@@ -7,10 +7,11 @@ require_once __DIR__ . '/../includes/social-auth.php';
 
 $error = '';
 $adsOauthSuccess = false;
+$cloudApiEnableSuccess = false;
 
-function sv_google_ads_signed_state_job(string $state): ?string
+function sv_google_signed_state_payload(string $state, string $prefix): ?array
 {
-    if (!str_starts_with($state, 'gads1.')) {
+    if (!str_starts_with($state, $prefix . '.')) {
         return null;
     }
     $parts = explode('.', $state, 3);
@@ -31,16 +32,61 @@ function sv_google_ads_signed_state_job(string $state): ?string
     if (!is_array($payload)) {
         return null;
     }
-    $job = strtolower(trim((string)($payload['job'] ?? '')));
     $ts = (int)($payload['ts'] ?? 0);
-    if ((int)($payload['v'] ?? 0) !== 1
-        || !preg_match('/^[a-f0-9]{32}$/', $job)
-        || $ts < time() - 1800
-        || $ts > time() + 60
-    ) {
+    if ((int)($payload['v'] ?? 0) !== 1 || $ts < time() - 1800 || $ts > time() + 60) {
         return null;
     }
-    return $job;
+    return $payload;
+}
+
+function sv_google_ads_signed_state_job(string $state): ?string
+{
+    $payload = sv_google_signed_state_payload($state, 'gads1');
+    if (!$payload) {
+        return null;
+    }
+    $job = strtolower(trim((string)($payload['job'] ?? '')));
+    return preg_match('/^[a-f0-9]{32}$/', $job) === 1 ? $job : null;
+}
+
+function sv_google_cloud_enable_project(string $state): ?string
+{
+    $payload = sv_google_signed_state_payload($state, 'gcloud1');
+    if (!$payload || (string)($payload['action'] ?? '') !== 'enable_google_ads_api') {
+        return null;
+    }
+    $project = trim((string)($payload['project'] ?? ''));
+    return preg_match('/^[0-9]{6,20}$/', $project) === 1 ? $project : null;
+}
+
+function sv_enable_google_ads_api(string $accessToken, string $project): void
+{
+    $url = 'https://serviceusage.googleapis.com/v1/projects/' . rawurlencode($project) . '/services/googleads.googleapis.com:enable';
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => '{}',
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer ' . $accessToken,
+            'Content-Type: application/json',
+            'Accept: application/json',
+        ],
+        CURLOPT_TIMEOUT => 30,
+    ]);
+    $body = (string)curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $curlError = (string)curl_error($ch);
+    curl_close($ch);
+
+    if ($status < 200 || $status >= 300) {
+        $decoded = json_decode($body, true);
+        $message = is_array($decoded) ? (string)($decoded['error']['message'] ?? '') : '';
+        if ($message === '') {
+            $message = $curlError !== '' ? $curlError : 'HTTP ' . $status;
+        }
+        throw new RuntimeException('Falha ao ativar Google Ads API: ' . $message);
+    }
 }
 
 try {
@@ -60,21 +106,8 @@ try {
         throw new RuntimeException('Resposta inválida do Google.');
     }
 
-    $signedAdsJob = sv_google_ads_signed_state_job($state);
-    $adsRequest = $_SESSION['social_oauth']['google_ads'] ?? null;
-    $sessionAdsJob = null;
-    if (is_array($adsRequest)
-        && isset($adsRequest['state'], $adsRequest['job'], $adsRequest['created_at'])
-        && hash_equals((string)$adsRequest['state'], $state)
-        && (int)$adsRequest['created_at'] >= (time() - 1800)
-        && preg_match('/^[a-f0-9]{32}$/', (string)$adsRequest['job']) === 1
-    ) {
-        $sessionAdsJob = (string)$adsRequest['job'];
-        unset($_SESSION['social_oauth']['google_ads']);
-    }
-
-    $adsJob = $signedAdsJob ?: $sessionAdsJob;
-    if (is_string($adsJob) && $adsJob !== '') {
+    $cloudProject = sv_google_cloud_enable_project($state);
+    if (is_string($cloudProject) && $cloudProject !== '') {
         $tokenResponse = sv_social_http_post('https://oauth2.googleapis.com/token', [
             'code' => $code,
             'client_id' => sv_social_env('GOOGLE_OAUTH_CLIENT_ID'),
@@ -84,58 +117,88 @@ try {
         ]);
         $tokenData = json_decode($tokenResponse['body'], true);
         if ($tokenResponse['status'] >= 400 || !is_array($tokenData) || empty($tokenData['access_token'])) {
-            throw new RuntimeException('Falha ao concluir autorização do Google Ads.');
+            throw new RuntimeException('Falha ao obter autorização temporária do Google Cloud.');
         }
-        $refreshToken = trim((string)($tokenData['refresh_token'] ?? ''));
-        if ($refreshToken === '') {
-            throw new RuntimeException('Google não retornou refresh token. Reautorize com consentimento.');
-        }
-
-        $pendingPath = sys_get_temp_dir() . '/shopvivaliz-google-ads-refresh-' . $adsJob . '.token';
-        if (file_put_contents($pendingPath, $refreshToken, LOCK_EX) === false) {
-            throw new RuntimeException('Não foi possível armazenar o token temporário com segurança.');
-        }
-        @chmod($pendingPath, 0600);
-        $adsOauthSuccess = true;
+        sv_enable_google_ads_api((string)$tokenData['access_token'], $cloudProject);
+        $cloudApiEnableSuccess = true;
     } else {
-        $request = sv_social_consume_request('google', $state);
-        if (!$request) {
-            throw new RuntimeException('Sessão do login Google expirou. Tente novamente.');
+        $signedAdsJob = sv_google_ads_signed_state_job($state);
+        $adsRequest = $_SESSION['social_oauth']['google_ads'] ?? null;
+        $sessionAdsJob = null;
+        if (is_array($adsRequest)
+            && isset($adsRequest['state'], $adsRequest['job'], $adsRequest['created_at'])
+            && hash_equals((string)$adsRequest['state'], $state)
+            && (int)$adsRequest['created_at'] >= (time() - 1800)
+            && preg_match('/^[a-f0-9]{32}$/', (string)$adsRequest['job']) === 1
+        ) {
+            $sessionAdsJob = (string)$adsRequest['job'];
+            unset($_SESSION['social_oauth']['google_ads']);
         }
 
-        $tokenResponse = sv_social_http_post('https://oauth2.googleapis.com/token', [
-            'code' => $code,
-            'client_id' => sv_social_env('GOOGLE_OAUTH_CLIENT_ID'),
-            'client_secret' => sv_social_env('GOOGLE_OAUTH_CLIENT_SECRET'),
-            'redirect_uri' => sv_social_callback_url('google'),
-            'grant_type' => 'authorization_code',
-        ]);
+        $adsJob = $signedAdsJob ?: $sessionAdsJob;
+        if (is_string($adsJob) && $adsJob !== '') {
+            $tokenResponse = sv_social_http_post('https://oauth2.googleapis.com/token', [
+                'code' => $code,
+                'client_id' => sv_social_env('GOOGLE_OAUTH_CLIENT_ID'),
+                'client_secret' => sv_social_env('GOOGLE_OAUTH_CLIENT_SECRET'),
+                'redirect_uri' => sv_social_callback_url('google'),
+                'grant_type' => 'authorization_code',
+            ]);
+            $tokenData = json_decode($tokenResponse['body'], true);
+            if ($tokenResponse['status'] >= 400 || !is_array($tokenData) || empty($tokenData['access_token'])) {
+                throw new RuntimeException('Falha ao concluir autorização do Google Ads.');
+            }
+            $refreshToken = trim((string)($tokenData['refresh_token'] ?? ''));
+            if ($refreshToken === '') {
+                throw new RuntimeException('Google não retornou refresh token. Reautorize com consentimento.');
+            }
 
-        $tokenData = json_decode($tokenResponse['body'], true);
-        if ($tokenResponse['status'] >= 400 || !is_array($tokenData) || empty($tokenData['access_token'])) {
-            throw new RuntimeException('Falha ao trocar código do Google por token.');
+            $pendingPath = sys_get_temp_dir() . '/shopvivaliz-google-ads-refresh-' . $adsJob . '.token';
+            if (file_put_contents($pendingPath, $refreshToken, LOCK_EX) === false) {
+                throw new RuntimeException('Não foi possível armazenar o token temporário com segurança.');
+            }
+            @chmod($pendingPath, 0600);
+            $adsOauthSuccess = true;
+        } else {
+            $request = sv_social_consume_request('google', $state);
+            if (!$request) {
+                throw new RuntimeException('Sessão do login Google expirou. Tente novamente.');
+            }
+
+            $tokenResponse = sv_social_http_post('https://oauth2.googleapis.com/token', [
+                'code' => $code,
+                'client_id' => sv_social_env('GOOGLE_OAUTH_CLIENT_ID'),
+                'client_secret' => sv_social_env('GOOGLE_OAUTH_CLIENT_SECRET'),
+                'redirect_uri' => sv_social_callback_url('google'),
+                'grant_type' => 'authorization_code',
+            ]);
+
+            $tokenData = json_decode($tokenResponse['body'], true);
+            if ($tokenResponse['status'] >= 400 || !is_array($tokenData) || empty($tokenData['access_token'])) {
+                throw new RuntimeException('Falha ao trocar código do Google por token.');
+            }
+
+            $profileResponse = sv_social_http_get_json(
+                'https://openidconnect.googleapis.com/v1/userinfo',
+                ['Authorization: Bearer ' . $tokenData['access_token']]
+            );
+            $profile = json_decode($profileResponse['body'], true);
+            if ($profileResponse['status'] >= 400 || !is_array($profile) || empty($profile['sub'])) {
+                throw new RuntimeException('Falha ao obter perfil do Google.');
+            }
+
+            $user = sv_social_upsert_user('google', [
+                'provider_id' => (string)$profile['sub'],
+                'email' => (string)($profile['email'] ?? ''),
+                'email_verified' => !empty($profile['email_verified']),
+                'name' => (string)($profile['name'] ?? ''),
+                'avatar_url' => (string)($profile['picture'] ?? ''),
+            ]);
+
+            sv_social_login_user($user);
+            header('Location: ' . sv_social_sanitize_redirect((string)($request['redirect'] ?? '/')));
+            exit;
         }
-
-        $profileResponse = sv_social_http_get_json(
-            'https://openidconnect.googleapis.com/v1/userinfo',
-            ['Authorization: Bearer ' . $tokenData['access_token']]
-        );
-        $profile = json_decode($profileResponse['body'], true);
-        if ($profileResponse['status'] >= 400 || !is_array($profile) || empty($profile['sub'])) {
-            throw new RuntimeException('Falha ao obter perfil do Google.');
-        }
-
-        $user = sv_social_upsert_user('google', [
-            'provider_id' => (string)$profile['sub'],
-            'email' => (string)($profile['email'] ?? ''),
-            'email_verified' => !empty($profile['email_verified']),
-            'name' => (string)($profile['name'] ?? ''),
-            'avatar_url' => (string)($profile['picture'] ?? ''),
-        ]);
-
-        sv_social_login_user($user);
-        header('Location: ' . sv_social_sanitize_redirect((string)($request['redirect'] ?? '/')));
-        exit;
     }
 } catch (Throwable $e) {
     $error = $e->getMessage();
@@ -158,13 +221,16 @@ try {
 </head>
 <body>
     <div class="card">
-        <?php if ($adsOauthSuccess): ?>
+        <?php if ($cloudApiEnableSuccess): ?>
+            <h1>Google Ads API ativada</h1>
+            <p>A API do Google Ads foi ativada no projeto Google Cloud. Esta janela pode ser fechada.</p>
+        <?php elseif ($adsOauthSuccess): ?>
             <h1>Google Ads autorizado</h1>
             <p>A autorização foi concluída. Esta janela pode ser fechada.</p>
         <?php else: ?>
-            <h1>Não foi possível concluir o login com Google</h1>
+            <h1>Não foi possível concluir a autorização do Google</h1>
             <p><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></p>
-            <a href="/auth/login.php">Voltar para o login</a>
+            <a href="/auth/login.php">Voltar</a>
         <?php endif; ?>
     </div>
 </body>
