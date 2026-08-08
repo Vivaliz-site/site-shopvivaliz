@@ -13,8 +13,10 @@
 - Forma, proporcao, cor, material aparente, logos, textos impressos, conectores, controles e partes incluidas devem ser preservados.
 - A cena nao pode adicionar acessorios que parecam fazer parte do produto vendido.
 - Arquivos falsos, HTML renomeado como imagem, formatos nao permitidos e resolucao insuficiente sao bloqueados.
-- A foto-base precisa ter pelo menos 300 px por lado.
-- A imagem gerada precisa ter pelo menos 512 px por lado antes de entrar em staging/publicacao.
+- A foto-base precisa ter pelo menos 600 px por lado para evitar edicao apoiada em referencia de baixa qualidade.
+- A imagem gerada quadrada precisa ter pelo menos 1000 px por lado antes de entrar em staging/publicacao. O Studio solicita 1024x1024 aos provedores quando suportado.
+- A imagem principal `white` usa fundo branco puro, produto centralizado e dominante no quadro, sem badge, watermark, texto promocional ou objeto extra.
+- O mesmo gate de 1000 px e aplicado na regeneracao e novamente na publicacao; nenhum caminho manual contorna a validacao.
 
 ## Identidade de produto
 
@@ -39,10 +41,11 @@ A publicacao do Admin deve encontrar exatamente um item do cache. Se zero ou mai
 `tests/image-identity-policy-test.php` cobre:
 
 - validacao real de PNG e fingerprint SHA-256;
-- bloqueio de resolucao insuficiente;
+- bloqueio de foto-base abaixo de 600 px;
+- bloqueio de saida/regeneracao abaixo de 1000 px;
 - bloqueio de arquivo falso com extensao de imagem;
 - bloqueio de traversal no caminho da foto-base;
-- prompts com preservacao de identidade;
+- prompts com preservacao de identidade, 1024x1024 e regra de imagem principal branca;
 - SKU + ID externo obrigatoriamente consistentes;
 - remocao da query antiga `WHERE olist_id = ? OR sku = ?`;
 - remocao do bind incompleto da rotina antiga.
