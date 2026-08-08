@@ -1,0 +1,61 @@
+name: Retire Fred-Win M365 certificate
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/retire-fredwin-m365-certificate.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  retire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Verify server Graph identity before retirement
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 '/home/ubuntu/.shopvivaliz/bin/graph-app-only.py'
+      - name: Remove Fred-Win certificate from Entra app
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          python3 - <<'PY'
+          import importlib.util,json,urllib.request
+          spec=importlib.util.spec_from_file_location('g','/home/ubuntu/.shopvivaliz/bin/graph-app-only.py'); g=importlib.util.module_from_spec(spec); spec.loader.exec_module(g)
+          access,claims=g.token()
+          url='https://graph.microsoft.com/v1.0/applications/709b607b-87f9-4572-8661-2ea8cec6e294/removeKey'
+          body=json.dumps({'keyId':'62fab7e0-931d-4dd8-83ce-34293e2486e5'}).encode()
+          req=urllib.request.Request(url,data=body,headers={'Authorization':'Bearer '+access,'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=30) as r:
+              print('ENTRA_FRED_CERT_REMOVED status='+str(r.status))
+          PY
+          EOF
+      - name: Remove Fred-Win local private certificate and temporary PFX
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 'curl -fsS --max-time 10 http://127.0.0.1:5557/health >/dev/null'
+          python3 - <<'PY' > /tmp/body.json
+          import json
+          ps=r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $thumb='7EFCBC6676B61F8C076F08127F5F7E365A95F2E9'; $store=New-Object System.Security.Cryptography.X509Certificates.X509Store('My','CurrentUser'); $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite); try { $matches=@($store.Certificates | Where-Object { $_.Thumbprint -eq $thumb }); foreach($cert in $matches){ $store.Remove($cert) }; Write-Output ('FRED_CERT_REMOVED_COUNT=' + $matches.Count) } finally { $store.Close() }; $files=@('C:\Users\FRED\Documents\Certs\ShopVivalizExchangeAuth.pfx','C:\Users\FRED\Documents\certs\ShopVivalizExchangeAuth.pfx'); foreach($f in $files){ if(Test-Path $f){ Remove-Item $f -Force; Write-Output ('PFX_REMOVED=' + $f) } }; $verify=New-Object System.Security.Cryptography.X509Certificates.X509Store('My','CurrentUser'); $verify.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly); try { if(@($verify.Certificates | Where-Object { $_.Thumbprint -eq $thumb }).Count -ne 0){ throw 'Fred certificate still present' } } finally { $verify.Close() }; Write-Output 'FRED_PRIVATE_IDENTITY_RETIRED'"'''
+          print(json.dumps({'params':{'command':ps,'timeout':120}}))
+          PY
+          B64=$(base64 -w0 /tmp/body.json)
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 "B64='$B64' python3 - <<'PY'
+          import base64,json,os,urllib.request
+          body=base64.b64decode(os.environ['B64'])
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=150) as r: payload=json.loads(r.read().decode())
+          result=payload.get('result') or {}; print(result.get('output',''))
+          if result.get('success') is not True: raise SystemExit(result.get('error') or 'Fred cleanup failed')
+          PY"
+      - name: Revalidate VM after Fred credential retirement
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 '/home/ubuntu/.shopvivaliz/bin/graph-app-only.py'
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/body.json
