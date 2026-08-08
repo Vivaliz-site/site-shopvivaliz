@@ -4,10 +4,22 @@ param(
   [string]$Thumbprint=''
 )
 $ErrorActionPreference='Stop'
-if(-not $Thumbprint){
-  $cert = Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.Subject -eq 'CN=ShopVivalizExchangeAuth' -and $_.HasPrivateKey } | Sort-Object NotAfter -Descending | Select-Object -First 1
-} else {
-  $cert = Get-Item "Cert:\CurrentUser\My\$Thumbprint"
+
+$store = [System.Security.Cryptography.X509Certificates.X509Store]::new(
+  [System.Security.Cryptography.X509Certificates.StoreName]::My,
+  [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
+)
+$store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly)
+try {
+  $certs = @($store.Certificates | Where-Object { $_.HasPrivateKey })
+  if($Thumbprint){
+    $wanted = ($Thumbprint -replace '\s','').ToUpperInvariant()
+    $cert = $certs | Where-Object { (($_.Thumbprint -replace '\s','').ToUpperInvariant()) -eq $wanted } | Select-Object -First 1
+  } else {
+    $cert = $certs | Where-Object { $_.Subject -eq 'CN=ShopVivalizExchangeAuth' } | Sort-Object NotAfter -Descending | Select-Object -First 1
+  }
+} finally {
+  $store.Close()
 }
 if(-not $cert -or -not $cert.HasPrivateKey){ throw 'Certificate with private key not found in CurrentUser\My' }
 function B64Url([byte[]]$bytes){ [Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+','-').Replace('/','_') }
