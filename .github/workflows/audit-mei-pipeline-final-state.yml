@@ -1,0 +1,152 @@
+name: Audit final MEI pipeline state
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/audit-mei-pipeline-final-state.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Audit end-to-end runtime and database
+        run: |
+          timeout 240s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=10 -o ServerAliveCountMax=2 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          sudo systemctl reset-failed mei-mg-base-sync.service || true
+
+          echo '=== SYSTEMD ==='
+          echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
+          echo BASE_SYNC_TIMER_STATE=$(sudo systemctl is-active mei-mg-base-sync.timer || true)
+          echo BASE_SYNC_TIMER_ENABLED=$(sudo systemctl is-enabled mei-mg-base-sync.timer || true)
+          echo BASE_SYNC_SERVICE_STATE=$(sudo systemctl is-active mei-mg-base-sync.service || true)
+          sudo systemctl list-timers mei-mg-base-sync.timer --all --no-pager
+          echo
+
+          echo '=== CONFIG ==='
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          from email.utils import parseaddr
+          import json,os
+          load_dotenv('.env',override=True)
+          print(json.dumps({
+            'provider':os.getenv('EMAIL_PROVIDER'),
+            'graph_auth_mode':os.getenv('MICROSOFT_GRAPH_AUTH_MODE','app_only_cert'),
+            'graph_user':os.getenv('MICROSOFT_GRAPH_USER'),
+            'mail_from':parseaddr(os.getenv('MAIL_FROM',''))[1],
+            'rate_limit':os.getenv('RATE_LIMIT_ENVIOS_POR_MINUTO'),
+            'target_24h':os.getenv('META_ENVIOS_POR_DIA'),
+            'hard_cap_24h':os.getenv('MAX_ENVIOS_POR_DIA'),
+            'legacy_client_secret_present':bool(os.getenv('MICROSOFT_GRAPH_CLIENT_SECRET','').strip()),
+          },ensure_ascii=False))
+          PY
+          timeout 60s .venv/bin/python scripts/auditar_graph_token.py
+          echo
+
+          echo '=== DATABASE ==='
+          timeout 120s .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env',override=True)
+          import datetime,json,os,psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'],row_factory=dict_row,connect_timeout=10) as conn:
+            with conn.cursor() as cur:
+              cur.execute("set transaction read only")
+              cur.execute("set statement_timeout='60s'")
+              cur.execute("""
+                select count(*) total,
+                       count(*) filter(where situacao_cadastral='ATIVA') active,
+                       count(*) filter(where email is not null and btrim(email::text)<>'') with_email,
+                       count(*) filter(where tipo_regime='MEI') mei_legacy_label,
+                       count(*) filter(where tipo_regime='MEI_CANDIDATO') mei_candidate,
+                       count(*) filter(where mei_verificado) mei_verified,
+                       count(*) filter(where marketing_autorizado) marketing_authorized,
+                       count(*) filter(where opt_out) opt_out,
+                       count(*) filter(where provavel_terceiro) probable_third_party,
+                       count(*) filter(where enviado) marked_submitted_or_sent,
+                       max(importado_em) last_insert_timestamp,
+                       max(atualizado_em) last_update_timestamp
+                  from mei_email.empresas
+              """)
+              base=dict(cur.fetchone())
+              cur.execute("select count(*) n from mei_email.vw_empresas_elegiveis")
+              base['eligible_view']=cur.fetchone()['n']
+              cur.execute("""
+                select count(*) n from mei_email.empresas e
+                 where e.situacao_cadastral='ATIVA'
+                   and e.email is not null and btrim(e.email::text)<>''
+                   and not e.opt_out and not e.provavel_terceiro and not e.enviado
+              """)
+              base['technical_candidates_before_auth_and_mei_verification']=cur.fetchone()['n']
+
+              cur.execute("""
+                select count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours') used_24h,
+                       count(*) filter(where status::text in ('pendente','enviando')) pending,
+                       count(*) filter(where status::text='bloqueado') blocked,
+                       count(*) filter(where status::text='submitted') submitted_total,
+                       count(*) filter(where status::text='falhou') failed_total,
+                       max(enviado_em) last_submission
+                  from mei_email.envios
+              """)
+              envios=dict(cur.fetchone())
+              cur.execute("""
+                select count(*) n from (
+                  select lower(btrim(email::text)) normalized_email
+                    from mei_email.envios
+                   where status::text in ('pendente','enviando')
+                   group by 1 having count(*)>1
+                ) d
+              """)
+              envios['duplicate_pending_emails']=cur.fetchone()['n']
+              cur.execute("""
+                select count(*) n from mei_email.envios p
+                 where p.status::text in ('pendente','enviando')
+                   and exists (
+                     select 1 from mei_email.envios s
+                      where s.id<>p.id
+                        and s.status::text in ('submitted','enviado')
+                        and lower(btrim(s.email::text))=lower(btrim(p.email::text))
+                   )
+              """)
+              envios['pending_already_submitted_or_sent']=cur.fetchone()['n']
+
+              cur.execute("""
+                select id,source_name,source_revision,source_last_modified,status,
+                       started_at,finished_at,rows_before,rows_after,rows_added,error,details
+                  from mei_email.base_sync_runs order by id desc limit 1
+              """)
+              sync=dict(cur.fetchone())
+              if sync.get('source_last_modified'):
+                now=datetime.datetime.now(datetime.timezone.utc)
+                sm=sync['source_last_modified']
+                if sm.tzinfo is None: sm=sm.replace(tzinfo=datetime.timezone.utc)
+                sync['source_age_hours']=round((now-sm.astimezone(datetime.timezone.utc)).total_seconds()/3600,2)
+
+              cur.execute("select status::text,count(*) n from mei_email.campanhas group by 1 order by 1")
+              campaigns=[dict(r) for r in cur.fetchall()]
+              print('BASE='+json.dumps(base,default=str,ensure_ascii=False))
+              print('ENVIOS='+json.dumps(envios,default=str,ensure_ascii=False))
+              print('LATEST_SYNC='+json.dumps(sync,default=str,ensure_ascii=False))
+              print('CAMPAIGNS='+json.dumps(campaigns,default=str,ensure_ascii=False))
+          PY
+          echo
+
+          echo '=== SCHEDULERS ==='
+          crontab -l 2>&1 | grep -E 'rotina_diaria_segura|disparar_10000|garantir_meta_10000|disparar_295' || true
+          echo
+          df -h /
+          echo FINAL_PIPELINE_AUDIT_COMPLETE
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
