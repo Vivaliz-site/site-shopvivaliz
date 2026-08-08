@@ -1,8 +1,6 @@
 <?php
 declare(strict_types=1);
 
-session_start();
-
 require_once __DIR__ . '/../includes/social-auth.php';
 
 if (!sv_social_google_is_configured()) {
@@ -16,12 +14,19 @@ if (!preg_match('/^[a-f0-9]{32}$/', $job)) {
     exit('Invalid authorization job.');
 }
 
-$state = bin2hex(random_bytes(24));
-$_SESSION['social_oauth']['google_ads'] = [
-    'state' => $state,
+// Use a short-lived signed state instead of relying on the PHP session cookie.
+// Google redirects back cross-site and a SameSite=Strict session cookie may not be
+// sent on that first request, which would otherwise make the callback lose the job.
+$payload = [
+    'v' => 1,
     'job' => $job,
-    'created_at' => time(),
+    'ts' => time(),
+    'nonce' => bin2hex(random_bytes(12)),
 ];
+$payloadJson = (string)json_encode($payload, JSON_UNESCAPED_SLASHES);
+$payloadB64 = rtrim(strtr(base64_encode($payloadJson), '+/', '-_'), '=');
+$signature = hash_hmac('sha256', $payloadB64, sv_social_env('GOOGLE_OAUTH_CLIENT_SECRET'));
+$state = 'gads1.' . $payloadB64 . '.' . $signature;
 
 $url = 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
     'client_id' => sv_social_env('GOOGLE_OAUTH_CLIENT_ID'),
