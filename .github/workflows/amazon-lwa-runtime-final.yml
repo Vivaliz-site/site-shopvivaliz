@@ -14,6 +14,12 @@ jobs:
   validate-runtime:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    env:
+      AMAZON_CLIENT_ID: ${{ secrets.AMAZON_LWA_CLIENT_ID || secrets.AMAZON_SP_API_CLIENT_ID || secrets.SP_API_CLIENT_ID || secrets.LWA_CLIENT_ID }}
+      AMAZON_CLIENT_SECRET: ${{ secrets.AMAZON_LWA_CLIENT_SECRET || secrets.AMAZON_SP_API_CLIENT_SECRET || secrets.SP_API_CLIENT_SECRET || secrets.LWA_CLIENT_SECRET }}
+      AMAZON_REFRESH_TOKEN: ${{ secrets.AMAZON_LWA_REFRESH_TOKEN || secrets.AMAZON_SP_API_REFRESH_TOKEN || secrets.SP_API_REFRESH_TOKEN || secrets.LWA_REFRESH_TOKEN }}
+      AMAZON_SELLER_ID_VALUE: ${{ secrets.AMAZON_SELLER_ID || secrets.AMAZON_ACCOUNT_ID || secrets.AMAZON_MERCHANT_ID || secrets.AMAZON_MERCHANT_TOKEN || secrets.SP_API_SELLER_ID }}
+      AMAZON_MARKETPLACE_ID_VALUE: ${{ secrets.AMAZON_MARKETPLACE_ID || secrets.AMAZON_MARKETPLACE || secrets.SP_API_MARKETPLACE_ID }}
     steps:
       - name: Configure verified SSH host
         shell: bash
@@ -30,7 +36,59 @@ jobs:
           printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Validate runtime and discover Amazon credential source
+      - name: Report repository Amazon secret presence
+        shell: bash
+        run: |
+          set -euo pipefail
+          cid=false; csec=false; rt=false; seller=false; market=false
+          [ -n "${AMAZON_CLIENT_ID:-}" ] && cid=true
+          [ -n "${AMAZON_CLIENT_SECRET:-}" ] && csec=true
+          [ -n "${AMAZON_REFRESH_TOKEN:-}" ] && rt=true
+          [ -n "${AMAZON_SELLER_ID_VALUE:-}" ] && seller=true
+          [ -n "${AMAZON_MARKETPLACE_ID_VALUE:-}" ] && market=true
+          printf 'github_amazon_presence={"client_id":%s,"client_secret":%s,"refresh_token":%s,"seller_id":%s,"marketplace_id":%s}\n' "$cid" "$csec" "$rt" "$seller" "$market"
+
+      - name: Sync complete Amazon LWA triplet to VM without exposing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${AMAZON_CLIENT_ID:-}" ] || [ -z "${AMAZON_CLIENT_SECRET:-}" ] || [ -z "${AMAZON_REFRESH_TOKEN:-}" ]; then
+            echo 'amazon_secret_sync=skipped_incomplete_repository_secrets'
+            exit 0
+          fi
+
+          payload="$(python3 - <<'PY'
+          import json, os
+          print(json.dumps({
+              'AMAZON_LWA_CLIENT_ID': os.environ.get('AMAZON_CLIENT_ID',''),
+              'AMAZON_LWA_CLIENT_SECRET': os.environ.get('AMAZON_CLIENT_SECRET',''),
+              'AMAZON_LWA_REFRESH_TOKEN': os.environ.get('AMAZON_REFRESH_TOKEN',''),
+              'AMAZON_SELLER_ID': os.environ.get('AMAZON_SELLER_ID_VALUE',''),
+              'AMAZON_MARKETPLACE_ID': os.environ.get('AMAZON_MARKETPLACE_ID_VALUE',''),
+          }, separators=(',', ':')))
+          PY
+          )"
+
+          printf '%s' "$payload" | ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'python3 -c '\''import sys,json,os,time,shutil; p="/home/ubuntu/shopvivaliz-deploy/shared/.env"; d=json.load(sys.stdin); lines=open(p,encoding="utf-8").read().splitlines(); keys=set(d); out=[]; seen=set();
+for line in lines:
+ s=line.strip();
+ if s and not s.startswith("#") and "=" in line:
+  k=line.split("=",1)[0].strip();
+  if k in keys:
+   if k not in seen and d.get(k): out.append(k+"="+d[k]); seen.add(k)
+   continue
+ out.append(line)
+for k,v in d.items():
+ if v and k not in seen: out.append(k+"="+v)
+backup=p+".amazon-lwa-backup-"+time.strftime("%Y%m%dT%H%M%SZ",time.gmtime()); shutil.copy2(p,backup); tmp=p+".tmp"; open(tmp,"w",encoding="utf-8").write("\n".join(out)+"\n"); os.chmod(tmp,0o600); os.replace(tmp,p); print("amazon_secret_sync=written_with_backup")'\'''
+
+      - name: Validate deployed release Shopee service and Amazon Sellers API
         shell: bash
         run: |
           set -euo pipefail
@@ -42,16 +100,12 @@ jobs:
             ubuntu@137.131.156.17 \
             'bash -s' <<'REMOTE'
           set -euo pipefail
-
           current='/home/ubuntu/shopvivaliz-deploy/current'
           env_file='/home/ubuntu/shopvivaliz-deploy/shared/.env'
           test -L "$current"
           test -r "$current/.release-sha"
           test -r "$env_file"
-          test -r "$current/includes/marketplace/AmazonPublisher.php"
-
-          active_sha="$(cat "$current/.release-sha")"
-          printf 'active_release_sha=%s\n' "$active_sha"
+          printf 'active_release_sha=%s\n' "$(cat "$current/.release-sha")"
 
           systemctl is-active --quiet shopvivaliz-shopee-token-renewer.service
           load_state="$(systemctl show shopvivaliz-shopee-token-renewer.service -p LoadState --value)"
@@ -65,128 +119,40 @@ jobs:
           php -d display_errors=0 <<'PHP'
           <?php
           declare(strict_types=1);
-
-          function loadEnvFile(string $path): void {
-              foreach (file($path, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
-                  $line = trim($line);
-                  if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) continue;
-                  [$key, $value] = explode('=', $line, 2);
-                  $key = trim($key);
-                  if ($key === '' || preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $key) !== 1) continue;
-                  $value = trim($value);
-                  if (strlen($value) >= 2 && (($value[0] === '"' && $value[-1] === '"') || ($value[0] === "'" && $value[-1] === "'"))) {
-                      $value = substr($value, 1, -1);
-                  }
-                  putenv($key . '=' . $value);
-                  $_ENV[$key] = $value;
-              }
+          foreach (file('/home/ubuntu/shopvivaliz-deploy/shared/.env', FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+              $line = trim($line);
+              if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) continue;
+              [$key, $value] = explode('=', $line, 2);
+              $key = trim($key);
+              if ($key === '' || preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $key) !== 1) continue;
+              $value = trim($value);
+              if (strlen($value) >= 2 && (($value[0] === '"' && $value[-1] === '"') || ($value[0] === "'" && $value[-1] === "'"))) $value = substr($value,1,-1);
+              putenv($key . '=' . $value); $_ENV[$key] = $value;
           }
-
-          function anyPresent(array $keys): bool {
-              foreach ($keys as $key) {
-                  $v = getenv($key);
-                  if ($v !== false && trim((string)$v) !== '') return true;
-              }
-              return false;
-          }
-
-          loadEnvFile('/home/ubuntu/shopvivaliz-deploy/shared/.env');
-
-          $clientIdAliases = ['AMAZON_LWA_CLIENT_ID','AMAZON_SP_API_CLIENT_ID','SP_API_CLIENT_ID','LWA_CLIENT_ID'];
-          $clientSecretAliases = ['AMAZON_LWA_CLIENT_SECRET','AMAZON_SP_API_CLIENT_SECRET','SP_API_CLIENT_SECRET','LWA_CLIENT_SECRET'];
-          $refreshAliases = ['AMAZON_LWA_REFRESH_TOKEN','AMAZON_SP_API_REFRESH_TOKEN','SP_API_REFRESH_TOKEN','LWA_REFRESH_TOKEN'];
-          $sellerAliases = ['AMAZON_SELLER_ID','AMAZON_ACCOUNT_ID','AMAZON_MERCHANT_ID','AMAZON_MERCHANT_TOKEN','SP_API_SELLER_ID'];
-          $marketplaceAliases = ['AMAZON_MARKETPLACE_ID','AMAZON_MARKETPLACE','SP_API_MARKETPLACE_ID'];
-
-          $envStatus = [
-              'client_id' => anyPresent($clientIdAliases),
-              'client_secret' => anyPresent($clientSecretAliases),
-              'refresh_token' => anyPresent($refreshAliases),
-              'seller_id' => anyPresent($sellerAliases),
-              'marketplace_id' => anyPresent($marketplaceAliases),
-          ];
-          echo json_encode(['amazon_env_presence' => $envStatus], JSON_UNESCAPED_SLASHES) . PHP_EOL;
-
-          $paths = [
-              '/home/ubuntu/shopvivaliz-deploy/current/storage/private/amazon-tokens.json',
-              '/home/ubuntu/shopvivaliz-deploy/current/storage/private/amazon-spapi.json',
-              '/home/ubuntu/shopvivaliz-deploy/current/storage/private/amazon-sp-api.json',
-              '/home/ubuntu/shopvivaliz-deploy/current/storage/private/sp-api.json',
-              '/home/ubuntu/shopvivaliz-deploy/current/storage/private/lwa-tokens.json',
-              '/home/ubuntu/shopvivaliz-deploy/shared/amazon-tokens.json',
-              '/home/ubuntu/shopvivaliz-deploy/shared/amazon-spapi.json',
-              '/home/ubuntu/shopvivaliz-deploy/shared/amazon-sp-api.json',
-              '/home/ubuntu/shopvivaliz-deploy/shared/sp-api.json',
-              '/home/ubuntu/shopvivaliz-deploy/shared/lwa-tokens.json',
-          ];
-          $privateSummary = [];
-          $privateLoaded = false;
-          foreach ($paths as $path) {
-              if (!is_file($path) || !is_readable($path)) continue;
-              $data = json_decode((string)file_get_contents($path), true);
-              if (!is_array($data)) {
-                  $privateSummary[basename($path)] = ['readable' => true, 'valid_json' => false, 'complete_lwa' => false];
-                  continue;
-              }
-              $clientId = trim((string)($data['client_id'] ?? $data['lwa_client_id'] ?? ''));
-              $clientSecret = trim((string)($data['client_secret'] ?? $data['lwa_client_secret'] ?? ''));
-              $refresh = trim((string)($data['refresh_token'] ?? $data['lwa_refresh_token'] ?? ''));
-              $seller = trim((string)($data['seller_id'] ?? $data['merchant_id'] ?? $data['merchant_token'] ?? $data['account_id'] ?? ''));
-              $marketplace = trim((string)($data['marketplace_id'] ?? ''));
-              $complete = $clientId !== '' && $clientSecret !== '' && $refresh !== '';
-              $privateSummary[basename($path)] = [
-                  'readable' => true,
-                  'valid_json' => true,
-                  'complete_lwa' => $complete,
-                  'seller_present' => $seller !== '',
-                  'marketplace_present' => $marketplace !== '',
-              ];
-              if (!$privateLoaded && $complete) {
-                  putenv('AMAZON_LWA_CLIENT_ID=' . $clientId);
-                  putenv('AMAZON_LWA_CLIENT_SECRET=' . $clientSecret);
-                  putenv('AMAZON_LWA_REFRESH_TOKEN=' . $refresh);
-                  $_ENV['AMAZON_LWA_CLIENT_ID'] = $clientId;
-                  $_ENV['AMAZON_LWA_CLIENT_SECRET'] = $clientSecret;
-                  $_ENV['AMAZON_LWA_REFRESH_TOKEN'] = $refresh;
-                  if ($seller !== '') { putenv('AMAZON_SELLER_ID=' . $seller); $_ENV['AMAZON_SELLER_ID'] = $seller; }
-                  if ($marketplace !== '') { putenv('AMAZON_MARKETPLACE_ID=' . $marketplace); $_ENV['AMAZON_MARKETPLACE_ID'] = $marketplace; }
-                  $privateLoaded = true;
-              }
-          }
-          echo json_encode(['amazon_private_sources' => $privateSummary, 'private_source_loaded_for_probe' => $privateLoaded], JSON_UNESCAPED_SLASHES) . PHP_EOL;
-
           require '/home/ubuntu/shopvivaliz-deploy/current/includes/marketplace/AmazonPublisher.php';
-
+          $present = [
+              'client_id' => sv_market_env('AMAZON_LWA_CLIENT_ID','AMAZON_SP_API_CLIENT_ID','SP_API_CLIENT_ID','LWA_CLIENT_ID') !== '',
+              'client_secret' => sv_market_env('AMAZON_LWA_CLIENT_SECRET','AMAZON_SP_API_CLIENT_SECRET','SP_API_CLIENT_SECRET','LWA_CLIENT_SECRET') !== '',
+              'refresh_token' => sv_market_env('AMAZON_LWA_REFRESH_TOKEN','AMAZON_SP_API_REFRESH_TOKEN','SP_API_REFRESH_TOKEN','LWA_REFRESH_TOKEN') !== '',
+          ];
+          echo json_encode(['vm_amazon_presence'=>$present], JSON_UNESCAPED_SLASHES) . PHP_EOL;
           try {
               $client = new SvAmazonClient();
-              $response = $client->request('GET', '/sellers/v1/marketplaceParticipations');
+              $response = $client->request('GET','/sellers/v1/marketplaceParticipations');
               $data = is_array($response['data'] ?? null) ? $response['data'] : [];
               $entries = is_array($data['payload'] ?? null) ? $data['payload'] : $data;
               $count = is_array($entries) ? count($entries) : 0;
               $hasBr = false;
-              if (is_array($entries)) {
-                  foreach ($entries as $entry) {
-                      if (!is_array($entry)) continue;
-                      $marketplace = is_array($entry['marketplace'] ?? null) ? $entry['marketplace'] : [];
-                      if (strtoupper((string)($marketplace['countryCode'] ?? '')) === 'BR') { $hasBr = true; break; }
-                  }
+              if (is_array($entries)) foreach ($entries as $entry) {
+                  if (!is_array($entry)) continue;
+                  $m = is_array($entry['marketplace'] ?? null) ? $entry['marketplace'] : [];
+                  if (strtoupper((string)($m['countryCode'] ?? '')) === 'BR') { $hasBr = true; break; }
               }
-              $result = [
-                  'amazon_probe' => 'success',
-                  'http_status' => (int)($response['status'] ?? 0),
-                  'participation_count' => $count,
-                  'has_br_marketplace' => $hasBr,
-                  'request_id_present' => trim((string)($response['request_id'] ?? '')) !== '',
-              ];
+              $result = ['amazon_probe'=>'success','http_status'=>(int)($response['status'] ?? 0),'participation_count'=>$count,'has_br_marketplace'=>$hasBr,'request_id_present'=>trim((string)($response['request_id'] ?? '')) !== ''];
               echo json_encode($result, JSON_UNESCAPED_SLASHES) . PHP_EOL;
-              if (($result['http_status'] ?? 0) !== 200 || $count < 1) exit(2);
+              if ($result['http_status'] !== 200 || $count < 1) exit(2);
           } catch (Throwable $e) {
-              $status = $e instanceof SvMarketplaceException ? $e->httpStatus : 0;
-              echo json_encode([
-                  'amazon_probe' => 'failed',
-                  'error_type' => get_class($e),
-                  'http_status' => $status,
-              ], JSON_UNESCAPED_SLASHES) . PHP_EOL;
+              echo json_encode(['amazon_probe'=>'failed','error_type'=>get_class($e),'http_status'=>$e instanceof SvMarketplaceException ? $e->httpStatus : 0], JSON_UNESCAPED_SLASHES) . PHP_EOL;
               exit(1);
           }
           PHP
