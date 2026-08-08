@@ -1,4 +1,5 @@
 name: Fred-Win Provision M365 Cert
+# Retry after explicitly loading Windows certificate providers.
 
 on:
   push:
