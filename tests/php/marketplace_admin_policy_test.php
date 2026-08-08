@@ -81,7 +81,8 @@ test_assert(str_contains($imageGenerationSource, 'json_encode([$targetChannel]')
 test_assert(str_contains($imageGenerationSource, 'ai_studio_channel_guidance($targetChannel'), 'prompt visual deve receber regras especificas do marketplace alvo');
 
 $catalogAdminSource = (string)file_get_contents(__DIR__ . '/../../admin/catalog-optimization/admin_catalog.php');
-test_assert(str_contains($catalogAdminSource, "confirm_channel') !== $channel"), 'aprovacao textual deve confirmar o mesmo canal do staging');
+test_assert(str_contains($catalogAdminSource, 'confirm_channel'), 'aprovacao textual deve exigir confirmacao explicita do canal');
+test_assert(str_contains($catalogAdminSource, '!== $channel'), 'aprovacao textual deve comparar a confirmacao com o canal do staging');
 test_assert(str_contains($catalogAdminSource, 'somente em'), 'Admin textual deve comunicar publicacao em canal unico');
 
 fwrite(STDOUT, "marketplace_admin_policy_test: OK\n");
