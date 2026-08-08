@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
+import shutil
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -19,7 +22,8 @@ TARGET = (
 
 
 def log(message: str) -> None:
-    print(message, flush=True)
+    safe = message.encode("cp1252", errors="replace").decode("cp1252")
+    print(safe, flush=True)
 
 
 def visible_text(page) -> str:
@@ -29,7 +33,7 @@ def visible_text(page) -> str:
         return ""
 
 
-def click_any(page, names: list[str], timeout: int = 4000) -> bool:
+def click_any(page, names: list[str], timeout: int = 5000) -> bool:
     for name in names:
         candidates = [
             page.get_by_role("button", name=name, exact=False),
@@ -38,12 +42,40 @@ def click_any(page, names: list[str], timeout: int = 4000) -> bool:
         ]
         for candidate in candidates:
             try:
-                if candidate.first.is_visible(timeout=500):
+                if candidate.first.is_visible(timeout=700):
                     candidate.first.click(timeout=timeout)
                     return True
             except Exception:
                 pass
     return False
+
+
+def make_profile_copy() -> Path:
+    """Copy only auth/profile state needed by Chrome; never read cookies ourselves."""
+    target = Path(tempfile.gettempdir()) / "ShopVivaliz-Entra-Automation"
+    if target.exists():
+        shutil.rmtree(target, ignore_errors=True)
+    target.mkdir(parents=True)
+    local_state = USER_DATA / "Local State"
+    if local_state.is_file():
+        shutil.copy2(local_state, target / "Local State")
+
+    src = USER_DATA / "Default"
+    dst = target / "Default"
+    excluded_dirs = {
+        "Cache", "Code Cache", "GPUCache", "DawnCache", "GrShaderCache",
+        "ShaderCache", "Service Worker", "blob_storage", "File System",
+    }
+
+    def ignore(directory: str, names: list[str]) -> set[str]:
+        result: set[str] = set()
+        for name in names:
+            if name in excluded_dirs or name.endswith("-journal"):
+                result.add(name)
+        return result
+
+    shutil.copytree(src, dst, ignore=ignore, dirs_exist_ok=True)
+    return target
 
 
 def main() -> int:
@@ -54,18 +86,25 @@ def main() -> int:
         log("ENTRA_CERT_UPLOAD_NOT_READY: Chrome/profile missing")
         return 3
 
+    try:
+        automation_profile = make_profile_copy()
+    except Exception as exc:
+        log(f"ENTRA_CERT_UPLOAD_NOT_READY: profile copy failed: {type(exc).__name__}: {exc}")
+        return 4
+
     with sync_playwright() as p:
         try:
             context = p.chromium.launch_persistent_context(
-                user_data_dir=str(USER_DATA),
+                user_data_dir=str(automation_profile),
                 executable_path=str(CHROME),
                 headless=True,
                 args=["--profile-directory=Default", "--disable-gpu"],
+                ignore_default_args=["--password-store=basic", "--use-mock-keychain"],
                 timeout=30000,
             )
         except Exception as exc:
-            log(f"ENTRA_CERT_UPLOAD_NOT_READY: browser launch failed: {type(exc).__name__}: {exc}")
-            return 4
+            log(f"ENTRA_CERT_UPLOAD_NOT_READY: browser launch failed: {type(exc).__name__}: {str(exc)[:800]}")
+            return 5
 
         try:
             page = context.pages[0] if context.pages else context.new_page()
@@ -78,11 +117,8 @@ def main() -> int:
             log(f"ENTRA_PAGE_TITLE={page.title()}")
 
             login_markers = [
-                "login.microsoftonline.com",
-                "sign in to your account",
-                "entrar em sua conta",
-                "pick an account",
-                "escolha uma conta",
+                "login.microsoftonline.com", "sign in to your account",
+                "entrar em sua conta", "pick an account", "escolha uma conta",
             ]
             if any(marker in url.casefold() or marker in lower for marker in login_markers):
                 log("ENTRA_CERT_UPLOAD_AUTH_REQUIRED")
@@ -92,13 +128,12 @@ def main() -> int:
                 log("ENTRA_CERT_ALREADY_REGISTERED")
                 return 0
 
-            # Ensure the Certificates section is selected when the portal opens a parent blade.
             click_any(page, ["Certificates & secrets", "Certificados e segredos"])
-            page.wait_for_timeout(3000)
+            page.wait_for_timeout(2500)
             click_any(page, ["Certificates", "Certificados"])
-            page.wait_for_timeout(3000)
+            page.wait_for_timeout(2500)
 
-            if not click_any(page, ["Upload certificate", "Carregar certificado", "Upload Certificate"]):
+            if not click_any(page, ["Upload certificate", "Carregar certificado"]):
                 text = visible_text(page)
                 if THUMBPRINT.casefold() in text.casefold():
                     log("ENTRA_CERT_ALREADY_REGISTERED")
@@ -107,7 +142,7 @@ def main() -> int:
                 log("ENTRA_VISIBLE_MARKERS=" + " | ".join(text.splitlines()[:35]))
                 return 11
 
-            page.wait_for_timeout(1500)
+            page.wait_for_timeout(1200)
             file_input = page.locator('input[type="file"]')
             try:
                 file_input.first.set_input_files(str(CERT_PATH), timeout=8000)
@@ -115,13 +150,12 @@ def main() -> int:
                 log("ENTRA_CERT_UPLOAD_NOT_READY: file input not found after upload action")
                 return 12
 
-            page.wait_for_timeout(1000)
-            if not click_any(page, ["Add", "Adicionar", "Upload"]):
+            page.wait_for_timeout(1200)
+            if not click_any(page, ["Add", "Adicionar"]):
                 log("ENTRA_CERT_UPLOAD_NOT_READY: final Add button not found")
                 return 13
 
-            # Portal updates can take a few seconds. Search the UI for the certificate thumbprint.
-            deadline = time.time() + 30
+            deadline = time.time() + 35
             while time.time() < deadline:
                 page.wait_for_timeout(2000)
                 text = visible_text(page)
@@ -129,16 +163,11 @@ def main() -> int:
                     log("ENTRA_CERT_UPLOAD_READY")
                     log(f"registered_thumbprint={THUMBPRINT}")
                     return 0
-                error_tokens = ["failed", "error", "falha", "erro"]
-                lines = [line.strip() for line in text.splitlines() if line.strip()]
-                suspicious = [line for line in lines if any(t in line.casefold() for t in error_tokens)]
-                if suspicious:
-                    log("ENTRA_PORTAL_MESSAGES=" + " | ".join(suspicious[:6]))
-
             log("ENTRA_CERT_UPLOAD_NOT_READY: certificate thumbprint not visible after upload")
             return 14
         finally:
             context.close()
+            shutil.rmtree(automation_profile, ignore_errors=True)
 
 
 if __name__ == "__main__":
