@@ -88,8 +88,8 @@ jobs:
                   print('CLASSIFICATION='+json.dumps(dict(cur.fetchone()),default=str))
                   cur.execute("select count(*) n from mei_email.vw_empresas_elegiveis")
                   print('ELIGIBLE_VIEW='+str(cur.fetchone()['n']))
-                  cur.execute("select pg_get_viewdef('mei_email.vw_empresas_elegiveis'::regclass,true)")
-                  viewdef=cur.fetchone()[0].lower()
+                  cur.execute("select pg_get_viewdef('mei_email.vw_empresas_elegiveis'::regclass,true) as viewdef")
+                  viewdef=cur.fetchone()['viewdef'].lower()
                   assert 'mei_candidato' in viewdef and 'mei_verificado' in viewdef and 'marketing_autorizado' in viewdef
           PY
           test "$(sudo systemctl is-active mei-mg-email-worker.service || true)" = inactive
