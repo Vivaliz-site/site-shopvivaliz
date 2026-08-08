@@ -1,5 +1,5 @@
 {
-  "action": "m365_app_only_audit",
-  "requested_at": "2026-08-07T22:52:00-03:00",
-  "reason": "Re-run app-only audit after replacing Cert drive dependency with direct CurrentUser certificate store access"
+  "action": "health",
+  "requested_at": "2026-08-08T12:36:00-03:00",
+  "reason": "Verify documented Fred-Win private relay before continuing Google Ads OAuth work"
 }
