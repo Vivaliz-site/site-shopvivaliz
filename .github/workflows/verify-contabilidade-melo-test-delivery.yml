@@ -18,12 +18,31 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Audit and send one controlled Graph test
+      - name: Repair runtime and send one controlled Graph test
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           sudo systemctl stop mei-mg-email-worker.service || true
           cd /home/ubuntu/mei-mg-email
+
+          echo '=== REPAIR SENDRESULT CONTRACT ==='
+          ts=$(date +%Y%m%d%H%M%S)
+          cp app/email_provider.py backups/email_provider.py.verify.$ts
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from pathlib import Path
+          p=Path('app/email_provider.py')
+          s=p.read_text(encoding='utf-8')
+          if 'status: str | None = None' not in s:
+              needle='    retry_after_seconds: int | None = None\n'
+              if needle not in s:
+                  raise SystemExit('SENDRESULT_PATCH_POINT_NOT_FOUND')
+              s=s.replace(needle, needle+'    status: str | None = None\n    status_code: int | None = None\n', 1)
+          elif 'status_code: int | None = None' not in s:
+              s=s.replace('    status: str | None = None\n', '    status: str | None = None\n    status_code: int | None = None\n', 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+          /home/ubuntu/mei-mg-email/.venv/bin/python -m py_compile app/email_provider.py worker/worker.py
+          grep -nE 'status: str|status_code: int|status="submitted"' app/email_provider.py | head -20
 
           echo '=== SAFE RUNTIME ==='
           grep -E '^(EMAIL_PROVIDER|MICROSOFT_GRAPH_USER|MAIL_FROM|RATE_LIMIT_ENVIOS_POR_MINUTO|META_ENVIOS_POR_DIA|MAX_ENVIOS_POR_DIA)=' .env
