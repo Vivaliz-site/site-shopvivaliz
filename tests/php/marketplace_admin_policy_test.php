@@ -77,7 +77,7 @@ test_assert(str_contains($imageValidationSource, 'Nenhum outro marketplace sera 
 test_assert(str_contains($imageValidationSource, '[$intended]'), 'publicacao de imagem deve encaminhar apenas o marketplace persistido no staging');
 
 $imageGenerationSource = (string)file_get_contents(__DIR__ . '/../../admin/ai-image-studio/process_item.php');
-test_assert(str_contains($imageGenerationSource, "json_encode([$targetChannel]"), 'geracao de imagem deve persistir exatamente um marketplace alvo');
+test_assert(str_contains($imageGenerationSource, 'json_encode([$targetChannel]'), 'geracao de imagem deve persistir exatamente um marketplace alvo');
 test_assert(str_contains($imageGenerationSource, 'ai_studio_channel_guidance($targetChannel'), 'prompt visual deve receber regras especificas do marketplace alvo');
 
 $catalogAdminSource = (string)file_get_contents(__DIR__ . '/../../admin/catalog-optimization/admin_catalog.php');
