@@ -35,7 +35,7 @@ jobs:
           actual=$(git rev-parse origin/main)
           echo ORIGIN_MAIN="$actual"
           test "$actual" = "$EXPECTED_PRIVATE_SHA"
-          command -v psql >/dev/null
+          test -x "$ROOT/.venv/bin/python"
 
           stamp=$(date +%Y%m%d-%H%M%S)
           backup="$ROOT/backups/daily-base-sync-$stamp"
@@ -50,17 +50,44 @@ jobs:
             if sudo test -e "$f"; then sudo cp -a "$f" "$backup/$(basename "$f")"; fi
           done
 
-          DB_URL=$($ROOT/.venv/bin/python - <<'PY'
+          echo '=== DATABASE SAFETY SNAPSHOT ==='
+          BACKUP_DIR="$backup" $ROOT/.venv/bin/python - <<'PY'
           from dotenv import load_dotenv
-          import os
           load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
-          print(os.environ['DATABASE_URL'])
-          PY
+          import json, os
+          from pathlib import Path
+          import psycopg
+          backup=Path(os.environ['BACKUP_DIR'])
+          with psycopg.connect(os.environ['DATABASE_URL']) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("""
+                    select e.cnpj::text,e.enviado,e.enviado_em
+                      from mei_email.empresas e
+                     where exists (
+                       select 1 from mei_email.envios x
+                        where x.cnpj=e.cnpj and x.status::text in ('submitted','enviado')
+                     )
+                     order by e.cnpj
+                  """)
+                  with (backup/'submitted-company-flags-before.tsv').open('w',encoding='utf-8') as fh:
+                      for cnpj,enviado,enviado_em in cur:
+                          fh.write(f"{cnpj}\t{enviado}\t{enviado_em or ''}\n")
+                  cur.execute("""
+                    select conname,pg_get_constraintdef(oid)
+                      from pg_constraint
+                     where connamespace='mei_email'::regnamespace
+                       and conrelid in ('mei_email.empresas'::regclass,'mei_email.envios'::regclass)
+                     order by conrelid::regclass::text,conname
+                  """)
+                  constraints=cur.fetchall()
+                  cur.execute("select pg_get_viewdef('mei_email.vw_empresas_elegiveis'::regclass,true)")
+                  viewdef=cur.fetchone()[0]
+          (backup/'database-definitions-before.json').write_text(
+              json.dumps({'constraints':constraints,'eligible_view':viewdef},default=str,ensure_ascii=False,indent=2),
+              encoding='utf-8'
           )
-          if command -v pg_dump >/dev/null; then
-            pg_dump "$DB_URL" --schema-only --schema=mei_email > "$backup/mei_email-schema-before.sql"
-            psql "$DB_URL" -X -v ON_ERROR_STOP=1 -Atc "select cnpj,enviado,coalesce(enviado_em::text,'') from mei_email.empresas e where exists (select 1 from mei_email.envios x where x.cnpj=e.cnpj and x.status::text in ('submitted','enviado'))" > "$backup/submitted-company-flags-before.tsv"
-          fi
+          print('DATABASE_SNAPSHOT_OK')
+          PY
 
           echo '=== INSTALL TESTED SOURCE FILES ==='
           for f in scripts/ingest_from_huggingface.py scripts/sincronizar_base_diaria.py db/migrations/V014__cnpj_alphanumeric_and_submission_guard.sql db/migrations/V015__base_sync_runs.sql; do
@@ -73,15 +100,31 @@ jobs:
           $ROOT/.venv/bin/python -m py_compile scripts/ingest_from_huggingface.py scripts/sincronizar_base_diaria.py
 
           echo '=== APPLY DATABASE HARDENING ==='
-          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -f db/migrations/V014__cnpj_alphanumeric_and_submission_guard.sql
-          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -f db/migrations/V015__base_sync_runs.sql
+          $ROOT/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
+          import os
+          from pathlib import Path
+          import psycopg
+          paths=[
+              Path('/home/ubuntu/mei-mg-email/db/migrations/V014__cnpj_alphanumeric_and_submission_guard.sql'),
+              Path('/home/ubuntu/mei-mg-email/db/migrations/V015__base_sync_runs.sql'),
+          ]
+          with psycopg.connect(os.environ['DATABASE_URL']) as conn:
+              for path in paths:
+                  sql=path.read_text(encoding='utf-8')
+                  with conn.cursor() as cur:
+                      cur.execute(sql, prepare=False)
+                  conn.commit()
+                  print('MIGRATION_APPLIED='+path.name)
+          PY
 
           echo '=== BOOTSTRAP SOURCE REVISION WITHOUT REIMPORT ==='
           $ROOT/.venv/bin/python - <<'PY'
           from dotenv import load_dotenv
           load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
           import json, os
-          from datetime import datetime, timezone
+          from datetime import datetime
           from urllib.request import Request, urlopen
           import psycopg
           source='huggingface_fluowai_datacorp_cnpj'
@@ -151,9 +194,22 @@ jobs:
           sudo systemctl is-active mei-mg-base-sync.timer
           sudo systemctl list-timers mei-mg-base-sync.timer --all --no-pager
           test "$(sudo systemctl is-active mei-mg-email-worker.service || true)" = inactive
-          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -Atc "select 'cnpj_constraint='||pg_get_constraintdef(oid) from pg_constraint where conrelid='mei_email.empresas'::regclass and conname='empresas_cnpj_check'"
-          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -Atc "select 'sync_runs='||count(*) from mei_email.base_sync_runs"
-          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -Atc "select 'submitted_marked_enviado='||count(*) from mei_email.empresas where enviado=true"
+          $ROOT/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
+          import os
+          import psycopg
+          with psycopg.connect(os.environ['DATABASE_URL']) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("select pg_get_constraintdef(oid) from pg_constraint where conrelid='mei_email.empresas'::regclass and conname='empresas_cnpj_check'")
+                  print('cnpj_constraint='+str(cur.fetchone()[0]))
+                  cur.execute('select count(*) from mei_email.base_sync_runs')
+                  print('sync_runs='+str(cur.fetchone()[0]))
+                  cur.execute('select count(*) from mei_email.empresas where enviado=true')
+                  print('submitted_marked_enviado='+str(cur.fetchone()[0]))
+                  cur.execute("select source_revision,source_last_modified,status,finished_at,rows_after from mei_email.base_sync_runs order by id desc limit 1")
+                  print('latest_sync_run='+str(cur.fetchone()))
+          PY
           echo BACKUP="$backup"
           echo DAILY_BASE_SYNC_DEPLOYED_WORKER_REMAINS_INACTIVE
           EOF
