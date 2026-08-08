@@ -47,31 +47,32 @@ $tmp = sys_get_temp_dir() . '/shopvivaliz-image-policy-' . bin2hex(random_bytes(
 @mkdir($tmp, 0700, true);
 
 try {
-    // Arquivo de imagem real e com resolução adequada deve ser aceito.
+    // Saida premium 1024x1024 deve ser aceita pelo fluxo inicial e pelo
+    // validador compartilhado usado na regeneracao.
     $good = $tmp . '/good.png';
-    iip_write_png($good, 512, 512);
-    $meta = ai_studio_validate_image_file($good, 512);
-    iip_assert($meta['width'] === 512 && $meta['height'] === 512, '512x512 image metadata');
+    iip_write_png($good, 1024, 1024);
+    $meta = ai_studio_validate_image_file($good, 600);
+    iip_assert($meta['width'] === 1024 && $meta['height'] === 1024, '1024x1024 image metadata');
     iip_assert($meta['mime'] === 'image/png', 'PNG MIME must be detected from file content');
     iip_assert(strlen($meta['sha256']) === 64, 'image fingerprint must be SHA-256');
 
-    // O validador compartilhado pelos clientes de IA protege inclusive o
-    // botão Regenerar do Admin, que chama os clients diretamente.
-    $providerMeta = AiStudioHttpClient::validateOutputImage($good, 512);
+    $providerMeta = AiStudioHttpClient::validateOutputImage($good, 1000);
     iip_assert($providerMeta['mime'] === 'image/png', 'provider output validator must inspect real MIME');
     iip_assert(strlen($providerMeta['sha256']) === 64, 'provider output validator must fingerprint output');
 
-    // Imagem pequena e arquivo falso devem ser bloqueados tanto no fluxo
-    // inicial quanto no fluxo compartilhado de regeneração.
-    $small = $tmp . '/small.png';
-    iip_write_png($small, 128, 128);
-    iip_expect_failure(fn() => ai_studio_validate_image_file($small, 300), 'small source image');
-    iip_expect_failure(fn() => AiStudioHttpClient::validateOutputImage($small, 512), 'small regenerated output');
+    // Foto-base abaixo de 600px e saida abaixo de 1000px devem ser bloqueadas.
+    $weakBase = $tmp . '/weak-base.png';
+    iip_write_png($weakBase, 599, 599);
+    iip_expect_failure(fn() => ai_studio_validate_image_file($weakBase, 600), 'source image below 600px');
+
+    $weakOutput = $tmp . '/weak-output.png';
+    iip_write_png($weakOutput, 999, 999);
+    iip_expect_failure(fn() => AiStudioHttpClient::validateOutputImage($weakOutput, 1000), 'output image below 1000px');
 
     $fake = $tmp . '/fake.jpg';
     file_put_contents($fake, '<html>not an image</html>');
-    iip_expect_failure(fn() => ai_studio_validate_image_file($fake, 300), 'fake image with jpg extension');
-    iip_expect_failure(fn() => AiStudioHttpClient::validateOutputImage($fake, 512), 'fake regenerated image with jpg extension');
+    iip_expect_failure(fn() => ai_studio_validate_image_file($fake, 600), 'fake image with jpg extension');
+    iip_expect_failure(fn() => AiStudioHttpClient::validateOutputImage($fake, 1000), 'fake regenerated image with jpg extension');
 
     // Traversal local nunca pode ser usado como foto-base.
     iip_expect_failure(
@@ -79,13 +80,17 @@ try {
         'path traversal in base image'
     );
 
-    // Prompts devem manter fidelidade do produto e evitar objetos inventados.
+    // Prompts devem manter fidelidade, resolucao e regras da imagem principal.
     $prompts = ai_studio_default_prompts('Produto Teste X1');
     foreach (['white', 'hero', 'ambient'] as $type) {
         iip_assert(isset($prompts[$type]), "prompt {$type} must exist");
         iip_assert(str_contains($prompts[$type], 'Preserve the exact product identity'), "prompt {$type} must preserve identity");
         iip_assert(str_contains($prompts[$type], 'Do not invent'), "prompt {$type} must reject invented features");
+        iip_assert(str_contains($prompts[$type], '1024x1024'), "prompt {$type} must request premium square resolution");
     }
+    iip_assert(str_contains($prompts['white'], 'RGB 255,255,255'), 'main image must request pure white background');
+    iip_assert(str_contains($prompts['white'], '85-95%'), 'main image must request strong product fill');
+    iip_assert(str_contains($prompts['white'], 'no badges'), 'main image must reject promotional overlays');
 
     // Testa o matcher privado sem abrir conexão de banco.
     $reflection = new ReflectionClass(AiStudioOmnichannelImagePublisher::class);
