@@ -1,8 +1,5 @@
 name: Verify Contabilidade Melo test delivery
 on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/verify-contabilidade-melo-test-delivery.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -23,11 +20,8 @@ jobs:
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           sudo systemctl stop mei-mg-email-worker.service || true
-          pkill -TERM -f 'python.*(-m[[:space:]]+worker\.worker|worker/worker\.py)' || true
-          sleep 2
           cd /home/ubuntu/mei-mg-email
 
-          echo '=== SYNC FINAL SAFETY FILES ==='
           GIT_TERMINAL_PROMPT=0 git fetch --quiet origin main
           for f in \
             app/email_provider.py \
@@ -45,65 +39,14 @@ jobs:
           /home/ubuntu/mei-mg-email/.venv/bin/python -m py_compile app/email_provider.py app/routes/campanhas.py worker/worker.py scripts/auditar_graph_token.py scripts/auditar_dns_microsoft.py scripts/auditar_exchange_10000.py scripts/disparar_10000_mei_mg.py
 
           if grep -q '^RATE_LIMIT_ENVIOS_POR_MINUTO=' .env; then
-            sed -i 's/^RATE_LIMIT_ENVIOS_POR_MINUTO=.*/RATE_LIMIT_ENVIOS_POR_MINUTO=20/' .env
+            sed -i 's/^RATE_LIMIT_ENVIOS_POR_MINUTO=.*/RATE_LIMIT_ENVIOS_POR_MINUTO=30/' .env
           else
-            printf '\nRATE_LIMIT_ENVIOS_POR_MINUTO=20\n' >> .env
+            printf '\nRATE_LIMIT_ENVIOS_POR_MINUTO=30\n' >> .env
           fi
 
-          echo '=== FINAL READINESS AUDIT ==='
-          set +e
           /home/ubuntu/mei-mg-email/.venv/bin/python scripts/auditar_exchange_10000.py
-          audit_rc=$?
-          set -e
-          echo AUDIT_RC=$audit_rc
-          if [ "$audit_rc" -ne 0 ]; then
-            echo FINAL_START_BLOCKED_AUDIT
-            echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
-            exit 0
-          fi
-
-          echo '=== AUTHORIZED POOL CHECK ==='
-          eligible=$(/home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
-          from dotenv import load_dotenv
-          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
-          import os, psycopg
-          with psycopg.connect(os.environ['DATABASE_URL']) as conn:
-              with conn.cursor() as cur:
-                  cur.execute('select count(*) from mei_email.vw_empresas_elegiveis')
-                  print(cur.fetchone()[0])
-          PY
-          )
-          echo AUTHORIZED_ELIGIBLE=$eligible
-          if [ "$eligible" -le 0 ]; then
-            echo FINAL_START_BLOCKED_NO_AUTHORIZED_RECIPIENTS
-            echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
-            exit 0
-          fi
-
-          echo '=== ENQUEUE AUTHORIZED ONLY ==='
-          /home/ubuntu/mei-mg-email/.venv/bin/python scripts/disparar_10000_mei_mg.py
-          echo '=== START WORKER ==='
-          sudo systemctl start mei-mg-email-worker.service
-          sleep 15
-          state=$(sudo systemctl is-active mei-mg-email-worker.service || true)
-          echo WORKER_STATE=$state
-          test "$state" = active
-          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
-          from dotenv import load_dotenv
-          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
-          import os,json,psycopg
-          from psycopg.rows import dict_row
-          with psycopg.connect(os.environ['DATABASE_URL'],row_factory=dict_row) as conn:
-              with conn.cursor() as cur:
-                  cur.execute("select status::text status,count(*) n from mei_email.envios group by status::text order by status::text")
-                  statuses=[dict(r) for r in cur.fetchall()]
-                  cur.execute("select count(*) n from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours'")
-                  used=cur.fetchone()['n']
-                  cur.execute("select count(*) n from mei_email.envios where status::text in ('pendente','enviando')")
-                  pending=cur.fetchone()['n']
-                  print(json.dumps({'statuses':statuses,'used_24h':used,'pending':pending,'target':9950},ensure_ascii=False))
-          PY
-          echo AUTHORIZED_DELIVERY_WORKER_STARTED
+          echo MANUAL_READINESS_OK_USE_SAFE_RESUME_WORKFLOW
+          echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
           EOF
       - name: Cleanup
         if: always()
