@@ -71,7 +71,7 @@ $badGuarantee = cot_base_data();
 $badGuarantee['optimized_description'] .= ' Com garantia de fabrica.';
 cot_expect_rejection(fn() => ai_catalog_validate_ai_response($badGuarantee, 'shopee', $product), 'unsourced guarantee');
 
-// Amazon: limite oficial atual de 200 caracteres, 5 bullets e sem repeticao abusiva.
+// Amazon: limite de 200 caracteres no quality gate, 5 bullets e sem repeticao abusiva.
 $amazon = cot_base_data();
 $amazon['optimized_title'] = 'Suporte Articulado Mesa X1 Preto';
 $amazon['bullet_points'] = [
@@ -91,26 +91,35 @@ $amazonRepeat = $amazon;
 $amazonRepeat['optimized_title'] = 'Suporte Suporte Suporte Mesa X1';
 cot_expect_rejection(fn() => ai_catalog_validate_ai_response($amazonRepeat, 'amazon', $product), 'Amazon repeated word');
 
-// TikTok Shop: titulo 25-200, 3 hooks factuais e bullets curtos.
+// TikTok Shop BR: a politica atual do Admin aceita ate 300 caracteres.
+// Hooks sao auxiliares/embutidos na descricao pelo publisher atual, por isso
+// 0-2 hooks factuais sao permitidos em vez da regra antiga de exatamente 3.
 $tiktok = cot_base_data();
 $tiktok['marketing_hooks'] = [
     'Veja o modelo X1 em uso sobre a mesa.',
-    'Conheca a estrutura articulada cadastrada do X1.',
     'Confira os detalhes do suporte na cor preta.',
 ];
 ai_catalog_validate_ai_response($tiktok, 'tiktok', $product);
 
 $tiktokShort = $tiktok;
-$tiktokShort['optimized_title'] = 'Suporte X1 Preto';
-cot_expect_rejection(fn() => ai_catalog_validate_ai_response($tiktokShort, 'tiktok', $product), 'TikTok title < 25');
+$tiktokShort['optimized_title'] = 'X';
+ai_catalog_validate_ai_response($tiktokShort, 'tiktok', $product);
 
-$tiktokLong = $tiktok;
-$tiktokLong['optimized_title'] = str_repeat('T', 201);
-cot_expect_rejection(fn() => ai_catalog_validate_ai_response($tiktokLong, 'tiktok', $product), 'TikTok title > 200');
+$tiktokLongAllowed = $tiktok;
+$tiktokLongAllowed['optimized_title'] = str_repeat('T', 300);
+ai_catalog_validate_ai_response($tiktokLongAllowed, 'tiktok', $product);
 
-$tiktokBad = $tiktok;
-$tiktokBad['marketing_hooks'] = ['Apenas um hook factual.'];
-cot_expect_rejection(fn() => ai_catalog_validate_ai_response($tiktokBad, 'tiktok', $product), 'TikTok requires 3 hooks');
+$tiktokTooLong = $tiktok;
+$tiktokTooLong['optimized_title'] = str_repeat('T', 301);
+cot_expect_rejection(fn() => ai_catalog_validate_ai_response($tiktokTooLong, 'tiktok', $product), 'TikTok title > 300');
+
+$tiktokTooManyHooks = $tiktok;
+$tiktokTooManyHooks['marketing_hooks'] = ['Hook factual 1.', 'Hook factual 2.', 'Hook factual 3.'];
+cot_expect_rejection(fn() => ai_catalog_validate_ai_response($tiktokTooManyHooks, 'tiktok', $product), 'TikTok allows at most 2 embedded hooks');
+
+$tiktokLongBullet = $tiktok;
+$tiktokLongBullet['bullet_points'][0] = str_repeat('B', 250);
+cot_expect_rejection(fn() => ai_catalog_validate_ai_response($tiktokLongBullet, 'tiktok', $product), 'TikTok bullet must remain below 250 chars');
 
 // ERP: nenhum SEO ou hook de marketing.
 $erp = cot_base_data();
