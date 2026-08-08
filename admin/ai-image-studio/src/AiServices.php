@@ -149,11 +149,13 @@ final class AiStudioHttpClient
     /**
      * Valida o arquivo produzido pelo provedor antes de qualquer caller poder
      * marcá-lo como pending. Isso protege também o fluxo "Regenerar" do Admin,
-     * que chama os clientes de imagem diretamente.
+     * que chama os clientes de imagem diretamente. Como o Studio gera imagens
+     * quadradas, 1000px por lado garante o patamar recomendado para zoom da
+     * imagem principal Amazon e supera o minimo de 600x600 do TikTok Shop.
      *
      * @return array{width:int,height:int,mime:string,sha256:string}
      */
-    public static function validateOutputImage(string $filePath, int $minimumSide = 512): array
+    public static function validateOutputImage(string $filePath, int $minimumSide = 1000): array
     {
         if (!is_file($filePath) || !is_readable($filePath) || (int)@filesize($filePath) <= 0) {
             throw new AiStudioApiException('Provedor não produziu um arquivo de imagem legível.');
@@ -257,7 +259,7 @@ final class AiStudioOpenAiClient extends AiStudioRotatingClient
             }
             throw new AiStudioApiException('OpenAI não retornou b64_json nem URL.');
         }, 'OpenAI');
-        AiStudioHttpClient::validateOutputImage($destinationPath, 512);
+        AiStudioHttpClient::validateOutputImage($destinationPath, 1000);
     }
 }
 
@@ -293,7 +295,7 @@ final class AiStudioGoogleImageEditClient extends AiStudioRotatingClient
             $reason = (string)($decoded['promptFeedback']['blockReason'] ?? '');
             throw new AiStudioApiException('Gemini não retornou imagem utilizável' . ($reason !== '' ? ': ' . $reason : '.'));
         }, 'Gemini');
-        AiStudioHttpClient::validateOutputImage($destinationPath, 512);
+        AiStudioHttpClient::validateOutputImage($destinationPath, 1000);
     }
 }
 
