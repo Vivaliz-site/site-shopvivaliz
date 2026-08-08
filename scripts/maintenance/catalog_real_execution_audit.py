@@ -43,16 +43,22 @@ FORBIDDEN_MARKERS = (
 )
 
 REQUIRED_SNIPPETS = {
-    "catalog_admin": ("CatalogOptimizationPublisher", "Salvar e publicar em", "publication_failed", "submitted"),
+    "catalog_admin": (
+        "CatalogOptimizationPublisher", "confirm_channel", "somente em", "publication_failed", "submitted",
+    ),
     "catalog_publisher": (
         "SvMercadoLivrePublisher", "SvShopeePublisher", "SvTikTokPublisher", "SvAmazonPublisher",
         "SvTinyPublisher", "'publishing'", "'published'", "'submitted'", "sv_market_write_publication",
         "all_approved_text_fields_exposed",
     ),
-    "image_admin": ("AiStudioOmnichannelImagePublisher", "channels[]", "Aprovar e publicar nos canais selecionados"),
+    "image_admin": (
+        "AiStudioOmnichannelImagePublisher", "Imagem legada sem marketplace de geracao",
+        "Nenhum outro marketplace sera chamado", "[$intended]", "confirm_channel",
+    ),
     "image_publisher": (
         "SvMercadoLivrePublisher", "SvShopeePublisher", "SvTikTokPublisher", "SvAmazonPublisher",
-        "SvTinyPublisher", "partial_published", "sv_market_write_publication",
+        "count($channels) !== 1", "exatamente um canal de destino", "Olist/Tiny está bloqueada",
+        "partial_published", "sv_market_write_publication",
     ),
     "runtime_schema": (
         "product_channel_content", "product_channel_mappings", "catalog_publications",
