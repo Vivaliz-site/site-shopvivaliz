@@ -27,7 +27,7 @@ jobs:
           from collections import OrderedDict
           from dotenv import load_dotenv
           load_dotenv('.env', override=True)
-          import os, json, re
+          import os, json
           import psycopg
           from psycopg.rows import dict_row
 
@@ -36,6 +36,7 @@ jobs:
           with psycopg.connect(db, autocommit=True, row_factory=dict_row) as conn:
               with conn.cursor() as cur:
                   cur.execute("set default_transaction_read_only = on")
+                  cur.execute("set statement_timeout = '180s'")
                   cur.execute("select table_name from information_schema.tables where table_schema='mei_email' order by table_name")
                   out['tables']=[r['table_name'] for r in cur.fetchall()]
 
@@ -73,15 +74,15 @@ jobs:
                       out['envios_columns']=ecols
                       out['envios_total']=scalar("select count(*) from mei_email.envios")
                       if 'status' in ecols:
-                          out['envios_por_status']=rows("select status,count(*)::bigint quantidade from mei_email.envios group by status order by quantidade desc")
+                          out['envios_por_status']=rows("select status::text status,count(*)::bigint quantidade from mei_email.envios group by status order by quantidade desc")
                       if 'email' in ecols:
                           out['envios_email_blank']=scalar("select count(*) from mei_email.envios where email is null or btrim(email)='' ")
                           out['envios_duplicate_recipient_groups']=scalar("select count(*) from (select lower(btrim(email)) e from mei_email.envios where email is not null and btrim(email)<>'' group by 1 having count(*)>1) x")
                       if all(c in ecols for c in ['campanha_id','status']):
-                          out['pendentes_por_campanha']=rows("select campanha_id,count(*)::bigint pendentes from mei_email.envios where status='pendente' group by campanha_id order by pendentes desc limit 25")
-                          out['falhas_por_campanha']=rows("select campanha_id,count(*)::bigint falhas from mei_email.envios where status in ('falha','erro') group by campanha_id order by falhas desc limit 25")
+                          out['pendentes_por_campanha']=rows("select campanha_id,count(*)::bigint pendentes from mei_email.envios where status::text='pendente' group by campanha_id order by pendentes desc limit 25")
+                          out['nao_enviados_por_campanha_status']=rows("select campanha_id,status::text status,count(*)::bigint quantidade from mei_email.envios where status::text not in ('enviado','pendente') group by campanha_id,status order by quantidade desc limit 50")
                       if 'enviado_em' in ecols and 'status' in ecols:
-                          out['enviados_hoje_sp']=scalar("select count(*) from mei_email.envios where status='enviado' and (enviado_em at time zone 'America/Sao_Paulo')::date=(now() at time zone 'America/Sao_Paulo')::date")
+                          out['enviados_hoje_sp']=scalar("select count(*) from mei_email.envios where status::text='enviado' and (enviado_em at time zone 'America/Sao_Paulo')::date=(now() at time zone 'America/Sao_Paulo')::date")
                       if all(c in ecols for c in ['cnpj','email']):
                           out['duplicate_cnpj_email_pairs']=scalar("select count(*) from (select cnpj,lower(btrim(email)) e from mei_email.envios group by cnpj,lower(btrim(email)) having count(*)>1) x")
 
@@ -89,7 +90,7 @@ jobs:
                       lcols=[r['column_name'] for r in rows("select column_name from information_schema.columns where table_schema='mei_email' and table_name='lotes' order by ordinal_position")]
                       out['lotes_columns']=lcols
                       if 'status' in lcols:
-                          out['lotes_por_status']=rows("select status,count(*)::bigint quantidade from mei_email.lotes group by status order by quantidade desc")
+                          out['lotes_por_status']=rows("select status::text status,count(*)::bigint quantidade from mei_email.lotes group by status order by quantidade desc")
 
                   if 'aquecimento_envio' in out['tables']:
                       out['curva_aquecimento']=rows("select * from mei_email.aquecimento_envio order by 1")
