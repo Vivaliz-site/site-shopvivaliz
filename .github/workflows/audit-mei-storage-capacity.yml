@@ -1,0 +1,63 @@
+name: Audit MEI storage capacity
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/audit-mei-storage-capacity.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect filesystem and database sizes read-only
+        run: |
+          timeout 180s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo '=== FILESYSTEM ==='
+          df -h / /home/ubuntu || true
+          echo '=== PROJECT_TOP ==='
+          timeout 60s du -xhd1 /home/ubuntu/mei-mg-email 2>/dev/null | sort -h | tail -n 30 || true
+          echo '=== HOME_TOP ==='
+          timeout 60s du -xhd1 /home/ubuntu 2>/dev/null | sort -h | tail -n 20 || true
+          echo '=== LARGE_PROJECT_FILES ==='
+          find /home/ubuntu/mei-mg-email -xdev -type f -size +50M -printf '%s %p\n' 2>/dev/null | sort -nr | head -n 30 || true
+          echo '=== JOURNAL ==='
+          journalctl --disk-usage 2>/dev/null || true
+          echo '=== DATABASE_SIZES ==='
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env',override=True)
+          import json,os,psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'],row_factory=dict_row,connect_timeout=10) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("set transaction read only")
+                  cur.execute("set statement_timeout='30s'")
+                  cur.execute("select pg_database_size(current_database()) bytes")
+                  print('DATABASE_BYTES='+str(cur.fetchone()['bytes']))
+                  cur.execute("""
+                    select relname,
+                           pg_total_relation_size(c.oid) total_bytes,
+                           pg_relation_size(c.oid) heap_bytes
+                      from pg_class c
+                      join pg_namespace n on n.oid=c.relnamespace
+                     where n.nspname='mei_email' and c.relkind='r'
+                     order by pg_total_relation_size(c.oid) desc
+                  """)
+                  print('TABLES='+json.dumps([dict(r) for r in cur.fetchall()],default=str))
+          PY
+          echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
