@@ -1,0 +1,162 @@
+name: Deploy MEI daily base synchronization
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/deploy-mei-daily-base-sync.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deploy-mei-daily-base-sync
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Deploy migrations, audited sync and daily timer
+        run: |
+          timeout 540s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          ROOT=/home/ubuntu/mei-mg-email
+          EXPECTED_PRIVATE_SHA=0a52fe455567ced7c5ab353142a4ace17e2c4cb2
+          cd "$ROOT"
+
+          echo '=== PREFLIGHT ==='
+          test "$(sudo systemctl is-active mei-mg-email-worker.service || true)" = inactive
+          timeout 40s git fetch --quiet origin main
+          actual=$(git rev-parse origin/main)
+          echo ORIGIN_MAIN="$actual"
+          test "$actual" = "$EXPECTED_PRIVATE_SHA"
+          command -v psql >/dev/null
+
+          stamp=$(date +%Y%m%d-%H%M%S)
+          backup="$ROOT/backups/daily-base-sync-$stamp"
+          mkdir -p "$backup"
+          for f in scripts/ingest_from_huggingface.py scripts/sincronizar_base_diaria.py db/migrations/V014__cnpj_alphanumeric_and_submission_guard.sql db/migrations/V015__base_sync_runs.sql; do
+            if [ -e "$f" ]; then
+              mkdir -p "$backup/$(dirname "$f")"
+              cp -a "$f" "$backup/$f"
+            fi
+          done
+          for f in /etc/systemd/system/mei-mg-base-sync.service /etc/systemd/system/mei-mg-base-sync.timer; do
+            if sudo test -e "$f"; then sudo cp -a "$f" "$backup/$(basename "$f")"; fi
+          done
+
+          DB_URL=$($ROOT/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          import os
+          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
+          print(os.environ['DATABASE_URL'])
+          PY
+          )
+          if command -v pg_dump >/dev/null; then
+            pg_dump "$DB_URL" --schema-only --schema=mei_email > "$backup/mei_email-schema-before.sql"
+            psql "$DB_URL" -X -v ON_ERROR_STOP=1 -Atc "select cnpj,enviado,coalesce(enviado_em::text,'') from mei_email.empresas e where exists (select 1 from mei_email.envios x where x.cnpj=e.cnpj and x.status::text in ('submitted','enviado'))" > "$backup/submitted-company-flags-before.tsv"
+          fi
+
+          echo '=== INSTALL TESTED SOURCE FILES ==='
+          for f in scripts/ingest_from_huggingface.py scripts/sincronizar_base_diaria.py db/migrations/V014__cnpj_alphanumeric_and_submission_guard.sql db/migrations/V015__base_sync_runs.sql; do
+            tmp=$(mktemp)
+            git show "$EXPECTED_PRIVATE_SHA:$f" > "$tmp"
+            install -m 640 "$tmp" "$ROOT/$f"
+            rm -f "$tmp"
+          done
+          chmod 750 "$ROOT/scripts/ingest_from_huggingface.py" "$ROOT/scripts/sincronizar_base_diaria.py"
+          $ROOT/.venv/bin/python -m py_compile scripts/ingest_from_huggingface.py scripts/sincronizar_base_diaria.py
+
+          echo '=== APPLY DATABASE HARDENING ==='
+          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -f db/migrations/V014__cnpj_alphanumeric_and_submission_guard.sql
+          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -f db/migrations/V015__base_sync_runs.sql
+
+          echo '=== BOOTSTRAP SOURCE REVISION WITHOUT REIMPORT ==='
+          $ROOT/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
+          import json, os
+          from datetime import datetime, timezone
+          from urllib.request import Request, urlopen
+          import psycopg
+          source='huggingface_fluowai_datacorp_cnpj'
+          url='https://huggingface.co/api/datasets/fluowai/datacorp-cnpj-data'
+          req=Request(url,headers={'User-Agent':'ShopVivaliz-MEI-base-sync-bootstrap/1.0','Accept':'application/json'})
+          with urlopen(req,timeout=30) as r:
+              meta=json.loads(r.read().decode('utf-8'))
+          revision=str(meta.get('sha') or meta.get('id') or '').strip()
+          raw=str(meta.get('lastModified') or '').strip().replace('Z','+00:00')
+          last_modified=datetime.fromisoformat(raw) if raw else None
+          with psycopg.connect(os.environ['DATABASE_URL']) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("select count(*) from mei_email.base_sync_runs where source_name=%s and source_revision=%s and status in ('success','no_change','source_stale')",(source,revision))
+                  exists=cur.fetchone()[0]
+                  if not exists:
+                      cur.execute('select count(*) from mei_email.empresas')
+                      rows=cur.fetchone()[0]
+                      cur.execute("""
+                        insert into mei_email.base_sync_runs
+                          (source_name,source_revision,source_last_modified,status,finished_at,rows_before,rows_after,rows_added,details)
+                        values (%s,%s,%s,'no_change',now(),%s,%s,0,%s::jsonb)
+                      """,(source,revision,last_modified,rows,rows,json.dumps({'bootstrap_existing_database':True,'note':'Scheduler instalado sem reimportacao pesada imediata; proxima revisao nova sera ingerida.'},ensure_ascii=False)))
+              conn.commit()
+          print('BOOTSTRAP_SOURCE_REVISION='+revision)
+          print('BOOTSTRAP_SOURCE_LAST_MODIFIED='+str(last_modified))
+          PY
+
+          echo '=== INSTALL DAILY SYSTEMD TIMER ==='
+          cat >/tmp/mei-mg-base-sync.service <<'UNIT'
+          [Unit]
+          Description=MEI MG Daily CNPJ Base Synchronization
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          Type=oneshot
+          User=ubuntu
+          WorkingDirectory=/home/ubuntu/mei-mg-email
+          ExecStart=/home/ubuntu/mei-mg-email/.venv/bin/python /home/ubuntu/mei-mg-email/scripts/sincronizar_base_diaria.py
+          Nice=10
+          IOSchedulingClass=best-effort
+          IOSchedulingPriority=7
+          TimeoutStartSec=6h
+          UNIT
+          cat >/tmp/mei-mg-base-sync.timer <<'UNIT'
+          [Unit]
+          Description=Run MEI MG CNPJ base synchronization every day
+
+          [Timer]
+          OnCalendar=*-*-* 05:30:00
+          Persistent=true
+          AccuracySec=1min
+          RandomizedDelaySec=5min
+          Unit=mei-mg-base-sync.service
+
+          [Install]
+          WantedBy=timers.target
+          UNIT
+          sudo install -m 644 /tmp/mei-mg-base-sync.service /etc/systemd/system/mei-mg-base-sync.service
+          sudo install -m 644 /tmp/mei-mg-base-sync.timer /etc/systemd/system/mei-mg-base-sync.timer
+          rm -f /tmp/mei-mg-base-sync.service /tmp/mei-mg-base-sync.timer
+          sudo systemctl daemon-reload
+          sudo systemctl enable --now mei-mg-base-sync.timer
+
+          echo '=== VERIFY ==='
+          sudo systemctl is-enabled mei-mg-base-sync.timer
+          sudo systemctl is-active mei-mg-base-sync.timer
+          sudo systemctl list-timers mei-mg-base-sync.timer --all --no-pager
+          test "$(sudo systemctl is-active mei-mg-email-worker.service || true)" = inactive
+          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -Atc "select 'cnpj_constraint='||pg_get_constraintdef(oid) from pg_constraint where conrelid='mei_email.empresas'::regclass and conname='empresas_cnpj_check'"
+          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -Atc "select 'sync_runs='||count(*) from mei_email.base_sync_runs"
+          psql "$DB_URL" -X -v ON_ERROR_STOP=1 -Atc "select 'submitted_marked_enviado='||count(*) from mei_email.empresas where enviado=true"
+          echo BACKUP="$backup"
+          echo DAILY_BASE_SYNC_DEPLOYED_WORKER_REMAINS_INACTIVE
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
