@@ -30,7 +30,7 @@ jobs:
           printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Validate Shopee service and Amazon Sellers API
+      - name: Validate runtime and discover Amazon credential source
         shell: bash
         run: |
           set -euo pipefail
@@ -66,20 +66,94 @@ jobs:
           <?php
           declare(strict_types=1);
 
-          $envFile = '/home/ubuntu/shopvivaliz-deploy/shared/.env';
-          foreach (file($envFile, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
-              $line = trim($line);
-              if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) continue;
-              [$key, $value] = explode('=', $line, 2);
-              $key = trim($key);
-              if ($key === '' || preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $key) !== 1) continue;
-              $value = trim($value);
-              if (strlen($value) >= 2 && (($value[0] === '"' && $value[-1] === '"') || ($value[0] === "'" && $value[-1] === "'"))) {
-                  $value = substr($value, 1, -1);
+          function loadEnvFile(string $path): void {
+              foreach (file($path, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+                  $line = trim($line);
+                  if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) continue;
+                  [$key, $value] = explode('=', $line, 2);
+                  $key = trim($key);
+                  if ($key === '' || preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $key) !== 1) continue;
+                  $value = trim($value);
+                  if (strlen($value) >= 2 && (($value[0] === '"' && $value[-1] === '"') || ($value[0] === "'" && $value[-1] === "'"))) {
+                      $value = substr($value, 1, -1);
+                  }
+                  putenv($key . '=' . $value);
+                  $_ENV[$key] = $value;
               }
-              putenv($key . '=' . $value);
-              $_ENV[$key] = $value;
           }
+
+          function anyPresent(array $keys): bool {
+              foreach ($keys as $key) {
+                  $v = getenv($key);
+                  if ($v !== false && trim((string)$v) !== '') return true;
+              }
+              return false;
+          }
+
+          loadEnvFile('/home/ubuntu/shopvivaliz-deploy/shared/.env');
+
+          $clientIdAliases = ['AMAZON_LWA_CLIENT_ID','AMAZON_SP_API_CLIENT_ID','SP_API_CLIENT_ID','LWA_CLIENT_ID'];
+          $clientSecretAliases = ['AMAZON_LWA_CLIENT_SECRET','AMAZON_SP_API_CLIENT_SECRET','SP_API_CLIENT_SECRET','LWA_CLIENT_SECRET'];
+          $refreshAliases = ['AMAZON_LWA_REFRESH_TOKEN','AMAZON_SP_API_REFRESH_TOKEN','SP_API_REFRESH_TOKEN','LWA_REFRESH_TOKEN'];
+          $sellerAliases = ['AMAZON_SELLER_ID','AMAZON_ACCOUNT_ID','AMAZON_MERCHANT_ID','AMAZON_MERCHANT_TOKEN','SP_API_SELLER_ID'];
+          $marketplaceAliases = ['AMAZON_MARKETPLACE_ID','AMAZON_MARKETPLACE','SP_API_MARKETPLACE_ID'];
+
+          $envStatus = [
+              'client_id' => anyPresent($clientIdAliases),
+              'client_secret' => anyPresent($clientSecretAliases),
+              'refresh_token' => anyPresent($refreshAliases),
+              'seller_id' => anyPresent($sellerAliases),
+              'marketplace_id' => anyPresent($marketplaceAliases),
+          ];
+          echo json_encode(['amazon_env_presence' => $envStatus], JSON_UNESCAPED_SLASHES) . PHP_EOL;
+
+          $paths = [
+              '/home/ubuntu/shopvivaliz-deploy/current/storage/private/amazon-tokens.json',
+              '/home/ubuntu/shopvivaliz-deploy/current/storage/private/amazon-spapi.json',
+              '/home/ubuntu/shopvivaliz-deploy/current/storage/private/amazon-sp-api.json',
+              '/home/ubuntu/shopvivaliz-deploy/current/storage/private/sp-api.json',
+              '/home/ubuntu/shopvivaliz-deploy/current/storage/private/lwa-tokens.json',
+              '/home/ubuntu/shopvivaliz-deploy/shared/amazon-tokens.json',
+              '/home/ubuntu/shopvivaliz-deploy/shared/amazon-spapi.json',
+              '/home/ubuntu/shopvivaliz-deploy/shared/amazon-sp-api.json',
+              '/home/ubuntu/shopvivaliz-deploy/shared/sp-api.json',
+              '/home/ubuntu/shopvivaliz-deploy/shared/lwa-tokens.json',
+          ];
+          $privateSummary = [];
+          $privateLoaded = false;
+          foreach ($paths as $path) {
+              if (!is_file($path) || !is_readable($path)) continue;
+              $data = json_decode((string)file_get_contents($path), true);
+              if (!is_array($data)) {
+                  $privateSummary[basename($path)] = ['readable' => true, 'valid_json' => false, 'complete_lwa' => false];
+                  continue;
+              }
+              $clientId = trim((string)($data['client_id'] ?? $data['lwa_client_id'] ?? ''));
+              $clientSecret = trim((string)($data['client_secret'] ?? $data['lwa_client_secret'] ?? ''));
+              $refresh = trim((string)($data['refresh_token'] ?? $data['lwa_refresh_token'] ?? ''));
+              $seller = trim((string)($data['seller_id'] ?? $data['merchant_id'] ?? $data['merchant_token'] ?? $data['account_id'] ?? ''));
+              $marketplace = trim((string)($data['marketplace_id'] ?? ''));
+              $complete = $clientId !== '' && $clientSecret !== '' && $refresh !== '';
+              $privateSummary[basename($path)] = [
+                  'readable' => true,
+                  'valid_json' => true,
+                  'complete_lwa' => $complete,
+                  'seller_present' => $seller !== '',
+                  'marketplace_present' => $marketplace !== '',
+              ];
+              if (!$privateLoaded && $complete) {
+                  putenv('AMAZON_LWA_CLIENT_ID=' . $clientId);
+                  putenv('AMAZON_LWA_CLIENT_SECRET=' . $clientSecret);
+                  putenv('AMAZON_LWA_REFRESH_TOKEN=' . $refresh);
+                  $_ENV['AMAZON_LWA_CLIENT_ID'] = $clientId;
+                  $_ENV['AMAZON_LWA_CLIENT_SECRET'] = $clientSecret;
+                  $_ENV['AMAZON_LWA_REFRESH_TOKEN'] = $refresh;
+                  if ($seller !== '') { putenv('AMAZON_SELLER_ID=' . $seller); $_ENV['AMAZON_SELLER_ID'] = $seller; }
+                  if ($marketplace !== '') { putenv('AMAZON_MARKETPLACE_ID=' . $marketplace); $_ENV['AMAZON_MARKETPLACE_ID'] = $marketplace; }
+                  $privateLoaded = true;
+              }
+          }
+          echo json_encode(['amazon_private_sources' => $privateSummary, 'private_source_loaded_for_probe' => $privateLoaded], JSON_UNESCAPED_SLASHES) . PHP_EOL;
 
           require '/home/ubuntu/shopvivaliz-deploy/current/includes/marketplace/AmazonPublisher.php';
 
@@ -94,10 +168,7 @@ jobs:
                   foreach ($entries as $entry) {
                       if (!is_array($entry)) continue;
                       $marketplace = is_array($entry['marketplace'] ?? null) ? $entry['marketplace'] : [];
-                      if (strtoupper((string)($marketplace['countryCode'] ?? '')) === 'BR') {
-                          $hasBr = true;
-                          break;
-                      }
+                      if (strtoupper((string)($marketplace['countryCode'] ?? '')) === 'BR') { $hasBr = true; break; }
                   }
               }
               $result = [
