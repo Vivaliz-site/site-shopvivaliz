@@ -1,72 +1,60 @@
 # GitHub Secrets Configuration
 
-## Como Adicionar Secrets no GitHub
+## Objetivo
 
-1. **Abra o repositório:**
-   https://github.com/Vivaliz-site/site-shopvivaliz
+Configure as credenciais reais somente no GitHub Environment `Production` (ou no cofre de segredos do runtime). Nao copie IDs ou secrets de arquivos versionados antigos: houve configuracao OAuth obsoleta neste repositorio e ela ja retornou `invalid_client` em uma chamada real.
 
-2. **Vá para Settings → Secrets and variables → Actions**
+## Como adicionar os secrets
 
-3. **Clique em "New repository secret"** e adicione CADA:
+1. Abra o repositorio no GitHub.
+2. Va para **Settings -> Environments -> Production -> Environment secrets**.
+3. Cadastre os valores reais diretamente no cofre, sem grava-los em arquivos versionados.
 
-### Secret 1: GOOGLE_OAUTH_CLIENT_ID
-```
-m71jvyuls7c4die88db14nv3bllmth0i.app.s.googleusercontent.com
-```
+Secrets usados pelo fluxo Google Ads:
 
-### Secret 2: GOOGLE_OAUTH_CLIENT_SECRET
-```
-<novo_secret_rotacionado_no_google_cloud>
-```
-
-### Secret 3: GOOGLE_ADS_CUSTOMER_ID
-```
-5104079137
-```
-
-### Secret 4: GOOGLE_ADS_DEVELOPER_TOKEN
-```
-<obter_de_https://ads.google.com/aw/apicenter>
+```text
+GOOGLE_OAUTH_CLIENT_ID=<client OAuth 2.0 ativo criado no Google Cloud>
+GOOGLE_OAUTH_CLIENT_SECRET=<secret atual desse mesmo client>
+GOOGLE_ADS_CUSTOMER_ID=<customer ID da conta de producao, 10 digitos>
+GOOGLE_ADS_LOGIN_CUSTOMER_ID=<MCC/login customer ID, se necessario>
+GOOGLE_ADS_DEVELOPER_TOKEN=<developer token do API Center>
+GOOGLE_ADS_REFRESH_TOKEN=<refresh token emitido para o mesmo OAuth client>
+GOOGLE_ADS_ID=<conversion ID, quando aplicavel>
+GOOGLE_ADS_CONVERSION_LABEL=<conversion label, quando aplicavel>
+GOOGLE_ANALYTICS_ID=<measurement ID do GA4>
 ```
 
-### Secret 5: GOOGLE_ADS_REFRESH_TOKEN
-```
-<gerar_via_oauth_google_ads>
+## Regra critica de consistencia OAuth
+
+`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` e `GOOGLE_ADS_REFRESH_TOKEN` precisam pertencer ao mesmo fluxo OAuth. Se o client for excluido, recriado ou tiver o secret rotacionado de forma incompatível, gere um novo refresh token.
+
+O Client ID esperado pelo Google deve terminar em:
+
+```text
+.apps.googleusercontent.com
 ```
 
-### Secret 6: GOOGLE_ADS_ID
-```
-<conversion_id_ou_AW-id>
-```
-
-### Secret 7: GOOGLE_ADS_CONVERSION_LABEL
-```
-<conversion_label>
-```
-
-### Secret 8: GOOGLE_ANALYTICS_ID
-```
-<obter_do_google_analytics>
-```
-
----
+Nao reutilize valores antigos encontrados em commits, relatorios ou documentacao.
 
 ## Validacao obrigatoria
 
-Depois de criar os secrets e sincronizar o ambiente, rode:
+Antes de qualquer chamada live, rode o preflight sem rede:
 
 ```bash
-python3 scripts/google_ads_real_readiness.py
+python3 scripts/google_ads_auth_preflight.py
 ```
 
 Resultado aceito:
 
 ```text
-READY_FOR_REAL_GOOGLE_ADS_CREATE_PAUSED
+GOOGLE_ADS_AUTH_PREFLIGHT_OK
 ```
 
-Qualquer `NOT_READY` ou exit code diferente de zero bloqueia campanha real.
+Depois, execute a auditoria read-only real pelo workflow **Google Ads Config CI -> Run workflow**. O workflow consulta campanhas e recomendacoes sem alterar budget, CPC, keywords, segmentacao ou status.
 
 ## Seguranca
 
-O secret antigo foi exposto neste arquivo. Rotacione `GOOGLE_OAUTH_CLIENT_SECRET` no Google Cloud antes de usar em producao.
+- Nunca commitar `.env`.
+- Nunca registrar OAuth Client Secret, Developer Token ou Refresh Token em Markdown, logs ou issues.
+- Nao enviar secrets por chat.
+- Se um secret tiver sido exposto, rotacione-o antes de reutilizar a integracao.
