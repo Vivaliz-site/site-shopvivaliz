@@ -36,6 +36,7 @@ jobs:
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
           set -euo pipefail
           unit='shopvivaliz-shopee-token-renewer.service'
+          backup='/etc/systemd/system/shopvivaliz-shopee-token-renewer.service.pre-hardening-20260803'
           redact='s/([A-Za-z0-9_]*(PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Za-z0-9_]*=)[^[:space:]]+/\1[REDACTED]/Ig'
           echo '=== systemctl show ==='
           systemctl show "$unit" -p FragmentPath -p LoadState -p ActiveState -p SubState -p UnitFileState || true
@@ -43,6 +44,12 @@ jobs:
           systemctl status "$unit" --no-pager --full 2>&1 | sed -E "$redact" || true
           echo '=== systemctl cat (sanitized) ==='
           systemctl cat "$unit" 2>&1 | sed -E "$redact" || true
+          echo '=== pre-hardening backup (sanitized) ==='
+          if [[ -r "$backup" ]]; then
+            sed -E "$redact" "$backup"
+          else
+            echo 'backup unavailable'
+          fi
           echo '=== systemd-analyze verify ==='
           fragment="$(systemctl show "$unit" -p FragmentPath --value 2>/dev/null || true)"
           if [[ -n "$fragment" && -r "$fragment" ]]; then
