@@ -1,0 +1,145 @@
+<?php
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/../admin/ai-image-studio/process_item.php';
+require_once __DIR__ . '/../admin/ai-image-studio/src/OmnichannelImagePublisher.php';
+
+function iip_assert(bool $condition, string $message): void
+{
+    if (!$condition) {
+        fwrite(STDERR, "FAIL: {$message}\n");
+        exit(1);
+    }
+}
+
+function iip_expect_failure(callable $callback, string $message): void
+{
+    try {
+        $callback();
+    } catch (Throwable) {
+        return;
+    }
+    fwrite(STDERR, "FAIL: expected failure - {$message}\n");
+    exit(1);
+}
+
+function iip_png_chunk(string $type, string $data): string
+{
+    $body = $type . $data;
+    return pack('N', strlen($data)) . $body . pack('N', crc32($body));
+}
+
+function iip_write_png(string $path, int $width, int $height): void
+{
+    $signature = "\x89PNG\r\n\x1a\n";
+    $ihdr = pack('NNCCCCC', $width, $height, 8, 2, 0, 0, 0);
+    $scanline = "\x00" . str_repeat("\x00", $width * 3);
+    $raw = str_repeat($scanline, $height);
+    $png = $signature
+        . iip_png_chunk('IHDR', $ihdr)
+        . iip_png_chunk('IDAT', gzcompress($raw, 1))
+        . iip_png_chunk('IEND', '');
+    file_put_contents($path, $png);
+}
+
+$tmp = sys_get_temp_dir() . '/shopvivaliz-image-policy-' . bin2hex(random_bytes(4));
+@mkdir($tmp, 0700, true);
+
+try {
+    // Saida premium 1024x1024 deve ser aceita pelo fluxo inicial e pelo
+    // validador compartilhado usado na regeneracao.
+    $good = $tmp . '/good.png';
+    iip_write_png($good, 1024, 1024);
+    $meta = ai_studio_validate_image_file($good, 600);
+    iip_assert($meta['width'] === 1024 && $meta['height'] === 1024, '1024x1024 image metadata');
+    iip_assert($meta['mime'] === 'image/png', 'PNG MIME must be detected from file content');
+    iip_assert(strlen($meta['sha256']) === 64, 'image fingerprint must be SHA-256');
+
+    $providerMeta = AiStudioHttpClient::validateOutputImage($good, 1000);
+    iip_assert($providerMeta['mime'] === 'image/png', 'provider output validator must inspect real MIME');
+    iip_assert(strlen($providerMeta['sha256']) === 64, 'provider output validator must fingerprint output');
+
+    // Foto-base abaixo de 600px e saida abaixo de 1000px devem ser bloqueadas.
+    $weakBase = $tmp . '/weak-base.png';
+    iip_write_png($weakBase, 599, 599);
+    iip_expect_failure(fn() => ai_studio_validate_image_file($weakBase, 600), 'source image below 600px');
+
+    $weakOutput = $tmp . '/weak-output.png';
+    iip_write_png($weakOutput, 999, 999);
+    iip_expect_failure(fn() => AiStudioHttpClient::validateOutputImage($weakOutput, 1000), 'output image below 1000px');
+
+    $fake = $tmp . '/fake.jpg';
+    file_put_contents($fake, '<html>not an image</html>');
+    iip_expect_failure(fn() => ai_studio_validate_image_file($fake, 600), 'fake image with jpg extension');
+    iip_expect_failure(fn() => AiStudioHttpClient::validateOutputImage($fake, 1000), 'fake regenerated image with jpg extension');
+
+    iip_expect_failure(
+        fn() => ai_studio_resolve_base_image('../etc/passwd', $tmp, 123),
+        'path traversal in base image'
+    );
+
+    // Prompts devem manter fidelidade, resolucao e regras da imagem principal.
+    $prompts = ai_studio_default_prompts('Produto Teste X1');
+    foreach (['white', 'hero', 'ambient'] as $type) {
+        iip_assert(isset($prompts[$type]), "prompt {$type} must exist");
+        iip_assert(str_contains($prompts[$type], 'Preserve the exact product identity'), "prompt {$type} must preserve identity");
+        iip_assert(str_contains($prompts[$type], 'Do not invent'), "prompt {$type} must reject invented features");
+        iip_assert(str_contains($prompts[$type], '1024x1024'), "prompt {$type} must request premium square resolution");
+    }
+    iip_assert(str_contains($prompts['white'], 'RGB 255,255,255'), 'main image must request pure white background');
+    iip_assert(str_contains($prompts['white'], '85-95%'), 'main image must request strong product fill');
+    iip_assert(str_contains($prompts['white'], 'no badges'), 'main image must reject promotional overlays');
+
+    // Testa funcoes puras/privadas de identidade e ordenacao sem banco.
+    $reflection = new ReflectionClass(AiStudioOmnichannelImagePublisher::class);
+    $publisher = $reflection->newInstanceWithoutConstructor();
+
+    $matchMethod = $reflection->getMethod('cacheItemMatchesProduct');
+    $matchMethod->setAccessible(true);
+    $exact = ['sku' => 'SKU-1', 'olist_id' => '1001'];
+    iip_assert($matchMethod->invoke($publisher, $exact, 'SKU-1', '1001') === true, 'exact SKU + Olist ID must match');
+    $wrongSku = ['sku' => 'SKU-OUTRO', 'olist_id' => '1001'];
+    iip_assert($matchMethod->invoke($publisher, $wrongSku, 'SKU-1', '1001') === false, 'matching Olist ID with conflicting SKU must not match');
+    $wrongId = ['sku' => 'SKU-1', 'olist_id' => '9999'];
+    iip_assert($matchMethod->invoke($publisher, $wrongId, 'SKU-1', '1001') === false, 'matching SKU with conflicting Olist ID must not match');
+    $onlySku = ['sku' => 'SKU-1'];
+    iip_assert($matchMethod->invoke($publisher, $onlySku, 'SKU-1', '1001') === false, 'two source identifiers require two cache confirmations');
+    iip_assert($matchMethod->invoke($publisher, $onlySku, 'SKU-1', '') === true, 'SKU-only source may match exact SKU');
+    $onlyId = ['olist_product_id' => '1001'];
+    iip_assert($matchMethod->invoke($publisher, $onlyId, '', '1001') === true, 'ID-only source may match exact external ID');
+
+    $orderMethod = $reflection->getMethod('orderImageCandidates');
+    $orderMethod->setAccessible(true);
+    $ordered = $orderMethod->invoke($publisher, [
+        ['type' => 'hero', 'url' => '/hero-new.png', 'order' => 0],
+        ['type' => 'white', 'url' => '/white-approved.png', 'order' => 1],
+        ['type' => 'ambient', 'url' => '/ambient-approved.png', 'order' => 2],
+        ['type' => 'hero', 'url' => '/hero-old.png', 'order' => 3],
+    ]);
+    iip_assert($ordered === ['/white-approved.png', '/hero-new.png', '/ambient-approved.png'], 'white must always be first and only latest type kept');
+
+    // A sincronizacao Olist antiga usava OR e um bind incompleto. Ambos devem sumir.
+    $syncSource = file_get_contents(__DIR__ . '/../olist/sync-images-to-site.php');
+    iip_assert(is_string($syncSource), 'sync source must be readable');
+    iip_assert(!str_contains($syncSource, 'WHERE olist_id = ? OR sku = ?'), 'unsafe OR identity query must not exist');
+    iip_assert(!str_contains($syncSource, 'bind_param("issi"'), 'old incomplete image bind must not exist');
+    iip_assert(str_contains($syncSource, 'correspondência ambígua'), 'sync must explicitly block ambiguity');
+
+    // Publicacao multicanal nao pode reaproveitar silenciosamente a galeria do
+    // site e nao pode tocar no preco do ERP para publicar imagem gerada.
+    $publisherSource = file_get_contents(__DIR__ . '/../admin/ai-image-studio/src/OmnichannelImagePublisher.php');
+    iip_assert(is_string($publisherSource), 'publisher source must be readable');
+    iip_assert(str_contains($publisherSource, 'approvedChannelUrls'), 'external channels must use same-channel approval provenance');
+    iip_assert(str_contains($publisherSource, 'white deve ser aprovada primeiro'), 'secondary image cannot become cover without approved white');
+    iip_assert(str_contains($publisherSource, 'amazonUrlsWithExisting'), 'Amazon gallery must preserve pre-existing locators');
+    iip_assert(str_contains($publisherSource, 'API V2 exige reenviar preço'), 'ERP image publish must fail closed instead of resending price');
+    iip_assert(!str_contains($publisherSource, "new SvTinyPublisher(\$this->db))->publishImages"), 'AI Image Studio must not call Tiny image mutation path');
+
+    fwrite(STDOUT, "OK image identity and quality policy\n");
+} finally {
+    foreach (glob($tmp . '/*') ?: [] as $file) {
+        @unlink($file);
+    }
+    @rmdir($tmp);
+}
