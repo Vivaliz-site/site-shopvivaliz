@@ -9,7 +9,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 8
     steps:
       - name: Configure VM key
         env:
@@ -18,98 +18,20 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Repair runtime and send one controlled Graph test
+      - name: Inspect runtime contract safely
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           sudo systemctl stop mei-mg-email-worker.service || true
           cd /home/ubuntu/mei-mg-email
-
-          echo '=== REPAIR SENDRESULT CONTRACT ==='
-          ts=$(date +%Y%m%d%H%M%S)
-          cp app/email_provider.py backups/email_provider.py.verify.$ts
-          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
-          from pathlib import Path
-          p=Path('app/email_provider.py')
-          s=p.read_text(encoding='utf-8')
-          if 'status: str | None = None' not in s:
-              needle='    retry_after_seconds: int | None = None\n'
-              if needle not in s:
-                  raise SystemExit('SENDRESULT_PATCH_POINT_NOT_FOUND')
-              s=s.replace(needle, needle+'    status: str | None = None\n    status_code: int | None = None\n', 1)
-          elif 'status_code: int | None = None' not in s:
-              s=s.replace('    status: str | None = None\n', '    status: str | None = None\n    status_code: int | None = None\n', 1)
-          p.write_text(s, encoding='utf-8')
-          PY
-          /home/ubuntu/mei-mg-email/.venv/bin/python -m py_compile app/email_provider.py worker/worker.py
-          grep -nE 'status: str|status_code: int|status="submitted"' app/email_provider.py | head -20
-
-          echo '=== SAFE RUNTIME ==='
+          echo '=== PROVIDER HEAD ==='
+          sed -n '1,90p' app/email_provider.py
+          echo '=== SUBMITTED CALL ==='
+          sed -n '130,160p' app/email_provider.py
+          echo '=== WORKER SUBMITTED BLOCK ==='
+          sed -n '246,270p' worker/worker.py
+          echo '=== SAFE CONFIG ==='
           grep -E '^(EMAIL_PROVIDER|MICROSOFT_GRAPH_USER|MAIL_FROM|RATE_LIMIT_ENVIOS_POR_MINUTO|META_ENVIOS_POR_DIA|MAX_ENVIOS_POR_DIA)=' .env
-          test "$(grep '^EMAIL_PROVIDER=' .env | tail -1 | cut -d= -f2-)" = "microsoft_graph"
-          test "$(grep '^MICROSOFT_GRAPH_USER=' .env | tail -1 | cut -d= -f2-)" = "naoresponda@dev.shopvivaliz.com.br"
-          test "$(grep '^RATE_LIMIT_ENVIOS_POR_MINUTO=' .env | tail -1 | cut -d= -f2-)" -le 30
-          ! grep -Eq '^(GMAIL_APP_PASSWORD|MICROSOFT_SMTP_PASSWORD|BREVO_API_KEY)=[^[:space:]]+' .env
-          grep -q 'status="submitted"' app/email_provider.py
-          grep -q 'provider_status = getattr' worker/worker.py
-
-          echo '=== GRAPH APP-ONLY ==='
-          /home/ubuntu/.shopvivaliz/bin/graph-app-only.py
-
-          echo '=== ROLLING QUOTA ==='
-          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
-          from dotenv import load_dotenv
-          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
-          import os, psycopg
-          with psycopg.connect(os.environ['DATABASE_URL'], autocommit=True) as conn:
-              with conn.cursor() as cur:
-                  cur.execute("select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em >= now()-interval '24 hours'")
-                  used = cur.fetchone()[0]
-                  print(f'used_24h={used}')
-                  print(f'capacity_to_9950={max(0,9950-used)}')
-                  if used >= 9950:
-                      raise SystemExit('NO_SAFE_CAPACITY_FOR_TEST')
-          PY
-
-          echo '=== CONTROLLED TEST ==='
-          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
-          from dotenv import load_dotenv
-          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
-          from datetime import datetime, timezone
-          from pathlib import Path
-          from app.email_provider import MicrosoftGraphEmailProvider
-          from worker.worker import montar_corpo
-
-          recipient='atendimento@shopvivaliz.com.br'
-          template=Path('/home/ubuntu/mei-mg-email/templates/mei-contabilidade-melo.html').read_text(encoding='utf-8')
-          body=montar_corpo(template, {
-              'cnpj':'00000000000000',
-              'email':recipient,
-              'razao_social':'Equipe ShopVivaliz',
-              'nome_fantasia':'ShopVivaliz',
-          })
-          for marker in ('R$ 200,00/mês','Quero falar no WhatsApp','logo-contabilidade-melo-transparente.png'):
-              if marker.casefold() not in body.casefold():
-                  raise SystemExit(f'TEMPLATE_MARKER_MISSING:{marker}')
-          if '{{unsubscribe_url}}' in body:
-              raise SystemExit('UNRENDERED_UNSUBSCRIBE')
-
-          provider=MicrosoftGraphEmailProvider()
-          if provider.address.casefold() != 'naoresponda@dev.shopvivaliz.com.br':
-              raise SystemExit('WRONG_SENDER')
-          stamp=datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%SZ')
-          subject=f'VALIDACAO GRAPH CORRIGIDA - Contabilidade Melo - {stamp}'
-          result=provider.send(to=recipient, subject=subject, body=body)
-          print(f'subject={subject}')
-          print(f'success={result.success}')
-          print(f'status={getattr(result,"status",None)}')
-          print(f'status_code={getattr(result,"status_code",None)}')
-          print(f'request_id={getattr(result,"message_id",None) or ""}')
-          if not result.success or getattr(result,'status',None) != 'submitted':
-              raise SystemExit(f'GRAPH_TEST_FAILED:{result.error}')
-          print('GRAPH_CONTROLLED_TEST_SUBMITTED')
-          PY
-
           echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
           EOF
       - name: Cleanup
