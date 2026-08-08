@@ -1,0 +1,5 @@
+{
+  "job": "360925a31e807fbaf8795ac3314a20c8",
+  "requested_at": "2026-08-08T13:23:00-03:00",
+  "reason": "Wait for Google Ads OAuth callback, install the refresh token server-side, and run a read-only 30-day account audit"
+}
