@@ -14,10 +14,12 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('current_runner_blob="$(git -C "$repo" hash-object -- "$deploy_script")"', text)
         self.assertIn('test "$(git -C "$repo" hash-object -- "$deploy_script")" = "$expected_runner_blob"', text)
 
-    def test_busy_lock_waits_then_runs_reconciliation(self) -> None:
+    def test_busy_lock_waits_long_enough_for_canonical_cron_then_reconciles(self) -> None:
         text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
-        self.assertIn('flock -w 180 -E 75 /var/lock/shopvivaliz-deploy.lock "$deploy_script" "$expected_sha"', text)
-        self.assertNotIn('Expected commit became active during wait.', text)
+        self.assertIn('timeout-minutes: 20', text)
+        self.assertIn('flock -w 600 -E 75 /var/lock/shopvivaliz-deploy.lock "$deploy_script" "$expected_sha"', text)
+        self.assertIn('Waiting up to 600s to run exact runner after concurrent deployment', text)
+        self.assertNotIn('flock -w 180 -E 75 /var/lock/shopvivaliz-deploy.lock', text)
 
     def test_runtime_checks_wait_for_exact_release_on_push(self) -> None:
         for relative in (

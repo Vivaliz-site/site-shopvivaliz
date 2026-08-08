@@ -136,7 +136,11 @@ jobs:
     name: Deploy Exact Commit to Oracle VM
     runs-on: ubuntu-latest
     needs: validate
-    timeout-minutes: 8
+    # O cron canonico da VM roda a cada 2 minutos e, em releases grandes,
+    # pode manter o mesmo lock por mais de 8 minutos. O Master precisa ter
+    # janela suficiente para aguardar esse deploy concorrente terminar e
+    # ainda executar a reconciliacao do SHA exato.
+    timeout-minutes: 20
     environment: production
     steps:
       - name: Checkout exact validated commit
@@ -239,9 +243,9 @@ jobs:
           deploy_status=0
           flock -n -E 75 /var/lock/shopvivaliz-deploy.lock "$deploy_script" "$expected_sha" || deploy_status=$?
           if [[ "$deploy_status" -eq 75 ]]; then
-            echo "Deploy lock busy. Waiting to run exact runner after concurrent deployment..."
+            echo "Deploy lock busy. Waiting up to 600s to run exact runner after concurrent deployment..."
             deploy_status=0
-            flock -w 180 -E 75 /var/lock/shopvivaliz-deploy.lock "$deploy_script" "$expected_sha" || deploy_status=$?
+            flock -w 600 -E 75 /var/lock/shopvivaliz-deploy.lock "$deploy_script" "$expected_sha" || deploy_status=$?
           fi
           if [[ "$deploy_status" -ne 0 ]]; then
             echo "Deployment script failed with status $deploy_status." >&2
