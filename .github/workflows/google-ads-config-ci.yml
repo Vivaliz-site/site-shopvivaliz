@@ -9,6 +9,7 @@ on:
       - "scripts/google_ads_config_lint.py"
       - "scripts/google_ads_real_readiness.py"
       - "scripts/google_ads_review_campaigns.py"
+      - "scripts/google_ads_dynamic_images.py"
       - "scripts/google_ads_create_search_campaign.py"
       - ".github/workflows/google-ads-config-ci.yml"
 
@@ -29,7 +30,7 @@ jobs:
           python-version: "3.12"
 
       - name: Compile Google Ads scripts
-        run: python -m py_compile scripts/google_ads_config_lint.py scripts/google_ads_real_readiness.py scripts/google_ads_review_campaigns.py scripts/google_ads_create_search_campaign.py
+        run: python -m py_compile scripts/google_ads_config_lint.py scripts/google_ads_real_readiness.py scripts/google_ads_review_campaigns.py scripts/google_ads_dynamic_images.py scripts/google_ads_create_search_campaign.py
 
       - name: Validate Google Ads static config
         run: python scripts/google_ads_config_lint.py
@@ -60,3 +61,6 @@ jobs:
 
       - name: Read-only Google Ads campaign audit
         run: python scripts/google_ads_review_campaigns.py
+
+      - name: Read-only dynamic image recommendation audit
+        run: python scripts/google_ads_dynamic_images.py
