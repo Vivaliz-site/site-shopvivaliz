@@ -19,6 +19,24 @@ function ai_studio_h(string $value): string
     return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+function ai_studio_excerpt(string $value, int $max = 120): string
+{
+    $value = trim(preg_replace('/\s+/u', ' ', $value) ?? '');
+    if ($value === '' || mb_strlen($value, 'UTF-8') <= $max) {
+        return $value;
+    }
+    return mb_substr($value, 0, max(1, $max - 1), 'UTF-8') . '…';
+}
+
+function ai_studio_target_channel(array $item): string
+{
+    $targets = json_decode((string)($item['target_channels_json'] ?? '[]'), true);
+    if (!is_array($targets) || !isset($targets[0])) {
+        return 'legado';
+    }
+    return strtolower(trim((string)$targets[0]));
+}
+
 $IMAGE_TYPE_LABELS = ['white' => 'Branco / capa', 'hero' => 'Hero comercial', 'ambient' => 'Ambientada / lifestyle'];
 $channelProfiles = ai_studio_channel_profiles();
 $batchResults = null;
@@ -97,10 +115,44 @@ try {
     error_log('[ai-image-studio] Falha ao ler estatisticas: ' . $e->getMessage());
 }
 
+$failureBuckets = [
+    'providers' => [],
+    'channels' => [],
+    'causes' => [],
+    'products' => [],
+];
+try {
+    $stmt = $db->query(
+        'SELECT id, product_id, image_type, provider_used, status, target_channels_json, error_message, created_at '
+        . "FROM product_images_staging WHERE status = 'failed' ORDER BY created_at DESC"
+    );
+    foreach ($stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [] as $item) {
+        $provider = trim((string)($item['provider_used'] ?? ''));
+        $provider = $provider !== '' ? $provider : 'desconhecido';
+        $failureBuckets['providers'][$provider] = ($failureBuckets['providers'][$provider] ?? 0) + 1;
+
+        $target = ai_studio_target_channel($item);
+        $channelLabel = (string)($channelProfiles[$target]['label'] ?? $target);
+        $failureBuckets['channels'][$channelLabel] = ($failureBuckets['channels'][$channelLabel] ?? 0) + 1;
+
+        $cause = ai_studio_excerpt((string)($item['error_message'] ?? ''), 110);
+        $cause = $cause !== '' ? $cause : 'Sem mensagem registrada';
+        $failureBuckets['causes'][$cause] = ($failureBuckets['causes'][$cause] ?? 0) + 1;
+
+        $productLabel = '#' . (int)($item['product_id'] ?? 0);
+        $failureBuckets['products'][$productLabel] = ($failureBuckets['products'][$productLabel] ?? 0) + 1;
+    }
+    foreach ($failureBuckets as $key => $values) {
+        arsort($failureBuckets[$key]);
+    }
+} catch (Throwable $e) {
+    error_log('[ai-image-studio] Falha ao resumir falhas: ' . $e->getMessage());
+}
+
 $recentItems = [];
 try {
     $stmt = $db->query(
-        'SELECT id, product_id, image_type, provider_used, status, target_channels_json, created_at '
+        'SELECT id, product_id, image_type, provider_used, status, target_channels_json, error_message, created_at '
         . 'FROM product_images_staging ORDER BY created_at DESC LIMIT 20'
     );
     $recentItems = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
@@ -124,6 +176,14 @@ try {
 .ais-preview-summary{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:6px;background:#f8fafc;border:1px solid #e5e7eb;color:#334155;font-size:13px}
 .ais-product-check{display:flex;align-items:center;gap:8px;flex-shrink:0}
 .ais-product-check input{transform:scale(1.08)}
+.ais-summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:12px 0 22px}
+.ais-summary-card{background:#fff;border:1px solid #e2e4ea;border-radius:10px;padding:14px}
+.ais-summary-card h3{margin:0 0 8px;font-size:16px}
+.ais-summary-card ul{margin:0;padding-left:18px}
+.ais-summary-card li{margin:4px 0;overflow-wrap:anywhere}
+.ais-error-summary{display:block;max-width:480px}
+.ais-error-summary summary{cursor:pointer;font-weight:700}
+.ais-error-summary pre{margin:8px 0 0;white-space:pre-wrap;word-break:break-word;background:#fff8f8;border:1px solid #f2d0d0;border-radius:8px;padding:10px}
 </style>
 </head>
 <body>
@@ -136,6 +196,15 @@ try {
 </div>
 <?php if ($batchError !== null): ?><div class="ais-alert error"><?= ai_studio_h($batchError) ?></div><?php endif; ?>
 <?php if ($batchResults !== null): $ok=0;$err=0;foreach($batchResults as $r){foreach((array)($r['results']??[]) as $x){($x['status']??'')==='pending'?$ok++:$err++;}} ?><div class="ais-alert info">Lote processado: <?=count($batchResults)?> produto(s), <?=$ok?> imagem(ns) em revisao e <?=$err?> erro(s). O destino foi persistido em cada imagem.</div><?php endif; ?>
+
+<?php if ($failureBuckets['providers'] !== []): ?>
+<div class="ais-summary-grid">
+<section class="ais-summary-card"><h3>Falhas por provedor</h3><ul><?php foreach(array_slice($failureBuckets['providers'], 0, 5, true) as $label => $total): ?><li><?=ai_studio_h((string)$label)?>: <strong><?=(int)$total?></strong></li><?php endforeach; ?></ul></section>
+<section class="ais-summary-card"><h3>Falhas por canal</h3><ul><?php foreach(array_slice($failureBuckets['channels'], 0, 5, true) as $label => $total): ?><li><?=ai_studio_h((string)$label)?>: <strong><?=(int)$total?></strong></li><?php endforeach; ?></ul></section>
+<section class="ais-summary-card"><h3>Falhas por produto</h3><ul><?php foreach(array_slice($failureBuckets['products'], 0, 5, true) as $label => $total): ?><li><?=ai_studio_h((string)$label)?>: <strong><?=(int)$total?></strong></li><?php endforeach; ?></ul></section>
+<section class="ais-summary-card"><h3>Causas mais frequentes</h3><ul><?php foreach(array_slice($failureBuckets['causes'], 0, 5, true) as $label => $total): ?><li><?=ai_studio_h((string)$label)?>: <strong><?=(int)$total?></strong></li><?php endforeach; ?></ul></section>
+</div>
+<?php endif; ?>
 
 <?php if ($previewProducts === null): ?>
 <div class="ais-form"><h2>Passo 1 — Marketplace e lote</h2><form method="get"><input type="hidden" name="preview" value="1">
@@ -153,7 +222,7 @@ try {
 </div><button type="submit" id="ais-submit">Confirmar e gerar para <?=ai_studio_h((string)$profile['label'])?></button> &nbsp; <a href="/admin/ai-image-studio/admin_dashboard.php">Cancelar</a></form><script>(()=>{const inputs=[...document.querySelectorAll('[data-product-check]')],count=document.getElementById('ais-selected-count'),submit=document.getElementById('ais-submit');const update=()=>{const selected=inputs.filter(x=>x.checked).length;if(count)count.textContent=String(selected);if(submit)submit.disabled=selected===0};document.getElementById('ais-select-all')?.addEventListener('click',()=>{inputs.forEach(x=>x.checked=true);update()});document.getElementById('ais-clear-all')?.addEventListener('click',()=>{inputs.forEach(x=>x.checked=false);update()});inputs.forEach(x=>x.addEventListener('change',update));update()})();</script><?php endif;?></div>
 <?php endif; ?>
 
-<h2>Itens recentes</h2><?php if($recentItems===[]):?><p>Nenhum item processado ainda.</p><?php else:?><div class="table-wrap"><table class="ais-table"><thead><tr><th>ID</th><th>Produto</th><th>Destino</th><th>Tipo</th><th>Provedor</th><th>Status</th><th>Criado em</th></tr></thead><tbody><?php foreach($recentItems as $item):$targets=json_decode((string)($item['target_channels_json']??'[]'),true);$target=is_array($targets)&&isset($targets[0])?(string)$targets[0]:'legado';?><tr><td>#<?=(int)$item['id']?></td><td>#<?=(int)$item['product_id']?></td><td><?=ai_studio_h((string)($channelProfiles[$target]['label']??$target))?></td><td><?=ai_studio_h((string)$item['image_type'])?></td><td><?=ai_studio_h((string)$item['provider_used'])?></td><td><span class="ais-badge"><?=ai_studio_h((string)$item['status'])?></span></td><td><?=ai_studio_h((string)$item['created_at'])?></td></tr><?php endforeach;?></tbody></table></div><?php endif; ?>
+<h2>Itens recentes</h2><?php if($recentItems===[]):?><p>Nenhum item processado ainda.</p><?php else:?><div class="table-wrap"><table class="ais-table"><thead><tr><th>ID</th><th>Produto</th><th>Destino</th><th>Tipo</th><th>Provedor</th><th>Status</th><th>Falha</th><th>Criado em</th></tr></thead><tbody><?php foreach($recentItems as $item):$target=ai_studio_target_channel($item);$error=trim((string)($item['error_message']??''));?><tr><td>#<?=(int)$item['id']?></td><td>#<?=(int)$item['product_id']?></td><td><?=ai_studio_h((string)($channelProfiles[$target]['label']??$target))?></td><td><?=ai_studio_h((string)$item['image_type'])?></td><td><?=ai_studio_h((string)$item['provider_used'])?></td><td><span class="ais-badge"><?=ai_studio_h((string)$item['status'])?></span></td><td><?php if($error!==''):?><details class="ais-error-summary"><summary><?=ai_studio_h(ai_studio_excerpt($error, 96))?></summary><pre><?=ai_studio_h($error)?></pre></details><?php else:?>—<?php endif;?></td><td><?=ai_studio_h((string)$item['created_at'])?></td></tr><?php endforeach;?></tbody></table></div><?php endif; ?>
 </div>
 </body>
 </html>
