@@ -6,6 +6,14 @@ $forbiddenFiles = [
     'fazer-pagamento-real-agora.php',
     'simular-pagamento-real.php',
     'teste-completo-mercadopago.php',
+    'admin/mercadopago-sandbox.php',
+    'admin/test-auto-sync.sh',
+    'admin/webhook-test.php',
+    'api/sandbox/create-preference.php',
+    'api/sandbox/webhook-mercadopago.php',
+    'claude/api/get-produtos-198.php',
+    'includes/mercadopago-sandbox.php',
+    'olist/produtos-198.php',
     'scripts/log-simulator.py',
 ];
 
@@ -35,6 +43,38 @@ foreach ($forbiddenPatterns as $pattern) {
     if (preg_match($pattern, $abTester) === 1) {
         fwrite(STDERR, "Synthetic A/B testing pattern found: {$pattern}\n");
         exit(1);
+    }
+}
+
+$operationalFiles = [
+    'admin/index.php',
+    'admin/menu-completo.php',
+    'admin/menu-dashboard.php',
+    'admin/admin-back.php',
+    'olist/admin.php',
+    'tools/external-smoke-test.php',
+];
+$forbiddenOperationalSnippets = [
+    'sync-products.php?dry_run',
+    'mercadopago-sandbox.php',
+    'webhook-test.php',
+    'test-auto-sync.sh',
+    'produtos-198.php',
+];
+
+foreach ($operationalFiles as $relativePath) {
+    $path = $root . '/' . $relativePath;
+    $contents = file_get_contents($path);
+    if (!is_string($contents)) {
+        fwrite(STDERR, "Unable to read operational file: {$relativePath}\n");
+        exit(1);
+    }
+
+    foreach ($forbiddenOperationalSnippets as $snippet) {
+        if (str_contains($contents, $snippet)) {
+            fwrite(STDERR, "Forbidden simulated operational route found in {$relativePath}: {$snippet}\n");
+            exit(1);
+        }
     }
 }
 
