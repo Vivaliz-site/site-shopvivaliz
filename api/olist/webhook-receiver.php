@@ -136,7 +136,7 @@ switch ($event) {
  * inconsistente e faz produto/estoque novo demorar mais que preco pra
  * aparecer no site.
  */
-function trigger_cache_resync($log_file) {
+function trigger_cache_resync(): void {
     $cache_file = __DIR__ . '/../../storage/products-cache-ativos.json';
     if (file_exists($cache_file)) {
         $backup = $cache_file . '.webhook-' . time();
