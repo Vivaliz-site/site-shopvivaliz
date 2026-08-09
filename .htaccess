@@ -84,6 +84,12 @@ AddCharset UTF-8 .html .txt .php .json
 
     RewriteRule ^p/termos-e-condicoes/?$ /termos [R=301,L,NE,QSD]
 
+    # Consolidacao do admin: antigas entradas duplicadas agora apontam para /admin/.
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^admin/(?:menu-completo|menu-dashboard|dashboard|admin-back)\.php$ /admin/ [R=301,L,NE,QSD,NC]
+    RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
+    RewriteRule ^admin/(?:menu-completo|menu-dashboard|dashboard|admin-back)\.php$ - [F,L,NC]
+
     # URLs publicas da vitrine legada/VNDA.
     RewriteRule ^ferramentas/?$ /catalogo?categoria=Ferramentas [R=301,L,NE]
     RewriteRule ^arte-papelaria-e-armarinho/?$ /catalogo?categoria=Arte%2C%20Papelaria%20e%20Armarinho [R=301,L,NE]

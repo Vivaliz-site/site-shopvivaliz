@@ -441,7 +441,7 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
 .empty-state{padding:20px;border:1px dashed #cbd5e1;border-radius:18px;background:#f8fafc;color:#475467}
 .log{white-space:pre-wrap;background:#111827;color:#dbeafe;padding:14px;border-radius:18px;display:none;max-height:240px;overflow:auto;margin-top:14px}
 .queue-header{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px}
-.queue-toolbar{margin-top:12px}
+.queue-toolbar{position:sticky;top:16px;z-index:5;margin-top:12px;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px}
 .queue-summary{display:flex;align-items:flex-start;gap:14px;width:100%}
 .queue-summary input[type=checkbox]{margin-top:5px}
 .queue-item{margin-top:14px;overflow:hidden}
@@ -599,6 +599,7 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
                     Selecionar todos desta pagina
                 </label>
                 <div id="active-products-list" class="active-products-grid"></div>
+                <div id="selected-products-hidden" hidden></div>
                 <div class="actions" style="margin-top:14px;justify-content:space-between">
                     <button id="prev-page" type="button">Pagina anterior</button>
                     <div id="page-status"></div>
@@ -617,7 +618,7 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
                 <p class="muted">Os itens ficam recolhidos por padrao. Clique no resumo para expandir somente o produto que voce quer revisar.</p>
             </div>
             <div>
-                <span class="badge">Selecionados: <strong id="bulk-selected-count">0</strong></span>
+                <span class="badge"><strong id="bulk-selected-count">0</strong> item(ns) selecionado(s)</span>
             </div>
         </div>
 
@@ -994,12 +995,23 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
         master.indeterminate = visibleIds.some((id) => state.selected.has(id)) && !master.checked;
     }
 
+    function syncSelectedInputs() {
+        const hiddenContainer = $('selected-products-hidden');
+        if (!hiddenContainer) {
+            return;
+        }
+        hiddenContainer.innerHTML = Array.from(state.selected)
+            .map((id) => `<input type="hidden" name="selected_product_ids[]" value="${escapeHtml(id)}">`)
+            .join('');
+    }
+
     function renderList() {
         if (!state.products.length) {
             listEl.innerHTML = '<div class="empty-state">Nenhum produto ativo encontrado nesta busca.</div>';
             pageStatusEl.textContent = '';
             renderSelectedCount();
             syncSelectAllProducts();
+            syncSelectedInputs();
             return;
         }
 
@@ -1008,7 +1020,7 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
             const checked = state.selected.has(id) ? 'checked' : '';
             return `
                 <label class="product-card ${checked ? 'is-selected' : ''}">
-                    <input type="checkbox" class="product-check" name="selected_product_ids[]" value="${escapeHtml(id)}" data-product-id="${escapeHtml(id)}" ${checked}>
+                    <input type="checkbox" class="product-check" value="${escapeHtml(id)}" data-product-id="${escapeHtml(id)}" ${checked}>
                     <div>
                         <div class="product-card-title">#${escapeHtml(id)} - ${escapeHtml(product.name || 'Produto sem nome')}</div>
                     </div>
@@ -1032,6 +1044,7 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
         pageStatusEl.textContent = `Pagina ${state.page} de ${state.totalPages}`;
         renderSelectedCount();
         syncSelectAllProducts();
+        syncSelectedInputs();
     }
 
     async function loadProducts(page = 1) {
@@ -1069,28 +1082,6 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
             summaryEl.textContent = 'Falha no carregamento';
             pageStatusEl.textContent = '';
             write('ERRO: ' + error.message);
-        }
-    }
-
-    async function generateSelected() {
-        const channel = $('channel').value;
-        const provider = $('provider').value;
-        const selectedIds = [...state.selected].map((id) => parseInt(id, 10)).filter(Number.isFinite);
-        if (!selectedIds.length) {
-            write('Nenhum produto selecionado.');
-            return;
-        }
-        const button = $('run-selected');
-        button.disabled = true;
-        log.textContent = '';
-        try {
-            for (const id of selectedIds) {
-                const output = await optimize(id, channel, provider);
-                write(`#${id}: ${output.success ? 'gerado' : 'falhou'} ${output.error || ''}`);
-            }
-            await loadProducts(state.page);
-        } finally {
-            button.disabled = false;
         }
     }
 

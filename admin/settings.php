@@ -143,7 +143,7 @@ function sv_admin_h(string $value): string
             </div>
 
             <div class="actions">
-                <a class="back" href="/admin/menu-completo.php">Voltar</a>
+                <a class="back" href="/admin/">Voltar</a>
                 <button type="submit">Salvar configurações</button>
             </div>
         </form>

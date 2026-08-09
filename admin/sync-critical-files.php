@@ -16,7 +16,6 @@ $repo_url = 'https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/mai
 
 // Arquivos críticos que precisam sincronizar
 $files_to_sync = [
-    'admin/menu-completo.php',
     'admin/force-git-pull.php',
     'checkout/index.php',
 ];
