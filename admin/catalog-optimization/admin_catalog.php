@@ -1038,6 +1038,7 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
                 event.currentTarget.closest('.product-card')?.classList.toggle('is-selected', event.currentTarget.checked);
                 renderSelectedCount();
                 syncSelectAllProducts();
+                syncSelectedInputs();
             });
         });
 
