@@ -27,12 +27,12 @@ Esta autorização remove apenas a espera por uma aprovação adicional. Ela nã
 ### Commit, PR e Merge obrigatório ao finalizar rodada de alterações
 
 > ⚠️ **REGRA DE FINALIZAÇÃO OBRIGATÓRIA:**
-> Qualquer alteração feita no repositório, ao ser finalizada, deve obrigatoriamente seguir o fluxo de:
+> Qualquer alteração feita no repositório, ao ser finalizada, deve obrigatoriamente ser validada e seguir o fluxo de:
 > 1. **Commit** das alterações locais.
 > 2. Abertura ou atualização do **Pull Request (PR)** correspondente.
 > 3. Realização de **Merge** para a branch principal ou branch ativa de entrega.
 > 
-> Não é aceitável encerrar uma rodada de alterações sem concluir o ciclo de commit, PR e merge/deploy quando houver acesso técnico para isso. Se houver algum impedimento técnico ou bloqueio de proteção de branch, o status deve ser reportado formalmente como **INCONCLUSIVO**.
+> Toda alteração deve ser validada e seguir este fluxo. Não é aceitável encerrar uma rodada de alterações sem concluir o ciclo de commit, PR e merge/deploy quando houver acesso técnico para isso. Se houver algum impedimento técnico ou bloqueio de proteção de branch, o status deve ser reportado formalmente como **INCONCLUSIVO**.
 
 Ao concluir qualquer rodada de alterações versionadas, o agente deve deixar a mudança integrada por merge no ramo alvo e/ou publicada no alvo de deploy autorizado, desde que checks, revisões e proteções permitam. Não é aceitável encerrar uma rodada como "pronta" mantendo apenas branch local ou remoto sem merge/deploy quando o agente tem acesso técnico para concluir o fluxo. Se branch protection, CI, falta de permissão ou outro gate impedir o merge, o resultado deve ser registrado como **INCONCLUSIVO**, com link/SHA, checks observados e próximo bloqueio concreto.
 
