@@ -259,7 +259,6 @@ $codename = (string)($version['codename'] ?? '');
     })();
     </script>
     <script src="/autodev/client.js"></script>
-    <script src="/js/catalog.js"></script>
     <script src="/js/admin-dashboard.js"></script>
 </body>
 </html>
