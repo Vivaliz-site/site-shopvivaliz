@@ -1,24 +1,24 @@
 {
   "status": "PRODUCTION_UPDATED",
-  "sha": "54ad87563eca7914e05ebab368e716f2f4234d65",
-  "workflow_run_id": "31327374985",
-  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31327374985",
+  "sha": "151c52beafa47d957af38450eb16c5028c0cc71e",
+  "workflow_run_id": "31339363029",
+  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31339363029",
   "jobs": {
     "validate": "success",
     "deploy": "success",
     "smoke_test": "success"
   },
   "results": [
-    "OK Oracle repository sync: canonical=aed46d64cc2d13569c304ee4d0e9e336daca19c8 deployed=54ad87563eca7914e05ebab368e716f2f4234d65",
+    "OK Oracle repository sync: canonical=151c52beafa47d957af38450eb16c5028c0cc71e deployed=151c52beafa47d957af38450eb16c5028c0cc71e",
     "OK Oracle repository sync cron installed",
-    "OK release SHA marker: 54ad87563eca7914e05ebab368e716f2f4234d65",
+    "OK release SHA marker: 151c52beafa47d957af38450eb16c5028c0cc71e",
     "OK version: https://shopvivaliz.com.br/api/health/version.php (200)",
-    "OK public version endpoint: 54ad87563eca7914e05ebab368e716f2f4234d65",
+    "OK public version endpoint: 151c52beafa47d957af38450eb16c5028c0cc71e",
     "OK homepage: https://shopvivaliz.com.br/ (200)",
     "OK public homepage HTML contract",
     "OK mobile responsive header contract",
     "OK catalog: https://shopvivaliz.com.br/catalogo (200)",
-    "OK product: https://shopvivaliz.com.br/produto/irrigador-girat%C3%B3rio-jardim-12-6-jatos-com-suporte-garden (200)",
+    "OK product: https://shopvivaliz.com.br/produto/rodo-vedante-borracha-friso-porta-aluminio-100cm-vivaliz (200)",
     "OK cart: https://shopvivaliz.com.br/carrinho (200)",
     "OK checkout: https://shopvivaliz.com.br/checkout (200)",
     "OK css: https://shopvivaliz.com.br/css/shopvivaliz-core-consolidated.css (200)",
@@ -55,5 +55,5 @@
     "OK security header: x-content-type-options",
     "OK security header: content-security-policy"
   ],
-  "verified_at": "2026-08-09T17:52:54.004984+00:00"
+  "verified_at": "2026-08-09T22:28:03.016620+00:00"
 }
