@@ -1,12 +1,12 @@
 name: Google Ads Normalize OAuth Client
 
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "ops/google-ads-normalize-client-request.json"
-      - ".github/workflows/google-ads-fredwin-normalize-client.yml"
+# on:
+#   workflow_dispatch:
+#   push:
+#     branches: [main]
+#     paths:
+#       - "ops/google-ads-normalize-client-request.json"
+#       - ".github/workflows/google-ads-fredwin-normalize-client.yml"
 
 permissions:
   contents: read
