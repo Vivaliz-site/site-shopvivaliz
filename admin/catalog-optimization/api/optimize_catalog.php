@@ -256,9 +256,24 @@ function ai_catalog_text_blob(array $data): string
     return implode("\n", $parts);
 }
 
+function ai_catalog_lower(string $value): string
+{
+    return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
+}
+
+function ai_catalog_strlen(string $value): int
+{
+    return function_exists('mb_strlen') ? mb_strlen($value, 'UTF-8') : strlen($value);
+}
+
+function ai_catalog_stripos(string $haystack, string $needle): int|false
+{
+    return function_exists('mb_stripos') ? mb_stripos($haystack, $needle, 0, 'UTF-8') : stripos($haystack, $needle);
+}
+
 function ai_catalog_source_blob(array $product): string
 {
-    return mb_strtolower(implode("\n", array_map('strval', array_filter($product, 'is_scalar'))), 'UTF-8');
+    return ai_catalog_lower(implode("\n", array_map('strval', array_filter($product, 'is_scalar'))));
 }
 
 function ai_catalog_has_emoji(string $text): bool
@@ -277,14 +292,14 @@ function ai_catalog_quality_report(array $data, string $channel, array $product)
     $source = ai_catalog_source_blob($product);
 
     $checks = [];
-    $titleLength = mb_strlen($title, 'UTF-8');
+    $titleLength = ai_catalog_strlen($title);
     $checks['title_length_max'] = $titleLength <= (int)$policy['title_max'];
     if (isset($policy['title_min'])) $checks['title_length_min'] = $titleLength >= (int)$policy['title_min'];
     $checks['description_present'] = $description !== '';
     $checks['protected_commerce_fields_absent'] = preg_match('/(?:R\$|\bpre[cç]o\b|\bestoque\b|\bparcel(?:a|as|ado|amento)?\b|\bfrete\s+gr[aá]tis\b|\bcupom\b|\bdesconto\b)/iu', $text) !== 1;
     $checks['bullet_count'] = count($bullets) >= (int)$policy['bullets_min'] && count($bullets) <= (int)$policy['bullets_max'];
-    $checks['meta_title_length'] = mb_strlen((string)($data['meta_title'] ?? ''), 'UTF-8') <= 70;
-    $checks['meta_description_length'] = mb_strlen((string)($data['meta_description'] ?? ''), 'UTF-8') <= 160;
+    $checks['meta_title_length'] = ai_catalog_strlen((string)($data['meta_title'] ?? '')) <= 70;
+    $checks['meta_description_length'] = ai_catalog_strlen((string)($data['meta_description'] ?? '')) <= 160;
 
     $claimPatterns = [
         'garantia' => '/\bgarantia\b/iu',
@@ -300,13 +315,13 @@ function ai_catalog_quality_report(array $data, string $channel, array $product)
 
     $brand = trim((string)($product['brand'] ?? ''));
     if ($brand !== '' && in_array($channel, ['ml', 'amazon'], true)) {
-        $checks['brand_preserved_in_title'] = mb_stripos($title, $brand, 0, 'UTF-8') !== false;
+        $checks['brand_preserved_in_title'] = ai_catalog_stripos($title, $brand) !== false;
     }
     if (in_array($channel, ['ml', 'amazon', 'erp'], true)) $checks['title_without_emoji'] = !ai_catalog_has_emoji($title);
 
     if ($channel === 'amazon') {
         $checks['amazon_disallowed_chars_absent'] = preg_match('/[!$?_{}^¬¦]/u', $title) !== 1;
-        $words = preg_split('/\s+/u', mb_strtolower($title, 'UTF-8')) ?: [];
+        $words = preg_split('/\s+/u', ai_catalog_lower($title)) ?: [];
         $ignore = ['de', 'da', 'do', 'das', 'dos', 'e', 'em', 'com', 'para', 'a', 'o'];
         $counts = [];
         foreach ($words as $word) {
@@ -318,7 +333,7 @@ function ai_catalog_quality_report(array $data, string $channel, array $product)
     }
 
     if ($channel === 'tiktok') {
-        $checks['tiktok_bullet_length'] = array_reduce($bullets, fn(bool $ok, string $b): bool => $ok && mb_strlen($b, 'UTF-8') < 250, true);
+        $checks['tiktok_bullet_length'] = array_reduce($bullets, fn(bool $ok, string $b): bool => $ok && ai_catalog_strlen($b) < 250, true);
         $checks['tiktok_hooks_count'] = count((array)($data['marketing_hooks'] ?? [])) <= 2;
     }
 

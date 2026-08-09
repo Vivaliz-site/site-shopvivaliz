@@ -62,7 +62,6 @@ $legacyGroups = [
         'description' => 'Rotinas manuais para sincronização e recuperação quando a automação não fecha sozinha.',
         'items' => [
             ['label' => 'Force Git Pull', 'href' => '/admin/force-git-pull.php', 'desc' => 'Sincronização manual quando o auto-sync falha.'],
-            ['label' => 'Teste auto-sync', 'href' => '/admin/test-auto-sync.sh', 'desc' => 'Script de validação do serviço de sincronização.'],
         ],
     ],
 ];

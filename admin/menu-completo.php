@@ -27,7 +27,6 @@ $sections = [
     'Frete e pagamentos' => [
         ['🚚', 'Configurações de frete', '/admin/configuracoes-frete.php', 'Configurar regras e provedores de frete.'],
         ['📦', 'Frete grátis', '/admin/settings-frete.php', 'Administrar condições de frete grátis.'],
-        ['💳', 'Mercado Pago Sandbox', '/admin/mercadopago-sandbox.php', 'Testar a integração de pagamentos em sandbox.'],
     ],
     'Integrações e marketplaces' => [
         ['🔗', 'Integrações', '/admin/integrations.php', 'Configurar integrações externas.'],
@@ -36,7 +35,6 @@ $sections = [
         ['🖼️', 'Auditoria de imagens Olist', '/admin/olist-images-audit.php', 'Verificar imagens e inconsistências.'],
         ['🧰', 'Reparar catálogo Olist', '/admin/reparar-catalogo-olist.php', 'Corrigir inconsistências do catálogo.'],
         ['🗂️', 'Sincronizar arquivos críticos', '/admin/sync-critical-files.php', 'Sincronizar arquivos críticos do projeto.'],
-        ['🧪', 'Teste de webhook', '/admin/webhook-test.php', 'Testar recebimento e processamento de webhooks.'],
     ],
     'Automação e inteligência artificial' => [
         ['🤖', 'Automação IA multicanal', '/admin/automacao-ia-multicanal/', 'Central de automações multicanal.'],

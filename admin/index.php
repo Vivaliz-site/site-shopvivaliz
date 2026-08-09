@@ -28,6 +28,8 @@ $codename = (string)($version['codename'] ?? '');
                 <a href="/admin/clientes.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">👥 Clientes</a>
                 <a href="/admin/admin-back.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🗂️ Legado</a>
                 <a href="/admin/monitor/" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">📊 Monitor</a>
+                <a href="/admin/ai-image-studio/admin_dashboard.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🖼️ Imagens IA</a>
+                <a href="/admin/catalog-optimization/admin_catalog.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">📝 Otimização</a>
                 <a href="/admin/connections.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🔐 Conexões</a>
                 <a href="/auth/logout.php" style="color: #ff6b6b; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🚪 Sair</a>
             </div>
@@ -50,6 +52,19 @@ $codename = (string)($version['codename'] ?? '');
         </section>
 
         <section class="container admin-overview" style="margin-top: 2rem;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+                <a href="/admin/ai-image-studio/admin_dashboard.php" style="background: #4c1d95; color: white; padding: 1.25rem; border-radius: 8px; text-decoration: none; font-weight: bold; display: block;">
+                    <span style="display: block; font-size: 0.78rem; text-transform: uppercase; letter-spacing: .04em; opacity: .82;">Rotina IA</span>
+                    <span style="display: block; margin-top: .35rem; font-size: 1.05rem;">🖼️ Gerar imagens de produto</span>
+                    <span style="display: block; margin-top: .35rem; font-weight: 500; opacity: .9;">OpenAI, Google Imagen ou Claude a partir da foto real.</span>
+                </a>
+                <a href="/admin/catalog-optimization/admin_catalog.php" style="background: #9a3412; color: white; padding: 1.25rem; border-radius: 8px; text-decoration: none; font-weight: bold; display: block;">
+                    <span style="display: block; font-size: 0.78rem; text-transform: uppercase; letter-spacing: .04em; opacity: .82;">Catalogo</span>
+                    <span style="display: block; margin-top: .35rem; font-size: 1.05rem;">📝 Otimização de cadastro</span>
+                    <span style="display: block; margin-top: .35rem; font-weight: 500; opacity: .9;">SEO/GEO por marketplace sem alterar preço nem estoque.</span>
+                </a>
+            </div>
+
             <!-- Menu Principal -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
                 <a href="/admin/pedidos.php" style="background: #007bff; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
@@ -117,7 +132,7 @@ $codename = (string)($version['codename'] ?? '');
                 </ul>
                 <div class="admin-link-list">
                     <a class="btn btn-secondary" href="/olist/connect.php" target="_blank" rel="noreferrer">Reconectar OAuth</a>
-                    <a class="btn btn-secondary" href="/olist/sync-products.php?dry_run=1&expected=200&limit=50" target="_blank" rel="noreferrer">Testar sync</a>
+                    <a class="btn btn-secondary" href="/olist/admin.php" target="_blank" rel="noreferrer">Painel de sync</a>
                     <a class="btn btn-secondary" href="/api/catalog/products.php?limit=200" target="_blank" rel="noreferrer">Ver catálogo JSON</a>
                 </div>
             </article>

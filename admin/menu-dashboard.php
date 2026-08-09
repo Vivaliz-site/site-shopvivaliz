@@ -176,7 +176,7 @@ header('Content-Type: text/html; charset=UTF-8');
                 <div class="menu-section-header">🔗 Integrações</div>
                 <div class="menu-section-items">
                     <a href="/olist/connect.php" class="menu-item external-link">Conectar Olist (OAuth)</a>
-                    <a href="/olist/sync-products.php?dry_run=1" class="menu-item external-link">Testar Sync Olist</a>
+                    <a href="/olist/admin.php" class="menu-item external-link">Painel Sync Olist</a>
                     <a href="/admin/sync-olist-para-products.php" class="menu-item external-link">Sync Produtos</a>
                 </div>
             </div>
