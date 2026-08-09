@@ -56,6 +56,9 @@
 - ✓ Torne migrations idempotentes (rodar 2x = rodar 1x)
 - ✗ **Nunca** exija clique manual pra concluir instalação
 
+### Finalização Obrigatória
+- ⚠️ **Ao finalizar alterações, faça sempre Commit, PR e Merge** (Obrigatório)
+
 ---
 
 ## ✅ Autorização operacional vigente — 2026-08-01

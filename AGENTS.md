@@ -14,6 +14,15 @@
 
 O proprietário autoriza os agentes com acesso técnico válido a validar pelo navegador real, preparar a entrega para revisão, aprovar PRs, fazer merge e acionar ou executar deploy sem nova aprovação explícita, desde que os checks e as proteções do repositório permitam. A autorização não elimina a necessidade de evidência independente, nem permite force-push, bypass de proteção, secrets, cobranças reais ou ações destrutivas fora do escopo.
 
+### 0.1 Commit, PR e Merge Obrigatório ao Finalizar
+
+> ⚠️ **CRÍTICO:** Qualquer alteração feita no repositório, ao ser finalizada, deve obrigatoriamente seguir o fluxo de:
+> 1. **Commit** das alterações locais.
+> 2. Abertura/atualização de **Pull Request (PR)**.
+> 3. Realização de **Merge** para a branch alvo.
+> 
+> Não finalize rodadas de alterações mantendo-as apenas locais ou sem merge/deploy. Se houver impedimento, registre formalmente como **INCONCLUSIVO**.
+
 ### 1. NUNCA Use `git reset --hard` em Produção
 
 **Proibido SEMPRE:**

@@ -32,16 +32,60 @@ function ai_studio_default_prompts(string $productName, string $targetChannel = 
     return $base;
 }
 
-/** @return array{name:string,description:string,image_ref:string,sku:string,olist_id:string}|null */
-function ai_studio_fetch_product(PDO $db, int $productId): ?array
+/** @return array<string,mixed>|null */
+function ai_studio_fetch_product_row(PDO $db, int $productId): ?array
 {
     $stmt = $db->prepare('SELECT * FROM products WHERE id = ? LIMIT 1');
     $stmt->execute([$productId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!is_array($row)) return null;
+    return is_array($row) ? $row : null;
+}
+
+function ai_studio_is_active_product_row(array $row): bool
+{
+    $status = trim((string)($row['status'] ?? $row['situacao'] ?? $row['state'] ?? ''));
+    $normalized = function_exists('mb_strtoupper')
+        ? mb_strtoupper($status, 'UTF-8')
+        : strtoupper($status);
+
+    if (in_array($normalized, ['', 'A', 'ACTIVE', 'ATIVO', '1'], true)) {
+        return true;
+    }
+
+    foreach (['is_active', 'active', 'ativo', 'enabled', 'published', 'is_published'] as $field) {
+        if (!array_key_exists($field, $row)) {
+            continue;
+        }
+
+        $value = $row[$field];
+        if (is_bool($value) && $value) {
+            return true;
+        }
+
+        $boolean = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($boolean === true) {
+            return true;
+        }
+
+        if (in_array($value, [1, '1'], true)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/** @return array{name:string,description:string,image_ref:string,sku:string,olist_id:string}|null */
+function ai_studio_map_product_row(array $row): ?array
+{
+    if (!ai_studio_is_active_product_row($row)) {
+        return null;
+    }
 
     $name = trim((string)($row['name'] ?? $row['nome'] ?? $row['descricao'] ?? ''));
-    if ($name === '') return null;
+    if ($name === '') {
+        return null;
+    }
 
     $description = trim((string)(
         $row['description']
@@ -66,6 +110,13 @@ function ai_studio_fetch_product(PDO $db, int $productId): ?array
         'sku' => trim((string)($row['sku'] ?? '')),
         'olist_id' => trim((string)($row['olist_id'] ?? '')),
     ];
+}
+
+/** @return array{name:string,description:string,image_ref:string,sku:string,olist_id:string}|null */
+function ai_studio_fetch_product(PDO $db, int $productId): ?array
+{
+    $row = ai_studio_fetch_product_row($db, $productId);
+    return is_array($row) ? ai_studio_map_product_row($row) : null;
 }
 
 /** @return array{width:int,height:int,mime:string,sha256:string} */
@@ -186,9 +237,17 @@ function ai_studio_process_item(
         return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => 'Nenhum tipo de imagem valido selecionado.'];
     }
 
-    $product = ai_studio_fetch_product($db, $productId);
+    $productRow = ai_studio_fetch_product_row($db, $productId);
+    if ($productRow === null) {
+        return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productId} nao encontrado."];
+    }
+    if (!ai_studio_is_active_product_row($productRow)) {
+        return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productId} esta inativo e nao pode gerar imagem."];
+    }
+
+    $product = ai_studio_map_product_row($productRow);
     if ($product === null) {
-        return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productId} nao encontrado ou sem nome."];
+        return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productId} esta sem nome valido ou bloqueado para geracao."]; 
     }
 
     $profile = ai_studio_channel_profile($targetChannel);

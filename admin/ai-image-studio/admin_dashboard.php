@@ -19,51 +19,20 @@ function ai_studio_h(string $value): string
     return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
-$IMAGE_TYPE_LABELS = ['white' => 'Branco / capa', 'hero' => 'Hero comercial', 'ambient' => 'Ambientada / lifestyle'];
+$IMAGE_TYPE_LABELS = [
+    'white' => 'Branco / capa',
+    'hero' => 'Hero comercial',
+    'ambient' => 'Ambientada / lifestyle',
+];
 $channelProfiles = ai_studio_channel_profiles();
 $batchResults = null;
 $batchError = null;
-$previewProducts = null;
-$previewProvider = '';
-$previewModel = '';
-$previewChannel = 'site';
-
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && ($_GET['preview'] ?? '') === '1') {
-    $previewProvider = strtolower(trim((string)($_GET['provider'] ?? '')));
-    $previewModel = trim((string)($_GET['model'] ?? ''));
-    $previewChannel = strtolower(trim((string)($_GET['target_channel'] ?? 'site')));
-    $limit = max(1, min(50, (int)($_GET['limit'] ?? 5)));
-
-    if (!in_array($previewProvider, ['openai', 'google', 'claude'], true)) {
-        $batchError = 'Selecione um provedor valido.';
-    } elseif (!isset($channelProfiles[$previewChannel])) {
-        $batchError = 'Selecione um marketplace valido.';
-    } else {
-        try {
-            // A fila agora e independente por marketplace. Um produto que ja
-            // recebeu imagens para o site continua elegivel para Amazon,
-            // Mercado Livre, Shopee ou TikTok.
-            $stmt = $db->prepare(
-                'SELECT p.id, p.name, p.image_url '
-                . 'FROM products p '
-                . 'LEFT JOIN product_images_staging s ON s.product_id = p.id AND s.target_channels_json LIKE ? '
-                . 'WHERE s.id IS NULL ORDER BY p.id ASC LIMIT ' . (int)$limit
-            );
-            $stmt->execute(['%"' . $previewChannel . '"%']);
-            $previewProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } catch (Throwable $e) {
-            error_log('[ai-image-studio] Falha ao buscar produtos para preview: ' . $e->getMessage());
-            $batchError = 'Falha ao buscar produtos pendentes: ' . $e->getMessage();
-            $previewProducts = null;
-        }
-    }
-}
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['run_batch'])) {
     $provider = strtolower(trim((string)($_POST['provider'] ?? '')));
     $model = trim((string)($_POST['model'] ?? ''));
     $targetChannel = strtolower(trim((string)($_POST['target_channel'] ?? 'site')));
-    $productIds = array_map('intval', (array)($_POST['product_ids'] ?? []));
+    $productIds = array_values(array_unique(array_map('intval', (array)($_POST['product_ids'] ?? []))));
     $imageTypesByProduct = (array)($_POST['image_types'] ?? []);
 
     if (!in_array($provider, ['openai', 'google', 'claude'], true)) {
@@ -76,8 +45,17 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['run_batch'
         $batchResults = [];
         foreach ($productIds as $productId) {
             $types = array_values(array_map('strval', (array)($imageTypesByProduct[(string)$productId] ?? [])));
-            if ($types === []) continue;
-            $batchResults[] = ai_studio_process_item($db, $productId, $provider, $types, $model !== '' ? $model : null, $targetChannel);
+            if ($types === []) {
+                continue;
+            }
+            $batchResults[] = ai_studio_process_item(
+                $db,
+                $productId,
+                $provider,
+                $types,
+                $model !== '' ? $model : null,
+                $targetChannel
+            );
         }
         if ($batchResults === []) {
             $batchError = 'Nenhum produto tinha ao menos um tipo de imagem marcado.';
@@ -112,40 +90,511 @@ try {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>AI Image Studio — ShopVivaliz Admin</title>
+<title>AI Image Studio - ShopVivaliz Admin</title>
 <link rel="stylesheet" href="/css/style.css">
 <style>
-*{box-sizing:border-box}body{background:#f5f6f8}.ais-wrap{max-width:1100px;margin:24px auto;padding:0 16px;font-family:system-ui,-apple-system,sans-serif}.ais-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px;margin-bottom:24px}.ais-card{background:#fff;border:1px solid #e2e4ea;border-radius:10px;padding:16px;text-align:center}.ais-card .num{font-size:28px;font-weight:700}.ais-form{background:#fff;border:1px solid #e2e4ea;border-radius:10px;padding:20px;margin-bottom:24px}.ais-form label{display:block;font-weight:600;margin:14px 0 6px}.ais-form select,.ais-form input[type=number],.ais-form input[type=text]{padding:10px;border:1px solid #ccc;border-radius:6px;width:360px;max-width:100%;font:inherit;font-size:16px}.ais-form button{margin-top:18px;background:#1a1a2e;color:#fff;border:0;padding:11px 22px;border-radius:6px;font-weight:700;cursor:pointer}.ais-form small{display:block;color:#666;margin-top:4px;max-width:760px}.ais-alert{padding:12px 16px;border-radius:8px;margin-bottom:16px}.ais-alert.error{background:#fdecea;color:#611a15}.ais-alert.info{background:#e8f4fd;color:#0c3b57}.ais-alert.note{background:#fff8e1;color:#6b5300}.ais-topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px}.ais-back{margin-bottom:16px}.ais-preview-list{display:flex;flex-direction:column;gap:10px;margin:16px 0}.ais-preview-item{display:flex;align-items:center;gap:14px;background:#fafbfc;border:1px solid #e6e8ed;border-radius:8px;padding:10px 14px;min-width:0}.ais-preview-item img{width:64px;height:64px;object-fit:contain;border-radius:6px;background:#eee;flex-shrink:0}.ais-pi-info{flex:1;min-width:0}.ais-pi-name{font-weight:600;overflow-wrap:anywhere}.ais-pi-id{color:#888;font-size:12px}.ais-pi-types{display:flex;gap:12px;flex-wrap:wrap}.ais-pi-types label{display:flex;align-items:center;gap:5px;font-weight:400;margin:0;font-size:13px}.channel-profile{background:#eef6ff;border-left:4px solid #1769aa;padding:12px;margin:12px 0}.channel-profile ul{margin:7px 0;padding-left:20px}.table-wrap{overflow:auto;border-radius:10px}table.ais-table{width:100%;border-collapse:collapse;background:#fff;min-width:720px}table.ais-table th,table.ais-table td{padding:10px 12px;border-bottom:1px solid #eee;text-align:left;font-size:14px}.ais-badge{padding:2px 8px;border-radius:12px;font-size:12px;font-weight:600;background:#eef2f7}@media(max-width:760px){.ais-wrap{padding:0 10px;margin-top:12px}.ais-preview-item{align-items:flex-start;flex-wrap:wrap}.ais-pi-types{width:100%;padding-left:78px}.ais-topbar h1{font-size:26px}}
+:root{color-scheme:light;--bg:#f4f7fb;--surface:#fff;--surface-soft:#f8fafc;--line:#d8e0ea;--text:#122033;--muted:#607186;--shadow:0 24px 60px rgba(15,23,42,.08);--radius:22px;--violet:#6d28d9;--blue:#1d4ed8;--emerald:#0f9f6e;--amber:#d97706}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient(180deg,#eef4fb 0%,var(--bg) 36%,#edf2f7 100%);color:var(--text)}
+.wrap{max-width:1360px;margin:0 auto;padding:24px 16px 40px}
+.hero{background:linear-gradient(135deg,#111827 0%,#312e81 54%,#6d28d9 100%);color:#fff;border-radius:28px;padding:26px;box-shadow:var(--shadow)}
+.hero-top{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;flex-wrap:wrap}
+.back-link,.hero-link{display:inline-flex;align-items:center;gap:8px;text-decoration:none;border-radius:999px;padding:10px 14px;font-weight:700}
+.back-link{background:#fff;color:#111827}
+.hero-link{background:rgba(255,255,255,.10);color:#fff;border:1px solid rgba(255,255,255,.14)}
+.eyebrow{margin:0 0 10px;text-transform:uppercase;letter-spacing:.14em;font-size:.74rem;font-weight:800;color:rgba(255,255,255,.72)}
+.hero h1{margin:0 0 10px;font-size:clamp(2rem,4vw,3.4rem);line-height:.96}
+.hero p{margin:0;max-width:760px;color:rgba(255,255,255,.84);line-height:1.6}
+.hero-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin:18px 0}
+.metric{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:18px;box-shadow:var(--shadow)}
+.metric strong{display:block;font-size:1.8rem;margin-bottom:4px}
+.metric span{color:var(--muted);font-size:.9rem}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow);margin-bottom:18px}
+.panel h2{margin:0 0 10px;font-size:1.28rem}
+.panel p{margin:0;color:var(--muted);line-height:1.58}
+.toolbar{display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin-top:18px}
+.toolbar label{display:grid;gap:6px;font-weight:700;min-width:180px}
+.toolbar input,.toolbar select{padding:12px 14px;border:1px solid #c7d2df;border-radius:14px;font:inherit;font-size:15px;background:#fff}
+.toolbar .search{min-width:min(360px,100%);flex:1}
+.toolbar-actions{display:flex;gap:10px;flex-wrap:wrap}
+.toolbar button,.submit-btn,.secondary-btn{border:0;border-radius:999px;padding:12px 16px;font-weight:800;cursor:pointer;font:inherit}
+.toolbar button,.secondary-btn{background:#e2e8f0;color:#0f172a}
+.submit-btn{background:linear-gradient(135deg,#312e81 0%,#6d28d9 100%);color:#fff}
+.alert{padding:14px 16px;border-radius:18px;margin-bottom:14px}
+.alert.error{background:#fdecea;color:#611a15}
+.alert.info{background:#e8f4fd;color:#0c3b57}
+.note{margin-top:14px;padding:14px 16px;border-radius:18px;background:#eef6ff;border-left:4px solid #1769aa;color:#19406c}
+.product-shell{margin-top:18px}
+.product-header{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.product-header strong{font-size:1rem}
+.product-summary,.page-status{color:var(--muted);font-size:.92rem}
+.products-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.product-card{display:grid;grid-template-columns:auto 86px minmax(0,1fr);gap:12px;align-items:flex-start;padding:16px;border:1px solid var(--line);border-radius:20px;background:var(--surface-soft);transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+.product-card:hover{transform:translateY(-2px);border-color:#a9b8cb;box-shadow:0 16px 32px rgba(15,23,42,.08)}
+.product-check{margin-top:6px}
+.product-thumb{width:86px;height:86px;border-radius:18px;overflow:hidden;background:#eef2f7;border:1px solid #dfe5ee;display:grid;place-items:center}
+.product-thumb img{width:100%;height:100%;object-fit:contain}
+.product-title{font-weight:800;line-height:1.32}
+.product-meta,.product-stats{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;color:#445468;font-size:.82rem}
+.product-stats span,.product-meta span{padding:4px 8px;border-radius:999px;background:#fff;border:1px solid #e2e8f0}
+.product-types{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.product-types label{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;background:#fff;border:1px solid #dbe4ef;font-size:.8rem;font-weight:700}
+.pager{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.pager button{border:0;border-radius:999px;padding:10px 14px;background:#e2e8f0;color:#0f172a;font-weight:800;cursor:pointer}
+.empty-state{padding:22px;border:1px dashed #cbd5e1;border-radius:18px;background:#f8fafc;color:#4b5a6e}
+.table-wrap{overflow:auto;border-radius:18px;border:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;background:#fff;min-width:760px}
+th,td{padding:12px 14px;border-bottom:1px solid #edf1f5;text-align:left;font-size:.92rem}
+th{background:#f8fafc;color:#425368}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:.78rem;font-weight:800}
+.badge.ok{background:#dcfce7;color:#166534}
+.badge.warn{background:#fef3c7;color:#92400e}
+@media(max-width:900px){.product-card{grid-template-columns:auto minmax(0,1fr)}.product-thumb{width:72px;height:72px}.wrap{padding:14px 10px 30px}}
 </style>
 </head>
 <body>
-<div class="ais-wrap">
-<div class="ais-back"><a href="/admin/menu-completo.php">← Voltar ao Admin</a></div>
-<div class="ais-topbar"><h1>AI Image Studio — por marketplace</h1><a href="/admin/ai-image-studio/admin_validate.php">Ir para aprovacao →</a></div>
-<div class="channel-profile"><strong>Fluxo auditado:</strong> escolha o marketplace <em>antes</em> de gerar. O prompt, a fila e a revisao passam a carregar esse destino. A imagem continua nascendo da foto real do mesmo produto; preco e estoque nao participam do fluxo.</div>
-<div class="ais-cards">
-<?php foreach (['pending'=>'Pendentes','published'=>'Publicadas','submitted'=>'Enviadas/auditoria','rejected'=>'Rejeitadas','failed'=>'Falhas','publication_failed'=>'Falha publicacao'] as $status=>$label): ?><div class="ais-card"><div class="num"><?= (int)($statusCounts[$status] ?? 0) ?></div><div><?= ai_studio_h($label) ?></div></div><?php endforeach; ?>
-</div>
-<?php if ($batchError !== null): ?><div class="ais-alert error"><?= ai_studio_h($batchError) ?></div><?php endif; ?>
-<?php if ($batchResults !== null): $ok=0;$err=0;foreach($batchResults as $r){foreach((array)($r['results']??[]) as $x){($x['status']??'')==='pending'?$ok++:$err++;}} ?><div class="ais-alert info">Lote processado: <?=count($batchResults)?> produto(s), <?=$ok?> imagem(ns) em revisao e <?=$err?> erro(s). O destino foi persistido em cada imagem.</div><?php endif; ?>
+<div class="wrap">
+    <section class="hero">
+        <div class="hero-top">
+            <div>
+                <a class="back-link" href="/admin/">Voltar ao admin</a>
+                <p class="eyebrow" style="margin-top:16px">Geracao guiada por listagem</p>
+                <h1>AI Image Studio por marketplace</h1>
+                <p>
+                    Selecione apenas produtos ativos na listagem, escolha o canal visual e gere em lote somente o que
+                    foi marcado. O backend tambem bloqueia item inativo, entao a regra vale mesmo fora da interface.
+                </p>
+                <div class="hero-actions">
+                    <a class="hero-link" href="/admin/ai-image-studio/admin_validate.php">Ir para aprovacao</a>
+                    <a class="hero-link" href="/admin/connections.php">Validar credenciais</a>
+                </div>
+            </div>
+        </div>
+    </section>
 
-<?php if ($previewProducts === null): ?>
-<div class="ais-form"><h2>Passo 1 — Marketplace e lote</h2><form method="get"><input type="hidden" name="preview" value="1">
-<label for="target_channel">Marketplace de destino</label><select name="target_channel" id="target_channel" required><?php foreach($channelProfiles as $key=>$profile): ?><option value="<?=ai_studio_h($key)?>"><?=ai_studio_h((string)$profile['label'])?></option><?php endforeach; ?></select><small>O destino controla o prompt visual e cria uma fila independente por canal.</small>
-<label for="provider">Motor de IA</label><select name="provider" id="provider" onchange="aisUpdateModelDefault()" required><option value="openai">OpenAI — edicao da foto real</option><option value="google">Google Gemini — edicao da foto real</option><option value="claude">Claude otimiza prompt + OpenAI edita</option></select>
-<label for="model">Modelo de imagem</label><input type="text" name="model" id="model" value="gpt-image-1"><small>Use um modelo que aceite imagem de referencia. A validacao local rejeita arquivo invalido ou abaixo do minimo tecnico.</small>
-<label for="limit">Limite de produtos</label><input type="number" name="limit" id="limit" value="5" min="1" max="50" required><div><button type="submit">Buscar produtos deste canal →</button></div></form></div>
-<script>function aisUpdateModelDefault(){const p=document.getElementById('provider').value,i=document.getElementById('model'),d={openai:'gpt-image-1',claude:'gpt-image-1',google:'gemini-2.5-flash-image'};if(Object.values(d).includes(i.value))i.value=d[p]||''}</script>
-<?php else: $profile=$channelProfiles[$previewChannel]??$channelProfiles['site']; ?>
-<div class="ais-form"><h2>Passo 2 — Confirmar geracao para <?=ai_studio_h((string)$profile['label'])?></h2><p>Provedor: <strong><?=ai_studio_h($previewProvider)?></strong><?php if($previewModel!==''):?> · Modelo: <strong><?=ai_studio_h($previewModel)?></strong><?php endif;?> · <?=count($previewProducts)?> produto(s).</p>
-<div class="channel-profile"><strong>Regra visual deste canal</strong><ul><?php foreach((array)($profile['audit_notes']??[]) as $note):?><li><?=ai_studio_h((string)$note)?></li><?php endforeach;?></ul><small>Minimo tecnico: <?= (int)($profile['minimum_side']??1000) ?>px por lado · alvo recomendado: <?= (int)($profile['recommended_side']??1000) ?>px · galeria: ate <?= (int)($profile['max_gallery']??9) ?> imagens.</small></div>
-<?php if($previewProducts===[]): ?><div class="ais-alert note">Nenhum produto pendente para este marketplace. <a href="/admin/ai-image-studio/admin_dashboard.php">Buscar outro canal</a></div><?php else: ?>
-<form method="post"><input type="hidden" name="run_batch" value="1"><input type="hidden" name="provider" value="<?=ai_studio_h($previewProvider)?>"><input type="hidden" name="model" value="<?=ai_studio_h($previewModel)?>"><input type="hidden" name="target_channel" value="<?=ai_studio_h($previewChannel)?>"><div class="ais-preview-list">
-<?php foreach($previewProducts as $p): $pid=(int)$p['id'];$pname=trim((string)($p['name']??''))!==''?(string)$p['name']:"Produto #$pid";$pimg=trim((string)($p['image_url']??'')); ?><div class="ais-preview-item"><input type="hidden" name="product_ids[]" value="<?=$pid?>"><?php if($pimg!==''):?><img src="<?=ai_studio_h($pimg)?>" alt="Foto atual"><?php else:?><div style="width:64px;height:64px;background:#eee;border-radius:6px"></div><?php endif;?><div class="ais-pi-info"><div class="ais-pi-name"><?=ai_studio_h($pname)?></div><div class="ais-pi-id">#<?=$pid?><?=$pimg===''?' · sem foto real: sera bloqueado':''?></div></div><div class="ais-pi-types"><?php foreach($IMAGE_TYPE_LABELS as $key=>$text):?><label><input type="checkbox" name="image_types[<?=$pid?>][]" value="<?=ai_studio_h($key)?>" checked> <?=ai_studio_h($text)?></label><?php endforeach;?></div></div><?php endforeach; ?>
-</div><button type="submit">Confirmar e gerar para <?=ai_studio_h((string)$profile['label'])?></button> &nbsp; <a href="/admin/ai-image-studio/admin_dashboard.php">Cancelar</a></form><?php endif;?></div>
-<?php endif; ?>
+    <section class="metrics">
+        <?php foreach (['pending' => 'Pendentes', 'published' => 'Publicadas', 'submitted' => 'Enviadas', 'rejected' => 'Rejeitadas', 'failed' => 'Falhas', 'publication_failed' => 'Falha publicacao'] as $status => $label): ?>
+            <div class="metric">
+                <strong><?= (int)($statusCounts[$status] ?? 0) ?></strong>
+                <span><?= ai_studio_h($label) ?></span>
+            </div>
+        <?php endforeach; ?>
+    </section>
 
-<h2>Itens recentes</h2><?php if($recentItems===[]):?><p>Nenhum item processado ainda.</p><?php else:?><div class="table-wrap"><table class="ais-table"><thead><tr><th>ID</th><th>Produto</th><th>Destino</th><th>Tipo</th><th>Provedor</th><th>Status</th><th>Criado em</th></tr></thead><tbody><?php foreach($recentItems as $item):$targets=json_decode((string)($item['target_channels_json']??'[]'),true);$target=is_array($targets)&&isset($targets[0])?(string)$targets[0]:'legado';?><tr><td>#<?=(int)$item['id']?></td><td>#<?=(int)$item['product_id']?></td><td><?=ai_studio_h((string)($channelProfiles[$target]['label']??$target))?></td><td><?=ai_studio_h((string)$item['image_type'])?></td><td><?=ai_studio_h((string)$item['provider_used'])?></td><td><span class="ais-badge"><?=ai_studio_h((string)$item['status'])?></span></td><td><?=ai_studio_h((string)$item['created_at'])?></td></tr><?php endforeach;?></tbody></table></div><?php endif; ?>
+    <section class="panel">
+        <h2>Gerar imagens somente para produtos ativos selecionados</h2>
+        <p>
+            A listagem abaixo usa o mesmo catalogo operacional ativo da loja. Escolha o marketplace, marque os produtos,
+            ajuste os tipos de imagem e envie apenas o lote desejado.
+        </p>
+
+        <?php if ($batchError !== null): ?>
+            <div class="alert error" style="margin-top:16px"><?= ai_studio_h($batchError) ?></div>
+        <?php endif; ?>
+
+        <?php if ($batchResults !== null): ?>
+            <?php
+            $productCount = count($batchResults);
+            $imageSuccess = 0;
+            $imageErrors = 0;
+            foreach ($batchResults as $batchResult) {
+                foreach ((array)($batchResult['results'] ?? []) as $itemResult) {
+                    if (($itemResult['status'] ?? '') === 'pending') {
+                        $imageSuccess++;
+                    } else {
+                        $imageErrors++;
+                    }
+                }
+            }
+            ?>
+            <div class="alert info" style="margin-top:16px">
+                Lote processado: <?= $productCount ?> produto(s), <?= $imageSuccess ?> imagem(ns) em revisao e
+                <?= $imageErrors ?> erro(s). O destino foi persistido em cada item.
+            </div>
+        <?php endif; ?>
+
+        <div class="note">
+            O prompt visual passa a ser definido pelo marketplace antes da geracao. Preco e estoque nao entram no fluxo;
+            a referencia continua sendo sempre a foto real do mesmo produto.
+        </div>
+
+        <form id="image-batch-form" method="post">
+            <input type="hidden" name="run_batch" value="1">
+
+            <div class="toolbar">
+                <label>
+                    Motor de IA
+                    <select name="provider" id="provider">
+                        <option value="openai">OpenAI - edicao da foto real</option>
+                        <option value="google">Google Gemini - edicao da foto real</option>
+                        <option value="claude">Claude otimiza prompt + OpenAI edita</option>
+                    </select>
+                </label>
+
+                <label>
+                    Marketplace de destino
+                    <select name="target_channel" id="target_channel">
+                        <?php foreach ($channelProfiles as $key => $profile): ?>
+                            <option value="<?= ai_studio_h($key) ?>"><?= ai_studio_h((string)$profile['label']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+
+                <label>
+                    Modelo de imagem
+                    <input type="text" name="model" id="model" value="gpt-image-1">
+                </label>
+
+                <label>
+                    Categoria
+                    <select id="category-filter">
+                        <option value="">Todas</option>
+                    </select>
+                </label>
+
+                <label>
+                    Ordenar
+                    <select id="sort-by">
+                        <option value="relevance">Relevancia</option>
+                        <option value="name">Nome</option>
+                        <option value="price-asc">Menor preco</option>
+                        <option value="price-desc">Maior preco</option>
+                    </select>
+                </label>
+
+                <label class="search">
+                    Busca
+                    <input id="product-search" type="search" placeholder="SKU, nome, categoria ou ID">
+                </label>
+
+                <label>
+                    Itens por pagina
+                    <input id="page-size" type="number" min="6" max="48" value="12">
+                </label>
+            </div>
+
+            <div class="toolbar-actions" style="margin-top:16px">
+                <button id="refresh-list" type="button">Atualizar lista</button>
+                <button id="select-page" type="button">Selecionar visiveis</button>
+                <button id="clear-selection" type="button">Limpar selecao</button>
+                <button class="submit-btn" id="run-selected" type="submit">Gerar selecionados</button>
+            </div>
+
+            <div class="product-shell">
+                <div class="product-header">
+                    <strong>Produtos ativos disponiveis</strong>
+                    <span class="product-summary" id="product-summary">Carregando...</span>
+                </div>
+
+                <div id="products-list" class="products-grid"></div>
+
+                <div class="pager">
+                    <button id="prev-page" type="button">Pagina anterior</button>
+                    <span class="page-status" id="page-status"></span>
+                    <button id="next-page" type="button">Proxima pagina</button>
+                </div>
+            </div>
+
+            <div id="hidden-inputs"></div>
+        </form>
+    </section>
+
+    <section class="panel">
+        <h2>Itens recentes</h2>
+        <p>Ultimos itens processados para conferencia rapida do staging de imagens.</p>
+        <?php if ($recentItems === []): ?>
+            <div class="empty-state" style="margin-top:16px">Nenhum item processado ainda.</div>
+        <?php else: ?>
+            <div class="table-wrap" style="margin-top:16px">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Produto</th>
+                            <th>Destino</th>
+                            <th>Tipo</th>
+                            <th>Provedor</th>
+                            <th>Status</th>
+                            <th>Criado em</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($recentItems as $item): ?>
+                            <?php
+                            $targets = json_decode((string)($item['target_channels_json'] ?? '[]'), true);
+                            $target = is_array($targets) && isset($targets[0]) ? (string)$targets[0] : 'legado';
+                            $targetLabel = (string)($channelProfiles[$target]['label'] ?? $target);
+                            $statusLabel = (string)$item['status'];
+                            $badgeClass = in_array($statusLabel, ['pending', 'published'], true) ? 'ok' : 'warn';
+                            ?>
+                            <tr>
+                                <td>#<?= (int)$item['id'] ?></td>
+                                <td>#<?= (int)$item['product_id'] ?></td>
+                                <td><?= ai_studio_h($targetLabel) ?></td>
+                                <td><?= ai_studio_h((string)$item['image_type']) ?></td>
+                                <td><?= ai_studio_h((string)$item['provider_used']) ?></td>
+                                <td><span class="badge <?= $badgeClass ?>"><?= ai_studio_h($statusLabel) ?></span></td>
+                                <td><?= ai_studio_h((string)$item['created_at']) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </section>
 </div>
+
+<script>
+(() => {
+    'use strict';
+
+    const form = document.getElementById('image-batch-form');
+    const listEl = document.getElementById('products-list');
+    const summaryEl = document.getElementById('product-summary');
+    const pageStatusEl = document.getElementById('page-status');
+    const hiddenInputsEl = document.getElementById('hidden-inputs');
+    const categoryFilterEl = document.getElementById('category-filter');
+    const sortByEl = document.getElementById('sort-by');
+    const providerEl = document.getElementById('provider');
+    const modelEl = document.getElementById('model');
+    const state = {
+        products: [],
+        selected: new Set(),
+        typesByProduct: {},
+        page: 1,
+        totalPages: 1,
+        categories: []
+    };
+    const allTypes = ['white', 'hero', 'ambient'];
+    const typeLabels = {
+        white: 'Branco / capa',
+        hero: 'Hero comercial',
+        ambient: 'Ambientada / lifestyle'
+    };
+
+    function escapeHtml(value) {
+        const div = document.createElement('div');
+        div.textContent = String(value ?? '');
+        return div.innerHTML;
+    }
+
+    function defaultTypes(productId) {
+        if (!Array.isArray(state.typesByProduct[productId])) {
+            state.typesByProduct[productId] = allTypes.slice();
+        }
+        return state.typesByProduct[productId];
+    }
+
+    function setModelDefault() {
+        const defaults = {
+            openai: 'gpt-image-1',
+            claude: 'gpt-image-1',
+            google: 'gemini-2.5-flash-image'
+        };
+        if (Object.values(defaults).includes(modelEl.value)) {
+            modelEl.value = defaults[providerEl.value] || '';
+        }
+    }
+
+    function renderCategories(categories) {
+        const current = categoryFilterEl.value;
+        categoryFilterEl.innerHTML = ['<option value="">Todas</option>']
+            .concat(categories.map(cat => `<option value="${escapeHtml(cat)}">${escapeHtml(cat)}</option>`))
+            .join('');
+        if (categories.includes(current)) {
+            categoryFilterEl.value = current;
+        }
+    }
+
+    function renderSummary() {
+        const count = state.selected.size;
+        summaryEl.textContent = count === 0
+            ? `${state.products.length} ativo(s) carregado(s) nesta pagina`
+            : `${count} selecionado(s) · ${state.products.length} ativo(s) na pagina`;
+    }
+
+    function renderList() {
+        if (!state.products.length) {
+            listEl.innerHTML = '<div class="empty-state">Nenhum produto ativo encontrado nesta busca.</div>';
+            pageStatusEl.textContent = '';
+            renderSummary();
+            return;
+        }
+
+        listEl.innerHTML = state.products.map(product => {
+            const id = String(product.id || '');
+            const checked = state.selected.has(id) ? 'checked' : '';
+            const selectedTypes = defaultTypes(id);
+            const image = product.image_url || '/images/logo-vivaliz-square-v2.png';
+            const price = Number(product.price || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            const stock = Number(product.stock || 0);
+            const meta = [
+                product.sku ? `SKU ${escapeHtml(product.sku)}` : '',
+                product.category ? escapeHtml(product.category) : '',
+                product.olist_product_id ? `ID ${escapeHtml(product.olist_product_id)}` : ''
+            ].filter(Boolean).map(text => `<span>${text}</span>`).join('');
+            const types = allTypes.map(type => {
+                const typeChecked = selectedTypes.includes(type) ? 'checked' : '';
+                return `<label><input type="checkbox" class="type-check" data-product-id="${escapeHtml(id)}" data-type="${type}" ${typeChecked}> ${escapeHtml(typeLabels[type])}</label>`;
+            }).join('');
+            return `
+                <label class="product-card">
+                    <input type="checkbox" class="product-check" data-product-id="${escapeHtml(id)}" ${checked}>
+                    <div class="product-thumb"><img src="${escapeHtml(image)}" alt="${escapeHtml(product.name || 'Produto')}"></div>
+                    <div>
+                        <div class="product-title">${escapeHtml(product.name || 'Produto sem nome')}</div>
+                        <div class="product-meta">${meta}</div>
+                        <div class="product-stats">
+                            <span>${price}</span>
+                            <span>Estoque ${stock}</span>
+                            <span>Ativo</span>
+                        </div>
+                        <div class="product-types">${types}</div>
+                    </div>
+                </label>`;
+        }).join('');
+
+        listEl.querySelectorAll('.product-check').forEach(input => {
+            input.addEventListener('change', event => {
+                const id = String(event.currentTarget.dataset.productId || '');
+                if (event.currentTarget.checked) {
+                    state.selected.add(id);
+                } else {
+                    state.selected.delete(id);
+                }
+                renderSummary();
+            });
+        });
+
+        listEl.querySelectorAll('.type-check').forEach(input => {
+            input.addEventListener('change', event => {
+                const id = String(event.currentTarget.dataset.productId || '');
+                const type = String(event.currentTarget.dataset.type || '');
+                const types = new Set(defaultTypes(id));
+                if (event.currentTarget.checked) {
+                    types.add(type);
+                } else {
+                    types.delete(type);
+                }
+                state.typesByProduct[id] = Array.from(types);
+            });
+        });
+
+        pageStatusEl.textContent = `Pagina ${state.page} de ${state.totalPages}`;
+        renderSummary();
+    }
+
+    async function loadProducts(page = 1) {
+        summaryEl.textContent = 'Carregando produtos ativos...';
+        try {
+            const url = new URL('/api/catalog/products.php', window.location.origin);
+            const pageSize = Math.max(6, Math.min(48, parseInt(document.getElementById('page-size').value || '12', 10) || 12));
+            url.searchParams.set('page', String(page));
+            url.searchParams.set('limit', String(pageSize));
+            url.searchParams.set('sort', sortByEl.value || 'relevance');
+            const query = document.getElementById('product-search').value.trim();
+            if (query) {
+                url.searchParams.set('q', query);
+            }
+            const category = categoryFilterEl.value.trim();
+            if (category) {
+                url.searchParams.set('category', category);
+            }
+
+            const response = await fetch(url.toString(), { credentials: 'same-origin', cache: 'no-store' });
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.error || ('HTTP ' + response.status));
+            }
+
+            state.products = Array.isArray(payload.products) ? payload.products : [];
+            state.page = Number(payload.page || page);
+            state.totalPages = Math.max(1, Number(payload.total_pages || 1));
+            state.categories = Object.keys(payload.categories || {});
+            renderCategories(state.categories);
+            renderList();
+        } catch (error) {
+            listEl.innerHTML = '<div class="empty-state">Erro ao carregar a listagem de produtos ativos.</div>';
+            summaryEl.textContent = 'Falha no carregamento';
+            pageStatusEl.textContent = '';
+        }
+    }
+
+    function buildHiddenInputs() {
+        hiddenInputsEl.innerHTML = '';
+        const selectedIds = Array.from(state.selected);
+
+        selectedIds.forEach(id => {
+            const types = Array.isArray(state.typesByProduct[id]) ? state.typesByProduct[id] : allTypes.slice();
+            const productInput = document.createElement('input');
+            productInput.type = 'hidden';
+            productInput.name = 'product_ids[]';
+            productInput.value = id;
+            hiddenInputsEl.appendChild(productInput);
+
+            types.forEach(type => {
+                const typeInput = document.createElement('input');
+                typeInput.type = 'hidden';
+                typeInput.name = `image_types[${id}][]`;
+                typeInput.value = type;
+                hiddenInputsEl.appendChild(typeInput);
+            });
+        });
+    }
+
+    providerEl.addEventListener('change', setModelDefault);
+    document.getElementById('refresh-list').addEventListener('click', () => loadProducts(1));
+    document.getElementById('product-search').addEventListener('input', () => loadProducts(1));
+    document.getElementById('page-size').addEventListener('change', () => loadProducts(1));
+    sortByEl.addEventListener('change', () => loadProducts(1));
+    categoryFilterEl.addEventListener('change', () => loadProducts(1));
+    document.getElementById('prev-page').addEventListener('click', () => {
+        if (state.page > 1) {
+            loadProducts(state.page - 1);
+        }
+    });
+    document.getElementById('next-page').addEventListener('click', () => {
+        if (state.page < state.totalPages) {
+            loadProducts(state.page + 1);
+        }
+    });
+    document.getElementById('select-page').addEventListener('click', () => {
+        state.products.forEach(product => {
+            const id = String(product.id || '');
+            if (id !== '') {
+                state.selected.add(id);
+                defaultTypes(id);
+            }
+        });
+        renderList();
+    });
+    document.getElementById('clear-selection').addEventListener('click', () => {
+        state.selected.clear();
+        renderList();
+    });
+
+    form.addEventListener('submit', event => {
+        const selectedIds = Array.from(state.selected);
+        if (!selectedIds.length) {
+            event.preventDefault();
+            window.alert('Selecione ao menos um produto ativo para gerar imagens.');
+            return;
+        }
+
+        const invalid = selectedIds.find(id => !Array.isArray(state.typesByProduct[id]) || state.typesByProduct[id].length === 0);
+        if (invalid) {
+            event.preventDefault();
+            window.alert(`O produto #${invalid} precisa ter ao menos um tipo de imagem marcado.`);
+            return;
+        }
+
+        buildHiddenInputs();
+    });
+
+    setModelDefault();
+    loadProducts(1);
+})();
+</script>
 </body>
 </html>
