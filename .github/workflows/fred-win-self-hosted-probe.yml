@@ -22,3 +22,56 @@ jobs:
           Write-Host "USERNAME=$env:USERNAME"
           Get-Date -Format o
           Get-Process -Name opera* -ErrorAction SilentlyContinue | Select-Object -First 5 ProcessName,Id,Path
+
+      - name: Audit local OpenAI credential presence without values
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repo = 'C:\site-shopvivaliz'
+          $paths = @(
+            (Join-Path $repo '.env'),
+            (Join-Path $repo '.env.local')
+          )
+          $allowed = @(
+            'OPENAI_API_KEYS',
+            'OPENAI_API_KEY',
+            'OPENAI_API_KEY_1',
+            'OPENAI_API_KEY_2',
+            'OPENAI_API_KEY_SECONDARY',
+            'OPENAI_API_KEY_BACKUP',
+            'OPENAI_API_KEY_ALT',
+            'OPENAI_KEY',
+            'OPENAI_KEY_1',
+            'OPENAI_KEY_2',
+            'GPT_API_KEY',
+            'GPT_API_KEY_1',
+            'GPT_API_KEY_2',
+            'GPT_API_KEY_SECONDARY',
+            'CHATGPT_API_KEY'
+          )
+          $values = @{}
+          foreach ($path in $paths) {
+            Write-Host ("local_env_file={0};exists={1}" -f $path, (Test-Path $path))
+            if (-not (Test-Path $path)) { continue }
+            foreach ($line in Get-Content -LiteralPath $path) {
+              $text = ([string]$line).Trim()
+              if (-not $text -or $text.StartsWith('#') -or -not $text.Contains('=')) { continue }
+              if ($text.StartsWith('export ')) { $text = $text.Substring(7).Trim() }
+              $parts = $text.Split('=', 2)
+              $name = $parts[0].Trim()
+              if ($allowed -notcontains $name) { continue }
+              $value = $parts[1].Trim().Trim('"').Trim("'")
+              if ($value) { $values[$name] = $value }
+            }
+          }
+          $present = @($allowed | Where-Object { $values.ContainsKey($_) })
+          Write-Host ('local_openai_alias_presence=' + (($allowed | ForEach-Object { "$_:$($values.ContainsKey($_))" }) -join ','))
+          Write-Host ('local_openai_present_aliases=' + ($present -join ','))
+          $sha = [System.Security.Cryptography.SHA256]::Create()
+          $fingerprints = @()
+          foreach ($value in $values.Values) {
+            $bytes = [System.Text.Encoding]::UTF8.GetBytes([string]$value)
+            $fingerprints += [Convert]::ToHexString($sha.ComputeHash($bytes))
+          }
+          $sha.Dispose()
+          Write-Host ('local_openai_distinct_key_count=' + (@($fingerprints | Select-Object -Unique).Count))
