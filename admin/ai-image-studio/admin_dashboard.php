@@ -443,6 +443,7 @@ th{background:#f8fafc;color:#425368}
                 event.currentTarget.closest('.product-card')?.classList.toggle('is-selected', event.currentTarget.checked);
                 renderSummary();
                 syncSelectAllProducts();
+                syncSelectedInputs();
             });
         });
 
