@@ -83,8 +83,8 @@ def _canonical_document(data: Any) -> dict[str, Any]:
         raise QueueValidationError("Queue field 'tasks' must be an array")
 
     compatibility_queue = data.get("queue")
-    if compatibility_queue is not None and compatibility_queue != tasks:
-        raise QueueValidationError("Compatibility 'queue' view diverged from canonical 'tasks'")
+    if compatibility_queue is not None and compatibility_queue is not tasks:
+        raise QueueValidationError("Compatibility 'queue' view must be an in-memory alias of canonical 'tasks'")
 
     metadata = data.get("metadata")
     if not isinstance(metadata, dict):
