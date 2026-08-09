@@ -99,7 +99,7 @@ ai_catalog_cli_log("Iniciando lote: canal={$args['channel']} provider={$args['pr
 // existe (mesma correção aplicada em api/optimize_catalog.php e
 // admin_catalog.php).
 $stmt = $db->prepare(
-    'SELECT p.id
+    'SELECT p.*
      FROM products p
      LEFT JOIN catalog_optimizations_staging s
         ON s.product_id = p.id AND s.channel = ?
@@ -108,7 +108,12 @@ $stmt = $db->prepare(
      LIMIT ' . (int) $args['limit']
 );
 $stmt->execute([$args['channel']]);
-$productIds = array_map('intval', array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'id'));
+$productIds = [];
+foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+    if (is_array($row) && ai_catalog_is_active_product_row($row)) {
+        $productIds[] = (int)($row['id'] ?? 0);
+    }
+}
 $stmt = null; // libera o result set antes do loop
 
 $total = count($productIds);

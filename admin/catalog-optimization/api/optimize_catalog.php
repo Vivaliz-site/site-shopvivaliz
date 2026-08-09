@@ -51,6 +51,7 @@ function ai_catalog_fetch_product(PDO $db, int $productId): ?array
     $stmt->execute([$productId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!is_array($row)) return null;
+    if (!ai_catalog_is_active_product_row($row)) return null;
 
     $name = ai_catalog_scalar($row, ['name', 'nome', 'descricao']);
     if ($name === '') return null;
@@ -90,6 +91,29 @@ function ai_catalog_fetch_product(PDO $db, int $productId): ?array
     }
 
     return $product;
+}
+
+function ai_catalog_is_active_product_row(array $row): bool
+{
+    $status = trim((string)($row['status'] ?? $row['situacao'] ?? $row['state'] ?? ''));
+    if ($status !== '') {
+        $normalized = ai_catalog_lower($status);
+        if (!in_array($normalized, ['a', 'active', 'ativo', '1', 'true', 'published', 'published_active'], true)) {
+            return false;
+        }
+    }
+
+    foreach (['is_active', 'active', 'ativo', 'enabled', 'published', 'is_published'] as $field) {
+        if (!array_key_exists($field, $row)) {
+            continue;
+        }
+        $value = $row[$field];
+        if ($value === false || $value === 0 || $value === '0' || $value === 'false') {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /** @return array<string,mixed> */
@@ -435,6 +459,16 @@ function ai_catalog_process_item(PDO $db, int $productId, string $channel, strin
     }
     if (!in_array($provider, ['openai', 'gemini', 'claude'], true)) {
         return ['success' => false, 'product_id' => $productId, 'channel' => $channel, 'provider' => $provider, 'error' => "Provider invalido: '$provider'."];
+    }
+
+    $statusProbe = $db->prepare('SELECT * FROM products WHERE id = ? LIMIT 1');
+    $statusProbe->execute([$productId]);
+    $statusRow = $statusProbe->fetch(PDO::FETCH_ASSOC);
+    if (!is_array($statusRow)) {
+        return ['success' => false, 'product_id' => $productId, 'channel' => $channel, 'provider' => $provider, 'error' => "Produto #$productId nao encontrado."];
+    }
+    if (!ai_catalog_is_active_product_row($statusRow)) {
+        return ['success' => false, 'product_id' => $productId, 'channel' => $channel, 'provider' => $provider, 'error' => "Produto #$productId esta inativo e nao pode ser gerado."];
     }
 
     $product = ai_catalog_fetch_product($db, $productId);

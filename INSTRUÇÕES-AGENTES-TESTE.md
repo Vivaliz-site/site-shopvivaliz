@@ -194,6 +194,7 @@ Pode ir para produção quando:
 - ✅ Zero SQL errors
 - ✅ Zero XSS/CSRF vulnerabilities
 - ✅ Performance < 2s em todas as páginas
+- ⚠️ **QUALQUER ALTERAÇÃO FEITA AO FINALIZAR DEVE-SE FAZER COMMIT, PR E MERGE** (Obrigatório)
 
 ---
 
