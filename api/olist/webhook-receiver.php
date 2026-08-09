@@ -139,7 +139,7 @@ switch ($event) {
 function trigger_cache_resync(): void {
     $cache_file = __DIR__ . '/../../storage/products-cache-ativos.json';
     if (file_exists($cache_file)) {
-        $backup = $cache_file . '.webhook-' . time();
+        $backup = $cache_file . '.webhook-' . (string)((int)floor(microtime(true) * 1000));
         if (rename($cache_file, $backup)) {
             log_event("  ✓ Cache invalidado (backup: " . basename($backup) . ")");
         }
