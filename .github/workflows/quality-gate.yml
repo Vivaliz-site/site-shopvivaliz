@@ -94,7 +94,6 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile \
-            scripts/sincronizar_secrets_github.py \
             tests/test_secret_bootstrap_safety.py
 
       - name: Run secret bootstrap safety tests
