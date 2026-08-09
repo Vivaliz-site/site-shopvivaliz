@@ -33,7 +33,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['action'
         $provider = strtolower(trim((string)($_POST['provider'] ?? '')));
         $model = trim((string)($_POST['model'] ?? ''));
         $targetChannel = strtolower(trim((string)($_POST['target_channel'] ?? 'site')));
-        $productIds = array_values(array_unique(array_map('intval', (array)($_POST['product_ids'] ?? []))));
+        $productIds = array_values(array_unique(array_filter(array_map(
+            static fn(mixed $value): string => trim((string)$value),
+            (array)($_POST['product_ids'] ?? [])
+        ), static fn(string $value): bool => $value !== '')));
 
         if (!in_array($provider, ['openai', 'google', 'claude'], true)) {
             $batchError = 'Selecione um provedor valido.';

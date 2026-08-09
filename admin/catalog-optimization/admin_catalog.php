@@ -207,7 +207,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         if ($action === 'generate_selected') {
             $provider = strtolower(trim((string)($_POST['provider'] ?? '')));
             $channel = strtolower(trim((string)($_POST['channel'] ?? '')));
-            $selectedIds = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['selected_product_ids'] ?? [])))));
+            $selectedIds = array_values(array_unique(cat_json_list((array)($_POST['selected_product_ids'] ?? []))));
 
             if ($selectedIds === []) {
                 $flashError = 'Selecione ao menos um produto para gerar a otimizacao.';

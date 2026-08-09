@@ -15,6 +15,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../config_optimization.php';
 require_once __DIR__ . '/../src/TextAiServices.php';
 require_once __DIR__ . '/../../../includes/marketplace/CatalogChannelProfile.php';
+require_once __DIR__ . '/../../../includes/product-reference-resolver.php';
 
 function ai_catalog_scalar(array $row, array $keys): string
 {
@@ -45,16 +46,16 @@ function ai_catalog_structured_text(mixed $value): string
 }
 
 /** @return array<string,string>|null */
-function ai_catalog_fetch_product(PDO $db, int $productId): ?array
+function ai_catalog_map_product_row(PDO $db, array $row, int|string $productReference): ?array
 {
-    $stmt = $db->prepare('SELECT * FROM products WHERE id = ? LIMIT 1');
-    $stmt->execute([$productId]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!is_array($row)) return null;
-    if (!ai_catalog_is_active_product_row($row)) return null;
+    if (!ai_catalog_is_active_product_row($row)) {
+        return null;
+    }
 
     $name = ai_catalog_scalar($row, ['name', 'nome', 'descricao']);
-    if ($name === '') return null;
+    if ($name === '') {
+        return null;
+    }
 
     $product = [
         'name' => $name,
@@ -71,6 +72,8 @@ function ai_catalog_fetch_product(PDO $db, int $productId): ?array
         'olist_id' => ai_catalog_scalar($row, ['olist_id']),
     ];
 
+    $productLabel = trim((string)($row['id'] ?? $productReference));
+
     // Enriquecimento factual via Olist/Tiny, sem preco/estoque e sem fallback
     // inventado de marca/modelo.
     if ($product['olist_id'] !== '') {
@@ -86,11 +89,22 @@ function ai_catalog_fetch_product(PDO $db, int $productId): ?array
                 if ($product['sku'] === '') $product['sku'] = ai_catalog_scalar($olist, ['sku', 'codigo']);
             }
         } catch (Throwable $e) {
-            error_log('[catalog-optimization] enriquecimento Olist indisponivel para produto #' . $productId . ': ' . $e->getMessage());
+            error_log('[catalog-optimization] enriquecimento Olist indisponivel para produto #' . $productLabel . ': ' . $e->getMessage());
         }
     }
 
     return $product;
+}
+
+/** @return array<string,string>|null */
+function ai_catalog_fetch_product(PDO $db, int|string $productReference): ?array
+{
+    $row = svpr_resolve_product_row($db, $productReference);
+    if (!is_array($row)) {
+        return null;
+    }
+
+    return ai_catalog_map_product_row($db, $row, $productReference);
 }
 
 function ai_catalog_is_active_product_row(array $row): bool
@@ -450,30 +464,36 @@ function ai_catalog_insert_staging_row(
 }
 
 /** @return array<string,mixed> */
-function ai_catalog_process_item(PDO $db, int $productId, string $channel, string $provider): array
+function ai_catalog_process_item(PDO $db, int|string $productReference, string $channel, string $provider): array
 {
+    $productReference = trim((string)$productReference);
     $channel = strtolower(trim($channel));
     $provider = strtolower(trim($provider));
     if (!array_key_exists($channel, catalog_ai_channels())) {
-        return ['success' => false, 'product_id' => $productId, 'channel' => $channel, 'provider' => $provider, 'error' => "Canal invalido: '$channel'."];
+        return ['success' => false, 'product_id' => 0, 'product_ref' => $productReference, 'channel' => $channel, 'provider' => $provider, 'error' => "Canal invalido: '$channel'."];
     }
     if (!in_array($provider, ['openai', 'gemini', 'claude'], true)) {
-        return ['success' => false, 'product_id' => $productId, 'channel' => $channel, 'provider' => $provider, 'error' => "Provider invalido: '$provider'."];
+        return ['success' => false, 'product_id' => 0, 'product_ref' => $productReference, 'channel' => $channel, 'provider' => $provider, 'error' => "Provider invalido: '$provider'."];
+    }
+    if ($productReference === '') {
+        return ['success' => false, 'product_id' => 0, 'product_ref' => '', 'channel' => $channel, 'provider' => $provider, 'error' => 'Referencia do produto ausente.'];
     }
 
-    $statusProbe = $db->prepare('SELECT * FROM products WHERE id = ? LIMIT 1');
-    $statusProbe->execute([$productId]);
-    $statusRow = $statusProbe->fetch(PDO::FETCH_ASSOC);
+    $statusRow = svpr_resolve_product_row($db, $productReference);
     if (!is_array($statusRow)) {
-        return ['success' => false, 'product_id' => $productId, 'channel' => $channel, 'provider' => $provider, 'error' => "Produto #$productId nao encontrado."];
+        return ['success' => false, 'product_id' => 0, 'product_ref' => $productReference, 'channel' => $channel, 'provider' => $provider, 'error' => "Produto #$productReference nao encontrado."];
+    }
+    $resolvedProductId = (int)($statusRow['id'] ?? 0);
+    if ($resolvedProductId <= 0) {
+        return ['success' => false, 'product_id' => 0, 'product_ref' => $productReference, 'channel' => $channel, 'provider' => $provider, 'error' => "Produto #$productReference nao foi resolvido para o cadastro local."];
     }
     if (!ai_catalog_is_active_product_row($statusRow)) {
-        return ['success' => false, 'product_id' => $productId, 'channel' => $channel, 'provider' => $provider, 'error' => "Produto #$productId esta inativo e nao pode ser gerado."];
+        return ['success' => false, 'product_id' => $resolvedProductId, 'product_ref' => $productReference, 'channel' => $channel, 'provider' => $provider, 'error' => "Produto #$productReference esta inativo e nao pode ser gerado."];
     }
 
-    $product = ai_catalog_fetch_product($db, $productId);
+    $product = ai_catalog_map_product_row($db, $statusRow, $productReference);
     if ($product === null) {
-        return ['success' => false, 'product_id' => $productId, 'channel' => $channel, 'provider' => $provider, 'error' => "Produto #$productId nao encontrado ou sem nome."];
+        return ['success' => false, 'product_id' => $resolvedProductId, 'product_ref' => $productReference, 'channel' => $channel, 'provider' => $provider, 'error' => "Produto #$productReference nao encontrado ou sem nome."];
     }
 
     try {
@@ -483,21 +503,22 @@ function ai_catalog_process_item(PDO $db, int $productId, string $channel, strin
         );
         ai_catalog_validate_ai_response($data, $channel, $product);
         $quality = ai_catalog_quality_report($data, $channel, $product);
-        $stagingId = ai_catalog_insert_staging_row($db, $productId, $channel, $provider, $data, 'pending', null, $quality);
+        $stagingId = ai_catalog_insert_staging_row($db, $resolvedProductId, $channel, $provider, $data, 'pending', null, $quality);
         return [
             'success' => true,
-            'product_id' => $productId,
+            'product_id' => $resolvedProductId,
+            'product_ref' => $productReference,
             'channel' => $channel,
             'provider' => $provider,
             'staging_id' => $stagingId,
             'quality_score' => $quality['score'],
         ];
     } catch (Throwable $e) {
-        error_log("[catalog-optimization] falha produto #$productId canal=$channel provider=$provider: " . $e->getMessage());
+        error_log("[catalog-optimization] falha produto #{$resolvedProductId} ref={$productReference} canal=$channel provider=$provider: " . $e->getMessage());
         try {
             $stagingId = ai_catalog_insert_staging_row(
                 $db,
-                $productId,
+                $resolvedProductId,
                 $channel,
                 $provider,
                 [
@@ -517,7 +538,8 @@ function ai_catalog_process_item(PDO $db, int $productId, string $channel, strin
         }
         return [
             'success' => false,
-            'product_id' => $productId,
+            'product_id' => $resolvedProductId,
+            'product_ref' => $productReference,
             'channel' => $channel,
             'provider' => $provider,
             'staging_id' => $stagingId,
@@ -538,10 +560,10 @@ if (PHP_SAPI !== 'cli' && basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basena
     $rawBody = file_get_contents('php://input') ?: '';
     $jsonInput = json_decode($rawBody, true);
     $input = is_array($jsonInput) ? $jsonInput : $_POST;
-    $productId = (int)($input['product_id'] ?? 0);
+    $productId = trim((string)($input['product_id'] ?? ''));
     $channel = (string)($input['target_channel'] ?? $input['channel'] ?? '');
     $provider = (string)($input['provider'] ?? '');
-    if ($productId <= 0 || $channel === '' || $provider === '') {
+    if ($productId === '' || $channel === '' || $provider === '') {
         http_response_code(400);
         echo json_encode(['success' => false, 'error' => 'product_id, target_channel e provider sao obrigatorios.']);
         exit;
