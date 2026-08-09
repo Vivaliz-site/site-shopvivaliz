@@ -52,7 +52,7 @@ final class BlogArticleRepository
             $params[] = $category;
         }
 
-        $sql .= ' ORDER BY featured DESC, published_at DESC, id DESC LIMIT ?';
+        $sql .= ' ORDER BY published_at DESC, id DESC LIMIT ?';
         $types .= 'i';
         $params[] = max(1, min(200, $limit));
 

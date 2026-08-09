@@ -347,7 +347,7 @@ function sv_blog_search_articles(string $query = '', string $category = '', int 
 
         $score = 0;
         if ($queryNorm === '') {
-            $score = !empty($article['featured']) ? 3 : 1;
+            $score = 1;
         } elseif (str_contains($haystack, $queryNorm)) {
             $score = 10;
         } else {
