@@ -1,12 +1,12 @@
 name: Google Ads Production OAuth Normalize
 
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "ops/google-ads-production-oauth-normalize.json"
-      - ".github/workflows/google-ads-production-oauth-normalize.yml"
+# on:
+#   workflow_dispatch:
+#   push:
+#     branches: [main]
+#     paths:
+#       - "ops/google-ads-production-oauth-normalize.json"
+#       - ".github/workflows/google-ads-production-oauth-normalize.yml"
 
 permissions:
   contents: read

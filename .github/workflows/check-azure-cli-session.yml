@@ -1,8 +1,8 @@
 name: Check Azure CLI authenticated session on VM
-on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/check-azure-cli-session.yml']
+# on:
+#   push:
+#     branches: [main]
+#     paths: ['.github/workflows/check-azure-cli-session.yml']
 permissions:
   contents: read
 jobs:
