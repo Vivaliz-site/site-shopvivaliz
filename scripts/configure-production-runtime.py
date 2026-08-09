@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
-"""Atomically update the production shared environment from a NUL payload.
+"""Atomically update static production settings without touching managed OAuth."""
 
-Supports the established 14-field production workflow and an extended payload
-containing all marketplace credentials. Empty optional fields are ignored, so
-an execution cannot erase existing credentials. Values are never printed.
-"""
 from __future__ import annotations
 
 import os
@@ -14,23 +10,29 @@ import tempfile
 import time
 from pathlib import Path
 
-LEGACY_KEYS = (
-    "DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASS",
-    "OLIST_ACCESS_TOKEN", "OLIST_REFRESH_TOKEN", "OLIST_CLIENT_ID", "OLIST_CLIENT_SECRET",
-    "TINY_ACCESS_TOKEN", "TINY_REFRESH_TOKEN", "TINY_CLIENT_ID", "TINY_CLIENT_SECRET",
+
+# This utility is used by the generic runtime workflow. OAuth credentials are
+# deliberately absent: access/refresh tokens may only be written by a
+# successful OAuth exchange or the interactive callback flow.
+KEYS = (
+    "DB_HOST",
+    "DB_PORT",
+    "DB_NAME",
+    "DB_USER",
+    "DB_PASS",
     "SHOPVIVALIZ_AGENT_KEY",
 )
 
-EXTENDED_KEYS = (
-    "DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASS",
-    "OLIST_ACCESS_TOKEN", "OLIST_REFRESH_TOKEN", "OLIST_CLIENT_ID", "OLIST_CLIENT_SECRET", "OLIST_API_KEY",
-    "TINY_ACCESS_TOKEN", "TINY_REFRESH_TOKEN", "TINY_CLIENT_ID", "TINY_CLIENT_SECRET", "TOKEN_API_OLIST",
-    "ML_CLIENT_ID", "ML_CLIENT_SECRET", "ML_ACCESS_TOKEN", "ML_REFRESH_TOKEN", "ML_SELLER_ID",
-    "SHOPEE_PARTNER_ID", "SHOPEE_PARTNER_KEY", "SHOPEE_SHOP_ID", "SHOPEE_ACCESS_TOKEN", "SHOPEE_REFRESH_TOKEN",
-    "TIKTOK_APP_KEY", "TIKTOK_APP_SECRET", "TIKTOK_ACCESS_TOKEN", "TIKTOK_REFRESH_TOKEN", "TIKTOK_SHOP_CIPHER", "TIKTOK_SHOP_ID",
-    "AMAZON_LWA_CLIENT_ID", "AMAZON_LWA_CLIENT_SECRET", "AMAZON_LWA_REFRESH_TOKEN",
-    "AMAZON_SELLER_ID", "AMAZON_ACCOUNT_ID", "AMAZON_MARKETPLACE_ID", "AMAZON_SP_API_ENDPOINT", "AMAZON_SP_API_REGION",
-    "SHOPVIVALIZ_AGENT_KEY",
+MANAGED_OAUTH_KEYS = (
+    "OLIST_ACCESS_TOKEN",
+    "OLIST_REFRESH_TOKEN",
+    "OLIST_CLIENT_ID",
+    "OLIST_CLIENT_SECRET",
+    "TINY_ACCESS_TOKEN",
+    "TINY_REFRESH_TOKEN",
+    "TINY_CLIENT_ID",
+    "TINY_CLIENT_SECRET",
+    "TOKEN_API_OLIST",
 )
 
 PRIVATE_MODE = 0o600
@@ -57,35 +59,33 @@ def validate_no_placeholders(values: dict[str, str]) -> str | None:
     return None
 
 
+def read_payload() -> dict[str, str]:
+    raw_values = sys.stdin.buffer.read().split(b"\0")
+    if raw_values and raw_values[-1] == b"":
+        raw_values.pop()
+    if len(raw_values) != len(KEYS):
+        raise ValueError("payload field count mismatch")
+
+    values: dict[str, str] = {}
+    for key, raw_value in zip(KEYS, raw_values):
+        value = raw_value.decode("utf-8")
+        if "\x00" in value or "\r" in value or "\n" in value:
+            raise ValueError(f"invalid control character in {key}")
+        if value:
+            values[key] = value
+    return values
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("usage: configure-production-runtime.py SHARED_ENV", file=sys.stderr)
         return 2
 
-    raw_values = sys.stdin.buffer.read().split(b"\0")
-    if raw_values and raw_values[-1] == b"":
-        raw_values.pop()
-    if len(raw_values) == len(LEGACY_KEYS):
-        keys = LEGACY_KEYS
-        payload_mode = "legacy"
-    elif len(raw_values) == len(EXTENDED_KEYS):
-        keys = EXTENDED_KEYS
-        payload_mode = "extended"
-    else:
-        print(
-            f"payload field count mismatch: received={len(raw_values)} expected={len(LEGACY_KEYS)} or {len(EXTENDED_KEYS)}",
-            file=sys.stderr,
-        )
+    try:
+        values = read_payload()
+    except (UnicodeDecodeError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
         return 2
-
-    values: dict[str, str] = {}
-    for key, raw_value in zip(keys, raw_values):
-        value = raw_value.decode("utf-8")
-        if "\x00" in value or "\r" in value or "\n" in value:
-            print(f"invalid control character in {key}", file=sys.stderr)
-            return 2
-        if value:
-            values[key] = value
 
     database_error = validate_database_tuple(values)
     if database_error is not None:
@@ -132,14 +132,15 @@ def main() -> int:
             os.chown(temporary, original.st_uid, original.st_gid)
         os.replace(temporary, path)
         os.chmod(path, PRIVATE_MODE)
-        updated = path.stat()
-        if updated.st_uid != original.st_uid or updated.st_gid != original.st_gid or (updated.st_mode & 0o777) != PRIVATE_MODE:
-            raise RuntimeError("shared env metadata changed unexpectedly")
+        if os.name != "nt":
+            updated = path.stat()
+            if updated.st_uid != original.st_uid or updated.st_gid != original.st_gid or (updated.st_mode & 0o777) != PRIVATE_MODE:
+                raise RuntimeError("shared env metadata changed unexpectedly")
     finally:
         temporary.unlink(missing_ok=True)
 
-    print("payload_mode=" + payload_mode)
     print("updated_keys=" + ",".join(sorted(values)))
+    print("managed_oauth_mutation=blocked")
     print("backup_created=true")
     print("shared_env_mode=600")
     print("shared_env_owner_preserved=true")
