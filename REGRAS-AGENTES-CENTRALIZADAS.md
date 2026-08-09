@@ -24,6 +24,12 @@ Fluxo padrão: depois de validar a entrega e deixá-la pronta para revisão, o a
 
 Esta autorização remove apenas a espera por uma aprovação adicional. Ela não autoriza force-push, bypass de branch protection, exposição de secrets, cobrança real, exclusão destrutiva de dados ou declaração de sucesso sem evidência. Antes de merge/deploy, o agente deve confirmar o SHA alvo, os checks do PR, a validação real aplicável e, quando houver alteração publicada, a release ativa, os logs e o smoke test de produção. Se a plataforma bloquear autoaprovação ou outra etapa, o agente não deve contornar a proteção: deve registrar o bloqueio como **INCONCLUSIVO**.
 
+### Merge obrigatório ao finalizar rodada de alterações
+
+Ao concluir qualquer rodada de alterações versionadas, o agente deve deixar a mudança integrada por merge no ramo alvo e/ou publicada no alvo de deploy autorizado, desde que checks, revisões e proteções permitam. Não é aceitável encerrar uma rodada como "pronta" mantendo apenas branch local ou remoto sem merge/deploy quando o agente tem acesso técnico para concluir o fluxo. Se branch protection, CI, falta de permissão ou outro gate impedir o merge, o resultado deve ser registrado como **INCONCLUSIVO**, com link/SHA, checks observados e próximo bloqueio concreto.
+
+Simulação não substitui execução real: testes secos, mocks, screenshots headless, `curl` isolado ou inspeção de código são apenas preparação. Para declarar entrega, o agente deve executar a rotina real aplicável e validar o efeito por evidência independente, incluindo navegador real para UI, sem gerar cobrança real, alterar preço/estoque/pedido fora do escopo, expor secrets ou contornar proteções.
+
 ---
 
 ## 🎯 PRINCÍPIOS FUNDAMENTAIS (4 REGRAS INVIOLÁVEIS)
