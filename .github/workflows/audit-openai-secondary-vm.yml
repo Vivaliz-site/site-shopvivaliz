@@ -1,0 +1,99 @@
+name: Audit OpenAI Secondary On VM
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/audit-openai-secondary-vm.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || exit 2
+          test -n "$known_hosts" || exit 3
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Audit VM env files without exposing values
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'python3 -' <<'PY'
+          import glob
+          import hashlib
+          import json
+          from pathlib import Path
+
+          aliases = {
+              'OPENAI_API_KEY','OPENAI_API_KEY_1','OPENAI_API_KEY_2',
+              'OPENAI_API_KEY_SECONDARY','OPENAI_API_KEY_BACKUP','OPENAI_API_KEY_ALT',
+              'OPENAI_KEY','OPENAI_KEY_1','OPENAI_KEY_2',
+              'GPT_API_KEY','GPT_API_KEY_1','GPT_API_KEY_2','GPT_API_KEY_SECONDARY',
+              'CHATGPT_API_KEY',
+          }
+          patterns = [
+              '/home/ubuntu/shopvivaliz-deploy/shared/.env*',
+              '/home/ubuntu/shopvivaliz-deploy/current/.env*',
+              '/home/ubuntu/shopvivaliz-deploy/repo/.env*',
+              '/home/ubuntu/shopvivaliz-deploy/releases/*/.env*',
+              '/home/ubuntu/site-shopvivaliz/.env*',
+              '/home/ubuntu/shopvivaliz/.env*',
+          ]
+          files = sorted({p for pattern in patterns for p in glob.glob(pattern) if Path(p).is_file()})
+          groups = {}
+          for path_text in files:
+              path = Path(path_text)
+              try:
+                  lines = path.read_text(encoding='utf-8', errors='replace').splitlines()
+              except OSError:
+                  continue
+              for raw in lines:
+                  text = raw.strip()
+                  if not text or text.startswith('#') or '=' not in text:
+                      continue
+                  if text.startswith('export '):
+                      text = text[7:].strip()
+                  name, value = text.split('=', 1)
+                  name = name.strip()
+                  value = value.strip().strip('"\'')
+                  if name not in aliases or not value or not value.startswith('sk-'):
+                      continue
+                  digest = hashlib.sha256(value.encode()).hexdigest()
+                  group = groups.setdefault(digest, [])
+                  group.append({'path': str(path), 'alias': name})
+          report = {
+              'env_files_scanned': len(files),
+              'distinct_openai_values': len(groups),
+              'groups': [
+                  {'candidate': i + 1, 'locations': locations}
+                  for i, locations in enumerate(groups.values())
+              ],
+          }
+          print(json.dumps(report, ensure_ascii=False, sort_keys=True))
+          PY
+
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
