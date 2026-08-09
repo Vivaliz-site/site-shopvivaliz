@@ -32,7 +32,7 @@ Esta autorização remove apenas a espera por uma aprovação adicional. Ela nã
 > 2. Abertura ou atualização do **Pull Request (PR)** correspondente.
 > 3. Realização de **Merge** para a branch principal ou branch ativa de entrega.
 > 
-> Toda alteração deve ser validada e seguir este fluxo. Não é aceitável encerrar uma rodada de alterações sem concluir o ciclo de commit, PR e merge/deploy quando houver acesso técnico para isso. Se houver algum impedimento técnico ou bloqueio de proteção de branch, o status deve ser reportado formalmente como **INCONCLUSIVO**.
+> Toda alteração deve ser validada pelo navegador de forma visual e funcional (nada de scripts para essa validação) e seguir este fluxo. Não é aceitável encerrar uma rodada de alterações sem concluir o ciclo de commit, PR e merge/deploy quando houver acesso técnico para isso. Se houver algum impedimento técnico ou bloqueio de proteção de branch, o status deve ser reportado formalmente como **INCONCLUSIVO**.
 
 Ao concluir qualquer rodada de alterações versionadas, o agente deve deixar a mudança integrada por merge no ramo alvo e/ou publicada no alvo de deploy autorizado, desde que checks, revisões e proteções permitam. Não é aceitável encerrar uma rodada como "pronta" mantendo apenas branch local ou remoto sem merge/deploy quando o agente tem acesso técnico para concluir o fluxo. Se branch protection, CI, falta de permissão ou outro gate impedir o merge, o resultado deve ser registrado como **INCONCLUSIVO**, com link/SHA, checks observados e próximo bloqueio concreto.
 

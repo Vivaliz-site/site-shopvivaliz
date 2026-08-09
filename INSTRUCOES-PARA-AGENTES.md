@@ -101,7 +101,7 @@ Qualquer alteração feita no repositório, ao ser finalizada, deve obrigatoriam
 2. Abertura/atualização de **Pull Request (PR)**.
 3. Realização de **Merge** para a branch alvo.
 
-Toda alteração deve ser validada e seguir este fluxo. Não finalize rodadas de alterações mantendo-as apenas locais ou sem merge/deploy.
+Toda alteração deve ser validada pelo navegador de forma visual e funcional (nada de scripts para essa validação) e seguir este fluxo. Não finalize rodadas de alterações mantendo-as apenas locais ou sem merge/deploy.
 
 ## 🚨 PROCEDIMENTO PARA EVITAR NO FUTURO
 

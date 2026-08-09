@@ -57,7 +57,7 @@
 - ✗ **Nunca** exija clique manual pra concluir instalação
 
 ### Finalização Obrigatória
-- ⚠️ **Ao finalizar alterações, faça sempre Commit, PR e Merge (Toda alteração deve ser validada e seguir este fluxo)** (Obrigatório)
+- ⚠️ **Ao finalizar alterações, faça sempre Commit, PR e Merge (Toda alteração deve ser validada de forma visual e funcional pelo navegador, sem scripts, e seguir este fluxo)** (Obrigatório)
 
 ---
 
