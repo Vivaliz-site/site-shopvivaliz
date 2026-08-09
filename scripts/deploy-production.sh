@@ -68,6 +68,104 @@ restart_runtime_services() {
   done
 }
 
+assert_managed_release_path() {
+  local release_path="$1"
+  local releases_root canonical_path current_target
+
+  releases_root="$(readlink -f "$RELEASES_DIR")"
+  canonical_path="$(readlink -f "$release_path" 2>/dev/null || true)"
+  current_target="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
+
+  if [ -z "$canonical_path" ] || [ ! -d "$release_path" ]; then
+    log ERROR "Caminho de release invalido para cleanup: $release_path"
+    return 1
+  fi
+
+  case "$canonical_path" in
+    "$releases_root"/*) ;;
+    *)
+      log ERROR "Cleanup recusado fora da raiz de releases: $release_path"
+      return 1
+      ;;
+  esac
+
+  if [ "$canonical_path" = "$releases_root" ]; then
+    log ERROR "Cleanup recusado para a raiz de releases"
+    return 1
+  fi
+
+  if [ -n "$current_target" ] && [ "$canonical_path" = "$current_target" ]; then
+    log ERROR "Cleanup recusado para a release ativa: $release_path"
+    return 1
+  fi
+}
+
+repair_release_tree_permissions() {
+  local release_path="$1"
+
+  if ! assert_managed_release_path "$release_path"; then
+    return 1
+  fi
+
+  if ! sudo find -P "$release_path" \( -type d -o -type f \) -exec chown ubuntu:ubuntu {} +; then
+    log ERROR "Nao foi possivel reconciliar ownership da release $(basename "$release_path")"
+    return 1
+  fi
+  if ! sudo find -P "$release_path" -type d -exec chmod u+rwx {} +; then
+    log ERROR "Nao foi possivel reconciliar permissoes de diretorios em $(basename "$release_path")"
+    return 1
+  fi
+  if ! sudo find -P "$release_path" -type f -exec chmod u+rw {} +; then
+    log ERROR "Nao foi possivel reconciliar permissoes de arquivos em $(basename "$release_path")"
+    return 1
+  fi
+}
+
+ensure_release_tree_cleanup_safe() {
+  local release_path="$1"
+  local owner_drift mode_drift
+
+  if ! assert_managed_release_path "$release_path"; then
+    return 1
+  fi
+
+  owner_drift="$(find -P "$release_path" \( -type d -o -type f \) ! -user ubuntu -print -quit 2>/dev/null || true)"
+  mode_drift="$(find -P "$release_path" -type d ! -perm -u+w -print -quit 2>/dev/null || true)"
+
+  if [ -z "$owner_drift$mode_drift" ]; then
+    return 0
+  fi
+
+  log WARN "Release $(basename "$release_path") contem ownership/permissoes fora do padrao; reconciliando"
+  repair_release_tree_permissions "$release_path"
+}
+
+remove_release_tree() {
+  local release_path="$1"
+
+  if ! assert_managed_release_path "$release_path"; then
+    return 1
+  fi
+
+  if rm -rf -- "$release_path"; then
+    return 0
+  fi
+
+  log WARN "Falha ao remover $(basename "$release_path") com o usuario atual; tentando recuperar permissoes"
+  if ! repair_release_tree_permissions "$release_path"; then
+    return 1
+  fi
+  if rm -rf -- "$release_path"; then
+    return 0
+  fi
+
+  log WARN "Remocao de $(basename "$release_path") ainda falhou; tentando sudo como ultimo recurso"
+  if ! sudo rm -rf -- "$release_path"; then
+    log ERROR "Nao foi possivel remover a release $(basename "$release_path")"
+    return 1
+  fi
+}
+
 rollback_to() {
   local previous_release="$1"
   if [ -z "$previous_release" ] || [ ! -d "$RELEASES_DIR/$previous_release" ]; then
@@ -347,7 +445,9 @@ NEW_RELEASE_PATH="$RELEASES_DIR/$NEW_RELEASE"
 log INFO "Criando release $NEW_RELEASE"
 mkdir -p "$NEW_RELEASE_PATH"
 if ! (cd "$REPO_DIR" && git archive "$REMOTE_SHA") | tar -xf - -C "$NEW_RELEASE_PATH"; then
-  rm -rf -- "$NEW_RELEASE_PATH"
+  if ! remove_release_tree "$NEW_RELEASE_PATH"; then
+    log WARN "Falha ao limpar a release incompleta $NEW_RELEASE apos erro de extracao"
+  fi
   log ERROR "Extracao da release falhou"
   exit 1
 fi
@@ -367,7 +467,9 @@ for name in "${SYMLINKS[@]}"; do
   release_path="$NEW_RELEASE_PATH/$name"
   if [ "$name" = ".env" ]; then
     if [ ! -f "$shared_path" ]; then
-      rm -rf -- "$NEW_RELEASE_PATH"
+      if ! remove_release_tree "$NEW_RELEASE_PATH"; then
+        log WARN "Falha ao limpar a release incompleta $NEW_RELEASE apos erro de configuracao"
+      fi
       log ERROR "Configuracao compartilhada ausente: $shared_path"
       exit 1
     fi
@@ -381,7 +483,9 @@ for name in "${SYMLINKS[@]}"; do
   rm -rf -- "$release_path"
   ln -s "../../shared/$name" "$release_path"
   if [ "$(readlink -f "$release_path")" != "$shared_path" ]; then
-    rm -rf -- "$NEW_RELEASE_PATH"
+    if ! remove_release_tree "$NEW_RELEASE_PATH"; then
+      log WARN "Falha ao limpar a release incompleta $NEW_RELEASE apos erro de symlink"
+    fi
     log ERROR "Symlink compartilhado invalido: $name"
     exit 1
   fi
@@ -390,7 +494,9 @@ done
 if [ -f "$NEW_RELEASE_PATH/scripts/apply-storefront-hardening-migration.php" ]; then
   log INFO "Aplicando migracao idempotente de estoque e newsletter"
   if ! php "$NEW_RELEASE_PATH/scripts/apply-storefront-hardening-migration.php" >> "$LOG_FILE" 2>&1; then
-    rm -rf -- "$NEW_RELEASE_PATH"
+    if ! remove_release_tree "$NEW_RELEASE_PATH"; then
+      log WARN "Falha ao limpar a release incompleta $NEW_RELEASE apos erro de migracao"
+    fi
     log ERROR "Migracao de storefront falhou; release nao foi ativada"
     write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "migracao de storefront falhou"
     exit 1
@@ -398,7 +504,9 @@ if [ -f "$NEW_RELEASE_PATH/scripts/apply-storefront-hardening-migration.php" ]; 
 fi
 
 if ! reconcile_runtime_secrets "$NEW_RELEASE_PATH"; then
-  rm -rf -- "$NEW_RELEASE_PATH"
+  if ! remove_release_tree "$NEW_RELEASE_PATH"; then
+    log WARN "Falha ao limpar a release incompleta $NEW_RELEASE apos erro de runtime"
+  fi
   exit 1
 fi
 
@@ -410,6 +518,14 @@ fi
 # This keeps the OAuth allowlist in sync without making the rest of /olist public.
 if [ -x "$NEW_RELEASE_PATH/scripts/install-apache-hardening.sh" ]; then
   sudo bash "$NEW_RELEASE_PATH/scripts/install-apache-hardening.sh" >> "$LOG_FILE" 2>&1
+fi
+
+if ! ensure_release_tree_cleanup_safe "$NEW_RELEASE_PATH"; then
+  if ! remove_release_tree "$NEW_RELEASE_PATH"; then
+    log WARN "Falha ao limpar a release incompleta $NEW_RELEASE apos erro de ownership/permissoes"
+  fi
+  write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "release criada com ownership/permissoes invalidos"
+  exit 1
 fi
 
 php -l "$NEW_RELEASE_PATH/index.php" > /dev/null
@@ -450,7 +566,9 @@ fi
 mapfile -t OLD_RELEASES < <(find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -r | tail -n +$((RETENTION_COUNT + 1)))
 for old_release in "${OLD_RELEASES[@]}"; do
   if [ "$old_release" != "$NEW_RELEASE" ] && [ "$old_release" != "$ACTIVE_RELEASE" ]; then
-    rm -rf -- "$RELEASES_DIR/$old_release"
+    if ! remove_release_tree "$RELEASES_DIR/$old_release"; then
+      log WARN "Retencao nao conseguiu remover $old_release; deploy seguira sem bloquear a release ativa"
+    fi
   fi
 done
 
