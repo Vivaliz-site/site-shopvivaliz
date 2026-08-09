@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../includes/admin-guard.php';
+require_once __DIR__ . '/../../includes/csrf.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/process_item.php';
 require_once __DIR__ . '/src/ImageChannelProfile.php';
@@ -19,47 +20,39 @@ function ai_studio_h(string $value): string
     return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
-$IMAGE_TYPE_LABELS = [
-    'white' => 'Branco / capa',
-    'hero' => 'Hero comercial',
-    'ambient' => 'Ambientada / lifestyle',
-];
 $channelProfiles = ai_studio_channel_profiles();
 $batchResults = null;
 $batchError = null;
+$defaultImageTypes = ['white', 'hero', 'ambient'];
+$csrf = sv_csrf_token('ai-image-batch');
 
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['run_batch'])) {
-    $provider = strtolower(trim((string)($_POST['provider'] ?? '')));
-    $model = trim((string)($_POST['model'] ?? ''));
-    $targetChannel = strtolower(trim((string)($_POST['target_channel'] ?? 'site')));
-    $productIds = array_values(array_unique(array_map('intval', (array)($_POST['product_ids'] ?? []))));
-    $imageTypesByProduct = (array)($_POST['image_types'] ?? []);
-
-    if (!in_array($provider, ['openai', 'google', 'claude'], true)) {
-        $batchError = 'Selecione um provedor valido.';
-    } elseif (!isset($channelProfiles[$targetChannel])) {
-        $batchError = 'Marketplace de destino invalido.';
-    } elseif ($productIds === []) {
-        $batchError = 'Nenhum produto selecionado.';
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['action'] ?? '') === 'generate_selected') {
+    if (!sv_csrf_valid('ai-image-batch', $_POST['csrf_token'] ?? null)) {
+        $batchError = 'A sessao expirou. Recarregue a pagina.';
     } else {
-        $batchResults = [];
-        foreach ($productIds as $productId) {
-            $types = array_values(array_map('strval', (array)($imageTypesByProduct[(string)$productId] ?? [])));
-            if ($types === []) {
-                continue;
+        $provider = strtolower(trim((string)($_POST['provider'] ?? '')));
+        $model = trim((string)($_POST['model'] ?? ''));
+        $targetChannel = strtolower(trim((string)($_POST['target_channel'] ?? 'site')));
+        $productIds = array_values(array_unique(array_map('intval', (array)($_POST['product_ids'] ?? []))));
+
+        if (!in_array($provider, ['openai', 'google', 'claude'], true)) {
+            $batchError = 'Selecione um provedor valido.';
+        } elseif (!isset($channelProfiles[$targetChannel])) {
+            $batchError = 'Marketplace de destino invalido.';
+        } elseif ($productIds === []) {
+            $batchError = 'Nenhum produto selecionado.';
+        } else {
+            $batchResults = [];
+            foreach ($productIds as $productId) {
+                $batchResults[] = ai_studio_process_item(
+                    $db,
+                    $productId,
+                    $provider,
+                    $defaultImageTypes,
+                    $model !== '' ? $model : null,
+                    $targetChannel
+                );
             }
-            $batchResults[] = ai_studio_process_item(
-                $db,
-                $productId,
-                $provider,
-                $types,
-                $model !== '' ? $model : null,
-                $targetChannel
-            );
-        }
-        if ($batchResults === []) {
-            $batchError = 'Nenhum produto tinha ao menos um tipo de imagem marcado.';
-            $batchResults = null;
         }
     }
 }
@@ -130,16 +123,11 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
 .product-header strong{font-size:1rem}
 .product-summary,.page-status{color:var(--muted);font-size:.92rem}
 .products-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
-.product-card{display:grid;grid-template-columns:auto 86px minmax(0,1fr);gap:12px;align-items:flex-start;padding:16px;border:1px solid var(--line);border-radius:20px;background:var(--surface-soft);transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+.product-card{display:flex;gap:12px;align-items:flex-start;padding:16px;border:1px solid var(--line);border-radius:20px;background:var(--surface-soft);transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+.product-card.is-selected{background:#eef6ff;border-color:#93c5fd;box-shadow:0 0 0 3px rgba(37,99,235,.10)}
 .product-card:hover{transform:translateY(-2px);border-color:#a9b8cb;box-shadow:0 16px 32px rgba(15,23,42,.08)}
 .product-check{margin-top:6px}
-.product-thumb{width:86px;height:86px;border-radius:18px;overflow:hidden;background:#eef2f7;border:1px solid #dfe5ee;display:grid;place-items:center}
-.product-thumb img{width:100%;height:100%;object-fit:contain}
 .product-title{font-weight:800;line-height:1.32}
-.product-meta,.product-stats{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;color:#445468;font-size:.82rem}
-.product-stats span,.product-meta span{padding:4px 8px;border-radius:999px;background:#fff;border:1px solid #e2e8f0}
-.product-types{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-.product-types label{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;background:#fff;border:1px solid #dbe4ef;font-size:.8rem;font-weight:700}
 .pager{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
 .pager button{border:0;border-radius:999px;padding:10px 14px;background:#e2e8f0;color:#0f172a;font-weight:800;cursor:pointer}
 .empty-state{padding:22px;border:1px dashed #cbd5e1;border-radius:18px;background:#f8fafc;color:#4b5a6e}
@@ -150,7 +138,7 @@ th{background:#f8fafc;color:#425368}
 .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:.78rem;font-weight:800}
 .badge.ok{background:#dcfce7;color:#166534}
 .badge.warn{background:#fef3c7;color:#92400e}
-@media(max-width:900px){.product-card{grid-template-columns:auto minmax(0,1fr)}.product-thumb{width:72px;height:72px}.wrap{padding:14px 10px 30px}}
+@media(max-width:900px){.wrap{padding:14px 10px 30px}}
 </style>
 </head>
 <body>
@@ -183,10 +171,10 @@ th{background:#f8fafc;color:#425368}
     </section>
 
     <section class="panel">
-        <h2>Gerar imagens somente para produtos ativos selecionados</h2>
+        <h2>Tela 1 - Selecao inicial</h2>
         <p>
-            A listagem abaixo usa o mesmo catalogo operacional ativo da loja. Escolha o marketplace, marque os produtos,
-            ajuste os tipos de imagem e envie apenas o lote desejado.
+            A listagem abaixo usa o mesmo catalogo operacional ativo da loja. Marque os itens, escolha o marketplace
+            e envie os IDs selecionados via POST para a geracao em lote.
         </p>
 
         <?php if ($batchError !== null): ?>
@@ -220,7 +208,8 @@ th{background:#f8fafc;color:#425368}
         </div>
 
         <form id="image-batch-form" method="post">
-            <input type="hidden" name="run_batch" value="1">
+            <input type="hidden" name="csrf_token" value="<?= ai_studio_h($csrf) ?>">
+            <input type="hidden" name="action" value="generate_selected">
 
             <div class="toolbar">
                 <label>
@@ -276,7 +265,6 @@ th{background:#f8fafc;color:#425368}
 
             <div class="toolbar-actions" style="margin-top:16px">
                 <button id="refresh-list" type="button">Atualizar lista</button>
-                <button id="select-page" type="button">Selecionar visiveis</button>
                 <button id="clear-selection" type="button">Limpar selecao</button>
                 <button class="submit-btn" id="run-selected" type="submit">Gerar selecionados</button>
             </div>
@@ -286,8 +274,13 @@ th{background:#f8fafc;color:#425368}
                     <strong>Produtos ativos disponiveis</strong>
                     <span class="product-summary" id="product-summary">Carregando...</span>
                 </div>
+                <label style="display:inline-flex;align-items:center;gap:8px;margin-bottom:12px;font-weight:800">
+                    <input id="select-all-products" type="checkbox">
+                    Selecionar todos desta pagina
+                </label>
 
                 <div id="products-list" class="products-grid"></div>
+                <div id="selected-products-hidden" hidden></div>
 
                 <div class="pager">
                     <button id="prev-page" type="button">Pagina anterior</button>
@@ -295,8 +288,6 @@ th{background:#f8fafc;color:#425368}
                     <button id="next-page" type="button">Proxima pagina</button>
                 </div>
             </div>
-
-            <div id="hidden-inputs"></div>
         </form>
     </section>
 
@@ -353,7 +344,6 @@ th{background:#f8fafc;color:#425368}
     const listEl = document.getElementById('products-list');
     const summaryEl = document.getElementById('product-summary');
     const pageStatusEl = document.getElementById('page-status');
-    const hiddenInputsEl = document.getElementById('hidden-inputs');
     const categoryFilterEl = document.getElementById('category-filter');
     const sortByEl = document.getElementById('sort-by');
     const providerEl = document.getElementById('provider');
@@ -361,29 +351,15 @@ th{background:#f8fafc;color:#425368}
     const state = {
         products: [],
         selected: new Set(),
-        typesByProduct: {},
         page: 1,
         totalPages: 1,
         categories: []
-    };
-    const allTypes = ['white', 'hero', 'ambient'];
-    const typeLabels = {
-        white: 'Branco / capa',
-        hero: 'Hero comercial',
-        ambient: 'Ambientada / lifestyle'
     };
 
     function escapeHtml(value) {
         const div = document.createElement('div');
         div.textContent = String(value ?? '');
         return div.innerHTML;
-    }
-
-    function defaultTypes(productId) {
-        if (!Array.isArray(state.typesByProduct[productId])) {
-            state.typesByProduct[productId] = allTypes.slice();
-        }
-        return state.typesByProduct[productId];
     }
 
     function setModelDefault() {
@@ -414,43 +390,44 @@ th{background:#f8fafc;color:#425368}
             : `${count} selecionado(s) · ${state.products.length} ativo(s) na pagina`;
     }
 
+    function syncSelectAllProducts() {
+        const master = document.getElementById('select-all-products');
+        if (!master) {
+            return;
+        }
+        const visibleIds = state.products.map(product => String(product.id || '')).filter(Boolean);
+        master.checked = visibleIds.length > 0 && visibleIds.every(id => state.selected.has(id));
+        master.indeterminate = visibleIds.some(id => state.selected.has(id)) && !master.checked;
+    }
+
+    function syncSelectedInputs() {
+        const hiddenContainer = document.getElementById('selected-products-hidden');
+        if (!hiddenContainer) {
+            return;
+        }
+        hiddenContainer.innerHTML = Array.from(state.selected)
+            .map(id => `<input type="hidden" name="product_ids[]" value="${escapeHtml(id)}">`)
+            .join('');
+    }
+
     function renderList() {
         if (!state.products.length) {
             listEl.innerHTML = '<div class="empty-state">Nenhum produto ativo encontrado nesta busca.</div>';
             pageStatusEl.textContent = '';
             renderSummary();
+            syncSelectAllProducts();
+            syncSelectedInputs();
             return;
         }
 
         listEl.innerHTML = state.products.map(product => {
             const id = String(product.id || '');
             const checked = state.selected.has(id) ? 'checked' : '';
-            const selectedTypes = defaultTypes(id);
-            const image = product.image_url || '/images/logo-vivaliz-square-v2.png';
-            const price = Number(product.price || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-            const stock = Number(product.stock || 0);
-            const meta = [
-                product.sku ? `SKU ${escapeHtml(product.sku)}` : '',
-                product.category ? escapeHtml(product.category) : '',
-                product.olist_product_id ? `ID ${escapeHtml(product.olist_product_id)}` : ''
-            ].filter(Boolean).map(text => `<span>${text}</span>`).join('');
-            const types = allTypes.map(type => {
-                const typeChecked = selectedTypes.includes(type) ? 'checked' : '';
-                return `<label><input type="checkbox" class="type-check" data-product-id="${escapeHtml(id)}" data-type="${type}" ${typeChecked}> ${escapeHtml(typeLabels[type])}</label>`;
-            }).join('');
             return `
-                <label class="product-card">
-                    <input type="checkbox" class="product-check" data-product-id="${escapeHtml(id)}" ${checked}>
-                    <div class="product-thumb"><img src="${escapeHtml(image)}" alt="${escapeHtml(product.name || 'Produto')}"></div>
+                <label class="product-card ${checked ? 'is-selected' : ''}">
+                    <input type="checkbox" class="product-check" value="${escapeHtml(id)}" data-product-id="${escapeHtml(id)}" ${checked}>
                     <div>
-                        <div class="product-title">${escapeHtml(product.name || 'Produto sem nome')}</div>
-                        <div class="product-meta">${meta}</div>
-                        <div class="product-stats">
-                            <span>${price}</span>
-                            <span>Estoque ${stock}</span>
-                            <span>Ativo</span>
-                        </div>
-                        <div class="product-types">${types}</div>
+                        <div class="product-title">#${escapeHtml(id)} - ${escapeHtml(product.name || 'Produto sem nome')}</div>
                     </div>
                 </label>`;
         }).join('');
@@ -463,26 +440,16 @@ th{background:#f8fafc;color:#425368}
                 } else {
                     state.selected.delete(id);
                 }
+                event.currentTarget.closest('.product-card')?.classList.toggle('is-selected', event.currentTarget.checked);
                 renderSummary();
-            });
-        });
-
-        listEl.querySelectorAll('.type-check').forEach(input => {
-            input.addEventListener('change', event => {
-                const id = String(event.currentTarget.dataset.productId || '');
-                const type = String(event.currentTarget.dataset.type || '');
-                const types = new Set(defaultTypes(id));
-                if (event.currentTarget.checked) {
-                    types.add(type);
-                } else {
-                    types.delete(type);
-                }
-                state.typesByProduct[id] = Array.from(types);
+                syncSelectAllProducts();
             });
         });
 
         pageStatusEl.textContent = `Pagina ${state.page} de ${state.totalPages}`;
         renderSummary();
+        syncSelectAllProducts();
+        syncSelectedInputs();
     }
 
     async function loadProducts(page = 1) {
@@ -521,28 +488,6 @@ th{background:#f8fafc;color:#425368}
         }
     }
 
-    function buildHiddenInputs() {
-        hiddenInputsEl.innerHTML = '';
-        const selectedIds = Array.from(state.selected);
-
-        selectedIds.forEach(id => {
-            const types = Array.isArray(state.typesByProduct[id]) ? state.typesByProduct[id] : allTypes.slice();
-            const productInput = document.createElement('input');
-            productInput.type = 'hidden';
-            productInput.name = 'product_ids[]';
-            productInput.value = id;
-            hiddenInputsEl.appendChild(productInput);
-
-            types.forEach(type => {
-                const typeInput = document.createElement('input');
-                typeInput.type = 'hidden';
-                typeInput.name = `image_types[${id}][]`;
-                typeInput.value = type;
-                hiddenInputsEl.appendChild(typeInput);
-            });
-        });
-    }
-
     providerEl.addEventListener('change', setModelDefault);
     document.getElementById('refresh-list').addEventListener('click', () => loadProducts(1));
     document.getElementById('product-search').addEventListener('input', () => loadProducts(1));
@@ -559,18 +504,22 @@ th{background:#f8fafc;color:#425368}
             loadProducts(state.page + 1);
         }
     });
-    document.getElementById('select-page').addEventListener('click', () => {
-        state.products.forEach(product => {
-            const id = String(product.id || '');
-            if (id !== '') {
-                state.selected.add(id);
-                defaultTypes(id);
-            }
-        });
-        renderList();
-    });
     document.getElementById('clear-selection').addEventListener('click', () => {
         state.selected.clear();
+        renderList();
+    });
+    document.getElementById('select-all-products')?.addEventListener('change', event => {
+        state.products.forEach(product => {
+            const id = String(product.id || '');
+            if (!id) {
+                return;
+            }
+            if (event.currentTarget.checked) {
+                state.selected.add(id);
+            } else {
+                state.selected.delete(id);
+            }
+        });
         renderList();
     });
 
@@ -581,15 +530,6 @@ th{background:#f8fafc;color:#425368}
             window.alert('Selecione ao menos um produto ativo para gerar imagens.');
             return;
         }
-
-        const invalid = selectedIds.find(id => !Array.isArray(state.typesByProduct[id]) || state.typesByProduct[id].length === 0);
-        if (invalid) {
-            event.preventDefault();
-            window.alert(`O produto #${invalid} precisa ter ao menos um tipo de imagem marcado.`);
-            return;
-        }
-
-        buildHiddenInputs();
     });
 
     setModelDefault();
