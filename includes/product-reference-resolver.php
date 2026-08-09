@@ -1,6 +1,10 @@
 <?php
 declare(strict_types=1);
 
+if (!function_exists('svcr_products') && is_file(__DIR__ . '/catalog-runtime.php')) {
+    require_once __DIR__ . '/catalog-runtime.php';
+}
+
 /** @return array<string,bool> */
 function svpr_table_columns(PDO $db, string $table): array
 {
@@ -27,15 +31,83 @@ function svpr_has_column(array $columns, string $field): bool
     return isset($columns[strtolower($field)]);
 }
 
+/** @param list<string> $candidates */
+function svpr_push_candidate(array &$candidates, mixed $value): void
+{
+    $candidate = trim((string)$value);
+    if ($candidate === '' || in_array($candidate, $candidates, true)) {
+        return;
+    }
+    $candidates[] = $candidate;
+}
+
+/** @return array<string,list<string>> */
+function svpr_runtime_reference_index(): array
+{
+    static $index = null;
+    if (is_array($index)) {
+        return $index;
+    }
+
+    $index = [];
+    if (!function_exists('svcr_products')) {
+        return $index;
+    }
+
+    foreach (svcr_products() as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+
+        $references = [];
+        svpr_push_candidate($references, $row['id'] ?? '');
+        svpr_push_candidate($references, $row['olist_product_id'] ?? '');
+        svpr_push_candidate($references, $row['sku'] ?? '');
+
+        if ($references === []) {
+            continue;
+        }
+
+        foreach ($references as $reference) {
+            $key = strtolower($reference);
+            $known = $index[$key] ?? [];
+            foreach ($references as $candidate) {
+                svpr_push_candidate($known, $candidate);
+            }
+            $index[$key] = $known;
+        }
+    }
+
+    return $index;
+}
+
+/** @return list<string> */
+function svpr_reference_candidates(int|string $productReference): array
+{
+    $candidates = [];
+    svpr_push_candidate($candidates, $productReference);
+
+    $reference = trim((string)$productReference);
+    if ($reference === '') {
+        return $candidates;
+    }
+
+    $runtimeMatches = svpr_runtime_reference_index()[strtolower($reference)] ?? [];
+    foreach ($runtimeMatches as $candidate) {
+        svpr_push_candidate($candidates, $candidate);
+    }
+
+    return $candidates;
+}
+
 /**
  * Resolve uma referencia operacional do catalogo para a linha local em
  * `products`, aceitando product_id local, olist_id, olist_product_id ou SKU.
  *
  * @return array<string,mixed>|null
  */
-function svpr_resolve_product_row(PDO $db, int|string $productReference): ?array
+function svpr_resolve_product_row_once(PDO $db, string $reference): ?array
 {
-    $reference = trim((string)$productReference);
     if ($reference === '') {
         return null;
     }
@@ -144,6 +216,26 @@ function svpr_resolve_product_row(PDO $db, int|string $productReference): ?array
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
     return is_array($row) ? $row : null;
+}
+
+/**
+ * Resolve uma referencia operacional do catalogo para a linha local em
+ * `products`, aceitando product_id local, olist_id, olist_product_id ou SKU.
+ * Se a referencia vier do catalogo runtime, tenta primeiro os aliases
+ * equivalentes expandidos a partir do proprio runtime.
+ *
+ * @return array<string,mixed>|null
+ */
+function svpr_resolve_product_row(PDO $db, int|string $productReference): ?array
+{
+    foreach (svpr_reference_candidates($productReference) as $candidate) {
+        $row = svpr_resolve_product_row_once($db, $candidate);
+        if (is_array($row)) {
+            return $row;
+        }
+    }
+
+    return null;
 }
 
 function svpr_resolve_local_product_id(PDO $db, int|string $productReference): ?int
