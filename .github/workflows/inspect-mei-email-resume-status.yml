@@ -1,0 +1,138 @@
+name: Inspect MEI email resume status
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/inspect-mei-email-resume-status.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mei-mg-email-inspect
+  cancel-in-progress: true
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect worker, Graph config, rolling quota and queue
+        run: |
+          timeout 120s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=10 -o ServerAliveCountMax=2 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+
+          echo '=== WORKER ==='
+          echo WORKER_STATE=$(timeout 10s sudo systemctl is-active mei-mg-email-worker.service || true)
+          timeout 10s sudo systemctl --no-pager --full status mei-mg-email-worker.service | sed -n '1,16p' || true
+
+          echo '=== CONFIG ==='
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          from email.utils import parseaddr
+          import json,os
+          load_dotenv('.env',override=True)
+          sender=os.getenv('MICROSOFT_GRAPH_USER','').strip()
+          mail_from=parseaddr(os.getenv('MAIL_FROM',''))[1].strip()
+          data={
+            'email_provider':os.getenv('EMAIL_PROVIDER','').strip(),
+            'graph_auth_mode':os.getenv('MICROSOFT_GRAPH_AUTH_MODE','app_only_cert').strip(),
+            'graph_user':sender,
+            'mail_from_address':mail_from,
+            'rate_limit_per_min':os.getenv('RATE_LIMIT_ENVIOS_POR_MINUTO','').strip(),
+            'target_24h':os.getenv('META_ENVIOS_POR_DIA','').strip(),
+            'hard_cap_24h':os.getenv('MAX_ENVIOS_POR_DIA','').strip(),
+            'legacy_client_secret_present':bool(os.getenv('MICROSOFT_GRAPH_CLIENT_SECRET','').strip()),
+          }
+          print(json.dumps(data,ensure_ascii=False))
+          PY
+
+          echo '=== GRAPH APP-ONLY ==='
+          timeout 60s /home/ubuntu/mei-mg-email/.venv/bin/python scripts/auditar_graph_token.py
+
+          echo '=== ROLLING 24H AND QUEUE ==='
+          timeout 45s /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env',override=True)
+          import datetime,json,os,psycopg
+          from psycopg.rows import dict_row
+          TARGET=9950
+          with psycopg.connect(os.environ['DATABASE_URL'],autocommit=True,row_factory=dict_row,connect_timeout=10) as conn:
+            with conn.cursor() as cur:
+              cur.execute("set statement_timeout = '20s'")
+              cur.execute("""
+                select count(*) n,min(enviado_em) oldest,max(enviado_em) newest
+                  from mei_email.envios
+                 where status::text in ('submitted','enviado')
+                   and enviado_em>=now()-interval '24 hours'
+              """)
+              rolling=dict(cur.fetchone())
+              used=rolling['n']
+              next_safe=None
+              if used>=TARGET:
+                need=used-(TARGET-1)
+                cur.execute("""
+                  select enviado_em from mei_email.envios
+                   where status::text in ('submitted','enviado')
+                     and enviado_em>=now()-interval '24 hours'
+                   order by enviado_em asc
+                   offset %s limit 1
+                """,(need-1,))
+                row=cur.fetchone()
+                if row and row['enviado_em']:
+                  next_safe=row['enviado_em']+datetime.timedelta(hours=24)
+
+              cur.execute("select count(*) n from mei_email.envios where status::text in ('pendente','enviando')")
+              pending=cur.fetchone()['n']
+              cur.execute("""
+                select count(*) n from (
+                  select lower(btrim(email::text)) email_normalizado
+                    from mei_email.envios
+                   where status::text in ('pendente','enviando')
+                   group by 1 having count(*)>1
+                ) d
+              """)
+              duplicates=cur.fetchone()['n']
+              cur.execute("""
+                select count(*) n from mei_email.envios p
+                 where p.status::text in ('pendente','enviando')
+                   and exists (
+                     select 1 from mei_email.envios s
+                      where s.id<>p.id
+                        and s.status::text in ('submitted','enviado')
+                        and lower(btrim(s.email::text))=lower(btrim(p.email::text))
+                   )
+              """)
+              already=cur.fetchone()['n']
+              cur.execute("""
+                select count(*) n
+                  from mei_email.envios p
+                  join mei_email.empresas emp on emp.cnpj=p.cnpj
+                 where p.status::text in ('pendente','enviando')
+                   and emp.situacao_cadastral='ATIVA'
+                   and not emp.opt_out
+                   and not emp.provavel_terceiro
+                   and emp.marketing_autorizado
+              """)
+              eligible_pending=cur.fetchone()['n']
+              cur.execute("select status::text,count(*) n from mei_email.envios group by status::text order by status::text")
+              statuses=[dict(r) for r in cur.fetchall()]
+              print(json.dumps({
+                'used_24h':used,'target':TARGET,'hard_cap':10000,
+                'oldest':rolling['oldest'],'newest':rolling['newest'],
+                'next_safe_below_target':next_safe,
+                'pending':pending,'eligible_pending':eligible_pending,
+                'duplicate_pending_emails':duplicates,
+                'pending_already_submitted_or_sent':already,
+                'statuses':statuses,
+              },default=str,ensure_ascii=False))
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

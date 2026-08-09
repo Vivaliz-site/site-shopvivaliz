@@ -1,0 +1,36 @@
+name: Inventory email runtime on Oracle VM
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/inventory-email-runtime-vm.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inventory VM
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -u
+          echo 'HOST'; hostname; date -Is
+          echo 'HOME'; find /home/ubuntu -maxdepth 3 -type d \( -iname '*mei*' -o -iname '*email*' -o -iname '*shopvivaliz*' \) 2>/dev/null | head -100
+          echo 'PROCESSES'; ps aux | grep -Ei 'mei|email|graph|shopvivaliz' | grep -v grep || true
+          echo 'SYSTEMD'; systemctl list-unit-files --type=service 2>/dev/null | grep -Ei 'mei|email|shopvivaliz|graph' || true
+          echo 'TIMERS'; systemctl list-timers --all 2>/dev/null | grep -Ei 'mei|email|shopvivaliz|graph' || true
+          echo 'CRON'; crontab -l 2>/dev/null || true
+          echo 'DOCKER'; docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' 2>/dev/null || true
+          echo 'FILES'; find /home/ubuntu -maxdepth 4 -type f \( -iname '*email*' -o -iname '*graph*' -o -iname '*mei*' \) 2>/dev/null | head -150
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

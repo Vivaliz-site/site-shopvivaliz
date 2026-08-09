@@ -1,0 +1,134 @@
+name: Fred-Win Remote Action
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ops/fredwin-request.json"
+
+permissions:
+  contents: read
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          test -n "$VM_KEY" || { echo "SHOPVIVALIZ_VM_SSH_KEY missing"; exit 2; }
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Resolve allowlisted action
+        id: action
+        shell: bash
+        run: |
+          ACTION="$(jq -r '.action // "health"' ops/fredwin-request.json)"
+          case "$ACTION" in
+            health)
+              COMMAND=""
+              ;;
+            email_emergency_stop)
+              COMMAND="powershell -NoProfile -Command \"Get-CimInstance Win32_Process | Where-Object { ([string]\$_.CommandLine) -match '(?i)mei-mg-email' -and ([string]\$_.Name) -match '(?i)python|powershell' } | ForEach-Object { if (\$_.ProcessId -ne \$PID) { Stop-Process -Id \$_.ProcessId -Force -ErrorAction SilentlyContinue; Write-Output ('stopped_pid=' + \$_.ProcessId) } }; Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { \$_.TaskName -match '(?i)ShopVivalizGraphBrowserAuth|mei.*email|gmail|smtp' } | ForEach-Object { Stop-ScheduledTask -TaskName \$_.TaskName -ErrorAction SilentlyContinue; Unregister-ScheduledTask -TaskName \$_.TaskName -Confirm:\$false -ErrorAction SilentlyContinue; Write-Output ('removed_task=' + \$_.TaskName) }; Write-Output 'EMAIL_EMERGENCY_STOP_DONE'\""
+              ;;
+            email_recent_sends)
+              COMMAND="powershell -NoProfile -Command \"Set-Location 'C:\\mei-mg-email'; Write-Output 'RECENT_SENDS_BEGIN'; docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -P pager=off -c 'select e.id,e.status,e.enviado_em,e.email,e.erro,c.nome as campanha,c.assunto from mei_email.envios e left join mei_email.campanhas c on c.id=e.campanha_id order by coalesce(e.enviado_em,e.criado_em) desc nulls last limit 20'; Write-Output 'RECENT_SENDS_END'; Write-Output 'LOGS_BEGIN'; if(Test-Path '.\\logs'){ Get-ChildItem '.\\logs' -File | Sort-Object LastWriteTime -Descending | Select-Object -First 8 Name,LastWriteTime,Length }; Write-Output 'LOGS_END'\""
+              ;;
+            email_hard_stop_repair)
+              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location 'C:\\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; & '.\\scripts\\fredwin-email-control.ps1' -Mode 'hard-stop-repair'\""
+              ;;
+            email_migration_status)
+              COMMAND="powershell -NoProfile -Command \"Set-Location 'C:\\mei-mg-email'; Write-Output 'FILES_BEGIN'; Get-ChildItem '.\\db\\migrations\\*.sql' | Sort-Object Name | ForEach-Object { Write-Output ('FILE=' + \$_.Name); if(\$_.Name -eq 'V009__aquecimento_envio.sql'){ Get-Content \$_.FullName } }; Write-Output 'FILES_END'; Write-Output 'HISTORY_BEGIN'; docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -Atc 'select installed_rank,version,description,script,checksum,success from mei_email.flyway_schema_history order by installed_rank'; Write-Output 'HISTORY_END'\""
+              ;;
+            graph_browser_authorize)
+              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location 'C:\\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; & '.\\scripts\\fredwin-email-control.ps1' -Mode 'graph-browser-auth'\""
+              ;;
+            graph_auth_status)
+              COMMAND="powershell -NoProfile -Command \"Write-Output 'GRAPH_AUTH_OUT_BEGIN'; if(Test-Path 'C:\\mei-mg-email\\logs\\graph-browser-auth.out.log'){ Get-Content 'C:\\mei-mg-email\\logs\\graph-browser-auth.out.log' -Tail 40 } else { Write-Output 'NO_OUT_LOG' }; Write-Output 'GRAPH_AUTH_OUT_END'; Write-Output 'GRAPH_AUTH_ERR_BEGIN'; if(Test-Path 'C:\\mei-mg-email\\logs\\graph-browser-auth.err.log'){ Get-Content 'C:\\mei-mg-email\\logs\\graph-browser-auth.err.log' -Tail 40 } else { Write-Output 'NO_ERR_LOG' }; Write-Output 'GRAPH_AUTH_ERR_END'; \$task=Get-ScheduledTask -TaskName 'ShopVivalizGraphBrowserAuth' -ErrorAction SilentlyContinue; if(\$task){ Write-Output ('graph_auth_task_state=' + \$task.State) } else { Write-Output 'graph_auth_task_state=absent' }; \$cache=Join-Path \$env:LOCALAPPDATA 'mei-mg-email\\microsoft-graph-token.json'; Write-Output ('graph_token_cache_exists=' + (Test-Path \$cache))\""
+              ;;
+            graph_template_test)
+              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location 'C:\\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; & '.\\scripts\\fredwin-email-control.ps1' -Mode 'graph-template-test'\""
+              ;;
+            m365_app_only_audit)
+              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location 'C:\\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; Write-Output 'APP_ONLY_AUTH_BEGIN'; & '.\\scripts\\m365\\Test-ShopVivalizGraphAppOnly.ps1' -Thumbprint '7EFCBC6676B61F8C076F08127F5F7E365A95F2E9'; Write-Output 'APP_ONLY_AUTH_END'; Write-Output 'APP_ONLY_AUDIT_BEGIN'; & '.\\scripts\\m365\\Audit-ShopVivalizM365.ps1'; Write-Output 'APP_ONLY_AUDIT_END'\""
+              ;;
+            email_audit_9950)
+              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location 'C:\\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; & '.\\scripts\\fredwin-email-control.ps1' -Mode 'audit-9950'\""
+              ;;
+            start_authorized_email_send)
+              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location 'C:\\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; & '.\\scripts\\fredwin-email-control.ps1' -Mode 'start-authorized-send'\""
+              ;;
+            email_runtime_status)
+              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location 'C:\\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; & '.\\scripts\\fredwin-email-control.ps1' -Mode 'status'\""
+              ;;
+            open_exchange_admin)
+              COMMAND="powershell -NoProfile -Command \"Start-Process 'https://admin.exchange.microsoft.com/'\""
+              ;;
+            open_microsoft_365)
+              COMMAND="powershell -NoProfile -Command \"Start-Process 'https://admin.microsoft.com/'\""
+              ;;
+            open_email_login_pair)
+              COMMAND="powershell -NoProfile -Command \"\$task='ShopVivalizOpenEmailLogin'; \$user=(Get-CimInstance Win32_ComputerSystem).UserName; \$args='-NoProfile -WindowStyle Hidden -Command \\\"Start-Process ''''https://admin.exchange.microsoft.com/''''; Start-Sleep -Seconds 1; Start-Process ''''https://admin.microsoft.com/''''\\\"'; \$a=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument \$args; \$t=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1); \$p=New-ScheduledTaskPrincipal -UserId \$user -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName \$task -Action \$a -Trigger \$t -Principal \$p -Force | Out-Null; Start-ScheduledTask -TaskName \$task; Start-Sleep -Seconds 5; Unregister-ScheduledTask -TaskName \$task -Confirm:\$false\""
+              ;;
+            open_google_ads)
+              COMMAND="powershell -NoProfile -Command \"Start-Process 'https://ads.google.com/'\""
+              ;;
+            open_merchant_center)
+              COMMAND="powershell -NoProfile -Command \"Start-Process 'https://merchants.google.com/'\""
+              ;;
+            open_search_console)
+              COMMAND="powershell -NoProfile -Command \"Start-Process 'https://search.google.com/search-console/'\""
+              ;;
+            open_ga4)
+              COMMAND="powershell -NoProfile -Command \"Start-Process 'https://analytics.google.com/'\""
+              ;;
+            open_tag_manager)
+              COMMAND="powershell -NoProfile -Command \"Start-Process 'https://tagmanager.google.com/'\""
+              ;;
+            *)
+              echo "Action not allowlisted: $ACTION"
+              exit 3
+              ;;
+          esac
+          echo "action=$ACTION" >> "$GITHUB_OUTPUT"
+          printf '%s' "$COMMAND" | base64 -w0 > /tmp/fredwin-command.b64
+
+      - name: Check private MCP path through VM
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health'
+
+      - name: Execute allowlisted action
+        if: steps.action.outputs.action != 'health'
+        run: |
+          CMD_B64="$(cat /tmp/fredwin-command.b64)"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
+          import base64, json, os, urllib.request
+          command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
+          body = json.dumps({'params': {'command': command, 'timeout': 850}}).encode('utf-8')
+          req = urllib.request.Request(
+              'http://127.0.0.1:5557/mcp/tool/execute_command',
+              data=body,
+              headers={'Content-Type': 'application/json'},
+              method='POST',
+          )
+          with urllib.request.urlopen(req, timeout=860) as response:
+              payload = json.loads(response.read().decode('utf-8'))
+          print(json.dumps(payload, ensure_ascii=False))
+          result = payload.get('result') or {}
+          if result.get('success') is not True:
+              raise SystemExit('Fred-Win action failed')
+          PY"
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/fredwin-command.b64

@@ -1,0 +1,75 @@
+name: Google Ads Config CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/google_ads_campaign_live_ready.json"
+      - "scripts/google_ads_config_lint.py"
+      - "scripts/google_ads_real_readiness.py"
+      - "scripts/google_ads_auth_preflight.py"
+      - "scripts/google_ads_review_campaigns.py"
+      - "scripts/google_ads_dynamic_images.py"
+      - "scripts/google_ads_create_search_campaign.py"
+      - "scripts/google_ads_api_activation.py"
+      - "scripts/launch_google_ads.py"
+      - ".github/workflows/google-ads-config-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile Google Ads scripts
+        run: python -m py_compile scripts/google_ads_config_lint.py scripts/google_ads_real_readiness.py scripts/google_ads_auth_preflight.py scripts/google_ads_review_campaigns.py scripts/google_ads_dynamic_images.py scripts/google_ads_create_search_campaign.py scripts/google_ads_api_activation.py scripts/launch_google_ads.py
+
+      - name: Validate Google Ads static config
+        run: python scripts/google_ads_config_lint.py
+
+      - name: Validate safe legacy launcher summary
+        run: python scripts/launch_google_ads.py
+
+  live-readonly-audit:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: Production
+    env:
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      GOOGLE_ADS_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
+      GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
+      GOOGLE_ADS_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
+      GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate auth inputs without network
+        run: python scripts/google_ads_auth_preflight.py
+
+      - name: Install Google Ads SDK
+        run: python -m pip install --disable-pip-version-check google-ads
+
+      - name: Read-only Google Ads campaign audit
+        run: python scripts/google_ads_review_campaigns.py
+
+      - name: Read-only dynamic image recommendation audit
+        run: python scripts/google_ads_dynamic_images.py

@@ -3,259 +3,422 @@
 declare(strict_types=1);
 
 /**
- * Core Processing Engine — Otimização de Cadastro de Produtos (SEO/GEO por
- * canal), usando OpenAI, Google Gemini ou Anthropic Claude via
- * src/TextAiServices.php.
+ * Core do Admin -> Otimizacao de Cadastro.
  *
- * REGRA DE NEGÓCIO CRÍTICA: preço e estoque são TOTALMENTE ignorados e
- * protegidos por este script. ai_catalog_fetch_product() abaixo só extrai
- * campos de texto/atributo (nome, descrição, categoria, marca,
- * especificações) para variáveis locais explícitas — mesmo que a linha
- * bruta do banco contenha colunas de preço/estoque, elas nunca são lidas,
- * nunca entram no prompt, e nunca são gravadas em nenhum lugar por este
- * módulo.
- *
- * IMPORTANTE — EXECUÇÃO REAL, SEM MOCK: se a chave de API do provedor
- * escolhido não estiver configurada, ou qualquer chamada de rede falhar, o
- * processamento deste item termina em erro registrado — nunca em um
- * "sucesso" fabricado. Ver CatalogAiApiException em src/TextAiServices.php.
- *
- * Uso via HTTP (chamado pelo admin_catalog.php, sessão de admin exigida):
- *   POST api/optimize_catalog.php
- *   Content-Type: application/json
- *   { "product_id": 123, "target_channel": "ml", "provider": "openai" }
- *   -> responde JSON: { success, product_id, channel, provider, staging_id }
- *
- * Também exposto como função reutilizável (ai_catalog_process_item) para
- * ser chamada diretamente por cron_bulk_optimize.php sem round-trip HTTP.
+ * Regras absolutas:
+ * - preco e estoque nao sao lidos, enviados a IA ou gravados por este modulo;
+ * - toda saida precisa ser factual e rastreavel aos dados do produto;
+ * - cada canal possui politica propria de titulo, descricao, atributos e SEO;
+ * - saida fora da politica e rejeitada antes de entrar em staging.
  */
 
 require_once __DIR__ . '/../config_optimization.php';
 require_once __DIR__ . '/../src/TextAiServices.php';
+require_once __DIR__ . '/../../../includes/marketplace/CatalogChannelProfile.php';
+require_once __DIR__ . '/../../../includes/product-reference-resolver.php';
 
-/**
- * Busca os dados de TEXTO do produto na tabela `products` (nome real da
- * tabela em produção, confirmado via admin/diagnostico-banco.php em
- * 2026-08-05 — NÃO é `produtos`, que não existe e era a causa do HTTP 500
- * anterior) — nunca preço ou estoque. Usa SELECT * (não SELECT com lista
- * fixa de colunas) porque, mesmo dentro de `products`, mantemos tolerância a
- * nomes de coluna alternativos por segurança; a proteção contra vazamento de
- * preço/estoque não vem da query, e sim do fato de que o código abaixo só
- * copia name/description/category/brand/specs para $product — nenhuma outra
- * chave do row bruto é lida ou propagada.
- *
- * `products` não tem colunas de categoria/marca diretamente — esses dados
- * vêm da tabela `olist_products` (schema paralelo em português, populado
- * pela sincronização Tiny/Olist), casados via `olist_id`. Atenção ao tipo:
- * `products.olist_id` é VARCHAR(100) e `olist_products.olist_id` é BIGINT
- * UNSIGNED — por isso o cast explícito no JOIN abaixo. Produtos sem
- * `olist_id` ou sem correspondência em `olist_products` caem no default
- * ('Vivaliz' / vazio), sem erro.
- *
- * @return array{name:string, description:string, category:string, brand:string, specs:string}|null
- */
-function ai_catalog_fetch_product(PDO $db, int $productId): ?array
+function ai_catalog_scalar(array $row, array $keys): string
 {
-    $stmt = $db->prepare('SELECT * FROM products WHERE id = ? LIMIT 1');
-    $stmt->execute([$productId]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    foreach ($keys as $key) {
+        if (!array_key_exists($key, $row)) continue;
+        $value = $row[$key];
+        if (is_scalar($value)) {
+            $value = trim((string)$value);
+            if ($value !== '') return $value;
+        }
+    }
+    return '';
+}
 
-    if (!is_array($row)) {
+function ai_catalog_structured_text(mixed $value): string
+{
+    if (is_array($value)) {
+        return trim((string)json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+    if (!is_scalar($value)) return '';
+    $text = trim((string)$value);
+    if ($text === '') return '';
+    $decoded = json_decode($text, true);
+    if (is_array($decoded)) {
+        return trim((string)json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+    return $text;
+}
+
+/** @return array<string,string>|null */
+function ai_catalog_map_product_row(PDO $db, array $row, int|string $productReference): ?array
+{
+    if (!ai_catalog_is_active_product_row($row)) {
         return null;
     }
 
-    $name = trim((string) ($row['name'] ?? $row['nome'] ?? ''));
+    $name = ai_catalog_scalar($row, ['name', 'nome', 'descricao']);
     if ($name === '') {
         return null;
     }
 
-    $description = trim((string) (
-        $row['description']
-        ?? $row['descricao_completa']
-        ?? $row['descricaoComplementar']
-        ?? $row['descricao_complementar']
-        ?? $row['descricao']
-        ?? ''
-    ));
+    $product = [
+        'name' => $name,
+        'description' => ai_catalog_scalar($row, ['description', 'descricao_completa', 'descricaoComplementar', 'descricao_complementar']),
+        'category' => ai_catalog_scalar($row, ['category', 'categoria', 'category_name', 'nome_categoria']),
+        'brand' => ai_catalog_scalar($row, ['brand', 'marca', 'manufacturer', 'fabricante']),
+        'model' => ai_catalog_scalar($row, ['model', 'modelo', 'part_number', 'mpn']),
+        'sku' => ai_catalog_scalar($row, ['sku', 'codigo', 'codigo_sku']),
+        'gtin' => ai_catalog_scalar($row, ['gtin', 'ean', 'ean13', 'barcode', 'codigo_barras']),
+        'color' => ai_catalog_scalar($row, ['color', 'cor']),
+        'size' => ai_catalog_scalar($row, ['size', 'tamanho']),
+        'material' => ai_catalog_scalar($row, ['material']),
+        'specs' => ai_catalog_structured_text($row['especificacoes_tecnicas'] ?? $row['especificacoes'] ?? $row['specifications'] ?? $row['ficha_tecnica'] ?? ''),
+        'olist_id' => ai_catalog_scalar($row, ['olist_id']),
+    ];
 
-    // `products` em si não tem categoria/marca — enriquece via olist_products
-    // (join tolerante a tipo, com try/catch: se falhar por qualquer motivo,
-    // degrada para os defaults em vez de derrubar o processamento do item).
-    $category = '';
-    $brand = 'Vivaliz';
-    $olistId = trim((string) ($row['olist_id'] ?? ''));
-    if ($olistId !== '') {
+    $productLabel = trim((string)($row['id'] ?? $productReference));
+
+    // Enriquecimento factual via Olist/Tiny, sem preco/estoque e sem fallback
+    // inventado de marca/modelo.
+    if ($product['olist_id'] !== '') {
         try {
-            $enrichStmt = $db->prepare(
-                'SELECT categoria, marca FROM olist_products WHERE CAST(olist_id AS CHAR) = ? LIMIT 1'
-            );
-            $enrichStmt->execute([$olistId]);
-            $enrichRow = $enrichStmt->fetch(PDO::FETCH_ASSOC);
-            if (is_array($enrichRow)) {
-                $categoryRaw = $enrichRow['categoria'] ?? '';
-                $category = is_array($categoryRaw)
-                    ? trim((string) ($categoryRaw['nome'] ?? $categoryRaw['caminhoCompleto'] ?? ''))
-                    : trim((string) $categoryRaw);
-                $brand = trim((string) ($enrichRow['marca'] ?? '')) !== '' ? trim((string) $enrichRow['marca']) : $brand;
+            $enrich = $db->prepare('SELECT * FROM olist_products WHERE CAST(olist_id AS CHAR) = ? LIMIT 1');
+            $enrich->execute([$product['olist_id']]);
+            $olist = $enrich->fetch(PDO::FETCH_ASSOC);
+            if (is_array($olist)) {
+                if ($product['category'] === '') $product['category'] = ai_catalog_scalar($olist, ['categoria', 'category', 'category_name']);
+                if ($product['brand'] === '') $product['brand'] = ai_catalog_scalar($olist, ['marca', 'brand', 'manufacturer', 'fabricante']);
+                if ($product['model'] === '') $product['model'] = ai_catalog_scalar($olist, ['modelo', 'model', 'part_number', 'mpn']);
+                if ($product['gtin'] === '') $product['gtin'] = ai_catalog_scalar($olist, ['gtin', 'ean', 'codigo_barras']);
+                if ($product['sku'] === '') $product['sku'] = ai_catalog_scalar($olist, ['sku', 'codigo']);
             }
         } catch (Throwable $e) {
-            error_log('[catalog-optimization] Falha ao enriquecer categoria/marca via olist_products para produto #' . $productId . ': ' . $e->getMessage());
+            error_log('[catalog-optimization] enriquecimento Olist indisponivel para produto #' . $productLabel . ': ' . $e->getMessage());
         }
     }
 
-    $specsRaw = $row['especificacoes_tecnicas'] ?? $row['especificacoes'] ?? $row['specifications'] ?? $row['ficha_tecnica'] ?? '';
-    $specs = is_array($specsRaw) ? trim((string) json_encode($specsRaw, JSON_UNESCAPED_UNICODE)) : trim((string) $specsRaw);
-
-    // PROTEÇÃO EXPLÍCITA: nenhuma variável de preço/estoque é lida de $row
-    // acima, propositalmente. O array abaixo é a ÚNICA coisa que sai desta
-    // função — não vaza mais nada do $row bruto.
-    return [
-        'name' => $name,
-        'description' => $description,
-        'category' => $category,
-        'brand' => $brand,
-        'specs' => $specs,
-    ];
+    return $product;
 }
 
-/**
- * Monta o System Prompt "de último nível" para o canal solicitado, seguindo
- * exatamente as diretrizes de cada marketplace/canal definidas pelo negócio.
- * Todos os canais compartilham o mesmo contrato de saída JSON (reforçado no
- * final do prompt) para que a validação em ai_catalog_process_item() seja
- * uniforme.
- */
+/** @return array<string,string>|null */
+function ai_catalog_fetch_product(PDO $db, int|string $productReference): ?array
+{
+    $row = svpr_resolve_product_row($db, $productReference);
+    if (!is_array($row)) {
+        return null;
+    }
+
+    return ai_catalog_map_product_row($db, $row, $productReference);
+}
+
+function ai_catalog_is_active_product_row(array $row): bool
+{
+    $status = trim((string)($row['status'] ?? $row['situacao'] ?? $row['state'] ?? ''));
+    if ($status !== '') {
+        $normalized = ai_catalog_lower($status);
+        if (!in_array($normalized, ['a', 'active', 'ativo', '1', 'true', 'published', 'published_active'], true)) {
+            return false;
+        }
+    }
+
+    foreach (['is_active', 'active', 'ativo', 'enabled', 'published', 'is_published'] as $field) {
+        if (!array_key_exists($field, $row)) {
+            continue;
+        }
+        $value = $row[$field];
+        if ($value === false || $value === 0 || $value === '0' || $value === 'false') {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/** @return array<string,mixed> */
+function ai_catalog_policy(string $channel): array
+{
+    return match ($channel) {
+        'ml' => [
+            'title_max' => 60,
+            'bullets_min' => 3,
+            'bullets_max' => 5,
+            'instructions' => <<<'TXT'
+Canal: Mercado Livre (Brasil).
+Priorize qualidade de catalogo e atributos, nao copy promocional.
+- Titulo, quando o fluxo do item ainda exigir titulo: Produto + Marca + Modelo + especificacao realmente identificadora. Use 60 caracteres como teto conservador somente quando o max_title_length especifico da categoria nao estiver disponivel. Sem preco, parcelas, frete, desconto, emojis ou chamadas promocionais.
+- No modelo User Products, o titulo pode deixar de ser enviado; nesse caso priorize marca, modelo, GTIN/MPN, variacao e atributos de identidade, porque o produto e sua familia sao definidos por dados estruturados.
+- Descricao: objetiva, factual e util para reduzir duvidas. Explique uso e compatibilidade somente se estiverem nos dados de origem. Nao inclua contato externo.
+- bullet_points: 3 a 5 fatos complementares que serao incorporados na descricao plain_text pelo publisher atual.
+- seo_keywords: consultas de busca plausiveis derivadas de produto, categoria, marca, modelo e atributos existentes; servem como apoio interno porque o publisher atual nao envia um campo de keywords ao Mercado Livre.
+- marketing_hooks: [].
+TXT,
+        ],
+        'shopee' => [
+            'title_max' => 120,
+            'bullets_min' => 3,
+            'bullets_max' => 5,
+            'instructions' => <<<'TXT'
+Canal: Shopee Brasil.
+- Titulo: claro e pesquisavel, priorizando tipo de produto, marca/modelo quando existirem e 1-3 atributos decisivos. Use 120 caracteres como teto operacional; nao preencha espaco com repeticao. Nao use escassez artificial, preco, desconto, frete, cupom ou emojis decorativos.
+- Descricao: leitura mobile, paragrafos curtos, 3 a 5 pontos escaneaveis e especificacoes reais. Nao prometa garantia, originalidade, certificacao, prazo ou suporte se a origem nao comprovar.
+- bullet_points: 3 a 5 fatos de decisao de compra; o publisher incorpora esses pontos na descricao.
+- seo_keywords: termos internos de descoberta derivados dos dados reais; o publisher atual nao envia campo externo de keywords.
+- marketing_hooks: no maximo 2 frases factuais; o publisher incorpora os hooks na descricao, portanto evite repeticao.
+TXT,
+        ],
+        'amazon' => [
+            'title_max' => 200,
+            'bullets_min' => 5,
+            'bullets_max' => 5,
+            'instructions' => <<<'TXT'
+Canal: Amazon.
+- Titulo: ate 200 caracteres, mas prefira uma estrutura limpa com Marca + tipo de produto + modelo/linha + diferenciador factual. Sem emojis, ALL CAPS, preco, promocao ou caracteres promocionais. Nao repetir a mesma palavra mais de duas vezes, exceto artigos/preposicoes/conjuncoes.
+- Descricao: tecnica, objetiva e factual; nao simule A+ nem certificacoes inexistentes.
+- bullet_points: exatamente 5. Cada bullet deve unir um fato/atributo real a sua utilidade direta, sem superlativos nao comprovados.
+- seo_keywords: search terms complementares; o publisher envia estes termos para generic_keyword. Evite repeticao mecanica do titulo e nao invente aplicacoes.
+- marketing_hooks: use no maximo 1 destaque factual; este campo nao e publicado pelo publisher Amazon atual.
+TXT,
+        ],
+        'tiktok' => [
+            'title_min' => 1,
+            'title_max' => 300,
+            'bullets_min' => 3,
+            'bullets_max' => 5,
+            'instructions' => <<<'TXT'
+Canal: TikTok Shop Brasil.
+- Titulo: entre 1 e 300 caracteres conforme o limite atual do canal; como alvo editorial, prefira 40-150 quando isso descrever o produto com clareza. Inclua apenas marca autorizada quando existir, tipo de produto, aplicacao real e caracteristicas factuais relevantes. Nao mencione estoque, desconto, inventario, variantes irrelevantes ou claims subjetivos.
+- Descricao: detalhada e facil de escanear. Quando houver fatos suficientes, procure ultrapassar 300 caracteres sem alongar artificialmente. Organize 3 a 5 selling points curtos e comprovados.
+- bullet_points: 3 a 5 pontos, cada um com menos de 250 caracteres. O publisher os incorpora no HTML da descricao.
+- seo_keywords: termos internos de descoberta e categoria; o publisher atual nao envia um campo externo de keywords.
+- marketing_hooks: 0 a 2 ganchos factuais e nao repetitivos para serem incorporados na descricao. Nao use falsa urgencia, medo, escassez ou promessa nao comprovada.
+TXT,
+        ],
+        'site' => [
+            'title_max' => 70,
+            'bullets_min' => 3,
+            'bullets_max' => 5,
+            'instructions' => <<<'TXT'
+Canal: Site Proprio ShopVivaliz.
+- Titulo: SEO sem keyword stuffing, ate 70 caracteres, preservando marca/modelo/variacao quando existirem.
+- Descricao: resposta direta no primeiro paragrafo, seguida de fatos, aplicacoes comprovadas e especificacoes. Otimize para leitura humana, busca e mecanismos de resposta/IA sem criar dores, beneficios ou promessas inexistentes.
+- bullet_points: 3 a 5 criterios objetivos de decisao.
+- seo_keywords: long-tail factual e semantica, baseada em produto/categoria/atributos.
+- meta_title: ate 60 caracteres, unico e descritivo.
+- meta_description: ate 160 caracteres, descritiva e convidativa sem promessa falsa.
+- marketing_hooks: 0 a 2 frases factuais.
+TXT,
+        ],
+        'erp' => [
+            'title_max' => 120,
+            'bullets_min' => 0,
+            'bullets_max' => 8,
+            'instructions' => <<<'TXT'
+Canal: Olist / Tiny ERP (cadastro tecnico interno).
+- Titulo: nomenclatura tecnica e padronizada; tipo + marca/modelo + variacao quando existirem. Ate 120 caracteres.
+- Descricao: somente dados tecnicos e identificadores relevantes; sem linguagem comercial.
+- bullet_points: especificacoes tecnicas factuais, ou [] se nao houver dados suficientes.
+- seo_keywords: [].
+- marketing_hooks: [].
+- meta_title e meta_description: derivados tecnicamente do titulo/descricao apenas para manter o contrato de staging; nao adicionar SEO promocional.
+TXT,
+        ],
+        default => throw new CatalogAiApiException("Canal invalido: '$channel'."),
+    };
+}
+
 function ai_catalog_build_system_prompt(string $channel): string
 {
-    $channelInstructions = match ($channel) {
-        'ml' => <<<'TXT'
-Canal: Mercado Livre.
-- optimized_title: focado em volume de busca orgânica pura, EXATAMENTE até 60 caracteres, sem termos banidos (sem preço, sem "frete grátis", sem superlativos proibidos, sem emojis).
-- optimized_description: em Pirâmide Invertida — comece pelo benefício principal, depois a ficha técnica traduzida em texto corrido (não apenas lista crua de specs), e termine quebrando as objeções de compra mais frequentes desse tipo de produto (dúvida de compatibilidade, durabilidade, uso correto).
-- bullet_points: 3 a 5 pontos-chave complementares à descrição (não repita literalmente o texto da descrição).
-- seo_keywords: termos de busca reais que um comprador digitaria no Mercado Livre para este produto.
-- marketing_hooks: pode retornar array vazio [] neste canal — não é o foco do Mercado Livre.
-TXT,
-        'shopee' => <<<'TXT'
-Canal: Shopee.
-- optimized_title: altamente persuasivo, com gatilhos mentais de escassez/urgência, usando emojis como delimitadores de leitura (não emoji decorativo aleatório — emoji funcional separando blocos de informação do título).
-- optimized_description: focada em público jovem, apelo visual rápido, linhas curtas e espaçadas (parágrafos de 1-2 linhas), mencionando garantia e suporte, terminando com exatamente 10 hashtags estratégicas inseridas organicamente (relacionadas ao produto, categoria e público, não genéricas).
-- bullet_points: 3 a 5 pontos rápidos e escaneáveis, tom informal.
-- seo_keywords: termos de busca reais usados no app da Shopee.
-- marketing_hooks: 2-3 chamadas curtas de urgência/escassez para usar em banners/anúncios do produto.
-TXT,
-        'amazon' => <<<'TXT'
-Canal: Amazon.
-- optimized_title: rigor absoluto nas diretrizes da Amazon. Estrutura obrigatória: [Marca] + [Linha/Modelo] + [Especificação Principal] + [Cor/Tamanho]. Sem emojis, sem caracteres especiais promocionais, sem ALL CAPS.
-- optimized_description: técnica e objetiva, adequada ao padrão A+/Enhanced Brand Content da Amazon.
-- bullet_points: EXATAMENTE 5 bullet points técnicos, cada um focado em um benefício + a especificação técnica que o sustenta, escritos para maximizar conversão em Amazon Ads (primeira palavra de cada bullet em destaque conceitual, ex: "DURÁVEL:", "COMPATÍVEL:").
-- seo_keywords: termos de busca reais usados na busca da Amazon (backend search terms style — sem repetir palavras já usadas no título).
-- marketing_hooks: pode retornar array vazio [] neste canal — a Amazon pune linguagem de marketing solto fora dos bullets/descrição.
-TXT,
-        'tiktok' => <<<'TXT'
-Canal: TikTok Shop.
-- optimized_title: extremamente dinâmico, focado em compra por impulso, linguagem de vídeo curto.
-- optimized_description: tom de script de vídeo/live, direta, sem enrolação.
-- bullet_points: 3 a 5 pontos rápidos, estilo "por que comprar agora".
-- seo_keywords: termos de busca/hashtags de descoberta usados no TikTok Shop.
-- marketing_hooks: OBRIGATORIAMENTE EXATAMENTE 3 ganchos textuais de 3 segundos, estilo "Pare de fazer isso se você...", projetados para prender atenção nos primeiros 3 segundos de um vídeo curto ou script de live — cada hook é uma frase completa pronta para narração, não um resumo.
-TXT,
-        'site' => <<<'TXT'
-Canal: Site Próprio (shopvivaliz.com.br).
-- optimized_title: copywriting de conversão profunda — foco em dor, desejo e solução, não apenas descrição factual do produto.
-- optimized_description: arquitetura voltada para SEO e GEO (Generative Engine Optimization) de 2026 — escreva de um jeito que tanto um leitor humano quanto um motor de busca de IA (que resume e cita conteúdo) consigam extrair a resposta certa sobre o produto rapidamente. Estruture com uma resposta direta logo no início (útil para snippets/citação por IA), seguida de profundidade.
-- bullet_points: 3 a 5 pontos-chave de decisão de compra.
-- seo_keywords: termos de busca reais orientados a SEO de long-tail para este produto.
-- marketing_hooks: pode retornar array vazio [] neste canal — o gancho de conversão do site vai em meta_description (CTA), não aqui.
-- meta_title e meta_description (dentro do mesmo JSON, além das chaves padrão): meta_title otimizado para CTR no Google, meta_description com gatilho de Call To Action explícito para incentivar o clique no resultado de busca.
-TXT,
-        'erp' => <<<'TXT'
-Canal: ERP (uso interno — nota fiscal e logística).
-- optimized_title: ESTRITAMENTE TÉCNICO, sem nenhum adjetivo de marketing, nomenclatura padronizada e limpa, pronta para nota fiscal e gerenciamento de estoque (mesmo este módulo não lidando com o valor de estoque em si).
-- optimized_description: técnica e objetiva, sem apelo comercial, só características físicas/técnicas do produto.
-- bullet_points: especificações técnicas em formato de lista simples (sem linguagem de venda).
-- seo_keywords: pode retornar array vazio [] neste canal — não se aplica a uso interno.
-- marketing_hooks: DEVE retornar array vazio [] neste canal — marketing é proibido em texto de ERP.
-TXT,
-        default => throw new CatalogAiApiException("Canal inválido: '$channel'."),
-    };
+    $policy = ai_catalog_policy($channel);
+    $instructions = $policy['instructions'];
 
     return <<<TXT
-Você é um especialista sênior em copywriting de e-commerce, SEO e GEO (Generative Engine Optimization) para 2026, escrevendo em português do Brasil (exceto quando o padrão do canal for tecnicamente exigir termos em inglês, ex: bullet points técnicos de categoria internacional).
+Voce e um especialista senior em catalogo de e-commerce, SEO e qualidade de dados. Trabalhe em portugues do Brasil.
 
-$channelInstructions
+$instructions
 
-REGRA ABSOLUTA DE FORMATO: responda ESTRITA e EXCLUSIVAMENTE com um objeto JSON válido, sem nenhum texto antes ou depois, sem cercas de código markdown (não use \`\`\`json), contendo EXATAMENTE estas chaves (nunca omita nenhuma, nunca deixe nenhuma vazia — use array vazio [] quando o canal explicitamente permitir, nunca string vazia ""):
+REGRAS GLOBAIS INEGOCIAVEIS:
+1. Use somente fatos presentes nos dados de origem. Nao invente marca, modelo, GTIN/EAN, material, cor, tamanho, compatibilidade, certificacao, garantia, autenticidade, desempenho, durabilidade ou aplicacao.
+2. Preco e estoque sao campos protegidos e fora do escopo. Nao os mencione, estime, corrija, recomende ou inferira.
+3. Nao invente urgencia, escassez, promocao, ranking, avaliacao, numero de vendas ou prova social.
+4. Se um dado importante estiver ausente, omita-o em vez de preencher com algo generico.
+5. Preserve exatamente numeros de modelo, SKU/MPN, GTIN/EAN, medidas e variantes quando forem fornecidos.
+6. Evite keyword stuffing, repeticao e marcas de terceiros que nao constem na origem.
 
+Responda ESTRITA e EXCLUSIVAMENTE com JSON valido, sem markdown, contendo exatamente estas chaves:
 {
   "optimized_title": "string",
   "optimized_description": "string",
-  "bullet_points": ["string", "..."],
-  "seo_keywords": ["string", "..."],
-  "marketing_hooks": ["string", "..."],
+  "bullet_points": ["string"],
+  "seo_keywords": ["string"],
+  "marketing_hooks": ["string"],
   "meta_title": "string",
   "meta_description": "string"
 }
-
-Não invente características físicas, técnicas ou de composição do produto que não estejam nos dados fornecidos pelo usuário — você pode reescrever, reorganizar e enriquecer o texto de marketing/SEO livremente, mas NUNCA pode alterar fatos técnicos do produto (isso causaria problemas com clientes e com os próprios marketplaces).
 TXT;
 }
 
-/**
- * Monta o prompt do usuário com os dados reais do produto — explicitamente
- * SEM preço e SEM estoque (essas informações nunca são buscadas por
- * ai_catalog_fetch_product(), então fisicamente não podem vazar aqui).
- */
 function ai_catalog_build_user_prompt(array $product, string $channel): string
 {
+    $GLOBALS['ai_catalog_validation_context'] = ['channel' => $channel, 'product' => $product];
     $channelLabel = catalog_ai_channels()[$channel] ?? $channel;
-
-    return sprintf(
-        "Canal de destino: %s\n\nDados do produto (texto/atributos apenas — preço e estoque não fazem parte deste sistema e não devem ser mencionados ou inventados):\nNome atual: %s\nDescrição atual: %s\nCategoria: %s\nMarca: %s\nEspecificações técnicas: %s\n\nReescreva o cadastro deste produto seguindo rigorosamente as diretrizes do canal e o contrato de JSON definidos no system prompt.",
-        $channelLabel,
-        $product['name'],
-        $product['description'] !== '' ? $product['description'] : '(sem descrição original cadastrada)',
-        $product['category'] !== '' ? $product['category'] : '(sem categoria cadastrada)',
-        $product['brand'],
-        $product['specs'] !== '' ? $product['specs'] : '(sem especificações técnicas cadastradas)'
-    );
+    $fields = [
+        'Nome atual' => $product['name'] ?? '',
+        'Descricao atual' => $product['description'] ?? '',
+        'Categoria' => $product['category'] ?? '',
+        'Marca' => $product['brand'] ?? '',
+        'Modelo/MPN' => $product['model'] ?? '',
+        'SKU' => $product['sku'] ?? '',
+        'GTIN/EAN' => $product['gtin'] ?? '',
+        'Cor' => $product['color'] ?? '',
+        'Tamanho' => $product['size'] ?? '',
+        'Material' => $product['material'] ?? '',
+        'Especificacoes' => $product['specs'] ?? '',
+    ];
+    $lines = ["Canal de destino: {$channelLabel}", '', 'DADOS FACTUAIS DO PRODUTO:'];
+    foreach ($fields as $label => $value) {
+        $value = trim((string)$value);
+        $lines[] = $label . ': ' . ($value !== '' ? $value : '(nao informado)');
+    }
+    $lines[] = '';
+    $lines[] = 'Otimize o cadastro respeitando integralmente a politica do canal e sem criar nenhum fato ausente.';
+    return implode("\n", $lines);
 }
 
-/**
- * Valida que a resposta da IA contém todas as chaves obrigatórias do
- * contrato, com o tipo esperado. Não exige que TODAS sejam não-vazias — os
- * próprios system prompts autorizam array vazio [] em alguns canais/campos
- * (ex: marketing_hooks em 'ml') — mas cada chave precisa EXISTIR e ter o
- * tipo certo (string ou array), senão a resposta é considerada malformada.
- *
- * @param array<string,mixed> $data
- * @throws CatalogAiApiException
- */
-function ai_catalog_validate_ai_response(array $data): void
+function ai_catalog_text_blob(array $data): string
 {
-    $stringKeys = ['optimized_title', 'optimized_description', 'meta_title', 'meta_description'];
-    $arrayKeys = ['bullet_points', 'seo_keywords', 'marketing_hooks'];
-
-    foreach ($stringKeys as $key) {
-        if (!array_key_exists($key, $data) || !is_string($data[$key]) || trim($data[$key]) === '') {
-            throw new CatalogAiApiException("Resposta da IA sem a chave obrigatória '$key' (ausente, vazia, ou tipo errado).");
-        }
+    $parts = [
+        (string)($data['optimized_title'] ?? ''),
+        (string)($data['optimized_description'] ?? ''),
+        (string)($data['meta_title'] ?? ''),
+        (string)($data['meta_description'] ?? ''),
+    ];
+    foreach (['bullet_points', 'seo_keywords', 'marketing_hooks'] as $key) {
+        foreach ((array)($data[$key] ?? []) as $value) if (is_scalar($value)) $parts[] = (string)$value;
     }
-
-    foreach ($arrayKeys as $key) {
-        if (!array_key_exists($key, $data) || !is_array($data[$key])) {
-            throw new CatalogAiApiException("Resposta da IA sem a chave obrigatória '$key' (ausente ou não é uma lista JSON).");
-        }
-    }
-
-    // optimized_title e optimized_description são o coração do cadastro —
-    // esses dois nunca podem ser array vazio, mesmo em canais mais
-    // permissivos com bullet_points/seo_keywords/marketing_hooks.
+    return implode("\n", $parts);
 }
 
-/**
- * Insere o registro gerado em catalog_optimizations_staging.
- */
+function ai_catalog_lower(string $value): string
+{
+    return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
+}
+
+function ai_catalog_strlen(string $value): int
+{
+    return function_exists('mb_strlen') ? mb_strlen($value, 'UTF-8') : strlen($value);
+}
+
+function ai_catalog_stripos(string $haystack, string $needle): int|false
+{
+    return function_exists('mb_stripos') ? mb_stripos($haystack, $needle, 0, 'UTF-8') : stripos($haystack, $needle);
+}
+
+function ai_catalog_source_blob(array $product): string
+{
+    return ai_catalog_lower(implode("\n", array_map('strval', array_filter($product, 'is_scalar'))));
+}
+
+function ai_catalog_has_emoji(string $text): bool
+{
+    return preg_match('/[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}]/u', $text) === 1;
+}
+
+/** @return array{score:int,checks:array<string,bool>} */
+function ai_catalog_quality_report(array $data, string $channel, array $product): array
+{
+    $policy = ai_catalog_policy($channel);
+    $title = trim((string)($data['optimized_title'] ?? ''));
+    $description = trim((string)($data['optimized_description'] ?? ''));
+    $bullets = array_values(array_filter((array)($data['bullet_points'] ?? []), 'is_string'));
+    $text = ai_catalog_text_blob($data);
+    $source = ai_catalog_source_blob($product);
+
+    $checks = [];
+    $titleLength = ai_catalog_strlen($title);
+    $checks['title_length_max'] = $titleLength <= (int)$policy['title_max'];
+    if (isset($policy['title_min'])) $checks['title_length_min'] = $titleLength >= (int)$policy['title_min'];
+    $checks['description_present'] = $description !== '';
+    $checks['protected_commerce_fields_absent'] = preg_match('/(?:R\$|\bpre[cç]o\b|\bestoque\b|\bparcel(?:a|as|ado|amento)?\b|\bfrete\s+gr[aá]tis\b|\bcupom\b|\bdesconto\b)/iu', $text) !== 1;
+    $checks['bullet_count'] = count($bullets) >= (int)$policy['bullets_min'] && count($bullets) <= (int)$policy['bullets_max'];
+    $checks['meta_title_length'] = ai_catalog_strlen((string)($data['meta_title'] ?? '')) <= 70;
+    $checks['meta_description_length'] = ai_catalog_strlen((string)($data['meta_description'] ?? '')) <= 160;
+
+    $claimPatterns = [
+        'garantia' => '/\bgarantia\b/iu',
+        'original' => '/\b(?:100%\s*)?(?:original|aut[eê]ntic[oa])\b/iu',
+        'certified' => '/\b(?:certificad[oa]|homologad[oa])\b/iu',
+        'ranking' => '/\b(?:mais\s+vendid[oa]|n[uú]mero\s*1|melhor\s+do\s+mercado)\b/iu',
+    ];
+    foreach ($claimPatterns as $name => $pattern) {
+        $generatedHas = preg_match($pattern, $text) === 1;
+        $sourceHas = preg_match($pattern, $source) === 1;
+        $checks['claim_' . $name . '_sourced'] = !$generatedHas || $sourceHas;
+    }
+
+    $brand = trim((string)($product['brand'] ?? ''));
+    if ($brand !== '' && in_array($channel, ['ml', 'amazon'], true)) {
+        $checks['brand_preserved_in_title'] = ai_catalog_stripos($title, $brand) !== false;
+    }
+    if (in_array($channel, ['ml', 'amazon', 'erp'], true)) $checks['title_without_emoji'] = !ai_catalog_has_emoji($title);
+
+    if ($channel === 'amazon') {
+        $checks['amazon_disallowed_chars_absent'] = preg_match('/[!$?_{}^¬¦]/u', $title) !== 1;
+        $words = preg_split('/\s+/u', ai_catalog_lower($title)) ?: [];
+        $ignore = ['de', 'da', 'do', 'das', 'dos', 'e', 'em', 'com', 'para', 'a', 'o'];
+        $counts = [];
+        foreach ($words as $word) {
+            $word = trim($word, " ,.;:/()[]-+");
+            if ($word === '' || in_array($word, $ignore, true)) continue;
+            $counts[$word] = ($counts[$word] ?? 0) + 1;
+        }
+        $checks['amazon_word_repetition'] = max($counts ?: [0]) <= 2;
+    }
+
+    if ($channel === 'tiktok') {
+        $checks['tiktok_bullet_length'] = array_reduce($bullets, fn(bool $ok, string $b): bool => $ok && ai_catalog_strlen($b) < 250, true);
+        $checks['tiktok_hooks_count'] = count((array)($data['marketing_hooks'] ?? [])) <= 2;
+    }
+
+    if ($channel === 'erp') {
+        $checks['erp_no_marketing_hooks'] = (array)($data['marketing_hooks'] ?? []) === [];
+        $checks['erp_no_seo_keywords'] = (array)($data['seo_keywords'] ?? []) === [];
+    }
+
+    $passed = count(array_filter($checks));
+    $score = $checks === [] ? 0 : (int)round(($passed / count($checks)) * 100);
+    return ['score' => $score, 'checks' => $checks];
+}
+
+/** @param array<string,mixed> $data @param array<string,string> $product */
+function ai_catalog_validate_ai_response(array $data, string $channel = '', array $product = []): void
+{
+    foreach (['optimized_title', 'optimized_description', 'meta_title', 'meta_description'] as $key) {
+        if (!array_key_exists($key, $data) || !is_string($data[$key]) || trim($data[$key]) === '') {
+            throw new CatalogAiApiException("Resposta da IA invalida em '$key'.");
+        }
+    }
+    foreach (['bullet_points', 'seo_keywords', 'marketing_hooks'] as $key) {
+        if (!array_key_exists($key, $data) || !is_array($data[$key])) throw new CatalogAiApiException("Resposta da IA invalida em '$key'.");
+        foreach ($data[$key] as $value) {
+            if (!is_string($value) || trim($value) === '') throw new CatalogAiApiException("Resposta da IA contem valor invalido em '$key'.");
+        }
+    }
+
+    if (preg_match('/(?:R\$|\bpre[cç]o\b|\bestoque\b|\bparcel(?:a|as|ado|amento)?\b|\bfrete\s+gr[aá]tis\b|\bcupom\b|\bdesconto\b)/iu', ai_catalog_text_blob($data)) === 1) {
+        throw new CatalogAiApiException('A IA tentou incluir preco, estoque ou condicao comercial protegida.');
+    }
+
+    if ($channel === '') {
+        $context = $GLOBALS['ai_catalog_validation_context'] ?? null;
+        if (is_array($context) && is_string($context['channel'] ?? null) && is_array($context['product'] ?? null)) {
+            $channel = (string)$context['channel'];
+            $product = $context['product'];
+        }
+    }
+    if ($channel === '') return;
+
+    $report = ai_catalog_quality_report($data, $channel, $product);
+    $GLOBALS['ai_catalog_last_quality_report'] = $report;
+    $failed = array_keys(array_filter($report['checks'], fn(bool $ok): bool => !$ok));
+    if ($failed !== []) throw new CatalogAiApiException('Saida reprovada pela politica de qualidade: ' . implode(', ', $failed));
+}
+
 function ai_catalog_insert_staging_row(
     PDO $db,
     int $productId,
@@ -263,15 +426,21 @@ function ai_catalog_insert_staging_row(
     string $providerUsed,
     array $data,
     string $status = 'pending',
-    ?string $errorMessage = null
+    ?string $errorMessage = null,
+    array $quality = []
 ): int {
     $bulletPointsJson = json_encode($data['bullet_points'] ?? [], JSON_UNESCAPED_UNICODE);
-    $seoKeywords = is_array($data['seo_keywords'] ?? null) ? implode(', ', $data['seo_keywords']) : (string) ($data['seo_keywords'] ?? '');
-    $marketingHooks = is_array($data['marketing_hooks'] ?? null) ? implode(' | ', $data['marketing_hooks']) : (string) ($data['marketing_hooks'] ?? '');
+    $seoKeywords = is_array($data['seo_keywords'] ?? null) ? implode(', ', $data['seo_keywords']) : '';
+    $marketingHooks = is_array($data['marketing_hooks'] ?? null) ? implode(' | ', $data['marketing_hooks']) : '';
+    $profile = sv_catalog_channel_profile($channel);
     $metaDataJson = json_encode([
         'meta_title' => $data['meta_title'] ?? '',
         'meta_description' => $data['meta_description'] ?? '',
-    ], JSON_UNESCAPED_UNICODE);
+        'quality_score' => $quality['score'] ?? null,
+        'quality_checks' => $quality['checks'] ?? [],
+        'policy_version' => (string)($profile['policy_version'] ?? 'marketplace-premium-2026-08'),
+        'manual_edit_pending_quality_recheck' => false,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
     $stmt = $db->prepare(
         'INSERT INTO catalog_optimizations_staging
@@ -282,8 +451,8 @@ function ai_catalog_insert_staging_row(
         $productId,
         $channel,
         $providerUsed,
-        (string) ($data['optimized_title'] ?? ''),
-        (string) ($data['optimized_description'] ?? ''),
+        (string)($data['optimized_title'] ?? ''),
+        (string)($data['optimized_description'] ?? ''),
         $bulletPointsJson !== false ? $bulletPointsJson : '[]',
         $seoKeywords,
         $marketingHooks,
@@ -291,77 +460,86 @@ function ai_catalog_insert_staging_row(
         $status,
         $errorMessage,
     ]);
-
-    return (int) $db->lastInsertId();
+    return (int)$db->lastInsertId();
 }
 
-/**
- * Processa um único produto para um canal + provedor.
- *
- * @return array{success:bool, product_id:int, channel:string, provider:string, staging_id?:int, error?:string}
- */
-function ai_catalog_process_item(PDO $db, int $productId, string $channel, string $provider): array
+/** @return array<string,mixed> */
+function ai_catalog_process_item(PDO $db, int|string $productReference, string $channel, string $provider): array
 {
+    $productReference = trim((string)$productReference);
     $channel = strtolower(trim($channel));
     $provider = strtolower(trim($provider));
-
     if (!array_key_exists($channel, catalog_ai_channels())) {
-        return ['success' => false, 'product_id' => $productId, 'channel' => $channel, 'provider' => $provider, 'error' => "Canal inválido: '$channel'."];
+        return ['success' => false, 'product_id' => 0, 'product_ref' => $productReference, 'channel' => $channel, 'provider' => $provider, 'error' => "Canal invalido: '$channel'."];
     }
-
     if (!in_array($provider, ['openai', 'gemini', 'claude'], true)) {
-        return ['success' => false, 'product_id' => $productId, 'channel' => $channel, 'provider' => $provider, 'error' => "Provider inválido: '$provider'. Use 'openai', 'gemini' ou 'claude'."];
+        return ['success' => false, 'product_id' => 0, 'product_ref' => $productReference, 'channel' => $channel, 'provider' => $provider, 'error' => "Provider invalido: '$provider'."];
+    }
+    if ($productReference === '') {
+        return ['success' => false, 'product_id' => 0, 'product_ref' => '', 'channel' => $channel, 'provider' => $provider, 'error' => 'Referencia do produto ausente.'];
     }
 
-    $product = ai_catalog_fetch_product($db, $productId);
+    $statusRow = svpr_resolve_product_row($db, $productReference);
+    if (!is_array($statusRow)) {
+        return ['success' => false, 'product_id' => 0, 'product_ref' => $productReference, 'channel' => $channel, 'provider' => $provider, 'error' => "Produto #$productReference nao encontrado."];
+    }
+    $resolvedProductId = (int)($statusRow['id'] ?? 0);
+    if ($resolvedProductId <= 0) {
+        return ['success' => false, 'product_id' => 0, 'product_ref' => $productReference, 'channel' => $channel, 'provider' => $provider, 'error' => "Produto #$productReference nao foi resolvido para o cadastro local."];
+    }
+    if (!ai_catalog_is_active_product_row($statusRow)) {
+        return ['success' => false, 'product_id' => $resolvedProductId, 'product_ref' => $productReference, 'channel' => $channel, 'provider' => $provider, 'error' => "Produto #$productReference esta inativo e nao pode ser gerado."];
+    }
+
+    $product = ai_catalog_map_product_row($db, $statusRow, $productReference);
     if ($product === null) {
-        return ['success' => false, 'product_id' => $productId, 'channel' => $channel, 'provider' => $provider, 'error' => "Produto #$productId não encontrado (ou sem nome cadastrado)."];
+        return ['success' => false, 'product_id' => $resolvedProductId, 'product_ref' => $productReference, 'channel' => $channel, 'provider' => $provider, 'error' => "Produto #$productReference nao encontrado ou sem nome."];
     }
 
     try {
-        $aiProvider = catalog_ai_make_provider($provider);
-        $systemPrompt = ai_catalog_build_system_prompt($channel);
-        $userPrompt = ai_catalog_build_user_prompt($product, $channel);
-
-        $data = $aiProvider->complete($systemPrompt, $userPrompt);
-        ai_catalog_validate_ai_response($data);
-
-        $stagingId = ai_catalog_insert_staging_row($db, $productId, $channel, $provider, $data, 'pending');
-
+        $data = catalog_ai_make_provider($provider)->complete(
+            ai_catalog_build_system_prompt($channel),
+            ai_catalog_build_user_prompt($product, $channel)
+        );
+        ai_catalog_validate_ai_response($data, $channel, $product);
+        $quality = ai_catalog_quality_report($data, $channel, $product);
+        $stagingId = ai_catalog_insert_staging_row($db, $resolvedProductId, $channel, $provider, $data, 'pending', null, $quality);
         return [
             'success' => true,
-            'product_id' => $productId,
+            'product_id' => $resolvedProductId,
+            'product_ref' => $productReference,
             'channel' => $channel,
             'provider' => $provider,
             'staging_id' => $stagingId,
+            'quality_score' => $quality['score'],
         ];
-    } catch (CatalogAiApiException $e) {
-        error_log("[catalog-optimization] Falha otimizando produto #$productId (canal=$channel, provider=$provider): " . $e->getMessage());
-
-        // Registra o erro no banco também, com status 'rejected', para
-        // ficar visível no dashboard em vez de só sumir no log do servidor
-        // — nunca fabricamos um registro "pending" de sucesso falso.
-        $stagingId = ai_catalog_insert_staging_row(
-            $db,
-            $productId,
-            $channel,
-            $provider,
-            [
-                'optimized_title' => '',
-                'optimized_description' => '',
-                'bullet_points' => [],
-                'seo_keywords' => [],
-                'marketing_hooks' => [],
-                'meta_title' => '',
-                'meta_description' => '',
-            ],
-            'rejected',
-            $e->getMessage()
-        );
-
+    } catch (Throwable $e) {
+        error_log("[catalog-optimization] falha produto #{$resolvedProductId} ref={$productReference} canal=$channel provider=$provider: " . $e->getMessage());
+        try {
+            $stagingId = ai_catalog_insert_staging_row(
+                $db,
+                $resolvedProductId,
+                $channel,
+                $provider,
+                [
+                    'optimized_title' => '',
+                    'optimized_description' => '',
+                    'bullet_points' => [],
+                    'seo_keywords' => [],
+                    'marketing_hooks' => [],
+                    'meta_title' => '',
+                    'meta_description' => '',
+                ],
+                'failed',
+                $e->getMessage()
+            );
+        } catch (Throwable) {
+            $stagingId = 0;
+        }
         return [
             'success' => false,
-            'product_id' => $productId,
+            'product_id' => $resolvedProductId,
+            'product_ref' => $productReference,
             'channel' => $channel,
             'provider' => $provider,
             'staging_id' => $stagingId,
@@ -370,17 +548,9 @@ function ai_catalog_process_item(PDO $db, int $productId, string $channel, strin
     }
 }
 
-// ---------------------------------------------------------------------
-// Entrada HTTP. Se este arquivo foi apenas incluído (require_once) por
-// outro script (ex: cron_bulk_optimize.php, admin_catalog.php), o bloco
-// abaixo não roda — só as funções acima ficam disponíveis.
-// ---------------------------------------------------------------------
-
 if (PHP_SAPI !== 'cli' && basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
     require_once __DIR__ . '/../../../includes/admin-guard.php';
-
     header('Content-Type: application/json; charset=UTF-8');
-
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
         http_response_code(405);
         echo json_encode(['success' => false, 'error' => 'Use POST.']);
@@ -390,24 +560,21 @@ if (PHP_SAPI !== 'cli' && basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basena
     $rawBody = file_get_contents('php://input') ?: '';
     $jsonInput = json_decode($rawBody, true);
     $input = is_array($jsonInput) ? $jsonInput : $_POST;
-
-    $httpProductId = (int) ($input['product_id'] ?? 0);
-    $httpChannel = (string) ($input['target_channel'] ?? $input['channel'] ?? '');
-    $httpProvider = (string) ($input['provider'] ?? '');
-
-    if ($httpProductId <= 0 || $httpChannel === '' || $httpProvider === '') {
+    $productId = trim((string)($input['product_id'] ?? ''));
+    $channel = (string)($input['target_channel'] ?? $input['channel'] ?? '');
+    $provider = (string)($input['provider'] ?? '');
+    if ($productId === '' || $channel === '' || $provider === '') {
         http_response_code(400);
-        echo json_encode(['success' => false, 'error' => 'Parâmetros product_id, target_channel e provider são obrigatórios.']);
+        echo json_encode(['success' => false, 'error' => 'product_id, target_channel e provider sao obrigatorios.']);
         exit;
     }
 
     $db = catalog_ai_db();
-    if ($db === null) {
-        http_response_code(500);
-        echo json_encode(['success' => false, 'error' => 'Falha ao conectar ao banco de dados.']);
+    if (!$db instanceof PDO) {
+        http_response_code(503);
+        echo json_encode(['success' => false, 'error' => 'Banco de dados temporariamente indisponivel.']);
         exit;
     }
-
-    echo json_encode(ai_catalog_process_item($db, $httpProductId, $httpChannel, $httpProvider), JSON_UNESCAPED_UNICODE);
+    echo json_encode(ai_catalog_process_item($db, $productId, $channel, $provider), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }

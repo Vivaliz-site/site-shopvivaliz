@@ -1,152 +1,347 @@
 <?php
 /**
- * Sincronizar Imagens Para o Site
- * Atualiza banco de dados do ShopVivaliz com as imagens baixadas da Olist
+ * Sincronizar imagens baixadas da Olist para o cadastro local.
+ *
+ * Regra de identidade: nunca atualizar por `olist_id OR sku`.
+ * Quando ambos existem, ambos precisam apontar para o mesmo produto.
+ * Correspondencia ambigua ou conflitante e rejeitada e registrada em log.
  */
 
 header('Content-Type: application/json; charset=utf-8');
 
-log_msg("=== SINCRONIZAR IMAGENS PARA SITE ===");
+log_msg('=== SINCRONIZAR IMAGENS PARA SITE ===');
 
 try {
-    // ========================================================================
-    // PASSO 1: Carregar mapping de imagens
-    // ========================================================================
-
-    log_msg("PASSO 1: Carregando mapping de imagens...");
-
-    $mapping_file = __DIR__ . '/../logs/olist-images-mapping.json';
-
-    if (!file_exists($mapping_file)) {
-        exit_error("Mapping não encontrado. Execute /olist/download-images.php primeiro");
+    $mappingFile = __DIR__ . '/../logs/olist-images-mapping.json';
+    if (!is_file($mappingFile)) {
+        exit_error('Mapping não encontrado. Execute /olist/download-images.php primeiro');
     }
 
-    $mapping = json_decode(file_get_contents($mapping_file), true);
+    $raw = file_get_contents($mappingFile);
+    $mapping = is_string($raw) ? json_decode($raw, true) : null;
+    if (!is_array($mapping)) {
+        exit_error('Mapping de imagens inválido ou não é JSON.');
+    }
 
-    log_msg("  " . count($mapping) . " produtos com imagens");
-
-    // ========================================================================
-    // PASSO 2: Conectar banco de dados
-    // ========================================================================
-
-    log_msg("\nPASSO 2: Conectando banco de dados...");
+    log_msg(count($mapping) . ' produtos com imagens no mapping');
 
     require_once __DIR__ . '/../config/database.php';
     $db = Database::getInstance();
+    log_msg('Banco conectado');
 
-    log_msg("  Banco conectado");
+    $updatedProducts = 0;
+    $updatedImages = 0;
+    $insertedImages = 0;
+    $errors = 0;
+    $skipped = 0;
 
-    // ========================================================================
-    // PASSO 3: Atualizar produtos com imagens
-    // ========================================================================
-
-    log_msg("\nPASSO 3: Atualizando produtos...");
-
-    $atualizados = 0;
-    $erro = 0;
-
-    foreach ($mapping as $olist_id => $dados) {
-        $sku = $dados['sku'];
-        $nome = $dados['nome'];
-        $imagens = $dados['imagens'] ?? [];
-
-        if (count($imagens) === 0) {
+    foreach ($mapping as $mappingOlistId => $data) {
+        if (!is_array($data)) {
+            $errors++;
+            log_msg('[ERRO] Entrada de mapping não é objeto/array.');
             continue;
         }
 
-        // Imagem principal (primeira)
-        $img_principal = $imagens[0]['local_path'] ?? null;
-        $total_imagens = count($imagens);
+        $sourceOlistId = trim((string)($data['olist_id'] ?? $mappingOlistId));
+        $sourceSku = trim((string)($data['sku'] ?? ''));
+        $name = trim((string)($data['nome'] ?? $data['name'] ?? 'produto sem nome'));
+        $images = is_array($data['imagens'] ?? null) ? $data['imagens'] : [];
 
-        if (!$img_principal) {
+        if ($images === []) {
+            $skipped++;
             continue;
         }
 
-        // Atualizar produto
-        $query = "UPDATE olist_products
-                  SET primary_image_url = ?,
-                      images_count = ?,
-                      last_image_sync_at = NOW()
-                  WHERE olist_id = ? OR sku = ?";
+        $resolved = resolve_unique_olist_product($db, $sourceOlistId, $sourceSku);
+        if (($resolved['ok'] ?? false) !== true) {
+            $errors++;
+            log_msg('[IDENTIDADE BLOQUEADA] ' . $name . ' | olist_id=' . $sourceOlistId . ' | sku=' . $sourceSku . ' | ' . ($resolved['error'] ?? 'não resolvido'));
+            continue;
+        }
 
-        $stmt = $db->prepare($query);
-        if ($stmt) {
-            $stmt->bind_param("siss", $img_principal, $total_imagens, $olist_id, $sku);
+        $olistRow = $resolved['row'];
+        $canonicalOlistId = trim((string)($olistRow['olist_id'] ?? $sourceOlistId));
+        $canonicalSku = trim((string)($olistRow['sku'] ?? $sourceSku));
+        $olistInternalId = (int)($olistRow['id'] ?? 0);
 
-            if ($stmt->execute()) {
-                $atualizados += $stmt->affected_rows;
-                log_msg("  [OK] $nome - $total_imagens imagens");
-            } else {
-                $erro++;
-                log_msg("  [ERRO] Falha ao atualizar: $nome");
+        if ($olistInternalId <= 0) {
+            $errors++;
+            log_msg('[ERRO] Produto Olist resolvido sem id interno: ' . $name);
+            continue;
+        }
+
+        $validImages = [];
+        foreach ($images as $image) {
+            if (!is_array($image)) {
+                continue;
             }
-
-            $stmt->close();
+            $path = trim((string)($image['local_path'] ?? ''));
+            if ($path !== '') {
+                $validImages[] = $image;
+            }
+        }
+        if ($validImages === []) {
+            $skipped++;
+            log_msg('[PULADO] ' . $name . ' sem local_path válido.');
+            continue;
         }
 
-        // Armazenar imagens individuais
-        foreach ($imagens as $idx => $img) {
-            $local_path = $img['local_path'] ?? null;
-            $ordem = ($idx + 1);
+        $primary = trim((string)$validImages[0]['local_path']);
+        $totalImages = count($validImages);
 
-            if (!$local_path) {
+        $stmt = $db->prepare(
+            'UPDATE olist_products SET primary_image_url = ?, images_count = ?, last_image_sync_at = NOW() WHERE id = ?'
+        );
+        if (!$stmt) {
+            $errors++;
+            log_msg('[ERRO] Falha ao preparar atualização do produto: ' . $name);
+            continue;
+        }
+        $stmt->bind_param('sii', $primary, $totalImages, $olistInternalId);
+        if (!$stmt->execute()) {
+            $errors++;
+            log_msg('[ERRO] Falha ao atualizar produto: ' . $name . ' | ' . $stmt->error);
+            $stmt->close();
+            continue;
+        }
+        $updatedProducts += max(0, $stmt->affected_rows);
+        $stmt->close();
+
+        $localProductId = resolve_unique_local_product_id($db, $canonicalOlistId, $canonicalSku);
+        if ($localProductId === null) {
+            log_msg('[AVISO] Produto local não pôde ser resolvido de forma única; imagens ficam sem product_local_id: ' . $name);
+        }
+
+        foreach ($validImages as $index => $image) {
+            $localPath = trim((string)($image['local_path'] ?? ''));
+            if ($localPath === '') {
                 continue;
             }
 
-            $query_img = "INSERT INTO olist_product_images
-                         (olist_id, sku, image_url, position, is_primary, status)
-                         VALUES (?, ?, ?, ?, ?, 'active')
-                         ON DUPLICATE KEY UPDATE
-                         image_url = VALUES(image_url),
-                         status = 'active'";
+            $position = $index + 1;
+            $isPrimary = $index === 0 ? 1 : 0;
+            $result = upsert_exact_product_image(
+                $db,
+                $canonicalOlistId,
+                $canonicalSku,
+                $localProductId,
+                $localPath,
+                $position,
+                $isPrimary
+            );
 
-            $stmt_img = $db->prepare($query_img);
-            if ($stmt_img) {
-                $is_primary = ($idx === 0) ? 1 : 0;
-                $stmt_img->bind_param("issi", $olist_id, $sku, $local_path, $ordem);
-                $stmt_img->execute();
-                $stmt_img->close();
+            if (($result['ok'] ?? false) !== true) {
+                $errors++;
+                log_msg('[ERRO IMAGEM] ' . $name . ' pos=' . $position . ' | ' . ($result['error'] ?? 'falha desconhecida'));
+                continue;
+            }
+
+            if (($result['action'] ?? '') === 'inserted') {
+                $insertedImages++;
+            } else {
+                $updatedImages++;
+            }
+        }
+
+        log_msg('[OK] ' . $name . ' | olist_id=' . $canonicalOlistId . ' | sku=' . $canonicalSku . ' | ' . $totalImages . ' imagens');
+    }
+
+    log_msg('=== SINCRONIZACAO CONCLUIDA ===');
+    log_msg('Produtos atualizados: ' . $updatedProducts);
+    log_msg('Imagens inseridas: ' . $insertedImages);
+    log_msg('Imagens atualizadas: ' . $updatedImages);
+    log_msg('Pulados: ' . $skipped);
+    log_msg('Erros: ' . $errors);
+
+    http_response_code($errors > 0 ? 207 : 200);
+    echo json_encode([
+        'sucesso' => $errors === 0,
+        'produtos_atualizados' => $updatedProducts,
+        'imagens_inseridas' => $insertedImages,
+        'imagens_atualizadas' => $updatedImages,
+        'pulados' => $skipped,
+        'erros' => $errors,
+        'mensagem' => $errors === 0
+            ? 'Sincronização de imagens concluída com identidade estrita.'
+            : 'Sincronização concluída com itens bloqueados por erro ou identidade ambígua.',
+        'timestamp' => date('c'),
+    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+} catch (Throwable $e) {
+    log_msg('EXCEPTION: ' . $e->getMessage());
+    exit_error('Erro: ' . $e->getMessage());
+}
+
+/** @return array{ok:bool,row?:array<string,mixed>,error?:string} */
+function resolve_unique_olist_product(Database $db, string $olistId, string $sku): array
+{
+    $olistId = trim($olistId);
+    $sku = trim($sku);
+    if ($olistId === '' && $sku === '') {
+        return ['ok' => false, 'error' => 'sem olist_id e sem SKU'];
+    }
+
+    if ($olistId !== '' && $sku !== '') {
+        $sql = 'SELECT id, CAST(olist_id AS CHAR) AS olist_id, sku FROM olist_products WHERE CAST(olist_id AS CHAR) = ? AND sku = ? LIMIT 2';
+        $params = [$olistId, $sku];
+    } elseif ($olistId !== '') {
+        $sql = 'SELECT id, CAST(olist_id AS CHAR) AS olist_id, sku FROM olist_products WHERE CAST(olist_id AS CHAR) = ? LIMIT 2';
+        $params = [$olistId];
+    } else {
+        $sql = 'SELECT id, CAST(olist_id AS CHAR) AS olist_id, sku FROM olist_products WHERE sku = ? LIMIT 2';
+        $params = [$sku];
+    }
+
+    $rows = stmt_rows($db, $sql, $params);
+    if (count($rows) !== 1) {
+        return [
+            'ok' => false,
+            'error' => count($rows) === 0 ? 'nenhuma correspondência exata' : 'correspondência ambígua',
+        ];
+    }
+
+    $row = $rows[0];
+    if ($olistId !== '' && trim((string)($row['olist_id'] ?? '')) !== $olistId) {
+        return ['ok' => false, 'error' => 'olist_id divergente após resolução'];
+    }
+    if ($sku !== '' && trim((string)($row['sku'] ?? '')) !== $sku) {
+        return ['ok' => false, 'error' => 'SKU divergente após resolução'];
+    }
+
+    return ['ok' => true, 'row' => $row];
+}
+
+function resolve_unique_local_product_id(Database $db, string $olistId, string $sku): ?int
+{
+    $olistId = trim($olistId);
+    $sku = trim($sku);
+    if ($olistId === '' && $sku === '') {
+        return null;
+    }
+
+    if ($olistId !== '' && $sku !== '') {
+        $rows = stmt_rows(
+            $db,
+            'SELECT id FROM products WHERE CAST(olist_id AS CHAR) = ? AND sku = ? LIMIT 2',
+            [$olistId, $sku]
+        );
+    } elseif ($olistId !== '') {
+        $rows = stmt_rows($db, 'SELECT id FROM products WHERE CAST(olist_id AS CHAR) = ? LIMIT 2', [$olistId]);
+    } else {
+        $rows = stmt_rows($db, 'SELECT id FROM products WHERE sku = ? LIMIT 2', [$sku]);
+    }
+
+    return count($rows) === 1 ? ((int)($rows[0]['id'] ?? 0) ?: null) : null;
+}
+
+/** @return array{ok:bool,action?:string,error?:string} */
+function upsert_exact_product_image(
+    Database $db,
+    string $olistId,
+    string $sku,
+    ?int $localProductId,
+    string $imageUrl,
+    int $position,
+    int $isPrimary
+): array {
+    if ($olistId === '' && $sku === '') {
+        return ['ok' => false, 'error' => 'imagem sem identidade de produto'];
+    }
+
+    if ($olistId !== '' && $sku !== '') {
+        $existing = stmt_rows(
+            $db,
+            'SELECT id FROM olist_product_images WHERE CAST(olist_id AS CHAR) = ? AND sku = ? AND position = ? LIMIT 2',
+            [$olistId, $sku, $position]
+        );
+    } elseif ($olistId !== '') {
+        $existing = stmt_rows(
+            $db,
+            'SELECT id FROM olist_product_images WHERE CAST(olist_id AS CHAR) = ? AND position = ? LIMIT 2',
+            [$olistId, $position]
+        );
+    } else {
+        $existing = stmt_rows(
+            $db,
+            'SELECT id FROM olist_product_images WHERE sku = ? AND position = ? LIMIT 2',
+            [$sku, $position]
+        );
+    }
+
+    if (count($existing) > 1) {
+        return ['ok' => false, 'error' => 'mais de uma imagem existente para a mesma identidade/posição'];
+    }
+
+    if (count($existing) === 1) {
+        $id = (int)$existing[0]['id'];
+        $stmt = $db->prepare(
+            "UPDATE olist_product_images SET image_url = ?, product_local_id = ?, is_primary = ?, status = 'active', updated_at = NOW() WHERE id = ?"
+        );
+        if (!$stmt) {
+            return ['ok' => false, 'error' => 'falha ao preparar UPDATE de imagem'];
+        }
+        $local = $localProductId ?? 0;
+        $stmt->bind_param('siii', $imageUrl, $local, $isPrimary, $id);
+        $ok = $stmt->execute();
+        $error = $stmt->error;
+        $stmt->close();
+        return $ok ? ['ok' => true, 'action' => 'updated'] : ['ok' => false, 'error' => $error];
+    }
+
+    $stmt = $db->prepare(
+        "INSERT INTO olist_product_images (olist_id, sku, product_local_id, image_url, position, is_primary, status, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'active', NOW())"
+    );
+    if (!$stmt) {
+        return ['ok' => false, 'error' => 'falha ao preparar INSERT de imagem'];
+    }
+    $local = $localProductId ?? 0;
+    $stmt->bind_param('ssisii', $olistId, $sku, $local, $imageUrl, $position, $isPrimary);
+    $ok = $stmt->execute();
+    $error = $stmt->error;
+    $stmt->close();
+    return $ok ? ['ok' => true, 'action' => 'inserted'] : ['ok' => false, 'error' => $error];
+}
+
+/** @return list<array<string,mixed>> */
+function stmt_rows(Database $db, string $sql, array $params): array
+{
+    $stmt = $db->prepare($sql);
+    if (!$stmt) {
+        return [];
+    }
+
+    // PHP 8.1+ permite passar os parâmetros diretamente ao execute(); isso
+    // evita o risco de bind_param por unpack não preservar referências.
+    if (!$stmt->execute($params)) {
+        $stmt->close();
+        return [];
+    }
+
+    $result = $stmt->get_result();
+    $rows = [];
+    if ($result instanceof mysqli_result) {
+        while ($row = $result->fetch_assoc()) {
+            if (is_array($row)) {
+                $rows[] = $row;
             }
         }
     }
-
-    // ========================================================================
-    // RESULTADO
-    // ========================================================================
-
-    log_msg("\n=== SINCRONIZACAO CONCLUIDA ===");
-    log_msg("Produtos atualizados: $atualizados");
-    log_msg("Erros: $erro");
-
-    http_response_code(200);
-    echo json_encode([
-        'sucesso' => true,
-        'produtos_atualizados' => $atualizados,
-        'erros' => $erro,
-        'mensagem' => "Sincronizados $atualizados produtos com suas imagens",
-        'timestamp' => date('c')
-    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-
-} catch (Exception $e) {
-    log_msg("EXCEPTION: " . $e->getMessage());
-    exit_error("Erro: " . $e->getMessage());
+    $stmt->close();
+    return $rows;
 }
 
-function log_msg($msg) {
-    $log_file = __DIR__ . '/../logs/olist-sync-images-to-site.log';
-    @mkdir(dirname($log_file), 0755, true);
-
-    $timestamp = date('Y-m-d H:i:s');
-    $line = "[$timestamp] $msg\n";
-
-    @file_put_contents($log_file, $line, FILE_APPEND);
-    error_log("[Sync] $msg");
+function log_msg(string $msg): void
+{
+    $logFile = __DIR__ . '/../logs/olist-sync-images-to-site.log';
+    @mkdir(dirname($logFile), 0755, true);
+    $line = '[' . date('Y-m-d H:i:s') . '] ' . $msg . "\n";
+    @file_put_contents($logFile, $line, FILE_APPEND | LOCK_EX);
+    error_log('[Sync] ' . $msg);
 }
 
-function exit_error($msg) {
-    log_msg("ERRO: $msg");
+function exit_error(string $msg): never
+{
+    log_msg('ERRO: ' . $msg);
     http_response_code(400);
     echo json_encode(['erro' => $msg, 'sucesso' => false], JSON_UNESCAPED_UNICODE);
     exit(1);
 }
-?>

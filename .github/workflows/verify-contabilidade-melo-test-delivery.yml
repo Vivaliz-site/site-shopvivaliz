@@ -1,0 +1,53 @@
+name: Verify Contabilidade Melo test delivery
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Final validation and conditional authorized start
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          sudo systemctl stop mei-mg-email-worker.service || true
+          cd /home/ubuntu/mei-mg-email
+
+          GIT_TERMINAL_PROMPT=0 git fetch --quiet origin main
+          for f in \
+            app/email_provider.py \
+            app/config.py \
+            app/routes/campanhas.py \
+            worker/worker.py \
+            scripts/auditar_graph_token.py \
+            scripts/auditar_dns_microsoft.py \
+            scripts/auditar_exchange_10000.py \
+            scripts/disparar_10000_mei_mg.py; do
+            mkdir -p "$(dirname "$f")"
+            git show "origin/main:$f" > "/tmp/$(basename "$f")"
+            install -m 0644 "/tmp/$(basename "$f")" "$f"
+          done
+          /home/ubuntu/mei-mg-email/.venv/bin/python -m py_compile app/email_provider.py app/routes/campanhas.py worker/worker.py scripts/auditar_graph_token.py scripts/auditar_dns_microsoft.py scripts/auditar_exchange_10000.py scripts/disparar_10000_mei_mg.py
+
+          if grep -q '^RATE_LIMIT_ENVIOS_POR_MINUTO=' .env; then
+            sed -i 's/^RATE_LIMIT_ENVIOS_POR_MINUTO=.*/RATE_LIMIT_ENVIOS_POR_MINUTO=30/' .env
+          else
+            printf '\nRATE_LIMIT_ENVIOS_POR_MINUTO=30\n' >> .env
+          fi
+
+          /home/ubuntu/mei-mg-email/.venv/bin/python scripts/auditar_exchange_10000.py
+          echo MANUAL_READINESS_OK_USE_SAFE_RESUME_WORKFLOW
+          echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

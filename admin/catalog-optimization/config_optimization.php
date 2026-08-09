@@ -2,89 +2,50 @@
 
 declare(strict_types=1);
 
-/**
- * Configuração da API de Otimização de Cadastro de Produtos (catálogo/SEO/GEO
- * via OpenAI / Google Gemini / Anthropic Claude).
- *
- * IMPORTANTE — SEGURANÇA: nenhuma chave de API real vive neste arquivo.
- * Tudo é lido de variáveis de ambiente (já carregadas pelo bootstrap padrão
- * do projeto em config/constants.php, que lê .env da release e
- * shared/.env do deploy). Configure as variáveis reais em .env /
- * shared/.env — NUNCA neste arquivo, e NUNCA versionado.
- *
- * IMPORTANTE — EXECUÇÃO REAL, SEM MOCK: se uma chave de API não estiver
- * configurada, o comportamento correto é falhar com uma exceção clara (ver
- * src/TextAiServices.php) — nunca simular uma resposta de sucesso. O mesmo
- * vale para qualquer erro de rede/HTTP das 3 APIs.
- *
- * Variáveis de ambiente esperadas (documentadas em .env.example):
- *   OPENAI_API_KEY
- *   GOOGLE_GEMINI_API_KEY
- *   CLAUDE_API_KEY
- *
- * REGRA DE NEGÓCIO: este módulo NUNCA lê nem escreve preço ou estoque.
- * ai_catalog_fetch_product() abaixo seleciona explicitamente só as colunas
- * de texto/atributo necessárias — não faz SELECT * — exatamente para deixar
- * essa proteção estrutural, não apenas convencional.
- */
-
-// Reaproveita o bootstrap padrão do projeto: carrega .env/shared/.env e
-// define DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASS/DB_CHARSET e ENVIRONMENT.
-// sv_pdo() já usa PDO::ATTR_ERRMODE_EXCEPTION (try/catch interno) e conecta
-// com charset UTF-8 (DB_CHARSET), então reaproveitamos a mesma conexão
-// compartilhada do projeto em vez de abrir uma segunda conexão MySQL.
 require_once __DIR__ . '/../../config/constants.php';
 require_once __DIR__ . '/../../includes/pdo-database.php';
 
-// --- Chaves de API (placeholders lidos de ambiente, nunca hardcoded) ---
-// NOTA 2026-08-05: o resto do projeto (Liz, config/constants.php) já usa
-// chaves reais e funcionando sob GEMINI_API_KEY e ANTHROPIC_API_KEY
-// (confirmado em produção via Liz respondendo de verdade pelo provider
-// 'gemini'). Este módulo tentava GOOGLE_GEMINI_API_KEY/CLAUDE_API_KEY, que
-// nunca foram configurados — por isso "sem chave" mesmo com a chave real já
-// existindo. Tenta primeiro o nome específico deste módulo (permite
-// override futuro) e cai para a variável já usada pelo resto do sistema,
-// sem duplicar segredo.
-define('CATALOG_AI_OPENAI_API_KEY', (string) (getenv('OPENAI_API_KEY') ?: ''));
-define('CATALOG_AI_GOOGLE_GEMINI_API_KEY', (string) (getenv('GOOGLE_GEMINI_API_KEY') ?: getenv('GEMINI_API_KEY') ?: ''));
-define('CATALOG_AI_CLAUDE_API_KEY', (string) (getenv('CLAUDE_API_KEY') ?: getenv('ANTHROPIC_API_KEY') ?: ''));
+/** @return list<string> */
+function catalog_ai_env_key_pool(array $baseNames): array
+{
+    $keys = [];
+    foreach ($baseNames as $baseName) {
+        $list = trim((string)getenv($baseName . 'S'));
+        if ($list !== '') {
+            $decoded = json_decode($list, true);
+            $candidates = is_array($decoded)
+                ? $decoded
+                : (preg_split('/[\r\n,;]+/', $list) ?: []);
+            foreach ($candidates as $candidate) {
+                $candidate = trim((string)$candidate);
+                if ($candidate !== '') $keys[] = $candidate;
+            }
+        }
+        for ($index = 1; $index <= 10; $index++) {
+            $candidate = trim((string)getenv($baseName . '_' . $index));
+            if ($candidate !== '') $keys[] = $candidate;
+        }
+        $legacy = trim((string)getenv($baseName));
+        if ($legacy !== '') $keys[] = $legacy;
+    }
+    return array_values(array_unique($keys));
+}
 
-// --- Modelos (podem ser sobrescritos via ambiente sem editar código) ---
-// Modelos de TEXTO reais e vigentes (não os genéricos citados no briefing
-// original — "gpt-4o"/"claude-3-5-sonnet" como nomes fixos ficam
-// desatualizados rápido; usamos defaults atuais de 2026, sobrescrevíveis).
-define('CATALOG_AI_OPENAI_MODEL', (string) (getenv('OPENAI_TEXT_MODEL') ?: 'gpt-4.1'));
-// Testado ao vivo em produção nesta sessão (2026-08-05) contra a
-// GEMINI_API_KEY real: gemini-2.5-pro -> HTTP 404 "no longer available to
-// new users"; gemini-1.5-flash -> HTTP 404 "not found for API version
-// v1beta, or is not supported for generateContent". gemini-2.5-flash é o
-// default do próprio scripts/validate-gemini-credentials.php do projeto
-// (script cuja função é validar que o modelo funciona com a chave real) —
-// usando esse como próxima tentativa. Ajustável via GOOGLE_GEMINI_MODEL
-// sem editar código.
-define('CATALOG_AI_GEMINI_MODEL', (string) (getenv('GOOGLE_GEMINI_MODEL') ?: 'gemini-2.5-flash'));
-define('CATALOG_AI_CLAUDE_MODEL', (string) (getenv('CLAUDE_TEXT_MODEL') ?: 'claude-sonnet-4-20250514'));
+define('CATALOG_AI_OPENAI_API_KEY', catalog_ai_env_key_pool(['OPENAI_API_KEY']));
+define('CATALOG_AI_GOOGLE_GEMINI_API_KEY', catalog_ai_env_key_pool(['GOOGLE_GEMINI_API_KEY', 'GEMINI_API_KEY']));
+define('CATALOG_AI_CLAUDE_API_KEY', catalog_ai_env_key_pool(['CLAUDE_API_KEY', 'ANTHROPIC_API_KEY']));
 
-// --- Timeout estendido para chamadas de IA (mínimo 60s, texto longo demora) ---
-define('CATALOG_AI_HTTP_TIMEOUT_SECONDS', max(60, (int) (getenv('CATALOG_AI_HTTP_TIMEOUT_SECONDS') ?: 90)));
+define('CATALOG_AI_OPENAI_MODEL', (string)(getenv('OPENAI_TEXT_MODEL') ?: 'gpt-4.1'));
+define('CATALOG_AI_GEMINI_MODEL', (string)(getenv('GOOGLE_GEMINI_MODEL') ?: 'gemini-2.5-flash'));
+define('CATALOG_AI_CLAUDE_MODEL', (string)(getenv('CLAUDE_TEXT_MODEL') ?: 'claude-sonnet-4-20250514'));
+define('CATALOG_AI_HTTP_TIMEOUT_SECONDS', max(60, (int)(getenv('CATALOG_AI_HTTP_TIMEOUT_SECONDS') ?: 90)));
 
-/**
- * Retorna a conexão PDO compartilhada do projeto (mysql, UTF-8,
- * PDO::ERRMODE_EXCEPTION — ver includes/pdo-database.php). Pode retornar
- * null se a conexão falhar — todo código deste módulo precisa checar antes
- * de usar, e propagar o erro em vez de seguir como se tivesse conectado.
- */
 function catalog_ai_db(): ?PDO
 {
     return sv_pdo();
 }
 
-/**
- * Canais de venda suportados por este módulo — usado tanto para validar
- * entrada quanto para popular o <select> do dashboard.
- *
- * @return array<string,string> chave técnica => rótulo legível
- */
+/** @return array<string,string> */
 function catalog_ai_channels(): array
 {
     return [
@@ -93,6 +54,6 @@ function catalog_ai_channels(): array
         'amazon' => 'Amazon',
         'tiktok' => 'TikTok Shop',
         'site' => 'Site Próprio',
-        'erp' => 'ERP (uso interno)',
+        'erp' => 'Olist / Tiny ERP',
     ];
 }

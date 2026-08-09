@@ -1,0 +1,43 @@
+name: Fred-Win Entra UIA Upload
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fred-win-entra-uia-upload.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          test -n "$VM_KEY" || exit 2
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Launch interactive certificate upload on Fred-Win
+        run: |
+          python3 - <<'PY' > /tmp/body.json
+          import json
+          ps=r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'C:\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; $log='C:\site-shopvivaliz\logs\entra-uia-upload.log'; Remove-Item $log -Force -ErrorAction SilentlyContinue; $task='ShopVivalizEntraUIAUpload'; $user=(Get-CimInstance Win32_ComputerSystem).UserName; if([string]::IsNullOrWhiteSpace($user)){ throw 'No interactive user' }; $a=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoProfile -ExecutionPolicy Bypass -File C:\site-shopvivaliz\scripts\fredwin-entra-uia-launch.ps1 -Mode upload'; $t=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1); $p=New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName $task -Action $a -Trigger $t -Principal $p -Force | Out-Null; Start-ScheduledTask -TaskName $task; for($i=0;$i -lt 90;$i++){ Start-Sleep -Seconds 2; if(Test-Path $log){ $txt=Get-Content $log -Raw -ErrorAction SilentlyContinue; if($txt -match 'ENTRA_UIA_(CERT_UPLOAD_READY|CERT_ALREADY_REGISTERED|UPLOAD_BUTTON_NOT_FOUND|FILE_PICKER_NOT_FOUND|ADD_BUTTON_NOT_FOUND|AUTH_REQUIRED|CERT_UPLOAD_UNCONFIRMED)'){ break } } }; if(Test-Path $log){ Get-Content $log -Tail 160 } else { Write-Output 'UIA_LOG_MISSING' }; $taskInfo=Get-ScheduledTaskInfo -TaskName $task -ErrorAction SilentlyContinue; if($taskInfo){ Write-Output ('UIA_LAST_RESULT='+$taskInfo.LastTaskResult) }; Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue"'''
+          print(json.dumps({'params':{'command':ps,'timeout':400}}))
+          PY
+          BODY_B64="$(base64 -w0 /tmp/body.json)"
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 "BODY_B64='$BODY_B64' python3 - <<'PY'
+          import os,base64,json,urllib.request
+          body=base64.b64decode(os.environ['BODY_B64'])
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=420) as r: payload=json.loads(r.read().decode())
+          print(json.dumps(payload,ensure_ascii=False))
+          if not (payload.get('result') or {}).get('success'): raise SystemExit(1)
+          PY"
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/body.json

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only Google Ads campaign review.
+"""Read-only Google Ads campaign review with sanitized auth diagnostics.
 
 This script performs no mutations. It lists recent campaign delivery and
 configuration signals so the account can be reviewed without opening the UI.
@@ -8,7 +8,6 @@ configuration signals so the account can be reviewed without opening the UI.
 from __future__ import annotations
 
 import os
-import sys
 from pathlib import Path
 
 
@@ -43,6 +42,19 @@ def is_missing_or_placeholder(value: str) -> bool:
     )
 
 
+def classify_auth_error(exc: Exception) -> str:
+    text = str(exc).casefold()
+    if "invalid_client" in text or "oauth client was not found" in text:
+        return "OAUTH_CLIENT_INVALID_OR_DELETED"
+    if "invalid_grant" in text:
+        return "OAUTH_REFRESH_TOKEN_INVALID_OR_REVOKED"
+    if "developer_token" in text and ("not approved" in text or "unauthorized" in text):
+        return "DEVELOPER_TOKEN_ACCESS_NOT_APPROVED"
+    if "authentication" in text or "unauthenticated" in text:
+        return "GOOGLE_ADS_AUTHENTICATION_FAILED"
+    return "GOOGLE_ADS_CLIENT_INIT_FAILED"
+
+
 def build_client():
     from google.ads.googleads.client import GoogleAdsClient
 
@@ -67,7 +79,14 @@ def main() -> int:
         print("missing_or_placeholder_env=" + ",".join(missing))
         return 1
 
-    client = build_client()
+    try:
+        client = build_client()
+    except Exception as exc:
+        print("AUTH_NOT_READY")
+        print("reason=" + classify_auth_error(exc))
+        print("action=repair OAuth client/refresh token in the secure secret store, then rerun")
+        return 1
+
     customer_id = os.environ["GOOGLE_ADS_CUSTOMER_ID"].replace("-", "").strip()
     service = client.get_service("GoogleAdsService")
     query = """
@@ -113,7 +132,8 @@ def main() -> int:
             )
     except Exception as exc:
         print("API_REVIEW_FAILED")
-        print(type(exc).__name__ + ": " + str(exc))
+        print("reason=" + classify_auth_error(exc))
+        print("exception_type=" + type(exc).__name__)
         return 1
 
     return 0

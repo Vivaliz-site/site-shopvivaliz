@@ -94,6 +94,15 @@ path.write_text("\n".join(lines) + "\n", encoding="utf-8")  # Quebra de linha re
 
 ---
 
+## ⚠️ REGRA DE FINALIZAÇÃO OBRIGATÓRIA (Commit, PR e Merge)
+
+Qualquer alteração feita no repositório, ao ser finalizada, deve obrigatoriamente ser validada e seguir o fluxo de:
+1. **Commit** das alterações locais.
+2. Abertura/atualização de **Pull Request (PR)**.
+3. Realização de **Merge** para a branch alvo.
+
+Toda alteração deve ser validada pelo navegador de forma visual e funcional (nada de scripts para essa validação) e seguir este fluxo. Não finalize rodadas de alterações mantendo-as apenas locais ou sem merge/deploy.
+
 ## 🚨 PROCEDIMENTO PARA EVITAR NO FUTURO
 
 **Antes de modificar qualquer desses arquivos/secrets:**

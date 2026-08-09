@@ -1,0 +1,96 @@
+name: Bootstrap M365 on Oracle VM
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/m365/Add-ShopVivalizVmCertificateToEntra.ps1'
+      - 'scripts/m365/graph-app-only-linux.py'
+      - '.github/workflows/bootstrap-m365-on-vm.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          test -n "$VM_KEY" || exit 2
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Generate server certificate and install client
+        run: |
+          scp -q -o StrictHostKeyChecking=no -i ~/.ssh/vmkey scripts/m365/graph-app-only-linux.py ubuntu@137.131.156.17:/tmp/graph-app-only-linux.py
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          umask 077
+          mkdir -p /home/ubuntu/.shopvivaliz/m365 /home/ubuntu/.shopvivaliz/bin
+          chmod 700 /home/ubuntu/.shopvivaliz /home/ubuntu/.shopvivaliz/m365 /home/ubuntu/.shopvivaliz/bin
+          if [ ! -s /home/ubuntu/.shopvivaliz/m365/graph-auth.key ] || [ ! -s /home/ubuntu/.shopvivaliz/m365/graph-auth.crt ]; then
+            openssl req -x509 -newkey rsa:2048 -sha256 -days 730 -nodes \
+              -subj '/CN=ShopVivalizExchangeVmAuth' \
+              -keyout /home/ubuntu/.shopvivaliz/m365/graph-auth.key \
+              -out /home/ubuntu/.shopvivaliz/m365/graph-auth.crt >/dev/null 2>&1
+          fi
+          chmod 600 /home/ubuntu/.shopvivaliz/m365/graph-auth.key /home/ubuntu/.shopvivaliz/m365/graph-auth.crt
+          install -m 700 /tmp/graph-app-only-linux.py /home/ubuntu/.shopvivaliz/bin/graph-app-only.py
+          rm -f /tmp/graph-app-only-linux.py
+          openssl x509 -in /home/ubuntu/.shopvivaliz/m365/graph-auth.crt -outform DER -out /home/ubuntu/.shopvivaliz/m365/graph-auth.cer
+          chmod 600 /home/ubuntu/.shopvivaliz/m365/graph-auth.cer
+          EOF
+
+      - name: Read public server certificate
+        id: cert
+        run: |
+          CERT_B64=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 'base64 -w0 /home/ubuntu/.shopvivaliz/m365/graph-auth.cer')
+          test -n "$CERT_B64"
+          echo "cert_b64=$CERT_B64" >> "$GITHUB_OUTPUT"
+
+      - name: Add server public certificate to Entra using Fred-Win existing key
+        env:
+          CERT_B64: ${{ steps.cert.outputs.cert_b64 }}
+        run: |
+          python3 - <<'PY' > /tmp/body.json
+          import json, os
+          cert=os.environ['CERT_B64']
+          ps="powershell -NoProfile -ExecutionPolicy Bypass -Command \"Set-Location 'C:\\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; & '.\\scripts\\m365\\Add-ShopVivalizVmCertificateToEntra.ps1' -NewCertificateBase64 '"+cert+"'\""
+          print(json.dumps({'params': {'command': ps, 'timeout': 240}}))
+          PY
+          B64=$(base64 -w0 /tmp/body.json)
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 "B64='$B64' python3 - <<'PY'
+          import base64,json,os,urllib.request
+          body=base64.b64decode(os.environ['B64'])
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=270) as r: payload=json.loads(r.read().decode())
+          result=payload.get('result') or {}
+          print(result.get('output',''))
+          if result.get('success') is not True: raise SystemExit(result.get('error') or 'Entra addKey failed')
+          PY"
+
+      - name: Validate Graph app-only directly on VM
+        run: |
+          sleep 10
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 '/home/ubuntu/.shopvivaliz/bin/graph-app-only.py --send-test-to naoresponda@dev.shopvivaliz.com.br'
+
+      - name: Confirm VM files and no Fred dependency
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -e
+          test -s /home/ubuntu/.shopvivaliz/m365/graph-auth.key
+          test -s /home/ubuntu/.shopvivaliz/m365/graph-auth.crt
+          test -x /home/ubuntu/.shopvivaliz/bin/graph-app-only.py
+          echo VM_M365_APP_ONLY_READY
+          EOF
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/body.json

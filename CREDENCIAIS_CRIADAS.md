@@ -1,94 +1,57 @@
 # Credenciais Google OAuth 2.0 - Registro Sanitizado
 
-**Data:** 2026-07-19  
-**Status:** PARCIAL
+**Status:** REQUER RECONFIGURACAO OAUTH
 
-## Credenciais
+Este arquivo nao e fonte de verdade para credenciais. Valores reais devem existir apenas no `.env` privado, GitHub Environment `Production` ou outro cofre de segredos autorizado.
 
-### OAuth 2.0 Client ID
-```
-Client ID: m71jvyuls7c4die88db14nv3bllmth0i.app.s.googleusercontent.com
-Client Secret: [REMOVIDO - armazenar somente em .env privado/GitHub Secrets]
-```
+## Estado atual
 
-### Projeto Google Cloud
-- **Projeto:** Default Gemini Project
-- **Tipo:** Web Application
-- **Nome:** ShopVivaliz-GoogleAds-Campaign
+- Um OAuth Client antigo documentado neste repositorio nao deve mais ser reutilizado.
+- Uma chamada real da Google Ads API retornou `invalid_client`, indicando client OAuth inexistente, excluido ou incorreto no secret store.
+- O Google Ads Developer Token e o Refresh Token podem estar cadastrados, mas so funcionarao depois que o OAuth Client ID/Secret forem validos e consistentes.
+- O refresh token deve ser reemitido para o mesmo OAuth Client ativo.
 
----
+## Configuracao segura esperada
 
-## Proximas etapas criticas
-
-### 1. Copiar credenciais para .env privado
-```bash
-# Crie um arquivo .env na raiz do projeto (NÃO commitar!)
-GOOGLE_OAUTH_CLIENT_ID=m71jvyuls7c4die88db14nv3bllmth0i.app.s.googleusercontent.com
-GOOGLE_OAUTH_CLIENT_SECRET=<novo_secret_rotacionado>
-GOOGLE_ADS_CUSTOMER_ID=5104079137
-GOOGLE_ADS_DEVELOPER_TOKEN=[CONFIGURADO - valor somente em .env/GitHub Secrets]
-GOOGLE_ADS_REFRESH_TOKEN=[PRESENTE, mas regenerador falha invalid_grant; reemitir]
+```env
+GOOGLE_OAUTH_CLIENT_ID=<client_id_ativo_terminando_em_.apps.googleusercontent.com>
+GOOGLE_OAUTH_CLIENT_SECRET=<secret_atual_do_mesmo_client>
+GOOGLE_ADS_CUSTOMER_ID=<customer_id_real_da_conta_de_producao>
+GOOGLE_ADS_LOGIN_CUSTOMER_ID=<mcc_id_se_necessario>
+GOOGLE_ADS_DEVELOPER_TOKEN=<armazenado_somente_em_secret_store>
+GOOGLE_ADS_REFRESH_TOKEN=<refresh_token_reemitido_para_o_mesmo_client>
 GOOGLE_ADS_CONVERSION_SOURCE=GA4_IMPORT
-GOOGLE_ADS_PURCHASE_CONVERSION_NAME=www.shopvivaliz.com.br (web) purchase
 ```
 
-### 2. Liberar DEVELOPER_TOKEN para producao
-- Token criado na MCC `shopvivaliz ltda` (`634-264-0666`)
-- Nivel atual: `Conta de teste`
-- Solicitar `Acesso basico` na Central de API
-- Concluir verificacao de marca/OAuth no Google Cloud se o Google exigir
+## Validacao
 
-### 3. Ativar Google Ads API
-- Vá para: https://console.cloud.google.com/apis/library
-- Procure por "Google Ads API"
-- Clique "Ativar" (Enable)
+Primeiro rode o preflight local, que nao faz chamadas de rede e nao imprime secrets:
 
-### 4. Validar antes de executar campanha
 ```bash
-python3 scripts/google_ads_real_readiness.py
+python3 scripts/google_ads_auth_preflight.py
 ```
 
----
+Resultado esperado:
 
-## STATUS DO SISTEMA
+```text
+GOOGLE_ADS_AUTH_PREFLIGHT_OK
+```
 
-- **Sistema autonomo:** Codigo pronto
-- **OAuth 2.0:** Client criado, secret deve ser rotacionado por ter sido exposto
-- **Google Ads API:** Readiness passou local/VM; bloqueio externo e acesso basico + refresh token invalido
-- **Monitoramento 30 dias:** Codigo/configuracao preparada
-- **Campaign Config:** Preparada, deve criar campanha pausada primeiro
+Em seguida rode manualmente o workflow `Google Ads Config CI`. A etapa live e read-only e deve ser usada para confirmar:
 
----
+- autenticacao OAuth;
+- acesso do Developer Token;
+- acesso ao Customer ID;
+- campanhas dos ultimos 30 dias;
+- recomendacao de imagens dinamicas.
 
-## ⚠️ SEGURANÇA
+## Seguranca
 
-**NUNCA commite o .env com credenciais reais.**
+- Nao gravar Client Secret, Developer Token ou Refresh Token em arquivos versionados.
+- Nao copiar credenciais de commits antigos.
+- Rotacionar qualquer secret previamente exposto.
+- Nao enviar tokens por chat.
 
-Este arquivo ja continha um client secret em claro. Trate o segredo antigo como comprometido:
+## Campanhas
 
-1. Rotacione o segredo no Google Cloud.
-2. Atualize `.env` privado e GitHub Secrets.
-3. Nunca registre o novo valor neste arquivo.
-
----
-
-## RESUMO DA CAMPANHA
-
-- **Nome:** Rodizios-Search-AGRESSIVO-10xROI-2026-07
-- **Budget:** R$ 15.00/dia (R$ 450 total 30 dias)
-- **Keywords:** 6 PHRASE match (high-intent)
-- **ROI Target:** 10x+
-- **Duração:** 30 dias
-
----
-
-## Resultado esperado apos credenciais reais
-
-Após configurar tudo:
-- Sistema conectará com Google Ads API
-- Criará campanha pausada primeiro
-- Monitorará dados reais por 30 dias
-- Gerará relatórios diários
-- Calculará ROI real
-
-**Status atual:** READINESS passou local/VM; bloqueio externo e acesso basico do Google Ads + reemissao do refresh token.
+Configuracoes de campanha permanecem separadas em `scripts/google_ads_campaign_live_ready.json`. A criacao/ativacao real deve respeitar os guardrails existentes e nunca deve ser liberada apenas porque o preflight passou.

@@ -41,8 +41,8 @@ function svop_order_dir(): string
 function svop_payment_method(string $value): string
 {
     $normalized = strtolower(trim($value));
-    $allowed = ['pix', 'boleto', 'whatsapp', 'transferencia', 'mercado_pago', 'pagarme', 'infinitepay'];
-    return in_array($normalized, $allowed, true) ? $normalized : 'pix';
+    $allowed = ['pix', 'boleto', 'whatsapp', 'transferencia', 'mercado_pago', 'infinitepay'];
+    return in_array($normalized, $allowed, true) ? $normalized : '';
 }
 
 function svop_payment_label(string $method): string
@@ -52,7 +52,6 @@ function svop_payment_label(string $method): string
         'whatsapp' => 'WhatsApp',
         'transferencia' => 'Transferencia bancaria',
         'mercado_pago' => 'Mercado Pago',
-        'pagarme' => 'Pagar.me',
         'infinitepay' => 'InfinitePay',
         default => 'PIX',
     };
@@ -65,7 +64,6 @@ function svop_payment_instructions(string $method): string
         'whatsapp' => 'Pagamento e frete serao alinhados pelo atendimento no WhatsApp.',
         'transferencia' => 'Dados bancarios serao enviados pela equipe apos confirmacao do frete.',
         'mercado_pago' => 'Pagamento processado no ambiente seguro do Mercado Pago.',
-        'pagarme' => 'Link de pagamento do Pagar.me sera enviado apos confirmacao do frete.',
         'infinitepay' => 'Voce sera redirecionado para o checkout seguro da InfinitePay.',
         default => 'Pagamento via PIX com confirmacao apos validacao do pedido.',
     };
@@ -167,6 +165,10 @@ $city = trim((string)($body['city'] ?? $body['cidade'] ?? ''));
 $state = strtoupper(trim((string)($body['state'] ?? $body['estado'] ?? $body['uf'] ?? '')));
 $notes = trim((string)($body['notes'] ?? ''));
 $paymentMethod = svop_payment_method((string)($body['payment_method'] ?? 'pix'));
+if ($paymentMethod === '') {
+    svoi_release($idempotencyKey);
+    svop_json(422, ['ok' => false, 'error' => 'payment_method_invalid']);
+}
 $deviceId = trim((string)($body['device_id'] ?? ''));
 $funnelClientId = trim((string)($body['funnel_client_id'] ?? ''));
 $gclid = trim((string)($body['gclid'] ?? ''));

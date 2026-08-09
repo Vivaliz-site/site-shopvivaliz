@@ -1,0 +1,52 @@
+name: Inspect MEI email queue rules
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/inspect-mei-email-queue-rules.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect queue creation, worker updates, indexes and views
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo 'CAMPANHAS_BEGIN'
+          sed -n '1,360p' app/routes/campanhas.py
+          echo 'CAMPANHAS_END'
+          echo 'WORKER_CORE_BEGIN'
+          grep -n -A220 -B20 'def pegar_proximo_lote\|def _atualizar_envio\|def processar_lote' worker/worker.py | head -520
+          echo 'WORKER_CORE_END'
+          echo 'SCHEMA_BEGIN'
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import os, json, psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'], autocommit=True, row_factory=dict_row) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("set default_transaction_read_only = on")
+                  cur.execute("select schemaname,tablename,indexname,indexdef from pg_indexes where schemaname='mei_email' order by tablename,indexname")
+                  print(json.dumps([dict(r) for r in cur.fetchall()], default=str, ensure_ascii=False, indent=2))
+                  cur.execute("select viewname,definition from pg_views where schemaname='mei_email' order by viewname")
+                  print(json.dumps([dict(r) for r in cur.fetchall()], default=str, ensure_ascii=False, indent=2))
+                  cur.execute("select t.typname,e.enumlabel,e.enumsortorder from pg_type t join pg_enum e on e.enumtypid=t.oid join pg_namespace n on n.oid=t.typnamespace where n.nspname='mei_email' order by t.typname,e.enumsortorder")
+                  print(json.dumps([dict(r) for r in cur.fetchall()], default=str, ensure_ascii=False, indent=2))
+          PY
+          echo 'SCHEMA_END'
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

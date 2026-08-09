@@ -1,0 +1,60 @@
+name: Audit MEI database locks
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/audit-mei-db-locks.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect Postgres activity and locks read-only
+        run: |
+          timeout 120s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env',override=True)
+          import json,os,psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'],row_factory=dict_row,connect_timeout=10) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("set transaction read only")
+                  cur.execute("set statement_timeout='20s'")
+                  cur.execute("""
+                    select pid,usename,application_name,state,wait_event_type,wait_event,
+                           now()-xact_start as xact_age,
+                           now()-query_start as query_age,
+                           left(regexp_replace(query,E'[\\n\\r\\t]+',' ','g'),240) as query
+                      from pg_stat_activity
+                     where datname=current_database() and pid<>pg_backend_pid()
+                     order by xact_start nulls last,query_start
+                  """)
+                  print('ACTIVITY='+json.dumps([dict(r) for r in cur.fetchall()],default=str,ensure_ascii=False))
+                  cur.execute("""
+                    select a.pid,a.state,l.locktype,l.mode,l.granted,c.relname,
+                           left(regexp_replace(a.query,E'[\\n\\r\\t]+',' ','g'),180) as query
+                      from pg_locks l
+                      join pg_stat_activity a on a.pid=l.pid
+                      left join pg_class c on c.oid=l.relation
+                     where a.datname=current_database()
+                       and (c.relname in ('empresas','envios','vw_empresas_elegiveis') or not l.granted)
+                     order by l.granted,a.pid,l.mode
+                  """)
+                  print('LOCKS='+json.dumps([dict(r) for r in cur.fetchall()],default=str,ensure_ascii=False))
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

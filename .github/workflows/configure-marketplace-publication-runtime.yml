@@ -1,0 +1,173 @@
+name: Configure Marketplace Publication Runtime
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: configure-marketplace-publication-runtime
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    name: Provisionar credenciais omnicanal na VM
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: production
+    env:
+      ML_CLIENT_ID_VALUE: ${{ secrets.ML_CLIENT_ID }}
+      ML_CLIENT_SECRET_VALUE: ${{ secrets.ML_CLIENT_SECRET }}
+      ML_ACCESS_TOKEN_VALUE: ${{ secrets.ML_ACCESS_TOKEN }}
+      ML_REFRESH_TOKEN_VALUE: ${{ secrets.ML_REFRESH_TOKEN }}
+      ML_SELLER_ID_VALUE: ${{ secrets.ML_SELLER_ID }}
+      SHOPEE_PARTNER_ID_VALUE: ${{ secrets.SHOPEE_PARTNER_ID }}
+      SHOPEE_PARTNER_KEY_VALUE: ${{ secrets.SHOPEE_PARTNER_KEY }}
+      SHOPEE_SHOP_ID_VALUE: ${{ secrets.SHOPEE_SHOP_ID }}
+      SHOPEE_ACCESS_TOKEN_VALUE: ${{ secrets.SHOPEE_ACCESS_TOKEN }}
+      SHOPEE_REFRESH_TOKEN_VALUE: ${{ secrets.SHOPEE_REFRESH_TOKEN }}
+      TIKTOK_APP_KEY_VALUE: ${{ secrets.TIKTOK_APP_KEY }}
+      TIKTOK_APP_SECRET_VALUE: ${{ secrets.TIKTOK_APP_SECRET }}
+      TIKTOK_ACCESS_TOKEN_VALUE: ${{ secrets.TIKTOK_ACCESS_TOKEN }}
+      TIKTOK_REFRESH_TOKEN_VALUE: ${{ secrets.TIKTOK_REFRESH_TOKEN }}
+      TIKTOK_SHOP_CIPHER_VALUE: ${{ secrets.TIKTOK_SHOP_CIPHER }}
+      TIKTOK_SHOP_ID_VALUE: ${{ secrets.TIKTOK_SHOP_ID }}
+      AMAZON_LWA_CLIENT_ID_VALUE: ${{ secrets.AMAZON_LWA_CLIENT_ID }}
+      AMAZON_LWA_CLIENT_SECRET_VALUE: ${{ secrets.AMAZON_LWA_CLIENT_SECRET }}
+      AMAZON_LWA_REFRESH_TOKEN_VALUE: ${{ secrets.AMAZON_LWA_REFRESH_TOKEN }}
+      AMAZON_SELLER_ID_VALUE: ${{ secrets.AMAZON_SELLER_ID }}
+      AMAZON_ACCOUNT_ID_VALUE: ${{ secrets.AMAZON_ACCOUNT_ID }}
+      AMAZON_MARKETPLACE_ID_VALUE: ${{ secrets.AMAZON_MARKETPLACE_ID }}
+      AMAZON_SP_API_ENDPOINT_VALUE: ${{ secrets.AMAZON_SP_API_ENDPOINT }}
+      AMAZON_SP_API_REGION_VALUE: ${{ secrets.AMAZON_SP_API_REGION }}
+      OLIST_API_KEY_VALUE: ${{ secrets.OLIST_API_KEY }}
+      TOKEN_API_OLIST_VALUE: ${{ secrets.TOKEN_API_OLIST }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Validate complete channel groups without exposing values
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import os
+          groups = {
+              'ml': [
+                  bool(os.getenv('ML_CLIENT_ID_VALUE')),
+                  bool(os.getenv('ML_CLIENT_SECRET_VALUE')),
+                  bool(os.getenv('ML_ACCESS_TOKEN_VALUE') or os.getenv('ML_REFRESH_TOKEN_VALUE')),
+                  bool(os.getenv('ML_SELLER_ID_VALUE')),
+              ],
+              'shopee': [
+                  bool(os.getenv('SHOPEE_PARTNER_ID_VALUE')),
+                  bool(os.getenv('SHOPEE_PARTNER_KEY_VALUE')),
+                  bool(os.getenv('SHOPEE_SHOP_ID_VALUE')),
+                  bool(os.getenv('SHOPEE_ACCESS_TOKEN_VALUE') or os.getenv('SHOPEE_REFRESH_TOKEN_VALUE')),
+              ],
+              'tiktok': [
+                  bool(os.getenv('TIKTOK_APP_KEY_VALUE')),
+                  bool(os.getenv('TIKTOK_APP_SECRET_VALUE')),
+                  bool(os.getenv('TIKTOK_ACCESS_TOKEN_VALUE') or os.getenv('TIKTOK_REFRESH_TOKEN_VALUE')),
+                  bool(os.getenv('TIKTOK_SHOP_CIPHER_VALUE') or os.getenv('TIKTOK_SHOP_ID_VALUE')),
+              ],
+              'amazon': [
+                  bool(os.getenv('AMAZON_LWA_CLIENT_ID_VALUE')),
+                  bool(os.getenv('AMAZON_LWA_CLIENT_SECRET_VALUE')),
+                  bool(os.getenv('AMAZON_LWA_REFRESH_TOKEN_VALUE')),
+                  bool(os.getenv('AMAZON_SELLER_ID_VALUE') or os.getenv('AMAZON_ACCOUNT_ID_VALUE')),
+                  bool(os.getenv('AMAZON_MARKETPLACE_ID_VALUE')),
+              ],
+              'tiny_images': [bool(os.getenv('OLIST_API_KEY_VALUE') or os.getenv('TOKEN_API_OLIST_VALUE'))],
+          }
+          incomplete = [channel for channel, checks in groups.items() if not all(checks)]
+          for channel, checks in groups.items():
+              print(f'{channel}_complete={str(all(checks)).lower()}')
+          if incomplete:
+              raise SystemExit('Incomplete GitHub secret groups: ' + ','.join(incomplete))
+          PY
+
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::SSH key missing'; exit 1; }
+          test -n "$known_hosts" || { echo '::error::known_hosts missing'; exit 1; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Wait for secure configurator deployment
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ready=0
+          for attempt in $(seq 1 24); do
+            if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+              ubuntu@137.131.156.17 \
+              'test -r /home/ubuntu/shopvivaliz-deploy/current/scripts/configure-marketplace-publication-runtime.py'; then
+              ready=1
+              break
+            fi
+            sleep 10
+          done
+          test "$ready" = 1 || { echo '::error::Marketplace configurator not deployed'; exit 1; }
+
+      - name: Merge marketplace secrets atomically
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          printf '%s\0' \
+            "$ML_CLIENT_ID_VALUE" "$ML_CLIENT_SECRET_VALUE" "$ML_ACCESS_TOKEN_VALUE" "$ML_REFRESH_TOKEN_VALUE" "$ML_SELLER_ID_VALUE" \
+            "$SHOPEE_PARTNER_ID_VALUE" "$SHOPEE_PARTNER_KEY_VALUE" "$SHOPEE_SHOP_ID_VALUE" "$SHOPEE_ACCESS_TOKEN_VALUE" "$SHOPEE_REFRESH_TOKEN_VALUE" \
+            "$TIKTOK_APP_KEY_VALUE" "$TIKTOK_APP_SECRET_VALUE" "$TIKTOK_ACCESS_TOKEN_VALUE" "$TIKTOK_REFRESH_TOKEN_VALUE" "$TIKTOK_SHOP_CIPHER_VALUE" "$TIKTOK_SHOP_ID_VALUE" \
+            "$AMAZON_LWA_CLIENT_ID_VALUE" "$AMAZON_LWA_CLIENT_SECRET_VALUE" "$AMAZON_LWA_REFRESH_TOKEN_VALUE" "$AMAZON_SELLER_ID_VALUE" "$AMAZON_ACCOUNT_ID_VALUE" "$AMAZON_MARKETPLACE_ID_VALUE" "$AMAZON_SP_API_ENDPOINT_VALUE" "$AMAZON_SP_API_REGION_VALUE" \
+            "$OLIST_API_KEY_VALUE" "$TOKEN_API_OLIST_VALUE" |
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+              ubuntu@137.131.156.17 \
+              'python3 /home/ubuntu/shopvivaliz-deploy/current/scripts/configure-marketplace-publication-runtime.py /home/ubuntu/shopvivaliz-deploy/shared/.env'
+
+      - name: Materialize PHP runtime and verify masked readiness
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          current=/home/ubuntu/shopvivaliz-deploy/current
+          shared=/home/ubuntu/shopvivaliz-deploy/shared
+          php "$current/scripts/materialize-runtime-secrets.php"
+          sudo chown ubuntu:www-data "$shared/runtime-secrets.php"
+          chmod 640 "$shared/runtime-secrets.php"
+          php "$current/scripts/maintenance/marketplace_publication_readiness.php" > /tmp/marketplace-readiness.json
+          python3 - <<'PY'
+          import json
+          data = json.load(open('/tmp/marketplace-readiness.json', encoding='utf-8'))
+          print(json.dumps({
+              'ok': data.get('ok'),
+              'channels': {name: state.get('ready') for name, state in data.get('channels', {}).items()},
+              'database_ready': data.get('database', {}).get('ready'),
+          }, sort_keys=True))
+          if not data.get('ok'):
+              raise SystemExit('Production marketplace readiness remains incomplete')
+          PY
+          rm -f /tmp/marketplace-readiness.json
+          REMOTE
+
+      - name: Remove SSH material
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"

@@ -1,0 +1,295 @@
+name: Safely resume MEI email worker after rolling quota clears
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/audit-vm-mei-email-runtime-after-resume.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mei-mg-email-runtime
+  cancel-in-progress: false
+jobs:
+  resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Preflight, repair safe config, and resume only when safe
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          sudo systemctl stop mei-mg-email-worker.service || true
+          cd /home/ubuntu/mei-mg-email
+
+          echo '=== SYNC SAFETY RUNTIME FROM PRIVATE REPO ==='
+          GIT_TERMINAL_PROMPT=0 git fetch --quiet origin main
+          for f in \
+            app/email_provider.py \
+            app/config.py \
+            worker/worker.py \
+            scripts/auditar_graph_token.py \
+            scripts/auditar_dns_microsoft.py \
+            scripts/auditar_exchange_10000.py; do
+            mkdir -p "$(dirname "$f")"
+            git show "origin/main:$f" > "/tmp/$(basename "$f")"
+            install -m 0644 "/tmp/$(basename "$f")" "$f"
+          done
+          /home/ubuntu/mei-mg-email/.venv/bin/python -m py_compile \
+            app/email_provider.py app/config.py worker/worker.py \
+            scripts/auditar_graph_token.py scripts/auditar_dns_microsoft.py \
+            scripts/auditar_exchange_10000.py
+
+          echo '=== NORMALIZE REQUIRED CONFIG ==='
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from pathlib import Path
+          path=Path('.env')
+          lines=path.read_text(encoding='utf-8').splitlines()
+          required={
+              'EMAIL_PROVIDER':'microsoft_graph',
+              'MICROSOFT_GRAPH_USER':'naoresponda@dev.shopvivaliz.com.br',
+              'MAIL_FROM':'Contabilidade Melo <naoresponda@dev.shopvivaliz.com.br>',
+              'MAIL_FROM_NAME':'Contabilidade Melo',
+              'RATE_LIMIT_ENVIOS_POR_MINUTO':'30',
+              'META_ENVIOS_POR_DIA':'9950',
+              'MAX_ENVIOS_POR_DIA':'10000',
+          }
+          out=[]
+          for line in lines:
+              stripped=line.strip()
+              if not stripped or stripped.startswith('#') or '=' not in line:
+                  out.append(line)
+                  continue
+              key=line.split('=',1)[0].strip()
+              if key not in required:
+                  out.append(line)
+          out.extend(f'{k}={v}' for k,v in required.items())
+          path.write_text('\n'.join(out).rstrip()+'\n',encoding='utf-8')
+          PY
+
+          echo '=== CONFIG PREFLIGHT ==='
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          from email.utils import parseaddr
+          import os
+          load_dotenv('.env',override=True)
+          expected='naoresponda@dev.shopvivaliz.com.br'
+          checks={
+              'EMAIL_PROVIDER': os.getenv('EMAIL_PROVIDER','').strip().lower() == 'microsoft_graph',
+              'MICROSOFT_GRAPH_USER': os.getenv('MICROSOFT_GRAPH_USER','').strip().lower() == expected,
+              'MAIL_FROM': parseaddr(os.getenv('MAIL_FROM',''))[1].strip().lower() == expected,
+              'RATE_LIMIT_ENVIOS_POR_MINUTO': os.getenv('RATE_LIMIT_ENVIOS_POR_MINUTO','').strip() == '30',
+              'META_ENVIOS_POR_DIA': os.getenv('META_ENVIOS_POR_DIA','').strip() == '9950',
+              'MAX_ENVIOS_POR_DIA': os.getenv('MAX_ENVIOS_POR_DIA','').strip() == '10000',
+          }
+          bad=[k for k,v in checks.items() if not v]
+          forbidden=['GMAIL_APP_PASSWORD','MICROSOFT_SMTP_PASSWORD','MICROSOFT_GRAPH_CLIENT_SECRET','BREVO_API_KEY']
+          present=[k for k in forbidden if os.getenv(k,'').strip()]
+          if bad:
+              raise SystemExit('CONFIG_BLOCK:'+','.join(bad))
+          if present:
+              raise SystemExit('LEGACY_CREDENTIAL_BLOCK:'+','.join(present))
+          print('CONFIG_OK_GRAPH_APP_ONLY_SENDER_RATE30')
+          PY
+
+          grep -q 'ALLOWED_SENDER = "naoresponda@dev.shopvivaliz.com.br"' app/email_provider.py
+          grep -q 'status="submitted"' app/email_provider.py
+          grep -q 'provider_status = getattr' worker/worker.py
+          grep -q 'marketing_autorizado' worker/worker.py
+          grep -q 'pg_try_advisory_lock' worker/worker.py
+
+          echo '=== GRAPH APP-ONLY PREFLIGHT ==='
+          /home/ubuntu/mei-mg-email/.venv/bin/python scripts/auditar_graph_token.py
+
+          echo '=== FULL READINESS AUDIT ==='
+          set +e
+          /home/ubuntu/mei-mg-email/.venv/bin/python scripts/auditar_exchange_10000.py
+          audit_rc=$?
+          set -e
+          if [ "$audit_rc" -ne 0 ]; then
+            echo FINAL_START_BLOCKED_READINESS_AUDIT
+            echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
+            exit 0
+          fi
+
+          echo '=== QUEUE REPAIR AND ROLLING 24H PREFLIGHT ==='
+          set +e
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env',override=True)
+          import datetime,json,os,psycopg
+          from psycopg.rows import dict_row
+
+          TARGET=9950
+          with psycopg.connect(os.environ['DATABASE_URL'],autocommit=True,row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+              cur.execute("""
+                update mei_email.envios p
+                   set status='descartado',
+                       erro='preflight: supressao global; destinatario ja submitted/enviado'
+                 where p.status::text in ('pendente','enviando')
+                   and exists (
+                     select 1 from mei_email.envios s
+                      where s.id<>p.id
+                        and s.status::text in ('submitted','enviado')
+                        and lower(btrim(s.email::text))=lower(btrim(p.email::text))
+                   )
+              """)
+              suppressed=cur.rowcount
+
+              cur.execute("""
+                update mei_email.envios p
+                   set status='bloqueado',
+                       erro='preflight: destinatario nao elegivel para comunicacao'
+                  from mei_email.empresas emp
+                 where emp.cnpj=p.cnpj
+                   and p.status::text in ('pendente','enviando')
+                   and (
+                     emp.situacao_cadastral<>'ATIVA'
+                     or emp.opt_out
+                     or emp.provavel_terceiro
+                     or not emp.marketing_autorizado
+                   )
+              """)
+              quarantined=cur.rowcount
+
+              cur.execute("""
+                with ranked as (
+                  select id,
+                         row_number() over (
+                           partition by lower(btrim(email::text))
+                           order by criado_em,id
+                         ) as rn
+                    from mei_email.envios
+                   where status::text in ('pendente','enviando')
+                )
+                update mei_email.envios e
+                   set status='descartado',
+                       erro='preflight: duplicado normalizado na fila'
+                  from ranked r
+                 where e.id=r.id and r.rn>1
+              """)
+              deduped=cur.rowcount
+
+              cur.execute("""
+                select count(*) n,min(enviado_em) oldest,max(enviado_em) newest
+                  from mei_email.envios
+                 where status::text in ('submitted','enviado')
+                   and enviado_em>=now()-interval '24 hours'
+              """)
+              rolling=dict(cur.fetchone())
+              used=rolling['n']
+
+              next_safe=None
+              if used>=TARGET:
+                need_to_expire=used-(TARGET-1)
+                cur.execute("""
+                  select enviado_em
+                    from mei_email.envios
+                   where status::text in ('submitted','enviado')
+                     and enviado_em>=now()-interval '24 hours'
+                   order by enviado_em asc
+                   offset %s limit 1
+                """,(need_to_expire-1,))
+                row=cur.fetchone()
+                if row and row['enviado_em']:
+                  next_safe=row['enviado_em']+datetime.timedelta(hours=24)
+
+              cur.execute("select count(*) n from mei_email.envios where status::text in ('pendente','enviando')")
+              pending=cur.fetchone()['n']
+              cur.execute("""
+                select count(*) n from (
+                  select lower(btrim(email::text)) e
+                    from mei_email.envios
+                   where status::text in ('pendente','enviando')
+                   group by 1 having count(*)>1
+                ) d
+              """)
+              duplicates=cur.fetchone()['n']
+              cur.execute("""
+                select count(*) n
+                  from mei_email.envios p
+                 where p.status::text in ('pendente','enviando')
+                   and exists (
+                     select 1 from mei_email.envios s
+                      where s.id<>p.id
+                        and s.status::text in ('submitted','enviado')
+                        and lower(btrim(s.email::text))=lower(btrim(p.email::text))
+                   )
+              """)
+              already=cur.fetchone()['n']
+              cur.execute("""
+                select count(*) n
+                  from mei_email.envios p
+                  join mei_email.empresas emp on emp.cnpj=p.cnpj
+                 where p.status::text in ('pendente','enviando')
+                   and emp.situacao_cadastral='ATIVA'
+                   and not emp.opt_out
+                   and not emp.provavel_terceiro
+                   and emp.marketing_autorizado
+              """)
+              eligible_pending=cur.fetchone()['n']
+
+              payload={
+                'used_24h':used,'target':TARGET,'hard_cap':10000,
+                'oldest':rolling['oldest'],'newest':rolling['newest'],
+                'next_safe_below_target':next_safe,'pending':pending,
+                'eligible_pending':eligible_pending,
+                'duplicate_pending_emails':duplicates,
+                'pending_already_submitted_or_sent':already,
+                'repaired_suppressed':suppressed,
+                'repaired_quarantined':quarantined,
+                'repaired_duplicates':deduped,
+              }
+              print(json.dumps(payload,default=str,ensure_ascii=False))
+
+              if used>=TARGET:
+                raise SystemExit(10)
+              if duplicates or already:
+                raise SystemExit(20)
+              if pending<1:
+                raise SystemExit(12)
+              if eligible_pending!=pending:
+                raise SystemExit(21)
+          PY
+          preflight_rc=$?
+          set -e
+
+          if [ "$preflight_rc" -eq 10 ]; then
+            echo FINAL_START_BLOCKED_ROLLING_QUOTA
+            echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
+            exit 0
+          fi
+          if [ "$preflight_rc" -eq 12 ]; then
+            echo FINAL_START_BLOCKED_NO_ELIGIBLE_PENDING_RECIPIENTS
+            echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
+            exit 0
+          fi
+          if [ "$preflight_rc" -ne 0 ]; then
+            echo FINAL_START_BLOCKED_QUEUE_SAFETY
+            echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
+            exit 1
+          fi
+
+          echo '=== START WORKER ==='
+          sudo systemctl start mei-mg-email-worker.service
+          sleep 10
+          state=$(sudo systemctl is-active mei-mg-email-worker.service || true)
+          echo WORKER_STATE=$state
+          test "$state" = active
+
+          echo '=== POST-START RUNTIME ASSERTIONS ==='
+          sudo journalctl -u mei-mg-email-worker.service --since '-2 minutes' --no-pager | tail -n 120 | tee /tmp/mei-worker-recent.log
+          grep -q 'APP-ONLY active sender=naoresponda@dev.shopvivaliz.com.br' /tmp/mei-worker-recent.log
+          grep -q 'rate_limit=30/min' /tmp/mei-worker-recent.log
+          echo MEI_EMAIL_WORKER_RESUMED_SAFE_RATE30
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

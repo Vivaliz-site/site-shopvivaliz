@@ -9,6 +9,8 @@ on:
       - main
     paths:
       - '.github/workflows/integrations-hourly.yml'
+      - 'includes/integration-health.php'
+      - 'daemon-token-renewer.py'
 
 permissions:
   contents: read
@@ -21,21 +23,25 @@ jobs:
   validate:
     name: Validate and safely remediate integrations
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Configure verified SSH host
         shell: bash
         env:
-          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
-          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          test -n "$ORACLE_VM_SSH_KEY" || { echo "::error::ORACLE_VM_SSH_KEY is missing"; exit 1; }
-          test -n "$ORACLE_VM_KNOWN_HOSTS" || { echo "::error::ORACLE_VM_KNOWN_HOSTS is missing"; exit 1; }
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo "::error::VM SSH key is missing"; exit 1; }
+          test -n "$known_hosts" || { echo "::error::VM known_hosts is missing"; exit 1; }
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa
+          printf '%s\n' "$key" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$known_hosts" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
       - name: Validate production connections
@@ -51,20 +57,59 @@ jobs:
             'bash -s' > integrations-health.json 2> integrations-health.stderr <<'REMOTE_SCRIPT'
           set -euo pipefail
           current='/home/ubuntu/shopvivaliz-deploy/current'
+          shared_env='/home/ubuntu/shopvivaliz-deploy/shared/.env'
           private_dir="$current/storage/private"
           state_file="$private_dir/integration-health.json"
-          test -r "$current/includes/integration-health.php"
+          service='shopvivaliz-token-renewer.service'
 
-          sudo install -d -o ubuntu -g www-data -m 2770 "$private_dir"
+          test -r "$current/includes/integration-health.php"
+          test -r "$current/daemon-token-renewer.py"
+          test -f "$shared_env"
+
+          php_user="$(ps -eo user=,comm= | awk '$2 ~ /php-fpm|apache2|httpd/ && $1 != "root" {print $1; exit}')"
+          php_user="${php_user:-www-data}"
+          php_group="$(id -gn "$php_user")"
+
+          # Repara apenas metadados do arquivo, nunca seu conteudo.
+          if ! sudo -u "$php_user" test -r "$shared_env"; then
+            echo "env_repair=required" >&2
+            sudo chown ubuntu:"$php_group" "$shared_env"
+            sudo chmod 0640 "$shared_env"
+          fi
+          sudo -u "$php_user" test -r "$shared_env" || {
+            echo "shared .env is unreadable by PHP user $php_user" >&2
+            exit 1
+          }
+
+          env_before="$(stat -c '%u:%g:%a' "$shared_env")"
+          echo "env_before=$env_before php_user=$php_user" >&2
+
+          sudo install -d -o ubuntu -g "$php_group" -m 2770 "$private_dir"
           if [[ -e "$state_file" ]]; then
-            sudo chown ubuntu:www-data "$state_file"
+            sudo chown ubuntu:"$php_group" "$state_file"
             sudo chmod 0660 "$state_file"
           else
-            sudo install -o ubuntu -g www-data -m 0660 /dev/null "$state_file"
+            sudo install -o ubuntu -g "$php_group" -m 0660 /dev/null "$state_file"
           fi
 
+          # O daemon deve estar habilitado e ativo. Uma parada silenciosa faria
+          # o access token expirar mesmo com o painel ainda exibindo o ultimo estado.
+          if ! systemctl is-enabled --quiet "$service"; then
+            sudo systemctl enable "$service" >&2
+          fi
+          if ! systemctl is-active --quiet "$service"; then
+            sudo systemctl restart "$service" >&2
+            sleep 3
+          fi
+          systemctl is-active --quiet "$service" || {
+            echo "Olist/Tiny token renewer service is inactive" >&2
+            exit 1
+          }
+
+          python3 -m py_compile "$current/daemon-token-renewer.py"
+
           cd "$current"
-          php -d display_errors=0 -d log_errors=1 <<'PHP'
+          SHOPVIVALIZ_ENV_PATH="$shared_env" php -d display_errors=0 -d log_errors=1 <<'PHP'
           <?php
           declare(strict_types=1);
           require '/home/ubuntu/shopvivaliz-deploy/current/includes/integration-health.php';
@@ -74,6 +119,18 @@ jobs:
               JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT
           ), PHP_EOL;
           PHP
+
+          # A renovacao nao pode alterar owner, group ou mode do arquivo ativo.
+          env_after="$(stat -c '%u:%g:%a' "$shared_env")"
+          echo "env_after=$env_after" >&2
+          if [[ "$env_after" != "$env_before" ]]; then
+            echo "shared .env metadata changed during integration refresh: $env_before -> $env_after" >&2
+            exit 1
+          fi
+          sudo -u "$php_user" test -r "$shared_env" || {
+            echo "shared .env became unreadable by PHP after refresh" >&2
+            exit 1
+          }
           REMOTE_SCRIPT
           then
             cat integrations-health.stderr >&2
@@ -85,16 +142,34 @@ jobs:
           python3 - <<'PY'
           import json
           from pathlib import Path
+
           data = json.loads(Path('integrations-health.json').read_text())
           summary = data.get('summary', {})
           print('checked_at=', data.get('checked_at'))
           print('connected=', summary.get('connected', 0))
           print('failed=', summary.get('failed', 0))
           print('attention=', summary.get('attention', 0))
+
+          olist = None
           for item in data.get('integrations', []):
-              print(f"{item.get('name')}: {item.get('status')} — {item.get('message')}")
+              print(f"{item.get('name')}: {item.get('status')} - {item.get('message')}")
+              if item.get('key') == 'olist_tiny':
+                  olist = item
+
+          if olist is None:
+              raise SystemExit('Olist/Tiny integration is missing from the central monitor response.')
+
+          status = str(olist.get('status') or '')
+          message = str(olist.get('message') or '')
+          remediation = str(olist.get('remediation') or '')
+          combined = (message + ' ' + remediation).lower()
+
+          if any(code in combined for code in ('invalid_grant', 'invalid_client', 'unauthorized_client')):
+              raise SystemExit('Olist/Tiny OAuth credentials were revoked or invalidated; reauthorization is required.')
+          if status != 'connected':
+              raise SystemExit('Olist/Tiny is not connected; inspect the Admin integration monitor remediation.')
           if not data.get('ok', False):
-              raise SystemExit('Integration health is degraded; inspect the dashboard remediation.')
+              raise SystemExit('Integration health is degraded; inspect the Admin dashboard remediation.')
           PY
 
       - name: Upload masked health evidence
@@ -105,3 +180,8 @@ jobs:
           path: integrations-health.json
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Remove temporary SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts" integrations-health.stderr

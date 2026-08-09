@@ -1,0 +1,29 @@
+name: Validate M365 on Oracle VM
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/validate-m365-on-vm.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Validate server-only Graph authentication and test send
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 '/home/ubuntu/.shopvivaliz/bin/graph-app-only.py --send-test-to naoresponda@dev.shopvivaliz.com.br'
+      - name: Confirm no Fred-Win dependency
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 'test -s /home/ubuntu/.shopvivaliz/m365/graph-auth.key && test -s /home/ubuntu/.shopvivaliz/m365/graph-auth.crt && echo VM_M365_APP_ONLY_READY'
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

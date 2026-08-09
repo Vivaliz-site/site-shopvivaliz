@@ -1,0 +1,4 @@
+{
+  "requested_at": "2026-08-08T18:30:00-03:00",
+  "reason": "Recover the freshly authorized Google Ads refresh token from Apache PrivateTmp and validate it without exposing the token"
+}

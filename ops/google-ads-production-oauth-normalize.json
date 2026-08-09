@@ -1,0 +1,5 @@
+{
+  "action": "probe_and_normalize_production_oauth",
+  "requested_at": "2026-08-08T12:56:00-03:00",
+  "reason": "Re-test Production OAuth using the valid client id and secret imported from Fred-Win; run read-only Ads audit if the existing refresh token matches"
+}

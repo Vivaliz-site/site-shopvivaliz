@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Create the live Google Ads Search campaign from the reviewed config.
+"""Create the reviewed Google Ads Search campaign in a fail-closed way.
 
-This script performs real Google Ads API mutations only when called with
---create-paused. It intentionally creates the campaign paused first; enabling
-delivery/spend must be a separate, explicit operational decision.
+Real mutations happen only with --create-paused. The script refuses duplicate
+campaign names and creates every entity paused. Search intent is split into
+focused ad groups with their own keywords, negatives, RSA assets and UTM content.
 """
 
 from __future__ import annotations
@@ -14,11 +14,11 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from urllib.parse import urlencode, urlsplit, urlunsplit, parse_qsl
-
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "scripts" / "google_ads_campaign_live_ready.json"
+ALLOWED_HOST = "shopvivaliz.com.br"
 
 
 def load_dotenv(path: Path) -> None:
@@ -36,14 +36,16 @@ def micros(brl: float) -> int:
     return int(round(float(brl) * 1_000_000))
 
 
-def final_url_with_utm(base_url: str, tracking: dict[str, str]) -> str:
+def final_url_with_utm(base_url: str, tracking: dict[str, str], content: str) -> str:
     split = urlsplit(base_url)
+    if split.scheme != "https" or split.hostname != ALLOWED_HOST:
+        raise ValueError(f"final_url must use https://{ALLOWED_HOST}/")
     query = dict(parse_qsl(split.query, keep_blank_values=True))
     query.update({
         "utm_source": tracking.get("utm_source", "google"),
         "utm_medium": tracking.get("utm_medium", "cpc"),
-        "utm_campaign": tracking.get("utm_campaign", "rodizios_roi10_kits_2026_07"),
-        "utm_content": "search_rsa",
+        "utm_campaign": tracking.get("utm_campaign", "abc_alto_ticket_roi10_2026_07"),
+        "utm_content": content,
         "cupom": tracking.get("coupon", "PRIMEIRA10"),
     })
     return urlunsplit((split.scheme, split.netloc, split.path, urlencode(query), split.fragment))
@@ -79,6 +81,24 @@ def build_client():
     return GoogleAdsClient.load_from_dict(config)
 
 
+def assert_campaign_name_available(client, customer_id: str, campaign_name: str) -> None:
+    safe_name = campaign_name.replace("\\", "\\\\").replace("'", "\\'")
+    query = f"""
+        SELECT campaign.id, campaign.name, campaign.status
+        FROM campaign
+        WHERE campaign.name = '{safe_name}'
+          AND campaign.status != 'REMOVED'
+        LIMIT 1
+    """
+    rows = list(client.get_service("GoogleAdsService").search(customer_id=customer_id, query=query))
+    if rows:
+        row = rows[0]
+        raise SystemExit(
+            "DUPLICATE_CAMPAIGN_BLOCKED: "
+            f"campaign_id={row.campaign.id} name={row.campaign.name} status={row.campaign.status.name}"
+        )
+
+
 def create_budget(client, customer_id: str, campaign_name: str, daily_budget_brl: float) -> str:
     service = client.get_service("CampaignBudgetService")
     operation = client.get_type("CampaignBudgetOperation")
@@ -93,7 +113,6 @@ def create_budget(client, customer_id: str, campaign_name: str, daily_budget_brl
 
 def create_campaign(client, customer_id: str, config: dict, budget_resource: str) -> str:
     service = client.get_service("CampaignService")
-    campaign_service = client.get_service("CampaignService")
     operation = client.get_type("CampaignOperation")
     campaign = operation.create
     campaign.name = config["campaign"]["name"]
@@ -105,12 +124,8 @@ def create_campaign(client, customer_id: str, config: dict, budget_resource: str
     campaign.network_settings.target_search_network = False
     campaign.network_settings.target_content_network = False
     campaign.network_settings.target_partner_search_network = False
-    campaign.tracking_url_template = "{lpurl}?gad_source=1"
     response = service.mutate_campaigns(customer_id=customer_id, operations=[operation])
-    resource_name = response.results[0].resource_name
-    # Validate resource name construction through the generated helper.
-    campaign_service.campaign_path(customer_id, resource_name.rsplit("/", 1)[-1])
-    return resource_name
+    return response.results[0].resource_name
 
 
 def create_campaign_criteria(client, customer_id: str, campaign_resource: str, negative_keywords: list[str]) -> None:
@@ -141,15 +156,15 @@ def create_campaign_criteria(client, customer_id: str, campaign_resource: str, n
     service.mutate_campaign_criteria(customer_id=customer_id, operations=operations)
 
 
-def create_ad_group(client, customer_id: str, campaign_resource: str, config: dict) -> str:
+def create_ad_group(client, customer_id: str, campaign_resource: str, group: dict) -> str:
     service = client.get_service("AdGroupService")
     operation = client.get_type("AdGroupOperation")
     ad_group = operation.create
-    ad_group.name = config["ad_group"]["name"]
+    ad_group.name = group["name"]
     ad_group.campaign = campaign_resource
     ad_group.status = client.enums.AdGroupStatusEnum.PAUSED
     ad_group.type_ = client.enums.AdGroupTypeEnum.SEARCH_STANDARD
-    ad_group.cpc_bid_micros = micros(config["ad_group"]["default_cpc_brl"])
+    ad_group.cpc_bid_micros = micros(group["default_cpc_brl"])
     response = service.mutate_ad_groups(customer_id=customer_id, operations=[operation])
     return response.results[0].resource_name
 
@@ -169,26 +184,54 @@ def create_keywords(client, customer_id: str, ad_group_resource: str, keywords: 
     service.mutate_ad_group_criteria(customer_id=customer_id, operations=operations)
 
 
-def create_responsive_search_ad(client, customer_id: str, ad_group_resource: str, config: dict) -> str:
+def create_ad_group_negatives(client, customer_id: str, ad_group_resource: str, negatives: list[str]) -> None:
+    if not negatives:
+        return
+    service = client.get_service("AdGroupCriterionService")
+    operations = []
+    for text in negatives:
+        op = client.get_type("AdGroupCriterionOperation")
+        criterion = op.create
+        criterion.ad_group = ad_group_resource
+        criterion.negative = True
+        criterion.keyword.text = text
+        criterion.keyword.match_type = client.enums.KeywordMatchTypeEnum.BROAD
+        operations.append(op)
+    service.mutate_ad_group_criteria(customer_id=customer_id, operations=operations)
+
+
+def create_responsive_search_ad(
+    client,
+    customer_id: str,
+    ad_group_resource: str,
+    group: dict,
+    tracking: dict,
+) -> tuple[str, str]:
     service = client.get_service("AdGroupAdService")
     operation = client.get_type("AdGroupAdOperation")
     ad_group_ad = operation.create
     ad_group_ad.ad_group = ad_group_resource
     ad_group_ad.status = client.enums.AdGroupAdStatusEnum.PAUSED
-    ad_group_ad.ad.final_urls.append(final_url_with_utm(config["responsive_search_ad"]["final_url"], config["tracking"]))
+    ad = group["responsive_search_ad"]
+    final_url = final_url_with_utm(ad["final_url"], tracking, group["tracking_content"])
+    ad_group_ad.ad.final_urls.append(final_url)
 
     rsa = ad_group_ad.ad.responsive_search_ad
-    for text in config["responsive_search_ad"]["headlines"]:
+    if ad.get("path1"):
+        rsa.path1 = ad["path1"]
+    if ad.get("path2"):
+        rsa.path2 = ad["path2"]
+    for text in ad["headlines"]:
         asset = client.get_type("AdTextAsset")
         asset.text = text
         rsa.headlines.append(asset)
-    for text in config["responsive_search_ad"]["descriptions"]:
+    for text in ad["descriptions"]:
         asset = client.get_type("AdTextAsset")
         asset.text = text
         rsa.descriptions.append(asset)
 
     response = service.mutate_ad_group_ads(customer_id=customer_id, operations=[operation])
-    return response.results[0].resource_name
+    return response.results[0].resource_name, final_url
 
 
 def main() -> int:
@@ -197,30 +240,63 @@ def main() -> int:
     args = parser.parse_args()
 
     config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    ad_groups = config["ad_groups"]
     if not args.create_paused:
         print("DRY_RUN_ONLY")
         print("Use --create-paused to perform real Google Ads API mutations.")
         print(f"campaign={config['campaign']['name']}")
         print(f"daily_budget_brl={config['campaign']['daily_budget_brl']}")
-        print(f"keywords={len(config['keywords'])}")
+        print(f"ad_groups={len(ad_groups)}")
+        print(f"keywords={sum(len(group['keywords']) for group in ad_groups)}")
+        for group in ad_groups:
+            url = final_url_with_utm(
+                group["responsive_search_ad"]["final_url"],
+                config["tracking"],
+                group["tracking_content"],
+            )
+            print(
+                f"group={group['name']} keywords={len(group['keywords'])} "
+                f"path1={group['responsive_search_ad'].get('path1', '')} "
+                f"path2={group['responsive_search_ad'].get('path2', '')} final_url={url}"
+            )
         return 0
 
     run_readiness()
     client = build_client()
     customer_id = os.environ["GOOGLE_ADS_CUSTOMER_ID"].replace("-", "")
+    assert_campaign_name_available(client, customer_id, config["campaign"]["name"])
 
-    budget_resource = create_budget(client, customer_id, config["campaign"]["name"], config["campaign"]["daily_budget_brl"])
+    budget_resource = create_budget(
+        client,
+        customer_id,
+        config["campaign"]["name"],
+        config["campaign"]["daily_budget_brl"],
+    )
     campaign_resource = create_campaign(client, customer_id, config, budget_resource)
     create_campaign_criteria(client, customer_id, campaign_resource, config["negative_keywords"])
-    ad_group_resource = create_ad_group(client, customer_id, campaign_resource, config)
-    create_keywords(client, customer_id, ad_group_resource, config["keywords"])
-    ad_resource = create_responsive_search_ad(client, customer_id, ad_group_resource, config)
+
+    created_groups = []
+    for group in ad_groups:
+        ad_group_resource = create_ad_group(client, customer_id, campaign_resource, group)
+        create_keywords(client, customer_id, ad_group_resource, group["keywords"])
+        create_ad_group_negatives(client, customer_id, ad_group_resource, group.get("negative_keywords", []))
+        ad_resource, final_url = create_responsive_search_ad(
+            client,
+            customer_id,
+            ad_group_resource,
+            group,
+            config["tracking"],
+        )
+        created_groups.append((group["name"], ad_group_resource, ad_resource, final_url))
 
     print("CREATED_PAUSED")
     print(f"campaign_resource={campaign_resource}")
     print(f"budget_resource={budget_resource}")
-    print(f"ad_group_resource={ad_group_resource}")
-    print(f"ad_resource={ad_resource}")
+    for name, ad_group_resource, ad_resource, final_url in created_groups:
+        print(f"group={name}")
+        print(f"ad_group_resource={ad_group_resource}")
+        print(f"ad_resource={ad_resource}")
+        print(f"final_url={final_url}")
     return 0
 
 

@@ -171,7 +171,7 @@ pre{background:#0a0c12;padding:.8rem;border-radius:4px;overflow-x:auto;font-size
 <div class="card">
   <a class="btn" href="/olist/sync-products.php">▶ Sync completo (v3)</a>
   <a class="btn orange" href="/olist/sync-products.php?v2=1">▶ Sync v2 fallback</a>
-  <a class="btn" href="/olist/sync-products.php?dry_run=1" style="background:#37474f">👁 Dry run</a>
+  <a class="btn" href="/api/catalog/products.php?limit=200" style="background:#37474f">Ver catálogo real</a>
 
   <?php if ($history): ?>
   <h3 style="margin-top:1.2rem;color:#90caf9">Últimas sincronizações</h3>

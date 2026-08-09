@@ -1,0 +1,32 @@
+name: Inspect email provider tail on Oracle VM
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/inspect-email-provider-tail-vm.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect relevant provider tail and config
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -e
+          cd /home/ubuntu/mei-mg-email
+          echo 'PROVIDER_240_620_BEGIN'; sed -n '240,620p' app/email_provider.py; echo 'PROVIDER_240_620_END'
+          echo 'CONFIG_BEGIN'; sed -n '1,260p' app/config.py; echo 'CONFIG_END'
+          echo 'ENV_NONSECRET_BEGIN'; grep -E '^(EMAIL_PROVIDER|MAIL_FROM|MICROSOFT_GRAPH_TENANT_ID|MICROSOFT_GRAPH_CLIENT_ID|MICROSOFT_GRAPH_USER|MICROSOFT_GRAPH_TOKEN_CACHE|MAX_ENVIOS_POR_DIA|RATE_LIMIT_ENVIOS_POR_MINUTO)=' .env || true; echo 'ENV_NONSECRET_END'
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

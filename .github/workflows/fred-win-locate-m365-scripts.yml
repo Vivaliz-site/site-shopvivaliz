@@ -1,0 +1,44 @@
+name: Fred-Win Locate M365 Scripts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fred-win-locate-m365-scripts.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  locate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          test -n "$VM_KEY" || { echo "SHOPVIVALIZ_VM_SSH_KEY missing"; exit 2; }
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Check MCP
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'curl -fsS --max-time 10 http://127.0.0.1:5557/health'
+      - name: Locate scripts
+        run: |
+          python3 - <<'PY' > /tmp/body.json
+          import json
+          ps = r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "$roots=@('C:\site-shopvivaliz','C:\Users\FRED\Desktop','C:\Users\FRED\Documents','C:\Users\FRED\Downloads'); $names=@('1-Generate-Certificate.ps1','2-Test-Authentication.ps1','3-Test-Send-Email.ps1','4-Audit-Complete.ps1','SETUP_MICROSOFT365.md','walkthrough.md','task.md'); foreach($r in $roots){ Write-Output ('ROOT=' + $r + ';EXISTS=' + (Test-Path $r)); if(Test-Path $r){ foreach($n in $names){ Get-ChildItem -Path $r -Filter $n -File -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 5 | ForEach-Object { Write-Output ('FOUND=' + $_.FullName) } } } }; Write-Output ('CERT_FILE_EXISTS=' + (Test-Path 'C:\Certs\ShopVivalizExchangeAuth.cer')); $tp='7EFCBC6676B61F8C076F08127F5F7E365A95F2E9'; foreach($store in @('Cert:\CurrentUser\My','Cert:\LocalMachine\My')){ if(Test-Path $store){ $cert=Get-ChildItem $store -ErrorAction SilentlyContinue | Where-Object { $_.Thumbprint -eq $tp -or $_.Subject -match 'ShopVivalizExchangeAuth' } | Select-Object -First 3; foreach($c in $cert){ Write-Output ('CERT_STORE=' + $store + ';THUMBPRINT=' + $c.Thumbprint + ';SUBJECT=' + $c.Subject + ';NOTAFTER=' + $c.NotAfter.ToString('o') + ';HASPRIVATEKEY=' + $c.HasPrivateKey) } } }; Write-Output ('RUN_AS=' + [System.Security.Principal.WindowsIdentity]::GetCurrent().Name)"'''
+          print(json.dumps({'params': {'command': ps, 'timeout': 120}}))
+          PY
+          BODY_B64="$(base64 -w0 /tmp/body.json)"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=6 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "BODY_B64='$BODY_B64' python3 - <<'PY'
+          import base64,json,os,urllib.request
+          body=base64.b64decode(os.environ['BODY_B64'])
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=140) as r: print(r.read().decode())
+          PY"
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/body.json

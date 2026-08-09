@@ -1,0 +1,45 @@
+name: Inspect email provider on Oracle VM
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/inspect-email-provider-vm.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect provider and service wiring
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -e
+          cd /home/ubuntu/mei-mg-email
+          echo 'PROVIDER_BEGIN'
+          sed -n '1,260p' app/email_provider.py
+          echo 'PROVIDER_END'
+          echo 'WORKER_BEGIN'
+          find worker -maxdepth 2 -type f -name '*.py' -print -exec sed -n '1,220p' {} \;
+          echo 'WORKER_END'
+          echo 'GRAPH_SCRIPTS_BEGIN'
+          for f in scripts/enviar_teste_microsoft_graph.py scripts/disparar_295_mei_mg.py scripts/garantir_meta_10000.py; do if [ -f "$f" ]; then echo "FILE=$f"; sed -n '1,260p' "$f"; fi; done
+          echo 'GRAPH_SCRIPTS_END'
+          echo 'SERVICE_BEGIN'
+          systemctl cat mei-mg-email-worker.service | sed -E 's/(PASSWORD|PASS|TOKEN|SECRET|KEY)=[^[:space:]]+/\1=REDACTED/g'
+          systemctl cat mei-mg-email-api.service | sed -E 's/(PASSWORD|PASS|TOKEN|SECRET|KEY)=[^[:space:]]+/\1=REDACTED/g'
+          echo 'SERVICE_END'
+          echo 'ENV_KEYS_BEGIN'
+          if [ -f .env ]; then sed -n 's/^\([A-Za-z0-9_]*\)=.*/\1/p' .env | sort; fi
+          echo 'ENV_KEYS_END'
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

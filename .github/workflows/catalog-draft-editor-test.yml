@@ -1,0 +1,45 @@
+name: Catalog Draft Editor Test
+
+on:
+  pull_request:
+    paths:
+      - 'admin/catalog-optimization/**'
+      - 'tests/catalog-draft-editor-test.php'
+      - '.github/workflows/catalog-draft-editor-test.yml'
+  push:
+    branches:
+      - fix/catalog-draft-title-period-test
+    paths:
+      - 'admin/catalog-optimization/**'
+      - 'tests/catalog-draft-editor-test.php'
+      - '.github/workflows/catalog-draft-editor-test.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  title-period-draft-save:
+    name: Save title period without publishing
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite
+      - name: PHP syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l admin/catalog-optimization/src/CatalogDraftEditor.php
+          php -l tests/catalog-draft-editor-test.php
+      - name: Execute staging edit and read-back test
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/catalog-draft-editor-test.php

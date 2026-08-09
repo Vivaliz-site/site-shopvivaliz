@@ -1,0 +1,113 @@
+name: Audit MEI email recipient base
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/audit-mei-email-recipient-base.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Audit recipient database read-only
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from collections import OrderedDict
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import os, json
+          import psycopg
+          from psycopg.rows import dict_row
+
+          db=os.environ['DATABASE_URL']
+          out=OrderedDict()
+          with psycopg.connect(db, autocommit=True, row_factory=dict_row) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("set default_transaction_read_only = on")
+                  cur.execute("set statement_timeout = '180s'")
+                  cur.execute("select table_name from information_schema.tables where table_schema='mei_email' order by table_name")
+                  out['tables']=[r['table_name'] for r in cur.fetchall()]
+
+                  def scalar(sql, params=()):
+                      cur.execute(sql, params)
+                      r=cur.fetchone()
+                      return list(r.values())[0] if r else None
+
+                  def rows(sql, params=()):
+                      cur.execute(sql, params)
+                      return [dict(r) for r in cur.fetchall()]
+
+                  if 'empresas' in out['tables']:
+                      out['empresas_total']=scalar("select count(*) from mei_email.empresas")
+                      cols=[r['column_name'] for r in rows("select column_name from information_schema.columns where table_schema='mei_email' and table_name='empresas' order by ordinal_position")]
+                      out['empresas_columns']=cols
+                      if 'opt_out' in cols:
+                          out['empresas_opt_out']=scalar("select count(*) from mei_email.empresas where coalesce(opt_out,false)=true")
+                      if 'email' in cols:
+                          out['empresas_email_blank']=scalar("select count(*) from mei_email.empresas where email is null or btrim(email)='' ")
+                          out['empresas_duplicate_email_groups']=scalar("select count(*) from (select lower(btrim(email)) e from mei_email.empresas where email is not null and btrim(email)<>'' group by 1 having count(*)>1) x")
+                      if 'cnpj' in cols:
+                          out['empresas_duplicate_cnpj_groups']=scalar("select count(*) from (select cnpj from mei_email.empresas group by cnpj having count(*)>1) x")
+
+                  if 'campanhas' in out['tables']:
+                      out['campanhas_total']=scalar("select count(*) from mei_email.campanhas")
+                      ccols=[r['column_name'] for r in rows("select column_name from information_schema.columns where table_schema='mei_email' and table_name='campanhas' order by ordinal_position")]
+                      out['campanhas_columns']=ccols
+                      select_cols=[c for c in ['id','nome','assunto','criado_em','status'] if c in ccols]
+                      if select_cols:
+                          out['campanhas_recent']=rows('select '+','.join(select_cols)+' from mei_email.campanhas order by '+('criado_em desc' if 'criado_em' in ccols else 'id desc')+' limit 15')
+
+                  if 'envios' in out['tables']:
+                      ecols=[r['column_name'] for r in rows("select column_name from information_schema.columns where table_schema='mei_email' and table_name='envios' order by ordinal_position")]
+                      out['envios_columns']=ecols
+                      out['envios_total']=scalar("select count(*) from mei_email.envios")
+                      if 'status' in ecols:
+                          out['envios_por_status']=rows("select status::text status,count(*)::bigint quantidade from mei_email.envios group by status order by quantidade desc")
+                      if 'email' in ecols:
+                          out['envios_email_blank']=scalar("select count(*) from mei_email.envios where email is null or btrim(email)='' ")
+                          out['envios_duplicate_recipient_groups']=scalar("select count(*) from (select lower(btrim(email)) e from mei_email.envios where email is not null and btrim(email)<>'' group by 1 having count(*)>1) x")
+                      if all(c in ecols for c in ['campanha_id','status']):
+                          out['pendentes_por_campanha']=rows("select campanha_id,count(*)::bigint pendentes from mei_email.envios where status::text='pendente' group by campanha_id order by pendentes desc limit 25")
+                          out['nao_enviados_por_campanha_status']=rows("select campanha_id,status::text status,count(*)::bigint quantidade from mei_email.envios where status::text not in ('enviado','pendente') group by campanha_id,status order by quantidade desc limit 50")
+                      if 'enviado_em' in ecols and 'status' in ecols:
+                          out['enviados_hoje_sp']=scalar("select count(*) from mei_email.envios where status::text='enviado' and (enviado_em at time zone 'America/Sao_Paulo')::date=(now() at time zone 'America/Sao_Paulo')::date")
+                      if all(c in ecols for c in ['cnpj','email']):
+                          out['duplicate_cnpj_email_pairs']=scalar("select count(*) from (select cnpj,lower(btrim(email)) e from mei_email.envios group by cnpj,lower(btrim(email)) having count(*)>1) x")
+
+                  if 'lotes' in out['tables']:
+                      lcols=[r['column_name'] for r in rows("select column_name from information_schema.columns where table_schema='mei_email' and table_name='lotes' order by ordinal_position")]
+                      out['lotes_columns']=lcols
+                      if 'status' in lcols:
+                          out['lotes_por_status']=rows("select status::text status,count(*)::bigint quantidade from mei_email.lotes group by status order by quantidade desc")
+
+                  if 'aquecimento_envio' in out['tables']:
+                      out['curva_aquecimento']=rows("select * from mei_email.aquecimento_envio order by 1")
+
+          print('RECIPIENT_AUDIT_BEGIN')
+          print(json.dumps(out, ensure_ascii=False, default=str, indent=2))
+          print('RECIPIENT_AUDIT_END')
+          PY
+          EOF
+      - name: Confirm bulk send remains held
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then echo 'ERROR_WORKER_ACTIVE'; exit 2; fi
+          crontab -l | grep -E 'APP_ONLY_MIGRATION_HOLD_PENDING_RECIPIENT_AUDIT.*(disparar_295_mei_mg.py|garantir_meta_10000.py)'
+          echo 'BULK_SEND_STILL_HELD'
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

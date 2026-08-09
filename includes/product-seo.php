@@ -25,7 +25,6 @@ function svseo_plain_text(string $value): string
     $value = html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8');
     $value = preg_replace('/\s*(?:FOTOS|IMAGENS)\s+MERAMENTES?\s+ILUSTRATIVAS\.?\s*/i', ' ', $value) ?: $value;
     $value = preg_replace('/\s*Confira as dimensões, compatibilidade e aplicação antes da compra\.?\s*/iu', ' ', $value) ?: $value;
-    // Normaliza descricoes vindas do ERP que chegam como "necessario.Destaques:•".
     $value = preg_replace('/([.!?;:])(?=[\p{Lu}\p{N}])/u', '$1 ', $value) ?: $value;
     $value = preg_replace('/\s*•\s*/u', ' • ', $value) ?: $value;
     $value = preg_replace('/\s+/', ' ', trim($value)) ?: '';
@@ -151,11 +150,6 @@ function svseo_product_type(array $product, string $name = ''): string
     return 'Casa, jardim e utilidades';
 }
 
-/**
- * Only emits a Google taxonomy override when the source catalog has a curated
- * valid ID or full path. Automatic guesses are intentionally avoided because
- * Google already categorizes products and rejects invalid overrides.
- */
 function svseo_google_product_category(array $product): string
 {
     $candidate = trim((string)(
@@ -171,6 +165,11 @@ function svseo_google_product_category(array $product): string
 
 function svseo_title(array $product, int $width = 150): string
 {
+    $approvedMetaTitle = trim((string)($product['meta_title'] ?? ''));
+    if ($approvedMetaTitle !== '') {
+        return svseo_trim_words($approvedMetaTitle, $width);
+    }
+
     $name = svseo_human_name($product);
     $brand = svseo_brand($product);
     $sku = trim((string)($product['sku'] ?? $product['olist_product_id'] ?? $product['id'] ?? ''));
@@ -207,7 +206,10 @@ function svseo_description(array $product, int $width = 5000): string
     }
 
     $parts = [$description];
-    if ($attributes !== []) {
+    $bullets = is_array($product['bullet_points'] ?? null) ? $product['bullet_points'] : [];
+    if ($bullets !== []) {
+        $parts[] = 'Destaques: ' . implode('; ', array_slice(array_map('strval', $bullets), 0, 5)) . '.';
+    } elseif ($attributes !== []) {
         $parts[] = 'Principais atributos: ' . implode(', ', array_slice($attributes, 0, 8)) . '.';
     }
     if ($brand !== 'Vivaliz') {
@@ -220,6 +222,10 @@ function svseo_description(array $product, int $width = 5000): string
 
 function svseo_meta_description(array $product): string
 {
+    $approvedMetaDescription = trim((string)($product['meta_description'] ?? ''));
+    if ($approvedMetaDescription !== '') {
+        return svseo_trim_words(svseo_plain_text($approvedMetaDescription), 155);
+    }
     return svseo_description($product, 155);
 }
 

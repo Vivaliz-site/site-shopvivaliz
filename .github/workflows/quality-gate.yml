@@ -89,6 +89,19 @@ jobs:
           fi
           shellcheck --severity=error "${scripts[@]}"
 
+      - name: Validate Python syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            tests/test_secret_bootstrap_safety.py
+
+      - name: Run secret bootstrap safety tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest tests/test_secret_bootstrap_safety.py -v
+
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
@@ -121,6 +134,16 @@ jobs:
           set -euo pipefail
           php tests/runtime-env-reader-test.php
           php tests/runtime-secrets-materializer-test.php
+
+      - name: Run task queue safety regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest tests/test_task_queue_safety.py -v
+          python3 -m py_compile \
+            scripts/task_queue_lib.py \
+            scripts/manage-tasks-queue.py \
+            tests/test_task_queue_safety.py
 
       - name: Audit Composer dependencies when available
         shell: bash

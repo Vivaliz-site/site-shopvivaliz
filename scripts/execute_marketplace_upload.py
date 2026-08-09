@@ -1,315 +1,165 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Executa upload de imagens nos marketplaces Shopee e TikTok Shop
-Usa as credenciais dos GitHub Secrets via variáveis de ambiente
-"""
-import os
-import sys
+"""Publica imagens reais na Shopee e TikTok Shop, sem modo simulado."""
+from __future__ import annotations
+
+import csv
 import json
 import logging
+import os
+import sys
 import tempfile
-import requests
+from datetime import datetime, timezone
 from pathlib import Path
-from datetime import datetime
+from typing import Callable
 
-if sys.platform == 'win32':
-    sys.stdout.reconfigure(encoding='utf-8')
+import requests
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
-    pass  # Em producao/CI as credenciais ja vem via env real (GitHub Secrets/systemd Environment)
+    pass
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-UPLOAD_MAPPING_FILE = Path('storage/uploaded_urls.csv')
-EXECUTION_LOG = Path('logs/marketplace_upload_execution.json')
+ROOT = Path(__file__).resolve().parent.parent
+UPLOAD_MAPPING_FILE = ROOT / "storage" / "uploaded_urls.csv"
+EXECUTION_LOG = ROOT / "logs" / "marketplace_upload_execution.json"
+sys.path.insert(0, str(Path(__file__).resolve().parent / "utils"))
 
 
-def check_marketplace_credentials() -> dict:
-    """Verifica credenciais disponíveis dos marketplaces"""
-    creds = {
-        'shopee': {
-            'partner_id': os.environ.get('SHOPEE_PARTNER_ID') or os.environ.get('SHOPEE_TEST_PARTNER_ID'),
-            'partner_key': os.environ.get('SHOPEE_PARTNER_KEY') or os.environ.get('SHOPEE_TEST_PARTNER_KEY'),
-            'configured': False
-        },
-        'tiktok': {
-            'client_id': os.environ.get('TIKTOK_CLIENT_ID') or os.environ.get('TIKTOK_APP_KEY'),
-            'client_secret': os.environ.get('TIKTOK_CLIENT_SECRET') or os.environ.get('TIKTOK_APP_SECRET'),
-            'configured': False
-        }
-    }
-
-    creds['shopee']['configured'] = bool(
-        creds['shopee']['partner_id'] and creds['shopee']['partner_key']
-    )
-
-    creds['tiktok']['configured'] = bool(
-        creds['tiktok']['client_id'] and creds['tiktok']['client_secret']
-    )
-
-    return creds
+def image_urls(row: dict[str, str]) -> list[str]:
+    return [
+        value.strip()
+        for value in (row.get(f"image_url_{index}", "") for index in range(1, 10))
+        if value and value.strip()
+    ]
 
 
-def upload_to_shopee(creds: dict) -> bool:
-    """Faz upload real para Shopee: sobe cada imagem via upload_image_by_url
-    e vincula ao produto (por SKU) via update_product. Usa scripts/utils/shopee_client.py,
-    o cliente real ja usado por outras automacoes deste repo -- antes esta funcao so
-    lia o CSV e fingia sucesso sem nunca chamar a API da Shopee de fato.
-    """
-    logger.info("\n" + "=" * 70)
-    logger.info("🛍️  UPLOAD SHOPEE")
-    logger.info("=" * 70)
-
-    if not creds['shopee']['configured']:
-        logger.warning("⚠️  Shopee não configurada (credenciais faltando)")
-        return False
-
+def download_images(urls: list[str]) -> list[Path]:
+    files: list[Path] = []
     try:
-        sys.path.insert(0, str(Path(__file__).parent / 'utils'))
-        from shopee_client import ShopeeClient
-
-        partner_id = creds['shopee']['partner_id']
-        logger.info(f"✅ Credenciais encontradas:")
-        logger.info(f"   • SHOPEE_PARTNER_ID: {partner_id}")
-
-        client = ShopeeClient()
-
-        logger.info("📦 Mapeando SKU -> item_id da loja...")
-        item_ids = [item.get('item_id') for item in client.iter_all_products() if item.get('item_id')]
-        details = client.get_product_details(item_ids)
-        sku_to_item_id = {
-            str(d.get('item_sku') or '').strip(): d.get('item_id')
-            for d in details if d.get('item_sku')
-        }
-        logger.info(f"   {len(sku_to_item_id)} SKUs mapeados na loja Shopee")
-
-        import csv
-        uploaded_products = 0
-        uploaded_images = 0
-        skipped_no_match = 0
-        failed_products = []
-
-        with UPLOAD_MAPPING_FILE.open('r', encoding='utf-8', newline='') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                sku = str(row.get('sku') or '').strip()
-                item_id = sku_to_item_id.get(sku)
-                if not item_id:
-                    skipped_no_match += 1
-                    continue
-
-                image_urls = [row.get(f'image_url_{i}') for i in range(1, 5)]
-                image_urls = [u.strip() for u in image_urls if u and u.strip()]
-                if not image_urls:
-                    continue
-
-                try:
-                    # upload_image_by_url() chama /media_space/upload_image_by_url,
-                    # endpoint que nao existe de fato na API v2 da Shopee (confirmado
-                    # 404 "error_not_found" em teste real) -- a API so aceita upload
-                    # de arquivo binario. Baixa a imagem e sobe pelo metodo real.
-                    image_ids = []
-                    for url in image_urls:
-                        resp = requests.get(url, timeout=30)
-                        resp.raise_for_status()
-                        suffix = Path(url).suffix or '.jpg'
-                        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-                            tmp.write(resp.content)
-                            tmp_path = tmp.name
-                        try:
-                            image_ids.append(client.upload_image(tmp_path))
-                        finally:
-                            os.unlink(tmp_path)
-                    client.update_product(int(item_id), image_ids=image_ids)
-                    uploaded_products += 1
-                    uploaded_images += len(image_ids)
-                    logger.info(f"   ✅ {sku} (item_id={item_id}): {len(image_ids)} imagens enviadas")
-                except Exception as e:
-                    failed_products.append(sku)
-                    logger.warning(f"   ❌ {sku}: falhou -- {e}")
-
-        logger.info(f"\n📊 RESULTADO SHOPEE")
-        logger.info(f"✅ {uploaded_products} produtos atualizados com sucesso")
-        logger.info(f"✅ {uploaded_images} imagens enviadas de verdade")
-        if skipped_no_match:
-            logger.info(f"⚠️  {skipped_no_match} SKUs do CSV nao encontrados na loja Shopee (pulados)")
-        if failed_products:
-            logger.warning(f"❌ {len(failed_products)} produtos falharam: {', '.join(failed_products[:10])}")
-
-        return len(failed_products) == 0
-
-    except Exception as e:
-        logger.error(f"❌ Erro no upload Shopee: {e}")
-        return False
+        for url in urls:
+            response = requests.get(url, timeout=40)
+            response.raise_for_status()
+            suffix = Path(url.split("?", 1)[0]).suffix.lower()
+            if suffix not in {".jpg", ".jpeg", ".png", ".webp"}:
+                suffix = ".jpg"
+            handle = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+            try:
+                handle.write(response.content)
+                files.append(Path(handle.name))
+            finally:
+                handle.close()
+        return files
+    except Exception:
+        for path in files:
+            path.unlink(missing_ok=True)
+        raise
 
 
-def upload_to_tiktok(creds: dict) -> bool:
-    """Faz upload real para TikTok Shop: vincula as URLs de imagem (ja publicas em
-    shopvivaliz.com.br) direto via update_product -- a API do TikTok Shop aceita
-    main_images por URL, sem precisar de um passo de upload separado. Usa
-    scripts/utils/tiktok_client.py. Antes esta funcao so lia o CSV e fingia sucesso
-    sem nunca chamar a API do TikTok.
-    """
-    logger.info("\n" + "=" * 70)
-    logger.info("🎵 UPLOAD TIKTOK SHOP")
-    logger.info("=" * 70)
-
-    if not creds['tiktok']['configured']:
-        logger.warning("⚠️  TikTok não configurado (credenciais faltando)")
-        return False
-
-    try:
-        sys.path.insert(0, str(Path(__file__).parent / 'utils'))
-        from tiktok_client import TikTokClient
-
-        client_id = creds['tiktok']['client_id']
-        logger.info(f"✅ Credenciais encontradas:")
-        logger.info(f"   • TIKTOK_CLIENT_ID: {client_id}")
-
-        client = TikTokClient()
-
-        logger.info("📦 Mapeando SKU -> product_id da loja...")
-        sku_to_product_id = {}
-        for product in client.iter_all_products():
-            product_id = product.get('id') or product.get('product_id')
-            if not product_id:
+def run_rows(callback: Callable[[str, list[str]], None]) -> tuple[int, int, int]:
+    if not UPLOAD_MAPPING_FILE.is_file():
+        raise RuntimeError(f"Mapeamento de imagens ausente: {UPLOAD_MAPPING_FILE}")
+    succeeded = 0
+    failed = 0
+    skipped = 0
+    with UPLOAD_MAPPING_FILE.open("r", encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            sku = str(row.get("sku") or "").strip()
+            urls = image_urls(row)
+            if not sku or not urls:
+                skipped += 1
                 continue
-            skus = product.get('skus') or []
-            if not skus:
-                try:
-                    detail = client.get_product_detail(str(product_id))
-                    skus = detail.get('skus') or []
-                except Exception:
-                    skus = []
-            for sku_entry in skus:
-                seller_sku = str(sku_entry.get('seller_sku') or '').strip()
-                if seller_sku:
-                    sku_to_product_id[seller_sku] = product_id
-        logger.info(f"   {len(sku_to_product_id)} SKUs mapeados na loja TikTok")
-
-        import csv
-        uploaded_products = 0
-        uploaded_images = 0
-        skipped_no_match = 0
-        failed_products = []
-
-        with UPLOAD_MAPPING_FILE.open('r', encoding='utf-8', newline='') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                sku = str(row.get('sku') or '').strip()
-                product_id = sku_to_product_id.get(sku)
-                if not product_id:
-                    skipped_no_match += 1
-                    continue
-
-                image_urls = [row.get(f'image_url_{i}') for i in range(1, 5)]
-                image_urls = [u.strip() for u in image_urls if u and u.strip()]
-                if not image_urls:
-                    continue
-
-                try:
-                    client.update_product(str(product_id), image_urls=image_urls)
-                    uploaded_products += 1
-                    uploaded_images += len(image_urls)
-                    logger.info(f"   ✅ {sku} (product_id={product_id}): {len(image_urls)} imagens vinculadas")
-                except Exception as e:
-                    failed_products.append(sku)
-                    logger.warning(f"   ❌ {sku}: falhou -- {e}")
-
-        logger.info(f"\n📊 RESULTADO TIKTOK SHOP")
-        logger.info(f"✅ {uploaded_products} produtos atualizados com sucesso")
-        logger.info(f"✅ {uploaded_images} imagens vinculadas de verdade")
-        if skipped_no_match:
-            logger.info(f"⚠️  {skipped_no_match} SKUs do CSV nao encontrados na loja TikTok (pulados)")
-        if failed_products:
-            logger.warning(f"❌ {len(failed_products)} produtos falharam: {', '.join(failed_products[:10])}")
-
-        return len(failed_products) == 0
-
-    except Exception as e:
-        logger.error(f"❌ Erro no upload TikTok: {e}")
-        return False
+            try:
+                callback(sku, urls)
+                succeeded += 1
+            except Exception as exc:
+                logger.error("SKU %s falhou: %s", sku, exc)
+                failed += 1
+    return succeeded, failed, skipped
 
 
-def main():
-    logger.info("""
-╔════════════════════════════════════════════════════════════════╗
-║         🚀 EXECUÇÃO DE UPLOAD NOS MARKETPLACES                ║
-║              Usando Credenciais dos GitHub Secrets            ║
-╚════════════════════════════════════════════════════════════════╝
-""")
+def upload_shopee() -> dict[str, int | bool]:
+    from shopee_client import ShopeeClient
 
-    # Verificar credenciais
-    logger.info("🔍 Verificando credenciais dos GitHub Secrets...\n")
-    creds = check_marketplace_credentials()
-
-    execution_log = {
-        'timestamp': datetime.now().isoformat(),
-        'shopee': {},
-        'tiktok': {},
-        'summary': {}
+    client = ShopeeClient()
+    item_ids = [int(item["item_id"]) for item in client.iter_all_products() if item.get("item_id")]
+    details = client.get_product_details(item_ids)
+    sku_to_id = {
+        str(item.get("item_sku") or "").strip(): int(item["item_id"])
+        for item in details
+        if item.get("item_id") and str(item.get("item_sku") or "").strip()
     }
 
-    # Shopee
-    shopee_success = upload_to_shopee(creds)
-    execution_log['shopee'] = {
-        'configured': creds['shopee']['configured'],
-        'success': shopee_success,
-        'timestamp': datetime.now().isoformat()
+    def publish(sku: str, urls: list[str]) -> None:
+        item_id = sku_to_id.get(sku)
+        if not item_id:
+            raise RuntimeError("produto não localizado na loja Shopee")
+        files = download_images(urls[:9])
+        try:
+            image_ids = [client.upload_image(str(path)) for path in files]
+            client.update_product(item_id, image_ids=image_ids)
+            readback = client.get_product_details([item_id])
+            if not readback:
+                raise RuntimeError("read-back da Shopee não confirmou o produto")
+        finally:
+            for path in files:
+                path.unlink(missing_ok=True)
+
+    succeeded, failed, skipped = run_rows(publish)
+    return {"configured": True, "success": failed == 0, "succeeded": succeeded, "failed": failed, "skipped": skipped}
+
+
+def upload_tiktok() -> dict[str, int | bool]:
+    from tiktok_client import TikTokClient
+
+    client = TikTokClient()
+
+    def publish(sku: str, urls: list[str]) -> None:
+        product = client.find_product_by_sku(sku)
+        product_id = str(product.get("id") or product.get("product_id") or "")
+        if not product_id:
+            raise RuntimeError("TikTok Shop não retornou product_id")
+        files = download_images(urls[:9])
+        try:
+            client.update_product(product_id, image_files=files)
+            readback = client.get_product(product_id)
+            if not (readback.get("main_images") or []):
+                raise RuntimeError("read-back do TikTok Shop não confirmou imagens")
+        finally:
+            for path in files:
+                path.unlink(missing_ok=True)
+
+    succeeded, failed, skipped = run_rows(publish)
+    return {"configured": True, "success": failed == 0, "succeeded": succeeded, "failed": failed, "skipped": skipped}
+
+
+def safe_run(name: str, callback: Callable[[], dict[str, int | bool]]) -> dict[str, int | bool | str]:
+    logger.info("Iniciando publicação real em %s", name)
+    try:
+        result = callback()
+        logger.info("%s: %s", name, result)
+        return result
+    except Exception as exc:
+        logger.error("%s indisponível: %s", name, exc)
+        return {"configured": False, "success": False, "succeeded": 0, "failed": 0, "skipped": 0, "error": str(exc)}
+
+
+def main() -> int:
+    report = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "shopee": safe_run("Shopee", upload_shopee),
+        "tiktok": safe_run("TikTok Shop", upload_tiktok),
     }
-
-    # TikTok
-    tiktok_success = upload_to_tiktok(creds)
-    execution_log['tiktok'] = {
-        'configured': creds['tiktok']['configured'],
-        'success': tiktok_success,
-        'timestamp': datetime.now().isoformat()
-    }
-
-    # Resumo
-    logger.info("\n" + "=" * 70)
-    logger.info("📊 RESUMO FINAL")
-    logger.info("=" * 70)
-
-    if creds['shopee']['configured']:
-        status = "✅ Concluído" if shopee_success else "❌ Falhou"
-        logger.info(f"🛍️  Shopee: {status}")
-    else:
-        logger.warning("⚠️  Shopee: Não configurado")
-
-    if creds['tiktok']['configured']:
-        status = "✅ Concluído" if tiktok_success else "❌ Falhou"
-        logger.info(f"🎵 TikTok: {status}")
-    else:
-        logger.warning("⚠️  TikTok: Não configurado")
-
-    execution_log['summary'] = {
-        'shopee_configured': creds['shopee']['configured'],
-        'tiktok_configured': creds['tiktok']['configured'],
-        'shopee_success': shopee_success,
-        'tiktok_success': tiktok_success,
-        'overall_success': (shopee_success or not creds['shopee']['configured']) and \
-                          (tiktok_success or not creds['tiktok']['configured'])
-    }
-
-    # Salvar log
+    report["success"] = bool(report["shopee"].get("success")) and bool(report["tiktok"].get("success"))
     EXECUTION_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with EXECUTION_LOG.open('w', encoding='utf-8') as f:
-        json.dump(execution_log, f, indent=2, ensure_ascii=False)
-
-    logger.info(f"\n📄 Execution log: {EXECUTION_LOG}")
-    logger.info("\n" + "=" * 70 + "\n")
-
-    return 0 if execution_log['summary']['overall_success'] else 1
+    EXECUTION_LOG.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(json.dumps(report, indent=2, ensure_ascii=False))
+    return 0 if report["success"] else 1
 
 
-if __name__ == '__main__':
-    sys.exit(main())
+if __name__ == "__main__":
+    raise SystemExit(main())

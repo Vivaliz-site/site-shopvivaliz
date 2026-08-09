@@ -116,6 +116,33 @@ function svcr_clean_description(string $description): string
     return trim($description);
 }
 
+/** @return list<string> */
+function svcr_string_list(mixed $value, string $separatorPattern = '/[,|\r\n]+/u'): array
+{
+    if (is_array($value)) {
+        $items = $value;
+    } elseif (is_string($value)) {
+        $raw = trim($value);
+        if ($raw === '') return [];
+        $decoded = json_decode($raw, true);
+        $items = is_array($decoded) ? $decoded : (preg_split($separatorPattern, $raw) ?: []);
+    } else {
+        return [];
+    }
+
+    $normalized = [];
+    foreach ($items as $item) {
+        if (is_array($item)) {
+            $item = $item['value'] ?? $item['text'] ?? $item['name'] ?? '';
+        }
+        $text = trim((string)$item);
+        if ($text !== '' && !in_array($text, $normalized, true)) {
+            $normalized[] = $text;
+        }
+    }
+    return $normalized;
+}
+
 function svcr_is_preorder(array $item): bool
 {
     $stockInfo = is_array($item['estoque'] ?? null)
@@ -218,6 +245,16 @@ function svcr_products(): array
         $price = svcr_item_price($item);
         if ($price <= 0) continue;
 
+        $bulletPoints = svcr_string_list($item['bullet_points'] ?? $item['bullet_points_json'] ?? []);
+        $seoKeywords = svcr_string_list($item['seo_keywords'] ?? $item['seo_keywords_json'] ?? []);
+        $marketingHooks = svcr_string_list($item['marketing_hooks'] ?? $item['marketing_hooks_json'] ?? []);
+        $existingTags = svcr_string_list($item['tags'] ?? []);
+        $brandValue = $item['brand'] ?? $item['marca'] ?? '';
+        if (is_array($brandValue)) {
+            $brandValue = $brandValue['nome'] ?? $brandValue['name'] ?? '';
+        }
+        $brand = is_scalar($brandValue) ? trim((string)$brandValue) : '';
+
         $products[] = [
             'id' => (string)($item['id'] ?? $sku),
             'sku' => $sku,
@@ -231,6 +268,13 @@ function svcr_products(): array
             'images' => $imagesList,
             'images_count' => count($imagesList),
             'category' => trim((string)($category['nome'] ?? $category['caminhoCompleto'] ?? $item['category'] ?? '')),
+            'brand' => $brand,
+            'bullet_points' => $bulletPoints,
+            'seo_keywords' => $seoKeywords,
+            'marketing_hooks' => $marketingHooks,
+            'meta_title' => trim((string)($item['meta_title'] ?? '')),
+            'meta_description' => trim((string)($item['meta_description'] ?? '')),
+            'tags' => array_slice(array_values(array_unique(array_merge($existingTags, $seoKeywords))), 0, 20),
             'weight' => (float)($dimensions['pesoLiquido'] ?? $dimensions['peso_liquido'] ?? $dimensions['net_weight'] ?? $item['peso'] ?? $item['weight'] ?? 0),
             'width' => (float)($dimensions['largura'] ?? $dimensions['width'] ?? $item['width'] ?? 0),
             'height' => (float)($dimensions['altura'] ?? $dimensions['height'] ?? $item['height'] ?? 0),

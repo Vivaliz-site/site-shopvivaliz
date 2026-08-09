@@ -1,0 +1,47 @@
+name: Fred-Win M365 Bootstrap
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/m365/**'
+      - '.github/workflows/fred-win-m365-bootstrap.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          test -n "$VM_KEY" || exit 2
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Check MCP
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'curl -fsS --max-time 10 http://127.0.0.1:5557/health'
+      - name: Sync repo and generate certificate
+        run: |
+          python3 - <<'PY' > /tmp/body.json
+          import json
+          ps = r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'C:\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; & '.\scripts\m365\Generate-ShopVivalizExchangeCertificate.ps1'; Write-Output 'AUDIT_BEGIN'; & '.\scripts\m365\Audit-ShopVivalizM365.ps1'; Write-Output 'AUDIT_END'"'''
+          print(json.dumps({'params': {'command': ps, 'timeout': 300}}))
+          PY
+          B64="$(base64 -w0 /tmp/body.json)"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "B64='$B64' python3 - <<'PY'
+          import base64,json,os,urllib.request
+          body=base64.b64decode(os.environ['B64'])
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=330) as r: print(r.read().decode())
+          PY"
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/body.json

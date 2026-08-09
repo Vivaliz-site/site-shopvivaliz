@@ -72,11 +72,6 @@ from .secrets import (
     SMTP_USER,
     SMTP_PASS,
 
-    # Payment
-    PAGARME_SECRET_KEY,
-    PAGARME_API_KEY,
-    PAGARME_PUBLIC_KEY,
-
     # Shipping
     MELHORENVIO_ACCESS_TOKEN,
     MELHORENVIO_API_KEY,
@@ -154,9 +149,6 @@ __all__ = [
     "SMTP_PORT",
     "SMTP_USER",
     "SMTP_PASS",
-    "PAGARME_SECRET_KEY",
-    "PAGARME_API_KEY",
-    "PAGARME_PUBLIC_KEY",
     "MELHORENVIO_ACCESS_TOKEN",
     "MELHORENVIO_API_KEY",
     "SESSION_SECRET",

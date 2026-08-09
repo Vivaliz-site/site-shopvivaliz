@@ -4,6 +4,8 @@
   const status = document.getElementById('catalog-status');
   const form = document.querySelector('.catalog-search');
   const input = document.getElementById('catalog-search');
+  if (!catalogPage || !grid || !status || !form || !input) return;
+
   const params = new URLSearchParams(window.location.search);
   const tools = document.querySelector('.catalog-tools');
   const filterNav = tools ? tools.querySelector('.category-filters') : null;

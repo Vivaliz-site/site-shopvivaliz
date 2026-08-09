@@ -1,0 +1,102 @@
+name: Deploy verified MEI classification gate
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/deploy-mei-verified-classification.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: deploy-mei-verified-classification
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Deploy verified MEI gate without starting worker
+        run: |
+          timeout 540s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          ROOT=/home/ubuntu/mei-mg-email
+          EXPECTED_PRIVATE_SHA=aea21b28b7345b0ebe4a0f33e20b4bf3ab5ccdb1
+          cd "$ROOT"
+          test "$(sudo systemctl is-active mei-mg-email-worker.service || true)" = inactive
+          timeout 40s git fetch --quiet origin main
+          actual=$(git rev-parse origin/main)
+          echo ORIGIN_MAIN="$actual"
+          test "$actual" = "$EXPECTED_PRIVATE_SHA"
+
+          stamp=$(date +%Y%m%d-%H%M%S)
+          backup="$ROOT/backups/verified-mei-$stamp"
+          mkdir -p "$backup/scripts" "$backup/db/migrations"
+          for f in scripts/ingest_from_huggingface.py scripts/ingest_estabelecimentos.py scripts/rotina_diaria_segura.py db/migrations/V016__verified_mei_eligibility.sql; do
+            if [ -e "$f" ]; then cp -a "$f" "$backup/$f"; fi
+          done
+
+          echo '=== INSTALL TESTED FILES ==='
+          for f in scripts/ingest_from_huggingface.py scripts/ingest_estabelecimentos.py scripts/rotina_diaria_segura.py db/migrations/V016__verified_mei_eligibility.sql; do
+            tmp=$(mktemp)
+            git show "$EXPECTED_PRIVATE_SHA:$f" > "$tmp"
+            install -m 640 "$tmp" "$ROOT/$f"
+            rm -f "$tmp"
+          done
+          chmod 750 scripts/ingest_from_huggingface.py scripts/ingest_estabelecimentos.py scripts/rotina_diaria_segura.py
+          .venv/bin/python -m py_compile scripts/ingest_from_huggingface.py scripts/ingest_estabelecimentos.py scripts/rotina_diaria_segura.py
+
+          echo '=== APPLY V016 ==='
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('/home/ubuntu/mei-mg-email/.env',override=True)
+          import os
+          from pathlib import Path
+          import psycopg
+          sql=Path('/home/ubuntu/mei-mg-email/db/migrations/V016__verified_mei_eligibility.sql').read_text(encoding='utf-8')
+          with psycopg.connect(os.environ['DATABASE_URL']) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("set lock_timeout='30s'")
+                  cur.execute("set statement_timeout='2min'")
+                  cur.execute(sql,prepare=False)
+              conn.commit()
+          print('V016_APPLIED')
+          PY
+
+          echo '=== VERIFY ==='
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('/home/ubuntu/mei-mg-email/.env',override=True)
+          import json,os,psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'],row_factory=dict_row) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("set statement_timeout='90s'")
+                  cur.execute("""
+                    select count(*) total,
+                           count(*) filter(where tipo_regime='MEI') mei_rotulo_legado,
+                           count(*) filter(where tipo_regime='MEI_CANDIDATO') mei_candidato,
+                           count(*) filter(where mei_verificado) mei_verificado,
+                           count(*) filter(where marketing_autorizado) marketing_autorizado
+                      from mei_email.empresas
+                  """)
+                  print('CLASSIFICATION='+json.dumps(dict(cur.fetchone()),default=str))
+                  cur.execute("select count(*) n from mei_email.vw_empresas_elegiveis")
+                  print('ELIGIBLE_VIEW='+str(cur.fetchone()['n']))
+                  cur.execute("select pg_get_viewdef('mei_email.vw_empresas_elegiveis'::regclass,true) as viewdef")
+                  viewdef=cur.fetchone()['viewdef'].lower()
+                  assert 'mei_candidato' in viewdef and 'mei_verificado' in viewdef and 'marketing_autorizado' in viewdef
+          PY
+          test "$(sudo systemctl is-active mei-mg-email-worker.service || true)" = inactive
+          sudo systemctl is-active mei-mg-base-sync.timer
+          echo BACKUP="$backup"
+          echo VERIFIED_MEI_GATE_DEPLOYED_WORKER_INACTIVE
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

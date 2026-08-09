@@ -1,0 +1,40 @@
+name: Sync MEI email systemd identity
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/sync-mei-email-systemd-label.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Align systemd label without starting worker
+        run: |
+          timeout 120s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=10 -o ServerAliveCountMax=2 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          unit=/etc/systemd/system/mei-mg-email-worker.service
+          test -f "$unit"
+          before=$(sudo grep '^Description=' "$unit" || true)
+          echo BEFORE="$before"
+          sudo sed -i 's/^Description=.*/Description=MEI MG Email Microsoft Graph App-Only Worker/' "$unit"
+          sudo systemctl daemon-reload
+          after=$(sudo grep '^Description=' "$unit")
+          echo AFTER="$after"
+          test "$after" = 'Description=MEI MG Email Microsoft Graph App-Only Worker'
+          echo WORKER_STATE=$(timeout 10s sudo systemctl is-active mei-mg-email-worker.service || true)
+          sudo systemctl show mei-mg-email-worker.service -p Description -p ActiveState --no-pager
+          echo SYSTEMD_IDENTITY_SYNCED_NO_START
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

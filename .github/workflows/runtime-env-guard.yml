@@ -1,0 +1,160 @@
+name: Production runtime env guard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/runtime-env-guard.yml'
+      - '.github/workflows/sync-ai-keys-to-vm.yml'
+      - 'config/constants.php'
+      - 'config/database.php'
+      - 'includes/social-auth.php'
+      - 'auth/login.php'
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-runtime-env-guard
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VM_HOST: 137.131.156.17
+      VM_USER: ubuntu
+      VM_ENV: /home/ubuntu/shopvivaliz-deploy/shared/.env
+    steps:
+      - name: Configurar SSH autenticado com host fixado
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          if [[ -z "$key" || -z "$known_hosts" ]]; then
+            echo '::error::SSH da VM nao configurado.'
+            exit 1
+          fi
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Aguardar release exata em producao
+        if: ${{ github.event_name == 'push' }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ready=0
+          for attempt in $(seq 1 30); do
+            deployed_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+              "${VM_USER}@${VM_HOST}" \
+              'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha 2>/dev/null || true')"
+            if [[ "$deployed_sha" == "$GITHUB_SHA" ]]; then
+              ready=1
+              echo "deployed_sha=$deployed_sha"
+              break
+            fi
+            echo "deployment_wait_attempt=$attempt"
+            sleep 20
+          done
+          test "$ready" = 1 || { echo '::error::A release exata do push nao chegou a producao em 10 minutos.'; exit 1; }
+
+      - name: Reparar e validar permissoes do shared/.env
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            "${VM_USER}@${VM_HOST}" "VM_ENV='${VM_ENV}' bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+          if [[ ! -f "$VM_ENV" ]]; then
+            echo 'shared_env_exists=false'
+            exit 1
+          fi
+
+          php_user='www-data'
+          if ! getent passwd "$php_user" >/dev/null 2>&1; then
+            php_user="$(ps -eo user,comm | awk '$2 ~ /php-fpm|apache2/ && $1 != "root" {print $1; exit}')"
+          fi
+          if [[ -z "$php_user" ]] || ! getent passwd "$php_user" >/dev/null 2>&1; then
+            echo '::error::Nao foi possivel identificar o usuario do PHP.'
+            exit 1
+          fi
+          php_group="$(id -gn "$php_user")"
+
+          sudo chown "${USER}:${php_group}" "$VM_ENV"
+          sudo chmod 0640 "$VM_ENV"
+
+          mode="$(stat -c '%a' "$VM_ENV")"
+          owner="$(stat -c '%U' "$VM_ENV")"
+          group="$(stat -c '%G' "$VM_ENV")"
+          echo "shared_env_mode=$mode"
+          echo "shared_env_owner=$owner"
+          echo "shared_env_group=$group"
+
+          sudo -u "$php_user" test -r "$VM_ENV"
+          sudo -u "$php_user" php -r '
+            $path = $argv[1] ?? "";
+            if (!is_file($path) || !is_readable($path)) { exit(2); }
+            $keys = [];
+            foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+              $line = trim($line);
+              if ($line === "" || $line[0] === "#" || strpos($line, "=") === false) continue;
+              [$key] = explode("=", $line, 2);
+              $keys[trim($key)] = true;
+            }
+            $families = [
+              "database" => ["DB_HOST", "DB_NAME", "DB_DATABASE", "DB_USER", "DB_USERNAME", "DB_PASS", "DB_PASSWORD"],
+              "google" => ["GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET"]
+            ];
+            foreach ($families as $name => $required) {
+              $present = 0;
+              foreach ($required as $key) if (isset($keys[$key])) $present++;
+              echo $name . "_env_keys_present=" . $present . PHP_EOL;
+            }
+          ' "$VM_ENV"
+          REMOTE
+
+      - name: Smoke test local da release ativa
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            "${VM_USER}@${VM_HOST}" 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+          code="$(curl --silent --show-error --connect-timeout 5 --max-time 20 \
+            -H 'Host: shopvivaliz.com.br' \
+            -o "$body" -w '%{http_code}' \
+            'http://127.0.0.1/auth/login.php')"
+          echo "login_http_status=$code"
+          if [[ "$code" != '200' ]]; then
+            echo '::error::Login local nao retornou HTTP 200.'
+            exit 1
+          fi
+          if grep -qi 'Banco de dados indisponível\|Erro ao inicializar banco de dados' "$body"; then
+            echo '::error::Login ainda exibe indisponibilidade do banco.'
+            exit 1
+          fi
+          if ! grep -q 'Continuar com Google' "$body"; then
+            echo '::error::Botao Continuar com Google ausente.'
+            exit 1
+          fi
+          echo 'login_database_error=false'
+          echo 'google_login_visible=true'
+          REMOTE

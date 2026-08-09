@@ -3,101 +3,97 @@
 declare(strict_types=1);
 
 /**
- * Engine de processamento do AI Image Studio.
+ * AI Image Studio - processamento de uma imagem por produto.
  *
- * Recebe product_id + provider ('openai', 'google' ou 'claude') e gera as
- * 3 variações de imagem (white / hero / ambient) EDITANDO a foto real do
- * produto já cadastrada no banco — nunca gerando do zero só por texto.
- * Fluxo:
- *   1. Busca a foto atual do produto na tabela `produtos` e resolve um
- *      caminho local para ela (baixa se for URL remota, ou aponta
- *      diretamente se já for um arquivo local do projeto).
- *   2. Se não houver foto cadastrada, ABORTA o processamento deste produto
- *      (não existe fallback silencioso para texto puro — ver REGRA CRÍTICA
- *      DE NEGÓCIO abaixo) e registra o erro nos 3 tipos de imagem.
- *   3. Determina os 3 prompts:
- *      - provider = 'openai' | 'google': usa os prompts padrão já blindados
- *        (contra alteração de cor/forma/tamanho do produto).
- *      - provider = 'claude': primeiro chama a API da Anthropic para
- *        reescrever os 3 prompts a partir do nome+descrição do produto
- *        (mantendo a mesma regra de fidelidade); a imagem final ainda é
- *        editada pela OpenAI — o Claude nunca toca na imagem.
- *   4. Envia a foto real + prompt para o endpoint de EDIÇÃo do provedor
- *      escolhido (OpenAI /v1/images/edits ou Google gemini-2.5-flash-image
- *      via :generateContent — ver AiServices.php).
- *
- * REGRA CRÍTICA DE NEGÓCIO (FIDELIDADE DO PRODUTO): a IA nunca gera a
- * imagem do zero. Ela sempre recebe a foto real do produto como entrada e é
- * instruída a preservar cor/forma/tamanho/design, mexendo só em
- * cenário/fundo/iluminação — daí a exigência de uma foto base válida antes
- * de chamar qualquer API de imagem.
- *
- * Cada imagem editada é salva em AI_STUDIO_STORAGE_DIR com nome único e
- * inserida em product_images_staging com status 'pending'. Erros de uma
- * variação (ex: falha da API num dos 3 tipos) não interrompem as outras —
- * cada tipo de imagem é tentado e registrado independentemente.
- *
- * Uso via linha de comando (Ubuntu, cron/batch):
- *   php process_item.php <product_id> <openai|google|claude>
- *
- * Uso via HTTP (chamado pelo admin_dashboard.php, sessão de admin exigida):
- *   POST process_item.php  { product_id: 123, provider: "openai" }
- *   -> responde JSON: { success, product_id, provider, results: [...] }
+ * Regra central: nunca gerar o produto do zero. Toda imagem nasce de uma
+ * foto real cadastrada para o MESMO product_id, recebe orientacao especifica
+ * do marketplace escolhido e permanece em staging ate revisao humana.
  */
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/src/AiServices.php';
+require_once __DIR__ . '/src/ImageChannelProfile.php';
+require_once __DIR__ . '/../../includes/catalog-publication-schema.php';
+require_once __DIR__ . '/../../includes/product-reference-resolver.php';
 
-/**
- * Prompts padrão "blindados" usados quando o provedor é OpenAI ou Google
- * diretamente (sem passar pelo Claude). [product_name] é substituído pelo
- * nome real do produto antes do envio.
- */
-function ai_studio_default_prompts(string $productName): array
+/** @return array<string,string> */
+function ai_studio_default_prompts(string $productName, string $targetChannel = 'site'): array
 {
-    return [
-        'white' => "High-resolution studio product photography of {$productName}. The product shape, color, and design must be 100% accurate and unmodified. Solid clean white background, center frame, professional uniform lighting, 1:1 aspect ratio",
-        'hero' => "Commercial hero shot photography of {$productName} with exactly accurate original colors and proportions. Dramatic cinematic studio lighting, sharp focus on product details, premium presentation, 1:1 aspect ratio",
-        'ambient' => "Lifestyle product photography of {$productName}. Product physical features, color, and shape must remain completely unchanged. Placed in a realistic contextual modern environment, soft natural shadows matching the product, highly detailed, photorealistic, 1:1 aspect ratio",
+    $identity = "Use the supplied real photo of {$productName} as the only product reference. Preserve the exact product identity: shape, proportions, color, material appearance, labels, logos, printed text, connectors, controls and included parts. Do not invent, remove, replace or redesign any product feature. Do not add accessories that could be interpreted as included with the product.";
+
+    $base = [
+        'white' => $identity . ' Create a marketplace-safe main image: pure white RGB 255,255,255 background, product centered, fully visible and occupying about 85-95% of the frame, neutral professional lighting, natural contact shadow only, no badges, borders, promotional text, watermarks or extra objects. Square 1:1 composition and photorealistic.',
+        'hero' => $identity . ' Create a premium ecommerce hero image with controlled studio lighting and a clean neutral setting. Keep the product unobstructed and dominant in frame. No promotional text, badges, watermarks or invented props. Square 1:1 composition and photorealistic.',
+        'ambient' => $identity . ' Place the exact product in a realistic usage context supported by the visible product category, without implying unsupported compatibility or accessories. Keep the product fully recognizable and unobstructed. Natural scale, perspective, shadows and lighting. Square 1:1 composition and photorealistic.',
     ];
+
+    foreach ($base as $type => $prompt) {
+        $base[$type] = $prompt . ' Marketplace-specific guidance: ' . ai_studio_channel_guidance($targetChannel, $type);
+    }
+    return $base;
 }
 
-/**
- * Busca nome + descrição + foto atual do produto na tabela `produtos`,
- * tolerando os diferentes nomes de coluna já observados em outras partes do
- * projeto (ver includes/catalog-runtime.php) — o schema real de `produtos`
- * varia conforme a origem da sincronização (Olist/Tiny vs. cadastro manual).
- *
- * @return array{name:string, description:string, image_ref:string}|null null se o produto não existir
- */
-function ai_studio_fetch_product(PDO $db, int $productId): ?array
+/** @return array<string,mixed>|null */
+function ai_studio_fetch_product_row(PDO $db, int|string $productReference): ?array
 {
-    $stmt = $db->prepare('SELECT * FROM products WHERE id = ? LIMIT 1');
-    $stmt->execute([$productId]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return svpr_resolve_product_row($db, $productReference);
+}
 
-    if (!is_array($row)) {
+function ai_studio_is_active_product_row(array $row): bool
+{
+    $status = trim((string)($row['status'] ?? $row['situacao'] ?? $row['state'] ?? ''));
+    $normalized = function_exists('mb_strtoupper')
+        ? mb_strtoupper($status, 'UTF-8')
+        : strtoupper($status);
+
+    if (in_array($normalized, ['', 'A', 'ACTIVE', 'ATIVO', '1'], true)) {
+        return true;
+    }
+
+    foreach (['is_active', 'active', 'ativo', 'enabled', 'published', 'is_published'] as $field) {
+        if (!array_key_exists($field, $row)) {
+            continue;
+        }
+
+        $value = $row[$field];
+        if (is_bool($value) && $value) {
+            return true;
+        }
+
+        $boolean = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($boolean === true) {
+            return true;
+        }
+
+        if (in_array($value, [1, '1'], true)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/** @return array{name:string,description:string,image_ref:string,sku:string,olist_id:string}|null */
+function ai_studio_map_product_row(array $row): ?array
+{
+    if (!ai_studio_is_active_product_row($row)) {
         return null;
     }
 
-    // `products` (nome real da tabela em produção, confirmado via
-    // admin/diagnostico-banco.php em 2026-08-05 — NÃO é `produtos`) usa
-    // colunas em inglês (`name`, `description`, `image_url`). Mantemos os
-    // fallbacks em português como rede de segurança, caso este código um dia
-    // rode contra um schema diferente, mas as chaves reais são as primeiras.
-    $name = trim((string) ($row['name'] ?? $row['nome'] ?? $row['descricao'] ?? ''));
-    $description = trim((string) (
+    $name = trim((string)($row['name'] ?? $row['nome'] ?? $row['descricao'] ?? ''));
+    if ($name === '') {
+        return null;
+    }
+
+    $description = trim((string)(
         $row['description']
         ?? $row['descricao_completa']
         ?? $row['descricaoComplementar']
         ?? $row['descricao_complementar']
         ?? $row['descricao']
-        ?? $name
+        ?? ''
     ));
-
-    // Mesma tolerância de nomes de coluna usada em
-    // includes/catalog-runtime.php para a imagem principal do produto.
-    $imageRef = trim((string) (
+    $imageRef = trim((string)(
         $row['image_url']
         ?? $row['imagem_principal_url']
         ?? $row['primary_image_url']
@@ -105,74 +101,85 @@ function ai_studio_fetch_product(PDO $db, int $productId): ?array
         ?? ''
     ));
 
-    if ($name === '') {
-        return null;
-    }
-
-    return ['name' => $name, 'description' => $description, 'image_ref' => $imageRef];
+    return [
+        'name' => $name,
+        'description' => $description,
+        'image_ref' => $imageRef,
+        'sku' => trim((string)($row['sku'] ?? '')),
+        'olist_id' => trim((string)($row['olist_id'] ?? '')),
+    ];
 }
 
-/**
- * Resolve a foto REAL do produto (valor bruto vindo de `produtos`, que pode
- * ser uma URL absoluta http(s) ou um caminho relativo dentro do próprio
- * projeto) para um arquivo local que as APIs de imagem possam ler/enviar.
- *
- * - URL http(s): baixa para AI_STUDIO_BASE_IMAGE_TMP_DIR.
- * - Caminho relativo (ex: "/public/assets/products/foo.jpg" ou
- *   "public/assets/products/foo.jpg"): resolve relativo à raiz do projeto.
- *
- * @return string caminho absoluto local do arquivo de imagem
- * @throws AiStudioApiException se `$imageRef` estiver vazio, ou o arquivo
- *   não existir/não puder ser baixado — SEM fallback silencioso, porque a
- *   regra de negócio exige uma foto real como base.
- */
+/** @return array{name:string,description:string,image_ref:string,sku:string,olist_id:string}|null */
+function ai_studio_fetch_product(PDO $db, int|string $productReference): ?array
+{
+    $row = ai_studio_fetch_product_row($db, $productReference);
+    return is_array($row) ? ai_studio_map_product_row($row) : null;
+}
+
+/** @return array{width:int,height:int,mime:string,sha256:string} */
+function ai_studio_validate_image_file(string $path, int $minimumSide = 600): array
+{
+    if (!is_file($path) || !is_readable($path) || (int)filesize($path) <= 0) {
+        throw new AiStudioApiException('Arquivo de imagem inexistente, vazio ou ilegivel.');
+    }
+    $info = @getimagesize($path);
+    if (!is_array($info)) throw new AiStudioApiException('O arquivo informado nao e uma imagem valida.');
+
+    $width = (int)($info[0] ?? 0);
+    $height = (int)($info[1] ?? 0);
+    $mime = strtolower(trim((string)($info['mime'] ?? '')));
+    if (!in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true)) {
+        throw new AiStudioApiException("Formato real da imagem nao permitido: {$mime}.");
+    }
+    if ($width < $minimumSide || $height < $minimumSide) {
+        throw new AiStudioApiException("Imagem abaixo da resolucao minima: {$width}x{$height}; minimo {$minimumSide}px por lado.");
+    }
+    $hash = hash_file('sha256', $path);
+    if (!is_string($hash) || $hash === '') throw new AiStudioApiException('Nao foi possivel calcular a identidade da imagem.');
+    return ['width' => $width, 'height' => $height, 'mime' => $mime, 'sha256' => $hash];
+}
+
 function ai_studio_resolve_base_image(string $imageRef, string $projectRoot, int $productId): string
 {
+    $imageRef = trim($imageRef);
     if ($imageRef === '') {
-        throw new AiStudioApiException(
-            "Produto #$productId não tem foto cadastrada em `products` (image_url/imagem_principal_url/primary_image_url/imagem todos vazios). " .
-            'Não é possível gerar imagens sem uma foto real de referência (regra de fidelidade do produto).'
-        );
+        throw new AiStudioApiException("Produto #{$productId} nao tem foto cadastrada. Nao e possivel gerar imagem sem referencia real.");
     }
 
     if (preg_match('#^https?://#i', $imageRef) === 1) {
-        $extension = strtolower((string) pathinfo(parse_url($imageRef, PHP_URL_PATH) ?: '', PATHINFO_EXTENSION));
+        $extension = strtolower((string)pathinfo(parse_url($imageRef, PHP_URL_PATH) ?: '', PATHINFO_EXTENSION));
         $extension = in_array($extension, ['jpg', 'jpeg', 'png', 'webp'], true) ? $extension : 'jpg';
         $tmpPath = AI_STUDIO_BASE_IMAGE_TMP_DIR . 'base-' . $productId . '-' . bin2hex(random_bytes(6)) . '.' . $extension;
-
         AiStudioHttpClient::downloadToFile($imageRef, $tmpPath);
-
+        try {
+            ai_studio_validate_image_file($tmpPath, 600);
+        } catch (Throwable $e) {
+            @unlink($tmpPath);
+            throw $e;
+        }
         return $tmpPath;
     }
 
-    // Caminho local: normaliza barra inicial e resolve a partir da raiz do
-    // projeto (mesma raiz usada por AI_STUDIO_STORAGE_DIR, definida em
-    // config.php via __DIR__ . '/../../').
-    $relative = ltrim($imageRef, '/');
-    $localPath = $projectRoot . '/' . $relative;
-
-    if (!is_file($localPath) || !is_readable($localPath)) {
-        throw new AiStudioApiException(
-            "Produto #$productId: foto cadastrada ('$imageRef') não foi encontrada no disco em '$localPath'."
-        );
+    $relative = ltrim(str_replace('\\', '/', $imageRef), '/');
+    if ($relative === '' || preg_match('#(^|/)\.\.(/|$)#', $relative) === 1) {
+        throw new AiStudioApiException("Produto #{$productId}: caminho local de imagem invalido.");
     }
-
+    $root = rtrim($projectRoot, '/');
+    $localPath = $root . '/' . $relative;
+    if (!is_file($localPath) || !is_readable($localPath)) {
+        throw new AiStudioApiException("Produto #{$productId}: foto cadastrada nao foi encontrada no disco.");
+    }
+    ai_studio_validate_image_file($localPath, 600);
     return $localPath;
 }
 
-/**
- * Gera um nome de arquivo único e seguro para a imagem de staging.
- */
 function ai_studio_unique_filename(int $productId, string $imageType, string $extension = 'png'): string
 {
-    $random = bin2hex(random_bytes(6));
-    $timestamp = date('Ymd-His');
-    return "product-{$productId}-{$imageType}-{$timestamp}-{$random}.{$extension}";
+    $safeType = preg_replace('/[^a-z0-9_-]+/i', '-', $imageType) ?: 'image';
+    return sprintf('product-%d-%s-%s-%s.%s', $productId, $safeType, date('Ymd-His'), bin2hex(random_bytes(6)), $extension);
 }
 
-/**
- * Insere um registro pending (ou de erro) em product_images_staging.
- */
 function ai_studio_insert_staging_row(
     PDO $db,
     int $productId,
@@ -181,12 +188,14 @@ function ai_studio_insert_staging_row(
     ?string $localPath,
     ?string $promptUsed,
     string $status,
-    ?string $errorMessage = null
+    ?string $errorMessage = null,
+    string $targetChannel = 'site'
 ): int {
+    $targets = json_encode([$targetChannel], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $stmt = $db->prepare(
-        'INSERT INTO product_images_staging
-            (product_id, image_type, provider_used, local_path, prompt_used, status, error_message, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())'
+        'INSERT INTO product_images_staging '
+        . '(product_id, image_type, provider_used, local_path, prompt_used, status, error_message, target_channels_json, created_at, updated_at) '
+        . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())'
     );
     $stmt->execute([
         $productId,
@@ -196,292 +205,192 @@ function ai_studio_insert_staging_row(
         $promptUsed,
         $status,
         $errorMessage,
+        is_string($targets) ? $targets : '[]',
     ]);
-
-    return (int) $db->lastInsertId();
+    return (int)$db->lastInsertId();
 }
 
-/**
- * Processa um único produto para um provedor, gerando as variações de imagem
- * selecionadas (por padrão as 3: white/hero/ambient).
- *
- * @param array<int,string> $imageTypes subconjunto de ['white','hero','ambient'] — permite ao admin optar por gerar só 1 ou 2 tipos por produto em vez de sempre os 3
- * @param string|null $modelOverride nome de modelo específico a usar no lugar do default de config.php (ex: forçar um modelo OpenAI/Google diferente pontualmente); null = usa o default
- * @return array{success:bool, product_id:int, provider:string, results:array<int,array<string,mixed>>}
- */
+/** @return array<string,mixed> */
 function ai_studio_process_item(
     PDO $db,
-    int $productId,
+    int|string $productReference,
     string $provider,
     array $imageTypes = ['white', 'hero', 'ambient'],
-    ?string $modelOverride = null
+    ?string $modelOverride = null,
+    string $targetChannel = 'site'
 ): array {
+    svcp_ensure_schema($db);
+    $productReference = trim((string)$productReference);
     $provider = strtolower(trim($provider));
+    $targetChannel = strtolower(trim($targetChannel));
+    $profiles = ai_studio_channel_profiles();
     if (!in_array($provider, ['openai', 'google', 'claude'], true)) {
-        return [
-            'success' => false,
-            'product_id' => $productId,
-            'provider' => $provider,
-            'results' => [],
-            'error' => "Provider inválido: '$provider'. Use 'openai', 'google' ou 'claude'.",
-        ];
+        return ['success' => false, 'product_id' => 0, 'product_ref' => $productReference, 'provider' => $provider, 'results' => [], 'error' => "Provider invalido: '{$provider}'."];
+    }
+    if (!isset($profiles[$targetChannel])) {
+        return ['success' => false, 'product_id' => 0, 'product_ref' => $productReference, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Canal de imagem invalido: '{$targetChannel}'."];
     }
 
-    // Valida e normaliza os tipos de imagem solicitados — nunca aceita tipo
-    // desconhecido, e nunca processa lista vazia (equivalente a "nada
-    // selecionado", tratado como erro explícito em vez de silenciosamente
-    // não gerar nada).
-    $imageTypes = array_values(array_unique(array_intersect($imageTypes, ['white', 'hero', 'ambient'])));
+    $imageTypes = array_values(array_unique(array_intersect(array_map('strval', $imageTypes), ['white', 'hero', 'ambient'])));
     if ($imageTypes === []) {
-        return [
-            'success' => false,
-            'product_id' => $productId,
-            'provider' => $provider,
-            'results' => [],
-            'error' => 'Nenhum tipo de imagem válido selecionado (white/hero/ambient).',
-        ];
+        return ['success' => false, 'product_id' => 0, 'product_ref' => $productReference, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => 'Nenhum tipo de imagem valido selecionado.'];
+    }
+    if ($productReference === '') {
+        return ['success' => false, 'product_id' => 0, 'product_ref' => '', 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => 'Referencia do produto ausente.'];
     }
 
-    $product = ai_studio_fetch_product($db, $productId);
+    $productRow = ai_studio_fetch_product_row($db, $productReference);
+    if ($productRow === null) {
+        return ['success' => false, 'product_id' => 0, 'product_ref' => $productReference, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productReference} nao encontrado."];
+    }
+    $resolvedProductId = (int)($productRow['id'] ?? 0);
+    if ($resolvedProductId <= 0) {
+        return ['success' => false, 'product_id' => 0, 'product_ref' => $productReference, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productReference} nao foi resolvido para o cadastro local."];
+    }
+    if (!ai_studio_is_active_product_row($productRow)) {
+        return ['success' => false, 'product_id' => $resolvedProductId, 'product_ref' => $productReference, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productReference} esta inativo e nao pode gerar imagem."];
+    }
+
+    $product = ai_studio_map_product_row($productRow);
     if ($product === null) {
-        return [
-            'success' => false,
-            'product_id' => $productId,
-            'provider' => $provider,
-            'results' => [],
-            'error' => "Produto #$productId não encontrado (ou sem nome cadastrado).",
-        ];
+        return ['success' => false, 'product_id' => $resolvedProductId, 'product_ref' => $productReference, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productReference} esta sem nome valido ou bloqueado para geracao."];
     }
 
-    // Resolve a foto REAL do produto ANTES de chamar qualquer API de
-    // imagem — sem ela, não há o que editar (ver REGRA CRÍTICA DE NEGÓCIO
-    // no cabeçalho deste arquivo). $baseImagePath aponta para um arquivo
-    // local; se veio de download remoto, é apagado no finally no fim desta
-    // função.
+    $profile = ai_studio_channel_profile($targetChannel);
+    $minimumSide = max(1000, (int)($profile['minimum_side'] ?? 1000));
+    $recommendedSide = max($minimumSide, (int)($profile['recommended_side'] ?? $minimumSide));
     $baseImagePath = null;
     $baseImageIsTemp = false;
-    try {
-        $projectRoot = dirname(__DIR__, 2);
-        $baseImagePath = ai_studio_resolve_base_image($product['image_ref'], $projectRoot, $productId);
-        $baseImageIsTemp = str_starts_with($baseImagePath, AI_STUDIO_BASE_IMAGE_TMP_DIR);
-    } catch (AiStudioApiException $e) {
-        error_log("[ai-image-studio] Falha ao resolver foto base do produto #$productId: " . $e->getMessage());
 
-        $results = [];
-        foreach ($imageTypes as $imageType) {
-            $id = ai_studio_insert_staging_row(
-                $db,
-                $productId,
-                $imageType,
-                $provider === 'claude' ? 'claude_optimized' : $provider,
-                null,
-                null,
-                'rejected',
-                $e->getMessage()
-            );
-            $results[] = ['image_type' => $imageType, 'status' => 'error', 'staging_id' => $id, 'error' => $e->getMessage()];
+    try {
+        try {
+            $baseImagePath = ai_studio_resolve_base_image($product['image_ref'], dirname(__DIR__, 2), $resolvedProductId);
+            $baseImageIsTemp = str_starts_with($baseImagePath, AI_STUDIO_BASE_IMAGE_TMP_DIR);
+        } catch (Throwable $e) {
+            $results = [];
+            foreach ($imageTypes as $imageType) {
+                $id = ai_studio_insert_staging_row($db, $resolvedProductId, $imageType, $provider === 'claude' ? 'claude_optimized' : $provider, null, null, 'failed', $e->getMessage(), $targetChannel);
+                $results[] = ['image_type' => $imageType, 'status' => 'error', 'staging_id' => $id, 'error' => $e->getMessage()];
+            }
+            return ['success' => false, 'product_id' => $resolvedProductId, 'product_ref' => $productReference, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => $results, 'error' => 'Foto base invalida: ' . $e->getMessage()];
         }
 
-        return [
-            'success' => false,
-            'product_id' => $productId,
-            'provider' => $provider,
-            'results' => $results,
-            'error' => 'Sem foto real de referência: ' . $e->getMessage(),
-        ];
-    }
-
-    try {
-        // Determina os 3 prompts finais e qual engine de imagem efetivamente
-        // edita o arquivo (Claude nunca gera/edita imagem — só reescreve o
-        // prompt).
-        $imageEngine = $provider; // 'openai' ou 'google'
-        $providerUsedLabel = $provider; // como fica gravado em provider_used
+        $imageEngine = $provider;
+        $providerUsed = $provider;
+        $prompts = ai_studio_default_prompts($product['name'], $targetChannel);
 
         if ($provider === 'claude') {
             try {
-                $claudeClient = new AiStudioClaudeClient(AI_STUDIO_CLAUDE_API_KEY, AI_STUDIO_CLAUDE_MODEL);
-                $prompts = $claudeClient->optimizePrompts($product['name'], $product['description']);
-            } catch (AiStudioApiException $e) {
-                error_log('[ai-image-studio] Claude optimizePrompts falhou: ' . $e->getMessage());
-                return [
-                    'success' => false,
-                    'product_id' => $productId,
-                    'provider' => $provider,
-                    'results' => [],
-                    'error' => 'Falha ao otimizar prompts com Claude: ' . $e->getMessage(),
-                ];
+                $optimized = (new AiStudioClaudeClient(AI_STUDIO_CLAUDE_API_KEY, AI_STUDIO_CLAUDE_MODEL))
+                    ->optimizePrompts($product['name'], $product['description']);
+                foreach ($prompts as $type => $guardedPrompt) {
+                    $candidate = trim((string)($optimized[$type] ?? ''));
+                    if ($candidate !== '') $prompts[$type] = $guardedPrompt . ' Additional scene guidance: ' . $candidate;
+                }
+                $imageEngine = 'openai';
+                $providerUsed = 'claude_optimized';
+            } catch (Throwable $e) {
+                $results = [];
+                foreach ($imageTypes as $imageType) {
+                    $id = ai_studio_insert_staging_row($db, $resolvedProductId, $imageType, 'claude_optimized', null, null, 'failed', $e->getMessage(), $targetChannel);
+                    $results[] = ['image_type' => $imageType, 'status' => 'error', 'staging_id' => $id, 'error' => $e->getMessage()];
+                }
+                return ['success' => false, 'product_id' => $resolvedProductId, 'product_ref' => $productReference, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => $results, 'error' => 'Falha ao otimizar prompts com Claude: ' . $e->getMessage()];
             }
-
-            // Depois de otimizado pelo Claude, a imagem final ainda é
-            // editada pela OpenAI (motor padrão para esse caminho). O tipo
-            // gravado no banco fica marcado como 'claude_optimized' para
-            // diferenciar de um prompt padrão direto.
-            $imageEngine = 'openai';
-            $providerUsedLabel = 'claude_optimized';
-        } else {
-            $prompts = ai_studio_default_prompts($product['name']);
         }
 
+        $openAiModel = ($modelOverride !== null && trim($modelOverride) !== '' && $imageEngine === 'openai') ? trim($modelOverride) : AI_STUDIO_OPENAI_IMAGE_MODEL;
+        $googleModel = ($modelOverride !== null && trim($modelOverride) !== '' && $imageEngine === 'google') ? trim($modelOverride) : AI_STUDIO_GOOGLE_IMAGEN_MODEL;
+
         $results = [];
-
-        // Modelo efetivo: usa o override explícito do chamador (ex: escolha
-        // feita no seletor de modelo do dashboard) se fornecido e não-vazio;
-        // senão cai no default de config.php, como sempre fez.
-        $effectiveOpenAiModel = ($modelOverride !== null && trim($modelOverride) !== '' && $imageEngine === 'openai')
-            ? trim($modelOverride)
-            : AI_STUDIO_OPENAI_IMAGE_MODEL;
-        $effectiveGoogleModel = ($modelOverride !== null && trim($modelOverride) !== '' && $imageEngine === 'google')
-            ? trim($modelOverride)
-            : AI_STUDIO_GOOGLE_IMAGEN_MODEL;
-
         foreach ($imageTypes as $imageType) {
             $prompt = $prompts[$imageType];
-            $filename = ai_studio_unique_filename($productId, $imageType);
-            $destinationPath = AI_STUDIO_STORAGE_DIR . $filename;
+            $filename = ai_studio_unique_filename($resolvedProductId, $imageType);
+            $destination = AI_STUDIO_STORAGE_DIR . $filename;
             $publicPath = AI_STUDIO_STORAGE_URL_PREFIX . $filename;
 
             try {
-                // Sempre EDITA a foto real ($baseImagePath) — nenhum dos
-                // dois caminhos abaixo gera imagem do zero só por texto.
                 if ($imageEngine === 'openai') {
-                    $client = new AiStudioOpenAiClient(AI_STUDIO_OPENAI_API_KEY, $effectiveOpenAiModel);
-                    $client->editImageToFile($prompt, $baseImagePath, $destinationPath);
+                    (new AiStudioOpenAiClient(AI_STUDIO_OPENAI_API_KEY, $openAiModel))->editImageToFile($prompt, $baseImagePath, $destination);
                 } else {
-                    $client = new AiStudioGoogleImageEditClient(AI_STUDIO_GOOGLE_IMAGEN_API_KEY, $effectiveGoogleModel);
-                    $client->editImageToFile($prompt, $baseImagePath, $destinationPath);
+                    (new AiStudioGoogleImageEditClient(AI_STUDIO_GOOGLE_IMAGEN_API_KEY, $googleModel))->editImageToFile($prompt, $baseImagePath, $destination);
                 }
-
-                $id = ai_studio_insert_staging_row(
-                    $db,
-                    $productId,
-                    $imageType,
-                    $providerUsedLabel,
-                    $publicPath,
-                    $prompt,
-                    'pending'
-                );
-
+                $quality = ai_studio_validate_image_file($destination, $minimumSide);
+                $quality['recommended_side'] = $recommendedSide;
+                $quality['meets_recommended_side'] = $quality['width'] >= $recommendedSide && $quality['height'] >= $recommendedSide;
+                $id = ai_studio_insert_staging_row($db, $resolvedProductId, $imageType, $providerUsed, $publicPath, $prompt, 'pending', null, $targetChannel);
                 $results[] = [
                     'image_type' => $imageType,
                     'status' => 'pending',
                     'staging_id' => $id,
                     'local_path' => $publicPath,
+                    'target_channel' => $targetChannel,
+                    'quality' => $quality,
                 ];
-            } catch (AiStudioApiException $e) {
-                error_log("[ai-image-studio] Falha editando imagem '$imageType' para produto #$productId via $imageEngine: " . $e->getMessage());
-
-                // Registra o erro no banco também (status 'rejected' com
-                // error_message) para o erro ficar visível no dashboard, em vez
-                // de só sumir nos logs do servidor.
-                $id = ai_studio_insert_staging_row(
-                    $db,
-                    $productId,
-                    $imageType,
-                    $providerUsedLabel,
-                    null,
-                    $prompt,
-                    'rejected',
-                    $e->getMessage()
-                );
-
-                $results[] = [
-                    'image_type' => $imageType,
-                    'status' => 'error',
-                    'staging_id' => $id,
-                    'error' => $e->getMessage(),
-                ];
+            } catch (Throwable $e) {
+                @unlink($destination);
+                $id = ai_studio_insert_staging_row($db, $resolvedProductId, $imageType, $providerUsed, null, $prompt, 'failed', $e->getMessage(), $targetChannel);
+                $results[] = ['image_type' => $imageType, 'status' => 'error', 'staging_id' => $id, 'target_channel' => $targetChannel, 'error' => $e->getMessage()];
+                error_log("[ai-image-studio] produto #{$resolvedProductId} ref={$productReference} canal={$targetChannel} tipo={$imageType} provider={$imageEngine}: " . $e->getMessage());
             }
         }
 
-        $anySuccess = array_reduce($results, static fn (bool $carry, array $r) => $carry || $r['status'] === 'pending', false);
-
-        return [
-            'success' => $anySuccess,
-            'product_id' => $productId,
-            'provider' => $provider,
-            'results' => $results,
-        ];
+        $anySuccess = array_reduce($results, static fn(bool $carry, array $row): bool => $carry || ($row['status'] ?? '') === 'pending', false);
+        return ['success' => $anySuccess, 'product_id' => $resolvedProductId, 'product_ref' => $productReference, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => $results];
     } finally {
-        // Cópia temporária da foto real (baixada de URL remota) nunca deve
-        // sobreviver além deste processamento — evita acumular lixo em
-        // storage/base-image-tmp/. Se a foto já era um arquivo local do
-        // projeto, não apagamos (não é nossa cópia).
-        if ($baseImageIsTemp && $baseImagePath !== null) {
-            @unlink($baseImagePath);
-        }
+        if ($baseImageIsTemp && is_string($baseImagePath) && is_file($baseImagePath)) @unlink($baseImagePath);
     }
 }
 
-// ---------------------------------------------------------------------
-// Entradas externas: CLI (cron/batch) ou HTTP (chamado pelo dashboard).
-// Se este arquivo foi apenas incluído (require_once) por outro script
-// (ex: admin_dashboard.php processando um lote), nenhuma das duas rodam —
-// só as funções acima ficam disponíveis.
-// ---------------------------------------------------------------------
-
 if (PHP_SAPI === 'cli' && realpath($argv[0] ?? '') === realpath(__FILE__)) {
-    $cliProductId = (int) ($argv[1] ?? 0);
-    $cliProvider = (string) ($argv[2] ?? '');
-    $cliImageTypesArg = (string) ($argv[3] ?? '');
-    $cliModel = (string) ($argv[4] ?? '');
-
-    if ($cliProductId <= 0 || $cliProvider === '') {
-        fwrite(STDERR, "Uso: php process_item.php <product_id> <openai|google|claude> [white,hero,ambient] [modelo]\n");
+    $productId = trim((string)($argv[1] ?? ''));
+    $provider = (string)($argv[2] ?? '');
+    $typesArg = (string)($argv[3] ?? '');
+    $model = trim((string)($argv[4] ?? ''));
+    $targetChannel = strtolower(trim((string)($argv[5] ?? 'site')));
+    if ($productId === '' || $provider === '') {
+        fwrite(STDERR, "Uso: php process_item.php <product_id> <openai|google|claude> [white,hero,ambient] [modelo] [site|ml|shopee|amazon|tiktok]\n");
         exit(1);
     }
-
-    $cliImageTypes = $cliImageTypesArg !== ''
-        ? array_map('trim', explode(',', $cliImageTypesArg))
-        : ['white', 'hero', 'ambient'];
-
+    $types = $typesArg !== '' ? array_map('trim', explode(',', $typesArg)) : ['white', 'hero', 'ambient'];
     $db = ai_studio_db();
-    if ($db === null) {
+    if (!$db instanceof PDO) {
         fwrite(STDERR, "Falha ao conectar ao banco de dados.\n");
         exit(1);
     }
-
-    $result = ai_studio_process_item($db, $cliProductId, $cliProvider, $cliImageTypes, $cliModel !== '' ? $cliModel : null);
+    $result = ai_studio_process_item($db, $productId, $provider, $types, $model !== '' ? $model : null, $targetChannel);
     fwrite(STDOUT, json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n");
-    exit($result['success'] ? 0 : 1);
+    exit(($result['success'] ?? false) ? 0 : 1);
 }
 
 if (PHP_SAPI !== 'cli' && basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
     require_once __DIR__ . '/../../includes/admin-guard.php';
-
     header('Content-Type: application/json; charset=UTF-8');
-
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
         http_response_code(405);
         echo json_encode(['success' => false, 'error' => 'Use POST.']);
         exit;
     }
 
-    $httpProductId = (int) ($_POST['product_id'] ?? 0);
-    $httpProvider = (string) ($_POST['provider'] ?? '');
-    // image_types[]: checkboxes por tipo de imagem vindos do formulário do
-    // dashboard (ver admin_dashboard.php) — se omitido, mantém o
-    // comportamento antigo de sempre gerar os 3 tipos.
-    $httpImageTypesRaw = $_POST['image_types'] ?? ['white', 'hero', 'ambient'];
-    $httpImageTypes = is_array($httpImageTypesRaw) ? array_map('strval', $httpImageTypesRaw) : ['white', 'hero', 'ambient'];
-    $httpModel = trim((string) ($_POST['model'] ?? ''));
-
-    if ($httpProductId <= 0 || $httpProvider === '') {
+    $productId = trim((string)($_POST['product_id'] ?? ''));
+    $provider = (string)($_POST['provider'] ?? '');
+    $rawTypes = $_POST['image_types'] ?? ['white', 'hero', 'ambient'];
+    $types = is_array($rawTypes) ? array_map('strval', $rawTypes) : ['white', 'hero', 'ambient'];
+    $model = trim((string)($_POST['model'] ?? ''));
+    $targetChannel = strtolower(trim((string)($_POST['target_channel'] ?? 'site')));
+    if ($productId === '' || $provider === '') {
         http_response_code(400);
-        echo json_encode(['success' => false, 'error' => 'Parâmetros product_id e provider são obrigatórios.']);
+        echo json_encode(['success' => false, 'error' => 'product_id e provider sao obrigatorios.']);
         exit;
     }
 
     $db = ai_studio_db();
-    if ($db === null) {
-        http_response_code(500);
-        echo json_encode(['success' => false, 'error' => 'Falha ao conectar ao banco de dados.']);
+    if (!$db instanceof PDO) {
+        http_response_code(503);
+        echo json_encode(['success' => false, 'error' => 'Banco de dados temporariamente indisponivel.']);
         exit;
     }
 
-    echo json_encode(
-        ai_studio_process_item($db, $httpProductId, $httpProvider, $httpImageTypes, $httpModel !== '' ? $httpModel : null),
-        JSON_UNESCAPED_UNICODE
-    );
+    echo json_encode(ai_studio_process_item($db, $productId, $provider, $types, $model !== '' ? $model : null, $targetChannel), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }

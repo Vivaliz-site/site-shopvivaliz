@@ -104,6 +104,12 @@ echo "OK public version endpoint: $expected_sha"
 
 check_http homepage "$base/" '200'
 homepage_body="$tmpdir/homepage.body"
+grep -q 'footer-cols' "$homepage_body"
+if grep -qE 'class="hero-slide is-active"[^>]*style="[^"]*linear-gradient' "$homepage_body"; then
+  echo 'FAIL possible duplicate hero gradient regression detected' >&2
+  exit 1
+fi
+echo 'OK public homepage HTML contract'
 grep -Eqi 'name=.viewport.' "$homepage_body"
 grep -Eqi '(mobile|menu-toggle|header)' "$homepage_body"
 echo 'OK mobile responsive header contract'

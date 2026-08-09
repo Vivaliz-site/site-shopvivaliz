@@ -23,7 +23,6 @@
 ### Specialized Agents
 | Agent | Purpose | Scope | Financial Impact |
 |-------|---------|-------|------------------|
-| PagarMeWebhookAgent | Payment webhook processing | Transaction events | Read-only |
 | InventoryMonitorAgent | Stock level monitoring | Inventory alerts | None |
 | SEOOptimizationAgent | Product SEO improvements | Content only | None |
 

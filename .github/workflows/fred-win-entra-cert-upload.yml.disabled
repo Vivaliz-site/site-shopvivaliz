@@ -1,0 +1,43 @@
+name: Fred-Win Entra Cert Upload
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fred-win-entra-cert-upload.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          test -n "$VM_KEY" || exit 2
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Upload public certificate using authenticated Fred-Win Chrome profile
+        run: |
+          python3 - <<'PY' > /tmp/body.json
+          import json
+          ps=r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'C:\site-shopvivaliz'; git fetch origin; git reset --hard origin/main; py -3 '.\scripts\fredwin-entra-cert-upload.py'"'''
+          print(json.dumps({'params':{'command':ps,'timeout':480}}))
+          PY
+          BODY_B64="$(base64 -w0 /tmp/body.json)"
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 "BODY_B64='$BODY_B64' python3 - <<'PY'
+          import os,base64,json,urllib.request
+          body=base64.b64decode(os.environ['BODY_B64'])
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=500) as r: payload=json.loads(r.read().decode())
+          print(json.dumps(payload,ensure_ascii=False))
+          if not (payload.get('result') or {}).get('success'): raise SystemExit(1)
+          PY"
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/body.json

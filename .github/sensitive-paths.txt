@@ -7,8 +7,7 @@
 #
 # Linhas comecando com # sao comentario e sao ignoradas.
 
-# Pagamento (Pagar.me e qualquer coisa de checkout/cobranca)
-^api/pagarme/
+# Pagamento, checkout e cobranca
 ^api/orders/
 checkout
 

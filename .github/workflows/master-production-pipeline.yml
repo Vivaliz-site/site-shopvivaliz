@@ -136,7 +136,11 @@ jobs:
     name: Deploy Exact Commit to Oracle VM
     runs-on: ubuntu-latest
     needs: validate
-    timeout-minutes: 8
+    # O cron canonico da VM roda a cada 2 minutos e, em releases grandes,
+    # pode manter o mesmo lock por mais de 8 minutos. O Master precisa ter
+    # janela suficiente para aguardar esse deploy concorrente terminar e
+    # ainda executar a reconciliacao do SHA exato.
+    timeout-minutes: 20
     environment: production
     steps:
       - name: Checkout exact validated commit
@@ -179,16 +183,17 @@ jobs:
           deploy_script="$repo/scripts/deploy-production.sh"
           deploy_log='/home/ubuntu/shopvivaliz-deploy/logs/deploy.log'
 
-          test -x "$deploy_script"
+          test -f "$deploy_script"
           git -C "$repo" rev-parse --is-inside-work-tree >/dev/null
           git -C "$repo" remote get-url origin >/dev/null
           git -C "$repo" fetch --no-tags origin "$expected_sha"
           git -C "$repo" cat-file -e "${expected_sha}^{commit}"
+          git -C "$repo" cat-file -e "${expected_sha}:scripts/deploy-production.sh"
 
-          # A legacy/out-of-band runner may have changed only this bootstrap
-          # file. Preserve it with a hash, then stage the exact requested
-          # runner so its own verified recovery logic can run. Any other dirty
-          # path remains a hard failure; no checkout reset or deletion occurs.
+          # Always stage the deploy runner from the exact validated SHA. A
+          # clean checkout can still be stale because fetch does not update the
+          # worktree. Preserve any different runner first, without resetting or
+          # deleting unrelated repository state.
           dirty="$(git -C "$repo" status --porcelain=v1 --untracked-files=all)"
           if [[ -n "$dirty" ]]; then
             dirty_paths="$(printf '%s\n' "$dirty" | sed -E 's/^.. //')"
@@ -197,6 +202,11 @@ jobs:
               printf '%s\n' "$dirty" >&2
               exit 1
             fi
+          fi
+
+          expected_runner_blob="$(git -C "$repo" rev-parse "${expected_sha}:scripts/deploy-production.sh")"
+          current_runner_blob="$(git -C "$repo" hash-object -- "$deploy_script")"
+          if [[ "$current_runner_blob" != "$expected_runner_blob" ]]; then
             backup_dir='/home/ubuntu/shopvivaliz-deploy/shared/logs/runner-recovery'
             mkdir -p "$backup_dir"
             recovery_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -209,7 +219,10 @@ jobs:
             git -C "$repo" show "${expected_sha}:scripts/deploy-production.sh" > "$restore_tmp"
             chmod 0755 "$restore_tmp"
             mv -f -- "$restore_tmp" "$deploy_script"
-            echo "Preserved legacy runner at $backup_path"
+            test "$(git -C "$repo" hash-object -- "$deploy_script")" = "$expected_runner_blob"
+            echo "Staged exact deploy runner for $expected_sha; previous runner preserved at $backup_path"
+          else
+            echo "Deploy runner already matches validated SHA $expected_sha"
           fi
 
           previous_release=''
@@ -230,22 +243,9 @@ jobs:
           deploy_status=0
           flock -n -E 75 /var/lock/shopvivaliz-deploy.lock "$deploy_script" "$expected_sha" || deploy_status=$?
           if [[ "$deploy_status" -eq 75 ]]; then
-            echo "Deploy lock busy. Waiting for concurrent deployment to finish..."
-            for attempt in 1 2 3 4 5 6; do
-              sleep 10
-              deployed_sha="$(cat "$current_link/.release-sha" 2>/dev/null || true)"
-              current_release="$(basename "$(readlink -f "$current_link")")"
-              if [[ "$deployed_sha" == "$expected_sha" ]]; then
-                echo "Expected commit became active during wait."
-                echo "Previous release: $previous_release"
-                echo "Previous commit: $previous_sha"
-                echo "Current release: $current_release"
-                echo "Deployed commit: $deployed_sha"
-                exit 0
-              fi
-            done
-            echo "Deployment lock remained busy and expected commit never became active." >&2
-            exit 75
+            echo "Deploy lock busy. Waiting up to 600s to run exact runner after concurrent deployment..."
+            deploy_status=0
+            flock -w 600 -E 75 /var/lock/shopvivaliz-deploy.lock "$deploy_script" "$expected_sha" || deploy_status=$?
           fi
           if [[ "$deploy_status" -ne 0 ]]; then
             echo "Deployment script failed with status $deploy_status." >&2

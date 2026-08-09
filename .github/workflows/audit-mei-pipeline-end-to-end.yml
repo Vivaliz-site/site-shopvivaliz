@@ -1,0 +1,145 @@
+name: Audit MEI pipeline end to end
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/audit-mei-pipeline-end-to-end.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mei-pipeline-end-to-end-audit
+  cancel-in-progress: true
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Audit live VM pipeline read-only
+        run: |
+          timeout 300s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=10 -o ServerAliveCountMax=2 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo '=== TIME_AND_HOST ==='
+          date --iso-8601=seconds
+          hostname
+          df -h /
+          echo
+
+          echo '=== CODE_DEPLOYMENT ==='
+          git remote -v || true
+          git branch --show-current || true
+          git rev-parse HEAD || true
+          git log -1 --format='%H %cI %s' || true
+          git status --short || true
+          for f in scripts/rotina_diaria_segura.py scripts/ingest_from_huggingface.py scripts/disparar_10000_mei_mg.py scripts/auditar_exchange_10000.py; do
+            test -f "$f" && sha256sum "$f" || echo "MISSING=$f"
+          done
+          echo
+
+          echo '=== USER_CRONTAB ==='
+          crontab -l 2>&1 || true
+          echo '=== ROOT_CRONTAB ==='
+          timeout 10s sudo crontab -l 2>&1 || true
+          echo '=== SYSTEMD_TIMERS_RELEVANT ==='
+          timeout 10s systemctl list-timers --all --no-pager | grep -Ei 'mei|email|cnpj|receita|hugging|shopvivaliz' || true
+          echo '=== SYSTEMD_UNITS_RELEVANT ==='
+          timeout 10s systemctl list-unit-files --no-pager | grep -Ei 'mei-mg-email|cnpj' || true
+          echo '=== CRON_AND_SYSTEMD_REFERENCES ==='
+          timeout 20s sudo grep -R -n -E 'rotina_diaria_segura|ingest_from_huggingface|disparar_10000_mei_mg|garantir_meta_10000|disparar_295_mei_mg' /etc/cron.d /etc/crontab /etc/systemd/system 2>/dev/null || true
+          echo
+
+          echo '=== SERVICES ==='
+          for u in mei-mg-email-api.service mei-mg-email-worker.service; do
+            echo "$u state=$(timeout 10s sudo systemctl is-active "$u" || true) enabled=$(timeout 10s sudo systemctl is-enabled "$u" || true)"
+            timeout 10s sudo systemctl show "$u" -p Description -p ActiveState -p SubState -p ExecMainStartTimestamp -p ExecMainExitTimestamp --no-pager || true
+          done
+          echo
+
+          echo '=== CRON_JOURNAL_LAST_48H ==='
+          timeout 20s sudo journalctl -u cron --since '48 hours ago' --no-pager 2>/dev/null | grep -Ei 'mei-mg-email|rotina_diaria|ingest_from_huggingface|disparar_10000|garantir_meta' | tail -n 120 || true
+          echo
+
+          echo '=== DATABASE_PIPELINE ==='
+          timeout 120s /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import json, os, psycopg
+          from psycopg.rows import dict_row
+          out={}
+          with psycopg.connect(os.environ['DATABASE_URL'], row_factory=dict_row, connect_timeout=10) as conn:
+            with conn.cursor() as cur:
+              cur.execute("set transaction read only")
+              cur.execute("set statement_timeout = '60s'")
+              cur.execute("""
+                select count(*) total,
+                       min(importado_em) first_import,
+                       max(importado_em) last_import,
+                       max(atualizado_em) last_update,
+                       count(*) filter (where importado_em >= now()-interval '24 hours') imported_24h,
+                       count(*) filter (where atualizado_em >= now()-interval '24 hours') updated_24h,
+                       count(*) filter (where importado_em >= date_trunc('day',now())) imported_today,
+                       count(*) filter (where atualizado_em >= date_trunc('day',now())) updated_today,
+                       count(*) filter (where tipo_regime='MEI') mei_total,
+                       count(*) filter (where tipo_regime='MEI' and situacao_cadastral='ATIVA' and email is not null and btrim(email::text)<>'') mei_active_email,
+                       count(*) filter (where marketing_autorizado) marketing_authorized,
+                       count(*) filter (where opt_out) opt_out,
+                       count(*) filter (where provavel_terceiro) probable_third_party
+                  from mei_email.empresas
+              """)
+              out['empresas']=dict(cur.fetchone())
+              cur.execute("""
+                select (importado_em at time zone 'America/Sao_Paulo')::date dia, count(*) n
+                  from mei_email.empresas
+                 where importado_em >= now()-interval '14 days'
+                 group by 1 order by 1 desc
+              """)
+              out['imports_by_day_14d']=[dict(r) for r in cur.fetchall()]
+              cur.execute("select count(*) n from mei_email.vw_empresas_elegiveis")
+              out['eligible_view']=cur.fetchone()['n']
+              cur.execute("""
+                select count(*) n
+                  from mei_email.empresas e
+                 where e.situacao_cadastral='ATIVA'
+                   and e.tipo_regime='MEI'
+                   and e.uf='MG'
+                   and e.email is not null and btrim(e.email::text)<>''
+                   and not e.opt_out and not e.provavel_terceiro and not e.enviado
+              """)
+              out['technical_candidates_without_marketing_flag']=cur.fetchone()['n']
+              cur.execute("""
+                select count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours') used_24h,
+                       count(*) filter(where status::text in ('pendente','enviando')) pending,
+                       count(*) filter(where status::text='bloqueado') blocked,
+                       count(*) filter(where status::text='falhou') failed,
+                       count(*) filter(where status::text='submitted') submitted_total,
+                       max(enviado_em) last_submit
+                  from mei_email.envios
+              """)
+              out['envios']=dict(cur.fetchone())
+              cur.execute("select status::text,count(*) n from mei_email.campanhas group by 1 order by 1")
+              out['campaign_statuses']=[dict(r) for r in cur.fetchall()]
+              cur.execute("""
+                select id::text,nome,status::text,total_empresas,total_enviados,total_falhas,criado_em,iniciado_em,concluido_em
+                  from mei_email.campanhas order by criado_em desc limit 10
+              """)
+              out['latest_campaigns']=[dict(r) for r in cur.fetchall()]
+              cur.execute("select status::text,count(*) n from mei_email.lotes group by 1 order by 1")
+              out['lot_statuses']=[dict(r) for r in cur.fetchall()]
+          print('PIPELINE_DB='+json.dumps(out, ensure_ascii=False, default=str))
+          PY
+          echo
+
+          echo '=== SOURCE_REACHABILITY ==='
+          timeout 20s curl -sSIL --max-time 15 'https://huggingface.co/datasets/fluowai/datacorp-cnpj-data/resolve/main/cnpj_prefix_00_09.parquet' | grep -Ei '^(HTTP/|last-modified:|etag:|content-length:|location:)' | tail -n 12 || true
+          timeout 20s curl -sSI --max-time 15 'https://dadosabertos.rfb.gov.br/CNPJ/' | grep -Ei '^(HTTP/|last-modified:|etag:|content-length:)' || true
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

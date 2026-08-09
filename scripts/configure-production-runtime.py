@@ -50,6 +50,15 @@ def validate_database_tuple(values: dict[str, str]) -> str | None:
     return None
 
 
+def validate_no_placeholders(values: dict[str, str]) -> str | None:
+    markers = ("changeme", "placeholder", "your_", "replace_me", "example", "dummy", "token_here")
+    for key, value in values.items():
+        normalized = value.strip().lower()
+        if any(marker in normalized for marker in markers):
+            return f"placeholder value refused for {key}"
+    return None
+
+
 def read_payload() -> dict[str, str]:
     raw_values = sys.stdin.buffer.read().split(b"\0")
     if raw_values and raw_values[-1] == b"":
@@ -82,15 +91,17 @@ def main() -> int:
     if database_error is not None:
         print(database_error, file=sys.stderr)
         return 2
+    placeholder_error = validate_no_placeholders(values)
+    if placeholder_error is not None:
+        print(placeholder_error, file=sys.stderr)
+        return 2
 
     path = Path(sys.argv[1])
     if not path.is_file():
         print(f"shared env does not exist: {path}", file=sys.stderr)
         return 1
 
-    # The generic configurator never changes managed OAuth keys. This keeps a
-    # stale GitHub secret, an alias mismatch, or a placeholder from breaking
-    # the working Tiny/Olist integration on the VM.
+    original = path.stat()
     backup = path.with_name(f"{path.name}.backup.{int(time.time())}")
     shutil.copy2(path, backup)
     os.chmod(backup, PRIVATE_MODE)
@@ -117,8 +128,14 @@ def main() -> int:
             handle.flush()
             os.fsync(handle.fileno())
         os.chmod(temporary, PRIVATE_MODE)
+        if hasattr(os, "chown"):
+            os.chown(temporary, original.st_uid, original.st_gid)
         os.replace(temporary, path)
         os.chmod(path, PRIVATE_MODE)
+        if os.name != "nt":
+            updated = path.stat()
+            if updated.st_uid != original.st_uid or updated.st_gid != original.st_gid or (updated.st_mode & 0o777) != PRIVATE_MODE:
+                raise RuntimeError("shared env metadata changed unexpectedly")
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -126,6 +143,7 @@ def main() -> int:
     print("managed_oauth_mutation=blocked")
     print("backup_created=true")
     print("shared_env_mode=600")
+    print("shared_env_owner_preserved=true")
     print("database_user_safe=true")
     return 0
 

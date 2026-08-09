@@ -1,0 +1,5 @@
+{
+  "action": "repair_oauth_candidate",
+  "requested_at": "2026-08-08T12:42:00-03:00",
+  "reason": "Wait for Fred-Win MCP recovery, test normalized OAuth client id without exposing credentials, repair local client id, and sync GitHub Production secret if gh auth is available"
+}

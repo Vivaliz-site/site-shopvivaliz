@@ -1,0 +1,47 @@
+name: Marketplace admin lint
+
+on:
+  push:
+    branches:
+      - 'audit/**'
+  pull_request:
+    paths:
+      - 'admin/catalog-optimization/**'
+      - 'admin/ai-image-studio/**'
+      - 'includes/marketplace/CatalogChannelProfile.php'
+      - 'tests/php/marketplace_admin_policy_test.php'
+      - '.github/workflows/marketplace-admin-lint.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  php-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP version
+        run: php -v
+      - name: Lint changed marketplace admin PHP
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            admin/catalog-optimization/admin_catalog.php
+            admin/catalog-optimization/api/optimize_catalog.php
+            admin/catalog-optimization/src/CatalogDraftEditor.php
+            admin/ai-image-studio/admin_dashboard.php
+            admin/ai-image-studio/admin_validate.php
+            admin/ai-image-studio/process_item.php
+            admin/ai-image-studio/src/ImageChannelProfile.php
+            includes/marketplace/CatalogChannelProfile.php
+            tests/php/marketplace_admin_policy_test.php
+          )
+          for file in "${files[@]}"; do
+            echo "Linting $file"
+            php -l "$file"
+          done
+      - name: Run marketplace admin policy test
+        run: php tests/php/marketplace_admin_policy_test.php

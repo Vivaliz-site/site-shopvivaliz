@@ -1,0 +1,5 @@
+{
+  "sha": "bf93c24fba027e2926088a76a6aef2a504b3c36b",
+  "requested_at": "2026-08-08T19:34:00-03:00",
+  "reason": "Deploy OAuth bootstrap fix that enables Service Usage before Google Ads API"
+}

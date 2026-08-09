@@ -1,0 +1,76 @@
+name: Google Ads Enable API With Current OAuth
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ops/google-ads-enable-api-oauth.json"
+
+permissions:
+  contents: read
+
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Attempt Service Usage enable with validated OAuth
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
+          import json, urllib.parse, urllib.request, urllib.error
+          from pathlib import Path
+          env={}
+          for raw in Path('/home/ubuntu/shopvivaliz-deploy/shared/.env').read_text(encoding='utf-8',errors='ignore').splitlines():
+              line=raw.strip()
+              if not line or line.startswith('#') or '=' not in line: continue
+              k,v=line.split('=',1); env[k.strip()]=v.strip().strip('"\'')
+          data=urllib.parse.urlencode({
+              'client_id':env.get('GOOGLE_OAUTH_CLIENT_ID',''),
+              'client_secret':env.get('GOOGLE_OAUTH_CLIENT_SECRET',''),
+              'refresh_token':env.get('GOOGLE_ADS_REFRESH_TOKEN',''),
+              'grant_type':'refresh_token',
+          }).encode()
+          req=urllib.request.Request('https://oauth2.googleapis.com/token',data=data,headers={'Content-Type':'application/x-www-form-urlencoded'},method='POST')
+          with urllib.request.urlopen(req,timeout=20) as r:
+              access=json.loads(r.read().decode()).get('access_token','')
+          print('OAUTH_REFRESH_VALID=' + ('yes' if access else 'no'))
+          if not access: raise SystemExit(2)
+          tokeninfo=urllib.request.urlopen('https://oauth2.googleapis.com/tokeninfo?access_token='+urllib.parse.quote(access),timeout=20)
+          info=json.loads(tokeninfo.read().decode())
+          scopes=set(str(info.get('scope','')).split())
+          print('HAS_CLOUD_PLATFORM_SCOPE=' + ('yes' if 'https://www.googleapis.com/auth/cloud-platform' in scopes else 'no'))
+          url='https://serviceusage.googleapis.com/v1/projects/515723698609/services/googleads.googleapis.com:enable'
+          ereq=urllib.request.Request(url,data=b'{}',headers={'Authorization':'Bearer '+access,'Content-Type':'application/json'},method='POST')
+          try:
+              with urllib.request.urlopen(ereq,timeout=30) as r:
+                  payload=json.loads(r.read().decode())
+              print('SERVICE_USAGE_ENABLE_REQUEST=accepted')
+              print('operation_created=' + ('yes' if payload.get('name') else 'no'))
+          except urllib.error.HTTPError as e:
+              body=e.read().decode(errors='ignore')
+              try: payload=json.loads(body)
+              except Exception: payload={}
+              err=payload.get('error') if isinstance(payload,dict) else {}
+              print('SERVICE_USAGE_ENABLE_REQUEST=failed')
+              print('http_code='+str(e.code))
+              print('status='+str(err.get('status','')))
+              print('message='+str(err.get('message',''))[:600].replace('\n',' '))
+              raise SystemExit(3)
+          PY
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

@@ -1,57 +1,38 @@
 #!/bin/bash
 set -Eeuo pipefail
-# Setup .env no servidor Oracle Cloud
-# Execute via SSH: ssh -i <key> ubuntu@137.131.156.17
 
-echo "Criando .env no servidor..."
+# Safe Google Ads environment bootstrap.
+# This file never contains real credentials and refuses to overwrite an existing
+# .env. Populate secrets through the approved secret store or edit the private
+# server .env directly over an authenticated administration channel.
 
-# Navegar para pasta do projeto
 cd /home/ubuntu/site-shopvivaliz
 
-# Criar arquivo .env
-cat > .env << 'ENVFILE'
-# Google Ads Campaign Configuration
-# SERVER ENVIRONMENT - 2026-07-19
-# VM Oracle Cloud: 137.131.156.17
-
-# OAuth 2.0 Credentials
-GOOGLE_OAUTH_CLIENT_ID=m71jvyuls7c4die88db14nv3bllmth0i.app.s.googleusercontent.com
-GOOGLE_OAUTH_CLIENT_SECRET=<novo_secret_rotacionado>
-
-# Google Ads API
-GOOGLE_ADS_CUSTOMER_ID=5104079137
-GOOGLE_ADS_DEVELOPER_TOKEN=<obter_de_ads_google_com_aw_apicenter>
-GOOGLE_ADS_REFRESH_TOKEN=<gerar_via_oauth_google_ads>
-GOOGLE_ADS_ID=<conversion_id_ou_AW-id>
-GOOGLE_ADS_CONVERSION_LABEL=<conversion_label>
-
-# Google Analytics
-GOOGLE_ANALYTICS_ID=<measurement_id_ga4>
-GA4_SECRET=<measurement_protocol_secret>
-
-# Campaign Configuration
-CAMPAIGN_NAME=Rodizios-Search-AGRESSIVO-10xROI-2026-07
-CAMPAIGN_BUDGET_DAILY=15.00
-CAMPAIGN_DURATION_DAYS=30
-CAMPAIGN_ROI_TARGET=10
-
-# Application Settings
-NODE_ENV=production
-DEBUG=false
-ENVFILE
-
-# Definir permissões
-chmod 600 .env
-
-# Verificar
-echo ".env criado com permissao 600."
-echo "Validando placeholders antes de qualquer campanha..."
-if python3 scripts/google_ads_real_readiness.py; then
-  echo "COMPROVADO: readiness Google Ads aprovado para criacao pausada."
-else
-  echo "FALHOU: readiness Google Ads nao aprovado. Preencha credenciais reais no .env privado."
-  exit 1
+if [ -e .env ]; then
+  echo "ABORT: .env already exists; refusing to overwrite production secrets."
+  echo "Update credentials through the approved secret store or secure admin channel."
+  exit 2
 fi
 
-echo ""
-echo "Proximo passo permitido: revisar criacao pausada da campanha."
+cat > .env << 'ENVFILE'
+# Google Ads OAuth/API - placeholders only
+GOOGLE_OAUTH_CLIENT_ID=<active_client_id_ending_in_.apps.googleusercontent.com>
+GOOGLE_OAUTH_CLIENT_SECRET=<secret_for_the_same_active_client>
+GOOGLE_ADS_CUSTOMER_ID=<production_customer_id_10_digits>
+GOOGLE_ADS_LOGIN_CUSTOMER_ID=<mcc_customer_id_if_required>
+GOOGLE_ADS_DEVELOPER_TOKEN=<developer_token_from_api_center>
+GOOGLE_ADS_REFRESH_TOKEN=<refresh_token_issued_for_the_same_oauth_client>
+
+# Conversion/Analytics
+GOOGLE_ADS_CONVERSION_SOURCE=GA4_IMPORT
+GOOGLE_ANALYTICS_ID=<ga4_measurement_id>
+GA4_SECRET=<measurement_protocol_secret_if_used>
+ENVFILE
+
+chmod 600 .env
+
+echo ".env template created with mode 600."
+echo "Fill the private values securely, then run:"
+echo "  python3 scripts/google_ads_auth_preflight.py"
+echo "  python3 scripts/google_ads_real_readiness.py"
+echo "Do not attempt any live Ads mutation until both checks pass."

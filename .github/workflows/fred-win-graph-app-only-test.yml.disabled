@@ -1,0 +1,43 @@
+name: Fred-Win Graph App-Only Test
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fred-win-graph-app-only-test.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          test -n "$VM_KEY" || exit 2
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Sync and test app-only
+        run: |
+          python3 - <<'PY' > /tmp/body.json
+          import json
+          ps=r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'C:\mei-mg-email'; git fetch origin; git reset --hard origin/main; & '.\.venv\Scripts\python.exe' -m pytest -q --disable-warnings --maxfail=1; if($LASTEXITCODE -ne 0){ throw 'pytest failed' }; & '.\.venv\Scripts\python.exe' '.\scripts\auditar_graph_token.py'; if($LASTEXITCODE -ne 0){ throw 'Graph app-only audit failed' }"'''
+          print(json.dumps({'params':{'command':ps,'timeout':500}}))
+          PY
+          BODY_B64="$(base64 -w0 /tmp/body.json)"
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 "BODY_B64='$BODY_B64' python3 - <<'PY'
+          import os,base64,json,urllib.request
+          body=base64.b64decode(os.environ['BODY_B64'])
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=520) as r: payload=json.loads(r.read().decode())
+          print(json.dumps(payload,ensure_ascii=False))
+          if not (payload.get('result') or {}).get('success'): raise SystemExit(1)
+          PY"
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/body.json

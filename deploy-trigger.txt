@@ -1,3 +1,4 @@
 Deploy trigger
-Updated at: 2026-06-26T17:41:00Z
-Purpose: run validation workflow.
+Updated at: 2026-08-06T22:55:07Z
+Source HEAD: 5486e5fed4b4452725ec70188ce450c4fae57a54
+Purpose: retry Quality Gate and canonical production deployment after the prior trigger produced no workflow run.

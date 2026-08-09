@@ -1,75 +1,44 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+"""Read-only launcher summary for the current reviewed Google Ads config.
+
+This script intentionally contains no account ID, no credentials and no live
+mutation path. It reads the canonical reviewed configuration and prints the
+safe next steps.
 """
-LANCADOR DE CAMPANHA GOOGLE ADS - ShopVivaliz
-Produto Campeao: Rodizios 35mm Gel
-Orcamento: R$ 10.00/dia
-"""
+
+from __future__ import annotations
 
 import json
-from datetime import datetime
+from pathlib import Path
 
-# ===== CONFIG =====
-CAMPAIGN = {
-    "name": "Rodizios-Search-ShopVivaliz-2026-07",
-    "budget_daily": 10.00,
-    "status": "PAUSED",  # Iniciar pausada para review
-    "keywords": 8,
-    "headlines": 12,
-    "descriptions": 6,
-    "negative_keywords": 8,
-    "locations": ["SP", "MG", "PR"],
-    "cpc_target": "R$ 0.75-0.95"
-}
 
-print("\n" + "="*70)
-print("GOOGLE ADS CAMPAIGN LAUNCHER - ShopVivaliz")
-print("="*70)
-print("\nCampanha: " + CAMPAIGN["name"])
-print("Orcamento: R$ " + str(CAMPAIGN["budget_daily"]) + "/dia")
-print("Status: " + CAMPAIGN["status"] + " (revisar antes de ativar)")
-print("Palavras-chave: " + str(CAMPAIGN["keywords"]))
-print("Headlines: " + str(CAMPAIGN["headlines"]))
-print("Negativas: " + str(CAMPAIGN["negative_keywords"]))
-print("\n" + "="*70)
+ROOT = Path(__file__).resolve().parents[1]
+CONFIG = ROOT / "scripts" / "google_ads_campaign_live_ready.json"
 
-# Salvar config
-config_file = "scripts/google_ads_launch_config.json"
-with open(config_file, "w", encoding="utf-8") as f:
-    json.dump(CAMPAIGN, f, ensure_ascii=False, indent=2)
 
-print("\nArquivo gerado: " + config_file)
-print("\nCOMO USAR:")
-print("\n1. NAVEGAR PARA GOOGLE ADS:")
-print("   - URL: https://ads.google.com")
-print("   - Account: 5104079137")
-print("\n2. CRIAR CAMPANHA MANUALMENTE:")
-print("   - Tipo: Pesquisa (Search)")
-print("   - Nome: " + CAMPAIGN["name"])
-print("   - Orcamento: R$ " + str(CAMPAIGN["budget_daily"]) + "/dia")
-print("\n3. ADICIONAR KEYWORDS:")
-print("   - ALTA PRIORIDADE:")
-print("     * rodizios gel soprano 35mm (PHRASE)")
-print("     * rodizio giratório com freio (PHRASE)")
-print("     * kit rodizios 35mm freio (PHRASE)")
-print("   ")
-print("   - MEDIA PRIORIDADE:")
-print("     * rodizios para móvel (PHRASE)")
-print("     * rodizio gel silicone (PHRASE)")
-print("     * rodizio giratório com freio (PHRASE)")
-print("   ")
-print("   - BAIXA PRIORIDADE:")
-print("     * comprar rodizios gel (PHRASE)")
-print("     * kit rodizios para movel (PHRASE)")
-print("\n4. ADICIONAR NEGATIVAS:")
-print("     * rodizio barato, gratis, free, download, usado")
-print("     * rodizio segunda mão, emprego, curso")
-print("\n5. CRIAR ANUNCIOS (RSA - Responsive Search Ads):")
-print("   Usar os 12 headlines e 6 descriptions do arquivo")
-print("   scripts/google_ads_campaign_config.json")
-print("\n6. REVISAR E ATIVAR:")
-print("   - CPC recomendado: R$ 0.75-0.95 por keyword")
-print("   - Ativar quando pronto")
-print("\n" + "="*70)
-print("ARQUIVO REFERENCIA: " + config_file + "\n")
+def main() -> int:
+    data = json.loads(CONFIG.read_text(encoding="utf-8"))
+    campaign = data["campaign"]
+    groups = data.get("ad_groups", [])
+    guardrails = data.get("guardrails", {})
 
+    print("GOOGLE_ADS_REVIEWED_CONFIG_SUMMARY")
+    print(f"campaign={campaign.get('name', '')}")
+    print(f"status_on_create={campaign.get('status_on_create', '')}")
+    print(f"daily_budget_brl={campaign.get('daily_budget_brl', '')}")
+    print(f"max_cpc_brl={campaign.get('bidding', {}).get('max_cpc_brl', '')}")
+    print(f"ad_groups={len(groups)}")
+    print(f"keywords={sum(len(group.get('keywords', [])) for group in groups)}")
+    print(f"target_roi={guardrails.get('target_roi', '')}")
+    print("customer_id_source=secure_environment_only")
+    print("credentials_source=secure_secret_store_only")
+    print("NO_CHANGES_MADE")
+    print("next=python scripts/google_ads_auth_preflight.py")
+    print("next=python scripts/google_ads_real_readiness.py")
+    print("next=python scripts/google_ads_create_search_campaign.py")
+    print("real_creation_requires=--create-paused_after_explicit_review")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
