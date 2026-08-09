@@ -218,8 +218,11 @@
       if (userInitiated) pauseAfterInteraction();
 
       isProgrammaticChange = true;
-      targetButton.click();
-      isProgrammaticChange = false;
+      try {
+        targetButton.click();
+      } finally {
+        isProgrammaticChange = false;
+      }
       updateControls();
     }
 
