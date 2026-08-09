@@ -91,7 +91,7 @@ Scripts também consolidados: 31 → 2 mestres (`olist-sync-master.py`, `git-aut
 
 3. Pull Request (PR) e Merge (OBRIGATÓRIO)
    ├─ Criar ou atualizar PR
-   └─ Efetuar Merge para branch alvo ao finalizar as alterações locais
+   └─ Efetuar Merge para branch alvo ao finalizar as alterações locais (Toda alteração deve ser validada e seguir este fluxo)
 
 4. GitHub Dispara Pipeline Automática
    ├─ [1] QA Lint (5 min) - Valida PHP/JS
