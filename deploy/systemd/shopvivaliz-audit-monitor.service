@@ -15,6 +15,6 @@ StandardOutput=append:/home/ubuntu/shopvivaliz-deploy/shared/logs/audit-monitor-
 StandardError=append:/home/ubuntu/shopvivaliz-deploy/shared/logs/audit-monitor-service.log
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectHome=true
+ProtectHome=read-only
 ProtectSystem=strict
 ReadWritePaths=/home/ubuntu/shopvivaliz-deploy/shared/logs
