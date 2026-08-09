@@ -71,6 +71,7 @@ function ai_catalog_cli_log(string $message): void
 }
 
 $args = ai_catalog_cli_parse_args($argv);
+$args['provider'] = catalog_ai_normalize_provider($args['provider']);
 
 if ($args['channel'] === '' || !array_key_exists($args['channel'], catalog_ai_channels())) {
     fwrite(STDERR, "Canal inválido ou ausente. Uso: php cron_bulk_optimize.php --channel=ml --provider=openai --limit=20\n");

@@ -29,7 +29,7 @@ $previewModel = '';
 $previewChannel = 'site';
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && ($_GET['preview'] ?? '') === '1') {
-    $previewProvider = strtolower(trim((string)($_GET['provider'] ?? '')));
+    $previewProvider = ai_studio_normalize_provider((string)($_GET['provider'] ?? ''));
     $previewModel = trim((string)($_GET['model'] ?? ''));
     $previewChannel = strtolower(trim((string)($_GET['target_channel'] ?? 'site')));
     $limit = max(1, min(50, (int)($_GET['limit'] ?? 5)));
@@ -44,7 +44,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && ($_GET['preview'] ?? '') 
             // recebeu imagens para o site continua elegivel para Amazon,
             // Mercado Livre, Shopee ou TikTok.
             $stmt = $db->prepare(
-                'SELECT p.id, p.name, p.image_url '
+                'SELECT p.id, p.name, p.image_url, p.sku, p.category '
                 . 'FROM products p '
                 . 'LEFT JOIN product_images_staging s ON s.product_id = p.id AND s.target_channels_json LIKE ? '
                 . 'WHERE s.id IS NULL ORDER BY p.id ASC LIMIT ' . (int)$limit
@@ -60,10 +60,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && ($_GET['preview'] ?? '') 
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['run_batch'])) {
-    $provider = strtolower(trim((string)($_POST['provider'] ?? '')));
+    $provider = ai_studio_normalize_provider((string)($_POST['provider'] ?? ''));
     $model = trim((string)($_POST['model'] ?? ''));
     $targetChannel = strtolower(trim((string)($_POST['target_channel'] ?? 'site')));
-    $productIds = array_map('intval', (array)($_POST['product_ids'] ?? []));
+    $selectedProducts = (array)($_POST['selected_products'] ?? ($_POST['product_ids'] ?? []));
+    $productIds = array_values(array_unique(array_filter(array_map('intval', $selectedProducts), static fn(int $value): bool => $value > 0)));
     $imageTypesByProduct = (array)($_POST['image_types'] ?? []);
 
     if (!in_array($provider, ['openai', 'google', 'claude'], true)) {
@@ -117,12 +118,19 @@ try {
 <style>
 *{box-sizing:border-box}body{background:#f5f6f8}.ais-wrap{max-width:1100px;margin:24px auto;padding:0 16px;font-family:system-ui,-apple-system,sans-serif}.ais-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px;margin-bottom:24px}.ais-card{background:#fff;border:1px solid #e2e4ea;border-radius:10px;padding:16px;text-align:center}.ais-card .num{font-size:28px;font-weight:700}.ais-form{background:#fff;border:1px solid #e2e4ea;border-radius:10px;padding:20px;margin-bottom:24px}.ais-form label{display:block;font-weight:600;margin:14px 0 6px}.ais-form select,.ais-form input[type=number],.ais-form input[type=text]{padding:10px;border:1px solid #ccc;border-radius:6px;width:360px;max-width:100%;font:inherit;font-size:16px}.ais-form button{margin-top:18px;background:#1a1a2e;color:#fff;border:0;padding:11px 22px;border-radius:6px;font-weight:700;cursor:pointer}.ais-form small{display:block;color:#666;margin-top:4px;max-width:760px}.ais-alert{padding:12px 16px;border-radius:8px;margin-bottom:16px}.ais-alert.error{background:#fdecea;color:#611a15}.ais-alert.info{background:#e8f4fd;color:#0c3b57}.ais-alert.note{background:#fff8e1;color:#6b5300}.ais-topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px}.ais-back{margin-bottom:16px}.ais-preview-list{display:flex;flex-direction:column;gap:10px;margin:16px 0}.ais-preview-item{display:flex;align-items:center;gap:14px;background:#fafbfc;border:1px solid #e6e8ed;border-radius:8px;padding:10px 14px;min-width:0}.ais-preview-item img{width:64px;height:64px;object-fit:contain;border-radius:6px;background:#eee;flex-shrink:0}.ais-pi-info{flex:1;min-width:0}.ais-pi-name{font-weight:600;overflow-wrap:anywhere}.ais-pi-id{color:#888;font-size:12px}.ais-pi-types{display:flex;gap:12px;flex-wrap:wrap}.ais-pi-types label{display:flex;align-items:center;gap:5px;font-weight:400;margin:0;font-size:13px}.channel-profile{background:#eef6ff;border-left:4px solid #1769aa;padding:12px;margin:12px 0}.channel-profile ul{margin:7px 0;padding-left:20px}.table-wrap{overflow:auto;border-radius:10px}table.ais-table{width:100%;border-collapse:collapse;background:#fff;min-width:720px}table.ais-table th,table.ais-table td{padding:10px 12px;border-bottom:1px solid #eee;text-align:left;font-size:14px}.ais-badge{padding:2px 8px;border-radius:12px;font-size:12px;font-weight:600;background:#eef2f7}@media(max-width:760px){.ais-wrap{padding:0 10px;margin-top:12px}.ais-preview-item{align-items:flex-start;flex-wrap:wrap}.ais-pi-types{width:100%;padding-left:78px}.ais-topbar h1{font-size:26px}}
 </style>
+<style>
+.ais-preview-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+.ais-preview-actions button,.ais-product-check{border:0;border-radius:6px;padding:8px 12px;font-weight:700;cursor:pointer;background:#eef2f7;color:#111}
+.ais-preview-summary{display:flex;align-items:center;gap:6px;padding:8px 10px;border-radius:6px;background:#f8fafc;border:1px solid #e5e7eb;color:#334155;font-size:13px}
+.ais-product-check{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.ais-product-check input{transform:scale(1.08)}
+</style>
 </head>
 <body>
 <div class="ais-wrap">
 <div class="ais-back"><a href="/admin/menu-completo.php">← Voltar ao Admin</a></div>
 <div class="ais-topbar"><h1>AI Image Studio — por marketplace</h1><a href="/admin/ai-image-studio/admin_validate.php">Ir para aprovacao →</a></div>
-<div class="channel-profile"><strong>Fluxo auditado:</strong> escolha o marketplace <em>antes</em> de gerar. O prompt, a fila e a revisao passam a carregar esse destino. A imagem continua nascendo da foto real do mesmo produto; preco e estoque nao participam do fluxo.</div>
+<div class="channel-profile"><strong>Fluxo auditado:</strong> escolha o marketplace <em>antes</em> de gerar. Depois, marque os produtos que quer processar. O prompt, a fila e a revisao passam a carregar esse destino. A imagem continua nascendo da foto real do mesmo produto; preco e estoque nao participam do fluxo.</div>
 <div class="ais-cards">
 <?php foreach (['pending'=>'Pendentes','published'=>'Publicadas','submitted'=>'Enviadas/auditoria','rejected'=>'Rejeitadas','failed'=>'Falhas','publication_failed'=>'Falha publicacao'] as $status=>$label): ?><div class="ais-card"><div class="num"><?= (int)($statusCounts[$status] ?? 0) ?></div><div><?= ai_studio_h($label) ?></div></div><?php endforeach; ?>
 </div>
@@ -134,15 +142,15 @@ try {
 <label for="target_channel">Marketplace de destino</label><select name="target_channel" id="target_channel" required><?php foreach($channelProfiles as $key=>$profile): ?><option value="<?=ai_studio_h($key)?>"><?=ai_studio_h((string)$profile['label'])?></option><?php endforeach; ?></select><small>O destino controla o prompt visual e cria uma fila independente por canal.</small>
 <label for="provider">Motor de IA</label><select name="provider" id="provider" onchange="aisUpdateModelDefault()" required><option value="openai">OpenAI — edicao da foto real</option><option value="google">Google Gemini — edicao da foto real</option><option value="claude">Claude otimiza prompt + OpenAI edita</option></select>
 <label for="model">Modelo de imagem</label><input type="text" name="model" id="model" value="gpt-image-1"><small>Use um modelo que aceite imagem de referencia. A validacao local rejeita arquivo invalido ou abaixo do minimo tecnico.</small>
-<label for="limit">Limite de produtos</label><input type="number" name="limit" id="limit" value="5" min="1" max="50" required><div><button type="submit">Buscar produtos deste canal →</button></div></form></div>
+<label for="limit">Mostrar ate</label><input type="number" name="limit" id="limit" value="12" min="1" max="50" required><div><button type="submit">Buscar produtos deste canal →</button></div></form></div>
 <script>function aisUpdateModelDefault(){const p=document.getElementById('provider').value,i=document.getElementById('model'),d={openai:'gpt-image-1',claude:'gpt-image-1',google:'gemini-2.5-flash-image'};if(Object.values(d).includes(i.value))i.value=d[p]||''}</script>
 <?php else: $profile=$channelProfiles[$previewChannel]??$channelProfiles['site']; ?>
 <div class="ais-form"><h2>Passo 2 — Confirmar geracao para <?=ai_studio_h((string)$profile['label'])?></h2><p>Provedor: <strong><?=ai_studio_h($previewProvider)?></strong><?php if($previewModel!==''):?> · Modelo: <strong><?=ai_studio_h($previewModel)?></strong><?php endif;?> · <?=count($previewProducts)?> produto(s).</p>
 <div class="channel-profile"><strong>Regra visual deste canal</strong><ul><?php foreach((array)($profile['audit_notes']??[]) as $note):?><li><?=ai_studio_h((string)$note)?></li><?php endforeach;?></ul><small>Minimo tecnico: <?= (int)($profile['minimum_side']??1000) ?>px por lado · alvo recomendado: <?= (int)($profile['recommended_side']??1000) ?>px · galeria: ate <?= (int)($profile['max_gallery']??9) ?> imagens.</small></div>
 <?php if($previewProducts===[]): ?><div class="ais-alert note">Nenhum produto pendente para este marketplace. <a href="/admin/ai-image-studio/admin_dashboard.php">Buscar outro canal</a></div><?php else: ?>
-<form method="post"><input type="hidden" name="run_batch" value="1"><input type="hidden" name="provider" value="<?=ai_studio_h($previewProvider)?>"><input type="hidden" name="model" value="<?=ai_studio_h($previewModel)?>"><input type="hidden" name="target_channel" value="<?=ai_studio_h($previewChannel)?>"><div class="ais-preview-list">
-<?php foreach($previewProducts as $p): $pid=(int)$p['id'];$pname=trim((string)($p['name']??''))!==''?(string)$p['name']:"Produto #$pid";$pimg=trim((string)($p['image_url']??'')); ?><div class="ais-preview-item"><input type="hidden" name="product_ids[]" value="<?=$pid?>"><?php if($pimg!==''):?><img src="<?=ai_studio_h($pimg)?>" alt="Foto atual"><?php else:?><div style="width:64px;height:64px;background:#eee;border-radius:6px"></div><?php endif;?><div class="ais-pi-info"><div class="ais-pi-name"><?=ai_studio_h($pname)?></div><div class="ais-pi-id">#<?=$pid?><?=$pimg===''?' · sem foto real: sera bloqueado':''?></div></div><div class="ais-pi-types"><?php foreach($IMAGE_TYPE_LABELS as $key=>$text):?><label><input type="checkbox" name="image_types[<?=$pid?>][]" value="<?=ai_studio_h($key)?>" checked> <?=ai_studio_h($text)?></label><?php endforeach;?></div></div><?php endforeach; ?>
-</div><button type="submit">Confirmar e gerar para <?=ai_studio_h((string)$profile['label'])?></button> &nbsp; <a href="/admin/ai-image-studio/admin_dashboard.php">Cancelar</a></form><?php endif;?></div>
+<form method="post"><input type="hidden" name="run_batch" value="1"><input type="hidden" name="provider" value="<?=ai_studio_h($previewProvider)?>"><input type="hidden" name="model" value="<?=ai_studio_h($previewModel)?>"><input type="hidden" name="target_channel" value="<?=ai_studio_h($previewChannel)?>"><div class="ais-preview-actions"><button type="button" id="ais-select-all">Selecionar tudo</button><button type="button" id="ais-clear-all">Limpar</button><div class="ais-preview-summary">Selecionados: <strong id="ais-selected-count">0</strong>/<span id="ais-total-count"><?=count($previewProducts)?></span></div></div><div class="ais-preview-list">
+<?php foreach($previewProducts as $p): $pid=(int)$p['id'];$pname=trim((string)($p['name']??''))!==''?(string)$p['name']:"Produto #$pid";$pimg=trim((string)($p['image_url']??'')); ?><div class="ais-preview-item"><label class="ais-product-check"><input type="checkbox" name="selected_products[]" value="<?=$pid?>" checked data-product-check> Selecionar</label><?php if($pimg!==''):?><img src="<?=ai_studio_h($pimg)?>" alt="Foto atual"><?php else:?><div style="width:64px;height:64px;background:#eee;border-radius:6px"></div><?php endif;?><div class="ais-pi-info"><div class="ais-pi-name"><?=ai_studio_h($pname)?></div><div class="ais-pi-id">#<?=$pid?><?=trim((string)($p['sku']??''))!==''?' · SKU '.ai_studio_h((string)$p['sku']):''?><?=trim((string)($p['category']??''))!==''?' · '.ai_studio_h((string)$p['category']):''?><?=$pimg===''?' · sem foto real: sera bloqueado':''?></div></div><div class="ais-pi-types"><?php foreach($IMAGE_TYPE_LABELS as $key=>$text):?><label><input type="checkbox" name="image_types[<?=$pid?>][]" value="<?=ai_studio_h($key)?>" checked> <?=ai_studio_h($text)?></label><?php endforeach;?></div></div><?php endforeach; ?>
+</div><button type="submit" id="ais-submit">Confirmar e gerar para <?=ai_studio_h((string)$profile['label'])?></button> &nbsp; <a href="/admin/ai-image-studio/admin_dashboard.php">Cancelar</a></form><script>(()=>{const inputs=[...document.querySelectorAll('[data-product-check]')],count=document.getElementById('ais-selected-count'),submit=document.getElementById('ais-submit');const update=()=>{const selected=inputs.filter(x=>x.checked).length;if(count)count.textContent=String(selected);if(submit)submit.disabled=selected===0};document.getElementById('ais-select-all')?.addEventListener('click',()=>{inputs.forEach(x=>x.checked=true);update()});document.getElementById('ais-clear-all')?.addEventListener('click',()=>{inputs.forEach(x=>x.checked=false);update()});inputs.forEach(x=>x.addEventListener('change',update));update()})();</script><?php endif;?></div>
 <?php endif; ?>
 
 <h2>Itens recentes</h2><?php if($recentItems===[]):?><p>Nenhum item processado ainda.</p><?php else:?><div class="table-wrap"><table class="ais-table"><thead><tr><th>ID</th><th>Produto</th><th>Destino</th><th>Tipo</th><th>Provedor</th><th>Status</th><th>Criado em</th></tr></thead><tbody><?php foreach($recentItems as $item):$targets=json_decode((string)($item['target_channels_json']??'[]'),true);$target=is_array($targets)&&isset($targets[0])?(string)$targets[0]:'legado';?><tr><td>#<?=(int)$item['id']?></td><td>#<?=(int)$item['product_id']?></td><td><?=ai_studio_h((string)($channelProfiles[$target]['label']??$target))?></td><td><?=ai_studio_h((string)$item['image_type'])?></td><td><?=ai_studio_h((string)$item['provider_used'])?></td><td><span class="ais-badge"><?=ai_studio_h((string)$item['status'])?></span></td><td><?=ai_studio_h((string)$item['created_at'])?></td></tr><?php endforeach;?></tbody></table></div><?php endif; ?>

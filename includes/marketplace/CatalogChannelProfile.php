@@ -32,6 +32,8 @@ function sv_catalog_channel_profiles(): array
             ],
             'limits' => [
                 'title_max' => 70,
+                'title_recommended_min' => 45,
+                'title_recommended_max' => 65,
                 'meta_title_target' => 60,
                 'meta_description_target' => 160,
             ],
@@ -107,7 +109,7 @@ function sv_catalog_channel_profiles(): array
                 'meta_title' => ['label' => 'Meta title', 'target' => 'nao publicado', 'mode' => 'internal'],
                 'meta_description' => ['label' => 'Meta description', 'target' => 'nao publicado', 'mode' => 'internal'],
             ],
-            'limits' => ['title_max' => 300, 'description_recommended_min' => 300, 'bullet_max' => 250],
+            'limits' => ['title_max' => 300, 'title_recommended_min' => 40, 'title_recommended_max' => 150, 'description_recommended_min' => 300, 'bullet_max' => 250],
             'seo_notes' => [
                 'Para BR, a API atual aceita titulo de ate 300 caracteres; qualidade e relevancia continuam mais importantes que preencher o limite.',
                 'A descricao deve ser detalhada e escaneavel; a documentacao recomenda mais de 300 caracteres quando houver fatos suficientes e 3 a 5 selling points curtos.',

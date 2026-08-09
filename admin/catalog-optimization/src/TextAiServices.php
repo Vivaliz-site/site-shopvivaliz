@@ -219,9 +219,51 @@ final class CatalogAiClaudeTextProvider extends CatalogAiRotatingProvider
     }
 }
 
-function catalog_ai_make_provider(string $provider): CatalogAiTextProvider
+function catalog_ai_normalize_provider(string $provider): string
 {
     return match (strtolower(trim($provider))) {
+        'gpt', 'openai' => 'openai',
+        'gemini' => 'gemini',
+        'claude' => 'claude',
+        default => strtolower(trim($provider)),
+    };
+}
+
+/** @return list<string> */
+function catalog_ai_provider_fallback_order(string $preferred): array
+{
+    $preferred = catalog_ai_normalize_provider($preferred);
+    $order = match ($preferred) {
+        'gemini' => ['gemini', 'openai', 'claude'],
+        'claude' => ['claude', 'openai', 'gemini'],
+        default => ['openai', 'gemini', 'claude'],
+    };
+    return array_values(array_unique(array_filter($order, static fn(string $value): bool => in_array($value, ['openai', 'gemini', 'claude'], true))));
+}
+
+function catalog_ai_provider_has_keys(string $provider): bool
+{
+    return match (catalog_ai_normalize_provider($provider)) {
+        'openai' => CatalogAiKeyPool::normalize(CATALOG_AI_OPENAI_API_KEY) !== [],
+        'gemini' => CatalogAiKeyPool::normalize(CATALOG_AI_GOOGLE_GEMINI_API_KEY) !== [],
+        'claude' => CatalogAiKeyPool::normalize(CATALOG_AI_CLAUDE_API_KEY) !== [],
+        default => false,
+    };
+}
+
+function catalog_ai_resolve_provider_name(string $preferred): string
+{
+    foreach (catalog_ai_provider_fallback_order($preferred) as $candidate) {
+        if (catalog_ai_provider_has_keys($candidate)) {
+            return $candidate;
+        }
+    }
+    throw new CatalogAiApiException('Nenhum provedor de texto possui chave configurada no ambiente privado.');
+}
+
+function catalog_ai_make_provider(string $provider): CatalogAiTextProvider
+{
+    return match (catalog_ai_normalize_provider($provider)) {
         'openai' => new CatalogAiOpenAiTextProvider(CATALOG_AI_OPENAI_API_KEY, CATALOG_AI_OPENAI_MODEL, CATALOG_AI_HTTP_TIMEOUT_SECONDS),
         'gemini' => new CatalogAiGeminiTextProvider(CATALOG_AI_GOOGLE_GEMINI_API_KEY, CATALOG_AI_GEMINI_MODEL, CATALOG_AI_HTTP_TIMEOUT_SECONDS),
         'claude' => new CatalogAiClaudeTextProvider(CATALOG_AI_CLAUDE_API_KEY, CATALOG_AI_CLAUDE_MODEL, CATALOG_AI_HTTP_TIMEOUT_SECONDS),

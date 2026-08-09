@@ -84,7 +84,11 @@ function cat_refresh_quality(PDO $db, array $row, bool $enforce): array
 
     $data = cat_staging_ai_data($row);
     $quality = ai_catalog_quality_report($data, $channel, $product);
-    $failed = array_values(array_keys(array_filter($quality['checks'], static fn(bool $ok): bool => !$ok)));
+    $softChecks = array_flip(ai_catalog_soft_quality_checks());
+    $failed = array_values(array_filter(
+        array_keys(array_filter($quality['checks'], static fn(bool $ok): bool => !$ok)),
+        static fn(string $check): bool => !isset($softChecks[$check])
+    ));
 
     $meta = json_decode((string)($row['meta_data_json'] ?? '{}'), true);
     $meta = is_array($meta) ? $meta : [];
@@ -147,6 +151,12 @@ function cat_mode_label(string $mode): string
     };
 }
 
+function cat_limit_text(array $limits, string $key, string $label): string
+{
+    if (!array_key_exists($key, $limits)) return '';
+    return $label . ': ' . (string)$limits[$key];
+}
+
 /** @param array<string,mixed> $fieldMap */
 function cat_before_text(array $before, array $fieldMap, string $key): string
 {
@@ -182,6 +192,33 @@ if (($_GET['ajax'] ?? '') === 'pending_ids') {
     exit;
 }
 
+if (($_GET['ajax'] ?? '') === 'pending_candidates') {
+    header('Content-Type: application/json; charset=utf-8');
+    $channel = strtolower(trim((string)($_GET['channel'] ?? '')));
+    $limit = max(1, min(100, (int)($_GET['limit'] ?? 30)));
+    if (!isset($channels[$channel])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Canal invalido.']);
+        exit;
+    }
+    $stmt = $db->prepare(
+        'SELECT p.id, p.name, p.sku, p.image_url, p.description, '
+        . 'CASE WHEN COALESCE(NULLIF(TRIM(p.image_url), ""), "") = "" THEN 0 ELSE 1 END AS has_image, '
+        . 'CASE WHEN COALESCE(NULLIF(TRIM(p.description), ""), "") = "" THEN 0 ELSE 1 END AS has_description, '
+        . 'CASE WHEN COALESCE(NULLIF(TRIM(p.sku), ""), "") = "" THEN 0 ELSE 1 END AS has_sku, '
+        . 'CASE WHEN COALESCE(NULLIF(TRIM(p.image_url), ""), "") = "" THEN 0 ELSE 30 END '
+        . '+ CASE WHEN COALESCE(NULLIF(TRIM(p.description), ""), "") = "" THEN 0 ELSE 10 END '
+        . '+ CASE WHEN COALESCE(NULLIF(TRIM(p.sku), ""), "") = "" THEN 0 ELSE 5 END AS priority_score '
+        . 'FROM products p '
+        . 'LEFT JOIN catalog_optimizations_staging latest ON latest.id = ('
+        . 'SELECT s2.id FROM catalog_optimizations_staging s2 WHERE s2.product_id = p.id AND s2.channel = ? ORDER BY s2.created_at DESC, s2.id DESC LIMIT 1) '
+        . "WHERE latest.id IS NULL OR latest.status IN ('published','rejected','failed') ORDER BY priority_score DESC, p.id ASC LIMIT " . $limit
+    );
+    $stmt->execute([$channel]);
+    echo json_encode(['items' => $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : []]);
+    exit;
+}
+
 if (($_GET['ajax'] ?? '') === 'failed_items') {
     header('Content-Type: application/json; charset=utf-8');
     $stmt = $db->query("SELECT id, product_id, channel, provider_used FROM catalog_optimizations_staging WHERE status = 'failed' ORDER BY created_at ASC LIMIT 100");
@@ -195,59 +232,119 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (!sv_csrf_valid('catalog-optimization', $_POST['csrf_token'] ?? null)) {
         $flashError = 'A sessao expirou. Recarregue a pagina.';
     } else {
-        $action = (string)($_POST['action'] ?? '');
-        $stagingId = (int)($_POST['staging_id'] ?? 0);
-        $load = $db->prepare('SELECT * FROM catalog_optimizations_staging WHERE id = ? LIMIT 1');
-        $load->execute([$stagingId]);
-        $row = $load->fetch(PDO::FETCH_ASSOC);
+        $bulkAction = (string)($_POST['bulk_action'] ?? '');
+        $selectedIds = array_values(array_unique(array_filter(array_map(
+            static fn(mixed $value): int => (int)$value,
+            (array)($_POST['selected_ids'] ?? [])
+        ), static fn(int $value): bool => $value > 0)));
 
-        if ($stagingId <= 0 || !is_array($row) || !in_array($action, ['publish', 'save', 'reject', 'regenerate'], true)) {
-            $flashError = 'Requisicao invalida.';
-        } elseif ($action === 'reject') {
-            $stmt = $db->prepare("UPDATE catalog_optimizations_staging SET status = 'rejected', updated_at = NOW() WHERE id = ?");
-            $stmt->execute([$stagingId]);
-            $flashMessage = "O conteudo #{$stagingId} foi rejeitado e nada foi publicado.";
-        } elseif ($action === 'regenerate') {
+        if ($bulkAction !== '') {
             try {
-                $instruction = trim((string)($_POST['regeneration_instruction'] ?? ''));
-                $provider = strtolower(trim((string)($_POST['provider'] ?? $row['provider_used'])));
-                $channel = (string)$row['channel'];
-                $product = ai_catalog_fetch_product($db, (int)$row['product_id']);
-                if ($product === null) throw new RuntimeException('Produto nao encontrado.');
-                $systemPrompt = ai_catalog_build_system_prompt($channel);
-                $userPrompt = ai_catalog_build_user_prompt($product, $channel);
-                if ($instruction !== '') $userPrompt .= "\n\nALTERACAO SOLICITADA PELO ADMINISTRADOR: {$instruction}\nAplique a alteracao sem inventar especificacoes.";
-                $data = catalog_ai_make_provider($provider)->complete($systemPrompt, $userPrompt);
-                ai_catalog_validate_ai_response($data, $channel, $product);
-                cat_update_generated_row($db, $stagingId, $data, $provider, $channel, $product);
-                $flashMessage = "Conteudo #{$stagingId} regenerado e revalidado pela politica de {$channels[$channel]}.";
-            } catch (Throwable $exception) {
-                $flashError = 'Falha na regeneracao real: ' . $exception->getMessage();
-            }
-        } else {
-            try {
-                $channel = (string)$row['channel'];
-                if ($action === 'publish' && ($_POST['confirm_channel'] ?? '') !== $channel) throw new RuntimeException('Confirme explicitamente o canal de destino.');
-                $updated = catalog_draft_save($db, $stagingId, $_POST);
-                $audit = cat_refresh_quality($db, $updated, $action === 'publish');
-                $updated = $audit['row'];
+                if ($selectedIds === []) throw new RuntimeException('Selecione ao menos um item para o lote.');
+                if (!in_array($bulkAction, ['bulk_publish', 'bulk_reject'], true)) throw new RuntimeException('Acao em lote invalida.');
+                if ($bulkAction === 'bulk_publish' && ($_POST['bulk_confirm'] ?? '') !== '1') {
+                    throw new RuntimeException('Confirme a publicacao em lote.');
+                }
 
-                if ($action === 'save') {
-                    $flashMessage = $audit['failed'] === []
-                        ? "Alteracoes do conteudo #{$stagingId} salvas. Quality gate: {$audit['quality']['score']}/100. Nada foi publicado."
-                        : "Rascunho #{$stagingId} salvo sem publicar. Quality gate: {$audit['quality']['score']}/100; corrija: " . implode(', ', $audit['failed']) . '.';
+                $load = $db->prepare('SELECT * FROM catalog_optimizations_staging WHERE id = ? LIMIT 1');
+                $reject = $db->prepare("UPDATE catalog_optimizations_staging SET status = 'rejected', updated_at = NOW() WHERE id = ?");
+                $publisher = $bulkAction === 'bulk_publish' ? new CatalogOptimizationPublisher($db) : null;
+                $published = 0;
+                $rejected = 0;
+                $failed = [];
+
+                foreach ($selectedIds as $stagingId) {
+                    $load->execute([$stagingId]);
+                    $row = $load->fetch(PDO::FETCH_ASSOC);
+                    if (!is_array($row)) {
+                        $failed[] = "#{$stagingId}: nao encontrado";
+                        continue;
+                    }
+                    if ($bulkAction === 'bulk_reject') {
+                        $reject->execute([$stagingId]);
+                        $rejected++;
+                        continue;
+                    }
+                    try {
+                        $product = ai_catalog_fetch_product($db, (int)$row['product_id']);
+                        if ($product === null) throw new RuntimeException('Produto nao encontrado.');
+                        $audit = cat_refresh_quality($db, $row, true);
+                        $result = $publisher->publish($audit['row']);
+                        $status = (string)($result['status'] ?? '');
+                        if ($status === 'submitted' || $status === 'published') {
+                            $published++;
+                        } else {
+                            $failed[] = "#{$stagingId}: retorno inesperado";
+                        }
+                    } catch (Throwable $exception) {
+                        $failed[] = "#{$stagingId}: " . $exception->getMessage();
+                    }
+                }
+
+                if ($bulkAction === 'bulk_reject') {
+                    $flashMessage = "Lote concluido: {$rejected} item(ns) rejeitado(s).";
                 } else {
-                    $result = (new CatalogOptimizationPublisher($db))->publish($updated);
-                    $status = (string)($result['status'] ?? '');
-                    $label = $channels[$channel] ?? $channel;
-                    $flashMessage = $status === 'submitted'
-                        ? "Conteudo #{$stagingId} enviado somente para {$label}; o canal ainda esta processando/auditando."
-                        : "Conteudo #{$stagingId} publicado e confirmado somente em {$label}.";
+                    $extra = $failed === [] ? '' : ' Falhas: ' . implode(' | ', $failed) . '.';
+                    $flashMessage = "Lote concluido: {$published} item(ns) aprovados/publicados." . $extra;
                 }
             } catch (Throwable $exception) {
-                $flashError = $action === 'save'
-                    ? 'As alteracoes nao foram salvas: ' . $exception->getMessage()
-                    : 'A publicacao real foi bloqueada ou nao confirmada: ' . $exception->getMessage();
+                $flashError = 'Falha no lote: ' . $exception->getMessage();
+            }
+        } else {
+            $action = (string)($_POST['action'] ?? '');
+            $stagingId = (int)($_POST['staging_id'] ?? 0);
+            $load = $db->prepare('SELECT * FROM catalog_optimizations_staging WHERE id = ? LIMIT 1');
+            $load->execute([$stagingId]);
+            $row = $load->fetch(PDO::FETCH_ASSOC);
+
+            if ($stagingId <= 0 || !is_array($row) || !in_array($action, ['publish', 'save', 'reject', 'regenerate'], true)) {
+                $flashError = 'Requisicao invalida.';
+            } elseif ($action === 'reject') {
+                $stmt = $db->prepare("UPDATE catalog_optimizations_staging SET status = 'rejected', updated_at = NOW() WHERE id = ?");
+                $stmt->execute([$stagingId]);
+                $flashMessage = "O conteudo #{$stagingId} foi rejeitado e nada foi publicado.";
+            } elseif ($action === 'regenerate') {
+                try {
+                    $instruction = trim((string)($_POST['regeneration_instruction'] ?? ''));
+                    $provider = catalog_ai_normalize_provider((string)($_POST['provider'] ?? $row['provider_used']));
+                    $channel = (string)$row['channel'];
+                    $product = ai_catalog_fetch_product($db, (int)$row['product_id']);
+                    if ($product === null) throw new RuntimeException('Produto nao encontrado.');
+                    $systemPrompt = ai_catalog_build_system_prompt($channel);
+                    $userPrompt = ai_catalog_build_user_prompt($product, $channel);
+                    if ($instruction !== '') $userPrompt .= "\n\nALTERACAO SOLICITADA PELO ADMINISTRADOR: {$instruction}\nAplique a alteracao sem inventar especificacoes.";
+                    $data = catalog_ai_make_provider($provider)->complete($systemPrompt, $userPrompt);
+                    ai_catalog_validate_ai_response($data, $channel, $product);
+                    cat_update_generated_row($db, $stagingId, $data, $provider, $channel, $product);
+                    $flashMessage = "Conteudo #{$stagingId} regenerado e revalidado pela politica de {$channels[$channel]}.";
+                } catch (Throwable $exception) {
+                    $flashError = 'Falha na regeneracao real: ' . $exception->getMessage();
+                }
+            } else {
+                try {
+                    $channel = (string)$row['channel'];
+                    if ($action === 'publish' && ($_POST['confirm_channel'] ?? '') !== $channel) throw new RuntimeException('Confirme explicitamente o canal de destino.');
+                    $updated = catalog_draft_save($db, $stagingId, $_POST);
+                    $audit = cat_refresh_quality($db, $updated, $action === 'publish');
+                    $updated = $audit['row'];
+
+                    if ($action === 'save') {
+                        $flashMessage = $audit['failed'] === []
+                            ? "Alteracoes do conteudo #{$stagingId} salvas. Quality gate: {$audit['quality']['score']}/100. Nada foi publicado."
+                            : "Rascunho #{$stagingId} salvo sem publicar. Quality gate: {$audit['quality']['score']}/100; corrija: " . implode(', ', $audit['failed']) . '.';
+                    } else {
+                        $result = (new CatalogOptimizationPublisher($db))->publish($updated);
+                        $status = (string)($result['status'] ?? '');
+                        $label = $channels[$channel] ?? $channel;
+                        $flashMessage = $status === 'submitted'
+                            ? "Conteudo #{$stagingId} enviado somente para {$label}; o canal ainda esta processando/auditando."
+                            : "Conteudo #{$stagingId} publicado e confirmado somente em {$label}.";
+                    }
+                } catch (Throwable $exception) {
+                    $flashError = $action === 'save'
+                        ? 'As alteracoes nao foram salvas: ' . $exception->getMessage()
+                        : 'A publicacao real foi bloqueada ou nao confirmada: ' . $exception->getMessage();
+                }
             }
         }
     }
@@ -262,20 +359,21 @@ $csrf = sv_csrf_token('catalog-optimization');
 ?>
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Otimizacao e publicacao real</title><link rel="stylesheet" href="/css/style.css"><style>
-*{box-sizing:border-box}body{background:#f5f6f8}.wrap{max-width:1380px;margin:24px auto;padding:0 16px;font-family:system-ui,-apple-system,sans-serif;color:#111827}.top{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap}.alert,.panel,.item,.metric{background:#fff;border:1px solid #dfe3e8;border-radius:12px;padding:14px;margin:12px 0}.ok{background:#e8f5e9;color:#175b28}.err{background:#fdecea;color:#7b1717}.warn{background:#fff8e1;color:#6b5300}.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}.metric{margin:0}.metric strong{font-size:24px}.controls,.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.controls label,.edit label,.regen label{display:grid;gap:5px}.controls input,.controls select,.edit input,.edit textarea,.regen textarea,.regen select{padding:10px;border:1px solid #c7ccd2;border-radius:7px;box-sizing:border-box;font:inherit;font-size:16px;max-width:100%}.compare{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}.compare>*{min-width:0}@media(max-width:850px){.compare{grid-template-columns:minmax(0,1fr)}.wrap{padding:0 10px;margin-top:12px}.item{padding:12px}.top h1{font-size:26px}}.before{white-space:pre-wrap;background:#f6f7f9;padding:10px;border-radius:7px;min-height:44px;overflow-wrap:anywhere;word-break:break-word;margin:4px 0 11px}.edit input,.edit textarea,.regen textarea{width:100%;min-width:0}.badge,.field-badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#e8f4fd;font-weight:700;font-size:12px}.field-badge{font-size:11px;margin-left:6px;background:#eef2f7}.field-badge.direct{background:#dcfce7;color:#166534}.field-badge.embedded{background:#fef3c7;color:#854d0e}.field-badge.internal{background:#f1f5f9;color:#475569}.endpoints code{display:block;margin:4px 0;white-space:normal;overflow-wrap:anywhere}.publish,.save,.regenerate,.reject,.controls button{border:0;border-radius:7px;padding:10px 14px;font-weight:700;cursor:pointer}.publish{background:#1a7f37;color:#fff}.save{background:#5f6368;color:#fff}.regenerate{background:#1769aa;color:#fff}.reject{background:#c62828;color:#fff}.confirm{display:block;padding:10px;background:#fff8e1;border-radius:7px;margin:12px 0}.draft-note{font-size:13px;background:#eef6ff;border-left:4px solid #1769aa;padding:10px;margin:10px 0}.log{white-space:pre-wrap;background:#111;color:#ddd;padding:10px;border-radius:7px;display:none;max-height:220px;overflow:auto}.profile{background:#fbfcfe;border:1px solid #e2e8f0;border-radius:9px;padding:12px;margin:12px 0}.profile h4{margin:0 0 8px}.profile ul{margin:6px 0;padding-left:20px}.field-map{display:grid;gap:6px}.field-map-row{display:grid;grid-template-columns:minmax(120px,180px) minmax(0,1fr);gap:8px;padding:7px;background:#fff;border-radius:7px;border:1px solid #edf0f3}.field-map-row span:last-child{overflow-wrap:anywhere}.details-grid{display:grid;grid-template-columns:minmax(120px,180px) minmax(0,1fr);gap:6px 10px;margin:8px 0}.details-grid dt{font-weight:700}.details-grid dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}.quality{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}.score{font-size:18px;font-weight:800}.checks{display:flex;gap:6px;flex-wrap:wrap}.check{font-size:11px;padding:3px 6px;border-radius:999px}.check.okc{background:#dcfce7;color:#166534}.check.badc{background:#fee2e2;color:#991b1b}.char-count{font-size:12px;color:#64748b;text-align:right}.source-title{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}.before-label{display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:7px}
+*{box-sizing:border-box}body{background:#f5f6f8}.wrap{max-width:1380px;margin:24px auto;padding:0 16px;font-family:system-ui,-apple-system,sans-serif;color:#111827}.top{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap}.alert,.panel,.item,.metric{background:#fff;border:1px solid #dfe3e8;border-radius:12px;padding:14px;margin:12px 0}.ok{background:#e8f5e9;color:#175b28}.err{background:#fdecea;color:#7b1717}.warn{background:#fff8e1;color:#6b5300}.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}.metric{margin:0}.metric strong{font-size:24px}.controls,.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.controls label,.edit label,.regen label{display:grid;gap:5px}.controls input,.controls select,.edit input,.edit textarea,.regen textarea,.regen select{padding:10px;border:1px solid #c7ccd2;border-radius:7px;box-sizing:border-box;font:inherit;font-size:16px;max-width:100%}.compare{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}.compare>*{min-width:0}@media(max-width:850px){.compare{grid-template-columns:minmax(0,1fr)}.wrap{padding:0 10px;margin-top:12px}.item{padding:12px}.top h1{font-size:26px}}.before{white-space:pre-wrap;background:#f6f7f9;padding:10px;border-radius:7px;min-height:44px;overflow-wrap:anywhere;word-break:break-word;margin:4px 0 11px}.edit input,.edit textarea,.regen textarea{width:100%;min-width:0}.badge,.field-badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#e8f4fd;font-weight:700;font-size:12px}.field-badge{font-size:11px;margin-left:6px;background:#eef2f7}.field-badge.direct{background:#dcfce7;color:#166534}.field-badge.embedded{background:#fef3c7;color:#854d0e}.field-badge.internal{background:#f1f5f9;color:#475569}.endpoints code{display:block;margin:4px 0;white-space:normal;overflow-wrap:anywhere}.publish,.save,.regenerate,.reject,.controls button{border:0;border-radius:7px;padding:10px 14px;font-weight:700;cursor:pointer}.publish{background:#1a7f37;color:#fff}.save{background:#5f6368;color:#fff}.regenerate{background:#1769aa;color:#fff}.reject{background:#c62828;color:#fff}.confirm{display:block;padding:10px;background:#fff8e1;border-radius:7px;margin:12px 0}.draft-note{font-size:13px;background:#eef6ff;border-left:4px solid #1769aa;padding:10px;margin:10px 0}.log{white-space:pre-wrap;background:#111;color:#ddd;padding:10px;border-radius:7px;display:none;max-height:220px;overflow:auto}.profile{background:#fbfcfe;border:1px solid #e2e8f0;border-radius:9px;padding:12px;margin:12px 0}.profile h4{margin:0 0 8px}.profile ul{margin:6px 0;padding-left:20px}.field-map{display:grid;gap:6px}.field-map-row{display:grid;grid-template-columns:minmax(120px,180px) minmax(0,1fr);gap:8px;padding:7px;background:#fff;border-radius:7px;border:1px solid #edf0f3}.field-map-row span:last-child{overflow-wrap:anywhere}.details-grid{display:grid;grid-template-columns:minmax(120px,180px) minmax(0,1fr);gap:6px 10px;margin:8px 0}.details-grid dt{font-weight:700}.details-grid dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}.quality{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}.score{font-size:18px;font-weight:800}.checks{display:flex;gap:6px;flex-wrap:wrap}.check{font-size:11px;padding:3px 6px;border-radius:999px}.check.okc{background:#dcfce7;color:#166534}.check.badc{background:#fee2e2;color:#991b1b}.char-count{font-size:12px;color:#64748b;text-align:right}.source-title{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}.before-label{display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin-top:7px}.bulk-panel{display:grid;gap:10px}.bulk-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.bulk-toolbar label{display:grid;gap:5px}.bulk-toolbar input,.bulk-toolbar select{padding:10px;border:1px solid #c7ccd2;border-radius:7px;font:inherit;font-size:16px}.bulk-toolbar button{border:0;border-radius:7px;padding:10px 14px;font-weight:700;cursor:pointer}.bulk-publish{background:#1a7f37;color:#fff}.bulk-reject{background:#c62828;color:#fff}.bulk-clear{background:#5f6368;color:#fff}.item-select{display:flex;align-items:center;gap:8px;font-weight:700}.item-select input{transform:scale(1.08)}.channel-pill{display:inline-flex;align-items:center;gap:6px;background:#e0f2fe;color:#075985;border-radius:999px;padding:4px 10px;font-weight:800;font-size:12px}.generation-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-top:12px}.candidate-list{display:grid;gap:8px;max-height:360px;overflow:auto;padding:6px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc}.candidate-item{display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid #e5e7eb;border-radius:9px;background:#fff}.candidate-item input{margin-top:4px;transform:scale(1.08)}.candidate-meta{display:grid;gap:2px;font-size:13px;color:#475569}.candidate-name{font-weight:700;color:#111827}.candidate-actions{display:flex;gap:8px;flex-wrap:wrap}.candidate-actions button{border:0;border-radius:7px;padding:8px 12px;font-weight:700;cursor:pointer}.candidate-load{background:#1769aa;color:#fff}.candidate-run{background:#1a7f37;color:#fff}
 </style></head><body><main class="wrap">
 <div><a href="/admin/menu-completo.php">← Voltar ao Admin</a></div><div class="top"><h1>Otimizacao de cadastro — por marketplace</h1><span class="badge">Preco e estoque protegidos</span></div>
 <div class="draft-note"><strong>Auditoria por canal:</strong> o lado “Antes” sempre mostra os sete campos editoriais, mesmo quando o marketplace nao possui um campo externo equivalente. Assim fica explicito o que existe no read-back real, o que e incorporado e o que e apenas apoio interno.</div>
 <?php if($flashMessage):?><div class="alert ok"><?=cat_h($flashMessage)?></div><?php endif;?><?php if($flashError):?><div class="alert err"><?=cat_h($flashError)?></div><?php endif;?>
 <section class="metrics"><?php foreach($channels as $key=>$label):$m=$metrics[$key]??[];?><div class="metric"><strong><?=(int)($m['published']??0)?></strong><div><?=cat_h($label)?></div><small>Pendentes <?=(int)($m['pending']??0)?> · Enviados <?=(int)($m['submitted']??0)?> · Falhas <?=(int)($m['publication_failed']??0)?></small></div><?php endforeach;?></section>
-<section class="panel"><h2>Gerar fila por canal</h2><div class="controls"><label>Provedor<select id="provider"><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="claude">Claude</option></select></label><label>Canal<select id="channel"><?php foreach($channels as $key=>$label):?><option value="<?=cat_h($key)?>"><?=cat_h($label)?></option><?php endforeach;?></select></label><label>Limite<input id="limit" type="number" min="1" max="100" value="10"></label><button id="run" type="button">Gerar fila</button><button id="retry" type="button">Reprocessar falhas</button></div><pre id="log" class="log"></pre></section>
+<section class="panel"><h2>Gerar fila por canal</h2><div class="controls"><label>Provedor<select id="provider"><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="claude">Claude</option></select></label><label>Canal<select id="channel"><?php foreach($channels as $key=>$label):?><option value="<?=cat_h($key)?>"><?=cat_h($label)?></option><?php endforeach;?></select></label><label>Mostrar até<input id="load-limit" type="number" min="1" max="100" value="30"></label><div class="candidate-actions"><button id="load-candidates" class="candidate-load" type="button">Carregar itens</button><button id="select-candidates" type="button">Selecionar tudo</button><button id="clear-candidates" type="button">Limpar</button><button id="run" class="candidate-run" type="button">Gerar selecionados</button><button id="retry" type="button">Reprocessar falhas</button></div></div><div class="generation-grid"><div><small>Escolha os itens do canal para gerar. O número acima só limita o quanto aparece na lista.</small><div id="candidate-summary" class="candidate-meta">Carregue os itens do canal para ver o resumo de completude.</div><div id="candidate-list" class="candidate-list"><div class="candidate-meta">Carregue os itens do canal para selecionar.</div></div></div><div><pre id="log" class="log"></pre></div></div></section>
+<section class="panel bulk-panel"><h2>Acoes em lote</h2><form id="bulk-action-form" method="post"><input type="hidden" name="csrf_token" value="<?=cat_h($csrf)?>"><div class="bulk-toolbar"><label>Acao<select name="bulk_action" required><option value="bulk_publish">Aprovar e publicar selecionados</option><option value="bulk_reject">Rejeitar selecionados</option></select></label><label><input type="checkbox" name="bulk_confirm" value="1"> Confirmo que cada item sera tratado apenas no seu canal alvo.</label><button class="bulk-publish" type="submit">Executar em lote</button><button class="bulk-clear" type="button" id="bulk-select-all">Selecionar tudo</button><button class="bulk-clear" type="button" id="bulk-clear">Limpar selecao</button></div></form><small>Selecione varios itens nos cartões abaixo. A publicacao em lote respeita o marketplace de cada linha e continua bloqueada se a validacao de qualidade falhar.</small></section>
 <h2>Antes e depois — dados reais, campos reais e aprovacao</h2><?php if($items===[]):?><div class="panel">Nenhum conteudo aguardando decisao.</div><?php endif;?>
 <?php foreach($items as $item):
 $pid=(int)$item['product_id'];$channel=(string)$item['channel'];$local=cat_original($db,$pid);$before=sv_catalog_channel_snapshot($db,$pid,$channel,$local);$profile=sv_catalog_channel_profile($channel);$label=$channels[$channel]??$channel;$bullets=cat_json_list($item['bullet_points_json']??'[]');$meta=json_decode((string)($item['meta_data_json']??'{}'),true);$meta=is_array($meta)?$meta:[];$qualityChecks=is_array($meta['quality_checks']??null)?$meta['quality_checks']:[];$qualityScore=is_numeric($meta['quality_score']??null)?(int)$meta['quality_score']:null;$ep=$endpointRegistry[$channel]??null;$fieldMap=is_array($profile['field_map']??null)?$profile['field_map']:[];$limits=is_array($profile['limits']??null)?$profile['limits']:[];
 ?>
-<article class="item"><div class="source-title"><div><span class="badge"><?=cat_h($label)?></span> Produto #<?=$pid?> · SKU <?=cat_h((string)$local['sku'])?> · status <?=cat_h((string)$item['status'])?></div><small>Politica <?=cat_h((string)($profile['policy_version']??''))?></small></div>
+<article class="item"><div class="source-title"><div><span class="badge"><?=cat_h($label)?></span> Produto #<?=$pid?> · SKU <?=cat_h((string)$local['sku'])?> · status <?=cat_h((string)$item['status'])?></div><small>Politica <?=cat_h((string)($profile['policy_version']??''))?></small></div><label class="item-select"><input type="checkbox" name="selected_ids[]" value="<?=(int)$item['id']?>" form="bulk-action-form"> Selecionar para lote</label>
 <?php if($before['warning']!==''):?><div class="alert warn"><?=cat_h($before['warning'])?></div><?php endif;?>
-<div class="profile"><h4>SEO e catalogo especificos de <?=cat_h($label)?></h4><ul><?php foreach((array)($profile['seo_notes']??[]) as $note):?><li><?=cat_h((string)$note)?></li><?php endforeach;?></ul><?php if($limits!==[]):?><small>Limites/alvos: <?php foreach($limits as $k=>$v):?><strong><?=cat_h((string)$k)?></strong>=<?=cat_h((string)$v)?> &nbsp;<?php endforeach;?></small><?php endif;?></div>
+<div class="profile"><h4>SEO e catalogo especificos de <?=cat_h($label)?></h4><div class="channel-pill">Canal alvo: <?=cat_h($label)?></div><ul><?php foreach((array)($profile['seo_notes']??[]) as $note):?><li><?=cat_h((string)$note)?></li><?php endforeach;?></ul><?php if($limits!==[]):?><small>Limites/alvos: <?php $pairs=[];foreach(['title_max'=>'teto do titulo','title_recommended_min'=>'alvo minimo','title_recommended_max'=>'alvo maximo','meta_title_target'=>'meta title','meta_description_target'=>'meta description','description_recommended_min'=>'descricao minima','bullet_max'=>'bullet max'] as $limitKey=>$labelText){$text=cat_limit_text($limits,$limitKey,$labelText);if($text!=='')$pairs[]=$text;}echo cat_h(implode(' · ',$pairs));?></small><?php endif;?></div>
 <?php if($ep):?><details class="endpoints"><summary><strong>Endpoints reais usados neste canal</strong></summary><h4>Texto</h4><?php foreach($ep['text'] as $endpoint):?><code><?=cat_h($endpoint)?></code><?php endforeach;?><h4>Read-back</h4><?php foreach($ep['readback'] as $endpoint):?><code><?=cat_h($endpoint)?></code><?php endforeach;?></details><?php endif;?>
 <details class="profile" open><summary><strong>Mapa de publicacao de cada campo</strong></summary><div class="field-map"><?php foreach($fieldMap as $key=>$field):$mode=(string)($field['mode']??'internal');?><div class="field-map-row"><strong><?=cat_h((string)($field['label']??$key))?> <span class="field-badge <?=cat_h($mode)?>"><?=cat_h(cat_mode_label($mode))?></span></strong><span><?=cat_h((string)($field['target']??''))?></span></div><?php endforeach;?></div></details>
 <?php if($qualityScore!==null):?><div class="quality"><span class="score">Quality gate <?=$qualityScore?>/100</span><div class="checks"><?php foreach($qualityChecks as $check=>$ok):?><span class="check <?=$ok?'okc':'badc'?>"><?=$ok?'✓':'✕'?> <?=cat_h((string)$check)?></span><?php endforeach;?></div></div><?php endif;?>
@@ -286,7 +384,11 @@ $pid=(int)$item['product_id'];$channel=(string)$item['channel'];$local=cat_origi
 ] as $fieldKey=>$fieldLabel):$mapKey=match($fieldKey){'title'=>'optimized_title','description'=>'optimized_description',default=>$fieldKey};$fm=$fieldMap[$mapKey]??[];$mode=(string)($fm['mode']??'internal');?><div class="before-label"><b><?=cat_h($fieldLabel)?></b><span class="field-badge <?=cat_h($mode)?>"><?=cat_h(cat_mode_label($mode))?></span></div><div class="before"><?=cat_h(cat_before_text($before,$fieldMap,$fieldKey))?></div><?php endforeach;?>
 <h4>Identidade, categoria e atributos do cadastro real</h4><dl class="details-grid"><?php foreach($before['details'] as $key=>$value):if(trim((string)$value)==='')continue;?><dt><?=cat_h((string)$key)?></dt><dd><?=cat_h((string)$value)?></dd><?php endforeach;?></dl></div>
 <div class="edit"><h3>Depois — editavel</h3>
-<?php $fm=$fieldMap['optimized_title']??[];$mode=(string)($fm['mode']??'internal');?><label>Titulo <span class="field-badge <?=cat_h($mode)?>"><?=cat_h(cat_mode_label($mode))?></span><input name="optimized_title" value="<?=cat_h((string)$item['optimized_title'])?>" required data-counter="title"<?=isset($limits['title_max'])?' maxlength="'.(int)$limits['title_max'].'"':''?>><span class="char-count" data-count-for="title"></span></label>
+<?php $fm=$fieldMap['optimized_title']??[];$mode=(string)($fm['mode']??'internal');?><label>Titulo <span class="field-badge <?=cat_h($mode)?>"><?=cat_h(cat_mode_label($mode))?></span><input name="optimized_title" value="<?=cat_h((string)$item['optimized_title'])?>" required data-counter="title"<?=isset($limits['title_max'])?' maxlength="'.(int)$limits['title_max'].'"':''?>><span class="char-count" data-count-for="title"></span><?php if(isset($limits['title_max'])||isset($limits['title_recommended_min'])||isset($limits['title_recommended_max'])):?><small>Canal: <?php echo cat_h(implode(' · ', array_values(array_filter([
+    isset($limits['title_max']) ? 'teto ' . (int)$limits['title_max'] : '',
+    isset($limits['title_recommended_min']) ? 'alvo minimo ' . (int)$limits['title_recommended_min'] : '',
+    isset($limits['title_recommended_max']) ? 'alvo maximo ' . (int)$limits['title_recommended_max'] : '',
+])))); ?></small><?php endif;?></label>
 <?php $fm=$fieldMap['optimized_description']??[];$mode=(string)($fm['mode']??'internal');?><label>Descricao <span class="field-badge <?=cat_h($mode)?>"><?=cat_h(cat_mode_label($mode))?></span><textarea name="optimized_description" rows="9" required data-counter="description"><?=cat_h((string)$item['optimized_description'])?></textarea><span class="char-count" data-count-for="description"></span></label>
 <?php $fm=$fieldMap['bullet_points']??[];$mode=(string)($fm['mode']??'internal');?><label>Bullet points / selling points <span class="field-badge <?=cat_h($mode)?>"><?=cat_h(cat_mode_label($mode))?></span><textarea name="bullet_points" rows="6"><?=cat_h(implode("\n",$bullets))?></textarea><small>Um ponto por linha.</small></label>
 <?php $fm=$fieldMap['seo_keywords']??[];$mode=(string)($fm['mode']??'internal');?><label><?=cat_h((string)($fm['label']??'SEO keywords'))?> <span class="field-badge <?=cat_h($mode)?>"><?=cat_h(cat_mode_label($mode))?></span><textarea name="seo_keywords" rows="3"><?=cat_h((string)$item['seo_keywords'])?></textarea><small>Uma por linha ou separadas por virgula. <?=cat_h((string)($fm['target']??''))?></small></label>
@@ -296,4 +398,4 @@ $pid=(int)$item['product_id'];$channel=(string)$item['channel'];$local=cat_origi
 </div></div><div class="actions"><button class="save" name="action" value="save">Salvar e reauditar sem publicar</button></div>
 <div class="regen"><h3>Alterar a geracao antes de aprovar</h3><label>Nova instrucao para a IA<textarea name="regeneration_instruction" rows="3" placeholder="Ex.: priorizar o modelo no titulo, retirar repeticao, reforcar um atributo comprovado..."></textarea></label><label>Provedor<select name="provider"><option value="openai" <?=$item['provider_used']==='openai'?'selected':''?>>OpenAI</option><option value="gemini" <?=$item['provider_used']==='gemini'?'selected':''?>>Gemini</option><option value="claude" <?=$item['provider_used']==='claude'?'selected':''?>>Claude</option></select></label><button class="regenerate" name="action" value="regenerate" formnovalidate>Regenerar e reauditar</button></div>
 <label class="confirm"><input type="checkbox" name="confirm_channel" value="<?=cat_h($channel)?>"> Confirmo publicar <strong>somente em <?=cat_h($label)?></strong>. O quality gate sera executado novamente antes da chamada real.</label><div class="actions"><button class="publish" name="action" value="publish">Aprovar e publicar somente em <?=cat_h($label)?></button><button class="reject" name="action" value="reject" formnovalidate>Rejeitar sem publicar</button></div></form></article><?php endforeach;?></main>
-<script>(()=>{'use strict';const log=document.getElementById('log'),write=t=>{log.style.display='block';log.textContent+=t+'\n';log.scrollTop=log.scrollHeight};async function optimize(id,channel,provider){const r=await fetch('/admin/catalog-optimization/api/optimize_catalog.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({product_id:id,target_channel:channel,provider})});const d=await r.json();if(!r.ok&&!d.error)d.error='HTTP '+r.status;return d}document.getElementById('run').addEventListener('click',async e=>{const b=e.currentTarget;b.disabled=true;log.textContent='';const channel=document.getElementById('channel').value,provider=document.getElementById('provider').value,limit=document.getElementById('limit').value;try{const r=await fetch(`?ajax=pending_ids&channel=${encodeURIComponent(channel)}&limit=${encodeURIComponent(limit)}`,{credentials:'same-origin'}),d=await r.json();for(const id of(d.product_ids||[])){const out=await optimize(id,channel,provider);write(`#${id}: ${out.success?'gerado':'falhou'} ${out.error||''}`)}location.reload()}catch(err){write('ERRO: '+err.message)}finally{b.disabled=false}});document.getElementById('retry').addEventListener('click',async e=>{const b=e.currentTarget;b.disabled=true;log.textContent='';try{const r=await fetch('?ajax=failed_items',{credentials:'same-origin'}),d=await r.json();for(const item of(d.items||[])){const out=await optimize(item.product_id,item.channel,item.provider_used);write(`#${item.product_id}: ${out.success?'reprocessado':'falhou'} ${out.error||''}`)}location.reload()}catch(err){write('ERRO: '+err.message)}finally{b.disabled=false}});document.querySelectorAll('[data-counter]').forEach(el=>{const target=el.closest('label')?.querySelector(`[data-count-for="${el.dataset.counter}"]`);if(!target)return;const update=()=>{target.textContent=`${el.value.length} caracteres${el.maxLength>0?' / '+el.maxLength:''}`};el.addEventListener('input',update);update()})})();</script></body></html>
+<script>(()=>{'use strict';const log=document.getElementById('log');const write=t=>{log.style.display='block';log.textContent+=t+'\n';log.scrollTop=log.scrollHeight};const channelEl=document.getElementById('channel');const providerEl=document.getElementById('provider');const loadLimitEl=document.getElementById('load-limit');const candidateList=document.getElementById('candidate-list');const candidateSummary=document.getElementById('candidate-summary');const loadBtn=document.getElementById('load-candidates');const runBtn=document.getElementById('run');const selectBtn=document.getElementById('select-candidates');const clearBtn=document.getElementById('clear-candidates');async function optimize(id,channel,provider){const r=await fetch('/admin/catalog-optimization/api/optimize_catalog.php',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({product_id:id,target_channel:channel,provider})});const d=await r.json();if(!r.ok&&!d.error)d.error='HTTP '+r.status;return d}function candidateCheckboxes(){return [...candidateList.querySelectorAll('input[data-candidate-id]')]}function updateCandidateState(){const selected=candidateCheckboxes().filter(cb=>cb.checked).length;if(runBtn)runBtn.textContent=selected>0?`Gerar selecionados (${selected})`:'Gerar selecionados'}function renderCandidates(items){if(!items.length){candidateList.innerHTML='<div class="candidate-meta">Nenhum item disponivel para este canal.</div>';if(candidateSummary)candidateSummary.textContent='Nenhum candidato disponivel neste canal.';updateCandidateState();return}const totals=items.reduce((acc,item)=>{acc.total+=1;acc.ready+=(item.has_image&&item.has_description&&item.has_sku)?1:0;acc.incomplete+=(!item.has_image||!item.has_description||!item.has_sku)?1:0;return acc;},{total:0,ready:0,incomplete:0});if(candidateSummary)candidateSummary.textContent=`Fila carregada: ${totals.total} item(ns) · prontos ${totals.ready} · incompletos ${totals.incomplete}.`;candidateList.innerHTML=items.map(item=>{const flags=[item.has_image?'com foto':'sem foto',item.has_description?'com descricao':'sem descricao',item.has_sku?'com SKU':'sem SKU'];return `<label class="candidate-item"><input type="checkbox" data-candidate-id="${item.id}" value="${item.id}"><span class="candidate-meta"><span class="candidate-name">#${item.id} · ${item.name||'(sem nome)'}</span><span>SKU: ${item.sku||'(sem SKU)'}</span><span>Categoria: ${item.category||'(sem categoria)'}</span><span>Prioridade: ${item.priority_score ?? 0}</span><span>${flags.join(' · ')}</span></span></label>`}).join('');updateCandidateState()}async function loadCandidates(){loadBtn.disabled=true;candidateList.innerHTML='<div class="candidate-meta">Carregando itens...</div>';if(candidateSummary)candidateSummary.textContent='Carregando fila do canal...';try{const channel=channelEl.value,limit=loadLimitEl.value;const r=await fetch(`?ajax=pending_candidates&channel=${encodeURIComponent(channel)}&limit=${encodeURIComponent(limit)}`,{credentials:'same-origin'});const d=await r.json();renderCandidates(d.items||[])}catch(err){candidateList.innerHTML='<div class="candidate-meta">Falha ao carregar itens.</div>';if(candidateSummary)candidateSummary.textContent='Falha ao carregar a fila.';write('ERRO: '+err.message)}finally{loadBtn.disabled=false}}loadBtn.addEventListener('click',loadCandidates);channelEl.addEventListener('change',loadCandidates);candidateList.addEventListener('change',e=>{if(e.target instanceof HTMLInputElement&&e.target.matches('input[data-candidate-id]')) updateCandidateState()});selectBtn.addEventListener('click',()=>{candidateCheckboxes().forEach(cb=>{cb.checked=true});updateCandidateState()});clearBtn.addEventListener('click',()=>{candidateCheckboxes().forEach(cb=>{cb.checked=false});updateCandidateState()});runBtn.addEventListener('click',async e=>{const b=e.currentTarget;b.disabled=true;log.textContent='';const channel=channelEl.value,provider=providerEl.value,selected=candidateCheckboxes().filter(cb=>cb.checked).map(cb=>cb.value);if(!selected.length){write('Selecione ao menos um item para gerar.');b.disabled=false;return}try{for(const id of selected){const out=await optimize(id,channel,provider);write(`#${id}: ${out.success?'gerado':'falhou'} ${out.error||''}`)}await loadCandidates();location.reload()}catch(err){write('ERRO: '+err.message)}finally{b.disabled=false}});document.getElementById('retry').addEventListener('click',async e=>{const b=e.currentTarget;b.disabled=true;log.textContent='';try{const r=await fetch('?ajax=failed_items',{credentials:'same-origin'}),d=await r.json();for(const item of(d.items||[])){const out=await optimize(item.product_id,item.channel,item.provider_used);write(`#${item.product_id}: ${out.success?'reprocessado':'falhou'} ${out.error||''}`)}location.reload()}catch(err){write('ERRO: '+err.message)}finally{b.disabled=false}});const bulkCheckboxes=[...document.querySelectorAll('input[name="selected_ids[]"][form="bulk-action-form"]')];document.getElementById('bulk-select-all')?.addEventListener('click',()=>{bulkCheckboxes.forEach(cb=>{cb.checked=true})});document.getElementById('bulk-clear')?.addEventListener('click',()=>{bulkCheckboxes.forEach(cb=>{cb.checked=false})});document.querySelectorAll('[data-counter]').forEach(el=>{const target=el.closest('label')?.querySelector(`[data-count-for="${el.dataset.counter}"]`);if(!target)return;const update=()=>{target.textContent=`${el.value.length} caracteres${el.maxLength>0?' / '+el.maxLength:''}`};el.addEventListener('input',update);update()});loadCandidates()})();</script></body></html>

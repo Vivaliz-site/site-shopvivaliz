@@ -80,6 +80,21 @@ function ai_studio_channel_guidance(string $channel, string $imageType): string
 {
     $profile = ai_studio_channel_profile($channel);
     $extra = (string)($profile['generation_guidance'] ?? '');
+    $minimumSide = (int)($profile['minimum_side'] ?? 1000);
+    $recommendedSide = (int)($profile['recommended_side'] ?? $minimumSide);
+    $maxGallery = (int)($profile['max_gallery'] ?? 9);
+    if ($extra !== '') {
+        $extra .= ' ';
+    }
+    $extra .= sprintf(
+        'Technical target: at least %dx%d px, recommended %dx%d px, gallery max %d images.',
+        $minimumSide,
+        $minimumSide,
+        $recommendedSide,
+        $recommendedSide,
+        $maxGallery
+    );
+    $extra .= ' Preserve the exact shape, proportions, color, finish, scale and number of visible parts from the source photo.';
     if ($imageType === 'white' && !empty($profile['white_first'])) {
         $extra .= ' This white image is intended to be the first marketplace image and must remain a neutral catalog cover.';
     }

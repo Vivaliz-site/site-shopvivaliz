@@ -38,6 +38,48 @@ final class AiStudioKeyPool
     }
 }
 
+function ai_studio_normalize_provider(string $provider): string
+{
+    return match (strtolower(trim($provider))) {
+        'gpt', 'openai' => 'openai',
+        'gemini', 'google' => 'google',
+        'claude' => 'claude',
+        default => strtolower(trim($provider)),
+    };
+}
+
+/** @return list<string> */
+function ai_studio_provider_fallback_order(string $preferred): array
+{
+    $preferred = ai_studio_normalize_provider($preferred);
+    $order = match ($preferred) {
+        'google' => ['google', 'openai'],
+        'claude' => ['openai', 'google'],
+        default => ['openai', 'google'],
+    };
+    return array_values(array_unique(array_filter($order, static fn(string $value): bool => in_array($value, ['openai', 'google'], true))));
+}
+
+function ai_studio_provider_has_key(string $provider): bool
+{
+    return match (ai_studio_normalize_provider($provider)) {
+        'openai' => AiStudioKeyPool::normalize(AI_STUDIO_OPENAI_API_KEY) !== [],
+        'google' => AiStudioKeyPool::normalize(AI_STUDIO_GOOGLE_IMAGEN_API_KEY) !== [],
+        'claude' => AiStudioKeyPool::normalize(AI_STUDIO_CLAUDE_API_KEY) !== [],
+        default => false,
+    };
+}
+
+function ai_studio_resolve_image_engine(string $preferred): string
+{
+    foreach (ai_studio_provider_fallback_order($preferred) as $candidate) {
+        if (ai_studio_provider_has_key($candidate)) {
+            return $candidate;
+        }
+    }
+    throw new AiStudioApiException('Nenhuma chave de edicao de imagem (OpenAI ou Gemini) está configurada no ambiente privado.');
+}
+
 final class AiStudioHttpClient
 {
     /** @return array{status:int,body:string} */
@@ -302,13 +344,15 @@ final class AiStudioGoogleImageEditClient extends AiStudioRotatingClient
 final class AiStudioClaudeClient extends AiStudioRotatingClient
 {
     private const SYSTEM_PROMPT = <<<'PROMPT'
-Você é um diretor de fotografia de e-commerce. Reescreva este produto em 3 prompts de imagem fotorrealistas em inglês para os modos white, hero e ambient. Preserve integralmente cor, formato, proporções, marca, rótulos e design do produto real. Altere somente cenário, fundo e iluminação. Retorne exclusivamente JSON com as chaves white, hero e ambient.
+Você é um diretor de fotografia de e-commerce. Reescreva este produto em 3 prompts de imagem fotorrealistas em inglês para os modos white, hero e ambient. Preserve integralmente cor, formato, proporções, marca, rótulos e design do produto real. Altere somente cenário, fundo e iluminação. Nunca invente acessórios, acabamento, tamanho ou compatibilidade. Use o contexto factual do catálogo quando houver. Retorne exclusivamente JSON com as chaves white, hero e ambient.
 PROMPT;
 
     /** @return array{white:string,hero:string,ambient:string} */
-    public function optimizePrompts(string $productName, string $productDescription): array
+    public function optimizePrompts(string $productName, string $productDescription, array $productContext = []): array
     {
-        return $this->withKeyRotation(function (string $key) use ($productName, $productDescription): array {
+        return $this->withKeyRotation(function (string $key) use ($productName, $productDescription, $productContext): array {
+            $contextBrief = ai_studio_catalog_context_brief($productContext);
+            $contextLine = $contextBrief !== '' ? "\nContexto factual do catálogo: {$contextBrief}" : '';
             $response = AiStudioHttpClient::request('POST', 'https://api.anthropic.com/v1/messages', [
                 'x-api-key' => $key,
                 'anthropic-version' => '2023-06-01',
@@ -318,7 +362,10 @@ PROMPT;
                 'model' => $this->model,
                 'max_tokens' => 1024,
                 'system' => self::SYSTEM_PROMPT,
-                'messages' => [['role' => 'user', 'content' => "Produto: {$productName}\nDescrição: {$productDescription}"]],
+                'messages' => [[
+                    'role' => 'user',
+                    'content' => "Produto: {$productName}\nDescrição: {$productDescription}{$contextLine}\nRegras obrigatorias: preserve identidade real, nao invente atributos e mantenha o produto como unico sujeito visual.",
+                ]],
             ]);
             if ($response['status'] < 200 || $response['status'] >= 300) throw AiStudioHttpClient::apiFailure('Claude messages', $response);
             $decoded = AiStudioHttpClient::decodeJson($response['body'], 'Claude messages');

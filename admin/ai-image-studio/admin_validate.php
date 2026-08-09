@@ -85,7 +85,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
                 $adminInstruction = trim((string)($_POST['prompt_used'] ?? ''));
                 if ($adminInstruction === '') throw new RuntimeException('Informe a instrucao de cena antes de regenerar.');
-                $engine = strtolower(trim((string)($_POST['regeneration_engine'] ?? 'openai')));
+                $engine = ai_studio_normalize_provider((string)($_POST['regeneration_engine'] ?? 'openai'));
                 if (!in_array($engine, ['openai', 'google', 'claude'], true)) throw new RuntimeException('Motor de regeneracao invalido.');
 
                 $targetChannel = ais_intended_channel($row);
@@ -93,30 +93,32 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 if (!isset($channelProfiles[$targetChannel])) throw new RuntimeException('Marketplace de destino invalido.');
 
                 $imageType = strtolower(trim((string)$row['image_type']));
-                $guardedPrompts = ai_studio_default_prompts($product['name'], $targetChannel);
+                $guardedPrompts = ai_studio_default_prompts($product['name'], $targetChannel, $product);
                 if (!isset($guardedPrompts[$imageType])) throw new RuntimeException('Tipo de imagem invalido para regeneracao.');
                 $fidelityGuard = $guardedPrompts[$imageType];
+                $imageEngine = ai_studio_resolve_image_engine($engine);
 
                 $basePath = ai_studio_resolve_base_image($product['image_ref'], dirname(__DIR__, 2), $productId);
                 $isTemp = str_starts_with($basePath, AI_STUDIO_BASE_IMAGE_TMP_DIR);
                 $filename = ai_studio_unique_filename($productId, $imageType);
                 $destination = AI_STUDIO_STORAGE_DIR . $filename;
                 $publicPath = AI_STUDIO_STORAGE_URL_PREFIX . $filename;
-                $providerUsed = $engine;
+                $providerUsed = $imageEngine;
                 $prompt = $fidelityGuard . ' Additional scene guidance from the administrator: ' . $adminInstruction;
 
-                if ($engine === 'google') {
+                if ($engine === 'claude' && ai_studio_provider_has_key('claude')) {
+                    $claudePrompts = (new AiStudioClaudeClient(AI_STUDIO_CLAUDE_API_KEY, AI_STUDIO_CLAUDE_MODEL))->optimizePrompts(
+                        $product['name'],
+                        $product['description'] . "\nInstrucao adicional do administrador: " . $adminInstruction
+                    );
+                    $claudeScene = trim((string)($claudePrompts[$imageType] ?? ''));
+                    if ($claudeScene !== '') $prompt = $fidelityGuard . ' Additional scene guidance optimized by Claude: ' . $claudeScene;
+                    $providerUsed = 'claude_optimized';
+                }
+
+                if ($imageEngine === 'google') {
                     (new AiStudioGoogleImageEditClient(AI_STUDIO_GOOGLE_IMAGEN_API_KEY, AI_STUDIO_GOOGLE_IMAGEN_MODEL))->editImageToFile($prompt, $basePath, $destination);
                 } else {
-                    if ($engine === 'claude') {
-                        $claudePrompts = (new AiStudioClaudeClient(AI_STUDIO_CLAUDE_API_KEY, AI_STUDIO_CLAUDE_MODEL))->optimizePrompts(
-                            $product['name'],
-                            $product['description'] . "\nInstrucao adicional do administrador: " . $adminInstruction
-                        );
-                        $claudeScene = trim((string)($claudePrompts[$imageType] ?? ''));
-                        if ($claudeScene !== '') $prompt = $fidelityGuard . ' Additional scene guidance optimized by Claude: ' . $claudeScene;
-                        $providerUsed = 'claude_optimized';
-                    }
                     (new AiStudioOpenAiClient(AI_STUDIO_OPENAI_API_KEY, AI_STUDIO_OPENAI_IMAGE_MODEL))->editImageToFile($prompt, $basePath, $destination);
                 }
 
