@@ -194,7 +194,7 @@ Pode ir para produção quando:
 - ✅ Zero SQL errors
 - ✅ Zero XSS/CSRF vulnerabilities
 - ✅ Performance < 2s em todas as páginas
-- ⚠️ **QUALQUER ALTERAÇÃO FEITA AO FINALIZAR DEVE SER VALIDADA E SEGUIR ESTE FLUXO: COMMIT, PR E MERGE** (Obrigatório)
+- ⚠️ **QUALQUER ALTERAÇÃO FEITA AO FINALIZAR DEVE SER VALIDADA PELO NAVEGADOR DE FORMA VISUAL E FUNCIONAL (NADA DE SCRIPTS) E SEGUIR ESTE FLUXO: COMMIT, PR E MERGE** (Obrigatório)
 
 ---
 

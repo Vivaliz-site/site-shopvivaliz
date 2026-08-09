@@ -521,7 +521,7 @@ openai.timeout = 60  # De 30 para 60 segundos
 - [ ] Executar pipeline: `python scripts/main.py`
 - [ ] Verificar logs: `cat logs/pipeline_execution_advanced.json`
 - [ ] Acessar painel: https://shopvivaliz.com.br/admin/monitor/
-- [ ] **AO FINALIZAR ALTERAÇÕES: Obrigatoriamente realizar Commit, PR e Merge (Toda alteração deve ser validada e seguir este fluxo)** ⚠️
+- [ ] **AO FINALIZAR ALTERAÇÕES: Obrigatoriamente realizar Commit, PR e Merge (Toda alteração deve ser validada pelo navegador de forma visual e funcional, sem scripts, e seguir este fluxo)** ⚠️
 
 ---
 

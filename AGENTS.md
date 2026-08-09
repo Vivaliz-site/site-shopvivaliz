@@ -21,7 +21,7 @@ O proprietário autoriza os agentes com acesso técnico válido a validar pelo n
 > 2. Abertura/atualização de **Pull Request (PR)**.
 > 3. Realização de **Merge** para a branch alvo.
 > 
-> Toda alteração deve ser validada e seguir este fluxo. Não finalize rodadas de alterações mantendo-as apenas locais ou sem merge/deploy. Se houver impedimento, registre formalmente como **INCONCLUSIVO**.
+> Toda alteração deve ser validada pelo navegador de forma visual e funcional (nada de scripts para essa validação) e seguir este fluxo. Não finalize rodadas de alterações mantendo-as apenas locais ou sem merge/deploy. Se houver impedimento, registre formalmente como **INCONCLUSIVO**.
 
 ### 1. NUNCA Use `git reset --hard` em Produção
 
