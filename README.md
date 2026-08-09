@@ -1,6 +1,6 @@
-# ShopVivaliz - E-commerce Autônomo com Trio IA
+# ShopVivaliz - E-commerce e automações auditáveis
 
-Código-fonte e automações do e-commerce ShopVivaliz operado por **Gemini + Claude + ChatGPT** trabalhando autonomamente.
+Código-fonte do e-commerce ShopVivaliz e de suas integrações, rotinas de qualidade e agentes assistidos por IA.
 
 ## Direção de plataforma
 
@@ -14,164 +14,70 @@ O projeto está evoluindo para uma base pronta com **MedusaJS** como backend pri
 - **Cache/fila:** Redis
 - **Integrações:** Olist, Tiny e marketplaces
 
-### Documento de migração
-
 Veja o plano em [`docs/medusa-migracao-roadmap.md`](docs/medusa-migracao-roadmap.md).
 
-## 🤖 Trio IA Autônomo
+## Agentes e automações
 
-Seu ecommerce agora funciona com inteligência artificial 24/7:
+Gemini, Claude e ChatGPT podem apoiar análise, implementação e revisão. Nenhum agente está autorizado a concluir tarefas, fazer push no branch protegido ou promover deploy apenas por alterar um estado interno.
 
-- **Gemini** → Analisa arquitetura e infraestrutura
-- **Claude** → Implementa código PHP production-ready
-- **ChatGPT** → Revisa, encontra bugs, gera checklists
+A fonte de verdade para automações ativas é o conteúdo atual de [`.github/workflows/`](.github/workflows/). Documentos históricos não substituem runs, logs e artifacts do GitHub Actions.
 
-Tudo roda **automaticamente a cada hora** sem intervenção manual.
+### Fila canônica
 
-### Começar Rápido
+`tasks-queue.json` é um registro operacional em schema 2. A fila legada de execução autônoma foi aposentada e não existe executor horário autorizado que consuma esse arquivo para implementar, commitar ou publicar código automaticamente.
+
+O CLI é somente leitura:
 
 ```bash
-# Ver fila de tarefas
-python scripts/manage-tasks-queue.py list
-
-# Adicionar nova feature
-python scripts/manage-tasks-queue.py add \
-  "Adicionar carrinho de compras" \
-  "Implementar carrinho persistente com sessão PHP" \
-  --priority high
-
-# Ver estatísticas
-python scripts/manage-tasks-queue.py stats
+python3 scripts/manage-tasks-queue.py list
+python3 scripts/manage-tasks-queue.py list --status failed
+python3 scripts/manage-tasks-queue.py stats
 ```
 
-**Próxima execução:** A cada 1 hora via GitHub Actions (ou manual)
+Os comandos `add`, `remove`, `mark` e `priority` permanecem reconhecidos apenas para falhar de modo explícito, evitando que integrações antigas alterem a fila silenciosamente.
 
-### Documentação Completa
+Mudanças na fila devem ocorrer por pull request revisado. O estado `completed_verified` só é válido com evidência persistida de run, commit, PR, testes, read-back e digest de artifact. O estado simples `completed` não pertence ao schema.
 
-📖 **Leia:** [`AUTONOMOUS_TRIO_GUIDE.md`](AUTONOMOUS_TRIO_GUIDE.md)
+Consulte [`AUTONOMOUS_TRIO_GUIDE.md`](AUTONOMOUS_TRIO_GUIDE.md) para o contrato operacional seguro.
 
-Inclui:
-- Como gerenciar a fila
-- Monitorar execuções
-- Customizar agendamento
-- Debugar problemas
-- Status atual do sistema
+## Estrutura principal
 
-### Arquitetura
-
-```
-tasks-queue.json → Fila de tarefas
-    ↓
-ai-autonomous-executor.yml → Workflow executado a cada hora
-    ↓
-autonomous-executor.py → Pega tarefa pendente
-    ↓
-ai_collaboration.py → Roda Trio IA (Gemini → Claude → ChatGPT)
-    ↓
-Git commit + push + deploy automático
-    ↓
-Próxima tarefa ⏭️
-```
-
-### Workflows Disponíveis
-
-| Workflow | Trigger | Descrição |
-|----------|---------|-----------|
-| **Trio IA Autônomo** | A cada 1h | Executa tarefas automaticamente |
-| **Trio IA Ecommerce** | Manual | Roda uma tarefa específica sob demanda |
-| **Deploy** | Push/Manual | Sincroniza código com HostGator |
-| **QA** | Push | Valida PHP e testes |
-| **Setup Branch Protection** | Manual | Configura proteção de branch |
-
----
-
-## 📂 Estrutura do Projeto
-
-```
-├── ai_collaboration.py          # Script principal do Trio IA
-├── tasks-queue.json             # Fila de tarefas (gerenciável)
-├── AUTONOMOUS_TRIO_GUIDE.md     # Documentação completa
-├── .github/workflows/
-│   ├── ai-autonomous-executor.yml    # Executor autônomo (1h)
-│   ├── ai-trio-ecommerce.yml        # Manual Trio IA
-│   ├── deploy.yml               # Deploy automático
-│   └── [outros workflows...]
+```text
+├── tasks-queue.json                 # Registro canônico em schema 2
+├── AUTONOMOUS_TRIO_GUIDE.md         # Contrato seguro da fila e dos agentes
+├── .github/workflows/               # Workflows ativos e revisáveis
 ├── scripts/
-│   ├── autonomous-executor.py   # Lógica do executor
-│   ├── manage-tasks-queue.py    # CLI para gerenciar fila
-│   └── generate-report.py       # Relatórios
-├── api/                         # APIs e agentes
-├── agents/                      # Agentes customizados
-└── [código do ecommerce...]
+│   ├── manage-tasks-queue.py        # Inspeção somente leitura
+│   ├── task_queue_lib.py            # Validação e escrita atômica do schema
+│   └── audit-agents-real-work.py    # Auditoria de agentes/automações
+├── api/                             # APIs do e-commerce
+├── agents/                          # Componentes de agentes
+└── docs/knowledge/                  # Base de conhecimento operacional
 ```
 
----
+## Operação segura
 
-## 🚀 Operação
+- Toda mudança de código ou configuração deve passar por PR e checks.
+- Push direto, auto-merge e deploy sem revisão não são evidência de conclusão.
+- Runs devem produzir logs e artifacts vinculados ao SHA executado.
+- Falha, bloqueio ou ausência de trabalho não deve gerar commit de progresso.
+- Credenciais devem vir do ambiente autorizado ou de gerenciador de segredos; nunca de valores fictícios ou arquivos versionados.
 
-### Status Atual
-✅ Sistema 100% operacional e autônomo
+## Stack
 
-### Próximos Passos
-1. Adicione tarefas à fila (`tasks-queue.json`)
-2. Monitore em GitHub Actions
-3. Analise relatórios a cada execução
-4. Intervenha apenas quando necessário reprioritizar
+- **Backend atual:** PHP 8.3 e MySQL
+- **IA:** Anthropic, OpenAI e Google Gemini quando configurados
+- **Automação:** GitHub Actions e serviços explicitamente documentados
+- **Qualidade:** lint, testes de regressão, auditoria de secrets e evidência
 
-### Pausar Sistema
-```yaml
-# Em .github/workflows/ai-autonomous-executor.yml
-# Comente a seção schedule:
-# schedule:
-#   - cron: '0 * * * *'
-```
+## Backend Medusa em desenvolvimento
 
----
+Há um backend headless MedusaJS + storefront Next.js em `claude/medusa/apps/`, integrado ao site PHP legado via webhook (`claude/api/medusa-webhook.php`) e à sincronização Olist/Tiny ERP. Ainda não está em produção.
 
-## 📊 Monitorar
+Leia [`claude/medusa/README.md`](claude/medusa/README.md) e [`claude/medusa/DEPLOY-CHECKLIST.md`](claude/medusa/DEPLOY-CHECKLIST.md).
 
-**GitHub Actions Dashboard:**
-https://github.com/fredmourao-ai/site-shopvivaliz/actions/workflows/ai-autonomous-executor.yml
+## Knowledge Base
 
----
-
-## 🔧 Stack
-
-- **Backend:** PHP 8.3, MySQL 5.7
-- **IA:** Anthropic Claude, OpenAI GPT-4o, Google Gemini
-- **Deployment:** HostGator via FTP
-- **Automation:** GitHub Actions, CI/CD
-
----
-
-## 🛒 Backend Medusa (em desenvolvimento)
-
-Há um backend headless MedusaJS + storefront Next.js em `claude/medusa/apps/`,
-integrado ao site PHP legado via webhook (`claude/api/medusa-webhook.php`) e
-à sincronização Olist/Tiny ERP. Ainda não está em produção.
-
-📖 **Leia:** [`claude/medusa/README.md`](claude/medusa/README.md) (visão geral)
-e [`claude/medusa/DEPLOY-CHECKLIST.md`](claude/medusa/DEPLOY-CHECKLIST.md)
-(como rodar localmente, o que falta para produção).
-
----
-
-## 🧠 Knowledge Base
-
-A documentação completa do sistema está em:
-`/docs/knowledge/`
-
-Utilizada por agentes IA e desenvolvedores para diagnóstico e operação.
-
-Consulte primeiro [`docs/knowledge/README.md`](docs/knowledge/README.md) para acessar a visão geral, Squad Chat, troubleshooting, deploy, regras de agentes, atualizador cumulativo, integridade de dados e testes.
+A documentação do sistema está em [`docs/knowledge/`](docs/knowledge/). Comece por [`docs/knowledge/README.md`](docs/knowledge/README.md).
 
 O checklist de aquisição, SEO, performance, conversão, retenção e infraestrutura de dados está em [`docs/knowledge/traffic-visibility-checklist.md`](docs/knowledge/traffic-visibility-checklist.md).
-
----
-
-## 📝 Notas
-
-- Sistema opera 24/7 sem intervenção
-- Commits e deploys automáticos
-- Relatórios salvos a cada execução
-- Você controla a fila, não o sistema

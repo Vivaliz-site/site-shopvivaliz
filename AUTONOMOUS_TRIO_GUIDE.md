@@ -1,194 +1,97 @@
-# 🤖 Guia - Trio IA Autônomo ShopVivaliz
+# Guia seguro de agentes e fila canônica ShopVivaliz
 
-Seu ecommerce agora opera com **Trio IA 100% autônomo**. Gemini, Claude e ChatGPT trabalham juntos sem intervenção manual.
+Este documento descreve o contrato atual de operação. A antiga fila autônoma que implementava tarefas e promovia código sem revisão está aposentada.
 
----
+## Estado do sistema
 
-## 📋 Como Funciona
+- `tasks-queue.json` é um registro canônico de tarefas e bloqueios.
+- Não existe executor autorizado a transformar uma entrada da fila em commit, push ou deploy automaticamente.
+- A existência de uma tarefa, um heartbeat ou uma mensagem de sucesso não comprova trabalho.
+- Workflows ativos devem ser confirmados diretamente em `.github/workflows/` e pelos respectivos runs e artifacts.
 
-### Fluxo Automático
-1. **Fila de tarefas** (`tasks-queue.json`) contém features a implementar
-2. **Executor Autônomo** roda a cada **1 hora** (ou manualmente)
-3. Pega a primeira tarefa pendente
-4. **Gemini** → Analisa arquitetura
-5. **Claude** → Implementa código PHP
-6. **ChatGPT** → Revisa e gera relatório
-7. ✅ Código é commitado e deployado automaticamente
-8. ⏭️ Passa para a próxima tarefa
+## Inspeção da fila
 
-### Sem Intervenção Manual
-- Nenhuma aprovação necessária
-- Deploy automático em `main`
-- Relatórios salvos a cada execução
-- Você só intervém quando precisa reprioritizar ou adicionar tarefas
-
----
-
-## 🎯 Gerenciar a Fila de Tarefas
-
-### Via Linha de Comando (Local)
+O utilitário `scripts/manage-tasks-queue.py` é somente leitura:
 
 ```bash
-# Listar todas as tarefas
-python scripts/manage-tasks-queue.py list
-
-# Listar só pendentes
-python scripts/manage-tasks-queue.py list --status pending
-
-# Adicionar nova tarefa
-python scripts/manage-tasks-queue.py add \
-  "Integrar Stripe" \
-  "Adicionar gateway de pagamento Stripe com webhooks" \
-  --priority high
-
-# Remover tarefa
-python scripts/manage-tasks-queue.py remove task-001
-
-# Marcar como completa
-python scripts/manage-tasks-queue.py mark task-002 --status completed
-
-# Alterar prioridade
-python scripts/manage-tasks-queue.py priority task-003 high
-
-# Ver estatísticas
-python scripts/manage-tasks-queue.py stats
+python3 scripts/manage-tasks-queue.py list
+python3 scripts/manage-tasks-queue.py list --status blocked
+python3 scripts/manage-tasks-queue.py stats
 ```
 
-### Via GitHub (Editar JSON Diretamente)
+Os antigos comandos de mutação retornam código diferente de zero e não alteram o arquivo. Isso inclui `add`, `remove`, `mark` e `priority`.
 
-1. Vá a: https://github.com/fredmourao-ai/site-shopvivaliz/blob/main/tasks-queue.json
-2. Clique no ✏️ (Edit)
-3. Adicione/remova tarefas no JSON
-4. Clique em "Commit changes"
+## Como alterar uma tarefa
 
----
+1. Crie uma branch a partir do `main` atual.
+2. Edite `tasks-queue.json` preservando `metadata.schema_version = 2`, todos os campos de evidência e os estados permitidos.
+3. Execute os testes da fila.
+4. Abra um pull request.
+5. Aguarde checks verdes e revisão humana independente.
+6. Faça merge somente pelo fluxo de governança aprovado.
 
-## 📊 Monitorar Execução
+Não edite a fila diretamente no branch principal e não use um commit documental para representar execução operacional.
 
-### Acompanhar no GitHub Actions
-**URL:** https://github.com/fredmourao-ai/site-shopvivaliz/actions/workflows/ai-autonomous-executor.yml
+## Estados permitidos
 
-Status de cada execução:
-- ✅ **Success** = Tarefa completada e deployada
-- ⏳ **Skipped** = Nenhuma tarefa pendente (fila vazia)
-- ❌ **Failed** = Erro (revise logs)
+- `pending`: trabalho ainda não iniciado.
+- `running`: execução real em andamento, vinculada a uma tentativa identificável.
+- `blocked`: depende de acesso, credencial, aprovação ou pré-condição ausente.
+- `failed`: a tentativa terminou sem satisfazer o contrato.
+- `completed_verified`: trabalho concluído e confirmado por evidência independente.
 
-### Relatórios de Execução
-Cada execução gera um relatório disponível em **Artifacts**:
-```
-relatorio-<run_id>/trio-report.txt
-```
+`completed` não é um estado válido.
 
----
+## Evidência mínima para `completed_verified`
 
-## 🔄 Agendar Execuções
-
-### Automático (Padrão)
-Roda a cada **1 hora** (cron: `0 * * * *`)
-
-### Manual (Via GitHub)
-1. Vá a **Actions** → **Trio IA - Executor Autônomo**
-2. Clique **Run workflow** → **Run workflow**
-3. Executa imediatamente
-
-### Customizar Intervalo
-Edite `.github/workflows/ai-autonomous-executor.yml`:
-```yaml
-schedule:
-  - cron: '0 */6 * * *'  # A cada 6 horas
-  - cron: '0 9 * * MON'  # Às 9h de segunda
-```
-
----
-
-## 📝 Estrutura da Tarefa
+Uma tarefa concluída deve conter `last_result.success = true` e um objeto `verification` com, no mínimo:
 
 ```json
 {
-  "id": "task-001",
-  "title": "Adicionar filtro de preço",
-  "description": "Implementar filtro de preço com Ajax...",
-  "priority": "high",
-  "status": "pending",
-  "created_at": "2026-06-27T12:00:00Z"
+  "run_id": "123456789",
+  "commit_sha": "40-character-sha",
+  "pull_request": "#123",
+  "artifact_digest": "sha256:...",
+  "verified_at": "2026-08-06T10:00:00Z",
+  "tests_passed": true,
+  "read_back_verified": true
 }
 ```
 
-**Status:**
-- `pending` → Aguardando execução
-- `completed` → Já foi feita
+A validação deve falhar quando qualquer campo estiver ausente. Contadores, arquivos existentes, mensagens de log ou o término de um processo não substituem read-back e artifact.
 
-**Prioridade:** `low`, `medium`, `high`
+## Escrita e integridade
 
----
+`scripts/task_queue_lib.py`:
 
-## 🛑 Pausar o Executor
+- aceita somente o schema canônico `metadata` + `tasks`;
+- rejeita o schema legado com chave `queue` quando lido do disco;
+- preserva campos desconhecidos e evidências existentes;
+- valida estados e IDs duplicados;
+- bloqueia por padrão qualquer escritor de runtime;
+- para uma alteração revisada, usa lock, arquivo temporário, `fsync` e `os.replace`;
+- grava apenas `tasks-queue.json`, sem criar uma segunda fila em `logs/`.
 
-Se precisar pausar temporariamente:
+Uma chave `queue` pode existir apenas como visão de compatibilidade em memória para leitores legados. Ela nunca é persistida.
 
-1. Desative o workflow no GitHub:
-   - Actions → Trio IA - Executor Autônomo
-   - ... → Disable workflow
+## Verificação local
 
-2. Ou edite a cron em `.github/workflows/ai-autonomous-executor.yml`:
-   ```yaml
-   on:
-     # schedule:
-     #   - cron: '0 * * * *'  # COMENTADO = DESATIVADO
-     workflow_dispatch:
-   ```
-
----
-
-## 🔍 Debugar Problemas
-
-### Ver logs completos
-1. **Actions** → workflow executado
-2. Clique em **Configurar main branch** (ou tarefa específica)
-3. Expanda **Executar próxima tarefa**
-
-### Tarefa travou?
-1. Verifique se `ai_collaboration.py` está funcional:
-   ```bash
-   python ai_collaboration.py --modo diagnostico
-   ```
-
-2. Verifique os secrets no GitHub:
-   - Settings → Secrets and variables → Actions
-   - `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`
-
-### Fila vazia?
-Adicione tarefas:
 ```bash
-python scripts/manage-tasks-queue.py add "Tarefa teste" "Descrição" --priority high
+python3 -m unittest tests/test_task_queue_safety.py -v
+python3 -m py_compile scripts/task_queue_lib.py scripts/manage-tasks-queue.py
+python3 scripts/manage-tasks-queue.py list
 ```
 
----
+## Monitoramento
 
-## 📧 Notificações (Futuro)
+Para considerar uma automação saudável, verifique:
 
-Para receber emails em `fredmourao@gmail.com` a cada execução, adicione um step no workflow que envia email via SMTP ou SendGrid.
+- run ID e evento correto;
+- SHA executado igual ao SHA esperado;
+- conclusão do job e de todas as etapas obrigatórias;
+- artifact presente e com digest;
+- códigos de saída dos comandos;
+- read-back do efeito esperado;
+- ausência de threads de revisão bloqueantes.
 
----
-
-## 🚀 Resumo de Comandos
-
-| Ação | Comando |
-|------|---------|
-| Listar tarefas | `python scripts/manage-tasks-queue.py list` |
-| Adicionar | `python scripts/manage-tasks-queue.py add "Título" "Descrição"` |
-| Executar agora | GitHub Actions → **Run workflow** |
-| Ver status | GitHub Actions → Workflow runs |
-| Pausar | GitHub Actions → Disable workflow |
-
----
-
-## ✅ Status Atual
-
-- ✅ Sistema autônomo operacional
-- ✅ Branch protection configurada
-- ✅ Todos os workflows com permissões completas
-- ✅ Fila de tarefas pronta
-- ⏳ Próxima execução em: **~1 hora**
-
-**Seu ecommerce está no piloto automático! 🛸**
+Um ciclo sem alteração deve ser registrado como `verified_no_action` em summary ou artifact, sem criar commit de progresso e sem mudar a fila para concluída.
