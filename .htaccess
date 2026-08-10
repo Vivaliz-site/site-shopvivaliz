@@ -87,7 +87,11 @@ AddCharset UTF-8 .html .txt .php .json
     # Consolidacao do admin: entradas sem barra e index.php apontam para /admin/.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
     RewriteRule ^admin$ /admin/ [R=301,L,NE,QSD,NC]
+    # Redirecionar index.php apenas quando ele foi solicitado explicitamente pelo cliente.
+    # DirectoryIndex resolve /admin/ internamente para admin/index.php; redirecionar essa
+    # sub-requisicao de volta para /admin/ causa um loop infinito de 301.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteCond %{THE_REQUEST} \s/+admin/index\.php(?:[?\s]) [NC]
     RewriteRule ^admin/index\.php$ /admin/ [R=301,L,NE,QSD,NC]
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
     RewriteRule ^admin/(?:menu-completo|menu-dashboard|dashboard|admin-back)\.php$ /admin/ [R=301,L,NE,QSD,NC]
