@@ -158,9 +158,15 @@
 
     params = params || {};
     window.dataLayer = window.dataLayer || [];
-    window.dataLayer.push(Object.assign({ event: eventName }, params));
+
+    // gtag() is itself a dataLayer writer. Pushing the object manually and then
+    // calling gtag('event', ...) emitted every browser funnel event twice when
+    // the Google tag/GTM was present. Prefer the canonical gtag command when it
+    // exists; fall back to a raw GTM event object only on pages without gtag.
     if (typeof window.gtag === 'function') {
       window.gtag('event', eventName, params);
+    } else {
+      window.dataLayer.push(Object.assign({ event: eventName }, params));
     }
     sendFirstParty(eventName, params);
   }
