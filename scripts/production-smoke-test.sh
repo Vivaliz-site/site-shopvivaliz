@@ -44,27 +44,43 @@ from pathlib import Path
 
 payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 expected_canonical = sys.argv[2].lower()
-action = str(payload.get("action") or "")
-allowed = {
-    "noop",
-    "fast-forward-to-canonical",
-    "realigned-to-verified-sanitized-history",
-}
+
+# The canonical git-auto-sync.py currently reports success with
+# status="completed" and SHA fields, while older sync runners also emitted
+# ok=true/action. Accept both schemas so a successful repository sync does not
+# become a false-negative deployment failure.
+ok_value = payload.get("ok")
+if ok_value is None:
+    ok_value = payload.get("status") == "completed"
+if ok_value is not True:
+    raise SystemExit("sync report is not successful")
+
+local_before = str(payload.get("local_sha_before") or "").lower()
 local_after = str(
     payload.get("local_sha_after")
+    or payload.get("final_sha")
     or payload.get("local_sha")
     or ""
 ).lower()
 remote = str(payload.get("remote_sha") or "").lower()
-if payload.get("ok") is not True:
-    raise SystemExit("sync report is not successful")
-if action not in allowed:
-    raise SystemExit(f"unexpected sync action: {action}")
+
 if local_after != expected_canonical or remote != expected_canonical:
     raise SystemExit(
         "sync report SHA mismatch: "
         f"local={local_after} remote={remote} canonical={expected_canonical}"
     )
+
+action = str(payload.get("action") or "")
+if not action:
+    action = "noop" if local_before == expected_canonical else "fast-forward-to-canonical"
+
+allowed = {
+    "noop",
+    "fast-forward-to-canonical",
+    "realigned-to-verified-sanitized-history",
+}
+if action not in allowed:
+    raise SystemExit(f"unexpected sync action: {action}")
 PY
 echo "OK Oracle repository sync: canonical=$repo_sha deployed=$expected_sha"
 
