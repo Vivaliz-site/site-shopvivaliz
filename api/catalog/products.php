@@ -17,11 +17,61 @@ function svcat_search_normalize(string $value): string
         'í'=>'i','ì'=>'i','î'=>'i','ï'=>'i','ó'=>'o','ò'=>'o','õ'=>'o','ô'=>'o','ö'=>'o',
         'ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u','ç'=>'c','ñ'=>'n','ý'=>'y',
         'Á'=>'A','À'=>'A','Ã'=>'A','Â'=>'A','Ä'=>'A','É'=>'E','È'=>'E','Ê'=>'E','Ë'=>'E',
-        'Í'=>'I','Ì'=>'I','Î'=>'I','Ï'=>'I','Ó'=>'O','Ò'=>'O','Õ'=>'O','Ô'=>'O','Ö'=>'O',
+        'Í'=>'I','Ì'=>'I','Î'=>'I','Ï'=>'I','Ó'=>'O','Õ'=>'O','Ô'=>'O','Ö'=>'O',
         'Ú'=>'U','Ù'=>'U','Û'=>'U','Ü'=>'U','Ç'=>'C','Ñ'=>'N','Ý'=>'Y',
     ];
     $value = strtr(trim($value), $accents);
     return function_exists('mb_strtoupper') ? mb_strtoupper($value, 'UTF-8') : strtoupper($value);
+}
+
+/** @return list<string> */
+function svcat_search_terms(string $query): array
+{
+    $normalized = svcat_search_normalize($query);
+    $parts = preg_split('/[^A-Z0-9]+/', $normalized) ?: [];
+    $stopwords = ['A', 'AS', 'O', 'OS', 'E', 'DE', 'DA', 'DAS', 'DO', 'DOS', 'EM', 'PARA', 'POR', 'COM'];
+    $terms = [];
+    foreach ($parts as $part) {
+        $part = trim($part);
+        if ($part === '' || strlen($part) < 2 || in_array($part, $stopwords, true)) continue;
+        if (!in_array($part, $terms, true)) $terms[] = $part;
+    }
+    return $terms;
+}
+
+function svcat_search_term_matches(string $haystack, string $term): bool
+{
+    if (str_contains($haystack, $term)) return true;
+
+    // Busca tolerante a plural simples sem transformar marcas em categorias
+    // genéricas. Ex.: "carrinhos fercar" encontra "Carrinho ... Fercar".
+    if (strlen($term) > 4 && str_ends_with($term, 'S')) {
+        $singular = substr($term, 0, -1);
+        if ($singular !== '' && str_contains($haystack, $singular)) return true;
+    }
+    return false;
+}
+
+function svcat_product_matches_query(array $product, string $query): bool
+{
+    $terms = svcat_search_terms($query);
+    if ($terms === []) return true;
+
+    $haystack = svcat_search_normalize(implode(' ', [
+        $product['sku'] ?? '',
+        $product['name'] ?? '',
+        $product['category'] ?? '',
+        $product['olist_product_id'] ?? '',
+        $product['id'] ?? '',
+        $product['description'] ?? '',
+    ]));
+
+    // AND entre os termos: evita que uma landing "carrinho fercar" vire uma
+    // vitrine genérica de ferramentas, mas permite palavras não contíguas.
+    foreach ($terms as $term) {
+        if (!svcat_search_term_matches($haystack, $term)) return false;
+    }
+    return true;
 }
 
 function svcat_ml_key_normalize(string $value): string
@@ -126,12 +176,17 @@ $limit = min(200, max(1, (int)($_GET['limit'] ?? 48)));
 $page = max(1, (int)($_GET['page'] ?? 1));
 $q = trim((string)($_GET['q'] ?? ''));
 $sort = trim((string)($_GET['ordem'] ?? $_GET['sort'] ?? 'relevance'));
+$refererPath = (string)(parse_url((string)($_SERVER['HTTP_REFERER'] ?? ''), PHP_URL_PATH) ?: '');
+$isStorefrontCatalog = $refererPath === '/catalogo' || str_starts_with($refererPath, '/catalogo/');
+$availableOnly = ($_GET['available'] ?? '') === '1'
+    || ($isStorefrontCatalog && ($_GET['include_out_of_stock'] ?? '') !== '1');
 $cacheKey = http_build_query([
     'limit' => $limit,
     'page' => $page,
     'q' => $q,
     'sort' => $sort,
     'category' => trim((string)($_GET['categoria'] ?? $_GET['category'] ?? '')),
+    'available_only' => $availableOnly ? '1' : '0',
     'sig' => svcat_cache_signature(),
 ]);
 $cachePath = svcat_response_cache_path($cacheKey);
@@ -148,6 +203,7 @@ $allProducts = array_map(static function (array $row): array {
         'sku' => trim((string)($row['sku'] ?? '')),
         'olist_product_id' => (string)($row['olist_product_id'] ?? $row['id'] ?? ''),
         'name' => trim((string)($row['name'] ?? $row['nome'] ?? 'Produto')),
+        'slug' => trim((string)($row['slug'] ?? '')),
         'description' => trim((string)($row['description'] ?? '')),
         'price' => (float)($row['price'] ?? $row['preco'] ?? 0),
         'stock' => (int)($row['stock'] ?? $row['estoque'] ?? 0),
@@ -161,6 +217,9 @@ $allProducts = array_map(static function (array $row): array {
 }, $runtimeRows);
 
 $allProducts = array_values(array_filter($allProducts, static fn(array $p): bool => svcat_is_active($p['status'] ?? null)));
+if ($availableOnly) {
+    $allProducts = array_values(array_filter($allProducts, static fn(array $p): bool => (int)($p['stock'] ?? 0) > 0));
+}
 
 foreach ($allProducts as &$product) {
     $candidates = array_values(array_unique(array_filter([
@@ -184,12 +243,10 @@ foreach ($allProducts as &$product) {
 unset($product);
 
 if ($q !== '') {
-    $needle = svcat_search_normalize($q);
-    $allProducts = array_values(array_filter($allProducts, static function (array $p) use ($needle): bool {
-        return str_contains(svcat_search_normalize(implode(' ', [
-            $p['sku'] ?? '', $p['name'] ?? '', $p['category'] ?? '', $p['olist_product_id'] ?? '',
-        ])), $needle);
-    }));
+    $allProducts = array_values(array_filter(
+        $allProducts,
+        static fn(array $product): bool => svcat_product_matches_query($product, $q)
+    ));
 }
 
 $category = trim((string)($_GET['categoria'] ?? $_GET['category'] ?? ''));
@@ -247,6 +304,7 @@ $payload = [
     'limit' => $limit,
     'total_pages' => $totalPages,
     'sort' => $sort !== '' ? $sort : 'relevance',
+    'available_only' => $availableOnly,
     'products' => $products,
     'categories' => $categories,
 ];
