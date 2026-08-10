@@ -76,11 +76,12 @@ final class CatalogAiKeyPool
     /** @return list<string> */
     public static function normalize(string|array $keys): array
     {
-        $items = is_array($keys) ? $keys : [$keys];
-        return array_values(array_unique(array_filter(array_map(
+        $items = is_array($keys) ? $keys : (preg_split('/[\r\n,;]+/', (string)$keys) ?: []);
+        $items = array_map(
             static fn(mixed $value): string => trim((string)$value),
             $items
-        ), static fn(string $value): bool => $value !== '')));
+        );
+        return array_values(array_unique(array_filter($items, static fn(string $value): bool => $value !== '')));
     }
 
     public static function shouldRotate(int $status, string $message): bool
