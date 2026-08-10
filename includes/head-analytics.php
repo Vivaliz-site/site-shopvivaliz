@@ -106,6 +106,8 @@ echo '<link rel="stylesheet" href="/css/public-experience-v1.css?v=' . htmlspeci
 echo '<script defer src="/js/public-experience-v1.js?v=' . htmlspecialchars($jsVersion, ENT_QUOTES, 'UTF-8') . '"></script>' . "\n";
 $GLOBALS['sv_public_experience_included'] = true;
 
+require_once __DIR__ . '/liz-assistant-assets.php';
+
 if (function_exists('track_page_view')) {
     $title = $GLOBALS['page_title'] ?? 'Page';
     $path = $_SERVER['REQUEST_URI'] ?? '/';
