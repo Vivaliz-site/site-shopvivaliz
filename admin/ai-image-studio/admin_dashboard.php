@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../includes/admin-guard.php';
 require_once __DIR__ . '/../../includes/csrf.php';
+require_once __DIR__ . '/../../includes/release-info.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/process_item.php';
 require_once __DIR__ . '/src/ImageChannelProfile.php';
@@ -63,6 +64,7 @@ function ai_studio_top_counter(array $counts, string $fallbackLabel = 'Nenhum'):
 }
 
 $channelProfiles = ai_studio_channel_profiles();
+$releaseInfo = sv_release_info_from_path(__DIR__);
 $batchResults = null;
 $batchError = null;
 $batchErrorItems = [];
@@ -211,6 +213,7 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
 .hero h1{margin:0 0 10px;font-size:clamp(2rem,4vw,3.4rem);line-height:.96}
 .hero p{margin:0;max-width:760px;color:rgba(255,255,255,.84);line-height:1.6}
 .hero-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+.release-pill{display:inline-flex;align-items:center;gap:8px;padding:9px 12px;border-radius:999px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.16);color:#fff;font-size:.82rem;font-weight:800;line-height:1.2}
 .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin:18px 0}
 .metric{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:18px;box-shadow:var(--shadow)}
 .metric strong{display:block;font-size:1.8rem;margin-bottom:4px}
@@ -277,6 +280,9 @@ th{background:#f8fafc;color:#425368}
                 <div class="hero-actions">
                     <a class="hero-link" href="/admin/ai-image-studio/admin_validate.php">Ir para aprovacao</a>
                     <a class="hero-link" href="/admin/connections.php">Validar credenciais</a>
+                    <span class="release-pill" title="Release detectado via <?= ai_studio_h($releaseInfo['source']) ?>">
+                        Release <?= ai_studio_h($releaseInfo['identifier']) ?>
+                    </span>
                 </div>
             </div>
         </div>
