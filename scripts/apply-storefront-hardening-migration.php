@@ -86,9 +86,9 @@ try {
         }
     }
 
-    // Reconcile the canonical administrative account as part of the existing
-    // idempotent production migration hook. This is deliberately narrow: it
-    // never creates users, changes passwords, or promotes any other account.
+    // Reconcile one persisted ShopVivaliz administrative identity as part of
+    // the existing idempotent production migration hook. Never create users,
+    // change passwords, or guess among multiple domain accounts.
     $adminColumn = $pdo->query(
         "SELECT COUNT(*)
            FROM information_schema.columns
@@ -101,27 +101,43 @@ try {
     }
 
     $canonicalAdminEmail = 'admin@shopvivaliz.com.br';
-    $adminLookup = $pdo->prepare('SELECT id, is_admin FROM users WHERE email = :email LIMIT 1');
+    $adminLookup = $pdo->prepare('SELECT id, is_admin FROM users WHERE LOWER(email) = :email LIMIT 1');
     $adminLookup->execute([':email' => $canonicalAdminEmail]);
     $admin = $adminLookup->fetch(PDO::FETCH_ASSOC);
+    $adminResolution = 'canonical_email';
+
     if (!$admin || empty($admin['id'])) {
-        throw new RuntimeException('Canonical admin account is missing');
+        $domainLookup = $pdo->prepare(
+            "SELECT id, is_admin
+               FROM users
+              WHERE LOWER(email) LIKE :domain
+              ORDER BY id ASC
+              LIMIT 2"
+        );
+        $domainLookup->execute([':domain' => '%@shopvivaliz.com.br']);
+        $domainAccounts = $domainLookup->fetchAll(PDO::FETCH_ASSOC);
+
+        if (count($domainAccounts) === 0) {
+            throw new RuntimeException('No persisted ShopVivaliz domain account is available');
+        }
+        if (count($domainAccounts) !== 1 || empty($domainAccounts[0]['id'])) {
+            throw new RuntimeException('Multiple ShopVivaliz domain accounts exist; refusing to guess admin identity');
+        }
+
+        $admin = $domainAccounts[0];
+        $adminResolution = 'single_domain_account';
     }
 
+    $adminId = (int)$admin['id'];
     if ((int)($admin['is_admin'] ?? 0) !== 1) {
         $adminUpdate = $pdo->prepare('UPDATE users SET is_admin = 1 WHERE id = :id');
-        $adminUpdate->execute([':id' => (int)$admin['id']]);
+        $adminUpdate->execute([':id' => $adminId]);
     }
 
-    $adminVerify = $pdo->prepare(
-        'SELECT is_admin FROM users WHERE id = :id AND email = :email LIMIT 1'
-    );
-    $adminVerify->execute([
-        ':id' => (int)$admin['id'],
-        ':email' => $canonicalAdminEmail,
-    ]);
+    $adminVerify = $pdo->prepare('SELECT is_admin FROM users WHERE id = :id LIMIT 1');
+    $adminVerify->execute([':id' => $adminId]);
     if ((int)$adminVerify->fetchColumn() !== 1) {
-        throw new RuntimeException('Canonical admin authorization verification failed');
+        throw new RuntimeException('Administrative authorization verification failed');
     }
 
     echo json_encode([
@@ -129,7 +145,8 @@ try {
         'migration' => basename($migration),
         'statements' => count($statements),
         'tables' => $requiredTables,
-        'canonical_admin_authorized' => true,
+        'admin_authorized' => true,
+        'admin_resolution' => $adminResolution,
         'checked_at' => date(DATE_ATOM),
     ], JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . PHP_EOL;
 } catch (Throwable $error) {
