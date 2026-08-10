@@ -101,3 +101,13 @@ function sv_active_coupon_offer_text(array $coupon): string
 
     return 'OFERTA ATIVA';
 }
+
+// A home ainda possui um banner legado com copy promocional estatica no
+// template. Ao carregar a fonte de cupons pelo navbar, registra um filtro de
+// saida que substitui essa copy pela promocao realmente ativa ou por texto
+// evergreen quando nao ha cupom. Em outros scripts e no CLI nada e alterado.
+$svActiveCouponScript = basename((string)($_SERVER['SCRIPT_FILENAME'] ?? $_SERVER['SCRIPT_NAME'] ?? ''));
+if ($svActiveCouponScript === 'index.php' && PHP_SAPI !== 'cli') {
+    require_once __DIR__ . '/promotion-output-filter.php';
+    sv_promotion_output_filter_register();
+}
