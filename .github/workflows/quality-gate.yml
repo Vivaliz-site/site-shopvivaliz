@@ -103,7 +103,9 @@ jobs:
             scripts/agent-operations-worker.py \
             tests/test_agent_docs_gate.py \
             daemon-sync-products.py \
-            tests/daemon-sync-images-regression.py
+            tests/daemon-sync-images-regression.py \
+            scripts/recover-olist-oauth-from-backups.py \
+            tests/test_recover_olist_oauth_from_backups.py
 
       - name: Run secret bootstrap safety tests
         shell: bash
@@ -116,6 +118,12 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 -m unittest tests/test_configure_erp_oauth_static_runtime.py -v
+
+      - name: Run Olist OAuth backup recovery safety tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m unittest tests/test_recover_olist_oauth_from_backups.py -v
 
       - name: Run catalog daemon image regression test
         shell: bash
