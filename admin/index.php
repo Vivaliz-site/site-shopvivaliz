@@ -13,11 +13,19 @@ $codename = (string)($version['codename'] ?? '');
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Central ShopVivaliz</title>
+    <link rel="canonical" href="/admin/">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
     <?php require_once __DIR__ . '/../includes/load-custom-css.php'; ?>
+    <script>
+    (function () {
+        if (window.location.pathname !== '/admin/' && window.location.pathname !== '/admin') {
+            window.history.replaceState({}, '', '/admin/');
+        }
+    })();
+    </script>
 </head>
-<body>
+<body class="admin-surface" data-catalog-preserve-path="1">
     <nav class="navbar" style="background: #1a1a2e; padding: 1rem 0;">
         <div class="container nav-inner" style="display: flex; justify-content: space-between; align-items: center;">
             <a class="brand-link" href="/admin/" style="color: white; font-weight: bold; font-size: 1.2rem;">🛍️ ShopVivaliz Admin</a>
