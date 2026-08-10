@@ -1,55 +1,12 @@
-# Força LF (Unix) para scripts que rodam em Linux
-# Previne CRLF (Windows) que quebra scripts shell
+* text=auto eol=lf
 
-# Shell scripts
-*.sh text eol=lf
-*.bash text eol=lf
-
-# Python scripts
-*.py text eol=lf
-
-# PHP scripts
 *.php text eol=lf
-
-# Configuration
+*.py text eol=lf
+*.sh text eol=lf
+*.json text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
-*.json text eol=lf
-*.toml text eol=lf
-*.cfg text eol=lf
-
-# Markdown documentation
 *.md text eol=lf
-*.markdown text eol=lf
-
-# Makefile
-Makefile text eol=lf
-makefile text eol=lf
-
-# Git-related
-.gitignore text eol=lf
-.gitattributes text eol=lf
-
-# Apache config
-*.conf text eol=lf
-.htaccess text eol=lf
-
-# Cron files
-crontab text eol=lf
-
-# Binary files
-*.jpg binary
-*.jpeg binary
-*.png binary
-*.gif binary
-*.ico binary
-*.mov binary
-*.mp4 binary
-*.mp3 binary
-*.gz binary
-*.zip binary
-*.7z binary
-*.ttf binary
-*.otf binary
-*.woff binary
-*.woff2 binary
+*.css text eol=lf
+*.js text eol=lf
+Dockerfile text eol=lf
