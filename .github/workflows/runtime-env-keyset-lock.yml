@@ -7,6 +7,10 @@ on:
       - '.github/workflows/runtime-env-keyset-lock.yml'
       - 'scripts/env_keyset_guard.py'
       - 'tests/test_env_keyset_guard.py'
+      - 'scripts/configure-production-runtime.py'
+      - 'daemon-token-renewer.py'
+      - 'daemon-shopee-token-renewer.py'
+      - 'daemon-google-token-renewer.py'
   schedule:
     - cron: '7 * * * *'
   workflow_dispatch:
