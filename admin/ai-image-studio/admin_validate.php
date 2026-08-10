@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../includes/admin-guard.php';
 require_once __DIR__ . '/../../includes/csrf.php';
+require_once __DIR__ . '/../../includes/release-info.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/process_item.php';
 require_once __DIR__ . '/../../includes/catalog-publication-schema.php';
@@ -17,6 +18,7 @@ if (!$db instanceof PDO) {
     exit('Falha ao conectar ao banco de dados.');
 }
 svcp_ensure_schema($db);
+$releaseInfo = sv_release_info_from_path(__DIR__);
 
 $channelProfiles = ai_studio_channel_profiles();
 $channelLabels = [];
@@ -248,6 +250,7 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
 .back-link,.hero-link{display:inline-flex;align-items:center;gap:8px;text-decoration:none;border-radius:999px;padding:10px 14px;font-weight:800}
 .back-link{background:#fff;color:#111827}
 .hero-link{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.14);color:#fff}
+.release-pill{display:inline-flex;align-items:center;gap:8px;padding:9px 12px;border-radius:999px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.16);color:#fff;font-size:.82rem;font-weight:800;line-height:1.2}
 .eyebrow{margin:0 0 10px;text-transform:uppercase;letter-spacing:.14em;font-size:.74rem;font-weight:800;color:rgba(255,255,255,.74)}
 .alert{padding:14px 16px;border-radius:18px;margin:14px 0}
 .ok{background:#e8f5e9;color:#175b28}
@@ -306,6 +309,9 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
                 </p>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px">
                     <a class="hero-link" href="/admin/ai-image-studio/admin_dashboard.php">Voltar para geracao</a>
+                    <span class="release-pill" title="Release detectado via <?= ais_v_h($releaseInfo['source']) ?>">
+                        Release <?= ais_v_h($releaseInfo['identifier']) ?>
+                    </span>
                 </div>
             </div>
         </div>

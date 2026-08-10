@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/admin-guard.php';
+require_once __DIR__ . '/../includes/release-info.php';
 require_once __DIR__ . '/admin-sections.php';
 
 header('Content-Type: text/html; charset=UTF-8');
@@ -11,6 +12,7 @@ $version = is_file(__DIR__ . '/../config/shopvivaliz-version.php')
     : [];
 $appVersion = (string)($version['version'] ?? '0.0.0');
 $codename = (string)($version['codename'] ?? '');
+$releaseInfo = sv_release_info_from_path(__DIR__);
 $sections = sv_admin_sections();
 $totalItems = sv_admin_total_items($sections);
 $sectionCount = count($sections);
@@ -663,6 +665,10 @@ $spotlights = [
                                 <div class="hero-metric">
                                     <strong><?= htmlspecialchars($appVersion, ENT_QUOTES, 'UTF-8') ?></strong>
                                     <span><?= htmlspecialchars($codename !== '' ? $codename : 'release sem codename', ENT_QUOTES, 'UTF-8') ?></span>
+                                </div>
+                                <div class="hero-metric">
+                                    <strong><?= htmlspecialchars($releaseInfo['identifier'], ENT_QUOTES, 'UTF-8') ?></strong>
+                                    <span>release imutavel em uso</span>
                                 </div>
                             </div>
                         </div>
