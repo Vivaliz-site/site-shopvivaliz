@@ -4,6 +4,8 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
 $root = dirname(__DIR__);
+require_once $root . '/includes/storefront-image-source.php';
+
 $storageDir = $root . '/storage';
 if (!is_dir($storageDir)) {
     @mkdir($storageDir, 0775, true);
@@ -13,59 +15,6 @@ if (!$lockFile || !flock($lockFile, LOCK_EX | LOCK_NB)) {
     http_response_code(409);
     echo json_encode(['success' => false, 'error' => 'cache_sync_locked']);
     exit;
-}
-
-/**
- * Resolve a URL de imagem mais confiavel para a release atual.
- *
- * O pipeline historico gravava site_url em /uploads/olist, inclusive em
- * caminhos de deploy antigos. Em releases imutaveis esses arquivos podem nao
- * existir mais. Por isso fontes remotas originais do ERP/Tiny tem prioridade.
- * URLs locais da propria ShopVivaliz so sao aceitas quando o arquivo existe
- * fisicamente na release atual.
- */
-function svsce_resolve_image_url(array $row, string $root): string
-{
-    $remoteCandidates = [
-        $row['original_url_olist'] ?? '',
-        $row['image_url'] ?? '',
-        $row['original_url'] ?? '',
-    ];
-
-    foreach ($remoteCandidates as $candidate) {
-        $candidate = trim((string)$candidate);
-        if ($candidate !== '' && preg_match('~^https?://~i', $candidate)) {
-            return $candidate;
-        }
-    }
-
-    foreach (['site_url', 'local_url'] as $field) {
-        $candidate = trim((string)($row[$field] ?? ''));
-        if ($candidate === '') continue;
-
-        if (str_starts_with($candidate, '/')) {
-            $path = parse_url($candidate, PHP_URL_PATH);
-            if (is_string($path) && $path !== '' && is_file($root . $path)) {
-                return 'https://shopvivaliz.com.br' . $path;
-            }
-            continue;
-        }
-
-        if (!preg_match('~^https?://~i', $candidate)) continue;
-
-        $host = strtolower((string)(parse_url($candidate, PHP_URL_HOST) ?? ''));
-        $path = (string)(parse_url($candidate, PHP_URL_PATH) ?? '');
-        if (in_array($host, ['shopvivaliz.com.br', 'www.shopvivaliz.com.br'], true)) {
-            if ($path !== '' && is_file($root . $path)) {
-                return 'https://shopvivaliz.com.br' . $path;
-            }
-            continue;
-        }
-
-        return $candidate;
-    }
-
-    return '';
 }
 
 try {
@@ -122,7 +71,7 @@ try {
             $stmt = $pdo->query($sql);
             while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                 $sku = trim((string)($row['sku'] ?? ''));
-                $imageUrl = svsce_resolve_image_url($row, $root);
+                $imageUrl = svsis_resolve_image_url($row, $root);
                 if ($sku === '' || $imageUrl === '') continue;
 
                 if (!isset($imagesBySku[$sku])) {
