@@ -131,26 +131,29 @@ grep -Eqi '(mobile|menu-toggle|header)' "$homepage_body"
 echo 'OK mobile responsive header contract'
 
 check_http catalog "$base/catalogo" '200'
-product_path="$(python3 - "$homepage_body" <<'PY'
-from html.parser import HTMLParser
-from pathlib import Path
-from urllib.parse import quote, urlsplit
+check_http catalog_api "$base/api/catalog/products.php?limit=1&available=1" '200'
+grep -q '"ok":true' "$tmpdir/catalog_api.body"
+echo 'OK catalog API payload'
+
+# The storefront product grid is rendered by JavaScript, so the static homepage
+# is not a reliable source for a /produto/ link. Use the same public catalog API
+# that feeds the browser and validate one canonical slug from live inventory.
+product_path="$(python3 - "$tmpdir/catalog_api.body" <<'PY'
+from __future__ import annotations
+
+import json
 import sys
+from pathlib import Path
+from urllib.parse import quote
 
-class ProductLinkParser(HTMLParser):
-    def handle_starttag(self, tag, attrs):
-        if tag.lower() != "a":
-            return
-        for key, value in attrs:
-            if key.lower() != "href" or not value:
-                continue
-            path = urlsplit(value).path
-            if path.startswith("/produto/"):
-                print(quote(path, safe="/%:@"))
-                raise SystemExit(0)
-
-parser = ProductLinkParser()
-parser.feed(Path(sys.argv[1]).read_text(encoding="utf-8", errors="ignore"))
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+products = payload.get("products") or []
+if not products:
+    raise SystemExit("catalog API returned no available product for smoke test")
+slug = str(products[0].get("slug") or "").strip()
+if not slug:
+    raise SystemExit("catalog API product is missing canonical slug")
+print('/produto/' + quote(slug, safe='-._~'))
 PY
 )"
 test -n "$product_path"
@@ -158,9 +161,6 @@ check_http product "$base$product_path" '200'
 check_http cart "$base/carrinho" '200,302'
 check_http checkout "$base/checkout" '200,302'
 check_http css "$base/css/shopvivaliz-core-consolidated.css" '200'
-check_http catalog_api "$base/api/catalog/products.php?limit=1" '200'
-grep -q '"ok":true' "$tmpdir/catalog_api.body"
-echo 'OK catalog API payload'
 
 admin_status="$(curl --silent --show-error --output "$tmpdir/admin.body" --max-time 20 --user-agent "$ua" --write-out '%{http_code}' "$base/admin" || true)"
 if [[ "$admin_status" == '200' ]]; then
