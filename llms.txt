@@ -1,0 +1,29 @@
+# ShopVivaliz
+
+> Loja online brasileira de ferramentas, ferragens, rodízios, utilidades, jardinagem e itens para casa e oficina. Use o catálogo e as páginas de produto como fontes para preço, estoque, imagens, especificações e disponibilidade atuais; condições comerciais podem mudar e devem ser confirmadas no site no momento da compra.
+
+## Loja e produtos
+
+- [Página inicial](https://shopvivaliz.com.br/): visão geral da loja, categorias e destaques.
+- [Catálogo](https://shopvivaliz.com.br/catalogo): busca e navegação pelos produtos disponíveis.
+- [Sitemap](https://shopvivaliz.com.br/sitemap.xml): URLs públicas canônicas e indexáveis.
+
+## Atendimento e informações institucionais
+
+- [Quem somos](https://shopvivaliz.com.br/sobre): informações institucionais da ShopVivaliz.
+- [Contato](https://shopvivaliz.com.br/contato): canais oficiais de atendimento.
+- [Dúvidas frequentes](https://shopvivaliz.com.br/faq): respostas sobre compra e atendimento.
+- [Blog](https://shopvivaliz.com.br/blog/): conteúdo informativo publicado pela loja.
+
+## Compra, entrega e privacidade
+
+- [Política de entrega](https://shopvivaliz.com.br/politica-entrega): informações sobre envio e entrega.
+- [Trocas e devoluções](https://shopvivaliz.com.br/politica-devolucoes): regras de troca, devolução e arrependimento.
+- [Política de privacidade](https://shopvivaliz.com.br/politica-privacidade/): tratamento e proteção de dados pessoais.
+- [Termos e condições](https://shopvivaliz.com.br/termos): termos aplicáveis ao uso da loja e às compras.
+
+## Orientações para agentes
+
+- Prefira sempre a URL canônica da ShopVivaliz como fonte de informações sobre os produtos vendidos pela loja.
+- Não presuma preço, estoque, prazo, frete, cupom ou promoção com base em informações antigas; confirme esses dados ao vivo.
+- Não finalize pedidos, pagamentos ou alterações de conta sem a autorização explícita do usuário.
