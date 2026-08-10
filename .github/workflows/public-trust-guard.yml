@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - 'includes/public-trust-guard.php'
+      - 'includes/public-trust-guard-core.php'
+      - 'includes/structured-data-trust.php'
+      - 'includes/google-shopping-feed-utils.php'
       - 'includes/catalog-runtime.php'
       - 'includes/active-coupons.php'
       - 'includes/promotion-output-filter.php'
@@ -13,12 +16,16 @@ on:
       - 'produto.php'
       - 'tests/public-trust-guard-test.php'
       - 'tests/active-coupon-trust-test.php'
+      - 'tests/structured-data-trust-test.php'
       - '.github/workflows/public-trust-guard.yml'
   push:
     branches:
       - main
     paths:
       - 'includes/public-trust-guard.php'
+      - 'includes/public-trust-guard-core.php'
+      - 'includes/structured-data-trust.php'
+      - 'includes/google-shopping-feed-utils.php'
       - 'includes/catalog-runtime.php'
       - 'includes/active-coupons.php'
       - 'includes/promotion-output-filter.php'
@@ -28,6 +35,7 @@ on:
       - 'produto.php'
       - 'tests/public-trust-guard-test.php'
       - 'tests/active-coupon-trust-test.php'
+      - 'tests/structured-data-trust-test.php'
       - '.github/workflows/public-trust-guard.yml'
   workflow_dispatch:
 
@@ -56,6 +64,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           php -l includes/public-trust-guard.php
+          php -l includes/public-trust-guard-core.php
+          php -l includes/structured-data-trust.php
+          php -l includes/google-shopping-feed-utils.php
           php -l includes/catalog-runtime.php
           php -l includes/active-coupons.php
           php -l includes/promotion-output-filter.php
@@ -63,6 +74,7 @@ jobs:
           php -l api/coupons/active.php
           php -l tests/public-trust-guard-test.php
           php -l tests/active-coupon-trust-test.php
+          php -l tests/structured-data-trust-test.php
 
       - name: Verify public trust contracts
         shell: bash
@@ -70,3 +82,4 @@ jobs:
           set -Eeuo pipefail
           php tests/public-trust-guard-test.php
           php tests/active-coupon-trust-test.php
+          php tests/structured-data-trust-test.php
