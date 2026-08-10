@@ -1,0 +1,101 @@
+name: AI Staging Schema Maintenance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ai-staging-schema-maintenance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: production
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key"
+          test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Migrate staging schema and verify image dashboard latency
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          cd /home/ubuntu/shopvivaliz-deploy/current
+
+          timeout 300s php -d display_errors=1 -d log_errors=0 -r '
+            declare(strict_types=1);
+            require "includes/pdo-database.php";
+            $db = sv_pdo();
+            if (!$db instanceof PDO) throw new RuntimeException("database_unavailable");
+
+            $columnType = static function(PDO $db, string $table): string {
+                $stmt = $db->prepare("SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=\"provider_used\" LIMIT 1");
+                $stmt->execute([$table]);
+                return strtolower((string)$stmt->fetchColumn());
+            };
+            $indexExists = static function(PDO $db, string $table, string $index): bool {
+                $stmt = $db->prepare("SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEX_NAME=?");
+                $stmt->execute([$table, $index]);
+                return (int)$stmt->fetchColumn() > 0;
+            };
+
+            foreach (["product_images_staging", "catalog_optimizations_staging"] as $table) {
+                $type = $columnType($db, $table);
+                echo $table, " provider_before=", $type, PHP_EOL;
+                $length = 0;
+                if (preg_match("/^varchar\\((\\d+)\\)$/", $type, $m) === 1) $length = (int)$m[1];
+                if ($length < 64) {
+                    $db->exec("ALTER TABLE `{$table}` MODIFY `provider_used` VARCHAR(64) NOT NULL DEFAULT \"\"");
+                }
+                echo $table, " provider_after=", $columnType($db, $table), PHP_EOL;
+            }
+
+            if (!$indexExists($db, "product_images_staging", "idx_product_images_staging_status_created")) {
+                $db->exec("CREATE INDEX `idx_product_images_staging_status_created` ON `product_images_staging` (`status`,`created_at`,`id`)");
+            }
+            echo "image_status_created_index=ok", PHP_EOL;
+          '
+
+          start_ns="$(date +%s%N)"
+          timeout 12s php -d display_errors=1 -d log_errors=0 -d error_reporting=E_ALL -r '
+            declare(strict_types=1);
+            session_id("admin-image-perf-".bin2hex(random_bytes(8))); session_start();
+            $_SESSION["user_id"]=1; $_SESSION["is_admin"]=1; $_SESSION["issued_at"]=time();
+            $_SERVER["REQUEST_METHOD"]="GET"; $_SERVER["REQUEST_URI"]="/admin/ai-image-studio/admin_dashboard.php";
+            $_SERVER["SCRIPT_NAME"]="/admin/ai-image-studio/admin_dashboard.php"; $_SERVER["HTTP_HOST"]="shopvivaliz.com.br"; $_SERVER["HTTPS"]="on";
+            $_GET=[]; $_POST=[]; $_REQUEST=[];
+            require "admin/ai-image-studio/admin_dashboard.php";
+          ' > /tmp/ai-image-dashboard-after-migration.html
+          end_ns="$(date +%s%N)"
+          bytes="$(wc -c </tmp/ai-image-dashboard-after-migration.html | tr -d ' ')"
+          elapsed_ms=$(( (end_ns - start_ns) / 1000000 ))
+          echo "image_dashboard_bytes=$bytes elapsed_ms=$elapsed_ms"
+          test "$bytes" -ge 1000
+          test "$elapsed_ms" -lt 12000
+          REMOTE
+
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
