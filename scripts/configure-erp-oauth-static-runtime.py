@@ -65,8 +65,6 @@ def validate_value(key: str, value: str) -> None:
     normalized = value.strip().lower()
     if normalized and any(marker in normalized for marker in PLACEHOLDER_MARKERS):
         raise ValueError(f"placeholder value refused for {key}")
-    if normalized and key.endswith("_SECRET") and len(value.strip()) < 8:
-        raise ValueError(f"suspiciously short secret refused for {key}")
 
 
 def read_payload() -> dict[str, str]:
