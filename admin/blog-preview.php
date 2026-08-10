@@ -26,17 +26,41 @@ function bp_safe_url(string $value): string
     return $value;
 }
 
+function bp_render_state(string $title, string $message, int $status = 200): never
+{
+    http_response_code($status);
+    $safeTitle = bp_esc($title);
+    $safeMessage = bp_esc($message);
+    echo <<<HTML
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>{$safeTitle} — ShopVivaliz Admin</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:#f4f6fb;color:#111827}.bar{background:#173b63;color:#fff;padding:14px 18px;font-weight:800}.wrap{width:min(760px,calc(100% - 28px));margin:48px auto}.card{background:#fff;border:1px solid #e5e9f0;border-radius:16px;padding:26px;box-shadow:0 8px 28px rgba(17,24,39,.08)}h1{margin:0 0 10px;font-size:clamp(26px,6vw,38px)}p{line-height:1.6;color:#4b5563}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}.btn{display:inline-flex;padding:11px 15px;border-radius:9px;text-decoration:none;font-weight:800;background:#173b63;color:#fff}.btn.secondary{background:#eef2f7;color:#173b63}@media(max-width:520px){.wrap{margin:24px auto}.card{padding:20px}}
+</style>
+</head>
+<body>
+<div class="bar">ShopVivaliz · Prévia do blog</div>
+<main class="wrap"><section class="card"><h1>{$safeTitle}</h1><p>{$safeMessage}</p><div class="actions"><a class="btn" href="/admin/blog.php">Abrir artigos do blog</a><a class="btn secondary" href="/admin/">Voltar ao Admin</a></div></section></main>
+</body>
+</html>
+HTML;
+    exit;
+}
+
 $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT) ?: 0;
 if ($id <= 0) {
-    http_response_code(400);
-    exit('Artigo inválido.');
+    bp_render_state('Selecione um artigo para visualizar', 'A prévia precisa de um artigo. Abra o Blog, escolha o conteúdo desejado e use a opção de pré-visualização.');
 }
 
 $db = Database::getInstance()->getConnection();
 $stmt = $db->prepare('SELECT * FROM blog_articles WHERE id = ? LIMIT 1');
 if (!$stmt) {
-    http_response_code(500);
-    exit('Não foi possível carregar o artigo.');
+    bp_render_state('Não foi possível abrir a prévia', 'O banco não conseguiu preparar a consulta do artigo. Tente novamente pelo Blog.', 500);
 }
 $stmt->bind_param('i', $id);
 $stmt->execute();
@@ -44,8 +68,7 @@ $article = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
 if (!$article) {
-    http_response_code(404);
-    exit('Artigo não encontrado.');
+    bp_render_state('Artigo não encontrado', 'Esse artigo não existe mais ou não está disponível para pré-visualização.', 404);
 }
 
 $content = json_decode((string)($article['content_json'] ?? '[]'), true);
@@ -58,11 +81,11 @@ $image = bp_safe_url((string)($article['image_url'] ?? ''));
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow,noarchive">
 <title>Preview: <?= bp_esc((string)$article['title']) ?></title>
 <style>
-body{font-family:Arial,sans-serif;margin:0;background:#f4f5f7;color:#202124}.bar{position:sticky;top:0;background:#202124;color:#fff;padding:12px 18px;z-index:2}.bar a{color:#fff}.wrap{max-width:860px;margin:28px auto;background:#fff;padding:28px;border-radius:14px}.badge{display:inline-block;background:#fff3cd;color:#664d03;padding:6px 10px;border-radius:999px;font-size:13px}.hero{width:100%;max-height:430px;object-fit:cover;border-radius:12px;margin:18px 0}h1{font-size:38px;line-height:1.15}.meta{color:#5f6368}.faq{border-top:1px solid #ddd;padding-top:18px;margin-top:28px}.faq article{margin-bottom:16px}p{line-height:1.7}ul{line-height:1.7}
+*{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;background:#f4f5f7;color:#202124}.bar{position:sticky;top:0;background:#202124;color:#fff;padding:12px 18px;z-index:2}.bar a{color:#fff}.wrap{width:min(860px,calc(100% - 28px));margin:28px auto;background:#fff;padding:28px;border-radius:14px}.badge{display:inline-block;background:#fff3cd;color:#664d03;padding:6px 10px;border-radius:999px;font-size:13px}.hero{width:100%;max-height:430px;object-fit:cover;border-radius:12px;margin:18px 0}h1{font-size:clamp(30px,7vw,38px);line-height:1.15;overflow-wrap:anywhere}.meta{color:#5f6368}.faq{border-top:1px solid #ddd;padding-top:18px;margin-top:28px}.faq article{margin-bottom:16px}p,li{line-height:1.7;overflow-wrap:anywhere}ul{line-height:1.7}@media(max-width:560px){.wrap{margin:14px auto;padding:18px}.bar{font-size:13px}}
 </style>
 </head>
 <body>
