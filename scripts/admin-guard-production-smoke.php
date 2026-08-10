@@ -1,7 +1,8 @@
 <?php
 declare(strict_types=1);
 
-// CLI-only production smoke: validates the real admin database fallback without credentials.
+// CLI-only production smoke: validates the real ShopVivaliz admin database
+// fallback without credentials or exposing account details.
 if (PHP_SAPI !== 'cli') {
     http_response_code(404);
     exit(1);
@@ -16,22 +17,39 @@ try {
         exit(2);
     }
 
-    // Do not hard-code an invented administrative identity. The authorization
-    // contract is role-based: any persisted user with is_admin=1 must be
-    // recognized by admin-guard.php when the session only carries user_id.
-    // No email/name/password is read or printed by this smoke test.
-    $stmt = $pdo->query('SELECT id FROM users WHERE is_admin = 1 ORDER BY id ASC LIMIT 1');
-    $user = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
+    $canonicalEmail = 'admin@shopvivaliz.com.br';
+    $canonical = $pdo->prepare(
+        'SELECT id, is_admin FROM users WHERE LOWER(email) = :email LIMIT 1'
+    );
+    $canonical->execute([':email' => $canonicalEmail]);
+    $user = $canonical->fetch(PDO::FETCH_ASSOC);
 
     if (!$user || empty($user['id'])) {
-        fwrite(STDERR, "No persisted administrative user is available\n");
-        exit(3);
+        $domain = $pdo->prepare(
+            "SELECT id, is_admin
+               FROM users
+              WHERE LOWER(email) LIKE :domain
+              ORDER BY id ASC
+              LIMIT 2"
+        );
+        $domain->execute([':domain' => '%@shopvivaliz.com.br']);
+        $accounts = $domain->fetchAll(PDO::FETCH_ASSOC);
+        if (count($accounts) !== 1 || empty($accounts[0]['id'])) {
+            fwrite(STDERR, "Unable to resolve one persisted ShopVivaliz admin identity\n");
+            exit(3);
+        }
+        $user = $accounts[0];
+    }
+
+    if ((int)($user['is_admin'] ?? 0) !== 1) {
+        fwrite(STDERR, "Resolved ShopVivaliz identity is not marked as admin\n");
+        exit(4);
     }
 
     $sessionDir = sys_get_temp_dir() . '/shopvivaliz-admin-smoke-sessions';
     if (!is_dir($sessionDir) && !mkdir($sessionDir, 0700, true) && !is_dir($sessionDir)) {
         fwrite(STDERR, "Unable to create isolated session directory\n");
-        exit(4);
+        exit(5);
     }
 
     session_save_path($sessionDir);
@@ -48,8 +66,8 @@ try {
     $guardOutput = trim((string)ob_get_clean());
 
     if ($guardOutput !== '' || (int)($_SESSION['is_admin'] ?? 0) !== 1) {
-        fwrite(STDERR, "Admin guard did not authorize persisted administrative user\n");
-        exit(5);
+        fwrite(STDERR, "Admin guard did not authorize resolved ShopVivaliz admin identity\n");
+        exit(6);
     }
 
     session_write_close();
@@ -57,5 +75,5 @@ try {
     exit(0);
 } catch (Throwable $e) {
     fwrite(STDERR, "Admin guard smoke failed\n");
-    exit(6);
+    exit(7);
 }
