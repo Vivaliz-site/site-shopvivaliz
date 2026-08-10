@@ -47,6 +47,50 @@ jobs:
           fi
           echo 'Google Ads API credential names are present; values remain masked.'
 
+      - name: Inspect granted OAuth scopes safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import urllib.parse
+          import urllib.request
+
+          payload = urllib.parse.urlencode({
+              'client_id': os.environ['GOOGLE_OAUTH_CLIENT_ID'],
+              'client_secret': os.environ['GOOGLE_OAUTH_CLIENT_SECRET'],
+              'refresh_token': os.environ['GOOGLE_ADS_REFRESH_TOKEN'],
+              'grant_type': 'refresh_token',
+          }).encode('utf-8')
+          request = urllib.request.Request(
+              'https://oauth2.googleapis.com/token',
+              data=payload,
+              headers={'Content-Type': 'application/x-www-form-urlencoded'},
+          )
+          with urllib.request.urlopen(request, timeout=20) as response:
+              token = json.load(response)
+
+          access_token = str(token.get('access_token') or '')
+          if not access_token:
+              raise SystemExit('OAuth refresh succeeded without an access token.')
+
+          info_url = 'https://oauth2.googleapis.com/tokeninfo?' + urllib.parse.urlencode({'access_token': access_token})
+          with urllib.request.urlopen(info_url, timeout=20) as response:
+              info = json.load(response)
+
+          scopes = sorted(set(str(info.get('scope') or '').split()))
+          analytics_scopes = [
+              'https://www.googleapis.com/auth/analytics.edit',
+              'https://www.googleapis.com/auth/analytics.readonly',
+          ]
+          print('oauth_scope_count=' + str(len(scopes)))
+          print('google_ads_scope=' + ('yes' if 'https://www.googleapis.com/auth/adwords' in scopes else 'no'))
+          print('analytics_edit_scope=' + ('yes' if analytics_scopes[0] in scopes else 'no'))
+          print('analytics_readonly_scope=' + ('yes' if analytics_scopes[1] in scopes else 'no'))
+          print('granted_scopes=' + ','.join(scopes))
+          PY
+
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
