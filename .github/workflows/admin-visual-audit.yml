@@ -1,0 +1,395 @@
+name: Admin Visual Audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/admin-visual-audit.yml'
+      - 'admin/admin-sections.php'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::SSH key is missing'; exit 2; }
+          test -n "$known_hosts" || { echo '::error::known_hosts is missing'; exit 3; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Render canonical admin screens on Oracle VM
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          archive="/tmp/shopvivaliz-admin-visual-audit-${GITHUB_RUN_ID}.tar.gz"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+            'bash -s' -- "$archive" <<'REMOTE'
+          set -Eeuo pipefail
+          archive="$1"
+          root='/home/ubuntu/shopvivaliz-deploy/current'
+          cd "$root"
+          workdir="$(mktemp -d /tmp/shopvivaliz-admin-audit.XXXXXX)"
+          mkdir -p "$workdir/html" "$workdir/errors"
+          manifest="$workdir/manifest.tsv"
+          printf 'status\tslug\ttitle\thref\tfile\thtml_bytes\ttext_chars\tdetail\n' > "$manifest"
+
+          product_id="$(php -r '
+            require "includes/pdo-database.php";
+            $db = function_exists("sv_pdo") ? sv_pdo() : null;
+            if ($db instanceof PDO) {
+                echo (int)$db->query("SELECT id FROM products ORDER BY id DESC LIMIT 1")->fetchColumn();
+            }
+          ' 2>/dev/null || true)"
+          product_id="${product_id:-0}"
+
+          is_side_effect_route() {
+            case "$1" in
+              /admin/sync-olist-para-products.php|/admin/reparar-catalogo-olist.php|/admin/sync-critical-files.php|/admin/force-git-pull.php)
+                return 0
+                ;;
+            esac
+            return 1
+          }
+
+          route_file() {
+            local href="$1"
+            local path="${href%%\?*}"
+            local relative="${path#/}"
+            local candidate="$root/$relative"
+            if [[ -d "$candidate" ]]; then
+              candidate="$candidate/index.php"
+            elif [[ ! -f "$candidate" && -f "${candidate}.php" ]]; then
+              candidate="${candidate}.php"
+            fi
+            printf '%s' "$candidate"
+          }
+
+          render_page() {
+            local title="$1"
+            local href="$2"
+            local runtime_href="$href"
+            if [[ "$href" == '/admin/editar-produto.php' && "$product_id" -gt 0 ]]; then
+              runtime_href="${href}?id=${product_id}"
+            fi
+
+            local path="${href%%\?*}"
+            local slug
+            slug="$(printf '%s' "$path" | sed 's#^/##; s#[^A-Za-z0-9._-]#_#g')"
+            local candidate
+            candidate="$(route_file "$href")"
+            local relative="${candidate#${root}/}"
+
+            if is_side_effect_route "$path"; then
+              if [[ -f "$candidate" ]]; then
+                printf 'SKIP_SIDE_EFFECT\t%s\t%s\t%s\t%s\t0\t0\tGET intentionally not executed\n' "$slug" "$title" "$href" "$relative" >> "$manifest"
+              else
+                printf 'MISSING\t%s\t%s\t%s\t%s\t0\t0\tSide-effect route file missing\n' "$slug" "$title" "$href" "$relative" >> "$manifest"
+              fi
+              return
+            fi
+
+            if [[ ! -f "$candidate" ]]; then
+              printf 'MISSING\t%s\t%s\t%s\t%s\t0\t0\tCanonical route has no PHP target\n' "$slug" "$title" "$href" "$relative" >> "$manifest"
+              return
+            fi
+
+            local output="$workdir/html/${slug}.html"
+            local error_file="$workdir/errors/${slug}.log"
+            set +e
+            php -d display_errors=1 -d log_errors=0 -d error_reporting=E_ALL -r '
+              declare(strict_types=1);
+              $file = $argv[1];
+              $uri = $argv[2];
+              session_id("admin-visual-" . bin2hex(random_bytes(8)));
+              session_start();
+              $_SESSION["user_id"] = 1;
+              $_SESSION["is_admin"] = 1;
+              $_SESSION["issued_at"] = time();
+              $parts = parse_url($uri);
+              $_GET = [];
+              if (isset($parts["query"])) parse_str((string)$parts["query"], $_GET);
+              $_POST = [];
+              $_REQUEST = $_GET;
+              $_SERVER["REQUEST_METHOD"] = "GET";
+              $_SERVER["REQUEST_URI"] = $uri;
+              $_SERVER["SCRIPT_NAME"] = (string)($parts["path"] ?? $uri);
+              $_SERVER["HTTP_HOST"] = "shopvivaliz.com.br";
+              $_SERVER["HTTPS"] = "on";
+              require $file;
+            ' "$candidate" "$runtime_href" > "$output" 2> "$error_file"
+            code=$?
+            set -e
+
+            local bytes text_chars detail
+            bytes="$(wc -c < "$output" | tr -d ' ')"
+            text_chars="$(php -r '
+              $html = (string)@file_get_contents($argv[1]);
+              $text = trim((string)(preg_replace("/\\s+/u", " ", strip_tags($html)) ?? ""));
+              echo mb_strlen($text, "UTF-8");
+            ' "$output" 2>/dev/null || echo 0)"
+            detail="$(head -c 500 "$error_file" | tr '\r\n\t' '   ' || true)"
+
+            if [[ "$code" -ne 0 ]]; then
+              printf 'RUNTIME_ERROR\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$slug" "$title" "$href" "$relative" "$bytes" "$text_chars" "exit=${code} ${detail}" >> "$manifest"
+            elif grep -Eqi 'Fatal error|Parse error|Uncaught [A-Za-z]+(Exception|Error)' "$output" "$error_file"; then
+              printf 'RUNTIME_ERROR\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$slug" "$title" "$href" "$relative" "$bytes" "$text_chars" "${detail:-PHP error text detected}" >> "$manifest"
+            elif [[ "$bytes" -lt 500 || "$text_chars" -lt 40 ]]; then
+              printf 'BLANK\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$slug" "$title" "$href" "$relative" "$bytes" "$text_chars" "${detail:-HTML empty or too small}" >> "$manifest"
+            else
+              printf 'RENDERED\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$slug" "$title" "$href" "$relative" "$bytes" "$text_chars" "${detail:-ok}" >> "$manifest"
+            fi
+          }
+
+          while IFS=$'\t' read -r title_b64 href_b64; do
+            title="$(printf '%s' "$title_b64" | base64 -d)"
+            href="$(printf '%s' "$href_b64" | base64 -d)"
+            render_page "$title" "$href"
+          done < <(php -r '
+            require "admin/admin-sections.php";
+            foreach (sv_admin_sections() as $section) {
+                foreach (($section["items"] ?? []) as $item) {
+                    $href = (string)($item["href"] ?? "");
+                    if (str_starts_with($href, "/admin/")) {
+                        echo base64_encode((string)($item["title"] ?? $href)), "\t", base64_encode($href), PHP_EOL;
+                    }
+                }
+            }
+          ')
+
+          # A propria entrada canonica tambem precisa renderizar.
+          render_page 'Central ShopVivaliz Admin' '/admin/'
+
+          echo '=== ADMIN RENDER MANIFEST ==='
+          column -t -s $'\t' "$manifest" || cat "$manifest"
+          tar -czf "$archive" -C "$workdir" .
+          REMOTE
+
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            "ubuntu@137.131.156.17:${archive}" admin-visual-audit.tar.gz
+          mkdir -p admin-audit
+          tar -xzf admin-visual-audit.tar.gz -C admin-audit
+
+      - name: Prepare safe visual snapshots
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p admin-audit/prepared admin-audit/screenshots/desktop admin-audit/screenshots/mobile admin-audit/dumps/desktop admin-audit/dumps/mobile
+          python3 <<'PY'
+          from __future__ import annotations
+
+          import re
+          from pathlib import Path
+
+          source = Path('admin-audit/html')
+          target = Path('admin-audit/prepared')
+          target.mkdir(parents=True, exist_ok=True)
+
+          audit_script = r'''
+          <script>
+          window.addEventListener('load', () => {
+            setTimeout(() => {
+              const body = document.body;
+              const bodyStyle = getComputedStyle(body);
+              const visible = Array.from(body.querySelectorAll('*')).filter((el) => {
+                const s = getComputedStyle(el);
+                const r = el.getBoundingClientRect();
+                const text = (el.innerText || el.textContent || '').trim();
+                return text.length > 0 && s.display !== 'none' && s.visibility !== 'hidden' && Number(s.opacity || 1) > 0 && r.width > 1 && r.height > 1;
+              });
+              const payload = {
+                text_chars: (body.innerText || '').trim().length,
+                visible_elements: visible.length,
+                body_display: bodyStyle.display,
+                body_visibility: bodyStyle.visibility,
+                body_opacity: bodyStyle.opacity,
+                body_color: bodyStyle.color,
+                body_background: bodyStyle.backgroundColor,
+                viewport_width: window.innerWidth,
+                viewport_height: window.innerHeight,
+                scroll_width: document.documentElement.scrollWidth,
+                scroll_height: document.documentElement.scrollHeight,
+                horizontal_overflow: Math.max(0, document.documentElement.scrollWidth - window.innerWidth)
+              };
+              const marker = document.createElement('div');
+              marker.id = 'admin-visual-audit-marker';
+              marker.hidden = true;
+              marker.setAttribute('data-json', JSON.stringify(payload));
+              body.appendChild(marker);
+            }, 700);
+          });
+          </script>
+          '''
+
+          for path in sorted(source.glob('*.html')):
+              html = path.read_text(encoding='utf-8', errors='replace')
+              # Nenhum JavaScript original e executado no auditor visual: a meta e
+              # revisar render/CSS sem disparar APIs ou mutacoes de negocio.
+              html = re.sub(r'<script\b[^>]*>.*?</script\s*>', '', html, flags=re.I | re.S)
+              if re.search(r'<head\b[^>]*>', html, flags=re.I):
+                  html = re.sub(r'(<head\b[^>]*>)', r'\1<base href="https://shopvivaliz.com.br/">', html, count=1, flags=re.I)
+              else:
+                  html = '<base href="https://shopvivaliz.com.br/">' + html
+              if re.search(r'</body\s*>', html, flags=re.I):
+                  html = re.sub(r'</body\s*>', audit_script + '</body>', html, count=1, flags=re.I)
+              else:
+                  html += audit_script
+              (target / path.name).write_text(html, encoding='utf-8')
+          PY
+
+      - name: Capture desktop and mobile screenshots
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          chrome="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          test -n "$chrome" || { echo '::error::Chromium/Chrome is unavailable on runner'; exit 20; }
+
+          for file in admin-audit/prepared/*.html; do
+            [[ -f "$file" ]] || continue
+            slug="$(basename "$file" .html)"
+            url="file://${GITHUB_WORKSPACE}/${file}"
+
+            "$chrome" --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files \
+              --window-size=1440,1000 --virtual-time-budget=2500 \
+              --screenshot="admin-audit/screenshots/desktop/${slug}.png" "$url" >/dev/null 2>&1
+            "$chrome" --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files \
+              --window-size=1440,1000 --virtual-time-budget=2500 --dump-dom "$url" \
+              > "admin-audit/dumps/desktop/${slug}.html" 2>/dev/null
+
+            "$chrome" --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files \
+              --window-size=390,844 --virtual-time-budget=2500 \
+              --screenshot="admin-audit/screenshots/mobile/${slug}.png" "$url" >/dev/null 2>&1
+            "$chrome" --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files \
+              --window-size=390,844 --virtual-time-budget=2500 --dump-dom "$url" \
+              > "admin-audit/dumps/mobile/${slug}.html" 2>/dev/null
+          done
+
+      - name: Evaluate visual audit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 <<'PY'
+          from __future__ import annotations
+
+          import csv
+          import html as html_lib
+          import json
+          import re
+          from pathlib import Path
+
+          root = Path('admin-audit')
+          manifest_path = root / 'manifest.tsv'
+          rows = list(csv.DictReader(manifest_path.open(encoding='utf-8'), delimiter='\t'))
+          visual_rows = []
+          fatal = []
+          warnings = []
+
+          marker_re = re.compile(r'id="admin-visual-audit-marker"[^>]*data-json="([^"]*)"', re.I)
+
+          def read_marker(path: Path):
+              if not path.is_file():
+                  return None
+              content = path.read_text(encoding='utf-8', errors='replace')
+              match = marker_re.search(content)
+              if not match:
+                  return None
+              try:
+                  return json.loads(html_lib.unescape(match.group(1)))
+              except Exception:
+                  return None
+
+          for row in rows:
+              status = row.get('status', '')
+              slug = row.get('slug', '')
+              if status in {'MISSING', 'BLANK', 'RUNTIME_ERROR'}:
+                  fatal.append(f"{row.get('title')}: {status} - {row.get('detail', '')}")
+              if status != 'RENDERED':
+                  continue
+
+              desktop = read_marker(root / 'dumps' / 'desktop' / f'{slug}.html')
+              mobile = read_marker(root / 'dumps' / 'mobile' / f'{slug}.html')
+              if desktop is None or mobile is None:
+                  fatal.append(f"{row.get('title')}: browser marker ausente")
+                  continue
+
+              for label, payload in [('desktop', desktop), ('mobile', mobile)]:
+                  hidden = (
+                      payload.get('body_display') == 'none'
+                      or payload.get('body_visibility') == 'hidden'
+                      or str(payload.get('body_opacity')) == '0'
+                      or int(payload.get('text_chars') or 0) < 40
+                      or int(payload.get('visible_elements') or 0) < 1
+                  )
+                  if hidden:
+                      fatal.append(f"{row.get('title')}: tela visualmente vazia em {label}: {payload}")
+                  overflow = int(payload.get('horizontal_overflow') or 0)
+                  if label == 'mobile' and overflow > 48:
+                      warnings.append(f"{row.get('title')}: overflow horizontal mobile de {overflow}px")
+
+              visual_rows.append({
+                  'title': row.get('title'),
+                  'href': row.get('href'),
+                  'slug': slug,
+                  'desktop': desktop,
+                  'mobile': mobile,
+              })
+
+          (root / 'visual-results.json').write_text(json.dumps(visual_rows, ensure_ascii=False, indent=2), encoding='utf-8')
+          (root / 'audit-failures.txt').write_text('\n'.join(fatal) + ('\n' if fatal else ''), encoding='utf-8')
+          (root / 'audit-warnings.txt').write_text('\n'.join(warnings) + ('\n' if warnings else ''), encoding='utf-8')
+
+          print(f"Canonical entries: {len(rows)}")
+          print(f"Rendered screens: {sum(1 for r in rows if r.get('status') == 'RENDERED')}")
+          print(f"Skipped side-effect screens: {sum(1 for r in rows if r.get('status') == 'SKIP_SIDE_EFFECT')}")
+          print(f"Fatal findings: {len(fatal)}")
+          print(f"Responsive warnings: {len(warnings)}")
+          if warnings:
+              print('\nWARNINGS:')
+              for item in warnings:
+                  print('-', item)
+          if fatal:
+              print('\nFATAL FINDINGS:')
+              for item in fatal:
+                  print('-', item)
+              raise SystemExit(1)
+          PY
+
+      - name: Upload visual audit evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: admin-visual-audit-${{ github.run_id }}
+          path: |
+            admin-audit/manifest.tsv
+            admin-audit/visual-results.json
+            admin-audit/audit-failures.txt
+            admin-audit/audit-warnings.txt
+            admin-audit/screenshots/
+            admin-audit/errors/
+          retention-days: 30
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
