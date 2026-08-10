@@ -81,11 +81,11 @@ foreach ($imageRequirements as $needle) {
 
 $catalogRequirements = [
     'catalog_resilient_structure_errors',
-    'protected',
+    'condicao comercial protegida',
     'ai_catalog_quality_report',
     'ai_catalog_insert_staging_row',
     'generated_with_quality_warnings',
-    'status = \'pending\'',
+    "'pending'",
 ];
 foreach ($catalogRequirements as $needle) {
     if (!str_contains($catalogEndpoint, $needle)) {
