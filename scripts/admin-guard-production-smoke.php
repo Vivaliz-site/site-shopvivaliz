@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 
+// CLI-only production smoke: validates the real admin database fallback without credentials.
 if (PHP_SAPI !== 'cli') {
     http_response_code(404);
     exit(1);
