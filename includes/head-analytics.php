@@ -64,7 +64,22 @@ echo <<<'HTML'
 </script>
 HTML;
 
-echo $GLOBALS['analytics']->getTrackingCode();
+$trackingCode = $GLOBALS['analytics']->getTrackingCode();
+
+// A vitrine já possui a Google tag direta (GA4/Ads) com Consent Mode e eventos
+// ecommerce próprios. Quando o helper legado também encontra um GTM, ele pode
+// injetar os dois coletores na mesma página. O container conectado atualmente
+// contém a mesma tag GA4 de todas as páginas, portanto manter os dois caminhos
+// cria risco real de contagem duplicada. A Google tag direta fica como fonte
+// canônica e o bloco GTM legado é removido somente quando a tag direta existe.
+if (str_contains($trackingCode, '<!-- Google tag (GA4/Ads) -->')) {
+    $trackingCode = preg_replace(
+        '~<!-- Google Tag Manager -->.*?<!-- End Google Tag Manager -->~s',
+        '',
+        $trackingCode
+    ) ?? $trackingCode;
+}
+echo $trackingCode;
 
 if (in_array($requestPath, ['/carrinho', '/checkout', '/checkout/retorno'], true)) {
     echo "\n<meta name=\"robots\" content=\"noindex,nofollow,noarchive\">\n";
@@ -108,9 +123,9 @@ $GLOBALS['sv_public_experience_included'] = true;
 
 require_once __DIR__ . '/liz-assistant-assets.php';
 
-if (function_exists('track_page_view')) {
-    $title = $GLOBALS['page_title'] ?? 'Page';
-    $path = $_SERVER['REQUEST_URI'] ?? '/';
-    track_page_view($title, $path);
-}
+// Page views are already collected by the consent-aware browser Google tag.
+// The legacy server-side page_view used a PHP session identifier rather than
+// the Analytics session and duplicated the same navigation after consent.
+// Approved purchases remain server-side because payment confirmation is the
+// authoritative revenue event; ordinary page views stay browser-owned.
 ?>
