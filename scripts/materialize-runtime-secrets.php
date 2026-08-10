@@ -122,8 +122,7 @@ $selectedSigningKey = static function (array $values) use ($signingKeys, $cleanS
 
 // Preserve only the two minimum runtime invariants (database tuple and signing
 // key) from the last known-good generated runtime when .env is temporarily
-// incomplete. Other integration credentials still come exclusively from .env,
-// so intentionally removed marketplace keys are not resurrected.
+// incomplete. Other integration credentials still come exclusively from .env.
 $existingValues = [];
 if (is_file($outputPath) && is_readable($outputPath)) {
     try {
@@ -144,51 +143,11 @@ if (is_file($outputPath) && is_readable($outputPath)) {
     }
 }
 
-// Pagar.me foi aposentado do projeto. Remova qualquer chave residual do
-// runtime compartilhado de forma atomica, sem expor ou registrar valores.
-$envLines = file($sharedEnv, FILE_IGNORE_NEW_LINES);
-if ($envLines === false) {
-    throw new RuntimeException('shared_env_read_failed');
-}
-$retainedLines = [];
+// The shared .env key-set is monotonic: this materializer is read-only with
+// respect to key names. Retired integrations may be ignored by runtime readers,
+// but their environment keys are never deleted here. Removal requires a
+// separate, explicit migration outside the protected production writer path.
 $retiredRuntimeKeysRemoved = 0;
-foreach ($envLines as $line) {
-    $candidate = trim($line);
-    if (str_starts_with($candidate, 'export ')) {
-        $candidate = trim(substr($candidate, 7));
-    }
-    if ($candidate !== '' && !str_starts_with($candidate, '#') && str_contains($candidate, '=')) {
-        [$candidateKey] = explode('=', $candidate, 2);
-        if (str_starts_with(trim($candidateKey), 'PAGARME_')) {
-            $retiredRuntimeKeysRemoved++;
-            continue;
-        }
-    }
-    $retainedLines[] = $line;
-}
-if ($retiredRuntimeKeysRemoved > 0) {
-    $envDir = dirname($sharedEnv);
-    $envTemp = tempnam($envDir, '.shared-env-retire.');
-    if ($envTemp === false) {
-        throw new RuntimeException('shared_env_temporary_file_failed');
-    }
-    try {
-        $envPayload = implode(PHP_EOL, $retainedLines) . PHP_EOL;
-        if (file_put_contents($envTemp, $envPayload, LOCK_EX) === false) {
-            throw new RuntimeException('shared_env_retirement_write_failed');
-        }
-        if (!chmod($envTemp, 0640)) {
-            throw new RuntimeException('shared_env_retirement_mode_failed');
-        }
-        if (!rename($envTemp, $sharedEnv)) {
-            throw new RuntimeException('shared_env_retirement_replace_failed');
-        }
-    } finally {
-        if (is_file($envTemp)) {
-            @unlink($envTemp);
-        }
-    }
-}
 
 if (PHP_OS_FAMILY !== 'Windows' && !chgrp($sharedEnv, $sharedGroup)) {
     throw new RuntimeException('shared_env_group_failed');
