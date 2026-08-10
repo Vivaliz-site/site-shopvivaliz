@@ -142,3 +142,20 @@ test-*.log
 /.tmp_shopvivaliz/
 /test*.php
 /teste*.php
+
+# Certificados (NUNCA commitar)
+*.pfx
+*.p12
+*.key
+*.pem
+Certs/
+certs/
+certificates/
+
+# Tokens e Secrets
+*.token
+*.secret
+tokens/
+
+# Relatorios locais com material sensivel
+GITHUB_SECRETS.md

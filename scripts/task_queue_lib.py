@@ -1,130 +1,218 @@
 #!/usr/bin/env python3
-"""Shared helpers for the ShopVivaliz autonomous task queue."""
+"""Fail-closed helpers for the canonical ShopVivaliz task queue."""
 from __future__ import annotations
 
 import json
+import os
+import tempfile
+from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
-ROOT_QUEUE_FILE = Path("tasks-queue.json")
-LEGACY_QUEUE_FILE = Path("logs/tasks-queue.json")
-
-DEFAULT_QUEUE = {
-    "version": "1.1",
-    "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    "queue": [],
-}
-
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+ROOT_QUEUE_FILE = PROJECT_ROOT / "tasks-queue.json"
+CANONICAL_SCHEMA_VERSION = 2
+ALLOWED_STATES = frozenset({"pending", "running", "blocked", "failed", "completed_verified"})
 PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+REQUIRED_COMPLETION_EVIDENCE = (
+    "run_id",
+    "commit_sha",
+    "pull_request",
+    "artifact_digest",
+    "verified_at",
+)
+
+
+class QueueValidationError(ValueError):
+    """Raised when the queue is not in the canonical, evidence-safe schema."""
+
+
+class QueueMutationRetiredError(RuntimeError):
+    """Raised when runtime code attempts to mutate the retired queue."""
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def _task_from_external(item: dict[str, Any], index: int) -> dict[str, Any]:
-    task_id = str(item.get("id") or item.get("task_id") or f"external-{index:03d}")
-    priority = str(item.get("priority") or "medium").lower()
-    if priority not in PRIORITY_ORDER:
-        priority = "medium"
-
-    normalized = {
-        "id": task_id,
-        "title": item.get("title") or item.get("action") or task_id,
-        "description": item.get("description") or "",
-        "priority": priority,
-        "status": item.get("status") or "pending",
-        "created_at": item.get("created_at") or utc_now(),
-        "source": item.get("source") or "external-task-format",
-        "tags": item.get("tags") or [],
-    }
-
-    if "requires_env" in item:
-        normalized["requires_env"] = item.get("requires_env") or []
-    elif "requires_secrets" in item:
-        normalized["requires_env"] = item.get("requires_secrets") or []
-
-    if "requires_human_approval" in item:
-        normalized["requires_human_approval"] = bool(item.get("requires_human_approval"))
-
-    if "requires_manual_access" in item:
-        normalized["requires_manual_access"] = bool(item.get("requires_manual_access"))
-
-    for key in (
-        "phase",
-        "queue_rank",
-        "type",
-        "action",
-        "assigned_to",
-        "estimated_hours",
-        "metadata",
-    ):
-        if key in item:
-            normalized[key] = item.get(key)
-
-    return normalized
+def task_identifier(task: dict[str, Any]) -> str:
+    return str(task.get("task_id") or task.get("id") or "").strip()
 
 
-def _normalize(data: Any) -> dict[str, Any]:
-    if isinstance(data, dict) and isinstance(data.get("queue"), list):
-        normalized = deepcopy(data)
-    elif isinstance(data, dict) and isinstance(data.get("tasks"), list):
-        normalized = {
-            "queue": [_task_from_external(task, index) for index, task in enumerate(data.get("tasks", []), start=1)],
-            "metadata": deepcopy(data.get("metadata", {})),
-        }
-    elif isinstance(data, list):
-        normalized = {"queue": data}
-    else:
-        normalized = {"queue": []}
-
-    normalized.setdefault("version", DEFAULT_QUEUE["version"])
-    normalized.setdefault("created_at", DEFAULT_QUEUE["created_at"])
-
-    for task in normalized["queue"]:
-        task.setdefault("priority", "medium")
-        task.setdefault("status", "pending")
-        task.setdefault("created_at", utc_now())
-
-    return normalized
-
-
-def _read_queue(path: Path) -> dict[str, Any] | None:
-    if not path.exists():
-        return None
-    return _normalize(json.loads(path.read_text(encoding="utf-8")))
-
-
-def load_queue() -> dict[str, Any]:
-    root_data = _read_queue(ROOT_QUEUE_FILE)
-    if root_data:
-        return root_data
-
-    legacy_data = _read_queue(LEGACY_QUEUE_FILE)
-    if legacy_data:
-        save_queue(legacy_data)
-        return legacy_data
-
-    save_queue(DEFAULT_QUEUE)
-    return _normalize(DEFAULT_QUEUE)
-
-
-def save_queue(data: dict[str, Any]) -> None:
-    normalized = _normalize(data)
-    for path in (ROOT_QUEUE_FILE, LEGACY_QUEUE_FILE):
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps(normalized, indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
+def _validate_completed_task(task: dict[str, Any], task_id: str) -> None:
+    verification = task.get("verification")
+    if not isinstance(verification, dict):
+        raise QueueValidationError(
+            f"Task {task_id} uses completed_verified without a verification object"
         )
+
+    missing = [key for key in REQUIRED_COMPLETION_EVIDENCE if not verification.get(key)]
+    if missing:
+        raise QueueValidationError(
+            f"Task {task_id} completion evidence is missing: {', '.join(missing)}"
+        )
+    if verification.get("tests_passed") is not True:
+        raise QueueValidationError(f"Task {task_id} completion does not prove tests_passed=true")
+    if verification.get("read_back_verified") is not True:
+        raise QueueValidationError(
+            f"Task {task_id} completion does not prove read_back_verified=true"
+        )
+
+    last_result = task.get("last_result")
+    if not isinstance(last_result, dict) or last_result.get("success") is not True:
+        raise QueueValidationError(
+            f"Task {task_id} completion does not have a successful last_result"
+        )
+
+
+def _canonical_document(data: Any) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        raise QueueValidationError("Queue document must be a JSON object")
+
+    if "tasks" not in data:
+        if "queue" in data:
+            raise QueueValidationError(
+                "Legacy top-level 'queue' schema is retired; use schema v2 with 'metadata' and 'tasks'"
+            )
+        raise QueueValidationError("Queue document is missing the canonical 'tasks' array")
+
+    tasks = data.get("tasks")
+    if not isinstance(tasks, list):
+        raise QueueValidationError("Queue field 'tasks' must be an array")
+
+    compatibility_queue = data.get("queue")
+    if compatibility_queue is not None and compatibility_queue is not tasks:
+        raise QueueValidationError("Compatibility 'queue' view must be an in-memory alias of canonical 'tasks'")
+
+    metadata = data.get("metadata")
+    if not isinstance(metadata, dict):
+        raise QueueValidationError("Queue document is missing metadata")
+    if metadata.get("schema_version") != CANONICAL_SCHEMA_VERSION:
+        raise QueueValidationError(
+            f"Unsupported queue schema version: {metadata.get('schema_version')!r}"
+        )
+
+    declared_states = metadata.get("allowed_states")
+    if not isinstance(declared_states, list) or set(declared_states) != ALLOWED_STATES:
+        raise QueueValidationError(
+            "metadata.allowed_states must exactly match the canonical evidence-safe states"
+        )
+
+    seen_ids: set[str] = set()
+    for index, task in enumerate(tasks, start=1):
+        if not isinstance(task, dict):
+            raise QueueValidationError(f"Task at index {index} must be an object")
+        task_id = task_identifier(task)
+        if not task_id:
+            raise QueueValidationError(f"Task at index {index} has no id or task_id")
+        if task_id in seen_ids:
+            raise QueueValidationError(f"Duplicate task identifier: {task_id}")
+        seen_ids.add(task_id)
+
+        status = str(task.get("status", "")).strip()
+        if status not in ALLOWED_STATES:
+            raise QueueValidationError(
+                f"Task {task_id} has unsupported status {status!r}; 'completed' is never valid"
+            )
+        priority = str(task.get("priority", "medium")).strip().lower()
+        if priority not in PRIORITY_ORDER:
+            raise QueueValidationError(f"Task {task_id} has unsupported priority {priority!r}")
+        if status == "completed_verified":
+            _validate_completed_task(task, task_id)
+
+    canonical = deepcopy(data)
+    canonical.pop("queue", None)
+    return canonical
+
+
+def validate_queue(data: Any) -> dict[str, Any]:
+    """Validate and return a deep-copied canonical queue document."""
+    return _canonical_document(data)
+
+
+def _runtime_view(canonical: dict[str, Any]) -> dict[str, Any]:
+    """Expose a temporary `queue` alias for legacy readers without persisting it."""
+    runtime = deepcopy(canonical)
+    runtime["queue"] = runtime["tasks"]
+    return runtime
+
+
+def load_queue(path: Path | None = None) -> dict[str, Any]:
+    queue_path = Path(path) if path is not None else ROOT_QUEUE_FILE
+    if not queue_path.is_file():
+        raise QueueValidationError(f"Canonical queue file does not exist: {queue_path}")
+    try:
+        raw = json.loads(queue_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise QueueValidationError(f"Invalid queue JSON: {exc}") from exc
+    return _runtime_view(validate_queue(raw))
+
+
+@contextmanager
+def _exclusive_lock(lock_path: Path) -> Iterator[None]:
+    try:
+        import fcntl
+    except ImportError as exc:  # pragma: no cover - production is Linux
+        raise RuntimeError("Atomic queue writes require POSIX file locking") from exc
+
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as lock_handle:
+        fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+
+
+def save_queue(
+    data: dict[str, Any],
+    path: Path | None = None,
+    *,
+    reviewed_change: bool = False,
+) -> None:
+    """Atomically write a reviewed queue change; runtime mutation is retired by default."""
+    if reviewed_change is not True:
+        raise QueueMutationRetiredError(
+            "Direct task queue mutation is retired; edit tasks-queue.json in a reviewed pull request"
+        )
+    queue_path = Path(path) if path is not None else ROOT_QUEUE_FILE
+    canonical = validate_queue(data)
+    canonical["metadata"]["updated_at"] = utc_now()
+    payload = json.dumps(canonical, indent=2, ensure_ascii=False) + "\n"
+    queue_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = queue_path.with_name(f".{queue_path.name}.lock")
+
+    with _exclusive_lock(lock_path):
+        mode = 0o644
+        if queue_path.exists():
+            mode = queue_path.stat().st_mode & 0o777
+
+        fd, temporary_name = tempfile.mkstemp(
+            prefix=f".{queue_path.name}.", suffix=".tmp", dir=queue_path.parent
+        )
+        temporary_path = Path(temporary_name)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.chmod(temporary_path, mode)
+            os.replace(temporary_path, queue_path)
+            directory_fd = os.open(queue_path.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+        finally:
+            temporary_path.unlink(missing_ok=True)
 
 
 def next_task_id(queue: dict[str, Any]) -> str:
     numeric_ids: list[int] = []
-    for task in queue.get("queue", []):
-        task_id = str(task.get("id", ""))
+    for task in queue.get("tasks", []):
+        task_id = task_identifier(task)
         if not task_id.startswith("task-"):
             continue
         suffix = task_id.split("-", 1)[1]
@@ -133,34 +221,62 @@ def next_task_id(queue: dict[str, Any]) -> str:
     return f"task-{max(numeric_ids or [0]) + 1:03d}"
 
 
-def upsert_task(queue: dict[str, Any], task: dict[str, Any], *, match_on_title: bool = True) -> tuple[dict[str, Any], bool]:
-    title = task.get("title", "").strip().lower()
-    task_id = task.get("id")
+def upsert_task(
+    queue: dict[str, Any], task: dict[str, Any], *, match_on_title: bool = True
+) -> tuple[dict[str, Any], bool]:
+    """Upsert a non-completed task while preserving the canonical document."""
+    tasks = queue.get("tasks")
+    compatibility_queue = queue.get("queue")
+    if not isinstance(tasks, list) or compatibility_queue is not tasks:
+        raise QueueValidationError("Queue must come from load_queue() before it can be updated")
 
-    for existing in queue.get("queue", []):
-        same_id = task_id and existing.get("id") == task_id
-        same_title = match_on_title and title and existing.get("title", "").strip().lower() == title
+    candidate = deepcopy(task)
+    status = str(candidate.get("status", "pending")).strip()
+    if status not in ALLOWED_STATES or status == "completed_verified":
+        raise QueueValidationError(
+            "upsert_task cannot create completion; completion requires independently verified evidence"
+        )
+
+    title = str(candidate.get("title", "")).strip().lower()
+    candidate_id = task_identifier(candidate)
+    for existing in tasks:
+        same_id = candidate_id and task_identifier(existing) == candidate_id
+        same_title = (
+            match_on_title
+            and title
+            and str(existing.get("title", "")).strip().lower() == title
+        )
         if same_id or same_title:
-            existing.update({k: v for k, v in task.items() if v is not None})
+            existing.update({key: value for key, value in candidate.items() if value is not None})
+            validate_queue(queue)
             return existing, False
 
-    new_task = deepcopy(task)
-    new_task.setdefault("id", next_task_id(queue))
-    new_task.setdefault("created_at", utc_now())
-    new_task.setdefault("status", "pending")
-    new_task.setdefault("priority", "medium")
-    queue.setdefault("queue", []).append(new_task)
-    return new_task, True
+    if not candidate_id:
+        candidate["id"] = next_task_id(queue)
+    candidate.setdefault("created_at", utc_now())
+    candidate.setdefault("status", "pending")
+    candidate.setdefault("priority", "medium")
+    tasks.append(candidate)
+    validate_queue(queue)
+    return candidate, True
 
 
 def executable_pending_tasks(queue: dict[str, Any]) -> list[dict[str, Any]]:
-    tasks = [task for task in queue.get("queue", []) if task.get("status") == "pending"]
+    tasks = [task for task in queue.get("tasks", []) if task.get("status") == "pending"]
     tasks.sort(
         key=lambda task: (
             int(task.get("queue_rank", 9999)),
             PRIORITY_ORDER.get(str(task.get("priority", "medium")), 99),
             str(task.get("created_at", "")),
-            str(task.get("id", "")),
+            task_identifier(task),
         )
     )
     return tasks
+
+
+def queue_summary(queue: dict[str, Any]) -> dict[str, int]:
+    summary = {state: 0 for state in sorted(ALLOWED_STATES)}
+    for task in queue.get("tasks", []):
+        summary[str(task.get("status"))] += 1
+    summary["total"] = len(queue.get("tasks", []))
+    return summary

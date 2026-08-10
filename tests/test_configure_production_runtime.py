@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
-import os
 from pathlib import Path
 
 
@@ -15,14 +15,6 @@ KEYS = (
     "DB_NAME",
     "DB_USER",
     "DB_PASS",
-    "OLIST_ACCESS_TOKEN",
-    "OLIST_REFRESH_TOKEN",
-    "OLIST_CLIENT_ID",
-    "OLIST_CLIENT_SECRET",
-    "TINY_ACCESS_TOKEN",
-    "TINY_REFRESH_TOKEN",
-    "TINY_CLIENT_ID",
-    "TINY_CLIENT_SECRET",
     "SHOPVIVALIZ_AGENT_KEY",
 )
 
@@ -34,14 +26,6 @@ def payload(overrides: dict[str, str]) -> bytes:
         "DB_NAME": "shopvivaliz",
         "DB_USER": "shop_runtime",
         "DB_PASS": "database-password",
-        "OLIST_ACCESS_TOKEN": "olist-access",
-        "OLIST_REFRESH_TOKEN": "olist-refresh",
-        "OLIST_CLIENT_ID": "olist-client",
-        "OLIST_CLIENT_SECRET": "olist-secret",
-        "TINY_ACCESS_TOKEN": "tiny-access",
-        "TINY_REFRESH_TOKEN": "tiny-refresh",
-        "TINY_CLIENT_ID": "tiny-client",
-        "TINY_CLIENT_SECRET": "tiny-secret",
         "SHOPVIVALIZ_AGENT_KEY": "a" * 40,
     }
     values.update(overrides)
@@ -73,11 +57,17 @@ class ConfigureProductionRuntimeTests(unittest.TestCase):
             self.assertEqual(target.read_text(encoding="utf-8"), original)
             self.assertEqual(list(root.glob(".env.backup.*")), [])
 
-    def test_writes_safe_tuple_atomically(self) -> None:
+    def test_writes_static_tuple_and_preserves_managed_oauth(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             target = root / ".env"
-            target.write_text("EXISTING=value\n", encoding="utf-8")
+            target.write_text(
+                "EXISTING=value\n"
+                "OLIST_ACCESS_TOKEN=active-access\n"
+                "OLIST_REFRESH_TOKEN=active-refresh\n"
+                "TINY_CLIENT_SECRET=active-client-secret\n",
+                encoding="utf-8",
+            )
 
             result = run_script(target, payload({}))
 
@@ -85,14 +75,27 @@ class ConfigureProductionRuntimeTests(unittest.TestCase):
             updated = target.read_text(encoding="utf-8")
             self.assertIn("DB_USER=shop_runtime", updated)
             self.assertIn("DB_NAME=shopvivaliz", updated)
-            self.assertIn("database-password", updated)
+            self.assertIn("DB_PASS=database-password", updated)
+            self.assertIn("OLIST_ACCESS_TOKEN=active-access", updated)
+            self.assertIn("OLIST_REFRESH_TOKEN=active-refresh", updated)
+            self.assertIn("TINY_CLIENT_SECRET=active-client-secret", updated)
             self.assertIn("database_user_safe=true", result.stdout.decode())
-            # POSIX mode bits are enforceable on the Oracle/Linux target. NTFS
-            # reports synthetic mode bits and cannot represent this contract
-            # through chmod alone, so content/atomicity are the portable checks.
+            self.assertIn("managed_oauth_mutation=blocked", result.stdout.decode())
             if os.name != "nt":
                 self.assertEqual(target.stat().st_mode & 0o777, 0o600)
             self.assertEqual(len(list(root.glob(".env.backup.*"))), 1)
+
+    def test_rejects_legacy_oauth_payload_without_modifying_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / ".env"
+            original = "OLIST_REFRESH_TOKEN=active-refresh\n"
+            target.write_text(original, encoding="utf-8")
+
+            result = run_script(target, payload({}) + b"legacy-oauth-field\0")
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn(b"payload field count mismatch", result.stderr)
+            self.assertEqual(target.read_text(encoding="utf-8"), original)
 
 
 if __name__ == "__main__":

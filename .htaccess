@@ -84,6 +84,12 @@ AddCharset UTF-8 .html .txt .php .json
 
     RewriteRule ^p/termos-e-condicoes/?$ /termos [R=301,L,NE,QSD]
 
+    # Consolidacao do admin: antigas entradas duplicadas agora apontam para /admin/.
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^admin/(?:menu-completo|menu-dashboard|dashboard|admin-back)\.php$ /admin/ [R=301,L,NE,QSD,NC]
+    RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
+    RewriteRule ^admin/(?:menu-completo|menu-dashboard|dashboard|admin-back)\.php$ - [F,L,NC]
+
     # URLs publicas da vitrine legada/VNDA.
     RewriteRule ^ferramentas/?$ /catalogo?categoria=Ferramentas [R=301,L,NE]
     RewriteRule ^arte-papelaria-e-armarinho/?$ /catalogo?categoria=Arte%2C%20Papelaria%20e%20Armarinho [R=301,L,NE]
@@ -95,6 +101,7 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^(?:criar-pagamento-teste-real|criar-pagamento-producao|gerar-payment-id-agora|fazer-pagamento-real-agora|simular-pagamento-real)\.php$ - [F,L,NC]
     RewriteRule ^logs/ - [F,L]
     RewriteRule ^(?:\.git|\.env(?:\.|$)|\.claude|\.codex|\.github|\.githooks|\.vscode|\.tmp_shopvivaliz|__pycache__|scripts|tests|test-results|deploy|docs|reports|scratch|automation|automations|autodev|core|dashboards|imports|kong|listings|medusa|migrations|planilhas|public_html|release-notes|tools|utils|CheckoutPageOptimizer|installer)(?:/|$) - [F,L,NC]
+    RewriteRule ^(?:api/sandbox/|admin/(?:mercadopago-sandbox\.php|webhook-test\.php|test-auto-sync\.sh)|olist/produtos-198\.php|claude/api/get-produtos-198\.php)$ - [F,L,NC]
     RewriteRule ^(?:debug|test|teste|check|gen-token)(?:[-_.][^/]*)?$ - [F,L,NC]
     RewriteRule ^(?:setup-webhooks|update-fallback-prices)\.php$ - [F,L,NC]
     RewriteRule ^sync(?:[-a-z0-9]*)?\.php$ - [F,L,NC]

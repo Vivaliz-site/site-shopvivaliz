@@ -13,7 +13,7 @@ $checks = [
     ['name' => 'update_applied', 'path' => '/installer/update-applied-check.php', 'type' => 'json', 'required' => true],
     ['name' => 'self_test', 'path' => '/installer/self-test.php', 'type' => 'json', 'required' => true],
     ['name' => 'olist_oauth_admin', 'path' => '/admin/olist-oauth.php', 'type' => 'html', 'required' => false],
-    ['name' => 'olist_sync_dry_run', 'path' => '/olist/sync-products.php?dry_run=1&expected=200&limit=50', 'type' => 'json', 'required' => false],
+    ['name' => 'catalog_products_real', 'path' => '/api/catalog/products.php?limit=50', 'type' => 'json', 'required' => false],
     ['name' => 'shipping_check', 'path' => '/api/melhorenvio/shipping-check.php?product_id=1&cep=01001000', 'type' => 'json', 'required' => false],
     ['name' => 'melhorenvio_webhook', 'path' => '/api/melhorenvio/webhook.php', 'type' => 'json', 'required' => false],
     ['name' => 'olist_webhook', 'path' => '/api/olist/webhook.php', 'type' => 'json', 'required' => false],

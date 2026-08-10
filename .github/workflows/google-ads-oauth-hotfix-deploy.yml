@@ -1,0 +1,55 @@
+name: Google Ads OAuth Hotfix Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ops/google-ads-oauth-hotfix-deploy.json"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy exact current main through canonical runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA='bf93c24fba027e2926088a76a6aef2a504b3c36b'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' -- "$SHA" <<'REMOTE'
+          set -euo pipefail
+          sha="$1"
+          repo='/home/ubuntu/shopvivaliz-deploy/repo'
+          script="$repo/scripts/deploy-production.sh"
+          git -C "$repo" fetch --no-tags origin "$sha"
+          tmp="$(mktemp "$repo/scripts/.deploy-googleads.XXXXXX")"
+          git -C "$repo" show "${sha}:scripts/deploy-production.sh" > "$tmp"
+          chmod 0755 "$tmp"
+          mv -f "$tmp" "$script"
+          flock -w 600 /var/lock/shopvivaliz-deploy.lock "$script" "$sha"
+          test "$(cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha)" = "$sha"
+          echo 'GOOGLE_ADS_OAUTH_HOTFIX_DEPLOYED'
+          REMOTE
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts

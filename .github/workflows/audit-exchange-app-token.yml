@@ -1,0 +1,55 @@
+name: Audit Exchange app-only token roles
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/audit-exchange-app-token.yml']
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Request Exchange app-only token and print roles only
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env',override=True)
+          import os,json,base64,urllib.request,urllib.parse,urllib.error
+          from app.email_provider import MicrosoftGraphEmailProvider
+          p=MicrosoftGraphEmailProvider()
+          values={
+            'client_id':p.client_id,
+            'scope':'https://outlook.office365.com/.default',
+            'grant_type':'client_credentials',
+            'client_assertion_type':'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+            'client_assertion':p._client_assertion(),
+          }
+          req=urllib.request.Request(p._token_url,data=urllib.parse.urlencode(values).encode(),headers={'Content-Type':'application/x-www-form-urlencoded'},method='POST')
+          try:
+            with urllib.request.urlopen(req,timeout=30) as r:
+              tok=json.load(r)['access_token']
+            payload=tok.split('.')[1]+'===' 
+            claims=json.loads(base64.urlsafe_b64decode(payload))
+            print('EXO_TOKEN_AUD='+str(claims.get('aud')))
+            print('EXO_TOKEN_ROLES='+json.dumps(claims.get('roles',[]),ensure_ascii=False))
+            print('HAS_EXCHANGE_MANAGE_AS_APP='+str('Exchange.ManageAsApp' in claims.get('roles',[])))
+          except urllib.error.HTTPError as e:
+            print('EXO_TOKEN_HTTP='+str(e.code))
+            print(e.read().decode('utf-8','replace')[:1200])
+            raise
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

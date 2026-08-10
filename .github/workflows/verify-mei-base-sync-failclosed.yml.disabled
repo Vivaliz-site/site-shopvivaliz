@@ -1,0 +1,59 @@
+name: Verify MEI daily base sync fail-closed
+# on:
+#   push:
+#     branches: [main]
+#     paths: ['.github/workflows/verify-mei-base-sync-failclosed.yml']
+#   workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Run data sync once and assert stale-source protection
+        run: |
+          timeout 180s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          test "$(sudo systemctl is-active mei-mg-email-worker.service || true)" = inactive
+          sudo systemctl reset-failed mei-mg-base-sync.service || true
+          set +e
+          timeout 90s sudo systemctl start mei-mg-base-sync.service
+          start_rc=$?
+          set -e
+          echo BASE_SYNC_SYSTEMCTL_RC=$start_rc
+          echo BASE_SYNC_STATE=$(sudo systemctl is-active mei-mg-base-sync.service || true)
+          sudo journalctl -u mei-mg-base-sync.service -n 30 --no-pager || true
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env',override=True)
+          import json,os,psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'],row_factory=dict_row,connect_timeout=10) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("""
+                    select id,source_name,source_revision,source_last_modified,status,
+                           started_at,finished_at,rows_before,rows_after,rows_added,error,details
+                      from mei_email.base_sync_runs
+                     order by id desc limit 1
+                  """)
+                  row=dict(cur.fetchone())
+          print('LATEST_SYNC='+json.dumps(row,default=str,ensure_ascii=False))
+          assert row['status']=='source_stale', row
+          assert row['rows_added'] in (None,0), row
+          print('STALE_SOURCE_FAIL_CLOSED_CONFIRMED')
+          PY
+          test "$(sudo systemctl is-active mei-mg-email-worker.service || true)" = inactive
+          echo WORKER_REMAINS_INACTIVE
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

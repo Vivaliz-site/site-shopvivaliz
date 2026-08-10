@@ -119,7 +119,7 @@ $socialMedia = is_array($company['social_media'] ?? null) ? $company['social_med
 </head>
 <body>
 <div class="container">
-    <a class="back-link" href="/admin/menu-dashboard.php">← Voltar ao painel</a>
+    <a class="back-link" href="/admin/">← Voltar ao painel</a>
     <h1>⚙️ Configuração da Empresa</h1>
 
     <?php if ($syncMessage): ?><div class="alert alert-success"><?= htmlspecialchars($syncMessage, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>

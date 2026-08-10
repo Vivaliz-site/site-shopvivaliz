@@ -1,0 +1,94 @@
+name: Google Ads Recover OAuth Token From Apache PrivateTmp
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ops/google-ads-recover-private-tmp.json"
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Recover and validate token securely
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          job='360925a31e807fbaf8795ac3314a20c8'
+          envfile='/home/ubuntu/shopvivaliz-deploy/shared/.env'
+          current='/home/ubuntu/shopvivaliz-deploy/current'
+          recovered='/tmp/google-ads-refresh-recovered.token'
+          rm -f "$recovered"
+
+          echo "apache_private_tmp=$(systemctl show apache2 -p PrivateTmp --value 2>/dev/null || echo unknown)"
+          found=''
+          while IFS= read -r candidate; do
+            if sudo test -s "$candidate"; then
+              found="$candidate"
+              break
+            fi
+          done < <(sudo find /tmp /var/tmp -type f -name "shopvivaliz-google-ads-refresh-${job}.token" 2>/dev/null | head -n 20)
+
+          if [ -z "$found" ]; then
+            echo 'PRIVATE_TMP_TOKEN_FOUND=no'
+            exit 3
+          fi
+          echo 'PRIVATE_TMP_TOKEN_FOUND=yes'
+          sudo cp "$found" "$recovered"
+          sudo chown ubuntu:ubuntu "$recovered"
+          chmod 600 "$recovered"
+          python3 "$current/scripts/install-google-ads-refresh-pending.py" "$envfile" "$recovered"
+          sudo rm -f "$found" || true
+
+          python3 - <<'PY'
+          import json, os, urllib.parse, urllib.request, urllib.error
+          from pathlib import Path
+          env={}
+          p=Path('/home/ubuntu/shopvivaliz-deploy/shared/.env')
+          for raw in p.read_text(encoding='utf-8', errors='ignore').splitlines():
+              line=raw.strip()
+              if not line or line.startswith('#') or '=' not in line: continue
+              k,v=line.split('=',1); env[k.strip()]=v.strip().strip('"\'')
+          data=urllib.parse.urlencode({
+              'client_id':env.get('GOOGLE_OAUTH_CLIENT_ID',''),
+              'client_secret':env.get('GOOGLE_OAUTH_CLIENT_SECRET',''),
+              'refresh_token':env.get('GOOGLE_ADS_REFRESH_TOKEN',''),
+              'grant_type':'refresh_token',
+          }).encode()
+          req=urllib.request.Request('https://oauth2.googleapis.com/token', data=data, headers={'Content-Type':'application/x-www-form-urlencoded'}, method='POST')
+          try:
+              with urllib.request.urlopen(req, timeout=20) as r:
+                  payload=json.loads(r.read().decode())
+              ok=bool(payload.get('access_token'))
+              print('OAUTH_REFRESH_VALID=' + ('yes' if ok else 'no'))
+              if not ok: raise SystemExit(4)
+          except urllib.error.HTTPError as e:
+              try: payload=json.loads(e.read().decode(errors='ignore'))
+              except Exception: payload={}
+              print('OAUTH_REFRESH_VALID=no')
+              print('oauth_error=' + str(payload.get('error','http_'+str(e.code))))
+              raise SystemExit(5)
+          PY
+          echo 'PRIVATE_TMP_TOKEN_RECOVERED_AND_VALIDATED'
+          REMOTE
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

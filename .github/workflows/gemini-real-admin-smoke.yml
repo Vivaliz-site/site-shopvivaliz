@@ -1,0 +1,94 @@
+name: Gemini Real Admin Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/gemini-real-admin-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || exit 2
+          test -n "$known_hosts" || exit 3
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Run real catalog optimization and image generation in staging
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          cd /home/ubuntu/shopvivaliz-deploy/current
+          php <<'PHP'
+          <?php
+          declare(strict_types=1);
+          require 'admin/catalog-optimization/api/optimize_catalog.php';
+          require 'admin/ai-image-studio/process_item.php';
+
+          $db = catalog_ai_db();
+          if (!$db instanceof PDO) throw new RuntimeException('database_unavailable');
+          $productId = 0;
+          $rows = $db->query('SELECT id FROM products ORDER BY id DESC LIMIT 250');
+          foreach ($rows ? $rows->fetchAll(PDO::FETCH_COLUMN) : [] as $candidateId) {
+              $candidateId = (int)$candidateId;
+              $product = ai_studio_fetch_product($db, $candidateId);
+              if (!is_array($product) || trim((string)($product['image_ref'] ?? '')) === '') continue;
+              $resolved = null;
+              try {
+                  $resolved = ai_studio_resolve_base_image((string)$product['image_ref'], getcwd(), $candidateId);
+                  $productId = $candidateId;
+                  break;
+              } catch (Throwable) {
+                  continue;
+              } finally {
+                  if (is_string($resolved) && str_starts_with($resolved, AI_STUDIO_BASE_IMAGE_TMP_DIR) && is_file($resolved)) @unlink($resolved);
+              }
+          }
+          if ($productId <= 0) throw new RuntimeException('no_product_with_valid_real_image');
+
+          $catalog = ai_catalog_process_item($db, $productId, 'site', 'gemini');
+          $image = ai_studio_process_item($db, $productId, 'google', ['white'], null, 'site');
+          $imageRow = $image['results'][0] ?? [];
+          $out = [
+              'product_id' => $productId,
+              'catalog_success' => (bool)($catalog['success'] ?? false),
+              'catalog_staging_id' => (int)($catalog['staging_id'] ?? 0),
+              'catalog_quality_score' => (int)($catalog['quality_score'] ?? 0),
+              'catalog_error' => substr((string)($catalog['error'] ?? ''), 0, 500),
+              'image_success' => (bool)($image['success'] ?? false),
+              'image_staging_id' => (int)($imageRow['staging_id'] ?? 0),
+              'image_status' => (string)($imageRow['status'] ?? ''),
+              'image_error' => substr((string)($image['error'] ?? ($imageRow['error'] ?? '')), 0, 500),
+          ];
+          echo json_encode($out, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), PHP_EOL;
+          if (!$out['catalog_success'] || !$out['image_success']) exit(4);
+          PHP
+          REMOTE
+
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"

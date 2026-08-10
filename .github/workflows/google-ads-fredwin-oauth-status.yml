@@ -1,0 +1,52 @@
+name: Google Ads Fred-Win OAuth Status
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ops/google-ads-oauth-status.json"
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect scoped browser status on Fred-Win
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat >/tmp/status.ps1 <<'PS1'
+          $ErrorActionPreference='SilentlyContinue'
+          Write-Output 'OAUTH_BROWSER_STATUS_BEGIN'
+          Get-Process msedge,chrome,opera -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -match '(?i)google|shopvivaliz|ads' } | ForEach-Object { Write-Output ('window=' + $_.ProcessName + ':' + $_.MainWindowTitle) }
+          $task=Get-ScheduledTask -TaskName 'ShopVivalizGoogleAdsOAuth' -ErrorAction SilentlyContinue
+          if($task){ Write-Output ('oauth_open_task=' + $task.State) } else { Write-Output 'oauth_open_task=absent' }
+          Write-Output 'OAUTH_BROWSER_STATUS_END'
+          PS1
+          B64="$(iconv -f UTF-8 -t UTF-16LE /tmp/status.ps1 | base64 -w0)"
+          CMD="powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand $B64"
+          C64="$(printf '%s' "$CMD" | base64 -w0)"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "FREDWIN_CMD_B64='$C64' python3 - <<'PY'
+          import base64,json,os,urllib.request
+          cmd=base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode()
+          body=json.dumps({'params':{'command':cmd,'timeout':30}}).encode()
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=45) as r:p=json.loads(r.read().decode())
+          x=p.get('result') or {}; print(x.get('output') or '')
+          if x.get('success') is not True: raise SystemExit(1)
+          PY"
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/status.ps1

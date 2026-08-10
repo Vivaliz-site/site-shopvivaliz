@@ -164,7 +164,10 @@ foreach ($channelChecks as $channel => $definition) {
         'missing_or_invalid' => $missing,
         'token_state' => is_array($token) ? $token : ['managed_by' => $channel === 'amazon' ? 'amazon_oauth_refresh_flow' : 'tiny_oauth_refresh_flow'],
     ];
-    if ($missing !== []) $report['ok'] = false;
+    // Apenas canais ativos e obrigatórios bloqueiam o status geral de prontidão
+    if ($missing !== [] && in_array($channel, ['ml', 'shopee', 'erp'], true)) {
+        $report['ok'] = false;
+    }
 }
 
 $db = sv_pdo();

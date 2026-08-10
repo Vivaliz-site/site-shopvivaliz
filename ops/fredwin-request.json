@@ -1,5 +1,5 @@
 {
   "action": "health",
-  "requested_at": "2026-08-08T12:36:00-03:00",
-  "reason": "Verify documented Fred-Win private relay before continuing Google Ads OAuth work"
+  "requested_at": "2026-08-08T18:24:00-03:00",
+  "reason": "Recheck Fred-Win relay after Google Ads OAuth runtime repair"
 }
