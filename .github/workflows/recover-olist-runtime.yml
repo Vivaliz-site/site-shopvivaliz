@@ -4,8 +4,10 @@ on:
   push:
     branches: [main]
     paths:
+      - 'daemon-token-renewer.py'
       - 'scripts/configure-erp-oauth-static-runtime.py'
       - 'tests/test_configure_erp_oauth_static_runtime.py'
+      - 'tests/test_token_renewer.py'
       - '.github/workflows/recover-olist-runtime.yml'
   workflow_dispatch:
 
@@ -34,14 +36,39 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Verify recovery utility before production access
+      - name: Verify recovery utilities before production access
         shell: bash
         run: |
           set -Eeuo pipefail
           python3 -m py_compile \
+            daemon-token-renewer.py \
             scripts/configure-erp-oauth-static-runtime.py \
-            tests/test_configure_erp_oauth_static_runtime.py
+            tests/test_configure_erp_oauth_static_runtime.py \
+            tests/test_token_renewer.py
           python3 -m unittest tests/test_configure_erp_oauth_static_runtime.py -v
+          python3 - <<'PY'
+          import importlib.util
+          import io
+          import json
+          import urllib.error
+          from pathlib import Path
+
+          path = Path('daemon-token-renewer.py')
+          spec = importlib.util.spec_from_file_location('olist_renewer_preflight', path)
+          module = importlib.util.module_from_spec(spec)
+          assert spec and spec.loader
+          spec.loader.exec_module(module)
+          body = json.dumps({
+              'error': 'invalid_grant',
+              'error_description': 'must-never-be-emitted',
+          }).encode()
+          exc = urllib.error.HTTPError(module.TOKEN_URL, 400, 'Bad Request', {}, io.BytesIO(body))
+          assert module.safe_oauth_error_code(exc) == 'invalid_grant'
+          body = json.dumps({'error': 'arbitrary-provider-text'}).encode()
+          exc = urllib.error.HTTPError(module.TOKEN_URL, 401, 'Unauthorized', {}, io.BytesIO(body))
+          assert module.safe_oauth_error_code(exc) == ''
+          print('safe_oauth_diagnostic_preflight=ok')
+          PY
 
       - name: Validate static GitHub credentials without exposing values
         shell: bash
@@ -96,7 +123,7 @@ jobs:
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
               -i "$HOME/.ssh/id_rsa" \
               ubuntu@137.131.156.17 \
-              'set -Eeuo pipefail; current=/home/ubuntu/shopvivaliz-deploy/current; test -r "$current/scripts/configure-erp-oauth-static-runtime.py"; cat "$current/.release-sha"')"; then
+              'set -Eeuo pipefail; current=/home/ubuntu/shopvivaliz-deploy/current; test -r "$current/daemon-token-renewer.py"; test -r "$current/scripts/configure-erp-oauth-static-runtime.py"; cat "$current/.release-sha"')"; then
               if [[ "$current_sha" == "$GITHUB_SHA" ]]; then
                 ready=1
                 break
@@ -197,11 +224,11 @@ jobs:
               ubuntu@137.131.156.17 \
               'python3 /home/ubuntu/shopvivaliz-deploy/current/scripts/configure-erp-oauth-static-runtime.py /home/ubuntu/shopvivaliz-deploy/shared/.env'
 
-      - name: Restart renewer and sync then prove fresh ERP cache
+      - name: Diagnose renewal once and prove fresh ERP cache
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh \
+          if ssh \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
@@ -213,50 +240,49 @@ jobs:
           current='/home/ubuntu/shopvivaliz-deploy/current'
           shared='/home/ubuntu/shopvivaliz-deploy/shared'
           cache="$current/storage/products-cache-ativos.json"
+          renew_log="$(mktemp)"
+          trap 'rm -f "$renew_log"' EXIT
           test "$(cat "$current/.release-sha")" = "$expected_sha"
 
-          recovery_started_at="$(date +%s)"
           php "$current/scripts/materialize-runtime-secrets.php" >/dev/null
+          if python3 "$current/daemon-token-renewer.py" --once >"$renew_log" 2>&1; then
+            renewal_exit=0
+          else
+            renewal_exit=$?
+          fi
+          cat "$renew_log" >&2
+
           sudo systemctl restart shopvivaliz-token-renewer.service
-          sleep 2
           sudo systemctl restart shopvivaliz-sync-products.service
 
-          token_renewed=0
-          cache_fresh=0
-          for attempt in $(seq 1 96); do
-            if journalctl -u shopvivaliz-token-renewer.service --since "@$recovery_started_at" --no-pager -o cat \
-              | grep -Fq 'Token Olist renovado'; then
-              token_renewed=1
-            fi
-
-            cache_fresh=0
-            if [[ -s "$cache" ]] && python3 -m json.tool "$cache" >/dev/null; then
-              cache_age="$(( $(date +%s) - $(stat -c %Y "$cache") ))"
-              if (( cache_age <= 300 )); then
-                cache_fresh=1
+          if [[ "$renewal_exit" = 0 ]]; then
+            for attempt in $(seq 1 72); do
+              if [[ -s "$cache" ]] && python3 -m json.tool "$cache" >/dev/null; then
+                cache_age="$(( $(date +%s) - $(stat -c %Y "$cache") ))"
+                if (( cache_age <= 300 )); then
+                  break
+                fi
               fi
-            fi
-
-            if [[ "$token_renewed" = 1 && "$cache_fresh" = 1 ]]; then
-              break
-            fi
-            echo "recovery_wait_attempt=$attempt" >&2
-            sleep 5
-          done
+              echo "cache_wait_attempt=$attempt" >&2
+              sleep 5
+            done
+          fi
 
           if token_status="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null)"; then :; else token_status='inactive'; fi
           if sync_status="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null)"; then :; else sync_status='inactive'; fi
 
-          python3 - "$expected_sha" "$token_renewed" "$token_status" "$sync_status" "$cache" "$shared/.env" <<'PY'
+          python3 - "$expected_sha" "$renewal_exit" "$token_status" "$sync_status" "$cache" "$shared/.env" "$renew_log" <<'PY'
           import json
+          import re
           import sys
           import time
           from pathlib import Path
 
-          expected_sha, token_renewed, token_status, sync_status, cache_name, env_name = sys.argv[1:]
+          expected_sha, renewal_exit, token_status, sync_status, cache_name, env_name, log_name = sys.argv[1:]
           current = Path('/home/ubuntu/shopvivaliz-deploy/current')
           cache = Path(cache_name)
           env_path = Path(env_name)
+          log_text = Path(log_name).read_text(encoding='utf-8', errors='replace')
           required = {
               'OLIST_CLIENT_ID': False,
               'OLIST_CLIENT_SECRET': False,
@@ -274,6 +300,13 @@ jobs:
               if key in required:
                   required[key] = bool(value.strip().strip('"\''))
 
+          http_status = None
+          oauth_error = None
+          match = re.search(r'Renovação Olist recusada: HTTP (\d{3})(?: oauth_error=([a-z_]+))?', log_text)
+          if match:
+              http_status = int(match.group(1))
+              oauth_error = match.group(2) or None
+
           cache_valid = False
           item_count = 0
           cache_age = None
@@ -288,10 +321,11 @@ jobs:
                   pass
 
           release_sha = (current / '.release-sha').read_text(encoding='utf-8').strip()
+          renewal_ok = renewal_exit == '0'
           ok = all((
               release_sha == expected_sha,
               all(required.values()),
-              token_renewed == '1',
+              renewal_ok,
               token_status == 'active',
               sync_status == 'active',
               cache_valid,
@@ -302,7 +336,10 @@ jobs:
               'ok': ok,
               'release_sha': release_sha,
               'credential_presence': required,
-              'token_renewed_after_repair': token_renewed == '1',
+              'renewal_exit_code': int(renewal_exit),
+              'renewal_http_status': http_status,
+              'renewal_oauth_error': oauth_error,
+              'token_renewed_after_repair': renewal_ok,
               'token_renewer': token_status,
               'sync_service': sync_status,
               'cache_age_seconds': cache_age,
@@ -314,7 +351,13 @@ jobs:
               raise SystemExit('Olist recovery evidence is incomplete')
           PY
           REMOTE
+          then
+            recovery_status=0
+          else
+            recovery_status=$?
+          fi
           cat artifacts/olist-recovery/after.json
+          test "$recovery_status" = 0
 
       - name: Upload masked Olist recovery evidence
         if: always()

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import io
+import json
 import os
+import urllib.error
 from pathlib import Path
 
 import pytest
@@ -86,6 +89,79 @@ def test_renew_once_never_logs_token_values(tmp_path: Path, monkeypatch, capsys)
     output = capsys.readouterr().out
     assert "sensitive-access" not in output
     assert "sensitive-refresh" not in output
+
+
+def test_http_error_logs_only_whitelisted_oauth_classification(monkeypatch, capsys) -> None:
+    client_id = "sensitive-client-id"
+    client_secret = "sensitive-client-secret"
+    refresh_token = "sensitive-refresh-token"
+    sensitive_description = "provider detail containing sensitive-refresh-token and other context"
+    body = json.dumps(
+        {"error": "invalid_grant", "error_description": sensitive_description}
+    ).encode("utf-8")
+    error = urllib.error.HTTPError(
+        renewer.TOKEN_URL,
+        400,
+        "Bad Request",
+        {},
+        io.BytesIO(body),
+    )
+
+    def raise_http_error(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(renewer.urllib.request, "urlopen", raise_http_error)
+
+    result = renewer.renew_token(
+        {
+            "OLIST_CLIENT_ID": client_id,
+            "OLIST_CLIENT_SECRET": client_secret,
+            "OLIST_REFRESH_TOKEN": refresh_token,
+        }
+    )
+
+    assert result is None
+    output = capsys.readouterr().out
+    assert "HTTP 400" in output
+    assert "oauth_error=invalid_grant" in output
+    assert sensitive_description not in output
+    assert client_id not in output
+    assert client_secret not in output
+    assert refresh_token not in output
+
+
+def test_http_error_never_logs_unknown_provider_error_text(monkeypatch, capsys) -> None:
+    provider_text = "credential-shaped-provider-value-should-never-be-logged"
+    body = json.dumps(
+        {"error": provider_text, "error_description": "another-sensitive-description"}
+    ).encode("utf-8")
+    error = urllib.error.HTTPError(
+        renewer.TOKEN_URL,
+        401,
+        "Unauthorized",
+        {},
+        io.BytesIO(body),
+    )
+
+    def raise_http_error(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(renewer.urllib.request, "urlopen", raise_http_error)
+
+    result = renewer.renew_token(
+        {
+            "OLIST_CLIENT_ID": "client",
+            "OLIST_CLIENT_SECRET": "secret",
+            "OLIST_REFRESH_TOKEN": "refresh",
+        }
+    )
+
+    assert result is None
+    output = capsys.readouterr().out
+    assert "HTTP 401" in output
+    assert provider_text not in output
+    assert "another-sensitive-description" not in output
+    assert "oauth_error=" not in output
 
 
 def test_atomic_env_update_writes_symlink_target_without_replacing_link(tmp_path: Path, monkeypatch) -> None:
