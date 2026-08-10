@@ -4,10 +4,30 @@
 
 ---
 
+## ⛔ PRÉ-LEITURA OBRIGATÓRIA ANTES DE QUALQUER ALTERAÇÃO
+
+Política: `AGENT_DOCS_PREFLIGHT_V1`.
+
+Nenhum agente pode alterar código, configuração, fila, integração, runtime ou produção antes de executar o protocolo de `docs/AGENT-DOCS-PREFLIGHT.md` e obter um recibo atual válido para a tarefa.
+
+Fluxo obrigatório:
+
+```bash
+python scripts/agent-docs-gate.py read --agent <agent-id> --task <task-id>
+# ler todo o conteúdo emitido e os docs específicos do escopo
+python scripts/agent-docs-gate.py acknowledge --agent <agent-id> --task <task-id> --digest <digest>
+python scripts/agent-docs-gate.py verify --agent <agent-id> --task <task-id>
+```
+
+O `verify` precisa terminar com exit code 0 **antes da primeira mutação**. Se qualquer documento obrigatório mudar, o recibo fica automaticamente inválido e o agente deve reler. Se a ferramenta preferida estiver indisponível, o agente deve investigar e usar uma rota alternativa aprovada em vez de pular a validação.
+
+---
+
 ## 📚 DOCUMENTAÇÃO PRINCIPAL
 
 ### 🚀 Começar Aqui
 - **[START_HERE.md](START_HERE.md)** - Guia rápido de inicialização
+- **[docs/AGENT-DOCS-PREFLIGHT.md](docs/AGENT-DOCS-PREFLIGHT.md)** - Leitura obrigatória e recibo antes de mudanças
 
 ### 📖 Documentação Completa
 - **[README.md](README.md)** - Overview do projeto
@@ -166,6 +186,7 @@ ChatGPT (Validação)   ─┘
 
 ### Fluxo de Execução
 ```
+0. Agente lê os docs obrigatórios e obtém receipt AGENT_DOCS_PREFLIGHT_V1
 1. Executor pega tarefa (priorização inteligente)
 2. Trio IA processa em paralelo
 3. QA automático valida
@@ -201,6 +222,11 @@ logs/
 
 ## 🚀 COMO USAR (Para Agentes)
 
+### 0️⃣ Fazer preflight obrigatório
+```bash
+python scripts/agent-docs-gate.py read --agent <agent-id> --task <task-id>
+```
+
 ### 1️⃣ Verificar Status
 ```bash
 python scripts/metrics-collector.py
@@ -230,6 +256,7 @@ python scripts/auto-documentation.py
 
 ## ✅ CHECKLIST PARA AGENTES
 
+- [ ] Executei `AGENT_DOCS_PREFLIGHT_V1`, li os docs e o `verify` passou
 - [ ] Ler START_HERE.md
 - [ ] Verificar tarefas em tasks-queue.json
 - [ ] Confirmar que pode acessar GitHub Secrets
@@ -291,7 +318,7 @@ Se agente encontrar bloqueio:
 
 ## 📈 Próximos Passos
 
-1. ✅ Ler documentação completa
+1. ✅ Executar preflight e ler documentação completa
 2. ✅ Acessar todos os scripts
 3. ✅ Executar primeira tarefa
 4. ✅ Monitorar progresso via dashboard
@@ -301,5 +328,5 @@ Se agente encontrar bloqueio:
 
 **Sistema pronto para operação 24/7 autônoma!** 🚀
 
-*Última atualização: 2026-06-27*
-*Todas as 50 melhorias implementadas e acessíveis*
+*Última atualização: 2026-08-10*
+*Todas as alterações por agentes exigem `AGENT_DOCS_PREFLIGHT_V1` antes da primeira mutação.*
