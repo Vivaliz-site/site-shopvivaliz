@@ -10,6 +10,11 @@ import tempfile
 import time
 from pathlib import Path
 
+try:
+    from env_keyset_guard import assert_monotonic_text
+except ModuleNotFoundError:  # pragma: no cover - import path used by test loaders
+    from scripts.env_keyset_guard import assert_monotonic_text
+
 
 # This utility is used by the generic runtime workflow. OAuth credentials are
 # deliberately absent: access/refresh tokens may only be written by a
@@ -102,11 +107,12 @@ def main() -> int:
         return 1
 
     original = path.stat()
+    original_text = path.read_text(encoding="utf-8")
     backup = path.with_name(f"{path.name}.backup.{int(time.time())}")
     shutil.copy2(path, backup)
     os.chmod(backup, PRIVATE_MODE)
 
-    lines = path.read_text(encoding="utf-8").splitlines()
+    lines = original_text.splitlines()
     seen: set[str] = set()
     output: list[str] = []
     for line in lines:
@@ -120,11 +126,14 @@ def main() -> int:
         if key not in seen:
             output.append(f"{key}={value}")
 
+    candidate_text = "\n".join(output).rstrip("\n") + "\n"
+    added_keys = assert_monotonic_text(original_text, candidate_text)
+
     descriptor, temporary_name = tempfile.mkstemp(prefix=".env.", dir=path.parent)
     temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write("\n".join(output).rstrip("\n") + "\n")
+            handle.write(candidate_text)
             handle.flush()
             os.fsync(handle.fileno())
         os.chmod(temporary, PRIVATE_MODE)
@@ -140,6 +149,8 @@ def main() -> int:
         temporary.unlink(missing_ok=True)
 
     print("updated_keys=" + ",".join(sorted(values)))
+    print("added_key_count=" + str(len(added_keys)))
+    print("env_key_deletion_blocked=true")
     print("managed_oauth_mutation=blocked")
     print("backup_created=true")
     print("shared_env_mode=600")
