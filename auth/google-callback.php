@@ -1,8 +1,7 @@
 <?php
 declare(strict_types=1);
 
-session_start();
-
+require_once __DIR__ . '/../includes/secure-session.php';
 require_once __DIR__ . '/../includes/social-auth.php';
 
 $error = '';
@@ -159,7 +158,14 @@ try {
                 'email_verified' => !empty($profile['email_verified']), 'name' => (string)($profile['name'] ?? ''),
                 'avatar_url' => (string)($profile['picture'] ?? ''),
             ]);
+            if (!session_regenerate_id(true)) {
+                throw new RuntimeException('Não foi possível renovar a sessão autenticada.');
+            }
             sv_social_login_user($user);
+            $_SESSION['issued_at'] = time();
+            if (session_status() === PHP_SESSION_ACTIVE && !session_write_close()) {
+                throw new RuntimeException('Não foi possível persistir a sessão autenticada.');
+            }
             header('Location: ' . sv_social_sanitize_redirect((string)($request['redirect'] ?? '/')));
             exit;
         }
