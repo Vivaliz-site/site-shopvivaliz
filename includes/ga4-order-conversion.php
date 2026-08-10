@@ -2,6 +2,44 @@
 declare(strict_types=1);
 
 /**
+ * Splits the browser identity persisted with the order.
+ *
+ * Historical orders contain only a GA4 client_id. New orders can carry
+ * "client_id|session_cookie" so the approved Measurement Protocol purchase can
+ * be joined back to the same tagged GA4 session.
+ *
+ * @return array{client_id:string,session_id:string}
+ */
+function svga4_order_browser_identity(array $order): array
+{
+    $candidate = trim((string)($order['funnel_client_id'] ?? ''));
+    if ($candidate === '') {
+        return ['client_id' => '', 'session_id' => ''];
+    }
+
+    $parts = explode('|', $candidate, 2);
+    $clientId = trim((string)($parts[0] ?? ''));
+    $sessionId = trim((string)($parts[1] ?? ''));
+
+    if (preg_match('/^\d+\.\d+$/', $clientId) !== 1) {
+        return ['client_id' => '', 'session_id' => ''];
+    }
+
+    // Measurement Protocol accepts a positive numeric session id or the full
+    // Analytics session cookie. Keep validation intentionally narrow because
+    // this value is persisted from a consented first-party cookie.
+    if ($sessionId !== '') {
+        $numericSession = preg_match('/^\d+$/', $sessionId) === 1;
+        $cookieSession = preg_match('/^GS\d+(?:\.\d+)?[A-Za-z0-9.$_-]*$/', $sessionId) === 1;
+        if ((!$numericSession && !$cookieSession) || strlen($sessionId) > 96) {
+            $sessionId = '';
+        }
+    }
+
+    return ['client_id' => $clientId, 'session_id' => $sessionId];
+}
+
+/**
  * Returns the GA4 client_id that can be joined back to browser tagging.
  * New orders persist the client_id extracted from the consented _ga cookie in
  * funnel_client_id. Older orders may contain a random first-party id, so only
@@ -9,9 +47,9 @@ declare(strict_types=1);
  */
 function svga4_order_client_id(array $order): array
 {
-    $candidate = trim((string)($order['funnel_client_id'] ?? ''));
-    if ($candidate !== '' && preg_match('/^\d+\.\d+$/', $candidate) === 1) {
-        return ['client_id' => $candidate, 'tagged' => true];
+    $browserIdentity = svga4_order_browser_identity($order);
+    if ($browserIdentity['client_id'] !== '') {
+        return ['client_id' => $browserIdentity['client_id'], 'tagged' => true];
     }
 
     $orderNumber = trim((string)($order['order_number'] ?? ''));
@@ -19,6 +57,11 @@ function svga4_order_client_id(array $order): array
         'client_id' => 'server.' . substr(hash('sha256', $orderNumber !== '' ? $orderNumber : uniqid('', true)), 0, 24),
         'tagged' => false,
     ];
+}
+
+function svga4_order_session_id(array $order): string
+{
+    return svga4_order_browser_identity($order)['session_id'];
 }
 
 /**
@@ -38,19 +81,23 @@ function svga4_send_approved_purchase(array $order): bool
     $items = [];
     foreach (is_array($order['items'] ?? null) ? $order['items'] : [] as $item) {
         if (!is_array($item)) continue;
-        $items[] = [
+        $itemPayload = [
             'item_id' => (string)($item['sku'] ?? $item['olist_product_id'] ?? $item['id'] ?? ''),
             'item_name' => (string)($item['name'] ?? 'Produto Vivaliz'),
-            'item_brand' => (string)($item['brand'] ?? 'Vivaliz'),
-            'item_category' => (string)($item['category'] ?? ''),
             'price' => round((float)($item['price'] ?? 0), 2),
             'quantity' => max(1, (int)($item['quantity'] ?? 1)),
         ];
+        $brand = trim((string)($item['brand'] ?? ''));
+        $category = trim((string)($item['category'] ?? ''));
+        if ($brand !== '') $itemPayload['item_brand'] = $brand;
+        if ($category !== '') $itemPayload['item_category'] = $category;
+        $items[] = $itemPayload;
     }
 
     $identity = svga4_order_client_id($order);
     $clientId = (string)$identity['client_id'];
     $taggedClient = (bool)$identity['tagged'];
+    $sessionId = $taggedClient ? svga4_order_session_id($order) : '';
 
     $eventParams = [
         'transaction_id' => $orderNumber,
@@ -62,6 +109,9 @@ function svga4_send_approved_purchase(array $order): bool
         'items' => $items,
         'engagement_time_msec' => 1,
     ];
+    if ($sessionId !== '') {
+        $eventParams['session_id'] = $sessionId;
+    }
 
     $payload = [
         'client_id' => $clientId,
@@ -97,6 +147,7 @@ function svga4_send_approved_purchase(array $order): bool
         . ' success=' . ($success ? 'yes' : 'no')
         . ' status=' . $status
         . ' attribution=' . ($taggedClient ? 'browser_client_id' : 'server_fallback')
+        . ' session=' . ($sessionId !== '' ? 'joined' : 'none')
     );
     return $success;
 }

@@ -41,8 +41,11 @@ $allowedEvents = [
     'view_item',
     'view_item_list',
     'add_to_cart',
+    'remove_from_cart',
     'view_cart',
     'begin_checkout',
+    'add_shipping_info',
+    'add_payment_info',
     'generate_lead',
     'search',
 ];
