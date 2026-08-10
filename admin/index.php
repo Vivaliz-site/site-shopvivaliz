@@ -25,7 +25,7 @@ $codename = (string)($version['codename'] ?? '');
     })();
     </script>
 </head>
-<body class="admin-surface" data-catalog-preserve-path="1">
+<body class="admin-surface">
     <nav class="navbar" style="background: #1a1a2e; padding: 1rem 0;">
         <div class="container nav-inner" style="display: flex; justify-content: space-between; align-items: center;">
             <a class="brand-link" href="/admin/" style="color: white; font-weight: bold; font-size: 1.2rem;">🛍️ ShopVivaliz Admin</a>
@@ -252,7 +252,6 @@ $codename = (string)($version['codename'] ?? '');
     })();
     </script>
     <script src="/autodev/client.js"></script>
-    <script src="/js/catalog.js?v=20260810-admin-url-fix-1"></script>
     <script src="/js/admin-dashboard.js"></script>
 </body>
 </html>

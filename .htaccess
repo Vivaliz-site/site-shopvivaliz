@@ -86,6 +86,8 @@ AddCharset UTF-8 .html .txt .php .json
 
     # Consolidacao do admin: antigas entradas duplicadas agora apontam para /admin/.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^admin(?:/index\.php)?/?$ /admin/ [R=301,L,NE,QSD,NC]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
     RewriteRule ^admin/(?:menu-completo|menu-dashboard|dashboard|admin-back)\.php$ /admin/ [R=301,L,NE,QSD,NC]
     RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
     RewriteRule ^admin/(?:menu-completo|menu-dashboard|dashboard|admin-back)\.php$ - [F,L,NC]

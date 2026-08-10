@@ -6,7 +6,8 @@
     "audit:tree:fix": "python scripts/audit-static-tree.py",
     "build:assets": "node scripts/build-assets.mjs",
     "dev:queue": "php -S 127.0.0.1:8088 -t .",
-    "worker": "php scripts/queue-worker.php"
+    "worker": "php scripts/queue-worker.php",
+    "qa:browser": "node scripts/browser-qa-validate.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",

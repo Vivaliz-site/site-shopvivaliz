@@ -560,6 +560,14 @@ function ai_catalog_quality_report(array $data, string $channel, array $product)
     return ['score' => $score, 'checks' => $checks];
 }
 
+/**
+ * @return list<string>
+ */
+function ai_catalog_allowed_providers(): array
+{
+    return ['openai', 'gemini', 'claude', 'openrouter', 'groq'];
+}
+
 /** @param array<string,mixed> $data @param array<string,string> $product */
 function ai_catalog_validate_ai_response(array $data, string $channel = '', array $product = []): void
 {
@@ -647,7 +655,7 @@ function ai_catalog_process_item(PDO $db, int $productId, string $channel, strin
     if (!array_key_exists($channel, catalog_ai_channels())) {
         return ['success' => false, 'product_id' => $productId, 'channel' => $channel, 'provider' => $provider, 'error' => "Canal invalido: '$channel'."];
     }
-    if (!in_array($provider, ['openai', 'gemini', 'claude'], true)) {
+    if (!in_array($provider, ai_catalog_allowed_providers(), true)) {
         return ['success' => false, 'product_id' => $productId, 'channel' => $channel, 'provider' => $provider, 'error' => "Provider invalido: '$provider'."];
     }
 

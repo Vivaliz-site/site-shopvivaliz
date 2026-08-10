@@ -35,6 +35,14 @@ require_once __DIR__ . '/config_optimization.php';
 require_once __DIR__ . '/api/optimize_catalog.php';
 
 /**
+ * @return list<string>
+ */
+function ai_catalog_cli_allowed_providers(): array
+{
+    return ai_catalog_allowed_providers();
+}
+
+/**
  * Parseia argumentos --chave=valor e posicionais numa única passada.
  *
  * @param array<int,string> $argv
@@ -79,8 +87,8 @@ if ($args['channel'] === '' || !array_key_exists($args['channel'], catalog_ai_ch
     exit(2);
 }
 
-if (!in_array($args['provider'], ['openai', 'gemini', 'claude'], true)) {
-    fwrite(STDERR, "Provider inválido ou ausente. Use 'openai', 'gemini' ou 'claude'.\n");
+if (!in_array($args['provider'], ai_catalog_cli_allowed_providers(), true)) {
+    fwrite(STDERR, "Provider inválido ou ausente. Use 'openai', 'gemini', 'claude', 'openrouter' ou 'groq'.\n");
     exit(2);
 }
 

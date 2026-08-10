@@ -219,12 +219,54 @@ final class CatalogAiClaudeTextProvider extends CatalogAiRotatingProvider
     }
 }
 
+final class CatalogAiOpenAiCompatibleTextProvider extends CatalogAiRotatingProvider
+{
+    public function __construct(
+        string|array $keys,
+        protected string $model,
+        protected int $timeoutSeconds,
+        protected string $baseUrl,
+        protected string $providerLabel,
+        protected array $extraHeaders = []
+    ) {
+        parent::__construct($keys, $model, $timeoutSeconds);
+        $this->baseUrl = rtrim($this->baseUrl, '/');
+    }
+
+    protected function providerName(): string { return $this->providerLabel; }
+    protected function missingKeyMessage(): string { return 'Nenhuma chave configurada para ' . $this->providerLabel . ' no ambiente privado.'; }
+
+    protected function completeWithKey(string $key, string $systemPrompt, string $userPrompt): array
+    {
+        $response = CatalogAiHttpClient::postJson($this->baseUrl . '/chat/completions', array_merge([
+            'Authorization' => 'Bearer ' . $key,
+        ], $this->extraHeaders), [
+            'model' => $this->model,
+            'messages' => [
+                ['role' => 'system', 'content' => $systemPrompt],
+                ['role' => 'user', 'content' => $userPrompt],
+            ],
+            'temperature' => 0.7,
+            'response_format' => ['type' => 'json_object'],
+        ], $this->timeoutSeconds);
+        if ($response['status'] < 200 || $response['status'] >= 300) throw $this->failure($this->providerLabel . ' chat/completions', $response);
+        $decoded = json_decode($response['body'], true);
+        $text = is_array($decoded) ? ($decoded['choices'][0]['message']['content'] ?? null) : null;
+        if (!is_string($text) || trim($text) === '') {
+            throw new CatalogAiApiException($this->providerLabel . ' retornou resposta sem conteúdo utilizável.');
+        }
+        return CatalogAiHttpClient::decodeModelJson($text, $this->providerLabel);
+    }
+}
+
 function catalog_ai_normalize_provider(string $provider): string
 {
     return match (strtolower(trim($provider))) {
         'gpt', 'openai' => 'openai',
         'gemini' => 'gemini',
         'claude' => 'claude',
+        'openrouter' => 'openrouter',
+        'groq', 'qrope' => 'groq',
         default => strtolower(trim($provider)),
     };
 }
@@ -234,11 +276,14 @@ function catalog_ai_provider_fallback_order(string $preferred): array
 {
     $preferred = catalog_ai_normalize_provider($preferred);
     $order = match ($preferred) {
-        'gemini' => ['gemini', 'openai', 'claude'],
+        'openai' => ['openai', 'gemini', 'claude'],
+        'gemini' => ['gemini', 'openrouter', 'groq', 'openai', 'claude'],
         'claude' => ['claude', 'openai', 'gemini'],
+        'openrouter' => ['openrouter', 'groq', 'openai', 'gemini', 'claude'],
+        'groq' => ['groq', 'openrouter', 'openai', 'gemini', 'claude'],
         default => ['openai', 'gemini', 'claude'],
     };
-    return array_values(array_unique(array_filter($order, static fn(string $value): bool => in_array($value, ['openai', 'gemini', 'claude'], true))));
+    return array_values(array_unique(array_filter($order, static fn(string $value): bool => in_array($value, ['openai', 'gemini', 'claude', 'openrouter', 'groq'], true))));
 }
 
 function catalog_ai_provider_has_keys(string $provider): bool
@@ -247,6 +292,8 @@ function catalog_ai_provider_has_keys(string $provider): bool
         'openai' => CatalogAiKeyPool::normalize(CATALOG_AI_OPENAI_API_KEY) !== [],
         'gemini' => CatalogAiKeyPool::normalize(CATALOG_AI_GOOGLE_GEMINI_API_KEY) !== [],
         'claude' => CatalogAiKeyPool::normalize(CATALOG_AI_CLAUDE_API_KEY) !== [],
+        'openrouter' => CatalogAiKeyPool::normalize(CATALOG_AI_OPENROUTER_API_KEY) !== [],
+        'groq' => CatalogAiKeyPool::normalize(CATALOG_AI_GROQ_API_KEY) !== [],
         default => false,
     };
 }
@@ -267,6 +314,11 @@ function catalog_ai_make_provider(string $provider): CatalogAiTextProvider
         'openai' => new CatalogAiOpenAiTextProvider(CATALOG_AI_OPENAI_API_KEY, CATALOG_AI_OPENAI_MODEL, CATALOG_AI_HTTP_TIMEOUT_SECONDS),
         'gemini' => new CatalogAiGeminiTextProvider(CATALOG_AI_GOOGLE_GEMINI_API_KEY, CATALOG_AI_GEMINI_MODEL, CATALOG_AI_HTTP_TIMEOUT_SECONDS),
         'claude' => new CatalogAiClaudeTextProvider(CATALOG_AI_CLAUDE_API_KEY, CATALOG_AI_CLAUDE_MODEL, CATALOG_AI_HTTP_TIMEOUT_SECONDS),
+        'openrouter' => new CatalogAiOpenAiCompatibleTextProvider(CATALOG_AI_OPENROUTER_API_KEY, CATALOG_AI_OPENROUTER_MODEL, CATALOG_AI_HTTP_TIMEOUT_SECONDS, CATALOG_AI_OPENROUTER_API_BASE_URL, 'OpenRouter', [
+            'HTTP-Referer' => CATALOG_AI_OPENROUTER_HTTP_REFERER,
+            'X-OpenRouter-Title' => CATALOG_AI_OPENROUTER_APP_TITLE,
+        ]),
+        'groq' => new CatalogAiOpenAiCompatibleTextProvider(CATALOG_AI_GROQ_API_KEY, CATALOG_AI_GROQ_MODEL, CATALOG_AI_HTTP_TIMEOUT_SECONDS, CATALOG_AI_GROQ_API_BASE_URL, 'Groq'),
         default => throw new CatalogAiApiException("Provider inválido: {$provider}."),
     };
 }
