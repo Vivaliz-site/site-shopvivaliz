@@ -24,7 +24,7 @@ function ai_studio_excerpt(string $value, int $limit = 180): string
 {
     $value = trim((string)preg_replace('/\s+/u', ' ', trim($value)));
     if ($value === '') {
-        return '';
+        return 'Sem detalhe informado.';
     }
 
     if (function_exists('mb_strlen') && function_exists('mb_substr')) {
@@ -36,6 +36,30 @@ function ai_studio_excerpt(string $value, int $limit = 180): string
     return strlen($value) <= $limit
         ? $value
         : substr($value, 0, max(1, $limit - 3)) . '...';
+}
+
+function ai_studio_recent_target_label(mixed $rawTargets, array $channelProfiles): string
+{
+    $targets = is_array($rawTargets) ? $rawTargets : json_decode((string)$rawTargets, true);
+    if (!is_array($targets) || $targets === []) {
+        return 'legado';
+    }
+    $target = trim((string)($targets[0] ?? ''));
+    if ($target === '') {
+        return 'legado';
+    }
+    return (string)($channelProfiles[$target]['label'] ?? $target);
+}
+
+/** @return array{label:string,count:int} */
+function ai_studio_top_counter(array $counts, string $fallbackLabel = 'Nenhum'): array
+{
+    if ($counts === []) {
+        return ['label' => $fallbackLabel, 'count' => 0];
+    }
+    arsort($counts);
+    $label = (string)array_key_first($counts);
+    return ['label' => $label, 'count' => (int)$counts[$label]];
 }
 
 $channelProfiles = ai_studio_channel_profiles();
@@ -136,6 +160,35 @@ try {
 } catch (Throwable $e) {
     error_log('[ai-image-studio] Falha ao ler itens recentes: ' . $e->getMessage());
 }
+
+$recentFailureStats = [
+    'providers' => [],
+    'targets' => [],
+    'products' => [],
+    'causes' => [],
+];
+foreach ($recentItems as $item) {
+    $status = strtolower(trim((string)($item['status'] ?? '')));
+    if (!in_array($status, ['failed', 'publication_failed'], true)) {
+        continue;
+    }
+
+    $provider = trim((string)($item['provider_used'] ?? '')) ?: 'desconhecido';
+    $target = ai_studio_recent_target_label($item['target_channels_json'] ?? '[]', $channelProfiles);
+    $product = '#' . (int)($item['product_id'] ?? 0);
+    $error = trim((string)($item['error_message'] ?? ''));
+    $cause = ai_studio_excerpt($error !== '' ? $error : 'Falha sem error_message informado.', 95);
+
+    $recentFailureStats['providers'][$provider] = ($recentFailureStats['providers'][$provider] ?? 0) + 1;
+    $recentFailureStats['targets'][$target] = ($recentFailureStats['targets'][$target] ?? 0) + 1;
+    $recentFailureStats['products'][$product] = ($recentFailureStats['products'][$product] ?? 0) + 1;
+    $recentFailureStats['causes'][$cause] = ($recentFailureStats['causes'][$cause] ?? 0) + 1;
+}
+
+$topProvider = ai_studio_top_counter($recentFailureStats['providers'], 'Nenhum');
+$topTarget = ai_studio_top_counter($recentFailureStats['targets'], 'Nenhum');
+$topProduct = ai_studio_top_counter($recentFailureStats['products'], 'Nenhum');
+$topCause = ai_studio_top_counter($recentFailureStats['causes'], 'Nenhum');
 ?>
 <!doctype html>
 <html lang="pt-BR">
@@ -162,6 +215,7 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
 .metric{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:18px;box-shadow:var(--shadow)}
 .metric strong{display:block;font-size:1.8rem;margin-bottom:4px}
 .metric span{color:var(--muted);font-size:.9rem}
+.metric em{display:block;font-style:normal;color:var(--text);font-weight:800;line-height:1.35}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow);margin-bottom:18px}
 .panel h2{margin:0 0 10px;font-size:1.28rem}
 .panel p{margin:0;color:var(--muted);line-height:1.58}
@@ -197,6 +251,10 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
 table{width:100%;border-collapse:collapse;background:#fff;min-width:760px}
 th,td{padding:12px 14px;border-bottom:1px solid #edf1f5;text-align:left;font-size:.92rem}
 th{background:#f8fafc;color:#425368}
+.error-details{max-width:440px}
+.error-details summary{cursor:pointer;font-weight:800;color:#1d4ed8}
+.error-details .excerpt{margin-top:6px;color:var(--muted);font-size:.88rem;line-height:1.45}
+.error-details pre{margin:10px 0 0;padding:12px;border-radius:14px;background:#0f172a;color:#e2e8f0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto}
 .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:.78rem;font-weight:800}
 .badge.ok{background:#dcfce7;color:#166534}
 .badge.warn{background:#fef3c7;color:#92400e}
@@ -376,6 +434,30 @@ th{background:#f8fafc;color:#425368}
     <section class="panel">
         <h2>Itens recentes</h2>
         <p>Ultimos itens processados para conferencia rapida do staging de imagens.</p>
+        <?php if ($recentFailureStats['providers'] !== []): ?>
+            <div class="metrics" style="margin-top:16px">
+                <div class="metric">
+                    <strong><?= (int)array_sum($recentFailureStats['providers']) ?></strong>
+                    <span>Falhas recentes com causa registrada</span>
+                    <em><?= ai_studio_h($topCause['label']) ?></em>
+                </div>
+                <div class="metric">
+                    <strong><?= (int)$topProvider['count'] ?></strong>
+                    <span>Provedor mais recorrente</span>
+                    <em><?= ai_studio_h($topProvider['label']) ?></em>
+                </div>
+                <div class="metric">
+                    <strong><?= (int)$topTarget['count'] ?></strong>
+                    <span>Canal mais afetado</span>
+                    <em><?= ai_studio_h($topTarget['label']) ?></em>
+                </div>
+                <div class="metric">
+                    <strong><?= (int)$topProduct['count'] ?></strong>
+                    <span>Produto com mais falhas</span>
+                    <em><?= ai_studio_h($topProduct['label']) ?></em>
+                </div>
+            </div>
+        <?php endif; ?>
         <?php if ($recentItems === []): ?>
             <div class="empty-state" style="margin-top:16px">Nenhum item processado ainda.</div>
         <?php else: ?>
@@ -389,18 +471,17 @@ th{background:#f8fafc;color:#425368}
                             <th>Tipo</th>
                             <th>Provedor</th>
                             <th>Status</th>
-                            <th>Detalhe</th>
+                            <th>Erro</th>
                             <th>Criado em</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($recentItems as $item): ?>
                             <?php
-                            $targets = json_decode((string)($item['target_channels_json'] ?? '[]'), true);
-                            $target = is_array($targets) && isset($targets[0]) ? (string)$targets[0] : 'legado';
-                            $targetLabel = (string)($channelProfiles[$target]['label'] ?? $target);
+                            $targetLabel = ai_studio_recent_target_label($item['target_channels_json'] ?? '[]', $channelProfiles);
                             $statusLabel = (string)$item['status'];
                             $badgeClass = in_array($statusLabel, ['pending', 'published'], true) ? 'ok' : 'warn';
+                            $errorMessage = trim((string)($item['error_message'] ?? ''));
                             ?>
                             <tr>
                                 <td>#<?= (int)$item['id'] ?></td>
@@ -410,9 +491,15 @@ th{background:#f8fafc;color:#425368}
                                 <td><?= ai_studio_h((string)$item['provider_used']) ?></td>
                                 <td><span class="badge <?= $badgeClass ?>"><?= ai_studio_h($statusLabel) ?></span></td>
                                 <td class="recent-error">
-                                    <?= $statusLabel === 'failed'
-                                        ? ai_studio_h(ai_studio_excerpt((string)($item['error_message'] ?? 'Sem detalhe registrado.'), 180))
-                                        : '—' ?>
+                                    <?php if ($errorMessage !== ''): ?>
+                                        <details class="error-details">
+                                            <summary><?= ai_studio_h(ai_studio_excerpt($errorMessage, 120)) ?></summary>
+                                            <div class="excerpt">Resumo: <?= ai_studio_h(ai_studio_excerpt($errorMessage, 180)) ?></div>
+                                            <pre><?= ai_studio_h($errorMessage) ?></pre>
+                                        </details>
+                                    <?php else: ?>
+                                        <span class="badge ok">Sem erro</span>
+                                    <?php endif; ?>
                                 </td>
                                 <td><?= ai_studio_h((string)$item['created_at']) ?></td>
                             </tr>
