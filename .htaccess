@@ -84,9 +84,11 @@ AddCharset UTF-8 .html .txt .php .json
 
     RewriteRule ^p/termos-e-condicoes/?$ /termos [R=301,L,NE,QSD]
 
-    # Consolidacao do admin: antigas entradas duplicadas agora apontam para /admin/.
+    # Consolidacao do admin: entradas sem barra e index.php apontam para /admin/.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
-    RewriteRule ^admin(?:/index\.php)?/?$ /admin/ [R=301,L,NE,QSD,NC]
+    RewriteRule ^admin$ /admin/ [R=301,L,NE,QSD,NC]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^admin/index\.php$ /admin/ [R=301,L,NE,QSD,NC]
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
     RewriteRule ^admin/(?:menu-completo|menu-dashboard|dashboard|admin-back)\.php$ /admin/ [R=301,L,NE,QSD,NC]
     RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
