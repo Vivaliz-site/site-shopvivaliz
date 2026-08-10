@@ -9,6 +9,17 @@ function sv_promotion_replace_once(string $html, string $pattern, string $replac
     return is_string($updated) ? $updated : $html;
 }
 
+function sv_promotion_replace_literal_once(string $html, string $pattern, string $replacement): string
+{
+    $updated = @preg_replace_callback(
+        $pattern,
+        static fn(array $matches): string => (string)($matches[1] ?? '') . $replacement . (string)($matches[2] ?? ''),
+        $html,
+        1
+    );
+    return is_string($updated) ? $updated : $html;
+}
+
 /**
  * Garante que o primeiro banner da home nunca prometa um cupom diferente da
  * fonte de cupons ativos. A origem do banner ainda e estatica, mas a copy
@@ -48,10 +59,10 @@ function sv_promotion_filter_home_html(string $html, array|null|false $couponOve
         '~(<span\s+class="banner-tag[^\"]*">)OFERTA EXCLUSIVA(</span>)~iu',
         '$1' . $tag . '$2'
     );
-    $html = sv_promotion_replace_once(
+    $html = sv_promotion_replace_literal_once(
         $html,
         '~(<p\s+class="banner-subtitle[^\"]*">)[^<]*(?:cupom|primeira compra)[^<]*(</p>)~iu',
-        '$1' . $subtitle . '$2'
+        $subtitle
     );
     $html = sv_promotion_replace_once(
         $html,
