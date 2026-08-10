@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from scripts.env_keyset_guard import assert_monotonic_text
+
 
 ENV_PATH = Path(
     os.environ.get(
@@ -122,13 +124,16 @@ def update_env(new_token: str, new_refresh_token: str) -> None:
         if key not in found:
             lines.append(f"{key}={value}")
 
+    candidate_text = "\n".join(lines).rstrip("\n") + "\n"
+    assert_monotonic_text(content, candidate_text)
+
     original = target.stat()
     mode = original.st_mode & 0o777
     descriptor, temporary_name = tempfile.mkstemp(prefix=".env.", dir=target.parent)
     temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write("\n".join(lines).rstrip("\n") + "\n")
+            handle.write(candidate_text)
             handle.flush()
             os.fsync(handle.fileno())
         os.chmod(temporary, mode)
