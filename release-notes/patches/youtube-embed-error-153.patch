@@ -1,0 +1,7 @@
+# ShopVivaliz patch manifest
+# Fix: YouTube embedded player Error 153 on product pages
+# Files deployed by this change:
+# - includes/head-analytics.php
+# - includes/product-video-embed-fix.php
+# - tests/product-video-embed-fix-static.php
+# No SQL/migration required.
