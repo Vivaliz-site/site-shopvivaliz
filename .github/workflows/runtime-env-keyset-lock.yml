@@ -24,7 +24,7 @@ permissions:
 
 concurrency:
   group: production-env-keyset-lock
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   seal-and-verify:
