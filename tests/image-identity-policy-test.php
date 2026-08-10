@@ -88,6 +88,8 @@ try {
         iip_assert(str_contains($sitePrompts[$type], 'Do not invent'), "prompt {$type} must reject invented features");
         iip_assert(str_contains($sitePrompts[$type], 'Square 1:1 composition'), "prompt {$type} must request square composition");
         iip_assert(str_contains($sitePrompts[$type], 'Marketplace-specific guidance'), "prompt {$type} must carry marketplace guidance");
+        iip_assert(str_contains($sitePrompts[$type], 'Technical target:'), "prompt {$type} must state technical target");
+        iip_assert(str_contains($sitePrompts[$type], 'geometry, perspective, scale or color balance'), "prompt {$type} must forbid visual distortion");
     }
     iip_assert(str_contains($sitePrompts['white'], 'RGB 255,255,255'), 'main image must request pure white background');
     iip_assert(str_contains($sitePrompts['white'], '85-95%'), 'main image must request strong product fill');
@@ -96,6 +98,26 @@ try {
     $amazonPrompts = ai_studio_default_prompts('Produto Teste X1', 'amazon');
     iip_assert(str_contains($amazonPrompts['white'], 'Amazon-compliant main product image'), 'Amazon white prompt must include Amazon guidance');
     iip_assert(str_contains($amazonPrompts['white'], 'first marketplace image'), 'Amazon white prompt must be treated as first image');
+    $contextPrompts = ai_studio_default_prompts('Produto Teste X1', 'tiktok', [
+        'category' => 'Acessorios',
+        'brand' => 'Acme',
+        'model' => 'X1',
+        'color' => 'Preto',
+        'material' => 'Aco',
+        'sku' => 'SKU-123',
+        'olist_id' => '1001',
+    ]);
+    iip_assert(str_contains($contextPrompts['white'], 'Factual context from the catalog'), 'image prompt must carry factual catalog context');
+    iip_assert(str_contains($contextPrompts['white'], 'category=Acessorios'), 'image prompt must expose category context');
+    iip_assert(str_contains($contextPrompts['white'], 'brand=Acme'), 'image prompt must expose brand context');
+    iip_assert(str_contains($contextPrompts['white'], 'color=Preto'), 'image prompt must expose color context');
+    iip_assert(str_contains($contextPrompts['white'], 'material=Aco'), 'image prompt must expose material context');
+    iip_assert(str_contains($contextPrompts['white'], 'Scene hint:'), 'image prompt must include category scene hint');
+    iip_assert(str_contains($contextPrompts['white'], 'Appearance cue:'), 'image prompt must include appearance cue');
+    iip_assert(ai_studio_normalize_provider('gpt') === 'openai', 'gpt alias must normalize to openai');
+    iip_assert(ai_studio_normalize_provider('gemini') === 'google', 'gemini alias must normalize to google');
+    iip_assert(ai_studio_provider_fallback_order('claude') === ['openai', 'google'], 'claude image fallback must choose an image engine');
+    iip_assert(str_contains(file_get_contents(__DIR__ . '/../admin/ai-image-studio/src/AiServices.php'), 'ai_studio_resolve_image_engine'), 'image engine resolver must exist');
 
     $tiktokProfile = ai_studio_channel_profile('tiktok');
     iip_assert((int)($tiktokProfile['minimum_side'] ?? 0) === 1000, 'TikTok technical minimum must remain 1000px');
@@ -146,6 +168,15 @@ try {
     iip_assert(str_contains($publisherSource, 'amazonUrlsWithExisting'), 'Amazon gallery must preserve pre-existing locators');
     iip_assert(str_contains($publisherSource, 'API V2 exige reenviar preço'), 'ERP image publish must fail closed instead of resending price');
     iip_assert(!str_contains($publisherSource, "new SvTinyPublisher(\$this->db))->publishImages"), 'AI Image Studio must not call Tiny image mutation path');
+
+    $dashboardSource = file_get_contents(__DIR__ . '/../admin/ai-image-studio/admin_dashboard.php');
+    iip_assert(is_string($dashboardSource), 'dashboard source must be readable');
+    iip_assert(str_contains($dashboardSource, 'selected_products[]'), 'image dashboard must allow product selection');
+    iip_assert(str_contains($dashboardSource, 'ais-select-all'), 'image dashboard must support select-all');
+    iip_assert(str_contains($dashboardSource, 'ais-selected-count'), 'image dashboard must show selected count');
+    iip_assert(str_contains($dashboardSource, 'data-product-check'), 'image dashboard must track each selected product');
+    iip_assert(str_contains($dashboardSource, 'p.sku'), 'image dashboard must load SKU in preview data');
+    iip_assert(str_contains($dashboardSource, 'p.category'), 'image dashboard must load category in preview data');
 
     fwrite(STDOUT, "OK image identity and quality policy\n");
 } finally {

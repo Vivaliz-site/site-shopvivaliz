@@ -95,22 +95,22 @@ cot_expect_rejection(fn() => ai_catalog_validate_ai_response($amazonRepeat, 'ama
 // Hooks sao auxiliares/embutidos na descricao pelo publisher atual, por isso
 // 0-2 hooks factuais sao permitidos em vez da regra antiga de exatamente 3.
 $tiktok = cot_base_data();
+$tiktok['optimized_title'] = 'Suporte Articulado Mesa Modelo X1 Preto 90cm';
 $tiktok['marketing_hooks'] = [
     'Veja o modelo X1 em uso sobre a mesa.',
     'Confira os detalhes do suporte na cor preta.',
 ];
 ai_catalog_validate_ai_response($tiktok, 'tiktok', $product);
-
-$tiktokShort = $tiktok;
-$tiktokShort['optimized_title'] = 'X';
-ai_catalog_validate_ai_response($tiktokShort, 'tiktok', $product);
+$tiktokReport = ai_catalog_quality_report($tiktok, 'tiktok', $product);
+cot_assert(($tiktokReport['checks']['title_within_recommended_range'] ?? false) === true, 'TikTok title should stay within recommended range');
 
 $tiktokLongAllowed = $tiktok;
-$tiktokLongAllowed['optimized_title'] = str_repeat('T', 300);
+$prefix = 'Suporte Articulado Mesa Modelo X1 Preto 90cm ';
+$tiktokLongAllowed['optimized_title'] = $prefix . str_repeat('T', 300 - mb_strlen($prefix, 'UTF-8'));
 ai_catalog_validate_ai_response($tiktokLongAllowed, 'tiktok', $product);
 
 $tiktokTooLong = $tiktok;
-$tiktokTooLong['optimized_title'] = str_repeat('T', 301);
+$tiktokTooLong['optimized_title'] = $prefix . str_repeat('T', 301 - mb_strlen($prefix, 'UTF-8'));
 cot_expect_rejection(fn() => ai_catalog_validate_ai_response($tiktokTooLong, 'tiktok', $product), 'TikTok title > 300');
 
 $tiktokTooManyHooks = $tiktok;
@@ -120,6 +120,10 @@ cot_expect_rejection(fn() => ai_catalog_validate_ai_response($tiktokTooManyHooks
 $tiktokLongBullet = $tiktok;
 $tiktokLongBullet['bullet_points'][0] = str_repeat('B', 250);
 cot_expect_rejection(fn() => ai_catalog_validate_ai_response($tiktokLongBullet, 'tiktok', $product), 'TikTok bullet must remain below 250 chars');
+
+$tiktokHypeTitle = $tiktok;
+$tiktokHypeTitle['optimized_title'] = 'Chega de Pó e Insetos! Suporte Articulado Mesa X1';
+cot_expect_rejection(fn() => ai_catalog_validate_ai_response($tiktokHypeTitle, 'tiktok', $product), 'TikTok title must start with product identity and avoid hype prefix');
 
 // ERP: nenhum SEO ou hook de marketing.
 $erp = cot_base_data();
@@ -138,12 +142,22 @@ $branded = cot_base_data();
 $branded['optimized_title'] = 'Suporte Articulado X1 Preto';
 cot_expect_rejection(fn() => ai_catalog_validate_ai_response($branded, 'ml', $brandedProduct), 'real brand must be preserved');
 
+cot_assert(catalog_ai_normalize_provider('gpt') === 'openai', 'gpt alias must resolve to openai');
+cot_assert(catalog_ai_provider_fallback_order('claude') === ['claude', 'openai', 'gemini'], 'claude fallback order must prefer the requested provider first');
+cot_assert(catalog_ai_provider_fallback_order('gpt') === ['openai', 'gemini', 'claude'], 'gpt fallback order must normalize to openai');
+
 // Prompts nao devem receber preco/estoque e devem conter identificadores factuais.
 $userPrompt = ai_catalog_build_user_prompt($product, 'ml');
 cot_assert(stripos($userPrompt, 'preco') === false, 'user prompt must not contain price field');
 cot_assert(stripos($userPrompt, 'estoque') === false, 'user prompt must not contain stock field');
 cot_assert(str_contains($userPrompt, 'SUP-X1-PT'), 'user prompt must preserve SKU');
 cot_assert(str_contains($userPrompt, 'X1'), 'user prompt must preserve model');
+cot_assert(str_contains($userPrompt, 'Objetivo editorial'), 'user prompt must state channel-specific editorial objective');
+cot_assert(str_contains($userPrompt, 'Alvos do canal'), 'user prompt must expose channel targets');
+cot_assert(str_contains($userPrompt, 'Estrutura preferida'), 'user prompt must explain channel-specific structure');
+cot_assert(str_contains($userPrompt, 'Foco da ficha'), 'user prompt must explain category-specific focus');
+cot_assert(str_contains($userPrompt, 'Resumo factual consolidado'), 'user prompt must consolidate factual product signals');
+cot_assert(str_contains(file_get_contents(__DIR__ . '/../admin/catalog-optimization/src/TextAiServices.php'), 'catalog_ai_resolve_provider_name'), 'catalog provider resolver must exist');
 
 // A regeneracao do Admin historicamente chama o validador sem canal/produto.
 // O contexto guardado pela construcao do prompt deve impedir qualquer bypass.

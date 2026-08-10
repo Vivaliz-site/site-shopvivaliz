@@ -9,6 +9,11 @@
   const params = new URLSearchParams(window.location.search);
   const tools = document.querySelector('.catalog-tools');
   const filterNav = tools ? tools.querySelector('.category-filters') : null;
+  const preservePath = Boolean(
+    document.body &&
+    document.body.dataset &&
+    document.body.dataset.catalogPreservePath === '1'
+  );
   const initialCategory = String(params.get('categoria') || params.get('category') || '').trim();
   const initialSort = String(params.get('ordem') || params.get('sort') || 'relevance').trim() || 'relevance';
   let activeCategory = initialCategory;
@@ -56,6 +61,7 @@
   }
 
   function syncPageState(query, category, sort, page, replace) {
+    if (preservePath) return;
     const url = buildCatalogUrl(query, category, sort, page);
     const titleParts = ['Catálogo | Vivaliz'];
     if (query) titleParts.unshift('Busca: ' + query);
@@ -373,14 +379,16 @@
     });
   }
 
-  window.addEventListener('popstate', function () {
-    const nextParams = new URLSearchParams(window.location.search);
-    activeCategory = String(nextParams.get('categoria') || nextParams.get('category') || '').trim();
-    activeSort = String(nextParams.get('ordem') || nextParams.get('sort') || 'relevance').trim() || 'relevance';
-    if (input) input.value = String(nextParams.get('q') || '').trim();
-    ensureToolbar();
-    loadCatalog(input ? input.value.trim() : '', activeCategory, Number(nextParams.get('page') || 1));
-  });
+  if (!preservePath) {
+    window.addEventListener('popstate', function () {
+      const nextParams = new URLSearchParams(window.location.search);
+      activeCategory = String(nextParams.get('categoria') || nextParams.get('category') || '').trim();
+      activeSort = String(nextParams.get('ordem') || nextParams.get('sort') || 'relevance').trim() || 'relevance';
+      if (input) input.value = String(nextParams.get('q') || '').trim();
+      ensureToolbar();
+      loadCatalog(input ? input.value.trim() : '', activeCategory, Number(nextParams.get('page') || 1));
+    });
+  }
 
   loadCatalog(input ? input.value.trim() : '', initialCategory, Number(params.get('page') || 1));
 })();

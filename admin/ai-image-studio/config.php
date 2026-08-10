@@ -34,6 +34,15 @@ define('AI_STUDIO_GOOGLE_IMAGEN_API_KEY', ai_studio_env_key_pool(['GOOGLE_IMAGEN
 define('AI_STUDIO_GOOGLE_IMAGEN_PROJECT_ID', (string)(getenv('GOOGLE_IMAGEN_PROJECT_ID') ?: ''));
 define('AI_STUDIO_GOOGLE_IMAGEN_LOCATION', (string)(getenv('GOOGLE_IMAGEN_LOCATION') ?: 'us-central1'));
 define('AI_STUDIO_CLAUDE_API_KEY', ai_studio_env_key_pool(['CLAUDE_API_KEY', 'ANTHROPIC_API_KEY']));
+define('AI_STUDIO_QROPE_API_KEY', ai_studio_env_key_pool(['QROPE_API_KEY']));
+define('AI_STUDIO_QROPE_API_BASE_URL', (string)(getenv('QROPE_API_BASE_URL') ?: 'https://api.qrope.ai/v1'));
+define('AI_STUDIO_GROQ_API_KEY', ai_studio_env_key_pool(['GROQ_API_KEY']));
+define('AI_STUDIO_GROQ_API_BASE_URL', (string)(getenv('GROQ_API_BASE_URL') ?: 'https://api.groq.com/openai/v1'));
+define('AI_STUDIO_GROQ_IMAGE_MODEL', (string)(getenv('GROQ_IMAGE_MODEL') ?: 'openai/gpt-oss-20b'));
+define('AI_STUDIO_OPENROUTER_API_KEY', ai_studio_env_key_pool(['OPENROUTER_API_KEY']));
+define('AI_STUDIO_OPENROUTER_API_BASE_URL', (string)(getenv('OPENROUTER_API_BASE_URL') ?: 'https://openrouter.ai/api/v1'));
+define('AI_STUDIO_OPENROUTER_HTTP_REFERER', (string)(getenv('OPENROUTER_HTTP_REFERER') ?: 'https://shopvivaliz.com.br'));
+define('AI_STUDIO_OPENROUTER_APP_TITLE', (string)(getenv('OPENROUTER_APP_TITLE') ?: 'ShopVivaliz'));
 
 define('AI_STUDIO_OPENAI_IMAGE_MODEL', (string)(getenv('OPENAI_IMAGE_MODEL') ?: 'gpt-image-1'));
 define('AI_STUDIO_GOOGLE_IMAGEN_MODEL', (string)(getenv('GOOGLE_IMAGEN_MODEL') ?: 'gemini-2.5-flash-image'));

@@ -14,17 +14,61 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/src/AiServices.php';
 require_once __DIR__ . '/src/ImageChannelProfile.php';
 require_once __DIR__ . '/../../includes/catalog-publication-schema.php';
-require_once __DIR__ . '/../../includes/product-reference-resolver.php';
 
 /** @return array<string,string> */
-function ai_studio_default_prompts(string $productName, string $targetChannel = 'site'): array
+function ai_studio_default_prompts(string $productName, string $targetChannel = 'site', array $productContext = []): array
 {
-    $identity = "Use the supplied real photo of {$productName} as the only product reference. Preserve the exact product identity: shape, proportions, color, material appearance, labels, logos, printed text, connectors, controls and included parts. Do not invent, remove, replace or redesign any product feature. Do not add accessories that could be interpreted as included with the product.";
+    $identity = "Use the supplied real photo of {$productName} as the only product reference. Preserve the exact product identity: shape, proportions, color, material appearance, labels, logos, printed text, connectors, controls and included parts. Do not invent, remove, replace or redesign any product feature. Do not add accessories that could be interpreted as included with the product. Keep the product count at exactly one and avoid any crop, prop or treatment that changes the visible identity, geometry, perspective, scale or color balance.";
+    $contextParts = [];
+    foreach ([
+        'category' => 'category',
+        'brand' => 'brand',
+        'model' => 'model',
+        'color' => 'color',
+        'material' => 'material',
+        'sku' => 'sku',
+        'olist_id' => 'olist_id',
+    ] as $key => $label) {
+        $value = trim((string)($productContext[$key] ?? ''));
+        if ($value !== '') {
+            $contextParts[] = $label . '=' . $value;
+        }
+    }
+    $context = $contextParts !== [] ? ' Factual context from the catalog: ' . implode(' | ', $contextParts) . '.' : '';
+    $category = mb_strtolower(trim((string)($productContext['category'] ?? '')), 'UTF-8');
+    $appearanceParts = [];
+    foreach ([
+        'color' => 'color',
+        'material' => 'material',
+        'size' => 'size',
+    ] as $key => $label) {
+        $value = trim((string)($productContext[$key] ?? ''));
+        if ($value !== '') {
+            $appearanceParts[] = $label . '=' . $value;
+        }
+    }
+    $appearanceHint = $appearanceParts !== [] ? ' Appearance cue: preserve ' . implode(' | ', $appearanceParts) . '.' : '';
+    $sceneHint = '';
+    if ($category !== '') {
+        if (preg_match('/\b(automot|ve[ií]culo|carro|moto|pneu|acess[oó]rio automotivo)\b/u', $category) === 1) {
+            $sceneHint = ' Scene hint: use a neutral workshop or clean garage surface only if it does not imply unsupported vehicle compatibility.';
+        } elseif (preg_match('/\b(cozinha|casa|organiz|banheiro|utilidade dom[eé]stica|decor|decora)\b/u', $category) === 1) {
+            $sceneHint = ' Scene hint: use a neutral home interior, countertop or shelf with no extra items that could change the product identity.';
+        } elseif (preg_match('/\b(eletr[oô]nic|gadget|informat|desktop|teclado|mouse|fone|audio)\b/u', $category) === 1) {
+            $sceneHint = ' Scene hint: use a clean desk/studio setting with cables, screens or peripherals only when already consistent with the source photo.';
+        } elseif (preg_match('/\b(ferrament|suporte|porta|vedante|borracha|obra|constru)\b/u', $category) === 1) {
+            $sceneHint = ' Scene hint: use a practical workbench or installation-like surface while keeping the product geometry untouched.';
+        } elseif (preg_match('/\b(beleza|cosm[eé]tic|perfum|higiene)\b/u', $category) === 1) {
+            $sceneHint = ' Scene hint: use a clean vanity or bathroom-style environment with sterile styling and no exaggerated props.';
+        } else {
+            $sceneHint = ' Scene hint: use a neutral category-appropriate setting that does not introduce unsupported accessories or change the product identity.';
+        }
+    }
 
     $base = [
-        'white' => $identity . ' Create a marketplace-safe main image: pure white RGB 255,255,255 background, product centered, fully visible and occupying about 85-95% of the frame, neutral professional lighting, natural contact shadow only, no badges, borders, promotional text, watermarks or extra objects. Square 1:1 composition and photorealistic.',
-        'hero' => $identity . ' Create a premium ecommerce hero image with controlled studio lighting and a clean neutral setting. Keep the product unobstructed and dominant in frame. No promotional text, badges, watermarks or invented props. Square 1:1 composition and photorealistic.',
-        'ambient' => $identity . ' Place the exact product in a realistic usage context supported by the visible product category, without implying unsupported compatibility or accessories. Keep the product fully recognizable and unobstructed. Natural scale, perspective, shadows and lighting. Square 1:1 composition and photorealistic.',
+        'white' => $identity . $context . $appearanceHint . $sceneHint . ' Create a marketplace-safe main image: pure white RGB 255,255,255 background, product centered, fully visible and occupying about 85-95% of the frame, neutral professional lighting, natural contact shadow only, no badges, borders, promotional text, watermarks or extra objects. Square 1:1 composition and photorealistic. This is the cover image and must read as a clean catalog photo first. Do not warp the object, bend edges, change colors or exaggerate size.',
+        'hero' => $identity . $context . $appearanceHint . $sceneHint . ' Create a premium ecommerce hero image with controlled studio lighting and a clean neutral setting. Keep the product unobstructed and dominant in frame. No promotional text, badges, watermarks or invented props. Square 1:1 composition and photorealistic. Make the scene channel-specific but still factual and product-first. Do not distort the product geometry, finish or color.',
+        'ambient' => $identity . $context . $appearanceHint . $sceneHint . ' Place the exact product in a realistic usage context supported by the visible product category, without implying unsupported compatibility or accessories. Keep the product fully recognizable and unobstructed. Natural scale, perspective, shadows and lighting. Square 1:1 composition and photorealistic. If the channel is strict, keep the scene simpler and more catalog-like. Do not stylize in a way that changes the product shape, proportions or color.',
     ];
 
     foreach ($base as $type => $prompt) {
@@ -33,57 +77,39 @@ function ai_studio_default_prompts(string $productName, string $targetChannel = 
     return $base;
 }
 
-/** @return array<string,mixed>|null */
-function ai_studio_fetch_product_row(PDO $db, int|string $productReference): ?array
+/** @return string */
+function ai_studio_catalog_context_brief(array $productContext): string
 {
-    return svpr_resolve_product_row($db, $productReference);
+    $parts = [];
+    foreach ([
+        'category' => 'category',
+        'brand' => 'brand',
+        'model' => 'model',
+        'color' => 'color',
+        'material' => 'material',
+        'size' => 'size',
+        'sku' => 'sku',
+        'olist_id' => 'olist_id',
+    ] as $key => $label) {
+        $value = trim((string)($productContext[$key] ?? ''));
+        if ($value !== '') {
+            $parts[] = $label . '=' . $value;
+        }
+    }
+
+    return $parts === [] ? '' : implode(' | ', $parts);
 }
 
-function ai_studio_is_active_product_row(array $row): bool
+/** @return array{name:string,description:string,image_ref:string,sku:string,olist_id:string,category:string,brand:string,model:string,color:string,size:string,material:string}|null */
+function ai_studio_fetch_product(PDO $db, int $productId): ?array
 {
-    $status = trim((string)($row['status'] ?? $row['situacao'] ?? $row['state'] ?? ''));
-    $normalized = function_exists('mb_strtoupper')
-        ? mb_strtoupper($status, 'UTF-8')
-        : strtoupper($status);
-
-    if (in_array($normalized, ['', 'A', 'ACTIVE', 'ATIVO', '1'], true)) {
-        return true;
-    }
-
-    foreach (['is_active', 'active', 'ativo', 'enabled', 'published', 'is_published'] as $field) {
-        if (!array_key_exists($field, $row)) {
-            continue;
-        }
-
-        $value = $row[$field];
-        if (is_bool($value) && $value) {
-            return true;
-        }
-
-        $boolean = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
-        if ($boolean === true) {
-            return true;
-        }
-
-        if (in_array($value, [1, '1'], true)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-/** @return array{name:string,description:string,image_ref:string,sku:string,olist_id:string}|null */
-function ai_studio_map_product_row(array $row): ?array
-{
-    if (!ai_studio_is_active_product_row($row)) {
-        return null;
-    }
+    $stmt = $db->prepare('SELECT * FROM products WHERE id = ? LIMIT 1');
+    $stmt->execute([$productId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!is_array($row)) return null;
 
     $name = trim((string)($row['name'] ?? $row['nome'] ?? $row['descricao'] ?? ''));
-    if ($name === '') {
-        return null;
-    }
+    if ($name === '') return null;
 
     $description = trim((string)(
         $row['description']
@@ -107,14 +133,13 @@ function ai_studio_map_product_row(array $row): ?array
         'image_ref' => $imageRef,
         'sku' => trim((string)($row['sku'] ?? '')),
         'olist_id' => trim((string)($row['olist_id'] ?? '')),
+        'category' => trim((string)($row['category'] ?? $row['categoria'] ?? $row['category_name'] ?? $row['nome_categoria'] ?? '')),
+        'brand' => trim((string)($row['brand'] ?? $row['marca'] ?? $row['manufacturer'] ?? $row['fabricante'] ?? '')),
+        'model' => trim((string)($row['model'] ?? $row['modelo'] ?? $row['part_number'] ?? $row['mpn'] ?? '')),
+        'color' => trim((string)($row['color'] ?? $row['cor'] ?? '')),
+        'size' => trim((string)($row['size'] ?? $row['tamanho'] ?? '')),
+        'material' => trim((string)($row['material'] ?? '')),
     ];
-}
-
-/** @return array{name:string,description:string,image_ref:string,sku:string,olist_id:string}|null */
-function ai_studio_fetch_product(PDO $db, int|string $productReference): ?array
-{
-    $row = ai_studio_fetch_product_row($db, $productReference);
-    return is_array($row) ? ai_studio_map_product_row($row) : null;
 }
 
 /** @return array{width:int,height:int,mime:string,sha256:string} */
@@ -213,47 +238,31 @@ function ai_studio_insert_staging_row(
 /** @return array<string,mixed> */
 function ai_studio_process_item(
     PDO $db,
-    int|string $productReference,
+    int $productId,
     string $provider,
     array $imageTypes = ['white', 'hero', 'ambient'],
     ?string $modelOverride = null,
     string $targetChannel = 'site'
 ): array {
     svcp_ensure_schema($db);
-    $productReference = trim((string)$productReference);
-    $provider = strtolower(trim($provider));
+    $provider = ai_studio_normalize_provider($provider);
     $targetChannel = strtolower(trim($targetChannel));
     $profiles = ai_studio_channel_profiles();
-    if (!in_array($provider, ['openai', 'google', 'claude'], true)) {
-        return ['success' => false, 'product_id' => 0, 'product_ref' => $productReference, 'provider' => $provider, 'results' => [], 'error' => "Provider invalido: '{$provider}'."];
+    if (!in_array($provider, ['openai', 'google', 'claude', 'openrouter', 'groq'], true)) {
+        return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'results' => [], 'error' => "Provider invalido: '{$provider}'."];
     }
     if (!isset($profiles[$targetChannel])) {
-        return ['success' => false, 'product_id' => 0, 'product_ref' => $productReference, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Canal de imagem invalido: '{$targetChannel}'."];
+        return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Canal de imagem invalido: '{$targetChannel}'."];
     }
 
     $imageTypes = array_values(array_unique(array_intersect(array_map('strval', $imageTypes), ['white', 'hero', 'ambient'])));
     if ($imageTypes === []) {
-        return ['success' => false, 'product_id' => 0, 'product_ref' => $productReference, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => 'Nenhum tipo de imagem valido selecionado.'];
-    }
-    if ($productReference === '') {
-        return ['success' => false, 'product_id' => 0, 'product_ref' => '', 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => 'Referencia do produto ausente.'];
+        return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => 'Nenhum tipo de imagem valido selecionado.'];
     }
 
-    $productRow = ai_studio_fetch_product_row($db, $productReference);
-    if ($productRow === null) {
-        return ['success' => false, 'product_id' => 0, 'product_ref' => $productReference, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productReference} nao encontrado."];
-    }
-    $resolvedProductId = (int)($productRow['id'] ?? 0);
-    if ($resolvedProductId <= 0) {
-        return ['success' => false, 'product_id' => 0, 'product_ref' => $productReference, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productReference} nao foi resolvido para o cadastro local."];
-    }
-    if (!ai_studio_is_active_product_row($productRow)) {
-        return ['success' => false, 'product_id' => $resolvedProductId, 'product_ref' => $productReference, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productReference} esta inativo e nao pode gerar imagem."];
-    }
-
-    $product = ai_studio_map_product_row($productRow);
+    $product = ai_studio_fetch_product($db, $productId);
     if ($product === null) {
-        return ['success' => false, 'product_id' => $resolvedProductId, 'product_ref' => $productReference, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productReference} esta sem nome valido ou bloqueado para geracao."];
+        return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productId} nao encontrado ou sem nome."];
     }
 
     $profile = ai_studio_channel_profile($targetChannel);
@@ -264,48 +273,49 @@ function ai_studio_process_item(
 
     try {
         try {
-            $baseImagePath = ai_studio_resolve_base_image($product['image_ref'], dirname(__DIR__, 2), $resolvedProductId);
+            $baseImagePath = ai_studio_resolve_base_image($product['image_ref'], dirname(__DIR__, 2), $productId);
             $baseImageIsTemp = str_starts_with($baseImagePath, AI_STUDIO_BASE_IMAGE_TMP_DIR);
         } catch (Throwable $e) {
             $results = [];
             foreach ($imageTypes as $imageType) {
-                $id = ai_studio_insert_staging_row($db, $resolvedProductId, $imageType, $provider === 'claude' ? 'claude_optimized' : $provider, null, null, 'failed', $e->getMessage(), $targetChannel);
+                $id = ai_studio_insert_staging_row($db, $productId, $imageType, $provider === 'claude' ? 'claude_optimized' : $provider, null, null, 'failed', $e->getMessage(), $targetChannel);
                 $results[] = ['image_type' => $imageType, 'status' => 'error', 'staging_id' => $id, 'error' => $e->getMessage()];
             }
-            return ['success' => false, 'product_id' => $resolvedProductId, 'product_ref' => $productReference, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => $results, 'error' => 'Foto base invalida: ' . $e->getMessage()];
+            return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => $results, 'error' => 'Foto base invalida: ' . $e->getMessage()];
         }
 
-        $imageEngine = $provider;
-        $providerUsed = $provider;
-        $prompts = ai_studio_default_prompts($product['name'], $targetChannel);
+        $imageEngine = ai_studio_resolve_image_engine($provider);
+        $providerUsed = $imageEngine;
+        $prompts = ai_studio_default_prompts($product['name'], $targetChannel, $product);
 
-        if ($provider === 'claude') {
+        if ($provider === 'claude' && ai_studio_provider_has_key('claude')) {
             try {
                 $optimized = (new AiStudioClaudeClient(AI_STUDIO_CLAUDE_API_KEY, AI_STUDIO_CLAUDE_MODEL))
-                    ->optimizePrompts($product['name'], $product['description']);
+                    ->optimizePrompts($product['name'], $product['description'], $product);
                 foreach ($prompts as $type => $guardedPrompt) {
                     $candidate = trim((string)($optimized[$type] ?? ''));
                     if ($candidate !== '') $prompts[$type] = $guardedPrompt . ' Additional scene guidance: ' . $candidate;
                 }
-                $imageEngine = 'openai';
                 $providerUsed = 'claude_optimized';
             } catch (Throwable $e) {
                 $results = [];
                 foreach ($imageTypes as $imageType) {
-                    $id = ai_studio_insert_staging_row($db, $resolvedProductId, $imageType, 'claude_optimized', null, null, 'failed', $e->getMessage(), $targetChannel);
+                    $id = ai_studio_insert_staging_row($db, $productId, $imageType, 'claude_optimized', null, null, 'failed', $e->getMessage(), $targetChannel);
                     $results[] = ['image_type' => $imageType, 'status' => 'error', 'staging_id' => $id, 'error' => $e->getMessage()];
                 }
-                return ['success' => false, 'product_id' => $resolvedProductId, 'product_ref' => $productReference, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => $results, 'error' => 'Falha ao otimizar prompts com Claude: ' . $e->getMessage()];
+                return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => $results, 'error' => 'Falha ao otimizar prompts com Claude: ' . $e->getMessage()];
             }
         }
 
         $openAiModel = ($modelOverride !== null && trim($modelOverride) !== '' && $imageEngine === 'openai') ? trim($modelOverride) : AI_STUDIO_OPENAI_IMAGE_MODEL;
         $googleModel = ($modelOverride !== null && trim($modelOverride) !== '' && $imageEngine === 'google') ? trim($modelOverride) : AI_STUDIO_GOOGLE_IMAGEN_MODEL;
+        $openRouterModel = trim((string)(getenv('OPENROUTER_IMAGE_MODEL') ?: $openAiModel));
+        $qropeModel = trim((string)(getenv('QROPE_IMAGE_MODEL') ?: $openAiModel));
 
         $results = [];
         foreach ($imageTypes as $imageType) {
             $prompt = $prompts[$imageType];
-            $filename = ai_studio_unique_filename($resolvedProductId, $imageType);
+            $filename = ai_studio_unique_filename($productId, $imageType);
             $destination = AI_STUDIO_STORAGE_DIR . $filename;
             $publicPath = AI_STUDIO_STORAGE_URL_PREFIX . $filename;
 
@@ -313,12 +323,23 @@ function ai_studio_process_item(
                 if ($imageEngine === 'openai') {
                     (new AiStudioOpenAiClient(AI_STUDIO_OPENAI_API_KEY, $openAiModel))->editImageToFile($prompt, $baseImagePath, $destination);
                 } else {
-                    (new AiStudioGoogleImageEditClient(AI_STUDIO_GOOGLE_IMAGEN_API_KEY, $googleModel))->editImageToFile($prompt, $baseImagePath, $destination);
+                    if ($imageEngine === 'google') {
+                        (new AiStudioGoogleImageEditClient(AI_STUDIO_GOOGLE_IMAGEN_API_KEY, $googleModel))->editImageToFile($prompt, $baseImagePath, $destination);
+                    } elseif ($imageEngine === 'claude') {
+                        (new AiStudioOpenAiCompatibleClient(AI_STUDIO_CLAUDE_API_KEY, $modelOverride !== null && trim($modelOverride) !== '' ? trim($modelOverride) : AI_STUDIO_CLAUDE_MODEL, 'https://api.anthropic.com/v1', 'Claude', ['anthropic-version' => '2023-06-01']))->editImageToFile($prompt, $baseImagePath, $destination);
+                    } elseif ($imageEngine === 'openrouter') {
+                        (new AiStudioOpenAiCompatibleClient(AI_STUDIO_OPENROUTER_API_KEY, $openRouterModel, AI_STUDIO_OPENROUTER_API_BASE_URL, 'OpenRouter', [
+                            'HTTP-Referer' => AI_STUDIO_OPENROUTER_HTTP_REFERER,
+                            'X-OpenRouter-Title' => AI_STUDIO_OPENROUTER_APP_TITLE,
+                        ]))->editImageToFile($prompt, $baseImagePath, $destination);
+                    } else {
+                        (new AiStudioOpenAiCompatibleClient(AI_STUDIO_GROQ_API_KEY, $qropeModel !== '' ? $qropeModel : AI_STUDIO_GROQ_IMAGE_MODEL, AI_STUDIO_GROQ_API_BASE_URL, 'Groq'))->editImageToFile($prompt, $baseImagePath, $destination);
+                    }
                 }
                 $quality = ai_studio_validate_image_file($destination, $minimumSide);
                 $quality['recommended_side'] = $recommendedSide;
                 $quality['meets_recommended_side'] = $quality['width'] >= $recommendedSide && $quality['height'] >= $recommendedSide;
-                $id = ai_studio_insert_staging_row($db, $resolvedProductId, $imageType, $providerUsed, $publicPath, $prompt, 'pending', null, $targetChannel);
+                $id = ai_studio_insert_staging_row($db, $productId, $imageType, $providerUsed, $publicPath, $prompt, 'pending', null, $targetChannel);
                 $results[] = [
                     'image_type' => $imageType,
                     'status' => 'pending',
@@ -329,26 +350,26 @@ function ai_studio_process_item(
                 ];
             } catch (Throwable $e) {
                 @unlink($destination);
-                $id = ai_studio_insert_staging_row($db, $resolvedProductId, $imageType, $providerUsed, null, $prompt, 'failed', $e->getMessage(), $targetChannel);
+                $id = ai_studio_insert_staging_row($db, $productId, $imageType, $providerUsed, null, $prompt, 'failed', $e->getMessage(), $targetChannel);
                 $results[] = ['image_type' => $imageType, 'status' => 'error', 'staging_id' => $id, 'target_channel' => $targetChannel, 'error' => $e->getMessage()];
-                error_log("[ai-image-studio] produto #{$resolvedProductId} ref={$productReference} canal={$targetChannel} tipo={$imageType} provider={$imageEngine}: " . $e->getMessage());
+                error_log("[ai-image-studio] produto #{$productId} canal={$targetChannel} tipo={$imageType} provider={$imageEngine}: " . $e->getMessage());
             }
         }
 
         $anySuccess = array_reduce($results, static fn(bool $carry, array $row): bool => $carry || ($row['status'] ?? '') === 'pending', false);
-        return ['success' => $anySuccess, 'product_id' => $resolvedProductId, 'product_ref' => $productReference, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => $results];
+        return ['success' => $anySuccess, 'product_id' => $productId, 'provider' => $provider, 'provider_used' => $providerUsed, 'target_channel' => $targetChannel, 'results' => $results];
     } finally {
         if ($baseImageIsTemp && is_string($baseImagePath) && is_file($baseImagePath)) @unlink($baseImagePath);
     }
 }
 
 if (PHP_SAPI === 'cli' && realpath($argv[0] ?? '') === realpath(__FILE__)) {
-    $productId = trim((string)($argv[1] ?? ''));
+    $productId = (int)($argv[1] ?? 0);
     $provider = (string)($argv[2] ?? '');
     $typesArg = (string)($argv[3] ?? '');
     $model = trim((string)($argv[4] ?? ''));
     $targetChannel = strtolower(trim((string)($argv[5] ?? 'site')));
-    if ($productId === '' || $provider === '') {
+    if ($productId <= 0 || $provider === '') {
         fwrite(STDERR, "Uso: php process_item.php <product_id> <openai|google|claude> [white,hero,ambient] [modelo] [site|ml|shopee|amazon|tiktok]\n");
         exit(1);
     }
@@ -372,13 +393,13 @@ if (PHP_SAPI !== 'cli' && basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basena
         exit;
     }
 
-    $productId = trim((string)($_POST['product_id'] ?? ''));
+    $productId = (int)($_POST['product_id'] ?? 0);
     $provider = (string)($_POST['provider'] ?? '');
     $rawTypes = $_POST['image_types'] ?? ['white', 'hero', 'ambient'];
     $types = is_array($rawTypes) ? array_map('strval', $rawTypes) : ['white', 'hero', 'ambient'];
     $model = trim((string)($_POST['model'] ?? ''));
     $targetChannel = strtolower(trim((string)($_POST['target_channel'] ?? 'site')));
-    if ($productId === '' || $provider === '') {
+    if ($productId <= 0 || $provider === '') {
         http_response_code(400);
         echo json_encode(['success' => false, 'error' => 'product_id e provider sao obrigatorios.']);
         exit;

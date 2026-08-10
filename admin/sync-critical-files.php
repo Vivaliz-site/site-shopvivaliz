@@ -9,8 +9,16 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/../includes/admin-guard.php';
+require_once __DIR__ . '/../includes/sync-lock.php';
 
 header('Content-Type: application/json');
+
+$lock = sv_sync_lock_handle('sync-critical-files');
+if ($lock === false) {
+    http_response_code(409);
+    echo json_encode(['error' => 'Sync already running']);
+    exit;
+}
 
 $repo_url = 'https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main';
 
@@ -67,4 +75,5 @@ echo json_encode([
     'results' => $results,
     'status' => $fail_count === 0 ? 'SUCCESS' : 'PARTIAL'
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+sv_sync_unlock_handle($lock);
 ?>

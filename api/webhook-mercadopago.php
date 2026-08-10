@@ -12,6 +12,7 @@ require_once dirname(__DIR__) . '/includes/tiny-order-push.php';
 require_once dirname(__DIR__) . '/api/emails/send-order-notification.php';
 require_once dirname(__DIR__) . '/includes/ml-event-tracker.php';
 require_once dirname(__DIR__) . '/includes/payment-notification-idempotency.php';
+require_once dirname(__DIR__) . '/includes/webhook-queue.php';
 
 function svmp_webhook_response(int $status, string $result): never
 {
@@ -118,6 +119,17 @@ if ($webhookSecret === '' || $accessToken === '') {
     error_log('[MercadoPago] webhook unavailable: missing runtime configuration');
     svmp_webhook_response(503, 'gateway_unconfigured');
 }
+
+$queuedId = sv_webhook_enqueue('mercadopago', [
+    'raw' => $raw,
+    'data_id' => $dataId,
+    'topic' => $topic,
+    'signature' => $signature,
+    'request_id' => $requestId,
+    'received_at' => date(DATE_ATOM),
+]);
+error_log('[MercadoPago] webhook queued id=' . $queuedId . ' data=' . $dataId);
+svmp_webhook_response(200, 'queued');
 if (!svmp_validate_webhook_signature($signature, $requestId, $dataId, $webhookSecret)) {
     error_log('[MercadoPago] webhook rejected: invalid signature request=' . substr($requestId, 0, 80) . ' sig_len=' . strlen($signature) . ' data_id=' . substr($dataId, 0, 80));
     svmp_webhook_response(401, 'invalid_signature');

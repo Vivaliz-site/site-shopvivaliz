@@ -38,6 +38,103 @@ final class AiStudioKeyPool
     }
 }
 
+function ai_studio_normalize_provider(string $provider): string
+{
+    return match (strtolower(trim($provider))) {
+        'gpt', 'openai' => 'openai',
+        'gemini', 'google' => 'google',
+        'claude' => 'claude',
+        'groq', 'qrope' => 'groq',
+        'openrouter' => 'openrouter',
+        default => strtolower(trim($provider)),
+    };
+}
+
+/** @return list<string> */
+function ai_studio_provider_fallback_order(string $preferred): array
+{
+    $preferred = ai_studio_normalize_provider($preferred);
+    $order = match ($preferred) {
+        'google' => ['google', 'openai', 'openrouter', 'groq', 'claude'],
+        'claude' => ['claude', 'openai', 'openrouter', 'groq', 'google'],
+        'openrouter' => ['openrouter', 'openai', 'google', 'groq', 'claude'],
+        'groq' => ['groq', 'openrouter', 'openai', 'google', 'claude'],
+        default => ['openai', 'google', 'openrouter', 'groq', 'claude'],
+    };
+    return array_values(array_unique(array_filter($order, static fn(string $value): bool => in_array($value, ['openai', 'google', 'claude', 'openrouter', 'groq'], true))));
+}
+
+function ai_studio_provider_has_key(string $provider): bool
+{
+    return match (ai_studio_normalize_provider($provider)) {
+        'openai' => AiStudioKeyPool::normalize(AI_STUDIO_OPENAI_API_KEY) !== [],
+        'google' => AiStudioKeyPool::normalize(AI_STUDIO_GOOGLE_IMAGEN_API_KEY) !== [],
+        'claude' => AiStudioKeyPool::normalize(AI_STUDIO_CLAUDE_API_KEY) !== [],
+        'openrouter' => AiStudioKeyPool::normalize(AI_STUDIO_OPENROUTER_API_KEY) !== [],
+        'groq' => AiStudioKeyPool::normalize(AI_STUDIO_GROQ_API_KEY) !== [],
+        default => false,
+    };
+}
+
+function ai_studio_resolve_image_engine(string $preferred): string
+{
+    foreach (ai_studio_provider_fallback_order($preferred) as $candidate) {
+        if (ai_studio_provider_has_key($candidate)) {
+            return $candidate;
+        }
+    }
+    throw new AiStudioApiException('Nenhuma chave de edicao de imagem (OpenAI, Gemini, Claude, OpenRouter ou Groq) está configurada no ambiente privado.');
+}
+
+final class AiStudioOpenAiCompatibleClient extends AiStudioRotatingClient
+{
+    public function __construct(string|array $keys, protected string $model, protected string $baseUrl, protected string $providerLabel, protected array $extraHeaders = [])
+    {
+        parent::__construct($keys, $model);
+        $this->baseUrl = rtrim($this->baseUrl, '/');
+    }
+
+    public function editImageToFile(string $prompt, string $baseImagePath, string $destinationPath): void
+    {
+        if (!is_file($baseImagePath) || !is_readable($baseImagePath)) {
+            throw new AiStudioApiException('Imagem base ausente ou ilegível.');
+        }
+        $mime = AiStudioHttpClient::detectImageMime($baseImagePath);
+        $this->withKeyRotation(function (string $key) use ($prompt, $baseImagePath, $destinationPath, $mime): void {
+            $response = AiStudioHttpClient::requestMultipart($this->baseUrl . '/images/edits', array_merge([
+                'Authorization' => 'Bearer ' . $key,
+            ], $this->extraHeaders), [
+                'model' => $this->model,
+                'prompt' => $prompt,
+                'image[]' => new CURLFile($baseImagePath, $mime, basename($baseImagePath)),
+                'n' => '1',
+                'size' => '1024x1024',
+            ], 180);
+            if ($response['status'] < 200 || $response['status'] >= 300) {
+                throw AiStudioHttpClient::apiFailure($this->providerLabel . ' images/edits', $response);
+            }
+            $decoded = AiStudioHttpClient::decodeJson($response['body'], $this->providerLabel . ' images/edits');
+            $item = $decoded['data'][0] ?? null;
+            if (!is_array($item)) {
+                throw new AiStudioApiException($this->providerLabel . ' não retornou data[0].');
+            }
+            if (is_string($item['b64_json'] ?? null) && $item['b64_json'] !== '') {
+                $binary = base64_decode($item['b64_json'], true);
+                if (!is_string($binary) || file_put_contents($destinationPath, $binary) === false) {
+                    throw new AiStudioApiException('Falha ao gravar imagem ' . $this->providerLabel . '.');
+                }
+                return;
+            }
+            if (is_string($item['url'] ?? null) && $item['url'] !== '') {
+                AiStudioHttpClient::downloadToFile($item['url'], $destinationPath);
+                return;
+            }
+            throw new AiStudioApiException($this->providerLabel . ' não retornou b64_json nem URL.');
+        }, $this->providerLabel);
+        AiStudioHttpClient::validateOutputImage($destinationPath, 1000);
+    }
+}
+
 final class AiStudioHttpClient
 {
     /** @return array{status:int,body:string} */
@@ -302,13 +399,15 @@ final class AiStudioGoogleImageEditClient extends AiStudioRotatingClient
 final class AiStudioClaudeClient extends AiStudioRotatingClient
 {
     private const SYSTEM_PROMPT = <<<'PROMPT'
-Você é um diretor de fotografia de e-commerce. Reescreva este produto em 3 prompts de imagem fotorrealistas em inglês para os modos white, hero e ambient. Preserve integralmente cor, formato, proporções, marca, rótulos e design do produto real. Altere somente cenário, fundo e iluminação. Retorne exclusivamente JSON com as chaves white, hero e ambient.
+Você é um diretor de fotografia de e-commerce. Reescreva este produto em 3 prompts de imagem fotorrealistas em inglês para os modos white, hero e ambient. Preserve integralmente cor, formato, proporções, marca, rótulos e design do produto real. Altere somente cenário, fundo e iluminação. Nunca invente acessórios, acabamento, tamanho ou compatibilidade. Use o contexto factual do catálogo quando houver. Retorne exclusivamente JSON com as chaves white, hero e ambient.
 PROMPT;
 
     /** @return array{white:string,hero:string,ambient:string} */
-    public function optimizePrompts(string $productName, string $productDescription): array
+    public function optimizePrompts(string $productName, string $productDescription, array $productContext = []): array
     {
-        return $this->withKeyRotation(function (string $key) use ($productName, $productDescription): array {
+        return $this->withKeyRotation(function (string $key) use ($productName, $productDescription, $productContext): array {
+            $contextBrief = ai_studio_catalog_context_brief($productContext);
+            $contextLine = $contextBrief !== '' ? "\nContexto factual do catálogo: {$contextBrief}" : '';
             $response = AiStudioHttpClient::request('POST', 'https://api.anthropic.com/v1/messages', [
                 'x-api-key' => $key,
                 'anthropic-version' => '2023-06-01',
@@ -318,7 +417,10 @@ PROMPT;
                 'model' => $this->model,
                 'max_tokens' => 1024,
                 'system' => self::SYSTEM_PROMPT,
-                'messages' => [['role' => 'user', 'content' => "Produto: {$productName}\nDescrição: {$productDescription}"]],
+                'messages' => [[
+                    'role' => 'user',
+                    'content' => "Produto: {$productName}\nDescrição: {$productDescription}{$contextLine}\nRegras obrigatorias: preserve identidade real, nao invente atributos e mantenha o produto como unico sujeito visual.",
+                ]],
             ]);
             if ($response['status'] < 200 || $response['status'] >= 300) throw AiStudioHttpClient::apiFailure('Claude messages', $response);
             $decoded = AiStudioHttpClient::decodeJson($response['body'], 'Claude messages');

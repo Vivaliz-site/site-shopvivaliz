@@ -50,6 +50,12 @@ test_assert(($shopee['field_map']['marketing_hooks']['mode'] ?? '') === 'embedde
 
 $tiktok = sv_catalog_channel_profile('tiktok');
 test_assert((int)($tiktok['limits']['title_max'] ?? 0) === 300, 'TikTok deve manter limite de titulo especifico do canal');
+test_assert((int)($tiktok['limits']['title_recommended_min'] ?? 0) === 40, 'TikTok deve exibir alvo minimo editorial');
+test_assert((int)($tiktok['limits']['title_recommended_max'] ?? 0) === 150, 'TikTok deve exibir alvo maximo editorial');
+
+$site = sv_catalog_channel_profile('site');
+test_assert((int)($site['limits']['title_recommended_min'] ?? 0) === 45, 'Site deve exibir alvo minimo editorial');
+test_assert((int)($site['limits']['title_recommended_max'] ?? 0) === 65, 'Site deve exibir alvo maximo editorial');
 
 $tiktokImage = ai_studio_channel_profile('tiktok');
 test_assert((int)($tiktokImage['recommended_side'] ?? 0) === 1600, 'TikTok image profile deve exibir alvo recomendado de 1600px');
@@ -63,6 +69,7 @@ test_assert((int)($mlImage['max_gallery'] ?? 0) !== (int)($amazonImage['max_gall
 $policySource = (string)file_get_contents(__DIR__ . '/../../admin/catalog-optimization/api/optimize_catalog.php');
 test_assert(str_contains($policySource, "'title_max' => 300"), 'politica textual deve conter limite TikTok de 300 caracteres');
 test_assert(str_contains($policySource, 'procure ultrapassar 300 caracteres'), 'politica TikTok deve orientar descricao 300+ quando factual');
+test_assert(str_contains($policySource, 'Comece com a identidade principal do produto'), 'politica textual deve exigir identidade no inicio do titulo');
 test_assert(str_contains($policySource, "'title_max' => 60"), 'Mercado Livre deve manter politica de titulo propria');
 test_assert(str_contains($policySource, "'title_max' => 120"), 'Shopee/ERP devem manter politica de titulo diferente do Mercado Livre');
 test_assert(str_contains($policySource, "'title_max' => 200"), 'Amazon deve manter politica de titulo propria');
@@ -84,5 +91,14 @@ $catalogAdminSource = (string)file_get_contents(__DIR__ . '/../../admin/catalog-
 test_assert(str_contains($catalogAdminSource, 'confirm_channel'), 'aprovacao textual deve exigir confirmacao explicita do canal');
 test_assert(str_contains($catalogAdminSource, '!== $channel'), 'aprovacao textual deve comparar a confirmacao com o canal do staging');
 test_assert(str_contains($catalogAdminSource, 'somente em'), 'Admin textual deve comunicar publicacao em canal unico');
+test_assert(str_contains($catalogAdminSource, 'bulk_action'), 'Admin textual deve suportar acao em lote');
+test_assert(str_contains($catalogAdminSource, 'Canal alvo:'), 'Admin textual deve mostrar o canal alvo no cartão do item');
+test_assert(str_contains($catalogAdminSource, 'pending_candidates'), 'Admin textual deve carregar candidatos por canal');
+test_assert(str_contains($catalogAdminSource, 'Gerar selecionados'), 'Admin textual deve gerar apenas os itens marcados');
+test_assert(str_contains($catalogAdminSource, 'Categoria:'), 'Admin textual deve mostrar categoria nos candidatos');
+test_assert(str_contains($catalogAdminSource, 'Prioridade:'), 'Admin textual deve mostrar prioridade na fila');
+test_assert(str_contains($catalogAdminSource, 'com foto'), 'Admin textual deve mostrar status de foto na fila');
+test_assert(str_contains($catalogAdminSource, 'com descricao'), 'Admin textual deve mostrar status de descricao na fila');
+test_assert(str_contains($catalogAdminSource, 'candidate-summary'), 'Admin textual deve mostrar resumo vivo da fila');
 
 fwrite(STDOUT, "marketplace_admin_policy_test: OK\n");

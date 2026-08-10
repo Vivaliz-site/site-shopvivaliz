@@ -130,6 +130,20 @@ services:
       timeout: 5s
       retries: 3
 
+  workers:
+    build: .
+    container_name: shopvivaliz-workers
+    command: ["php", "scripts/queue-worker.php"]
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SHOPVIVALIZ_QUEUE_DSN=sqlite:/app/storage/queue.sqlite
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+
   # PostgreSQL - Port 5432 (optional, for advanced storage)
   postgres:
     image: postgres:15-alpine
