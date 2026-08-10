@@ -64,7 +64,39 @@ echo <<<'HTML'
 </script>
 HTML;
 
-echo $GLOBALS['analytics']->getTrackingCode();
+$trackingCode = $GLOBALS['analytics']->getTrackingCode();
+
+// O container GTM-TW4RPSQD foi verificado com a Google tag G-1H55K1TZ5D em
+// All Pages. Somente nesse container conhecido removemos o carregador direto
+// gtag.js redundante. Qualquer outro GTM preserva o caminho original como
+// fallback fail-safe, evitando perder GA4 por uma configuracao desconhecida.
+$verifiedGtmId = 'GTM-TW4RPSQD';
+$hasVerifiedGtmLoader = str_contains(
+    $trackingCode,
+    'googletagmanager.com/gtm.js?id=' . $verifiedGtmId
+);
+$hasDirectGoogleTag = str_contains($trackingCode, 'googletagmanager.com/gtag/js?id=');
+if ($hasVerifiedGtmLoader && $hasDirectGoogleTag) {
+    $trackingCode = preg_replace(
+        '~<!-- Google tag \(gtag\.js\) -->\s*<script async src="https://www\.googletagmanager\.com/gtag/js\?id=[^"]+"></script>\s*<script>.*?</script>~s',
+        '',
+        $trackingCode
+    ) ?? $trackingCode;
+
+    $trackingPublicConfig = [
+        'ga4Id' => (string)(getenv('GA4_ID') ?: 'G-1H55K1TZ5D'),
+        'googleAdsId' => (string)(getenv('GOOGLE_ADS_CONVERSION_ID') ?: ''),
+        'googleAdsLabel' => (string)(getenv('GOOGLE_ADS_CONVERSION_LABEL') ?: ''),
+        'currency' => 'BRL',
+        'consentMode' => true,
+        'consentCookie' => 'sv_privacy_consent',
+    ];
+    $trackingCode .= "\n<script>window.ShopVivalizTrackingConfig="
+        . json_encode($trackingPublicConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+        . ";</script>\n";
+}
+
+echo $trackingCode;
 
 if (in_array($requestPath, ['/carrinho', '/checkout', '/checkout/retorno'], true)) {
     echo "\n<meta name=\"robots\" content=\"noindex,nofollow,noarchive\">\n";
