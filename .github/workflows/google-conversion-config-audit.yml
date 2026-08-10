@@ -1,0 +1,51 @@
+name: Google Conversion Config Audit
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/google-conversion-config-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Check Google conversion config presence
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: Production
+    env:
+      GA4_ID: ${{ secrets.GA4_ID }}
+      GOOGLE_ANALYTICS_ID: ${{ secrets.GOOGLE_ANALYTICS_ID }}
+      GA4_SECRET: ${{ secrets.GA4_SECRET }}
+      GOOGLE_ADS_ID: ${{ secrets.GOOGLE_ADS_ID }}
+      GOOGLE_ADS_CONVERSION_ID: ${{ secrets.GOOGLE_ADS_CONVERSION_ID }}
+      GOOGLE_ADS_CONVERSION_LABEL: ${{ secrets.GOOGLE_ADS_CONVERSION_LABEL }}
+      GTM_ID: ${{ secrets.GTM_ID }}
+      GOOGLE_TAG_MANAGER_ID: ${{ secrets.GOOGLE_TAG_MANAGER_ID }}
+    steps:
+      - name: Report presence only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+
+          keys = [
+              'GA4_ID',
+              'GOOGLE_ANALYTICS_ID',
+              'GA4_SECRET',
+              'GOOGLE_ADS_ID',
+              'GOOGLE_ADS_CONVERSION_ID',
+              'GOOGLE_ADS_CONVERSION_LABEL',
+              'GTM_ID',
+              'GOOGLE_TAG_MANAGER_ID',
+          ]
+          state = {key: bool(os.environ.get(key, '').strip()) for key in keys}
+          print(json.dumps(state, sort_keys=True))
+          print('ga4_server_purchase_ready=' + ('yes' if state['GA4_SECRET'] else 'no'))
+          ads_id_ready = state['GOOGLE_ADS_ID'] or state['GOOGLE_ADS_CONVERSION_ID']
+          print('google_ads_direct_conversion_ready=' + ('yes' if ads_id_ready and state['GOOGLE_ADS_CONVERSION_LABEL'] else 'no'))
+          PY
