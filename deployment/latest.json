@@ -1,19 +1,19 @@
 {
   "status": "PRODUCTION_UPDATED",
-  "sha": "89b06c40e3aad2f3e6314764bce965ad22e55ae7",
-  "workflow_run_id": "31442543130",
-  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31442543130",
+  "sha": "01c2d6021942e278060c6f4cd3da567e2703e892",
+  "workflow_run_id": "31444182942",
+  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31444182942",
   "jobs": {
     "validate": "success",
     "deploy": "success",
     "smoke_test": "success"
   },
   "results": [
-    "OK Oracle canonical ref: remote=89b06c40e3aad2f3e6314764bce965ad22e55ae7 deployed=89b06c40e3aad2f3e6314764bce965ad22e55ae7",
+    "OK Oracle canonical ref: remote=cff9a7bcd31bde2b9432029c3f5df5f420efba04 deployed=01c2d6021942e278060c6f4cd3da567e2703e892",
     "OK Oracle repository sync cron installed",
-    "OK release SHA marker: 89b06c40e3aad2f3e6314764bce965ad22e55ae7",
+    "OK release SHA marker: 01c2d6021942e278060c6f4cd3da567e2703e892",
     "OK version: https://shopvivaliz.com.br/api/health/version.php (200)",
-    "OK public version endpoint: 89b06c40e3aad2f3e6314764bce965ad22e55ae7",
+    "OK public version endpoint: 01c2d6021942e278060c6f4cd3da567e2703e892",
     "OK homepage: https://shopvivaliz.com.br/ (200)",
     "OK public homepage HTML contract",
     "OK mobile responsive header contract",
@@ -22,11 +22,11 @@
     "OK catalog: https://shopvivaliz.com.br/catalogo (200)",
     "OK catalog_api: https://shopvivaliz.com.br/api/catalog/products.php?limit=1&available=1 (200)",
     "OK catalog API payload",
-    "OK product: https://shopvivaliz.com.br/produto/caixa-ferramentas-bau-reto-n00-30x13x10-c-bandeja-fercar (200)",
+    "OK product: https://shopvivaliz.com.br/produto/carrinho-fechado-ferramentas-c06-3-gavetas-todo-preto-fercar (200)",
     "OK cart: https://shopvivaliz.com.br/carrinho (200)",
     "OK checkout: https://shopvivaliz.com.br/checkout (200)",
     "OK css: https://shopvivaliz.com.br/css/shopvivaliz-core-consolidated.css (200)",
-    "OK admin redirect chain: final=200 redirects=1 effective=https://shopvivaliz.com.br/auth/login.php?redirect=%2Fadmin%2F%3Fsmoke%3D89b06c40e3aa",
+    "OK admin redirect chain: final=200 redirects=1 effective=https://shopvivaliz.com.br/auth/login.php?redirect=%2Fadmin%2F%3Fsmoke%3D01c2d6021942",
     "OK login session continuity and CSRF round-trip",
     "OK authenticated admin guard database fallback",
     "OK liz_health: https://shopvivaliz.com.br/api/liz-intelligent.php?health=1 (200)",
@@ -59,5 +59,5 @@
     "OK security header: x-content-type-options",
     "OK security header: content-security-policy"
   ],
-  "verified_at": "2026-08-10T23:32:17.155041+00:00"
+  "verified_at": "2026-08-10T23:58:25.917559+00:00"
 }
