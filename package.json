@@ -1,4 +1,13 @@
 {
+  "name": "shopvivaliz",
+  "private": true,
+  "scripts": {
+    "audit:tree": "python scripts/audit-static-tree.py --dry-run",
+    "audit:tree:fix": "python scripts/audit-static-tree.py",
+    "build:assets": "node scripts/build-assets.mjs",
+    "dev:queue": "php -S 127.0.0.1:8088 -t .",
+    "worker": "php scripts/queue-worker.php"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",
     "@vercel/analytics": "^2.0.1",

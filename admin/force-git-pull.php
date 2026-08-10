@@ -9,6 +9,7 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/../includes/admin-guard.php';
+require_once __DIR__ . '/../includes/sync-lock.php';
 
 // Rate limiting: max 1 pull per 30 seconds
 $rate_limit_file = __DIR__ . '/../logs/.git-pull-cooldown';
@@ -21,6 +22,13 @@ if (file_exists($rate_limit_file) && (time() - filemtime($rate_limit_file)) < 30
 
 $remote_ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
 $remote_ip = preg_replace('/[^0-9a-f:.]/i', '', $remote_ip); // Sanitize
+$lock = sv_sync_lock_handle('force-git-pull');
+if ($lock === false) {
+    http_response_code(409);
+    header('Content-Type: application/json');
+    echo json_encode(['error' => 'Sync already running']);
+    exit;
+}
 
 // Log file
 $log_file = __DIR__ . '/../logs/admin-force-pull.log';
@@ -84,4 +92,5 @@ file_put_contents($log_file, "[$timestamp] Result: " . json_encode($response) . 
 http_response_code($success ? 200 : 206);
 header('Content-Type: application/json');
 echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+sv_sync_unlock_handle($lock);
 ?>

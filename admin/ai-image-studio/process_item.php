@@ -248,7 +248,7 @@ function ai_studio_process_item(
     $provider = ai_studio_normalize_provider($provider);
     $targetChannel = strtolower(trim($targetChannel));
     $profiles = ai_studio_channel_profiles();
-    if (!in_array($provider, ['openai', 'google', 'claude'], true)) {
+    if (!in_array($provider, ['openai', 'google', 'claude', 'openrouter', 'groq'], true)) {
         return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'results' => [], 'error' => "Provider invalido: '{$provider}'."];
     }
     if (!isset($profiles[$targetChannel])) {
@@ -309,6 +309,8 @@ function ai_studio_process_item(
 
         $openAiModel = ($modelOverride !== null && trim($modelOverride) !== '' && $imageEngine === 'openai') ? trim($modelOverride) : AI_STUDIO_OPENAI_IMAGE_MODEL;
         $googleModel = ($modelOverride !== null && trim($modelOverride) !== '' && $imageEngine === 'google') ? trim($modelOverride) : AI_STUDIO_GOOGLE_IMAGEN_MODEL;
+        $openRouterModel = trim((string)(getenv('OPENROUTER_IMAGE_MODEL') ?: $openAiModel));
+        $qropeModel = trim((string)(getenv('QROPE_IMAGE_MODEL') ?: $openAiModel));
 
         $results = [];
         foreach ($imageTypes as $imageType) {
@@ -321,7 +323,18 @@ function ai_studio_process_item(
                 if ($imageEngine === 'openai') {
                     (new AiStudioOpenAiClient(AI_STUDIO_OPENAI_API_KEY, $openAiModel))->editImageToFile($prompt, $baseImagePath, $destination);
                 } else {
-                    (new AiStudioGoogleImageEditClient(AI_STUDIO_GOOGLE_IMAGEN_API_KEY, $googleModel))->editImageToFile($prompt, $baseImagePath, $destination);
+                    if ($imageEngine === 'google') {
+                        (new AiStudioGoogleImageEditClient(AI_STUDIO_GOOGLE_IMAGEN_API_KEY, $googleModel))->editImageToFile($prompt, $baseImagePath, $destination);
+                    } elseif ($imageEngine === 'claude') {
+                        (new AiStudioOpenAiCompatibleClient(AI_STUDIO_CLAUDE_API_KEY, $modelOverride !== null && trim($modelOverride) !== '' ? trim($modelOverride) : AI_STUDIO_CLAUDE_MODEL, 'https://api.anthropic.com/v1', 'Claude', ['anthropic-version' => '2023-06-01']))->editImageToFile($prompt, $baseImagePath, $destination);
+                    } elseif ($imageEngine === 'openrouter') {
+                        (new AiStudioOpenAiCompatibleClient(AI_STUDIO_OPENROUTER_API_KEY, $openRouterModel, AI_STUDIO_OPENROUTER_API_BASE_URL, 'OpenRouter', [
+                            'HTTP-Referer' => AI_STUDIO_OPENROUTER_HTTP_REFERER,
+                            'X-OpenRouter-Title' => AI_STUDIO_OPENROUTER_APP_TITLE,
+                        ]))->editImageToFile($prompt, $baseImagePath, $destination);
+                    } else {
+                        (new AiStudioOpenAiCompatibleClient(AI_STUDIO_GROQ_API_KEY, $qropeModel !== '' ? $qropeModel : AI_STUDIO_GROQ_IMAGE_MODEL, AI_STUDIO_GROQ_API_BASE_URL, 'Groq'))->editImageToFile($prompt, $baseImagePath, $destination);
+                    }
                 }
                 $quality = ai_studio_validate_image_file($destination, $minimumSide);
                 $quality['recommended_side'] = $recommendedSide;

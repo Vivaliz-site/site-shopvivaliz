@@ -86,7 +86,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $adminInstruction = trim((string)($_POST['prompt_used'] ?? ''));
                 if ($adminInstruction === '') throw new RuntimeException('Informe a instrucao de cena antes de regenerar.');
                 $engine = ai_studio_normalize_provider((string)($_POST['regeneration_engine'] ?? 'openai'));
-                if (!in_array($engine, ['openai', 'google', 'claude'], true)) throw new RuntimeException('Motor de regeneracao invalido.');
+                if (!in_array($engine, ['openai', 'google', 'claude', 'openrouter', 'groq'], true)) throw new RuntimeException('Motor de regeneracao invalido.');
 
                 $targetChannel = ais_intended_channel($row);
                 if ($targetChannel === '') $targetChannel = strtolower(trim((string)($_POST['channel'] ?? '')));
@@ -118,6 +118,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
                 if ($imageEngine === 'google') {
                     (new AiStudioGoogleImageEditClient(AI_STUDIO_GOOGLE_IMAGEN_API_KEY, AI_STUDIO_GOOGLE_IMAGEN_MODEL))->editImageToFile($prompt, $basePath, $destination);
+                } elseif ($imageEngine === 'openrouter') {
+                    (new AiStudioOpenAiCompatibleClient(AI_STUDIO_OPENROUTER_API_KEY, trim((string)(getenv('OPENROUTER_IMAGE_MODEL') ?: AI_STUDIO_OPENAI_IMAGE_MODEL)), AI_STUDIO_OPENROUTER_API_BASE_URL, 'OpenRouter', [
+                        'HTTP-Referer' => AI_STUDIO_OPENROUTER_HTTP_REFERER,
+                        'X-Title' => AI_STUDIO_OPENROUTER_APP_TITLE,
+                    ]))->editImageToFile($prompt, $basePath, $destination);
+                } elseif ($imageEngine === 'groq') {
+                    (new AiStudioOpenAiCompatibleClient(AI_STUDIO_GROQ_API_KEY, trim((string)(getenv('GROQ_IMAGE_MODEL') ?: AI_STUDIO_GROQ_IMAGE_MODEL)), AI_STUDIO_GROQ_API_BASE_URL, 'Groq'))->editImageToFile($prompt, $basePath, $destination);
                 } else {
                     (new AiStudioOpenAiClient(AI_STUDIO_OPENAI_API_KEY, AI_STUDIO_OPENAI_IMAGE_MODEL))->editImageToFile($prompt, $basePath, $destination);
                 }
