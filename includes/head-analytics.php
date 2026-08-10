@@ -66,14 +66,17 @@ HTML;
 
 $trackingCode = $GLOBALS['analytics']->getTrackingCode();
 
-// Quando GTM e a Google tag direta aparecem juntos, a mesma biblioteca Google
-// pode ser baixada/configurada duas vezes. O container de producao ja hospeda a
-// Google tag; nesse caso mantemos GTM como carregador unico e preservamos apenas
-// a configuracao publica que os scripts first-party usam. Se GTM nao estiver
-// presente, o codigo original permanece intocado como fallback.
-$hasGtmLoader = str_contains($trackingCode, 'googletagmanager.com/gtm.js?id=');
+// O container GTM-TW4RPSQD foi verificado com a Google tag G-1H55K1TZ5D em
+// All Pages. Somente nesse container conhecido removemos o carregador direto
+// gtag.js redundante. Qualquer outro GTM preserva o caminho original como
+// fallback fail-safe, evitando perder GA4 por uma configuracao desconhecida.
+$verifiedGtmId = 'GTM-TW4RPSQD';
+$hasVerifiedGtmLoader = str_contains(
+    $trackingCode,
+    'googletagmanager.com/gtm.js?id=' . $verifiedGtmId
+);
 $hasDirectGoogleTag = str_contains($trackingCode, 'googletagmanager.com/gtag/js?id=');
-if ($hasGtmLoader && $hasDirectGoogleTag) {
+if ($hasVerifiedGtmLoader && $hasDirectGoogleTag) {
     $trackingCode = preg_replace(
         '~<!-- Google tag \(gtag\.js\) -->\s*<script async src="https://www\.googletagmanager\.com/gtag/js\?id=[^"]+"></script>\s*<script>.*?</script>~s',
         '',
