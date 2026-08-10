@@ -13,6 +13,9 @@ require_once __DIR__ . '/../includes/rate-limiter.php';
 $redirectTo = sv_social_sanitize_redirect((string)($_GET['redirect'] ?? $_POST['redirect'] ?? '/'));
 
 if (!empty($_SESSION['user_id'])) {
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
+    }
     header('Location: ' . $redirectTo);
     exit;
 }
@@ -52,19 +55,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-login', $_POST
                 $user = $result->fetch_assoc();
 
                 if ($user && password_verify($password, $user['password_hash'])) {
-                    // Regenerar session ID para prevenir Session Fixation
-                    session_regenerate_id(true);
+                    // Regenerar session ID para prevenir Session Fixation.
+                    if (!session_regenerate_id(true)) {
+                        throw new RuntimeException('Não foi possível renovar a sessão autenticada.');
+                    }
 
-                    // Login bem-sucedido
-                    $_SESSION['user_id'] = $user['id'];
-                    $_SESSION['user_name'] = $user['name'];
-                    $_SESSION['user_email'] = $user['email'];
+                    // Login bem-sucedido.
+                    $_SESSION['user_id'] = (int)$user['id'];
+                    $_SESSION['user_name'] = (string)$user['name'];
+                    $_SESSION['user_email'] = (string)$user['email'];
+                    $_SESSION['issued_at'] = time();
 
                     // Atualizar updated_at (coluna last_login nao existe no schema)
                     $update = $db->prepare('UPDATE users SET updated_at = NOW() WHERE id = ?');
                     if ($update) {
-                        $update->bind_param('i', $user['id']);
+                        $userId = (int)$user['id'];
+                        $update->bind_param('i', $userId);
                         $update->execute();
+                        $update->close();
+                    }
+
+                    // Persistir a sessão antes do redirect. Isto evita depender do
+                    // flush implícito do PHP/FPM no encerramento da requisição.
+                    if (session_status() === PHP_SESSION_ACTIVE && !session_write_close()) {
+                        throw new RuntimeException('Não foi possível persistir a sessão autenticada.');
                     }
 
                     header('Location: ' . $redirectTo);
