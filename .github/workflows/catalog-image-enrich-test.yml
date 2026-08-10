@@ -1,0 +1,52 @@
+name: Catalog Image Enrichment Test
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'api/catalog/products.php'
+      - 'includes/catalog-image-enrich.php'
+      - 'tests/catalog-image-enrich-test.php'
+      - '.github/workflows/catalog-image-enrich-test.yml'
+  pull_request:
+    paths:
+      - 'api/catalog/products.php'
+      - 'includes/catalog-image-enrich.php'
+      - 'tests/catalog-image-enrich-test.php'
+      - '.github/workflows/catalog-image-enrich-test.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  catalog-images:
+    name: Validate catalog image enrichment
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: PHP syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l api/catalog/products.php
+          php -l includes/catalog-image-enrich.php
+          php -l tests/catalog-image-enrich-test.php
+
+      - name: Run catalog image tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/catalog-image-enrich-test.php
