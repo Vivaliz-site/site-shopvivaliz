@@ -1,30 +1,31 @@
 {
   "status": "PRODUCTION_UPDATED",
-  "sha": "b2d4294b9cbf4183a76002b053c561e9a66747e9",
-  "workflow_run_id": "31392787379",
-  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31392787379",
+  "sha": "1cbfc882bc2098f1aebb6a7e21d6d1e7cf70022f",
+  "workflow_run_id": "31401345298",
+  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31401345298",
   "jobs": {
     "validate": "success",
     "deploy": "success",
     "smoke_test": "success"
   },
   "results": [
-    "OK Oracle repository sync: canonical=b2d4294b9cbf4183a76002b053c561e9a66747e9 deployed=b2d4294b9cbf4183a76002b053c561e9a66747e9",
+    "OK Oracle repository sync: canonical=ae4d3293c76f7e604ce7ebe9a10f0bc74b825b23 deployed=1cbfc882bc2098f1aebb6a7e21d6d1e7cf70022f",
     "OK Oracle repository sync cron installed",
-    "OK release SHA marker: b2d4294b9cbf4183a76002b053c561e9a66747e9",
+    "OK release SHA marker: 1cbfc882bc2098f1aebb6a7e21d6d1e7cf70022f",
     "OK version: https://shopvivaliz.com.br/api/health/version.php (200)",
-    "OK public version endpoint: b2d4294b9cbf4183a76002b053c561e9a66747e9",
+    "OK public version endpoint: 1cbfc882bc2098f1aebb6a7e21d6d1e7cf70022f",
     "OK homepage: https://shopvivaliz.com.br/ (200)",
     "OK public homepage HTML contract",
     "OK mobile responsive header contract",
     "OK catalog: https://shopvivaliz.com.br/catalogo (200)",
-    "OK product: https://shopvivaliz.com.br/produto/rodo-vedante-borracha-friso-porta-aluminio-100cm-vivaliz (200)",
+    "OK catalog_api: https://shopvivaliz.com.br/api/catalog/products.php?limit=1&available=1 (200)",
+    "OK catalog API payload",
+    "OK product: https://shopvivaliz.com.br/produto/caixa-ferramentas-bau-reto-n00-30x13x10-c-bandeja-fercar (200)",
     "OK cart: https://shopvivaliz.com.br/carrinho (200)",
     "OK checkout: https://shopvivaliz.com.br/checkout (200)",
     "OK css: https://shopvivaliz.com.br/css/shopvivaliz-core-consolidated.css (200)",
-    "OK catalog_api: https://shopvivaliz.com.br/api/catalog/products.php?limit=1 (200)",
-    "OK catalog API payload",
     "OK admin protected behavior (301)",
+    "OK authenticated admin guard database fallback",
     "OK liz_health: https://shopvivaliz.com.br/api/liz-intelligent.php?health=1 (200)",
     "OK Liz health payload",
     "OK orders_health: https://shopvivaliz.com.br/api/orders/health.php (200)",
@@ -55,5 +56,5 @@
     "OK security header: x-content-type-options",
     "OK security header: content-security-policy"
   ],
-  "verified_at": "2026-08-10T13:28:51.940523+00:00"
+  "verified_at": "2026-08-10T15:04:37.732336+00:00"
 }
