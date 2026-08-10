@@ -219,6 +219,71 @@ fi
 grep -Eqi '(login|senha|password|entrar)' "$tmpdir/admin.body"
 echo "OK admin redirect chain: final=200 redirects=$admin_redirects effective=$admin_effective"
 
+# Verify that the public login flow keeps one anonymous PHP session across
+# requests. The CSRF token is intentionally stable for the session scope, so
+# matching tokens prove that the browser cookie can round-trip through PHP.
+login_cookie_jar="$tmpdir/login.cookies"
+login_first="$tmpdir/login-first.html"
+login_second="$tmpdir/login-second.html"
+login_post="$tmpdir/login-post.html"
+login_url="$base/auth/login.php?redirect=%2Fadmin%2F%3Fsession_smoke%3D${expected_sha:0:12}"
+
+curl --silent --show-error --max-time 20 --user-agent "$ua" \
+  --cookie-jar "$login_cookie_jar" --output "$login_first" "$login_url"
+login_token_first="$(python3 - "$login_first" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+html = Path(sys.argv[1]).read_text(encoding='utf-8', errors='replace')
+match = re.search(r'name=["\']csrf_token["\'][^>]*value=["\']([^"\']+)', html, re.I)
+if not match:
+    raise SystemExit('missing login CSRF token on first request')
+print(match.group(1))
+PY
+)"
+
+curl --silent --show-error --max-time 20 --user-agent "$ua" \
+  --cookie "$login_cookie_jar" --cookie-jar "$login_cookie_jar" \
+  --output "$login_second" "$login_url"
+login_token_second="$(python3 - "$login_second" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+html = Path(sys.argv[1]).read_text(encoding='utf-8', errors='replace')
+match = re.search(r'name=["\']csrf_token["\'][^>]*value=["\']([^"\']+)', html, re.I)
+if not match:
+    raise SystemExit('missing login CSRF token on second request')
+print(match.group(1))
+PY
+)"
+
+if [[ "$login_token_first" != "$login_token_second" ]]; then
+  echo 'FAIL login session continuity: CSRF token changed despite cookie jar reuse' >&2
+  exit 1
+fi
+
+login_post_status="$(curl --silent --show-error --max-time 20 --user-agent "$ua" \
+  --cookie "$login_cookie_jar" --cookie-jar "$login_cookie_jar" \
+  --output "$login_post" --write-out '%{http_code}' \
+  --request POST \
+  --data-urlencode "csrf_token=$login_token_second" \
+  --data-urlencode 'redirect=/admin/' \
+  --data-urlencode "email=shopvivaliz-session-smoke-${expected_sha:0:12}@invalid.example" \
+  --data-urlencode 'password=SmokeSessionPassword123!' \
+  "$base/auth/login.php" || true)"
+if [[ "$login_post_status" != '200' ]]; then
+  echo "FAIL login session continuity: controlled invalid login returned HTTP $login_post_status" >&2
+  exit 1
+fi
+if grep -Fq 'Sua sessão expirou' "$login_post"; then
+  echo 'FAIL login session continuity: CSRF validation lost the PHP session' >&2
+  exit 1
+fi
+grep -Fq 'Email ou senha incorretos' "$login_post"
+echo 'OK login session continuity and CSRF round-trip'
+
 admin_guard_cli="$(/usr/bin/php "$current_root/scripts/admin-guard-production-smoke.php" 2>&1 || true)"
 if [[ "$admin_guard_cli" != 'ADMIN_GUARD_OK' ]]; then
   echo 'FAIL authenticated admin guard database fallback' >&2
