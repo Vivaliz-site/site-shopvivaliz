@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Monotonic key-set guard for production .env files.
+"""Monotonic active-key guard for production .env files.
 
-The guard stores only environment variable NAMES, never values. Once a key name
-has been sealed, future states must keep that key. New key names may be added.
-Existing values may still rotate through authorized runtime flows.
+The guard stores only environment variable NAMES, never values. A key becomes
+sealed when it has a non-empty effective value. Future states must keep that key
+non-empty, while authorized writers may rotate its value. New non-empty key
+names may be added, so the protected active key-set can only grow.
 """
 from __future__ import annotations
 
@@ -24,6 +25,7 @@ class KeysetReductionError(RuntimeError):
 
 
 def keyset_from_text(text: str) -> set[str]:
+    """Return names of syntactically valid keys with non-empty effective values."""
     keys: set[str] = set()
     for raw in text.splitlines():
         line = raw.strip()
@@ -31,8 +33,12 @@ def keyset_from_text(text: str) -> set[str]:
             continue
         if line.startswith("export "):
             line = line[7:].strip()
-        key = line.split("=", 1)[0].strip()
-        if KEY_RE.fullmatch(key):
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            value = value[1:-1].strip()
+        if KEY_RE.fullmatch(key) and value != "":
             keys.add(key)
     return keys
 
@@ -43,7 +49,7 @@ def assert_monotonic_text(before: str, after: str) -> set[str]:
     missing = sorted(before_keys - after_keys)
     if missing:
         raise KeysetReductionError(
-            "environment key-set reduction blocked: " + ",".join(missing)
+            "environment active key-set reduction blocked: " + ",".join(missing)
         )
     return after_keys - before_keys
 
@@ -95,7 +101,7 @@ def verify(env_path: Path, lock_path: Path) -> tuple[int, int]:
     missing = sorted(locked - current)
     if missing:
         raise KeysetReductionError(
-            "sealed environment keys disappeared: " + ",".join(missing)
+            "sealed environment keys disappeared or became empty: " + ",".join(missing)
         )
     return len(locked), len(current)
 
@@ -103,14 +109,14 @@ def verify(env_path: Path, lock_path: Path) -> tuple[int, int]:
 def seal(env_path: Path, lock_path: Path) -> tuple[int, int, int]:
     current = read_env_keys(env_path)
     if not current:
-        raise ValueError("refusing to seal empty environment key-set")
+        raise ValueError("refusing to seal empty environment active key-set")
 
     if lock_path.exists():
         locked = read_lock(lock_path)
         missing = sorted(locked - current)
         if missing:
             raise KeysetReductionError(
-                "sealed environment keys disappeared: " + ",".join(missing)
+                "sealed environment keys disappeared or became empty: " + ",".join(missing)
             )
     else:
         locked = set()
@@ -122,7 +128,7 @@ def seal(env_path: Path, lock_path: Path) -> tuple[int, int, int]:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Protect a .env key-set from deletion")
+    parser = argparse.ArgumentParser(description="Protect a .env active key-set from deletion or emptying")
     sub = parser.add_subparsers(dest="command", required=True)
     for command in ("seal", "verify"):
         child = sub.add_parser(command)
