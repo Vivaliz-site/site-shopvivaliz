@@ -12,6 +12,12 @@ Recuperacao excepcional:
 - valida `.security/sanitized-history.json` no remoto;
 - exige que a raiz real do remoto corresponda exatamente ao marcador;
 - realinha apenas uma arvore limpa, sem push e sem criar historico alternativo.
+
+Compatibilidade de transicao:
+- um checkout deixado pelo orquestrador legado em `patch/agente-*` pode voltar
+  para `main` somente se estiver limpo e o HEAD legado ja for ancestral de
+  `origin/main`; branches arbitrarias ou com commits exclusivos continuam
+  bloqueadas para nao descartar trabalho.
 """
 from __future__ import annotations
 
@@ -30,6 +36,7 @@ REPO_DIR = Path(os.getenv("SHOPVIVALIZ_REPO_DIR", str(DEFAULT_REPO_DIR))).resolv
 DEFAULT_BRANCH = os.getenv("SHOPVIVALIZ_SYNC_BRANCH", "main")
 STATUS_FILE = REPO_DIR / "logs" / "tri-environment-sync.json"
 SANITIZED_HISTORY_MARKER = ".security/sanitized-history.json"
+LEGACY_AGENT_BRANCH_PREFIX = "patch/agente-"
 HEALTH_URL = os.getenv(
     "SHOPVIVALIZ_HEALTH_URL",
     "http://127.0.0.1/api/health.php?health=1",
@@ -74,6 +81,11 @@ def tracked_dirty_paths() -> list[str]:
         if path:
             paths.append(path.replace("\\", "/"))
     return paths
+
+
+def local_branch_exists(branch: str) -> bool:
+    result = run(["git", "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"])
+    return result.returncode == 0
 
 
 def write_status(payload: dict[str, object]) -> None:
@@ -198,7 +210,12 @@ def main() -> int:
             }
         )
 
-        if current_branch != branch:
+        legacy_agent_branch = bool(
+            current_branch
+            and current_branch != branch
+            and current_branch.startswith(LEGACY_AGENT_BRANCH_PREFIX)
+        )
+        if current_branch != branch and not legacy_agent_branch:
             payload["action"] = "blocked-wrong-branch"
             payload["message"] = (
                 f"checkout atual em {current_branch or 'detached'}, esperado {branch}"
@@ -244,6 +261,60 @@ def main() -> int:
         run(["git", "fetch", "--prune", "--no-tags", "origin", branch], check=True)
         remote_sha = git_output(["rev-parse", f"origin/{branch}"])
         payload["remote_sha"] = remote_sha
+
+        if legacy_agent_branch:
+            legacy_branch = current_branch
+            legacy_sha = local_sha
+            if not is_ancestor(legacy_sha, remote_sha):
+                payload.update(
+                    {
+                        "action": "blocked-legacy-branch-with-unique-commits",
+                        "message": (
+                            f"branch legado {legacy_branch} possui historico nao contido "
+                            f"em origin/{branch}; nenhuma troca de branch foi aplicada"
+                        ),
+                    }
+                )
+                write_status(payload)
+                log.error(payload["message"])
+                return 6
+
+            if not local_branch_exists(branch):
+                payload.update(
+                    {
+                        "action": "blocked-missing-canonical-branch",
+                        "message": (
+                            f"branch canonica local {branch} ausente; recuperacao automatica "
+                            "recusada para nao inventar estado Git"
+                        ),
+                    }
+                )
+                write_status(payload)
+                log.error(payload["message"])
+                return 7
+
+            run(["git", "switch", branch], check=True)
+            current_branch = git_output(["branch", "--show-current"])
+            local_sha = git_output(["rev-parse", "HEAD"])
+            if current_branch != branch:
+                raise RuntimeError("recuperacao de branch legado nao terminou na branch canonica")
+
+            payload.update(
+                {
+                    "branch": current_branch,
+                    "local_sha": local_sha,
+                    "legacy_branch_recovery": {
+                        "from_branch": legacy_branch,
+                        "from_sha": legacy_sha,
+                        "status": "switched-to-canonical",
+                    },
+                }
+            )
+            log.info(
+                "Checkout legado %s recuperado com seguranca para %s",
+                legacy_branch,
+                branch,
+            )
 
         if local_sha == remote_sha:
             payload.update(
