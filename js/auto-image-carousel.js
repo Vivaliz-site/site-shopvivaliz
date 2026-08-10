@@ -1,48 +1,20 @@
 /**
- * AUTO IMAGE CAROUSEL - 3 SEGUNDOS
- * Alterna automaticamente entre imagens em todas as paginas.
+ * Galeria leve de imagens do produto.
+ *
+ * Mantém setas, teclado e swipe na página de produto, mas não alterna imagens
+ * automaticamente em cards da home/catálogo. Isso evita baixar galerias inteiras
+ * em segundo plano a cada 3 segundos quando o cliente nem interagiu com o card.
  */
-
-(function() {
+(function () {
   'use strict';
 
-  const carousels = new Map();
-  const ROTATION_INTERVAL = 3000;
-  const USER_PAUSE_INTERVAL = 10000;
-
-  function parseImages(rawValue) {
-    if (!rawValue) return [];
-
-    const candidates = [rawValue];
-    try {
-      candidates.push(decodeURIComponent(rawValue));
-    } catch (e) {}
-    candidates.push(rawValue.replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, '&'));
-
-    for (const candidate of candidates) {
-      try {
-        const parsed = JSON.parse(candidate);
-        if (Array.isArray(parsed)) {
-          return parsed
-            .map(value => String(value || '').trim())
-            .filter(Boolean);
-        }
-      } catch (e) {}
-    }
-
-    return [];
-  }
-
-  function injectProductGalleryStyles() {
+  function injectStyles() {
     if (document.getElementById('sv-product-gallery-navigation-styles')) return;
 
     const style = document.createElement('style');
     style.id = 'sv-product-gallery-navigation-styles';
     style.textContent = `
-      #product-zoom-box.sv-product-gallery-enabled {
-        position: relative;
-      }
-
+      #product-zoom-box.sv-product-gallery-enabled { position: relative; }
       .sv-product-gallery-arrow {
         position: absolute;
         top: 50%;
@@ -63,32 +35,18 @@
         transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
         -webkit-tap-highlight-color: transparent;
       }
-
       .sv-product-gallery-arrow:hover {
-        background: #ffffff;
+        background: #fff;
         box-shadow: 0 10px 28px rgba(15, 23, 42, 0.24);
         transform: translateY(-50%) scale(1.06);
       }
-
       .sv-product-gallery-arrow:focus-visible {
         outline: 3px solid rgba(11, 79, 136, 0.34);
         outline-offset: 3px;
       }
-
-      .sv-product-gallery-arrow--previous {
-        left: 14px;
-      }
-
-      .sv-product-gallery-arrow--next {
-        right: 14px;
-      }
-
-      .sv-product-gallery-arrow svg {
-        width: 24px;
-        height: 24px;
-        pointer-events: none;
-      }
-
+      .sv-product-gallery-arrow--previous { left: 14px; }
+      .sv-product-gallery-arrow--next { right: 14px; }
+      .sv-product-gallery-arrow svg { width: 24px; height: 24px; pointer-events: none; }
       .sv-product-gallery-counter {
         position: absolute;
         right: 14px;
@@ -98,44 +56,27 @@
         padding: 5px 10px;
         border-radius: 999px;
         background: rgba(15, 23, 42, 0.78);
-        color: #ffffff;
+        color: #fff;
         font-size: 0.78rem;
         font-weight: 700;
         line-height: 1.2;
         text-align: center;
         pointer-events: none;
       }
-
       @media (max-width: 640px) {
-        .sv-product-gallery-arrow {
-          width: 44px;
-          height: 44px;
-        }
-
-        .sv-product-gallery-arrow--previous {
-          left: 8px;
-        }
-
-        .sv-product-gallery-arrow--next {
-          right: 8px;
-        }
-
-        .sv-product-gallery-counter {
-          right: 8px;
-          bottom: 8px;
-        }
+        .sv-product-gallery-arrow { width: 44px; height: 44px; }
+        .sv-product-gallery-arrow--previous { left: 8px; }
+        .sv-product-gallery-arrow--next { right: 8px; }
+        .sv-product-gallery-counter { right: 8px; bottom: 8px; }
       }
-
       @media (prefers-reduced-motion: reduce) {
-        .sv-product-gallery-arrow {
-          transition: none;
-        }
+        .sv-product-gallery-arrow { transition: none; }
       }
     `;
     document.head.appendChild(style);
   }
 
-  function createGalleryArrow(direction, label) {
+  function createArrow(direction, label) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'sv-product-gallery-arrow sv-product-gallery-arrow--' + direction;
@@ -147,224 +88,97 @@
   }
 
   function initProductGallery() {
-    const thumbnailButtons = Array.from(document.querySelectorAll('.product-gallery-thumbnails .thumb-btn'));
-    const galleryContainer = document.getElementById('product-zoom-box');
-    if (thumbnailButtons.length < 2 || !galleryContainer || window.__svProductGalleryCarousel) return;
-    window.__svProductGalleryCarousel = true;
+    const thumbnails = Array.from(document.querySelectorAll('.product-gallery-thumbnails .thumb-btn'));
+    const gallery = document.getElementById('product-zoom-box');
+    if (!gallery || thumbnails.length < 2 || gallery.dataset.svGalleryBound === '1') return;
 
-    injectProductGalleryStyles();
+    gallery.dataset.svGalleryBound = '1';
+    injectStyles();
 
-    const reducedMotionQuery = typeof window.matchMedia === 'function'
-      ? window.matchMedia('(prefers-reduced-motion: reduce)')
-      : null;
-    let currentImageIndex = Math.max(0, thumbnailButtons.findIndex(button => button.classList.contains('active')));
-    let isAutoPlay = !(reducedMotionQuery && reducedMotionQuery.matches);
-    let autoCarouselInterval = null;
-    let resumeTimer = null;
-    let isProgrammaticChange = false;
+    let current = Math.max(0, thumbnails.findIndex(button => button.classList.contains('active')));
     let touchStartX = null;
+    let programmatic = false;
 
-    galleryContainer.classList.add('sv-product-gallery-enabled');
-    galleryContainer.setAttribute('role', 'region');
-    galleryContainer.setAttribute('aria-label', 'Galeria de imagens do produto');
-    if (!galleryContainer.hasAttribute('tabindex')) galleryContainer.setAttribute('tabindex', '0');
+    gallery.classList.add('sv-product-gallery-enabled');
+    gallery.setAttribute('role', 'region');
+    gallery.setAttribute('aria-label', 'Galeria de imagens do produto');
+    if (!gallery.hasAttribute('tabindex')) gallery.setAttribute('tabindex', '0');
 
-    const previousButton = createGalleryArrow('previous', 'Ver imagem anterior');
-    const nextButton = createGalleryArrow('next', 'Ver próxima imagem');
+    const previous = createArrow('previous', 'Ver imagem anterior');
+    const next = createArrow('next', 'Ver próxima imagem');
     const counter = document.createElement('span');
     counter.className = 'sv-product-gallery-counter';
     counter.setAttribute('aria-hidden', 'true');
+    gallery.append(previous, next, counter);
 
-    galleryContainer.appendChild(previousButton);
-    galleryContainer.appendChild(nextButton);
-    galleryContainer.appendChild(counter);
-
-    function normalizeIndex(index) {
-      return (index + thumbnailButtons.length) % thumbnailButtons.length;
+    function normalize(index) {
+      return (index + thumbnails.length) % thumbnails.length;
     }
 
     function updateControls() {
-      counter.textContent = (currentImageIndex + 1) + ' / ' + thumbnailButtons.length;
-      previousButton.setAttribute('aria-label', 'Ver imagem anterior. Imagem atual ' + (currentImageIndex + 1) + ' de ' + thumbnailButtons.length);
-      nextButton.setAttribute('aria-label', 'Ver próxima imagem. Imagem atual ' + (currentImageIndex + 1) + ' de ' + thumbnailButtons.length);
+      counter.textContent = (current + 1) + ' / ' + thumbnails.length;
+      previous.setAttribute('aria-label', 'Ver imagem anterior. Imagem atual ' + (current + 1) + ' de ' + thumbnails.length);
+      next.setAttribute('aria-label', 'Ver próxima imagem. Imagem atual ' + (current + 1) + ' de ' + thumbnails.length);
     }
 
-    function startAutoCarousel() {
-      if (autoCarouselInterval) clearInterval(autoCarouselInterval);
-      if (!isAutoPlay) return;
-
-      autoCarouselInterval = setInterval(() => {
-        if (!isAutoPlay) return;
-        selectImage(currentImageIndex + 1, false);
-      }, ROTATION_INTERVAL);
-    }
-
-    function pauseAfterInteraction() {
-      isAutoPlay = false;
-      if (autoCarouselInterval) clearInterval(autoCarouselInterval);
-      if (resumeTimer) clearTimeout(resumeTimer);
-
-      resumeTimer = setTimeout(() => {
-        isAutoPlay = !(reducedMotionQuery && reducedMotionQuery.matches);
-        startAutoCarousel();
-      }, USER_PAUSE_INTERVAL);
-    }
-
-    function selectImage(index, userInitiated) {
-      currentImageIndex = normalizeIndex(index);
-      const targetButton = thumbnailButtons[currentImageIndex];
-      if (!targetButton) return;
-
-      if (userInitiated) pauseAfterInteraction();
-
-      isProgrammaticChange = true;
+    function select(index) {
+      current = normalize(index);
+      const target = thumbnails[current];
+      if (!target) return;
+      programmatic = true;
       try {
-        targetButton.click();
+        target.click();
       } finally {
-        isProgrammaticChange = false;
+        programmatic = false;
       }
       updateControls();
     }
 
-    thumbnailButtons.forEach((button, index) => {
+    thumbnails.forEach((button, index) => {
       button.addEventListener('click', () => {
-        currentImageIndex = index;
-        updateControls();
-        if (!isProgrammaticChange) pauseAfterInteraction();
+        current = index;
+        if (!programmatic) updateControls();
       });
     });
 
-    previousButton.addEventListener('click', event => {
+    previous.addEventListener('click', event => {
       event.preventDefault();
       event.stopPropagation();
-      selectImage(currentImageIndex - 1, true);
+      select(current - 1);
     });
-
-    nextButton.addEventListener('click', event => {
+    next.addEventListener('click', event => {
       event.preventDefault();
       event.stopPropagation();
-      selectImage(currentImageIndex + 1, true);
+      select(current + 1);
     });
 
-    previousButton.addEventListener('mousemove', event => event.stopPropagation());
-    nextButton.addEventListener('mousemove', event => event.stopPropagation());
-
-    galleryContainer.addEventListener('keydown', event => {
+    gallery.addEventListener('keydown', event => {
       if (event.key === 'ArrowLeft') {
         event.preventDefault();
-        selectImage(currentImageIndex - 1, true);
+        select(current - 1);
       } else if (event.key === 'ArrowRight') {
         event.preventDefault();
-        selectImage(currentImageIndex + 1, true);
+        select(current + 1);
       }
     });
 
-    galleryContainer.addEventListener('touchstart', event => {
+    gallery.addEventListener('touchstart', event => {
       if (event.touches.length === 1) touchStartX = event.touches[0].clientX;
     }, { passive: true });
-
-    galleryContainer.addEventListener('touchend', event => {
+    gallery.addEventListener('touchend', event => {
       if (touchStartX === null || event.changedTouches.length !== 1) return;
       const distance = event.changedTouches[0].clientX - touchStartX;
       touchStartX = null;
       if (Math.abs(distance) < 48) return;
-      selectImage(currentImageIndex + (distance < 0 ? 1 : -1), true);
+      select(current + (distance < 0 ? 1 : -1));
     }, { passive: true });
 
     updateControls();
-    startAutoCarousel();
-
-    window.addEventListener('beforeunload', () => {
-      if (autoCarouselInterval) clearInterval(autoCarouselInterval);
-      if (resumeTimer) clearTimeout(resumeTimer);
-    });
-  }
-
-  function initProductCardCarousels() {
-    document.querySelectorAll('.product-image[data-images], .product-card .product-image').forEach(element => {
-      if (carousels.has(element)) return;
-
-      const img = element.querySelector('img');
-      if (!img) return;
-
-      let imagesJson = element.getAttribute('data-images');
-      if (!imagesJson) {
-        const article = element.closest('article');
-        const link = article ? article.querySelector('a.product-image[data-images]') : null;
-        if (link) imagesJson = link.getAttribute('data-images');
-      }
-      if (!imagesJson) return;
-
-      const images = parseImages(imagesJson);
-      const currentSrc = img.getAttribute('src') || '';
-      if (currentSrc && !images.includes(currentSrc)) {
-        images.unshift(currentSrc);
-      }
-      if (images.length < 2) return;
-
-      let currentIndex = Math.max(0, images.indexOf(currentSrc));
-      let isAutoPlay = true;
-      let timer = null;
-
-      function setCurrentImage(nextIndex) {
-        currentIndex = nextIndex % images.length;
-        element.setAttribute('data-current-index', String(currentIndex));
-        img.style.opacity = '0.72';
-        img.src = images[currentIndex];
-        setTimeout(() => {
-          img.style.opacity = '1';
-        }, 180);
-      }
-
-      function startRotation() {
-        if (timer) clearInterval(timer);
-        timer = setInterval(() => {
-          if (isAutoPlay) setCurrentImage(currentIndex + 1);
-        }, ROTATION_INTERVAL);
-      }
-
-      img.addEventListener('mouseenter', () => {
-        isAutoPlay = false;
-      });
-
-      img.addEventListener('mouseleave', () => {
-        isAutoPlay = true;
-      });
-
-      img.addEventListener('error', () => {
-        if (images.length > 1) setCurrentImage(currentIndex + 1);
-      });
-
-      element.setAttribute('data-current-index', String(currentIndex));
-      startRotation();
-      carousels.set(element, { timer, images });
-    });
-  }
-
-  function initAll() {
-    initProductGallery();
-    initProductCardCarousels();
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initAll);
+    document.addEventListener('DOMContentLoaded', initProductGallery, { once: true });
   } else {
-    initAll();
+    initProductGallery();
   }
-
-  const observer = new MutationObserver(() => {
-    setTimeout(initProductCardCarousels, 100);
-  });
-
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-  });
-
-  window.addEventListener('beforeunload', () => {
-    carousels.forEach(carousel => {
-      if (carousel.timer) clearInterval(carousel.timer);
-    });
-    observer.disconnect();
-  });
 })();
