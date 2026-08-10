@@ -52,7 +52,8 @@ jobs:
           manifest="$workdir/manifest.tsv"
           printf 'status\tslug\ttitle\thref\tfile\thtml_bytes\ttext_chars\tdetail\n' > "$manifest"
 
-          product_slug="$(php -r '
+          product_slug=''
+          if candidate_product_slug="$(php -r '
             require "includes/catalog-runtime.php";
             foreach (svcr_products() as $row) {
                 if (!is_array($row)) continue;
@@ -61,14 +62,19 @@ jobs:
                 if ($slug !== "") { echo $slug; break; }
                 if ($sku !== "") { echo strtolower($sku); break; }
             }
-          ' 2>/dev/null || true)"
+          ' 2>/dev/null)"; then
+            product_slug="$candidate_product_slug"
+          fi
 
-          blog_slug="$(php -r '
+          blog_slug=''
+          if candidate_blog_slug="$(php -r '
             require "includes/blog-article-repository.php";
             $repo = BlogArticleRepository::fromApplicationDatabase();
             $items = $repo->published("", "", 1);
             if (isset($items[0]["slug"])) echo trim((string)$items[0]["slug"]);
-          ' 2>/dev/null || true)"
+          ' 2>/dev/null)"; then
+            blog_slug="$candidate_blog_slug"
+          fi
 
           cat > "$workdir/routes.tsv" <<'EOF'
           Home	/	index.php	
@@ -379,7 +385,7 @@ jobs:
             public-audit/screenshots/
             public-audit/errors/
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
 
       - name: Cleanup SSH material
         if: always()
