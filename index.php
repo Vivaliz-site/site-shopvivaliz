@@ -197,7 +197,6 @@ function sv_home_sales_rank_map(): array
         if ($score <= 0) {
             continue;
         }
-
         foreach (['sku', 'product_id', 'olist_product_id', 'id'] as $field) {
             $key = strtoupper(trim((string)($row[$field] ?? '')));
             if ($key !== '' && !isset($map[$key])) {
@@ -413,12 +412,21 @@ function sv_home_top_categories(int $limit = 8): array
         arsort($counts);
         foreach ($counts as $category => $count) {
             $localIcon = sv_home_category_icon($category);
-            // Priorizar sempre a foto real do produto (Tiny/Olist) quando existir. O ícone
-            // local curado (cat-*.jpg) é genérico por tipo (ex: "caixa" cai em organização,
-            // "vaso" cai em jardim) e pode não bater com a categoria real — ver docs/AGENTS.md.
-            $icon = (isset($categoryImages[$category]) && $categoryImages[$category] !== '')
-                ? $categoryImages[$category]
-                : $localIcon;
+            $preferLocal = false;
+            foreach (['ferrament', 'rodízio', 'rodizio', 'rodas', 'jardim', 'organiza', 'ferragem', 'fixação', 'fixacao'] as $curatedNeedle) {
+                if (stripos($category, $curatedNeedle) !== false) {
+                    $preferLocal = true;
+                    break;
+                }
+            }
+            $productImage = trim((string)($categoryImages[$category] ?? ''));
+            // Os cinco grupos principais já possuem assets locais 360x360 curados e leves.
+            // Para eles, evitar baixar uma foto remota de produto (frequentemente 1200x1200)
+            // apenas para preencher um card de 240x240. Categorias sem um desses grupos
+            // continuam usando a primeira imagem real do catálogo, preservando precisão.
+            $icon = ($preferLocal && str_starts_with($localIcon, '/public/assets/category-images/'))
+                ? $localIcon
+                : ($productImage !== '' ? $productImage : $localIcon);
 
             $result[] = [
                 'name' => $category,
@@ -490,12 +498,12 @@ $svNavCurrent = '';
     <title>Vivaliz | Loja Online</title>
 
     <?php
-        // Bundle consolidado (2026-08-05): substitui 10 <link>/arquivos CSS
+        // Bundle consolidado (2026-08-05): substitui 9 <link>/arquivos CSS
         // separados (core, premium, inline-to-classes, webp-optimization,
-        // first-purchase-popup-v1, zoom-responsive, layout-polish-v1,
-        // home-mobile-compact, home-mobile-final, visual-polish-v4) por UMA
-        // única resposta HTTP, na mesma ordem de antes. Ver
-        // includes/asset-bundle-manifest.php e css/home-bundle.php.
+        // zoom-responsive, layout-polish-v1, home-mobile-compact,
+        // home-mobile-final, visual-polish-v4) por UMA única resposta HTTP,
+        // na mesma ordem de antes. Ver includes/asset-bundle-manifest.php e
+        // css/home-bundle.php.
         // Não inclui visual-polish-v5/v6/hotfix/audit/accessibility/cls —
         // esses continuam individuais em includes/load-custom-css.php
         // porque carregam DEPOIS do CSS customizado do admin de propósito.
@@ -1059,7 +1067,6 @@ $svNavCurrent = '';
     <!-- Footer -->
     <?php include __DIR__ . '/includes/footer.php'; ?>
 
-    <script src="/autodev/client.js"></script>
     <!-- Scroll Reveal -->
     <script>
     (function () {
@@ -1076,7 +1083,6 @@ $svNavCurrent = '';
         elements.forEach(function (el) { observer.observe(el); });
     })();
     </script>
-    <script src="/js/catalog.js"></script>
     <script src="/js/first-purchase-popup-v1.js?v=2026-07-30-1" defer></script>
     <script>
     (function () {
@@ -1196,9 +1202,8 @@ $svNavCurrent = '';
         });
     })();
     </script>
-    <script src="/js/auto-image-carousel.js?v=20260719-2"></script>
-    <!-- A/B Testing Framework for CRO -->
-    <script src="/js/shopvivaliz-ab-testing.js?v=1.0.0"></script>
+    <!-- Shim temporario: limpa variantes persistidas sem executar experimento. -->
+    <script src="/js/shopvivaliz-ab-testing.js?v=1.0.0" defer></script>
 
     <!-- Popup de Cupons Promocionais -->
     <?php echo sv_popup_cupons_html(); ?>
