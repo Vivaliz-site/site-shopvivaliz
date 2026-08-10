@@ -107,7 +107,12 @@ jobs:
             scripts/recover-olist-oauth-from-backups.py \
             tests/test_recover_olist_oauth_from_backups.py \
             scripts/env_keyset_guard.py \
-            tests/test_env_keyset_guard.py
+            tests/test_env_keyset_guard.py \
+            tests/test_env_writer_monotonic_policy.py \
+            scripts/configure-production-runtime.py \
+            daemon-token-renewer.py \
+            daemon-shopee-token-renewer.py \
+            daemon-google-token-renewer.py
 
       - name: Run secret bootstrap safety tests
         shell: bash
@@ -120,6 +125,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m unittest tests/test_env_keyset_guard.py -v
+          python3 -m unittest tests/test_env_writer_monotonic_policy.py -v
 
       - name: Run ERP OAuth static repair safety tests
         shell: bash
