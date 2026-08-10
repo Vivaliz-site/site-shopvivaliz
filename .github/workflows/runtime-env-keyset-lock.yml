@@ -5,8 +5,10 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/runtime-env-keyset-lock.yml'
+      - '.github/workflows/quality-gate.yml'
       - 'scripts/env_keyset_guard.py'
       - 'tests/test_env_keyset_guard.py'
+      - 'tests/test_env_writer_monotonic_policy.py'
       - 'scripts/configure-production-runtime.py'
       - 'daemon-token-renewer.py'
       - 'daemon-shopee-token-renewer.py'
