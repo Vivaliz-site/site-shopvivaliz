@@ -4,6 +4,31 @@ declare(strict_types=1);
 require_once __DIR__ . '/pdo-database.php';
 
 /**
+ * @param list<array<string,mixed>> $products
+ * @param array<string,string> $imageBySku
+ * @return list<array<string,mixed>>
+ */
+function svcie_apply_image_map(array $products, array $imageBySku): array
+{
+    foreach ($products as $index => $product) {
+        $sku = trim((string)($product['sku'] ?? ''));
+        $current = trim((string)($product['image_url'] ?? ''));
+        if ($current !== '' || $sku === '' || !isset($imageBySku[$sku])) continue;
+
+        $image = trim((string)$imageBySku[$sku]);
+        if ($image === '') continue;
+
+        $products[$index]['image_url'] = $image;
+        $images = is_array($product['images'] ?? null) ? array_values(array_filter($product['images'])) : [];
+        if (!in_array($image, $images, true)) array_unshift($images, $image);
+        $products[$index]['images'] = array_slice($images, 0, 10);
+        $products[$index]['images_count'] = max((int)($product['images_count'] ?? 0), count($products[$index]['images']));
+    }
+
+    return $products;
+}
+
+/**
  * Enriches storefront catalog rows with the primary image stored in the local
  * product mirror. Price/stock/description stay authoritative from the ERP
  * runtime; only missing image fields are filled here.
@@ -47,18 +72,5 @@ function svcie_enrich_images(array $products): array
         return $products;
     }
 
-    foreach ($products as $index => $product) {
-        $sku = trim((string)($product['sku'] ?? ''));
-        $current = trim((string)($product['image_url'] ?? ''));
-        if ($current !== '' || $sku === '' || !isset($imageBySku[$sku])) continue;
-
-        $image = $imageBySku[$sku];
-        $products[$index]['image_url'] = $image;
-        $images = is_array($product['images'] ?? null) ? array_values(array_filter($product['images'])) : [];
-        if (!in_array($image, $images, true)) array_unshift($images, $image);
-        $products[$index]['images'] = array_slice($images, 0, 10);
-        $products[$index]['images_count'] = max((int)($product['images_count'] ?? 0), count($products[$index]['images']));
-    }
-
-    return $products;
+    return svcie_apply_image_map($products, $imageBySku);
 }
