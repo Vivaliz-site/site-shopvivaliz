@@ -319,3 +319,4 @@ $svFreeShippingConfig = sv_free_shipping_config();
     });
 })();
 </script>
+<?php require_once __DIR__ . '/liz-assistant-assets.php'; ?>
