@@ -26,7 +26,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Configuration
 REPO_ROOT = Path(__file__).parent.resolve()
@@ -36,6 +36,15 @@ DEFAULT_BRANCH = "main"
 REMOTE_NAME = "origin"
 SANITIZED_HISTORY_MARKER = ".sanitized_history_root"
 HEALTH_URL = os.getenv("SHOPVIVALIZ_HEALTH_URL", "http://127.0.0.1/api/health.php?health=1")
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+try:
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 
 def run(cmd: List[str], check: bool = False, capture: bool = True) -> subprocess.CompletedProcess[str]:
@@ -84,7 +93,7 @@ def acquire_lock() -> None:
                         # Try to import psutil for process checking
                         import psutil
                         if psutil.pid_exists(int(pid_content)):
-                            print(f"\u274c Another git-auto-sync instance is running (PID: {pid_content}). Exiting.")
+                            print(f"ERROR: Another git-auto-sync instance is running (PID: {pid_content}). Exiting.")
                             sys.exit(1)
                         else:
                             # Stale lock, remove it
@@ -109,7 +118,7 @@ def acquire_lock() -> None:
         waited += wait_interval
         time.sleep(wait_interval)
 
-    print(f"\u274c Could not acquire lock after {max_wait} seconds. Exiting.")
+    print(f"ERROR: Could not acquire lock after {max_wait} seconds. Exiting.")
     sys.exit(1)
 
 
@@ -160,6 +169,9 @@ def check_local_health() -> Dict[str, Any]:
                 raise RuntimeError(f"Health endpoint returned HTTP {response.status}")
             if not isinstance(data, dict) or not data.get("ok", False):
                 raise RuntimeError("Health endpoint reported unhealthy state")
+            score = float(data.get("health_score_percent", 0))
+            if score < 85.0:
+                raise RuntimeError(f"Health score below threshold: {score}")
             return {"ok": True, "status": response.status, "data": data}
     except (urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError, RuntimeError) as exc:
         return {"ok": False, "error": str(exc)}
@@ -231,7 +243,7 @@ def create_agent_branch(agent_id: str, base_sha: str) -> str:
 def write_status(payload: Dict[str, Any]) -> None:
     """Write synchronization status to JSON file."""
     STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    payload["timestamp"] = datetime.utcnow().isoformat() + "Z"
+    payload["timestamp"] = datetime.now(timezone.utc).isoformat()
     payload["repo_root"] = str(REPO_ROOT)
     with open(STATUS_FILE, "w") as f:
         json.dump(payload, f, indent=2)
@@ -293,7 +305,6 @@ def main() -> int:
 
     # Acquire lock first
     acquire_lock()
-    print(f"[{agent_id}] Lock acquired")
 
     payload: Dict[str, Any] = {
         "agent_id": agent_id,
@@ -306,8 +317,20 @@ def main() -> int:
         print(f"\n[{agent_id}] Step 0: Checking local health gate...")
         health = check_local_health()
         if not health.get("ok"):
-            raise RuntimeError(f"Health gate failed: {health.get('error', 'unknown error')}")
-        payload["health"] = {"status": "ok", "endpoint": HEALTH_URL}
+            payload["status"] = "aborted"
+            payload["error"] = f"Health gate failed: {health.get('error', 'unknown error')}"
+            payload["health"] = {"status": "failed", "endpoint": HEALTH_URL, "error": health.get("error")}
+            payload["steps"].append({"step": "health", "status": "failed", "error": health.get("error")})
+            write_status(payload)
+            print(f"ERROR: [{agent_id}] {payload['error']}")
+            return 2
+
+        payload["health"] = {
+            "status": "ok",
+            "endpoint": HEALTH_URL,
+            "score": health["data"].get("health_score_percent"),
+            "queue": health["data"].get("queue"),
+        }
         payload["steps"].append({"step": "health", "status": "ok"})
 
         # Step 1: Fetch remote
@@ -345,6 +368,7 @@ def main() -> int:
             stash_ref = get_latest_stash(agent_id)
             if stash_ref:
                 applied = apply_stash(stash_ref, agent_id)
+                payload["stash_applied"] = applied
                 payload["steps"].append({"step": "apply_stash", "status": "ok" if applied else "failed", "stash_ref": stash_ref})
             else:
                 print(f"[{agent_id}] No stash found for this agent")
@@ -382,7 +406,7 @@ def main() -> int:
         payload["steps"].append({"step": "error", "status": "failed", "error": str(e)})
         write_status(payload)
 
-        print(f"\n❌ [{agent_id}] Sync failed: {e}")
+        print(f"\nERROR: [{agent_id}] Sync failed: {e}")
         print(f"{'='*60}\n")
         return 1
 

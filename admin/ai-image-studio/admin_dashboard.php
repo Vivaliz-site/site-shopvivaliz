@@ -128,6 +128,51 @@ $failureBuckets = [
     'causes' => [],
     'products' => [],
 ];
+function ai_studio_provider_health_snapshot(): array
+{
+    $path = dirname(__DIR__, 3) . '/storage/ai-provider-health.json';
+    if (!is_file($path) || !is_readable($path)) {
+        return [];
+    }
+    $raw = file_get_contents($path);
+    if (!is_string($raw) || trim($raw) === '') {
+        return [];
+    }
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+    $snapshot = [];
+    foreach ($decoded as $provider => $expiry) {
+        $provider = ai_studio_h((string)$provider);
+        $snapshot[$provider] = is_numeric($expiry) ? (float)$expiry : 0.0;
+    }
+    return $snapshot;
+}
+
+function ai_studio_provider_audit_tail(int $limit = 25): array
+{
+    $path = dirname(__DIR__, 3) . '/storage/ai-provider-audit.jsonl';
+    if (!is_file($path) || !is_readable($path)) {
+        return [];
+    }
+    $lines = @file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!is_array($lines) || $lines === []) {
+        return [];
+    }
+    $tail = array_slice($lines, max(0, count($lines) - $limit));
+    $events = [];
+    foreach ($tail as $line) {
+        $decoded = json_decode((string)$line, true);
+        if (!is_array($decoded)) {
+            continue;
+        }
+        $events[] = $decoded;
+    }
+    return array_reverse($events);
+}
+$providerHealth = ai_studio_provider_health_snapshot();
+$providerAuditTail = ai_studio_provider_audit_tail(24);
 try {
     $stmt = $db->query(
         'SELECT id, product_id, image_type, provider_used, status, target_channels_json, error_message, created_at '
@@ -213,6 +258,43 @@ try {
 </div>
 <?php endif; ?>
 
+<?php if ($providerHealth !== []): ?>
+<div class="ais-summary-card" style="margin:16px 0 24px">
+    <h3>Estado do pool de IA</h3>
+    <ul>
+        <?php foreach ($providerHealth as $provider => $expiry): ?>
+            <li>
+                <?= ai_studio_h($provider) ?>:
+                <strong><?= $expiry > 0 ? 'cooldown até ' . ai_studio_h(date('Y-m-d H:i:s', (int)$expiry)) : 'livre' ?></strong>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+</div>
+<?php endif; ?>
+
+<?php if ($providerAuditTail !== []): ?>
+<div class="ais-summary-card" style="margin:16px 0 24px">
+    <h3>Últimos eventos por provedor</h3>
+    <div class="table-wrap">
+        <table class="ais-table">
+            <thead><tr><th>Hora</th><th>Provedor</th><th>Tipo</th><th>Status</th><th>Mensagem</th><th>SKU</th></tr></thead>
+            <tbody>
+            <?php foreach ($providerAuditTail as $event): ?>
+                <tr>
+                    <td><?= ai_studio_h(date('Y-m-d H:i:s', (int)($event['ts'] ?? 0))) ?></td>
+                    <td><?= ai_studio_h((string)($event['provider'] ?? '')) ?></td>
+                    <td><?= ai_studio_h((string)($event['variant'] ?? ($event['image_type'] ?? ''))) ?></td>
+                    <td><span class="ais-badge"><?= ai_studio_h((string)($event['status'] ?? '')) ?></span></td>
+                    <td><?= ai_studio_h(ai_studio_excerpt((string)($event['message'] ?? ''), 110)) ?></td>
+                    <td><?= ai_studio_h((string)($event['sku'] ?? '')) ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+<?php endif; ?>
+
 <?php if ($previewProducts === null): ?>
 <div class="ais-form"><h2>Passo 1 — Marketplace e lote</h2><form method="get"><input type="hidden" name="preview" value="1">
 <label for="target_channel">Marketplace de destino</label><select name="target_channel" id="target_channel" required><?php foreach($channelProfiles as $key=>$profile): ?><option value="<?=ai_studio_h($key)?>"><?=ai_studio_h((string)$profile['label'])?></option><?php endforeach; ?></select><small>O destino controla o prompt visual e cria uma fila independente por canal.</small>
@@ -224,7 +306,7 @@ try {
 <div class="ais-form"><h2>Passo 2 — Confirmar geracao para <?=ai_studio_h((string)$profile['label'])?></h2><p>Provedor: <strong><?=ai_studio_h($previewProvider)?></strong><?php if($previewModel!==''):?> · Modelo: <strong><?=ai_studio_h($previewModel)?></strong><?php endif;?> · <?=count($previewProducts)?> produto(s).</p>
 <div class="channel-profile"><strong>Regra visual deste canal</strong><ul><?php foreach((array)($profile['audit_notes']??[]) as $note):?><li><?=ai_studio_h((string)$note)?></li><?php endforeach;?></ul><small>Minimo tecnico: <?= (int)($profile['minimum_side']??1000) ?>px por lado · alvo recomendado: <?= (int)($profile['recommended_side']??1000) ?>px · galeria: ate <?= (int)($profile['max_gallery']??9) ?> imagens.</small></div>
 <?php if($previewProducts===[]): ?><div class="ais-alert note">Nenhum produto pendente para este marketplace. <a href="/admin/ai-image-studio/admin_dashboard.php">Buscar outro canal</a></div><?php else: ?>
-<form method="post"><input type="hidden" name="run_batch" value="1"><input type="hidden" name="provider" value="<?=ai_studio_h($previewProvider)?>"><input type="hidden" name="model" value="<?=ai_studio_h($previewModel)?>"><input type="hidden" name="target_channel" value="<?=ai_studio_h($previewChannel)?>"><div class="ais-preview-actions"><button type="button" id="ais-select-all">Selecionar tudo</button><button type="button" id="ais-clear-all">Limpar</button><div class="ais-preview-summary">Selecionados: <strong id="ais-selected-count">0</strong>/<span id="ais-total-count"><?=count($previewProducts)?></span></div></div><div class="ais-preview-list">
+<form method="post"><input type="hidden" name="run_batch" value="1"><input type="hidden" name="provider" value="<?=ai_studio_h($previewProvider)?>"><input type="hidden" name="model" value="<?=ai_studio_h($previewModel)?>"><input type="hidden" name="target_channel" value="<?=ai_studio_h($previewChannel)?>"><label style="display:flex;align-items:center;gap:8px;margin:14px 0 6px"><input type="checkbox" name="enqueue_only" value="1" checked> Enfileirar processamento e responder rápido</label><small>Recomendado para lotes maiores, porque a fila processa cada produto em segundo plano sem travar a interface.</small><div class="ais-preview-actions"><button type="button" id="ais-select-all">Selecionar tudo</button><button type="button" id="ais-clear-all">Limpar</button><div class="ais-preview-summary">Selecionados: <strong id="ais-selected-count">0</strong>/<span id="ais-total-count"><?=count($previewProducts)?></span></div></div><div class="ais-preview-list">
 <?php foreach($previewProducts as $p): $pid=(int)$p['id'];$pname=trim((string)($p['name']??''))!==''?(string)$p['name']:"Produto #$pid";$pimg=trim((string)($p['image_url']??'')); ?><div class="ais-preview-item"><label class="ais-product-check"><input type="checkbox" name="selected_products[]" value="<?=$pid?>" checked data-product-check> Selecionar</label><?php if($pimg!==''):?><img src="<?=ai_studio_h($pimg)?>" alt="Foto atual"><?php else:?><div style="width:64px;height:64px;background:#eee;border-radius:6px"></div><?php endif;?><div class="ais-pi-info"><div class="ais-pi-name"><?=ai_studio_h($pname)?></div><div class="ais-pi-id">#<?=$pid?><?=trim((string)($p['sku']??''))!==''?' · SKU '.ai_studio_h((string)$p['sku']):''?><?=trim((string)($p['category']??''))!==''?' · '.ai_studio_h((string)$p['category']):''?><?=$pimg===''?' · sem foto real: sera bloqueado':''?></div></div><div class="ais-pi-types"><?php foreach($IMAGE_TYPE_LABELS as $key=>$text):?><label><input type="checkbox" name="image_types[<?=$pid?>][]" value="<?=ai_studio_h($key)?>" checked> <?=ai_studio_h($text)?></label><?php endforeach;?></div></div><?php endforeach; ?>
 </div><button type="submit" id="ais-submit">Confirmar e gerar para <?=ai_studio_h((string)$profile['label'])?></button> &nbsp; <a href="/admin/ai-image-studio/admin_dashboard.php">Cancelar</a></form><script>(()=>{const inputs=[...document.querySelectorAll('[data-product-check]')],count=document.getElementById('ais-selected-count'),submit=document.getElementById('ais-submit');const update=()=>{const selected=inputs.filter(x=>x.checked).length;if(count)count.textContent=String(selected);if(submit)submit.disabled=selected===0};document.getElementById('ais-select-all')?.addEventListener('click',()=>{inputs.forEach(x=>x.checked=true);update()});document.getElementById('ais-clear-all')?.addEventListener('click',()=>{inputs.forEach(x=>x.checked=false);update()});inputs.forEach(x=>x.addEventListener('change',update));update()})();</script><?php endif;?></div>
 <?php endif; ?>

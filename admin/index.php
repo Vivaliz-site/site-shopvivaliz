@@ -17,15 +17,12 @@ $codename = (string)($version['codename'] ?? '');
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
     <?php require_once __DIR__ . '/../includes/load-custom-css.php'; ?>
-    <script>
-    (function () {
-        if (window.location.pathname !== '/admin/' && window.location.pathname !== '/admin') {
-            window.history.replaceState({}, '', '/admin/');
-        }
-    })();
-    </script>
 </head>
 <body class="admin-surface">
+    <div style="position:sticky;top:0;z-index:9999;background:#0f172a;color:#fff;padding:8px 16px;border-bottom:1px solid rgba(255,255,255,.12);font-size:13px;font-weight:700;letter-spacing:.02em;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <span>ShopVivaliz Admin</span>
+        <span>Release <?= htmlspecialchars($appVersion, ENT_QUOTES, 'UTF-8') ?><?= $codename !== '' ? ' · ' . htmlspecialchars($codename, ENT_QUOTES, 'UTF-8') : '' ?></span>
+    </div>
     <nav class="navbar" style="background: #1a1a2e; padding: 1rem 0;">
         <div class="container nav-inner" style="display: flex; justify-content: space-between; align-items: center;">
             <a class="brand-link" href="/admin/" style="color: white; font-weight: bold; font-size: 1.2rem;">🛍️ ShopVivaliz Admin</a>
@@ -36,6 +33,7 @@ $codename = (string)($version['codename'] ?? '');
                 <a href="/admin/clientes.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">👥 Clientes</a>
                 <a href="/admin/admin-back.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🗂️ Legado</a>
                 <a href="/admin/monitor/" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">📊 Monitor</a>
+                <a href="/admin/ai-provider-audit.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🧪 Auditoria IA</a>
                 <a href="/admin/connections.php" style="color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🔐 Conexões</a>
                 <a href="/auth/logout.php" style="color: #ff6b6b; text-decoration: none; padding: 0.5rem 1rem; border-radius: 4px;">🚪 Sair</a>
             </div>
@@ -80,6 +78,9 @@ $codename = (string)($version['codename'] ?? '');
                 </a>
                 <a href="/admin/monitor/" style="background: #ffc107; color: black; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
                     📊 Monitor
+                </a>
+                <a href="/admin/ai-provider-audit.php" style="background: #0ea5e9; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
+                    🧪 Auditoria IA
                 </a>
                 <a href="/admin/integrations.php" style="background: #e83e8c; color: white; padding: 1.5rem; border-radius: 8px; text-decoration: none; text-align: center; font-weight: bold; transition: all 0.3s;">
                     ⚙️ Integrações
@@ -213,6 +214,7 @@ $codename = (string)($version['codename'] ?? '');
             <div id="catalog-status" class="status-line">Carregando catálogo...</div>
             <div class="admin-link-list">
                 <a class="btn btn-secondary" href="/admin/monitor/" target="_blank" rel="noreferrer">Monitor</a>
+                <a class="btn btn-secondary" href="/admin/ai-provider-audit.php" target="_blank" rel="noreferrer">Auditoria IA</a>
                 <a class="btn btn-secondary" href="/admin/admin-back.php" target="_blank" rel="noreferrer">Legado</a>
                 <a class="btn btn-secondary" href="/api/catalog/products.php?limit=200" target="_blank" rel="noreferrer">Ver JSON</a>
             </div>

@@ -1,89 +1,176 @@
 <?php
-require_once __DIR__ . '/../includes/admin-guard.php';
-header('Content-Type: application/json; charset=utf-8');
+declare(strict_types=1);
 
-$host = getenv('DB_HOST') ?: 'localhost';
-$user = getenv('DB_USER') ?: 'root';
-$pass = getenv('DB_PASS') ?: '';
-$db_name = getenv('DB_NAME') ?: 'shopvivaliz';
+require_once __DIR__ . '/../includes/admin-guard.php';
+
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
+
+function svdb_json(int $status, array $payload): never
+{
+    http_response_code($status);
+    echo json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+    exit;
+}
+
+function svdb_env(string $key, string $fallback = ''): string
+{
+    $value = getenv($key);
+    return is_string($value) && $value !== '' ? $value : $fallback;
+}
+
+function svdb_table_exists(mysqli $db, string $table): bool
+{
+    $stmt = $db->prepare('SELECT COUNT(*) AS c FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?');
+    if (!$stmt) {
+        return false;
+    }
+    $stmt->bind_param('s', $table);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    return (int)($row['c'] ?? 0) > 0;
+}
+
+function svdb_scalar(mysqli $db, string $sql): int|string|null
+{
+    $result = $db->query($sql);
+    if (!$result) {
+        return null;
+    }
+    $row = $result->fetch_row();
+    return $row[0] ?? null;
+}
+
+function svdb_table_summary(mysqli $db, string $table): array
+{
+    if (!svdb_table_exists($db, $table)) {
+        return ['exists' => false];
+    }
+
+    $count = svdb_scalar($db, 'SELECT COUNT(*) FROM `' . $db->real_escape_string($table) . '`');
+    $distinctSku = null;
+    $columns = [];
+    $colResult = $db->query('SHOW COLUMNS FROM `' . $db->real_escape_string($table) . '`');
+    if ($colResult) {
+        while ($row = $colResult->fetch_assoc()) {
+            $columns[] = (string)($row['Field'] ?? '');
+        }
+    }
+    if (in_array('sku', $columns, true)) {
+        $distinctSku = svdb_scalar($db, 'SELECT COUNT(DISTINCT sku) FROM `' . $db->real_escape_string($table) . '` WHERE sku IS NOT NULL AND sku <> ""');
+    }
+
+    $indexes = [];
+    $idxResult = $db->query('SHOW INDEX FROM `' . $db->real_escape_string($table) . '`');
+    if ($idxResult) {
+        while ($row = $idxResult->fetch_assoc()) {
+            $indexes[] = [
+                'name' => (string)($row['Key_name'] ?? ''),
+                'column' => (string)($row['Column_name'] ?? ''),
+                'unique' => ((int)($row['Non_unique'] ?? 1)) === 0,
+            ];
+        }
+    }
+
+    return [
+        'exists' => true,
+        'rows' => is_numeric($count) ? (int)$count : $count,
+        'distinct_skus' => is_numeric($distinctSku) ? (int)$distinctSku : $distinctSku,
+        'columns' => array_values(array_filter($columns)),
+        'indexes' => $indexes,
+    ];
+}
+
+function svdb_recommended_indexes(mysqli $db): array
+{
+    $recommendations = [
+        'products' => [
+            'idx_products_sku' => 'ALTER TABLE products ADD INDEX idx_products_sku (sku)',
+            'idx_products_status' => 'ALTER TABLE products ADD INDEX idx_products_status (status)',
+        ],
+        'olist_products' => [
+            'idx_olist_products_sku' => 'ALTER TABLE olist_products ADD INDEX idx_olist_products_sku (sku)',
+            'idx_olist_products_id' => 'ALTER TABLE olist_products ADD INDEX idx_olist_products_id (id)',
+        ],
+        'olist_product_images' => [
+            'idx_olist_product_images_sku' => 'ALTER TABLE olist_product_images ADD INDEX idx_olist_product_images_sku (sku)',
+        ],
+        'catalog_optimizations_staging' => [
+            'idx_catalog_staging_status_channel' => 'ALTER TABLE catalog_optimizations_staging ADD INDEX idx_catalog_staging_status_channel (status, channel)',
+            'idx_catalog_staging_product_channel' => 'ALTER TABLE catalog_optimizations_staging ADD INDEX idx_catalog_staging_product_channel (product_id, channel)',
+        ],
+    ];
+
+    $missing = [];
+    foreach ($recommendations as $table => $indexes) {
+        if (!svdb_table_exists($db, $table)) {
+            continue;
+        }
+        $existing = [];
+        $idxResult = $db->query('SHOW INDEX FROM `' . $db->real_escape_string($table) . '`');
+        if ($idxResult) {
+            while ($row = $idxResult->fetch_assoc()) {
+                $existing[(string)($row['Key_name'] ?? '')] = true;
+            }
+        }
+        foreach ($indexes as $name => $sql) {
+            if (!isset($existing[$name])) {
+                $missing[] = ['table' => $table, 'index' => $name, 'sql' => $sql];
+            }
+        }
+    }
+
+    return $missing;
+}
+
+$host = svdb_env('DB_HOST', 'localhost');
+$user = svdb_env('DB_USER', 'root');
+$pass = svdb_env('DB_PASS', '');
+$dbName = svdb_env('DB_NAME', 'shopvivaliz');
 
 mysqli_report(MYSQLI_REPORT_OFF);
 try {
-    $db = @new mysqli((string)$host, (string)$user, (string)$pass, (string)$db_name, 3306);
+    $db = @new mysqli($host, $user, $pass, $dbName, 3306);
 } catch (Throwable $e) {
-    http_response_code(503);
-    exit(json_encode(['ok' => false, 'erro' => 'Banco de dados indisponível.'], JSON_UNESCAPED_UNICODE));
+    svdb_json(503, ['ok' => false, 'error' => 'database_unavailable']);
 }
 
 if ($db->connect_errno) {
-    http_response_code(503);
-    exit(json_encode(['ok' => false, 'erro' => 'Banco de dados indisponível.'], JSON_UNESCAPED_UNICODE));
+    svdb_json(503, ['ok' => false, 'error' => 'database_unavailable']);
 }
 
 $db->set_charset('utf8mb4');
 
-$result = [];
-
-// 1. TABELAS
 $tables = [];
-$t_result = $db->query("SHOW TABLES");
-while ($row = $t_result->fetch_row()) {
-    $tables[] = $row[0];
-}
-$result['tabelas'] = $tables;
-
-// 2. CONTAGENS
-$counts = [];
-$counts['products'] = $db->query("SELECT COUNT(*) as c FROM products")->fetch_assoc()['c'];
-$counts['olist_products'] = $db->query("SELECT COUNT(*) as c FROM olist_products")->fetch_assoc()['c'];
-$counts['olist_product_images'] = $db->query("SELECT COUNT(*) as c FROM olist_product_images")->fetch_assoc()['c'];
-$result['contagens'] = $counts;
-
-// 3. SKUs
-$skus = [];
-$skus['products_skus'] = $db->query("SELECT COUNT(DISTINCT sku) as c FROM products WHERE sku IS NOT NULL")->fetch_assoc()['c'];
-$skus['olist_skus'] = $db->query("SELECT COUNT(DISTINCT sku) as c FROM olist_products WHERE sku IS NOT NULL")->fetch_assoc()['c'];
-$skus['images_skus'] = $db->query("SELECT COUNT(DISTINCT sku) as c FROM olist_product_images WHERE sku IS NOT NULL")->fetch_assoc()['c'];
-$result['skus'] = $skus;
-
-// 4. ESTRUTURA PRODUCTS
-$products_struct = [];
-$p_result = $db->query("SHOW CREATE TABLE products");
-if ($p_result && $row = $p_result->fetch_assoc()) {
-    $products_struct = $row;
-}
-$result['products_structure'] = $products_struct;
-
-// 5. ESTRUTURA OLIST_PRODUCTS
-$olist_struct = [];
-$o_result = $db->query("SHOW CREATE TABLE olist_products");
-if ($o_result && $row = $o_result->fetch_assoc()) {
-    $olist_struct = $row;
-}
-$result['olist_products_structure'] = $olist_struct;
-
-// 6. ESTRUTURA OLIST_PRODUCT_IMAGES
-$images_struct = [];
-$i_result = $db->query("SHOW CREATE TABLE olist_product_images");
-if ($i_result && $row = $i_result->fetch_assoc()) {
-    $images_struct = $row;
-}
-$result['olist_product_images_structure'] = $images_struct;
-
-// 7. PRIMEIROS 5 PRODUTOS
-$result['primeiro_produto'] = [];
-$first = $db->query("SELECT * FROM products LIMIT 1");
-if ($first && $row = $first->fetch_assoc()) {
-    $result['primeiro_produto'] = $row;
+$tableResult = $db->query('SHOW TABLES');
+if ($tableResult) {
+    while ($row = $tableResult->fetch_row()) {
+        $tables[] = (string)$row[0];
+    }
 }
 
-$result['primeiro_olist'] = [];
-$first_olist = $db->query("SELECT * FROM olist_products LIMIT 1");
-if ($first_olist && $row = $first_olist->fetch_assoc()) {
-    $result['primeiro_olist'] = $row;
+$targetTables = ['products', 'olist_products', 'olist_product_images', 'catalog_optimizations_staging', 'product_channel_content', 'orders'];
+$summary = [];
+foreach ($targetTables as $table) {
+    $summary[$table] = svdb_table_summary($db, $table);
 }
+
+$payload = [
+    'ok' => true,
+    'generated_at' => date(DATE_ATOM),
+    'database' => [
+        'host' => $host,
+        'name' => $dbName,
+        'server_info' => $db->server_info,
+        'tables_total' => count($tables),
+    ],
+    'tables' => $summary,
+    'recommended_indexes' => svdb_recommended_indexes($db),
+    'notes' => [
+        'recommended_indexes_are_dry_run' => true,
+        'no_schema_changes_were_applied' => true,
+    ],
+];
 
 $db->close();
-
-echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-?>
+svdb_json(200, $payload);

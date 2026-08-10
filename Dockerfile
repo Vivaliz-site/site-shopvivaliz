@@ -6,6 +6,14 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     git \
     curl \
+    ca-certificates \
+    unzip \
+    php-cli \
+    php-curl \
+    php-mbstring \
+    php-sqlite3 \
+    php-xml \
+    php-zip \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar requirements
@@ -18,7 +26,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Criar diretórios necessários
-RUN mkdir -p logs reports .claude
+RUN mkdir -p logs reports .claude storage/cache storage/raw
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

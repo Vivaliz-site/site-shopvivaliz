@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import base64
 import io
+import json
 import logging
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -20,6 +22,8 @@ logger = logging.getLogger(__name__)
 RAW_ROOT = Path('storage/raw')
 PROCESSED_ROOT = Path('storage/processed')
 VARIANT_COUNT = 4
+PROVIDER_HEALTH_FILE = Path("storage/ai-provider-health.json")
+PROVIDER_AUDIT_LOG = Path("storage/ai-provider-audit.jsonl")
 
 PROMPTS = {
     1: 'a clean white-background hero shot of the exact product in the image, preserving its shape, color, and proportions, with no new product features added',
@@ -31,6 +35,28 @@ PROMPTS = {
 
 class AIProviderError(Exception):
     pass
+
+
+PROVIDER_BASE_URLS = {
+    "openai": "https://api.openai.com/v1",
+    "openrouter": "https://openrouter.ai/api/v1",
+    "groq": "https://api.groq.com/openai/v1",
+    "google": "https://generativelanguage.googleapis.com/v1beta",
+}
+
+
+def normalize_provider(value: Optional[str]) -> str:
+    provider = (value or "").strip().lower()
+    return {
+        "gpt": "openai",
+        "openai": "openai",
+        "gemini": "google",
+        "google": "google",
+        "claude": "claude",
+        "openrouter": "openrouter",
+        "groq": "groq",
+        "qrope": "groq",
+    }.get(provider, provider)
 
 
 def get_env_variable(name: str, alt_names: Optional[list[str]] = None) -> Optional[str]:
@@ -47,13 +73,100 @@ def get_env_variable(name: str, alt_names: Optional[list[str]] = None) -> Option
 
 
 def load_ai_settings() -> tuple[Optional[str], Optional[str]]:
-    provider = get_env_variable('AI_PROVIDER')
-    api_key = get_env_variable('AI_API_KEY')
-    if provider:
-        provider = provider.strip().lower()
+    provider = normalize_provider(get_env_variable('AI_PROVIDER'))
+    api_key = get_env_variable('AI_API_KEY') or get_env_variable('OPENAI_API_KEY')
     if api_key:
         api_key = api_key.strip()
-    return provider, api_key
+    return provider or None, api_key
+
+
+def load_provider_pool() -> list[tuple[str, str]]:
+    pool = [
+        ("openai", get_env_variable("OPENAI_API_KEY", ["OPENAI_API_KEYS"])),
+        ("google", get_env_variable("GEMINI_API_KEY", ["GOOGLE_IMAGEN_API_KEY", "GOOGLE_GEMINI_API_KEY", "GOOGLE_IMAGEN_API_KEYS"])),
+        ("openrouter", get_env_variable("OPENROUTER_API_KEY", ["OPENROUTER_API_KEYS"])),
+        ("groq", get_env_variable("GROQ_API_KEY", ["GROQ_API_KEYS"])),
+    ]
+    return [(normalize_provider(name), key) for name, key in pool if key]
+
+
+def _read_provider_health() -> dict[str, float]:
+    try:
+        if not PROVIDER_HEALTH_FILE.exists():
+            return {}
+        raw = PROVIDER_HEALTH_FILE.read_text(encoding="utf-8")
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            return {}
+        return {str(k): float(v) for k, v in data.items()}
+    except Exception:
+        return {}
+
+
+def _write_provider_health(state: dict[str, float]) -> None:
+    try:
+        PROVIDER_HEALTH_FILE.parent.mkdir(parents=True, exist_ok=True)
+        PROVIDER_HEALTH_FILE.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _mark_provider_cooldown(provider: str, seconds: int = 900) -> None:
+    state = _read_provider_health()
+    state[normalize_provider(provider)] = time.time() + seconds
+    _write_provider_health(state)
+
+
+def _provider_available(provider: str) -> bool:
+    state = _read_provider_health()
+    expiry = state.get(normalize_provider(provider))
+    return not expiry or expiry <= time.time()
+
+
+def _append_provider_audit(provider: str, variant: int, status: str, message: str, sku: str = "") -> None:
+    try:
+        PROVIDER_AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "ts": time.time(),
+            "provider": normalize_provider(provider),
+            "variant": variant,
+            "status": status,
+            "message": message[:500],
+            "sku": sku,
+        }
+        with PROVIDER_AUDIT_LOG.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+def analyze_with_groq(image_url: str, api_key: str) -> str:
+    try:
+        payload = {
+            "model": os.getenv("GROQ_ANALYSIS_MODEL") or "llama-4-scout-17b-16e-instruct",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": image_url}},
+                        {"type": "text", "text": "Describe this product in detail for image generation: product type, color, material, shape, size, and distinguishing features. Be specific and concise (max 100 words)."},
+                    ],
+                }
+            ],
+            "max_tokens": 200,
+        }
+        response = requests.post(
+            f"{PROVIDER_BASE_URLS['groq']}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=120,
+        )
+        response.raise_for_status()
+        body = response.json()
+        text = ((body.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+        return text.strip() or "a product"
+    except Exception:
+        return "a product"
 
 
 def get_variant_prompt(variant: int) -> str:
@@ -96,8 +209,145 @@ def download_image_url(image_url: str, output_path: Path) -> bool:
         return False
 
 
-def openai_image_edit(source_path: Path, prompt: str, api_key: str) -> bytes:
-    endpoint = 'https://api.openai.com/v1/images/edits'
+def _image_edit_endpoint(provider: str) -> str:
+    provider = normalize_provider(provider)
+    if provider == "google":
+        model = os.getenv("GOOGLE_IMAGEN_MODEL") or "gemini-2.5-flash-image"
+        return f"{PROVIDER_BASE_URLS['google']}/models/{model}:generateContent"
+    if provider == "openrouter":
+        return f"{PROVIDER_BASE_URLS['openrouter']}/images"
+    return PROVIDER_BASE_URLS.get(provider, PROVIDER_BASE_URLS["openai"]) + "/images/edits"
+
+
+def _provider_headers(provider: str, api_key: str) -> dict[str, str]:
+    provider = normalize_provider(provider)
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+    }
+    if provider == "google":
+        headers = {"x-goog-api-key": api_key}
+    if provider == "openrouter":
+        headers["HTTP-Referer"] = os.getenv("OPENROUTER_HTTP_REFERER", "https://shopvivaliz.com.br")
+        headers["X-Title"] = os.getenv("OPENROUTER_APP_TITLE", "ShopVivaliz")
+    return headers
+
+
+def _openrouter_image_model(api_key: str) -> str:
+    configured = os.getenv("OPENROUTER_IMAGE_MODEL") or ""
+    if configured.strip():
+        return configured.strip()
+    try:
+        response = requests.get(
+            f"{PROVIDER_BASE_URLS['openrouter']}/images/models",
+            headers=_provider_headers("openrouter", api_key),
+            timeout=60,
+        )
+        response.raise_for_status()
+        body = response.json()
+        models = body.get("data") if isinstance(body, dict) else []
+        for item in models or []:
+            if not isinstance(item, dict):
+                continue
+            if item.get("architecture", {}).get("output_modalities") == ["image"]:
+                model_id = item.get("id")
+                if isinstance(model_id, str) and model_id.strip():
+                    return model_id.strip()
+    except Exception:
+        pass
+    return "qwen/qwen-image-3"
+
+
+def image_edit(provider: str, source_path: Path, prompt: str, api_key: str) -> bytes:
+    provider = normalize_provider(provider)
+    if provider == "google":
+        with source_path.open("rb") as image_file:
+            payload = {
+                "contents": [{
+                    "parts": [
+                        {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(image_file.read()).decode("ascii")}},
+                        {"text": prompt},
+                    ]
+                }],
+                "generationConfig": {"responseModalities": ["IMAGE"]},
+            }
+        endpoint = _image_edit_endpoint(provider)
+        response = requests.post(endpoint, headers={"x-goog-api-key": api_key, "Content-Type": "application/json", "Accept": "application/json"}, json=payload, timeout=180)
+        if response.status_code != 200:
+            raise AIProviderError(f'Gemini image edit failed ({response.status_code}): {response.text}')
+        body = response.json()
+        parts = (((body or {}).get('candidates') or [{}])[0].get('content') or {}).get('parts') or []
+        for part in parts:
+            inline = part.get('inlineData') or part.get('inline_data') or {}
+            data = inline.get('data')
+        if data:
+            return base64.b64decode(data)
+        raise AIProviderError('Gemini image edit response lacked image content')
+
+    if provider == "openrouter":
+        with source_path.open("rb") as image_file:
+            image_b64 = base64.b64encode(image_file.read()).decode("ascii")
+        model = _openrouter_image_model(api_key)
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "n": 1,
+            "size": os.getenv("OPENROUTER_IMAGE_SIZE") or "1024x1024",
+            "quality": os.getenv("OPENROUTER_IMAGE_QUALITY") or "high",
+            "input_references": [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{image_b64}",
+                    },
+                }
+            ],
+        }
+        response = requests.post(
+            _image_edit_endpoint(provider),
+            headers=_provider_headers(provider, api_key),
+            json=payload,
+            timeout=180,
+        )
+        if response.status_code != 200:
+            raise AIProviderError(f'OpenRouter image generation failed ({response.status_code}): {response.text}')
+        body = response.json()
+        if not isinstance(body, dict) or 'data' not in body or not body['data']:
+            if isinstance(body, dict) and body.get("imageUrl"):
+                if download_image_url(str(body["imageUrl"]), Path('.cache_ai_image_download.jpg')):
+                    try:
+                        return Path('.cache_ai_image_download.jpg').read_bytes()
+                    finally:
+                        try:
+                            Path('.cache_ai_image_download.jpg').unlink()
+                        except OSError:
+                            pass
+            raise AIProviderError('OpenRouter image generation returned no data')
+        image_item = body['data'][0]
+        if 'b64_json' in image_item and image_item['b64_json']:
+            return base64.b64decode(image_item['b64_json'])
+        if 'url' in image_item and image_item['url']:
+            temp_path = Path('.cache_ai_image_download.jpg')
+            if download_image_url(image_item['url'], temp_path):
+                try:
+                    return temp_path.read_bytes()
+                finally:
+                    try:
+                        temp_path.unlink()
+                    except OSError:
+                        pass
+        if 'imageUrl' in image_item and image_item['imageUrl']:
+            temp_path = Path('.cache_ai_image_download.jpg')
+            if download_image_url(image_item['imageUrl'], temp_path):
+                try:
+                    return temp_path.read_bytes()
+                finally:
+                    try:
+                        temp_path.unlink()
+                    except OSError:
+                        pass
+        raise AIProviderError('OpenRouter image generation response lacked image content')
+
+    endpoint = _image_edit_endpoint(provider)
     with source_path.open('rb') as image_file:
         files = {
             'image': ('image.jpg', image_file, 'image/jpeg'),
@@ -109,15 +359,15 @@ def openai_image_edit(source_path: Path, prompt: str, api_key: str) -> bytes:
             'n': '1',
         }
         headers = {
-            'Authorization': f'Bearer {api_key}',
+            **_provider_headers(provider, api_key),
         }
         response = requests.post(endpoint, headers=headers, data=data, files=files, timeout=120)
     if response.status_code != 200:
-        raise AIProviderError(f'OpenAI image edit failed ({response.status_code}): {response.text}')
+        raise AIProviderError(f'{provider.title()} image edit failed ({response.status_code}): {response.text}')
 
     body = response.json()
     if not isinstance(body, dict) or 'data' not in body or not body['data']:
-        raise AIProviderError('OpenAI image edit returned no data')
+        raise AIProviderError(f'{provider.title()} image edit returned no data')
 
     image_item = body['data'][0]
     if 'b64_json' in image_item and image_item['b64_json']:
@@ -132,29 +382,60 @@ def openai_image_edit(source_path: Path, prompt: str, api_key: str) -> bytes:
                     temp_path.unlink()
                 except OSError:
                     pass
-        raise AIProviderError('OpenAI returned image URL but download failed')
+        raise AIProviderError(f'{provider.title()} returned image URL but download failed')
 
-    raise AIProviderError('OpenAI image edit response lacked image content')
+    raise AIProviderError(f'{provider.title()} image edit response lacked image content')
+
+
+def render_with_provider(provider: str, source_path: Path, destination_path: Path, variant: int, api_key: str) -> bool:
+    prompt = get_variant_prompt(variant)
+    try:
+        logger.info(f'  Generating variant {variant} with {provider}: {prompt}')
+        image_bytes = image_edit(provider, source_path, prompt, api_key)
+        destination_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(destination_path, 'wb') as f:
+            f.write(image_bytes)
+        logger.info(f'    Saved {provider} variant {variant} at {destination_path}')
+        _append_provider_audit(provider, variant, "ok", f"saved:{destination_path}", destination_path.parent.name)
+        return True
+    except Exception as exc:
+        logger.warning(f'{provider} generation failed for {source_path.name} variant {variant}: {exc}')
+        _append_provider_audit(provider, variant, "fail", str(exc), destination_path.parent.name)
+        return False
 
 
 def render_ai_variant(source_path: Path, destination_path: Path, variant: int, provider: Optional[str], api_key: Optional[str]) -> bool:
     prompt = get_variant_prompt(variant)
-    if provider != 'openai' or not api_key:
-        logger.warning('AI_PROVIDER is not set to a supported provider or API key is missing; using original image fallback')
-        return safe_copy_source(source_path, destination_path)
+    provider_pool = []
+    if provider and api_key:
+        provider_pool.append((provider, api_key))
+    for candidate_provider, candidate_key in load_provider_pool():
+        if all(candidate_provider != existing[0] for existing in provider_pool):
+            provider_pool.append((candidate_provider, candidate_key))
 
-    try:
-        logger.info(f'  Generating variant {variant}: {prompt}')
-        image_bytes = openai_image_edit(source_path, prompt, api_key)
-        destination_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(destination_path, 'wb') as f:
-            f.write(image_bytes)
-        logger.info(f'    Saved AI variant {variant} at {destination_path}')
-        return True
-    except Exception as exc:
-        logger.warning(f'AI generation failed for {source_path.name} variant {variant}: {exc}')
-        logger.warning('Falling back to original image for this variant')
-        return safe_copy_source(source_path, destination_path)
+    for candidate_provider, candidate_key in provider_pool:
+        if not _provider_available(candidate_provider):
+            logger.info(f'Skipping {candidate_provider} for variant {variant}: provider in cooldown')
+            _append_provider_audit(candidate_provider, variant, "skip", "cooldown", destination_path.parent.name)
+            continue
+        if candidate_provider == "groq":
+            # Groq atua como analisador/otimizador textual; a geração final
+            # permanece com provedores image-capable.
+            try:
+                refined = analyze_with_groq("file://" + str(source_path), candidate_key)
+                logger.info(f'Groq analysis for variant {variant}: {refined[:120]}')
+                _append_provider_audit(candidate_provider, variant, "analysis", refined[:220], destination_path.parent.name)
+                continue
+            except Exception as exc:
+                logger.warning(f'Groq analysis failed for {source_path.name} variant {variant}: {exc}')
+                _append_provider_audit(candidate_provider, variant, "analysis_fail", str(exc), destination_path.parent.name)
+                continue
+        if render_with_provider(candidate_provider, source_path, destination_path, variant, candidate_key):
+            return True
+        _mark_provider_cooldown(candidate_provider)
+
+    logger.warning('All AI providers failed; falling back to original image for this variant')
+    return safe_copy_source(source_path, destination_path)
 
 
 def main(argv=None) -> int:

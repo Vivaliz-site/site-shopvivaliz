@@ -9,6 +9,7 @@ require_once dirname(__DIR__) . '/includes/site-settings.php';
 
 $svNavCurrent = $svNavCurrent ?? trim((string)parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH), '/');
 $svNavCurrent = preg_replace('#^index\.php$#', '', $svNavCurrent);
+$svNavCurrent = trim((string)$svNavCurrent, '/');
 
 $svNavLinks = [
     ['href' => '/', 'label' => 'Home', 'match' => ['']],
@@ -68,6 +69,9 @@ header.sv-navbar .navbar-menu > a[aria-current="page"] {
     padding: 8px 12px !important;
     border-radius: 999px !important;
 }
+header.sv-navbar .navbar-menu > a.nav-account-link {
+    opacity: .95;
+}
 header.sv-navbar .navbar-menu > a#nav-cart-link {
     color: #ffffff !important;
 }
@@ -126,6 +130,12 @@ header.sv-navbar .menu-toggle {
     letter-spacing: 0.03em;
     border-bottom: 1px solid rgba(255,255,255,0.15);
     line-height: 1.35;
+}
+.sv-announcement-coupon {
+    color: #35c759;
+    background: rgba(255,255,255,0.15);
+    padding: 2px 6px;
+    border-radius: 4px;
 }
 @media (max-width: 768px) {
     header.sv-navbar { padding: 8px 0; }
@@ -217,9 +227,9 @@ $svFreeShippingConfig = sv_free_shipping_config();
 ?>
 <div class="sv-announcement-bar">
     <?php if ($svFreeShippingConfig['enabled'] && $svFreeShippingConfig['threshold'] > 0): ?>
-        <span>🚚 FRETE GRÁTIS ACIMA DE R$ <?= number_format($svFreeShippingConfig['threshold'], 2, ',', '.') ?> | 🎁 5% OFF NA 1ª COMPRA COM O CUPOM <strong style="color: #35c759; background: rgba(255,255,255,0.15); padding: 2px 6px; border-radius: 4px;">VOLTEI5</strong></span>
+        <span>🚚 FRETE GRÁTIS ACIMA DE R$ <?= number_format($svFreeShippingConfig['threshold'], 2, ',', '.') ?> | 🎁 5% OFF NA 1ª COMPRA COM O CUPOM <strong class="sv-announcement-coupon">VOLTEI5</strong></span>
     <?php else: ?>
-        <span>🎁 5% OFF NA 1ª COMPRA COM O CUPOM <strong style="color: #35c759; background: rgba(255,255,255,0.15); padding: 2px 6px; border-radius: 4px;">VOLTEI5</strong></span>
+        <span>🎁 5% OFF NA 1ª COMPRA COM O CUPOM <strong class="sv-announcement-coupon">VOLTEI5</strong></span>
     <?php endif; ?>
 </div>
 
@@ -232,7 +242,26 @@ $svFreeShippingConfig = sv_free_shipping_config();
         <div class="navbar-menu" id="navMenu">
             <?php foreach ($svNavLinks as $link): ?>
                 <?php $isCurrent = in_array($svNavCurrent, $link['match'], true); ?>
-                <a href="<?= htmlspecialchars($link['href'], ENT_QUOTES, 'UTF-8') ?>"<?= $isCurrent ? ' aria-current="page"' : '' ?><?= $link['href'] === '/catalogo' ? ' class="sv-nav-cta"' : '' ?><?= $link['href'] === '/carrinho' ? ' id="nav-cart-link" class="nav-cart-link"' : '' ?>>
+                <?php
+                    $linkClasses = [];
+                    if ($link['href'] === '/catalogo') {
+                        $linkClasses[] = 'sv-nav-cta';
+                    }
+                    if ($link['href'] === '/carrinho') {
+                        $linkClasses[] = 'nav-cart-link';
+                    }
+                    $linkAttrs = '';
+                    if ($isCurrent) {
+                        $linkAttrs .= ' aria-current="page"';
+                    }
+                    if ($link['href'] === '/carrinho') {
+                        $linkAttrs .= ' id="nav-cart-link"';
+                    }
+                    if ($linkClasses !== []) {
+                        $linkAttrs .= ' class="' . htmlspecialchars(implode(' ', $linkClasses), ENT_QUOTES, 'UTF-8') . '"';
+                    }
+                ?>
+                <a href="<?= htmlspecialchars($link['href'], ENT_QUOTES, 'UTF-8') ?>"<?= $linkAttrs ?>>
                     <?= htmlspecialchars($link['label'], ENT_QUOTES, 'UTF-8') ?>
                 </a>
             <?php endforeach; ?>

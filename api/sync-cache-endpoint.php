@@ -1,9 +1,14 @@
 <?php
 declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
 
 $root = dirname(__DIR__);
-$lockFile = fopen($root . '/storage/cache-sync.lock', 'c+');
+$storageDir = $root . '/storage';
+if (!is_dir($storageDir)) {
+    @mkdir($storageDir, 0775, true);
+}
+$lockFile = fopen($storageDir . '/cache-sync.lock', 'c+');
 if (!$lockFile || !flock($lockFile, LOCK_EX | LOCK_NB)) {
     http_response_code(409);
     echo json_encode(['success' => false, 'error' => 'cache_sync_locked']);
@@ -37,16 +42,40 @@ try {
         $offset += 100;
     } while (count($pageItems) === 100);
 
-    $cacheFile = $root . '/storage/cache/products-cache-ativos.json';
-    @mkdir(dirname($cacheFile), 0775, true);
-    file_put_contents($cacheFile, json_encode([
+    $payload = [
         'success' => true,
         'total' => count($items),
         'updated_at' => gmdate(DATE_ATOM),
+        'itens' => $items,
         'items' => $items,
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), LOCK_EX);
-    echo json_encode(['success' => true, 'total' => count($items), 'file' => $cacheFile]);
+    ];
+    $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+    if (!is_string($encoded)) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'json_encode_failed']);
+        exit;
+    }
+
+    $cacheFiles = [
+        $root . '/storage/products-cache-ativos.json',
+        $root . '/storage/cache/products-cache-ativos.json',
+    ];
+    $written = [];
+    foreach ($cacheFiles as $cacheFile) {
+        @mkdir(dirname($cacheFile), 0775, true);
+        if (file_put_contents($cacheFile, $encoded, LOCK_EX) !== false) {
+            $written[] = $cacheFile;
+        }
+    }
+
+    foreach (glob($root . '/storage/cache/catalog-api/*.json') ?: [] as $file) {
+        @unlink($file);
+    }
+
+    echo json_encode(['success' => true, 'total' => count($items), 'files' => $written], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } finally {
     flock($lockFile, LOCK_UN);
+    if (is_resource($lockFile)) {
+        fclose($lockFile);
+    }
 }
-?>

@@ -84,6 +84,7 @@ function sv_admin_sections(): array
                 ['icon' => '🧠', 'title' => 'Orchestrator', 'href' => '/admin/orchestrator.php', 'desc' => 'Orquestrar agentes e fluxos.'],
                 ['icon' => '💬', 'title' => 'Squad Chat', 'href' => '/admin/squad-chat.php', 'desc' => 'Conversar com o conjunto de agentes.'],
                 ['icon' => '🩺', 'title' => 'Monitor do sistema de IA', 'href' => '/admin/ai-system-monitor.php', 'desc' => 'Acompanhar saude e uso dos servicos de IA.'],
+                ['icon' => '🧪', 'title' => 'Auditoria consolidada de IA', 'href' => '/admin/ai-provider-audit.php', 'desc' => 'Saude, cooldown, falhas e eventos dos provedores.', 'tone' => 'sky'],
                 ['icon' => '🖼️', 'title' => 'AI Image Studio — Gerar imagens', 'href' => '/admin/ai-image-studio/admin_dashboard.php', 'desc' => 'Gerar imagens reais por marketplace a partir da foto do produto.', 'tone' => 'violet'],
                 ['icon' => '✅', 'title' => 'AI Image Studio — Validar imagens', 'href' => '/admin/ai-image-studio/admin_validate.php', 'desc' => 'Aprovar, rejeitar ou regenerar imagens antes de publicar.', 'tone' => 'violet'],
                 ['icon' => '📝', 'title' => 'Otimizacao de cadastro', 'href' => '/admin/catalog-optimization/admin_catalog.php', 'desc' => 'Reescrever titulo, descricao e SEO por canal de venda.', 'tone' => 'orange'],

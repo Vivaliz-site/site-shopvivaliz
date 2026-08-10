@@ -35,6 +35,40 @@ $providerLabels = [
     'groq' => 'Groq / Qrope',
 ];
 
+function cat_provider_health_snapshot(): array
+{
+    $path = dirname(__DIR__, 3) . '/storage/ai-provider-health.json';
+    if (!is_file($path) || !is_readable($path)) {
+        return [];
+    }
+    $raw = file_get_contents($path);
+    if (!is_string($raw) || trim($raw) === '') {
+        return [];
+    }
+    $decoded = json_decode($raw, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+function cat_provider_audit_tail(int $limit = 16): array
+{
+    $path = dirname(__DIR__, 3) . '/storage/ai-provider-audit.jsonl';
+    if (!is_file($path) || !is_readable($path)) {
+        return [];
+    }
+    $lines = @file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!is_array($lines) || $lines === []) {
+        return [];
+    }
+    $events = [];
+    foreach (array_slice($lines, max(0, count($lines) - $limit)) as $line) {
+        $decoded = json_decode((string)$line, true);
+        if (is_array($decoded)) {
+            $events[] = $decoded;
+        }
+    }
+    return array_reverse($events);
+}
+
 function cat_provider_options(string $selected, array $labels): string
 {
     $html = '';
@@ -226,9 +260,10 @@ if (($_GET['ajax'] ?? '') === 'pending_ids') {
     }
     $stmt = $db->prepare(
         'SELECT p.id FROM products p '
-        . 'LEFT JOIN catalog_optimizations_staging latest ON latest.id = ('
-        . 'SELECT s2.id FROM catalog_optimizations_staging s2 WHERE s2.product_id = p.id AND s2.channel = ? ORDER BY s2.created_at DESC, s2.id DESC LIMIT 1) '
-        . "WHERE latest.id IS NULL OR latest.status IN ('published','rejected','failed') ORDER BY p.id ASC LIMIT " . $limit
+        . 'LEFT JOIN catalog_optimizations_staging latest '
+        . 'ON latest.product_id = p.id AND latest.channel = ? '
+        . "WHERE latest.id IS NULL OR latest.status IN ('published','rejected','failed') "
+        . 'ORDER BY p.id ASC LIMIT ' . $limit
     );
     $stmt->execute([$channel]);
     echo json_encode(['product_ids' => array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN))]);
@@ -253,9 +288,10 @@ if (($_GET['ajax'] ?? '') === 'pending_candidates') {
         . '+ CASE WHEN COALESCE(NULLIF(TRIM(p.description), ""), "") = "" THEN 0 ELSE 10 END '
         . '+ CASE WHEN COALESCE(NULLIF(TRIM(p.sku), ""), "") = "" THEN 0 ELSE 5 END AS priority_score '
         . 'FROM products p '
-        . 'LEFT JOIN catalog_optimizations_staging latest ON latest.id = ('
-        . 'SELECT s2.id FROM catalog_optimizations_staging s2 WHERE s2.product_id = p.id AND s2.channel = ? ORDER BY s2.created_at DESC, s2.id DESC LIMIT 1) '
-        . "WHERE latest.id IS NULL OR latest.status IN ('published','rejected','failed') ORDER BY priority_score DESC, p.id ASC LIMIT " . $limit
+        . 'LEFT JOIN catalog_optimizations_staging latest '
+        . 'ON latest.product_id = p.id AND latest.channel = ? '
+        . "WHERE latest.id IS NULL OR latest.status IN ('published','rejected','failed') "
+        . 'ORDER BY priority_score DESC, p.id ASC LIMIT ' . $limit
     );
     $stmt->execute([$channel]);
     echo json_encode(['items' => $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : []]);
@@ -399,6 +435,8 @@ foreach ($stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [] as $metric) $metrics[(st
 $stmt = $db->query("SELECT * FROM catalog_optimizations_staging WHERE status IN ('pending','publication_failed') ORDER BY created_at DESC LIMIT 50");
 $items = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
 $csrf = sv_csrf_token('catalog-optimization');
+$providerHealth = cat_provider_health_snapshot();
+$providerAuditTail = cat_provider_audit_tail();
 ?>
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Otimizacao e publicacao real</title><link rel="stylesheet" href="/css/style.css"><style>
@@ -407,6 +445,8 @@ $csrf = sv_csrf_token('catalog-optimization');
 </style></head><body><main class="wrap">
 <div><a href="/admin/menu-completo.php">← Voltar ao Admin</a></div><div class="top"><h1>Otimizacao de cadastro — por marketplace</h1><span class="badge">Preco e estoque protegidos</span></div>
 <div class="draft-note"><strong>Auditoria por canal:</strong> o lado “Antes” sempre mostra os sete campos editoriais, mesmo quando o marketplace nao possui um campo externo equivalente. Assim fica explicito o que existe no read-back real, o que e incorporado e o que e apenas apoio interno.</div>
+<?php if($providerHealth!==[]): ?><div class="alert warn"><strong>Estado dos provedores:</strong> <?php $parts=[];foreach($providerHealth as $name=>$expiry){$parts[] = cat_h((string)$name) . ' → ' . ((int)$expiry > time() ? 'cooldown até ' . cat_h(date('Y-m-d H:i:s', (int)$expiry)) : 'livre');} echo implode(' · ', $parts); ?></div><?php endif; ?>
+<?php if($providerAuditTail!==[]): ?><details class="panel"><summary><strong>Últimos eventos de IA do catálogo</strong></summary><div class="grid" style="margin-top:12px"><?php foreach($providerAuditTail as $event): ?><div class="item"><div class="meta"><strong><?=cat_h((string)($event['provider'] ?? ''))?></strong> · <?=cat_h((string)($event['status'] ?? ''))?> · <?=cat_h(date('Y-m-d H:i:s', (int)($event['ts'] ?? 0)))?></div><div><?=cat_h((string)($event['message'] ?? ''))?></div><div class="meta">Produto <?=cat_h((string)($event['product_id'] ?? ''))?> · Canal <?=cat_h((string)($event['channel'] ?? ''))?></div></div><?php endforeach; ?></div></details><?php endif; ?>
 <?php if($flashMessage):?><div class="alert ok"><?=cat_h($flashMessage)?></div><?php endif;?><?php if($flashError):?><div class="alert err"><?=cat_h($flashError)?></div><?php endif;?>
 <section class="metrics"><?php foreach($channels as $key=>$label):$m=$metrics[$key]??[];?><div class="metric"><strong><?=(int)($m['published']??0)?></strong><div><?=cat_h($label)?></div><small>Pendentes <?=(int)($m['pending']??0)?> · Enviados <?=(int)($m['submitted']??0)?> · Falhas <?=(int)($m['publication_failed']??0)?></small></div><?php endforeach;?></section>
 <section class="panel"><h2>Gerar fila por canal</h2><div class="controls"><label>Provedor<select id="provider"><?=cat_provider_options('openai', $providerLabels)?></select></label><label>Canal<select id="channel"><?php foreach($channels as $key=>$label):?><option value="<?=cat_h($key)?>"><?=cat_h($label)?></option><?php endforeach;?></select></label><label>Mostrar até<input id="load-limit" type="number" min="1" max="100" value="30"></label><div class="candidate-actions"><button id="load-candidates" class="candidate-load" type="button">Carregar itens</button><button id="select-candidates" type="button">Selecionar tudo</button><button id="clear-candidates" type="button">Limpar</button><button id="run" class="candidate-run" type="button">Gerar selecionados</button><button id="retry" type="button">Reprocessar falhas</button></div></div><div class="generation-grid"><div><small>Escolha os itens do canal para gerar. O número acima só limita o quanto aparece na lista.</small><div id="candidate-summary" class="candidate-meta">Carregue os itens do canal para ver o resumo de completude.</div><div id="candidate-list" class="candidate-list"><div class="candidate-meta">Carregue os itens do canal para selecionar.</div></div></div><div><pre id="log" class="log"></pre></div></div></section>

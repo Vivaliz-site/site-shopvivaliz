@@ -568,6 +568,62 @@ function ai_catalog_allowed_providers(): array
     return ['openai', 'gemini', 'claude', 'openrouter', 'groq'];
 }
 
+/** @return list<string> */
+function ai_catalog_provider_candidates(string $preferred): array
+{
+    $order = catalog_ai_provider_fallback_order($preferred);
+    $filtered = array_values(array_filter($order, static fn(string $provider): bool => catalog_ai_provider_has_keys($provider)));
+    return $filtered !== [] ? $filtered : array_values(array_filter(['openai', 'gemini', 'openrouter', 'groq'], static fn(string $provider): bool => catalog_ai_provider_has_keys($provider)));
+}
+
+function ai_catalog_provider_health_path(): string
+{
+    return dirname(__DIR__, 3) . '/storage/ai-provider-health.json';
+}
+
+/** @return array<string,int> */
+function ai_catalog_provider_health_snapshot(): array
+{
+    $path = ai_catalog_provider_health_path();
+    if (!is_file($path) || !is_readable($path)) {
+        return [];
+    }
+    $raw = file_get_contents($path);
+    if (!is_string($raw) || trim($raw) === '') {
+        return [];
+    }
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+    $snapshot = [];
+    foreach ($decoded as $provider => $expiry) {
+        $snapshot[(string)$provider] = is_numeric($expiry) ? (int)$expiry : 0;
+    }
+    return $snapshot;
+}
+
+function ai_catalog_provider_available(string $provider): bool
+{
+    $snapshot = ai_catalog_provider_health_snapshot();
+    $expiry = (int)($snapshot[catalog_ai_normalize_provider($provider)] ?? 0);
+    return $expiry <= time();
+}
+
+function ai_catalog_provider_audit_log(string $provider, string $channel, string $status, string $message, int $productId = 0): void
+{
+    $path = dirname(__DIR__, 3) . '/storage/ai-provider-audit.jsonl';
+    $record = [
+        'ts' => time(),
+        'provider' => catalog_ai_normalize_provider($provider),
+        'channel' => $channel,
+        'status' => $status,
+        'message' => function_exists('mb_substr') ? mb_substr($message, 0, 500) : substr($message, 0, 500),
+        'product_id' => $productId,
+    ];
+    @file_put_contents($path, json_encode($record, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL, FILE_APPEND | LOCK_EX);
+}
+
 /** @param array<string,mixed> $data @param array<string,string> $product */
 function ai_catalog_validate_ai_response(array $data, string $channel = '', array $product = []): void
 {
@@ -664,56 +720,69 @@ function ai_catalog_process_item(PDO $db, int $productId, string $channel, strin
         return ['success' => false, 'product_id' => $productId, 'channel' => $channel, 'provider' => $provider, 'error' => "Produto #$productId nao encontrado ou sem nome."];
     }
 
-    try {
-        $resolvedProvider = catalog_ai_resolve_provider_name($provider);
-        $data = catalog_ai_make_provider($resolvedProvider)->complete(
-            ai_catalog_build_system_prompt($channel),
-            ai_catalog_build_user_prompt($product, $channel)
-        );
-        ai_catalog_validate_ai_response($data, $channel, $product);
-        $quality = ai_catalog_quality_report($data, $channel, $product);
-        $stagingId = ai_catalog_insert_staging_row($db, $productId, $channel, $resolvedProvider, $data, 'pending', null, $quality);
-        return [
-            'success' => true,
-            'product_id' => $productId,
-            'channel' => $channel,
-            'provider' => $provider,
-            'provider_used' => $resolvedProvider,
-            'staging_id' => $stagingId,
-            'quality_score' => $quality['score'],
-        ];
-    } catch (Throwable $e) {
-        error_log("[catalog-optimization] falha produto #$productId canal=$channel provider=$provider: " . $e->getMessage());
-        try {
-            $stagingId = ai_catalog_insert_staging_row(
-                $db,
-                $productId,
-                $channel,
-                $provider,
-                [
-                    'optimized_title' => '',
-                    'optimized_description' => '',
-                    'bullet_points' => [],
-                    'seo_keywords' => [],
-                    'marketing_hooks' => [],
-                    'meta_title' => '',
-                    'meta_description' => '',
-                ],
-                'failed',
-                $e->getMessage()
-            );
-        } catch (Throwable) {
-            $stagingId = 0;
+    $providerCandidates = ai_catalog_provider_candidates($provider);
+    $lastError = null;
+    foreach ($providerCandidates as $resolvedProvider) {
+        if (!ai_catalog_provider_available($resolvedProvider)) {
+            ai_catalog_provider_audit_log($resolvedProvider, $channel, 'skip', 'cooldown', $productId);
+            continue;
         }
-        return [
-            'success' => false,
-            'product_id' => $productId,
-            'channel' => $channel,
-            'provider' => $provider,
-            'staging_id' => $stagingId,
-            'error' => $e->getMessage(),
-        ];
+        try {
+            $data = catalog_ai_make_provider($resolvedProvider)->complete(
+                ai_catalog_build_system_prompt($channel),
+                ai_catalog_build_user_prompt($product, $channel)
+            );
+            ai_catalog_validate_ai_response($data, $channel, $product);
+            $quality = ai_catalog_quality_report($data, $channel, $product);
+            $stagingId = ai_catalog_insert_staging_row($db, $productId, $channel, $resolvedProvider, $data, 'pending', null, $quality);
+            ai_catalog_provider_audit_log($resolvedProvider, $channel, 'ok', 'generated', $productId);
+            return [
+                'success' => true,
+                'product_id' => $productId,
+                'channel' => $channel,
+                'provider' => $provider,
+                'provider_used' => $resolvedProvider,
+                'staging_id' => $stagingId,
+                'quality_score' => $quality['score'],
+            ];
+        } catch (Throwable $e) {
+            $lastError = $e;
+            ai_catalog_provider_audit_log($resolvedProvider, $channel, 'fail', $e->getMessage(), $productId);
+            error_log("[catalog-optimization] fallback falhou produto #$productId canal=$channel provider=$resolvedProvider: " . $e->getMessage());
+            continue;
+        }
     }
+
+    $message = $lastError instanceof Throwable ? $lastError->getMessage() : 'Sem provedor disponivel.';
+    try {
+        $stagingId = ai_catalog_insert_staging_row(
+            $db,
+            $productId,
+            $channel,
+            $providerCandidates[0] ?? $provider,
+            [
+                'optimized_title' => '',
+                'optimized_description' => '',
+                'bullet_points' => [],
+                'seo_keywords' => [],
+                'marketing_hooks' => [],
+                'meta_title' => '',
+                'meta_description' => '',
+            ],
+            'failed',
+            $message
+        );
+    } catch (Throwable) {
+        $stagingId = 0;
+    }
+    return [
+        'success' => false,
+        'product_id' => $productId,
+        'channel' => $channel,
+        'provider' => $provider,
+        'staging_id' => $stagingId,
+        'error' => $message,
+    ];
 }
 
 if (PHP_SAPI !== 'cli' && basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {

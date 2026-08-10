@@ -14,6 +14,7 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/src/AiServices.php';
 require_once __DIR__ . '/src/ImageChannelProfile.php';
 require_once __DIR__ . '/../../includes/catalog-publication-schema.php';
+require_once __DIR__ . '/../../core/queue/queue.php';
 
 /** @return array<string,string> */
 function ai_studio_default_prompts(string $productName, string $targetChannel = 'site', array $productContext = []): array
@@ -75,6 +76,74 @@ function ai_studio_default_prompts(string $productName, string $targetChannel = 
         $base[$type] = $prompt . ' Marketplace-specific guidance: ' . ai_studio_channel_guidance($targetChannel, $type);
     }
     return $base;
+}
+
+/** @return list<string> */
+function ai_studio_image_provider_candidates(string $preferred): array
+{
+    $preferred = ai_studio_normalize_provider($preferred);
+    $order = match ($preferred) {
+        'openai' => ['openai', 'google', 'openrouter', 'groq'],
+        'google' => ['google', 'openai', 'openrouter', 'groq'],
+        'claude' => ['openai', 'google', 'openrouter', 'groq'],
+        'openrouter' => ['openrouter', 'groq', 'openai', 'google'],
+        'groq' => ['groq', 'openrouter', 'openai', 'google'],
+        default => ['openai', 'google', 'openrouter', 'groq'],
+    };
+    return array_values(array_unique(array_filter($order, static fn(string $provider): bool => ai_studio_provider_has_key($provider))));
+}
+
+function ai_studio_build_image_client(string $provider, ?string $modelOverride, string $openAiModel, string $googleModel, string $openRouterModel, string $qropeModel): object
+{
+    return match ($provider) {
+        'openai' => new AiStudioOpenAiClient(ai_studio_secret_pool('AI_STUDIO_OPENAI_API_KEY', ['OPENAI_API_KEY']), $modelOverride !== null && trim($modelOverride) !== '' ? trim($modelOverride) : $openAiModel),
+        'google' => new AiStudioGoogleImageEditClient(ai_studio_secret_pool('AI_STUDIO_GOOGLE_IMAGEN_API_KEY', ['GOOGLE_IMAGEN_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_GEMINI_API_KEY']), $modelOverride !== null && trim($modelOverride) !== '' ? trim($modelOverride) : $googleModel),
+        'openrouter' => new AiStudioOpenAiCompatibleClient(ai_studio_secret_pool('AI_STUDIO_OPENROUTER_API_KEY', ['OPENROUTER_API_KEY']), $openRouterModel !== '' ? $openRouterModel : $openAiModel, defined('AI_STUDIO_OPENROUTER_API_BASE_URL') ? AI_STUDIO_OPENROUTER_API_BASE_URL : 'https://openrouter.ai/api/v1', 'OpenRouter', [
+            'HTTP-Referer' => defined('AI_STUDIO_OPENROUTER_HTTP_REFERER') ? AI_STUDIO_OPENROUTER_HTTP_REFERER : 'https://shopvivaliz.com.br',
+            'X-OpenRouter-Title' => defined('AI_STUDIO_OPENROUTER_APP_TITLE') ? AI_STUDIO_OPENROUTER_APP_TITLE : 'ShopVivaliz',
+        ]),
+        'groq' => new AiStudioOpenAiCompatibleClient(ai_studio_secret_pool('AI_STUDIO_GROQ_API_KEY', ['GROQ_API_KEY']), $qropeModel !== '' ? $qropeModel : (defined('AI_STUDIO_GROQ_IMAGE_MODEL') ? AI_STUDIO_GROQ_IMAGE_MODEL : 'openai/gpt-oss-20b'), defined('AI_STUDIO_GROQ_API_BASE_URL') ? AI_STUDIO_GROQ_API_BASE_URL : 'https://api.groq.com/openai/v1', 'Groq'),
+        default => throw new AiStudioApiException("Provider de imagem invalido: {$provider}."),
+    };
+}
+
+function ai_studio_groq_refine_prompt(string $prompt, array $product, string $targetChannel): string
+{
+    $keys = ai_studio_secret_pool('AI_STUDIO_GROQ_API_KEY', ['GROQ_API_KEY']);
+    if ($keys === []) {
+        return $prompt;
+    }
+    $analysisModel = getenv('GROQ_ANALYSIS_MODEL') ?: 'llama-4-scout-17b-16e-instruct';
+    $payload = [
+        'model' => $analysisModel,
+        'messages' => [[
+            'role' => 'user',
+            'content' => 'Refine this product image prompt for channel ' . $targetChannel . '. Preserve only factual details. Prompt: ' . $prompt . "\nContext: " . ai_studio_catalog_context_brief($product),
+        ]],
+        'max_tokens' => 220,
+    ];
+    foreach ($keys as $key) {
+        try {
+            $response = AiStudioHttpClient::request(
+                'POST',
+                (defined('AI_STUDIO_GROQ_API_BASE_URL') ? AI_STUDIO_GROQ_API_BASE_URL : 'https://api.groq.com/openai/v1') . '/chat/completions',
+                ['Authorization' => 'Bearer ' . $key, 'Content-Type' => 'application/json'],
+                $payload,
+                90
+            );
+            if ($response['status'] < 200 || $response['status'] >= 300) {
+                continue;
+            }
+            $decoded = AiStudioHttpClient::decodeJson($response['body'], 'Groq prompt refine');
+            $text = trim((string)($decoded['choices'][0]['message']['content'] ?? ''));
+            if ($text !== '') {
+                return $text;
+            }
+        } catch (Throwable $e) {
+            continue;
+        }
+    }
+    return $prompt;
 }
 
 /** @return string */
@@ -235,16 +304,59 @@ function ai_studio_insert_staging_row(
     return (int)$db->lastInsertId();
 }
 
+/** @return array{job_id:int,status:string} */
+function ai_studio_enqueue_job(
+    PDO $db,
+    int $productId,
+    string $provider,
+    array $imageTypes,
+    ?string $modelOverride,
+    string $targetChannel
+): array {
+    $product = ai_studio_fetch_product($db, $productId);
+    if ($product === null) {
+        throw new AiStudioApiException("Produto #{$productId} nao encontrado para enfileirar.");
+    }
+    $baseImagePath = ai_studio_resolve_base_image($product['image_ref'], dirname(__DIR__, 2), $productId);
+    $baseImageIsTemp = str_starts_with($baseImagePath, AI_STUDIO_BASE_IMAGE_TMP_DIR);
+    $prompts = ai_studio_default_prompts($product['name'], $targetChannel, $product);
+    $jobId = sv_queue_enqueue('ai_image_studio.process_item', [
+        'product_id' => $productId,
+        'provider' => $provider,
+        'image_types' => array_values($imageTypes),
+        'model_override' => $modelOverride,
+        'target_channel' => $targetChannel,
+        'product' => $product,
+        'prompts' => $prompts,
+        'base_image_path' => $baseImagePath,
+        'base_image_is_temp' => $baseImageIsTemp,
+        'requested_at' => gmdate(DATE_ATOM),
+    ], 25);
+    sv_log('ai_image_studio_job_enqueued', 'queue', [
+        'job_id' => $jobId,
+        'product_id' => $productId,
+        'provider' => $provider,
+        'target_channel' => $targetChannel,
+    ]);
+    return ['job_id' => $jobId, 'status' => 'queued'];
+}
+
 /** @return array<string,mixed> */
 function ai_studio_process_item(
-    PDO $db,
+    ?PDO $db,
     int $productId,
     string $provider,
     array $imageTypes = ['white', 'hero', 'ambient'],
     ?string $modelOverride = null,
-    string $targetChannel = 'site'
+    string $targetChannel = 'site',
+    ?array $productOverride = null,
+    ?string $baseImageOverride = null,
+    bool $baseImageOverrideIsTemp = false,
+    ?array $promptOverrides = null
 ): array {
-    svcp_ensure_schema($db);
+    if ($db instanceof PDO) {
+        svcp_ensure_schema($db);
+    }
     $provider = ai_studio_normalize_provider($provider);
     $targetChannel = strtolower(trim($targetChannel));
     $profiles = ai_studio_channel_profiles();
@@ -260,7 +372,7 @@ function ai_studio_process_item(
         return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => 'Nenhum tipo de imagem valido selecionado.'];
     }
 
-    $product = ai_studio_fetch_product($db, $productId);
+    $product = $productOverride ?? ai_studio_fetch_product($db, $productId);
     if ($product === null) {
         return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productId} nao encontrado ou sem nome."];
     }
@@ -268,25 +380,32 @@ function ai_studio_process_item(
     $profile = ai_studio_channel_profile($targetChannel);
     $minimumSide = max(1000, (int)($profile['minimum_side'] ?? 1000));
     $recommendedSide = max($minimumSide, (int)($profile['recommended_side'] ?? $minimumSide));
-    $baseImagePath = null;
-    $baseImageIsTemp = false;
+    $baseImagePath = $baseImageOverride;
+    $baseImageIsTemp = $baseImageOverrideIsTemp;
 
     try {
         try {
-            $baseImagePath = ai_studio_resolve_base_image($product['image_ref'], dirname(__DIR__, 2), $productId);
-            $baseImageIsTemp = str_starts_with($baseImagePath, AI_STUDIO_BASE_IMAGE_TMP_DIR);
+            if (!is_string($baseImagePath) || $baseImagePath === '') {
+                $baseImagePath = ai_studio_resolve_base_image($product['image_ref'], dirname(__DIR__, 2), $productId);
+                $baseImageIsTemp = str_starts_with($baseImagePath, AI_STUDIO_BASE_IMAGE_TMP_DIR);
+            }
         } catch (Throwable $e) {
             $results = [];
             foreach ($imageTypes as $imageType) {
-                $id = ai_studio_insert_staging_row($db, $productId, $imageType, $provider === 'claude' ? 'claude_optimized' : $provider, null, null, 'failed', $e->getMessage(), $targetChannel);
+                $id = $db instanceof PDO
+                    ? ai_studio_insert_staging_row($db, $productId, $imageType, $provider === 'claude' ? 'claude_optimized' : $provider, null, null, 'failed', $e->getMessage(), $targetChannel)
+                    : 0;
                 $results[] = ['image_type' => $imageType, 'status' => 'error', 'staging_id' => $id, 'error' => $e->getMessage()];
             }
             return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => $results, 'error' => 'Foto base invalida: ' . $e->getMessage()];
         }
 
-        $imageEngine = ai_studio_resolve_image_engine($provider);
-        $providerUsed = $imageEngine;
-        $prompts = ai_studio_default_prompts($product['name'], $targetChannel, $product);
+        $imageCandidates = ai_studio_image_provider_candidates($provider);
+        if ($imageCandidates === []) {
+            throw new AiStudioApiException('Nenhum provedor de imagem com chave ativa encontrou disponibilidade.');
+        }
+        $providerUsed = $imageCandidates[0];
+        $prompts = $promptOverrides ?? ai_studio_default_prompts($product['name'], $targetChannel, $product);
 
         if ($provider === 'claude' && ai_studio_provider_has_key('claude')) {
             try {
@@ -298,17 +417,12 @@ function ai_studio_process_item(
                 }
                 $providerUsed = 'claude_optimized';
             } catch (Throwable $e) {
-                $results = [];
-                foreach ($imageTypes as $imageType) {
-                    $id = ai_studio_insert_staging_row($db, $productId, $imageType, 'claude_optimized', null, null, 'failed', $e->getMessage(), $targetChannel);
-                    $results[] = ['image_type' => $imageType, 'status' => 'error', 'staging_id' => $id, 'error' => $e->getMessage()];
-                }
-                return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => $results, 'error' => 'Falha ao otimizar prompts com Claude: ' . $e->getMessage()];
+                error_log("[ai-image-studio] Claude indisponível para prompts do produto #{$productId}: " . $e->getMessage());
             }
         }
 
-        $openAiModel = ($modelOverride !== null && trim($modelOverride) !== '' && $imageEngine === 'openai') ? trim($modelOverride) : AI_STUDIO_OPENAI_IMAGE_MODEL;
-        $googleModel = ($modelOverride !== null && trim($modelOverride) !== '' && $imageEngine === 'google') ? trim($modelOverride) : AI_STUDIO_GOOGLE_IMAGEN_MODEL;
+        $openAiModel = ($modelOverride !== null && trim($modelOverride) !== '') ? trim($modelOverride) : AI_STUDIO_OPENAI_IMAGE_MODEL;
+        $googleModel = ($modelOverride !== null && trim($modelOverride) !== '') ? trim($modelOverride) : AI_STUDIO_GOOGLE_IMAGEN_MODEL;
         $openRouterModel = trim((string)(getenv('OPENROUTER_IMAGE_MODEL') ?: ''));
         if ($openRouterModel === '') {
             $openRouterModel = trim((string)(getenv('OPENROUTER_IMAGE_MODEL') ?: getenv('GROQ_IMAGE_MODEL') ?: $openAiModel));
@@ -326,28 +440,30 @@ function ai_studio_process_item(
             $publicPath = AI_STUDIO_STORAGE_URL_PREFIX . $filename;
 
             try {
-                if ($imageEngine === 'openai') {
-                    (new AiStudioOpenAiClient(AI_STUDIO_OPENAI_API_KEY, $openAiModel))->editImageToFile($prompt, $baseImagePath, $destination);
-                } else {
-                    if ($imageEngine === 'google') {
-                        (new AiStudioGoogleImageEditClient(AI_STUDIO_GOOGLE_IMAGEN_API_KEY, $googleModel))->editImageToFile($prompt, $baseImagePath, $destination);
-                    } elseif ($imageEngine === 'claude') {
-                        (new AiStudioOpenAiCompatibleClient(AI_STUDIO_CLAUDE_API_KEY, $modelOverride !== null && trim($modelOverride) !== '' ? trim($modelOverride) : AI_STUDIO_CLAUDE_MODEL, 'https://api.anthropic.com/v1', 'Claude', ['anthropic-version' => '2023-06-01']))->editImageToFile($prompt, $baseImagePath, $destination);
-                    } elseif ($imageEngine === 'openrouter') {
-                        $providerUsed = 'openrouter';
-                        (new AiStudioOpenAiCompatibleClient(AI_STUDIO_OPENROUTER_API_KEY, $openRouterModel, AI_STUDIO_OPENROUTER_API_BASE_URL, 'OpenRouter', [
-                            'HTTP-Referer' => AI_STUDIO_OPENROUTER_HTTP_REFERER,
-                            'X-OpenRouter-Title' => AI_STUDIO_OPENROUTER_APP_TITLE,
-                        ]))->editImageToFile($prompt, $baseImagePath, $destination);
-                    } else {
-                        $providerUsed = 'groq';
-                        (new AiStudioOpenAiCompatibleClient(AI_STUDIO_GROQ_API_KEY, $qropeModel !== '' ? $qropeModel : AI_STUDIO_GROQ_IMAGE_MODEL, AI_STUDIO_GROQ_API_BASE_URL, 'Groq'))->editImageToFile($prompt, $baseImagePath, $destination);
+                $lastError = null;
+                foreach ($imageCandidates as $candidateProvider) {
+                    try {
+                        $providerUsed = $candidateProvider;
+                        $client = ai_studio_build_image_client($candidateProvider, $modelOverride, $openAiModel, $googleModel, $openRouterModel, $qropeModel);
+                        $client->editImageToFile($prompt, $baseImagePath, $destination);
+                        $lastError = null;
+                        break;
+                    } catch (Throwable $candidateError) {
+                        $lastError = $candidateError;
+                        @unlink($destination);
+                        error_log("[ai-image-studio] produto #{$productId} canal={$targetChannel} tipo={$imageType} provider={$candidateProvider} fallback: " . $candidateError->getMessage());
+                        continue;
                     }
+                }
+                if ($lastError instanceof Throwable && !is_file($destination)) {
+                    throw $lastError;
                 }
                 $quality = ai_studio_validate_image_file($destination, $minimumSide);
                 $quality['recommended_side'] = $recommendedSide;
                 $quality['meets_recommended_side'] = $quality['width'] >= $recommendedSide && $quality['height'] >= $recommendedSide;
-                $id = ai_studio_insert_staging_row($db, $productId, $imageType, $providerUsed, $publicPath, $prompt, 'pending', null, $targetChannel);
+                $id = $db instanceof PDO
+                    ? ai_studio_insert_staging_row($db, $productId, $imageType, $providerUsed, $publicPath, $prompt, 'pending', null, $targetChannel)
+                    : 0;
                 $results[] = [
                     'image_type' => $imageType,
                     'status' => 'pending',
@@ -358,9 +474,11 @@ function ai_studio_process_item(
                 ];
             } catch (Throwable $e) {
                 @unlink($destination);
-                $id = ai_studio_insert_staging_row($db, $productId, $imageType, $providerUsed, null, $prompt, 'failed', $e->getMessage(), $targetChannel);
+                $id = $db instanceof PDO
+                    ? ai_studio_insert_staging_row($db, $productId, $imageType, $providerUsed, null, $prompt, 'failed', $e->getMessage(), $targetChannel)
+                    : 0;
                 $results[] = ['image_type' => $imageType, 'status' => 'error', 'staging_id' => $id, 'target_channel' => $targetChannel, 'error' => $e->getMessage()];
-                error_log("[ai-image-studio] produto #{$productId} canal={$targetChannel} tipo={$imageType} provider={$imageEngine}: " . $e->getMessage());
+                error_log("[ai-image-studio] produto #{$productId} canal={$targetChannel} tipo={$imageType} provider={$providerUsed}: " . $e->getMessage());
             }
         }
 
@@ -369,6 +487,31 @@ function ai_studio_process_item(
     } finally {
         if ($baseImageIsTemp && is_string($baseImagePath) && is_file($baseImagePath)) @unlink($baseImagePath);
     }
+}
+
+function ai_studio_process_queued_job(array $payload): array
+{
+    $productId = (int)($payload['product_id'] ?? 0);
+    $provider = (string)($payload['provider'] ?? '');
+    $imageTypes = is_array($payload['image_types'] ?? null) ? array_map('strval', $payload['image_types']) : ['white', 'hero', 'ambient'];
+    $modelOverride = trim((string)($payload['model_override'] ?? ''));
+    $targetChannel = strtolower(trim((string)($payload['target_channel'] ?? 'site')));
+    $product = is_array($payload['product'] ?? null) ? $payload['product'] : null;
+    $baseImagePath = trim((string)($payload['base_image_path'] ?? ''));
+    $baseImageIsTemp = (bool)($payload['base_image_is_temp'] ?? false);
+    $prompts = is_array($payload['prompts'] ?? null) ? $payload['prompts'] : [];
+    return ai_studio_process_item(
+        null,
+        $productId,
+        $provider,
+        $imageTypes,
+        $modelOverride !== '' ? $modelOverride : null,
+        $targetChannel,
+        $product,
+        $baseImagePath !== '' ? $baseImagePath : null,
+        $baseImageIsTemp,
+        $prompts
+    );
 }
 
 if (PHP_SAPI === 'cli' && realpath($argv[0] ?? '') === realpath(__FILE__)) {
@@ -382,10 +525,16 @@ if (PHP_SAPI === 'cli' && realpath($argv[0] ?? '') === realpath(__FILE__)) {
         exit(1);
     }
     $types = $typesArg !== '' ? array_map('trim', explode(',', $typesArg)) : ['white', 'hero', 'ambient'];
-    $db = ai_studio_db();
-    if (!$db instanceof PDO) {
-        fwrite(STDERR, "Falha ao conectar ao banco de dados.\n");
-        exit(1);
+    $db = null;
+    if (function_exists('ai_studio_db')) {
+        try {
+            $candidateDb = ai_studio_db();
+            if ($candidateDb instanceof PDO) {
+                $db = $candidateDb;
+            }
+        } catch (Throwable $e) {
+            $db = null;
+        }
     }
     $result = ai_studio_process_item($db, $productId, $provider, $types, $model !== '' ? $model : null, $targetChannel);
     fwrite(STDOUT, json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n");
@@ -417,6 +566,18 @@ if (PHP_SAPI !== 'cli' && basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basena
     if (!$db instanceof PDO) {
         http_response_code(503);
         echo json_encode(['success' => false, 'error' => 'Banco de dados temporariamente indisponivel.']);
+        exit;
+    }
+
+    $enqueueOnly = (string)($_POST['enqueue_only'] ?? $_POST['async'] ?? '') === '1';
+    if ($enqueueOnly) {
+        http_response_code(202);
+        echo json_encode([
+            'success' => true,
+            'queued' => true,
+            'job' => ai_studio_enqueue_job($db, $productId, $provider, $types, $model !== '' ? $model : null, $targetChannel),
+            'message' => 'Job enfileirado para processamento assíncrono.',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }
 

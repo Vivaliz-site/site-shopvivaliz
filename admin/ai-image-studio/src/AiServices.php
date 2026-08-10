@@ -51,17 +51,55 @@ function ai_studio_normalize_provider(string $provider): string
     };
 }
 
+/**
+ * @param list<string> $envNames
+ * @return list<string>
+ */
+function ai_studio_secret_pool(string $constantName, array $envNames): array
+{
+    if (defined($constantName)) {
+        $value = constant($constantName);
+        if (is_array($value)) {
+            return AiStudioKeyPool::normalize($value);
+        }
+        if (is_string($value) && $value !== '') {
+            return AiStudioKeyPool::normalize($value);
+        }
+    }
+
+    $values = [];
+    foreach ($envNames as $envName) {
+        $value = trim((string)getenv($envName));
+        if ($value !== '') {
+            $values[] = $value;
+        }
+        $plural = trim((string)getenv($envName . 'S'));
+        if ($plural !== '') {
+            $decoded = json_decode($plural, true);
+            $items = is_array($decoded) ? $decoded : (preg_split('/[\r\n,;]+/', $plural) ?: []);
+            foreach ($items as $item) {
+                $item = trim((string)$item);
+                if ($item !== '') {
+                    $values[] = $item;
+                }
+            }
+        }
+    }
+
+    return AiStudioKeyPool::normalize($values);
+}
+
 /** @return list<string> */
 function ai_studio_provider_fallback_order(string $preferred): array
 {
     $preferred = ai_studio_normalize_provider($preferred);
     $order = match ($preferred) {
-        'openai' => ['openai', 'openrouter', 'groq', 'google', 'claude'],
-        'google' => ['google', 'openrouter', 'groq', 'openai', 'claude'],
-        'claude' => ['openai', 'google'],
+        'openai' => ['openai', 'google', 'openrouter', 'groq', 'claude'],
+        'google' => ['google', 'openai', 'openrouter', 'groq', 'claude'],
+        'claude' => ['openai', 'google', 'openrouter', 'groq'],
         'openrouter' => ['openrouter', 'groq', 'openai', 'google', 'claude'],
         'groq' => ['groq', 'openrouter', 'openai', 'google', 'claude'],
-        default => ['openai', 'google', 'openrouter', 'groq', 'claude'],
+        default => ['openai', 'google', 'openrouter', 'groq'],
     };
     return array_values(array_unique(array_filter($order, static fn(string $value): bool => in_array($value, ['openai', 'google', 'claude', 'openrouter', 'groq'], true))));
 }
@@ -69,11 +107,11 @@ function ai_studio_provider_fallback_order(string $preferred): array
 function ai_studio_provider_has_key(string $provider): bool
 {
     return match (ai_studio_normalize_provider($provider)) {
-        'openai' => AiStudioKeyPool::normalize(AI_STUDIO_OPENAI_API_KEY) !== [],
-        'google' => AiStudioKeyPool::normalize(AI_STUDIO_GOOGLE_IMAGEN_API_KEY) !== [],
-        'claude' => AiStudioKeyPool::normalize(AI_STUDIO_CLAUDE_API_KEY) !== [],
-        'openrouter' => AiStudioKeyPool::normalize(AI_STUDIO_OPENROUTER_API_KEY) !== [],
-        'groq' => AiStudioKeyPool::normalize(AI_STUDIO_GROQ_API_KEY) !== [],
+        'openai' => ai_studio_secret_pool('AI_STUDIO_OPENAI_API_KEY', ['OPENAI_API_KEY']) !== [],
+        'google' => ai_studio_secret_pool('AI_STUDIO_GOOGLE_IMAGEN_API_KEY', ['GOOGLE_IMAGEN_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_GEMINI_API_KEY']) !== [],
+        'claude' => ai_studio_secret_pool('AI_STUDIO_CLAUDE_API_KEY', ['CLAUDE_API_KEY', 'ANTHROPIC_API_KEY']) !== [],
+        'openrouter' => ai_studio_secret_pool('AI_STUDIO_OPENROUTER_API_KEY', ['OPENROUTER_API_KEY']) !== [],
+        'groq' => ai_studio_secret_pool('AI_STUDIO_GROQ_API_KEY', ['GROQ_API_KEY']) !== [],
         default => false,
     };
 }
@@ -139,6 +177,26 @@ final class AiStudioOpenAiCompatibleClient extends AiStudioRotatingClient
 
 final class AiStudioHttpClient
 {
+    /** @return array<string,mixed> */
+    private static function sslOptions(): array
+    {
+        $options = [
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+        ];
+        $cainfo = trim((string)(getenv('SHOPVIVALIZ_CURL_CAINFO') ?: ini_get('curl.cainfo') ?: ini_get('openssl.cafile') ?: ''));
+        if ($cainfo === '') {
+            $fallback = dirname(__DIR__, 3) . '/storage/certs/cacert.pem';
+            if (is_file($fallback)) {
+                $cainfo = $fallback;
+            }
+        }
+        if ($cainfo !== '' && is_file($cainfo) && is_readable($cainfo)) {
+            $options[CURLOPT_CAINFO] = $cainfo;
+        }
+        return $options;
+    }
+
     /** @return array{status:int,body:string} */
     public static function request(string $method, string $url, array $headers = [], ?array $jsonBody = null, int $timeoutSeconds = 120): array
     {
@@ -153,10 +211,8 @@ final class AiStudioHttpClient
             CURLOPT_HTTPHEADER => $httpHeaders,
             CURLOPT_TIMEOUT => $timeoutSeconds,
             CURLOPT_CONNECTTIMEOUT => 15,
-            CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_FAILONERROR => false,
-        ];
+        ] + self::sslOptions();
         if ($jsonBody !== null) {
             $encoded = json_encode($jsonBody, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             if (!is_string($encoded)) throw new AiStudioApiException('Falha ao codificar JSON: ' . json_last_error_msg());
@@ -187,10 +243,8 @@ final class AiStudioHttpClient
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => $timeoutSeconds,
             CURLOPT_CONNECTTIMEOUT => 15,
-            CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_FAILONERROR => false,
-        ]);
+        ] + self::sslOptions());
         $raw = curl_exec($handle);
         $errno = curl_errno($handle);
         $error = curl_error($handle);
@@ -212,9 +266,7 @@ final class AiStudioHttpClient
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_TIMEOUT => $timeoutSeconds,
             CURLOPT_CONNECTTIMEOUT => 15,
-            CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_SSL_VERIFYHOST => 2,
-        ]);
+        ] + self::sslOptions());
         $ok = curl_exec($handle);
         $errno = curl_errno($handle);
         $error = curl_error($handle);

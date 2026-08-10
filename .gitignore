@@ -93,6 +93,8 @@ shopvivaliz-deploy/
 
 # Builds locais e temporários
 dist/
+!public/dist/
+!public/dist/**
 build/
 out/
 
@@ -142,6 +144,14 @@ test-*.log
 /.tmp_shopvivaliz/
 /test*.php
 /teste*.php
+/_real_smoke/
+/_real_smoke.ps1
+/_tmp_ai_smoke/
+/_tmp_ai_smoke.ps1
+storage/raw/SKU-*-SMOKE/
+storage/processed/SKU-*-SMOKE/
+storage/queue.json
+storage/queue.json.lock
 
 # Certificados (NUNCA commitar)
 *.pfx

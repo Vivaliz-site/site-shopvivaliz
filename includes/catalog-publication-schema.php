@@ -103,7 +103,17 @@ CREATE TABLE IF NOT EXISTS `catalog_publications` (
     KEY `idx_catalog_publications_staging` (`publication_type`, `staging_id`),
     KEY `idx_catalog_publications_product_channel` (`product_id`, `channel`),
     KEY `idx_catalog_publications_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL);
+
+    $db->exec(<<<'SQL'
+CREATE INDEX IF NOT EXISTS `idx_catalog_optimizations_staging_channel_product_status`
+    ON `catalog_optimizations_staging` (`channel`, `product_id`, `status`, `created_at`, `id`)
+SQL);
+
+    $db->exec(<<<'SQL'
+CREATE INDEX IF NOT EXISTS `idx_catalog_optimizations_staging_status_created`
+    ON `catalog_optimizations_staging` (`status`, `created_at`, `id`)
 SQL);
 
     $db->exec(<<<'SQL'
