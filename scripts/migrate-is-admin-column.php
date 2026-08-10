@@ -1,13 +1,14 @@
 <?php
 /**
- * MIGRATION: garantir coluna is_admin e autorizacao do admin canonico.
+ * MIGRATION: garantir coluna is_admin e autorizacao de uma identidade
+ * administrativa ShopVivaliz persistida.
  * Execucao: php scripts/migrate-is-admin-column.php
  *
- * Idempotente:
+ * Idempotente e restritiva:
  * 1. Cria users.is_admin apenas se a coluna nao existir.
- * 2. Exige que a conta canonica admin@shopvivaliz.com.br exista.
- * 3. Define somente essa conta como is_admin = 1 quando necessario.
- * 4. Valida o estado final antes de retornar sucesso.
+ * 2. Prefere admin@shopvivaliz.com.br quando essa conta existe.
+ * 3. Na ausencia dela, aceita somente uma unica conta @shopvivaliz.com.br.
+ * 4. Nunca cria usuario, altera senha ou escolhe entre multiplas contas.
  */
 
 declare(strict_types=1);
@@ -39,7 +40,6 @@ if (PHP_SAPI !== 'cli') {
 }
 
 log_info('Carregando configuracoes...');
-
 $envFile = __DIR__ . '/../.env';
 if (!is_file($envFile) || !is_readable($envFile)) {
     log_error('Arquivo .env nao encontrado ou ilegivel');
@@ -61,25 +61,16 @@ $dbHost = $env['DB_HOST'] ?? 'localhost';
 $dbUser = $env['DB_USER'] ?? ($env['DB_USERNAME'] ?? '');
 $dbPass = $env['DB_PASS'] ?? ($env['DB_PASSWORD'] ?? '');
 $dbName = $env['DB_NAME'] ?? 'shopvivaliz';
-
 if ($dbUser === '') {
     log_error('DB_USER/DB_USERNAME ausente');
     exit(1);
 }
 
-log_info('Conectando ao banco de dados...');
-
 try {
     mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
     $db = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
     $db->set_charset('utf8mb4');
-} catch (Throwable $error) {
-    log_error('Falha ao conectar ao banco');
-    exit(1);
-}
 
-try {
-    log_info("Verificando coluna 'is_admin'...");
     $columnResult = $db->query("SHOW COLUMNS FROM users LIKE 'is_admin'");
     if ($columnResult->num_rows === 0) {
         $db->query('ALTER TABLE users ADD COLUMN is_admin TINYINT(1) NOT NULL DEFAULT 0');
@@ -88,35 +79,58 @@ try {
         log_success("Coluna 'is_admin' ja existe");
     }
 
-    log_info('Validando conta administrativa canonica...');
-    $stmt = $db->prepare('SELECT id, is_admin FROM users WHERE email = ? LIMIT 1');
-    $adminEmail = CANONICAL_ADMIN_EMAIL;
-    $stmt->bind_param('s', $adminEmail);
+    $adminId = 0;
+    $adminFlag = 0;
+    $stmt = $db->prepare('SELECT id, is_admin FROM users WHERE LOWER(email) = ? LIMIT 1');
+    $canonicalEmail = CANONICAL_ADMIN_EMAIL;
+    $stmt->bind_param('s', $canonicalEmail);
     $stmt->execute();
     $admin = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 
-    if (!$admin || empty($admin['id'])) {
-        throw new RuntimeException('Conta administrativa canonica nao encontrada');
+    if ($admin && !empty($admin['id'])) {
+        $adminId = (int)$admin['id'];
+        $adminFlag = (int)($admin['is_admin'] ?? 0);
+        log_info('Identidade administrativa resolvida pela conta canonica');
+    } else {
+        $domainPattern = '%@shopvivaliz.com.br';
+        $domainStmt = $db->prepare(
+            'SELECT id, is_admin FROM users WHERE LOWER(email) LIKE ? ORDER BY id ASC LIMIT 2'
+        );
+        $domainStmt->bind_param('s', $domainPattern);
+        $domainStmt->execute();
+        $result = $domainStmt->get_result();
+        $domainAccounts = [];
+        while ($row = $result->fetch_assoc()) {
+            $domainAccounts[] = $row;
+        }
+        $domainStmt->close();
+
+        if (count($domainAccounts) === 0) {
+            throw new RuntimeException('Nenhuma conta ShopVivaliz persistida foi encontrada');
+        }
+        if (count($domainAccounts) !== 1 || empty($domainAccounts[0]['id'])) {
+            throw new RuntimeException('Existem multiplas contas ShopVivaliz; recusando escolher admin automaticamente');
+        }
+
+        $adminId = (int)$domainAccounts[0]['id'];
+        $adminFlag = (int)($domainAccounts[0]['is_admin'] ?? 0);
+        log_info('Identidade administrativa resolvida pela unica conta do dominio');
     }
 
-    $adminId = (int)$admin['id'];
-    if ((int)($admin['is_admin'] ?? 0) !== 1) {
+    if ($adminFlag !== 1) {
         $update = $db->prepare('UPDATE users SET is_admin = 1 WHERE id = ?');
         $update->bind_param('i', $adminId);
         $update->execute();
         $update->close();
-        log_success('Permissao administrativa canonica restaurada');
-    } else {
-        log_success('Conta canonica ja possui permissao administrativa');
+        log_success('Permissao administrativa restaurada');
     }
 
-    $verify = $db->prepare('SELECT is_admin FROM users WHERE id = ? AND email = ? LIMIT 1');
-    $verify->bind_param('is', $adminId, $adminEmail);
+    $verify = $db->prepare('SELECT is_admin FROM users WHERE id = ? LIMIT 1');
+    $verify->bind_param('i', $adminId);
     $verify->execute();
     $verified = $verify->get_result()->fetch_assoc();
     $verify->close();
-
     if (!$verified || (int)($verified['is_admin'] ?? 0) !== 1) {
         throw new RuntimeException('Validacao final da permissao administrativa falhou');
     }
@@ -126,6 +140,8 @@ try {
     exit(0);
 } catch (Throwable $error) {
     log_error($error->getMessage());
-    $db->close();
+    if (isset($db) && $db instanceof mysqli) {
+        $db->close();
+    }
     exit(1);
 }
