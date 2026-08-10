@@ -322,7 +322,7 @@ jobs:
         with:
           name: olist-runtime-recovery-${{ github.run_id }}
           path: artifacts/olist-recovery/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
 
       - name: Remove SSH material
