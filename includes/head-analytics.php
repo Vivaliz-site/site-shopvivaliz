@@ -140,6 +140,10 @@ $GLOBALS['sv_public_experience_included'] = true;
 
 require_once __DIR__ . '/liz-assistant-assets.php';
 
+if ($requestPath === '/produto' || str_starts_with($requestPath, '/produto/')) {
+    require_once __DIR__ . '/product-video-embed-fix.php';
+}
+
 if (function_exists('track_page_view')) {
     $title = $GLOBALS['page_title'] ?? 'Page';
     $path = $_SERVER['REQUEST_URI'] ?? '/';
