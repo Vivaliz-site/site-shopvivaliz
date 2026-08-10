@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS `product_images_staging` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `product_id` INT UNSIGNED NOT NULL,
     `image_type` VARCHAR(32) NOT NULL,
-    `provider_used` VARCHAR(32) NOT NULL,
+    `provider_used` VARCHAR(64) NOT NULL,
     `local_path` VARCHAR(500) NOT NULL,
     `prompt_used` TEXT NULL,
     `status` VARCHAR(32) NOT NULL DEFAULT 'pending',
@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS `product_images_staging` (
     `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     KEY `idx_product_images_staging_product_id` (`product_id`),
-    KEY `idx_product_images_staging_status` (`status`)
+    KEY `idx_product_images_staging_status` (`status`),
+    KEY `idx_product_images_staging_status_created` (`status`, `created_at`, `id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL);
     $results['product_images_staging'] = ['ok' => true];
@@ -45,7 +46,7 @@ CREATE TABLE IF NOT EXISTS `catalog_optimizations_staging` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `product_id` INT UNSIGNED NOT NULL,
     `channel` VARCHAR(32) NOT NULL,
-    `provider_used` VARCHAR(32) NOT NULL,
+    `provider_used` VARCHAR(64) NOT NULL,
     `optimized_title` VARCHAR(500) NOT NULL,
     `optimized_description` LONGTEXT NOT NULL,
     `bullet_points_json` LONGTEXT NOT NULL,
