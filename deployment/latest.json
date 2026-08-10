@@ -1,19 +1,19 @@
 {
   "status": "PRODUCTION_UPDATED",
-  "sha": "17f050859ae74cbe5cce72a4615d9c12beb5efdb",
-  "workflow_run_id": "31414367769",
-  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31414367769",
+  "sha": "4c48356e7024305e1466a6fc0cae9265e018903c",
+  "workflow_run_id": "31414668801",
+  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31414668801",
   "jobs": {
     "validate": "success",
     "deploy": "success",
     "smoke_test": "success"
   },
   "results": [
-    "OK Oracle canonical ref: remote=4c48356e7024305e1466a6fc0cae9265e018903c deployed=17f050859ae74cbe5cce72a4615d9c12beb5efdb",
+    "OK Oracle canonical ref: remote=4c48356e7024305e1466a6fc0cae9265e018903c deployed=4c48356e7024305e1466a6fc0cae9265e018903c",
     "OK Oracle repository sync cron installed",
-    "OK release SHA marker: 17f050859ae74cbe5cce72a4615d9c12beb5efdb",
+    "OK release SHA marker: 4c48356e7024305e1466a6fc0cae9265e018903c",
     "OK version: https://shopvivaliz.com.br/api/health/version.php (200)",
-    "OK public version endpoint: 17f050859ae74cbe5cce72a4615d9c12beb5efdb",
+    "OK public version endpoint: 4c48356e7024305e1466a6fc0cae9265e018903c",
     "OK homepage: https://shopvivaliz.com.br/ (200)",
     "OK public homepage HTML contract",
     "OK mobile responsive header contract",
@@ -26,7 +26,7 @@
     "OK cart: https://shopvivaliz.com.br/carrinho (200)",
     "OK checkout: https://shopvivaliz.com.br/checkout (200)",
     "OK css: https://shopvivaliz.com.br/css/shopvivaliz-core-consolidated.css (200)",
-    "OK admin protected behavior (301)",
+    "OK admin redirect chain: final=200 redirects=1 effective=https://shopvivaliz.com.br/auth/login.php?redirect=%2Fadmin%2F%3Fsmoke%3D4c48356e7024",
     "OK authenticated admin guard database fallback",
     "OK liz_health: https://shopvivaliz.com.br/api/liz-intelligent.php?health=1 (200)",
     "OK Liz health payload",
@@ -58,5 +58,5 @@
     "OK security header: x-content-type-options",
     "OK security header: content-security-policy"
   ],
-  "verified_at": "2026-08-10T17:34:31.324441+00:00"
+  "verified_at": "2026-08-10T17:37:39.149014+00:00"
 }
