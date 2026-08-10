@@ -15,6 +15,59 @@ if (!$lockFile || !flock($lockFile, LOCK_EX | LOCK_NB)) {
     exit;
 }
 
+/**
+ * Resolve a URL de imagem mais confiavel para a release atual.
+ *
+ * O pipeline historico gravava site_url em /uploads/olist, inclusive em
+ * caminhos de deploy antigos. Em releases imutaveis esses arquivos podem nao
+ * existir mais. Por isso fontes remotas originais do ERP/Tiny tem prioridade.
+ * URLs locais da propria ShopVivaliz so sao aceitas quando o arquivo existe
+ * fisicamente na release atual.
+ */
+function svsce_resolve_image_url(array $row, string $root): string
+{
+    $remoteCandidates = [
+        $row['original_url_olist'] ?? '',
+        $row['image_url'] ?? '',
+        $row['original_url'] ?? '',
+    ];
+
+    foreach ($remoteCandidates as $candidate) {
+        $candidate = trim((string)$candidate);
+        if ($candidate !== '' && preg_match('~^https?://~i', $candidate)) {
+            return $candidate;
+        }
+    }
+
+    foreach (['site_url', 'local_url'] as $field) {
+        $candidate = trim((string)($row[$field] ?? ''));
+        if ($candidate === '') continue;
+
+        if (str_starts_with($candidate, '/')) {
+            $path = parse_url($candidate, PHP_URL_PATH);
+            if (is_string($path) && $path !== '' && is_file($root . $path)) {
+                return 'https://shopvivaliz.com.br' . $path;
+            }
+            continue;
+        }
+
+        if (!preg_match('~^https?://~i', $candidate)) continue;
+
+        $host = strtolower((string)(parse_url($candidate, PHP_URL_HOST) ?? ''));
+        $path = (string)(parse_url($candidate, PHP_URL_PATH) ?? '');
+        if (in_array($host, ['shopvivaliz.com.br', 'www.shopvivaliz.com.br'], true)) {
+            if ($path !== '' && is_file($root . $path)) {
+                return 'https://shopvivaliz.com.br' . $path;
+            }
+            continue;
+        }
+
+        return $candidate;
+    }
+
+    return '';
+}
+
 try {
     $token = getenv('TINY_ACCESS_TOKEN') ?: getenv('OLIST_ACCESS_TOKEN') ?: '';
     if ($token === '') {
@@ -53,13 +106,11 @@ try {
         $pdo = sv_pdo();
         if ($pdo instanceof PDO) {
             $sql = "SELECT sku,
-                           COALESCE(
-                               NULLIF(site_url, ''),
-                               NULLIF(local_url, ''),
-                               NULLIF(image_url, ''),
-                               NULLIF(original_url_olist, ''),
-                               NULLIF(original_url, '')
-                           ) AS resolved_url,
+                           site_url,
+                           local_url,
+                           image_url,
+                           original_url_olist,
+                           original_url,
                            position,
                            is_primary,
                            id
@@ -71,13 +122,8 @@ try {
             $stmt = $pdo->query($sql);
             while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                 $sku = trim((string)($row['sku'] ?? ''));
-                $imageUrl = trim((string)($row['resolved_url'] ?? ''));
+                $imageUrl = svsce_resolve_image_url($row, $root);
                 if ($sku === '' || $imageUrl === '') continue;
-
-                if (str_starts_with($imageUrl, '/')) {
-                    $imageUrl = 'https://shopvivaliz.com.br' . $imageUrl;
-                }
-                if (!preg_match('~^https?://~i', $imageUrl)) continue;
 
                 if (!isset($imagesBySku[$sku])) {
                     $imagesBySku[$sku] = [];
