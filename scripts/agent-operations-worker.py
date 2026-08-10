@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from agent_docs_gate import verify_receipt
 from task_queue_lib import load_queue, save_queue
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -138,6 +139,33 @@ def set_focus(runtime_state: dict[str, Any], agent_id: str, focus: str) -> None:
     agent_state["last_updated_at"] = utc_now()
 
 
+def task_id_for(task: dict[str, Any]) -> str:
+    return str(task.get("task_id") or task.get("id") or "").strip()
+
+
+def task_scope_docs(task: dict[str, Any]) -> list[str]:
+    raw = task.get("required_docs") or task.get("scope_docs") or []
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list):
+        return []
+    return [str(item).strip() for item in raw if str(item).strip()]
+
+
+def docs_preflight(agent_id: str, task: dict[str, Any]) -> tuple[bool, str]:
+    task_id = task_id_for(task)
+    if not task_id:
+        return False, "tarefa sem identificador; preflight de documentação não pode ser vinculado"
+    valid, reason, _ = verify_receipt(agent_id, task_id, task_scope_docs(task))
+    return valid, reason
+
+
+def docs_read_command(agent_id: str, task: dict[str, Any]) -> str:
+    task_id = task_id_for(task) or "task-sem-id"
+    extras = "".join(f" --doc {json.dumps(path)}" for path in task_scope_docs(task))
+    return f"python scripts/agent-docs-gate.py read --agent {agent_id} --task {task_id}{extras}"
+
+
 def choose_agent(task: dict[str, Any]) -> str:
     text = " ".join(
         [
@@ -166,15 +194,27 @@ def assign_pending_tasks(runtime_state: dict[str, Any]) -> list[dict[str, Any]]:
         if task.get("assigned_to"):
             continue
         agent_id = choose_agent(task)
+        valid, reason = docs_preflight(agent_id, task)
+        if not valid:
+            command = docs_read_command(agent_id, task)
+            set_focus(runtime_state, agent_id, f"Pré-leitura obrigatória: {task.get('title', task_id_for(task))}")
+            push_step(
+                runtime_state,
+                agent_id,
+                f"Tarefa não atribuída ainda: {reason}. Ler docs antes de alterar: {command}",
+                kind="docs-preflight-required",
+                extra={"task_id": task_id_for(task), "command": command},
+            )
+            continue
         task["assigned_to"] = [agent_id]
         task["assignment_updated_at"] = utc_now()
-        assigned.append({"id": task.get("id"), "title": task.get("title"), "agent_id": agent_id})
+        assigned.append({"id": task.get("id") or task.get("task_id"), "title": task.get("title"), "agent_id": agent_id})
         push_step(
             runtime_state,
             agent_id,
-            f"Assumindo a tarefa '{task.get('title')}' na fila compartilhada",
+            f"Preflight de documentação confirmado; assumindo a tarefa '{task.get('title')}'",
             kind="assignment",
-            extra={"task_id": task.get("id")},
+            extra={"task_id": task_id_for(task)},
         )
         changed = True
     if changed:
@@ -209,19 +249,31 @@ def record_agent_activity(queue: dict[str, Any], runtime_state: dict[str, Any]) 
         push_step(runtime_state, agent_id, f"Lendo a fila canônica para atualizar foco atual: {focus}", kind="read-queue")
         if tasks:
             current_task = tasks[0]
+            valid, reason = docs_preflight(agent_id, current_task)
+            if not valid:
+                command = docs_read_command(agent_id, current_task)
+                set_focus(runtime_state, agent_id, f"Pré-leitura obrigatória: {focus}")
+                push_step(
+                    runtime_state,
+                    agent_id,
+                    f"Execução bloqueada antes de qualquer alteração: {reason}. Próximo passo obrigatório: {command}",
+                    kind="docs-preflight-required",
+                    extra={"task_id": task_id_for(current_task), "command": command},
+                )
+                continue
             push_step(
                 runtime_state,
                 agent_id,
-                f"Lendo o contexto da tarefa '{current_task.get('title')}' para identificar o próximo bloco de execução",
+                f"Preflight de documentação válido; lendo o contexto da tarefa '{current_task.get('title')}'",
                 kind="task-context",
-                extra={"task_id": current_task.get("id")},
+                extra={"task_id": task_id_for(current_task)},
             )
             push_step(
                 runtime_state,
                 agent_id,
                 f"Executando comando de teste: {validation_command_for(agent_id, focus)}",
                 kind="validation",
-                extra={"task_id": current_task.get("id")},
+                extra={"task_id": task_id_for(current_task)},
             )
         else:
             push_step(runtime_state, agent_id, "Sem tarefa atribuída agora; aguardando novas missões da auto-geração", kind="idle")
@@ -252,6 +304,18 @@ def build_agent_reply(agent_id: str, command: dict[str, Any], queue: dict[str, A
     focus = tasks[0].get("title") if tasks else "Aguardando tarefa"
     assigned_count = len(tasks)
     prefix = "Ordem do supervisor recebida" if supervisor_mode else "Comando recebido"
+    if tasks:
+        valid, reason = docs_preflight(agent_id, tasks[0])
+        if not valid:
+            read_command = docs_read_command(agent_id, tasks[0])
+            return {
+                "agent": AGENTS[agent_id]["name"],
+                "agent_id": agent_id,
+                "message": f"[{AGENTS[agent_id]['name']}] {prefix}, mas nenhuma alteração será executada antes da leitura obrigatória dos docs. {reason}. Execute: {read_command}",
+                "timestamp": utc_now(),
+                "command_id": command.get("id"),
+                "status": "docs_preflight_required",
+            }
     return {
         "agent": AGENTS[agent_id]["name"],
         "agent_id": agent_id,
@@ -281,7 +345,8 @@ def process_commands(queue: dict[str, Any], runtime_state: dict[str, Any]) -> in
         push_step(runtime_state, agent_id, f"Lendo mensagem operacional da fila: {row.get('message', '')}", kind="command", extra={"command_id": row.get("id")})
         reply = build_agent_reply(agent_id, row, queue)
         append_jsonl(RESPONSES_FILE, reply)
-        push_step(runtime_state, agent_id, "Enviando resposta de sucesso para a fila e aguardando validação do deploy", kind="response", extra={"command_id": row.get("id")})
+        kind = "docs-preflight-required" if reply.get("status") == "docs_preflight_required" else "response"
+        push_step(runtime_state, agent_id, f"Resposta registrada com status {reply.get('status')}", kind=kind, extra={"command_id": row.get("id")})
         processed += 1
     return processed
 
@@ -306,7 +371,10 @@ def process_supervisor_interventions(queue: dict[str, Any], runtime_state: dict[
         push_step(runtime_state, agent_id, f"Reavaliando prioridades com a instrução: {row.get('message', '')}", kind="supervisor", extra={"command_id": row.get("id")})
         reply = build_agent_reply(agent_id, row, queue, supervisor_mode=True)
         append_jsonl(INTERVENTION_RESPONSES_FILE, reply)
-        push_step(runtime_state, agent_id, "Retomando o trabalho real após intervenção humana", kind="resume", extra={"command_id": row.get("id")})
+        if reply.get("status") == "docs_preflight_required":
+            push_step(runtime_state, agent_id, "Intervenção registrada; agente deve ler docs antes de retomar qualquer alteração", kind="docs-preflight-required", extra={"command_id": row.get("id")})
+        else:
+            push_step(runtime_state, agent_id, "Retomando o trabalho real após intervenção humana", kind="resume", extra={"command_id": row.get("id")})
         processed += 1
     return processed
 
