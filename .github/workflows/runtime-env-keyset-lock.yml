@@ -57,26 +57,45 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Wait for exact release on push
+      - name: Wait for protected release or descendant on push
         if: ${{ github.event_name == 'push' }}
         shell: bash
         run: |
           set -Eeuo pipefail
           ready=0
           for attempt in $(seq 1 30); do
-            deployed_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            state="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              "${VM_USER}@${VM_HOST}" \
-              'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha 2>/dev/null || true')"
-            if [[ "$deployed_sha" == "$GITHUB_SHA" ]]; then
+              "${VM_USER}@${VM_HOST}" 'bash -s' -- "$GITHUB_SHA" <<'REMOTE'
+          set -euo pipefail
+          protected_sha="$1"
+          repo=/home/ubuntu/shopvivaliz-deploy/repo
+          current=/home/ubuntu/shopvivaliz-deploy/current
+          deployed_sha="$(cat "$current/.release-sha" 2>/dev/null || true)"
+          relation=none
+          if [[ -n "$deployed_sha" && "$deployed_sha" == "$protected_sha" ]]; then
+            relation=exact
+          elif [[ -n "$deployed_sha" ]] \
+            && git -C "$repo" cat-file -e "${protected_sha}^{commit}" 2>/dev/null \
+            && git -C "$repo" cat-file -e "${deployed_sha}^{commit}" 2>/dev/null \
+            && git -C "$repo" merge-base --is-ancestor "$protected_sha" "$deployed_sha"; then
+            relation=descendant
+          fi
+          printf 'deployed_sha=%s\nrelation=%s\n' "$deployed_sha" "$relation"
+          REMOTE
+            )"
+            deployed_sha="$(printf '%s\n' "$state" | sed -n 's/^deployed_sha=//p' | head -n 1)"
+            relation="$(printf '%s\n' "$state" | sed -n 's/^relation=//p' | head -n 1)"
+            if [[ "$relation" == exact || "$relation" == descendant ]]; then
               ready=1
+              echo "protected_release_relation=$relation"
               echo "deployed_sha=$deployed_sha"
               break
             fi
             echo "deployment_wait_attempt=$attempt"
             sleep 20
           done
-          test "$ready" = 1 || { echo '::error::Exact release did not reach production'; exit 1; }
+          test "$ready" = 1 || { echo '::error::Protected release or descendant did not reach production'; exit 1; }
 
       - name: Seal current key names and block reductions
         shell: bash
@@ -92,8 +111,9 @@ jobs:
 
           sudo install -d -m 0755 -o root -g root "$(dirname "$VM_LOCK")"
 
-          # seal() is fail-closed: if an already sealed key disappeared, it exits
-          # non-zero before changing the lock. Only newly added key names expand it.
+          # seal() is fail-closed: if an already sealed key disappeared or was
+          # emptied, it exits non-zero before changing the lock. Only newly
+          # populated key names expand it.
           sudo python3 "$guard" seal --env "$VM_ENV" --lock "$VM_LOCK"
           sudo chown root:root "$VM_LOCK"
           sudo chmod 0444 "$VM_LOCK"
@@ -101,6 +121,7 @@ jobs:
 
           echo 'production_env_keyset_monotonic=true'
           echo 'production_env_key_deletion_blocked=true'
+          echo 'production_env_key_emptying_blocked=true'
           echo 'secret_values_printed=false'
           REMOTE
 
