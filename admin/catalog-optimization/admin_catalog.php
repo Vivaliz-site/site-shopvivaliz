@@ -70,6 +70,15 @@ function cat_staging_ai_data(array $row): array
 }
 
 /**
+ * @param array<string,bool> $qualityChecks
+ * @return list<string>
+ */
+function cat_quality_gate_failures(array $qualityChecks): array
+{
+    return array_values(array_keys(array_filter($qualityChecks, static fn(bool $ok): bool => !$ok)));
+}
+
+/**
  * Recalcula o quality gate depois de qualquer edicao manual. O relatorio novo
  * e persistido ANTES da tentativa de publicar, de forma que uma reprovacao
  * continue visivel no proximo carregamento do Admin.
@@ -415,6 +424,7 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
 .controls button,.publish,.save,.regenerate,.reject,.delete-btn,.queue-tool-btn{border:0;border-radius:999px;padding:12px 16px;font-weight:800;cursor:pointer;font:inherit}
 .controls button,.queue-tool-btn{background:#e2e8f0;color:#0f172a}
 .publish{background:var(--green);color:#fff}
+.publish:disabled{background:#94a3b8;color:#f8fafc;cursor:not-allowed;opacity:.82}
 .save{background:#4b5563;color:#fff}
 .regenerate{background:var(--blue);color:#fff}
 .reject{background:var(--red);color:#fff}
@@ -425,7 +435,8 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
 .queue-state{background:#eef2ff;color:#3730a3}
 .queue-state.fail{background:#fff7ed;color:#9a3412}
 .queue-quality{background:#ecfdf5;color:#166534}
-.queue-quality.bad{background:#fee2e2;color:#991b1b}
+.queue-quality.approved{background:#dcfce7;color:#166534}
+.queue-quality.rejected{background:#fee2e2;color:#991b1b}
 .field-badge{font-size:.72rem;background:#eef2f7;color:#475569}
 .field-badge.direct{background:#dcfce7;color:#166534}
 .field-badge.embedded{background:#fef3c7;color:#854d0e}
@@ -461,6 +472,8 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
 .profile{background:#fbfcfe;border:1px solid #e2e8f0;border-radius:18px;padding:14px;margin:14px 0}
 .profile h4{margin:0 0 8px}
 .profile ul{margin:6px 0;padding-left:20px}
+.quality-note{margin-top:10px;padding:12px 14px;border-radius:16px;background:#fff8e1;color:#7a5b00;line-height:1.5}
+.quality-note strong{display:block;margin-bottom:4px}
 .endpoints code{display:block;margin:4px 0;white-space:normal;overflow-wrap:anywhere}
 .field-map{display:grid;gap:8px}
 .field-map-row{display:grid;grid-template-columns:minmax(120px,180px) minmax(0,1fr);gap:10px;padding:10px;background:#fff;border-radius:14px;border:1px solid #edf0f3}
@@ -470,6 +483,8 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
 .details-grid dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
 .quality{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0}
 .score{font-size:1.05rem;font-weight:800}
+.score.approved{color:#166534}
+.score.rejected{color:#991b1b}
 .check{font-size:.72rem;padding:4px 8px;border-radius:999px}
 .check.okc{background:#dcfce7;color:#166534}
 .check.badc{background:#fee2e2;color:#991b1b}
@@ -653,6 +668,9 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
             $meta = is_array($meta) ? $meta : [];
             $qualityChecks = is_array($meta['quality_checks'] ?? null) ? $meta['quality_checks'] : [];
             $qualityScore = is_numeric($meta['quality_score'] ?? null) ? (int)$meta['quality_score'] : null;
+            $qualityFailures = cat_quality_gate_failures($qualityChecks);
+            $qualityApproved = $qualityFailures === [];
+            $publishDisabled = $qualityScore !== null && !$qualityApproved;
             $ep = $endpointRegistry[$channel] ?? null;
             $fieldMap = is_array($profile['field_map'] ?? null) ? $profile['field_map'] : [];
             $limits = is_array($profile['limits'] ?? null) ? $profile['limits'] : [];
@@ -675,7 +693,10 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
                                 <span>SKU <?= cat_h((string)$local['sku']) ?></span>
                                 <span class="<?= cat_h($statusClass) ?>"><?= cat_h((string)$item['status']) ?></span>
                                 <?php if ($qualityScore !== null): ?>
-                                    <span class="queue-quality <?= $qualityScore >= 80 ? '' : 'bad' ?>">Quality <?= $qualityScore ?>/100</span>
+                                    <span class="queue-quality <?= $qualityApproved ? 'approved' : 'rejected' ?>">
+                                        <?= $qualityApproved ? 'Aprovado' : 'Reprovado' ?>
+                                        <?= $qualityScore ?>/100
+                                    </span>
                                 <?php endif; ?>
                             </div>
                             <div class="queue-summary-meta">
@@ -741,7 +762,9 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
 
                     <?php if ($qualityScore !== null): ?>
                         <div class="quality">
-                            <span class="score">Quality gate <?= $qualityScore ?>/100</span>
+                            <span class="score <?= $qualityApproved ? 'approved' : 'rejected' ?>">
+                                <?= $qualityApproved ? 'Aprovado' : 'Reprovado' ?> pelo quality gate: <?= $qualityScore ?>/100
+                            </span>
                             <div class="checks">
                                 <?php foreach ($qualityChecks as $check => $ok): ?>
                                     <span class="check <?= $ok ? 'okc' : 'badc' ?>">
@@ -750,6 +773,12 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
                                 <?php endforeach; ?>
                             </div>
                         </div>
+                        <?php if ($qualityFailures !== []): ?>
+                            <div class="quality-note">
+                                <strong>Publicacao bloqueada pelo quality gate</strong>
+                                Ajuste os checks que falharam antes de aprovar: <?= cat_h(implode(', ', $qualityFailures)) ?>.
+                            </div>
+                        <?php endif; ?>
                     <?php endif; ?>
 
                     <form method="post">
@@ -881,7 +910,9 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
                         </label>
 
                         <div class="actions">
-                            <button class="publish" name="action" value="publish">Aprovar e publicar somente em <?= cat_h($label) ?></button>
+                            <button class="publish" name="action" value="publish" <?= $publishDisabled ? 'disabled aria-disabled="true"' : '' ?>>
+                                <?= $publishDisabled ? 'Publicacao bloqueada pelo quality gate' : 'Aprovar e publicar somente em ' . cat_h($label) ?>
+                            </button>
                             <button class="reject" name="action" value="reject" formnovalidate>Rejeitar sem publicar</button>
                         </div>
                     </form>
