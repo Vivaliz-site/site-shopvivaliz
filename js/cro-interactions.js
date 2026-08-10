@@ -4,7 +4,7 @@
  * Mantém somente comportamentos que possuem DOM e função reais na página de
  * produto. Fluxos legados de mini-cart/exit-intent foram removidos porque não
  * existe markup correspondente no storefront atual e eles ainda carregavam
- * metas/cupom hard-coded (VOLTEI5, R$150/R$299), contrariando a fonte dinâmica
+ * metas e benefício promocional hard-coded, contrariando as fontes dinâmicas
  * de promoções e frete.
  */
 
