@@ -5,9 +5,14 @@ on:
     paths:
       - 'includes/public-trust-guard.php'
       - 'includes/catalog-runtime.php'
+      - 'includes/active-coupons.php'
+      - 'includes/promotion-output-filter.php'
+      - 'includes/navbar.php'
+      - 'api/coupons/active.php'
       - 'index.php'
       - 'produto.php'
       - 'tests/public-trust-guard-test.php'
+      - 'tests/active-coupon-trust-test.php'
       - '.github/workflows/public-trust-guard.yml'
   push:
     branches:
@@ -15,9 +20,14 @@ on:
     paths:
       - 'includes/public-trust-guard.php'
       - 'includes/catalog-runtime.php'
+      - 'includes/active-coupons.php'
+      - 'includes/promotion-output-filter.php'
+      - 'includes/navbar.php'
+      - 'api/coupons/active.php'
       - 'index.php'
       - 'produto.php'
       - 'tests/public-trust-guard-test.php'
+      - 'tests/active-coupon-trust-test.php'
       - '.github/workflows/public-trust-guard.yml'
   workflow_dispatch:
 
@@ -41,16 +51,22 @@ jobs:
           php-version: '8.1'
           coverage: none
 
-      - name: Lint trust guard and catalog runtime
+      - name: Lint public trust sources
         shell: bash
         run: |
           set -Eeuo pipefail
           php -l includes/public-trust-guard.php
           php -l includes/catalog-runtime.php
+          php -l includes/active-coupons.php
+          php -l includes/promotion-output-filter.php
+          php -l includes/navbar.php
+          php -l api/coupons/active.php
           php -l tests/public-trust-guard-test.php
+          php -l tests/active-coupon-trust-test.php
 
-      - name: Verify untrusted social proof is removed
+      - name: Verify public trust contracts
         shell: bash
         run: |
           set -Eeuo pipefail
           php tests/public-trust-guard-test.php
+          php tests/active-coupon-trust-test.php

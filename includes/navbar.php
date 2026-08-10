@@ -6,6 +6,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 require_once dirname(__DIR__) . '/includes/site-settings.php';
+require_once dirname(__DIR__) . '/includes/active-coupons.php';
 
 $svNavCurrent = $svNavCurrent ?? trim((string)parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH), '/');
 $svNavCurrent = preg_replace('#^index\.php$#', '', $svNavCurrent);
@@ -32,6 +33,20 @@ $svWhatsappRaw = is_array($svCompanyProfile) ? (string)($svCompanyProfile['socia
 $svWhatsappDigits = preg_replace('/\D+/', '', $svWhatsappRaw);
 $svWhatsappMessage = rawurlencode('Ola! Vim pelo site da ShopVivaliz e gostaria de falar com a equipe.');
 $svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?text={$svWhatsappMessage}" : '/contato';
+
+$svFreeShippingConfig = sv_free_shipping_config();
+$svPrimaryCoupon = sv_primary_active_coupon();
+$svAnnouncementParts = [];
+if ($svFreeShippingConfig['enabled'] && $svFreeShippingConfig['threshold'] > 0) {
+    $svAnnouncementParts[] = '🚚 FRETE GRÁTIS ACIMA DE R$ ' . number_format((float)$svFreeShippingConfig['threshold'], 2, ',', '.');
+}
+if (is_array($svPrimaryCoupon)) {
+    $svCouponCode = htmlspecialchars((string)($svPrimaryCoupon['code'] ?? ''), ENT_QUOTES, 'UTF-8');
+    $svCouponOffer = htmlspecialchars(sv_active_coupon_offer_text($svPrimaryCoupon), ENT_QUOTES, 'UTF-8');
+    if ($svCouponCode !== '') {
+        $svAnnouncementParts[] = '🎁 ' . $svCouponOffer . ' COM O CUPOM <strong class="sv-announcement-coupon">' . $svCouponCode . '</strong>';
+    }
+}
 ?>
 <meta name="theme-color" content="#0b4f88">
 <style>
@@ -222,16 +237,11 @@ header.sv-navbar .menu-toggle {
 
 <a href="#main-content" class="sv-skip-link">Ir para o conteúdo principal</a>
 
-<?php
-$svFreeShippingConfig = sv_free_shipping_config();
-?>
+<?php if ($svAnnouncementParts !== []): ?>
 <div class="sv-announcement-bar">
-    <?php if ($svFreeShippingConfig['enabled'] && $svFreeShippingConfig['threshold'] > 0): ?>
-        <span>🚚 FRETE GRÁTIS ACIMA DE R$ <?= number_format($svFreeShippingConfig['threshold'], 2, ',', '.') ?> | 🎁 5% OFF NA 1ª COMPRA COM O CUPOM <strong class="sv-announcement-coupon">VOLTEI5</strong></span>
-    <?php else: ?>
-        <span>🎁 5% OFF NA 1ª COMPRA COM O CUPOM <strong class="sv-announcement-coupon">VOLTEI5</strong></span>
-    <?php endif; ?>
+    <span><?= implode(' | ', $svAnnouncementParts) ?></span>
 </div>
+<?php endif; ?>
 
 <header class="navbar sv-navbar">
     <nav class="container nav-inner" aria-label="Navegação principal">
