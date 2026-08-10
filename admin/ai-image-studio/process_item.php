@@ -311,11 +311,11 @@ function ai_studio_process_item(
         $googleModel = ($modelOverride !== null && trim($modelOverride) !== '' && $imageEngine === 'google') ? trim($modelOverride) : AI_STUDIO_GOOGLE_IMAGEN_MODEL;
         $openRouterModel = trim((string)(getenv('OPENROUTER_IMAGE_MODEL') ?: ''));
         if ($openRouterModel === '') {
-            $openRouterModel = AI_STUDIO_OPENROUTER_IMAGE_MODEL !== '' ? AI_STUDIO_OPENROUTER_IMAGE_MODEL : AI_STUDIO_GROQ_IMAGE_MODEL;
+            $openRouterModel = trim((string)(getenv('OPENROUTER_IMAGE_MODEL') ?: getenv('GROQ_IMAGE_MODEL') ?: $openAiModel));
         }
         $qropeModel = trim((string)(getenv('QROPE_IMAGE_MODEL') ?: ''));
         if ($qropeModel === '') {
-            $qropeModel = AI_STUDIO_GROQ_IMAGE_MODEL !== '' ? AI_STUDIO_GROQ_IMAGE_MODEL : $openRouterModel;
+            $qropeModel = trim((string)(getenv('GROQ_IMAGE_MODEL') ?: getenv('OPENROUTER_IMAGE_MODEL') ?: $openAiModel));
         }
 
         $results = [];
