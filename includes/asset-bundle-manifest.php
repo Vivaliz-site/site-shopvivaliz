@@ -28,7 +28,6 @@ function sv_home_css_bundle_manifest(): array
         ['path' => 'css/shopvivaliz-premium-consolidated.css', 'optional' => false],
         ['path' => 'css/shopvivaliz-inline-to-classes.css', 'optional' => false],
         ['path' => 'css/shopvivaliz-webp-optimization.css', 'optional' => false],
-        ['path' => 'css/first-purchase-popup-v1.css', 'optional' => false],
         ['path' => 'css/zoom-responsive.css', 'optional' => false],
         ['path' => 'css/layout-polish-v1.css', 'optional' => false],
         ['path' => 'css/home-mobile-compact.css', 'optional' => false],
