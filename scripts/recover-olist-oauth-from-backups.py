@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Recover a working Olist OAuth client/token tuple from private .env backups.
+"""Recover a working Olist OAuth tuple from private production runtime history.
 
-The script never prints credential values. It tests complete OLIST_* tuples from
-private production backups against the official token endpoint and only writes a
-candidate after the provider successfully issues a new access token.
+No credential value is printed. Client pairs and refresh tokens are collected
+from the current shared env and private backups, then tested only against the
+official OAuth token endpoint. Nothing is written until the provider issues a
+new access token for one exact combination.
 """
 from __future__ import annotations
 
@@ -36,8 +37,11 @@ SAFE_OAUTH_ERRORS = frozenset(
         "access_denied",
     }
 )
+CLIENT_REJECTION_ERRORS = frozenset({"invalid_client", "unauthorized_client"})
+TRANSIENT_ERRORS = frozenset({"temporarily_unavailable", "server_error", "transport_or_decode_error"})
 PLACEHOLDERS = frozenset({"changeme", "change-me", "placeholder", "***", "replace_me"})
 ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+MAX_PROVIDER_ATTEMPTS = 96
 
 
 class RecoveryError(RuntimeError):
@@ -69,7 +73,7 @@ def complete_olist_tuple(values: dict[str, str]) -> bool:
     return all(bool(values.get(key, "").strip()) for key in REQUIRED_KEYS)
 
 
-def candidate_backups(backup_dir: Path) -> list[Path]:
+def backup_files(backup_dir: Path) -> list[Path]:
     candidates: dict[Path, int] = {}
     for pattern in BACKUP_PATTERNS:
         for path in backup_dir.glob(pattern):
@@ -77,12 +81,33 @@ def candidate_backups(backup_dir: Path) -> list[Path]:
                 continue
             try:
                 _, values = parse_env(path)
-                if not complete_olist_tuple(values):
-                    continue
-                candidates[path] = int(path.stat().st_mtime)
             except (OSError, UnicodeError):
                 continue
+            relevant = any(
+                values.get(key, "").strip()
+                for key in (
+                    "OLIST_CLIENT_ID",
+                    "OLIST_CLIENT_SECRET",
+                    "OLIST_REFRESH_TOKEN",
+                    "TINY_CLIENT_ID",
+                    "TINY_CLIENT_SECRET",
+                )
+            )
+            if relevant:
+                candidates[path] = int(path.stat().st_mtime)
     return [path for path, _ in sorted(candidates.items(), key=lambda item: item[1], reverse=True)]
+
+
+def candidate_backups(backup_dir: Path) -> list[Path]:
+    result: list[Path] = []
+    for path in backup_files(backup_dir):
+        try:
+            _, values = parse_env(path)
+        except (OSError, UnicodeError):
+            continue
+        if complete_olist_tuple(values):
+            result.append(path)
+    return result
 
 
 def safe_oauth_error(exc: urllib.error.HTTPError) -> str:
@@ -162,6 +187,62 @@ def atomic_replace_values(env_path: Path, replacements: dict[str, str]) -> Path:
     return safety
 
 
+def _source_material(env_path: Path, backup_dir: Path) -> list[tuple[str, dict[str, str]]]:
+    sources: list[tuple[str, dict[str, str]]] = []
+    _, current = parse_env(env_path)
+    sources.append(("current", current))
+    for path in backup_files(backup_dir):
+        try:
+            _, values = parse_env(path)
+        except (OSError, UnicodeError):
+            continue
+        sources.append((path.name, values))
+    return sources
+
+
+def _unique_clients(sources: list[tuple[str, dict[str, str]]]) -> list[dict[str, str]]:
+    clients: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for source, values in sources:
+        for namespace in ("OLIST", "TINY"):
+            client_id = values.get(f"{namespace}_CLIENT_ID", "").strip()
+            client_secret = values.get(f"{namespace}_CLIENT_SECRET", "").strip()
+            if not client_id or not client_secret:
+                continue
+            identity = (client_id, client_secret)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            clients.append(
+                {
+                    "source": source,
+                    "namespace": namespace.lower(),
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                }
+            )
+    return clients
+
+
+def _unique_refresh_tokens(sources: list[tuple[str, dict[str, str]]]) -> list[dict[str, str]]:
+    tokens: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for source, values in sources:
+        token = values.get("OLIST_REFRESH_TOKEN", "").strip()
+        if not token or token in seen:
+            continue
+        seen.add(token)
+        tokens.append({"source": source, "refresh_token": token})
+    return tokens
+
+
+def _ordered_tokens_for_client(client: dict[str, str], tokens: list[dict[str, str]]) -> list[dict[str, str]]:
+    same_source = [token for token in tokens if token["source"] == client["source"]]
+    current = [token for token in tokens if token["source"] == "current" and token not in same_source]
+    others = [token for token in tokens if token not in same_source and token not in current]
+    return same_source + current + others
+
+
 def recover(
     env_path: Path,
     backup_dir: Path,
@@ -170,51 +251,91 @@ def recover(
     if not env_path.is_file():
         raise RecoveryError("shared_env_missing")
 
-    candidates = candidate_backups(backup_dir)
-    print(f"olist_backup_candidate_count={len(candidates)}")
-    if not candidates:
-        raise RecoveryError("no_complete_olist_backup_tuple")
+    sources = _source_material(env_path, backup_dir)
+    clients = _unique_clients(sources)
+    refresh_tokens = _unique_refresh_tokens(sources)
+    print(f"olist_runtime_source_count={len(sources)}")
+    print(f"olist_unique_client_pair_count={len(clients)}")
+    print(f"olist_unique_refresh_token_count={len(refresh_tokens)}")
+    if not clients:
+        raise RecoveryError("no_oauth_client_pair_in_runtime_history")
+    if not refresh_tokens:
+        raise RecoveryError("no_refresh_token_in_runtime_history")
 
     attempted: list[dict[str, str]] = []
-    for index, path in enumerate(candidates, 1):
-        _, values = parse_env(path)
-        result, classification = requester(values)
-        attempted.append({"backup": path.name, "result": classification})
-        print(f"olist_backup_attempt={index} backup={path.name} result={classification}")
-        if result is None:
-            continue
+    attempt_count = 0
+    for client in clients:
+        for token in _ordered_tokens_for_client(client, refresh_tokens):
+            attempt_count += 1
+            if attempt_count > MAX_PROVIDER_ATTEMPTS:
+                raise RecoveryError("provider_attempt_limit_reached")
 
-        access_token = result.get("access_token")
-        refresh_token = result.get("refresh_token") or values.get("OLIST_REFRESH_TOKEN")
-        if not isinstance(access_token, str) or not access_token:
-            continue
-        if not isinstance(refresh_token, str) or not refresh_token:
-            continue
+            candidate = {
+                "OLIST_CLIENT_ID": client["client_id"],
+                "OLIST_CLIENT_SECRET": client["client_secret"],
+                "OLIST_REFRESH_TOKEN": token["refresh_token"],
+            }
+            result, classification = requester(candidate)
+            attempted.append(
+                {
+                    "client_source": client["source"],
+                    "client_namespace": client["namespace"],
+                    "refresh_source": token["source"],
+                    "result": classification,
+                }
+            )
+            print(
+                "olist_crossmatch_attempt="
+                f"{attempt_count} client_source={client['source']} "
+                f"client_namespace={client['namespace']} "
+                f"refresh_source={token['source']} result={classification}"
+            )
 
-        replacements = {
-            "OLIST_CLIENT_ID": values["OLIST_CLIENT_ID"],
-            "OLIST_CLIENT_SECRET": values["OLIST_CLIENT_SECRET"],
-            "OLIST_ACCESS_TOKEN": access_token,
-            "OLIST_REFRESH_TOKEN": refresh_token,
-        }
-        safety = atomic_replace_values(env_path, replacements)
-        print(f"olist_recovery_selected_backup={path.name}")
-        print(f"olist_recovery_safety_backup={safety.name}")
-        print("olist_recovery_updated_keys=OLIST_CLIENT_ID,OLIST_CLIENT_SECRET,OLIST_ACCESS_TOKEN,OLIST_REFRESH_TOKEN")
-        print("secret_values_printed=false")
-        return {
-            "ok": True,
-            "selected_backup": path.name,
-            "attempt_count": index,
-            "attempted": attempted,
-            "safety_backup": safety.name,
-        }
+            if classification in TRANSIENT_ERRORS:
+                raise RecoveryError("oauth_provider_temporarily_unavailable")
 
-    raise RecoveryError("no_backup_tuple_accepted_by_provider")
+            if result is None:
+                if classification in CLIENT_REJECTION_ERRORS:
+                    # A client rejection is independent of the refresh token;
+                    # do not hammer the provider with the same rejected pair.
+                    break
+                continue
+
+            access_token = result.get("access_token")
+            refresh_token = result.get("refresh_token") or token["refresh_token"]
+            if not isinstance(access_token, str) or not access_token:
+                continue
+            if not isinstance(refresh_token, str) or not refresh_token:
+                continue
+
+            replacements = {
+                "OLIST_CLIENT_ID": client["client_id"],
+                "OLIST_CLIENT_SECRET": client["client_secret"],
+                "OLIST_ACCESS_TOKEN": access_token,
+                "OLIST_REFRESH_TOKEN": refresh_token,
+            }
+            safety = atomic_replace_values(env_path, replacements)
+            print(f"olist_recovery_client_source={client['source']}")
+            print(f"olist_recovery_client_namespace={client['namespace']}")
+            print(f"olist_recovery_refresh_source={token['source']}")
+            print(f"olist_recovery_safety_backup={safety.name}")
+            print("olist_recovery_updated_keys=OLIST_CLIENT_ID,OLIST_CLIENT_SECRET,OLIST_ACCESS_TOKEN,OLIST_REFRESH_TOKEN")
+            print("secret_values_printed=false")
+            return {
+                "ok": True,
+                "client_source": client["source"],
+                "client_namespace": client["namespace"],
+                "refresh_source": token["source"],
+                "attempt_count": attempt_count,
+                "attempted": attempted,
+                "safety_backup": safety.name,
+            }
+
+    raise RecoveryError("no_historical_client_refresh_combination_accepted_by_provider")
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Recover Olist OAuth from private production env backups")
+    parser = argparse.ArgumentParser(description="Recover Olist OAuth from provider-validated private runtime history")
     parser.add_argument("--env", default="/home/ubuntu/shopvivaliz-deploy/shared/.env")
     parser.add_argument("--backup-dir", default="/home/ubuntu/shopvivaliz-deploy/shared")
     args = parser.parse_args()
