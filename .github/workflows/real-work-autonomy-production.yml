@@ -1,12 +1,11 @@
 name: Real Work Autonomy Production
 
+# Safety policy: this workflow invokes the same mutating production
+# orchestrator used by autonomous-watchdog.yml. Automatic schedule and
+# workflow_run triggers are intentionally disabled to prevent duplicate
+# unattended mutations. Manual dispatch remains available for deliberate use.
 on:
-  schedule:
-    - cron: '*/15 * * * *'
   workflow_dispatch:
-  workflow_run:
-    workflows: ['Master Production Pipeline 24/7']
-    types: [completed]
 
 permissions:
   contents: read
@@ -18,7 +17,6 @@ concurrency:
 jobs:
   execute-real-work:
     name: Executar trabalho real com evidencia
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

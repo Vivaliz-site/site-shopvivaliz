@@ -19,8 +19,11 @@ $expectedIds = [
 if (array_keys($registered) !== $expectedIds) {
     $errors[] = 'production_agent_registry_ids_invalid';
 }
-if (($registry['schedule_minutes'] ?? null) !== 15) {
-    $errors[] = 'production_agent_schedule_invalid';
+if (($registry['trigger_mode'] ?? null) !== 'manual') {
+    $errors[] = 'production_agent_trigger_mode_invalid';
+}
+if (($registry['schedule_minutes'] ?? null) !== 0) {
+    $errors[] = 'production_agent_schedule_must_be_disabled';
 }
 
 $registeredFiles = [];
@@ -90,7 +93,7 @@ if (!is_file($agentWorkflow)) {
 } else {
     $agent = (string)file_get_contents($agentWorkflow);
     $requiredAgentFragments = [
-        "cron: '*/15 * * * *'",
+        'workflow_dispatch:',
         '/home/ubuntu/shopvivaliz-deploy/current',
         'api/agent/real-work-orchestrator.php',
         'includes/production-agent-registry.php',
@@ -107,6 +110,9 @@ if (!is_file($agentWorkflow)) {
         if (!str_contains($agent, $fragment)) {
             $errors[] = 'agent_workflow_missing:' . $fragment;
         }
+    }
+    if (preg_match('/^\s*schedule\s*:/m', $agent) === 1 || str_contains($agent, "cron: '*/15 * * * *'")) {
+        $errors[] = 'mutating_agent_workflow_must_not_be_scheduled';
     }
     foreach ($expectedIds as $id) {
         if (!str_contains($agent, "'" . $id . "'")) {
@@ -162,6 +168,9 @@ if (!is_array($manifest)) {
     if ($manifestIds !== $expectedIds) {
         $errors[] = 'production_agent_manifest_ids_invalid';
     }
+    if (($manifest['trigger_mode'] ?? null) !== 'manual' || ($manifest['schedule_minutes'] ?? null) !== 0) {
+        $errors[] = 'production_agent_manifest_trigger_invalid';
+    }
     if (($manifest['requirements']['minimum_work_evidence_count'] ?? 0) < 12) {
         $errors[] = 'production_agent_manifest_evidence_too_weak';
     }
@@ -176,7 +185,8 @@ echo json_encode([
     'ok' => true,
     'active_agent_count' => count($registered),
     'active_agents' => array_keys($registered),
-    'agent_schedule_minutes' => 15,
+    'agent_trigger_mode' => 'manual',
+    'agent_schedule_minutes' => 0,
     'blog_schedule_minutes' => 15,
     'execution_path' => 'oracle-active-release',
     'unregistered_agent_files' => 0,
