@@ -115,8 +115,7 @@ jobs:
 
             local output="$workdir/html/${slug}.html"
             local error_file="$workdir/errors/${slug}.log"
-            set +e
-            php -d display_errors=1 -d log_errors=0 -d error_reporting=E_ALL -r '
+            if php -d display_errors=1 -d log_errors=0 -d error_reporting=E_ALL -r '
               declare(strict_types=1);
               $file = $argv[1];
               $uri = $argv[2];
@@ -136,9 +135,11 @@ jobs:
               $_SERVER["HTTP_HOST"] = "shopvivaliz.com.br";
               $_SERVER["HTTPS"] = "on";
               require $file;
-            ' "$candidate" "$runtime_href" > "$output" 2> "$error_file"
-            code=$?
-            set -e
+            ' "$candidate" "$runtime_href" > "$output" 2> "$error_file"; then
+              code=0
+            else
+              code=$?
+            fi
 
             local bytes text_chars detail
             bytes="$(wc -c < "$output" | tr -d ' ')"
