@@ -105,13 +105,21 @@ jobs:
             daemon-sync-products.py \
             tests/daemon-sync-images-regression.py \
             scripts/recover-olist-oauth-from-backups.py \
-            tests/test_recover_olist_oauth_from_backups.py
+            tests/test_recover_olist_oauth_from_backups.py \
+            scripts/env_keyset_guard.py \
+            tests/test_env_keyset_guard.py
 
       - name: Run secret bootstrap safety tests
         shell: bash
         run: |
           set -euo pipefail
           python3 -m unittest tests/test_secret_bootstrap_safety.py -v
+
+      - name: Run env keyset monotonic guard tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest tests/test_env_keyset_guard.py -v
 
       - name: Run ERP OAuth static repair safety tests
         shell: bash
