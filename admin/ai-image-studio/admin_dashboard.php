@@ -20,16 +20,22 @@ function ai_studio_h(string $value): string
     return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
-function ai_studio_excerpt(string $value, int $limit = 140): string
+function ai_studio_excerpt(string $value, int $limit = 180): string
 {
-    $value = trim(preg_replace('/\s+/', ' ', $value) ?? $value);
+    $value = trim((string)preg_replace('/\s+/u', ' ', trim($value)));
     if ($value === '') {
         return 'Sem detalhe informado.';
     }
-    if (strlen($value) <= $limit) {
-        return $value;
+
+    if (function_exists('mb_strlen') && function_exists('mb_substr')) {
+        return mb_strlen($value, 'UTF-8') <= $limit
+            ? $value
+            : mb_substr($value, 0, max(1, $limit - 1), 'UTF-8') . '…';
     }
-    return substr($value, 0, max(0, $limit - 1)) . '…';
+
+    return strlen($value) <= $limit
+        ? $value
+        : substr($value, 0, max(1, $limit - 3)) . '...';
 }
 
 function ai_studio_recent_target_label(mixed $rawTargets, array $channelProfiles): string
@@ -59,7 +65,13 @@ function ai_studio_top_counter(array $counts, string $fallbackLabel = 'Nenhum'):
 $channelProfiles = ai_studio_channel_profiles();
 $batchResults = null;
 $batchError = null;
+$batchErrorItems = [];
 $defaultImageTypes = ['white', 'hero', 'ambient'];
+$defaultTargetChannel = isset($channelProfiles['site']) ? 'site' : (string)(array_key_first($channelProfiles) ?? 'site');
+$selectedProvider = 'openai';
+$selectedTargetChannel = $defaultTargetChannel;
+$selectedModel = AI_STUDIO_OPENAI_IMAGE_MODEL;
+$submittedProductIds = [];
 $csrf = sv_csrf_token('ai-image-batch');
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['action'] ?? '') === 'generate_selected') {
@@ -73,6 +85,17 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['action'
             static fn(mixed $value): string => trim((string)$value),
             (array)($_POST['product_ids'] ?? [])
         ), static fn(string $value): bool => $value !== '')));
+        $submittedProductIds = $productIds;
+
+        if (in_array($provider, ['openai', 'google', 'claude'], true)) {
+            $selectedProvider = $provider;
+        }
+        if (isset($channelProfiles[$targetChannel])) {
+            $selectedTargetChannel = $targetChannel;
+        }
+        $selectedModel = $model !== ''
+            ? $model
+            : ($selectedProvider === 'google' ? AI_STUDIO_GOOGLE_IMAGEN_MODEL : AI_STUDIO_OPENAI_IMAGE_MODEL);
 
         if (!in_array($provider, ['openai', 'google', 'claude'], true)) {
             $batchError = 'Selecione um provedor valido.';
@@ -92,6 +115,27 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && (string)($_POST['action'
                     $targetChannel
                 );
             }
+        }
+    }
+}
+
+if (is_array($batchResults)) {
+    foreach ($batchResults as $batchResult) {
+        $productRef = trim((string)($batchResult['product_ref'] ?? ''));
+        if ($productRef === '') {
+            $productRef = (string)($batchResult['product_id'] ?? '0');
+        }
+
+        foreach ((array)($batchResult['results'] ?? []) as $itemResult) {
+            if (($itemResult['status'] ?? '') === 'pending') {
+                continue;
+            }
+
+            $batchErrorItems[] = [
+                'product_ref' => $productRef,
+                'image_type' => trim((string)($itemResult['image_type'] ?? 'imagem')),
+                'error' => trim((string)($itemResult['error'] ?? $batchResult['error'] ?? 'Falha desconhecida.')),
+            ];
         }
     }
 }
@@ -186,6 +230,9 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
 .alert{padding:14px 16px;border-radius:18px;margin-bottom:14px}
 .alert.error{background:#fdecea;color:#611a15}
 .alert.info{background:#e8f4fd;color:#0c3b57}
+.batch-error-list{margin:10px 0 0;padding-left:20px}
+.batch-error-list li+li{margin-top:6px}
+.batch-error-more{margin-top:10px;font-size:.88rem;font-weight:700}
 .note{margin-top:14px;padding:14px 16px;border-radius:18px;background:#eef6ff;border-left:4px solid #1769aa;color:#19406c}
 .product-shell{margin-top:18px}
 .product-header{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
@@ -211,6 +258,7 @@ th{background:#f8fafc;color:#425368}
 .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:.78rem;font-weight:800}
 .badge.ok{background:#dcfce7;color:#166534}
 .badge.warn{background:#fef3c7;color:#92400e}
+.recent-error{max-width:420px;color:#5b6574;white-space:normal}
 @media(max-width:900px){.wrap{padding:14px 10px 30px}}
 </style>
 </head>
@@ -273,6 +321,25 @@ th{background:#f8fafc;color:#425368}
                 Lote processado: <?= $productCount ?> produto(s), <?= $imageSuccess ?> imagem(ns) em revisao e
                 <?= $imageErrors ?> erro(s). O destino foi persistido em cada item.
             </div>
+            <?php if ($batchErrorItems !== []): ?>
+                <div class="alert error">
+                    <strong>Falhas do lote em detalhes</strong>
+                    <ul class="batch-error-list">
+                        <?php foreach (array_slice($batchErrorItems, 0, 6) as $errorItem): ?>
+                            <li>
+                                Produto #<?= ai_studio_h((string)$errorItem['product_ref']) ?> ·
+                                <?= ai_studio_h((string)$errorItem['image_type']) ?>:
+                                <?= ai_studio_h(ai_studio_excerpt((string)$errorItem['error'], 220)) ?>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                    <?php if (count($batchErrorItems) > 6): ?>
+                        <div class="batch-error-more">
+                            Mais <?= count($batchErrorItems) - 6 ?> falha(s) ficaram registradas no staging.
+                        </div>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
         <?php endif; ?>
 
         <div class="note">
@@ -288,9 +355,9 @@ th{background:#f8fafc;color:#425368}
                 <label>
                     Motor de IA
                     <select name="provider" id="provider">
-                        <option value="openai">OpenAI - edicao da foto real</option>
-                        <option value="google">Google Gemini - edicao da foto real</option>
-                        <option value="claude">Claude otimiza prompt + OpenAI edita</option>
+                        <option value="openai" <?= $selectedProvider === 'openai' ? 'selected' : '' ?>>OpenAI - edicao da foto real</option>
+                        <option value="google" <?= $selectedProvider === 'google' ? 'selected' : '' ?>>Google Gemini - edicao da foto real</option>
+                        <option value="claude" <?= $selectedProvider === 'claude' ? 'selected' : '' ?>>Claude otimiza prompt + OpenAI edita</option>
                     </select>
                 </label>
 
@@ -298,14 +365,14 @@ th{background:#f8fafc;color:#425368}
                     Marketplace de destino
                     <select name="target_channel" id="target_channel">
                         <?php foreach ($channelProfiles as $key => $profile): ?>
-                            <option value="<?= ai_studio_h($key) ?>"><?= ai_studio_h((string)$profile['label']) ?></option>
+                            <option value="<?= ai_studio_h($key) ?>" <?= $selectedTargetChannel === $key ? 'selected' : '' ?>><?= ai_studio_h((string)$profile['label']) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </label>
 
                 <label>
                     Modelo de imagem
-                    <input type="text" name="model" id="model" value="gpt-image-1">
+                    <input type="text" name="model" id="model" value="<?= ai_studio_h($selectedModel) ?>">
                 </label>
 
                 <label>
@@ -423,7 +490,7 @@ th{background:#f8fafc;color:#425368}
                                 <td><?= ai_studio_h((string)$item['image_type']) ?></td>
                                 <td><?= ai_studio_h((string)$item['provider_used']) ?></td>
                                 <td><span class="badge <?= $badgeClass ?>"><?= ai_studio_h($statusLabel) ?></span></td>
-                                <td>
+                                <td class="recent-error">
                                     <?php if ($errorMessage !== ''): ?>
                                         <details class="error-details">
                                             <summary><?= ai_studio_h(ai_studio_excerpt($errorMessage, 120)) ?></summary>
@@ -456,9 +523,10 @@ th{background:#f8fafc;color:#425368}
     const sortByEl = document.getElementById('sort-by');
     const providerEl = document.getElementById('provider');
     const modelEl = document.getElementById('model');
+    const initialSelectedIds = <?= json_encode(array_values($submittedProductIds), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const state = {
         products: [],
-        selected: new Set(),
+        selected: new Set((Array.isArray(initialSelectedIds) ? initialSelectedIds : []).map((id) => String(id))),
         page: 1,
         totalPages: 1,
         categories: []
