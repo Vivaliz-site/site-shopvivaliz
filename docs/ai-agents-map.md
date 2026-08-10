@@ -1,5 +1,18 @@
 # AI Agents Map
 
+## Mandatory preflight for every agent
+
+Policy: `AGENT_DOCS_PREFLIGHT_V1`.
+
+Before any mutating action, every agent in this registry — including Claude, Gemini, ChatGPT/GPT, Codex, browser/QA agents, marketplace agents, autonomous workers, and future agents — MUST execute the protocol in `docs/AGENT-DOCS-PREFLIGHT.md`:
+
+1. `python scripts/agent-docs-gate.py read --agent <agent-id> --task <task-id>`
+2. read all emitted required documents and any scope-specific docs;
+3. acknowledge the exact current digest;
+4. `python scripts/agent-docs-gate.py verify --agent <agent-id> --task <task-id>` must return exit code 0 before the first mutation.
+
+A stale or missing receipt prevents the orchestrator from handing a mutating execution step to the agent. If a preferred tool is unavailable, the agent must investigate an approved alternative route rather than silently skipping a required validation.
+
 ## Agent Registry
 
 ### Core Agents
@@ -31,6 +44,7 @@
 - **No agent may alter financial rules**
 - **All agents respect Guardian of Price**
 - **All agents execute through orchestrator**
+- **All agents must pass `AGENT_DOCS_PREFLIGHT_V1` before mutation**
 - **Tri-environment sync never writes to `main` directly**
 
 ## Communication Protocol
