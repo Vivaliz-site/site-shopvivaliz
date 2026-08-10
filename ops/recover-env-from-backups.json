@@ -1,0 +1,7 @@
+{
+  "requested_at": "2026-08-10T23:10:00-03:00",
+  "operation": "merge_missing_runtime_values_from_best_backup",
+  "preserve_current_nonempty_values": true,
+  "require_google_oauth_pair": true,
+  "exclude_retired_prefixes": ["PAGARME_"]
+}
