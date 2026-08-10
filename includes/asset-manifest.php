@@ -24,7 +24,10 @@ function sv_asset_url(string $path): string
     $manifest = sv_asset_manifest();
     $entry = $manifest[$normalized] ?? null;
     if (is_array($entry) && is_string($entry['file'] ?? null) && $entry['file'] !== '') {
-        return $entry['file'];
+        $distAbsolute = dirname(__DIR__) . '/' . ltrim($entry['file'], '/');
+        if (is_file($distAbsolute)) {
+            return $entry['file'];
+        }
     }
 
     $absolute = dirname(__DIR__) . $normalized;

@@ -70,6 +70,68 @@ function sv_health_probe_queue(array &$checks, string $root): array
     return $queueSummary;
 }
 
+function sv_health_probe_asset_manifest(array &$checks, string $root): array
+{
+    $manifestPath = $root . '/public/dist/asset-manifest.json';
+    if (!is_file($manifestPath) || !is_readable($manifestPath)) {
+        $checks['Manifest de assets presente'] = false;
+        return ['ok' => false, 'assets' => 0, 'error' => 'manifest_missing'];
+    }
+
+    $decoded = json_decode((string)file_get_contents($manifestPath), true);
+    $assets = is_array($decoded['assets'] ?? null) ? $decoded['assets'] : null;
+    if ($assets === null) {
+        $checks['Manifest de assets presente'] = false;
+        return ['ok' => false, 'assets' => 0, 'error' => 'manifest_invalid'];
+    }
+
+    $missing = [];
+    foreach ($assets as $source => $entry) {
+        $file = is_array($entry) ? (string)($entry['file'] ?? '') : '';
+        if ($file === '' || $file[0] !== '/') {
+            $missing[] = (string)$source;
+            continue;
+        }
+
+        if (!is_file($root . '/' . ltrim($file, '/'))) {
+            $missing[] = (string)$source;
+        }
+    }
+
+    $checks['Manifest de assets presente'] = true;
+    $checks['Manifest de assets consistente'] = $missing === [];
+
+    return [
+        'ok' => $missing === [],
+        'assets' => count($assets),
+        'missing' => array_slice($missing, 0, 10),
+    ];
+}
+
+function sv_health_public_secret_summary(?array $secretHealth): ?array
+{
+    if ($secretHealth === null) {
+        return null;
+    }
+
+    $groups = [];
+    foreach (($secretHealth['groups'] ?? []) as $group => $status) {
+        if (!is_array($status)) {
+            continue;
+        }
+
+        $groups[$group] = [
+            'configured' => (bool)($status['configured'] ?? false),
+            'ok' => (bool)($status['ok'] ?? false),
+        ];
+    }
+
+    return [
+        'ok' => (bool)($secretHealth['ok'] ?? false),
+        'groups' => $groups,
+    ];
+}
+
 $logsDir = $root . '/logs';
 $tmpDir = sys_get_temp_dir();
 $diskTotal = @disk_total_space($root) ?: 0;
@@ -95,6 +157,7 @@ $checks = [
 ];
 
 $queueSummary = sv_health_probe_queue($checks, $root);
+$assetManifestHealth = sv_health_probe_asset_manifest($checks, $root);
 
 $storageDisk = is_dir($root . '/storage') ? @disk_free_space($root . '/storage') : false;
 $checks['Storage gravavel'] = sv_health_is_writable_dir($root . '/storage');
@@ -142,18 +205,22 @@ echo json_encode([
         'https' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
     ],
     'disk' => [
-        'root' => $root,
         'total_bytes' => $diskTotal,
         'free_bytes' => $diskFree,
         'used_percent' => $diskUsedPct,
     ],
     'paths' => [
-        'root' => $root,
-        'logs' => $logsDir,
-        'temp' => $tmpDir,
-        'storage' => $root . '/storage',
+        'root_ready' => is_dir($root),
+        'logs_writable' => (bool)($checks['Diretorio logs gravavel'] ?? false),
+        'temp_writable' => (bool)($checks['Diretorio temporario gravavel'] ?? false),
+        'storage_writable' => (bool)($checks['Storage gravavel'] ?? false),
     ],
     'queue' => $queueSummary,
-    'secrets' => $secretHealth,
+    'assets' => $assetManifestHealth,
+    'secrets' => sv_health_public_secret_summary($secretHealth),
     'checks' => $checks,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+
+if (PHP_SAPI === 'cli' && !$ok) {
+    exit(1);
+}
