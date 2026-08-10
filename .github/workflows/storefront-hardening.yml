@@ -17,6 +17,7 @@ on:
       - 'includes/order-rate-limit.php'
       - 'includes/public-trust-guard.php'
       - 'js/checkout-resilience-v1.js'
+      - 'js/cro-interactions.js'
       - 'js/newsletter-v1.js'
       - 'js/privacy-consent-v1.js'
       - 'js/public-experience-v1.js'
@@ -24,6 +25,7 @@ on:
       - 'scripts/apply-storefront-hardening-migration.php'
       - 'scripts/deploy-production.sh'
       - 'scripts/release-expired-stock-reservations.php'
+      - 'tests/cro-interactions-trust-test.php'
       - 'tests/storefront-hardening-test.php'
       - '.github/workflows/storefront-hardening.yml'
   push:
@@ -44,6 +46,7 @@ on:
       - 'includes/order-rate-limit.php'
       - 'includes/public-trust-guard.php'
       - 'js/checkout-resilience-v1.js'
+      - 'js/cro-interactions.js'
       - 'js/newsletter-v1.js'
       - 'js/privacy-consent-v1.js'
       - 'js/public-experience-v1.js'
@@ -51,6 +54,7 @@ on:
       - 'scripts/apply-storefront-hardening-migration.php'
       - 'scripts/deploy-production.sh'
       - 'scripts/release-expired-stock-reservations.php'
+      - 'tests/cro-interactions-trust-test.php'
       - 'tests/storefront-hardening-test.php'
       - '.github/workflows/storefront-hardening.yml'
   workflow_dispatch:
@@ -103,7 +107,9 @@ jobs:
           php -l includes/public-trust-guard.php
           php -l scripts/apply-storefront-hardening-migration.php
           php -l scripts/release-expired-stock-reservations.php
+          php -l tests/cro-interactions-trust-test.php
           php -l tests/storefront-hardening-test.php
+          php tests/cro-interactions-trust-test.php
           php tests/storefront-hardening-test.php
 
       - name: Validate browser JavaScript and deploy shell
@@ -111,6 +117,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           node --check js/checkout-resilience-v1.js
+          node --check js/cro-interactions.js
           node --check js/newsletter-v1.js
           node --check js/privacy-consent-v1.js
           node --check js/public-experience-v1.js
