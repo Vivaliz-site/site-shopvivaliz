@@ -14,6 +14,16 @@ function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
 }
 
+function cleanGeneratedAssets(dir, extensions) {
+  if (!fs.existsSync(dir)) return;
+  for (const file of walk(dir)) {
+    const ext = path.extname(file).toLowerCase();
+    if (!extensions.includes(ext)) continue;
+    if (!/\.[a-f0-9]{10}\.min\.(js|css)$/i.test(path.basename(file))) continue;
+    fs.rmSync(file);
+  }
+}
+
 function minify(text, ext) {
   if (ext === '.css') {
     return text
@@ -56,6 +66,7 @@ for (const [srcDir, dstDir, extensions] of targets) {
   const absDst = path.join(root, dstDir);
   if (!fs.existsSync(absSrc)) continue;
   ensureDir(absDst);
+  cleanGeneratedAssets(absDst, extensions);
 
   for (const src of walk(absSrc)) {
     const ext = path.extname(src).toLowerCase();

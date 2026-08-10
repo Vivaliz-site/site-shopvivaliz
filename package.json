@@ -7,6 +7,7 @@
     "audit:tree:quarantine": "python scripts/audit-static-tree.py --delete",
     "build:assets": "node scripts/build-assets.mjs",
     "assets:validate": "php scripts/quality/validate-asset-manifest.php",
+    "health:check": "php scripts/quality/validate-health-output.php",
     "dev:queue": "php -S 127.0.0.1:8088 -t .",
     "worker": "php scripts/queue-worker.php",
     "queue:smoke": "php scripts/queue-smoke.php",
