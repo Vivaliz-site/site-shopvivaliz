@@ -171,6 +171,14 @@ elif [[ ",$admin_status," != *,301,* && ",$admin_status," != *,302,* && ",$admin
 fi
 echo "OK admin protected behavior ($admin_status)"
 
+admin_guard_cli="$(/usr/bin/php "$current_root/scripts/admin-guard-production-smoke.php" 2>&1 || true)"
+if [[ "$admin_guard_cli" != 'ADMIN_GUARD_OK' ]]; then
+  echo 'FAIL authenticated admin guard database fallback' >&2
+  printf '%s\n' "$admin_guard_cli" >&2
+  exit 1
+fi
+echo 'OK authenticated admin guard database fallback'
+
 check_http liz_health "$base/api/liz-intelligent.php?health=1" '200'
 grep -Eq '"(ok|status)"[[:space:]]*:[[:space:]]*(true|"ok"|"healthy")' "$tmpdir/liz_health.body"
 echo 'OK Liz health payload'
