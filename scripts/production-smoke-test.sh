@@ -15,7 +15,7 @@ sync_script="$script_root/scripts/auto-sync-oracle.sh"
 installer="$script_root/scripts/install-auto-sync-oracle.sh"
 sync_status="$shared/logs/tri-environment-sync.json"
 
-echo "INFO validating Oracle repository sync for deployed commit $expected_sha"
+echo "INFO validating Oracle repository state for deployed commit $expected_sha"
 if [ ! -d "$repo/.git" ]; then
   echo "FAIL Oracle repository is missing: $repo" >&2
   exit 1
@@ -24,18 +24,30 @@ if [ ! -r "$sync_script" ]; then
   echo "FAIL Oracle sync script is unreadable: $sync_script" >&2
   exit 1
 fi
-ROOT="$repo" SHARED_ROOT="$shared" /usr/bin/bash "$sync_script"
 
+# Fetching the canonical ref is read-only with respect to the active working
+# tree. The operational clone can legitimately be checked out on a clean
+# patch/* branch while an autonomous agent owns that checkout. In that case the
+# deploy smoke must not switch branches underneath the agent; it validates the
+# canonical remote ref and defers the mutating sync safely instead.
+git -C "$repo" fetch --prune --no-tags origin main >/dev/null 2>&1
+current_branch="$(git -C "$repo" branch --show-current)"
 repo_sha="$(git -C "$repo" rev-parse HEAD)"
 remote_sha="$(git -C "$repo" rev-parse origin/main)"
-test "$repo_sha" = "$remote_sha"
 git -C "$repo" cat-file -e "${expected_sha}^{commit}"
 if ! git -C "$repo" merge-base --is-ancestor "$expected_sha" "$remote_sha"; then
   echo "FAIL deployed commit $expected_sha is not reachable from canonical main $remote_sha" >&2
   exit 1
 fi
-test -s "$sync_status"
-python3 - "$sync_status" "$remote_sha" <<'PY'
+
+if [[ "$current_branch" == 'main' ]]; then
+  ROOT="$repo" SHARED_ROOT="$shared" /usr/bin/bash "$sync_script"
+
+  repo_sha="$(git -C "$repo" rev-parse HEAD)"
+  remote_sha="$(git -C "$repo" rev-parse origin/main)"
+  test "$repo_sha" = "$remote_sha"
+  test -s "$sync_status"
+  python3 - "$sync_status" "$remote_sha" <<'PY'
 from __future__ import annotations
 
 import json
@@ -82,7 +94,19 @@ allowed = {
 if action not in allowed:
     raise SystemExit(f"unexpected sync action: {action}")
 PY
-echo "OK Oracle repository sync: canonical=$repo_sha deployed=$expected_sha"
+  echo "OK Oracle repository sync: canonical=$repo_sha deployed=$expected_sha"
+elif [[ "$current_branch" == patch/* ]]; then
+  tracked_changes="$(git -C "$repo" status --porcelain --untracked-files=no)"
+  if [[ -n "$tracked_changes" ]]; then
+    echo "FAIL active agent checkout has tracked working-tree changes; refusing to treat repository state as safe" >&2
+    exit 1
+  fi
+  echo "OK Oracle canonical ref: remote=$remote_sha deployed=$expected_sha"
+  echo "INFO repository sync deferred safely while active checkout is $current_branch"
+else
+  echo "FAIL Oracle repository is on unexpected branch: ${current_branch:-detached}" >&2
+  exit 1
+fi
 
 if [ ! -r "$installer" ]; then
   echo "FAIL Oracle sync installer is unreadable: $installer" >&2
