@@ -1,0 +1,24 @@
+{
+    "name": "ShopVivaliz PHP DevContainer",
+    "dockerComposeFile": "../docker-compose.yml",
+    "service": "devcontainer",
+    "workspaceFolder": "/workspaces/site-shopvivaliz",
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "php.validate.executablePath": "/usr/local/bin/php",
+                "files.eol": "\n",
+                "editor.insertSpaces": true,
+                "editor.tabSize": 4,
+                "files.trimTrailingWhitespace": true
+            },
+            "extensions": [
+                "bmewburn.vscode-intelephense-client",
+                "esbenp.prettier-vscode",
+                "ms-python.python"
+            ]
+        }
+    },
+    "postCreateCommand": "php -v && node -v && npm -v && python3 --version",
+    "remoteUser": "root"
+}

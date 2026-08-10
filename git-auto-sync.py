@@ -22,6 +22,8 @@ import json
 import subprocess
 import socket
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -33,6 +35,7 @@ STATUS_FILE = REPO_ROOT / "logs" / "tri-environment-sync.json"
 DEFAULT_BRANCH = "main"
 REMOTE_NAME = "origin"
 SANITIZED_HISTORY_MARKER = ".sanitized_history_root"
+HEALTH_URL = os.getenv("SHOPVIVALIZ_HEALTH_URL", "http://127.0.0.1/api/health.php?health=1")
 
 
 def run(cmd: List[str], check: bool = False, capture: bool = True) -> subprocess.CompletedProcess[str]:
@@ -144,6 +147,22 @@ def get_remote_sha(branch: str) -> str:
     """Get the remote branch SHA."""
     result = run(["git", "rev-parse", f"{REMOTE_NAME}/{branch}"])
     return result.stdout.strip()
+
+
+def check_local_health() -> Dict[str, Any]:
+    """Check whether the local health endpoint is reachable and healthy."""
+    req = urllib.request.Request(HEALTH_URL, headers={"Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            body = response.read().decode("utf-8", "replace")
+            data = json.loads(body)
+            if response.status not in (200, 207):
+                raise RuntimeError(f"Health endpoint returned HTTP {response.status}")
+            if not isinstance(data, dict) or not data.get("ok", False):
+                raise RuntimeError("Health endpoint reported unhealthy state")
+            return {"ok": True, "status": response.status, "data": data}
+    except (urllib.error.URLError, TimeoutError, ValueError, json.JSONDecodeError, RuntimeError) as exc:
+        return {"ok": False, "error": str(exc)}
 
 
 def has_local_changes() -> bool:
@@ -284,6 +303,13 @@ def main() -> int:
     }
 
     try:
+        print(f"\n[{agent_id}] Step 0: Checking local health gate...")
+        health = check_local_health()
+        if not health.get("ok"):
+            raise RuntimeError(f"Health gate failed: {health.get('error', 'unknown error')}")
+        payload["health"] = {"status": "ok", "endpoint": HEALTH_URL}
+        payload["steps"].append({"step": "health", "status": "ok"})
+
         # Step 1: Fetch remote
         print(f"\n[{agent_id}] Step 1: Fetching remote...")
         fetch_remote()

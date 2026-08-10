@@ -1,6 +1,17 @@
 version: '3.8'
 
 services:
+  devcontainer:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+    container_name: shopvivaliz-devcontainer
+    volumes:
+      - .:/workspaces/site-shopvivaliz
+    command: sleep infinity
+    working_dir: /workspaces/site-shopvivaliz
+    restart: unless-stopped
+
   # API Gateway (Kong) - Port 8000
   kong-migrations:
     image: kong:3.4-alpine
