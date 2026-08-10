@@ -64,7 +64,36 @@ echo <<<'HTML'
 </script>
 HTML;
 
-echo $GLOBALS['analytics']->getTrackingCode();
+$trackingCode = $GLOBALS['analytics']->getTrackingCode();
+
+// Quando GTM e a Google tag direta aparecem juntos, a mesma biblioteca Google
+// pode ser baixada/configurada duas vezes. O container de producao ja hospeda a
+// Google tag; nesse caso mantemos GTM como carregador unico e preservamos apenas
+// a configuracao publica que os scripts first-party usam. Se GTM nao estiver
+// presente, o codigo original permanece intocado como fallback.
+$hasGtmLoader = str_contains($trackingCode, 'googletagmanager.com/gtm.js?id=');
+$hasDirectGoogleTag = str_contains($trackingCode, 'googletagmanager.com/gtag/js?id=');
+if ($hasGtmLoader && $hasDirectGoogleTag) {
+    $trackingCode = preg_replace(
+        '~<!-- Google tag \(gtag\.js\) -->\s*<script async src="https://www\.googletagmanager\.com/gtag/js\?id=[^"]+"></script>\s*<script>.*?</script>~s',
+        '',
+        $trackingCode
+    ) ?? $trackingCode;
+
+    $trackingPublicConfig = [
+        'ga4Id' => (string)(getenv('GA4_ID') ?: 'G-1H55K1TZ5D'),
+        'googleAdsId' => (string)(getenv('GOOGLE_ADS_CONVERSION_ID') ?: ''),
+        'googleAdsLabel' => (string)(getenv('GOOGLE_ADS_CONVERSION_LABEL') ?: ''),
+        'currency' => 'BRL',
+        'consentMode' => true,
+        'consentCookie' => 'sv_privacy_consent',
+    ];
+    $trackingCode .= "\n<script>window.ShopVivalizTrackingConfig="
+        . json_encode($trackingPublicConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+        . ";</script>\n";
+}
+
+echo $trackingCode;
 
 if (in_array($requestPath, ['/carrinho', '/checkout', '/checkout/retorno'], true)) {
     echo "\n<meta name=\"robots\" content=\"noindex,nofollow,noarchive\">\n";
