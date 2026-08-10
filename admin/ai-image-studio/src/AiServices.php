@@ -96,7 +96,7 @@ function ai_studio_provider_fallback_order(string $preferred): array
     $order = match ($preferred) {
         'openai' => ['openai', 'google', 'openrouter', 'groq', 'claude'],
         'google' => ['google', 'openai', 'openrouter', 'groq', 'claude'],
-        'claude' => ['openai', 'google', 'openrouter', 'groq'],
+        'claude' => ['openai', 'google'],
         'openrouter' => ['openrouter', 'groq', 'openai', 'google', 'claude'],
         'groq' => ['groq', 'openrouter', 'openai', 'google', 'claude'],
         default => ['openai', 'google', 'openrouter', 'groq'],
