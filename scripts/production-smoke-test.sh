@@ -154,6 +154,11 @@ grep -Eqi 'name=.viewport.' "$homepage_body"
 grep -Eqi '(mobile|menu-toggle|header)' "$homepage_body"
 echo 'OK mobile responsive header contract'
 
+check_http llms "$base/llms.txt" '200'
+grep -qx '# ShopVivaliz' "$tmpdir/llms.body"
+grep -Fq 'https://shopvivaliz.com.br/catalogo' "$tmpdir/llms.body"
+echo 'OK public llms.txt contract'
+
 check_http catalog "$base/catalogo" '200'
 check_http catalog_api "$base/api/catalog/products.php?limit=1&available=1" '200'
 grep -q '"ok":true' "$tmpdir/catalog_api.body"
