@@ -86,11 +86,50 @@ try {
         }
     }
 
+    // Reconcile the canonical administrative account as part of the existing
+    // idempotent production migration hook. This is deliberately narrow: it
+    // never creates users, changes passwords, or promotes any other account.
+    $adminColumn = $pdo->query(
+        "SELECT COUNT(*)
+           FROM information_schema.columns
+          WHERE table_schema = DATABASE()
+            AND table_name = 'users'
+            AND column_name = 'is_admin'"
+    );
+    if ((int)$adminColumn->fetchColumn() !== 1) {
+        $pdo->exec('ALTER TABLE users ADD COLUMN is_admin TINYINT(1) NOT NULL DEFAULT 0');
+    }
+
+    $canonicalAdminEmail = 'admin@shopvivaliz.com.br';
+    $adminLookup = $pdo->prepare('SELECT id, is_admin FROM users WHERE email = :email LIMIT 1');
+    $adminLookup->execute([':email' => $canonicalAdminEmail]);
+    $admin = $adminLookup->fetch(PDO::FETCH_ASSOC);
+    if (!$admin || empty($admin['id'])) {
+        throw new RuntimeException('Canonical admin account is missing');
+    }
+
+    if ((int)($admin['is_admin'] ?? 0) !== 1) {
+        $adminUpdate = $pdo->prepare('UPDATE users SET is_admin = 1 WHERE id = :id');
+        $adminUpdate->execute([':id' => (int)$admin['id']]);
+    }
+
+    $adminVerify = $pdo->prepare(
+        'SELECT is_admin FROM users WHERE id = :id AND email = :email LIMIT 1'
+    );
+    $adminVerify->execute([
+        ':id' => (int)$admin['id'],
+        ':email' => $canonicalAdminEmail,
+    ]);
+    if ((int)$adminVerify->fetchColumn() !== 1) {
+        throw new RuntimeException('Canonical admin authorization verification failed');
+    }
+
     echo json_encode([
         'ok' => true,
         'migration' => basename($migration),
         'statements' => count($statements),
         'tables' => $requiredTables,
+        'canonical_admin_authorized' => true,
         'checked_at' => date(DATE_ATOM),
     ], JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . PHP_EOL;
 } catch (Throwable $error) {
