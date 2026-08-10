@@ -227,12 +227,7 @@ def test_invalid_olist_client_falls_back_to_tiny_aliases(monkeypatch, capsys) ->
         ("tiny-client-current", "tiny-refresh-current"),
     ]
     output = capsys.readouterr().out
-    assert "olist-client-stale" not in output
-    assert "tiny-client-current" not in output
-    assert "olist-refresh-stale" not in output
-    assert "tiny-refresh-current" not in output
-    assert "credential_alias=olist" in output
-    assert "credential_alias=tiny" in output
+    assert output == ""
 
 
 def test_atomic_env_update_writes_symlink_target_without_replacing_link(tmp_path: Path, monkeypatch) -> None:
