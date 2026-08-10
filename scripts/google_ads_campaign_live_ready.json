@@ -19,7 +19,8 @@
       "require current stock",
       "prefer high-ticket products so shipping is a smaller share of order value",
       "exclude low-ticket N00 from paid Search while Merchant Center reports average shipping cost of R$ 47.45",
-      "do not use broad match until purchase conversion signal is stable"
+      "do not use broad match until purchase conversion signal is stable",
+      "do not advertise a coupon code unless it is validated live immediately before campaign activation"
     ]
   },
   "ad_groups": [
@@ -53,7 +54,7 @@
           "Comprar Carrinho Fercar",
           "Compra Segura Vivaliz",
           "Entrega Para Todo Brasil",
-          "Use Cupom PRIMEIRA10",
+          "Confira Oferta no Site",
           "Envio Com Rastreamento",
           "Carrinho Preto e Cinza",
           "Organize Suas Ferramentas",
@@ -62,7 +63,7 @@
         "descriptions": [
           "Carrinho Fercar C06 com 3 gavetas para organizar ferramentas e ganhar eficiência na oficina.",
           "Compre online na Vivaliz com pagamento seguro e envio rastreado para todo o Brasil.",
-          "Use PRIMEIRA10 na primeira compra. Confira preço, prazo e disponibilidade antes de pagar.",
+          "Confira preço, prazo, condições comerciais e disponibilidade atualizados antes de pagar.",
           "Veja fotos e detalhes do Fercar C06 preto e cinza na página oficial do produto."
         ]
       }
@@ -98,7 +99,7 @@
           "Vermelho e Cinza Fercar",
           "Compra Segura Vivaliz",
           "Entrega Para Todo Brasil",
-          "Use Cupom PRIMEIRA10",
+          "Confira Oferta no Site",
           "Envio Com Rastreamento",
           "Organize Suas Ferramentas",
           "Confira Estoque Online"
@@ -106,7 +107,7 @@
         "descriptions": [
           "Carrinho Fercar C08 com 6 gavetas para organização profissional de ferramentas na oficina.",
           "Compre online na Vivaliz com pagamento seguro e envio rastreado para todo o Brasil.",
-          "Use PRIMEIRA10 na primeira compra. Confira preço, prazo e disponibilidade antes de pagar.",
+          "Confira preço, prazo, condições comerciais e disponibilidade atualizados antes de pagar.",
           "Veja fotos e detalhes do Fercar C08 vermelho e cinza na página oficial do produto."
         ]
       }
@@ -140,7 +141,7 @@
           "Comprar Carrinho Fercar",
           "Compra Segura Vivaliz",
           "Entrega Para Todo Brasil",
-          "Use Cupom PRIMEIRA10",
+          "Confira Oferta no Site",
           "Envio Com Rastreamento",
           "Organize Suas Ferramentas",
           "Confira Estoque Online",
@@ -149,7 +150,7 @@
         "descriptions": [
           "Carrinho Fercar C08 todo preto com 6 gavetas para organização profissional da oficina.",
           "Compre online na Vivaliz com pagamento seguro e envio rastreado para todo o Brasil.",
-          "Use PRIMEIRA10 na primeira compra. Confira preço, prazo e disponibilidade antes de pagar.",
+          "Confira preço, prazo, condições comerciais e disponibilidade atualizados antes de pagar.",
           "Veja fotos e detalhes do Fercar C08 todo preto na página oficial do produto."
         ]
       }
@@ -169,7 +170,6 @@
   ],
   "tracking": {
     "ga4_measurement_id": "G-1H55K1TZ5D",
-    "coupon": "PRIMEIRA10",
     "utm_source": "google",
     "utm_medium": "cpc",
     "utm_campaign": "search_fercar_altovalor_2026_08"
@@ -186,6 +186,7 @@
     "pause_keyword_after_clicks_without_conversion": 20,
     "exclude_out_of_stock_products": true,
     "prefer_product_specific_final_urls": true,
-    "do_not_scale_budget_until_purchase_tracking_is_verified": true
+    "do_not_scale_budget_until_purchase_tracking_is_verified": true,
+    "validate_live_promotion_before_using_coupon_copy": true
   }
 }
