@@ -279,6 +279,7 @@ function svcr_products(): array
             'width' => (float)($dimensions['largura'] ?? $dimensions['width'] ?? $item['width'] ?? 0),
             'height' => (float)($dimensions['altura'] ?? $dimensions['height'] ?? $item['height'] ?? 0),
             'length' => (float)($dimensions['comprimento'] ?? $dimensions['length'] ?? $item['length'] ?? 0),
+            'video_url' => trim((string)($item['video_url'] ?? '')),
             'status' => 'active',
         ];
     }
