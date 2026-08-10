@@ -95,10 +95,15 @@ REQUIRED_SNIPPETS = {
         "/product/202509/products/", "/product/202309/images/upload", "image_files",
         "/api/v2/token/refresh", "under_review=True", "TIKTOK_TOKEN_FILE", "tiktok-tokens.json", "os.replace",
     ),
+    # O runtime generico foi intencionalmente reduzido ao tuple estatico de
+    # banco/agente. Credenciais de marketplaces vivem no configurador dedicado
+    # abaixo; exigir ML/Shopee/TikTok/Amazon aqui reabria a mutacao generica de
+    # OAuth que os testes de seguranca explicitamente bloqueiam.
     "runtime_configurator": (
-        "LEGACY_KEYS", "EXTENDED_KEYS", "payload_mode", "validate_no_placeholders",
+        "KEYS = (", "DB_HOST", "SHOPVIVALIZ_AGENT_KEY", "MANAGED_OAUTH_KEYS",
+        "read_payload", "validate_database_tuple", "validate_no_placeholders",
+        "root database user is forbidden", "managed_oauth_mutation=blocked",
         "shared env metadata changed unexpectedly", "os.chown", "os.replace",
-        "TIKTOK_APP_KEY", "AMAZON_LWA_CLIENT_ID", "SHOPEE_PARTNER_ID", "ML_CLIENT_ID",
     ),
     "marketplace_configurator": (
         "NUL-delimited", "Empty fields are", "PLACEHOLDER_MARKERS", "suspiciously short secret",
