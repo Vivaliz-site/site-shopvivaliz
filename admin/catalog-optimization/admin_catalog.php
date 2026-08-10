@@ -198,6 +198,10 @@ if (($_GET['ajax'] ?? '') === 'failed_items') {
 
 $flashMessage = null;
 $flashError = null;
+$defaultCatalogChannel = isset($channels['ml']) ? 'ml' : (string)(array_key_first($channels) ?? '');
+$selectedProvider = 'openai';
+$selectedChannel = $defaultCatalogChannel;
+$submittedProductIds = [];
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (!sv_csrf_valid('catalog-optimization', $_POST['csrf_token'] ?? null)) {
         $flashError = 'A sessao expirou. Recarregue a pagina.';
@@ -208,6 +212,14 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $provider = strtolower(trim((string)($_POST['provider'] ?? '')));
             $channel = strtolower(trim((string)($_POST['channel'] ?? '')));
             $selectedIds = array_values(array_unique(cat_json_list((array)($_POST['selected_product_ids'] ?? []))));
+            $submittedProductIds = $selectedIds;
+
+            if (in_array($provider, ['openai', 'gemini', 'claude'], true)) {
+                $selectedProvider = $provider;
+            }
+            if (isset($channels[$channel])) {
+                $selectedChannel = $channel;
+            }
 
             if ($selectedIds === []) {
                 $flashError = 'Selecione ao menos um produto para gerar a otimizacao.';
@@ -539,9 +551,9 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
                 <label>
                     Provedor
                     <select id="provider" name="provider">
-                        <option value="openai">OpenAI</option>
-                        <option value="gemini">Gemini</option>
-                        <option value="claude">Claude</option>
+                        <option value="openai" <?= $selectedProvider === 'openai' ? 'selected' : '' ?>>OpenAI</option>
+                        <option value="gemini" <?= $selectedProvider === 'gemini' ? 'selected' : '' ?>>Gemini</option>
+                        <option value="claude" <?= $selectedProvider === 'claude' ? 'selected' : '' ?>>Claude</option>
                     </select>
                 </label>
 
@@ -549,7 +561,7 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
                     Canal
                     <select id="channel" name="channel">
                         <?php foreach ($channels as $key => $label): ?>
-                            <option value="<?= cat_h($key) ?>"><?= cat_h($label) ?></option>
+                            <option value="<?= cat_h($key) ?>" <?= $selectedChannel === $key ? 'selected' : '' ?>><?= cat_h($label) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </label>
@@ -897,7 +909,14 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
 
     const log = document.getElementById('log');
     const $ = (id) => document.getElementById(id);
-    const state = { products: [], selected: new Set(), page: 1, totalPages: 1, categories: [] };
+    const initialSelectedIds = <?= json_encode(array_values($submittedProductIds), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const state = {
+        products: [],
+        selected: new Set((Array.isArray(initialSelectedIds) ? initialSelectedIds : []).map((id) => String(id))),
+        page: 1,
+        totalPages: 1,
+        categories: []
+    };
     const listEl = $('active-products-list');
     const summaryEl = $('product-summary');
     const pageStatusEl = $('page-status');
