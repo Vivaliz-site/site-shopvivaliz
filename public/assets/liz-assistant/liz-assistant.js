@@ -7,7 +7,7 @@
     return new Promise(resolve => {
       const script = document.createElement('script');
       script.src = CONFIG_URL;
-      script.async = false;
+      script.async = true;
       script.onload = () => resolve();
       script.onerror = () => resolve();
       document.head.appendChild(script);
@@ -60,17 +60,17 @@
 
     root.innerHTML = `
       <button id="sv-liz-launcher" type="button" aria-label="Abrir assistente Liz" aria-controls="sv-liz-panel" aria-expanded="false">
-        <img src="/public/assets/liz-assistant/liz-avatar.png" alt="Liz">
+        <img src="/public/assets/liz-assistant/liz-avatar.png" alt="Liz" width="96" height="96" decoding="async">
       </button>
       <div id="sv-liz-bubble">Posso ajudar com os produtos do seu carrinho e com dúvidas sobre sua compra.</div>
       <section id="sv-liz-panel" role="dialog" aria-modal="false" aria-label="Liz - Assistente Virtual">
         <div class="sv-head">
-          <img src="/public/assets/liz-assistant/logo-oficial.svg" alt="ShopVivaliz">
+          <img src="/public/assets/liz-assistant/logo-oficial.svg" alt="ShopVivaliz" loading="lazy" decoding="async">
           <strong>Liz - Assistente Virtual</strong>
           <button class="sv-close" type="button" aria-label="Fechar assistente">×</button>
         </div>
         <div class="sv-hero">
-          <video autoplay muted loop playsinline src="/public/assets/liz-assistant/liz-acenando.webm"></video>
+          <video muted loop playsinline preload="none" data-src="/public/assets/liz-assistant/liz-acenando.webm"></video>
         </div>
         <div class="sv-msgs" aria-live="polite" aria-relevant="additions text">
           <div class="sv-msg sv-bot">${greeting}! Eu sou a Liz, assistente virtual da ShopVivaliz. Posso ajudar a encontrar produtos, acompanhar uma compra ou esclarecer dúvidas.</div>
@@ -93,15 +93,44 @@
     const msgs = root.querySelector('.sv-msgs');
     const input = root.querySelector('input');
     const submitButton = root.querySelector('.sv-form button[type="submit"]');
+    const heroVideo = root.querySelector('.sv-hero video');
     const conversation = [];
     let conversationState = {};
     let requestInFlight = false;
+    let healthChecked = false;
+
+    function ensureHeroVideo() {
+      if (!heroVideo || heroVideo.getAttribute('src')) return;
+      const source = String(heroVideo.dataset.src || '').trim();
+      if (!source) return;
+      heroVideo.src = source;
+      heroVideo.load();
+      const play = heroVideo.play();
+      if (play && typeof play.catch === 'function') play.catch(() => {});
+    }
+
+    function checkHealthOnce() {
+      if (healthChecked) return;
+      healthChecked = true;
+      fetch(`${HEALTH_API}?health=1`, { cache: 'no-store' })
+        .then(response => response.json())
+        .then(health => {
+          root.dataset.health = health.ok === true && health.endpoint === 'liz-intelligent' ? 'ok' : 'degraded';
+        })
+        .catch(() => { root.dataset.health = 'offline'; });
+    }
 
     function setOpen(open) {
       panel.classList.toggle('open', open);
       root.classList.toggle('sv-liz-is-open', open);
       launcher.setAttribute('aria-expanded', open ? 'true' : 'false');
-      if (open && !requestInFlight) setTimeout(() => input.focus(), 60);
+      if (open) {
+        ensureHeroVideo();
+        checkHealthOnce();
+        if (!requestInFlight) setTimeout(() => input.focus(), 60);
+      } else if (heroVideo && !heroVideo.paused) {
+        heroVideo.pause();
+      }
     }
 
     function setBusy(busy) {
@@ -211,13 +240,6 @@
       input.value = '';
       ask(text);
     });
-
-    fetch(`${HEALTH_API}?health=1`, { cache: 'no-store' })
-      .then(response => response.json())
-      .then(health => {
-        root.dataset.health = health.ok === true && health.endpoint === 'liz-intelligent' ? 'ok' : 'degraded';
-      })
-      .catch(() => { root.dataset.health = 'offline'; });
 
     let abandonmentTriggered = false;
     document.addEventListener('mouseleave', event => {
