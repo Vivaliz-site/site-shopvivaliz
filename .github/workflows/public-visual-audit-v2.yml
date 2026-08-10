@@ -1,0 +1,272 @@
+name: Public Storefront Visual Audit V2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/public-visual-audit-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      BASE_URL: https://shopvivaliz.com.br
+      BROWSER_UA: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Fetch canonical public pages from production
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p public-audit/html public-audit/errors
+          manifest='public-audit/manifest.tsv'
+          printf 'status\tslug\ttitle\turl\thttp_code\tfinal_url\thtml_bytes\ttext_chars\tdetail\n' > "$manifest"
+
+          cat > public-audit/routes.tsv <<EOF
+          Home	${BASE_URL}/
+          Catalogo	${BASE_URL}/catalogo
+          Produtos alias	${BASE_URL}/produtos
+          Catalogo filtrado	${BASE_URL}/catalogo?categoria=Ferramentas
+          Carrinho	${BASE_URL}/carrinho
+          Checkout	${BASE_URL}/checkout
+          Sobre	${BASE_URL}/sobre
+          Contato	${BASE_URL}/contato
+          FAQ	${BASE_URL}/faq
+          Blog	${BASE_URL}/blog
+          Termos	${BASE_URL}/termos
+          Politica de privacidade	${BASE_URL}/politica-privacidade
+          Politica de devolucoes	${BASE_URL}/politica-devolucoes
+          Politica de entrega	${BASE_URL}/politica-entrega
+          Login	${BASE_URL}/auth/login.php
+          Cadastro	${BASE_URL}/auth/register.php
+          Recuperar senha	${BASE_URL}/auth/forgot-password.php
+          EOF
+
+          catalog_seed="$(curl --location --silent --show-error --max-time 35 -A "$BROWSER_UA" "$BASE_URL/catalogo" || true)"
+          product_path="$(printf '%s' "$catalog_seed" | grep -oE 'href=["'"'][^"'"']*/produto/[A-Za-z0-9._~%/-]+' | head -n 1 | sed -E 's/^href=["'"']//; s/["'"']$//' || true)"
+          if [[ -n "$product_path" ]]; then
+            [[ "$product_path" == http* ]] || product_path="${BASE_URL}${product_path}"
+            printf 'Produto real\t%s\n' "$product_path" >> public-audit/routes.tsv
+          else
+            printf 'MISSING\tproduto_real\tProduto real\t\t0\t\t0\t0\tNo product URL found in catalog\n' >> "$manifest"
+          fi
+
+          blog_seed="$(curl --location --silent --show-error --max-time 35 -A "$BROWSER_UA" "$BASE_URL/blog" || true)"
+          blog_path="$(printf '%s' "$blog_seed" | grep -oE 'href=["'"'][^"'"']*/blog/[a-z0-9][a-z0-9-]+' | grep -vE '/blog/(feed|index)$' | head -n 1 | sed -E 's/^href=["'"']//; s/["'"']$//' || true)"
+          if [[ -n "$blog_path" ]]; then
+            [[ "$blog_path" == http* ]] || blog_path="${BASE_URL}${blog_path}"
+            printf 'Artigo real do blog\t%s\n' "$blog_path" >> public-audit/routes.tsv
+          fi
+
+          slug_for() {
+            python3 - "$1" <<'PY'
+          import re, sys
+          from urllib.parse import urlsplit
+          u = urlsplit(sys.argv[1])
+          raw = u.path.strip('/') or 'home'
+          if u.query:
+              raw += '-' + u.query
+          print(re.sub(r'[^A-Za-z0-9._-]+', '_', raw)[:120])
+          PY
+          }
+
+          while IFS=$'\t' read -r title url; do
+            [[ -n "${url:-}" ]] || continue
+            slug="$(slug_for "$url")"
+            output="public-audit/html/${slug}.html"
+            error_file="public-audit/errors/${slug}.log"
+            meta_file="public-audit/${slug}.meta"
+
+            if curl --location --silent --show-error \
+              --max-redirs 10 --connect-timeout 10 --max-time 45 --retry 2 --retry-delay 1 \
+              -A "$BROWSER_UA" -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' \
+              -o "$output" -w '%{http_code}\t%{url_effective}\t%{content_type}' "$url" \
+              > "$meta_file" 2> "$error_file"; then
+              curl_code=0
+            else
+              curl_code=$?
+            fi
+
+            IFS=$'\t' read -r http_code final_url content_type < "$meta_file" || true
+            http_code="${http_code:-0}"
+            final_url="${final_url:-$url}"
+            content_type="${content_type:-unknown}"
+            bytes="$(wc -c < "$output" 2>/dev/null | tr -d ' ' || echo 0)"
+            text_chars="$(python3 - "$output" <<'PY'
+          import html, re, sys
+          from pathlib import Path
+          p = Path(sys.argv[1])
+          raw = p.read_text(encoding='utf-8', errors='replace') if p.is_file() else ''
+          raw = re.sub(r'<script\b[^>]*>.*?</script\s*>', ' ', raw, flags=re.I | re.S)
+          raw = re.sub(r'<style\b[^>]*>.*?</style\s*>', ' ', raw, flags=re.I | re.S)
+          text = html.unescape(re.sub(r'<[^>]+>', ' ', raw))
+          print(len(re.sub(r'\s+', ' ', text).strip()))
+          PY
+            )"
+            detail="$(head -c 500 "$error_file" | tr '\r\n\t' '   ' || true)"
+
+            if [[ "$curl_code" -ne 0 ]]; then
+              status='HTTP_ERROR'; detail="curl_exit=${curl_code} ${detail}"
+            elif [[ ! "$http_code" =~ ^[23][0-9][0-9]$ ]]; then
+              status='HTTP_ERROR'; detail="HTTP ${http_code}; content_type=${content_type}"
+            elif [[ "$bytes" -lt 700 || "$text_chars" -lt 40 ]]; then
+              status='BLANK'; detail="HTML too small; content_type=${content_type}"
+            elif grep -Eqi 'Fatal error|Parse error|Uncaught [A-Za-z]+(Exception|Error)|ERR_TOO_MANY_REDIRECTS' "$output" "$error_file"; then
+              status='RUNTIME_ERROR'; detail="${detail:-Runtime error text detected}"
+            else
+              status='RENDERED'; detail="content_type=${content_type}"
+            fi
+
+            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+              "$status" "$slug" "$title" "$url" "$http_code" "$final_url" "$bytes" "$text_chars" "$detail" >> "$manifest"
+          done < public-audit/routes.tsv
+
+          echo '=== PUBLIC HTTP MANIFEST ==='
+          column -t -s $'\t' "$manifest" || cat "$manifest"
+
+      - name: Prepare safe visual snapshots
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p public-audit/prepared public-audit/screenshots/desktop public-audit/screenshots/mobile public-audit/dumps/desktop public-audit/dumps/mobile
+          python3 <<'PY'
+          from __future__ import annotations
+          import csv, re
+          from pathlib import Path
+
+          root = Path('public-audit')
+          rows = list(csv.DictReader((root / 'manifest.tsv').open(encoding='utf-8'), delimiter='\t'))
+          audit_script = r'''
+          <script>
+          window.addEventListener('load', () => setTimeout(() => {
+            const body = document.body, bs = getComputedStyle(body);
+            const visible = Array.from(body.querySelectorAll('*')).filter(el => {
+              const s = getComputedStyle(el), r = el.getBoundingClientRect();
+              const text = (el.innerText || el.textContent || '').trim();
+              return text.length > 0 && s.display !== 'none' && s.visibility !== 'hidden' && Number(s.opacity || 1) > 0 && r.width > 1 && r.height > 1;
+            });
+            const payload = {
+              text_chars: (body.innerText || '').trim().length,
+              visible_elements: visible.length,
+              body_display: bs.display,
+              body_visibility: bs.visibility,
+              body_opacity: bs.opacity,
+              viewport_width: innerWidth,
+              viewport_height: innerHeight,
+              scroll_width: document.documentElement.scrollWidth,
+              scroll_height: document.documentElement.scrollHeight,
+              horizontal_overflow: Math.max(0, document.documentElement.scrollWidth - innerWidth)
+            };
+            const marker = document.createElement('div');
+            marker.id = 'public-visual-audit-marker'; marker.hidden = true;
+            marker.setAttribute('data-json', JSON.stringify(payload)); body.appendChild(marker);
+          }, 700));
+          </script>
+          '''
+          for row in rows:
+              if row.get('status') != 'RENDERED':
+                  continue
+              slug = row['slug']; path = root / 'html' / f'{slug}.html'
+              if not path.is_file():
+                  continue
+              raw = path.read_text(encoding='utf-8', errors='replace')
+              raw = re.sub(r'<script\b[^>]*>.*?</script\s*>', '', raw, flags=re.I | re.S)
+              base = row.get('final_url') or row.get('url') or 'https://shopvivaliz.com.br/'
+              if re.search(r'<head\b[^>]*>', raw, flags=re.I):
+                  raw = re.sub(r'(<head\b[^>]*>)', r'\1<base href="' + base + '">', raw, count=1, flags=re.I)
+              else:
+                  raw = '<base href="' + base + '">' + raw
+              if re.search(r'</body\s*>', raw, flags=re.I):
+                  raw = re.sub(r'</body\s*>', audit_script + '</body>', raw, count=1, flags=re.I)
+              else:
+                  raw += audit_script
+              (root / 'prepared' / f'{slug}.html').write_text(raw, encoding='utf-8')
+          PY
+
+      - name: Capture desktop and mobile screenshots
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          chrome="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          test -n "$chrome" || { echo '::error::Chrome unavailable'; exit 20; }
+          for file in public-audit/prepared/*.html; do
+            [[ -f "$file" ]] || continue
+            slug="$(basename "$file" .html)"; url="file://${GITHUB_WORKSPACE}/${file}"
+            for spec in 'desktop 1440,1000' 'mobile 390,844'; do
+              read -r label size <<< "$spec"
+              "$chrome" --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files \
+                --window-size="$size" --virtual-time-budget=3500 --screenshot="public-audit/screenshots/${label}/${slug}.png" "$url" >/dev/null 2>&1
+              "$chrome" --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files \
+                --window-size="$size" --virtual-time-budget=3500 --dump-dom "$url" > "public-audit/dumps/${label}/${slug}.html" 2>/dev/null
+            done
+          done
+
+      - name: Evaluate public visual audit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 <<'PY'
+          import csv, html as html_lib, json, re
+          from pathlib import Path
+          root = Path('public-audit')
+          rows = list(csv.DictReader((root / 'manifest.tsv').open(encoding='utf-8'), delimiter='\t'))
+          fatal, warnings, visual = [], [], []
+          marker_re = re.compile(r'id="public-visual-audit-marker"[^>]*data-json="([^"]*)"', re.I)
+          def read_marker(path):
+              if not path.is_file(): return None
+              m = marker_re.search(path.read_text(encoding='utf-8', errors='replace'))
+              if not m: return None
+              try: return json.loads(html_lib.unescape(m.group(1)))
+              except Exception: return None
+          for row in rows:
+              status, title, slug = row.get('status',''), row.get('title',''), row.get('slug','')
+              if status in {'MISSING','BLANK','RUNTIME_ERROR','HTTP_ERROR'}:
+                  fatal.append(f"{title}: {status} - {row.get('detail','')}"); continue
+              if status != 'RENDERED': continue
+              desktop = read_marker(root/'dumps'/'desktop'/f'{slug}.html')
+              mobile = read_marker(root/'dumps'/'mobile'/f'{slug}.html')
+              if desktop is None or mobile is None:
+                  fatal.append(f'{title}: browser marker ausente'); continue
+              for label, payload in [('desktop',desktop),('mobile',mobile)]:
+                  if payload.get('body_display') == 'none' or payload.get('body_visibility') == 'hidden' or str(payload.get('body_opacity')) == '0' or int(payload.get('text_chars') or 0) < 40 or int(payload.get('visible_elements') or 0) < 1:
+                      fatal.append(f'{title}: tela visualmente vazia em {label}: {payload}')
+                  overflow = int(payload.get('horizontal_overflow') or 0)
+                  if label == 'mobile' and overflow > 48:
+                      warnings.append(f'{title}: overflow horizontal mobile de {overflow}px')
+              visual.append({'title':title,'url':row.get('url'),'desktop':desktop,'mobile':mobile})
+          (root/'visual-results.json').write_text(json.dumps(visual, ensure_ascii=False, indent=2), encoding='utf-8')
+          (root/'audit-failures.txt').write_text('\n'.join(fatal)+('\n' if fatal else ''), encoding='utf-8')
+          (root/'audit-warnings.txt').write_text('\n'.join(warnings)+('\n' if warnings else ''), encoding='utf-8')
+          print(f'Public entries: {len(rows)}')
+          print(f'Rendered screens: {sum(1 for r in rows if r.get("status") == "RENDERED")}')
+          print(f'Fatal findings: {len(fatal)}')
+          print(f'Responsive warnings: {len(warnings)}')
+          if warnings:
+              print('WARNINGS:'); [print('-', x) for x in warnings]
+          if fatal:
+              print('FATAL FINDINGS:'); [print('-', x) for x in fatal]; raise SystemExit(1)
+          PY
+
+      - name: Upload public visual audit evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: public-visual-audit-v2-${{ github.run_id }}
+          path: |
+            public-audit/manifest.tsv
+            public-audit/visual-results.json
+            public-audit/audit-failures.txt
+            public-audit/audit-warnings.txt
+            public-audit/screenshots/
+            public-audit/errors/
+          retention-days: 30
+          if-no-files-found: warn
