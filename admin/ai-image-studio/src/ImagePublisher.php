@@ -20,14 +20,13 @@ final class AiStudioImagePublisher
         }
 
         $source = $this->resolveSource($localPath);
-        if (!is_file($source) || !is_readable($source)) {
-            throw new RuntimeException('Arquivo gerado não existe ou não pode ser lido.');
-        }
-
-        $extension = strtolower((string)pathinfo($source, PATHINFO_EXTENSION));
-        if (!in_array($extension, ['jpg', 'jpeg', 'png', 'webp'], true)) {
-            throw new RuntimeException('Formato de imagem não permitido.');
-        }
+        $image = $this->validateGeneratedImage($source);
+        $extension = match ($image['mime']) {
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+            default => throw new RuntimeException('Formato de imagem não permitido.'),
+        };
 
         $projectRoot = dirname(__DIR__, 3);
         $targetDir = $projectRoot . '/public/assets/products/generated';
@@ -42,11 +41,13 @@ final class AiStudioImagePublisher
         if (!copy($source, $temporary)) {
             throw new RuntimeException('Falha ao copiar a imagem aprovada para o diretório público.');
         }
+        $this->validateGeneratedImage($temporary);
         if (!rename($temporary, $target)) {
             @unlink($temporary);
             throw new RuntimeException('Falha ao promover a imagem aprovada.');
         }
         @chmod($target, 0644);
+        $this->validateGeneratedImage($target);
 
         $publicUrl = '/public/assets/products/generated/' . $filename;
 
@@ -90,5 +91,43 @@ final class AiStudioImagePublisher
             return $localPath;
         }
         return dirname(__DIR__, 3) . '/' . ltrim($localPath, '/');
+    }
+
+    /** @return array{width:int,height:int,mime:string,sha256:string,is_square:bool,square_delta_px:int} */
+    private function validateGeneratedImage(string $path): array
+    {
+        if (!is_file($path) || !is_readable($path) || (int)filesize($path) <= 0) {
+            throw new RuntimeException('Arquivo gerado não existe, está vazio ou não pode ser lido.');
+        }
+        $info = @getimagesize($path);
+        if (!is_array($info)) {
+            throw new RuntimeException('Arquivo gerado não é uma imagem válida.');
+        }
+        $width = (int)($info[0] ?? 0);
+        $height = (int)($info[1] ?? 0);
+        $mime = strtolower(trim((string)($info['mime'] ?? '')));
+        if (!in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true)) {
+            throw new RuntimeException("Formato real de imagem não permitido: {$mime}.");
+        }
+        if ($width < 1000 || $height < 1000) {
+            throw new RuntimeException("Imagem gerada abaixo do padrão premium: {$width}x{$height}; mínimo 1000px por lado.");
+        }
+        $squareTolerance = max(8, (int)round(min($width, $height) * 0.02));
+        $squareDelta = abs($width - $height);
+        if ($squareDelta > $squareTolerance) {
+            throw new RuntimeException("Imagem gerada não está quadrada: {$width}x{$height}; desvio de {$squareDelta}px.");
+        }
+        $hash = hash_file('sha256', $path);
+        if (!is_string($hash) || $hash === '') {
+            throw new RuntimeException('Falha ao calcular fingerprint da imagem gerada.');
+        }
+        return [
+            'width' => $width,
+            'height' => $height,
+            'mime' => $mime,
+            'sha256' => $hash,
+            'is_square' => true,
+            'square_delta_px' => $squareDelta,
+        ];
     }
 }

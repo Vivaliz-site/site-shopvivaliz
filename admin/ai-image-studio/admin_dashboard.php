@@ -63,6 +63,42 @@ function ai_studio_top_counter(array $counts, string $fallbackLabel = 'Nenhum'):
     return ['label' => $label, 'count' => (int)$counts[$label]];
 }
 
+/** @return array{width:int,height:int,is_square:bool,square_delta_px:int} */
+function ai_studio_image_geometry(?string $publicPath): array
+{
+    if (!is_string($publicPath) || $publicPath === '') {
+        return ['width' => 0, 'height' => 0, 'is_square' => false, 'square_delta_px' => 0];
+    }
+
+    $filePath = null;
+    if (defined('AI_STUDIO_STORAGE_URL_PREFIX') && str_starts_with($publicPath, AI_STUDIO_STORAGE_URL_PREFIX)) {
+        $filePath = AI_STUDIO_STORAGE_DIR . basename($publicPath);
+    } elseif (is_file($publicPath)) {
+        $filePath = $publicPath;
+    }
+
+    if (!is_string($filePath) || !is_file($filePath)) {
+        return ['width' => 0, 'height' => 0, 'is_square' => false, 'square_delta_px' => 0];
+    }
+
+    $info = @getimagesize($filePath);
+    if (!is_array($info)) {
+        return ['width' => 0, 'height' => 0, 'is_square' => false, 'square_delta_px' => 0];
+    }
+
+    $width = (int)($info[0] ?? 0);
+    $height = (int)($info[1] ?? 0);
+    $delta = abs($width - $height);
+    $squareTolerance = max(8, (int)round(min($width, $height) * 0.02));
+
+    return [
+        'width' => $width,
+        'height' => $height,
+        'is_square' => $width > 0 && $height > 0 && $delta <= $squareTolerance,
+        'square_delta_px' => $delta,
+    ];
+}
+
 $channelProfiles = ai_studio_channel_profiles();
 $releaseInfo = sv_release_info_from_path(__DIR__);
 $batchResults = null;
@@ -153,12 +189,12 @@ try {
 }
 
 $recentItems = [];
-try {
-    $stmt = $db->query(
-        'SELECT id, product_id, image_type, provider_used, status, error_message, target_channels_json, created_at '
-        . 'FROM product_images_staging ORDER BY created_at DESC LIMIT 20'
-    );
-    $recentItems = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+    try {
+        $stmt = $db->query(
+            'SELECT id, product_id, image_type, provider_used, status, error_message, target_channels_json, local_path, created_at '
+            . 'FROM product_images_staging ORDER BY created_at DESC LIMIT 20'
+        );
+        $recentItems = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
 } catch (Throwable $e) {
     error_log('[ai-image-studio] Falha ao ler itens recentes: ' . $e->getMessage());
 }
@@ -470,24 +506,30 @@ th{background:#f8fafc;color:#425368}
             <div class="table-wrap" style="margin-top:16px">
                 <table>
                     <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Produto</th>
-                            <th>Destino</th>
-                            <th>Tipo</th>
-                            <th>Provedor</th>
-                            <th>Status</th>
-                            <th>Erro</th>
-                            <th>Criado em</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                    <tr>
+                        <th>ID</th>
+                        <th>Produto</th>
+                        <th>Destino</th>
+                        <th>Tipo</th>
+                        <th>Provedor</th>
+                        <th>Status</th>
+                        <th>Qualidade</th>
+                        <th>Erro</th>
+                        <th>Criado em</th>
+                    </tr>
+                </thead>
+                <tbody>
                         <?php foreach ($recentItems as $item): ?>
                             <?php
                             $targetLabel = ai_studio_recent_target_label($item['target_channels_json'] ?? '[]', $channelProfiles);
                             $statusLabel = (string)$item['status'];
                             $badgeClass = in_array($statusLabel, ['pending', 'published'], true) ? 'ok' : 'warn';
                             $errorMessage = trim((string)($item['error_message'] ?? ''));
+                            $geometry = ai_studio_image_geometry((string)($item['local_path'] ?? ''));
+                            $geometryLabel = $geometry['width'] > 0
+                                ? $geometry['width'] . 'x' . $geometry['height']
+                                : 'sem arquivo';
+                            $geometryTone = $geometry['is_square'] ? 'ok' : 'warn';
                             ?>
                             <tr>
                                 <td>#<?= (int)$item['id'] ?></td>
@@ -496,6 +538,14 @@ th{background:#f8fafc;color:#425368}
                                 <td><?= ai_studio_h((string)$item['image_type']) ?></td>
                                 <td><?= ai_studio_h((string)$item['provider_used']) ?></td>
                                 <td><span class="badge <?= $badgeClass ?>"><?= ai_studio_h($statusLabel) ?></span></td>
+                                <td>
+                                    <span class="badge <?= $geometryTone ?>"><?= ai_studio_h($geometryLabel) ?></span>
+                                    <?php if ($geometry['width'] > 0): ?>
+                                        <div class="product-summary" style="margin-top:6px">
+                                            <?= $geometry['is_square'] ? 'Quadrada e consistente.' : 'Quadratura fora do ideal: ' . $geometry['square_delta_px'] . 'px de desvio.' ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
                                 <td class="recent-error">
                                     <?php if ($errorMessage !== ''): ?>
                                         <details class="error-details">

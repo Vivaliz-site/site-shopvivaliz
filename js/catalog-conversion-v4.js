@@ -99,6 +99,17 @@
     document.body.appendChild(bottom);
   }
 
+  var currentPath=(window.location.pathname||'/').replace(/\/+$/,'')||'/';
+  bottom.querySelectorAll('a').forEach(function(link){
+    var linkPath=(new URL(link.getAttribute('href')||'',window.location.origin)).pathname.replace(/\/+$/,'')||'/';
+    if(linkPath===currentPath){
+      link.setAttribute('aria-current','page');
+      link.style.color='#0b4f88';
+      link.style.background='rgba(11,79,136,.10)';
+      link.style.borderRadius='12px';
+    }
+  });
+
   if(!bottom.dataset.svBound){
     bottom.dataset.svBound='1';
     bottom.addEventListener('click',function(e){

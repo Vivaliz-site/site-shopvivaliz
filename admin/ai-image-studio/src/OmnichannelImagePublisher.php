@@ -176,7 +176,7 @@ final class AiStudioOmnichannelImagePublisher
         return ['/public/assets/products/generated/' . $filename, $target];
     }
 
-    /** @return array{width:int,height:int,mime:string,sha256:string} */
+    /** @return array{width:int,height:int,mime:string,sha256:string,is_square:bool,square_delta_px:int} */
     private function validateGeneratedImage(string $path): array
     {
         if (!is_file($path) || !is_readable($path) || (int)filesize($path) <= 0) {
@@ -195,11 +195,23 @@ final class AiStudioOmnichannelImagePublisher
         if ($width < 1000 || $height < 1000) {
             throw new RuntimeException("Imagem gerada abaixo do padrão premium: {$width}x{$height}; mínimo 1000px por lado.");
         }
+        $squareTolerance = max(8, (int)round(min($width, $height) * 0.02));
+        $squareDelta = abs($width - $height);
+        if ($squareDelta > $squareTolerance) {
+            throw new RuntimeException("Imagem gerada não está quadrada: {$width}x{$height}; desvio de {$squareDelta}px.");
+        }
         $hash = hash_file('sha256', $path);
         if (!is_string($hash) || $hash === '') {
             throw new RuntimeException('Falha ao calcular fingerprint da imagem gerada.');
         }
-        return ['width' => $width, 'height' => $height, 'mime' => $mime, 'sha256' => $hash];
+        return [
+            'width' => $width,
+            'height' => $height,
+            'mime' => $mime,
+            'sha256' => $hash,
+            'is_square' => true,
+            'square_delta_px' => $squareDelta,
+        ];
     }
 
     private function resolveSource(string $localPath): string

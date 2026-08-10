@@ -394,6 +394,14 @@ foreach ($stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [] as $metric) {
 }
 $stmt = $db->query("SELECT * FROM catalog_optimizations_staging WHERE status IN ('pending','publication_failed') ORDER BY created_at DESC LIMIT 50");
 $items = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+$pendingRecheckCount = 0;
+foreach ($items as $itemRow) {
+    $meta = json_decode((string)($itemRow['meta_data_json'] ?? '{}'), true);
+    $meta = is_array($meta) ? $meta : [];
+    if (!empty($meta['manual_edit_pending_quality_recheck'])) {
+        $pendingRecheckCount++;
+    }
+}
 $csrf = sv_csrf_token('catalog-optimization');
 ?>
 <!doctype html>
@@ -537,6 +545,11 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
         marketplace nao possui um campo externo separado. Assim fica claro o que vem do read-back real, o que e
         incorporado em outro campo e o que existe apenas como apoio interno.
     </div>
+    <?php if ($pendingRecheckCount > 0): ?>
+        <div class="draft-note" style="margin-top:12px;border-left-color:#ea580c">
+            <strong>Rechecagem pendente:</strong> <?= (int)$pendingRecheckCount ?> item(ns) ainda carregam edicao manual aguardando nova validacao antes da publicacao.
+        </div>
+    <?php endif; ?>
 
     <?php if ($flashMessage): ?>
         <div class="alert ok"><?= cat_h($flashMessage) ?></div>
@@ -689,6 +702,7 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
             $qualityFailures = cat_quality_gate_failures($qualityChecks);
             $qualityApproved = $qualityFailures === [];
             $publishDisabled = $qualityScore !== null && !$qualityApproved;
+            $manualRecheckPending = !empty($meta['manual_edit_pending_quality_recheck']);
             $ep = $endpointRegistry[$channel] ?? null;
             $fieldMap = is_array($profile['field_map'] ?? null) ? $profile['field_map'] : [];
             $limits = is_array($profile['limits'] ?? null) ? $profile['limits'] : [];
@@ -710,6 +724,9 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
                                 <span>Produto #<?= $pid ?></span>
                                 <span>SKU <?= cat_h((string)$local['sku']) ?></span>
                                 <span class="<?= cat_h($statusClass) ?>"><?= cat_h((string)$item['status']) ?></span>
+                                <?php if ($manualRecheckPending): ?>
+                                    <span class="badge" style="background:#fff7ed;color:#9a3412">Revalidar edicao</span>
+                                <?php endif; ?>
                                 <?php if ($qualityScore !== null): ?>
                                     <span class="queue-quality <?= $qualityApproved ? 'approved' : 'rejected' ?>">
                                         <?= $qualityApproved ? 'Aprovado' : 'Reprovado' ?>
@@ -795,6 +812,12 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
                             <div class="quality-note">
                                 <strong>Publicacao bloqueada pelo quality gate</strong>
                                 Ajuste os checks que falharam antes de aprovar: <?= cat_h(implode(', ', $qualityFailures)) ?>.
+                            </div>
+                        <?php endif; ?>
+                        <?php if ($manualRecheckPending): ?>
+                            <div class="quality-note" style="background:#fff7ed;color:#9a3412">
+                                <strong>Rechecagem obrigatoria</strong>
+                                Esta edicao ainda precisa passar pela revalidacao antes da publicacao real.
                             </div>
                         <?php endif; ?>
                     <?php endif; ?>

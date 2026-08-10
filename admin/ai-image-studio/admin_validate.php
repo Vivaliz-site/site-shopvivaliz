@@ -180,7 +180,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     }
 
                     $profile = ai_studio_channel_profile($targetChannel);
-                    ai_studio_validate_image_file($destination, max(1000, (int)($profile['minimum_side'] ?? 1000)));
+                    ai_studio_validate_image_file($destination, max(1000, (int)($profile['minimum_side'] ?? 1000)), true);
                     $oldFile = ais_staging_file((string)$row['local_path']);
                     $targets = json_encode([$targetChannel], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                     $update = $db->prepare(
@@ -352,6 +352,8 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
             $h = is_array($imgInfo) ? (int)$imgInfo[1] : 0;
             $recommended = (int)($profile['recommended_side'] ?? 1000);
             $meetsRec = $w >= $recommended && $h >= $recommended;
+            $squareTolerance = max(8, (int)round(min($w, $h) * 0.02));
+            $isSquare = $w > 0 && $h > 0 && abs($w - $h) <= $squareTolerance;
             $statusClass = (string)$item['status'] === 'publication_failed' ? 'status fail' : 'status';
             ?>
             <details class="queue-item" data-image-item>
@@ -392,6 +394,7 @@ body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:linear-gradient
                         <?php if ($w > 0): ?>
                             <div class="<?= $meetsRec ? 'quality-ok' : 'quality-warn' ?>">
                                 Arquivo gerado: <?= $w ?>x<?= $h ?>. Alvo recomendado: <?= $recommended ?>x<?= $recommended ?>.
+                                <?= $isSquare ? 'Formato quadrado confirmado.' : 'O formato ainda precisa ser revisado.' ?>
                                 <?= $meetsRec ? 'Atende o alvo recomendado.' : 'A imagem pode ser tecnicamente valida, mas esta abaixo do alvo recomendado.' ?>
                             </div>
                         <?php endif; ?>

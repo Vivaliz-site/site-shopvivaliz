@@ -117,27 +117,10 @@ function ai_studio_fetch_product(PDO $db, int|string $productReference): ?array
     return is_array($row) ? ai_studio_map_product_row($row) : null;
 }
 
-/** @return array{width:int,height:int,mime:string,sha256:string} */
-function ai_studio_validate_image_file(string $path, int $minimumSide = 600): array
+/** @return array{width:int,height:int,mime:string,sha256:string,aspect_ratio:float,is_square:bool,square_delta_px:int} */
+function ai_studio_validate_image_file(string $path, int $minimumSide = 600, bool $requireSquare = false): array
 {
-    if (!is_file($path) || !is_readable($path) || (int)filesize($path) <= 0) {
-        throw new AiStudioApiException('Arquivo de imagem inexistente, vazio ou ilegivel.');
-    }
-    $info = @getimagesize($path);
-    if (!is_array($info)) throw new AiStudioApiException('O arquivo informado nao e uma imagem valida.');
-
-    $width = (int)($info[0] ?? 0);
-    $height = (int)($info[1] ?? 0);
-    $mime = strtolower(trim((string)($info['mime'] ?? '')));
-    if (!in_array($mime, ['image/jpeg', 'image/png', 'image/webp'], true)) {
-        throw new AiStudioApiException("Formato real da imagem nao permitido: {$mime}.");
-    }
-    if ($width < $minimumSide || $height < $minimumSide) {
-        throw new AiStudioApiException("Imagem abaixo da resolucao minima: {$width}x{$height}; minimo {$minimumSide}px por lado.");
-    }
-    $hash = hash_file('sha256', $path);
-    if (!is_string($hash) || $hash === '') throw new AiStudioApiException('Nao foi possivel calcular a identidade da imagem.');
-    return ['width' => $width, 'height' => $height, 'mime' => $mime, 'sha256' => $hash];
+    return AiStudioHttpClient::validateOutputImage($path, $minimumSide, $requireSquare);
 }
 
 function ai_studio_resolve_base_image(string $imageRef, string $projectRoot, int $productId): string
@@ -153,7 +136,7 @@ function ai_studio_resolve_base_image(string $imageRef, string $projectRoot, int
         $tmpPath = AI_STUDIO_BASE_IMAGE_TMP_DIR . 'base-' . $productId . '-' . bin2hex(random_bytes(6)) . '.' . $extension;
         AiStudioHttpClient::downloadToFile($imageRef, $tmpPath);
         try {
-            ai_studio_validate_image_file($tmpPath, 600);
+            ai_studio_validate_image_file($tmpPath, 600, false);
         } catch (Throwable $e) {
             @unlink($tmpPath);
             throw $e;
@@ -170,7 +153,7 @@ function ai_studio_resolve_base_image(string $imageRef, string $projectRoot, int
     if (!is_file($localPath) || !is_readable($localPath)) {
         throw new AiStudioApiException("Produto #{$productId}: foto cadastrada nao foi encontrada no disco.");
     }
-    ai_studio_validate_image_file($localPath, 600);
+    ai_studio_validate_image_file($localPath, 600, false);
     return $localPath;
 }
 
@@ -315,7 +298,7 @@ function ai_studio_process_item(
                 } else {
                     (new AiStudioGoogleImageEditClient(AI_STUDIO_GOOGLE_IMAGEN_API_KEY, $googleModel))->editImageToFile($prompt, $baseImagePath, $destination);
                 }
-                $quality = ai_studio_validate_image_file($destination, $minimumSide);
+                $quality = ai_studio_validate_image_file($destination, $minimumSide, true);
                 $quality['recommended_side'] = $recommendedSide;
                 $quality['meets_recommended_side'] = $quality['width'] >= $recommendedSide && $quality['height'] >= $recommendedSide;
                 $id = ai_studio_insert_staging_row($db, $resolvedProductId, $imageType, $providerUsed, $publicPath, $prompt, 'pending', null, $targetChannel);

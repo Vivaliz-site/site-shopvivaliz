@@ -149,13 +149,11 @@ final class AiStudioHttpClient
     /**
      * Valida o arquivo produzido pelo provedor antes de qualquer caller poder
      * marcá-lo como pending. Isso protege também o fluxo "Regenerar" do Admin,
-     * que chama os clientes de imagem diretamente. Como o Studio gera imagens
-     * quadradas, 1000px por lado garante o patamar recomendado para zoom da
-     * imagem principal Amazon e supera o minimo de 600x600 do TikTok Shop.
+     * que chama os clientes de imagem diretamente.
      *
-     * @return array{width:int,height:int,mime:string,sha256:string}
+     * @return array{width:int,height:int,mime:string,sha256:string,aspect_ratio:float,is_square:bool,square_delta_px:int}
      */
-    public static function validateOutputImage(string $filePath, int $minimumSide = 1000): array
+    public static function validateOutputImage(string $filePath, int $minimumSide = 1000, bool $requireSquare = true): array
     {
         if (!is_file($filePath) || !is_readable($filePath) || (int)@filesize($filePath) <= 0) {
             throw new AiStudioApiException('Provedor não produziu um arquivo de imagem legível.');
@@ -175,13 +173,27 @@ final class AiStudioHttpClient
         if ($width < $minimumSide || $height < $minimumSide) {
             throw new AiStudioApiException("Imagem produzida abaixo da qualidade mínima: {$width}x{$height}; mínimo {$minimumSide}px por lado.");
         }
+        $squareDelta = abs($width - $height);
+        $squareTolerance = max(8, (int)round(min($width, $height) * 0.02));
+        $isSquare = $squareDelta <= $squareTolerance;
+        if ($requireSquare && !$isSquare) {
+            throw new AiStudioApiException("Imagem produzida não está quadrada: {$width}x{$height}; desvio de {$squareDelta}px.");
+        }
 
         $hash = hash_file('sha256', $filePath);
         if (!is_string($hash) || $hash === '') {
             throw new AiStudioApiException('Falha ao calcular fingerprint da imagem produzida.');
         }
 
-        return ['width' => $width, 'height' => $height, 'mime' => $mime, 'sha256' => $hash];
+        return [
+            'width' => $width,
+            'height' => $height,
+            'mime' => $mime,
+            'sha256' => $hash,
+            'aspect_ratio' => $height > 0 ? $width / $height : 0.0,
+            'is_square' => $isSquare,
+            'square_delta_px' => $squareDelta,
+        ];
     }
 
     public static function apiFailure(string $context, array $response): AiStudioApiException
