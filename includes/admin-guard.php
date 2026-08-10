@@ -6,6 +6,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 }
 
 require_once __DIR__ . '/../config/constants.php';
+require_once __DIR__ . '/pdo-database.php';
 require_once __DIR__ . '/../core/logger/logger.php';
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
