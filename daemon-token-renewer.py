@@ -100,6 +100,19 @@ def oauth_refresh_candidates(config: dict[str, str]) -> list[tuple[str, str]]:
     return candidates
 
 
+def print_oauth_failure(
+    status: int,
+    error_code: str,
+    client_alias: str,
+    refresh_alias: str,
+) -> None:
+    suffix = f" oauth_error={error_code}" if error_code else ""
+    print(
+        f"[!] Renovação Olist recusada: HTTP {status}{suffix} "
+        f"credential_alias={client_alias} refresh_alias={refresh_alias}"
+    )
+
+
 def renew_token(config: dict[str, str]) -> dict[str, Any] | None:
     clients = oauth_client_candidates(config)
     refreshes = oauth_refresh_candidates(config)
@@ -107,6 +120,7 @@ def renew_token(config: dict[str, str]) -> dict[str, Any] | None:
         print("[!] Credenciais Olist incompletas")
         return None
 
+    last_failure: tuple[int, str, str, str] | None = None
     for client_alias, client_id, client_secret in clients:
         client_rejected = False
         for refresh_alias, refresh_token in refreshes:
@@ -127,16 +141,13 @@ def renew_token(config: dict[str, str]) -> dict[str, Any] | None:
             except urllib.error.HTTPError as exc:
                 error_code = safe_oauth_error_code(exc)
                 status = int(getattr(exc, "code", 0) or 0)
-                suffix = f" oauth_error={error_code}" if error_code else ""
-                print(
-                    f"[!] Renovação Olist recusada: HTTP {status}{suffix} "
-                    f"credential_alias={client_alias} refresh_alias={refresh_alias}"
-                )
+                last_failure = (status, error_code, client_alias, refresh_alias)
                 if error_code == "invalid_client":
                     client_rejected = True
                     break
                 if error_code == "invalid_grant":
                     continue
+                print_oauth_failure(status, error_code, client_alias, refresh_alias)
                 return None
             except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
                 print(f"[!] Renovação Olist falhou: {type(exc).__name__}")
@@ -152,6 +163,8 @@ def renew_token(config: dict[str, str]) -> dict[str, Any] | None:
         if client_rejected:
             continue
 
+    if last_failure is not None:
+        print_oauth_failure(*last_failure)
     return None
 
 
