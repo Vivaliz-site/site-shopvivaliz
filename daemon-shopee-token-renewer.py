@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from scripts.env_keyset_guard import assert_monotonic_text
+
 ENV_PATH = Path(os.environ.get("SHOPVIVALIZ_ENV_PATH", "c:/site-shopvivaliz/.env" if os.name == "nt" else "/home/ubuntu/shopvivaliz-deploy/current/.env"))
 BASE_URL = "https://partner.shopeemobile.com/api/v2"
 
@@ -59,11 +61,13 @@ def update_env(new_token: str, new_refresh_token: str) -> None:
         else: lines.append(line)
     for key, value in replacements.items():
         if key not in found: lines.append(f"{key}={value}")
+    candidate_text = "\n".join(lines).rstrip("\n") + "\n"
+    assert_monotonic_text(content, candidate_text)
     original = target.stat(); mode = original.st_mode & 0o777
     descriptor, temporary_name = tempfile.mkstemp(prefix=".env.", dir=target.parent); temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write("\n".join(lines).rstrip("\n") + "\n"); handle.flush(); os.fsync(handle.fileno())
+            handle.write(candidate_text); handle.flush(); os.fsync(handle.fileno())
         os.chmod(temporary, mode)
         if os.name != "nt": os.chown(temporary, original.st_uid, original.st_gid)
         os.replace(temporary, target)
