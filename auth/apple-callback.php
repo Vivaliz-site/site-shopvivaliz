@@ -1,11 +1,27 @@
 <?php
 declare(strict_types=1);
 
-session_start();
-
+require_once __DIR__ . '/../includes/secure-session.php';
 require_once __DIR__ . '/../includes/social-auth.php';
 
 $error = '';
+
+function sv_apple_finish_login(array $user, string $redirect): never
+{
+    if (!session_regenerate_id(true)) {
+        throw new RuntimeException('Não foi possível renovar a sessão autenticada.');
+    }
+
+    sv_social_login_user($user);
+    $_SESSION['issued_at'] = time();
+
+    if (session_status() === PHP_SESSION_ACTIVE && !session_write_close()) {
+        throw new RuntimeException('Não foi possível persistir a sessão autenticada.');
+    }
+
+    header('Location: ' . sv_social_sanitize_redirect($redirect));
+    exit;
+}
 
 try {
     if (!sv_social_apple_is_configured()) {
@@ -77,9 +93,7 @@ try {
             throw new RuntimeException('Apple não reenviou o email. Remova a permissão do app no Apple ID e tente novamente.');
         }
 
-        sv_social_login_user($existingUser);
-        header('Location: ' . sv_social_sanitize_redirect((string)($request['redirect'] ?? '/')));
-        exit;
+        sv_apple_finish_login($existingUser, (string)($request['redirect'] ?? '/'));
     }
 
     $user = sv_social_upsert_user('apple', [
@@ -90,9 +104,7 @@ try {
         'avatar_url' => '',
     ]);
 
-    sv_social_login_user($user);
-    header('Location: ' . sv_social_sanitize_redirect((string)($request['redirect'] ?? '/')));
-    exit;
+    sv_apple_finish_login($user, (string)($request['redirect'] ?? '/'));
 } catch (Throwable $e) {
     $error = $e->getMessage();
     log_error('Apple OAuth callback failed', ['error' => $error]);
