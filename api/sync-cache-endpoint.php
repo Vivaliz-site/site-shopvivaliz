@@ -4,6 +4,8 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
 $root = dirname(__DIR__);
+require_once $root . '/includes/storefront-image-source.php';
+
 $storageDir = $root . '/storage';
 if (!is_dir($storageDir)) {
     @mkdir($storageDir, 0775, true);
@@ -53,13 +55,11 @@ try {
         $pdo = sv_pdo();
         if ($pdo instanceof PDO) {
             $sql = "SELECT sku,
-                           COALESCE(
-                               NULLIF(site_url, ''),
-                               NULLIF(local_url, ''),
-                               NULLIF(image_url, ''),
-                               NULLIF(original_url_olist, ''),
-                               NULLIF(original_url, '')
-                           ) AS resolved_url,
+                           site_url,
+                           local_url,
+                           image_url,
+                           original_url_olist,
+                           original_url,
                            position,
                            is_primary,
                            id
@@ -71,13 +71,8 @@ try {
             $stmt = $pdo->query($sql);
             while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                 $sku = trim((string)($row['sku'] ?? ''));
-                $imageUrl = trim((string)($row['resolved_url'] ?? ''));
+                $imageUrl = svsis_resolve_image_url($row, $root);
                 if ($sku === '' || $imageUrl === '') continue;
-
-                if (str_starts_with($imageUrl, '/')) {
-                    $imageUrl = 'https://shopvivaliz.com.br' . $imageUrl;
-                }
-                if (!preg_match('~^https?://~i', $imageUrl)) continue;
 
                 if (!isset($imagesBySku[$sku])) {
                     $imagesBySku[$sku] = [];
