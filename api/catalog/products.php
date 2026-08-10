@@ -171,6 +171,7 @@ function svcat_is_active(mixed $status): bool
 }
 
 require_once svcat_root() . '/includes/catalog-runtime.php';
+require_once svcat_root() . '/includes/catalog-image-enrich.php';
 
 $limit = min(200, max(1, (int)($_GET['limit'] ?? 48)));
 $page = max(1, (int)($_GET['page'] ?? 1));
@@ -215,6 +216,11 @@ $allProducts = array_map(static function (array $row): array {
         'ml_score' => null,
     ];
 }, $runtimeRows);
+
+// The ERP runtime is authoritative for commerce fields but occasionally omits
+// image URLs. Fill only missing images from the local mirror so paid/catalog
+// landings show the real product instead of a storefront-logo placeholder.
+$allProducts = svcie_enrich_images($allProducts);
 
 $allProducts = array_values(array_filter($allProducts, static fn(array $p): bool => svcat_is_active($p['status'] ?? null)));
 if ($availableOnly) {
