@@ -1,0 +1,48 @@
+name: Catalog Publication Schema Compatibility
+
+on:
+  pull_request:
+    paths:
+      - 'includes/catalog-publication-schema.php'
+      - 'tests/catalog-publication-schema-compat-test.php'
+      - '.github/workflows/catalog-publication-schema-compat.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'includes/catalog-publication-schema.php'
+      - 'tests/catalog-publication-schema-compat-test.php'
+      - '.github/workflows/catalog-publication-schema-compat.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-publication-schema-compat-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate publication schema compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout without persisted credentials
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+
+      - name: Verify MySQL-compatible idempotent indexes
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php -l includes/catalog-publication-schema.php
+          php -l tests/catalog-publication-schema-compat-test.php
+          php tests/catalog-publication-schema-compat-test.php
