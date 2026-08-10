@@ -12,6 +12,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from scripts.env_keyset_guard import assert_monotonic_text
+
 ENV_PATH = Path(os.environ.get("SHOPVIVALIZ_ENV_PATH", "c:/site-shopvivaliz/.env" if os.name == "nt" else "/home/ubuntu/shopvivaliz-deploy/current/.env"))
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 
@@ -29,7 +31,9 @@ def write_env(new_values: dict) -> bool:
     if not ENV_PATH.is_file():
         print(f"[!] Erro: .env nao encontrado em {ENV_PATH}"); return False
     target = ENV_PATH.resolve(strict=True)
-    with open(target, "r", encoding="utf-8", errors="ignore") as handle: lines = handle.readlines()
+    with open(target, "r", encoding="utf-8", errors="ignore") as handle:
+        original_text = handle.read()
+    lines = original_text.splitlines(keepends=True)
     updated_lines, pending = [], dict(new_values)
     for line in lines:
         stripped = line.strip()
@@ -40,11 +44,16 @@ def write_env(new_values: dict) -> bool:
         updated_lines.append(line)
     for key, value in pending.items(): updated_lines.append(f"{key}={value}\n")
 
+    candidate_text = "".join(updated_lines)
+    if candidate_text and not candidate_text.endswith("\n"):
+        candidate_text += "\n"
+    assert_monotonic_text(original_text, candidate_text)
+
     original = target.stat(); mode = original.st_mode & 0o777
     fd, temp_name = tempfile.mkstemp(prefix=".env.google.", dir=str(target.parent))
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-            handle.writelines(updated_lines); handle.flush(); os.fsync(handle.fileno())
+            handle.write(candidate_text); handle.flush(); os.fsync(handle.fileno())
         os.chmod(temp_name, mode)
         if os.name != "nt": os.chown(temp_name, original.st_uid, original.st_gid)
         os.replace(temp_name, target)
