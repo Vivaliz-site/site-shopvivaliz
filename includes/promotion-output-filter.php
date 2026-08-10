@@ -13,14 +13,17 @@ function sv_promotion_replace_once(string $html, string $pattern, string $replac
  * Garante que o primeiro banner da home nunca prometa um cupom diferente da
  * fonte de cupons ativos. A origem do banner ainda e estatica, mas a copy
  * promocional entregue ao cliente e fail-closed.
+ *
+ * @param array<string,mixed>|null|false $couponOverride false usa a fonte real;
+ * null forca o cenario sem cupom para teste deterministico.
  */
-function sv_promotion_filter_home_html(string $html): string
+function sv_promotion_filter_home_html(string $html, array|null|false $couponOverride = false): string
 {
     if ($html === '') {
         return $html;
     }
 
-    $coupon = sv_primary_active_coupon();
+    $coupon = $couponOverride === false ? sv_primary_active_coupon() : $couponOverride;
     if (is_array($coupon) && trim((string)($coupon['code'] ?? '')) !== '') {
         $code = htmlspecialchars((string)$coupon['code'], ENT_QUOTES, 'UTF-8');
         $offer = htmlspecialchars(sv_active_coupon_offer_text($coupon), ENT_QUOTES, 'UTF-8');
