@@ -2,13 +2,10 @@
 declare(strict_types=1);
 
 /**
- * Serve o CSS da home consolidado em UMA resposta HTTP, em vez de 16 tags
- * <link> separadas. Conteúdo e ordem são idênticos ao que cada arquivo
- * individual produzia antes — ver includes/asset-bundle-manifest.php para o
- * manifesto e a explicação de por que a ordem não pode mudar.
- *
- * Criado em 2026-08-05 para reduzir TTFB/peso da home (achado real: 19 CSS +
- * 11 JS separados, medidos via curl -w).
+ * Serve o CSS da home consolidado em UMA resposta HTTP, em vez de várias tags
+ * <link>. A ordem das regras continua exatamente a do manifesto; apenas
+ * comentários não essenciais e linhas vazias são removidos da resposta para
+ * reduzir bytes sem reescrever seletores, valores, calc(), strings ou URLs.
  */
 
 $projectRoot = dirname(__DIR__);
@@ -21,12 +18,26 @@ header('Content-Type: text/css; charset=utf-8');
 header('Cache-Control: public, max-age=31536000, immutable');
 header('ETag: "' . $version . '"');
 
-// Cache-buster automático: se o navegador já tem essa versão exata (mesmo
-// filemtime agregado), responde 304 sem reenviar os ~160KB.
 $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
 if ($ifNoneMatch !== '' && trim($ifNoneMatch, '"') === $version) {
     http_response_code(304);
     exit;
+}
+
+/**
+ * Compactação deliberadamente conservadora.
+ *
+ * - preserva comentários de licença iniciados por /*!;
+ * - não remove espaços dentro de declarações;
+ * - não toca em strings, URLs, calc() ou custom properties;
+ * - reduz apenas comentários CSS comuns e linhas totalmente vazias.
+ */
+function sv_home_css_compact(string $css): string
+{
+    $css = str_replace(["\r\n", "\r"], "\n", $css);
+    $css = preg_replace('~/\*(?!\!)[\s\S]*?\*/~', '', $css) ?? $css;
+    $css = preg_replace('/^[\t ]*\n/m', '', $css) ?? $css;
+    return trim($css) . "\n";
 }
 
 foreach ($files as $file) {
@@ -37,10 +48,8 @@ foreach ($files as $file) {
         continue;
     }
 
-    echo '/* ' . basename($file) . " */\n";
     $content = file_get_contents($file);
     if ($content !== false) {
-        echo $content;
+        echo sv_home_css_compact($content);
     }
-    echo "\n";
 }
