@@ -1,0 +1,52 @@
+name: InfinitePay Approved Order Flow Test
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'includes/infinitepay-gateway.php'
+      - 'includes/webhook-job-dispatcher.php'
+      - 'tests/infinitepay-approved-order-flow-test.php'
+      - '.github/workflows/infinitepay-approved-order-flow-test.yml'
+  pull_request:
+    paths:
+      - 'includes/infinitepay-gateway.php'
+      - 'includes/webhook-job-dispatcher.php'
+      - 'tests/infinitepay-approved-order-flow-test.php'
+      - '.github/workflows/infinitepay-approved-order-flow-test.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  infinitepay-flow:
+    name: Validate InfinitePay approved-order processing
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: PHP syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l includes/infinitepay-gateway.php
+          php -l includes/webhook-job-dispatcher.php
+          php -l tests/infinitepay-approved-order-flow-test.php
+
+      - name: Run regression test
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/infinitepay-approved-order-flow-test.php
