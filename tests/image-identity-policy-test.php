@@ -116,7 +116,10 @@ try {
     iip_assert(str_contains($contextPrompts['white'], 'Appearance cue:'), 'image prompt must include appearance cue');
     iip_assert(ai_studio_normalize_provider('gpt') === 'openai', 'gpt alias must normalize to openai');
     iip_assert(ai_studio_normalize_provider('gemini') === 'google', 'gemini alias must normalize to google');
-    iip_assert(ai_studio_provider_fallback_order('claude') === ['openai', 'google'], 'claude image fallback must choose an image engine');
+    $claudeFallback = ai_studio_provider_fallback_order('claude');
+    iip_assert(array_slice($claudeFallback, 0, 2) === ['openai', 'google'], 'claude fallback must prefer native image engines');
+    iip_assert(!in_array('claude', $claudeFallback, true), 'claude must not be selected as its own image engine');
+    iip_assert(array_diff($claudeFallback, ['openai', 'google', 'openrouter', 'groq']) === [], 'claude fallback must contain only supported image engines');
     iip_assert(str_contains(file_get_contents(__DIR__ . '/../admin/ai-image-studio/src/AiServices.php'), 'ai_studio_resolve_image_engine'), 'image engine resolver must exist');
 
     $tiktokProfile = ai_studio_channel_profile('tiktok');
