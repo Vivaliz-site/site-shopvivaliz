@@ -84,6 +84,27 @@ function svcp_add_index_if_missing(PDO $db, string $table, string $index, array 
     }
 }
 
+function svcp_widen_provider_column(PDO $db, string $table): void
+{
+    if (!svcp_column_exists($db, $table, 'provider_used')) {
+        return;
+    }
+
+    $type = svcp_column_type($db, $table, 'provider_used');
+    $length = 0;
+    if (preg_match('/^varchar\((\d+)\)$/', $type, $matches) === 1) {
+        $length = (int)$matches[1];
+    }
+
+    // Os fluxos atuais podem registrar openrouter, groq e nomes compostos de
+    // fallback. ENUMs legados ou VARCHARs curtos causam Data truncated e podem
+    // encerrar a pagina do Admin antes de ela renderizar a resposta.
+    if ($length < 64) {
+        $tableSql = svcp_sql_identifier($table);
+        $db->exec("ALTER TABLE {$tableSql} MODIFY `provider_used` VARCHAR(64) NOT NULL DEFAULT ''");
+    }
+}
+
 function svcp_ensure_schema(PDO $db): void
 {
     static $done = false;
@@ -192,6 +213,7 @@ SQL);
         if (!str_starts_with($statusType, 'varchar(')) {
             $db->exec("ALTER TABLE `catalog_optimizations_staging` MODIFY `status` VARCHAR(32) NOT NULL DEFAULT 'pending'");
         }
+        svcp_widen_provider_column($db, 'catalog_optimizations_staging');
         svcp_add_column_if_missing($db, 'catalog_optimizations_staging', 'publication_summary_json', 'LONGTEXT NULL AFTER `error_message`');
         svcp_add_column_if_missing($db, 'catalog_optimizations_staging', 'published_at', 'DATETIME NULL AFTER `publication_summary_json`');
     }
@@ -201,6 +223,7 @@ SQL);
         if (!str_starts_with($statusType, 'varchar(')) {
             $db->exec("ALTER TABLE `product_images_staging` MODIFY `status` VARCHAR(32) NOT NULL DEFAULT 'pending'");
         }
+        svcp_widen_provider_column($db, 'product_images_staging');
         svcp_add_column_if_missing($db, 'product_images_staging', 'target_channels_json', 'LONGTEXT NULL AFTER `error_message`');
         svcp_add_column_if_missing($db, 'product_images_staging', 'publication_summary_json', 'LONGTEXT NULL AFTER `target_channels_json`');
         svcp_add_column_if_missing($db, 'product_images_staging', 'published_at', 'DATETIME NULL AFTER `publication_summary_json`');
