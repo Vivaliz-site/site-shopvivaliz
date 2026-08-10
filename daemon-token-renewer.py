@@ -23,6 +23,19 @@ ENV_PATH = Path(
     )
 )
 TOKEN_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
+SAFE_OAUTH_ERROR_CODES = frozenset(
+    {
+        "invalid_request",
+        "invalid_client",
+        "invalid_grant",
+        "unauthorized_client",
+        "unsupported_grant_type",
+        "invalid_scope",
+        "temporarily_unavailable",
+        "server_error",
+        "access_denied",
+    }
+)
 
 
 def get_config() -> dict[str, str]:
@@ -36,6 +49,23 @@ def get_config() -> dict[str, str]:
         key, value = line.split("=", 1)
         config[key.strip()] = value.strip().strip('"').strip("'")
     return config
+
+
+def safe_oauth_error_code(exc: urllib.error.HTTPError) -> str:
+    """Return only a whitelisted OAuth error class from an HTTP error body.
+
+    Error descriptions and arbitrary provider payload fields are deliberately
+    ignored because they are not guaranteed to be free of credential material.
+    """
+    try:
+        raw = exc.read(4096)
+        data = json.loads(raw.decode("utf-8", errors="replace"))
+    except (OSError, UnicodeError, json.JSONDecodeError, AttributeError, TypeError):
+        return ""
+    candidate = data.get("error") if isinstance(data, dict) else None
+    if isinstance(candidate, str) and candidate in SAFE_OAUTH_ERROR_CODES:
+        return candidate
+    return ""
 
 
 def renew_token(config: dict[str, str]) -> dict[str, Any] | None:
@@ -60,6 +90,12 @@ def renew_token(config: dict[str, str]) -> dict[str, Any] | None:
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             result = json.loads(response.read())
+    except urllib.error.HTTPError as exc:
+        error_code = safe_oauth_error_code(exc)
+        status = int(getattr(exc, "code", 0) or 0)
+        suffix = f" oauth_error={error_code}" if error_code else ""
+        print(f"[!] Renovação Olist recusada: HTTP {status}{suffix}")
+        return None
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
         print(f"[!] Renovação Olist falhou: {type(exc).__name__}")
         return None
