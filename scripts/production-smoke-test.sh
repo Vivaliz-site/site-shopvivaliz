@@ -191,14 +191,33 @@ check_http cart "$base/carrinho" '200,302'
 check_http checkout "$base/checkout" '200,302'
 check_http css "$base/css/shopvivaliz-core-consolidated.css" '200'
 
-admin_status="$(curl --silent --show-error --output "$tmpdir/admin.body" --max-time 20 --user-agent "$ua" --write-out '%{http_code}' "$base/admin" || true)"
-if [[ "$admin_status" == '200' ]]; then
-  grep -Eqi '(login|senha|password|entrar)' "$tmpdir/admin.body"
-elif [[ ",$admin_status," != *,301,* && ",$admin_status," != *,302,* && ",$admin_status," != *,303,* && ",$admin_status," != *,401,* && ",$admin_status," != *,403,* ]]; then
-  echo "FAIL admin behavior: HTTP $admin_status" >&2
+# Follow the complete unauthenticated admin redirect chain. The previous smoke
+# accepted the first 301 from /admin and therefore could not detect a cached or
+# server-side /admin/ -> /admin/ loop. A cache-busting query also prevents an
+# intermediary cache from masking the current routing behavior.
+admin_probe="$base/admin/?smoke=${expected_sha:0:12}"
+admin_meta="$(curl --location --max-redirs 5 --silent --show-error \
+  --output "$tmpdir/admin.body" --max-time 20 --user-agent "$ua" \
+  --write-out $'%{http_code}\n%{url_effective}\n%{num_redirects}' \
+  "$admin_probe" || true)"
+admin_status="$(printf '%s\n' "$admin_meta" | sed -n '1p')"
+admin_effective="$(printf '%s\n' "$admin_meta" | sed -n '2p')"
+admin_redirects="$(printf '%s\n' "$admin_meta" | sed -n '3p')"
+
+if [[ "$admin_status" != '200' ]]; then
+  echo "FAIL admin redirect chain: final HTTP ${admin_status:-unknown}; effective=${admin_effective:-unknown}; redirects=${admin_redirects:-unknown}" >&2
   exit 1
 fi
-echo "OK admin protected behavior ($admin_status)"
+if [[ "$admin_effective" != "$base/auth/login.php"* ]]; then
+  echo "FAIL admin redirect chain: unauthenticated request did not finish at login; effective=$admin_effective" >&2
+  exit 1
+fi
+if [[ ! "$admin_redirects" =~ ^[0-9]+$ ]] || (( admin_redirects < 1 || admin_redirects > 5 )); then
+  echo "FAIL admin redirect chain: invalid redirect count ${admin_redirects:-unknown}" >&2
+  exit 1
+fi
+grep -Eqi '(login|senha|password|entrar)' "$tmpdir/admin.body"
+echo "OK admin redirect chain: final=200 redirects=$admin_redirects effective=$admin_effective"
 
 admin_guard_cli="$(/usr/bin/php "$current_root/scripts/admin-guard-production-smoke.php" 2>&1 || true)"
 if [[ "$admin_guard_cli" != 'ADMIN_GUARD_OK' ]]; then
