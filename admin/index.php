@@ -252,7 +252,7 @@ $codename = (string)($version['codename'] ?? '');
     })();
     </script>
     <script src="/autodev/client.js"></script>
-    <script src="/js/catalog.js"></script>
+    <script src="/js/catalog.js?v=20260810-admin-url-fix-1"></script>
     <script src="/js/admin-dashboard.js"></script>
 </body>
 </html>
