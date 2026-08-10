@@ -1,19 +1,19 @@
 {
   "status": "PRODUCTION_UPDATED",
-  "sha": "358562adade7105e866c08bfaee2182ea14fce99",
-  "workflow_run_id": "31423824800",
-  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31423824800",
+  "sha": "9569b47fc81255611078e9c5780956f84dcf81c7",
+  "workflow_run_id": "31424463572",
+  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31424463572",
   "jobs": {
     "validate": "success",
     "deploy": "success",
     "smoke_test": "success"
   },
   "results": [
-    "OK Oracle canonical ref: remote=fd19727479cc77ddb4e5c744c9747fcc1a18a879 deployed=358562adade7105e866c08bfaee2182ea14fce99",
+    "OK Oracle canonical ref: remote=8d5a8b4228f7cda8c0444a6d3b00fae50f31bebf deployed=9569b47fc81255611078e9c5780956f84dcf81c7",
     "OK Oracle repository sync cron installed",
-    "OK release SHA marker: 358562adade7105e866c08bfaee2182ea14fce99",
+    "OK release SHA marker: 9569b47fc81255611078e9c5780956f84dcf81c7",
     "OK version: https://shopvivaliz.com.br/api/health/version.php (200)",
-    "OK public version endpoint: 358562adade7105e866c08bfaee2182ea14fce99",
+    "OK public version endpoint: 9569b47fc81255611078e9c5780956f84dcf81c7",
     "OK homepage: https://shopvivaliz.com.br/ (200)",
     "OK public homepage HTML contract",
     "OK mobile responsive header contract",
@@ -26,7 +26,7 @@
     "OK cart: https://shopvivaliz.com.br/carrinho (200)",
     "OK checkout: https://shopvivaliz.com.br/checkout (200)",
     "OK css: https://shopvivaliz.com.br/css/shopvivaliz-core-consolidated.css (200)",
-    "OK admin redirect chain: final=200 redirects=1 effective=https://shopvivaliz.com.br/auth/login.php?redirect=%2Fadmin%2F%3Fsmoke%3D358562adade7",
+    "OK admin redirect chain: final=200 redirects=1 effective=https://shopvivaliz.com.br/auth/login.php?redirect=%2Fadmin%2F%3Fsmoke%3D9569b47fc812",
     "OK authenticated admin guard database fallback",
     "OK liz_health: https://shopvivaliz.com.br/api/liz-intelligent.php?health=1 (200)",
     "OK Liz health payload",
@@ -58,5 +58,5 @@
     "OK security header: x-content-type-options",
     "OK security header: content-security-policy"
   ],
-  "verified_at": "2026-08-10T19:28:46.027183+00:00"
+  "verified_at": "2026-08-10T19:34:13.131105+00:00"
 }
