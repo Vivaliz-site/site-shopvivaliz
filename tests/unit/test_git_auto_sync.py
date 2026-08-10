@@ -111,8 +111,15 @@ class SanitizedHistorySyncTests(unittest.TestCase):
         SYNC.REPO_DIR = self.local
         SYNC.STATUS_FILE = self.local / "logs" / "tri-environment-sync.json"
         SYNC.DEFAULT_BRANCH = "main"
+        self.original_check_local_health = SYNC.check_local_health
+        SYNC.check_local_health = lambda: {
+            "ok": True,
+            "status": 200,
+            "data": {"health_score_percent": 100.0, "queue": None},
+        }
 
     def tearDown(self) -> None:
+        SYNC.check_local_health = self.original_check_local_health
         try:
             self.tmp.cleanup()
         except PermissionError:
@@ -138,6 +145,7 @@ class SanitizedHistorySyncTests(unittest.TestCase):
             "realigned-to-verified-sanitized-history",
         )
         self.assertEqual(report["sanitized_root_sha"], self.clean_root)
+        self.assertEqual(report["health"]["status"], "ok")
 
     def test_blocks_unrelated_diverged_history_without_marker(self) -> None:
         git(self.remote_work, "switch", "--orphan", "unsafe-history")
@@ -180,6 +188,21 @@ class SanitizedHistorySyncTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertEqual(git(self.local, "rev-parse", "HEAD").stdout.strip(), self.remote_tip)
         self.assertEqual(self.status()["action"], "fast-forward-to-canonical")
+
+    def test_health_gate_blocks_before_sync(self) -> None:
+        SYNC.check_local_health = lambda: {
+            "ok": False,
+            "error": "test runtime unavailable",
+        }
+
+        result = SYNC.main()
+
+        self.assertEqual(result, 5)
+        self.assertEqual(git(self.local, "rev-parse", "HEAD").stdout.strip(), self.old_sha)
+        report = self.status()
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["action"], "blocked-unhealthy-local-runtime")
+        self.assertEqual(report["health"]["status"], "failed")
 
     def test_oracle_wrapper_does_not_stage_commit_or_push(self) -> None:
         text = (ROOT / "scripts" / "auto-sync-oracle.sh").read_text(encoding="utf-8")
