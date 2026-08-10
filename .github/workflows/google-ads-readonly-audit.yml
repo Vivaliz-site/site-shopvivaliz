@@ -1,0 +1,73 @@
+name: Google Ads Read-only Audit
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/google-ads-readonly-audit.yml'
+      - 'scripts/google_ads_review_campaigns.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUNBUFFERED: '1'
+
+jobs:
+  review:
+    name: Review Google Ads without mutations
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: Production
+    env:
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      GOOGLE_ADS_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
+      GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
+      GOOGLE_ADS_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
+      GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Check credential presence without revealing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          for key in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_ADS_CUSTOMER_ID GOOGLE_ADS_DEVELOPER_TOKEN GOOGLE_ADS_REFRESH_TOKEN; do
+            if [ -z "${!key:-}" ]; then missing+=("$key"); fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '::error::Google Ads API secrets missing: %s\n' "$(IFS=,; echo "${missing[*]}")"
+            exit 1
+          fi
+          echo 'Google Ads API credential names are present; values remain masked.'
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Google Ads SDK
+        shell: bash
+        run: python -m pip install --disable-pip-version-check google-ads
+
+      - name: Run sanitized campaign review
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/google_ads_review_campaigns.py | tee google-ads-readonly-review.txt
+
+      - name: Upload sanitized review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: google-ads-readonly-review-${{ github.run_id }}
+          path: google-ads-readonly-review.txt
+          if-no-files-found: ignore
+          retention-days: 7
