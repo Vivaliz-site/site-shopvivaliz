@@ -148,7 +148,7 @@ $queuedId = sv_webhook_enqueue('infinitepay', [
     'payload' => $payload,
     'received_at' => date(DATE_ATOM),
     'request_id' => svip_request_header('X-Request-Id'),
-    'token' => svip_webhook_provided_token(),
+    'auth_validated' => true,
 ], 45);
 error_log('[InfinitePay] webhook queued id=' . $queuedId);
 svip_webhook_response(200, 'queued');

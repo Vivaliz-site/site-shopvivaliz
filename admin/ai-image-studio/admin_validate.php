@@ -56,8 +56,51 @@ function ais_intended_channel(array $row): string
     return count($targets) === 1 ? strtolower(trim($targets[0])) : '';
 }
 
+function ais_provider_health_snapshot(): array
+{
+    $path = dirname(__DIR__, 3) . '/storage/ai-provider-health.json';
+    if (!is_file($path) || !is_readable($path)) {
+        return [];
+    }
+    $raw = file_get_contents($path);
+    if (!is_string($raw) || trim($raw) === '') {
+        return [];
+    }
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+    $rows = [];
+    foreach ($decoded as $provider => $expiry) {
+        $rows[(string)$provider] = is_numeric($expiry) ? (int)$expiry : 0;
+    }
+    return $rows;
+}
+
+function ais_provider_audit_tail(int $limit = 12): array
+{
+    $path = dirname(__DIR__, 3) . '/storage/ai-provider-audit.jsonl';
+    if (!is_file($path) || !is_readable($path)) {
+        return [];
+    }
+    $lines = @file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!is_array($lines) || $lines === []) {
+        return [];
+    }
+    $events = [];
+    foreach (array_slice($lines, max(0, count($lines) - $limit)) as $line) {
+        $decoded = json_decode((string)$line, true);
+        if (is_array($decoded)) {
+            $events[] = $decoded;
+        }
+    }
+    return array_reverse($events);
+}
+
 $flashMessage = null;
 $flashError = null;
+$providerHealth = ais_provider_health_snapshot();
+$providerAuditTail = ais_provider_audit_tail(14);
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (!sv_csrf_valid('ai-image-validation', $_POST['csrf_token'] ?? null)) {
         $flashError = 'A sessao expirou. Recarregue a pagina.';
@@ -114,6 +157,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     $claudeScene = trim((string)($claudePrompts[$imageType] ?? ''));
                     if ($claudeScene !== '') $prompt = $fidelityGuard . ' Additional scene guidance optimized by Claude: ' . $claudeScene;
                     $providerUsed = 'claude_optimized';
+                }
+
+                if (isset($providerHealth[$imageEngine]) && (int)$providerHealth[$imageEngine] > time()) {
+                    $cooldownUntil = date('Y-m-d H:i:s', (int)$providerHealth[$imageEngine]);
+                    $flashError = 'O provedor escolhido está em cooldown até ' . $cooldownUntil . '. Tente outra IA disponível.';
+                    throw new RuntimeException($flashError);
                 }
 
                 if ($imageEngine === 'google') {
@@ -188,6 +237,8 @@ $csrf = sv_csrf_token('ai-image-validation');
 </style></head><body><main class="wrap"><div><a href="/admin/menu-completo.php">← Voltar ao Admin</a></div><div class="top"><h1>Imagens — auditoria por marketplace</h1><a href="/admin/ai-image-studio/admin_dashboard.php">Dashboard de geracao</a></div>
 <div class="note">O marketplace escolhido na geracao e imutavel durante a aprovacao. Para outro canal, gere/regere uma versao especifica com as regras daquele marketplace. Imagens legadas sem destino persistido nao podem ser publicadas sem regeneracao.</div>
 <?php if($flashMessage):?><div class="alert ok"><?=ais_v_h($flashMessage)?></div><?php endif;?><?php if($flashError):?><div class="alert err"><?=ais_v_h($flashError)?></div><?php endif;?><?php if($items===[]):?><div class="alert ok">Nenhuma imagem aguardando decisao.</div><?php endif;?>
+<?php if($providerHealth !== []): ?><div class="alert warn"><strong>Estado dos provedores:</strong> <?php $parts=[];foreach($providerHealth as $name=>$expiry){$parts[] = ais_v_h($name) . ' → ' . ($expiry > time() ? 'cooldown até ' . ais_v_h(date('Y-m-d H:i:s', $expiry)) : 'livre');} echo implode(' · ', $parts); ?></div><?php endif; ?>
+<?php if($providerAuditTail !== []): ?><details class="card" style="margin:14px 0"><summary><strong>Últimos eventos de IA</strong></summary><div class="grid" style="margin-top:12px"><?php foreach($providerAuditTail as $event): ?><div class="card"><div class="meta"><strong><?=ais_v_h((string)($event['provider'] ?? ''))?></strong> · <?=ais_v_h((string)($event['status'] ?? ''))?> · <?=ais_v_h(date('Y-m-d H:i:s', (int)($event['ts'] ?? 0)))?></div><div><?=ais_v_h((string)($event['message'] ?? ''))?></div><div class="meta">SKU <?=ais_v_h((string)($event['sku'] ?? ''))?> · tipo <?=ais_v_h((string)($event['image_type'] ?? $event['variant'] ?? ''))?></div></div><?php endforeach; ?></div></details><?php endif; ?>
 <section class="grid"><?php foreach($items as $item):$intended=ais_intended_channel($item);$legacy=$intended==='';$defaultChannel=$legacy?'site':$intended;$profile=ai_studio_channel_profile($defaultChannel);$generatedFile=ais_staging_file((string)$item['local_path']);$imgInfo=is_string($generatedFile)&&is_file($generatedFile)?@getimagesize($generatedFile):false;$w=is_array($imgInfo)?(int)$imgInfo[0]:0;$h=is_array($imgInfo)?(int)$imgInfo[1]:0;$recommended=(int)($profile['recommended_side']??1000);$meetsRec=$w>=$recommended&&$h>=$recommended;?>
 <article class="card"><div class="top"><h2><?=ais_v_h((string)($item['product_name']?:'Produto #'.$item['product_id']))?></h2><span class="badge"><?=$legacy?'SEM DESTINO':ais_v_h((string)($channelLabels[$defaultChannel]??$defaultChannel))?></span></div><div class="meta">SKU <?=ais_v_h((string)($item['product_sku']??''))?> · tipo <?=ais_v_h((string)$item['image_type'])?> · provedor <?=ais_v_h((string)$item['provider_used'])?> · <span class="status"><?=ais_v_h((string)$item['status'])?></span></div>
 <?php if($legacy):?><div class="alert warn"><strong>Publicacao bloqueada:</strong> esta imagem foi gerada antes da separacao por marketplace. Escolha um destino abaixo e use <strong>Regenerar</strong>; somente a nova versao podera ser autorizada.</div><?php endif;?>

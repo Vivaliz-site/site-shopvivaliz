@@ -8,7 +8,7 @@ declare(strict_types=1);
 header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
-header('Cache-Control: no-store');
+header('Cache-Control: public, max-age=60, stale-while-revalidate=300');
 
 function svcat_search_normalize(string $value): string
 {
@@ -31,6 +31,57 @@ function svcat_ml_key_normalize(string $value): string
 }
 
 function svcat_root(): string { return dirname(__DIR__, 2); }
+function svcat_response_cache_path(string $key): string
+{
+    $dir = svcat_root() . '/storage/cache/catalog-api';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0775, true);
+    }
+    return $dir . '/' . hash('sha256', $key) . '.json';
+}
+
+function svcat_cache_signature(): string
+{
+    $root = svcat_root();
+    $paths = [
+        $root . '/storage/products-cache-ativos.json',
+        $root . '/storage/cache/products-cache-ativos.json',
+        $root . '/api/catalog/fallback-products.json',
+        $root . '/storage/ml/product-scores.json',
+    ];
+    $parts = [];
+    foreach ($paths as $path) {
+        $parts[] = $path . ':' . (is_file($path) ? ((string)filemtime($path) . ':' . (string)filesize($path)) : 'missing');
+    }
+    return implode('|', $parts);
+}
+
+function svcat_try_emit_cached(string $cachePath, int $ttl = 60): void
+{
+    if (!is_file($cachePath) || (time() - (int)filemtime($cachePath)) > $ttl) {
+        return;
+    }
+    $body = file_get_contents($cachePath);
+    if (!is_string($body) || $body === '') {
+        return;
+    }
+    header('X-ShopVivaliz-Cache: HIT');
+    echo $body;
+    exit;
+}
+
+function svcat_store_response_cache(string $cachePath, array $payload): void
+{
+    $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+    if (!is_string($json)) {
+        return;
+    }
+    @file_put_contents($cachePath, $json, LOCK_EX);
+    header('X-ShopVivaliz-Cache: MISS');
+    echo $json;
+    exit;
+}
+
 function svcat_ml_scores(): array
 {
     $path = svcat_root() . '/storage/ml/product-scores.json';
@@ -75,6 +126,18 @@ $limit = min(200, max(1, (int)($_GET['limit'] ?? 48)));
 $page = max(1, (int)($_GET['page'] ?? 1));
 $q = trim((string)($_GET['q'] ?? ''));
 $sort = trim((string)($_GET['ordem'] ?? $_GET['sort'] ?? 'relevance'));
+$cacheKey = http_build_query([
+    'limit' => $limit,
+    'page' => $page,
+    'q' => $q,
+    'sort' => $sort,
+    'category' => trim((string)($_GET['categoria'] ?? $_GET['category'] ?? '')),
+    'sig' => svcat_cache_signature(),
+]);
+$cachePath = svcat_response_cache_path($cacheKey);
+if (($_GET['no_cache'] ?? '') !== '1') {
+    svcat_try_emit_cached($cachePath);
+}
 $mlScores = svcat_ml_scores();
 
 $runtimeRows = array_values(array_filter(svcr_products(), 'is_array'));
@@ -175,7 +238,7 @@ foreach ($allProducts as $row) {
 }
 arsort($categories);
 
-svcat_json(200, [
+$payload = [
     'ok' => true,
     'source' => 'catalog_runtime',
     'count' => count($products),
@@ -186,4 +249,6 @@ svcat_json(200, [
     'sort' => $sort !== '' ? $sort : 'relevance',
     'products' => $products,
     'categories' => $categories,
-]);
+];
+
+svcat_store_response_cache($cachePath, $payload);

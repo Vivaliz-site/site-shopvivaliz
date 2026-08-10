@@ -3,10 +3,12 @@
   "private": true,
   "scripts": {
     "audit:tree": "python scripts/audit-static-tree.py --dry-run",
-    "audit:tree:fix": "python scripts/audit-static-tree.py",
+    "audit:tree:json": "python scripts/audit-static-tree.py --dry-run --json",
+    "audit:tree:quarantine": "python scripts/audit-static-tree.py --delete",
     "build:assets": "node scripts/build-assets.mjs",
     "dev:queue": "php -S 127.0.0.1:8088 -t .",
     "worker": "php scripts/queue-worker.php",
+    "queue:smoke": "php scripts/queue-smoke.php",
     "qa:browser": "node scripts/browser-qa-validate.mjs"
   },
   "dependencies": {
