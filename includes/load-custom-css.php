@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/asset-manifest.php';
+
 /**
  * Resolve a página PHP realmente executada, inclusive quando Apache/Nginx usa
  * uma rota amigável como /produto/<slug>. PHP_SELF pode conter o slug nessas
@@ -71,6 +73,11 @@ function sv_emit_prepaint_page_state(string $pageName): void
     echo "    </script>\n";
 }
 
+function sv_public_asset_attr(string $path): string
+{
+    return htmlspecialchars(sv_asset_url($path), ENT_QUOTES, 'UTF-8');
+}
+
 /**
  * Carrega CSS versionado da aplicação e CSS customizado do admin para a página atual.
  * Inclua isto no <head> de todas as páginas públicas suportadas.
@@ -106,9 +113,9 @@ function load_custom_css(): void
     // (é comportamento, não estilo, e roda em carrinho/checkout também).
     if (in_array($pageName, ['index', 'carrinho', 'checkout'], true)) {
         if ($pageName !== 'index') {
-            echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v4.css?v=2026-08-02-1\">\n";
+            echo "    <link rel=\"stylesheet\" href=\"" . sv_public_asset_attr('/css/visual-polish-v4.css') . "\">\n";
         }
-        echo "    <script src=\"/js/visual-polish-v4.js?v=2026-08-02-1\" defer></script>\n";
+        echo "    <script src=\"" . sv_public_asset_attr('/js/visual-polish-v4.js') . "\" defer></script>\n";
     }
 
     $loadVisualPolishV5 = in_array($pageName, ['index', 'catalogo', 'produto', 'carrinho', 'checkout'], true);
@@ -132,13 +139,13 @@ function load_custom_css(): void
 
     // V5 permanece restrita às páginas-alvo originais.
     if ($loadVisualPolishV5) {
-        echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v5.css?v=2026-07-31-2\">\n";
+        echo "    <link rel=\"stylesheet\" href=\"" . sv_public_asset_attr('/css/visual-polish-v5.css') . "\">\n";
     }
 
     // V6 contém somente seletores públicos e correções fail-safe de imagem/título.
     // É emitida sempre que este loader público é incluído, eliminando dependência
     // de variáveis de rewrite para rotas amigáveis como /produto/<slug>.
-    echo "    <link rel=\"stylesheet\" href=\"/css/visual-polish-v6.css?v=2026-07-31-2\">\n";
+    echo "    <link rel=\"stylesheet\" href=\"" . sv_public_asset_attr('/css/visual-polish-v6.css') . "\">\n";
     $visualPolishHotfixCss = $root . '/css/visual-polish-v6-hotfix.css';
     if (is_file($visualPolishHotfixCss) && is_readable($visualPolishHotfixCss)) {
         $visualPolishHotfixVersion = (string) filemtime($visualPolishHotfixCss);
