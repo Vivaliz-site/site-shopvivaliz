@@ -74,6 +74,18 @@ class ConfigureErpOauthStaticRuntimeTests(unittest.TestCase):
             if os.name != "nt":
                 self.assertEqual(target.stat().st_mode & 0o777, 0o640)
 
+    def test_accepts_short_opaque_provider_secret(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / ".env"
+            target.write_text("OLIST_REFRESH_TOKEN=active-refresh\n", encoding="utf-8")
+
+            result = run_script(target, payload({"OLIST_CLIENT_SECRET": "a1b2c3"}))
+
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            updated = target.read_text(encoding="utf-8")
+            self.assertIn("OLIST_CLIENT_SECRET=a1b2c3", updated)
+            self.assertIn("OLIST_REFRESH_TOKEN=active-refresh", updated)
+
     def test_rejects_incomplete_olist_pair_without_modifying_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / ".env"
