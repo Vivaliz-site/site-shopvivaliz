@@ -114,7 +114,7 @@ jobs:
             if [[ "$merge_clean" -eq 1 ]]; then
               after_sha="$(git rev-parse HEAD)"
               if [[ "$after_sha" != "$before_sha" ]]; then
-                "$GITHUB_WORKSPACE/trusted/scripts/publish_pr_branch_update.sh" "$head_ref" origin
+                bash "$GITHUB_WORKSPACE/trusted/scripts/publish_pr_branch_update.sh" "$head_ref" origin
                 echo "pr_${pr}_main_sync_pushed=true"
               else
                 echo "pr_${pr}_already_up_to_date=true"
@@ -154,7 +154,7 @@ jobs:
             git diff --cached --check
             git commit -m "chore: auto-resolve PR #${pr} conflicts with main via Gemini"
             healed_sha="$(git rev-parse HEAD)"
-            "$GITHUB_WORKSPACE/trusted/scripts/publish_pr_branch_update.sh" "$head_ref" origin
+            bash "$GITHUB_WORKSPACE/trusted/scripts/publish_pr_branch_update.sh" "$head_ref" origin
             echo "pr_${pr}_healed_sha=${healed_sha}"
             echo "pr_${pr}_revalidation_triggered=true"
 
