@@ -62,15 +62,15 @@ while (true) {
         break;
     }
 
-    // Filtrar apenas ATIVOS (situacao == 'A') e normalizar estoque
+    // Filtrar apenas ATIVOS (situacao == 'A'). NAO preencher estoque_disponivel
+    // aqui: o campo estoque.quantidade da listagem em lote (GET /produtos) nao
+    // e confiavel (fica zerado/desatualizado, especialmente em kits) -- a
+    // fonte correta e GET /estoque/{id} (campo disponivel), buscada depois por
+    // olist/fetch-estoque-v3.php, que só preenche quando a chave ainda não
+    // existe (ver docs/TINY-ERP-API-V3.md, secao "GET /produtos/{id} vs GET
+    // /estoque/{id}"). Se setarmos aqui, o enriquecimento nunca roda.
     foreach ($data['itens'] as $item) {
         if ($item['situacao'] === 'A') {
-            // Extrair quantidade disponível do campo estoque.quantidade
-            if (isset($item['estoque']['quantidade'])) {
-                $item['estoque_disponivel'] = $item['estoque']['quantidade'];
-            } else {
-                $item['estoque_disponivel'] = 0;
-            }
             $all_products[] = $item;
         }
     }
