@@ -53,16 +53,21 @@ function get_product_estoque_v3(string $id_produto, string $token): ?int
 {
     $url = "https://api.tiny.com.br/public-api/v3/estoque/{$id_produto}";
 
-    $context = stream_context_create([
-        'http' => [
-            'method'  => 'GET',
-            'header'  => "Authorization: Bearer {$token}\r\nAccept: application/json\r\n",
-            'timeout' => 15,
-        ],
-    ]);
+    // file_get_contents()/stream_context_create() e bloqueado com 401 pela
+    // Cloudflare do Tiny mesmo com token valido (confirmado em 2026-08-11 --
+    // ver olist/sync-on-webhook.php e docs/AGENTS.md). cURL com os mesmos
+    // headers funciona normalmente.
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$token}", "Accept: application/json"]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+    $response = curl_exec($ch);
+    $httpStatus = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
 
-    $response = @file_get_contents($url, false, $context);
-    if (!$response) {
+    if ($response === false || $httpStatus < 200 || $httpStatus >= 300) {
         return null;
     }
 
