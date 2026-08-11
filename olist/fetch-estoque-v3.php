@@ -23,12 +23,16 @@ function fev3_env(string ...$keys): string
                 if ($k !== '' && getenv($k) === false) { putenv("$k=$v"); $_ENV[$k] = $v; }
             }
         }
+        // Só preenche o que faltou no .env -- storage/private/tokens.json e um
+        // snapshot que pode ficar desatualizado (visto em 2026-08-11: token
+        // la dentro expirado ha 5h, causando 401 por sobrescrever o token
+        // valido do .env, que o renovador auto-atualiza a cada 3h).
         $tokensFile = dirname(__DIR__) . '/storage/private/tokens.json';
         if (is_file($tokensFile)) {
             $tokens = json_decode((string)file_get_contents($tokensFile), true);
             if (is_array($tokens)) {
                 foreach ($tokens as $k => $v) {
-                    if (is_string($v) && $v !== '') { putenv("$k=$v"); $_ENV[$k] = $v; }
+                    if (is_string($v) && $v !== '' && getenv($k) === false) { putenv("$k=$v"); $_ENV[$k] = $v; }
                 }
             }
         }
