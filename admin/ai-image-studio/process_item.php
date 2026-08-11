@@ -105,7 +105,7 @@ function ai_studio_build_image_client(string $provider, ?string $modelOverride, 
         'google' => new AiStudioGoogleImageEditClient(ai_studio_secret_pool('AI_STUDIO_GOOGLE_IMAGEN_API_KEY', ['AI_STUDIO_GOOGLE_IMAGEN_API_KEY', 'GOOGLE_IMAGEN_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_GEMINI_API_KEY']), $modelOverride !== null && trim($modelOverride) !== '' ? trim($modelOverride) : $googleModel),
         'openrouter' => new AiStudioOpenRouterImageClient(
             ai_studio_secret_pool('AI_STUDIO_OPENROUTER_API_KEY', ['AI_STUDIO_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY']),
-            $modelOverride !== null && trim($modelOverride) !== '' ? trim($modelOverride) : ($openRouterModel !== '' ? $openRouterModel : 'openai/gpt-image-1'),
+            $modelOverride !== null && trim($modelOverride) !== '' ? trim($modelOverride) : ($openRouterModel !== '' ? $openRouterModel : 'openai/gpt-image-1-mini'),
             defined('AI_STUDIO_OPENROUTER_API_BASE_URL') ? AI_STUDIO_OPENROUTER_API_BASE_URL : 'https://openrouter.ai/api/v1',
             [
                 'HTTP-Referer' => defined('AI_STUDIO_OPENROUTER_HTTP_REFERER') ? AI_STUDIO_OPENROUTER_HTTP_REFERER : 'https://shopvivaliz.com.br',
