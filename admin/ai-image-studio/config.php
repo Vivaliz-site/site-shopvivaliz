@@ -52,7 +52,7 @@ define('AI_STUDIO_OPENROUTER_APP_TITLE', (string)(getenv('OPENROUTER_APP_TITLE')
 
 define('AI_STUDIO_OPENAI_IMAGE_MODEL', (string)(getenv('OPENAI_IMAGE_MODEL') ?: 'gpt-image-1'));
 define('AI_STUDIO_GOOGLE_IMAGEN_MODEL', (string)(getenv('GOOGLE_IMAGEN_MODEL') ?: 'gemini-2.5-flash-image'));
-define('AI_STUDIO_CLAUDE_MODEL', (string)(getenv('CLAUDE_MODEL') ?: 'claude-sonnet-4-20250514'));
+define('AI_STUDIO_CLAUDE_MODEL', (string)(getenv('CLAUDE_MODEL') ?: 'claude-haiku-4-5-20251001'));
 
 define('AI_STUDIO_STORAGE_DIR', __DIR__ . '/storage/staging/');
 define('AI_STUDIO_STORAGE_URL_PREFIX', '/admin/ai-image-studio/storage/staging/');
