@@ -70,38 +70,104 @@ def safe_oauth_error_code(exc: urllib.error.HTTPError) -> str:
     return ""
 
 
+def oauth_client_candidates(config: dict[str, str]) -> list[tuple[str, str, str]]:
+    candidates: list[tuple[str, str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for alias, id_key, secret_key in (
+        ("olist", "OLIST_CLIENT_ID", "OLIST_CLIENT_SECRET"),
+        ("tiny", "TINY_CLIENT_ID", "TINY_CLIENT_SECRET"),
+    ):
+        client_id = config.get(id_key, "").strip()
+        client_secret = config.get(secret_key, "").strip()
+        pair = (client_id, client_secret)
+        if not all(pair) or pair in seen:
+            continue
+        seen.add(pair)
+        candidates.append((alias, client_id, client_secret))
+    return candidates
+
+
+def oauth_refresh_candidates(config: dict[str, str]) -> list[tuple[str, str]]:
+    candidates: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for alias, key in (
+        ("olist", "OLIST_REFRESH_TOKEN"),
+        ("tiny", "TINY_REFRESH_TOKEN"),
+    ):
+        token = config.get(key, "").strip()
+        if not token or token in seen:
+            continue
+        seen.add(token)
+        candidates.append((alias, token))
+    return candidates
+
+
+def print_oauth_failure(
+    status: int,
+    error_code: str,
+    client_alias: str,
+    refresh_alias: str,
+) -> None:
+    suffix = f" oauth_error={error_code}" if error_code else ""
+    print(
+        f"[!] Renovação Olist recusada: HTTP {status}{suffix} "
+        f"credential_alias={client_alias} refresh_alias={refresh_alias}"
+    )
+
+
 def renew_token(config: dict[str, str]) -> dict[str, Any] | None:
-    client_id = config.get("OLIST_CLIENT_ID", "")
-    client_secret = config.get("OLIST_CLIENT_SECRET", "")
-    refresh_token = config.get("OLIST_REFRESH_TOKEN", "")
-    if not all((client_id, client_secret, refresh_token)):
+    clients = oauth_client_candidates(config)
+    refreshes = oauth_refresh_candidates(config)
+    if not clients or not refreshes:
         print("[!] Credenciais Olist incompletas")
         return None
 
-    payload = urllib.parse.urlencode({
-        "grant_type": "refresh_token",
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "refresh_token": refresh_token,
-    }).encode("utf-8")
-    request = urllib.request.Request(
-        TOKEN_URL,
-        data=payload,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            result = json.loads(response.read())
-    except urllib.error.HTTPError as exc:
-        error_code = safe_oauth_error_code(exc)
-        status = int(getattr(exc, "code", 0) or 0)
-        suffix = f" oauth_error={error_code}" if error_code else ""
-        print(f"[!] Renovação Olist recusada: HTTP {status}{suffix}")
-        return None
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-        print(f"[!] Renovação Olist falhou: {type(exc).__name__}")
-        return None
-    return result if isinstance(result, dict) else None
+    last_failure: tuple[int, str, str, str] | None = None
+    for client_alias, client_id, client_secret in clients:
+        client_rejected = False
+        for refresh_alias, refresh_token in refreshes:
+            payload = urllib.parse.urlencode({
+                "grant_type": "refresh_token",
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh_token,
+            }).encode("utf-8")
+            request = urllib.request.Request(
+                TOKEN_URL,
+                data=payload,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    result = json.loads(response.read())
+            except urllib.error.HTTPError as exc:
+                error_code = safe_oauth_error_code(exc)
+                status = int(getattr(exc, "code", 0) or 0)
+                last_failure = (status, error_code, client_alias, refresh_alias)
+                if error_code == "invalid_client":
+                    client_rejected = True
+                    break
+                if error_code == "invalid_grant":
+                    continue
+                print_oauth_failure(status, error_code, client_alias, refresh_alias)
+                return None
+            except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+                print(f"[!] Renovação Olist falhou: {type(exc).__name__}")
+                return None
+
+            if not isinstance(result, dict):
+                return None
+            result["_sv_refresh_token_fallback"] = refresh_token
+            result["_sv_credential_alias"] = client_alias
+            result["_sv_refresh_alias"] = refresh_alias
+            return result
+
+        if client_rejected:
+            continue
+
+    if last_failure is not None:
+        print_oauth_failure(*last_failure)
+    return None
 
 
 def update_env(new_token: str, new_refresh_token: str) -> None:
@@ -110,6 +176,9 @@ def update_env(new_token: str, new_refresh_token: str) -> None:
     replacements = {
         "OLIST_ACCESS_TOKEN": new_token,
         "OLIST_REFRESH_TOKEN": new_refresh_token,
+        "TINY_ACCESS_TOKEN": new_token,
+        "TINY_REFRESH_TOKEN": new_refresh_token,
+        "TOKEN_API_OLIST": new_token,
     }
     found: set[str] = set()
     lines: list[str] = []
@@ -155,10 +224,17 @@ def renew_once() -> bool:
     access_token = result.get("access_token") if isinstance(result, dict) else None
     if not isinstance(access_token, str) or not access_token:
         return False
-    refresh_token = result.get("refresh_token") or config.get("OLIST_REFRESH_TOKEN")
+    refresh_token = result.get("refresh_token") or result.get("_sv_refresh_token_fallback")
     if not isinstance(refresh_token, str) or not refresh_token:
         return False
+    credential_alias = str(result.get("_sv_credential_alias") or "")
+    refresh_alias = str(result.get("_sv_refresh_alias") or "")
     update_env(access_token, refresh_token)
+    if credential_alias and refresh_alias:
+        print(
+            f"[+] Credencial OAuth aceita: credential_alias={credential_alias} "
+            f"refresh_alias={refresh_alias}"
+        )
     print(f"[+] Token Olist renovado em {datetime.now(timezone.utc).isoformat()}")
     return True
 

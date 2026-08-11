@@ -5,6 +5,7 @@ import io
 import json
 import os
 import urllib.error
+import urllib.parse
 from pathlib import Path
 
 import pytest
@@ -68,6 +69,9 @@ def test_atomic_env_update_preserves_unrelated_values(tmp_path: Path, monkeypatc
     assert "UNCHANGED=value" in content
     assert "OLIST_ACCESS_TOKEN=new-access" in content
     assert "OLIST_REFRESH_TOKEN=new-refresh" in content
+    assert "TINY_ACCESS_TOKEN=new-access" in content
+    assert "TINY_REFRESH_TOKEN=new-refresh" in content
+    assert "TOKEN_API_OLIST=new-access" in content
     assert not list(tmp_path.glob(".env.*"))
 
 
@@ -164,6 +168,68 @@ def test_http_error_never_logs_unknown_provider_error_text(monkeypatch, capsys) 
     assert "oauth_error=" not in output
 
 
+def test_invalid_olist_client_falls_back_to_tiny_aliases(monkeypatch, capsys) -> None:
+    calls: list[tuple[str, str]] = []
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {"access_token": "new-access", "refresh_token": "new-refresh"}
+            ).encode("utf-8")
+
+    def oauth_error(status: int, code: str) -> urllib.error.HTTPError:
+        return urllib.error.HTTPError(
+            renewer.TOKEN_URL,
+            status,
+            "OAuth error",
+            {},
+            io.BytesIO(json.dumps({"error": code}).encode("utf-8")),
+        )
+
+    def fake_urlopen(request, timeout=30):
+        payload = urllib.parse.parse_qs(request.data.decode("utf-8"))
+        client_id = payload["client_id"][0]
+        refresh_token = payload["refresh_token"][0]
+        calls.append((client_id, refresh_token))
+        if client_id == "olist-client-stale":
+            raise oauth_error(401, "invalid_client")
+        if refresh_token == "olist-refresh-stale":
+            raise oauth_error(400, "invalid_grant")
+        return FakeResponse()
+
+    monkeypatch.setattr(renewer.urllib.request, "urlopen", fake_urlopen)
+
+    result = renewer.renew_token(
+        {
+            "OLIST_CLIENT_ID": "olist-client-stale",
+            "OLIST_CLIENT_SECRET": "olist-secret-stale",
+            "OLIST_REFRESH_TOKEN": "olist-refresh-stale",
+            "TINY_CLIENT_ID": "tiny-client-current",
+            "TINY_CLIENT_SECRET": "tiny-secret-current",
+            "TINY_REFRESH_TOKEN": "tiny-refresh-current",
+        }
+    )
+
+    assert isinstance(result, dict)
+    assert result["access_token"] == "new-access"
+    assert result["refresh_token"] == "new-refresh"
+    assert result["_sv_credential_alias"] == "tiny"
+    assert result["_sv_refresh_alias"] == "tiny"
+    assert calls == [
+        ("olist-client-stale", "olist-refresh-stale"),
+        ("tiny-client-current", "olist-refresh-stale"),
+        ("tiny-client-current", "tiny-refresh-current"),
+    ]
+    output = capsys.readouterr().out
+    assert output == ""
+
+
 def test_atomic_env_update_writes_symlink_target_without_replacing_link(tmp_path: Path, monkeypatch) -> None:
     if os.name == "nt":
         pytest.skip("Windows sem privilégio de symlink; o runtime de produção é Linux")
@@ -183,6 +249,9 @@ def test_atomic_env_update_writes_symlink_target_without_replacing_link(tmp_path
     content = shared_env.read_text(encoding="utf-8")
     assert "OLIST_ACCESS_TOKEN=new-access" in content
     assert "OLIST_REFRESH_TOKEN=new-refresh" in content
+    assert "TINY_ACCESS_TOKEN=new-access" in content
+    assert "TINY_REFRESH_TOKEN=new-refresh" in content
+    assert "TOKEN_API_OLIST=new-access" in content
     assert not list(tmp_path.glob(".env.*"))
 
 
