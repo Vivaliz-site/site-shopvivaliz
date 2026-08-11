@@ -52,3 +52,4 @@ A stale or missing receipt prevents the orchestrator from handing a mutating exe
 - No direct agent-to-agent calls
 - All state changes logged
 - Audit trail mandatory
+- Remote MCP access, when available, is an operator-controlled channel documented in `docs/AGENT-MCP-REMOTE.md`; it does not expand repository, production, marketplace, payment, or secret permissions.
