@@ -3,6 +3,8 @@
 Use GitHub Secrets for Actions and environment variables for local or server runtime.
 Do not put real passwords in tracked PHP, Python, shell, Markdown, or `.env.example` files.
 
+Canonical cross-reference: [`docs/secrets-inventory.md`](docs/secrets-inventory.md). Use it for the full alias map and the current VM/runtime split.
+
 Canonical accepted groups:
 
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`

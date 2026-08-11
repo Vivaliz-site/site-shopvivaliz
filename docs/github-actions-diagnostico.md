@@ -13,6 +13,8 @@ Este documento explica como configurar, diagnosticar e solucionar problemas com 
 
 ## 🔑 Secrets Obrigatórios
 
+Para a lista completa de canônicos, aliases e onde cada segredo vive de verdade, veja [`docs/secrets-inventory.md`](docs/secrets-inventory.md). `REMOTE_MCP_*` não entra nesse grupo de GitHub Secrets ou runtime materializado.
+
 ### Deploy FTP (deploy.yml)
 
 | Secret | Tipo | Descrição | Fallbacks |

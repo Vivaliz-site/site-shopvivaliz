@@ -26,6 +26,9 @@ Claude, Gemini e ChatGPT podem revisar arquivos pelo GitHub Actions usando GitHu
 - FTP_PORT
 - FTP_REMOTE_DIR
 
+Para o mapa completo de canônicos, aliases e o que vive em `shared/.env` ou `runtime-secrets.php`, use [`docs/secrets-inventory.md`](docs/secrets-inventory.md).
+`REMOTE_MCP_*` não é um secret de GitHub Actions nem de runtime materializado; fica só como documentação/local.
+
 ## Regras
 
 - Nunca commitar senhas, tokens ou chaves.
