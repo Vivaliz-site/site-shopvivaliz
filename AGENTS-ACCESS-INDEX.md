@@ -33,6 +33,7 @@ O `verify` precisa terminar com exit code 0 **antes da primeira mutação**. Se 
 - **[README.md](README.md)** - Overview do projeto
 - **[AUTONOMOUS_TRIO_GUIDE.md](AUTONOMOUS_TRIO_GUIDE.md)** - Guia do Trio IA
 - **[AGENTS.md](AGENTS.md)** - Informações dos agentes
+- **[docs/AGENT-MCP-REMOTE.md](docs/AGENT-MCP-REMOTE.md)** - Uso seguro do Remote MCP por agentes
 
 ### 🔧 Configuração & Troubleshooting
 - **[MONITOR_SETUP.md](MONITOR_SETUP.md)** - Setup do monitor web

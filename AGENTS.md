@@ -399,6 +399,17 @@ Regras:
 
 7. O service roda em loop e observa a `inbox` a cada 30 segundos.
 
+### Remote MCP para agentes
+
+O PDF `C:\Users\FRED\Downloads\mcp.pdf` foi inspecionado em 2026-08-11 e registra um fluxo de autenticacao bem-sucedido com Remote MCP server por device authorization.
+
+Regras:
+
+1. Consulte [`docs/AGENT-MCP-REMOTE.md`](docs/AGENT-MCP-REMOTE.md) antes de usar MCP remoto em tarefas de agente.
+2. Nunca commitar codigo de device, device ID completo, e-mail completo, token, cookie ou screenshot sem mascara.
+3. Validar estado atual do MCP antes de declarar disponibilidade; se nao houver ferramenta/evidencia atual, reportar `INCONCLUSIVO`.
+4. MCP remoto nao amplia permissoes: continuam proibidos force-push, bypass de protecoes, exposicao de secrets e alteracoes de preco/estoque/pedido fora do escopo aprovado.
+
 ### Se Tiver Que SSH à VM
 
 ```bash
