@@ -72,3 +72,19 @@ if (empty($_SESSION['is_admin'])) {
     echo 'Acesso negado.';
     exit;
 }
+
+$svAiRoutineUiPages = [
+    '/admin/ai-image-studio/admin_dashboard.php',
+    '/admin/ai-image-studio/admin_validate.php',
+    '/admin/catalog-optimization/admin_catalog.php',
+];
+$svAdminScriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAiRoutineUiPages, true)) {
+    register_shutdown_function(static function () use ($svAdminScriptName): void {
+        echo "\n<script src=\"/admin/assets/ai-routines-hotfix-ui.js?v=20260810d\"></script>\n";
+        if ($svAdminScriptName === '/admin/catalog-optimization/admin_catalog.php') {
+            echo "<script src=\"/admin/assets/catalog-resilient-run-hotfix.js?v=20260810d\"></script>\n";
+            echo "<script src=\"/admin/assets/catalog-candidate-race-guard.js?v=20260810d\"></script>\n";
+        }
+    });
+}

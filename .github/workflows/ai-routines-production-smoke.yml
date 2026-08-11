@@ -1,0 +1,121 @@
+name: AI Routines Production Smoke Matrix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ai-routines-production-smoke.php'
+      - '.github/workflows/ai-routines-production-smoke.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-routines-production-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    environment: production
+    steps:
+      - name: Configure verified production SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$ORACLE_VM_SSH_KEY" || { echo '::error::ORACLE_VM_SSH_KEY is missing'; exit 1; }
+          test -n "$ORACLE_VM_KNOWN_HOSTS" || { echo '::error::ORACLE_VM_KNOWN_HOSTS is missing'; exit 1; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Wait for exact production release
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ready=0
+          for attempt in $(seq 1 36); do
+            deployed_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+              ubuntu@137.131.156.17 \
+              'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha 2>/dev/null || true')"
+            if [[ "$deployed_sha" == "$GITHUB_SHA" ]]; then
+              ready=1
+              echo "production_release_ready=true"
+              break
+            fi
+            echo "deployment_wait_attempt=$attempt"
+            sleep 20
+          done
+          test "$ready" = 1 || { echo '::error::Exact smoke release did not reach production'; exit 1; }
+
+      - name: Run all channel/provider smoke combinations
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          report="/home/ubuntu/shopvivaliz-deploy/shared/logs/ai-routines-smoke-${GITHUB_SHA}.json"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'bash -s' -- "$GITHUB_SHA" "$report" <<'REMOTE'
+          set -Eeuo pipefail
+          expected_sha="$1"
+          report="$2"
+          current=/home/ubuntu/shopvivaliz-deploy/current
+          test "$(cat "$current/.release-sha")" = "$expected_sha"
+          cd "$current"
+          export AI_PRODUCTION_SMOKE_CONFIRM=RUN_ALL_PROVIDER_CHANNEL_SMOKES
+          php scripts/ai-routines-production-smoke.php \
+            --expected-sha="$expected_sha" \
+            --json-output="$report"
+          php -r '
+            $r=json_decode(file_get_contents($argv[1]), true);
+            if (!is_array($r)) { fwrite(STDERR,"invalid_report\n"); exit(2); }
+            printf("smoke_attempted=%d\nsmoke_pass=%d\nsmoke_fail=%d\npublication_performed=%s\n",
+              (int)($r["attempted_total"]??0),
+              (int)($r["pass_total"]??0),
+              (int)($r["fail_total"]??0),
+              !empty($r["publication_performed"])?"true":"false"
+            );
+            if ((int)($r["attempted_total"]??0) !== 55) exit(3);
+            if (!empty($r["publication_performed"])) exit(4);
+          ' "$report"
+          REMOTE
+
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            "ubuntu@137.131.156.17:$report" ./ai-routines-smoke.json
+
+      - name: Validate redacted report
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -s ai-routines-smoke.json
+          php -r '
+            $r=json_decode(file_get_contents("ai-routines-smoke.json"), true);
+            if (!is_array($r)) exit(2);
+            if (($r["schema"]??"") !== "shopvivaliz.ai-smoke-matrix.v1") exit(3);
+            if ((int)($r["expected_total"]??0) !== 55 || (int)($r["attempted_total"]??0) !== 55) exit(4);
+            if (!empty($r["publication_performed"])) exit(5);
+            $raw=file_get_contents("ai-routines-smoke.json");
+            if (preg_match("/(?:sk-(?:proj-)?|AIza|ant-api)[A-Za-z0-9_\\-]{8,}/", $raw)) exit(6);
+            echo "matrix_report_valid=true\n";
+          '
+
+      - name: Upload smoke matrix
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ai-routines-production-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ai-routines-smoke.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
