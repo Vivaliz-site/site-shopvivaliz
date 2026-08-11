@@ -67,15 +67,22 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && ($_GET['preview'] ?? '') 
         try {
             // A fila agora e independente por marketplace. Um produto que ja
             // recebeu imagens para o site continua elegivel para Amazon,
-            // Mercado Livre, Shopee ou TikTok.
+            // Mercado Livre, Shopee ou TikTok. Categoria e enriquecida pelo
+            // resolver tolerante de ai_studio_fetch_product(), pois a coluna
+            // products.category nao existe em todos os schemas de producao.
             $stmt = $db->prepare(
-                'SELECT p.id, p.name, p.image_url, p.sku, p.category '
+                'SELECT p.id, p.name, p.image_url, p.sku '
                 . 'FROM products p '
                 . 'LEFT JOIN product_images_staging s ON s.product_id = p.id AND s.target_channels_json LIKE ? '
                 . 'WHERE s.id IS NULL ORDER BY p.id ASC LIMIT ' . (int)$limit
             );
             $stmt->execute(['%"' . $previewChannel . '"%']);
             $previewProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($previewProducts as &$previewProduct) {
+                $resolved = ai_studio_fetch_product($db, (int)($previewProduct['id'] ?? 0));
+                $previewProduct['category'] = is_array($resolved) ? (string)($resolved['category'] ?? '') : '';
+            }
+            unset($previewProduct);
         } catch (Throwable $e) {
             error_log('[ai-image-studio] Falha ao buscar produtos para preview: ' . $e->getMessage());
             $batchError = 'Falha ao buscar produtos pendentes: ' . $e->getMessage();
@@ -298,10 +305,10 @@ try {
 <?php if ($previewProducts === null): ?>
 <div class="ais-form"><h2>Passo 1 — Marketplace e lote</h2><form method="get"><input type="hidden" name="preview" value="1">
 <label for="target_channel">Marketplace de destino</label><select name="target_channel" id="target_channel" required><?php foreach($channelProfiles as $key=>$profile): ?><option value="<?=ai_studio_h($key)?>"><?=ai_studio_h((string)$profile['label'])?></option><?php endforeach; ?></select><small>O destino controla o prompt visual e cria uma fila independente por canal.</small>
-<label for="provider">Motor de IA</label><select name="provider" id="provider" onchange="aisUpdateModelDefault()" required><option value="openai">GPT / OpenAI — edicao da foto real</option><option value="google">Gemini — edicao da foto real</option><option value="claude">Claude otimiza prompt + OpenAI edita</option><option value="openrouter">OpenRouter — OpenAI-compatible</option><option value="groq">Groq / Qrope — OpenAI-compatible</option></select>
+<label for="provider">Motor de IA</label><select name="provider" id="provider" onchange="aisUpdateModelDefault()" required><option value="openai">GPT / OpenAI — edicao da foto real</option><option value="google">Gemini — edicao da foto real</option><option value="claude">Claude otimiza prompt + editor de imagem disponivel</option><option value="openrouter">OpenRouter — API de imagem com referencia</option><option value="groq">Groq otimiza prompt + editor de imagem disponivel</option></select>
 <label for="model">Modelo de imagem</label><input type="text" name="model" id="model" value="gpt-image-1"><small>Use um modelo que aceite imagem de referencia. A validacao local rejeita arquivo invalido ou abaixo do minimo tecnico. As chaves do provider selecionado sao rotacionadas automaticamente se houver mais de uma disponivel.</small>
 <label for="limit">Mostrar ate</label><input type="number" name="limit" id="limit" value="12" min="1" max="50" required><div><button type="submit">Buscar produtos deste canal →</button></div></form></div>
-<script>function aisUpdateModelDefault(){const p=document.getElementById('provider').value,i=document.getElementById('model'),d={openai:'gpt-image-1',claude:'gpt-image-1',google:'gemini-2.5-flash-image',openrouter:'gpt-image-1',groq:'openai/gpt-oss-20b'};if(Object.values(d).includes(i.value))i.value=d[p]||''}aisUpdateModelDefault();</script>
+<script>function aisUpdateModelDefault(){const p=document.getElementById('provider').value,i=document.getElementById('model'),d={openai:'gpt-image-1',claude:'',google:'gemini-2.5-flash-image',openrouter:'openai/gpt-image-1',groq:''};if(Object.values(d).includes(i.value)||i.value==='openai/gpt-oss-20b')i.value=d[p]||''}aisUpdateModelDefault();</script>
 <?php else: $profile=$channelProfiles[$previewChannel]??$channelProfiles['site']; ?>
 <div class="ais-form"><h2>Passo 2 — Confirmar geracao para <?=ai_studio_h((string)$profile['label'])?></h2><p>Provedor: <strong><?=ai_studio_h($previewProvider)?></strong><?php if($previewModel!==''):?> · Modelo: <strong><?=ai_studio_h($previewModel)?></strong><?php endif;?> · <?=count($previewProducts)?> produto(s).</p>
 <div class="channel-profile"><strong>Regra visual deste canal</strong><ul><?php foreach((array)($profile['audit_notes']??[]) as $note):?><li><?=ai_studio_h((string)$note)?></li><?php endforeach;?></ul><small>Minimo tecnico: <?= (int)($profile['minimum_side']??1000) ?>px por lado · alvo recomendado: <?= (int)($profile['recommended_side']??1000) ?>px · galeria: ate <?= (int)($profile['max_gallery']??9) ?> imagens.</small></div>
