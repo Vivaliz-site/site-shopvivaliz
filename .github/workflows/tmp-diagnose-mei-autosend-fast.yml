@@ -1,0 +1,42 @@
+name: Fast MEI autosend diagnostics
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-diagnose-mei-autosend-fast.yml']
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Fast read-only checks
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo '=== UNIT ==='
+          sudo systemctl cat mei-mg-email-worker.service || true
+          echo '=== ENABLED ACTIVE ==='
+          sudo systemctl is-enabled mei-mg-email-worker.service || true
+          sudo systemctl is-active mei-mg-email-worker.service || true
+          echo '=== TIMERS ==='
+          sudo systemctl list-timers --all --no-pager | grep -Ei 'mei|email|vivaliz' || true
+          echo '=== CRON ==='
+          crontab -l 2>/dev/null || true
+          sudo crontab -l 2>/dev/null || true
+          echo '=== CODE ==='
+          grep -nE 'META_ENVIOS_POR_DIA|MAX_ENVIOS_POR_DIA|RATE_LIMIT_ENVIOS_POR_MINUTO|sleep\(|POLL|poll|LOTE|lote|24h|rate_limit' worker/worker.py | head -n 260 || true
+          echo '=== ENV ==='
+          grep -E '^(EMAIL_PROVIDER|MICROSOFT_GRAPH_AUTH_MODE|MICROSOFT_GRAPH_USER|RATE_LIMIT_ENVIOS_POR_MINUTO|META_ENVIOS_POR_DIA|MAX_ENVIOS_POR_DIA|POLL.*|LOTE.*)=' .env || true
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
