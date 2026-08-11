@@ -12,39 +12,21 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: pr-conflict-auto-healer
-  cancel-in-progress: false
+  group: pr-conflict-auto-healer-${{ github.event.pull_request.number || 'sweep' }}
+  cancel-in-progress: true
 
 jobs:
   heal:
-    name: Resolve same-repository PR conflicts with Gemini
+    name: Resolve same-repository PR conflicts with private Oracle Gemini pool
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       REPO: ${{ github.repository }}
-      # PAT/admin token is required so the scoped publisher's push emits a
-      # normal pull_request synchronize event and re-runs every PR gate.
-      GH_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      GOOGLE_GEMINI_API_KEY: ${{ secrets.GOOGLE_GEMINI_API_KEY }}
-      GOOGLE_IMAGEN_API_KEY: ${{ secrets.GOOGLE_IMAGEN_API_KEY }}
-      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-      GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
-      GOOGLE_GEMINI_API_KEYS: ${{ secrets.GOOGLE_GEMINI_API_KEYS }}
-      GOOGLE_IMAGEN_API_KEYS: ${{ secrets.GOOGLE_IMAGEN_API_KEYS }}
-      GOOGLE_API_KEYS: ${{ secrets.GOOGLE_API_KEYS }}
-      GEMINI_CONFLICT_MODELS: gemini-3.6-flash,gemini-2.5-flash
+      VM_HOST: 137.131.156.17
+      VM_USER: ubuntu
+      GH_TOKEN: ${{ github.token }}
 
     steps:
-      - name: Require repository automation token
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          test -n "${GH_TOKEN:-}" || {
-            echo '::error::GH_REPO_TOKEN is required so healed commits re-trigger PR validation.'
-            exit 1
-          }
-
       - name: Checkout trusted healer from main
         uses: actions/checkout@v7
         with:
@@ -53,27 +35,66 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Validate trusted healer and scoped publisher
+      - name: Validate trusted Oracle-side implementation
         shell: bash
         run: |
           set -Eeuo pipefail
           python3 -m py_compile trusted/scripts/pr_conflict_gemini_healer.py
-          bash -n trusted/scripts/publish_pr_branch_update.sh
+          bash -n trusted/scripts/pr_conflict_vm_heal.sh
 
-      - name: Heal conflicted PR branches
+      - name: Configure verified Oracle SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::Oracle SSH key missing'; exit 1; }
+          test -n "$known_hosts" || { echo '::error::Oracle known_hosts missing'; exit 1; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Stage trusted healer in Oracle temporary boundary
+        id: stage
         shell: bash
         run: |
           set -Eeuo pipefail
-          git config --global user.name 'shopvivaliz-pr-auto-healer[bot]'
-          git config --global user.email 'shopvivaliz-pr-auto-healer@users.noreply.github.com'
-          gh auth setup-git
+          remote_base="/tmp/shopvivaliz-pr-healer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "remote_base=$remote_base" >> "$GITHUB_OUTPUT"
+          scp -q \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            trusted/scripts/pr_conflict_gemini_healer.py \
+            "${VM_USER}@${VM_HOST}:${remote_base}.py"
+          scp -q \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            trusted/scripts/pr_conflict_vm_heal.sh \
+            "${VM_USER}@${VM_HOST}:${remote_base}.sh"
 
-          abort_merge_if_active() {
-            if git rev-parse -q --verify MERGE_HEAD >/dev/null; then
-              git merge --abort
-            fi
-          }
+      - name: Preflight private Gemini credential pool
+        shell: bash
+        env:
+          REMOTE_BASE: ${{ steps.stage.outputs.remote_base }}
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            "${VM_USER}@${VM_HOST}" \
+            "GEMINI_ENV_FILE=/home/ubuntu/shopvivaliz-deploy/shared/.env python3 '${REMOTE_BASE}.py' --credential-preflight"
 
+      - name: Heal and synchronize eligible PR branches
+        shell: bash
+        env:
+          REMOTE_BASE: ${{ steps.stage.outputs.remote_base }}
+        run: |
+          set -Eeuo pipefail
           if [[ "$GITHUB_EVENT_NAME" == 'pull_request_target' ]]; then
             prs=("${{ github.event.pull_request.number }}")
           else
@@ -84,89 +105,41 @@ jobs:
           fi
 
           echo "candidate_pr_count=${#prs[@]}"
-          unresolved_pr_count=0
           for pr in "${prs[@]}"; do
             meta="$(gh api "repos/${REPO}/pulls/${pr}")"
+            state="$(jq -r '.state' <<<"$meta")"
             draft="$(jq -r '.draft' <<<"$meta")"
             head_repo="$(jq -r '.head.repo.full_name // ""' <<<"$meta")"
             head_ref="$(jq -r '.head.ref' <<<"$meta")"
+            head_sha="$(jq -r '.head.sha' <<<"$meta")"
             base_ref="$(jq -r '.base.ref' <<<"$meta")"
 
-            if [[ "$draft" == 'true' || "$head_repo" != "$REPO" || "$base_ref" != 'main' ]]; then
+            if [[ "$state" != 'open' || "$draft" == 'true' || "$head_repo" != "$REPO" || "$base_ref" != 'main' ]]; then
               echo "pr_${pr}_skipped=true"
               continue
             fi
 
-            work="$(mktemp -d "/tmp/shopvivaliz-pr-${pr}-XXXXXX")"
-            gh repo clone "$REPO" "$work" -- --filter=blob:none --no-tags
-            pushd "$work" >/dev/null
-            git fetch --no-tags origin \
-              "+refs/heads/main:refs/remotes/origin/main" \
-              "+refs/heads/${head_ref}:refs/remotes/origin/${head_ref}"
-            git checkout -B "$head_ref" "origin/$head_ref"
-            before_sha="$(git rev-parse HEAD)"
-
-            merge_clean=0
-            if git merge --no-edit --no-ff origin/main; then
-              merge_clean=1
-            fi
-
-            if [[ "$merge_clean" -eq 1 ]]; then
-              after_sha="$(git rev-parse HEAD)"
-              if [[ "$after_sha" != "$before_sha" ]]; then
-                bash "$GITHUB_WORKSPACE/trusted/scripts/publish_pr_branch_update.sh" "$head_ref" origin
-                echo "pr_${pr}_main_sync_pushed=true"
-              else
-                echo "pr_${pr}_already_up_to_date=true"
-              fi
-              popd >/dev/null
-              rm -rf "$work"
-              continue
-            fi
-
-            mapfile -t unresolved < <(git diff --name-only --diff-filter=U)
-            if (( ${#unresolved[@]} == 0 )); then
-              abort_merge_if_active
-              echo "::error::PR #${pr} merge failed without Git conflict entries."
-              popd >/dev/null
-              rm -rf "$work"
-              exit 2
-            fi
-
-            echo "pr_${pr}_conflict_count=${#unresolved[@]}"
-            if ! python3 "$GITHUB_WORKSPACE/trusted/scripts/pr_conflict_gemini_healer.py"; then
-              abort_merge_if_active
-              echo "::warning::PR #${pr} remains open: Gemini pool could not produce a validated resolution in this run."
-              unresolved_pr_count=$((unresolved_pr_count + 1))
-              popd >/dev/null
-              rm -rf "$work"
-              continue
-            fi
-
-            if [[ -n "$(git diff --name-only --diff-filter=U)" ]]; then
-              abort_merge_if_active
-              echo "::error::PR #${pr} still has unmerged paths after Gemini resolution."
-              popd >/dev/null
-              rm -rf "$work"
-              exit 3
-            fi
-
-            git diff --cached --check
-            git commit -m "chore: auto-resolve PR #${pr} conflicts with main via Gemini"
-            healed_sha="$(git rev-parse HEAD)"
-            bash "$GITHUB_WORKSPACE/trusted/scripts/publish_pr_branch_update.sh" "$head_ref" origin
-            echo "pr_${pr}_healed_sha=${healed_sha}"
-            echo "pr_${pr}_revalidation_triggered=true"
-
-            popd >/dev/null
-            rm -rf "$work"
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+              "${VM_USER}@${VM_HOST}" \
+              "bash '${REMOTE_BASE}.sh' '${pr}' '${head_ref}' '${head_sha}' '${REMOTE_BASE}.py'"
+            echo "pr_${pr}_oracle_heal_completed=true"
           done
 
-          echo "unresolved_pr_count=${unresolved_pr_count}"
-          if (( unresolved_pr_count > 0 )); then
-            echo '::error::At least one PR conflict remains unresolved after exhausting the configured Gemini pool.'
-            exit 4
+      - name: Remove Oracle and runner temporary material
+        if: always()
+        shell: bash
+        env:
+          REMOTE_BASE: ${{ steps.stage.outputs.remote_base }}
+        run: |
+          set -Eeuo pipefail
+          if [[ -n "${REMOTE_BASE:-}" && -r "$HOME/.ssh/id_rsa" && -r "$HOME/.ssh/known_hosts" ]]; then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+              "${VM_USER}@${VM_HOST}" \
+              "rm -f '${REMOTE_BASE}.py' '${REMOTE_BASE}.sh'"
           fi
+          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
       - name: Security invariant
         if: always()
@@ -174,5 +147,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           echo 'fork_pr_secrets_exposed=false'
-          echo 'pr_code_executed_by_healer=false'
+          echo 'pr_code_executed_with_runtime_secrets=false'
+          echo 'gemini_keys_copied_to_actions=false'
+          echo 'github_write_token_copied_to_actions=false'
           echo 'secret_values_printed=false'

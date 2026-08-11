@@ -34,7 +34,8 @@ jobs:
             scripts/pr_conflict_gemini_healer.py \
             scripts/check_pr_completion_policy.py \
             tests/test_pr_conflict_gemini_healer.py
-          bash -n scripts/publish_pr_branch_update.sh
+          bash -n scripts/pr_conflict_vm_heal.sh
+          bash -n scripts/merge_green_pr_via_vm.sh
 
       - name: Run Gemini healer regression tests
         shell: bash
@@ -52,7 +53,9 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          echo 'pr_completion_policy_v2=true'
+          echo 'pr_completion_policy_v3=true'
           echo 'green_pr_must_merge=true'
           echo 'conflict_auto_heal_required=true'
           echo 'stale_check_merge_forbidden=true'
+          echo 'gemini_pool_stays_in_oracle=true'
+          echo 'github_write_auth_stays_in_oracle=true'
