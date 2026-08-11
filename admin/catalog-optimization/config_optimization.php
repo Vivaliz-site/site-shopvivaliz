@@ -37,10 +37,10 @@ define('CATALOG_AI_CLAUDE_API_KEY', catalog_ai_env_key_pool(['CLAUDE_API_KEY', '
 define('CATALOG_AI_OPENROUTER_API_KEY', catalog_ai_env_key_pool(['OPENROUTER_API_KEY']));
 define('CATALOG_AI_GROQ_API_KEY', catalog_ai_env_key_pool(['GROQ_API_KEY']));
 
-define('CATALOG_AI_OPENAI_MODEL', (string)(getenv('OPENAI_TEXT_MODEL') ?: 'gpt-4.1'));
+define('CATALOG_AI_OPENAI_MODEL', (string)(getenv('OPENAI_TEXT_MODEL') ?: 'gpt-5-nano'));
 define('CATALOG_AI_GEMINI_MODEL', (string)(getenv('GOOGLE_GEMINI_MODEL') ?: 'gemini-2.5-flash'));
-define('CATALOG_AI_CLAUDE_MODEL', (string)(getenv('CLAUDE_TEXT_MODEL') ?: 'claude-sonnet-4-20250514'));
-define('CATALOG_AI_OPENROUTER_MODEL', (string)(getenv('OPENROUTER_TEXT_MODEL') ?: 'openai/gpt-4.1'));
+define('CATALOG_AI_CLAUDE_MODEL', (string)(getenv('CLAUDE_TEXT_MODEL') ?: 'claude-haiku-4-5-20251001'));
+define('CATALOG_AI_OPENROUTER_MODEL', (string)(getenv('OPENROUTER_TEXT_MODEL') ?: 'openai/gpt-4o-mini'));
 define('CATALOG_AI_GROQ_MODEL', (string)(getenv('GROQ_TEXT_MODEL') ?: 'openai/gpt-oss-20b'));
 define('CATALOG_AI_OPENROUTER_API_BASE_URL', (string)(getenv('OPENROUTER_API_BASE_URL') ?: 'https://openrouter.ai/api/v1'));
 define('CATALOG_AI_OPENROUTER_HTTP_REFERER', (string)(getenv('OPENROUTER_HTTP_REFERER') ?: 'https://shopvivaliz.com.br'));
