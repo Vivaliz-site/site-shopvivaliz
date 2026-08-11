@@ -22,8 +22,8 @@ jobs:
     timeout-minutes: 30
     env:
       REPO: ${{ github.repository }}
-      # PAT/admin token is required so the healer's push emits a normal
-      # pull_request synchronize event and therefore re-runs every PR gate.
+      # PAT/admin token is required so the scoped publisher's push emits a
+      # normal pull_request synchronize event and re-runs every PR gate.
       GH_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GOOGLE_GEMINI_API_KEY: ${{ secrets.GOOGLE_GEMINI_API_KEY }}
@@ -53,11 +53,12 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Validate trusted healer syntax
+      - name: Validate trusted healer and scoped publisher
         shell: bash
         run: |
           set -Eeuo pipefail
           python3 -m py_compile trusted/scripts/pr_conflict_gemini_healer.py
+          bash -n trusted/scripts/publish_pr_branch_update.sh
 
       - name: Heal conflicted PR branches
         shell: bash
@@ -66,6 +67,12 @@ jobs:
           git config --global user.name 'shopvivaliz-pr-auto-healer[bot]'
           git config --global user.email 'shopvivaliz-pr-auto-healer@users.noreply.github.com'
           gh auth setup-git
+
+          abort_merge_if_active() {
+            if git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+              git merge --abort
+            fi
+          }
 
           if [[ "$GITHUB_EVENT_NAME" == 'pull_request_target' ]]; then
             prs=("${{ github.event.pull_request.number }}")
@@ -77,6 +84,7 @@ jobs:
           fi
 
           echo "candidate_pr_count=${#prs[@]}"
+          unresolved_pr_count=0
           for pr in "${prs[@]}"; do
             meta="$(gh api "repos/${REPO}/pulls/${pr}")"
             draft="$(jq -r '.draft' <<<"$meta")"
@@ -90,11 +98,6 @@ jobs:
             fi
 
             work="$(mktemp -d "/tmp/shopvivaliz-pr-${pr}-XXXXXX")"
-            cleanup() {
-              rm -rf "$work"
-            }
-            trap cleanup RETURN
-
             gh repo clone "$REPO" "$work" -- --filter=blob:none --no-tags
             pushd "$work" >/dev/null
             git fetch --no-tags origin \
@@ -103,64 +106,67 @@ jobs:
             git checkout -B "$head_ref" "origin/$head_ref"
             before_sha="$(git rev-parse HEAD)"
 
-            set +e
-            git merge --no-edit --no-ff origin/main
-            merge_rc=$?
-            set -e
+            merge_clean=0
+            if git merge --no-edit --no-ff origin/main; then
+              merge_clean=1
+            fi
 
-            if [[ "$merge_rc" -eq 0 ]]; then
+            if [[ "$merge_clean" -eq 1 ]]; then
               after_sha="$(git rev-parse HEAD)"
               if [[ "$after_sha" != "$before_sha" ]]; then
-                git push origin "HEAD:refs/heads/${head_ref}"
+                "$GITHUB_WORKSPACE/trusted/scripts/publish_pr_branch_update.sh" "$head_ref" origin
                 echo "pr_${pr}_main_sync_pushed=true"
               else
                 echo "pr_${pr}_already_up_to_date=true"
               fi
               popd >/dev/null
-              cleanup
-              trap - RETURN
+              rm -rf "$work"
               continue
             fi
 
             mapfile -t unresolved < <(git diff --name-only --diff-filter=U)
             if (( ${#unresolved[@]} == 0 )); then
-              git merge --abort || true
+              abort_merge_if_active
               echo "::error::PR #${pr} merge failed without Git conflict entries."
               popd >/dev/null
-              cleanup
-              trap - RETURN
+              rm -rf "$work"
               exit 2
             fi
 
             echo "pr_${pr}_conflict_count=${#unresolved[@]}"
             if ! python3 "$GITHUB_WORKSPACE/trusted/scripts/pr_conflict_gemini_healer.py"; then
-              git merge --abort || true
+              abort_merge_if_active
               echo "::warning::PR #${pr} remains open: Gemini pool could not produce a validated resolution in this run."
+              unresolved_pr_count=$((unresolved_pr_count + 1))
               popd >/dev/null
-              cleanup
-              trap - RETURN
+              rm -rf "$work"
               continue
             fi
 
-            test -z "$(git diff --name-only --diff-filter=U)" || {
-              git merge --abort || true
+            if [[ -n "$(git diff --name-only --diff-filter=U)" ]]; then
+              abort_merge_if_active
               echo "::error::PR #${pr} still has unmerged paths after Gemini resolution."
               popd >/dev/null
-              cleanup
-              trap - RETURN
+              rm -rf "$work"
               exit 3
-            }
+            fi
+
             git diff --cached --check
             git commit -m "chore: auto-resolve PR #${pr} conflicts with main via Gemini"
             healed_sha="$(git rev-parse HEAD)"
-            git push origin "HEAD:refs/heads/${head_ref}"
+            "$GITHUB_WORKSPACE/trusted/scripts/publish_pr_branch_update.sh" "$head_ref" origin
             echo "pr_${pr}_healed_sha=${healed_sha}"
             echo "pr_${pr}_revalidation_triggered=true"
 
             popd >/dev/null
-            cleanup
-            trap - RETURN
+            rm -rf "$work"
           done
+
+          echo "unresolved_pr_count=${unresolved_pr_count}"
+          if (( unresolved_pr_count > 0 )); then
+            echo '::error::At least one PR conflict remains unresolved after exhausting the configured Gemini pool.'
+            exit 4
+          fi
 
       - name: Security invariant
         if: always()
