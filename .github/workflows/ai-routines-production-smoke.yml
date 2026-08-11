@@ -91,35 +91,49 @@ jobs:
           done
           test "$ready" = 1 || { echo '::error::Exact smoke release did not reach production'; exit 1; }
 
-      - name: Run all channel/provider smoke combinations
+      - name: Run only the smoke combinations for what changed
         shell: bash
+        env:
+          RUN_IMAGE: ${{ steps.scope.outputs.run_image }}
+          RUN_CATALOG: ${{ steps.scope.outputs.run_catalog }}
         run: |
           set -Eeuo pipefail
+          echo "run_image=$RUN_IMAGE run_catalog=$RUN_CATALOG"
           report="/home/ubuntu/shopvivaliz-deploy/shared/logs/ai-routines-smoke-${GITHUB_SHA}.json"
           image_report="/home/ubuntu/shopvivaliz-deploy/shared/logs/ai-image-smoke-v2-${GITHUB_SHA}.json"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 'bash -s' -- "$GITHUB_SHA" "$report" "$image_report" <<'REMOTE'
+            ubuntu@137.131.156.17 'bash -s' -- "$GITHUB_SHA" "$report" "$image_report" "$RUN_IMAGE" "$RUN_CATALOG" <<'REMOTE'
           set -Eeuo pipefail
           expected_sha="$1"
           report="$2"
           image_report="$3"
+          run_image="$4"
+          run_catalog="$5"
           current=/home/ubuntu/shopvivaliz-deploy/current
           test "$(cat "$current/.release-sha")" = "$expected_sha"
           cd "$current"
           export AI_PRODUCTION_SMOKE_CONFIRM=RUN_ALL_PROVIDER_CHANNEL_SMOKES
 
-          # Matriz histórica completa: 25 imagens diretas + 30 cadastros.
-          # Mantida para comparação longitudinal e para validar as 30 combinações de texto.
+          # Roda so o lado (imagem/catalogo) do arquivo que realmente mudou,
+          # para nao gastar credito real das 55 combinacoes a cada push.
+          skip_image_flag="1"; [[ "$run_image" == "true" ]] && skip_image_flag="0"
+          skip_catalog_flag="1"; [[ "$run_catalog" == "true" ]] && skip_catalog_flag="0"
           php scripts/ai-routines-production-smoke.php \
             --expected-sha="$expected_sha" \
+            --skip-image="$skip_image_flag" \
+            --skip-catalog="$skip_catalog_flag" \
             --json-output="$report"
 
-          # Matriz canônica de imagem: passa exatamente por ai_studio_process_item(),
-          # o mesmo caminho usado pelo worker/Admin, incluindo otimizadores + editor final.
-          php scripts/ai-image-production-smoke-v2.php \
-            --expected-sha="$expected_sha" \
-            --json-output="$image_report"
+          if [[ "$run_image" == "true" ]]; then
+            # Matriz canonica de imagem: passa exatamente por ai_studio_process_item(),
+            # o mesmo caminho usado pelo worker/Admin, incluindo otimizadores + editor final.
+            php scripts/ai-image-production-smoke-v2.php \
+              --expected-sha="$expected_sha" \
+              --json-output="$image_report"
+          else
+            printf '{"schema":"shopvivaliz.ai-image-smoke-matrix.v2","skipped":true,"expected_total":0,"attempted_total":0,"pass_total":0,"fail_total":0,"publication_performed":false,"results":[]}' > "$image_report"
+          fi
 
           php -r '
             $r=json_decode(file_get_contents($argv[1]), true);
@@ -135,8 +149,8 @@ jobs:
               (int)($i["requested_provider_contributed_total"]??0),
               (!empty($r["publication_performed"]) || !empty($i["publication_performed"]))?"true":"false"
             );
-            if ((int)($r["attempted_total"]??0) !== 55) exit(3);
-            if ((int)($i["attempted_total"]??0) !== 25) exit(4);
+            if ((int)($r["attempted_total"]??0) !== (int)($r["expected_total"]??0)) exit(3);
+            if ((int)($i["attempted_total"]??0) !== (int)($i["expected_total"]??0)) exit(4);
             if (!empty($r["publication_performed"]) || !empty($i["publication_performed"])) exit(5);
           ' "$report" "$image_report"
           REMOTE
