@@ -1204,6 +1204,7 @@ $svNavCurrent = '';
     </script>
     <!-- Shim temporario: limpa variantes persistidas sem executar experimento. -->
     <script src="/js/shopvivaliz-ab-testing.js?v=1.0.0" defer></script>
+    <script src="/js/auto-image-carousel.js?v=20260811-1"></script>
 
     <!-- Popup de Cupons Promocionais -->
     <?php echo sv_popup_cupons_html(); ?>
