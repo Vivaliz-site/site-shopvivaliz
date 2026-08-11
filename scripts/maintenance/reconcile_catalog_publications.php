@@ -10,6 +10,9 @@ declare(strict_types=1);
  * only when the live channel confirms the approved content, and records a
  * real failure when the channel rejects it or the configured deadline expires.
  *
+ * Amazon read-back is opt-in only. Set CATALOG_RECONCILE_AMAZON=1 in an
+ * explicitly approved manual run; routine executions must not touch Amazon.
+ *
  * No price, inventory or stock endpoint is called.
  */
 require_once dirname(__DIR__, 2) . '/config/constants.php';
@@ -27,6 +30,7 @@ svcp_ensure_schema($db);
 
 $limit = max(1, min(500, (int)(getenv('CATALOG_RECONCILE_LIMIT') ?: 100)));
 $maxAge = max(3600, (int)(getenv('CATALOG_SUBMISSION_MAX_AGE_SECONDS') ?: 259200));
+$amazonReconcileEnabled = in_array(strtolower(trim((string)(getenv('CATALOG_RECONCILE_AMAZON') ?: ''))), ['1', 'true', 'yes', 'on'], true);
 
 /** @return array<string,mixed>|null */
 function svrec_channel_content(PDO $db, int $productId, string $channel): ?array
@@ -308,8 +312,9 @@ function svrec_refresh_staging(PDO $db, string $publicationType, int $stagingId)
     ]);
 }
 
+$eligibleChannelsSql = $amazonReconcileEnabled ? "'amazon','tiktok'" : "'tiktok'";
 $query = $db->prepare(
-    "SELECT * FROM catalog_publications WHERE status = 'submitted' AND channel IN ('amazon','tiktok') ORDER BY id ASC LIMIT {$limit}"
+    "SELECT * FROM catalog_publications WHERE status = 'submitted' AND channel IN ({$eligibleChannelsSql}) ORDER BY id ASC LIMIT {$limit}"
 );
 $query->execute();
 $rows = $query->fetchAll(PDO::FETCH_ASSOC);
@@ -347,6 +352,7 @@ $result = [
     'ok' => $counts['transient_errors'] === 0,
     'checked_at' => gmdate('c'),
     'max_submission_age_seconds' => $maxAge,
+    'amazon_reconcile_enabled' => $amazonReconcileEnabled,
     'counts' => $counts,
     'items' => $items,
 ];

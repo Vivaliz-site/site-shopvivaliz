@@ -54,8 +54,6 @@ on:
       - '.github/workflows/catalog-publication-integrity.yml'
       - '.github/workflows/catalog-publication-reconcile.yml'
       - '.github/workflows/configure-marketplace-publication-runtime.yml'
-  schedule:
-    - cron: '37 * * * *'
   workflow_dispatch:
 
 permissions:

@@ -1,16 +1,13 @@
 name: Reconcile Catalog Publications
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'includes/catalog-publication-schema.php'
-      - 'scripts/maintenance/reconcile_catalog_publications.php'
-      - 'tests/catalog-publication-schema-compat-test.php'
-      - '.github/workflows/catalog-publication-reconcile.yml'
-  schedule:
-    - cron: '*/15 * * * *'
   workflow_dispatch:
+    inputs:
+      include_amazon:
+        description: 'Consultar Amazon SP-API nesta reconciliacao manual'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -85,12 +82,14 @@ jobs:
 
       - name: Reconcile real marketplace submissions
         shell: bash
+        env:
+          CATALOG_RECONCILE_AMAZON: ${{ inputs.include_amazon && '1' || '0' }}
         run: |
           set -Eeuo pipefail
           if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
-            'cd /home/ubuntu/shopvivaliz-deploy/current && php scripts/maintenance/reconcile_catalog_publications.php' \
+            "cd /home/ubuntu/shopvivaliz-deploy/current && CATALOG_RECONCILE_AMAZON='${CATALOG_RECONCILE_AMAZON}' php scripts/maintenance/reconcile_catalog_publications.php" \
             > catalog-publication-reconcile.json; then
             command_status=0
           else
