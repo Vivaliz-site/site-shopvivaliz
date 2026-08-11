@@ -225,7 +225,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 if ($imageEngine === 'google') {
                     (new AiStudioGoogleImageEditClient(AI_STUDIO_GOOGLE_IMAGEN_API_KEY, AI_STUDIO_GOOGLE_IMAGEN_MODEL))->editImageToFile($prompt, $basePath, $destination);
                 } elseif ($imageEngine === 'openrouter') {
-                    $openRouterModel = trim((string)(getenv('OPENROUTER_IMAGE_MODEL') ?: 'openai/gpt-image-1'));
+                    $openRouterModel = trim((string)(getenv('OPENROUTER_IMAGE_MODEL') ?: 'openai/gpt-image-1-mini'));
                     (new AiStudioOpenRouterImageClient(AI_STUDIO_OPENROUTER_API_KEY, $openRouterModel !== '' ? $openRouterModel : 'openai/gpt-image-1', AI_STUDIO_OPENROUTER_API_BASE_URL, [
                         'HTTP-Referer' => AI_STUDIO_OPENROUTER_HTTP_REFERER,
                         'X-OpenRouter-Title' => AI_STUDIO_OPENROUTER_APP_TITLE,
