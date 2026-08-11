@@ -20,7 +20,7 @@ require_once __DIR__ . '/../../core/queue/queue.php';
 /** @return array<string,string> */
 function ai_studio_default_prompts(string $productName, string $targetChannel = 'site', array $productContext = []): array
 {
-    $identity = "Use the supplied real photo of {$productName} as the only product reference. Preserve the exact product identity: shape, proportions, color, material appearance, labels, logos, printed text, connectors, controls and included parts. Do not invent, remove, replace or redesign any product feature. Do not add accessories that could be interpreted as included with the product. Keep the product count at exactly one and avoid any crop, prop or treatment that changes the visible identity, geometry, perspective, scale or color balance.";
+    $identity = "Use the supplied real photo of {$productName} as the only product reference. Preserve the exact product identity: shape, proportions, color, material appearance, labels, logos, printed text, connectors, controls and included parts. Do not invent, remove, replace or redesign any product feature. Do not add accessories that could be interpreted as included with the product. Keep the product count at exactly one and avoid any crop, prop or treatment that changes the visible identity, geometry, perspective, scale or color balance. If any product detail is unclear or ambiguous in the source photo, keep the result as close as possible to the visible source rather than guessing or embellishing. Do not render any new legible text, logo, watermark, badge, seal or label that is not already present on the real product; keep existing printed text and labels sharp and legible, not distorted or duplicated.";
     $contextParts = [];
     foreach ([
         'category' => 'category',
