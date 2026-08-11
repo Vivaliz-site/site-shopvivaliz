@@ -433,4 +433,4 @@ fwrite(STDOUT, sprintf(
     $productId
 ));
 
-exit(count($results) === 55 ? 0 : 6);
+exit(count($results) === $expectedTotal ? 0 : 6);
