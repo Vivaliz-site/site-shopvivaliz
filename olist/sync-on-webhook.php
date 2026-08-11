@@ -87,6 +87,15 @@ while (true) {
 // Salvar em JSON
 // ============================================================
 
+if ($all_products === []) {
+    // Nao sobrescreve um cache bom anterior com uma lista vazia quando a
+    // busca falhou de verdade (ex: token/rede) -- so grava se a API
+    // realmente respondeu 0 produtos ativos (situacao improvavel, mas nao
+    // impossivel, entao nao trata como erro fatal).
+    error_log("[webhook-sync] Nenhum produto ativo retornado; cache anterior preservado");
+    exit(1);
+}
+
 $output = [
     'total' => count($all_products),
     'timestamp' => date('Y-m-d H:i:s'),
@@ -99,4 +108,3 @@ $output_file = $root . '/storage/products-cache-ativos.json';
 file_put_contents($output_file, json_encode($output, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 
 error_log("[webhook-sync] Sincronizados " . count($all_products) . " produtos ativos");
-?>
