@@ -1,0 +1,178 @@
+name: PR Conflict Auto-Healer
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-conflict-auto-healer
+  cancel-in-progress: false
+
+jobs:
+  heal:
+    name: Resolve same-repository PR conflicts with Gemini
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      REPO: ${{ github.repository }}
+      # PAT/admin token is required so the scoped publisher's push emits a
+      # normal pull_request synchronize event and re-runs every PR gate.
+      GH_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GOOGLE_GEMINI_API_KEY: ${{ secrets.GOOGLE_GEMINI_API_KEY }}
+      GOOGLE_IMAGEN_API_KEY: ${{ secrets.GOOGLE_IMAGEN_API_KEY }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
+      GOOGLE_GEMINI_API_KEYS: ${{ secrets.GOOGLE_GEMINI_API_KEYS }}
+      GOOGLE_IMAGEN_API_KEYS: ${{ secrets.GOOGLE_IMAGEN_API_KEYS }}
+      GOOGLE_API_KEYS: ${{ secrets.GOOGLE_API_KEYS }}
+      GEMINI_CONFLICT_MODELS: gemini-3.6-flash,gemini-2.5-flash
+
+    steps:
+      - name: Require repository automation token
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "${GH_TOKEN:-}" || {
+            echo '::error::GH_REPO_TOKEN is required so healed commits re-trigger PR validation.'
+            exit 1
+          }
+
+      - name: Checkout trusted healer from main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: trusted
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate trusted healer and scoped publisher
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile trusted/scripts/pr_conflict_gemini_healer.py
+          bash -n trusted/scripts/publish_pr_branch_update.sh
+
+      - name: Heal conflicted PR branches
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config --global user.name 'shopvivaliz-pr-auto-healer[bot]'
+          git config --global user.email 'shopvivaliz-pr-auto-healer@users.noreply.github.com'
+          gh auth setup-git
+
+          abort_merge_if_active() {
+            if git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+              git merge --abort
+            fi
+          }
+
+          if [[ "$GITHUB_EVENT_NAME" == 'pull_request_target' ]]; then
+            prs=("${{ github.event.pull_request.number }}")
+          else
+            mapfile -t prs < <(
+              gh api "repos/${REPO}/pulls?state=open&base=main&per_page=100" \
+                --jq '.[] | select(.draft == false) | .number'
+            )
+          fi
+
+          echo "candidate_pr_count=${#prs[@]}"
+          unresolved_pr_count=0
+          for pr in "${prs[@]}"; do
+            meta="$(gh api "repos/${REPO}/pulls/${pr}")"
+            draft="$(jq -r '.draft' <<<"$meta")"
+            head_repo="$(jq -r '.head.repo.full_name // ""' <<<"$meta")"
+            head_ref="$(jq -r '.head.ref' <<<"$meta")"
+            base_ref="$(jq -r '.base.ref' <<<"$meta")"
+
+            if [[ "$draft" == 'true' || "$head_repo" != "$REPO" || "$base_ref" != 'main' ]]; then
+              echo "pr_${pr}_skipped=true"
+              continue
+            fi
+
+            work="$(mktemp -d "/tmp/shopvivaliz-pr-${pr}-XXXXXX")"
+            gh repo clone "$REPO" "$work" -- --filter=blob:none --no-tags
+            pushd "$work" >/dev/null
+            git fetch --no-tags origin \
+              "+refs/heads/main:refs/remotes/origin/main" \
+              "+refs/heads/${head_ref}:refs/remotes/origin/${head_ref}"
+            git checkout -B "$head_ref" "origin/$head_ref"
+            before_sha="$(git rev-parse HEAD)"
+
+            merge_clean=0
+            if git merge --no-edit --no-ff origin/main; then
+              merge_clean=1
+            fi
+
+            if [[ "$merge_clean" -eq 1 ]]; then
+              after_sha="$(git rev-parse HEAD)"
+              if [[ "$after_sha" != "$before_sha" ]]; then
+                bash "$GITHUB_WORKSPACE/trusted/scripts/publish_pr_branch_update.sh" "$head_ref" origin
+                echo "pr_${pr}_main_sync_pushed=true"
+              else
+                echo "pr_${pr}_already_up_to_date=true"
+              fi
+              popd >/dev/null
+              rm -rf "$work"
+              continue
+            fi
+
+            mapfile -t unresolved < <(git diff --name-only --diff-filter=U)
+            if (( ${#unresolved[@]} == 0 )); then
+              abort_merge_if_active
+              echo "::error::PR #${pr} merge failed without Git conflict entries."
+              popd >/dev/null
+              rm -rf "$work"
+              exit 2
+            fi
+
+            echo "pr_${pr}_conflict_count=${#unresolved[@]}"
+            if ! python3 "$GITHUB_WORKSPACE/trusted/scripts/pr_conflict_gemini_healer.py"; then
+              abort_merge_if_active
+              echo "::warning::PR #${pr} remains open: Gemini pool could not produce a validated resolution in this run."
+              unresolved_pr_count=$((unresolved_pr_count + 1))
+              popd >/dev/null
+              rm -rf "$work"
+              continue
+            fi
+
+            if [[ -n "$(git diff --name-only --diff-filter=U)" ]]; then
+              abort_merge_if_active
+              echo "::error::PR #${pr} still has unmerged paths after Gemini resolution."
+              popd >/dev/null
+              rm -rf "$work"
+              exit 3
+            fi
+
+            git diff --cached --check
+            git commit -m "chore: auto-resolve PR #${pr} conflicts with main via Gemini"
+            healed_sha="$(git rev-parse HEAD)"
+            bash "$GITHUB_WORKSPACE/trusted/scripts/publish_pr_branch_update.sh" "$head_ref" origin
+            echo "pr_${pr}_healed_sha=${healed_sha}"
+            echo "pr_${pr}_revalidation_triggered=true"
+
+            popd >/dev/null
+            rm -rf "$work"
+          done
+
+          echo "unresolved_pr_count=${unresolved_pr_count}"
+          if (( unresolved_pr_count > 0 )); then
+            echo '::error::At least one PR conflict remains unresolved after exhausting the configured Gemini pool.'
+            exit 4
+          fi
+
+      - name: Security invariant
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo 'fork_pr_secrets_exposed=false'
+          echo 'pr_code_executed_by_healer=false'
+          echo 'secret_values_printed=false'

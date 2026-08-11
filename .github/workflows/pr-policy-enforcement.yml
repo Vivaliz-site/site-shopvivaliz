@@ -1,0 +1,58 @@
+name: PR Policy Enforcement
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-policy-enforcement-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  enforce:
+    name: Enforce autonomous PR completion contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate implementation syntax
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile \
+            scripts/pr_conflict_gemini_healer.py \
+            scripts/check_pr_completion_policy.py \
+            tests/test_pr_conflict_gemini_healer.py
+          bash -n scripts/publish_pr_branch_update.sh
+
+      - name: Run Gemini healer regression tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m unittest tests.test_pr_conflict_gemini_healer -v
+
+      - name: Verify policy enforcement surfaces
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/check_pr_completion_policy.py
+
+      - name: Publish enforcement invariant
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo 'pr_completion_policy_v2=true'
+          echo 'green_pr_must_merge=true'
+          echo 'conflict_auto_heal_required=true'
+          echo 'stale_check_merge_forbidden=true'

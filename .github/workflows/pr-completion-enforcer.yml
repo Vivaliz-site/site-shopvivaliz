@@ -1,0 +1,156 @@
+name: PR Completion Enforcer
+
+on:
+  workflow_run:
+    workflows:
+      - Quality Gate
+      - ShopVivaliz QA
+      - Repository Governance
+      - Policy Engine
+      - Autonomy Boundary
+      - History Integrity
+      - Ecommerce Excellence Audit
+      - PR Policy Enforcement
+    types: [completed]
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: pr-completion-enforcer
+  cancel-in-progress: false
+
+jobs:
+  enforce:
+    name: Merge every current fully-green same-repository PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
+
+    steps:
+      - name: Require repository automation token
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "${GH_TOKEN:-}" || {
+            echo '::error::GH_REPO_TOKEN is required for autonomous PR completion.'
+            exit 1
+          }
+
+      - name: Merge fully validated PRs immediately
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          required=(
+            'Quality Gate'
+            'ShopVivaliz QA'
+            'Repository Governance'
+            'Policy Engine'
+            'Autonomy Boundary'
+            'History Integrity'
+            'Ecommerce Excellence Audit'
+            'PR Policy Enforcement'
+          )
+
+          mapfile -t prs < <(
+            gh api "repos/${REPO}/pulls?state=open&base=main&per_page=100" \
+              --jq '.[] | select(.draft == false) | .number'
+          )
+          echo "open_ready_pr_count=${#prs[@]}"
+          merged_count=0
+
+          for pr in "${prs[@]}"; do
+            meta="$(gh api "repos/${REPO}/pulls/${pr}")"
+            head_repo="$(jq -r '.head.repo.full_name // ""' <<<"$meta")"
+            head_sha="$(jq -r '.head.sha' <<<"$meta")"
+            base_ref="$(jq -r '.base.ref' <<<"$meta")"
+
+            if [[ "$head_repo" != "$REPO" || "$base_ref" != 'main' ]]; then
+              echo "pr_${pr}_skipped_untrusted_or_nonmain=true"
+              continue
+            fi
+
+            # A PR is never merged against stale main. If main advanced, the
+            # Auto-Healer will merge main into the PR branch and re-run gates.
+            relation="$(gh api "repos/${REPO}/compare/main...${head_sha}" --jq '.status')"
+            if [[ "$relation" != 'ahead' && "$relation" != 'identical' ]]; then
+              echo "pr_${pr}_needs_main_sync=true"
+              continue
+            fi
+
+            runs="$(gh api "repos/${REPO}/actions/runs?head_sha=${head_sha}&per_page=100")"
+            ready=1
+            for workflow_name in "${required[@]}"; do
+              state="$(jq -r --arg name "$workflow_name" '
+                [.workflow_runs[] | select(.name == $name)]
+                | sort_by(.created_at)
+                | last
+                | if . == null then "missing" else (.status + ":" + (.conclusion // "")) end
+              ' <<<"$runs")"
+              echo "pr_${pr}_gate_${workflow_name// /_}=${state}"
+              if [[ "$state" != 'completed:success' ]]; then
+                ready=0
+              fi
+            done
+
+            # Any completed failing run on this exact SHA is a known failure,
+            # even when it is not one of the mandatory core workflow names.
+            failing="$(jq '[.workflow_runs[]
+              | select(.status == "completed")
+              | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "action_required" or .conclusion == "startup_failure")]
+              | length' <<<"$runs")"
+            if (( failing > 0 )); then
+              ready=0
+              echo "pr_${pr}_failing_run_count=${failing}"
+            fi
+
+            if [[ "$ready" -ne 1 ]]; then
+              echo "pr_${pr}_merge_ready=false"
+              continue
+            fi
+
+            # TOCTOU guard: never merge if the branch moved after validation.
+            latest_sha="$(gh api "repos/${REPO}/pulls/${pr}" --jq '.head.sha')"
+            if [[ "$latest_sha" != "$head_sha" ]]; then
+              echo "pr_${pr}_head_moved=true"
+              continue
+            fi
+
+            result="$(gh api --method PUT "repos/${REPO}/pulls/${pr}/merge" \
+              -f sha="$head_sha" \
+              -f merge_method='squash')"
+            merged="$(jq -r '.merged // false' <<<"$result")"
+            if [[ "$merged" != 'true' ]]; then
+              message="$(jq -r '.message // "merge rejected"' <<<"$result")"
+              echo "::warning::PR #${pr} was green but GitHub rejected merge: ${message}"
+              continue
+            fi
+
+            merged_count=$((merged_count + 1))
+            echo "pr_${pr}_merged=true"
+            echo "pr_${pr}_validated_head_sha=${head_sha}"
+          done
+
+          echo "merged_pr_count=${merged_count}"
+          if (( merged_count > 0 )); then
+            # Merging advances main and can stale the remaining PRs. Failure to
+            # start the synchronization sweep is itself a workflow failure.
+            gh workflow run pr-conflict-auto-healer.yml --ref main
+            echo 'post_merge_healer_dispatch=true'
+          fi
+
+      - name: Enforcement invariant
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo 'green_pr_without_current_main_merge_allowed=false'
+          echo 'stale_checks_accepted=false'
+          echo 'fork_pr_auto_merge_allowed=false'
