@@ -133,22 +133,20 @@ function smoke_image_client(string $selector): array
     return match ($selector) {
         'openai' => [new AiStudioOpenAiClient(ai_studio_secret_pool('AI_STUDIO_OPENAI_API_KEY', ['OPENAI_API_KEY']), $openAiModel), 'openai'],
         'google' => [new AiStudioGoogleImageEditClient(ai_studio_secret_pool('AI_STUDIO_GOOGLE_IMAGEN_API_KEY', ['GOOGLE_IMAGEN_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_GEMINI_API_KEY']), $googleModel), 'google'],
-        'openrouter' => [new AiStudioOpenAiCompatibleClient(
+        'openrouter' => [new AiStudioOpenRouterImageClient(
             ai_studio_secret_pool('AI_STUDIO_OPENROUTER_API_KEY', ['OPENROUTER_API_KEY']),
             $openRouterModel,
             defined('AI_STUDIO_OPENROUTER_API_BASE_URL') ? (string)AI_STUDIO_OPENROUTER_API_BASE_URL : 'https://openrouter.ai/api/v1',
-            'OpenRouter',
             [
                 'HTTP-Referer' => defined('AI_STUDIO_OPENROUTER_HTTP_REFERER') ? (string)AI_STUDIO_OPENROUTER_HTTP_REFERER : 'https://shopvivaliz.com.br',
                 'X-OpenRouter-Title' => defined('AI_STUDIO_OPENROUTER_APP_TITLE') ? (string)AI_STUDIO_OPENROUTER_APP_TITLE : 'ShopVivaliz',
             ]
         ), 'openrouter'],
-        'groq' => [new AiStudioOpenAiCompatibleClient(
-            ai_studio_secret_pool('AI_STUDIO_GROQ_API_KEY', ['GROQ_API_KEY']),
-            $groqModel,
-            defined('AI_STUDIO_GROQ_API_BASE_URL') ? (string)AI_STUDIO_GROQ_API_BASE_URL : 'https://api.groq.com/openai/v1',
-            'Groq'
-        ), 'groq'],
+        // Groq nao expoe endpoint de edicao/geracao de imagem (so texto/audio);
+        // o dashboard real (process_item.php) ja trata isso como otimizador de
+        // prompt e usa outro motor para o pixel. Deixe o teste explicito para
+        // nao mascarar um 404 estrutural como se fosse uma falha de credencial.
+        'groq' => throw new AiStudioApiException('Groq nao possui endpoint de edicao/geracao de imagem; use-o apenas como otimizador de prompt.'),
         default => throw new InvalidArgumentException('Seletor de imagem invalido: ' . $selector),
     };
 }
