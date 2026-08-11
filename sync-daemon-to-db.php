@@ -48,7 +48,7 @@ foreach ($items as $item) {
     // olist/sync-on-webhook.php). Todo produto sincronizado aqui deve ficar
     // active=1; os que nao aparecerem mais neste ciclo sao desativados abaixo.
     $stmt = $db->prepare(
-        "INSERT INTO products (olist_product_id, sku, name, price, stock, category, is_published, active, created_at, updated_at)
+        "INSERT INTO products (olist_id, sku, name, price, stock, category, is_published, active, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, 1, 1, NOW(), NOW())
          ON DUPLICATE KEY UPDATE name=?, price=?, stock=?, category=?, active=1, updated_at=NOW()"
     );
@@ -64,13 +64,13 @@ foreach ($items as $item) {
 
 $deactivated = 0;
 if ($activeOlistIds !== []) {
-    // Produtos com olist_product_id preenchido que nao vieram nesta lista de
+    // Produtos com olist_id preenchido que nao vieram nesta lista de
     // ativos do Tiny devem ser desativados: o site precisa espelhar o ERP.
     $placeholders = implode(',', array_fill(0, count($activeOlistIds), '?'));
     $types = str_repeat('i', count($activeOlistIds));
     $stmt = $db->prepare(
         "UPDATE products SET active = 0, updated_at = NOW()
-         WHERE olist_product_id IS NOT NULL AND olist_product_id NOT IN ($placeholders) AND active = 1"
+         WHERE olist_id IS NOT NULL AND olist_id NOT IN ($placeholders) AND active = 1"
     );
     $stmt->bind_param($types, ...$activeOlistIds);
     $stmt->execute();
