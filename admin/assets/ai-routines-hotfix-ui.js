@@ -156,7 +156,7 @@
           targetChannel: stepForm.querySelector('[name="target_channel"]')?.value || 'site',
           provider: stepForm.querySelector('[name="provider"]')?.value || 'openai',
           model: stepForm.querySelector('[name="model"]')?.value || '',
-          limit: Math.max(0, Math.min(5000, Number(stepForm.querySelector('[name="limit"]')?.value || 12))),
+          limit: Math.max(0, Math.min(5000, Number(stepForm.querySelector('[name="page_size"], [name="limit"]')?.value || 0))),
         };
         renderImageCandidates(stepForm.closest('.ais-form'), values);
       }, true);
