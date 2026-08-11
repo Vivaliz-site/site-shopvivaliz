@@ -92,19 +92,19 @@ after_sha="$(git rev-parse HEAD)"
 if [[ "$after_sha" == "$before_sha" ]]; then
   echo 'pr_branch_already_current=true'
   echo "pr_head_sha=${after_sha}"
-  exit 0
+else
+  # Before publication, ensure nobody moved the PR branch. This makes the push
+  # strictly fast-forward and scoped to the original PR head.
+  latest="$(gh api "repos/${repo}/pulls/${pr_number}" --jq '.head.sha')"
+  [[ "$latest" == "$expected_head_sha" ]] || fail 'remote PR branch moved before publication'
+  remote_sha="$(git rev-parse "refs/remotes/origin/${head_ref}")"
+  git merge-base --is-ancestor "$remote_sha" HEAD || fail 'publication would not be fast-forward'
+
+  # ALLOW_SCOPED_PUSH: same-repository PR branch only, never protected refs.
+  git push origin "HEAD:refs/heads/${head_ref}" >/dev/null
+  echo 'pr_branch_update_pushed=true'
+  echo "pr_head_sha=${after_sha}"
 fi
 
-# Before publication, ensure nobody moved the PR branch. This makes the push
-# strictly fast-forward and scoped to the original PR head.
-latest="$(gh api "repos/${repo}/pulls/${pr_number}" --jq '.head.sha')"
-[[ "$latest" == "$expected_head_sha" ]] || fail 'remote PR branch moved before publication'
-remote_sha="$(git rev-parse "refs/remotes/origin/${head_ref}")"
-git merge-base --is-ancestor "$remote_sha" HEAD || fail 'publication would not be fast-forward'
-
-# ALLOW_SCOPED_PUSH: same-repository PR branch only, never protected refs.
-git push origin "HEAD:refs/heads/${head_ref}" >/dev/null
-echo 'pr_branch_update_pushed=true'
-echo "pr_head_sha=${after_sha}"
 echo 'external_github_auth_used=true'
 echo 'secret_values_printed=false'
