@@ -239,9 +239,7 @@ final class CatalogAiOpenAiCompatibleTextProvider extends CatalogAiRotatingProvi
 
     protected function completeWithKey(string $key, string $systemPrompt, string $userPrompt): array
     {
-        $response = CatalogAiHttpClient::postJson($this->baseUrl . '/chat/completions', array_merge([
-            'Authorization' => 'Bearer ' . $key,
-        ], $this->extraHeaders), [
+        $payload = [
             'model' => $this->model,
             'messages' => [
                 ['role' => 'system', 'content' => $systemPrompt],
@@ -249,7 +247,17 @@ final class CatalogAiOpenAiCompatibleTextProvider extends CatalogAiRotatingProvi
             ],
             'temperature' => 0.7,
             'response_format' => ['type' => 'json_object'],
-        ], $this->timeoutSeconds);
+        ];
+        // OpenRouter pode usar o limite máximo do modelo quando max_tokens não
+        // é informado. Para este JSON de catálogo isso é desnecessário e pode
+        // transformar saldo suficiente em HTTP 402. Mantemos um teto explícito
+        // sem alterar o comportamento do Groq.
+        if (strcasecmp($this->providerLabel, 'OpenRouter') === 0) {
+            $payload['max_tokens'] = 3200;
+        }
+        $response = CatalogAiHttpClient::postJson($this->baseUrl . '/chat/completions', array_merge([
+            'Authorization' => 'Bearer ' . $key,
+        ], $this->extraHeaders), $payload, $this->timeoutSeconds);
         if ($response['status'] < 200 || $response['status'] >= 300) throw $this->failure($this->providerLabel . ' chat/completions', $response);
         $decoded = json_decode($response['body'], true);
         $text = is_array($decoded) ? ($decoded['choices'][0]['message']['content'] ?? null) : null;
