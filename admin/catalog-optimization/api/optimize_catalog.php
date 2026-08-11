@@ -311,6 +311,7 @@ function ai_catalog_build_user_prompt(array $product, string $channel): string
     $channelLabel = catalog_ai_channels()[$channel] ?? $channel;
     $profile = sv_catalog_channel_profile($channel);
     $limits = is_array($profile['limits'] ?? null) ? $profile['limits'] : [];
+    $fieldMap = is_array($profile['field_map'] ?? null) ? $profile['field_map'] : [];
     $fields = [
         'Nome atual' => $product['name'] ?? '',
         'Descricao atual' => $product['description'] ?? '',
@@ -343,6 +344,32 @@ function ai_catalog_build_user_prompt(array $product, string $channel): string
         if ($limitParts !== []) {
             $lines[] = 'Alvos do canal: ' . implode(' | ', $limitParts);
         }
+    }
+    if ($fieldMap !== []) {
+        $direct = [];
+        $embedded = [];
+        $internal = [];
+        foreach ($fieldMap as $key => $field) {
+            $label = trim((string)($field['label'] ?? $key));
+            if ($label === '') {
+                continue;
+            }
+            $mode = (string)($field['mode'] ?? 'internal');
+            $target = trim((string)($field['target'] ?? ''));
+            $text = $label . ($target !== '' ? ' -> ' . $target : '');
+            if ($mode === 'direct') {
+                $direct[] = $text;
+            } elseif ($mode === 'embedded') {
+                $embedded[] = $text;
+            } else {
+                $internal[] = $text;
+            }
+        }
+        $lines[] = 'Campos deste canal:';
+        $lines[] = 'Diretos/publicados como campo proprio: ' . ($direct !== [] ? implode(' | ', $direct) : 'nenhum');
+        $lines[] = 'Incorporados em outro campo: ' . ($embedded !== [] ? implode(' | ', $embedded) : 'nenhum');
+        $lines[] = 'Apoio interno/nao publicado diretamente: ' . ($internal !== [] ? implode(' | ', $internal) : 'nenhum');
+        $lines[] = 'Nao transforme campo interno em promessa publicada. Quando um campo nao existir no canal, produza conteudo util para revisao interna ou deixe conservador.';
     }
     $lines[] = '';
     $lines[] = 'DADOS FACTUAIS DO PRODUTO:';
@@ -442,6 +469,7 @@ function ai_catalog_channel_prompt_brief(array $product, string $channel): strin
         case 'erp':
             $parts[] = 'Estrutura preferida: nomenclatura tecnica interna + identificadores + especificacoes estruturadas.';
             $parts[] = 'Nao tente transformar o ERP em vitrine; mantenha o texto util para integracao e consistencia cadastral.';
+            $parts[] = 'Inclua no conteudo tecnico os atributos editoriais reutilizaveis de Site, Mercado Livre, Shopee, Amazon e TikTok como metadados/atributos internos, sem prometer publicacao direta desses campos.';
             break;
         default:
             $parts[] = 'Estrutura preferida: nome principal do produto + atributo factual mais forte + contexto de uso permitido.';

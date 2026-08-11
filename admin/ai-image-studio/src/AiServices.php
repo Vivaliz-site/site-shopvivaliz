@@ -25,7 +25,7 @@ final class AiStudioKeyPool
 
     public static function shouldRotate(int $status, string $message): bool
     {
-        if (in_array($status, [401, 403, 429], true)) return true;
+        if (in_array($status, [401, 402, 403, 429], true)) return true;
         $text = strtolower($message);
         foreach ([
             'insufficient_quota', 'quota exceeded', 'quota_exceeded', 'resource_exhausted',
@@ -458,10 +458,10 @@ final class AiStudioGoogleImageEditClient extends AiStudioRotatingClient
 final class AiStudioClaudeClient extends AiStudioRotatingClient
 {
     private const SYSTEM_PROMPT = <<<'PROMPT'
-Você é um diretor de fotografia de e-commerce. Reescreva este produto em 3 prompts de imagem fotorrealistas em inglês para os modos white, hero e ambient. Preserve integralmente cor, formato, proporções, marca, rótulos e design do produto real. Altere somente cenário, fundo e iluminação. Nunca invente acessórios, acabamento, tamanho ou compatibilidade. Use o contexto factual do catálogo quando houver. Retorne exclusivamente JSON com as chaves white, hero e ambient.
+Você é um diretor de fotografia de e-commerce. Reescreva este produto em 4 prompts de imagem fotorrealistas em inglês para os modos cover, white, hero e ambient. Preserve integralmente cor, formato, proporções, marca, rótulos e design do produto real. Altere somente cenário, fundo e iluminação. Nunca invente acessórios, acabamento, tamanho ou compatibilidade. Use o contexto factual do catálogo quando houver. Retorne exclusivamente JSON com as chaves cover, white, hero e ambient.
 PROMPT;
 
-    /** @return array{white:string,hero:string,ambient:string} */
+    /** @return array{cover:string,white:string,hero:string,ambient:string} */
     public function optimizePrompts(string $productName, string $productDescription, array $productContext = []): array
     {
         return $this->withKeyRotation(function (string $key) use ($productName, $productDescription, $productContext): array {
@@ -488,10 +488,10 @@ PROMPT;
             $clean = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', trim($text)) ?? trim($text);
             $prompts = json_decode($clean, true);
             if (!is_array($prompts)) throw new AiStudioApiException('Claude não retornou JSON válido.');
-            foreach (['white', 'hero', 'ambient'] as $name) {
+            foreach (['cover', 'white', 'hero', 'ambient'] as $name) {
                 if (!is_string($prompts[$name] ?? null) || trim($prompts[$name]) === '') throw new AiStudioApiException("Claude não retornou o prompt {$name}.");
             }
-            return ['white' => trim($prompts['white']), 'hero' => trim($prompts['hero']), 'ambient' => trim($prompts['ambient'])];
+            return ['cover' => trim($prompts['cover']), 'white' => trim($prompts['white']), 'hero' => trim($prompts['hero']), 'ambient' => trim($prompts['ambient'])];
         }, 'Claude');
     }
 }

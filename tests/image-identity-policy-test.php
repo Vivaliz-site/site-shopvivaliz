@@ -77,7 +77,7 @@ try {
     );
 
     $sitePrompts = ai_studio_default_prompts('Produto Teste X1', 'site');
-    foreach (['white', 'hero', 'ambient'] as $type) {
+    foreach (['cover', 'white', 'hero', 'ambient'] as $type) {
         iip_assert(isset($sitePrompts[$type]), "prompt {$type} must exist");
         iip_assert(str_contains($sitePrompts[$type], 'Preserve the exact product identity'), "prompt {$type} must preserve identity");
         iip_assert(str_contains($sitePrompts[$type], 'Do not invent'), "prompt {$type} must reject invented features");
@@ -91,8 +91,9 @@ try {
     iip_assert(str_contains($sitePrompts['white'], 'no badges'), 'main image must reject promotional overlays');
 
     $amazonPrompts = ai_studio_default_prompts('Produto Teste X1', 'amazon');
+    iip_assert(str_contains($amazonPrompts['cover'], 'channel-specific cover image'), 'Amazon cover prompt must be channel-specific');
+    iip_assert(str_contains($amazonPrompts['cover'], 'first marketplace image'), 'Amazon cover prompt must be treated as first image');
     iip_assert(str_contains($amazonPrompts['white'], 'Amazon-compliant main product image'), 'Amazon white prompt must include Amazon guidance');
-    iip_assert(str_contains($amazonPrompts['white'], 'first marketplace image'), 'Amazon white prompt must be treated as first image');
     $contextPrompts = ai_studio_default_prompts('Produto Teste X1', 'tiktok', [
         'category' => 'Acessorios',
         'brand' => 'Acme',
@@ -132,7 +133,7 @@ try {
     $tiktokProfile = ai_studio_channel_profile('tiktok');
     iip_assert((int)($tiktokProfile['minimum_side'] ?? 0) === 1000, 'TikTok technical minimum must remain 1000px');
     iip_assert((int)($tiktokProfile['recommended_side'] ?? 0) === 1600, 'TikTok recommended target must be visible as 1600px');
-    iip_assert(!empty($tiktokProfile['white_first']), 'TikTok white cover must be reviewed first');
+    iip_assert(!empty($tiktokProfile['white_first']), 'TikTok cover must be reviewed first');
 
     $reflection = new ReflectionClass(AiStudioOmnichannelImagePublisher::class);
     $publisher = $reflection->newInstanceWithoutConstructor();
@@ -156,10 +157,11 @@ try {
     $ordered = $orderMethod->invoke($publisher, [
         ['type' => 'hero', 'url' => '/hero-new.png', 'order' => 0],
         ['type' => 'white', 'url' => '/white-approved.png', 'order' => 1],
+        ['type' => 'cover', 'url' => '/cover-approved.png', 'order' => 2],
         ['type' => 'ambient', 'url' => '/ambient-approved.png', 'order' => 2],
         ['type' => 'hero', 'url' => '/hero-old.png', 'order' => 3],
     ]);
-    iip_assert($ordered === ['/white-approved.png', '/hero-new.png', '/ambient-approved.png'], 'white must always be first and only latest type kept');
+    iip_assert($ordered === ['/cover-approved.png', '/white-approved.png', '/hero-new.png', '/ambient-approved.png'], 'cover/white must always be first and only latest type kept');
 
     $syncSource = file_get_contents(__DIR__ . '/../olist/sync-images-to-site.php');
     iip_assert(is_string($syncSource), 'sync source must be readable');
@@ -170,7 +172,7 @@ try {
     $publisherSource = file_get_contents(__DIR__ . '/../admin/ai-image-studio/src/OmnichannelImagePublisher.php');
     iip_assert(is_string($publisherSource), 'publisher source must be readable');
     iip_assert(str_contains($publisherSource, 'approvedChannelUrls'), 'external channels must use same-channel approval provenance');
-    iip_assert(str_contains($publisherSource, 'white deve ser aprovada primeiro'), 'secondary image cannot become cover without approved white');
+    iip_assert(str_contains($publisherSource, 'imagem capa deve ser aprovada primeiro'), 'secondary image cannot become cover without approved cover');
     iip_assert(str_contains($publisherSource, 'amazonUrlsWithExisting'), 'Amazon gallery must preserve pre-existing locators');
     iip_assert(str_contains($publisherSource, 'API V2 exige reenviar preço'), 'ERP image publish must fail closed instead of resending price');
     iip_assert(!str_contains($publisherSource, "new SvTinyPublisher(\$this->db))->publishImages"), 'AI Image Studio must not call Tiny image mutation path');

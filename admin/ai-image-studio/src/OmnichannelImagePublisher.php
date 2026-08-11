@@ -48,7 +48,7 @@ final class AiStudioOmnichannelImagePublisher
 
                 // Amazon substitui os locators informados no patch. Preserva a
                 // galeria já existente, mas mantém as imagens explicitamente
-                // aprovadas pelo Admin na frente e sempre com white como capa.
+                // aprovadas pelo Admin na frente e sempre com cover/white como capa.
                 if ($channel === 'amazon') {
                     $channelUrls = $this->amazonUrlsWithExisting($productId, $channelUrls);
                 }
@@ -274,22 +274,22 @@ final class AiStudioOmnichannelImagePublisher
         }
 
         $urls = $this->orderImageCandidates($candidates);
-        $whitePresent = false;
+        $coverPresent = false;
         foreach ($candidates as $candidate) {
-            if (($candidate['type'] ?? '') === 'white' && trim((string)($candidate['url'] ?? '')) !== '') {
-                $whitePresent = true;
+            if (in_array(($candidate['type'] ?? ''), ['cover', 'white'], true) && trim((string)($candidate['url'] ?? '')) !== '') {
+                $coverPresent = true;
                 break;
             }
         }
-        if (in_array($channel, self::COVER_FIRST_CHANNELS, true) && !$whitePresent) {
-            throw new RuntimeException("A imagem white deve ser aprovada primeiro para {$channel}; hero/ambient nunca podem virar capa automaticamente.");
+        if (in_array($channel, self::COVER_FIRST_CHANNELS, true) && !$coverPresent) {
+            throw new RuntimeException("A imagem capa deve ser aprovada primeiro para {$channel}; hero/ambient nunca podem virar capa automaticamente.");
         }
         return $urls;
     }
 
     /**
      * Mantém no máximo a versão mais recente de cada tipo e garante a ordem
-     * white -> hero -> ambient -> outros. O primeiro URL é a capa nos
+     * cover -> white -> hero -> ambient -> outros. O primeiro URL é a capa nos
      * publishers externos, portanto esta função é parte do contrato de
      * segurança da publicação.
      *
@@ -298,7 +298,7 @@ final class AiStudioOmnichannelImagePublisher
      */
     private function orderImageCandidates(array $candidates): array
     {
-        $rank = ['white' => 0, 'hero' => 1, 'ambient' => 2];
+        $rank = ['cover' => 0, 'white' => 1, 'hero' => 2, 'ambient' => 3];
         $seenTypes = [];
         $selected = [];
         foreach ($candidates as $candidate) {
@@ -377,7 +377,7 @@ final class AiStudioOmnichannelImagePublisher
 
     private function registerSiteImage(int $stagingId, int $productId, string $type, string $url): void
     {
-        if ($type === 'white') {
+        if (in_array($type, ['cover', 'white'], true)) {
             $clear = $this->db->prepare('UPDATE product_images SET is_primary = 0 WHERE product_id = ?');
             $clear->execute([$productId]);
         }
@@ -385,7 +385,7 @@ final class AiStudioOmnichannelImagePublisher
             'INSERT INTO product_images (product_id, image_type, public_url, is_primary, source_staging_id) VALUES (?, ?, ?, ?, ?) '
             . 'ON DUPLICATE KEY UPDATE image_type = VALUES(image_type), is_primary = VALUES(is_primary), source_staging_id = VALUES(source_staging_id)'
         );
-        $stmt->execute([$productId, $type, $url, $type === 'white' ? 1 : 0, $stagingId]);
+        $stmt->execute([$productId, $type, $url, in_array($type, ['cover', 'white'], true) ? 1 : 0, $stagingId]);
     }
 
     private function publishSite(int $stagingId, int $productId, string $imageType, string $publicUrl, array $publicUrls): array
@@ -394,7 +394,7 @@ final class AiStudioOmnichannelImagePublisher
         $this->db->beginTransaction();
         try {
             $this->registerSiteImage($stagingId, $productId, $imageType, $publicUrl);
-            if ($imageType === 'white') {
+            if (in_array($imageType, ['cover', 'white'], true)) {
                 $stmt = $this->db->prepare('UPDATE products SET image_url = ?, updated_at = NOW() WHERE id = ?');
                 $stmt->execute([$publicUrl, $productId]);
                 $verify = $this->db->prepare('SELECT image_url FROM products WHERE id = ? LIMIT 1');
@@ -421,7 +421,7 @@ final class AiStudioOmnichannelImagePublisher
 
         return [
             'status' => 'published',
-            'operation' => 'product_images + storefront cache' . ($imageType === 'white' ? ' + products.image_url' : ''),
+            'operation' => 'product_images + storefront cache' . (in_array($imageType, ['cover', 'white'], true) ? ' + products.image_url' : ''),
             'external_id' => (string)$productId,
             'http_status' => 200,
             'request_id' => '',
@@ -469,7 +469,7 @@ final class AiStudioOmnichannelImagePublisher
             $gallery = array_slice(array_values(array_unique(array_merge($absoluteUrls, $existing))), 0, 12);
             $item['images'] = $gallery;
             $item['imagens'] = array_map(static fn(string $url): array => ['url' => $url], $gallery);
-            if ($imageType === 'white') {
+            if (in_array($imageType, ['cover', 'white'], true)) {
                 foreach (['image_url', 'primary_image_url', 'imagem_principal_url', 'imagem'] as $field) {
                     $item[$field] = $publicUrl;
                 }
@@ -540,7 +540,7 @@ final class AiStudioOmnichannelImagePublisher
             'images' => $gallery,
             'imagens' => array_map(static fn(string $url): array => ['url' => $url], $gallery),
         ];
-        if ($imageType === 'white') {
+        if (in_array($imageType, ['cover', 'white'], true)) {
             foreach (['image_url', 'primary_image_url', 'imagem_principal_url', 'imagem'] as $field) {
                 $entry[$field] = $publicUrl;
             }

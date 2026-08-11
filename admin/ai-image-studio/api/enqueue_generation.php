@@ -80,9 +80,9 @@ $productId = (int)($input['product_id'] ?? 0);
 $provider = ai_studio_normalize_provider((string)($input['provider'] ?? ''));
 $targetChannel = strtolower(trim((string)($input['target_channel'] ?? 'site')));
 $model = trim((string)($input['model'] ?? $input['model_override'] ?? ''));
-$rawTypes = $input['image_types'] ?? ['white', 'hero', 'ambient'];
+$rawTypes = $input['image_types'] ?? ['cover', 'hero', 'ambient'];
 $imageTypes = is_array($rawTypes)
-    ? array_values(array_unique(array_intersect(array_map('strval', $rawTypes), ['white', 'hero', 'ambient'])))
+    ? array_values(array_unique(array_intersect(array_map('strval', $rawTypes), ['cover', 'white', 'hero', 'ambient'])))
     : [];
 
 if ($productId <= 0) {

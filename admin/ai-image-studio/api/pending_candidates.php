@@ -34,6 +34,35 @@ if (!$db instanceof PDO) {
 
 svcp_ensure_schema($db);
 
+function ais_pending_active_product_sql(PDO $db, string $alias = 'p'): string
+{
+    $prefix = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 'p';
+    $columns = [];
+    try {
+        $stmt = $db->query('SHOW COLUMNS FROM products');
+        foreach ($stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [] as $row) {
+            $field = strtolower((string)($row['Field'] ?? ''));
+            if ($field !== '') {
+                $columns[$field] = true;
+            }
+        }
+    } catch (Throwable) {
+        $columns = ['active' => true];
+    }
+    $parts = [];
+    foreach (['active', 'is_active', 'ativo'] as $column) {
+        if (isset($columns[$column])) {
+            $parts[] = "COALESCE({$prefix}.{$column}, 0) = 1";
+        }
+    }
+    foreach (['situacao', 'status'] as $column) {
+        if (isset($columns[$column])) {
+            $parts[] = "UPPER(COALESCE({$prefix}.{$column}, 'A')) NOT IN ('I','INATIVO','INACTIVE','DESATIVADO','DISABLED','EXCLUIDO','DELETED')";
+        }
+    }
+    return $parts !== [] ? implode(' AND ', $parts) : '1=1';
+}
+
 try {
     // Nao seleciona colunas opcionais (como products.category), porque o schema
     // de producao nao garante esses campos. O contexto adicional e resolvido
@@ -44,7 +73,7 @@ try {
     $stmt = $db->prepare(
         'SELECT p.id, p.name, p.image_url, p.sku '
         . 'FROM products p '
-        . 'WHERE COALESCE(p.active, 0) = 1 '
+        . 'WHERE ' . ais_pending_active_product_sql($db, 'p') . ' '
         . 'AND NOT EXISTS ('
         . ' SELECT 1 FROM product_images_staging s '
         . ' WHERE s.product_id = p.id '

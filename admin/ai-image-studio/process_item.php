@@ -68,6 +68,7 @@ function ai_studio_default_prompts(string $productName, string $targetChannel = 
     }
 
     $base = [
+        'cover' => $identity . $context . $appearanceHint . $sceneHint . ' Create the channel-specific cover image for the selected marketplace. It must be the safest first image for that channel: exact product only, product dominant, fully visible, and following that channel cover convention. Do not use badges, borders, promotional text or seals unless the channel guidance explicitly allows generic visual seals. Never claim discounts, shipping, warranty, ratings, official status, quantity included, compatibility or benefits not proven by the catalog. Square 1:1 composition and photorealistic. For strict channels, use pure white RGB 255,255,255; for the ShopVivaliz site, keep a clean ecommerce cover; for channels that commonly use commercial covers, keep labels generic and non-claiming. Do not warp the object, bend edges, change colors or exaggerate size.',
         'white' => $identity . $context . $appearanceHint . $sceneHint . ' Create a marketplace-safe main image: pure white RGB 255,255,255 background, product centered, fully visible and occupying about 85-95% of the frame, neutral professional lighting, natural contact shadow only, no badges, borders, promotional text, watermarks or extra objects. Square 1:1 composition and photorealistic. This is the cover image and must read as a clean catalog photo first. Do not warp the object, bend edges, change colors or exaggerate size.',
         'hero' => $identity . $context . $appearanceHint . $sceneHint . ' Create a premium ecommerce hero image with controlled studio lighting and a clean neutral setting. Keep the product unobstructed and dominant in frame. No promotional text, badges, watermarks or invented props. Square 1:1 composition and photorealistic. Make the scene channel-specific but still factual and product-first. Do not distort the product geometry, finish or color.',
         'ambient' => $identity . $context . $appearanceHint . $sceneHint . ' Place the exact product in a realistic usage context supported by the visible product category, without implying unsupported compatibility or accessories. Keep the product fully recognizable and unobstructed. Natural scale, perspective, shadows and lighting. Square 1:1 composition and photorealistic. If the channel is strict, keep the scene simpler and more catalog-like. Do not stylize in a way that changes the product shape, proportions or color.',
@@ -371,7 +372,7 @@ function ai_studio_process_item(
     ?PDO $db,
     int $productId,
     string $provider,
-    array $imageTypes = ['white', 'hero', 'ambient'],
+    array $imageTypes = ['cover', 'hero', 'ambient'],
     ?string $modelOverride = null,
     string $targetChannel = 'site',
     ?array $productOverride = null,
@@ -392,7 +393,7 @@ function ai_studio_process_item(
         return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Canal de imagem invalido: '{$targetChannel}'."];
     }
 
-    $imageTypes = array_values(array_unique(array_intersect(array_map('strval', $imageTypes), ['white', 'hero', 'ambient'])));
+    $imageTypes = array_values(array_unique(array_intersect(array_map('strval', $imageTypes), ['cover', 'white', 'hero', 'ambient'])));
     if ($imageTypes === []) {
         return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => 'Nenhum tipo de imagem valido selecionado.'];
     }
@@ -538,7 +539,7 @@ function ai_studio_process_queued_job(array $payload): array
 {
     $productId = (int)($payload['product_id'] ?? 0);
     $provider = (string)($payload['provider'] ?? '');
-    $imageTypes = is_array($payload['image_types'] ?? null) ? array_map('strval', $payload['image_types']) : ['white', 'hero', 'ambient'];
+    $imageTypes = is_array($payload['image_types'] ?? null) ? array_map('strval', $payload['image_types']) : ['cover', 'hero', 'ambient'];
     $modelOverride = trim((string)($payload['model_override'] ?? ''));
     $targetChannel = strtolower(trim((string)($payload['target_channel'] ?? 'site')));
     $product = is_array($payload['product'] ?? null) ? $payload['product'] : null;
@@ -566,10 +567,10 @@ if (PHP_SAPI === 'cli' && realpath($argv[0] ?? '') === realpath(__FILE__)) {
     $model = trim((string)($argv[4] ?? ''));
     $targetChannel = strtolower(trim((string)($argv[5] ?? 'site')));
     if ($productId <= 0 || $provider === '') {
-        fwrite(STDERR, "Uso: php process_item.php <product_id> <openai|google|claude|openrouter|groq> [white,hero,ambient] [modelo] [site|ml|shopee|amazon|tiktok]\n");
+        fwrite(STDERR, "Uso: php process_item.php <product_id> <openai|google|claude|openrouter|groq> [cover,hero,ambient] [modelo] [site|ml|shopee|amazon|tiktok]\n");
         exit(1);
     }
-    $types = $typesArg !== '' ? array_map('trim', explode(',', $typesArg)) : ['white', 'hero', 'ambient'];
+    $types = $typesArg !== '' ? array_map('trim', explode(',', $typesArg)) : ['cover', 'hero', 'ambient'];
     $db = null;
     if (function_exists('ai_studio_db')) {
         try {
@@ -597,8 +598,8 @@ if (PHP_SAPI !== 'cli' && basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basena
 
     $productId = (int)($_POST['product_id'] ?? 0);
     $provider = (string)($_POST['provider'] ?? '');
-    $rawTypes = $_POST['image_types'] ?? ['white', 'hero', 'ambient'];
-    $types = is_array($rawTypes) ? array_map('strval', $rawTypes) : ['white', 'hero', 'ambient'];
+    $rawTypes = $_POST['image_types'] ?? ['cover', 'hero', 'ambient'];
+    $types = is_array($rawTypes) ? array_map('strval', $rawTypes) : ['cover', 'hero', 'ambient'];
     $model = trim((string)($_POST['model'] ?? ''));
     $targetChannel = strtolower(trim((string)($_POST['target_channel'] ?? 'site')));
     if ($productId <= 0 || $provider === '') {
