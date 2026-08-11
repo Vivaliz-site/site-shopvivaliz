@@ -4,7 +4,9 @@
 A UI success message, staging status or API submission is not enough. Each
 channel must call a real client, protect commerce fields, preserve rotated OAuth
 tokens and either confirm read-back or explicitly remain submitted for review.
-Submissions waiting for Amazon/TikTok review must be reconciled automatically.
+Submissions waiting for TikTok review may be reconciled automatically. Amazon
+read-back is gated behind CATALOG_RECONCILE_AMAZON=1 and must remain off for
+routine executions.
 """
 from __future__ import annotations
 
@@ -113,6 +115,7 @@ REQUIRED_SNIPPETS = {
         "SvAmazonClient", "SvTikTokClient", "status = 'submitted'", "includedData",
         "return_under_review_version", "publication_failed", "amazon_live_readback",
         "tiktok_live_readback", "svrec_refresh_staging", "CATALOG_SUBMISSION_MAX_AGE_SECONDS",
+        "CATALOG_RECONCILE_AMAZON", "amazonReconcileEnabled",
     ),
 }
 
