@@ -50,10 +50,10 @@ foreach ($items as $item) {
     $stmt = $db->prepare(
         "INSERT INTO products (olist_id, sku, name, price, stock, active, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, 1, NOW(), NOW())
-         ON DUPLICATE KEY UPDATE name=?, price=?, stock=?, active=1, updated_at=NOW()"
+         ON DUPLICATE KEY UPDATE olist_id=VALUES(olist_id), name=VALUES(name), price=VALUES(price), stock=VALUES(stock), active=1, updated_at=NOW()"
     );
 
-    $stmt->bind_param('issdisdi', $id, $sku, $name, $price, $stock, $name, $price, $stock);
+    $stmt->bind_param('issdi', $id, $sku, $name, $price, $stock);
     if ($stmt->execute()) {
         $synced++;
         $activeOlistIds[] = $id;
