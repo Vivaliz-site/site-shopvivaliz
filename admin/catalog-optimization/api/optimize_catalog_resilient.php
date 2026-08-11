@@ -95,17 +95,32 @@ foreach ($providers as $resolvedProvider) {
     }
 
     try {
+        $userPrompt = ai_catalog_build_user_prompt($product, $channel);
         $data = catalog_ai_make_provider($resolvedProvider)->complete(
             ai_catalog_build_system_prompt($channel),
-            ai_catalog_build_user_prompt($product, $channel)
+            $userPrompt
         );
+        $structureErrors = is_array($data) ? catalog_resilient_structure_errors($data) : ['resposta nao retornou um objeto de catalogo'];
+
+        if ($structureErrors !== []) {
+            // Resposta truncada/incompleta e comum em modelos menores; uma
+            // segunda tentativa no mesmo provedor, com os campos faltantes
+            // explicitados, recupera a maioria dos casos sem gastar o
+            // fallback para outro provedor.
+            $retryPrompt = $userPrompt . "\n\nATENCAO: a tentativa anterior veio incompleta (" . implode(', ', $structureErrors)
+                . "). Responda de novo com o JSON completo, garantindo TODAS as chaves obrigatorias preenchidas, mesmo que precise ser mais conciso no texto.";
+            $data = catalog_ai_make_provider($resolvedProvider)->complete(
+                ai_catalog_build_system_prompt($channel),
+                $retryPrompt
+            );
+            $structureErrors = is_array($data) ? catalog_resilient_structure_errors($data) : ['resposta nao retornou um objeto de catalogo'];
+        }
+
         if (!is_array($data)) {
             throw new RuntimeException('Resposta do provedor nao retornou um objeto de catalogo.');
         }
-
-        $structureErrors = catalog_resilient_structure_errors($data);
         if ($structureErrors !== []) {
-            throw new RuntimeException('Resposta insegura/incompleta: ' . implode(', ', $structureErrors));
+            throw new RuntimeException('Resposta insegura/incompleta apos nova tentativa: ' . implode(', ', $structureErrors));
         }
 
         $quality = ai_catalog_quality_report($data, $channel, $product);
