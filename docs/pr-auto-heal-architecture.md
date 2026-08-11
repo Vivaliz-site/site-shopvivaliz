@@ -40,3 +40,7 @@ Binary, symlink and oversized conflicts fail closed. A resolution is staged only
 Green checks are valid only for the exact SHA being merged. The completion enforcer requires `main` to be an ancestor of the PR head, verifies all canonical gates on that exact SHA and then sends only the PR number and expected SHA to Oracle. The Oracle finalizer repeats PR state, repository, base, head-SHA and current-main checks immediately before the merge.
 
 If another PR advances `main`, the remaining PRs are not allowed to merge with stale checks. The next Auto-Healer event/sweep synchronizes `main` into each branch, which produces a new SHA and normal PR validation before merge.
+
+## End-to-end verification
+
+A documentation-only PR may be used as a non-destructive canary for this automation. The canary is considered verified only when the Oracle-private Gemini preflight succeeds without exposing values, all canonical gates pass on one exact SHA, and `PR Completion Enforcer` merges that same SHA automatically through the Oracle finalizer.
