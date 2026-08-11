@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 import importlib.util
 import json
-import os
+import sys
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "pr_conflict_gemini_healer.py"
 spec = importlib.util.spec_from_file_location("pr_conflict_gemini_healer", MODULE_PATH)
-module = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 
 
