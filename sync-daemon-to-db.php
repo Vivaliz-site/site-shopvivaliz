@@ -37,7 +37,6 @@ foreach ($items as $item) {
     $name = trim((string)($item['descricao'] ?? $item['nome'] ?? ''));
     $price = (float)($item['precos']['preco'] ?? 0);
     $stock = (int)($item['estoque_disponivel'] ?? 0);
-    $category = trim((string)(($item['categoria'] ?? [])['nome'] ?? ''));
 
     if (!$id || !$sku || !$name) {
         $skipped++;
@@ -47,13 +46,14 @@ foreach ($items as $item) {
     // O cache ja contem somente produtos com situacao='A' no Tiny (ver
     // olist/sync-on-webhook.php). Todo produto sincronizado aqui deve ficar
     // active=1; os que nao aparecerem mais neste ciclo sao desativados abaixo.
+    // "category" e "is_published" nao existem na tabela products real.
     $stmt = $db->prepare(
-        "INSERT INTO products (olist_id, sku, name, price, stock, category, is_published, active, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 1, 1, NOW(), NOW())
-         ON DUPLICATE KEY UPDATE name=?, price=?, stock=?, category=?, active=1, updated_at=NOW()"
+        "INSERT INTO products (olist_id, sku, name, price, stock, active, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 1, NOW(), NOW())
+         ON DUPLICATE KEY UPDATE name=?, price=?, stock=?, active=1, updated_at=NOW()"
     );
 
-    $stmt->bind_param('isisissssi', $id, $sku, $name, $price, $stock, $category, $name, $price, $stock, $category);
+    $stmt->bind_param('issdisdi', $id, $sku, $name, $price, $stock, $name, $price, $stock);
     if ($stmt->execute()) {
         $synced++;
         $activeOlistIds[] = $id;
