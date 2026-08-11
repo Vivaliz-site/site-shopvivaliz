@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import importlib.util
 import json
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -28,6 +30,69 @@ class CredentialPoolTests(unittest.TestCase):
             module.collect_api_keys(env),
             ["key-a", "key-b", "key-c", "key-d", "key-e"],
         )
+
+    def test_private_env_parser_reads_only_gemini_names(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env_file = Path(directory) / ".env"
+            env_file.write_text(
+                "DB_PASS=must-never-be-loaded\n"
+                "GEMINI_API_KEY=key-a\n"
+                "GOOGLE_GEMINI_API_KEY='key-b'\n"
+                "GOOGLE_IMAGEN_API_KEYS=key-c,key-a\n"
+                "OPENAI_API_KEY=must-never-be-loaded-either\n",
+                encoding="utf-8",
+            )
+            parsed = module.parse_env_file(env_file)
+
+        self.assertEqual(
+            parsed,
+            {
+                "GEMINI_API_KEY": "key-a",
+                "GOOGLE_GEMINI_API_KEY": "key-b",
+                "GOOGLE_IMAGEN_API_KEYS": "key-c,key-a",
+            },
+        )
+        self.assertNotIn("DB_PASS", parsed)
+        self.assertNotIn("OPENAI_API_KEY", parsed)
+
+    def test_credential_environment_uses_private_file_and_deduplicates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env_file = Path(directory) / ".env"
+            env_file.write_text(
+                "GEMINI_API_KEY=key-from-file\n"
+                "GOOGLE_GEMINI_API_KEY=second-key\n"
+                "GOOGLE_API_KEY=key-from-file\n",
+                encoding="utf-8",
+            )
+            with patch.dict(
+                os.environ,
+                {
+                    "GEMINI_ENV_FILE": str(env_file),
+                    "GEMINI_API_KEY": "runner-key-that-file-overrides",
+                },
+                clear=True,
+            ):
+                env = module.credential_environment()
+                keys = module.collect_api_keys(env)
+
+        self.assertEqual(keys, ["key-from-file", "second-key"])
+
+    def test_credential_preflight_reports_count_not_values(self):
+        fake_env = {
+            "GEMINI_API_KEY": "secret-one",
+            "GOOGLE_GEMINI_API_KEY": "secret-two",
+        }
+        with patch.object(module, "credential_environment", return_value=fake_env), patch(
+            "builtins.print"
+        ) as printer:
+            code = module.credential_preflight()
+
+        self.assertEqual(code, 0)
+        rendered = "\n".join(" ".join(map(str, call.args)) for call in printer.call_args_list)
+        self.assertIn("gemini_credentials_configured=2", rendered)
+        self.assertIn("secret_values_printed=false", rendered)
+        self.assertNotIn("secret-one", rendered)
+        self.assertNotIn("secret-two", rendered)
 
     def test_default_models_prefer_current_stable_flash(self):
         self.assertEqual(module.configured_models({})[0], "gemini-3.6-flash")
