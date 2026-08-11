@@ -74,8 +74,14 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && ($_GET['preview'] ?? '') 
             $stmt = $db->prepare(
                 'SELECT p.id, p.name, p.image_url, p.sku '
                 . 'FROM products p '
-                . 'LEFT JOIN product_images_staging s ON s.product_id = p.id AND s.target_channels_json LIKE ? '
-                . 'WHERE COALESCE(p.active, 0) = 1 AND s.id IS NULL ORDER BY p.id ASC LIMIT ' . (int)$limit
+                . 'WHERE COALESCE(p.active, 0) = 1 '
+                . 'AND NOT EXISTS ('
+                . ' SELECT 1 FROM product_images_staging s '
+                . ' WHERE s.product_id = p.id '
+                . ' AND s.target_channels_json LIKE ? '
+                . " AND COALESCE(s.status, '') NOT IN ('failed','rejected')"
+                . ') '
+                . 'ORDER BY p.id ASC LIMIT ' . (int)$limit
             );
             $stmt->execute(['%"' . $previewChannel . '"%']);
             $previewProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
