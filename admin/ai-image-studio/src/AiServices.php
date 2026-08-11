@@ -57,21 +57,26 @@ function ai_studio_normalize_provider(string $provider): string
  */
 function ai_studio_secret_pool(string $constantName, array $envNames): array
 {
+    $values = [];
     if (defined($constantName)) {
         $value = constant($constantName);
         if (is_array($value)) {
-            return AiStudioKeyPool::normalize($value);
-        }
-        if (is_string($value) && $value !== '') {
-            return AiStudioKeyPool::normalize($value);
+            $values = array_merge($values, $value);
+        } elseif (is_string($value) && $value !== '') {
+            $values[] = $value;
         }
     }
 
-    $values = [];
     foreach ($envNames as $envName) {
         $value = trim((string)getenv($envName));
         if ($value !== '') {
             $values[] = $value;
+        }
+        for ($index = 1; $index <= 10; $index++) {
+            $indexed = trim((string)getenv($envName . '_' . $index));
+            if ($indexed !== '') {
+                $values[] = $indexed;
+            }
         }
         $plural = trim((string)getenv($envName . 'S'));
         if ($plural !== '') {
@@ -107,11 +112,11 @@ function ai_studio_provider_fallback_order(string $preferred): array
 function ai_studio_provider_has_key(string $provider): bool
 {
     return match (ai_studio_normalize_provider($provider)) {
-        'openai' => ai_studio_secret_pool('AI_STUDIO_OPENAI_API_KEY', ['OPENAI_API_KEY']) !== [],
-        'google' => ai_studio_secret_pool('AI_STUDIO_GOOGLE_IMAGEN_API_KEY', ['GOOGLE_IMAGEN_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_GEMINI_API_KEY']) !== [],
-        'claude' => ai_studio_secret_pool('AI_STUDIO_CLAUDE_API_KEY', ['CLAUDE_API_KEY', 'ANTHROPIC_API_KEY']) !== [],
-        'openrouter' => ai_studio_secret_pool('AI_STUDIO_OPENROUTER_API_KEY', ['OPENROUTER_API_KEY']) !== [],
-        'groq' => ai_studio_secret_pool('AI_STUDIO_GROQ_API_KEY', ['GROQ_API_KEY']) !== [],
+        'openai' => ai_studio_secret_pool('AI_STUDIO_OPENAI_API_KEY', ['AI_STUDIO_OPENAI_API_KEY', 'OPENAI_API_KEY']) !== [],
+        'google' => ai_studio_secret_pool('AI_STUDIO_GOOGLE_IMAGEN_API_KEY', ['AI_STUDIO_GOOGLE_IMAGEN_API_KEY', 'GOOGLE_IMAGEN_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_GEMINI_API_KEY']) !== [],
+        'claude' => ai_studio_secret_pool('AI_STUDIO_CLAUDE_API_KEY', ['AI_STUDIO_CLAUDE_API_KEY', 'CLAUDE_API_KEY', 'ANTHROPIC_API_KEY']) !== [],
+        'openrouter' => ai_studio_secret_pool('AI_STUDIO_OPENROUTER_API_KEY', ['AI_STUDIO_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY']) !== [],
+        'groq' => ai_studio_secret_pool('AI_STUDIO_GROQ_API_KEY', ['AI_STUDIO_GROQ_API_KEY', 'GROQ_API_KEY']) !== [],
         default => false,
     };
 }

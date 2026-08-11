@@ -434,7 +434,7 @@ final class AiStudioOmnichannelImagePublisher
     private function updateStorefrontCache(array $product, string $imageType, string $publicUrl, array $publicUrls): void
     {
         $path = dirname(__DIR__, 3) . '/storage/products-cache-ativos.json';
-        if (!is_file($path) || !is_readable($path) || !is_writable($path)) {
+        if (!is_file($path) || !is_readable($path) || !is_writable(dirname($path))) {
             throw new RuntimeException('Cache ativo da vitrine indisponível.');
         }
         $payload = json_decode((string)file_get_contents($path), true);
@@ -495,20 +495,75 @@ final class AiStudioOmnichannelImagePublisher
         $walk($payload);
 
         if ($matched === 0) {
-            throw new RuntimeException('Produto não localizado no cache ativo com identidade estrita.');
+            $this->appendStorefrontImageItem($payload, $product, $imageType, $publicUrl, $absoluteUrls);
+            $matched = 1;
         }
         if ($matched > 1) {
             throw new RuntimeException("Identidade ambígua no cache: {$matched} registros correspondem ao mesmo produto. Nenhuma alteração foi persistida.");
         }
 
         $encoded = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        if (!is_string($encoded) || file_put_contents($path, $encoded . PHP_EOL, LOCK_EX) === false) {
+        $tmpPath = $path . '.tmp.' . getmypid() . '.' . bin2hex(random_bytes(4));
+        if (!is_string($encoded) || file_put_contents($tmpPath, $encoded . PHP_EOL, LOCK_EX) === false) {
             throw new RuntimeException('Falha ao persistir a galeria no cache ativo.');
+        }
+        if (!@rename($tmpPath, $path)) {
+            @unlink($tmpPath);
+            throw new RuntimeException('Falha ao substituir o cache ativo.');
         }
         $readBack = json_decode((string)file_get_contents($path), true);
         if (!is_array($readBack)) {
             throw new RuntimeException('Read-back do cache ativo falhou.');
         }
+    }
+
+    /** @param array<string,mixed> $payload @param array<string,mixed> $product @param list<string> $absoluteUrls */
+    private function appendStorefrontImageItem(array &$payload, array $product, string $imageType, string $publicUrl, array $absoluteUrls): void
+    {
+        $sku = trim((string)($product['sku'] ?? ''));
+        $externalId = trim((string)($product['olist_id'] ?? $product['olist_product_id'] ?? ''));
+        $title = trim((string)($product['name'] ?? $product['descricao'] ?? ''));
+        $description = trim((string)($product['description'] ?? $product['descricao_completa'] ?? $title));
+        $gallery = array_slice(array_values(array_unique($absoluteUrls)), 0, 12);
+        $entry = [
+            'id' => $externalId !== '' ? $externalId : (int)($product['id'] ?? 0),
+            'product_id' => (int)($product['id'] ?? 0),
+            'sku' => $sku,
+            'descricao' => $title,
+            'name' => $title,
+            'nome' => $title,
+            'description' => $description,
+            'descricaoComplementar' => $description,
+            'descricao_complementar' => $description,
+            'active' => true,
+            'situacao' => 'A',
+            'images' => $gallery,
+            'imagens' => array_map(static fn(string $url): array => ['url' => $url], $gallery),
+        ];
+        if ($imageType === 'white') {
+            foreach (['image_url', 'primary_image_url', 'imagem_principal_url', 'imagem'] as $field) {
+                $entry[$field] = $publicUrl;
+            }
+        }
+        if (isset($product['price'])) {
+            $entry['precos'] = ['preco' => (float)$product['price'], 'precoPromocional' => (float)($product['promotional_price'] ?? 0)];
+        }
+        if (isset($product['stock'])) {
+            $entry['estoque'] = ['quantidade' => (int)$product['stock']];
+            $entry['estoque_disponivel'] = (int)$product['stock'];
+        }
+
+        foreach (['itens', 'items', 'produtos', 'products', 'data'] as $key) {
+            if (isset($payload[$key]) && is_array($payload[$key])) {
+                $payload[$key][] = $entry;
+                return;
+            }
+        }
+        if (array_is_list($payload)) {
+            $payload[] = $entry;
+            return;
+        }
+        $payload['items'] = [$entry];
     }
 
     private function cacheItemMatchesProduct(array $item, string $sku, string $externalId): bool

@@ -100,10 +100,10 @@ function ai_studio_image_provider_candidates(string $preferred): array
 function ai_studio_build_image_client(string $provider, ?string $modelOverride, string $openAiModel, string $googleModel, string $openRouterModel, string $qropeModel): object
 {
     return match ($provider) {
-        'openai' => new AiStudioOpenAiClient(ai_studio_secret_pool('AI_STUDIO_OPENAI_API_KEY', ['OPENAI_API_KEY']), $modelOverride !== null && trim($modelOverride) !== '' ? trim($modelOverride) : $openAiModel),
-        'google' => new AiStudioGoogleImageEditClient(ai_studio_secret_pool('AI_STUDIO_GOOGLE_IMAGEN_API_KEY', ['GOOGLE_IMAGEN_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_GEMINI_API_KEY']), $modelOverride !== null && trim($modelOverride) !== '' ? trim($modelOverride) : $googleModel),
+        'openai' => new AiStudioOpenAiClient(ai_studio_secret_pool('AI_STUDIO_OPENAI_API_KEY', ['AI_STUDIO_OPENAI_API_KEY', 'OPENAI_API_KEY']), $modelOverride !== null && trim($modelOverride) !== '' ? trim($modelOverride) : $openAiModel),
+        'google' => new AiStudioGoogleImageEditClient(ai_studio_secret_pool('AI_STUDIO_GOOGLE_IMAGEN_API_KEY', ['AI_STUDIO_GOOGLE_IMAGEN_API_KEY', 'GOOGLE_IMAGEN_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_GEMINI_API_KEY']), $modelOverride !== null && trim($modelOverride) !== '' ? trim($modelOverride) : $googleModel),
         'openrouter' => new AiStudioOpenRouterImageClient(
-            ai_studio_secret_pool('AI_STUDIO_OPENROUTER_API_KEY', ['OPENROUTER_API_KEY']),
+            ai_studio_secret_pool('AI_STUDIO_OPENROUTER_API_KEY', ['AI_STUDIO_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY']),
             $modelOverride !== null && trim($modelOverride) !== '' ? trim($modelOverride) : ($openRouterModel !== '' ? $openRouterModel : 'openai/gpt-image-1'),
             defined('AI_STUDIO_OPENROUTER_API_BASE_URL') ? AI_STUDIO_OPENROUTER_API_BASE_URL : 'https://openrouter.ai/api/v1',
             [
@@ -118,7 +118,7 @@ function ai_studio_build_image_client(string $provider, ?string $modelOverride, 
 
 function ai_studio_groq_refine_prompt(string $prompt, array $product, string $targetChannel): string
 {
-    $keys = ai_studio_secret_pool('AI_STUDIO_GROQ_API_KEY', ['GROQ_API_KEY']);
+    $keys = ai_studio_secret_pool('AI_STUDIO_GROQ_API_KEY', ['AI_STUDIO_GROQ_API_KEY', 'GROQ_API_KEY']);
     if ($keys === []) {
         return $prompt;
     }
@@ -281,6 +281,22 @@ function ai_studio_unique_filename(int $productId, string $imageType, string $ex
 {
     $safeType = preg_replace('/[^a-z0-9_-]+/i', '-', $imageType) ?: 'image';
     return sprintf('product-%d-%s-%s-%s.%s', $productId, $safeType, date('Ymd-His'), bin2hex(random_bytes(6)), $extension);
+}
+
+function ai_studio_reference_fallback_enabled(): bool
+{
+    return strtolower(trim((string)(getenv('AI_STUDIO_REFERENCE_FALLBACK') ?: '1'))) !== '0';
+}
+
+function ai_studio_copy_reference_image_to_file(string $sourcePath, string $destinationPath): void
+{
+    if (!is_file($sourcePath) || !is_readable($sourcePath)) {
+        throw new AiStudioApiException('Fallback local sem foto base legivel.');
+    }
+    if (!@copy($sourcePath, $destinationPath)) {
+        throw new AiStudioApiException('Fallback local nao conseguiu gravar a foto de referencia.');
+    }
+    AiStudioHttpClient::validateOutputImage($destinationPath, 1000);
 }
 
 function ai_studio_insert_staging_row(
@@ -480,7 +496,12 @@ function ai_studio_process_item(
                     }
                 }
                 if ($lastError instanceof Throwable && !is_file($destination)) {
-                    throw $lastError;
+                    if (!ai_studio_reference_fallback_enabled()) {
+                        throw $lastError;
+                    }
+                    ai_studio_copy_reference_image_to_file($baseImagePath, $destination);
+                    $providerUsed = $promptOptimizer !== '' ? $promptOptimizer . '+local_reference' : 'local_reference';
+                    $lastError = null;
                 }
                 $quality = ai_studio_validate_image_file($destination, $minimumSide);
                 $quality['recommended_side'] = $recommendedSide;
