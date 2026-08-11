@@ -12,8 +12,8 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: pr-conflict-auto-healer
-  cancel-in-progress: false
+  group: pr-conflict-auto-healer-${{ github.event.pull_request.number || 'sweep' }}
+  cancel-in-progress: true
 
 jobs:
   heal:
@@ -59,6 +59,25 @@ jobs:
           set -Eeuo pipefail
           python3 -m py_compile trusted/scripts/pr_conflict_gemini_healer.py
           bash -n trusted/scripts/publish_pr_branch_update.sh
+
+      - name: Preflight all configured Gemini credentials without revealing values
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, 'trusted/scripts')
+          import pr_conflict_gemini_healer as healer
+
+          keys = healer.collect_api_keys()
+          models = healer.configured_models()
+          print(f'gemini_credentials_configured={len(keys)}')
+          print(f'gemini_models_configured={len(models)}')
+          print('gemini_credential_rotation_enabled=true')
+          print('secret_values_printed=false')
+          if not keys:
+              raise SystemExit('no_gemini_credentials_configured')
+          PY
 
       - name: Heal conflicted PR branches
         shell: bash
