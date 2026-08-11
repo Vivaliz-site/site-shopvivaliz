@@ -225,12 +225,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 if ($imageEngine === 'google') {
                     (new AiStudioGoogleImageEditClient(AI_STUDIO_GOOGLE_IMAGEN_API_KEY, AI_STUDIO_GOOGLE_IMAGEN_MODEL))->editImageToFile($prompt, $basePath, $destination);
                 } elseif ($imageEngine === 'openrouter') {
-                    (new AiStudioOpenAiCompatibleClient(AI_STUDIO_OPENROUTER_API_KEY, trim((string)(getenv('OPENROUTER_IMAGE_MODEL') ?: AI_STUDIO_OPENAI_IMAGE_MODEL)), AI_STUDIO_OPENROUTER_API_BASE_URL, 'OpenRouter', [
+                    $openRouterModel = trim((string)(getenv('OPENROUTER_IMAGE_MODEL') ?: 'openai/gpt-image-1'));
+                    (new AiStudioOpenRouterImageClient(AI_STUDIO_OPENROUTER_API_KEY, $openRouterModel !== '' ? $openRouterModel : 'openai/gpt-image-1', AI_STUDIO_OPENROUTER_API_BASE_URL, [
                         'HTTP-Referer' => AI_STUDIO_OPENROUTER_HTTP_REFERER,
-                        'X-Title' => AI_STUDIO_OPENROUTER_APP_TITLE,
+                        'X-OpenRouter-Title' => AI_STUDIO_OPENROUTER_APP_TITLE,
                     ]))->editImageToFile($prompt, $basePath, $destination);
                 } elseif ($imageEngine === 'groq') {
-                    (new AiStudioOpenAiCompatibleClient(AI_STUDIO_GROQ_API_KEY, trim((string)(getenv('GROQ_IMAGE_MODEL') ?: AI_STUDIO_GROQ_IMAGE_MODEL)), AI_STUDIO_GROQ_API_BASE_URL, 'Groq'))->editImageToFile($prompt, $basePath, $destination);
+                    // Groq nao expoe endpoint de edicao de imagem; use-o como
+                    // otimizador de prompt (ai_studio_groq_refine_prompt) e
+                    // escolha OpenAI, Gemini ou OpenRouter para o pixel final.
+                    throw new AiStudioApiException('Groq não possui saída de imagem direta; escolha OpenAI, Gemini ou OpenRouter para regenerar.');
                 } else {
                     (new AiStudioOpenAiClient(AI_STUDIO_OPENAI_API_KEY, AI_STUDIO_OPENAI_IMAGE_MODEL))->editImageToFile($prompt, $basePath, $destination);
                 }
