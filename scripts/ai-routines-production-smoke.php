@@ -357,20 +357,32 @@ $imageSelectors = ['openai', 'google', 'claude', 'openrouter', 'groq'];
 $catalogChannels = ['ml', 'shopee', 'amazon', 'tiktok', 'site', 'erp'];
 $catalogProviders = ['openai', 'gemini', 'claude', 'openrouter', 'groq'];
 
+// Permite rodar so a parte de imagem ou so a de catalogo, para nao gastar
+// credito real das 55 combinacoes quando so um dos dois lados mudou.
+$skipImage = smoke_arg('skip-image') === '1';
+$skipCatalog = smoke_arg('skip-catalog') === '1';
+$onlyProvider = trim(smoke_arg('only-provider'));
+
 $results = [];
-foreach ($imageChannels as $channel) {
-    foreach ($imageSelectors as $selector) {
-        $result = smoke_run_image($db, $fixture, $channel, $selector);
-        $results[] = $result;
-        fwrite(STDOUT, sprintf("image channel=%s provider=%s status=%s\n", $channel, $selector, $result['status']));
+if (!$skipImage) {
+    foreach ($imageChannels as $channel) {
+        foreach ($imageSelectors as $selector) {
+            if ($onlyProvider !== '' && $selector !== $onlyProvider) continue;
+            $result = smoke_run_image($db, $fixture, $channel, $selector);
+            $results[] = $result;
+            fwrite(STDOUT, sprintf("image channel=%s provider=%s status=%s\n", $channel, $selector, $result['status']));
+        }
     }
 }
 
-foreach ($catalogChannels as $channel) {
-    foreach ($catalogProviders as $provider) {
-        $result = smoke_run_catalog($db, $productId, $channel, $provider);
-        $results[] = $result;
-        fwrite(STDOUT, sprintf("catalog channel=%s provider=%s status=%s\n", $channel, $provider, $result['status']));
+if (!$skipCatalog) {
+    foreach ($catalogChannels as $channel) {
+        foreach ($catalogProviders as $provider) {
+            if ($onlyProvider !== '' && $provider !== $onlyProvider) continue;
+            $result = smoke_run_catalog($db, $productId, $channel, $provider);
+            $results[] = $result;
+            fwrite(STDOUT, sprintf("catalog channel=%s provider=%s status=%s\n", $channel, $provider, $result['status']));
+        }
     }
 }
 
