@@ -1,0 +1,48 @@
+name: Maintain MEI envios quota index v2
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-maintenance-mei-envios-index-v2-20260811.yml']
+permissions:
+  contents: read
+jobs:
+  maintenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Stop worker build index and always restart
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -u
+          cd /home/ubuntu/mei-mg-email
+          sudo systemctl stop mei-mg-email-worker.service || true
+          cleanup() {
+            sudo systemctl start mei-mg-email-worker.service || true
+            sleep 10
+            echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
+          }
+          trap cleanup EXIT
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env',override=True)
+          import os,psycopg
+          with psycopg.connect(os.environ['DATABASE_URL'],autocommit=True,connect_timeout=10) as conn:
+            with conn.cursor() as cur:
+              cur.execute("set lock_timeout='20s'")
+              cur.execute("set statement_timeout='3min'")
+              cur.execute("CREATE INDEX IF NOT EXISTS idx_envios_enviado_em_v2 ON mei_email.envios (enviado_em) WHERE enviado_em IS NOT NULL")
+              cur.execute("ANALYZE mei_email.envios")
+              cur.execute("select c.relname,i.indisvalid,i.indisready from pg_class c join pg_index i on i.indexrelid=c.oid join pg_namespace n on n.oid=c.relnamespace where n.nspname='mei_email' and c.relname='idx_envios_enviado_em_v2'")
+              print('INDEX_V2='+str(cur.fetchone()))
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
