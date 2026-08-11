@@ -179,6 +179,12 @@ jobs:
           php tests/runtime-secrets-materializer-test.php
           php tests/storefront-image-source-test.php
 
+      - name: Guard automatic product image carousel
+        shell: bash
+        run: |
+          set -euo pipefail
+          php scripts/quality/validate-auto-image-carousel.php
+
       - name: Run task queue safety regression tests
         shell: bash
         run: |
