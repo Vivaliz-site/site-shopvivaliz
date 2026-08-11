@@ -21,6 +21,15 @@ esac
 install -o root -g root -m 0644 "${unit_source}" "${unit_target}"
 systemd-analyze verify "${unit_target}"
 systemctl daemon-reload
+
+if systemctl is-active --quiet mcp-universal.service 2>/dev/null; then
+  systemctl disable --now shopvivaliz-mcp.service
+  systemctl reset-failed shopvivaliz-mcp.service
+  systemctl is-active --quiet mcp-universal.service
+  echo "mcp-universal.service ativo; shopvivaliz-mcp.service mantido desligado para evitar conflito de porta"
+  exit 0
+fi
+
 systemctl enable --now shopvivaliz-mcp.service
 systemctl is-active --quiet shopvivaliz-mcp.service
 echo "shopvivaliz-mcp.service ativo"
