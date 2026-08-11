@@ -123,7 +123,7 @@ function ai_studio_groq_refine_prompt(string $prompt, array $product, string $ta
     if ($keys === []) {
         return $prompt;
     }
-    $analysisModel = getenv('GROQ_ANALYSIS_MODEL') ?: 'llama-4-scout-17b-16e-instruct';
+    $analysisModel = getenv('GROQ_ANALYSIS_MODEL') ?: 'llama-3.1-8b-instant';
     $payload = [
         'model' => $analysisModel,
         'messages' => [[
