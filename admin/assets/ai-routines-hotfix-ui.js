@@ -123,6 +123,7 @@
         if (!selected.length) { setMessage(form, 'Selecione ao menos um produto.', 'error'); return; }
         generate.disabled = true; let queued = 0; const errors = [];
         for (const checkbox of selected) {
+          if (queued + errors.length > 0) await new Promise((r) => setTimeout(r, 600));
           const details = checkbox.closest('details');
           const imageTypes = [...details.querySelectorAll('[data-sv-image-type]:checked')].map((node) => node.value);
           if (!imageTypes.length) { errors.push(`#${checkbox.value}: marque um tipo de imagem`); continue; }
