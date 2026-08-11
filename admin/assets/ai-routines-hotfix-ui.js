@@ -166,7 +166,7 @@
     if (params.get('preview') === '1' && !document.querySelector('.ais-preview-list')) {
       const host = document.querySelector('.ais-form');
       if (host) renderImageCandidates(host, {
-        targetChannel: params.get('target_channel') || 'site', provider: params.get('provider') || 'openai', model: params.get('model') || '', limit: Math.max(0, Math.min(5000, Number(params.get('limit') || 12))),
+        targetChannel: params.get('target_channel') || 'site', provider: params.get('provider') || 'openai', model: params.get('model') || '', limit: Math.max(0, Math.min(5000, Number(params.get('page_size') || params.get('limit') || 0))),
       });
     }
   }
