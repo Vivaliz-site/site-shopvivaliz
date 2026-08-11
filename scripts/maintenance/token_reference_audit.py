@@ -24,13 +24,13 @@ SKIP_DIRS = {
 SCAN_SUFFIXES = {".php", ".py", ".sh", ".yml", ".yaml", ".js", ".ts"}
 
 PATTERNS = [
-    re.compile(r"getenv\(\s*['\"]([A-Z][A-Z0-9_]+)['\"]\s*\)"),
-    re.compile(r"\$_(?:ENV|SERVER)\s*\[\s*['\"]([A-Z][A-Z0-9_]+)['\"]\s*\]"),
-    re.compile(r"os\.environ(?:\.get)?\(\s*['\"]([A-Z][A-Z0-9_]+)['\"]"),
-    re.compile(r"os\.environ\s*\[\s*['\"]([A-Z][A-Z0-9_]+)['\"]\s*\]"),
-    re.compile(r"process\.env\.([A-Z][A-Z0-9_]+)"),
-    re.compile(r"\$\{\{\s*secrets\.([A-Z][A-Z0-9_]+)\s*\}\}"),
-    re.compile(r"\$\{([A-Z][A-Z0-9_]+)(?::[-=?+][^}]*)?\}"),
+    ("runtime_env", re.compile(r"getenv\(\s*['\"]([A-Z][A-Z0-9_]+)['\"]\s*\)")),
+    ("runtime_env", re.compile(r"\$_(?:ENV|SERVER)\s*\[\s*['\"]([A-Z][A-Z0-9_]+)['\"]\s*\]")),
+    ("runtime_env", re.compile(r"os\.environ(?:\.get)?\(\s*['\"]([A-Z][A-Z0-9_]+)['\"]")),
+    ("runtime_env", re.compile(r"os\.environ\s*\[\s*['\"]([A-Z][A-Z0-9_]+)['\"]\s*\]")),
+    ("runtime_env", re.compile(r"process\.env\.([A-Z][A-Z0-9_]+)")),
+    ("github_secret", re.compile(r"\$\{\{\s*secrets\.([A-Z][A-Z0-9_]+)\s*\}\}")),
+    ("runtime_env", re.compile(r"\$\{([A-Z][A-Z0-9_]+)(?::[-=?+][^}]*)?\}")),
 ]
 
 PLACEHOLDERS = {
@@ -91,7 +91,7 @@ def scan(repo: Path) -> dict[str, list[dict[str, object]]]:
         except OSError:
             continue
         for number, line in enumerate(lines, 1):
-            for pattern in PATTERNS:
+            for source, pattern in PATTERNS:
                 for match in pattern.finditer(line):
                     key = match.group(1)
                     if not SENSITIVE.search(key):
@@ -99,40 +99,42 @@ def scan(repo: Path) -> dict[str, list[dict[str, object]]]:
                     references.setdefault(key, []).append({
                         "path": str(rel),
                         "line": number,
+                        "source": source,
                         "mandatory": mandatory_context(line, key),
                     })
     return references
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("repo_root", type=Path)
-    parser.add_argument("env_path", type=Path)
-    parser.add_argument("--json-output", type=Path)
-    args = parser.parse_args()
-
-    env = parse_env(args.env_path)
-    references = scan(args.repo_root)
+def build_report(repo_root: Path, env_path: Path) -> dict[str, object]:
+    env = parse_env(env_path)
+    references = scan(repo_root)
     critical: list[dict[str, object]] = []
     warnings: list[dict[str, object]] = []
 
     for key, locations in sorted(references.items()):
+        runtime_locations = [
+            item for item in locations
+            if item.get("source") != "github_secret"
+        ]
+        if not runtime_locations:
+            continue
         value = env.get(key, "")
         missing = value == ""
         placeholder = bool(value) and looks_placeholder(value)
         if not missing and not placeholder:
             continue
-        mandatory = any(bool(item["mandatory"]) for item in locations)
+        mandatory = any(bool(item["mandatory"]) for item in runtime_locations)
+        severity = "critical" if placeholder and mandatory else "warning"
         finding = {
             "key": key,
             "reason": "referenced_but_placeholder" if placeholder else "referenced_but_not_provisioned",
             "mandatory": mandatory,
-            "references": locations[:10],
-            "reference_count": len(locations),
+            "references": runtime_locations[:10],
+            "reference_count": len(runtime_locations),
         }
-        (critical if mandatory else warnings).append(finding)
+        (critical if severity == "critical" else warnings).append(finding)
 
-    report = {
+    return {
         "ok": not critical,
         "referenced_sensitive_keys": len(references),
         "missing_or_placeholder_count": len(critical) + len(warnings),
@@ -141,12 +143,25 @@ def main() -> int:
         "critical": critical,
         "warnings": warnings,
     }
+
+
+def main_for_paths(repo_root: Path, env_path: Path, json_output: Path | None = None) -> int:
+    report = build_report(repo_root, env_path)
     rendered = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True)
-    if args.json_output:
-        args.json_output.parent.mkdir(parents=True, exist_ok=True)
-        args.json_output.write_text(rendered + "\n", encoding="utf-8")
+    if json_output:
+        json_output.parent.mkdir(parents=True, exist_ok=True)
+        json_output.write_text(rendered + "\n", encoding="utf-8")
     print(rendered)
     return 0 if report["ok"] else 2
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("repo_root", type=Path)
+    parser.add_argument("env_path", type=Path)
+    parser.add_argument("--json-output", type=Path)
+    args = parser.parse_args()
+    return main_for_paths(args.repo_root, args.env_path, args.json_output)
 
 
 if __name__ == "__main__":
