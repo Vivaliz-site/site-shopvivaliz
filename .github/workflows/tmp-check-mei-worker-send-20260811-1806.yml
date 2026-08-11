@@ -1,0 +1,47 @@
+name: Check MEI worker send progress
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-check-mei-worker-send-20260811-1806.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Check worker and counts
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env',override=True)
+          import os,json,psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'],autocommit=True,row_factory=dict_row,connect_timeout=10) as conn:
+            with conn.cursor() as cur:
+              cur.execute("select count(*) n,max(enviado_em) newest from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours'")
+              rolling=dict(cur.fetchone())
+              cur.execute("select status::text,count(*) n from mei_email.envios group by 1 order by 1")
+              statuses=[dict(r) for r in cur.fetchall()]
+              cur.execute("select count(*) n from mei_email.envios where status::text='submitted'")
+              submitted=cur.fetchone()['n']
+              cur.execute("select count(*) n from mei_email.envios where status::text='enviado'")
+              enviado=cur.fetchone()['n']
+              print('COUNTS='+json.dumps({'used_24h':rolling['n'],'newest':rolling['newest'],'submitted_total':submitted,'enviado_total':enviado,'statuses':statuses},default=str,ensure_ascii=False))
+          PY
+          sudo journalctl -u mei-mg-email-worker.service --since '-70 minutes' --no-pager -n 120 || true
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
