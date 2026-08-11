@@ -13,11 +13,14 @@ REQUIRED = {
     ".github/workflows/pr-conflict-auto-healer.yml": [
         "pull_request_target:",
         "schedule:",
+        "cancel-in-progress: true",
         "GH_REPO_TOKEN",
         "GEMINI_API_KEY",
         "GOOGLE_GEMINI_API_KEY",
         "GOOGLE_IMAGEN_API_KEYS",
         "gemini-3.6-flash",
+        "gemini_credentials_configured",
+        "gemini_credential_rotation_enabled=true",
         "head_repo",
         "scripts/pr_conflict_gemini_healer.py",
         "scripts/publish_pr_branch_update.sh",
@@ -25,6 +28,7 @@ REQUIRED = {
     ".github/workflows/pr-completion-enforcer.yml": [
         "workflow_run:",
         "schedule:",
+        "cancel-in-progress: true",
         "GH_REPO_TOKEN",
         "Quality Gate",
         "ShopVivaliz QA",
