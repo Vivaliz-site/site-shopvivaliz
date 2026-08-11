@@ -5,6 +5,8 @@ Este documento agrupa nomes canônicos, aliases aceitos no código e uso princip
 
 Nao registrar valores reais aqui.
 
+Mapa complementar de consumidores reais: [docs/secret-usage-map.md](secret-usage-map.md).
+
 ## Estado verificado em 2026-08-11
 
 | Grupo | Onde apareceu | Observação |
