@@ -313,6 +313,7 @@ try {
 <div class="ais-back"><a href="/admin/menu-completo.php">← Voltar ao Admin</a></div>
 <div class="ais-topbar"><h1>AI Image Studio — por marketplace</h1><a href="/admin/ai-image-studio/admin_validate.php">Ir para aprovacao →</a></div>
 <div class="channel-profile"><strong>Fluxo auditado:</strong> escolha o marketplace <em>antes</em> de gerar. Depois, marque os produtos que quer processar. O prompt, a fila e a revisao passam a carregar esse destino. A imagem continua nascendo da foto real do mesmo produto; preco e estoque nao participam do fluxo.</div>
+<div class="ais-form" style="margin-bottom:18px"><div class="ais-panel-title"><h2 style="font-size:16px;margin:0">Saude dos provedores</h2><button type="button" id="ais-health-btn" style="margin:0;background:#eef2f7;color:#111827">Testar conexao (sem gastar credito)</button></div><div id="ais-health-result" class="ais-strategy"></div></div>
 <div class="ais-cards">
 <?php foreach (['pending'=>'Pendentes','published'=>'Publicadas','submitted'=>'Enviadas/auditoria','rejected'=>'Rejeitadas','failed'=>'Falhas','publication_failed'=>'Falha publicacao'] as $status=>$label): ?><div class="ais-card"><div class="num"><?= (int)($statusCounts[$status] ?? 0) ?></div><div><?= ai_studio_h($label) ?></div></div><?php endforeach; ?>
 </div>
