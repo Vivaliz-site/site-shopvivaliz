@@ -104,6 +104,63 @@ $providerAuditTail = ais_provider_audit_tail(14);
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (!sv_csrf_valid('ai-image-validation', $_POST['csrf_token'] ?? null)) {
         $flashError = 'A sessao expirou. Recarregue a pagina.';
+    } elseif (($_POST['bulk_action'] ?? '') !== '') {
+        $bulkAction = (string)$_POST['bulk_action'];
+        $selectedIds = array_values(array_unique(array_filter(array_map(
+            static fn(mixed $value): int => (int)$value,
+            (array)($_POST['selected_ids'] ?? [])
+        ), static fn(int $value): bool => $value > 0)));
+
+        if (!in_array($bulkAction, ['bulk_publish', 'bulk_reject'], true)) {
+            $flashError = 'Acao em lote invalida.';
+        } elseif ($selectedIds === []) {
+            $flashError = 'Selecione ao menos uma imagem para o lote.';
+        } elseif ($bulkAction === 'bulk_publish' && ($_POST['bulk_confirm'] ?? '') !== '1') {
+            $flashError = 'Confirme a publicacao em lote antes de continuar.';
+        } else {
+            $load = $db->prepare('SELECT * FROM product_images_staging WHERE id = ? LIMIT 1');
+            $reject = $db->prepare("UPDATE product_images_staging SET status = 'rejected', updated_at = NOW() WHERE id = ?");
+            $publisher = $bulkAction === 'bulk_publish' ? new AiStudioOmnichannelImagePublisher($db) : null;
+            $published = 0;
+            $rejected = 0;
+            $failed = [];
+            foreach ($selectedIds as $bulkStagingId) {
+                $load->execute([$bulkStagingId]);
+                $row = $load->fetch(PDO::FETCH_ASSOC);
+                if (!is_array($row)) {
+                    $failed[] = "#{$bulkStagingId}: nao encontrado";
+                    continue;
+                }
+                if ($bulkAction === 'bulk_reject') {
+                    $reject->execute([$bulkStagingId]);
+                    $rejected++;
+                    continue;
+                }
+                $intended = ais_intended_channel($row);
+                if ($intended === '' || !isset($channelLabels[$intended])) {
+                    $failed[] = "#{$bulkStagingId}: sem marketplace definido, regenere individualmente";
+                    continue;
+                }
+                try {
+                    $result = $publisher->publish($row, [$intended]);
+                    $status = (string)($result['status'] ?? '');
+                    if ($status === 'submitted' || $status === 'published') {
+                        $published++;
+                    } else {
+                        $failed[] = "#{$bulkStagingId}: retorno inesperado ({$status})";
+                    }
+                } catch (Throwable $exception) {
+                    error_log('[ai-image-studio] Publicacao em lote falhou #' . $bulkStagingId . ': ' . $exception->getMessage());
+                    $failed[] = "#{$bulkStagingId}: " . $exception->getMessage();
+                }
+            }
+            if ($bulkAction === 'bulk_reject') {
+                $flashMessage = "Lote concluido: {$rejected} imagem(ns) rejeitada(s).";
+            } else {
+                $extra = $failed === [] ? '' : ' Falhas: ' . implode(' | ', $failed) . '.';
+                $flashMessage = "Lote concluido: {$published} imagem(ns) aprovada(s)/publicada(s)." . $extra;
+            }
+        }
     } else {
         $action = (string)($_POST['action'] ?? '');
         $stagingId = (int)($_POST['staging_id'] ?? 0);
