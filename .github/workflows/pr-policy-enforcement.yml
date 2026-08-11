@@ -26,7 +26,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Validate Python syntax
+      - name: Validate implementation syntax
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -34,6 +34,7 @@ jobs:
             scripts/pr_conflict_gemini_healer.py \
             scripts/check_pr_completion_policy.py \
             tests/test_pr_conflict_gemini_healer.py
+          bash -n scripts/publish_pr_branch_update.sh
 
       - name: Run Gemini healer regression tests
         shell: bash
