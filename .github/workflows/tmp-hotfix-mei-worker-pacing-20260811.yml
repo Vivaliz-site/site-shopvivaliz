@@ -1,0 +1,47 @@
+name: Hotfix MEI worker pacing
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-hotfix-mei-worker-pacing-20260811.yml']
+permissions:
+  contents: read
+jobs:
+  hotfix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Patch pacing and restart worker
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          .venv/bin/python - <<'PY'
+          from pathlib import Path
+          p = Path('worker/worker.py')
+          s = p.read_text()
+          old1 = '''        corpo = montar_corpo(envio["corpo_template"], envio)\n        resultado = provider.send(to=envio["email"], subject=envio["assunto"], body=corpo)\n'''
+          new1 = '''        corpo = montar_corpo(envio["corpo_template"], envio)\n        inicio_envio = time.monotonic()\n        resultado = provider.send(to=envio["email"], subject=envio["assunto"], body=corpo)\n'''
+          old2 = '''        time.sleep(intervalo_entre_envios)\n\n    with conn.cursor() as cur:\n'''
+          new2 = '''        decorrido = time.monotonic() - inicio_envio\n        espera_rate_limit = intervalo_entre_envios - decorrido\n        if espera_rate_limit > 0:\n            time.sleep(espera_rate_limit)\n\n    with conn.cursor() as cur:\n'''
+          if old1 not in s or old2 not in s:
+              raise SystemExit('hotfix guard: expected worker source not found')
+          s = s.replace(old1, new1, 1).replace(old2, new2, 1)
+          p.write_text(s)
+          print('PACING_HOTFIX_APPLIED')
+          PY
+          .venv/bin/python -m py_compile worker/worker.py
+          sudo systemctl restart mei-mg-email-worker.service
+          sleep 12
+          echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
+          sudo journalctl -u mei-mg-email-worker.service --since '-1 minute' --no-pager -n 30 || true
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
