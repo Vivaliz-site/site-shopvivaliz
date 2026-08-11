@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   repair:
-    name: Renovar token e sincronizar catálogo real
+    name: Renovar token ERP real
     runs-on: ubuntu-latest
     timeout-minutes: 12
     environment: production
@@ -46,52 +46,45 @@ jobs:
           printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
-      - name: Executar renovação e sincronização sem fallback
+      - name: Executar renovação sem fallback e manter sync automático desligado
         shell: bash
         run: |
           set -euo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE_SCRIPT'
           set -u
           current='/home/ubuntu/shopvivaliz-deploy/current'
-          cache="$current/storage/products-cache-ativos.json"
           renew_log="$(mktemp)"
-          sync_log="$(mktemp)"
-          trap 'rm -f "$renew_log" "$sync_log"' EXIT
+          trap 'rm -f "$renew_log"' EXIT
           renew_status=0
-          sync_status=0
 
           (cd "$current" && timeout 90 python3 daemon-token-renewer.py --once) >"$renew_log" 2>&1 || renew_status=$?
-          if [[ "$renew_status" -eq 0 ]]; then
-            (cd "$current" && timeout 240 python3 daemon-sync-products.py --once --workers 4) >"$sync_log" 2>&1 || sync_status=$?
-          else
-            sync_status=125
-          fi
 
-          sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-sync-products.service
+          sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-shopee-token-renewer.service
+          if systemctl list-unit-files shopvivaliz-sync-products.service --no-legend 2>/dev/null | grep -q '^shopvivaliz-sync-products\.service'; then
+            sudo systemctl disable --now shopvivaliz-sync-products.service
+          fi
           sleep 10
-          service_sync="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null)"
-          service_sync_query_status=$?
+          service_sync='inactive'
+          service_sync_query_status=3
+          if systemctl is-active --quiet shopvivaliz-sync-products.service 2>/dev/null; then
+            service_sync='active'
+            service_sync_query_status=0
+          fi
           service_token="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null)"
           service_token_query_status=$?
-          cache_age=0
-          if [[ -e "$cache" ]]; then
-            cache_age=$(( $(date +%s) - $(stat -c %Y "$cache") ))
-          else
-            cache_age=999999
-          fi
+          service_shopee_token="$(systemctl is-active shopvivaliz-shopee-token-renewer.service 2>/dev/null)"
+          service_shopee_token_query_status=$?
           orders_file="$(mktemp)"
           olist_file="$(mktemp)"
-          trap 'rm -f "$renew_log" "$sync_log" "$orders_file" "$olist_file"' EXIT
+          trap 'rm -f "$renew_log" "$orders_file" "$olist_file"' EXIT
           orders_code="$(curl --location --silent --show-error --max-time 30 -o "$orders_file" -w '%{http_code}' https://shopvivaliz.com.br/api/orders/health.php)"
           orders_query_status=$?
           olist_code="$(curl --location --silent --show-error --max-time 30 -o "$olist_file" -w '%{http_code}' https://shopvivaliz.com.br/api/olist/webhook-health.php)"
           olist_query_status=$?
 
-          echo "repair_report={\"renew_status\":$renew_status,\"sync_status\":$sync_status,\"token_service\":\"$service_token\",\"sync_service\":\"$service_sync\",\"service_query_status\":\"$service_token_query_status,$service_sync_query_status\",\"cache_age_seconds\":$cache_age,\"orders_http\":$orders_code,\"olist_http\":$olist_code,\"health_query_status\":\"$orders_query_status,$olist_query_status\",\"env_target\":\"$(readlink -f \"$current/.env\")\"}"
+          echo "repair_report={\"renew_status\":$renew_status,\"token_service\":\"$service_token\",\"shopee_token_service\":\"$service_shopee_token\",\"sync_service\":\"$service_sync\",\"expected_sync_service\":\"inactive\",\"service_query_status\":\"$service_token_query_status,$service_shopee_token_query_status,$service_sync_query_status\",\"orders_http\":$orders_code,\"olist_http\":$olist_code,\"health_query_status\":\"$orders_query_status,$olist_query_status\",\"env_target\":\"$(readlink -f \"$current/.env\")\"}"
           echo 'renew_log_sanitized:'
           sed -E 's/([A-Za-z0-9_]*(PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Za-z0-9_]*=)[^[:space:]]+/\1[REDACTED]/Ig' "$renew_log"
-          echo 'sync_log_sanitized:'
-          sed -E 's/([A-Za-z0-9_]*(PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Za-z0-9_]*=)[^[:space:]]+/\1[REDACTED]/Ig' "$sync_log"
           echo 'orders_health_body:'
           cat "$orders_file"
           echo
@@ -100,12 +93,10 @@ jobs:
           echo
           echo 'journal_token_tail_sanitized:'
           journalctl -u shopvivaliz-token-renewer.service -n 20 --no-pager -o cat | sed -E 's/([A-Za-z0-9_]*(PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Za-z0-9_]*=)[^[:space:]]+/\1[REDACTED]/Ig'
-          echo 'journal_sync_tail_sanitized:'
-          journalctl -u shopvivaliz-sync-products.service -n 20 --no-pager -o cat | sed -E 's/([A-Za-z0-9_]*(PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Za-z0-9_]*=)[^[:space:]]+/\1[REDACTED]/Ig'
+          echo 'journal_shopee_token_tail_sanitized:'
+          journalctl -u shopvivaliz-shopee-token-renewer.service -n 20 --no-pager -o cat | sed -E 's/([A-Za-z0-9_]*(PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Za-z0-9_]*=)[^[:space:]]+/\1[REDACTED]/Ig'
 
           [[ "$renew_status" -eq 0 ]]
-          [[ "$sync_status" -eq 0 ]]
-          [[ "$service_token" = active && "$service_sync" = active ]]
-          [[ "$cache_age" -le 900 ]]
+          [[ "$service_token" = active && "$service_shopee_token" = active && "$service_sync" != active ]]
           [[ "$orders_code" = 200 && "$olist_code" = 200 ]]
           REMOTE_SCRIPT

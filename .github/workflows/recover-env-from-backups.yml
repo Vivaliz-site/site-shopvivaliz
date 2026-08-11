@@ -213,7 +213,10 @@ jobs:
           php "$current/scripts/materialize-runtime-secrets.php"
           sudo chown ubuntu:www-data "$shared/runtime-secrets.php"
           sudo chmod 0640 "$shared/runtime-secrets.php"
-          sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-shopee-token-renewer.service shopvivaliz-sync-products.service
+          sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-shopee-token-renewer.service
+          if systemctl list-unit-files shopvivaliz-sync-products.service --no-legend 2>/dev/null | grep -q '^shopvivaliz-sync-products\.service'; then
+            sudo systemctl disable --now shopvivaliz-sync-products.service
+          fi
           REMOTE
 
       - name: Verify login and core production health

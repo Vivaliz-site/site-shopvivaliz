@@ -1,14 +1,6 @@
 name: Recover Olist Runtime Credentials
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'daemon-token-renewer.py'
-      - 'scripts/configure-erp-oauth-static-runtime.py'
-      - 'tests/test_configure_erp_oauth_static_runtime.py'
-      - 'tests/test_token_renewer.py'
-      - '.github/workflows/recover-olist-runtime.yml'
   workflow_dispatch:
 
 permissions:
@@ -201,6 +193,7 @@ jobs:
               'credential_presence': values,
               'token_renewer': service('shopvivaliz-token-renewer.service'),
               'sync_service': service('shopvivaliz-sync-products.service'),
+              'expected_sync_service': 'inactive',
               'cache_age_seconds': cache_age,
               'cache_json_valid': cache_valid,
               'cache_item_count': item_count,
@@ -253,7 +246,10 @@ jobs:
           cat "$renew_log" >&2
 
           sudo systemctl restart shopvivaliz-token-renewer.service
-          sudo systemctl restart shopvivaliz-sync-products.service
+          sudo systemctl restart shopvivaliz-shopee-token-renewer.service
+          if systemctl list-unit-files shopvivaliz-sync-products.service --no-legend 2>/dev/null | grep -q '^shopvivaliz-sync-products\.service'; then
+            sudo systemctl disable --now shopvivaliz-sync-products.service
+          fi
 
           if [[ "$renewal_exit" = 0 ]]; then
             for attempt in $(seq 1 72); do
@@ -269,16 +265,20 @@ jobs:
           fi
 
           if token_status="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null)"; then :; else token_status='inactive'; fi
-          if sync_status="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null)"; then :; else sync_status='inactive'; fi
+          if shopee_token_status="$(systemctl is-active shopvivaliz-shopee-token-renewer.service 2>/dev/null)"; then :; else shopee_token_status='inactive'; fi
+          sync_status='inactive'
+          if systemctl is-active --quiet shopvivaliz-sync-products.service 2>/dev/null; then
+            sync_status='active'
+          fi
 
-          python3 - "$expected_sha" "$renewal_exit" "$token_status" "$sync_status" "$cache" "$shared/.env" "$renew_log" <<'PY'
+          python3 - "$expected_sha" "$renewal_exit" "$token_status" "$shopee_token_status" "$sync_status" "$cache" "$shared/.env" "$renew_log" <<'PY'
           import json
           import re
           import sys
           import time
           from pathlib import Path
 
-          expected_sha, renewal_exit, token_status, sync_status, cache_name, env_name, log_name = sys.argv[1:]
+          expected_sha, renewal_exit, token_status, shopee_token_status, sync_status, cache_name, env_name, log_name = sys.argv[1:]
           current = Path('/home/ubuntu/shopvivaliz-deploy/current')
           cache = Path(cache_name)
           env_path = Path(env_name)
@@ -327,7 +327,8 @@ jobs:
               all(required.values()),
               renewal_ok,
               token_status == 'active',
-              sync_status == 'active',
+              shopee_token_status == 'active',
+              sync_status != 'active',
               cache_valid,
               item_count > 0,
               cache_age is not None and cache_age <= 300,
@@ -341,7 +342,9 @@ jobs:
               'renewal_oauth_error': oauth_error,
               'token_renewed_after_repair': renewal_ok,
               'token_renewer': token_status,
+              'shopee_token_renewer': shopee_token_status,
               'sync_service': sync_status,
+              'expected_sync_service': 'inactive',
               'cache_age_seconds': cache_age,
               'cache_json_valid': cache_valid,
               'cache_item_count': item_count,
