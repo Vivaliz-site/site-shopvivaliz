@@ -1,6 +1,32 @@
 name: Catalog Publication Integrity
 
 on:
+  pull_request:
+    paths:
+      - 'admin/catalog-optimization/**'
+      - 'admin/ai-image-studio/**'
+      - 'api/admin/integrations-status.php'
+      - 'includes/integration-health-marketplaces.php'
+      - 'includes/marketplace/**'
+      - 'includes/catalog-publication-schema.php'
+      - 'includes/catalog-runtime.php'
+      - 'includes/product-seo.php'
+      - 'includes/tiny-order-push.php'
+      - 'api/ml/**'
+      - 'utils/shopee_client.py'
+      - 'scripts/utils/shopee_client.py'
+      - 'scripts/utils/tiktok_client.py'
+      - 'scripts/configure-production-runtime.py'
+      - 'scripts/configure-marketplace-publication-runtime.py'
+      - 'scripts/integrations/tiktok.py'
+      - 'scripts/execute_marketplace_upload.py'
+      - 'scripts/maintenance/catalog_real_execution_audit.py'
+      - 'scripts/maintenance/marketplace_publication_readiness.php'
+      - 'scripts/maintenance/reconcile_catalog_publications.php'
+      - 'tests/test_configure_production_runtime.py'
+      - '.github/workflows/catalog-publication-integrity.yml'
+      - '.github/workflows/catalog-publication-reconcile.yml'
+      - '.github/workflows/configure-marketplace-publication-runtime.yml'
   push:
     branches: [main]
     paths:
@@ -24,6 +50,7 @@ on:
       - 'scripts/maintenance/catalog_real_execution_audit.py'
       - 'scripts/maintenance/marketplace_publication_readiness.php'
       - 'scripts/maintenance/reconcile_catalog_publications.php'
+      - 'tests/test_configure_production_runtime.py'
       - '.github/workflows/catalog-publication-integrity.yml'
       - '.github/workflows/catalog-publication-reconcile.yml'
       - '.github/workflows/configure-marketplace-publication-runtime.yml'
@@ -33,7 +60,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: catalog-publication-integrity
+  group: catalog-publication-integrity-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -42,7 +69,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Lint PHP publication code
         shell: bash
         run: |
@@ -80,11 +109,17 @@ jobs:
             scripts/integrations/tiktok.py \
             scripts/execute_marketplace_upload.py \
             scripts/maintenance/catalog_real_execution_audit.py
+      - name: Verify generic runtime safety contract
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 tests/test_configure_production_runtime.py
       - name: Reject simulation and missing publisher wiring
         run: python3 scripts/maintenance/catalog_real_execution_audit.py
 
   production-readiness:
     name: Audit production credentials and schema
+    if: github.event_name != 'pull_request'
     needs: static-integrity
     runs-on: ubuntu-latest
     timeout-minutes: 12

@@ -128,7 +128,11 @@ function svip_link_payload(array $order): array
         'handle' => svip_handle(),
         'items' => $items,
         'order_nsu' => $orderNumber,
-        'redirect_url' => $baseUrl . '/checkout-return.php?gateway=infinitepay&result=approved',
+        // Preserve the ShopVivaliz order id in the browser return as well as
+        // in the webhook payload. Without this, the return page cannot load
+        // the server-side order, dedupe conversion tracking, or show the
+        // customer the correct order reference.
+        'redirect_url' => $baseUrl . '/checkout-return.php?gateway=infinitepay&result=approved&order_nsu=' . rawurlencode($orderNumber),
         'webhook_url' => svip_webhook_url($baseUrl),
         'customer' => [
             'name' => (string)($customer['name'] ?? ''),

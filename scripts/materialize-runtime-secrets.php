@@ -12,59 +12,6 @@ if (!is_file($sharedEnv) || !is_readable($sharedEnv)) {
     throw new RuntimeException('shared_env_unavailable');
 }
 
-// Pagar.me foi aposentado do projeto. Remova qualquer chave residual do
-// runtime compartilhado de forma atomica, sem expor ou registrar valores.
-$envLines = file($sharedEnv, FILE_IGNORE_NEW_LINES);
-if ($envLines === false) {
-    throw new RuntimeException('shared_env_read_failed');
-}
-$retainedLines = [];
-$retiredRuntimeKeysRemoved = 0;
-foreach ($envLines as $line) {
-    $candidate = trim($line);
-    if (str_starts_with($candidate, 'export ')) {
-        $candidate = trim(substr($candidate, 7));
-    }
-    if ($candidate !== '' && !str_starts_with($candidate, '#') && str_contains($candidate, '=')) {
-        [$candidateKey] = explode('=', $candidate, 2);
-        if (str_starts_with(trim($candidateKey), 'PAGARME_')) {
-            $retiredRuntimeKeysRemoved++;
-            continue;
-        }
-    }
-    $retainedLines[] = $line;
-}
-if ($retiredRuntimeKeysRemoved > 0) {
-    $envDir = dirname($sharedEnv);
-    $envTemp = tempnam($envDir, '.shared-env-retire.');
-    if ($envTemp === false) {
-        throw new RuntimeException('shared_env_temporary_file_failed');
-    }
-    try {
-        $envPayload = implode(PHP_EOL, $retainedLines) . PHP_EOL;
-        if (file_put_contents($envTemp, $envPayload, LOCK_EX) === false) {
-            throw new RuntimeException('shared_env_retirement_write_failed');
-        }
-        if (!chmod($envTemp, 0640)) {
-            throw new RuntimeException('shared_env_retirement_mode_failed');
-        }
-        if (!rename($envTemp, $sharedEnv)) {
-            throw new RuntimeException('shared_env_retirement_replace_failed');
-        }
-    } finally {
-        if (is_file($envTemp)) {
-            @unlink($envTemp);
-        }
-    }
-}
-
-if (PHP_OS_FAMILY !== 'Windows' && !chgrp($sharedEnv, $sharedGroup)) {
-    throw new RuntimeException('shared_env_group_failed');
-}
-if (!chmod($sharedEnv, 0640)) {
-    throw new RuntimeException('shared_env_web_mode_failed');
-}
-
 // Runtime secrets are a PHP-readable fallback loaded by config/constants.php
 // before .env. Marketplace credentials are included because admin publication
 // executes under the web user and must survive an accidental .env permission
@@ -133,6 +80,82 @@ $allowedKeys = [
     'TOKEN_API_OLIST',
 ];
 
+$databaseKeys = [
+    'DB_HOST',
+    'DB_PORT',
+    'DB_NAME',
+    'DB_USER',
+    'DB_PASS',
+    'DB_DATABASE',
+    'DB_USERNAME',
+    'DB_PASSWORD',
+];
+$signingKeys = [
+    'QUOTE_SIGNING_KEY',
+    'APP_KEY',
+    'SHOPVIVALIZ_APP_KEY',
+    'SHOPVIVALIZ_AGENT_KEY',
+];
+
+$cleanScalar = static function (mixed $value): string {
+    if (!is_scalar($value)) {
+        return '';
+    }
+    return trim((string)$value);
+};
+
+$databaseTuple = static function (array $values) use ($cleanScalar): array {
+    $name = $cleanScalar($values['DB_NAME'] ?? $values['DB_DATABASE'] ?? '');
+    $user = $cleanScalar($values['DB_USER'] ?? $values['DB_USERNAME'] ?? '');
+    return [$name, $user];
+};
+
+$selectedSigningKey = static function (array $values) use ($signingKeys, $cleanScalar): string {
+    foreach ($signingKeys as $key) {
+        $value = $cleanScalar($values[$key] ?? '');
+        if ($value !== '') {
+            return $value;
+        }
+    }
+    return '';
+};
+
+// Preserve only the two minimum runtime invariants (database tuple and signing
+// key) from the last known-good generated runtime when .env is temporarily
+// incomplete. Other integration credentials still come exclusively from .env.
+$existingValues = [];
+if (is_file($outputPath) && is_readable($outputPath)) {
+    try {
+        $existingRaw = require $outputPath;
+        if (is_array($existingRaw)) {
+            foreach ($existingRaw as $key => $value) {
+                if (!is_string($key) || !in_array($key, $allowedKeys, true)) {
+                    continue;
+                }
+                $stringValue = $cleanScalar($value);
+                if ($stringValue !== '') {
+                    $existingValues[$key] = $stringValue;
+                }
+            }
+        }
+    } catch (Throwable) {
+        $existingValues = [];
+    }
+}
+
+// The shared .env key-set is monotonic: this materializer is read-only with
+// respect to key names. Retired integrations may be ignored by runtime readers,
+// but their environment keys are never deleted here. Removal requires a
+// separate, explicit migration outside the protected production writer path.
+$retiredRuntimeKeysRemoved = 0;
+
+if (PHP_OS_FAMILY !== 'Windows' && !chgrp($sharedEnv, $sharedGroup)) {
+    throw new RuntimeException('shared_env_group_failed');
+}
+if (!chmod($sharedEnv, 0640)) {
+    throw new RuntimeException('shared_env_web_mode_failed');
+}
+
 $values = [];
 foreach (file($sharedEnv, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
     $line = trim($line);
@@ -160,15 +183,51 @@ foreach (file($sharedEnv, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] a
     }
 }
 
-$databaseName = trim((string)($values['DB_NAME'] ?? $values['DB_DATABASE'] ?? ''));
-$databaseUser = trim((string)($values['DB_USER'] ?? $values['DB_USERNAME'] ?? ''));
-$signingKey = trim((string)(
-    $values['QUOTE_SIGNING_KEY']
-    ?? $values['APP_KEY']
-    ?? $values['SHOPVIVALIZ_APP_KEY']
-    ?? $values['SHOPVIVALIZ_AGENT_KEY']
-    ?? ''
-));
+[$databaseName, $databaseUser] = $databaseTuple($values);
+$envDatabaseSafe = $databaseName !== ''
+    && $databaseUser !== ''
+    && strtolower($databaseUser) !== 'root';
+
+if (!$envDatabaseSafe) {
+    [$existingDatabaseName, $existingDatabaseUser] = $databaseTuple($existingValues);
+    $existingDatabaseSafe = $existingDatabaseName !== ''
+        && $existingDatabaseUser !== ''
+        && strtolower($existingDatabaseUser) !== 'root';
+    if (!$existingDatabaseSafe) {
+        throw new RuntimeException('safe_database_tuple_missing');
+    }
+
+    foreach ($databaseKeys as $key) {
+        unset($values[$key]);
+        if (isset($existingValues[$key]) && $existingValues[$key] !== '') {
+            $values[$key] = $existingValues[$key];
+        }
+    }
+    [$databaseName, $databaseUser] = $databaseTuple($values);
+} else {
+    // Host/port may be intentionally omitted from .env when unchanged. Reuse
+    // the last known-good values without mixing user/name/password tuples.
+    foreach (['DB_HOST', 'DB_PORT'] as $key) {
+        if (!isset($values[$key]) && isset($existingValues[$key]) && $existingValues[$key] !== '') {
+            $values[$key] = $existingValues[$key];
+        }
+    }
+}
+
+$signingKey = $selectedSigningKey($values);
+if (strlen($signingKey) < 32) {
+    $existingSigningKey = $selectedSigningKey($existingValues);
+    if (strlen($existingSigningKey) < 32) {
+        throw new RuntimeException('quote_signing_key_missing');
+    }
+    foreach ($signingKeys as $key) {
+        unset($values[$key]);
+        if (isset($existingValues[$key]) && $existingValues[$key] !== '') {
+            $values[$key] = $existingValues[$key];
+        }
+    }
+    $signingKey = $selectedSigningKey($values);
+}
 
 if ($databaseName === '' || $databaseUser === '' || strtolower($databaseUser) === 'root') {
     throw new RuntimeException('safe_database_tuple_missing');

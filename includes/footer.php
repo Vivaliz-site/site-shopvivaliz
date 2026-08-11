@@ -278,6 +278,4 @@ footer::before {
 <script src="/js/public-experience-v1.js?v=<?= htmlspecialchars($publicExperienceJsVersion, ENT_QUOTES, 'UTF-8') ?>" defer></script>
 <?php endif; ?>
 
-<!-- Liz virtual assistant: the script creates both the launcher and dialog. -->
-<link rel="stylesheet" href="/public/assets/liz-assistant/liz-assistant.css?v=20260729-1">
-<script src="/public/assets/liz-assistant/liz-assistant.js?v=20260729-1" defer></script>
+<?php require_once __DIR__ . '/liz-assistant-assets.php'; ?>

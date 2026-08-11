@@ -1,0 +1,11 @@
+{
+  "requested_at": "2026-08-10T23:26:00Z",
+  "operation": "recover_olist_oauth_by_provider_validated_client_refresh_crossmatch",
+  "include_current_and_private_history": true,
+  "allow_tiny_client_namespace_only_if_provider_accepts": true,
+  "preserve_unrelated_runtime_values": true,
+  "require_provider_acceptance_before_write": true,
+  "require_fresh_catalog": true,
+  "require_products_with_images": true,
+  "require_reachable_image_sample": true
+}

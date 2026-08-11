@@ -1,0 +1,245 @@
+name: Recover Missing Production Env From Backups
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/recover-env-from-backups.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recover-missing-production-env
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: production
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::VM SSH key missing'; exit 1; }
+          test -n "$known_hosts" || { echo '::error::VM known_hosts missing'; exit 1; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Merge missing values from best verified backup
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'python3 -' <<'PY'
+          from __future__ import annotations
+
+          import os
+          import re
+          import shutil
+          import tempfile
+          import time
+          from pathlib import Path
+
+          shared = Path('/home/ubuntu/shopvivaliz-deploy/shared')
+          current = shared / '.env'
+          if not current.is_file():
+              raise SystemExit('shared_env_missing')
+
+          assignment = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
+          retired_prefixes = ('PAGARME_',)
+          placeholder_values = {'changeme', 'change-me', 'placeholder', '***', 'replace_me'}
+
+          def parse(path: Path) -> tuple[list[str], dict[str, str]]:
+              lines = path.read_text(encoding='utf-8', errors='ignore').splitlines()
+              values: dict[str, str] = {}
+              for raw in lines:
+                  text = raw.strip()
+                  if not text or text.startswith('#') or '=' not in text:
+                      continue
+                  if text.startswith('export '):
+                      text = text[7:].strip()
+                  key, value = text.split('=', 1)
+                  key = key.strip()
+                  value = value.strip()
+                  if not assignment.fullmatch(key):
+                      continue
+                  if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+                      value = value[1:-1]
+                  if value and value.lower() not in placeholder_values:
+                      values[key] = value
+              return lines, values
+
+          current_lines, current_values = parse(current)
+
+          candidates: list[tuple[tuple[int, int, int], Path, dict[str, str]]] = []
+          seen_paths: set[Path] = set()
+          patterns = (
+              '.env.backup.*',
+              '.env.bak-*',
+              '.env.pre-*',
+              '.env.restore.*',
+          )
+          for pattern in patterns:
+              for path in shared.glob(pattern):
+                  if path in seen_paths or not path.is_file():
+                      continue
+                  seen_paths.add(path)
+                  try:
+                      _, values = parse(path)
+                  except OSError:
+                      continue
+                  google_ready = int(bool(values.get('GOOGLE_OAUTH_CLIENT_ID')) and bool(values.get('GOOGLE_OAUTH_CLIENT_SECRET')))
+                  if not google_ready:
+                      continue
+                  static_score = sum(1 for key in values if not key.endswith('_ACCESS_TOKEN'))
+                  timestamp_score = 0
+                  match = re.search(r'\.backup\.(\d{9,})$', path.name)
+                  if match:
+                      timestamp_score = int(match.group(1))
+                  else:
+                      match = re.search(r'(\d{14})$', path.name)
+                      if match:
+                          try:
+                              timestamp_score = int(time.mktime(time.strptime(match.group(1), '%Y%m%d%H%M%S')))
+                          except ValueError:
+                              timestamp_score = int(path.stat().st_mtime)
+                      else:
+                          timestamp_score = int(path.stat().st_mtime)
+                  candidates.append(((len(values), static_score, timestamp_score), path, values))
+
+          if not candidates:
+              raise SystemExit('no_backup_with_google_oauth_pair')
+
+          candidates.sort(key=lambda item: item[0], reverse=True)
+          _, selected_path, selected_values = candidates[0]
+
+          restore: dict[str, str] = {}
+          for key, value in selected_values.items():
+              if key.startswith(retired_prefixes):
+                  continue
+              if not current_values.get(key, '').strip():
+                  restore[key] = value
+
+          if not restore:
+              print('candidate_backup=' + selected_path.name)
+              print('restored_key_count=0')
+              print('merge_required=false')
+              raise SystemExit(0)
+
+          original = current.stat()
+          safety = shared / f'.env.pre-merge-{int(time.time())}'
+          shutil.copy2(current, safety)
+          os.chmod(safety, original.st_mode & 0o777)
+
+          output: list[str] = []
+          written: set[str] = set()
+          for raw in current_lines:
+              text = raw.strip()
+              key = ''
+              if text and not text.startswith('#') and '=' in text:
+                  probe = text[7:].strip() if text.startswith('export ') else text
+                  key = probe.split('=', 1)[0].strip()
+              if key in restore:
+                  output.append(f'{key}={restore[key]}')
+                  written.add(key)
+              else:
+                  output.append(raw)
+
+          missing_to_append = [key for key in sorted(restore) if key not in written]
+          if missing_to_append:
+              if output and output[-1].strip():
+                  output.append('')
+              output.append('# Recovered from verified production backup; current non-empty values preserved')
+              output.extend(f'{key}={restore[key]}' for key in missing_to_append)
+
+          fd, temp_name = tempfile.mkstemp(prefix='.env.recover.', dir=str(shared))
+          temp = Path(temp_name)
+          try:
+              with os.fdopen(fd, 'w', encoding='utf-8', newline='\n') as handle:
+                  handle.write('\n'.join(output).rstrip('\n') + '\n')
+                  handle.flush()
+                  os.fsync(handle.fileno())
+              os.chmod(temp, original.st_mode & 0o777)
+              if hasattr(os, 'chown'):
+                  os.chown(temp, original.st_uid, original.st_gid)
+              os.replace(temp, current)
+          finally:
+              temp.unlink(missing_ok=True)
+
+          _, merged = parse(current)
+          google_ok = bool(merged.get('GOOGLE_OAUTH_CLIENT_ID')) and bool(merged.get('GOOGLE_OAUTH_CLIENT_SECRET'))
+          if not google_ok:
+              shutil.copy2(safety, current)
+              os.chmod(current, original.st_mode & 0o777)
+              if hasattr(os, 'chown'):
+                  os.chown(current, original.st_uid, original.st_gid)
+              raise SystemExit('post_merge_google_validation_failed_rollback_applied')
+
+          print('candidate_backup=' + selected_path.name)
+          print('candidate_nonempty_key_count=' + str(len(selected_values)))
+          print('current_nonempty_key_count_before=' + str(len(current_values)))
+          print('restored_key_count=' + str(len(restore)))
+          print('restored_keys=' + ','.join(sorted(restore)))
+          print('safety_backup=' + safety.name)
+          print('google_oauth_pair_present=true')
+          print('secret_values_printed=false')
+          PY
+
+      - name: Reconcile permissions and materialize runtime
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          shared=/home/ubuntu/shopvivaliz-deploy/shared
+          current=/home/ubuntu/shopvivaliz-deploy/current
+          sudo chown ubuntu:www-data "$shared/.env"
+          sudo chmod 0640 "$shared/.env"
+          php "$current/scripts/materialize-runtime-secrets.php"
+          sudo chown ubuntu:www-data "$shared/runtime-secrets.php"
+          sudo chmod 0640 "$shared/runtime-secrets.php"
+          sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-shopee-token-renewer.service shopvivaliz-sync-products.service
+          REMOTE
+
+      - name: Verify login and core production health
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+          code="$(curl --silent --show-error --connect-timeout 5 --max-time 20 \
+            -H 'Host: shopvivaliz.com.br' -o "$body" -w '%{http_code}' \
+            'http://127.0.0.1/auth/login.php')"
+          echo "login_http_status=$code"
+          test "$code" = 200
+          grep -q 'Continuar com Google' "$body"
+          ! grep -qi 'Banco de dados indisponível\|Erro ao inicializar banco de dados' "$body"
+          curl --fail --silent --show-error -H 'Host: shopvivaliz.com.br' http://127.0.0.1/api/orders/health.php >/dev/null
+          curl --fail --silent --show-error -H 'Host: shopvivaliz.com.br' http://127.0.0.1/api/olist/webhook-health.php >/dev/null
+          echo 'google_login_visible=true'
+          echo 'core_health=true'
+          REMOTE
+
+      - name: Remove temporary SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"

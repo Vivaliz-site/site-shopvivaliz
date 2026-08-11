@@ -1,0 +1,63 @@
+name: Production Storefront Image Audit
+
+on:
+  pull_request:
+    paths:
+      - 'tests/production-storefront-image-audit.mjs'
+      - '.github/workflows/production-storefront-image-audit.yml'
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['Master Production Pipeline 24/7']
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-storefront-image-audit-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  production-images:
+    name: Verify real product images in production browser
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout audit code
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'workflow_run' && 'main' || github.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install browser dependencies
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Audit production catalog images
+        shell: bash
+        env:
+          BASE_URL: https://shopvivaliz.com.br
+          OUTPUT_DIR: test-results/production-image-audit
+        run: |
+          set -Eeuo pipefail
+          node tests/production-storefront-image-audit.mjs
+
+      - name: Upload production evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: production-storefront-image-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/production-image-audit/
+          if-no-files-found: error
+          retention-days: 30

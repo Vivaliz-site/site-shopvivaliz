@@ -28,7 +28,6 @@ function sv_home_css_bundle_manifest(): array
         ['path' => 'css/shopvivaliz-premium-consolidated.css', 'optional' => false],
         ['path' => 'css/shopvivaliz-inline-to-classes.css', 'optional' => false],
         ['path' => 'css/shopvivaliz-webp-optimization.css', 'optional' => false],
-        ['path' => 'css/first-purchase-popup-v1.css', 'optional' => false],
         ['path' => 'css/zoom-responsive.css', 'optional' => false],
         ['path' => 'css/layout-polish-v1.css', 'optional' => false],
         ['path' => 'css/home-mobile-compact.css', 'optional' => false],
@@ -63,8 +62,9 @@ function sv_resolve_home_css_bundle_files(string $projectRoot): array
 
 /**
  * Versão determinística do bundle: derivada do maior filemtime entre todos
- * os arquivos presentes. Muda automaticamente sempre que qualquer arquivo do
- * manifesto for editado, sem exigir atualização manual de query string.
+ * os arquivos presentes E do próprio gerador. Assim uma mudança na forma de
+ * servir/minificar o bundle invalida clientes com Cache-Control immutable,
+ * mesmo quando os CSS-fontes não foram editados.
  */
 function sv_home_css_bundle_version(string $projectRoot): string
 {
@@ -73,6 +73,11 @@ function sv_home_css_bundle_version(string $projectRoot): string
         if (is_string($file) && is_file($file)) {
             $maxMtime = max($maxMtime, (int) filemtime($file));
         }
+    }
+
+    $generator = $projectRoot . '/css/home-bundle.php';
+    if (is_file($generator)) {
+        $maxMtime = max($maxMtime, (int) filemtime($generator));
     }
 
     return (string) $maxMtime;

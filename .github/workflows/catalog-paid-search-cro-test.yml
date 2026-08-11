@@ -1,0 +1,49 @@
+name: Catalog Paid Search CRO Test
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'api/catalog/products.php'
+      - 'tests/catalog-paid-search-cro-test.php'
+      - '.github/workflows/catalog-paid-search-cro-test.yml'
+  pull_request:
+    paths:
+      - 'api/catalog/products.php'
+      - 'tests/catalog-paid-search-cro-test.php'
+      - '.github/workflows/catalog-paid-search-cro-test.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  catalog-cro:
+    name: Validate paid landing search and stock safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: PHP syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l api/catalog/products.php
+          php -l tests/catalog-paid-search-cro-test.php
+
+      - name: Run catalog paid-search regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/catalog-paid-search-cro-test.php

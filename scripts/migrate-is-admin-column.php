@@ -1,159 +1,147 @@
 <?php
 /**
- * MIGRATION: Adicionar coluna is_admin na tabela users
- * Execução: php scripts/migrate-is-admin-column.php
+ * MIGRATION: garantir coluna is_admin e autorizacao de uma identidade
+ * administrativa ShopVivaliz persistida.
+ * Execucao: php scripts/migrate-is-admin-column.php
  *
- * Status: ✅ CRÍTICO - Sem esta migração, o admin panel não funciona
- *
- * O que faz:
- * 1. Verifica se coluna is_admin já existe
- * 2. Se não existir, cria com DEFAULT 0
- * 3. Define usuário admin como is_admin = 1 (se houver email admin)
+ * Idempotente e restritiva:
+ * 1. Cria users.is_admin apenas se a coluna nao existir.
+ * 2. Prefere admin@shopvivaliz.com.br quando essa conta existe.
+ * 3. Na ausencia dela, aceita somente uma unica conta @shopvivaliz.com.br.
+ * 4. Nunca cria usuario, altera senha ou escolhe entre multiplas contas.
  */
 
 declare(strict_types=1);
 
-// Cores para terminal
 const COLOR_GREEN = "\033[92m";
 const COLOR_RED = "\033[91m";
 const COLOR_YELLOW = "\033[93m";
 const COLOR_RESET = "\033[0m";
+const CANONICAL_ADMIN_EMAIL = 'admin@shopvivaliz.com.br';
 
 function log_success(string $message): void
 {
-    echo COLOR_GREEN . "✅ " . $message . COLOR_RESET . "\n";
+    echo COLOR_GREEN . "OK " . $message . COLOR_RESET . "\n";
 }
 
 function log_error(string $message): void
 {
-    echo COLOR_RED . "❌ " . $message . COLOR_RESET . "\n";
+    echo COLOR_RED . "ERRO " . $message . COLOR_RESET . "\n";
 }
 
 function log_info(string $message): void
 {
-    echo COLOR_YELLOW . "ℹ️  " . $message . COLOR_RESET . "\n";
+    echo COLOR_YELLOW . "INFO " . $message . COLOR_RESET . "\n";
 }
 
-// ============================================================================
-// STEP 1: Carregar credenciais do .env
-// ============================================================================
-log_info("Carregando configurações...");
-
-$env_file = __DIR__ . '/../.env';
-if (!file_exists($env_file)) {
-    log_error("Arquivo .env não encontrado");
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
     exit(1);
 }
 
-// Carregar .env com parser robusto
-$env = [];
-$lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-foreach ($lines as $line) {
-    if (strpos($line, '=') === false || strpos($line, '#') === 0) continue;
-    list($key, $value) = explode('=', $line, 2);
-    $env[trim($key)] = trim($value);
+log_info('Carregando configuracoes...');
+$envFile = __DIR__ . '/../.env';
+if (!is_file($envFile) || !is_readable($envFile)) {
+    log_error('Arquivo .env nao encontrado ou ilegivel');
+    exit(1);
 }
 
-$db_host = $env['DB_HOST'] ?? 'localhost';
-$db_user = $env['DB_USER'] ?? 'root';
-$db_pass = $env['DB_PASS'] ?? 'root';
-$db_name = $env['DB_NAME'] ?? 'shopvivaliz';
+$env = [];
+$lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+foreach ($lines as $line) {
+    $trimmed = trim($line);
+    if ($trimmed === '' || str_starts_with($trimmed, '#') || !str_contains($trimmed, '=')) {
+        continue;
+    }
+    [$key, $value] = explode('=', $trimmed, 2);
+    $env[trim($key)] = trim($value, " \t\n\r\0\x0B\"'");
+}
 
-log_success("Configurações carregadas");
-
-// ============================================================================
-// STEP 2: Conectar ao banco de dados
-// ============================================================================
-log_info("Conectando ao banco de dados...");
+$dbHost = $env['DB_HOST'] ?? 'localhost';
+$dbUser = $env['DB_USER'] ?? ($env['DB_USERNAME'] ?? '');
+$dbPass = $env['DB_PASS'] ?? ($env['DB_PASSWORD'] ?? '');
+$dbName = $env['DB_NAME'] ?? 'shopvivaliz';
+if ($dbUser === '') {
+    log_error('DB_USER/DB_USERNAME ausente');
+    exit(1);
+}
 
 try {
-    $db = new mysqli($db_host, $db_user, $db_pass, $db_name);
+    mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+    $db = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
+    $db->set_charset('utf8mb4');
 
-    if ($db->connect_error) {
-        throw new Exception("Erro de conexão: " . $db->connect_error);
-    }
-
-    $db->set_charset("utf8mb4");
-    log_success("Conectado ao banco: " . $db_name);
-} catch (Exception $e) {
-    log_error("Falha ao conectar: " . $e->getMessage());
-    exit(1);
-}
-
-// ============================================================================
-// STEP 2: Verificar se coluna já existe
-// ============================================================================
-log_info("Verificando se coluna 'is_admin' já existe...");
-
-$result = $db->query("DESCRIBE users is_admin");
-
-if ($result && $result->num_rows > 0) {
-    log_success("Coluna 'is_admin' já existe. Migração não necessária.");
-    $db->close();
-    exit(0);
-}
-
-log_info("Coluna 'is_admin' não encontrada. Criando...");
-
-// ============================================================================
-// STEP 3: Adicionar coluna is_admin
-// ============================================================================
-$sql = "ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0 AFTER updated_at";
-
-if ($db->query($sql)) {
-    log_success("Coluna 'is_admin' criada com sucesso!");
-} else {
-    log_error("Falha ao criar coluna: " . $db->error);
-    $db->close();
-    exit(1);
-}
-
-// ============================================================================
-// STEP 4: Definir admin padrão (opcional)
-// ============================================================================
-log_info("Procurando usuário admin...");
-
-// Tentar encontrar usuário com email 'admin@shopvivaliz.com.br'
-$adminEmail = 'admin@shopvivaliz.com.br';
-$stmt = $db->prepare("SELECT id FROM users WHERE email = ? LIMIT 1");
-$stmt->bind_param('s', $adminEmail);
-$stmt->execute();
-$result = $stmt->get_result();
-
-if ($result->num_rows > 0) {
-    $row = $result->fetch_assoc();
-    $adminId = (int)$row['id'];
-
-    $updateStmt = $db->prepare("UPDATE users SET is_admin = 1 WHERE id = ?");
-    $updateStmt->bind_param('i', $adminId);
-
-    if ($updateStmt->execute()) {
-        log_success("Usuário #$adminId ($adminEmail) definido como admin");
+    $columnResult = $db->query("SHOW COLUMNS FROM users LIKE 'is_admin'");
+    if ($columnResult->num_rows === 0) {
+        $db->query('ALTER TABLE users ADD COLUMN is_admin TINYINT(1) NOT NULL DEFAULT 0');
+        log_success("Coluna 'is_admin' criada");
     } else {
-        log_error("Falha ao definir admin: " . $db->error);
+        log_success("Coluna 'is_admin' ja existe");
     }
 
-    $updateStmt->close();
-} else {
-    log_info("Nenhum usuário 'admin@shopvivaliz.com.br' encontrado");
-    log_info("Você pode definir um admin manualmente:");
-    log_info("  UPDATE users SET is_admin = 1 WHERE id = [USER_ID];");
-}
+    $adminId = 0;
+    $adminFlag = 0;
+    $stmt = $db->prepare('SELECT id, is_admin FROM users WHERE LOWER(email) = ? LIMIT 1');
+    $canonicalEmail = CANONICAL_ADMIN_EMAIL;
+    $stmt->bind_param('s', $canonicalEmail);
+    $stmt->execute();
+    $admin = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
 
-$stmt->close();
+    if ($admin && !empty($admin['id'])) {
+        $adminId = (int)$admin['id'];
+        $adminFlag = (int)($admin['is_admin'] ?? 0);
+        log_info('Identidade administrativa resolvida pela conta canonica');
+    } else {
+        $domainPattern = '%@shopvivaliz.com.br';
+        $domainStmt = $db->prepare(
+            'SELECT id, is_admin FROM users WHERE LOWER(email) LIKE ? ORDER BY id ASC LIMIT 2'
+        );
+        $domainStmt->bind_param('s', $domainPattern);
+        $domainStmt->execute();
+        $result = $domainStmt->get_result();
+        $domainAccounts = [];
+        while ($row = $result->fetch_assoc()) {
+            $domainAccounts[] = $row;
+        }
+        $domainStmt->close();
 
-// ============================================================================
-// STEP 5: Validação final
-// ============================================================================
-log_info("Validando coluna criada...");
+        if (count($domainAccounts) === 0) {
+            throw new RuntimeException('Nenhuma conta ShopVivaliz persistida foi encontrada');
+        }
+        if (count($domainAccounts) !== 1 || empty($domainAccounts[0]['id'])) {
+            throw new RuntimeException('Existem multiplas contas ShopVivaliz; recusando escolher admin automaticamente');
+        }
 
-$validateResult = $db->query("DESCRIBE users is_admin");
-if ($validateResult && $validateResult->num_rows > 0) {
-    log_success("Migração completada com sucesso!");
+        $adminId = (int)$domainAccounts[0]['id'];
+        $adminFlag = (int)($domainAccounts[0]['is_admin'] ?? 0);
+        log_info('Identidade administrativa resolvida pela unica conta do dominio');
+    }
+
+    if ($adminFlag !== 1) {
+        $update = $db->prepare('UPDATE users SET is_admin = 1 WHERE id = ?');
+        $update->bind_param('i', $adminId);
+        $update->execute();
+        $update->close();
+        log_success('Permissao administrativa restaurada');
+    }
+
+    $verify = $db->prepare('SELECT is_admin FROM users WHERE id = ? LIMIT 1');
+    $verify->bind_param('i', $adminId);
+    $verify->execute();
+    $verified = $verify->get_result()->fetch_assoc();
+    $verify->close();
+    if (!$verified || (int)($verified['is_admin'] ?? 0) !== 1) {
+        throw new RuntimeException('Validacao final da permissao administrativa falhou');
+    }
+
+    log_success('Migracao de autorizacao administrativa concluida');
     $db->close();
     exit(0);
-} else {
-    log_error("Validação falhou - coluna não foi criada");
-    $db->close();
+} catch (Throwable $error) {
+    log_error($error->getMessage());
+    if (isset($db) && $db instanceof mysqli) {
+        $db->close();
+    }
     exit(1);
 }

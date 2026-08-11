@@ -4,6 +4,8 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
 $root = dirname(__DIR__);
+require_once $root . '/includes/storefront-image-source.php';
+
 $storageDir = $root . '/storage';
 if (!is_dir($storageDir)) {
     @mkdir($storageDir, 0775, true);
@@ -42,10 +44,71 @@ try {
         $offset += 100;
     } while (count($pageItems) === 100);
 
+    // A listagem V3 do Tiny nao traz necessariamente todos os anexos do
+    // cadastro. As imagens completas ja reconciliadas do ERP ficam em
+    // olist_product_images. Mesclamos por SKU somente durante a geracao do
+    // cache, evitando consultas ao banco em cada visita da loja.
+    $imagesBySku = [];
+    $imagesEnriched = 0;
+    try {
+        require_once $root . '/includes/pdo-database.php';
+        $pdo = sv_pdo();
+        if ($pdo instanceof PDO) {
+            $sql = "SELECT sku,
+                           site_url,
+                           local_url,
+                           image_url,
+                           original_url_olist,
+                           original_url,
+                           position,
+                           is_primary,
+                           id
+                      FROM olist_product_images
+                     WHERE sku IS NOT NULL
+                       AND TRIM(sku) <> ''
+                       AND (status IS NULL OR status = '' OR status NOT IN ('error', 'deleted', 'inactive'))
+                  ORDER BY sku ASC, is_primary DESC, position ASC, id ASC";
+            $stmt = $pdo->query($sql);
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $sku = trim((string)($row['sku'] ?? ''));
+                $imageUrl = svsis_resolve_image_url($row, $root);
+                if ($sku === '' || $imageUrl === '') continue;
+
+                if (!isset($imagesBySku[$sku])) {
+                    $imagesBySku[$sku] = [];
+                }
+                if (!in_array($imageUrl, $imagesBySku[$sku], true) && count($imagesBySku[$sku]) < 12) {
+                    $imagesBySku[$sku][] = $imageUrl;
+                }
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('cache image gallery enrichment failed: ' . $e->getMessage());
+    }
+
+    if ($imagesBySku !== []) {
+        foreach ($items as &$item) {
+            $sku = trim((string)($item['sku'] ?? $item['codigo'] ?? $item['code'] ?? ''));
+            if ($sku === '' || empty($imagesBySku[$sku])) continue;
+
+            $gallery = $imagesBySku[$sku];
+            // O runtime do catalogo reconhece "imagens" e usa a primeira URL
+            // como capa quando necessario. A ordem vem de is_primary/position.
+            $item['imagens'] = $gallery;
+            $item['images'] = $gallery;
+            $item['imagem_principal_url'] = $gallery[0];
+            $item['primary_image_url'] = $gallery[0];
+            $item['images_count'] = count($gallery);
+            $imagesEnriched++;
+        }
+        unset($item);
+    }
+
     $payload = [
         'success' => true,
         'total' => count($items),
         'updated_at' => gmdate(DATE_ATOM),
+        'images_enriched' => $imagesEnriched,
         'itens' => $items,
         'items' => $items,
     ];
@@ -72,7 +135,12 @@ try {
         @unlink($file);
     }
 
-    echo json_encode(['success' => true, 'total' => count($items), 'files' => $written], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode([
+        'success' => true,
+        'total' => count($items),
+        'images_enriched' => $imagesEnriched,
+        'files' => $written,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } finally {
     flock($lockFile, LOCK_UN);
     if (is_resource($lockFile)) {

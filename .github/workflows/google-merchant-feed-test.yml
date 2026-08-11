@@ -1,0 +1,74 @@
+name: Google Merchant Feed Test
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'google-merchant-feed.php'
+      - 'google-shopping-feed.php'
+      - 'includes/google-shopping-feed-utils.php'
+      - 'tests/google-shopping-feed-utils-test.php'
+      - '.github/workflows/google-merchant-feed-test.yml'
+  pull_request:
+    paths:
+      - 'google-merchant-feed.php'
+      - 'google-shopping-feed.php'
+      - 'includes/google-shopping-feed-utils.php'
+      - 'tests/google-shopping-feed-utils-test.php'
+      - '.github/workflows/google-merchant-feed-test.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  merchant-feed:
+    name: Validate Merchant feed identifiers
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+
+      - name: PHP syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l includes/google-shopping-feed-utils.php
+          php -l google-shopping-feed.php
+          php -l google-merchant-feed.php
+          php -l tests/google-shopping-feed-utils-test.php
+
+      - name: Identifier regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/google-shopping-feed-utils-test.php
+
+      - name: Render and parse XML feeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          php google-shopping-feed.php > /tmp/google-shopping-feed.xml
+          php google-merchant-feed.php > /tmp/google-merchant-feed.xml
+          php -r '$files=["/tmp/google-shopping-feed.xml","/tmp/google-merchant-feed.xml"]; foreach($files as $file){$xml=simplexml_load_file($file); if($xml===false){exit(1);} echo basename($file)," XML OK\n";}'
+          if grep -q '<g:identifier_exists>TRUE</g:identifier_exists>' /tmp/google-shopping-feed.xml; then
+            echo '::error::Secondary feed still forces identifier_exists=TRUE.'
+            exit 1
+          fi
+          if grep -q '<g:google_product_category>' /tmp/google-shopping-feed.xml; then
+            echo '::error::Secondary feed emits an unmapped Google product category.'
+            exit 1
+          fi
+          if grep -q '<g:identifier_exists>no</g:identifier_exists>' /tmp/google-merchant-feed.xml; then
+            echo '::error::Canonical feed infers identifier_exists=no from missing local data.'
+            exit 1
+          fi

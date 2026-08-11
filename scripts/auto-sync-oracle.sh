@@ -13,5 +13,7 @@ fi
 
 export ROOT
 export SHARED_ROOT
-export SYNC_RUNNER_PATH="${SYNC_RUNNER_PATH:-$SCRIPT_ROOT/git-auto-sync.py}"
+# Releases imutaveis nao possuem .git. O runner Python precisa viver no clone
+# operacional em $ROOT para executar git fetch/status contra o repositorio real.
+export SYNC_RUNNER_PATH="${SYNC_RUNNER_PATH:-$ROOT/git-auto-sync.py}"
 exec /usr/bin/bash "$CANONICAL_RUNNER"

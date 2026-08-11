@@ -1,0 +1,201 @@
+name: PR Completion Enforcer
+
+on:
+  workflow_run:
+    workflows:
+      - Quality Gate
+      - ShopVivaliz QA
+      - Repository Governance
+      - Policy Engine
+      - Autonomy Boundary
+      - History Integrity
+      - Ecommerce Excellence Audit
+      - PR Policy Enforcement
+    types: [completed]
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: pr-completion-enforcer
+  cancel-in-progress: true
+
+jobs:
+  enforce:
+    name: Merge every current fully-green same-repository PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      REPO: ${{ github.repository }}
+      VM_HOST: 137.131.156.17
+      VM_USER: ubuntu
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout trusted finalizer from main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: trusted
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate trusted finalizer syntax
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash -n trusted/scripts/merge_green_pr_via_vm.sh
+
+      - name: Configure verified Oracle SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::Oracle SSH key missing'; exit 1; }
+          test -n "$known_hosts" || { echo '::error::Oracle known_hosts missing'; exit 1; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Stage trusted finalizer in Oracle temporary boundary
+        id: stage
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          remote_script="/tmp/shopvivaliz-pr-finalizer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
+          echo "remote_script=$remote_script" >> "$GITHUB_OUTPUT"
+          scp -q \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            trusted/scripts/merge_green_pr_via_vm.sh \
+            "${VM_USER}@${VM_HOST}:${remote_script}"
+
+      - name: Merge fully validated PRs immediately
+        shell: bash
+        env:
+          REMOTE_SCRIPT: ${{ steps.stage.outputs.remote_script }}
+        run: |
+          set -Eeuo pipefail
+          required=(
+            'Quality Gate'
+            'ShopVivaliz QA'
+            'Repository Governance'
+            'Policy Engine'
+            'Autonomy Boundary'
+            'History Integrity'
+            'Ecommerce Excellence Audit'
+            'PR Policy Enforcement'
+          )
+
+          mapfile -t prs < <(
+            gh api "repos/${REPO}/pulls?state=open&base=main&per_page=100" \
+              --jq '.[] | select(.draft == false) | .number'
+          )
+          echo "open_ready_pr_count=${#prs[@]}"
+          merged_count=0
+
+          for pr in "${prs[@]}"; do
+            meta="$(gh api "repos/${REPO}/pulls/${pr}")"
+            head_repo="$(jq -r '.head.repo.full_name // ""' <<<"$meta")"
+            head_sha="$(jq -r '.head.sha' <<<"$meta")"
+            base_ref="$(jq -r '.base.ref' <<<"$meta")"
+
+            if [[ "$head_repo" != "$REPO" || "$base_ref" != 'main' ]]; then
+              echo "pr_${pr}_skipped_untrusted_or_nonmain=true"
+              continue
+            fi
+
+            # A PR is never merged against stale main. A later healer sweep
+            # will synchronize it and cause every PR gate to run on a new SHA.
+            relation="$(gh api "repos/${REPO}/compare/main...${head_sha}" --jq '.status')"
+            if [[ "$relation" != 'ahead' && "$relation" != 'identical' ]]; then
+              echo "pr_${pr}_needs_main_sync=true"
+              continue
+            fi
+
+            runs="$(gh api "repos/${REPO}/actions/runs?head_sha=${head_sha}&per_page=100")"
+            ready=1
+            for workflow_name in "${required[@]}"; do
+              state="$(jq -r --arg name "$workflow_name" '
+                [.workflow_runs[] | select(.name == $name)]
+                | sort_by(.created_at)
+                | last
+                | if . == null then "missing" else (.status + ":" + (.conclusion // "")) end
+              ' <<<"$runs")"
+              echo "pr_${pr}_gate_${workflow_name// /_}=${state}"
+              if [[ "$state" != 'completed:success' ]]; then
+                ready=0
+              fi
+            done
+
+            # Any completed failing run on this exact SHA is a known failure,
+            # even when it is outside the mandatory core workflow names.
+            failing="$(jq '[.workflow_runs[]
+              | select(.status == "completed")
+              | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "action_required" or .conclusion == "startup_failure")]
+              | length' <<<"$runs")"
+            if (( failing > 0 )); then
+              ready=0
+              echo "pr_${pr}_failing_run_count=${failing}"
+            fi
+
+            if [[ "$ready" -ne 1 ]]; then
+              echo "pr_${pr}_merge_ready=false"
+              continue
+            fi
+
+            # TOCTOU guard on the runner, followed by a second independent
+            # guard inside the Oracle finalizer immediately before mutation.
+            latest_sha="$(gh api "repos/${REPO}/pulls/${pr}" --jq '.head.sha')"
+            if [[ "$latest_sha" != "$head_sha" ]]; then
+              echo "pr_${pr}_head_moved=true"
+              continue
+            fi
+
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+              "${VM_USER}@${VM_HOST}" \
+              "bash '${REMOTE_SCRIPT}' '${pr}' '${head_sha}'"
+            merged_count=$((merged_count + 1))
+            echo "pr_${pr}_merged_via_oracle=true"
+          done
+
+          echo "merged_pr_count=${merged_count}"
+
+      - name: Remove Oracle and runner temporary material
+        if: always()
+        shell: bash
+        env:
+          REMOTE_SCRIPT: ${{ steps.stage.outputs.remote_script }}
+        run: |
+          set -Eeuo pipefail
+          if [[ -n "${REMOTE_SCRIPT:-}" && -r "$HOME/.ssh/id_rsa" && -r "$HOME/.ssh/known_hosts" ]]; then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+              "${VM_USER}@${VM_HOST}" \
+              "rm -f '${REMOTE_SCRIPT}'"
+          fi
+          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Enforcement invariant
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo 'green_pr_without_current_main_merge_allowed=false'
+          echo 'stale_checks_accepted=false'
+          echo 'fork_pr_auto_merge_allowed=false'
+          echo 'github_write_token_copied_to_actions=false'
+          echo 'secret_values_printed=false'

@@ -58,6 +58,7 @@ try {
         'OLIST_WEBHOOK_SECRET=olist-secret',
         'OPENAI_API_KEY=must-not-be-exported',
         'SMTP_PASS=must-not-be-exported',
+        'PAGARME_LEGACY_KEY=must-remain-in-env',
         '',
     ]));
 
@@ -65,7 +66,12 @@ try {
     rsm_assert($result['exit'] === 0, 'valid runtime materialization should succeed');
     rsm_assert(is_file($target), 'runtime secrets file should be created');
     rsm_assert(str_contains($result['stdout'], 'runtime_secrets_materialized=true'), 'success evidence should be emitted');
+    rsm_assert(str_contains($result['stdout'], 'retired_runtime_keys_removed=0'), 'materializer must report zero env-key removals');
     rsm_assert(!str_contains($result['stdout'] . $result['stderr'], $signingKey), 'secret values must never be logged');
+
+    $sourceAfter = file_get_contents($source);
+    rsm_assert(is_string($sourceAfter), 'shared env should remain readable');
+    rsm_assert(str_contains($sourceAfter, 'PAGARME_LEGACY_KEY='), 'materializer must never delete an existing env key name');
 
     $values = require $target;
     rsm_assert(is_array($values), 'generated PHP file should return an array');
@@ -74,6 +80,7 @@ try {
     rsm_assert(($values['OLIST_WEBHOOK_SECRET'] ?? '') === 'olist-secret', 'Olist secret should be included');
     rsm_assert(!array_key_exists('OPENAI_API_KEY', $values), 'unrelated AI keys must not be exported');
     rsm_assert(!array_key_exists('SMTP_PASS', $values), 'unrelated mail secrets must not be exported');
+    rsm_assert(!array_key_exists('PAGARME_LEGACY_KEY', $values), 'retired key may remain stored but must not be materialized');
     // The Oracle contract is POSIX 0640. Windows reports synthetic mode bits
     // and cannot represent this chmod contract through the local filesystem.
     if (PHP_OS_FAMILY !== 'Windows') {

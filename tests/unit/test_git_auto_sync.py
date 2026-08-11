@@ -111,8 +111,15 @@ class SanitizedHistorySyncTests(unittest.TestCase):
         SYNC.REPO_DIR = self.local
         SYNC.STATUS_FILE = self.local / "logs" / "tri-environment-sync.json"
         SYNC.DEFAULT_BRANCH = "main"
+        self.original_check_local_health = SYNC.check_local_health
+        SYNC.check_local_health = lambda: {
+            "ok": True,
+            "status": 200,
+            "data": {"health_score_percent": 100.0, "queue": None},
+        }
 
     def tearDown(self) -> None:
+        SYNC.check_local_health = self.original_check_local_health
         try:
             self.tmp.cleanup()
         except PermissionError:
@@ -120,6 +127,12 @@ class SanitizedHistorySyncTests(unittest.TestCase):
 
     def status(self) -> dict[str, object]:
         return json.loads(SYNC.STATUS_FILE.read_text(encoding="utf-8"))
+
+    def clone_remote_into_local(self) -> None:
+        remove_tree(self.local)
+        git(Path(self.tmp.name), "clone", str(self.remote_bare), str(self.local))
+        SYNC.REPO_DIR = self.local
+        SYNC.STATUS_FILE = self.local / "logs" / "tri-environment-sync.json"
 
     def test_realigns_diverged_clean_clone_only_for_verified_sanitized_root(self) -> None:
         result = SYNC.main()
@@ -138,6 +151,7 @@ class SanitizedHistorySyncTests(unittest.TestCase):
             "realigned-to-verified-sanitized-history",
         )
         self.assertEqual(report["sanitized_root_sha"], self.clean_root)
+        self.assertEqual(report["health"]["status"], "ok")
 
     def test_blocks_unrelated_diverged_history_without_marker(self) -> None:
         git(self.remote_work, "switch", "--orphan", "unsafe-history")
@@ -167,19 +181,96 @@ class SanitizedHistorySyncTests(unittest.TestCase):
         self.assertEqual(report["action"], "blocked-diverged-history")
 
     def test_keeps_normal_fast_forward_path(self) -> None:
-        remove_tree(self.local)
-        git(Path(self.tmp.name), "clone", str(self.remote_bare), str(self.local))
+        self.clone_remote_into_local()
         git(self.local, "switch", "--detach", self.clean_root)
         git(self.local, "branch", "--force", "main", self.clean_root)
         git(self.local, "switch", "main")
-        SYNC.REPO_DIR = self.local
-        SYNC.STATUS_FILE = self.local / "logs" / "tri-environment-sync.json"
 
         result = SYNC.main()
 
         self.assertEqual(result, 0)
         self.assertEqual(git(self.local, "rev-parse", "HEAD").stdout.strip(), self.remote_tip)
         self.assertEqual(self.status()["action"], "fast-forward-to-canonical")
+
+    def test_recovers_clean_legacy_agent_branch_if_head_is_already_in_main(self) -> None:
+        self.clone_remote_into_local()
+        legacy_branch = "patch/agente-shopvivaliz-"
+        git(self.local, "switch", "-c", legacy_branch, self.clean_root)
+
+        result = SYNC.main()
+
+        self.assertEqual(result, 0)
+        self.assertEqual(git(self.local, "branch", "--show-current").stdout.strip(), "main")
+        self.assertEqual(git(self.local, "rev-parse", "HEAD").stdout.strip(), self.remote_tip)
+        report = self.status()
+        self.assertTrue(report["ok"])
+        self.assertEqual(report["action"], "noop")
+        self.assertEqual(report["legacy_branch_recovery"]["from_branch"], legacy_branch)
+        self.assertEqual(report["legacy_branch_recovery"]["from_sha"], self.clean_root)
+        self.assertEqual(report["legacy_branch_recovery"]["status"], "switched-to-canonical")
+
+    def test_blocks_legacy_agent_branch_with_unique_commits(self) -> None:
+        self.clone_remote_into_local()
+        legacy_branch = "patch/agente-shopvivaliz-"
+        git(self.local, "switch", "-c", legacy_branch, self.clean_root)
+        unique_sha = commit_file(
+            self.local,
+            "agent-only.txt",
+            "must not be discarded\n",
+            "agent-only work",
+        )
+
+        result = SYNC.main()
+
+        self.assertEqual(result, 6)
+        self.assertEqual(git(self.local, "branch", "--show-current").stdout.strip(), legacy_branch)
+        self.assertEqual(git(self.local, "rev-parse", "HEAD").stdout.strip(), unique_sha)
+        report = self.status()
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["action"], "blocked-legacy-branch-with-unique-commits")
+
+    def test_blocks_unknown_wrong_branch(self) -> None:
+        self.clone_remote_into_local()
+        git(self.local, "switch", "-c", "feature/manual-review", self.clean_root)
+
+        result = SYNC.main()
+
+        self.assertEqual(result, 2)
+        self.assertEqual(
+            git(self.local, "branch", "--show-current").stdout.strip(),
+            "feature/manual-review",
+        )
+        self.assertEqual(self.status()["action"], "blocked-wrong-branch")
+
+    def test_health_gate_blocks_before_sync(self) -> None:
+        SYNC.check_local_health = lambda: {
+            "ok": False,
+            "error": "test runtime unavailable",
+        }
+
+        result = SYNC.main()
+
+        self.assertEqual(result, 5)
+        self.assertEqual(git(self.local, "rev-parse", "HEAD").stdout.strip(), self.old_sha)
+        report = self.status()
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["action"], "blocked-unhealthy-local-runtime")
+        self.assertEqual(report["health"]["status"], "failed")
+
+    def test_health_gate_blocks_legacy_recovery_before_branch_switch(self) -> None:
+        self.clone_remote_into_local()
+        legacy_branch = "patch/agente-shopvivaliz-"
+        git(self.local, "switch", "-c", legacy_branch, self.clean_root)
+        SYNC.check_local_health = lambda: {
+            "ok": False,
+            "error": "test runtime unavailable",
+        }
+
+        result = SYNC.main()
+
+        self.assertEqual(result, 5)
+        self.assertEqual(git(self.local, "branch", "--show-current").stdout.strip(), legacy_branch)
+        self.assertEqual(self.status()["action"], "blocked-unhealthy-local-runtime")
 
     def test_oracle_wrapper_does_not_stage_commit_or_push(self) -> None:
         text = (ROOT / "scripts" / "auto-sync-oracle.sh").read_text(encoding="utf-8")
@@ -188,6 +279,13 @@ class SanitizedHistorySyncTests(unittest.TestCase):
         self.assertNotIn("git commit", text)
         self.assertNotIn("git push", text)
         self.assertNotIn("gh pr create", text)
+
+    def test_sync_runner_does_not_use_destructive_checkout_shortcuts(self) -> None:
+        text = MODULE_PATH.read_text(encoding="utf-8")
+        self.assertNotIn("reset --hard", text)
+        self.assertNotIn("git clean", text)
+        self.assertNotIn("git stash", text)
+        self.assertNotIn("git push", text)
 
 
 if __name__ == "__main__":

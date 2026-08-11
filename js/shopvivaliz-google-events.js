@@ -10,6 +10,15 @@
     }
   }
 
+  function readShippingQuote() {
+    try {
+      var parsed = JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null');
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
   function number(value) {
     var parsed = Number(value || 0);
     return Number.isFinite(parsed) ? parsed : 0;
@@ -17,14 +26,17 @@
 
   function itemFromProduct(product) {
     product = product || {};
-    return {
+    var item = {
       item_id: String(product.sku || product.item_id || product.olist_product_id || ''),
       item_name: String(product.name || product.item_name || 'Produto Vivaliz'),
-      item_brand: String(product.brand || 'Vivaliz'),
-      item_category: String(product.category || ''),
       price: number(product.price),
       quantity: Math.max(1, parseInt(product.quantity || 1, 10) || 1)
     };
+    var brand = String(product.brand || '').trim();
+    var category = String(product.category || '').trim();
+    if (brand) item.item_brand = brand;
+    if (category) item.item_category = category;
+    return item;
   }
 
   function itemsValue(items) {
@@ -96,7 +108,18 @@
 
   function sendFirstParty(eventName, params) {
     if (!analyticsConsentGranted()) return;
-    var allowed = ['view_item', 'view_item_list', 'add_to_cart', 'view_cart', 'begin_checkout', 'generate_lead', 'search'];
+    var allowed = [
+      'view_item',
+      'view_item_list',
+      'add_to_cart',
+      'remove_from_cart',
+      'view_cart',
+      'begin_checkout',
+      'add_shipping_info',
+      'add_payment_info',
+      'generate_lead',
+      'search'
+    ];
     if (allowed.indexOf(eventName) === -1) return;
 
     var items = params && Array.isArray(params.items) ? params.items : [];
@@ -127,11 +150,23 @@
   }
 
   function push(eventName, params) {
+    // Revenue has exactly one source of truth: the payment-approved webhook.
+    // checkout.php still contains legacy browser purchase calls for older
+    // payment flows; suppress them here so pending orders never inflate GA4
+    // purchases/ROAS. The approved purchase is emitted by Measurement Protocol.
+    if (eventName === 'purchase') return;
+
     params = params || {};
     window.dataLayer = window.dataLayer || [];
-    window.dataLayer.push(Object.assign({ event: eventName }, params));
+
+    // gtag() is itself a dataLayer writer. Pushing the object manually and then
+    // calling gtag('event', ...) emitted every browser funnel event twice when
+    // the Google tag/GTM was present. Prefer the canonical gtag command when it
+    // exists; fall back to a raw GTM event object only on pages without gtag.
     if (typeof window.gtag === 'function') {
       window.gtag('event', eventName, params);
+    } else {
+      window.dataLayer.push(Object.assign({ event: eventName }, params));
     }
     sendFirstParty(eventName, params);
   }
@@ -166,6 +201,35 @@
     else push(eventName, payload);
   }
 
+  function shippingTierFromQuote(quote) {
+    if (!quote || typeof quote !== 'object') return '';
+    if (quote.label) return String(quote.label).trim();
+    var option = quote.option && typeof quote.option === 'object' ? quote.option : {};
+    return [option.company, option.name].filter(Boolean).join(' - ').trim();
+  }
+
+  function trackCheckoutDetails(form) {
+    var payload = cartPayload();
+    if (!payload.items.length) return;
+
+    var quote = readShippingQuote();
+    var shippingTier = shippingTierFromQuote(quote);
+    if (quote) {
+      var shippingPayload = Object.assign({}, payload);
+      if (shippingTier) shippingPayload.shipping_tier = shippingTier;
+      pushOnce('add_shipping_info_checkout', 'add_shipping_info', shippingPayload);
+    }
+
+    var payment = form && form.querySelector
+      ? form.querySelector('[name="payment_method"]:checked')
+      : null;
+    if (payment && payment.value) {
+      pushOnce('add_payment_info_checkout', 'add_payment_info', Object.assign({}, payload, {
+        payment_type: String(payment.value)
+      }));
+    }
+  }
+
   function parseProductPayload(button) {
     try {
       var raw = String(button.getAttribute('data-product') || '{}');
@@ -189,6 +253,22 @@
 
   function bindClicks() {
     document.addEventListener('click', function (event) {
+      var removeButton = event.target && event.target.closest
+        ? event.target.closest('.btn-remove[data-remove]')
+        : null;
+      if (removeButton) {
+        var cart = readCart();
+        var removeIndex = parseInt(removeButton.getAttribute('data-remove'), 10);
+        if (!isNaN(removeIndex) && cart[removeIndex]) {
+          var removedItem = itemFromProduct(cart[removeIndex]);
+          push('remove_from_cart', {
+            currency: 'BRL',
+            value: number(removedItem.price) * removedItem.quantity,
+            items: [removedItem]
+          });
+        }
+      }
+
       var button = event.target && event.target.closest ? event.target.closest('[data-product]') : null;
       if (button) {
         var product = parseProductPayload(button);
@@ -242,6 +322,10 @@
         if (term !== '') push('search', { search_term: term });
       }
 
+      if (form.matches('#checkout-form')) {
+        trackCheckoutDetails(form);
+      }
+
       if (form.matches('#contact-form,.contact-form,form[action*="contato"],form[action*="contact"]')) {
         push('generate_lead', {
           lead_source: 'site',
@@ -288,6 +372,7 @@
   window.ShopVivalizGoogleEvents = {
     push: push,
     trackCartEvent: trackCartEvent,
+    trackCheckoutDetails: trackCheckoutDetails,
     itemFromProduct: itemFromProduct
   };
 

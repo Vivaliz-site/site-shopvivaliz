@@ -84,9 +84,15 @@ AddCharset UTF-8 .html .txt .php .json
 
     RewriteRule ^p/termos-e-condicoes/?$ /termos [R=301,L,NE,QSD]
 
-    # Consolidacao do admin: antigas entradas duplicadas agora apontam para /admin/.
+    # Consolidacao do admin: entradas sem barra e index.php apontam para /admin/.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
-    RewriteRule ^admin(?:/index\.php)?/?$ /admin/ [R=301,L,NE,QSD,NC]
+    RewriteRule ^admin$ /admin/ [R=301,L,NE,QSD,NC]
+    # Redirecionar index.php apenas quando ele foi solicitado explicitamente pelo cliente.
+    # DirectoryIndex resolve /admin/ internamente para admin/index.php; redirecionar essa
+    # sub-requisicao de volta para /admin/ causa um loop infinito de 301.
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteCond %{THE_REQUEST} \s/+admin/index\.php(?:[?\s]) [NC]
+    RewriteRule ^admin/index\.php$ /admin/ [R=301,L,NE,QSD,NC]
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
     RewriteRule ^admin/(?:menu-completo|menu-dashboard|dashboard|admin-back)\.php$ /admin/ [R=301,L,NE,QSD,NC]
     RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
@@ -138,7 +144,9 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
 
-    RewriteRule ^produto/([a-z0-9][a-z0-9\-]*)-[0-9]+/?$ /produto/$1 [R=301,L]
+    # Slugs numericos podem ser IDs legados ou parte legitima do modelo (ex: TH-05).
+    # O PHP valida o slug contra o catalogo antes de decidir se deve redirecionar.
+    RewriteRule ^produto/([a-z0-9][a-z0-9\-]*-[0-9]+)/?$ produto-numeric-route.php?slug=$1 [L,QSA]
 
     # Cart API endpoints
     RewriteRule ^api/cart/add/?$ api/cart/add.php [L,QSA]

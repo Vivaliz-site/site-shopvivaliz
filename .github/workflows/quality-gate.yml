@@ -94,13 +94,56 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile \
-            tests/test_secret_bootstrap_safety.py
+            tests/test_secret_bootstrap_safety.py \
+            scripts/configure-erp-oauth-static-runtime.py \
+            tests/test_configure_erp_oauth_static_runtime.py \
+            scripts/agent_docs_gate.py \
+            scripts/agent-docs-gate.py \
+            scripts/check-agent-docs-enforcement.py \
+            scripts/agent-operations-worker.py \
+            tests/test_agent_docs_gate.py \
+            daemon-sync-products.py \
+            tests/daemon-sync-images-regression.py \
+            scripts/recover-olist-oauth-from-backups.py \
+            tests/test_recover_olist_oauth_from_backups.py \
+            scripts/env_keyset_guard.py \
+            tests/test_env_keyset_guard.py \
+            tests/test_env_writer_monotonic_policy.py \
+            scripts/configure-production-runtime.py \
+            daemon-token-renewer.py \
+            daemon-shopee-token-renewer.py \
+            daemon-google-token-renewer.py
 
       - name: Run secret bootstrap safety tests
         shell: bash
         run: |
           set -euo pipefail
           python3 -m unittest tests/test_secret_bootstrap_safety.py -v
+
+      - name: Run env keyset monotonic guard tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest tests/test_env_keyset_guard.py -v
+          python3 -m unittest tests/test_env_writer_monotonic_policy.py -v
+
+      - name: Run ERP OAuth static repair safety tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m unittest tests/test_configure_erp_oauth_static_runtime.py -v
+
+      - name: Run Olist OAuth backup recovery safety tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m unittest tests/test_recover_olist_oauth_from_backups.py -v
+
+      - name: Run catalog daemon image regression test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/daemon-sync-images-regression.py
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -128,12 +171,13 @@ jobs:
           fi
           echo 'PHP syntax OK'
 
-      - name: Run runtime configuration regression tests
+      - name: Run runtime and catalog regression tests
         shell: bash
         run: |
           set -euo pipefail
           php tests/runtime-env-reader-test.php
           php tests/runtime-secrets-materializer-test.php
+          php tests/storefront-image-source-test.php
 
       - name: Run task queue safety regression tests
         shell: bash
@@ -144,6 +188,13 @@ jobs:
             scripts/task_queue_lib.py \
             scripts/manage-tasks-queue.py \
             tests/test_task_queue_safety.py
+
+      - name: Enforce mandatory agent docs preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest tests/test_agent_docs_gate.py -v
+          python3 scripts/check-agent-docs-enforcement.py
 
       - name: Audit Composer dependencies when available
         shell: bash

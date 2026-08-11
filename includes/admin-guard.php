@@ -6,6 +6,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 }
 
 require_once __DIR__ . '/../config/constants.php';
+require_once __DIR__ . '/pdo-database.php';
 require_once __DIR__ . '/../core/logger/logger.php';
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -70,4 +71,20 @@ if (empty($_SESSION['is_admin'])) {
     header('Content-Type: text/plain; charset=UTF-8');
     echo 'Acesso negado.';
     exit;
+}
+
+$svAiRoutineUiPages = [
+    '/admin/ai-image-studio/admin_dashboard.php',
+    '/admin/ai-image-studio/admin_validate.php',
+    '/admin/catalog-optimization/admin_catalog.php',
+];
+$svAdminScriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
+if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAiRoutineUiPages, true)) {
+    register_shutdown_function(static function () use ($svAdminScriptName): void {
+        echo "\n<script src=\"/admin/assets/ai-routines-hotfix-ui.js?v=20260810d\"></script>\n";
+        if ($svAdminScriptName === '/admin/catalog-optimization/admin_catalog.php') {
+            echo "<script src=\"/admin/assets/catalog-resilient-run-hotfix.js?v=20260810d\"></script>\n";
+            echo "<script src=\"/admin/assets/catalog-candidate-race-guard.js?v=20260810d\"></script>\n";
+        }
+    });
 }

@@ -1,17 +1,21 @@
 <?php
 /**
- * Google Shopping Feed (Product Feed)
- * XML format for Google Merchant Center
- * Auto-generated from catalog
+ * Google Shopping / Merchant Center product feed.
+ * Generated from the public ShopVivaliz catalog with manufacturer identifiers
+ * recovered from the Tiny/Olist catalog cache when available.
  */
+
+declare(strict_types=1);
 
 header('Content-Type: application/xml; charset=utf-8');
 header('Cache-Control: public, max-age=3600');
 
 require_once __DIR__ . '/includes/catalog-runtime.php';
 require_once __DIR__ . '/includes/site-settings.php';
+require_once __DIR__ . '/includes/google-shopping-feed-utils.php';
 
 $products = svcr_products();
+$identifierMap = svgf_catalog_identifier_map(__DIR__);
 $freeShipping = sv_free_shipping_config();
 $hasUnconditionalFreeShipping = ($freeShipping['enabled'] ?? false)
     && (float)($freeShipping['threshold'] ?? 0) <= 0;
@@ -25,31 +29,75 @@ echo '<description>Produtos ShopVivaliz para Google Shopping</description>' . "\
 echo '<lastBuildDate>' . date('c') . '</lastBuildDate>' . "\n";
 
 foreach ($products as $product) {
+    if (!is_array($product)) continue;
+
     $sku = trim((string)($product['sku'] ?? ''));
-    $name = trim((string)($product['name'] ?? ''));
+    $name = svgf_limit((string)($product['name'] ?? ''), 150);
     $image = trim((string)($product['image_url'] ?? ''));
     $price = (float)($product['price'] ?? 0);
-    $category = trim((string)($product['category'] ?? 'Produtos'));
+    $category = svgf_limit((string)($product['category'] ?? 'Produtos'), 750);
     $stock = (int)($product['stock'] ?? 0);
-    $url = 'https://shopvivaliz.com.br' . (isset($product['slug']) ? '/produto/' . $product['slug'] : '/catalogo');
+    $slug = trim((string)($product['slug'] ?? ''));
+    $url = 'https://shopvivaliz.com.br' . ($slug !== '' ? '/produto/' . rawurlencode($slug) : '/catalogo');
 
-    if (empty($sku) || empty($name) || $price <= 0 || empty($image)) {
+    if ($sku === '' || $name === '' || $price <= 0 || $image === '') {
         continue;
     }
 
+    $catalogIdentifiers = $identifierMap[$sku] ?? ['gtin' => '', 'mpn' => '', 'brand' => ''];
+    $brand = svgf_limit((string)($product['brand'] ?? ''), 70);
+    if ($brand === '') $brand = svgf_limit((string)($catalogIdentifiers['brand'] ?? ''), 70);
+
+    $gtin = svgf_normalize_gtin($product['gtin'] ?? '');
+    if ($gtin === '') $gtin = (string)($catalogIdentifiers['gtin'] ?? '');
+
+    $mpn = svgf_limit((string)($product['mpn'] ?? ''), 70);
+    if ($mpn === '') $mpn = svgf_limit((string)($catalogIdentifiers['mpn'] ?? ''), 70);
+
+    $description = svgf_limit(
+        (string)($product['description'] ?? 'Produto ShopVivaliz'),
+        5000
+    );
+    if ($description === '') $description = $name;
+
     echo '<item>' . "\n";
-    echo '<g:id>' . htmlspecialchars($sku) . '</g:id>' . "\n";
-    echo '<title>' . htmlspecialchars($name) . '</title>' . "\n";
-    echo '<description>' . htmlspecialchars(substr($product['description'] ?? 'Produto ShopVivaliz', 0, 5000)) . '</description>' . "\n";
-    echo '<g:link>' . htmlspecialchars($url) . '</g:link>' . "\n";
-    echo '<g:image_link>' . htmlspecialchars($image) . '</g:image_link>' . "\n";
+    echo '<g:id>' . svgf_xml($sku) . '</g:id>' . "\n";
+    echo '<title>' . svgf_xml($name) . '</title>' . "\n";
+    echo '<description>' . svgf_xml($description) . '</description>' . "\n";
+    echo '<g:link>' . svgf_xml($url) . '</g:link>' . "\n";
+    echo '<g:image_link>' . svgf_xml($image) . '</g:image_link>' . "\n";
+
+    $additionalImages = [];
+    foreach (is_array($product['images'] ?? null) ? $product['images'] : [] as $candidate) {
+        $candidate = trim((string)$candidate);
+        if ($candidate === '' || $candidate === $image || !preg_match('~^https?://~i', $candidate)) continue;
+        if (!in_array($candidate, $additionalImages, true)) $additionalImages[] = $candidate;
+        if (count($additionalImages) >= 10) break;
+    }
+    foreach ($additionalImages as $additionalImage) {
+        echo '<g:additional_image_link>' . svgf_xml($additionalImage) . '</g:additional_image_link>' . "\n";
+    }
+
     echo '<g:availability>' . ($stock > 0 ? 'in_stock' : 'out_of_stock') . '</g:availability>' . "\n";
-    echo '<g:price>' . htmlspecialchars(number_format($price, 2, '.', '')) . ' BRL</g:price>' . "\n";
-    echo '<g:currency>BRL</g:currency>' . "\n";
-    echo '<g:brand>ShopVivaliz</g:brand>' . "\n";
-    echo '<g:product_type>' . htmlspecialchars($category) . '</g:product_type>' . "\n";
-    echo '<g:google_product_category>' . htmlspecialchars($category) . '</g:google_product_category>' . "\n";
-    echo '<g:mpn>' . htmlspecialchars($sku) . '</g:mpn>' . "\n";
+    echo '<g:price>' . svgf_xml(number_format($price, 2, '.', '')) . ' BRL</g:price>' . "\n";
+    echo '<g:condition>new</g:condition>' . "\n";
+
+    if ($brand !== '') {
+        echo '<g:brand>' . svgf_xml($brand) . '</g:brand>' . "\n";
+    }
+    if ($gtin !== '') {
+        echo '<g:gtin>' . svgf_xml($gtin) . '</g:gtin>' . "\n";
+    }
+    if ($mpn !== '') {
+        echo '<g:mpn>' . svgf_xml($mpn) . '</g:mpn>' . "\n";
+    }
+
+    // Keep the store taxonomy in product_type. Google product category is not
+    // emitted unless there is an explicit mapping to Google's own taxonomy;
+    // arbitrary internal categories must not be sent as google_product_category.
+    if ($category !== '') {
+        echo '<g:product_type>' . svgf_xml($category) . '</g:product_type>' . "\n";
+    }
 
     if ($hasUnconditionalFreeShipping) {
         echo '<g:shipping>' . "\n";
@@ -58,15 +106,8 @@ foreach ($products as $product) {
         echo '</g:shipping>' . "\n";
     }
 
-    // Condition
-    echo '<g:condition>new</g:condition>' . "\n";
-
-    // Identifier exists
-    echo '<g:identifier_exists>TRUE</g:identifier_exists>' . "\n";
-
     echo '</item>' . "\n";
 }
 
 echo '</channel>' . "\n";
 echo '</rss>' . "\n";
-?>

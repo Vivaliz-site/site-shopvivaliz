@@ -5,6 +5,7 @@ header('Content-Type: application/xml; charset=UTF-8');
 header('Cache-Control: public, max-age=900, stale-while-revalidate=3600');
 require_once __DIR__ . '/includes/catalog-runtime.php';
 require_once __DIR__ . '/includes/product-seo.php';
+require_once __DIR__ . '/includes/google-shopping-feed-utils.php';
 
 $official = __DIR__ . '/config/official-site.php';
 $officialData = is_file($official) ? (@include $official) : [];
@@ -13,6 +14,7 @@ $baseUrl = is_array($officialData) && trim((string)($officialData['base_url'] ??
     : 'https://shopvivaliz.com.br';
 
 $products = svcr_products();
+$identifierMap = svgf_catalog_identifier_map(__DIR__);
 
 function gm_xml(string $value): string
 {
@@ -22,10 +24,8 @@ function gm_xml(string $value): string
 function gm_gtin(array $product): string
 {
     foreach (['gtin', 'ean', 'barcode', 'codigo_barras'] as $field) {
-        $value = preg_replace('/\D+/', '', trim((string)($product[$field] ?? '')));
-        if (in_array(strlen((string)$value), [8, 12, 13, 14], true)) {
-            return (string)$value;
-        }
+        $value = svgf_normalize_gtin($product[$field] ?? '');
+        if ($value !== '') return $value;
     }
     return '';
 }
@@ -77,6 +77,7 @@ foreach ($products as $product) {
     if (!is_array($product)) continue;
 
     $id = gm_id($product);
+    $rawSku = trim((string)($product['sku'] ?? $product['olist_product_id'] ?? $product['id'] ?? ''));
     $slug = trim((string)($product['slug'] ?? ''));
     $name = svseo_human_name($product);
     $description = svseo_description($product);
@@ -86,9 +87,25 @@ foreach ($products as $product) {
 
     if ($id === '' || $slug === '' || $name === '' || $image === '' || $price <= 0) continue;
 
-    $brand = svseo_brand($product);
+    $catalogIdentifiers = $identifierMap[$rawSku] ?? ['gtin' => '', 'mpn' => '', 'brand' => ''];
+
+    $brand = trim((string)($product['brand'] ?? $product['marca'] ?? ''));
+    if ($brand === '') $brand = trim((string)($catalogIdentifiers['brand'] ?? ''));
+    if ($brand === '') {
+        $inferredBrand = svseo_brand($product);
+        // svseo_brand() intentionally falls back to the storefront name for
+        // presentation. Merchant identifiers must not use that fallback unless
+        // the catalog actually says the item is a Vivaliz-branded product.
+        if ($inferredBrand !== 'Vivaliz') $brand = $inferredBrand;
+    }
+    $brand = svseo_trim_words($brand, 70);
+
     $gtin = gm_gtin($product);
+    if ($gtin === '') $gtin = (string)($catalogIdentifiers['gtin'] ?? '');
+
     $mpn = gm_mpn($product);
+    if ($mpn === '') $mpn = svseo_trim_words((string)($catalogIdentifiers['mpn'] ?? ''), 70);
+
     $link = $baseUrl . '/produto/' . rawurlencode($slug);
     $title = svseo_title($product, 150);
     $productType = svseo_product_type($product, $name);
@@ -126,12 +143,15 @@ foreach ($products as $product) {
         echo '<g:sale_price>' . gm_xml(number_format($salePrice, 2, '.', '') . ' BRL') . '</g:sale_price>' . PHP_EOL;
     }
     echo '<g:condition>new</g:condition>' . PHP_EOL;
-    echo '<g:brand>' . gm_xml($brand) . '</g:brand>' . PHP_EOL;
+    if ($brand !== '') echo '<g:brand>' . gm_xml($brand) . '</g:brand>' . PHP_EOL;
     echo '<g:product_type>' . gm_xml($productType) . '</g:product_type>' . PHP_EOL;
     if ($googleCategory !== '') echo '<g:google_product_category>' . gm_xml($googleCategory) . '</g:google_product_category>' . PHP_EOL;
     if ($gtin !== '') echo '<g:gtin>' . gm_xml($gtin) . '</g:gtin>' . PHP_EOL;
     if ($mpn !== '') echo '<g:mpn>' . gm_xml($mpn) . '</g:mpn>' . PHP_EOL;
-    if ($gtin === '' && $mpn === '') echo '<g:identifier_exists>no</g:identifier_exists>' . PHP_EOL;
+    // Do not infer identifier_exists=no merely because the local normalized
+    // record is missing a GTIN/MPN. Manufacturer products may still have a
+    // valid identifier that needs to be recovered upstream; a false "no"
+    // hides that data-quality issue and weakens matching.
     if ($color !== '') echo '<g:color>' . gm_xml($color) . '</g:color>' . PHP_EOL;
     if ($material !== '') echo '<g:material>' . gm_xml($material) . '</g:material>' . PHP_EOL;
     if ($size !== '') echo '<g:size>' . gm_xml($size) . '</g:size>' . PHP_EOL;

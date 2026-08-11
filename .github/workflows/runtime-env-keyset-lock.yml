@@ -1,0 +1,131 @@
+name: Production env keyset lock
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/runtime-env-keyset-lock.yml'
+      - '.github/workflows/quality-gate.yml'
+      - 'scripts/env_keyset_guard.py'
+      - 'tests/test_env_keyset_guard.py'
+      - 'tests/test_env_writer_monotonic_policy.py'
+      - 'tests/runtime-secrets-materializer-test.php'
+      - 'scripts/configure-production-runtime.py'
+      - 'scripts/materialize-runtime-secrets.php'
+      - 'daemon-token-renewer.py'
+      - 'daemon-shopee-token-renewer.py'
+      - 'daemon-google-token-renewer.py'
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-env-keyset-lock
+  cancel-in-progress: true
+
+jobs:
+  seal-and-verify:
+    name: Seal monotonic production env keyset
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VM_HOST: 137.131.156.17
+      VM_USER: ubuntu
+      VM_ENV: /home/ubuntu/shopvivaliz-deploy/shared/.env
+      VM_LOCK: /etc/shopvivaliz/env-keyset.lock.json
+
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::VM SSH key missing'; exit 1; }
+          test -n "$known_hosts" || { echo '::error::VM known_hosts missing'; exit 1; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Wait for protected release or descendant on push
+        if: ${{ github.event_name == 'push' }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ready=0
+          for attempt in $(seq 1 30); do
+            state="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+              "${VM_USER}@${VM_HOST}" 'bash -s' -- "$GITHUB_SHA" <<'REMOTE'
+          set -euo pipefail
+          protected_sha="$1"
+          repo=/home/ubuntu/shopvivaliz-deploy/repo
+          current=/home/ubuntu/shopvivaliz-deploy/current
+          deployed_sha="$(cat "$current/.release-sha" 2>/dev/null || true)"
+          relation=none
+          if [[ -n "$deployed_sha" && "$deployed_sha" == "$protected_sha" ]]; then
+            relation=exact
+          elif [[ -n "$deployed_sha" ]] \
+            && git -C "$repo" cat-file -e "${protected_sha}^{commit}" 2>/dev/null \
+            && git -C "$repo" cat-file -e "${deployed_sha}^{commit}" 2>/dev/null \
+            && git -C "$repo" merge-base --is-ancestor "$protected_sha" "$deployed_sha"; then
+            relation=descendant
+          fi
+          printf 'deployed_sha=%s\nrelation=%s\n' "$deployed_sha" "$relation"
+          REMOTE
+            )"
+            deployed_sha="$(printf '%s\n' "$state" | sed -n 's/^deployed_sha=//p' | head -n 1)"
+            relation="$(printf '%s\n' "$state" | sed -n 's/^relation=//p' | head -n 1)"
+            if [[ "$relation" == exact || "$relation" == descendant ]]; then
+              ready=1
+              echo "protected_release_relation=$relation"
+              echo "deployed_sha=$deployed_sha"
+              break
+            fi
+            echo "deployment_wait_attempt=$attempt"
+            sleep 20
+          done
+          test "$ready" = 1 || { echo '::error::Protected release or descendant did not reach production'; exit 1; }
+
+      - name: Seal current key names and block reductions
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            "${VM_USER}@${VM_HOST}" "VM_ENV='${VM_ENV}' VM_LOCK='${VM_LOCK}' bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+          guard=/home/ubuntu/shopvivaliz-deploy/current/scripts/env_keyset_guard.py
+          test -r "$guard"
+          test -r "$VM_ENV"
+
+          sudo install -d -m 0755 -o root -g root "$(dirname "$VM_LOCK")"
+
+          # seal() is fail-closed: if an already sealed key disappeared or was
+          # emptied, it exits non-zero before changing the lock. Only newly
+          # populated key names expand it.
+          sudo python3 "$guard" seal --env "$VM_ENV" --lock "$VM_LOCK"
+          sudo chown root:root "$VM_LOCK"
+          sudo chmod 0444 "$VM_LOCK"
+          sudo python3 "$guard" verify --env "$VM_ENV" --lock "$VM_LOCK"
+
+          echo 'production_env_keyset_monotonic=true'
+          echo 'production_env_key_deletion_blocked=true'
+          echo 'production_env_key_emptying_blocked=true'
+          echo 'secret_values_printed=false'
+          REMOTE
+
+      - name: Remove temporary SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"

@@ -418,6 +418,19 @@ $galleryImages = array_slice($galleryImages, 0, 12);
 
 $related = $notFound ? [] : sv_product_enrich_many(sv_product_related($sku, $category));
 $svNavCurrent = 'produto';
+$videoUrl = trim((string)($resolved['video_url'] ?? ''));
+$videoEmbedUrl = '';
+if ($videoUrl !== '') {
+    $youtubeId = '';
+    if (preg_match('%(?:youtube(?:-nocookie)?\.com/(?:[^/]+/.+/|(?:v|e(?:mbed)?)/|.*[?&]v=)|youtu\.be/)([^"&?/ ]{11})%i', $videoUrl, $match)) {
+        $youtubeId = $match[1];
+    } elseif (preg_match('%youtube\.com/shorts/([^"&?/ ]{11})%i', $videoUrl, $match)) {
+        $youtubeId = $match[1];
+    }
+    if ($youtubeId !== '') {
+        $videoEmbedUrl = 'https://www.youtube.com/embed/' . $youtubeId . '?autoplay=1&rel=0';
+    }
+}
 
 /* ── V15: descrição automática ── */
 $description = trim((string)($resolved['description'] ?? ''));
@@ -647,6 +660,15 @@ if ($notFound) {
                         <img src="<?= sv_esc($galleryUrl) ?>" alt="<?= sv_esc('Imagem adicional de ' . $name) ?>" width="54" height="54" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='<?= sv_product_default_image() ?>'">
                     </button>
                     <?php endforeach; ?>
+                    <?php if ($videoEmbedUrl !== ''): ?>
+                    <button type="button" class="thumb-btn" data-type="video" data-src="<?= sv_esc($videoEmbedUrl) ?>" aria-label="Ver vídeo do produto"
+                            style="width:54px; height:54px; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; cursor:pointer; padding:0; background:#fff; transition: border-color 0.2s; position:relative; display:flex; align-items:center; justify-content:center;">
+                        <img src="<?= sv_esc($image) ?>" alt="<?= sv_esc('Vídeo de ' . $name) ?>" width="54" height="54" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover; opacity:0.6;" onerror="this.src='<?= sv_product_default_image() ?>'">
+                        <div style="position:absolute; width:24px; height:24px; background:rgba(11,79,136,0.9); border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(0,0,0,0.2);">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="#fff"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                        </div>
+                    </button>
+                    <?php endif; ?>
                 </div>
             </div>
             <div class="product-detail-copy">
@@ -957,6 +979,7 @@ if ($notFound) {
         // 1. Gallery Switcher Logic
         const thumbs = document.querySelectorAll('.thumb-btn');
         const mainImg = document.getElementById('main-product-image');
+        const container = document.getElementById('product-zoom-box');
         
         thumbs.forEach(function(btn) {
             btn.addEventListener('click', function() {
@@ -967,19 +990,47 @@ if ($notFound) {
                 btn.classList.add('active');
                 btn.style.borderColor = '#0b4f88';
                 
-                if (mainImg) {
-                    mainImg.style.transition = 'opacity 0.15s ease';
-                    mainImg.style.opacity = '0.3';
-                    setTimeout(function() {
-                        mainImg.src = btn.getAttribute('data-src');
-                        mainImg.style.opacity = '1';
-                    }, 150);
+                const isVideo = btn.getAttribute('data-type') === 'video';
+                
+                if (isVideo && container) {
+                    let iframe = document.getElementById('main-product-video');
+                    if (!iframe) {
+                        iframe = document.createElement('iframe');
+                        iframe.id = 'main-product-video';
+                        iframe.style.width = '100%';
+                        iframe.style.height = '100%';
+                        iframe.style.border = 'none';
+                        iframe.style.position = 'absolute';
+                        iframe.style.top = '0';
+                        iframe.style.left = '0';
+                        iframe.style.zIndex = '10';
+                        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+                        iframe.allowFullscreen = true;
+                        container.appendChild(iframe);
+                    }
+                    iframe.src = btn.getAttribute('data-src');
+                    iframe.style.display = 'block';
+                    if (mainImg) mainImg.style.display = 'none';
+                } else {
+                    const iframe = document.getElementById('main-product-video');
+                    if (iframe) {
+                        iframe.style.display = 'none';
+                        iframe.src = '';
+                    }
+                    if (mainImg) {
+                        mainImg.style.display = 'block';
+                        mainImg.style.transition = 'opacity 0.15s ease';
+                        mainImg.style.opacity = '0.3';
+                        setTimeout(function() {
+                            mainImg.src = btn.getAttribute('data-src');
+                            mainImg.style.opacity = '1';
+                        }, 150);
+                    }
                 }
             });
         });
 
         // 2. Interactive Zoom Lens Logic
-        const container = document.getElementById('product-zoom-box');
         const img = container ? container.querySelector('img') : null;
         
         if (container && img) {
@@ -989,6 +1040,11 @@ if ($notFound) {
             img.style.transition = 'transform 0.1s ease, transform-origin 0.1s ease';
             
             container.addEventListener('mousemove', function(e) {
+                const video = document.getElementById('main-product-video');
+                if (video && video.style.display !== 'none') {
+                    img.style.transform = 'scale(1)';
+                    return;
+                }
                 const rect = container.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const y = e.clientY - rect.top;

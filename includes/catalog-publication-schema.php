@@ -32,6 +32,79 @@ function svcp_add_column_if_missing(PDO $db, string $table, string $column, stri
     }
 }
 
+function svcp_sql_identifier(string $value): string
+{
+    if ($value === '' || preg_match('/^[A-Za-z0-9_]+$/', $value) !== 1) {
+        throw new InvalidArgumentException('Invalid SQL identifier for catalog publication schema.');
+    }
+
+    return '`' . $value . '`';
+}
+
+function svcp_index_exists(PDO $db, string $table, string $index): bool
+{
+    $stmt = $db->prepare(
+        'SELECT COUNT(*) FROM information_schema.STATISTICS '
+        . 'WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?'
+    );
+    $stmt->execute([$table, $index]);
+    return (int)$stmt->fetchColumn() > 0;
+}
+
+/**
+ * Cria um indice somente quando ele ainda nao existe, sem depender de
+ * `CREATE INDEX IF NOT EXISTS` (sintaxe ausente em versões MySQL usadas em
+ * producao). A rechecagem no catch tambem torna a operacao segura se dois
+ * processos tentarem criar o mesmo indice ao mesmo tempo.
+ *
+ * @param array<int,string> $columns
+ */
+function svcp_add_index_if_missing(PDO $db, string $table, string $index, array $columns): void
+{
+    if (svcp_index_exists($db, $table, $index)) {
+        return;
+    }
+    if ($columns === []) {
+        throw new InvalidArgumentException('Catalog publication index requires at least one column.');
+    }
+
+    $tableSql = svcp_sql_identifier($table);
+    $indexSql = svcp_sql_identifier($index);
+    $columnSql = implode(', ', array_map('svcp_sql_identifier', $columns));
+
+    try {
+        $db->exec("CREATE INDEX {$indexSql} ON {$tableSql} ({$columnSql})");
+    } catch (Throwable $e) {
+        // Outro processo pode ter criado o indice entre o SELECT e o CREATE.
+        // Nesse caso a meta ja foi atingida; qualquer outro erro continua fatal.
+        if (svcp_index_exists($db, $table, $index)) {
+            return;
+        }
+        throw $e;
+    }
+}
+
+function svcp_widen_provider_column(PDO $db, string $table): void
+{
+    if (!svcp_column_exists($db, $table, 'provider_used')) {
+        return;
+    }
+
+    $type = svcp_column_type($db, $table, 'provider_used');
+    $length = 0;
+    if (preg_match('/^varchar\((\d+)\)$/', $type, $matches) === 1) {
+        $length = (int)$matches[1];
+    }
+
+    // Os fluxos atuais podem registrar openrouter, groq e nomes compostos de
+    // fallback. ENUMs legados ou VARCHARs curtos causam Data truncated e podem
+    // encerrar a pagina do Admin antes de ela renderizar a resposta.
+    if ($length < 64) {
+        $tableSql = svcp_sql_identifier($table);
+        $db->exec("ALTER TABLE {$tableSql} MODIFY `provider_used` VARCHAR(64) NOT NULL DEFAULT ''");
+    }
+}
+
 function svcp_ensure_schema(PDO $db): void
 {
     static $done = false;
@@ -106,15 +179,18 @@ CREATE TABLE IF NOT EXISTS `catalog_publications` (
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL);
 
-    $db->exec(<<<'SQL'
-CREATE INDEX IF NOT EXISTS `idx_catalog_optimizations_staging_channel_product_status`
-    ON `catalog_optimizations_staging` (`channel`, `product_id`, `status`, `created_at`, `id`)
-SQL);
-
-    $db->exec(<<<'SQL'
-CREATE INDEX IF NOT EXISTS `idx_catalog_optimizations_staging_status_created`
-    ON `catalog_optimizations_staging` (`status`, `created_at`, `id`)
-SQL);
+    svcp_add_index_if_missing(
+        $db,
+        'catalog_optimizations_staging',
+        'idx_catalog_optimizations_staging_channel_product_status',
+        ['channel', 'product_id', 'status', 'created_at', 'id']
+    );
+    svcp_add_index_if_missing(
+        $db,
+        'catalog_optimizations_staging',
+        'idx_catalog_optimizations_staging_status_created',
+        ['status', 'created_at', 'id']
+    );
 
     $db->exec(<<<'SQL'
 CREATE TABLE IF NOT EXISTS `product_images` (
@@ -137,6 +213,7 @@ SQL);
         if (!str_starts_with($statusType, 'varchar(')) {
             $db->exec("ALTER TABLE `catalog_optimizations_staging` MODIFY `status` VARCHAR(32) NOT NULL DEFAULT 'pending'");
         }
+        svcp_widen_provider_column($db, 'catalog_optimizations_staging');
         svcp_add_column_if_missing($db, 'catalog_optimizations_staging', 'publication_summary_json', 'LONGTEXT NULL AFTER `error_message`');
         svcp_add_column_if_missing($db, 'catalog_optimizations_staging', 'published_at', 'DATETIME NULL AFTER `publication_summary_json`');
     }
@@ -146,6 +223,7 @@ SQL);
         if (!str_starts_with($statusType, 'varchar(')) {
             $db->exec("ALTER TABLE `product_images_staging` MODIFY `status` VARCHAR(32) NOT NULL DEFAULT 'pending'");
         }
+        svcp_widen_provider_column($db, 'product_images_staging');
         svcp_add_column_if_missing($db, 'product_images_staging', 'target_channels_json', 'LONGTEXT NULL AFTER `error_message`');
         svcp_add_column_if_missing($db, 'product_images_staging', 'publication_summary_json', 'LONGTEXT NULL AFTER `target_channels_json`');
         svcp_add_column_if_missing($db, 'product_images_staging', 'published_at', 'DATETIME NULL AFTER `publication_summary_json`');

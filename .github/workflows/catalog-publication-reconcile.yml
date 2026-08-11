@@ -22,6 +22,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Checkout without persisted credentials
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          coverage: none
+
+      - name: Validate publication schema compatibility
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php -l includes/catalog-publication-schema.php
+          php -l tests/catalog-publication-schema-compat-test.php
+          php tests/catalog-publication-schema-compat-test.php
+
       - name: Configure verified SSH host
         shell: bash
         env:
@@ -45,19 +64,21 @@ jobs:
         run: |
           set -Eeuo pipefail
           ready=0
-          for attempt in $(seq 1 24); do
+          for attempt in $(seq 1 36); do
             if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
               -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
               "test -r /home/ubuntu/shopvivaliz-deploy/current/scripts/maintenance/reconcile_catalog_publications.php && \
-               grep -q 'amazon_live_readback' /home/ubuntu/shopvivaliz-deploy/current/scripts/maintenance/reconcile_catalog_publications.php"; then
+               test -r /home/ubuntu/shopvivaliz-deploy/current/includes/catalog-publication-schema.php && \
+               grep -q 'amazon_live_readback' /home/ubuntu/shopvivaliz-deploy/current/scripts/maintenance/reconcile_catalog_publications.php && \
+               grep -q 'information_schema.STATISTICS' /home/ubuntu/shopvivaliz-deploy/current/includes/catalog-publication-schema.php"; then
               ready=1
               break
             fi
             echo "deployment_wait_attempt=$attempt"
             sleep 10
           done
-          test "$ready" = 1 || { echo '::error::Publication reconciler was not deployed within 4 minutes'; exit 1; }
+          test "$ready" = 1 || { echo '::error::Compatible publication schema was not deployed within 6 minutes'; exit 1; }
 
       - name: Reconcile real marketplace submissions
         shell: bash

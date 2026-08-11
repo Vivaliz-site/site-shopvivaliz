@@ -15,7 +15,7 @@ sync_script="$script_root/scripts/auto-sync-oracle.sh"
 installer="$script_root/scripts/install-auto-sync-oracle.sh"
 sync_status="$shared/logs/tri-environment-sync.json"
 
-echo "INFO validating Oracle repository sync for deployed commit $expected_sha"
+echo "INFO validating Oracle repository state for deployed commit $expected_sha"
 if [ ! -d "$repo/.git" ]; then
   echo "FAIL Oracle repository is missing: $repo" >&2
   exit 1
@@ -24,18 +24,30 @@ if [ ! -r "$sync_script" ]; then
   echo "FAIL Oracle sync script is unreadable: $sync_script" >&2
   exit 1
 fi
-ROOT="$repo" SHARED_ROOT="$shared" /usr/bin/bash "$sync_script"
 
+# Fetching the canonical ref is read-only with respect to the active working
+# tree. The operational clone can legitimately be checked out on a clean
+# patch/* branch while an autonomous agent owns that checkout. In that case the
+# deploy smoke must not switch branches underneath the agent; it validates the
+# canonical remote ref and defers the mutating sync safely instead.
+git -C "$repo" fetch --prune --no-tags origin main >/dev/null 2>&1
+current_branch="$(git -C "$repo" branch --show-current)"
 repo_sha="$(git -C "$repo" rev-parse HEAD)"
 remote_sha="$(git -C "$repo" rev-parse origin/main)"
-test "$repo_sha" = "$remote_sha"
 git -C "$repo" cat-file -e "${expected_sha}^{commit}"
 if ! git -C "$repo" merge-base --is-ancestor "$expected_sha" "$remote_sha"; then
   echo "FAIL deployed commit $expected_sha is not reachable from canonical main $remote_sha" >&2
   exit 1
 fi
-test -s "$sync_status"
-python3 - "$sync_status" "$remote_sha" <<'PY'
+
+if [[ "$current_branch" == 'main' ]]; then
+  ROOT="$repo" SHARED_ROOT="$shared" /usr/bin/bash "$sync_script"
+
+  repo_sha="$(git -C "$repo" rev-parse HEAD)"
+  remote_sha="$(git -C "$repo" rev-parse origin/main)"
+  test "$repo_sha" = "$remote_sha"
+  test -s "$sync_status"
+  python3 - "$sync_status" "$remote_sha" <<'PY'
 from __future__ import annotations
 
 import json
@@ -44,29 +56,57 @@ from pathlib import Path
 
 payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 expected_canonical = sys.argv[2].lower()
-action = str(payload.get("action") or "")
-allowed = {
-    "noop",
-    "fast-forward-to-canonical",
-    "realigned-to-verified-sanitized-history",
-}
+
+# The canonical git-auto-sync.py currently reports success with
+# status="completed" and SHA fields, while older sync runners also emitted
+# ok=true/action. Accept both schemas so a successful repository sync does not
+# become a false-negative deployment failure.
+ok_value = payload.get("ok")
+if ok_value is None:
+    ok_value = payload.get("status") == "completed"
+if ok_value is not True:
+    raise SystemExit("sync report is not successful")
+
+local_before = str(payload.get("local_sha_before") or "").lower()
 local_after = str(
     payload.get("local_sha_after")
+    or payload.get("final_sha")
     or payload.get("local_sha")
     or ""
 ).lower()
 remote = str(payload.get("remote_sha") or "").lower()
-if payload.get("ok") is not True:
-    raise SystemExit("sync report is not successful")
-if action not in allowed:
-    raise SystemExit(f"unexpected sync action: {action}")
+
 if local_after != expected_canonical or remote != expected_canonical:
     raise SystemExit(
         "sync report SHA mismatch: "
         f"local={local_after} remote={remote} canonical={expected_canonical}"
     )
+
+action = str(payload.get("action") or "")
+if not action:
+    action = "noop" if local_before == expected_canonical else "fast-forward-to-canonical"
+
+allowed = {
+    "noop",
+    "fast-forward-to-canonical",
+    "realigned-to-verified-sanitized-history",
+}
+if action not in allowed:
+    raise SystemExit(f"unexpected sync action: {action}")
 PY
-echo "OK Oracle repository sync: canonical=$repo_sha deployed=$expected_sha"
+  echo "OK Oracle repository sync: canonical=$repo_sha deployed=$expected_sha"
+elif [[ "$current_branch" == patch/* ]]; then
+  tracked_changes="$(git -C "$repo" status --porcelain --untracked-files=no)"
+  if [[ -n "$tracked_changes" ]]; then
+    echo "FAIL active agent checkout has tracked working-tree changes; refusing to treat repository state as safe" >&2
+    exit 1
+  fi
+  echo "OK Oracle canonical ref: remote=$remote_sha deployed=$expected_sha"
+  echo "INFO repository sync deferred safely while active checkout is $current_branch"
+else
+  echo "FAIL Oracle repository is on unexpected branch: ${current_branch:-detached}" >&2
+  exit 1
+fi
 
 if [ ! -r "$installer" ]; then
   echo "FAIL Oracle sync installer is unreadable: $installer" >&2
@@ -114,27 +154,35 @@ grep -Eqi 'name=.viewport.' "$homepage_body"
 grep -Eqi '(mobile|menu-toggle|header)' "$homepage_body"
 echo 'OK mobile responsive header contract'
 
+check_http llms "$base/llms.txt" '200'
+grep -qx '# ShopVivaliz' "$tmpdir/llms.body"
+grep -Fq 'https://shopvivaliz.com.br/catalogo' "$tmpdir/llms.body"
+echo 'OK public llms.txt contract'
+
 check_http catalog "$base/catalogo" '200'
-product_path="$(python3 - "$homepage_body" <<'PY'
-from html.parser import HTMLParser
-from pathlib import Path
-from urllib.parse import quote, urlsplit
+check_http catalog_api "$base/api/catalog/products.php?limit=1&available=1" '200'
+grep -q '"ok":true' "$tmpdir/catalog_api.body"
+echo 'OK catalog API payload'
+
+# The storefront product grid is rendered by JavaScript, so the static homepage
+# is not a reliable source for a /produto/ link. Use the same public catalog API
+# that feeds the browser and validate one canonical slug from live inventory.
+product_path="$(python3 - "$tmpdir/catalog_api.body" <<'PY'
+from __future__ import annotations
+
+import json
 import sys
+from pathlib import Path
+from urllib.parse import quote
 
-class ProductLinkParser(HTMLParser):
-    def handle_starttag(self, tag, attrs):
-        if tag.lower() != "a":
-            return
-        for key, value in attrs:
-            if key.lower() != "href" or not value:
-                continue
-            path = urlsplit(value).path
-            if path.startswith("/produto/"):
-                print(quote(path, safe="/%:@"))
-                raise SystemExit(0)
-
-parser = ProductLinkParser()
-parser.feed(Path(sys.argv[1]).read_text(encoding="utf-8", errors="ignore"))
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+products = payload.get("products") or []
+if not products:
+    raise SystemExit("catalog API returned no available product for smoke test")
+slug = str(products[0].get("slug") or "").strip()
+if not slug:
+    raise SystemExit("catalog API product is missing canonical slug")
+print('/produto/' + quote(slug, safe='-._~'))
 PY
 )"
 test -n "$product_path"
@@ -142,18 +190,107 @@ check_http product "$base$product_path" '200'
 check_http cart "$base/carrinho" '200,302'
 check_http checkout "$base/checkout" '200,302'
 check_http css "$base/css/shopvivaliz-core-consolidated.css" '200'
-check_http catalog_api "$base/api/catalog/products.php?limit=1" '200'
-grep -q '"ok":true' "$tmpdir/catalog_api.body"
-echo 'OK catalog API payload'
 
-admin_status="$(curl --silent --show-error --output "$tmpdir/admin.body" --max-time 20 --user-agent "$ua" --write-out '%{http_code}' "$base/admin" || true)"
-if [[ "$admin_status" == '200' ]]; then
-  grep -Eqi '(login|senha|password|entrar)' "$tmpdir/admin.body"
-elif [[ ",$admin_status," != *,301,* && ",$admin_status," != *,302,* && ",$admin_status," != *,303,* && ",$admin_status," != *,401,* && ",$admin_status," != *,403,* ]]; then
-  echo "FAIL admin behavior: HTTP $admin_status" >&2
+# Follow the complete unauthenticated admin redirect chain. The previous smoke
+# accepted the first 301 from /admin and therefore could not detect a cached or
+# server-side /admin/ -> /admin/ loop. A cache-busting query also prevents an
+# intermediary cache from masking the current routing behavior.
+admin_probe="$base/admin/?smoke=${expected_sha:0:12}"
+admin_meta="$(curl --location --max-redirs 5 --silent --show-error \
+  --output "$tmpdir/admin.body" --max-time 20 --user-agent "$ua" \
+  --write-out $'%{http_code}\n%{url_effective}\n%{num_redirects}' \
+  "$admin_probe" || true)"
+admin_status="$(printf '%s\n' "$admin_meta" | sed -n '1p')"
+admin_effective="$(printf '%s\n' "$admin_meta" | sed -n '2p')"
+admin_redirects="$(printf '%s\n' "$admin_meta" | sed -n '3p')"
+
+if [[ "$admin_status" != '200' ]]; then
+  echo "FAIL admin redirect chain: final HTTP ${admin_status:-unknown}; effective=${admin_effective:-unknown}; redirects=${admin_redirects:-unknown}" >&2
   exit 1
 fi
-echo "OK admin protected behavior ($admin_status)"
+if [[ "$admin_effective" != "$base/auth/login.php"* ]]; then
+  echo "FAIL admin redirect chain: unauthenticated request did not finish at login; effective=$admin_effective" >&2
+  exit 1
+fi
+if [[ ! "$admin_redirects" =~ ^[0-9]+$ ]] || (( admin_redirects < 1 || admin_redirects > 5 )); then
+  echo "FAIL admin redirect chain: invalid redirect count ${admin_redirects:-unknown}" >&2
+  exit 1
+fi
+grep -Eqi '(login|senha|password|entrar)' "$tmpdir/admin.body"
+echo "OK admin redirect chain: final=200 redirects=$admin_redirects effective=$admin_effective"
+
+# Verify that the public login flow keeps one anonymous PHP session across
+# requests. The CSRF token is intentionally stable for the session scope, so
+# matching tokens prove that the browser cookie can round-trip through PHP.
+login_cookie_jar="$tmpdir/login.cookies"
+login_first="$tmpdir/login-first.html"
+login_second="$tmpdir/login-second.html"
+login_post="$tmpdir/login-post.html"
+login_url="$base/auth/login.php?redirect=%2Fadmin%2F%3Fsession_smoke%3D${expected_sha:0:12}"
+
+curl --silent --show-error --max-time 20 --user-agent "$ua" \
+  --cookie-jar "$login_cookie_jar" --output "$login_first" "$login_url"
+login_token_first="$(python3 - "$login_first" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+html = Path(sys.argv[1]).read_text(encoding='utf-8', errors='replace')
+match = re.search(r'name=["\']csrf_token["\'][^>]*value=["\']([^"\']+)', html, re.I)
+if not match:
+    raise SystemExit('missing login CSRF token on first request')
+print(match.group(1))
+PY
+)"
+
+curl --silent --show-error --max-time 20 --user-agent "$ua" \
+  --cookie "$login_cookie_jar" --cookie-jar "$login_cookie_jar" \
+  --output "$login_second" "$login_url"
+login_token_second="$(python3 - "$login_second" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+html = Path(sys.argv[1]).read_text(encoding='utf-8', errors='replace')
+match = re.search(r'name=["\']csrf_token["\'][^>]*value=["\']([^"\']+)', html, re.I)
+if not match:
+    raise SystemExit('missing login CSRF token on second request')
+print(match.group(1))
+PY
+)"
+
+if [[ "$login_token_first" != "$login_token_second" ]]; then
+  echo 'FAIL login session continuity: CSRF token changed despite cookie jar reuse' >&2
+  exit 1
+fi
+
+login_post_status="$(curl --silent --show-error --max-time 20 --user-agent "$ua" \
+  --cookie "$login_cookie_jar" --cookie-jar "$login_cookie_jar" \
+  --output "$login_post" --write-out '%{http_code}' \
+  --request POST \
+  --data-urlencode "csrf_token=$login_token_second" \
+  --data-urlencode 'redirect=/admin/' \
+  --data-urlencode "email=shopvivaliz-session-smoke-${expected_sha:0:12}@invalid.example" \
+  --data-urlencode 'password=SmokeSessionPassword123!' \
+  "$base/auth/login.php" || true)"
+if [[ "$login_post_status" != '200' ]]; then
+  echo "FAIL login session continuity: controlled invalid login returned HTTP $login_post_status" >&2
+  exit 1
+fi
+if grep -Fq 'Sua sessão expirou' "$login_post"; then
+  echo 'FAIL login session continuity: CSRF validation lost the PHP session' >&2
+  exit 1
+fi
+grep -Fq 'Email ou senha incorretos' "$login_post"
+echo 'OK login session continuity and CSRF round-trip'
+
+admin_guard_cli="$(/usr/bin/php "$current_root/scripts/admin-guard-production-smoke.php" 2>&1 || true)"
+if [[ "$admin_guard_cli" != 'ADMIN_GUARD_OK' ]]; then
+  echo 'FAIL authenticated admin guard database fallback' >&2
+  printf '%s\n' "$admin_guard_cli" >&2
+  exit 1
+fi
+echo 'OK authenticated admin guard database fallback'
 
 check_http liz_health "$base/api/liz-intelligent.php?health=1" '200'
 grep -Eq '"(ok|status)"[[:space:]]*:[[:space:]]*(true|"ok"|"healthy")' "$tmpdir/liz_health.body"

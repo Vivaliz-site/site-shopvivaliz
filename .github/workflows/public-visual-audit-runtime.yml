@@ -1,0 +1,393 @@
+name: Public Pages Visual Audit Runtime
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/public-visual-audit-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: production
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::SSH key is missing'; exit 2; }
+          test -n "$known_hosts" || { echo '::error::known_hosts is missing'; exit 3; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Render public pages in production PHP runtime
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          archive="/tmp/shopvivaliz-public-runtime-audit-${GITHUB_RUN_ID}.tar.gz"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+            'bash -s' -- "$archive" <<'REMOTE'
+          set -Eeuo pipefail
+          archive="$1"
+          root='/home/ubuntu/shopvivaliz-deploy/current'
+          cd "$root"
+          workdir="$(mktemp -d /tmp/shopvivaliz-public-runtime.XXXXXX)"
+          mkdir -p "$workdir/html" "$workdir/errors"
+          manifest="$workdir/manifest.tsv"
+          printf 'status\tslug\ttitle\thref\tfile\thtml_bytes\ttext_chars\tdetail\n' > "$manifest"
+
+          product_slug=''
+          if candidate_product_slug="$(php -r '
+            require "includes/catalog-runtime.php";
+            foreach (svcr_products() as $row) {
+                if (!is_array($row)) continue;
+                $slug = trim((string)($row["slug"] ?? ""));
+                $sku = trim((string)($row["sku"] ?? ""));
+                if ($slug !== "") { echo $slug; break; }
+                if ($sku !== "") { echo strtolower($sku); break; }
+            }
+          ' 2>/dev/null)"; then
+            product_slug="$candidate_product_slug"
+          fi
+
+          blog_slug=''
+          if candidate_blog_slug="$(php -r '
+            require "includes/blog-article-repository.php";
+            $repo = BlogArticleRepository::fromApplicationDatabase();
+            $items = $repo->published("", "", 1);
+            if (isset($items[0]["slug"])) echo trim((string)$items[0]["slug"]);
+          ' 2>/dev/null)"; then
+            blog_slug="$candidate_blog_slug"
+          fi
+
+          cat > "$workdir/routes.tsv" <<'EOF'
+          Home	/	index.php	
+          Catalogo	/catalogo	catalogo.php	
+          Produtos alias	/produtos	catalogo.php	
+          Catalogo filtrado	/catalogo?categoria=Ferramentas	catalogo.php	categoria=Ferramentas
+          Carrinho	/carrinho	carrinho.php	
+          Checkout	/checkout	checkout.php	
+          Sobre	/sobre	sobre/index.php	
+          Contato	/contato	contato/index.php	
+          FAQ	/faq	faq/index.php	
+          Blog	/blog	blog/index.php	
+          Termos	/termos	termos.php	
+          Politica de privacidade	/politica-privacidade	politica-privacidade/index.php	
+          Politica de devolucoes	/politica-devolucoes	politica-devolucoes.php	
+          Politica de entrega	/politica-entrega	politica-entrega.php	
+          Login	/auth/login.php	auth/login.php	
+          Cadastro	/auth/register.php	auth/register.php	
+          Recuperar senha	/auth/forgot-password.php	auth/forgot-password.php	
+          EOF
+
+          if [[ -n "$product_slug" ]]; then
+            encoded_product_slug="$(php -r 'echo rawurlencode($argv[1]);' "$product_slug")"
+            printf 'Produto real\t/produto/%s\tproduto.php\tslug=%s\n' "$product_slug" "$encoded_product_slug" >> "$workdir/routes.tsv"
+          else
+            printf 'MISSING\tproduto_real\tProduto real\t/produto/{slug}\tproduto.php\t0\t0\tNo product slug available\n' >> "$manifest"
+          fi
+
+          if [[ -n "$blog_slug" ]]; then
+            encoded_blog_slug="$(php -r 'echo rawurlencode($argv[1]);' "$blog_slug")"
+            printf 'Artigo real do blog\t/blog/%s\tblog/artigo.php\tslug=%s\n' "$blog_slug" "$encoded_blog_slug" >> "$workdir/routes.tsv"
+          fi
+
+          slug_for() {
+            printf '%s' "$1" | sed 's#^/##; s#[?&=/%]#_#g; s#[^A-Za-z0-9._-]#_#g; s#^$#home#'
+          }
+
+          while IFS=$'\t' read -r title href relative_file query; do
+            [[ -n "${relative_file:-}" ]] || continue
+            slug="$(slug_for "$href")"
+            target="$root/$relative_file"
+            output="$workdir/html/${slug}.html"
+            error_file="$workdir/errors/${slug}.log"
+
+            if [[ ! -f "$target" ]]; then
+              printf 'MISSING\t%s\t%s\t%s\t%s\t0\t0\tPHP target missing\n' "$slug" "$title" "$href" "$relative_file" >> "$manifest"
+              continue
+            fi
+
+            if timeout 25s php -d display_errors=1 -d log_errors=0 -d error_reporting=E_ALL -r '
+              declare(strict_types=1);
+              $file = $argv[1];
+              $uri = $argv[2];
+              $extraQuery = $argv[3] ?? "";
+              $root = $argv[4];
+              $parts = parse_url($uri) ?: [];
+              $_GET = [];
+              if (isset($parts["query"])) {
+                  parse_str((string)$parts["query"], $_GET);
+              }
+              if ($extraQuery !== "") {
+                  $extra = [];
+                  parse_str($extraQuery, $extra);
+                  $_GET = array_replace($_GET, $extra);
+              }
+              $_POST = [];
+              $_REQUEST = $_GET;
+              $_COOKIE = [];
+              if (session_status() === PHP_SESSION_NONE) {
+                  session_id("publicvisual-" . bin2hex(random_bytes(8)));
+              }
+              $_SERVER["REQUEST_METHOD"] = "GET";
+              $_SERVER["REQUEST_URI"] = $uri;
+              $_SERVER["QUERY_STRING"] = http_build_query($_GET);
+              $_SERVER["SCRIPT_NAME"] = (string)($parts["path"] ?? $uri);
+              $_SERVER["PHP_SELF"] = $_SERVER["SCRIPT_NAME"];
+              $_SERVER["SCRIPT_FILENAME"] = $file;
+              $_SERVER["DOCUMENT_ROOT"] = $root;
+              $_SERVER["HTTP_HOST"] = "shopvivaliz.com.br";
+              $_SERVER["SERVER_NAME"] = "shopvivaliz.com.br";
+              $_SERVER["SERVER_PORT"] = "443";
+              $_SERVER["HTTPS"] = "on";
+              $_SERVER["REQUEST_SCHEME"] = "https";
+              $_SERVER["HTTP_USER_AGENT"] = "Mozilla/5.0 ShopVivalizVisualAudit/1.0";
+              $_SERVER["HTTP_ACCEPT"] = "text/html,application/xhtml+xml";
+              $_SERVER["HTTP_ACCEPT_LANGUAGE"] = "pt-BR,pt;q=0.9";
+              $_SERVER["REMOTE_ADDR"] = "127.0.0.1";
+              require $file;
+            ' "$target" "$href" "${query:-}" "$root" > "$output" 2> "$error_file"; then
+              code=0
+            else
+              code=$?
+            fi
+
+            bytes="$(wc -c < "$output" 2>/dev/null | tr -d ' ' || echo 0)"
+            text_chars="$(php -r '
+              $html=(string)@file_get_contents($argv[1]);
+              $html=preg_replace("/<script\\b[^>]*>.*?<\\/script\\s*>/is", " ", $html) ?? $html;
+              $html=preg_replace("/<style\\b[^>]*>.*?<\\/style\\s*>/is", " ", $html) ?? $html;
+              $text=trim((string)(preg_replace("/\\s+/u", " ", strip_tags($html)) ?? ""));
+              echo mb_strlen($text,"UTF-8");
+            ' "$output" 2>/dev/null || echo 0)"
+            detail="$(head -c 500 "$error_file" | tr '\r\n\t' '   ' || true)"
+
+            if [[ "$code" -eq 124 ]]; then
+              status='TIMEOUT'; detail="Page render exceeded 25 seconds ${detail}"
+            elif [[ "$code" -ne 0 ]]; then
+              status='RUNTIME_ERROR'; detail="exit=${code} ${detail}"
+            elif grep -Eqi 'Fatal error|Parse error|Uncaught [A-Za-z]+(Exception|Error)' "$output" "$error_file"; then
+              status='RUNTIME_ERROR'; detail="${detail:-PHP error text detected}"
+            elif [[ "$bytes" -lt 500 || "$text_chars" -lt 40 ]]; then
+              status='BLANK'; detail="${detail:-HTML empty or too small}"
+            else
+              status='RENDERED'; detail="${detail:-ok}"
+            fi
+
+            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+              "$status" "$slug" "$title" "$href" "$relative_file" "$bytes" "$text_chars" "$detail" >> "$manifest"
+          done < "$workdir/routes.tsv"
+
+          echo '=== PUBLIC RUNTIME MANIFEST ==='
+          column -t -s $'\t' "$manifest" || cat "$manifest"
+          tar -czf "$archive" -C "$workdir" .
+          REMOTE
+
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            "ubuntu@137.131.156.17:${archive}" public-runtime-audit.tar.gz
+          mkdir -p public-audit
+          tar -xzf public-runtime-audit.tar.gz -C public-audit
+
+      - name: Prepare safe visual snapshots
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p public-audit/prepared public-audit/screenshots/desktop public-audit/screenshots/mobile public-audit/dumps/desktop public-audit/dumps/mobile
+          python3 <<'PY'
+          import csv
+          import re
+          from pathlib import Path
+
+          root = Path('public-audit')
+          rows = list(csv.DictReader((root / 'manifest.tsv').open(encoding='utf-8'), delimiter='\t'))
+          audit_script = r'''
+          <script>
+          window.addEventListener('load', () => setTimeout(() => {
+            const body = document.body;
+            const style = getComputedStyle(body);
+            const visible = Array.from(body.querySelectorAll('*')).filter((el) => {
+              const s = getComputedStyle(el);
+              const r = el.getBoundingClientRect();
+              const text = (el.innerText || el.textContent || '').trim();
+              return text.length > 0 && s.display !== 'none' && s.visibility !== 'hidden' && Number(s.opacity || 1) > 0 && r.width > 1 && r.height > 1;
+            });
+            const payload = {
+              text_chars: (body.innerText || '').trim().length,
+              visible_elements: visible.length,
+              body_display: style.display,
+              body_visibility: style.visibility,
+              body_opacity: style.opacity,
+              viewport_width: window.innerWidth,
+              viewport_height: window.innerHeight,
+              scroll_width: document.documentElement.scrollWidth,
+              scroll_height: document.documentElement.scrollHeight,
+              horizontal_overflow: Math.max(0, document.documentElement.scrollWidth - window.innerWidth)
+            };
+            const marker = document.createElement('div');
+            marker.id = 'public-visual-audit-marker';
+            marker.hidden = true;
+            marker.setAttribute('data-json', JSON.stringify(payload));
+            body.appendChild(marker);
+          }, 700));
+          </script>
+          '''
+
+          for row in rows:
+              if row.get('status') != 'RENDERED':
+                  continue
+              slug = row['slug']
+              source = root / 'html' / f'{slug}.html'
+              if not source.is_file():
+                  continue
+              html = source.read_text(encoding='utf-8', errors='replace')
+              html = re.sub(r'<script\b[^>]*>.*?</script\s*>', '', html, flags=re.I | re.S)
+              if re.search(r'<head\b[^>]*>', html, flags=re.I):
+                  html = re.sub(r'(<head\b[^>]*>)', r'\1<base href="https://shopvivaliz.com.br/">', html, count=1, flags=re.I)
+              else:
+                  html = '<base href="https://shopvivaliz.com.br/">' + html
+              if re.search(r'</body\s*>', html, flags=re.I):
+                  html = re.sub(r'</body\s*>', audit_script + '</body>', html, count=1, flags=re.I)
+              else:
+                  html += audit_script
+              (root / 'prepared' / f'{slug}.html').write_text(html, encoding='utf-8')
+          PY
+
+      - name: Capture desktop and mobile screenshots
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          chrome="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          test -n "$chrome" || { echo '::error::Chrome unavailable'; exit 20; }
+          for file in public-audit/prepared/*.html; do
+            [[ -f "$file" ]] || continue
+            slug="$(basename "$file" .html)"
+            url="file://${GITHUB_WORKSPACE}/${file}"
+            "$chrome" --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files \
+              --window-size=1440,1000 --virtual-time-budget=3500 \
+              --screenshot="public-audit/screenshots/desktop/${slug}.png" "$url" >/dev/null 2>&1
+            "$chrome" --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files \
+              --window-size=1440,1000 --virtual-time-budget=3500 --dump-dom "$url" \
+              > "public-audit/dumps/desktop/${slug}.html" 2>/dev/null
+            "$chrome" --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files \
+              --window-size=390,844 --virtual-time-budget=3500 \
+              --screenshot="public-audit/screenshots/mobile/${slug}.png" "$url" >/dev/null 2>&1
+            "$chrome" --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files \
+              --window-size=390,844 --virtual-time-budget=3500 --dump-dom "$url" \
+              > "public-audit/dumps/mobile/${slug}.html" 2>/dev/null
+          done
+
+      - name: Evaluate public visual audit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 <<'PY'
+          import csv
+          import html as html_lib
+          import json
+          import re
+          from pathlib import Path
+
+          root = Path('public-audit')
+          rows = list(csv.DictReader((root / 'manifest.tsv').open(encoding='utf-8'), delimiter='\t'))
+          fatal = []
+          warnings = []
+          visual = []
+          marker_re = re.compile(r'id="public-visual-audit-marker"[^>]*data-json="([^"]*)"', re.I)
+
+          def read_marker(path: Path):
+              if not path.is_file():
+                  return None
+              match = marker_re.search(path.read_text(encoding='utf-8', errors='replace'))
+              if not match:
+                  return None
+              try:
+                  return json.loads(html_lib.unescape(match.group(1)))
+              except Exception:
+                  return None
+
+          for row in rows:
+              status = row.get('status', '')
+              title = row.get('title', '')
+              slug = row.get('slug', '')
+              if status in {'MISSING', 'BLANK', 'RUNTIME_ERROR', 'TIMEOUT'}:
+                  fatal.append(f"{title}: {status} - {row.get('detail', '')}")
+                  continue
+              if status != 'RENDERED':
+                  continue
+              desktop = read_marker(root / 'dumps' / 'desktop' / f'{slug}.html')
+              mobile = read_marker(root / 'dumps' / 'mobile' / f'{slug}.html')
+              if desktop is None or mobile is None:
+                  fatal.append(f'{title}: browser marker ausente')
+                  continue
+              for label, payload in [('desktop', desktop), ('mobile', mobile)]:
+                  hidden = (
+                      payload.get('body_display') == 'none'
+                      or payload.get('body_visibility') == 'hidden'
+                      or str(payload.get('body_opacity')) == '0'
+                      or int(payload.get('text_chars') or 0) < 40
+                      or int(payload.get('visible_elements') or 0) < 1
+                  )
+                  if hidden:
+                      fatal.append(f'{title}: tela visualmente vazia em {label}: {payload}')
+                  overflow = int(payload.get('horizontal_overflow') or 0)
+                  if label == 'mobile' and overflow > 48:
+                      warnings.append(f'{title}: overflow horizontal mobile de {overflow}px')
+              visual.append({'title': title, 'href': row.get('href'), 'desktop': desktop, 'mobile': mobile})
+
+          (root / 'visual-results.json').write_text(json.dumps(visual, ensure_ascii=False, indent=2), encoding='utf-8')
+          (root / 'audit-failures.txt').write_text('\n'.join(fatal) + ('\n' if fatal else ''), encoding='utf-8')
+          (root / 'audit-warnings.txt').write_text('\n'.join(warnings) + ('\n' if warnings else ''), encoding='utf-8')
+
+          print(f'Public entries: {len(rows)}')
+          print(f'Rendered screens: {sum(1 for row in rows if row.get("status") == "RENDERED")}')
+          print(f'Fatal findings: {len(fatal)}')
+          print(f'Responsive warnings: {len(warnings)}')
+          if warnings:
+              print('\nWARNINGS:')
+              for item in warnings:
+                  print('-', item)
+          if fatal:
+              print('\nFATAL FINDINGS:')
+              for item in fatal:
+                  print('-', item)
+              raise SystemExit(1)
+          PY
+
+      - name: Upload public visual audit evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: public-visual-audit-runtime-${{ github.run_id }}
+          path: |
+            public-audit/manifest.tsv
+            public-audit/visual-results.json
+            public-audit/audit-failures.txt
+            public-audit/audit-warnings.txt
+            public-audit/screenshots/
+            public-audit/errors/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"

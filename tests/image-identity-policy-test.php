@@ -47,8 +47,6 @@ $tmp = sys_get_temp_dir() . '/shopvivaliz-image-policy-' . bin2hex(random_bytes(
 @mkdir($tmp, 0700, true);
 
 try {
-    // Saida 1024x1024 continua tecnicamente valida. O novo perfil separa
-    // minimo tecnico de alvo recomendado de cada marketplace.
     $good = $tmp . '/good.png';
     iip_write_png($good, 1024, 1024);
     $meta = ai_studio_validate_image_file($good, 1000);
@@ -60,7 +58,6 @@ try {
     iip_assert($providerMeta['mime'] === 'image/png', 'provider output validator must inspect real MIME');
     iip_assert(strlen($providerMeta['sha256']) === 64, 'provider output validator must fingerprint output');
 
-    // Foto-base abaixo de 600px e saida abaixo de 1000px devem ser bloqueadas.
     $weakBase = $tmp . '/weak-base.png';
     iip_write_png($weakBase, 599, 599);
     iip_expect_failure(fn() => ai_studio_validate_image_file($weakBase, 600), 'source image below 600px');
@@ -79,8 +76,6 @@ try {
         'path traversal in base image'
     );
 
-    // Prompts devem manter identidade real e composicao quadrada sem inventar
-    // especificacoes. Regras visuais passam a depender do destino escolhido.
     $sitePrompts = ai_studio_default_prompts('Produto Teste X1', 'site');
     foreach (['white', 'hero', 'ambient'] as $type) {
         iip_assert(isset($sitePrompts[$type]), "prompt {$type} must exist");
@@ -116,15 +111,29 @@ try {
     iip_assert(str_contains($contextPrompts['white'], 'Appearance cue:'), 'image prompt must include appearance cue');
     iip_assert(ai_studio_normalize_provider('gpt') === 'openai', 'gpt alias must normalize to openai');
     iip_assert(ai_studio_normalize_provider('gemini') === 'google', 'gemini alias must normalize to google');
-    iip_assert(ai_studio_provider_fallback_order('claude') === ['openai', 'google'], 'claude image fallback must choose an image engine');
-    iip_assert(str_contains(file_get_contents(__DIR__ . '/../admin/ai-image-studio/src/AiServices.php'), 'ai_studio_resolve_image_engine'), 'image engine resolver must exist');
+
+    // Este helper é uma ordem genérica histórica e ainda pode conter provedores
+    // de prompt. A decisão de motor FINAL de imagem é exercida no process_item.
+    $claudeFallback = ai_studio_provider_fallback_order('claude');
+    iip_assert(array_slice($claudeFallback, 0, 3) === ['openai', 'google', 'openrouter'], 'claude generic fallback must prefer image-output engines first');
+    iip_assert(!in_array('claude', $claudeFallback, true), 'claude must not be selected as its own image engine');
+
+    $processSource = file_get_contents(__DIR__ . '/../admin/ai-image-studio/process_item.php');
+    iip_assert(is_string($processSource), 'process_item source must be readable');
+    iip_assert(str_contains($processSource, "'groq' => ['openrouter', 'openai', 'google']"), 'Groq real image flow must end in supported image-output engines');
+    iip_assert(str_contains($processSource, "'claude' => ['openai', 'google', 'openrouter']"), 'Claude real image flow must end in supported image-output engines');
+    iip_assert(str_contains($processSource, "'groq' => throw new AiStudioApiException"), 'Groq must not expose a direct image client');
+
+    $openRouterImageSource = file_get_contents(__DIR__ . '/../admin/ai-image-studio/src/OpenRouterImageClient.php');
+    iip_assert(is_string($openRouterImageSource), 'OpenRouter dedicated image client must exist');
+    iip_assert(str_contains($openRouterImageSource, "'/images'"), 'OpenRouter image client must use dedicated /images endpoint');
+    iip_assert(str_contains($openRouterImageSource, 'input_references'), 'OpenRouter image-to-image must send the real source as input_references');
 
     $tiktokProfile = ai_studio_channel_profile('tiktok');
     iip_assert((int)($tiktokProfile['minimum_side'] ?? 0) === 1000, 'TikTok technical minimum must remain 1000px');
     iip_assert((int)($tiktokProfile['recommended_side'] ?? 0) === 1600, 'TikTok recommended target must be visible as 1600px');
     iip_assert(!empty($tiktokProfile['white_first']), 'TikTok white cover must be reviewed first');
 
-    // Testa funcoes puras/privadas de identidade e ordenacao sem banco.
     $reflection = new ReflectionClass(AiStudioOmnichannelImagePublisher::class);
     $publisher = $reflection->newInstanceWithoutConstructor();
 
@@ -152,15 +161,12 @@ try {
     ]);
     iip_assert($ordered === ['/white-approved.png', '/hero-new.png', '/ambient-approved.png'], 'white must always be first and only latest type kept');
 
-    // A sincronizacao Olist antiga usava OR e um bind incompleto. Ambos devem sumir.
     $syncSource = file_get_contents(__DIR__ . '/../olist/sync-images-to-site.php');
     iip_assert(is_string($syncSource), 'sync source must be readable');
     iip_assert(!str_contains($syncSource, 'WHERE olist_id = ? OR sku = ?'), 'unsafe OR identity query must not exist');
     iip_assert(!str_contains($syncSource, 'bind_param("issi"'), 'old incomplete image bind must not exist');
     iip_assert(str_contains($syncSource, 'correspondência ambígua'), 'sync must explicitly block ambiguity');
 
-    // Publicacao multicanal nao pode reaproveitar silenciosamente a galeria do
-    // site e nao pode tocar no preco do ERP para publicar imagem gerada.
     $publisherSource = file_get_contents(__DIR__ . '/../admin/ai-image-studio/src/OmnichannelImagePublisher.php');
     iip_assert(is_string($publisherSource), 'publisher source must be readable');
     iip_assert(str_contains($publisherSource, 'approvedChannelUrls'), 'external channels must use same-channel approval provenance');
@@ -176,7 +182,8 @@ try {
     iip_assert(str_contains($dashboardSource, 'ais-selected-count'), 'image dashboard must show selected count');
     iip_assert(str_contains($dashboardSource, 'data-product-check'), 'image dashboard must track each selected product');
     iip_assert(str_contains($dashboardSource, 'p.sku'), 'image dashboard must load SKU in preview data');
-    iip_assert(str_contains($dashboardSource, 'p.category'), 'image dashboard must load category in preview data');
+    iip_assert(!str_contains($dashboardSource, 'p.sku, p.category'), 'image dashboard must not select optional p.category directly');
+    iip_assert(str_contains($dashboardSource, 'ai_studio_fetch_product($db'), 'image dashboard must enrich optional category through tolerant product resolver');
 
     fwrite(STDOUT, "OK image identity and quality policy\n");
 } finally {

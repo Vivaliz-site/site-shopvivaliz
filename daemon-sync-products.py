@@ -70,11 +70,12 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
             "comprimento": float(dimensions.get("comprimento") or 0),
             "pesoLiquido": float(dimensions.get("pesoLiquido") or dimensions.get("peso_liquido") or item.get("peso") or 0),
         },
-        "imagem_principal_url": str(item.get("imagem_principal_url") or ""),
         "anexos": attachments,
+        "imagem_principal_url": str(item.get("imagem_principal_url") or ""),
         "seo_title": str(item.get("seo_title") or ""),
         "seo_description": str(item.get("seo_description") or ""),
         "keywords": item.get("keywords", []) if isinstance(item.get("keywords"), list) else [],
+        "video_url": str((item.get("seo") or {}).get("linkVideo") if isinstance(item.get("seo"), dict) else (item.get("video_url") or "")).strip(),
         "_detail_synced_at": str(item.get("_detail_synced_at") or datetime.now(timezone.utc).isoformat()),
     }
 

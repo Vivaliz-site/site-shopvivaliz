@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/src/AiServices.php';
+require_once __DIR__ . '/src/OpenRouterImageClient.php';
 require_once __DIR__ . '/src/ImageChannelProfile.php';
 require_once __DIR__ . '/../../includes/catalog-publication-schema.php';
 require_once __DIR__ . '/../../core/queue/queue.php';
@@ -82,13 +83,16 @@ function ai_studio_default_prompts(string $productName, string $targetChannel = 
 function ai_studio_image_provider_candidates(string $preferred): array
 {
     $preferred = ai_studio_normalize_provider($preferred);
+    // Groq aceita imagem como entrada e produz texto, mas não expõe endpoint
+    // nativo de geração/edição de imagem. Quando escolhido, ele atua como
+    // otimizador de prompt e a edição final usa um motor visual disponível.
     $order = match ($preferred) {
-        'openai' => ['openai', 'google', 'openrouter', 'groq'],
-        'google' => ['google', 'openai', 'openrouter', 'groq'],
-        'claude' => ['openai', 'google', 'openrouter', 'groq'],
-        'openrouter' => ['openrouter', 'groq', 'openai', 'google'],
-        'groq' => ['groq', 'openrouter', 'openai', 'google'],
-        default => ['openai', 'google', 'openrouter', 'groq'],
+        'openai' => ['openai', 'google', 'openrouter'],
+        'google' => ['google', 'openai', 'openrouter'],
+        'claude' => ['openai', 'google', 'openrouter'],
+        'openrouter' => ['openrouter', 'openai', 'google'],
+        'groq' => ['openrouter', 'openai', 'google'],
+        default => ['openai', 'google', 'openrouter'],
     };
     return array_values(array_unique(array_filter($order, static fn(string $provider): bool => ai_studio_provider_has_key($provider))));
 }
@@ -98,11 +102,16 @@ function ai_studio_build_image_client(string $provider, ?string $modelOverride, 
     return match ($provider) {
         'openai' => new AiStudioOpenAiClient(ai_studio_secret_pool('AI_STUDIO_OPENAI_API_KEY', ['OPENAI_API_KEY']), $modelOverride !== null && trim($modelOverride) !== '' ? trim($modelOverride) : $openAiModel),
         'google' => new AiStudioGoogleImageEditClient(ai_studio_secret_pool('AI_STUDIO_GOOGLE_IMAGEN_API_KEY', ['GOOGLE_IMAGEN_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_GEMINI_API_KEY']), $modelOverride !== null && trim($modelOverride) !== '' ? trim($modelOverride) : $googleModel),
-        'openrouter' => new AiStudioOpenAiCompatibleClient(ai_studio_secret_pool('AI_STUDIO_OPENROUTER_API_KEY', ['OPENROUTER_API_KEY']), $openRouterModel !== '' ? $openRouterModel : $openAiModel, defined('AI_STUDIO_OPENROUTER_API_BASE_URL') ? AI_STUDIO_OPENROUTER_API_BASE_URL : 'https://openrouter.ai/api/v1', 'OpenRouter', [
-            'HTTP-Referer' => defined('AI_STUDIO_OPENROUTER_HTTP_REFERER') ? AI_STUDIO_OPENROUTER_HTTP_REFERER : 'https://shopvivaliz.com.br',
-            'X-OpenRouter-Title' => defined('AI_STUDIO_OPENROUTER_APP_TITLE') ? AI_STUDIO_OPENROUTER_APP_TITLE : 'ShopVivaliz',
-        ]),
-        'groq' => new AiStudioOpenAiCompatibleClient(ai_studio_secret_pool('AI_STUDIO_GROQ_API_KEY', ['GROQ_API_KEY']), $qropeModel !== '' ? $qropeModel : (defined('AI_STUDIO_GROQ_IMAGE_MODEL') ? AI_STUDIO_GROQ_IMAGE_MODEL : 'openai/gpt-oss-20b'), defined('AI_STUDIO_GROQ_API_BASE_URL') ? AI_STUDIO_GROQ_API_BASE_URL : 'https://api.groq.com/openai/v1', 'Groq'),
+        'openrouter' => new AiStudioOpenRouterImageClient(
+            ai_studio_secret_pool('AI_STUDIO_OPENROUTER_API_KEY', ['OPENROUTER_API_KEY']),
+            $modelOverride !== null && trim($modelOverride) !== '' ? trim($modelOverride) : ($openRouterModel !== '' ? $openRouterModel : 'openai/gpt-image-1'),
+            defined('AI_STUDIO_OPENROUTER_API_BASE_URL') ? AI_STUDIO_OPENROUTER_API_BASE_URL : 'https://openrouter.ai/api/v1',
+            [
+                'HTTP-Referer' => defined('AI_STUDIO_OPENROUTER_HTTP_REFERER') ? AI_STUDIO_OPENROUTER_HTTP_REFERER : 'https://shopvivaliz.com.br',
+                'X-OpenRouter-Title' => defined('AI_STUDIO_OPENROUTER_APP_TITLE') ? AI_STUDIO_OPENROUTER_APP_TITLE : 'ShopVivaliz',
+            ]
+        ),
+        'groq' => throw new AiStudioApiException('Groq não possui saída de imagem direta; use-o como otimizador de prompt.'),
         default => throw new AiStudioApiException("Provider de imagem invalido: {$provider}."),
     };
 }
@@ -402,10 +411,11 @@ function ai_studio_process_item(
 
         $imageCandidates = ai_studio_image_provider_candidates($provider);
         if ($imageCandidates === []) {
-            throw new AiStudioApiException('Nenhum provedor de imagem com chave ativa encontrou disponibilidade.');
+            throw new AiStudioApiException('Nenhum editor de imagem com chave ativa encontrou disponibilidade.');
         }
         $providerUsed = $imageCandidates[0];
         $prompts = $promptOverrides ?? ai_studio_default_prompts($product['name'], $targetChannel, $product);
+        $promptOptimizer = '';
 
         if ($provider === 'claude' && ai_studio_provider_has_key('claude')) {
             try {
@@ -415,9 +425,23 @@ function ai_studio_process_item(
                     $candidate = trim((string)($optimized[$type] ?? ''));
                     if ($candidate !== '') $prompts[$type] = $guardedPrompt . ' Additional scene guidance: ' . $candidate;
                 }
-                $providerUsed = 'claude_optimized';
+                $promptOptimizer = 'claude_optimized';
             } catch (Throwable $e) {
                 error_log("[ai-image-studio] Claude indisponível para prompts do produto #{$productId}: " . $e->getMessage());
+            }
+        }
+
+        if ($provider === 'groq' && ai_studio_provider_has_key('groq')) {
+            $groqChanged = false;
+            foreach ($prompts as $type => $guardedPrompt) {
+                $candidate = ai_studio_groq_refine_prompt($guardedPrompt, $product, $targetChannel);
+                if (trim($candidate) !== '' && $candidate !== $guardedPrompt) {
+                    $prompts[$type] = $guardedPrompt . ' Additional scene guidance: ' . trim($candidate);
+                    $groqChanged = true;
+                }
+            }
+            if ($groqChanged) {
+                $promptOptimizer = 'groq_optimized';
             }
         }
 
@@ -425,12 +449,9 @@ function ai_studio_process_item(
         $googleModel = ($modelOverride !== null && trim($modelOverride) !== '') ? trim($modelOverride) : AI_STUDIO_GOOGLE_IMAGEN_MODEL;
         $openRouterModel = trim((string)(getenv('OPENROUTER_IMAGE_MODEL') ?: ''));
         if ($openRouterModel === '') {
-            $openRouterModel = trim((string)(getenv('OPENROUTER_IMAGE_MODEL') ?: getenv('GROQ_IMAGE_MODEL') ?: $openAiModel));
+            $openRouterModel = 'openai/gpt-image-1';
         }
         $qropeModel = trim((string)(getenv('QROPE_IMAGE_MODEL') ?: ''));
-        if ($qropeModel === '') {
-            $qropeModel = trim((string)(getenv('GROQ_IMAGE_MODEL') ?: getenv('OPENROUTER_IMAGE_MODEL') ?: $openAiModel));
-        }
 
         $results = [];
         foreach ($imageTypes as $imageType) {
@@ -443,9 +464,12 @@ function ai_studio_process_item(
                 $lastError = null;
                 foreach ($imageCandidates as $candidateProvider) {
                     try {
-                        $providerUsed = $candidateProvider;
-                        $client = ai_studio_build_image_client($candidateProvider, $modelOverride, $openAiModel, $googleModel, $openRouterModel, $qropeModel);
+                        $candidateModelOverride = ($candidateProvider === $provider || ($provider === 'claude' && $candidateProvider === 'openai'))
+                            ? $modelOverride
+                            : null;
+                        $client = ai_studio_build_image_client($candidateProvider, $candidateModelOverride, $openAiModel, $googleModel, $openRouterModel, $qropeModel);
                         $client->editImageToFile($prompt, $baseImagePath, $destination);
+                        $providerUsed = $promptOptimizer !== '' ? $promptOptimizer . '+' . $candidateProvider : $candidateProvider;
                         $lastError = null;
                         break;
                     } catch (Throwable $candidateError) {
@@ -521,7 +545,7 @@ if (PHP_SAPI === 'cli' && realpath($argv[0] ?? '') === realpath(__FILE__)) {
     $model = trim((string)($argv[4] ?? ''));
     $targetChannel = strtolower(trim((string)($argv[5] ?? 'site')));
     if ($productId <= 0 || $provider === '') {
-        fwrite(STDERR, "Uso: php process_item.php <product_id> <openai|google|claude> [white,hero,ambient] [modelo] [site|ml|shopee|amazon|tiktok]\n");
+        fwrite(STDERR, "Uso: php process_item.php <product_id> <openai|google|claude|openrouter|groq> [white,hero,ambient] [modelo] [site|ml|shopee|amazon|tiktok]\n");
         exit(1);
     }
     $types = $typesArg !== '' ? array_map('trim', explode(',', $typesArg)) : ['white', 'hero', 'ambient'];
