@@ -71,6 +71,12 @@ Essa autorização não permite force-push, bypass de branch protection, exposi�
 
 ---
 
+### 2026-08-11 — Webhook de pedido/rastreio/nota fiscal (`api/webhooks/order-status-update.php`) rejeitava 100% das chamadas por falta de token
+**Sistema/arquivo:** `api/webhooks/order-status-update.php`, `.env` (`shopvivaliz-deploy/shared/.env`), painel `erp.olist.com/integracoes#/ecommerce/edit/31816` (aba Notificações)
+**O que descobri:** `OLIST_WEBHOOK_TOKEN`/`ERP_WEBHOOK_TOKEN` nao existiam no `.env` de producao — nenhuma das duas. O codigo faz `if (empty($webhook_token) || ...) { http_response_code(401); }`, entao TODA chamada era rejeitada, sempre, independente do token que a Tiny mandasse na query string (`?token=...` — e' assim que o token e' passado, porque o painel de webhooks da Tiny so aceita URL por evento, sem campo de header customizado). `logs/webhook.log` confirmou: eventos `estoque`/`preco`/`atualizacao_pedido` chegavam normalmente ate 2026-07-14/20, sumiram depois — bate com `docs/TINY-WEBHOOKS-SETUP.md` avisando que um token antigo "deve ser considerado comprometido e revogado no provedor" (alguem removeu o token comprometido do `.env` mas nunca colocou um novo). Corrigido gerando um token novo (`openssl rand -hex 32`), adicionando `OLIST_WEBHOOK_TOKEN=...` ao `.env`, e atualizando as 3 URLs correspondentes no painel Olist (`urls_webhook_terceiros.situacao_pedido`, `.rastreio`, `.nota_fiscal`) com `?token=<novo>` no final. Testado com curl real: `HTTP 404 "Order not found"` para um pedido fake confirma que a autenticacao passou (compare com 401 antes da correcao).
+**Por quê importa:** rastreio, nota fiscal e status de pedido pararam de atualizar automaticamente por ~3 semanas sem nenhum erro visivel no admin — o pedido so ficava "parado" no status antigo. Se um agente futuro achar pedidos com status desatualizado, confira primeiro se `OLIST_WEBHOOK_TOKEN` existe no `.env` antes de investigar qualquer outra coisa.
+**Ver também:** `docs/TINY-WEBHOOKS-SETUP.md`
+
 ### 2026-08-11 — Sincronizacao de produtos ativos/inativos com o Tiny/Olist estava completamente ausente
 **Sistema/arquivo:** `sync-daemon-to-db.php`, `olist/sync-on-webhook.php`, `olist/webhook-receiver.php`, `api/webhooks/order-status-update.php`, `scripts/products-active-sync-loop.sh`, `daemon-token-renewer.py`
 **O que descobri:**
