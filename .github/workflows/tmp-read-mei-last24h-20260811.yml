@@ -1,0 +1,48 @@
+name: Read MEI last 24h count
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-read-mei-last24h-20260811.yml']
+permissions:
+  contents: read
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Read last 24h
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import os, json, psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'], autocommit=True, row_factory=dict_row, connect_timeout=10) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("set transaction read only")
+                  cur.execute("""
+                    select count(*) as enviados_24h,
+                           max(coalesce(submitted_at,enviado_em,criado_em)) as ultimo_envio
+                      from mei_email.envios
+                     where status::text in ('submitted','delivered','enviado')
+                       and coalesce(submitted_at,enviado_em,criado_em) >= now() - interval '24 hours'
+                  """)
+                  result = dict(cur.fetchone())
+                  cur.execute("select count(*) as pending from mei_email.envios where status::text in ('pending','pendente')")
+                  result['pending'] = cur.fetchone()['pending']
+                  print('RESULT='+json.dumps(result, default=str, ensure_ascii=False))
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
