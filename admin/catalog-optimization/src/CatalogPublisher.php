@@ -186,7 +186,8 @@ final class CatalogOptimizationPublisher
         };
         $walk($payload);
         if (!$updated) {
-            throw new RuntimeException('Produto não localizado no cache ativo da vitrine; publicação do site foi abortada.');
+            $this->appendStorefrontCacheItem($payload, $product, $content, $displayDescription);
+            $updated = true;
         }
         $encoded = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $tmpPath = $path . '.tmp.' . getmypid() . '.' . bin2hex(random_bytes(4));
@@ -204,6 +205,55 @@ final class CatalogOptimizationPublisher
         if (!$this->cacheContainsAllFields($verify, $sku, $externalId, $content)) {
             throw new RuntimeException('Read-back do cache não confirmou todos os campos textuais aprovados.');
         }
+    }
+
+    /** @param array<string,mixed> $payload @param array<string,mixed> $product @param array<string,mixed> $content */
+    private function appendStorefrontCacheItem(array &$payload, array $product, array $content, string $displayDescription): void
+    {
+        $sku = trim((string)($product['sku'] ?? ''));
+        $externalId = trim((string)($product['olist_id'] ?? $product['olist_product_id'] ?? ''));
+        $imageUrl = trim((string)($product['image_url'] ?? $product['imagem_principal_url'] ?? ''));
+        $title = (string)$content['title'];
+        $entry = [
+            'id' => $externalId !== '' ? $externalId : (int)($product['id'] ?? 0),
+            'product_id' => (int)($product['id'] ?? 0),
+            'sku' => $sku,
+            'descricao' => $title,
+            'name' => $title,
+            'nome' => $title,
+            'description' => $displayDescription,
+            'descricaoComplementar' => $displayDescription,
+            'descricao_complementar' => $displayDescription,
+            'active' => true,
+            'situacao' => 'A',
+            'imagem_principal_url' => $imageUrl,
+            'image_url' => $imageUrl,
+            'anexos' => $imageUrl !== '' ? [['url' => $imageUrl]] : [],
+            'bullet_points' => $content['bullet_points'],
+            'seo_keywords' => $content['seo_keywords'],
+            'marketing_hooks' => $content['marketing_hooks'],
+            'meta_title' => (string)$content['meta_title'],
+            'meta_description' => (string)$content['meta_description'],
+        ];
+        if (isset($product['price'])) {
+            $entry['precos'] = ['preco' => (float)$product['price'], 'precoPromocional' => (float)($product['promotional_price'] ?? 0)];
+        }
+        if (isset($product['stock'])) {
+            $entry['estoque'] = ['quantidade' => (int)$product['stock']];
+            $entry['estoque_disponivel'] = (int)$product['stock'];
+        }
+
+        foreach (['itens', 'items', 'produtos', 'products', 'data'] as $key) {
+            if (isset($payload[$key]) && is_array($payload[$key])) {
+                $payload[$key][] = $entry;
+                return;
+            }
+        }
+        if (array_is_list($payload)) {
+            $payload[] = $entry;
+            return;
+        }
+        $payload['items'] = [$entry];
     }
 
     /** @param array<string,mixed> $content */
