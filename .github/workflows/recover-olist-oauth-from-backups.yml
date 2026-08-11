@@ -95,13 +95,17 @@ jobs:
           test -r "$current/scripts/recover-olist-oauth-from-backups.py"
 
           restart_services() {
-            sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-shopee-token-renewer.service >/dev/null 2>&1 || true
-            sudo systemctl disable --now shopvivaliz-sync-products.service >/dev/null 2>&1 || true
+            sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-shopee-token-renewer.service >/dev/null 2>&1
+            if systemctl list-unit-files shopvivaliz-sync-products.service --no-legend 2>/dev/null | grep -q '^shopvivaliz-sync-products\.service'; then
+              sudo systemctl disable --now shopvivaliz-sync-products.service >/dev/null 2>&1
+            fi
           }
           trap restart_services EXIT
 
           sudo systemctl stop shopvivaliz-token-renewer.service shopvivaliz-shopee-token-renewer.service
-          sudo systemctl disable --now shopvivaliz-sync-products.service >/dev/null 2>&1 || true
+          if systemctl list-unit-files shopvivaliz-sync-products.service --no-legend 2>/dev/null | grep -q '^shopvivaliz-sync-products\.service'; then
+            sudo systemctl disable --now shopvivaliz-sync-products.service >/dev/null 2>&1
+          fi
 
           cd "$current"
           python3 scripts/recover-olist-oauth-from-backups.py \
@@ -201,7 +205,11 @@ jobs:
           trap - EXIT
           test "$(systemctl is-active shopvivaliz-token-renewer.service)" = active
           test "$(systemctl is-active shopvivaliz-shopee-token-renewer.service)" = active
-          test "$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null || true)" != active
+          sync_status='inactive'
+          if systemctl is-active --quiet shopvivaliz-sync-products.service 2>/dev/null; then
+            sync_status='active'
+          fi
+          test "$sync_status" != active
           echo 'olist_oauth_recovery_verified=true'
           echo 'fresh_catalog_with_images_verified=true'
           REMOTE

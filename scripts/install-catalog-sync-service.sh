@@ -23,7 +23,9 @@ systemd-analyze verify "${token_unit_target}" "${shopee_unit_target}"
 systemctl daemon-reload
 systemctl enable --now shopvivaliz-token-renewer.service
 systemctl enable --now shopvivaliz-shopee-token-renewer.service
-systemctl disable --now shopvivaliz-sync-products.service 2>/dev/null || true
+if systemctl list-unit-files shopvivaliz-sync-products.service --no-legend 2>/dev/null | grep -q '^shopvivaliz-sync-products\.service'; then
+  systemctl disable --now shopvivaliz-sync-products.service
+fi
 systemctl is-active --quiet shopvivaliz-token-renewer.service
 systemctl is-active --quiet shopvivaliz-shopee-token-renewer.service
 echo "serviços de token e Shopee ativos; sync automático de catálogo desabilitado"

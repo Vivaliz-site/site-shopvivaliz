@@ -79,10 +79,14 @@ jobs:
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE_SCRIPT'
           set -euo pipefail
           sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-shopee-token-renewer.service
-          sudo systemctl disable --now shopvivaliz-sync-products.service 2>/dev/null || true
+          if systemctl list-unit-files shopvivaliz-sync-products.service --no-legend 2>/dev/null | grep -q '^shopvivaliz-sync-products\.service'; then
+            sudo systemctl disable --now shopvivaliz-sync-products.service
+          fi
           for attempt in $(seq 1 12); do
-            sync_status='unknown'
-            if sync_status="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null)"; then :; fi
+            sync_status='inactive'
+            if systemctl is-active --quiet shopvivaliz-sync-products.service 2>/dev/null; then
+              sync_status='active'
+            fi
             token_status='unknown'
             if token_status="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null)"; then :; fi
             shopee_token_status='unknown'
@@ -92,8 +96,10 @@ jobs:
             fi
             sleep 10
           done
-          sync_status='unknown'
-          if sync_status="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null)"; then :; fi
+          sync_status='inactive'
+          if systemctl is-active --quiet shopvivaliz-sync-products.service 2>/dev/null; then
+            sync_status='active'
+          fi
           token_status='unknown'
           if token_status="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null)"; then :; fi
           shopee_token_status='unknown'
@@ -102,8 +108,14 @@ jobs:
           orders_file="$(mktemp)"
           olist_file="$(mktemp)"
           trap 'rm -f "$orders_file" "$olist_file"' EXIT
-          orders_code="$(curl --location --silent --show-error --max-time 30 -o "$orders_file" -w '%{http_code}' "$base_url/api/orders/health.php" || true)"
-          olist_code="$(curl --location --silent --show-error --max-time 30 -o "$olist_file" -w '%{http_code}' "$base_url/api/olist/webhook-health.php" || true)"
+          orders_code='000'
+          if orders_code="$(curl --location --silent --show-error --max-time 30 -o "$orders_file" -w '%{http_code}' "$base_url/api/orders/health.php")"; then
+            :
+          fi
+          olist_code='000'
+          if olist_code="$(curl --location --silent --show-error --max-time 30 -o "$olist_file" -w '%{http_code}' "$base_url/api/olist/webhook-health.php")"; then
+            :
+          fi
           echo "runtime_services={\"sync_service\":\"$sync_status\",\"expected_sync_service\":\"inactive\",\"token_renewer\":\"$token_status\",\"shopee_token_renewer\":\"$shopee_token_status\",\"orders_http\":$orders_code,\"olist_http\":$olist_code}"
           echo 'orders_health_body:'
           cat "$orders_file"

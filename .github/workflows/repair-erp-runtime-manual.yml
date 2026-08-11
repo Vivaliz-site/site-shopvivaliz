@@ -60,10 +60,16 @@ jobs:
           (cd "$current" && timeout 90 python3 daemon-token-renewer.py --once) >"$renew_log" 2>&1 || renew_status=$?
 
           sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-shopee-token-renewer.service
-          sudo systemctl disable --now shopvivaliz-sync-products.service 2>/dev/null || true
+          if systemctl list-unit-files shopvivaliz-sync-products.service --no-legend 2>/dev/null | grep -q '^shopvivaliz-sync-products\.service'; then
+            sudo systemctl disable --now shopvivaliz-sync-products.service
+          fi
           sleep 10
-          service_sync="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null)"
-          service_sync_query_status=$?
+          service_sync='inactive'
+          service_sync_query_status=3
+          if systemctl is-active --quiet shopvivaliz-sync-products.service 2>/dev/null; then
+            service_sync='active'
+            service_sync_query_status=0
+          fi
           service_token="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null)"
           service_token_query_status=$?
           service_shopee_token="$(systemctl is-active shopvivaliz-shopee-token-renewer.service 2>/dev/null)"
