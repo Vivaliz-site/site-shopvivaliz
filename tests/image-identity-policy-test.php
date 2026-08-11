@@ -119,8 +119,15 @@ try {
     $claudeFallback = ai_studio_provider_fallback_order('claude');
     iip_assert(array_slice($claudeFallback, 0, 2) === ['openai', 'google'], 'claude fallback must prefer native image engines');
     iip_assert(!in_array('claude', $claudeFallback, true), 'claude must not be selected as its own image engine');
-    iip_assert(array_diff($claudeFallback, ['openai', 'google', 'openrouter', 'groq']) === [], 'claude fallback must contain only supported image engines');
+    iip_assert(array_diff($claudeFallback, ['openai', 'google', 'openrouter']) === [], 'claude fallback must contain only image-output engines');
+    $groqImageCandidates = ai_studio_image_provider_candidates('groq');
+    iip_assert(!in_array('groq', $groqImageCandidates, true), 'Groq must not be treated as a direct image-output engine');
+    iip_assert(array_diff($groqImageCandidates, ['openai', 'google', 'openrouter']) === [], 'Groq visual flow must end in a supported image-output engine');
     iip_assert(str_contains(file_get_contents(__DIR__ . '/../admin/ai-image-studio/src/AiServices.php'), 'ai_studio_resolve_image_engine'), 'image engine resolver must exist');
+    $openRouterImageSource = file_get_contents(__DIR__ . '/../admin/ai-image-studio/src/OpenRouterImageClient.php');
+    iip_assert(is_string($openRouterImageSource), 'OpenRouter dedicated image client must exist');
+    iip_assert(str_contains($openRouterImageSource, "'/images'"), 'OpenRouter image client must use dedicated /images endpoint');
+    iip_assert(str_contains($openRouterImageSource, 'input_references'), 'OpenRouter image-to-image must send the real source as input_references');
 
     $tiktokProfile = ai_studio_channel_profile('tiktok');
     iip_assert((int)($tiktokProfile['minimum_side'] ?? 0) === 1000, 'TikTok technical minimum must remain 1000px');
@@ -179,7 +186,8 @@ try {
     iip_assert(str_contains($dashboardSource, 'ais-selected-count'), 'image dashboard must show selected count');
     iip_assert(str_contains($dashboardSource, 'data-product-check'), 'image dashboard must track each selected product');
     iip_assert(str_contains($dashboardSource, 'p.sku'), 'image dashboard must load SKU in preview data');
-    iip_assert(str_contains($dashboardSource, 'p.category'), 'image dashboard must load category in preview data');
+    iip_assert(!str_contains($dashboardSource, 'p.sku, p.category'), 'image dashboard must not select optional p.category directly');
+    iip_assert(str_contains($dashboardSource, 'ai_studio_fetch_product($db'), 'image dashboard must enrich optional category through tolerant product resolver');
 
     fwrite(STDOUT, "OK image identity and quality policy\n");
 } finally {
