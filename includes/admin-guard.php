@@ -6,6 +6,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 }
 
 require_once __DIR__ . '/../config/constants.php';
+require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/pdo-database.php';
 require_once __DIR__ . '/../core/logger/logger.php';
 
@@ -33,36 +34,66 @@ if ($sessionIssuedAt > 0 && (time() - $sessionIssuedAt) > $sessionMaxAge) {
 
 if (empty($_SESSION['is_admin']) || !is_numeric($_SESSION['is_admin'])) {
     $isAdmin = false;
+    $adminResolved = false;
+    $userId = (int)$_SESSION['user_id'];
+
+    // Prefer the same canonical mysqli connection used by auth/login.php.
+    // The previous if/elseif ordering always selected sv_pdo() because the
+    // function is defined by the required file above, leaving this path dead.
+    // If the primary lookup cannot run, retry through PDO before denying.
     try {
-        if (function_exists('sv_pdo')) {
+        if (class_exists('Database')) {
+            try {
+                $conn = Database::getInstance()->getConnection();
+                if ($conn instanceof mysqli) {
+                    $stmt = $conn->prepare('SELECT is_admin FROM users WHERE id = ? LIMIT 1');
+                    if ($stmt) {
+                        $stmt->bind_param('i', $userId);
+                        $stmt->execute();
+                        $result = $stmt->get_result();
+                        $row = $result ? $result->fetch_assoc() : null;
+                        $stmt->close();
+                        if (is_array($row)) {
+                            $isAdmin = !empty($row['is_admin']);
+                            $adminResolved = true;
+                        }
+                    }
+                }
+            } catch (Throwable $e) {
+                sv_log('admin_guard_mysqli_error', 'security', [
+                    'user_id' => $userId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        if (!$adminResolved && function_exists('sv_pdo')) {
             $db = sv_pdo();
             if ($db instanceof PDO) {
                 $stmt = $db->prepare('SELECT is_admin FROM users WHERE id = ? LIMIT 1');
-                $stmt->execute([(int)$_SESSION['user_id']]);
+                $stmt->execute([$userId]);
                 $row = $stmt->fetch(PDO::FETCH_ASSOC);
-                $isAdmin = !empty($row) && !empty($row['is_admin']);
-            }
-        } elseif (class_exists('Database')) {
-            $conn = Database::getInstance()->getConnection();
-            if ($conn instanceof mysqli) {
-                $stmt = $conn->prepare('SELECT is_admin FROM users WHERE id = ? LIMIT 1');
-                if ($stmt) {
-                    $userId = (int)$_SESSION['user_id'];
-                    $stmt->bind_param('i', $userId);
-                    $stmt->execute();
-                    $row = $stmt->get_result()->fetch_assoc();
-                    $isAdmin = !empty($row) && !empty($row['is_admin']);
+                if (is_array($row)) {
+                    $isAdmin = !empty($row['is_admin']);
+                    $adminResolved = true;
                 }
             }
         }
     } catch (Throwable $e) {
-        sv_log('admin_guard_error', 'security', ['error' => $e->getMessage()]);
+        sv_log('admin_guard_error', 'security', [
+            'user_id' => $userId,
+            'error' => $e->getMessage(),
+        ]);
         $isAdmin = false;
     }
 
     $_SESSION['is_admin'] = $isAdmin ? 1 : 0;
     if (!$isAdmin) {
-        sv_log('admin_guard_denied', 'security', ['user_id' => (int)$_SESSION['user_id'], 'uri' => $_SERVER['REQUEST_URI'] ?? '']);
+        sv_log('admin_guard_denied', 'security', [
+            'user_id' => $userId,
+            'uri' => $_SERVER['REQUEST_URI'] ?? '',
+            'admin_resolved' => $adminResolved,
+        ]);
     }
 }
 
