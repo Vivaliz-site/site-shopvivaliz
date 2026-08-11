@@ -65,9 +65,29 @@ function get_product_estoque_v3(string $id_produto, string $token): ?int
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
     $response = curl_exec($ch);
     $httpStatus = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
     curl_close($ch);
 
+    if ($httpStatus === 429) {
+        // Limite e 60 req/min por CONTA (nao por app) -- outros daemons
+        // (olist-sync, daemon-sync-products) podem estar consumindo a
+        // mesma cota ao mesmo tempo. Um retry apos respirar resolve a
+        // maioria dos casos sem abortar o item inteiro.
+        sleep(2);
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$token}", "Accept: application/json"]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        $response = curl_exec($ch);
+        $httpStatus = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+    }
+
     if ($response === false || $httpStatus < 200 || $httpStatus >= 300) {
+        error_log("[fetch-estoque-v3] Falha id={$id_produto} status={$httpStatus} curl_error=" . ($curlError ?: 'none'));
         return null;
     }
 
@@ -75,6 +95,8 @@ function get_product_estoque_v3(string $id_produto, string $token): ?int
     if (isset($data['disponivel'])) {
         return (int)$data['disponivel'];
     }
+
+    error_log("[fetch-estoque-v3] Resposta sem campo disponivel id={$id_produto}: " . substr((string)$response, 0, 200));
 
     return null;
 }
