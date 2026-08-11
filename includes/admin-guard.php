@@ -81,10 +81,15 @@ $svAiRoutineUiPages = [
 $svAdminScriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
 if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAiRoutineUiPages, true)) {
     register_shutdown_function(static function () use ($svAdminScriptName): void {
-        echo "\n<script src=\"/admin/assets/ai-routines-hotfix-ui.js?v=20260811a\"></script>\n";
+        $svAssetVersion = static function (string $relativePath): string {
+            $path = dirname(__DIR__) . $relativePath;
+            $mtime = is_file($path) ? (int)filemtime($path) : 0;
+            return $mtime > 0 ? (string)$mtime : '20260811a';
+        };
+        echo "\n<script src=\"/admin/assets/ai-routines-hotfix-ui.js?v=" . $svAssetVersion('/admin/assets/ai-routines-hotfix-ui.js') . "\"></script>\n";
         if ($svAdminScriptName === '/admin/catalog-optimization/admin_catalog.php') {
-            echo "<script src=\"/admin/assets/catalog-resilient-run-hotfix.js?v=20260811a\"></script>\n";
-            echo "<script src=\"/admin/assets/catalog-candidate-race-guard.js?v=20260811a\"></script>\n";
+            echo "<script src=\"/admin/assets/catalog-resilient-run-hotfix.js?v=" . $svAssetVersion('/admin/assets/catalog-resilient-run-hotfix.js') . "\"></script>\n";
+            echo "<script src=\"/admin/assets/catalog-candidate-race-guard.js?v=" . $svAssetVersion('/admin/assets/catalog-candidate-race-guard.js') . "\"></script>\n";
         }
     });
 }
