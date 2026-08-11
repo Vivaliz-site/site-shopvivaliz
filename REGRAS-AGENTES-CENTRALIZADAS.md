@@ -279,13 +279,14 @@ PROCESSO OBRIGATÓRIO:
 
 #### Passo 1: EDITAR
 ```bash
-# Local: C:\Users\FRED\site-shopvivaliz\.env
+# Local: C:\Users\FRED\site-shopvivaliz\.env (ou C:\Users\user\...)
 vi .env
 ```
 
 #### Passo 2: COPIAR para VM
 ```bash
-SSH_KEY="C:\Users\FRED\Downloads\ssh-key-2026-07-04.key"
+# Dependendo do perfil do Windows ativo (FRED ou user)
+SSH_KEY="C:\Users\user\Downloads\ssh-key-2026-07-04.key"  # ou FRED
 scp -i "$SSH_KEY" .env ubuntu@137.131.156.17:/home/ubuntu/site-shopvivaliz/.env
 ```
 
@@ -301,7 +302,7 @@ gh secret set NOME_SECRET --body "valor"
 #### Passo 4: VALIDAR nos 3 locais
 ```bash
 # Local
-grep "NOME_SECRET" C:\Users\FRED\site-shopvivaliz\.env
+grep "NOME_SECRET" C:\site-shopvivaliz\.env
 
 # VM
 ssh -i "$SSH_KEY" ubuntu@137.131.156.17 "grep NOME_SECRET /home/ubuntu/site-shopvivaliz/.env"

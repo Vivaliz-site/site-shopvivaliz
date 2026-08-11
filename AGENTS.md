@@ -280,7 +280,7 @@ Regras:
 
 1. A chave SSH operacional atual da VM é:
    ```text
-   C:\Users\FRED\Downloads\ssh-key-2026-07-04.key
+   C:\Users\user\Downloads\ssh-key-2026-07-04.key  (ou C:\Users\FRED\Downloads\ssh-key-2026-07-04.key depending on profile)
    ```
 
 2. `sv-deploy-head` e `sv-deploy-sha` atualizam o alvo persistente de produção em:
@@ -413,6 +413,9 @@ Regras:
 ### Se Tiver Que SSH à VM
 
 ```bash
+# Use a chave baseada no perfil ativo (FRED ou user)
+ssh -i "C:\Users\user\Downloads\ssh-key-2026-07-04.key" ubuntu@137.131.156.17
+# ou
 ssh -i "C:\Users\FRED\Downloads\ssh-key-2026-07-04.key" ubuntu@137.131.156.17
 
 # Monitorar deploy (a cada 2 min, cron roda)

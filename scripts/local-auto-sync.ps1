@@ -26,13 +26,37 @@ try {
 
     Set-Location $Repo
     Log "Auto-sync start"
-    & git fetch origin main 2>&1 | ForEach-Object { Log "git fetch: $_" }
+
+    # Get current branch name
+    $CurrentBranch = & git rev-parse --abbrev-ref HEAD 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "Failed to get current branch name" }
+    $CurrentBranch = $CurrentBranch.ToString().Trim()
+    Log "Current branch is: $CurrentBranch"
+
+    # Fetch all remote branches to update remote tracking branches
+    & git fetch origin 2>&1 | ForEach-Object { Log "git fetch: $_" }
     if ($LASTEXITCODE -ne 0) { throw "git fetch failed exit=$LASTEXITCODE" }
 
-    # Preserve local work: only fast-forward. Do not hard reset from automation.
-    & git merge --ff-only origin/main 2>&1 | ForEach-Object { Log "git merge: $_" }
-    if ($LASTEXITCODE -ne 0) {
-        Log "WARNING fast-forward failed; local changes/divergence preserved"
+    # Sync current branch if it has a tracking branch configured
+    $Upstream = & git rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2>$null
+    if ($LASTEXITCODE -eq 0 -and $Upstream) {
+        $Upstream = $Upstream.ToString().Trim()
+        Log "Syncing current branch $CurrentBranch with upstream $Upstream"
+        & git merge --ff-only $Upstream 2>&1 | ForEach-Object { Log "git merge: $_" }
+        if ($LASTEXITCODE -ne 0) {
+            Log "WARNING fast-forward failed for current branch $CurrentBranch; local changes preserved"
+        }
+    } else {
+        Log "No tracking branch configured for $CurrentBranch"
+    }
+
+    # If not on main, update local main branch using fast-forward fetch
+    if ($CurrentBranch -ne "main") {
+        Log "Updating local main branch via fast-forward fetch"
+        & git fetch origin main:main 2>&1 | ForEach-Object { Log "git fetch main:main: $_" }
+        if ($LASTEXITCODE -ne 0) {
+            Log "WARNING fast-forward update of main failed (possibly non-fast-forward)"
+        }
     }
 
     # Enforce Graph-only mail before any other Fred-Win automation.
