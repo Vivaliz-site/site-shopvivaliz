@@ -24,6 +24,38 @@ jobs:
     timeout-minutes: 80
     environment: production
     steps:
+      - name: Checkout for diff detection
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed scope
+        id: scope
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          before="${{ github.event.before }}"
+          if [[ -z "$before" || "$before" == "0000000000000000000000000000000000000000" ]]; then
+            before="HEAD~1"
+          fi
+          changed="$(git diff --name-only "$before" "${{ github.sha }}" 2>/dev/null || echo '')"
+          echo "changed files: $changed"
+          run_image=false
+          run_catalog=false
+          if grep -qE '^(admin/ai-image-studio/process_item\.php|admin/ai-image-studio/src/OpenRouterImageClient\.php|scripts/ai-routines-production-smoke\.php|scripts/ai-image-production-smoke-v2\.php|\.github/workflows/ai-routines-production-smoke\.yml)$' <<<"$changed"; then
+            run_image=true
+          fi
+          if grep -qE '^(admin/catalog-optimization/src/TextAiServices\.php|scripts/ai-routines-production-smoke\.php|\.github/workflows/ai-routines-production-smoke\.yml)$' <<<"$changed"; then
+            run_catalog=true
+          fi
+          # Fallback de seguranca: se nao detectou nada (ex: diff vazio em push forcado), roda os dois.
+          if [[ "$run_image" == "false" && "$run_catalog" == "false" ]]; then
+            run_image=true
+            run_catalog=true
+          fi
+          echo "run_image=$run_image" >> "$GITHUB_OUTPUT"
+          echo "run_catalog=$run_catalog" >> "$GITHUB_OUTPUT"
+
       - name: Configure verified production SSH
         env:
           ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
