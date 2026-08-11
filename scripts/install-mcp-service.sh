@@ -24,7 +24,9 @@ systemctl daemon-reload
 
 if systemctl is-active --quiet mcp-universal.service 2>/dev/null; then
   systemctl disable --now shopvivaliz-mcp.service
-  systemctl reset-failed shopvivaliz-mcp.service
+  if ! systemctl reset-failed shopvivaliz-mcp.service 2>/dev/null; then
+    echo "shopvivaliz-mcp.service sem estado failed carregado; nada a limpar"
+  fi
   systemctl is-active --quiet mcp-universal.service
   echo "mcp-universal.service ativo; shopvivaliz-mcp.service mantido desligado para evitar conflito de porta"
   exit 0
