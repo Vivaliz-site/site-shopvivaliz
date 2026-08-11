@@ -20,6 +20,7 @@ REQUIRED = {
         "gemini-3.6-flash",
         "head_repo",
         "scripts/pr_conflict_gemini_healer.py",
+        "scripts/publish_pr_branch_update.sh",
     ],
     ".github/workflows/pr-completion-enforcer.yml": [
         "workflow_run:",
@@ -41,6 +42,7 @@ REQUIRED = {
         "workflow_dispatch:",
         "test_pr_conflict_gemini_healer",
         "check_pr_completion_policy.py",
+        "publish_pr_branch_update.sh",
     ],
     "scripts/pr_conflict_gemini_healer.py": [
         "KEY_ENV_NAMES",
@@ -48,6 +50,13 @@ REQUIRED = {
         "gemini-3.6-flash",
         "gemini_pool_exhausted_for",
         "secret_values_printed=false",
+    ],
+    "scripts/publish_pr_branch_update.sh": [
+        "ALLOW_SCOPED_PUSH",
+        "protected branch publication is forbidden",
+        "checked-out branch does not match requested PR head ref",
+        "update is not fast-forward",
+        "git push",
     ],
     "tests/test_pr_conflict_gemini_healer.py": [
         "test_rotates_to_next_key_after_quota_exhaustion",
