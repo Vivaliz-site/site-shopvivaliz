@@ -136,13 +136,15 @@ jobs:
             merged_count=$((merged_count + 1))
             echo "pr_${pr}_merged=true"
             echo "pr_${pr}_validated_head_sha=${head_sha}"
-
-            # Merging one PR advances main and can stale the remaining PRs.
-            # Trigger a trusted sweep immediately instead of waiting for cron.
-            gh workflow run pr-conflict-auto-healer.yml --ref main || true
           done
 
           echo "merged_pr_count=${merged_count}"
+          if (( merged_count > 0 )); then
+            # Merging advances main and can stale the remaining PRs. Failure to
+            # start the synchronization sweep is itself a workflow failure.
+            gh workflow run pr-conflict-auto-healer.yml --ref main
+            echo 'post_merge_healer_dispatch=true'
+          fi
 
       - name: Enforcement invariant
         if: always()
