@@ -156,12 +156,19 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['run_batch'
         $batchError = 'Nenhum produto selecionado.';
     } else {
         $batchResults = [];
+        $processedCount = 0;
         foreach ($productIds as $productId) {
             $types = array_values(array_map('strval', (array)($imageTypesByProduct[(string)$productId] ?? [])));
             if ($types === []) continue;
+            if (!$enqueueOnly && $processedCount > 0) {
+                // Espaca chamadas sincronas ao mesmo provedor para nao estourar
+                // limites de taxa por minuto (ex: tier gratuito do Gemini).
+                usleep(600000);
+            }
             $batchResults[] = $enqueueOnly
                 ? ai_studio_enqueue_job($db, $productId, $provider, $types, $model !== '' ? $model : null, $targetChannel)
                 : ai_studio_process_item($db, $productId, $provider, $types, $model !== '' ? $model : null, $targetChannel);
+            $processedCount++;
         }
         if ($batchResults === []) {
             $batchError = 'Nenhum produto tinha ao menos um tipo de imagem marcado.';
