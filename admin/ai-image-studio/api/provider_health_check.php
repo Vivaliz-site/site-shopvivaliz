@@ -29,14 +29,16 @@ function ais_health_probe(string $provider, string $key): array
         return ['ok' => false, 'detail' => 'Nenhuma chave configurada.'];
     }
     try {
-        [$status, $body] = match ($provider) {
-            'openai' => AiStudioHttpClient::request('GET', 'https://api.openai.com/v1/models', ['Authorization' => 'Bearer ' . $key]),
-            'google' => AiStudioHttpClient::request('GET', 'https://generativelanguage.googleapis.com/v1beta/models?key=' . rawurlencode($key), []),
-            'claude' => AiStudioHttpClient::request('GET', 'https://api.anthropic.com/v1/models', ['x-api-key' => $key, 'anthropic-version' => '2023-06-01']),
-            'openrouter' => AiStudioHttpClient::request('GET', 'https://openrouter.ai/api/v1/key', ['Authorization' => 'Bearer ' . $key]),
-            'groq' => AiStudioHttpClient::request('GET', 'https://api.groq.com/openai/v1/models', ['Authorization' => 'Bearer ' . $key]),
-            default => [0, ''],
+        $response = match ($provider) {
+            'openai' => AiStudioHttpClient::request('GET', 'https://api.openai.com/v1/models', ['Authorization' => 'Bearer ' . $key], null, 12),
+            'google' => AiStudioHttpClient::request('GET', 'https://generativelanguage.googleapis.com/v1beta/models?key=' . rawurlencode($key), [], null, 12),
+            'claude' => AiStudioHttpClient::request('GET', 'https://api.anthropic.com/v1/models', ['x-api-key' => $key, 'anthropic-version' => '2023-06-01'], null, 12),
+            'openrouter' => AiStudioHttpClient::request('GET', 'https://openrouter.ai/api/v1/key', ['Authorization' => 'Bearer ' . $key], null, 12),
+            'groq' => AiStudioHttpClient::request('GET', 'https://api.groq.com/openai/v1/models', ['Authorization' => 'Bearer ' . $key], null, 12),
+            default => ['status' => 0, 'body' => ''],
         };
+        $status = (int)$response['status'];
+        $body = (string)$response['body'];
         if ($status >= 200 && $status < 300) {
             return ['ok' => true, 'detail' => 'Chave valida.'];
         }
