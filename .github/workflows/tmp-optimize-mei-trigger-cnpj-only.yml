@@ -1,0 +1,51 @@
+name: Optimize MEI submission trigger by CNPJ
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-optimize-mei-trigger-cnpj-only.yml']
+permissions:
+  contents: read
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Replace trigger function
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env',override=True)
+          import os,psycopg
+          with psycopg.connect(os.environ['DATABASE_URL'],autocommit=True,connect_timeout=10) as conn:
+            with conn.cursor() as cur:
+              cur.execute("set lock_timeout='10s'")
+              cur.execute("""
+                create or replace function mei_email.trg_marcar_empresa_submetida()
+                returns trigger language plpgsql as $$
+                begin
+                  if new.status::text in ('submitted','enviado') then
+                    update mei_email.empresas e
+                       set enviado=true,
+                           enviado_em=coalesce(e.enviado_em,new.enviado_em,now())
+                     where e.cnpj=new.cnpj;
+                  end if;
+                  return new;
+                end;
+                $$;
+              """)
+              print('TRIGGER_OPTIMIZED_CNPJ_ONLY')
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
