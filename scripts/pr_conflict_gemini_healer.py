@@ -6,7 +6,8 @@ Security invariants:
 - never executes code from the pull request;
 - only rewrites files already reported by Git as conflicted;
 - refuses binary/symlink/oversized conflict payloads;
-- stages a file only after conflict markers are gone.
+- stages a file only after conflict markers are gone;
+- can read Gemini credentials from a private env file without exporting them.
 """
 from __future__ import annotations
 
@@ -52,8 +53,40 @@ def split_secret_bundle(raw: str) -> list[str]:
     return [part.strip() for part in re.split(r"[\n,;]+", raw) if part.strip()]
 
 
+def parse_env_file(path: Path) -> dict[str, str]:
+    """Read dotenv assignments without sourcing or executing file content."""
+    values: dict[str, str] = {}
+    if not path.is_file():
+        raise FileNotFoundError(f"gemini_env_file_missing:{path}")
+    for raw in path.read_text(encoding="utf-8", errors="strict").splitlines():
+        text = raw.strip()
+        if not text or text.startswith("#") or "=" not in text:
+            continue
+        if text.startswith("export "):
+            text = text[7:].strip()
+        key, value = text.split("=", 1)
+        key = key.strip()
+        if key not in KEY_ENV_NAMES:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        values[key] = value
+    return values
+
+
+def credential_environment(env: Mapping[str, str] | None = None) -> dict[str, str]:
+    source = dict(os.environ if env is None else env)
+    env_file = source.get("GEMINI_ENV_FILE", "").strip()
+    if env_file:
+        # Private runtime file is authoritative for the credential aliases it
+        # contains. Only Gemini-related names are parsed from it.
+        source.update(parse_env_file(Path(env_file)))
+    return source
+
+
 def collect_api_keys(env: Mapping[str, str] | None = None) -> list[str]:
-    env = os.environ if env is None else env
+    env = credential_environment() if env is None else env
     seen: set[str] = set()
     keys: list[str] = []
     for name in KEY_ENV_NAMES:
@@ -67,10 +100,24 @@ def collect_api_keys(env: Mapping[str, str] | None = None) -> list[str]:
 
 
 def configured_models(env: Mapping[str, str] | None = None) -> list[str]:
-    env = os.environ if env is None else env
+    env = credential_environment() if env is None else env
     raw = env.get("GEMINI_CONFLICT_MODELS", "") or env.get("GEMINI_CONFLICT_MODEL", "")
     models = split_secret_bundle(raw)
     return models or list(DEFAULT_MODELS)
+
+
+def credential_preflight() -> int:
+    env = credential_environment()
+    keys = collect_api_keys(env)
+    models = configured_models(env)
+    print(f"gemini_credentials_configured={len(keys)}")
+    print(f"gemini_models_configured={len(models)}")
+    print("gemini_credential_rotation_enabled=true")
+    print("secret_values_printed=false")
+    if not keys:
+        print("::error::no_gemini_credentials_configured", file=sys.stderr)
+        return 3
+    return 0
 
 
 def run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess[bytes]:
@@ -252,6 +299,13 @@ def write_and_stage(path: str, content: str) -> None:
 
 
 def main() -> int:
+    args = sys.argv[1:]
+    if args == ["--credential-preflight"]:
+        return credential_preflight()
+    if args:
+        print("::error::unsupported_arguments", file=sys.stderr)
+        return 2
+
     files = conflicted_files()
     if not files:
         print("conflicts_detected=0")
@@ -260,8 +314,9 @@ def main() -> int:
         print(f"::error::too_many_conflicts={len(files)}", file=sys.stderr)
         return 2
 
-    keys = collect_api_keys()
-    models = configured_models()
+    env = credential_environment()
+    keys = collect_api_keys(env)
+    models = configured_models(env)
     print(f"conflicts_detected={len(files)}")
     print(f"gemini_credentials_configured={len(keys)}")
     print(f"gemini_models_configured={len(models)}")
