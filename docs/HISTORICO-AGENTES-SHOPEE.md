@@ -841,3 +841,36 @@ novo com erro diferente, ou execução de `shopee-production-seo.yml` com apply 
 ocorreu; o achado estrutural e o bloqueio de credencial já foram comunicados nos ciclos anteriores
 e permanecem sem ação humana pendente (renovar OAuth2 do Tiny e/ou decidir se vale integrar a API
 de analytics do Shopee Open Platform).
+
+### 9.20 Atualização — ciclo de 2026-08-11 (~07h UTC), 25º ciclo — estado idêntico ao ciclo 24, sem fato novo
+
+Checagem completa: `env | grep -iE "SHOPEE|TINY|OLIST"` continua vazio neste sandbox (esperado).
+`.github/workflows/` continua com apenas `shopee-optimizer-safety.yml`/`shopee-production-seo.yml`
+— o par baseado em Tiny/Olist (`fetch-shopee-listings.yml`/`optimize-shopee-listings.yml`) ainda
+ausente. Artefato mais recente em `listings/` (por nome/timestamp) continua
+`shopee-listings-20260726-080756.json` (`status: partial`, `total_products: 0`, mesmo erro `"Falha
+ao renovar token: Invalid client or Invalid client credentials"` / `"Autenticação falhou (401)."`)
+— nenhum arquivo novo desde 2026-07-26, agora **16 dias** sem extração de catálogo funcional.
+
+Via `mcp__github__actions_list` (`shopee-production-seo.yml`): as mesmas 5 execuções de
+2026-07-30 (`id`s 30585266165, 30571531668, 30571478470, 30571242284, 30570700034), todas
+`conclusion: failure` — nenhuma execução nova desde então; o passo real de apply ("Apply SEO to
+real Shopee catalog") segue nunca tendo rodado com sucesso. `git log` desde o ciclo 24
+(`d3c7ab4`, 2026-08-10 21:39 UTC-3) não toca `scripts/shopee_full_catalog_optimizer.py`,
+`scripts/shopee_production_seo_apply.py`, `scripts/utils/shopee_client.py`, `listings/` nem os
+dois workflows Shopee existentes.
+
+O achado estrutural dos ciclos 19–24 (nenhuma chamada a endpoint de analytics do Shopee Open
+Platform nos scripts de produção — sem CTR, taxa de conversão, comparação alto-vs-baixo-desempenho
+ou A/B testing medido; itens 1, 3, 9 e 10 desta rotina de 6h permanecem tecnicamente inexequíveis
+mesmo que a credencial `SHOPEE_*` esteja presente) não foi re-verificado linha a linha nesta sessão
+por já ter sido confirmado repetidamente.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. Nenhuma notificação
+push enviada neste ciclo — nenhum dos critérios de novo aviso (workflows Tiny recriados, artefato
+novo com erro diferente, ou execução de `shopee-production-seo.yml` com apply real bem-sucedido)
+ocorreu; o achado estrutural e o bloqueio de credencial já foram comunicados extensivamente nos
+ciclos anteriores (24 ciclos / ~6 dias de reconfirmações) e permanecem sem ação humana pendente
+(renovar OAuth2 do Tiny em `accounts.tiny.com.br` e/ou decidir se vale integrar a API de analytics
+do Shopee Open Platform).
