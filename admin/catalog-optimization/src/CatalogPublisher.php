@@ -140,7 +140,7 @@ final class CatalogOptimizationPublisher
     private function updateStorefrontCache(array $product, array $content): void
     {
         $path = dirname(__DIR__, 3) . '/storage/products-cache-ativos.json';
-        if (!is_file($path) || !is_readable($path) || !is_writable($path)) {
+        if (!is_file($path) || !is_readable($path) || !is_writable(dirname($path))) {
             throw new RuntimeException('Cache ativo da vitrine não está disponível para atualização real.');
         }
         $payload = json_decode((string)file_get_contents($path), true);
@@ -186,11 +186,17 @@ final class CatalogOptimizationPublisher
         };
         $walk($payload);
         if (!$updated) {
-            throw new RuntimeException('Produto não localizado no cache ativo da vitrine; publicação do site foi abortada.');
+            $this->appendStorefrontCacheItem($payload, $product, $content, $displayDescription);
+            $updated = true;
         }
         $encoded = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        if (!is_string($encoded) || file_put_contents($path, $encoded . PHP_EOL, LOCK_EX) === false) {
+        $tmpPath = $path . '.tmp.' . getmypid() . '.' . bin2hex(random_bytes(4));
+        if (!is_string($encoded) || file_put_contents($tmpPath, $encoded . PHP_EOL, LOCK_EX) === false) {
             throw new RuntimeException('Falha ao persistir o conteúdo otimizado no cache ativo da vitrine.');
+        }
+        if (!@rename($tmpPath, $path)) {
+            @unlink($tmpPath);
+            throw new RuntimeException('Falha ao substituir o cache ativo da vitrine.');
         }
         $verify = json_decode((string)file_get_contents($path), true);
         if (!is_array($verify)) {
@@ -199,6 +205,55 @@ final class CatalogOptimizationPublisher
         if (!$this->cacheContainsAllFields($verify, $sku, $externalId, $content)) {
             throw new RuntimeException('Read-back do cache não confirmou todos os campos textuais aprovados.');
         }
+    }
+
+    /** @param array<string,mixed> $payload @param array<string,mixed> $product @param array<string,mixed> $content */
+    private function appendStorefrontCacheItem(array &$payload, array $product, array $content, string $displayDescription): void
+    {
+        $sku = trim((string)($product['sku'] ?? ''));
+        $externalId = trim((string)($product['olist_id'] ?? $product['olist_product_id'] ?? ''));
+        $imageUrl = trim((string)($product['image_url'] ?? $product['imagem_principal_url'] ?? ''));
+        $title = (string)$content['title'];
+        $entry = [
+            'id' => $externalId !== '' ? $externalId : (int)($product['id'] ?? 0),
+            'product_id' => (int)($product['id'] ?? 0),
+            'sku' => $sku,
+            'descricao' => $title,
+            'name' => $title,
+            'nome' => $title,
+            'description' => $displayDescription,
+            'descricaoComplementar' => $displayDescription,
+            'descricao_complementar' => $displayDescription,
+            'active' => true,
+            'situacao' => 'A',
+            'imagem_principal_url' => $imageUrl,
+            'image_url' => $imageUrl,
+            'anexos' => $imageUrl !== '' ? [['url' => $imageUrl]] : [],
+            'bullet_points' => $content['bullet_points'],
+            'seo_keywords' => $content['seo_keywords'],
+            'marketing_hooks' => $content['marketing_hooks'],
+            'meta_title' => (string)$content['meta_title'],
+            'meta_description' => (string)$content['meta_description'],
+        ];
+        if (isset($product['price'])) {
+            $entry['precos'] = ['preco' => (float)$product['price'], 'precoPromocional' => (float)($product['promotional_price'] ?? 0)];
+        }
+        if (isset($product['stock'])) {
+            $entry['estoque'] = ['quantidade' => (int)$product['stock']];
+            $entry['estoque_disponivel'] = (int)$product['stock'];
+        }
+
+        foreach (['itens', 'items', 'produtos', 'products', 'data'] as $key) {
+            if (isset($payload[$key]) && is_array($payload[$key])) {
+                $payload[$key][] = $entry;
+                return;
+            }
+        }
+        if (array_is_list($payload)) {
+            $payload[] = $entry;
+            return;
+        }
+        $payload['items'] = [$entry];
     }
 
     /** @param array<string,mixed> $content */
