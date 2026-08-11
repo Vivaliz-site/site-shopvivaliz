@@ -17,7 +17,6 @@ readonly RETENTION_COUNT=5
 readonly -a RUNTIME_SERVICES=(
   "shopvivaliz-token-renewer.service"
   "shopvivaliz-shopee-token-renewer.service"
-  "shopvivaliz-sync-products.service"
 )
 
 mkdir -p "$RELEASES_DIR" "$SHARED_DIR" "$LOG_DIR" "$SHARED_DIR/logs"

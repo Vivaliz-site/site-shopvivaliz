@@ -1,10 +1,6 @@
 name: Recover Olist OAuth From Validated Backup
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'ops/recover-olist-oauth-from-backups.json'
   workflow_dispatch:
 
 permissions:
@@ -99,11 +95,13 @@ jobs:
           test -r "$current/scripts/recover-olist-oauth-from-backups.py"
 
           restart_services() {
-            sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-sync-products.service >/dev/null 2>&1 || true
+            sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-shopee-token-renewer.service >/dev/null 2>&1 || true
+            sudo systemctl disable --now shopvivaliz-sync-products.service >/dev/null 2>&1 || true
           }
           trap restart_services EXIT
 
-          sudo systemctl stop shopvivaliz-token-renewer.service shopvivaliz-sync-products.service
+          sudo systemctl stop shopvivaliz-token-renewer.service shopvivaliz-shopee-token-renewer.service
+          sudo systemctl disable --now shopvivaliz-sync-products.service >/dev/null 2>&1 || true
 
           cd "$current"
           python3 scripts/recover-olist-oauth-from-backups.py \
@@ -202,7 +200,8 @@ jobs:
           restart_services
           trap - EXIT
           test "$(systemctl is-active shopvivaliz-token-renewer.service)" = active
-          test "$(systemctl is-active shopvivaliz-sync-products.service)" = active
+          test "$(systemctl is-active shopvivaliz-shopee-token-renewer.service)" = active
+          test "$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null || true)" != active
           echo 'olist_oauth_recovery_verified=true'
           echo 'fresh_catalog_with_images_verified=true'
           REMOTE

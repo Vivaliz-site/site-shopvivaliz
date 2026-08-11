@@ -78,19 +78,17 @@ jobs:
           set -euo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE_SCRIPT'
           set -euo pipefail
-          current='/home/ubuntu/shopvivaliz-deploy/current'
-          cache="$current/storage/products-cache-ativos.json"
-          sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-sync-products.service
+          sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-shopee-token-renewer.service
+          sudo systemctl disable --now shopvivaliz-sync-products.service 2>/dev/null || true
           for attempt in $(seq 1 12); do
             sync_status='unknown'
             if sync_status="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null)"; then :; fi
             token_status='unknown'
             if token_status="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null)"; then :; fi
-            if [[ "$sync_status" == active && "$token_status" == active && -s "$cache" ]]; then
-              cache_age="$(( $(date +%s) - $(stat -c %Y "$cache") ))"
-              if (( cache_age <= 900 )); then
-                break
-              fi
+            shopee_token_status='unknown'
+            if shopee_token_status="$(systemctl is-active shopvivaliz-shopee-token-renewer.service 2>/dev/null)"; then :; fi
+            if [[ "$sync_status" != active && "$token_status" == active && "$shopee_token_status" == active ]]; then
+              break
             fi
             sleep 10
           done
@@ -98,30 +96,31 @@ jobs:
           if sync_status="$(systemctl is-active shopvivaliz-sync-products.service 2>/dev/null)"; then :; fi
           token_status='unknown'
           if token_status="$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null)"; then :; fi
-          cache_age="$(( $(date +%s) - $(stat -c %Y "$cache") ))"
+          shopee_token_status='unknown'
+          if shopee_token_status="$(systemctl is-active shopvivaliz-shopee-token-renewer.service 2>/dev/null)"; then :; fi
           base_url='https://shopvivaliz.com.br'
           orders_file="$(mktemp)"
           olist_file="$(mktemp)"
           trap 'rm -f "$orders_file" "$olist_file"' EXIT
           orders_code="$(curl --location --silent --show-error --max-time 30 -o "$orders_file" -w '%{http_code}' "$base_url/api/orders/health.php" || true)"
           olist_code="$(curl --location --silent --show-error --max-time 30 -o "$olist_file" -w '%{http_code}' "$base_url/api/olist/webhook-health.php" || true)"
-          echo "runtime_services={\"sync_service\":\"$sync_status\",\"token_renewer\":\"$token_status\",\"cache_age_seconds\":$cache_age,\"orders_http\":$orders_code,\"olist_http\":$olist_code}"
+          echo "runtime_services={\"sync_service\":\"$sync_status\",\"expected_sync_service\":\"inactive\",\"token_renewer\":\"$token_status\",\"shopee_token_renewer\":\"$shopee_token_status\",\"orders_http\":$orders_code,\"olist_http\":$olist_code}"
           echo 'orders_health_body:'
           cat "$orders_file"
           echo
           echo 'olist_health_body:'
           cat "$olist_file"
           echo
-          echo 'journal_sync_tail:'
-          journalctl -u shopvivaliz-sync-products.service -n 20 --no-pager -o cat
           echo 'journal_token_tail:'
           journalctl -u shopvivaliz-token-renewer.service -n 20 --no-pager -o cat
-          python3 - "$sync_status" "$token_status" "$cache_age" "$orders_code" "$olist_code" "$orders_file" "$olist_file" <<'PY'
+          echo 'journal_shopee_token_tail:'
+          journalctl -u shopvivaliz-shopee-token-renewer.service -n 20 --no-pager -o cat
+          python3 - "$sync_status" "$token_status" "$shopee_token_status" "$orders_code" "$olist_code" "$orders_file" "$olist_file" <<'PY'
           import json
           import pathlib
           import sys
 
-          sync_status, token_status, cache_age, orders_code, olist_code, orders_file, olist_file = sys.argv[1:]
+          sync_status, token_status, shopee_token_status, orders_code, olist_code, orders_file, olist_file = sys.argv[1:]
           try:
               orders = json.loads(pathlib.Path(orders_file).read_text())
               orders_json_valid = True
@@ -136,8 +135,9 @@ jobs:
               olist_json_valid = False
           report = {
               "sync_service": sync_status,
+              "expected_sync_service": "inactive",
               "token_renewer": token_status,
-              "cache_age_seconds": int(cache_age),
+              "shopee_token_renewer": shopee_token_status,
               "orders_http": int(orders_code) if orders_code.isdigit() else 0,
               "olist_http": int(olist_code) if olist_code.isdigit() else 0,
               "orders_ok": orders.get("ok") is True,
@@ -147,9 +147,9 @@ jobs:
           }
           print(json.dumps(report, sort_keys=True))
           if not (
-              sync_status == "active"
+              sync_status != "active"
               and token_status == "active"
-              and int(cache_age) <= 900
+              and shopee_token_status == "active"
               and report["orders_http"] == 200
               and report["olist_http"] == 200
               and report["orders_ok"]
