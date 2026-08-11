@@ -1,0 +1,34 @@
+name: Snapshot MEI production worker
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-snapshot-mei-worker-production-20260811.yml']
+permissions:
+  contents: write
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Fetch production worker
+        run: |
+          mkdir -p ops-snapshots
+          scp -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17:/home/ubuntu/mei-mg-email/worker/worker.py ops-snapshots/mei-worker-production-20260811.py
+      - name: Commit snapshot
+        run: |
+          git config user.name 'shopvivaliz-ops-bot'
+          git config user.email 'ops-bot@users.noreply.github.com'
+          git add ops-snapshots/mei-worker-production-20260811.py
+          git commit -m 'ops: snapshot MEI production worker after throughput hotfix' || exit 0
+          git push
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
