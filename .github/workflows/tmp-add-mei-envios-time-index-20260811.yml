@@ -1,0 +1,39 @@
+name: Add MEI envios timestamp index
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-add-mei-envios-time-index-20260811.yml']
+permissions:
+  contents: read
+jobs:
+  index:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Create envios timestamp index
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env',override=True)
+          import os,psycopg
+          with psycopg.connect(os.environ['DATABASE_URL'],autocommit=True,connect_timeout=10) as conn:
+            with conn.cursor() as cur:
+              cur.execute("set statement_timeout='5min'")
+              cur.execute("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_envios_enviado_em ON mei_email.envios (enviado_em) WHERE enviado_em IS NOT NULL")
+              cur.execute("select c.relname,i.indisvalid,i.indisready from pg_class c join pg_index i on i.indexrelid=c.oid join pg_namespace n on n.oid=c.relnamespace where n.nspname='mei_email' and c.relname='idx_envios_enviado_em'")
+              print(cur.fetchone())
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
