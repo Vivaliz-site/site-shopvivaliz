@@ -143,8 +143,8 @@ $branded['optimized_title'] = 'Suporte Articulado X1 Preto';
 cot_expect_rejection(fn() => ai_catalog_validate_ai_response($branded, 'ml', $brandedProduct), 'real brand must be preserved');
 
 cot_assert(catalog_ai_normalize_provider('gpt') === 'openai', 'gpt alias must resolve to openai');
-cot_assert(catalog_ai_provider_fallback_order('claude') === ['claude', 'openai', 'gemini'], 'claude fallback order must prefer the requested provider first');
-cot_assert(catalog_ai_provider_fallback_order('gpt') === ['openai', 'gemini', 'claude'], 'gpt fallback order must normalize to openai');
+cot_assert(catalog_ai_provider_fallback_order('claude') === ['claude', 'openai', 'gemini', 'openrouter', 'groq'], 'claude fallback order must prefer the requested provider first');
+cot_assert(catalog_ai_provider_fallback_order('gpt') === ['openai', 'gemini', 'openrouter', 'groq', 'claude'], 'gpt fallback order must normalize to openai and exhaust text providers before claude');
 
 // Prompts nao devem receber preco/estoque e devem conter identificadores factuais.
 $userPrompt = ai_catalog_build_user_prompt($product, 'ml');

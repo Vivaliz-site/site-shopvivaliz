@@ -285,12 +285,12 @@ function catalog_ai_provider_fallback_order(string $preferred): array
 {
     $preferred = catalog_ai_normalize_provider($preferred);
     $order = match ($preferred) {
-        'openai' => ['openai', 'gemini', 'claude'],
-        'gemini' => ['gemini', 'openrouter', 'groq', 'openai', 'claude'],
-        'claude' => ['claude', 'openai', 'gemini'],
+        'openai' => ['openai', 'gemini', 'openrouter', 'groq', 'claude'],
+        'gemini' => ['gemini', 'openai', 'openrouter', 'groq', 'claude'],
+        'claude' => ['claude', 'openai', 'gemini', 'openrouter', 'groq'],
         'openrouter' => ['openrouter', 'groq', 'openai', 'gemini', 'claude'],
         'groq' => ['groq', 'openrouter', 'openai', 'gemini', 'claude'],
-        default => ['openai', 'gemini', 'claude'],
+        default => ['openai', 'gemini', 'openrouter', 'groq', 'claude'],
     };
     return array_values(array_unique(array_filter($order, static fn(string $value): bool => in_array($value, ['openai', 'gemini', 'claude', 'openrouter', 'groq'], true))));
 }

@@ -15,7 +15,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
 }
 
 $channel = strtolower(trim((string)($_GET['channel'] ?? '')));
-$limit = max(1, min(100, (int)($_GET['limit'] ?? 30)));
+$rawLimit = (int)($_GET['limit'] ?? 30);
+$limit = $rawLimit <= 0 ? 5000 : max(1, min(5000, $rawLimit));
 $channels = catalog_ai_channels();
 if (!isset($channels[$channel])) {
     http_response_code(400);
@@ -40,7 +41,8 @@ try {
         . '+ CASE WHEN COALESCE(NULLIF(TRIM(p.description), ""), "") = "" THEN 0 ELSE 10 END '
         . '+ CASE WHEN COALESCE(NULLIF(TRIM(p.sku), ""), "") = "" THEN 0 ELSE 5 END AS priority_score '
         . 'FROM products p '
-        . 'WHERE NOT EXISTS ('
+        . 'WHERE COALESCE(p.active, 0) = 1 '
+        . 'AND NOT EXISTS ('
         . ' SELECT 1 FROM catalog_optimizations_staging s '
         . ' WHERE s.product_id = p.id AND s.channel = ? '
         . " AND COALESCE(s.status, '') NOT IN ('published','rejected','failed')"

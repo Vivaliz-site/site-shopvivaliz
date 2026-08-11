@@ -57,7 +57,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && ($_GET['preview'] ?? '') 
     $previewProvider = ai_studio_normalize_provider((string)($_GET['provider'] ?? ''));
     $previewModel = trim((string)($_GET['model'] ?? ''));
     $previewChannel = strtolower(trim((string)($_GET['target_channel'] ?? 'site')));
-    $limit = max(1, min(50, (int)($_GET['limit'] ?? 5)));
+    $rawLimit = (int)($_GET['limit'] ?? 5);
+    $limit = $rawLimit <= 0 ? 5000 : max(1, min(5000, $rawLimit));
 
     if (!in_array($previewProvider, ['openai', 'google', 'claude', 'openrouter', 'groq'], true)) {
         $batchError = 'Selecione um provedor valido.';
@@ -74,7 +75,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && ($_GET['preview'] ?? '') 
                 'SELECT p.id, p.name, p.image_url, p.sku '
                 . 'FROM products p '
                 . 'LEFT JOIN product_images_staging s ON s.product_id = p.id AND s.target_channels_json LIKE ? '
-                . 'WHERE s.id IS NULL ORDER BY p.id ASC LIMIT ' . (int)$limit
+                . 'WHERE COALESCE(p.active, 0) = 1 AND s.id IS NULL ORDER BY p.id ASC LIMIT ' . (int)$limit
             );
             $stmt->execute(['%"' . $previewChannel . '"%']);
             $previewProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -95,6 +96,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['run_batch'
     $provider = ai_studio_normalize_provider((string)($_POST['provider'] ?? ''));
     $model = trim((string)($_POST['model'] ?? ''));
     $targetChannel = strtolower(trim((string)($_POST['target_channel'] ?? 'site')));
+    $enqueueOnly = ($_POST['enqueue_only'] ?? '') === '1';
     $selectedProducts = (array)($_POST['selected_products'] ?? ($_POST['product_ids'] ?? []));
     $productIds = array_values(array_unique(array_filter(array_map('intval', $selectedProducts), static fn(int $value): bool => $value > 0)));
     $imageTypesByProduct = (array)($_POST['image_types'] ?? []);
@@ -110,7 +112,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['run_batch'
         foreach ($productIds as $productId) {
             $types = array_values(array_map('strval', (array)($imageTypesByProduct[(string)$productId] ?? [])));
             if ($types === []) continue;
-            $batchResults[] = ai_studio_process_item($db, $productId, $provider, $types, $model !== '' ? $model : null, $targetChannel);
+            $batchResults[] = $enqueueOnly
+                ? ai_studio_enqueue_job($db, $productId, $provider, $types, $model !== '' ? $model : null, $targetChannel)
+                : ai_studio_process_item($db, $productId, $provider, $types, $model !== '' ? $model : null, $targetChannel);
         }
         if ($batchResults === []) {
             $batchError = 'Nenhum produto tinha ao menos um tipo de imagem marcado.';
@@ -254,7 +258,7 @@ try {
 <?php foreach (['pending'=>'Pendentes','published'=>'Publicadas','submitted'=>'Enviadas/auditoria','rejected'=>'Rejeitadas','failed'=>'Falhas','publication_failed'=>'Falha publicacao'] as $status=>$label): ?><div class="ais-card"><div class="num"><?= (int)($statusCounts[$status] ?? 0) ?></div><div><?= ai_studio_h($label) ?></div></div><?php endforeach; ?>
 </div>
 <?php if ($batchError !== null): ?><div class="ais-alert error"><?= ai_studio_h($batchError) ?></div><?php endif; ?>
-<?php if ($batchResults !== null): $ok=0;$err=0;foreach($batchResults as $r){foreach((array)($r['results']??[]) as $x){($x['status']??'')==='pending'?$ok++:$err++;}} ?><div class="ais-alert info">Lote processado: <?=count($batchResults)?> produto(s), <?=$ok?> imagem(ns) em revisao e <?=$err?> erro(s). O destino foi persistido em cada imagem.</div><?php endif; ?>
+<?php if ($batchResults !== null): $queued=0;$ok=0;$err=0;foreach($batchResults as $r){if(($r['status']??'')==='queued'){$queued++;continue;}foreach((array)($r['results']??[]) as $x){($x['status']??'')==='pending'?$ok++:$err++;}} ?><div class="ais-alert info"><?php if($queued>0): ?>Lote enfileirado: <?=$queued?> produto(s) enviados para a fila em segundo plano. Atualize a tela para acompanhar os itens recentes.<?php else: ?>Lote processado: <?=count($batchResults)?> produto(s), <?=$ok?> imagem(ns) em revisao e <?=$err?> erro(s). O destino foi persistido em cada imagem.<?php endif; ?></div><?php endif; ?>
 
 <?php if ($failureBuckets['providers'] !== []): ?>
 <div class="ais-summary-grid">

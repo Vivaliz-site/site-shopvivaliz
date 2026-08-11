@@ -15,7 +15,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
 }
 
 $targetChannel = strtolower(trim((string)($_GET['target_channel'] ?? 'site')));
-$limit = max(1, min(50, (int)($_GET['limit'] ?? 12)));
+$rawLimit = (int)($_GET['limit'] ?? 12);
+$limit = $rawLimit <= 0 ? 5000 : max(1, min(5000, $rawLimit));
 $profiles = ai_studio_channel_profiles();
 
 if (!isset($profiles[$targetChannel])) {
@@ -43,7 +44,8 @@ try {
     $stmt = $db->prepare(
         'SELECT p.id, p.name, p.image_url, p.sku '
         . 'FROM products p '
-        . 'WHERE NOT EXISTS ('
+        . 'WHERE COALESCE(p.active, 0) = 1 '
+        . 'AND NOT EXISTS ('
         . ' SELECT 1 FROM product_images_staging s '
         . ' WHERE s.product_id = p.id '
         . ' AND s.target_channels_json LIKE ? '

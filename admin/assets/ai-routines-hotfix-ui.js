@@ -155,7 +155,7 @@
           targetChannel: stepForm.querySelector('[name="target_channel"]')?.value || 'site',
           provider: stepForm.querySelector('[name="provider"]')?.value || 'openai',
           model: stepForm.querySelector('[name="model"]')?.value || '',
-          limit: Math.max(1, Math.min(50, Number(stepForm.querySelector('[name="limit"]')?.value || 12))),
+          limit: Math.max(0, Math.min(5000, Number(stepForm.querySelector('[name="limit"]')?.value || 12))),
         };
         renderImageCandidates(stepForm.closest('.ais-form'), values);
       }, true);
@@ -165,7 +165,7 @@
     if (params.get('preview') === '1' && !document.querySelector('.ais-preview-list')) {
       const host = document.querySelector('.ais-form');
       if (host) renderImageCandidates(host, {
-        targetChannel: params.get('target_channel') || 'site', provider: params.get('provider') || 'openai', model: params.get('model') || '', limit: Math.max(1, Math.min(50, Number(params.get('limit') || 12))),
+        targetChannel: params.get('target_channel') || 'site', provider: params.get('provider') || 'openai', model: params.get('model') || '', limit: Math.max(0, Math.min(5000, Number(params.get('limit') || 12))),
       });
     }
   }
@@ -174,7 +174,7 @@
     const list = document.getElementById('candidate-list');
     if (!list) return;
     const channel = document.getElementById('channel')?.value || 'ml';
-    const limit = Math.max(1, Math.min(100, Number(document.getElementById('load-limit')?.value || 30)));
+    const limit = Math.max(0, Math.min(5000, Number(document.getElementById('load-limit')?.value || 200)));
     list.innerHTML = '<div class="sv-ai-meta">Carregando itens unicos...</div>';
     try {
       const data = await jsonFetch(`/admin/catalog-optimization/api/pending_candidates_unique.php?${new URLSearchParams({ channel, limit: String(limit) })}`);
