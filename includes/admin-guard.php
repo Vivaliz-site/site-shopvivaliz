@@ -6,7 +6,6 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 }
 
 require_once __DIR__ . '/../config/constants.php';
-require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/pdo-database.php';
 require_once __DIR__ . '/../core/logger/logger.php';
 
@@ -37,37 +36,14 @@ if (empty($_SESSION['is_admin']) || !is_numeric($_SESSION['is_admin'])) {
     $adminResolved = false;
     $userId = (int)$_SESSION['user_id'];
 
-    // Prefer the same canonical mysqli connection used by auth/login.php.
-    // The previous if/elseif ordering always selected sv_pdo() because the
-    // function is defined by the required file above, leaving this path dead.
-    // If the primary lookup cannot run, retry through PDO before denying.
+    // Keep the lightweight PDO path as the normal lookup. If it cannot
+    // resolve the authenticated user (for example during a transient PDO
+    // connection failure), lazily load the canonical mysqli Database class
+    // used by auth/login.php and retry before denying access. This avoids
+    // opening a second database connection for anonymous requests, sessions
+    // that already carry is_admin, and healthy PDO-backed admin requests.
     try {
-        if (class_exists('Database')) {
-            try {
-                $conn = Database::getInstance()->getConnection();
-                if ($conn instanceof mysqli) {
-                    $stmt = $conn->prepare('SELECT is_admin FROM users WHERE id = ? LIMIT 1');
-                    if ($stmt) {
-                        $stmt->bind_param('i', $userId);
-                        $stmt->execute();
-                        $result = $stmt->get_result();
-                        $row = $result ? $result->fetch_assoc() : null;
-                        $stmt->close();
-                        if (is_array($row)) {
-                            $isAdmin = !empty($row['is_admin']);
-                            $adminResolved = true;
-                        }
-                    }
-                }
-            } catch (Throwable $e) {
-                sv_log('admin_guard_mysqli_error', 'security', [
-                    'user_id' => $userId,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
-
-        if (!$adminResolved && function_exists('sv_pdo')) {
+        if (function_exists('sv_pdo')) {
             $db = sv_pdo();
             if ($db instanceof PDO) {
                 $stmt = $db->prepare('SELECT is_admin FROM users WHERE id = ? LIMIT 1');
@@ -77,6 +53,38 @@ if (empty($_SESSION['is_admin']) || !is_numeric($_SESSION['is_admin'])) {
                     $isAdmin = !empty($row['is_admin']);
                     $adminResolved = true;
                 }
+            }
+        }
+
+        if (!$adminResolved) {
+            try {
+                // config/database.php eagerly initializes its singleton, so it
+                // must only be loaded when the PDO lookup genuinely failed to
+                // resolve the authenticated account.
+                require_once __DIR__ . '/../config/database.php';
+
+                if (class_exists('Database')) {
+                    $conn = Database::getInstance()->getConnection();
+                    if ($conn instanceof mysqli) {
+                        $stmt = $conn->prepare('SELECT is_admin FROM users WHERE id = ? LIMIT 1');
+                        if ($stmt) {
+                            $stmt->bind_param('i', $userId);
+                            $stmt->execute();
+                            $result = $stmt->get_result();
+                            $row = $result ? $result->fetch_assoc() : null;
+                            $stmt->close();
+                            if (is_array($row)) {
+                                $isAdmin = !empty($row['is_admin']);
+                                $adminResolved = true;
+                            }
+                        }
+                    }
+                }
+            } catch (Throwable $e) {
+                sv_log('admin_guard_mysqli_error', 'security', [
+                    'user_id' => $userId,
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
     } catch (Throwable $e) {
