@@ -841,3 +841,25 @@ novo com erro diferente, ou execução de `shopee-production-seo.yml` com apply 
 ocorreu; o achado estrutural e o bloqueio de credencial já foram comunicados nos ciclos anteriores
 e permanecem sem ação humana pendente (renovar OAuth2 do Tiny e/ou decidir se vale integrar a API
 de analytics do Shopee Open Platform).
+
+### 9.20 Atualização — ciclo de 2026-08-11, 25º ciclo — estado idêntico ao ciclo 24, sem fato novo
+
+Checagem incremental desde o ciclo 24 (2026-08-10 ~13h UTC, commit `d3c7ab4`): `git log
+d3c7ab4..HEAD` traz 47 commits no intervalo, nenhum tocando `scripts/shopee_*`,
+`scripts/utils/shopee_client.py`, `.github/workflows/*shopee*` ou
+`docs/TINY-TOKEN-RENEWAL-SETUP.md`. `env | grep -iE "SHOPEE|TINY|OLIST"` continua vazio neste
+sandbox. `.github/workflows/` continua só com `shopee-optimizer-safety.yml`/
+`shopee-production-seo.yml` — `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` ainda
+ausentes. Artefato mais recente em `listings/` (por `sort`) continua
+`shopee-listings-20260726-080756.json`/`optimization-report-20260726-060921.json`, mesmo erro de
+sempre — agora **16 dias** sem extração de catálogo funcional.
+
+Via `mcp__github__actions_list`: `shopee-production-seo.yml` segue com exatamente as mesmas 5
+execuções de 2026-07-30 (`id` mais recente `30585266165`), todas `conclusion: failure` — nenhuma
+execução nova desde então; o passo real de apply nunca completou com sucesso.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado. Nenhuma notificação push enviada — nenhum critério de novo
+aviso ocorreu (mesmos três critérios do ciclo 24); achado estrutural e bloqueio de credencial já
+comunicados, sem ação humana nova pendente além da já registrada (renovar OAuth2 do Tiny e/ou
+decidir se vale integrar a API de analytics do Shopee Open Platform).
