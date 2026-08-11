@@ -140,7 +140,7 @@ final class CatalogOptimizationPublisher
     private function updateStorefrontCache(array $product, array $content): void
     {
         $path = dirname(__DIR__, 3) . '/storage/products-cache-ativos.json';
-        if (!is_file($path) || !is_readable($path) || !is_writable($path)) {
+        if (!is_file($path) || !is_readable($path) || !is_writable(dirname($path))) {
             throw new RuntimeException('Cache ativo da vitrine não está disponível para atualização real.');
         }
         $payload = json_decode((string)file_get_contents($path), true);
@@ -189,8 +189,13 @@ final class CatalogOptimizationPublisher
             throw new RuntimeException('Produto não localizado no cache ativo da vitrine; publicação do site foi abortada.');
         }
         $encoded = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        if (!is_string($encoded) || file_put_contents($path, $encoded . PHP_EOL, LOCK_EX) === false) {
+        $tmpPath = $path . '.tmp.' . getmypid() . '.' . bin2hex(random_bytes(4));
+        if (!is_string($encoded) || file_put_contents($tmpPath, $encoded . PHP_EOL, LOCK_EX) === false) {
             throw new RuntimeException('Falha ao persistir o conteúdo otimizado no cache ativo da vitrine.');
+        }
+        if (!@rename($tmpPath, $path)) {
+            @unlink($tmpPath);
+            throw new RuntimeException('Falha ao substituir o cache ativo da vitrine.');
         }
         $verify = json_decode((string)file_get_contents($path), true);
         if (!is_array($verify)) {
