@@ -392,17 +392,21 @@ if (!empty($fixture['base_image_is_temp']) && is_file((string)$fixture['base_ima
 
 $pass = count(array_filter($results, static fn(array $row): bool => ($row['status'] ?? '') === 'PASS'));
 $fail = count($results) - $pass;
+$expectedImageTotal = $skipImage ? 0 : count($imageChannels) * ($onlyProvider !== '' ? (int)in_array($onlyProvider, $imageSelectors, true) : count($imageSelectors));
+$expectedCatalogTotal = $skipCatalog ? 0 : count($catalogChannels) * ($onlyProvider !== '' ? (int)in_array($onlyProvider, $catalogProviders, true) : count($catalogProviders));
+$expectedTotal = $expectedImageTotal + $expectedCatalogTotal;
 $report = [
     'schema' => 'shopvivaliz.ai-smoke-matrix.v1',
     'generated_at' => gmdate(DATE_ATOM),
     'release_sha' => $expectedSha,
     'product_id' => $productId,
     'image_source_kind' => (string)$fixture['source_kind'],
-    'expected_total' => 55,
+    'scope' => ['skip_image' => $skipImage, 'skip_catalog' => $skipCatalog, 'only_provider' => $onlyProvider !== '' ? $onlyProvider : null],
+    'expected_total' => $expectedTotal,
     'attempted_total' => count($results),
     'pass_total' => $pass,
     'fail_total' => $fail,
-    'all_combinations_attempted' => count($results) === 55,
+    'all_combinations_attempted' => count($results) === $expectedTotal,
     'publication_performed' => false,
     'results' => $results,
 ];
