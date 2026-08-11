@@ -50,8 +50,8 @@ define('AI_STUDIO_OPENROUTER_API_BASE_URL', (string)(getenv('OPENROUTER_API_BASE
 define('AI_STUDIO_OPENROUTER_HTTP_REFERER', (string)(getenv('OPENROUTER_HTTP_REFERER') ?: 'https://shopvivaliz.com.br'));
 define('AI_STUDIO_OPENROUTER_APP_TITLE', (string)(getenv('OPENROUTER_APP_TITLE') ?: 'ShopVivaliz'));
 
-define('AI_STUDIO_OPENAI_IMAGE_MODEL', (string)(getenv('OPENAI_IMAGE_MODEL') ?: 'gpt-image-1'));
-define('AI_STUDIO_GOOGLE_IMAGEN_MODEL', (string)(getenv('GOOGLE_IMAGEN_MODEL') ?: 'gemini-2.5-flash-image'));
+define('AI_STUDIO_OPENAI_IMAGE_MODEL', (string)(getenv('OPENAI_IMAGE_MODEL') ?: 'gpt-image-1-mini'));
+define('AI_STUDIO_GOOGLE_IMAGEN_MODEL', (string)(getenv('GOOGLE_IMAGEN_MODEL') ?: 'gemini-3.1-flash-lite-image'));
 define('AI_STUDIO_CLAUDE_MODEL', (string)(getenv('CLAUDE_MODEL') ?: 'claude-haiku-4-5-20251001'));
 
 define('AI_STUDIO_STORAGE_DIR', __DIR__ . '/storage/staging/');
