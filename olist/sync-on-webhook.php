@@ -36,18 +36,23 @@ $limit = 100;
 while (true) {
     $url = "https://api.tiny.com.br/public-api/v3/produtos?limit={$limit}&offset={$offset}";
 
-    $context = stream_context_create([
-        'https' => [
-            'method' => 'GET',
-            'header' => "Authorization: Bearer {$token}\r\nAccept: application/json\r\n",
-            'timeout' => 30,
-        ]
-    ]);
+    // file_get_contents()/stream_context_create() era rejeitado com 401 pela
+    // Cloudflare do Tiny mesmo com token e permissoes corretas (confirmado em
+    // 2026-08-11: a mesma chamada via cURL funciona normalmente). Usar cURL
+    // aqui evita esse bloqueio silencioso.
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer {$token}", "Accept: application/json"]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+    $response = curl_exec($ch);
+    $httpStatus = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
 
-    $response = @file_get_contents($url, false, $context);
-
-    if (!$response) {
-        error_log("[webhook-sync] Falha ao buscar produtos");
+    if ($response === false || $httpStatus < 200 || $httpStatus >= 300) {
+        error_log("[webhook-sync] Falha ao buscar produtos: HTTP {$httpStatus} {$curlError}");
         break;
     }
 
