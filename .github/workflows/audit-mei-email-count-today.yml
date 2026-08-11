@@ -1,0 +1,67 @@
+name: Audit MEI email count today
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/audit-mei-email-count-today.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Count today's email activity in America/Sao_Paulo
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import os, json, psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'], row_factory=dict_row) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("""
+                    select status::text as status, count(*) as n
+                    from mei_email.envios
+                    where (enviado_em at time zone 'America/Sao_Paulo')::date = (now() at time zone 'America/Sao_Paulo')::date
+                    group by 1
+                    order by 1
+                  """)
+                  by_status = cur.fetchall()
+                  cur.execute("""
+                    select count(*) as n
+                    from mei_email.envios
+                    where (enviado_em at time zone 'America/Sao_Paulo')::date = (now() at time zone 'America/Sao_Paulo')::date
+                      and status::text in ('submitted','enviado')
+                  """)
+                  submitted_or_sent = cur.fetchone()['n']
+                  cur.execute("""
+                    select min(enviado_em at time zone 'America/Sao_Paulo') as first_at,
+                           max(enviado_em at time zone 'America/Sao_Paulo') as last_at
+                    from mei_email.envios
+                    where (enviado_em at time zone 'America/Sao_Paulo')::date = (now() at time zone 'America/Sao_Paulo')::date
+                      and status::text in ('submitted','enviado')
+                  """)
+                  window = cur.fetchone()
+                  print('TODAY_EMAIL_AUDIT='+json.dumps({
+                    'timezone':'America/Sao_Paulo',
+                    'submitted_or_enviado': submitted_or_sent,
+                    'by_status': by_status,
+                    'first_at': window['first_at'],
+                    'last_at': window['last_at']
+                  }, default=str, ensure_ascii=False))
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
