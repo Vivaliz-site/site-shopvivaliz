@@ -5,6 +5,17 @@ Este documento agrupa nomes canônicos, aliases aceitos no código e uso princip
 
 Nao registrar valores reais aqui.
 
+## Estado verificado em 2026-08-11
+
+| Grupo | Onde apareceu | Observação |
+|---|---|---|
+| `OPENAI_API_KEY` | `.env` local e `shared/.env` | usado por IA e workflows; não materializado em `runtime-secrets.php` |
+| `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` | workflows e `shared/.env` | usado por IA; sincronização via GitHub Secrets |
+| `GA4_*` / `GOOGLE_ADS_*` | `.env` local e docs | não apareceu em `shared/.env` nem em `runtime-secrets.php` |
+| `AMAZON_LWA_*` | `.env` local e `shared/.env` | fica em `shared/.env`; não materializado em `runtime-secrets.php` |
+| `DB_*`, `ML_*`, `OLIST_*`, `SHOPEE_*`, `TINY_*`, `SHOPVIVALIZ_AGENT_KEY`, `TOKEN_API_OLIST` | `shared/.env` e `runtime-secrets.php` | runtime operacional real da VM |
+| `REMOTE_MCP_*` | `.env` local e docs | local-only; sem consumidor em scripts ou workflows |
+
 ## IA
 
 - Canônicos:
@@ -224,6 +235,21 @@ Nao registrar valores reais aqui.
   - `GH_REPO_TOKEN`
   - `ADMIN_EMAIL`
   - `ADMIN_PASSWORD`
+
+## Remote MCP
+
+- Nao materializar em `shared/.env` nem em `runtime-secrets.php`.
+- Variaveis registradas:
+  - `REMOTE_MCP_ENABLED`
+  - `REMOTE_MCP_PROVIDER`
+  - `REMOTE_MCP_VERIFY_URL`
+  - `REMOTE_MCP_AUTH_FLOW`
+  - `REMOTE_MCP_DEVICE_NAME`
+  - `REMOTE_MCP_AUTH_USER_EMAIL`
+  - `REMOTE_MCP_DEVICE_ID`
+  - `REMOTE_MCP_ACCESS_TOKEN`
+- Uso:
+  - apenas documentação e suporte operacional local ao conector remoto.
 
 ## Recomendação de padronização
 
