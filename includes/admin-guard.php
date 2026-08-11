@@ -80,7 +80,10 @@ $svAiRoutineUiPages = [
 ];
 $svAdminScriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
 if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAiRoutineUiPages, true)) {
-    register_shutdown_function(static function (): void {
-        echo "\n<script src=\"/admin/assets/ai-routines-hotfix-ui.js?v=20260810b\"></script>\n";
+    register_shutdown_function(static function () use ($svAdminScriptName): void {
+        echo "\n<script src=\"/admin/assets/ai-routines-hotfix-ui.js?v=20260810c\"></script>\n";
+        if ($svAdminScriptName === '/admin/catalog-optimization/admin_catalog.php') {
+            echo "<script src=\"/admin/assets/catalog-resilient-run-hotfix.js?v=20260810c\"></script>\n";
+        }
     });
 }
