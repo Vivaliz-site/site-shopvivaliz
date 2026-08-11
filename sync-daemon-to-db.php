@@ -29,6 +29,7 @@ if (!$items) {
 $db = Database::getInstance();
 $synced = 0;
 $skipped = 0;
+$activeOlistIds = [];
 
 foreach ($items as $item) {
     $id = (int)($item['id'] ?? 0);
@@ -43,19 +44,39 @@ foreach ($items as $item) {
         continue;
     }
 
+    // O cache ja contem somente produtos com situacao='A' no Tiny (ver
+    // olist/sync-on-webhook.php). Todo produto sincronizado aqui deve ficar
+    // active=1; os que nao aparecerem mais neste ciclo sao desativados abaixo.
     $stmt = $db->prepare(
-        "INSERT INTO products (olist_product_id, sku, name, price, stock, category, is_published, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, 1, NOW(), NOW())
-         ON DUPLICATE KEY UPDATE name=?, price=?, stock=?, category=?, updated_at=NOW()"
+        "INSERT INTO products (olist_product_id, sku, name, price, stock, category, is_published, active, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 1, 1, NOW(), NOW())
+         ON DUPLICATE KEY UPDATE name=?, price=?, stock=?, category=?, active=1, updated_at=NOW()"
     );
 
     $stmt->bind_param('isisissssi', $id, $sku, $name, $price, $stock, $category, $name, $price, $stock, $category);
     if ($stmt->execute()) {
         $synced++;
+        $activeOlistIds[] = $id;
     } else {
         $skipped++;
     }
 }
 
+$deactivated = 0;
+if ($activeOlistIds !== []) {
+    // Produtos com olist_product_id preenchido que nao vieram nesta lista de
+    // ativos do Tiny devem ser desativados: o site precisa espelhar o ERP.
+    $placeholders = implode(',', array_fill(0, count($activeOlistIds), '?'));
+    $types = str_repeat('i', count($activeOlistIds));
+    $stmt = $db->prepare(
+        "UPDATE products SET active = 0, updated_at = NOW()
+         WHERE olist_product_id IS NOT NULL AND olist_product_id NOT IN ($placeholders) AND active = 1"
+    );
+    $stmt->bind_param($types, ...$activeOlistIds);
+    $stmt->execute();
+    $deactivated = $stmt->affected_rows;
+}
+
 echo "✅ Sincronizados: $synced\n";
 echo "⏭️  Pulados: $skipped\n";
+echo "🔴 Desativados (saíram da lista de ativos do Tiny): $deactivated\n";
