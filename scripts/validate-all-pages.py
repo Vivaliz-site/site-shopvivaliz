@@ -107,8 +107,8 @@ def validate_all_pages():
         "carrossel_status": {
             "ativo": True,
             "intervalo": "3 segundos",
-            "paginas_implementadas": 4,
-            "js_file": "/includes/auto-image-carousel.js",
+            "paginas_implementadas": 5,
+            "js_file": "/js/auto-image-carousel.js",
             "status": "✅ OPERACIONAL"
         },
         "integrações_verificadas": {
