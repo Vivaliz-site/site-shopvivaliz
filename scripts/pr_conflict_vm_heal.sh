@@ -26,9 +26,15 @@ fail() {
 [[ "$head_ref" != *'..'* && "$head_ref" != *'@{'* && "$head_ref" != */. && "$head_ref" != ./* && "$head_ref" != */ ]] || fail 'unsafe PR head ref structure'
 [[ -r "$trusted_healer" ]] || fail 'trusted healer unavailable'
 [[ -r "$shared_env" ]] || fail 'private runtime env unavailable'
+command -v git >/dev/null || fail 'git unavailable on Oracle'
+command -v gh >/dev/null || fail 'gh unavailable on Oracle'
+command -v jq >/dev/null || fail 'jq unavailable on Oracle'
+command -v python3 >/dev/null || fail 'python3 unavailable on Oracle'
 
-# This checks auth state without revealing token material.
+# Check auth without revealing token material, then install gh as Git's
+# credential helper for the isolated temporary clone/push.
 gh auth status --hostname github.com >/dev/null 2>&1 || fail 'Oracle GitHub authentication unavailable'
+gh auth setup-git >/dev/null
 
 meta="$(gh api "repos/${repo}/pulls/${pr_number}")"
 state="$(jq -r '.state' <<<"$meta")"
