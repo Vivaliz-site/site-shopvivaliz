@@ -29,35 +29,39 @@ Um agente não pode encerrar, abandonar, trocar de tarefa ou declarar sucesso en
 
 ## Execução automática obrigatória
 
-A regra textual é reforçada por três componentes versionados e auditáveis:
+A regra textual é reforçada por três componentes versionados e auditáveis. O GitHub Actions atua apenas como orquestrador de leitura; credenciais Gemini e autenticação GitHub de escrita permanecem privadas dentro da Oracle VM.
 
 ### `PR Conflict Auto-Healer`
 
 - roda em eventos do PR e também em varredura periódica;
-- atua somente em PRs do próprio repositório com base `main`;
+- atua somente em PRs não-draft do próprio repositório com base `main`;
 - sincroniza `main` no branch do PR mesmo quando não existe conflito;
 - quando existe conflito Git, usa Gemini para produzir a resolução;
-- utiliza todas as **credenciais Gemini** configuradas nos aliases e bundles suportados, deduplicando-as e alternando automaticamente quando uma chave retorna quota/rate limit, autenticação inválida ou indisponibilidade;
-- nunca imprime valores de chaves;
-- nunca executa código do PR enquanto possui credenciais de IA;
+- executa o resolvedor dentro da Oracle, lendo somente os nomes de credenciais Gemini permitidos de `/home/ubuntu/shopvivaliz-deploy/shared/.env`;
+- utiliza todas as **credenciais Gemini** únicas configuradas nos aliases e bundles suportados, deduplicando-as e alternando automaticamente quando uma chave retorna quota/rate limit, autenticação inválida ou indisponibilidade;
+- nunca copia valores Gemini para o runner do Actions e nunca imprime valores de chaves;
+- nunca executa código do PR enquanto possui acesso ao runtime privado;
 - rejeita binários, symlinks, arquivos excessivamente grandes e qualquer resultado que ainda contenha marcadores de conflito;
-- depois da correção faz novo commit no mesmo branch e o push deve disparar novamente os gates do PR.
+- publica somente no branch original do PR, nunca `main`/`master`, nunca com force-push e somente se o SHA remoto ainda for o esperado;
+- o push é feito pela autenticação GitHub externa já configurada na Oracle, portanto gera um novo SHA e deve disparar novamente os gates normais do PR.
 
 ### `PR Completion Enforcer`
 
 - reavalia PRs sempre que um gate canônico termina e também em varredura periódica;
+- usa `cancel-in-progress` para descartar avaliações obsoletas e evitar fila redundante de eventos equivalentes;
 - exige que o SHA validado contenha a `main` atual;
 - exige sucesso dos gates canônicos no **mesmo SHA** que será mesclado;
 - rejeita qualquer SHA com workflow conhecido em estado de falha;
-- confere novamente o SHA imediatamente antes do merge para impedir corrida entre validação e alteração do branch;
-- faz squash merge automaticamente quando todos os critérios estiverem satisfeitos;
-- ao avançar `main`, dispara nova varredura do Auto-Healer para atualizar os demais PRs.
+- confere novamente o SHA no runner e a Oracle repete estado, repositório, base, SHA e ancestralidade de `main` imediatamente antes do merge;
+- faz squash merge por meio da autenticação GitHub externa da Oracle, sem copiar token de escrita para Actions;
+- quando `main` avança, PRs restantes ficam inelegíveis até o próximo ciclo do Auto-Healer sincronizar e revalidar cada novo SHA.
 
 ### `PR Policy Enforcement`
 
 - é gate obrigatório de todo PR;
-- testa a rotação de credenciais Gemini, fallback de modelo e rejeição de marcadores de conflito;
+- testa a rotação de credenciais Gemini, fallback de modelo, leitura seletiva do `.env` privado e rejeição de marcadores de conflito;
 - verifica que os workflows e scripts responsáveis por esta política continuam presentes e com os invariantes mínimos;
+- proíbe reintroduzir `GH_REPO_TOKEN`, chaves Gemini diretamente no workflow, `git push` direto no Actions ou merge direto pelo runner;
 - qualquer tentativa de remover ou enfraquecer essa automação deve deixar o próprio PR vermelho.
 
 ## SLA operacional obrigatório
@@ -66,6 +70,7 @@ A regra textual é reforçada por três componentes versionados e auditáveis:
 - **PR com `main` desatualizada:** sincronização automática e revalidação; checks antigos nunca autorizam merge.
 - **PR verde, atualizado e sem bloqueio externo:** merge automático no evento do gate ou, no máximo, no próximo ciclo de 5 minutos do `PR Completion Enforcer`.
 - **Pool Gemini esgotado:** a rodada continua `FALHOU`/`INCONCLUSIVO`; o PR não pode ser declarado concluído e a próxima varredura tenta novamente.
+- **Autenticação GitHub da Oracle indisponível:** falhar fechado; nenhum fallback para force-push, bypass ou token impresso é permitido.
 
 ## É proibido
 
@@ -77,6 +82,7 @@ A regra textual é reforçada por três componentes versionados e auditáveis:
 - Aceitar como válidos checks executados em SHA anterior ao SHA que será mesclado.
 - Fazer force-push, bypass de branch protection, reduzir cobertura ou enfraquecer teste apenas para obter verde.
 - Expor secrets a PRs de forks ou executar código não confiável com secrets disponíveis.
+- Copiar o pool privado Gemini ou a autenticação GitHub de escrita da Oracle para logs, artifacts, outputs ou argumentos públicos do Actions.
 - Usar IA para apagar testes, validações, segurança, tratamento de erros ou proteções apenas para resolver conflito.
 
 ## Exceção válida: bloqueio externo real
@@ -94,6 +100,6 @@ Nesse caso, o agente deve registrar a evidência do bloqueio, o SHA/PR afetado, 
 ## Regra curta para agentes
 
 **Falhou → diagnostica → corrige na hora → revalida.  
-Conflitou → Auto-Healer resolve/retenta → revalida no novo SHA.  
-Ficou verde e contém a main atual → merge na hora.  
+Conflitou → Auto-Healer resolve/retenta na Oracle → revalida no novo SHA.  
+Ficou verde e contém a main atual → merge na hora pela Oracle.  
 Só termina aberto se houver bloqueio externo comprovado.**
