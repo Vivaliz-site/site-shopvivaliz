@@ -631,6 +631,6 @@ $svNavCurrent = 'catalogo';
         } catch(e){}
     })();
     </script>
-    <script src="/js/auto-image-carousel.js?v=20260719-2"></script>
+    <script src="/js/auto-image-carousel.js?v=20260811-1"></script>
 </body>
 </html>
