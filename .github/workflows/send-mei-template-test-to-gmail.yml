@@ -1,4 +1,4 @@
-name: Validate storefront persistent uploads
+name: Recover storefront upload mapping
 on:
   push:
     branches: [main]
@@ -8,9 +8,9 @@ on:
 permissions:
   contents: read
 jobs:
-  validate-storefront:
+  recover-storefront:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 8
     steps:
       - name: Configure VM key
         env:
@@ -19,32 +19,40 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Deploy current main and validate storefront images
+      - name: Locate and recover upload mapping safely
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           BASE=/home/ubuntu/shopvivaliz-deploy
-          cd "$BASE/repo"
-          git fetch --prune origin main
-          echo "origin_main=$(git rev-parse --short origin/main)"
-          grep -A8 'declare -a SYMLINKS=(' <(git show origin/main:scripts/deploy-production.sh)
-          flock -w 120 /var/lock/shopvivaliz-deploy.lock "$BASE/repo/scripts/deploy-production.sh"
-          echo "current=$(basename "$(readlink -f "$BASE/current")")"
-          resolved_uploads=$(readlink -f "$BASE/current/uploads" 2>/dev/null || true)
-          echo "uploads_link=$resolved_uploads"
-          test "$resolved_uploads" = "$BASE/shared/uploads"
-          echo "shared_upload_files=$(find "$BASE/shared/uploads" -type f 2>/dev/null | wc -l)"
-          if test -f "$BASE/current/uploads/olist_imagens_site_mapeamento.csv"; then
+          SHARED="$BASE/shared/uploads"
+          mkdir -p "$SHARED"
+          echo "before_files=$(find "$SHARED" -type f 2>/dev/null | wc -l)"
+          echo '=== exact mapping candidates ==='
+          find /home/ubuntu -type f -name 'olist_imagens_site_mapeamento.csv' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n 20 || true
+          candidate=$(find /home/ubuntu -type f -name 'olist_imagens_site_mapeamento.csv' ! -path "$SHARED/*" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n 1 | cut -d' ' -f2- || true)
+          if [ -n "$candidate" ] && [ -f "$candidate" ]; then
+            source_dir=$(dirname "$candidate")
+            backup="$BASE/shared/upload-recovery-backup-$(date +%Y%m%d-%H%M%S)"
+            mkdir -p "$backup"
+            cp -a "$SHARED/." "$backup/" 2>/dev/null || true
+            echo "recovery_source=$source_dir"
+            cp -a -n "$source_dir/." "$SHARED/"
+          else
+            echo 'recovery_source=none'
+          fi
+          echo "after_files=$(find "$SHARED" -type f 2>/dev/null | wc -l)"
+          if test -f "$SHARED/olist_imagens_site_mapeamento.csv"; then
             echo 'mapping_csv=present'
+            echo "mapping_rows=$(wc -l < "$SHARED/olist_imagens_site_mapeamento.csv")"
           else
             echo 'mapping_csv=missing'
           fi
-          echo '=== homepage category/product image sample ==='
+          echo "uploads_link=$(readlink -f "$BASE/current/uploads" 2>/dev/null || true)"
           html=$(mktemp)
           curl -sS --max-time 30 -H 'Host: shopvivaliz.com.br' http://127.0.0.1/ > "$html"
-          grep -oE '<img[^>]+class="[^"]*(category-slide-img|product-card)[^"]*"[^>]*>|<img[^>]+src="[^"]+"[^>]*>' "$html" | head -n 40 || true
           echo "category_images=$(grep -c 'category-slide-img' "$html" || true)"
           echo "product_cards=$(grep -c 'product-card' "$html" || true)"
+          grep -oE '<img[^>]+class="product[^>]*>|<img[^>]+src="[^"]+"[^>]*>' "$html" | head -n 30 || true
           rm -f "$html"
           echo "email_worker=$(systemctl is-active mei-mg-email-worker.service || true)"
           EOF
