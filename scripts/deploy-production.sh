@@ -454,6 +454,7 @@ printf '%s\n' "$REMOTE_SHA" > "$NEW_RELEASE_PATH/.release-sha"
 
 declare -a SYMLINKS=(
   ".env"
+  "uploads"
   "logs"
   "cache"
   "sessions"
