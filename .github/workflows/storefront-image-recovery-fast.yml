@@ -1,16 +1,18 @@
-name: Deploy and validate featured product images
+name: Deploy and validate storefront restoration
 on:
   push:
     branches: [main]
     paths:
       - '.github/workflows/storefront-image-recovery-fast.yml'
+      - 'index.php'
+      - 'js/category-real-images-v52.js'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
       - name: Configure VM key
         env:
@@ -19,25 +21,45 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Deploy under single lock and validate
+      - name: Deploy latest main and validate storefront
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           BASE=/home/ubuntu/shopvivaliz-deploy
-          flock -w 180 /var/lock/shopvivaliz-deploy.lock "$BASE/repo/scripts/deploy-production.sh"
+          REPO="$BASE/repo"
+
+          # Toda reconciliacao Git + deploy fica sob o mesmo lock. O clone local
+          # ja apresentou remote-tracking ref stale; recriar somente origin/main
+          # e seguro porque e uma referencia descartavel do remoto, nao altera main.
+          flock -w 240 /var/lock/shopvivaliz-deploy.lock bash -c '
+            set -euo pipefail
+            REPO="/home/ubuntu/shopvivaliz-deploy/repo"
+            cd "$REPO"
+            rm -f .git/refs/remotes/origin/main.lock
+            git update-ref -d refs/remotes/origin/main || true
+            git fetch --prune origin +refs/heads/main:refs/remotes/origin/main
+            "$REPO/scripts/deploy-production.sh"
+          '
+
           html=$(mktemp)
           curl -sS --max-time 30 -H 'Host: shopvivaliz.com.br' http://127.0.0.1/ > "$html"
           categories=$(grep -o 'category-slide-img' "$html" | wc -l)
           cards=$(grep -o 'class="product-card' "$html" | wc -l)
           pimgs=$(grep -o 'class="product-image"' "$html" | wc -l)
+          curated=$(grep -o '/public/assets/category-images/cat-[^"? ]*\.jpg' "$html" | sort -u | wc -l)
+
           echo "current=$(basename "$(readlink -f "$BASE/current")")"
           echo "category_images=$categories"
+          echo "curated_category_assets=$curated"
           echo "product_cards=$cards"
           echo "product_images=$pimgs"
           echo "uploads_link=$(readlink -f "$BASE/current/uploads")"
           echo "mapping_rows=$(wc -l < "$BASE/shared/uploads/olist_imagens_site_mapeamento.csv")"
+          echo '=== category sources ==='
+          grep -o '/public/assets/category-images/cat-[^"? ]*\.jpg' "$html" | sort -u || true
+
           python3 - "$html" <<'PY'
-          import re,sys,urllib.parse,subprocess
+          import re,sys,subprocess
           s=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
           cards=re.findall(r'<article class="product-card.*?</article>',s,re.S)
           urls=[]
@@ -53,15 +75,21 @@ jobs:
                   target='http://127.0.0.1/'+u.split('https://shopvivaliz.com.br/',1)[1]
               elif u.startswith('/'):
                   target='http://127.0.0.1'+u
-              cmd=['curl','-sS','-o','/dev/null','-w','%{http_code}', '--max-time','15']
+              cmd=['curl','-sS','-o','/dev/null','-w','%{http_code}','--max-time','15']
               if target.startswith('http://127.0.0.1'):
                   cmd += ['-H','Host: shopvivaliz.com.br']
-              code=subprocess.check_output(cmd+[target],text=True).strip()
+              try:
+                  code=subprocess.check_output(cmd+[target],text=True).strip()
+              except Exception:
+                  code='ERR'
               print(f'image_http={code} url={u}')
           PY
+
           test "$categories" -ge 5
+          test "$curated" -ge 3
           test "$cards" -gt 0
           test "$pimgs" -gt 0
+          test "$(readlink -f "$BASE/current/uploads")" = "$BASE/shared/uploads"
           echo "email_worker=$(systemctl is-active mei-mg-email-worker.service || true)"
           rm -f "$html"
           EOF
