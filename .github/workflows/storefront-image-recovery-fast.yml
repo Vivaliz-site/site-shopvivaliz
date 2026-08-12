@@ -1,4 +1,4 @@
-name: Validate featured storefront images
+name: Inspect storefront image mapping
 on:
   push:
     branches: [main]
@@ -8,9 +8,9 @@ on:
 permissions:
   contents: read
 jobs:
-  validate:
+  inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 3
     steps:
       - name: Configure VM key
         env:
@@ -19,30 +19,22 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Validate rendered featured product images
+      - name: Inspect mapping header and sample safely
         run: |
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
-          BASE=/home/ubuntu/shopvivaliz-deploy
-          html=$(mktemp)
-          curl -sS --max-time 30 -H 'Host: shopvivaliz.com.br' http://127.0.0.1/ > "$html"
-          echo "uploads_link=$(readlink -f "$BASE/current/uploads" 2>/dev/null || true)"
-          echo "mapping_rows=$(wc -l < "$BASE/shared/uploads/olist_imagens_site_mapeamento.csv")"
-          echo "category_images=$(grep -o 'category-slide-img' "$html" | wc -l)"
-          echo "product_cards=$(grep -o 'class=\"product-card' "$html" | wc -l)"
-          echo "product_images=$(grep -o 'class=\"product-image\"' "$html" | wc -l)"
-          echo '=== featured product image tags ==='
-          python3 - "$html" <<'PY'
-          import re,sys
-          s=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
-          cards=re.findall(r'<article class="product-card.*?</article>',s,re.S)
-          for i,c in enumerate(cards[:12],1):
-              m=re.search(r'<img[^>]+src="([^"]+)"[^>]*>',c,re.S)
-              sku=re.search(r'data-sku="([^"]*)"',c)
-              print(f'{i}: sku={(sku.group(1) if sku else "")} src={(m.group(1) if m else "MISSING")}')
+          CSV=/home/ubuntu/shopvivaliz-deploy/shared/uploads/olist_imagens_site_mapeamento.csv
+          echo "rows=$(wc -l < "$CSV")"
+          python3 - "$CSV" <<'PY'
+          import csv,sys
+          with open(sys.argv[1],newline='',encoding='utf-8-sig',errors='replace') as f:
+              r=csv.DictReader(f)
+              print('headers=',r.fieldnames)
+              for i,row in zip(range(3),r):
+                  safe={k:row.get(k,'') for k in (r.fieldnames or []) if k.lower() in {'sku','codigo','id','id_produto','olist_product_id','nome_produto','site_url','original_url_olist','image_url','imagem_principal_url'}}
+                  print('sample=',safe)
           PY
           echo "email_worker=$(systemctl is-active mei-mg-email-worker.service || true)"
-          rm -f "$html"
           EOF
       - name: Cleanup
         if: always()
