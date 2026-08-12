@@ -1,0 +1,41 @@
+name: Prepare isolated local backup preview
+on:
+  push:
+    branches:
+      - preview/backup-2026-08-10
+    paths:
+      - '.github/workflows/prepare-local-backup-preview.yml'
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Clone historical branch to isolated VM directory
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          DEST=/home/ubuntu/shopvivaliz-preview-20260810
+          rm -rf "$DEST.new"
+          git clone --branch preview/backup-2026-08-10 --single-branch https://github.com/Vivaliz-site/site-shopvivaliz.git "$DEST.new"
+          rm -rf "$DEST"
+          mv "$DEST.new" "$DEST"
+          cd "$DEST"
+          echo "preview_sha=$(git rev-parse HEAD)"
+          echo "preview_date=$(git show -s --format=%cI HEAD)"
+          echo '=== category assets ==='
+          find public/assets/category-images -maxdepth 1 -type f -printf '%f\n' 2>/dev/null | sort | head -n 50 || true
+          echo '=== category refs in index.php ==='
+          grep -n "category-images\|category-slide-img" index.php | head -n 40 || true
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
