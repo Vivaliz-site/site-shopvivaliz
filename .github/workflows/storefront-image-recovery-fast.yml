@@ -1,4 +1,4 @@
-name: Targeted storefront image recovery
+name: Direct storefront image recovery
 on:
   push:
     branches: [main]
@@ -10,7 +10,7 @@ permissions:
 jobs:
   recover:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 4
     steps:
       - name: Configure VM key
         env:
@@ -19,28 +19,42 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Recover mapping from targeted locations
+      - name: Recover mapping directly from retained releases
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           BASE=/home/ubuntu/shopvivaliz-deploy
           SHARED="$BASE/shared/uploads"
           mkdir -p "$SHARED"
-          echo '=== targeted candidates ==='
-          { find "$BASE/releases" -maxdepth 3 -type f -name 'olist_imagens_site_mapeamento.csv' -printf '%T@ %p\n' 2>/dev/null || true; 
-            find "$BASE/repo" -maxdepth 3 -type f -name 'olist_imagens_site_mapeamento.csv' -printf '%T@ %p\n' 2>/dev/null || true;
-            find /home/ubuntu -maxdepth 4 -type f -name 'olist_imagens_site_mapeamento.csv' ! -path "$BASE/shared/*" -printf '%T@ %p\n' 2>/dev/null || true; } | sort -nr | head -n 30
-          candidate=$({ find "$BASE/releases" -maxdepth 3 -type f -name 'olist_imagens_site_mapeamento.csv' -printf '%T@ %p\n' 2>/dev/null || true; find "$BASE/repo" -maxdepth 3 -type f -name 'olist_imagens_site_mapeamento.csv' -printf '%T@ %p\n' 2>/dev/null || true; find /home/ubuntu -maxdepth 4 -type f -name 'olist_imagens_site_mapeamento.csv' ! -path "$BASE/shared/*" -printf '%T@ %p\n' 2>/dev/null || true; } | sort -nr | head -n 1 | cut -d' ' -f2- || true)
+          candidate=''
+          echo '=== retained release candidates ==='
+          for d in "$BASE"/releases/*/uploads; do
+            [ -d "$d" ] || continue
+            if [ -f "$d/olist_imagens_site_mapeamento.csv" ]; then
+              echo "$d/olist_imagens_site_mapeamento.csv"
+              candidate="$d/olist_imagens_site_mapeamento.csv"
+            fi
+          done
+          for p in "$BASE/repo/uploads/olist_imagens_site_mapeamento.csv" /home/ubuntu/site-shopvivaliz/uploads/olist_imagens_site_mapeamento.csv /home/ubuntu/shopvivaliz/uploads/olist_imagens_site_mapeamento.csv; do
+            if [ -f "$p" ]; then
+              echo "$p"
+              candidate="$p"
+            fi
+          done
           echo "candidate=$candidate"
           if [ -n "$candidate" ] && [ -f "$candidate" ]; then
             src=$(dirname "$candidate")
-            backup="$BASE/shared/upload-recovery-backup-fast-$(date +%Y%m%d-%H%M%S)"
+            backup="$BASE/shared/upload-recovery-backup-direct-$(date +%Y%m%d-%H%M%S)"
             mkdir -p "$backup"
             cp -a "$SHARED/." "$backup/" 2>/dev/null || true
             cp -a -n "$src/." "$SHARED/"
           fi
-          echo "shared_files=$(find "$SHARED" -type f | wc -l)"
-          test -f "$SHARED/olist_imagens_site_mapeamento.csv" && echo "mapping_rows=$(wc -l < "$SHARED/olist_imagens_site_mapeamento.csv")" || echo 'mapping_missing'
+          echo "shared_count=$(ls -1A "$SHARED" 2>/dev/null | wc -l)"
+          if [ -f "$SHARED/olist_imagens_site_mapeamento.csv" ]; then
+            echo "mapping_rows=$(wc -l < "$SHARED/olist_imagens_site_mapeamento.csv")"
+          else
+            echo 'mapping_missing'
+          fi
           echo "uploads_link=$(readlink -f "$BASE/current/uploads" 2>/dev/null || true)"
           html=$(mktemp)
           curl -sS --max-time 30 -H 'Host: shopvivaliz.com.br' http://127.0.0.1/ > "$html"
