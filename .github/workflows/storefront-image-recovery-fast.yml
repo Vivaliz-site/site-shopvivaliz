@@ -1,4 +1,4 @@
-name: Repair featured product images
+name: Deploy and validate featured product images
 on:
   push:
     branches: [main]
@@ -6,37 +6,12 @@ on:
       - '.github/workflows/storefront-image-recovery-fast.yml'
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 jobs:
-  repair:
+  validate:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Checkout latest main
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Patch home catalog image enrichment
-        shell: bash
-        run: |
-          git fetch origin main
-          git reset --hard origin/main
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('index.php')
-          s=p.read_text(encoding='utf-8')
-          old="""function sv_home_catalog_source_rows(): array\n{\n    $runtime = svcr_products();\n    if ($runtime !== []) return $runtime;\n\n    $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';\n"""
-          new="""function sv_home_catalog_source_rows(): array\n{\n    $runtime = svcr_products();\n    $csvPath = __DIR__ . '/uploads/olist_imagens_site_mapeamento.csv';\n\n    // O runtime de catalogo e autoritativo para preco/estoque, mas nem sempre\n    // carrega as URLs de imagem. Enriquece os produtos ativos pelo SKU usando\n    // o mapeamento persistente de imagens, sem substituir dados comerciais.\n    if ($runtime !== [] && is_file($csvPath) && is_readable($csvPath)) {\n        $imageMap = [];\n        $handle = fopen($csvPath, 'r');\n        if ($handle) {\n            $header = fgetcsv($handle);\n            if (is_array($header)) {\n                while (($line = fgetcsv($handle)) !== false) {\n                    if (!is_array($line) || $line === []) continue;\n                    $assoc = [];\n                    foreach ($header as $i => $column) {\n                        $key = trim((string)$column);\n                        if ($key !== '') $assoc[$key] = $line[$i] ?? '';\n                    }\n                    $sku = strtoupper(trim((string)($assoc['sku'] ?? '')));\n                    if ($sku === '') continue;\n                    $url = trim((string)($assoc['site_url'] ?? ''));\n                    if ($url === '') $url = trim((string)($assoc['original_url_olist'] ?? ''));\n                    if ($url === '') continue;\n                    if (!isset($imageMap[$sku])) $imageMap[$sku] = ['primary' => '', 'images' => []];\n                    if (!in_array($url, $imageMap[$sku]['images'], true)) $imageMap[$sku]['images'][] = $url;\n                    $isPrimary = strtolower(trim((string)($assoc['is_primary'] ?? '')));\n                    if ($imageMap[$sku]['primary'] === '' && in_array($isPrimary, ['1','true','yes','sim'], true)) {\n                        $imageMap[$sku]['primary'] = $url;\n                    }\n                }\n            }\n            fclose($handle);\n        }\n\n        foreach ($runtime as &$row) {\n            if (!is_array($row)) continue;\n            $sku = strtoupper(trim((string)($row['sku'] ?? '')));\n            if ($sku === '' || !isset($imageMap[$sku])) continue;\n            $mapped = $imageMap[$sku];\n            $current = trim((string)($row['image_url'] ?? ''));\n            $isWeak = $current === '' || preg_match('/placeholder|default|no[-_ ]?image|sem[-_ ]?imagem/i', $current);\n            if ($isWeak) {\n                $row['image_url'] = $mapped['primary'] !== '' ? $mapped['primary'] : ($mapped['images'][0] ?? '');\n            }\n            $existing = is_array($row['images'] ?? null) ? $row['images'] : [];\n            $row['images'] = array_values(array_unique(array_filter(array_merge($existing, $mapped['images']))));\n        }\n        unset($row);\n        return $runtime;\n    }\n\n    if ($runtime !== []) return $runtime;\n\n    $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';\n"""
-          if old not in s:
-              raise SystemExit('target block not found')
-          p.write_text(s.replace(old,new,1),encoding='utf-8')
-          PY
-          php -l index.php
-          git config user.name 'shopvivaliz-ops-bot'
-          git config user.email 'ops-bot@users.noreply.github.com'
-          git add index.php
-          git commit -m 'fix: enrich featured products with persistent image map'
-          git push origin HEAD:main
       - name: Configure VM key
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
@@ -44,32 +19,45 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Deploy and validate home products
+      - name: Deploy under single lock and validate
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           BASE=/home/ubuntu/shopvivaliz-deploy
-          cd "$BASE/repo"
-          git fetch --prune origin main
-          flock -w 120 /var/lock/shopvivaliz-deploy.lock "$BASE/repo/scripts/deploy-production.sh"
+          flock -w 180 /var/lock/shopvivaliz-deploy.lock "$BASE/repo/scripts/deploy-production.sh"
           html=$(mktemp)
           curl -sS --max-time 30 -H 'Host: shopvivaliz.com.br' http://127.0.0.1/ > "$html"
           categories=$(grep -o 'category-slide-img' "$html" | wc -l)
           cards=$(grep -o 'class="product-card' "$html" | wc -l)
           pimgs=$(grep -o 'class="product-image"' "$html" | wc -l)
+          echo "current=$(basename "$(readlink -f "$BASE/current")")"
           echo "category_images=$categories"
           echo "product_cards=$cards"
           echo "product_images=$pimgs"
           echo "uploads_link=$(readlink -f "$BASE/current/uploads")"
           echo "mapping_rows=$(wc -l < "$BASE/shared/uploads/olist_imagens_site_mapeamento.csv")"
           python3 - "$html" <<'PY'
-          import re,sys
+          import re,sys,urllib.parse,subprocess
           s=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
           cards=re.findall(r'<article class="product-card.*?</article>',s,re.S)
+          urls=[]
           for i,c in enumerate(cards[:8],1):
               sku=re.search(r'data-sku="([^"]*)"',c)
               img=re.search(r'<img[^>]+src="([^"]+)"[^>]*>',c,re.S)
-              print(f'{i}: sku={(sku.group(1) if sku else "")} src={(img.group(1) if img else "MISSING")}')
+              u=img.group(1) if img else ''
+              print(f'{i}: sku={(sku.group(1) if sku else "")} src={u or "MISSING"}')
+              if u: urls.append(u)
+          for u in urls[:3]:
+              target=u
+              if u.startswith('https://shopvivaliz.com.br/'):
+                  target='http://127.0.0.1/'+u.split('https://shopvivaliz.com.br/',1)[1]
+              elif u.startswith('/'):
+                  target='http://127.0.0.1'+u
+              cmd=['curl','-sS','-o','/dev/null','-w','%{http_code}', '--max-time','15']
+              if target.startswith('http://127.0.0.1'):
+                  cmd += ['-H','Host: shopvivaliz.com.br']
+              code=subprocess.check_output(cmd+[target],text=True).strip()
+              print(f'image_http={code} url={u}')
           PY
           test "$categories" -ge 5
           test "$cards" -gt 0
