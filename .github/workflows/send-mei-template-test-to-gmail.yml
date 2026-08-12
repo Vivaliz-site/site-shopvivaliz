@@ -18,11 +18,16 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Send official template through Microsoft Graph App-Only to forwarding address
+      - name: Update provider and send one official template test
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           cd /home/ubuntu/mei-mg-email
+          sudo systemctl stop mei-mg-email-worker.service || true
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+          /home/ubuntu/mei-mg-email/.venv/bin/python -m py_compile app/email_provider.py
           /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
           import os
           from pathlib import Path
@@ -31,29 +36,26 @@ jobs:
           load_dotenv('.env', override=True)
           from app.email_provider import MicrosoftGraphEmailProvider
 
-          recipient='atendimento@shopvivaliz.com.br'
-          subject='MEI: Ganhe Certificado Digital + 10 Notas Fiscais por mes [DIAG-ROUTE-1245]'
-          template_path=Path('templates/mei-contabilidade-melo.html')
-          if not template_path.exists():
-              raise SystemExit(f'TEMPLATE_NOT_FOUND:{template_path}')
-          template=template_path.read_text(encoding='utf-8')
+          recipient='fredmourao@gmail.com'
+          subject='Teste RFC8058 ShopVivaliz'
+          template=Path('templates/mei-contabilidade-melo.html').read_text(encoding='utf-8')
           base_url=os.environ['BASE_URL_DESCADASTRO'].rstrip('?')
           unsubscribe_url=f"{base_url}?{urlencode({'email': recipient})}"
           body=(template
-                .replace('{{nome_fantasia}}','Equipe ShopVivaliz')
+                .replace('{{nome_fantasia}}','Teste ShopVivaliz')
                 .replace('{{razao_social}}','ShopVivaliz')
                 .replace('{{cnpj}}','')
                 .replace('{{unsubscribe_url}}',unsubscribe_url))
-          provider=MicrosoftGraphEmailProvider()
-          result=provider.send(to=recipient, subject=subject, body=body)
+          result=MicrosoftGraphEmailProvider().send(to=recipient, subject=subject, body=body)
           print(f'success={result.success}')
           print(f'status={getattr(result,"status",None)}')
           print(f'message_id={getattr(result,"message_id",None)}')
           print(f'error={getattr(result,"error",None)}')
           if not result.success or getattr(result,'status',None) != 'submitted':
               raise SystemExit('TEST_SEND_NOT_SUBMITTED')
-          print('TEST_GRAPH_ROUTED_SUBMITTED_OK')
+          print('TEST_GRAPH_RFC8058_SUBMITTED_OK')
           PY
+          echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
           EOF
       - name: Cleanup
         if: always()
