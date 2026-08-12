@@ -23,27 +23,22 @@ jobs:
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           SNAP=/home/ubuntu/shopvivaliz-deploy/repo/storage/products-cache.json
-          test -r "$SNAP"
           python3 - "$SNAP" <<'PY'
           import json,sys,collections
-          p=sys.argv[1]
-          d=json.load(open(p,encoding='utf-8'))
-          print('root_type=',type(d).__name__)
-          if isinstance(d,dict): print('root_keys=',list(d)[:30])
-          def find_list(x):
-              if isinstance(x,list): return x
-              if isinstance(x,dict):
-                  for k in ['itens','items','produtos','products','data','rows']:
-                      v=x.get(k)
-                      if isinstance(v,list): return v
-                      if isinstance(v,dict):
-                          for kk in ['itens','items','produtos','products','data','rows']:
-                              vv=v.get(kk)
-                              if isinstance(vv,list): return vv
-              return []
-          rows=find_list(d)
+          d=json.load(open(sys.argv[1],encoding='utf-8'))
+          candidates=[]
+          def walk(x,path='root'):
+              if isinstance(x,list):
+                  if x and sum(isinstance(i,dict) for i in x) >= max(1,len(x)//2): candidates.append((len(x),path,x))
+                  for i,v in enumerate(x[:3]): walk(v,f'{path}[{i}]')
+              elif isinstance(x,dict):
+                  for k,v in x.items(): walk(v,f'{path}.{k}')
+          walk(d)
+          candidates.sort(key=lambda t:t[0],reverse=True)
+          print('candidate_lists=',[(n,p) for n,p,_ in candidates[:10]])
+          rows=candidates[0][2] if candidates else []
           print('rows=',len(rows))
-          if rows and isinstance(rows[0],dict): print('sample_keys=',list(rows[0])[:50])
+          if rows and isinstance(rows[0],dict): print('sample_keys=',list(rows[0])[:60])
           def s(v): return '' if v is None else str(v).strip()
           def cat(r):
               v=r.get('categoria')
@@ -58,12 +53,13 @@ jobs:
               try:return int(float(v or 0))
               except:return 0
           def price(r):
-              vals=[]
               pr=r.get('precos') if isinstance(r.get('precos'),dict) else {}
-              vals += [pr.get('precoPromocional'),pr.get('preco_promocional'),pr.get('preco'),pr.get('preco_venda'),r.get('preco'),r.get('price')]
+              vals=[pr.get('precoPromocional'),pr.get('preco_promocional'),pr.get('preco'),pr.get('preco_venda'),r.get('preco'),r.get('price')]
               for v in vals:
                   try:
-                      x=float(str(v).replace('R$','').replace('.','').replace(',','.').strip())
+                      q=str(v).replace('R$','').strip()
+                      if ',' in q:q=q.replace('.','').replace(',','.')
+                      x=float(q)
                       if x>0:return x
                   except: pass
               return 0
@@ -80,8 +76,7 @@ jobs:
                           z=s(z)
                           if z: out.append(z)
               return list(dict.fromkeys(out))
-          counts=collections.Counter()
-          best={}
+          counts=collections.Counter(); best={}
           for r in rows:
               if not isinstance(r,dict): continue
               c=cat(r)
@@ -89,12 +84,10 @@ jobs:
               counts[c]+=1
               imgs=images(r)
               if not imgs: continue
-              score=(4 if stock(r)>0 else 0)+(2 if price(r)>0 else 0)+3+1
+              score=(4 if stock(r)>0 else 0)+(2 if price(r)>0 else 0)+3+(1 if sku(r) else 0)
               if c not in best or score>best[c][0]: best[c]=(score,sku(r),name(r),imgs[0],len(imgs))
           print('=== TOP CATEGORIES ===')
-          for c,n in counts.most_common(12):
-              b=best.get(c)
-              print(f'{c} | count={n} | best={b}')
+          for c,n in counts.most_common(15): print(f'{c} | count={n} | best={best.get(c)}')
           PY
           EOF
       - name: Cleanup
