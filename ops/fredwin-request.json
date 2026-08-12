@@ -1,5 +1,5 @@
 {
   "action": "install_mcp_startup",
-  "requested_at": "2026-08-12T18:11:00-03:00",
-  "reason": "Create BAT and Windows logon task to start Fred-Win MCP and reverse tunnel automatically"
+  "requested_at": "2026-08-12T18:16:00-03:00",
+  "reason": "Retry BAT and Windows logon task installation after fixing shell escaping"
 }
