@@ -1,16 +1,14 @@
-name: Deploy and validate storefront restoration
+name: Restore and validate storefront product images
 on:
   push:
     branches: [main]
     paths:
       - '.github/workflows/storefront-image-recovery-fast.yml'
-      - 'index.php'
-      - 'js/category-real-images-v52.js'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  validate:
+  restore:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -21,55 +19,97 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Deploy latest main and validate storefront
+      - name: Restore missing featured product images and validate
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           BASE=/home/ubuntu/shopvivaliz-deploy
-          REPO="$BASE/repo"
+          SHARED="$BASE/shared/uploads"
+          CSV="$SHARED/olist_imagens_site_mapeamento.csv"
+          test -r "$CSV"
+          mkdir -p "$SHARED/olist"
 
-          # Toda reconciliacao Git + deploy fica sob o mesmo lock. O clone local
-          # ja apresentou remote-tracking ref stale; recriar somente origin/main
-          # e seguro porque e uma referencia descartavel do remoto, nao altera main.
-          flock -w 240 /var/lock/shopvivaliz-deploy.lock bash -c '
-            set -euo pipefail
-            REPO="/home/ubuntu/shopvivaliz-deploy/repo"
-            cd "$REPO"
-            rm -f .git/refs/remotes/origin/main.lock
-            git update-ref -d refs/remotes/origin/main || true
-            git fetch --prune origin +refs/heads/main:refs/remotes/origin/main
-            "$REPO/scripts/deploy-production.sh"
-          '
+          python3 - "$CSV" "$SHARED" "$BASE" <<'PY'
+          import csv, os, shutil, sys, urllib.request
+          csv_path, shared, base = sys.argv[1:]
+          wanted = {
+              '13705E':'001-1ca06570a157.jpg',
+              'RODOVED100':'001-13f588b30ccf.jpg',
+              'JFQFCQ67':'001-f4b99922dc98.jpg',
+              'JVCDB34':'001-4e9519a44158.jpg',
+              'JVAQAC44':'001-85db1dde1ad3.jpg',
+              'JFQFAC67':'001-8e87d5c98149.jpg',
+              'FLOREIRA-FLAT77':'001-4e238ff2df09.jpg',
+              'JFQFAC57':'001-5a53f1176382.jpg',
+          }
+          rows={}
+          with open(csv_path,newline='',encoding='utf-8-sig') as f:
+              for r in csv.DictReader(f):
+                  sku=(r.get('sku') or '').strip()
+                  if sku in wanted and sku not in rows:
+                      rows[sku]=r
+          release_root=os.path.join(base,'releases')
+          releases=[]
+          try:
+              releases=sorted((os.path.join(release_root,n) for n in os.listdir(release_root)), reverse=True)
+          except FileNotFoundError:
+              pass
+          roots=['/home/ubuntu/shopvivaliz-preview-20260810'] + releases + [os.path.join(base,'repo')]
+          failures=[]
+          for sku,filename in wanted.items():
+              dest=os.path.join(shared,'olist',sku,filename)
+              os.makedirs(os.path.dirname(dest),exist_ok=True)
+              if os.path.isfile(dest) and os.path.getsize(dest)>0:
+                  print(f'PRESENT sku={sku} bytes={os.path.getsize(dest)}')
+                  continue
+              source=None
+              for root in roots:
+                  p=os.path.join(root,'uploads','olist',sku,filename)
+                  if os.path.isfile(p) and os.path.getsize(p)>0:
+                      source=p; break
+              if source:
+                  shutil.copy2(source,dest)
+                  print(f'COPIED sku={sku} source={source} bytes={os.path.getsize(dest)}')
+                  continue
+              row=rows.get(sku,{})
+              url=(row.get('original_url_olist') or '').strip()
+              if not url:
+                  failures.append((sku,'no historical file and no original_url_olist'))
+                  continue
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0'})
+                  with urllib.request.urlopen(req,timeout=25) as resp, open(dest,'wb') as out:
+                      shutil.copyfileobj(resp,out)
+                  if os.path.getsize(dest)<=0:
+                      raise RuntimeError('empty download')
+                  print(f'DOWNLOADED sku={sku} bytes={os.path.getsize(dest)}')
+              except Exception as e:
+                  try: os.remove(dest)
+                  except FileNotFoundError: pass
+                  failures.append((sku,type(e).__name__+': '+str(e)[:160]))
+          if failures:
+              for sku,msg in failures: print(f'FAILED sku={sku} reason={msg}')
+              raise SystemExit(2)
+          PY
 
           html=$(mktemp)
           curl -sS --max-time 30 -H 'Host: shopvivaliz.com.br' http://127.0.0.1/ > "$html"
-          categories=$(grep -o 'category-slide-img' "$html" | wc -l)
-          cards=$(grep -o 'class="product-card' "$html" | wc -l)
-          pimgs=$(grep -o 'class="product-image"' "$html" | wc -l)
-          curated=$(grep -o '/public/assets/category-images/cat-[^"? ]*\.jpg' "$html" | sort -u | wc -l)
-
           echo "current=$(basename "$(readlink -f "$BASE/current")")"
-          echo "category_images=$categories"
-          echo "curated_category_assets=$curated"
-          echo "product_cards=$cards"
-          echo "product_images=$pimgs"
           echo "uploads_link=$(readlink -f "$BASE/current/uploads")"
-          echo "mapping_rows=$(wc -l < "$BASE/shared/uploads/olist_imagens_site_mapeamento.csv")"
-          echo '=== category sources ==='
-          grep -o '/public/assets/category-images/cat-[^"? ]*\.jpg' "$html" | sort -u || true
+          echo "mapping_rows=$(wc -l < "$CSV")"
+          echo "category_images=$(grep -o 'category-slide-img' "$html" | wc -l)"
+          echo "product_cards=$(grep -o 'class=\"product-card' "$html" | wc -l)"
+          echo "product_images=$(grep -o 'class=\"product-image\"' "$html" | wc -l)"
 
           python3 - "$html" <<'PY'
           import re,sys,subprocess
           s=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
-          cards=re.findall(r'<article class="product-card.*?</article>',s,re.S)
-          urls=[]
-          for i,c in enumerate(cards[:8],1):
-              sku=re.search(r'data-sku="([^"]*)"',c)
-              img=re.search(r'<img[^>]+src="([^"]+)"[^>]*>',c,re.S)
-              u=img.group(1) if img else ''
-              print(f'{i}: sku={(sku.group(1) if sku else "")} src={u or "MISSING"}')
-              if u: urls.append(u)
-          for u in urls[:3]:
+          cards=re.findall(r'<article class="product-card.*?</article>',s,re.S)[:8]
+          bad=[]
+          for i,c in enumerate(cards,1):
+              sku=(re.search(r'data-sku="([^"]*)"',c) or [None,''])[1]
+              m=re.search(r'<img[^>]+src="([^"]+)"[^>]*>',c,re.S)
+              u=m.group(1) if m else ''
               target=u
               if u.startswith('https://shopvivaliz.com.br/'):
                   target='http://127.0.0.1/'+u.split('https://shopvivaliz.com.br/',1)[1]
@@ -78,19 +118,17 @@ jobs:
               cmd=['curl','-sS','-o','/dev/null','-w','%{http_code}','--max-time','15']
               if target.startswith('http://127.0.0.1'):
                   cmd += ['-H','Host: shopvivaliz.com.br']
-              try:
-                  code=subprocess.check_output(cmd+[target],text=True).strip()
-              except Exception:
-                  code='ERR'
-              print(f'image_http={code} url={u}')
+              try: code=subprocess.check_output(cmd+[target],text=True).strip()
+              except Exception: code='ERR'
+              print(f'{i}: sku={sku} http={code} src={u}')
+              if code!='200': bad.append((sku,code,u))
+          if len(cards)<8: raise SystemExit('expected 8 featured cards')
+          if bad: raise SystemExit('featured image validation failed: '+repr(bad))
           PY
 
-          test "$categories" -ge 5
-          test "$curated" -ge 3
-          test "$cards" -gt 0
-          test "$pimgs" -gt 0
-          test "$(readlink -f "$BASE/current/uploads")" = "$BASE/shared/uploads"
+          test "$(readlink -f "$BASE/current/uploads")" = "$SHARED"
           echo "email_worker=$(systemctl is-active mei-mg-email-worker.service || true)"
+          test "$(systemctl is-active mei-mg-email-worker.service || true)" = active
           rm -f "$html"
           EOF
       - name: Cleanup
