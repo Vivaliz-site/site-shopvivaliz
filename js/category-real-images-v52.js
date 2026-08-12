@@ -6,6 +6,16 @@
     return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');
   }
 
+  function hasValidRenderedImage(wrapper){
+    if(!wrapper)return false;
+    var current=wrapper.querySelector('img');
+    if(!current)return false;
+    var src=String(current.getAttribute('src')||'').trim();
+    if(!src)return false;
+    var lower=src.toLowerCase();
+    return lower.indexOf('placeholder')===-1 && lower.indexOf('logo-vivaliz')===-1;
+  }
+
   function removePlaceholders(){
     cards.forEach(function(card){
       var icon=card.querySelector('.category-slide-icon');
@@ -19,6 +29,16 @@
     cards.forEach(function(card){
       var title=card.querySelector('strong');
       var wrapper=card.querySelector('.category-slide-image-wrapper');
+
+      // A home ja renderiza no servidor os assets curados para os grupos
+      // principais (mesmo comportamento da referencia de 10/08/2026).
+      // Nunca substituir uma imagem valida ja presente por uma escolha
+      // dinamica do runtime, pois isso fazia as categorias mudarem apos deploy.
+      if(hasValidRenderedImage(wrapper)){
+        card.classList.add('has-real-image');
+        return;
+      }
+
       var row=title?byCategory[normalize(title.textContent)]:null;
       if(!title||!wrapper||!row||!row.image_url){return;}
       var image=document.createElement('img');
