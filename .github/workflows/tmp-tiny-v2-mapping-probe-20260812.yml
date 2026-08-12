@@ -1,0 +1,152 @@
+name: Temporary Tiny v2 Mapping Probe 2026-08-12
+
+on:
+  push:
+    branches:
+      - ops/tiny-v2-mapping-cleanup-20260812
+    paths:
+      - .github/workflows/tmp-tiny-v2-mapping-probe-20260812.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure verified Oracle SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key"
+          test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Probe Tiny v2 token and mapping endpoint; refresh Melhor Envio
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          current='/home/ubuntu/shopvivaliz-deploy/current'
+          env_file='/home/ubuntu/shopvivaliz-deploy/shared/.env'
+          test -r "$env_file"
+          test -r "$current/includes/melhorenvio-oauth.php"
+
+          python3 - "$env_file" <<'PY'
+          import json, sys, urllib.parse, urllib.request, urllib.error
+          from pathlib import Path
+
+          env = {}
+          for raw in Path(sys.argv[1]).read_text(encoding='utf-8-sig').splitlines():
+              line = raw.strip()
+              if not line or line.startswith('#') or '=' not in line:
+                  continue
+              if line.startswith('export '):
+                  line = line[7:].strip()
+              key, value = line.split('=', 1)
+              env[key.strip()] = value.strip().strip('"').strip("'")
+
+          candidates = ['TINY_API_TOKEN', 'TINY_TOKEN', 'TOKEN_API_OLIST', 'TINY_API_KEY']
+          valid = None
+          product_id = '342906294'
+          target_mapping = '11502840'
+          for name in candidates:
+              token = env.get(name, '').strip()
+              if not token:
+                  continue
+              body = urllib.parse.urlencode({'token': token, 'id': product_id, 'formato': 'json'}).encode()
+              req = urllib.request.Request('https://api.tiny.com.br/api2/produto.obter.php', data=body, method='POST')
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as resp:
+                      payload = json.loads(resp.read().decode('utf-8'))
+              except Exception as exc:
+                  print(f'tiny_v2_candidate={name} transport={type(exc).__name__}')
+                  continue
+              retorno = payload.get('retorno', {}) if isinstance(payload, dict) else {}
+              status = str(retorno.get('status') or '')
+              print(f'tiny_v2_candidate={name} status={status}')
+              if status == 'OK':
+                  valid = (name, token, retorno)
+                  break
+
+          if valid is None:
+              raise SystemExit('no_valid_tiny_v2_token_found')
+
+          name, token, retorno = valid
+          produto = retorno.get('produto', {}) if isinstance(retorno, dict) else {}
+          mappings = produto.get('mapeamentos', []) if isinstance(produto, dict) else []
+          flat = []
+          if isinstance(mappings, list):
+              for item in mappings:
+                  if isinstance(item, dict):
+                      m = item.get('mapeamento', item)
+                      if isinstance(m, dict):
+                          flat.append(m)
+          target_present = any(str(m.get('idMapeamento') or '') == target_mapping for m in flat)
+          print(f'tiny_v2_token_key={name}')
+          print(f'product_mapping_count={len(flat)}')
+          print(f'target_mapping_present={str(target_present).lower()}')
+
+          probe = urllib.parse.urlencode({'token': token, 'idProduto': product_id, 'idMapeamento': '0', 'formato': 'json'}).encode()
+          req = urllib.request.Request('https://api.tiny.com.br/api2/produto.excluir.mapeamento.php', data=probe, method='POST')
+          try:
+              with urllib.request.urlopen(req, timeout=20) as resp:
+                  raw = resp.read().decode('utf-8', errors='replace')
+                  code = resp.status
+          except urllib.error.HTTPError as exc:
+              code = exc.code
+              raw = exc.read().decode('utf-8', errors='replace')
+          except Exception as exc:
+              raise SystemExit(f'mapping_endpoint_transport_error={type(exc).__name__}')
+          print(f'mapping_endpoint_http={code}')
+          try:
+              payload = json.loads(raw)
+              retorno = payload.get('retorno', {}) if isinstance(payload, dict) else {}
+              print('mapping_endpoint_status=' + str(retorno.get('status') or ''))
+              print('mapping_endpoint_codigo_erro=' + str(retorno.get('codigo_erro') or ''))
+              erros = retorno.get('erros', []) if isinstance(retorno, dict) else []
+              if isinstance(erros, list) and erros:
+                  first = erros[0]
+                  if isinstance(first, dict):
+                      print('mapping_endpoint_error=' + str(first.get('erro') or '')[:180].replace('\n', ' '))
+          except Exception:
+              print('mapping_endpoint_json=false')
+              print('mapping_endpoint_body_prefix=' + raw[:120].replace('\n', ' '))
+          PY
+
+          cd "$current"
+          php -d display_errors=0 <<'PHP'
+          <?php
+          declare(strict_types=1);
+          require __DIR__ . '/includes/melhorenvio-oauth.php';
+          $before = me_read_tokens();
+          echo 'me_token_file=' . (is_array($before) ? 'present' : 'missing') . PHP_EOL;
+          if (!is_array($before)) {
+              exit(0);
+          }
+          echo 'me_token_host=' . (string)($before['_token_host'] ?? me_environment()) . PHP_EOL;
+          echo 'me_has_refresh=' . (!empty($before['refresh_token']) ? 'true' : 'false') . PHP_EOL;
+          echo 'me_expires_at=' . (int)($before['expires_at'] ?? 0) . PHP_EOL;
+          $after = me_refresh_if_needed(true);
+          echo 'me_refresh_has_access=' . (is_array($after) && !empty($after['access_token']) ? 'true' : 'false') . PHP_EOL;
+          echo 'me_refresh_error=' . (string)($after['_refresh_error'] ?? '') . PHP_EOL;
+          echo 'me_refresh_status=' . (int)($after['_refresh_status'] ?? 0) . PHP_EOL;
+          PHP
+          REMOTE
+
+      - name: Cleanup SSH
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
