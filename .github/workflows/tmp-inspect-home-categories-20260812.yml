@@ -26,19 +26,10 @@ jobs:
           python3 - "$SNAP" <<'PY'
           import json,sys,collections
           d=json.load(open(sys.argv[1],encoding='utf-8'))
-          candidates=[]
-          def walk(x,path='root'):
-              if isinstance(x,list):
-                  if x and sum(isinstance(i,dict) for i in x) >= max(1,len(x)//2): candidates.append((len(x),path,x))
-                  for i,v in enumerate(x[:3]): walk(v,f'{path}[{i}]')
-              elif isinstance(x,dict):
-                  for k,v in x.items(): walk(v,f'{path}.{k}')
-          walk(d)
-          candidates.sort(key=lambda t:t[0],reverse=True)
-          print('candidate_lists=',[(n,p) for n,p,_ in candidates[:10]])
-          rows=candidates[0][2] if candidates else []
+          raw=d.get('itens',[]) if isinstance(d,dict) else d
+          rows=list(raw.values()) if isinstance(raw,dict) else raw if isinstance(raw,list) else []
           print('rows=',len(rows))
-          if rows and isinstance(rows[0],dict): print('sample_keys=',list(rows[0])[:60])
+          if rows and isinstance(rows[0],dict): print('sample_keys=',list(rows[0])[:70])
           def s(v): return '' if v is None else str(v).strip()
           def cat(r):
               v=r.get('categoria')
@@ -86,7 +77,7 @@ jobs:
               if not imgs: continue
               score=(4 if stock(r)>0 else 0)+(2 if price(r)>0 else 0)+3+(1 if sku(r) else 0)
               if c not in best or score>best[c][0]: best[c]=(score,sku(r),name(r),imgs[0],len(imgs))
-          print('=== TOP CATEGORIES ===')
+          print('=== TOP CATEGORIES HISTORICAL ===')
           for c,n in counts.most_common(15): print(f'{c} | count={n} | best={best.get(c)}')
           PY
           EOF
