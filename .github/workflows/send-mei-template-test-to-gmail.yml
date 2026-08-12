@@ -1,4 +1,4 @@
-name: Inspect M365 framework logic
+name: Inspect M365 automation main
 on:
   push:
     branches: [main]
@@ -7,9 +7,9 @@ on:
 permissions:
   contents: read
 jobs:
-  inspect-m365-code:
+  inspect-main:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 4
     steps:
       - name: Configure VM key
         env:
@@ -18,20 +18,9 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Inspect relevant code only
+      - name: Inspect automation tail
         run: |
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
-          set -euo pipefail
-          cd /opt/m365
-          echo '=== CONFIG CLASS ==='
-          sed -n '1,220p' python/m365_config.py
-          echo '=== AUTOMATION INIT/RUN ==='
-          grep -n -E 'M365Config|def main|def run|__main__|check_restriction|remove_restriction' python/automation.py || true
-          sed -n '1,260p' python/automation.py
-          echo '=== EXCHANGE RESTRICTION LOGIC ==='
-          grep -n -E 'BlockedConnector|restriction|restricted|PowerShell|Connect-Exchange' python/exchange_client.py || true
-          sed -n '1,320p' python/exchange_client.py
-          EOF
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "sed -n '260,370p' /opt/m365/python/automation.py"
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey
