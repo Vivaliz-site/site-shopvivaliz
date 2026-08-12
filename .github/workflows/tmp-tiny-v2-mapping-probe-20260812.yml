@@ -33,7 +33,7 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Probe Tiny v2 token and mapping endpoint; refresh Melhor Envio
+      - name: Probe runtime tokens and refresh Melhor Envio
         shell: bash
         run: |
           set -euo pipefail
@@ -45,7 +45,7 @@ jobs:
           test -r "$current/includes/melhorenvio-oauth.php"
 
           python3 - "$env_file" <<'PY'
-          import json, sys, urllib.parse, urllib.request, urllib.error
+          import json, sys, urllib.parse, urllib.request
           from pathlib import Path
 
           env = {}
@@ -59,71 +59,25 @@ jobs:
               env[key.strip()] = value.strip().strip('"').strip("'")
 
           candidates = ['TINY_API_TOKEN', 'TINY_TOKEN', 'TOKEN_API_OLIST', 'TINY_API_KEY']
-          valid = None
-          product_id = '342906294'
-          target_mapping = '11502840'
+          found = False
           for name in candidates:
               token = env.get(name, '').strip()
               if not token:
+                  print(f'tiny_v2_candidate_{name}=missing')
                   continue
-              body = urllib.parse.urlencode({'token': token, 'id': product_id, 'formato': 'json'}).encode()
+              body = urllib.parse.urlencode({'token': token, 'id': '342906294', 'formato': 'json'}).encode()
               req = urllib.request.Request('https://api.tiny.com.br/api2/produto.obter.php', data=body, method='POST')
               try:
                   with urllib.request.urlopen(req, timeout=20) as resp:
                       payload = json.loads(resp.read().decode('utf-8'))
+                  retorno = payload.get('retorno', {}) if isinstance(payload, dict) else {}
+                  status = str(retorno.get('status') or '')
+                  print(f'tiny_v2_candidate_{name}_status={status}')
+                  if status == 'OK':
+                      found = True
               except Exception as exc:
-                  print(f'tiny_v2_candidate={name} transport={type(exc).__name__}')
-                  continue
-              retorno = payload.get('retorno', {}) if isinstance(payload, dict) else {}
-              status = str(retorno.get('status') or '')
-              print(f'tiny_v2_candidate={name} status={status}')
-              if status == 'OK':
-                  valid = (name, token, retorno)
-                  break
-
-          if valid is None:
-              raise SystemExit('no_valid_tiny_v2_token_found')
-
-          name, token, retorno = valid
-          produto = retorno.get('produto', {}) if isinstance(retorno, dict) else {}
-          mappings = produto.get('mapeamentos', []) if isinstance(produto, dict) else []
-          flat = []
-          if isinstance(mappings, list):
-              for item in mappings:
-                  if isinstance(item, dict):
-                      m = item.get('mapeamento', item)
-                      if isinstance(m, dict):
-                          flat.append(m)
-          target_present = any(str(m.get('idMapeamento') or '') == target_mapping for m in flat)
-          print(f'tiny_v2_token_key={name}')
-          print(f'product_mapping_count={len(flat)}')
-          print(f'target_mapping_present={str(target_present).lower()}')
-
-          probe = urllib.parse.urlencode({'token': token, 'idProduto': product_id, 'idMapeamento': '0', 'formato': 'json'}).encode()
-          req = urllib.request.Request('https://api.tiny.com.br/api2/produto.excluir.mapeamento.php', data=probe, method='POST')
-          try:
-              with urllib.request.urlopen(req, timeout=20) as resp:
-                  raw = resp.read().decode('utf-8', errors='replace')
-                  code = resp.status
-          except urllib.error.HTTPError as exc:
-              code = exc.code
-              raw = exc.read().decode('utf-8', errors='replace')
-          except Exception as exc:
-              raise SystemExit(f'mapping_endpoint_transport_error={type(exc).__name__}')
-          print(f'mapping_endpoint_http={code}')
-          try:
-              payload = json.loads(raw)
-              retorno = payload.get('retorno', {}) if isinstance(payload, dict) else {}
-              print('mapping_endpoint_status=' + str(retorno.get('status') or ''))
-              print('mapping_endpoint_codigo_erro=' + str(retorno.get('codigo_erro') or ''))
-              erros = retorno.get('erros', []) if isinstance(retorno, dict) else []
-              if isinstance(erros, list) and erros:
-                  first = erros[0]
-                  if isinstance(first, dict):
-                      print('mapping_endpoint_error=' + str(first.get('erro') or '')[:180].replace('\n', ' '))
-          except Exception:
-              print('mapping_endpoint_json=false')
-              print('mapping_endpoint_body_prefix=' + raw[:120].replace('\n', ' '))
+                  print(f'tiny_v2_candidate_{name}_transport={type(exc).__name__}')
+          print('tiny_v2_valid=' + ('true' if found else 'false'))
           PY
 
           cd "$current"
@@ -133,16 +87,18 @@ jobs:
           require __DIR__ . '/includes/melhorenvio-oauth.php';
           $before = me_read_tokens();
           echo 'me_token_file=' . (is_array($before) ? 'present' : 'missing') . PHP_EOL;
-          if (!is_array($before)) {
-              exit(0);
+          if (is_array($before)) {
+              echo 'me_token_host=' . (string)($before['_token_host'] ?? me_environment()) . PHP_EOL;
+              echo 'me_has_refresh=' . (!empty($before['refresh_token']) ? 'true' : 'false') . PHP_EOL;
+              echo 'me_saved_at=' . (string)($before['saved_at'] ?? '') . PHP_EOL;
+              echo 'me_expires_at=' . (int)($before['expires_at'] ?? 0) . PHP_EOL;
+              $after = me_refresh_if_needed(true);
+              echo 'me_refresh_has_access=' . (is_array($after) && !empty($after['access_token']) ? 'true' : 'false') . PHP_EOL;
+              echo 'me_refresh_error=' . (string)($after['_refresh_error'] ?? '') . PHP_EOL;
+              echo 'me_refresh_status=' . (int)($after['_refresh_status'] ?? 0) . PHP_EOL;
           }
-          echo 'me_token_host=' . (string)($before['_token_host'] ?? me_environment()) . PHP_EOL;
-          echo 'me_has_refresh=' . (!empty($before['refresh_token']) ? 'true' : 'false') . PHP_EOL;
-          echo 'me_expires_at=' . (int)($before['expires_at'] ?? 0) . PHP_EOL;
-          $after = me_refresh_if_needed(true);
-          echo 'me_refresh_has_access=' . (is_array($after) && !empty($after['access_token']) ? 'true' : 'false') . PHP_EOL;
-          echo 'me_refresh_error=' . (string)($after['_refresh_error'] ?? '') . PHP_EOL;
-          echo 'me_refresh_status=' . (int)($after['_refresh_status'] ?? 0) . PHP_EOL;
+          $static = me_oauth_env('MELHORENVIO_ACCESS_TOKEN', 'SHOPVIVALIZ_MELHORENVIO_ACCESS_TOKEN', 'MELHORENVIO_API_KEY');
+          echo 'me_static_fallback_present=' . ($static !== '' ? 'true' : 'false') . PHP_EOL;
           PHP
           REMOTE
 
