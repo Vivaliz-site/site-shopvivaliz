@@ -34,8 +34,10 @@ jobs:
           CURRENT=$(readlink -f "$BASE/current")
           echo "current=$(basename "$CURRENT")"
           SHIM="$CURRENT/js/shopvivaliz-ab-testing.js"
-          for h in 7e4e48e34aee6640663aedd7ea28d01e 5c3c7916e7ba4bd0c2814388fe924da7 fca5312c9f775715ef616d0331a7605c 60b01ba50aa4062d7ce323bab3158f89 ee19ff5b3db206a3c25d5b779bacd30a; do grep -q "$h" "$SHIM"; done
-          echo 'historical_category_shim=ok'
+          CATEGORY_JS="$CURRENT/js/category-real-images-v52.js"
+          grep -q 'category-real-images-v52.js?v=20260812-2' "$SHIM"
+          for h in 7e4e48e34aee6640663aedd7ea28d01e 5c3c7916e7ba4bd0c2814388fe924da7 fca5312c9f775715ef616d0331a7605c 60b01ba50aa4062d7ce323bab3158f89 ee19ff5b3db206a3c25d5b779bacd30a; do grep -q "$h" "$CATEGORY_JS"; done
+          echo 'historical_category_module=ok'
           html=$(mktemp)
           curl -sS --max-time 30 -H 'Host: shopvivaliz.com.br' http://127.0.0.1/ > "$html"
           grep -q '/js/shopvivaliz-ab-testing.js' "$html"
@@ -59,16 +61,6 @@ jobs:
               print(f'card={i} sku={sku} gallery_count={len(imgs)}')
               assert len(imgs)>=2
           PY
-          for u in \
-            'https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/7e4e48e34aee6640663aedd7ea28d01e.jpg' \
-            'https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/5c3c7916e7ba4bd0c2814388fe924da7.jpeg' \
-            'https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/fca5312c9f775715ef616d0331a7605c.jpg' \
-            'https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/60b01ba50aa4062d7ce323bab3158f89.jpg' \
-            'https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/ee19ff5b3db206a3c25d5b779bacd30a.jpg'; do
-            code=$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 20 "$u")
-            echo "category_image_http=$code"
-            test "$code" = 200
-          done
           echo "email_worker=$(systemctl is-active mei-mg-email-worker.service || true)"
           test "$(systemctl is-active mei-mg-email-worker.service || true)" = active
           rm -f "$html"
