@@ -1,4 +1,4 @@
-name: Inspect M365 automation main
+name: Diagnose Liz Gemini production
 on:
   push:
     branches: [main]
@@ -7,9 +7,9 @@ on:
 permissions:
   contents: read
 jobs:
-  inspect-main:
+  diagnose-liz:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 5
     steps:
       - name: Configure VM key
         env:
@@ -18,9 +18,25 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Inspect automation tail
+      - name: Diagnose Liz without exposing secrets
         run: |
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "sed -n '260,370p' /opt/m365/python/automation.py"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          BASE=/home/ubuntu/shopvivaliz-deploy
+          echo "current=$(readlink -f "$BASE/current")"
+          echo "liz_file=$(test -f "$BASE/current/api/liz-general.php" && echo yes || echo no)"
+          for f in "$BASE/shared/.env.local" "$BASE/shared/.env" "$BASE/current/.env.local" "$BASE/current/.env"; do
+            if [ -r "$f" ]; then
+              echo "ENVFILE:$f"
+              awk -F= '/^(GEMINI_API_KEY|GOOGLE_GEMINI_API_KEY|GEMINI_MODEL|GOOGLE_GEMINI_MODEL)=/{v=substr($0,index($0,"=")+1); gsub(/^[[:space:]]+|[[:space:]]+$/,"",v); printf "%s=%s len=%d\n",$1,(length(v)>0?"SET":"EMPTY"),length(v)}' "$f"
+            fi
+          done
+          echo '=== local endpoint smoke ==='
+          curl -sS --max-time 35 -H 'Host: shopvivaliz.com.br' -H 'Content-Type: application/json' -d '{"message":"Responda apenas OK"}' http://127.0.0.1/api/liz-general.php | head -c 1000
+          echo
+          echo '=== apache/php recent Liz errors ==='
+          sudo tail -n 300 /var/log/apache2/error.log 2>/dev/null | grep -Ei 'liz|gemini|generative|api.?key|curl' | tail -n 40 || true
+          EOF
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey
