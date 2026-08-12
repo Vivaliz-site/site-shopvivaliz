@@ -1,4 +1,4 @@
-name: Inspect Liz Gemini API failure
+name: Deploy and validate Liz Gemini fix
 on:
   push:
     branches: [main]
@@ -7,9 +7,9 @@ on:
 permissions:
   contents: read
 jobs:
-  inspect-gemini:
+  deploy-liz:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 7
     steps:
       - name: Configure VM key
         env:
@@ -18,33 +18,21 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Query Gemini and print sanitized error
+      - name: Deploy through immutable release flow and test Liz
         run: |
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
-          ENV=/home/ubuntu/shopvivaliz-deploy/shared/.env
-          key=$(awk -F= '$1=="GEMINI_API_KEY"{print substr($0,index($0,"=")+1); exit}' "$ENV")
-          model=$(awk -F= '$1=="GEMINI_MODEL"{print substr($0,index($0,"=")+1); exit}' "$ENV")
-          key=${key%\"}; key=${key#\"}; key=${key%\'}; key=${key#\'}
-          model=${model%\"}; model=${model#\"}; model=${model%\'}; model=${model#\'}
-          tmp=$(mktemp)
-          code=$(curl -sS -o "$tmp" -w '%{http_code}' --max-time 30 -H 'Content-Type: application/json' -H "x-goog-api-key: $key" -d '{"contents":[{"parts":[{"text":"Responda apenas OK"}]}]}' "https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent" || true)
-          echo "HTTP=$code MODEL=$model"
-          python3 - "$tmp" <<'PY'
-          import json,sys
-          try:
-              d=json.load(open(sys.argv[1]))
-              e=d.get('error',{})
-              print('error_code=', e.get('code'))
-              print('error_status=', e.get('status'))
-              print('error_message=', str(e.get('message',''))[:800])
-              if not e:
-                  text=d.get('candidates',[{}])[0].get('content',{}).get('parts',[{}])[0].get('text','')
-                  print('answer=',text[:200])
-          except Exception as ex:
-              print('parse_error=',type(ex).__name__)
-          PY
-          rm -f "$tmp"
+          BASE=/home/ubuntu/shopvivaliz-deploy
+          cd "$BASE/repo"
+          git fetch --prune origin main
+          echo "origin_main=$(git rev-parse --short origin/main)"
+          flock -w 120 /var/lock/shopvivaliz-deploy.lock "$BASE/repo/scripts/deploy-production.sh"
+          echo "current=$(basename "$(readlink -f "$BASE/current")")"
+          php -l "$BASE/current/api/liz-general.php"
+          echo '=== Liz smoke ==='
+          response=$(curl -sS --max-time 40 -H 'Host: shopvivaliz.com.br' -H 'Content-Type: application/json' -d '{"message":"Responda somente: Liz funcionando"}' http://127.0.0.1/api/liz-general.php)
+          echo "$response" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("ok=",d.get("ok")); print("provider=",d.get("provider")); print("grounding=",d.get("web_grounding_requested")); print("answer=",str(d.get("answer",d.get("error","")))[:300]); raise SystemExit(0 if d.get("ok") else 1)'
+          echo "email_worker=$(systemctl is-active mei-mg-email-worker.service || true)"
           EOF
       - name: Cleanup
         if: always()
