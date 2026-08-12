@@ -87,9 +87,15 @@ function lizg_request(string $url, string $key, array $payload): array
 }
 
 [$status, $body] = lizg_request($url, $key, $payload);
-// Modelos antigos podem não aceitar Google Search. Mantém a conversa funcionando sem alegar pesquisa web.
-if ($status === 400) {
+$groundingUsed = true;
+
+// Grounding é um recurso opcional. Se ele falhar por modelo, quota, billing,
+// permissão ou indisponibilidade temporária, a Liz ainda deve conseguir conversar.
+// A segunda tentativa não alega pesquisa web e preserva erros de autenticação da
+// chamada básica, que continuam resultando em 503 abaixo.
+if ($status !== 200) {
     unset($payload['tools']);
+    $groundingUsed = false;
     $payload['system_instruction']['parts'][0]['text'] .= "\nA pesquisa web não está disponível nesta execução. Não diga que pesquisou; avise quando uma informação atual não puder ser confirmada.";
     [$status, $body] = lizg_request($url, $key, $payload);
 }
@@ -104,6 +110,7 @@ foreach (is_array($parts) ? $parts : [] as $part) {
 }
 $answer = trim(implode("\n", array_filter($texts)));
 if ($status !== 200 || $answer === '') {
+    error_log('Liz Gemini request failed after fallback; HTTP ' . $status . ', model=' . $model);
     lizg_reply(503, ['ok' => false, 'error' => 'Não consegui pesquisar ou responder agora. Tente novamente em instantes.']);
 }
 
@@ -111,6 +118,6 @@ lizg_reply(200, [
     'ok' => true,
     'answer' => $answer,
     'provider' => 'gemini',
-    'web_grounding_requested' => isset($payload['tools']),
+    'web_grounding_requested' => $groundingUsed,
     'timestamp' => (new DateTimeImmutable('now', new DateTimeZone('America/Sao_Paulo')))->format(DateTime::ATOM),
 ]);
