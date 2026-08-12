@@ -1,4 +1,4 @@
-name: Validate live MEI sending
+name: Inspect M365 deployment on Oracle VM
 on:
   push:
     branches: [main]
@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 jobs:
-  validate-live-send:
+  inspect-m365:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
@@ -18,50 +18,23 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Validate live sending on VM
+      - name: Inspect M365 target
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
-          cd /home/ubuntu/mei-mg-email
-          echo '=== SERVICE ==='
+          echo '=== OPT M365 TREE ==='
+          sudo mkdir -p /opt/m365
+          sudo find /opt/m365 -maxdepth 3 -type f -printf '%p %s bytes\n' | sort || true
+          echo '=== DIRECTORY DETAILS ==='
+          sudo ls -la /opt/m365 || true
+          sudo ls -la /opt/m365/python || true
+          echo '=== PYTHON ==='
+          python3 --version
+          if [ -f /opt/m365/python/requirements.txt ]; then cat /opt/m365/python/requirements.txt; fi
+          echo '=== CONFIG FILE NAMES ONLY ==='
+          sudo find /opt/m365 -maxdepth 2 -type f \( -name '*.env*' -o -name '*.yaml' -o -name '*.yml' \) -printf '%p\n' | sort || true
+          echo '=== EMAIL WORKER ==='
           sudo systemctl is-active mei-mg-email-worker.service
-          echo '=== SNAPSHOT A ==='
-          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
-          from dotenv import load_dotenv
-          load_dotenv('.env', override=True)
-          import json, os, psycopg
-          with psycopg.connect(os.environ['DATABASE_URL']) as conn:
-              with conn.cursor() as cur:
-                  cur.execute("select count(*) from mei_email.envios where status::text in ('submitted','enviado','delivered') and coalesce(enviado_em,criado_em) >= now()-interval '24 hours'")
-                  used=cur.fetchone()[0]
-                  cur.execute("select count(*) from mei_email.envios where status::text in ('pendente','pending')")
-                  pending=cur.fetchone()[0]
-                  cur.execute("select count(*) from mei_email.envios where status::text in ('processando','processing')")
-                  processing=cur.fetchone()[0]
-                  cur.execute("select email,status::text,coalesce(enviado_em,criado_em) from mei_email.envios where status::text in ('submitted','enviado','delivered') order by coalesce(enviado_em,criado_em) desc nulls last limit 5")
-                  recent=[tuple(str(x) for x in row) for row in cur.fetchall()]
-          print(json.dumps({'used_24h':used,'pending':pending,'processing':processing,'recent':recent}, ensure_ascii=False))
-          PY
-          sleep 35
-          echo '=== SNAPSHOT B ==='
-          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
-          from dotenv import load_dotenv
-          load_dotenv('.env', override=True)
-          import json, os, psycopg
-          with psycopg.connect(os.environ['DATABASE_URL']) as conn:
-              with conn.cursor() as cur:
-                  cur.execute("select count(*) from mei_email.envios where status::text in ('submitted','enviado','delivered') and coalesce(enviado_em,criado_em) >= now()-interval '24 hours'")
-                  used=cur.fetchone()[0]
-                  cur.execute("select count(*) from mei_email.envios where status::text in ('pendente','pending')")
-                  pending=cur.fetchone()[0]
-                  cur.execute("select count(*) from mei_email.envios where status::text in ('processando','processing')")
-                  processing=cur.fetchone()[0]
-                  cur.execute("select email,status::text,coalesce(enviado_em,criado_em) from mei_email.envios where status::text in ('submitted','enviado','delivered') order by coalesce(enviado_em,criado_em) desc nulls last limit 5")
-                  recent=[tuple(str(x) for x in row) for row in cur.fetchall()]
-          print(json.dumps({'used_24h':used,'pending':pending,'processing':processing,'recent':recent}, ensure_ascii=False))
-          PY
-          echo '=== JOURNAL ==='
-          sudo journalctl -u mei-mg-email-worker.service --since '-5 minutes' --no-pager | tail -n 100
           EOF
       - name: Cleanup
         if: always()
