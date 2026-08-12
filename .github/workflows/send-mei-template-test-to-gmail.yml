@@ -18,15 +18,17 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Update provider and send one official template test
+      - name: Deploy provider only and send one test
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           cd /home/ubuntu/mei-mg-email
           sudo systemctl stop mei-mg-email-worker.service || true
           git fetch origin main
-          git checkout main
-          git pull --ff-only origin main
+          git show origin/main:app/email_provider.py > /tmp/email_provider.py
+          /home/ubuntu/mei-mg-email/.venv/bin/python -m py_compile /tmp/email_provider.py
+          cp app/email_provider.py /tmp/email_provider.py.before-rfc8058
+          cp /tmp/email_provider.py app/email_provider.py
           /home/ubuntu/mei-mg-email/.venv/bin/python -m py_compile app/email_provider.py
           /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
           import os
@@ -35,17 +37,12 @@ jobs:
           from dotenv import load_dotenv
           load_dotenv('.env', override=True)
           from app.email_provider import MicrosoftGraphEmailProvider
-
           recipient='fredmourao@gmail.com'
           subject='Teste RFC8058 ShopVivaliz'
           template=Path('templates/mei-contabilidade-melo.html').read_text(encoding='utf-8')
           base_url=os.environ['BASE_URL_DESCADASTRO'].rstrip('?')
           unsubscribe_url=f"{base_url}?{urlencode({'email': recipient})}"
-          body=(template
-                .replace('{{nome_fantasia}}','Teste ShopVivaliz')
-                .replace('{{razao_social}}','ShopVivaliz')
-                .replace('{{cnpj}}','')
-                .replace('{{unsubscribe_url}}',unsubscribe_url))
+          body=(template.replace('{{nome_fantasia}}','Teste ShopVivaliz').replace('{{razao_social}}','ShopVivaliz').replace('{{cnpj}}','').replace('{{unsubscribe_url}}',unsubscribe_url))
           result=MicrosoftGraphEmailProvider().send(to=recipient, subject=subject, body=body)
           print(f'success={result.success}')
           print(f'status={getattr(result,"status",None)}')
