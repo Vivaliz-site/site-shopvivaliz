@@ -1,4 +1,4 @@
-name: Restore storefront uploads symlink
+name: Validate storefront persistent uploads
 on:
   push:
     branches: [main]
@@ -6,40 +6,12 @@ on:
       - '.github/workflows/send-mei-template-test-to-gmail.yml'
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 jobs:
-  repair-storefront:
+  validate-storefront:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Persist uploads symlink in deploy script
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('scripts/deploy-production.sh')
-          s = p.read_text(encoding='utf-8')
-          old = 'declare -a SYMLINKS=(\n  ".env"\n  "logs"'
-          new = 'declare -a SYMLINKS=(\n  ".env"\n  "uploads"\n  "logs"'
-          if '  "uploads"\n' not in s:
-              if old not in s:
-                  raise SystemExit('SYMLINKS block not found')
-              s = s.replace(old, new, 1)
-              p.write_text(s, encoding='utf-8')
-          PY
-          if git diff --quiet -- scripts/deploy-production.sh; then
-            echo 'deploy script already contains uploads symlink'
-          else
-            git config user.name 'shopvivaliz-ops-bot'
-            git config user.email 'ops-bot@users.noreply.github.com'
-            git add scripts/deploy-production.sh
-            git commit -m 'fix: persist uploads across immutable releases'
-            git push origin HEAD:main
-          fi
       - name: Configure VM key
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
@@ -47,21 +19,33 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Deploy and validate storefront images
+      - name: Deploy current main and validate storefront images
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           BASE=/home/ubuntu/shopvivaliz-deploy
           cd "$BASE/repo"
           git fetch --prune origin main
+          echo "origin_main=$(git rev-parse --short origin/main)"
+          grep -A8 'declare -a SYMLINKS=(' <(git show origin/main:scripts/deploy-production.sh)
           flock -w 120 /var/lock/shopvivaliz-deploy.lock "$BASE/repo/scripts/deploy-production.sh"
           echo "current=$(basename "$(readlink -f "$BASE/current")")"
-          echo "uploads_link=$(readlink -f "$BASE/current/uploads" 2>/dev/null || true)"
-          test "$(readlink -f "$BASE/current/uploads")" = "$BASE/shared/uploads"
+          resolved_uploads=$(readlink -f "$BASE/current/uploads" 2>/dev/null || true)
+          echo "uploads_link=$resolved_uploads"
+          test "$resolved_uploads" = "$BASE/shared/uploads"
           echo "shared_upload_files=$(find "$BASE/shared/uploads" -type f 2>/dev/null | wc -l)"
-          test -f "$BASE/current/uploads/olist_imagens_site_mapeamento.csv" && echo 'mapping_csv=present' || echo 'mapping_csv=missing'
-          echo '=== homepage image sample ==='
-          curl -sS --max-time 30 -H 'Host: shopvivaliz.com.br' http://127.0.0.1/ | grep -oE '<img[^>]+(category-slide-img|product-card)[^>]*>|<img[^>]+src="[^"]+"[^>]*>' | head -n 25 || true
+          if test -f "$BASE/current/uploads/olist_imagens_site_mapeamento.csv"; then
+            echo 'mapping_csv=present'
+          else
+            echo 'mapping_csv=missing'
+          fi
+          echo '=== homepage category/product image sample ==='
+          html=$(mktemp)
+          curl -sS --max-time 30 -H 'Host: shopvivaliz.com.br' http://127.0.0.1/ > "$html"
+          grep -oE '<img[^>]+class="[^"]*(category-slide-img|product-card)[^"]*"[^>]*>|<img[^>]+src="[^"]+"[^>]*>' "$html" | head -n 40 || true
+          echo "category_images=$(grep -c 'category-slide-img' "$html" || true)"
+          echo "product_cards=$(grep -c 'product-card' "$html" || true)"
+          rm -f "$html"
           echo "email_worker=$(systemctl is-active mei-mg-email-worker.service || true)"
           EOF
       - name: Cleanup
