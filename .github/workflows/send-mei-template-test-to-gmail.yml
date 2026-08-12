@@ -9,7 +9,7 @@ permissions:
 jobs:
   finalize-m365:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 8
     steps:
       - name: Configure VM key
         env:
@@ -20,22 +20,24 @@ jobs:
           chmod 600 ~/.ssh/vmkey
       - name: Finalize and validate M365 automation
         run: |
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=20 -o ServerAliveCountMax=6 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           cd /opt/m365
           echo '=== SECURE FILE PERMISSIONS ==='
           chmod 600 .env shopvivaliz_cert_new.pfx
           chmod 700 python/automation.py
           stat -c '%a %n' .env shopvivaliz_cert_new.pfx python/automation.py
-          echo '=== DEPENDENCIES ==='
-          ./venv/bin/pip install -q -r python/requirements.txt
-          echo 'dependencies_ok=true'
+          echo '=== IMPORT CHECK ==='
+          ./venv/bin/python - <<'PY'
+          import msal, requests, dotenv, yaml, OpenSSL, cryptography
+          print('dependencies_ok=true')
+          PY
           echo '=== COMPILE ==='
           ./venv/bin/python -m py_compile python/m365_auth.py python/graph_client.py python/exchange_client.py python/m365_config.py python/automation.py
           echo 'compile_ok=true'
           echo '=== RUN AUTOMATION ==='
           set +e
-          ./venv/bin/python python/automation.py > /tmp/m365-finalize.out 2>&1
+          timeout 120 ./venv/bin/python python/automation.py > /tmp/m365-finalize.out 2>&1
           rc=$?
           set -e
           sed -E 's/(token|secret|password|private[_ -]?key)([=: ]+)[^ ,;]+/\1\2REDACTED/Ig' /tmp/m365-finalize.out | tail -n 120
