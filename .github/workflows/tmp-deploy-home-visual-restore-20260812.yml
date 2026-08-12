@@ -23,7 +23,6 @@ jobs:
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           BASE=/home/ubuntu/shopvivaliz-deploy
-          REPO="$BASE/repo"
           flock -w 240 /var/lock/shopvivaliz-deploy.lock bash -c '
             set -euo pipefail
             cd /home/ubuntu/shopvivaliz-deploy/repo
@@ -34,29 +33,19 @@ jobs:
           '
           CURRENT=$(readlink -f "$BASE/current")
           echo "current=$(basename "$CURRENT")"
-          grep -q '7e4e48e34aee6640663aedd7ea28d01e.jpg' "$CURRENT/js/category-real-images-v52.js"
-          grep -q '5c3c7916e7ba4bd0c2814388fe924da7.jpeg' "$CURRENT/js/category-real-images-v52.js"
-          grep -q 'fca5312c9f775715ef616d0331a7605c.jpg' "$CURRENT/js/category-real-images-v52.js"
-          grep -q '60b01ba50aa4062d7ce323bab3158f89.jpg' "$CURRENT/js/category-real-images-v52.js"
-          grep -q 'ee19ff5b3db206a3c25d5b779bacd30a.jpg' "$CURRENT/js/category-real-images-v52.js"
-          echo 'historical_category_js=ok'
-          for u in \
-            'https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/7e4e48e34aee6640663aedd7ea28d01e.jpg' \
-            'https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/5c3c7916e7ba4bd0c2814388fe924da7.jpeg' \
-            'https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/fca5312c9f775715ef616d0331a7605c.jpg' \
-            'https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/60b01ba50aa4062d7ce323bab3158f89.jpg' \
-            'https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/ee19ff5b3db206a3c25d5b779bacd30a.jpg'; do
-            code=$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 20 "$u")
-            echo "category_image_http=$code $u"
-            test "$code" = 200
-          done
+          SHIM="$CURRENT/js/shopvivaliz-ab-testing.js"
+          for h in 7e4e48e34aee6640663aedd7ea28d01e 5c3c7916e7ba4bd0c2814388fe924da7 fca5312c9f775715ef616d0331a7605c 60b01ba50aa4062d7ce323bab3158f89 ee19ff5b3db206a3c25d5b779bacd30a; do grep -q "$h" "$SHIM"; done
+          echo 'historical_category_shim=ok'
           html=$(mktemp)
           curl -sS --max-time 30 -H 'Host: shopvivaliz.com.br' http://127.0.0.1/ > "$html"
-          grep -q '/js/category-real-images-v52.js' "$html"
+          grep -q '/js/shopvivaliz-ab-testing.js' "$html"
           grep -q '/js/auto-image-carousel.js' "$html"
           python3 - "$html" <<'PY'
           import html as h,re,json,sys
           s=open(sys.argv[1],encoding='utf-8',errors='ignore').read()
+          categories=re.findall(r'class="category-slide"',s)
+          print('category_cards=',len(categories))
+          assert len(categories)>=5
           cards=re.findall(r'<article class="product-card.*?</article>',s,re.S)[:8]
           print('featured_cards=',len(cards))
           assert len(cards)==8
@@ -70,6 +59,16 @@ jobs:
               print(f'card={i} sku={sku} gallery_count={len(imgs)}')
               assert len(imgs)>=2
           PY
+          for u in \
+            'https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/7e4e48e34aee6640663aedd7ea28d01e.jpg' \
+            'https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/5c3c7916e7ba4bd0c2814388fe924da7.jpeg' \
+            'https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/fca5312c9f775715ef616d0331a7605c.jpg' \
+            'https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/60b01ba50aa4062d7ce323bab3158f89.jpg' \
+            'https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/ee19ff5b3db206a3c25d5b779bacd30a.jpg'; do
+            code=$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 20 "$u")
+            echo "category_image_http=$code"
+            test "$code" = 200
+          done
           echo "email_worker=$(systemctl is-active mei-mg-email-worker.service || true)"
           test "$(systemctl is-active mei-mg-email-worker.service || true)" = active
           rm -f "$html"
