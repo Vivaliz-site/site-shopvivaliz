@@ -1,8 +1,10 @@
-name: Deploy and validate Liz Gemini fix
+name: Deploy Liz Enter-key fix
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/send-mei-template-test-to-gmail.yml']
+    paths:
+      - 'public/assets/liz-assistant/liz-assistant.js'
+      - '.github/workflows/send-mei-template-test-to-gmail.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -18,7 +20,7 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Deploy through immutable release flow and test Liz
+      - name: Deploy through immutable release flow and validate asset
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
@@ -28,10 +30,8 @@ jobs:
           echo "origin_main=$(git rev-parse --short origin/main)"
           flock -w 120 /var/lock/shopvivaliz-deploy.lock "$BASE/repo/scripts/deploy-production.sh"
           echo "current=$(basename "$(readlink -f "$BASE/current")")"
-          php -l "$BASE/current/api/liz-general.php"
-          echo '=== Liz smoke ==='
-          response=$(curl -sS --max-time 40 -H 'Host: shopvivaliz.com.br' -H 'Content-Type: application/json' -d '{"message":"Responda somente: Liz funcionando"}' http://127.0.0.1/api/liz-general.php)
-          echo "$response" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("ok=",d.get("ok")); print("provider=",d.get("provider")); print("grounding=",d.get("web_grounding_requested")); print("answer=",str(d.get("answer",d.get("error","")))[:300]); raise SystemExit(0 if d.get("ok") else 1)'
+          grep -F "Enter dentro da Liz" "$BASE/current/public/assets/liz-assistant/liz-assistant.js"
+          grep -F "stopImmediatePropagation" "$BASE/current/public/assets/liz-assistant/liz-assistant.js"
           echo "email_worker=$(systemctl is-active mei-mg-email-worker.service || true)"
           EOF
       - name: Cleanup
