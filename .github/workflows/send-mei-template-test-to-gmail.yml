@@ -1,4 +1,4 @@
-name: Inspect M365 deployment on Oracle VM
+name: Finalize M365 automation deployment
 on:
   push:
     branches: [main]
@@ -7,9 +7,9 @@ on:
 permissions:
   contents: read
 jobs:
-  inspect-m365:
+  finalize-m365:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 10
     steps:
       - name: Configure VM key
         env:
@@ -18,23 +18,46 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Inspect M365 target
+      - name: Finalize and validate M365 automation
         run: |
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
-          echo '=== OPT M365 TREE ==='
-          sudo mkdir -p /opt/m365
-          sudo find /opt/m365 -maxdepth 3 -type f -printf '%p %s bytes\n' | sort || true
-          echo '=== DIRECTORY DETAILS ==='
-          sudo ls -la /opt/m365 || true
-          sudo ls -la /opt/m365/python || true
-          echo '=== PYTHON ==='
-          python3 --version
-          if [ -f /opt/m365/python/requirements.txt ]; then cat /opt/m365/python/requirements.txt; fi
-          echo '=== CONFIG FILE NAMES ONLY ==='
-          sudo find /opt/m365 -maxdepth 2 -type f \( -name '*.env*' -o -name '*.yaml' -o -name '*.yml' \) -printf '%p\n' | sort || true
+          cd /opt/m365
+          echo '=== SECURE FILE PERMISSIONS ==='
+          chmod 600 .env shopvivaliz_cert_new.pfx
+          chmod 700 python/automation.py
+          stat -c '%a %n' .env shopvivaliz_cert_new.pfx python/automation.py
+          echo '=== DEPENDENCIES ==='
+          ./venv/bin/pip install -q -r python/requirements.txt
+          echo 'dependencies_ok=true'
+          echo '=== COMPILE ==='
+          ./venv/bin/python -m py_compile python/m365_auth.py python/graph_client.py python/exchange_client.py python/m365_config.py python/automation.py
+          echo 'compile_ok=true'
+          echo '=== RUN AUTOMATION ==='
+          set +e
+          ./venv/bin/python python/automation.py > /tmp/m365-finalize.out 2>&1
+          rc=$?
+          set -e
+          sed -E 's/(token|secret|password|private[_ -]?key)([=: ]+)[^ ,;]+/\1\2REDACTED/Ig' /tmp/m365-finalize.out | tail -n 120
+          echo "automation_exit_code=$rc"
+          echo '=== RESULT SUMMARY ==='
+          ./venv/bin/python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('/opt/m365/python/automation_results.json')
+          if not p.exists():
+              raise SystemExit('automation_results_missing')
+          data=json.loads(p.read_text(encoding='utf-8'))
+          def scrub(x):
+              if isinstance(x, dict):
+                  return {k: ('REDACTED' if any(s in k.lower() for s in ('token','secret','password','private_key')) else scrub(v)) for k,v in x.items()}
+              if isinstance(x, list): return [scrub(v) for v in x]
+              return x
+          print(json.dumps(scrub(data), ensure_ascii=False, indent=2))
+          PY
           echo '=== EMAIL WORKER ==='
-          sudo systemctl is-active mei-mg-email-worker.service
+          systemctl is-active mei-mg-email-worker.service
+          echo 'M365_DEPLOY_FINALIZE_DONE'
           EOF
       - name: Cleanup
         if: always()
