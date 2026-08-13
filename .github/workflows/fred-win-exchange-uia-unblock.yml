@@ -1,0 +1,62 @@
+name: Fred-Win Exchange UI unblock
+
+on:
+  push:
+    branches: [ops/inspect-mei-v020-stash]
+    paths:
+      - '.github/workflows/fred-win-exchange-uia-unblock.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  unblock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Configure VM key and stop production worker
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'sudo systemctl stop mei-mg-email-worker.service || true; ! sudo systemctl is-active --quiet mei-mg-email-worker.service'
+
+      - name: Run interactive Exchange recovery through Fred-Win MCP
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > /tmp/body.json
+          import json
+          command = r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $repo='C:\site-shopvivaliz'; $work='C:\Temp\shopvivaliz-exchange-recovery'; New-Item -ItemType Directory -Force -Path $work | Out-Null; Set-Location $repo; git fetch origin ops/inspect-mei-v020-stash; if($LASTEXITCODE -ne 0){throw 'FREDWIN_GIT_FETCH_FAILED'}; cmd /c ('git show origin/ops/inspect-mei-v020-stash:scripts/fredwin-exchange-restricted-sender.py > ' + $work + '\fredwin-exchange-restricted-sender.py'); if($LASTEXITCODE -ne 0){throw 'FREDWIN_SCRIPT_EXPORT_FAILED'}; cmd /c ('git show origin/ops/inspect-mei-v020-stash:scripts/fredwin-exchange-restricted-sender-launch.ps1 > ' + $work + '\fredwin-exchange-restricted-sender-launch.ps1'); if($LASTEXITCODE -ne 0){throw 'FREDWIN_LAUNCHER_EXPORT_FAILED'}; py -3 -c \"import playwright.sync_api; print('PLAYWRIGHT_READY=true')\"; if($LASTEXITCODE -ne 0){throw 'PLAYWRIGHT_NOT_READY'}; $log='C:\site-shopvivaliz\logs\exchange-restricted-sender-unblock.log'; Remove-Item $log -Force -ErrorAction SilentlyContinue; $task='ShopVivalizExchangeRestrictedSender'; $user=(Get-CimInstance Win32_ComputerSystem).UserName; if([string]::IsNullOrWhiteSpace($user)){throw 'NO_INTERACTIVE_USER'}; $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -ExecutionPolicy Bypass -File ' + $work + '\fredwin-exchange-restricted-sender-launch.ps1 -Mode unblock'); $trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1); $principal=New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName $task -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null; Start-ScheduledTask -TaskName $task; $done=$false; for($i=0;$i -lt 300;$i++){Start-Sleep -Seconds 2; if(Test-Path $log){$txt=Get-Content $log -Raw -ErrorAction SilentlyContinue; if($txt -match 'EXCHANGE_UI_(UNBLOCK_CONFIRMED|SENDER_NOT_LISTED|AUTH_REQUIRED|UNBLOCK_UNCONFIRMED|ERROR|TIMEOUT|SELECT_FAILED|UNBLOCK_BUTTON_NOT_FOUND)'){$done=$true;break}}}; if(Test-Path $log){Get-Content $log -Tail 120}else{Write-Output 'EXCHANGE_UI_LOG_MISSING'}; $info=Get-ScheduledTaskInfo -TaskName $task -ErrorAction SilentlyContinue; if($info){Write-Output ('EXCHANGE_UI_TASK_RESULT=' + $info.LastTaskResult)}; Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue; if(-not $done){throw 'EXCHANGE_UI_RESULT_TIMEOUT'}; $final=Get-Content $log -Raw; if($final -notmatch 'EXCHANGE_UI_(UNBLOCK_CONFIRMED|SENDER_NOT_LISTED)'){throw 'EXCHANGE_UI_UNBLOCK_FAILED'}; Write-Output 'EXCHANGE_UI_RECOVERY_OK=true'"'''
+          print(json.dumps({'params': {'command': command, 'timeout': 780}}))
+          PY
+          BODY_B64="$(base64 -w0 /tmp/body.json)"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "BODY_B64='$BODY_B64' python3 - <<'PY'
+          import base64, json, os, urllib.request
+          body = base64.b64decode(os.environ['BODY_B64'])
+          req = urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command', data=body, headers={'Content-Type':'application/json'}, method='POST')
+          with urllib.request.urlopen(req, timeout=820) as response:
+              payload = json.loads(response.read().decode('utf-8'))
+          result = payload.get('result') or {}
+          print(result.get('output') or '')
+          if result.get('error'):
+              print(result.get('error'))
+          if result.get('success') is not True or 'EXCHANGE_UI_RECOVERY_OK=true' not in (result.get('output') or ''):
+              raise SystemExit('FREDWIN_EXCHANGE_UI_RECOVERY_FAILED')
+          PY"
+
+      - name: Verify production worker remains stopped
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 '! sudo systemctl is-active --quiet mei-mg-email-worker.service && echo WORKER_RESUME_ALLOWED=false'
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey /tmp/body.json
