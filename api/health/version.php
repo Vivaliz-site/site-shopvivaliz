@@ -71,14 +71,45 @@ function resolveReleaseSha(string $projectRoot): array
     return [null, 'unknown'];
 }
 
+/**
+ * Release paths are switched atomically behind the stable `current` symlink.
+ * A long-lived web SAPI may still keep bytecode from the previous target in
+ * OPcache. The deployment always probes this endpoint immediately after the
+ * symlink swap, so use that probe to invalidate OPcache once for each new SHA.
+ * The marker lives in /tmp, contains no secret, and prevents routine health
+ * checks from repeatedly flushing the cache.
+ */
+function refreshOpcacheForRelease(?string $sha): bool
+{
+    if ($sha === null || PHP_SAPI === 'cli' || !function_exists('opcache_reset')) {
+        return false;
+    }
+
+    $marker = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
+        . DIRECTORY_SEPARATOR
+        . 'shopvivaliz-opcache-release.sha';
+    $last = is_readable($marker) ? trim((string) @file_get_contents($marker)) : '';
+    if (hash_equals($sha, $last)) {
+        return false;
+    }
+
+    $reset = @opcache_reset();
+    if ($reset) {
+        @file_put_contents($marker, $sha . PHP_EOL, LOCK_EX);
+    }
+    return $reset;
+}
+
 $projectRoot = dirname(__DIR__, 2);
 [$sha, $source] = resolveReleaseSha($projectRoot);
+$opcacheRefreshed = refreshOpcacheForRelease($sha);
 
 $payload = [
     'ok' => $sha !== null,
     'service' => 'shopvivaliz',
     'release_sha' => $sha,
     'release_source' => $source,
+    'opcache_refreshed' => $opcacheRefreshed,
     'checked_at' => gmdate('c'),
 ];
 
