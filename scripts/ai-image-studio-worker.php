@@ -87,6 +87,24 @@ while (true) {
                 $error = trim((string)($row['error'] ?? ''));
                 if ($error !== '') $resultErrors[] = $error;
             }
+            $stagingIds = array_values(array_unique($stagingIds));
+
+            // Correlacao forte: somente as linhas efetivamente retornadas por
+            // esta execucao recebem o job da fila. O endpoint de status usa
+            // source_job_id em vez de uma janela temporal que poderia misturar
+            // regeneracoes simultaneas do mesmo produto/canal.
+            if ($stagingIds !== []) {
+                $placeholders = implode(',', array_fill(0, count($stagingIds), '?'));
+                $stamp = $db->prepare(
+                    "UPDATE product_images_staging SET source_job_id = ?, updated_at = updated_at "
+                    . "WHERE product_id = ? AND id IN ({$placeholders})"
+                );
+                $stamp->execute(array_merge([$jobId, $productId], $stagingIds));
+                if ($stamp->rowCount() < count($stagingIds)) {
+                    throw new RuntimeException('Nao foi possivel correlacionar todos os resultados de staging ao job da fila.');
+                }
+            }
+
             $errorText = $success ? null : (trim((string)($result['error'] ?? '')) ?: implode(' | ', $resultErrors));
             sv_queue_finish($jobId, $success ? 'done' : 'failed', $errorText !== '' ? $errorText : null);
 
