@@ -22,7 +22,7 @@ Campos otimizados aqui: attributes (ficha tecnica) e description. O titulo ideal
 apenas reportado como sugestao para edicao manual, e a categoria sugerida pelo
 domain_discovery tambem e so reportada.
 
-O conteudo e gerado pelo Claude (claude-opus-5) a partir dos dados reais do anuncio
+O conteudo e gerado pelo Claude (ver MODEL / --model) a partir dos dados reais do anuncio
 e validado deterministicamente aqui antes de qualquer PUT: nada e enviado ao ML sem
 passar pelas regras de `validate_*`.
 
