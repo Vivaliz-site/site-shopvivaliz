@@ -32,22 +32,18 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from importlib import import_module
-
-_seo = import_module("ml-seo-optimizer".replace("-", "_")) if False else None  # noqa: E501
-
-# Reaproveita o cliente ML/env do otimizador de SEO sem depender do nome com hifen.
-import importlib.util
-
+# Reaproveita cliente ML, env e selecao de alvos do otimizador de SEO.
+# Import por caminho porque o nome do arquivo tem hifen.
 _spec = importlib.util.spec_from_file_location(
-    "ml_seo_optimizer", os.path.join(os.path.dirname(os.path.abspath(__file__)), "ml-seo-optimizer.py")
+    "ml_seo_optimizer",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "ml-seo-optimizer.py"),
 )
 _seo = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_seo)
