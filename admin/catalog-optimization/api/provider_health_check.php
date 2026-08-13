@@ -19,7 +19,9 @@ function cat_health_get(string $url, array $headers): array
 {
     $handle = curl_init();
     $httpHeaders = [];
-    foreach ($headers as $name => $value) $httpHeaders[] = $name . ': ' . $value;
+    foreach ($headers as $name => $value) {
+        $httpHeaders[] = $name . ': ' . $value;
+    }
     curl_setopt_array($handle, [
         CURLOPT_URL => $url,
         CURLOPT_HTTPHEADER => $httpHeaders,
@@ -50,11 +52,20 @@ function cat_health_probe(string $provider, string $key): array
     }
     try {
         $response = match ($provider) {
-            'openai' => cat_health_get('https://api.openai.com/v1/models', ['Authorization: Bearer ' . $key]),
+            'openai' => cat_health_get('https://api.openai.com/v1/models', [
+                'Authorization' => 'Bearer ' . $key,
+            ]),
             'gemini' => cat_health_get('https://generativelanguage.googleapis.com/v1beta/models?key=' . rawurlencode($key), []),
-            'claude' => cat_health_get('https://api.anthropic.com/v1/models', ['x-api-key: ' . $key, 'anthropic-version: 2023-06-01']),
-            'openrouter' => cat_health_get('https://openrouter.ai/api/v1/key', ['Authorization: Bearer ' . $key]),
-            'groq' => cat_health_get('https://api.groq.com/openai/v1/models', ['Authorization: Bearer ' . $key]),
+            'claude' => cat_health_get('https://api.anthropic.com/v1/models', [
+                'x-api-key' => $key,
+                'anthropic-version' => '2023-06-01',
+            ]),
+            'openrouter' => cat_health_get('https://openrouter.ai/api/v1/key', [
+                'Authorization' => 'Bearer ' . $key,
+            ]),
+            'groq' => cat_health_get('https://api.groq.com/openai/v1/models', [
+                'Authorization' => 'Bearer ' . $key,
+            ]),
             default => ['status' => 0, 'body' => ''],
         };
         $status = (int)$response['status'];
