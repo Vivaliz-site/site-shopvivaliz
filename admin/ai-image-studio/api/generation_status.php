@@ -30,10 +30,7 @@ if ($jobIds === []) {
 function ais_sanitize_error(string $error): string
 {
     $error = trim($error);
-    if ($error === '') {
-        return '';
-    }
-
+    if ($error === '') return '';
     $patterns = [
         '/(?:sk-(?:proj-)?|AIza|ant-api)[A-Za-z0-9_\-]{8,}/i' => '[redacted]',
         '/Bearer\s+[A-Za-z0-9._~+\-\/=]+/i' => 'Bearer [redacted]',
@@ -43,7 +40,6 @@ function ais_sanitize_error(string $error): string
     foreach ($patterns as $pattern => $replacement) {
         $error = preg_replace($pattern, $replacement, $error) ?? $error;
     }
-
     $error = preg_replace('/\s+/u', ' ', $error) ?? $error;
     return mb_substr(trim($error), 0, 360, 'UTF-8');
 }
@@ -51,15 +47,14 @@ function ais_sanitize_error(string $error): string
 /** @return array<int,array<string,mixed>> */
 function ais_status_queue_rows(array $jobIds): array
 {
-    $found = [];
     try {
+        $found = [];
         if (sv_queue_uses_file_backend()) {
             $data = sv_queue_file_bootstrap();
             $wanted = array_fill_keys($jobIds, true);
             foreach ((array)($data['tasks'] ?? []) as $row) {
                 $id = (int)($row['id'] ?? 0);
-                if (!isset($wanted[$id])) continue;
-                $found[$id] = $row;
+                if (isset($wanted[$id])) $found[$id] = $row;
             }
             return $found;
         }
@@ -74,10 +69,11 @@ function ais_status_queue_rows(array $jobIds): array
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
             $found[(int)$row['id']] = $row;
         }
+        return $found;
     } catch (Throwable $e) {
         error_log('[ai-image-studio] generation_status queue: ' . ais_sanitize_error($e->getMessage()));
+        throw new RuntimeException('Backend de fila indisponivel.', 0, $e);
     }
-    return $found;
 }
 
 /** @return list<array<string,mixed>> */
@@ -94,16 +90,15 @@ function ais_status_staging_rows(PDO $db, int $productId, string $channel, strin
             . 'ORDER BY created_at DESC, id DESC LIMIT 20'
         );
         $stmt->execute([$productId, '%"' . $channel . '"%', $sinceSql]);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
         $latestByType = [];
-        foreach ($rows as $row) {
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
             $type = strtolower(trim((string)($row['image_type'] ?? '')));
             if ($type === '' || isset($latestByType[$type])) continue;
             $latestByType[$type] = [
                 'staging_id' => (int)($row['id'] ?? 0),
                 'image_type' => $type,
                 'provider_used' => (string)($row['provider_used'] ?? ''),
-                'status' => (string)($row['status'] ?? ''),
+                'status' => strtolower(trim((string)($row['status'] ?? ''))),
                 'local_path' => (string)($row['local_path'] ?? ''),
                 'error' => ais_sanitize_error((string)($row['error_message'] ?? '')),
                 'created_at' => (string)($row['created_at'] ?? ''),
@@ -113,26 +108,30 @@ function ais_status_staging_rows(PDO $db, int $productId, string $channel, strin
         return array_values($latestByType);
     } catch (Throwable $e) {
         error_log('[ai-image-studio] generation_status staging: ' . ais_sanitize_error($e->getMessage()));
-        return [];
+        throw new RuntimeException('Staging de imagens indisponivel.', 0, $e);
     }
 }
 
 try {
     $queueRows = ais_status_queue_rows($jobIds);
     $db = function_exists('ai_studio_db') ? ai_studio_db() : null;
+    if (!$db instanceof PDO) throw new RuntimeException('Banco do Image Studio indisponivel.');
+
     $jobs = [];
-    $summary = ['queued' => 0, 'running' => 0, 'done' => 0, 'failed' => 0, 'unknown' => 0, 'total' => count($jobIds)];
+    $summary = ['queued' => 0, 'running' => 0, 'done' => 0, 'failed' => 0, 'unknown' => 0, 'partial_failure' => 0, 'total' => count($jobIds)];
 
     foreach ($jobIds as $jobId) {
         $row = $queueRows[$jobId] ?? null;
         if (!is_array($row)) {
             $summary['unknown']++;
             $jobs[] = [
+                'id' => $jobId,
                 'job_id' => $jobId,
                 'status' => 'unknown',
                 'terminal' => false,
                 'result_state' => 'unknown',
                 'message' => 'Job nao encontrado no backend de fila atual.',
+                'variants' => ['requested' => 0, 'ready_for_review' => 0, 'failed' => 0, 'missing' => []],
                 'staging' => [],
             ];
             continue;
@@ -151,22 +150,46 @@ try {
         $productId = (int)($payload['product_id'] ?? 0);
         $channel = strtolower(trim((string)($payload['target_channel'] ?? 'site')));
         $requestedAt = (string)($payload['requested_at'] ?? $row['created_at'] ?? '');
-        $staging = $db instanceof PDO ? ais_status_staging_rows($db, $productId, $channel, $requestedAt) : [];
+        $requestedTypes = array_values(array_unique(array_filter(array_map(
+            static fn(mixed $type): string => strtolower(trim((string)$type)),
+            (array)($payload['image_types'] ?? [])
+        ))));
+        $staging = ais_status_staging_rows($db, $productId, $channel, $requestedAt);
+        $stagingByType = [];
+        foreach ($staging as $stagingRow) {
+            $type = (string)($stagingRow['image_type'] ?? '');
+            if ($type !== '') $stagingByType[$type] = $stagingRow;
+        }
 
-        $stagingSuccess = count(array_filter($staging, static fn(array $item): bool => in_array((string)($item['status'] ?? ''), ['pending', 'published', 'submitted', 'partial_published'], true)));
-        $stagingFailed = count(array_filter($staging, static fn(array $item): bool => in_array((string)($item['status'] ?? ''), ['failed', 'publication_failed'], true)));
+        $readyStatuses = ['pending', 'published', 'submitted', 'partial_published'];
+        $failedStatuses = ['failed', 'publication_failed'];
+        $readyTypes = [];
+        $failedTypes = [];
+        foreach ($requestedTypes as $type) {
+            $itemStatus = (string)($stagingByType[$type]['status'] ?? '');
+            if (in_array($itemStatus, $readyStatuses, true)) $readyTypes[] = $type;
+            elseif (in_array($itemStatus, $failedStatuses, true)) $failedTypes[] = $type;
+        }
+        $missingTypes = array_values(array_diff($requestedTypes, $readyTypes, $failedTypes));
+        $expected = count($requestedTypes);
+        $readyCount = count($readyTypes);
+        $failedCount = count($failedTypes);
         $terminal = in_array($status, ['done', 'failed'], true);
+
         $resultState = match (true) {
             $status === 'failed' => 'failed',
-            $status === 'done' && $stagingSuccess > 0 => 'ready_for_review',
-            $status === 'done' && $stagingFailed > 0 => 'failed',
+            $status === 'done' && $expected > 0 && $readyCount === $expected => 'ready_for_review',
+            $status === 'done' && $readyCount > 0 && ($failedCount > 0 || $missingTypes !== []) => 'partial_failure',
+            $status === 'done' && $failedCount > 0 => 'failed',
             $status === 'done' => 'done_without_visible_staging',
             $status === 'running' => 'generating',
             $status === 'queued' => 'queued',
             default => 'unknown',
         };
+        if ($resultState === 'partial_failure') $summary['partial_failure']++;
 
         $jobs[] = [
+            'id' => $jobId,
             'job_id' => $jobId,
             'job_type' => (string)($row['job_type'] ?? ''),
             'status' => $status,
@@ -175,7 +198,15 @@ try {
             'product_id' => $productId,
             'provider' => (string)($payload['provider'] ?? ''),
             'target_channel' => $channel,
-            'image_types' => array_values(array_map('strval', (array)($payload['image_types'] ?? []))),
+            'image_types' => $requestedTypes,
+            'variants' => [
+                'requested' => $expected,
+                'ready_for_review' => $readyCount,
+                'failed' => $failedCount,
+                'missing' => $missingTypes,
+                'ready_types' => $readyTypes,
+                'failed_types' => $failedTypes,
+            ],
             'attempts' => (int)($row['attempts'] ?? 0),
             'created_at' => (string)($row['created_at'] ?? ''),
             'started_at' => $row['started_at'] ?? null,
