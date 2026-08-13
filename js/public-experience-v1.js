@@ -211,13 +211,16 @@ function installTestimonials() {
     });
 }
 function installSupport() {
+  if (!isPublicPath(window.location.pathname)) return;
   if (document.querySelector('.sv-support-dock')) return;
   var config = window.ShopVivalizPublicConfig || {};
   var dock = document.createElement('div');
   dock.className = 'sv-support-dock';
   dock.setAttribute('aria-label', 'Canais de atendimento');
   var whatsapp = config.whatsappUrl || '/contato';
-  dock.innerHTML = '<a class="sv-support-button sv-support-whatsapp" href="' + esc(whatsapp) + '" target="_blank" rel="noopener noreferrer" aria-label="Falar com a ShopVivaliz pelo WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.52 3.48A11.87 11.87 0 0 0 12.05 0C5.5 0 .16 5.33.16 11.89c0 2.1.55 4.14 1.6 5.93L.06 24l6.32-1.66a11.86 11.86 0 0 0 5.67 1.45h.01c6.55 0 11.89-5.33 11.89-11.89 0-3.18-1.22-6.17-3.43-8.42Z"/></svg><span class="sv-support-label">WhatsApp</span></a>';
+  var external = /^https?:\/\//i.test(String(whatsapp));
+  var extra = external ? ' target="_blank" rel="noopener noreferrer"' : '';
+  dock.innerHTML = '<a class="sv-support-button sv-support-whatsapp" href="' + esc(whatsapp) + '"' + extra + ' aria-label="Falar com a ShopVivaliz pelo WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.52 3.48A11.87 11.87 0 0 0 12.05 0C5.5 0 .16 5.33.16 11.89c0 2.1.55 4.14 1.6 5.93L.06 24l6.32-1.66a11.86 11.86 0 0 0 5.67 1.45h.01c6.55 0 11.89-5.33 11.89-11.89 0-3.18-1.22-6.17-3.43-8.42Z"/></svg><span class="sv-support-label">WhatsApp</span></a>';
   document.body.appendChild(dock);
 }
 function installMobileNav() {
@@ -236,16 +239,25 @@ function installMobileNav() {
   nav.setAttribute('aria-label', 'Navegação rápida');
   nav.innerHTML = links.map(function (link) {
     var attrs = link.active ? ' aria-current="page" class="is-active"' : '';
-    return '<a href="' + link.href + '"' + attrs + '><span class="nav-icon">' + link.icon + '</span><span>' + link.label + '</span></a>';
+    return '<a href="' + link.href + '"' + attrs + '><span class="nav-icon" aria-hidden="true">' + link.icon + '</span><span>' + link.label + '</span></a>';
   }).join('');
   document.body.appendChild(nav);
 }
-function updateSupportVisibility() {
+function updatePageState() {
   var body = document.body;
   if (!body) return;
-  var isProduct = /^\/produto(?:\/|$)/i.test(window.location.pathname || '');
+  var path = window.location.pathname || '/';
+  var isProduct = /^\/produto(?:\/|$)/i.test(path);
+  var isCatalog = /^\/catalogo(?:\/|$)/i.test(path);
+  var isHome = path === '/';
+  var nearTop = window.scrollY < 420;
+
   body.classList.toggle('sv-page-product', isProduct);
-  body.classList.toggle('sv-product-top', isProduct && window.scrollY < 420);
+  body.classList.toggle('sv-product-top', isProduct && nearTop);
+  body.classList.toggle('sv-page-catalog', isCatalog);
+  body.classList.toggle('sv-catalog-top', isCatalog && nearTop);
+  body.classList.toggle('sv-page-home', isHome);
+  body.classList.toggle('sv-home-top', isHome && nearTop);
 }
 function updateFooterVisibility() {
   var body = document.body;
@@ -259,7 +271,7 @@ function updateFooterVisibility() {
 }
 function runVisibilityPass() {
   visibilityFramePending = false;
-  updateSupportVisibility();
+  updatePageState();
   updateFooterVisibility();
 }
 function scheduleVisibilityPass() {
@@ -271,7 +283,7 @@ function runResponsivePass() {
   framePending = false;
   installMobileNav();
   syncBottomUiOffset();
-  updateSupportVisibility();
+  updatePageState();
   updateFooterVisibility();
 }
 function scheduleResponsivePass() {

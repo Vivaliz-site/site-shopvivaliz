@@ -192,6 +192,19 @@
     font-weight: 600;
 }
 
+/* Progressive enhancement: antes do JS hidratar o carrinho, a lista esta
+   vazia. Nesse intervalo nao podemos deixar um CTA de checkout clicavel nem
+   exibir promessa de frete. Quando os itens sao renderizados, :empty deixa de
+   casar e o estado normal volta automaticamente, sem depender de timeout. */
+body:has(#cart-items-list:empty) #btn-checkout {
+    opacity: .5 !important;
+    pointer-events: none !important;
+    cursor: not-allowed !important;
+}
+body:has(#cart-items-list:empty) .free-shipping-container {
+    display: none !important;
+}
+
 /* No mobile o rodape fixo da navegacao cobria o botao de confirmar pedido. */
 @media (max-width: 768px) {
     .checkout-actions,
