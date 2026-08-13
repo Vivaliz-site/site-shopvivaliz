@@ -6,6 +6,9 @@ on:
     paths:
       - 'admin/catalog-optimization/repair_hard_quality_pending.php'
       - '.github/workflows/repair-catalog-hard-quality-pending.yml'
+  workflow_run:
+    workflows: ['Master Production Pipeline 24/7']
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -17,10 +20,22 @@ concurrency:
 
 jobs:
   repair:
+    if: >-
+      ${{ github.event_name != 'workflow_run' ||
+          (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     environment: production
+    env:
+      TARGET_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
     steps:
+      - name: Validate target production SHA
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::Invalid target SHA'; exit 1; }
+          echo "target_release_sha=$TARGET_SHA"
+
       - name: Configure verified production SSH
         shell: bash
         env:
@@ -49,15 +64,15 @@ jobs:
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
               ubuntu@137.131.156.17 \
               'if test -r /home/ubuntu/shopvivaliz-deploy/current/.release-sha; then cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha; else printf missing; fi')"
-            if [[ "$deployed" == "$GITHUB_SHA" ]]; then
+            if [[ "$deployed" == "$TARGET_SHA" ]]; then
               echo 'production_release_exact=true'
               break
             fi
             echo "waiting_for_production_release_attempt=${attempt}"
             sleep 15
           done
-          if [[ "$deployed" != "$GITHUB_SHA" ]]; then
-            echo '::error::Exact protected SHA was not observed in production before timeout.'
+          if [[ "$deployed" != "$TARGET_SHA" ]]; then
+            echo '::error::Exact deployed SHA was not observed in production before timeout.'
             exit 4
           fi
 
