@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: production-catalog-hard-quality-repair
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   repair:
@@ -95,4 +95,5 @@ jobs:
           set -Eeuo pipefail
           echo 'catalog_repair_publishes_marketplace=false'
           echo 'catalog_invalid_pending_kept_for_manual_fix=false'
+          echo 'catalog_repair_interruption_resumable=true'
           echo 'secret_values_printed=false'

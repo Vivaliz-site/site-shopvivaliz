@@ -8,6 +8,11 @@ declare(strict_types=1);
  * invalido da fila de aprovacao e gera um novo staging usando o pipeline
  * validado/fallback de provedores.
  *
+ * O reparo e retomavel: se uma execucao for interrompida depois de marcar um
+ * rascunho antigo como failed e antes de criar o substituto valido, a proxima
+ * execucao reconhece essa evidencia e tenta novamente. Uma linha ja
+ * substituida por pending/published/rejected mais novo nao e regenerada.
+ *
  * Uso:
  *   php repair_hard_quality_pending.php --limit=500
  */
@@ -20,6 +25,8 @@ if (PHP_SAPI !== 'cli') {
 
 require_once __DIR__ . '/config_optimization.php';
 require_once __DIR__ . '/api/optimize_catalog.php';
+
+const CATALOG_HARD_REPAIR_PREFIX = 'Substituido automaticamente: hard quality gate ';
 
 $limit = 500;
 foreach (array_slice($argv, 1) as $arg) {
@@ -80,13 +87,34 @@ function catalog_hard_repair_failures(array $quality): array
     return $failed;
 }
 
-$stmt = $db->query(
-    "SELECT * FROM catalog_optimizations_staging WHERE status = 'pending' ORDER BY id ASC LIMIT " . (int)$limit
-);
-$rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+// Inclui:
+// 1) pending ainda nao auditados pelo reparo; e
+// 2) evidencias de reparo interrompido, desde que nao exista substituto mais
+//    novo em estado terminal/acionavel para o mesmo produto+canal.
+$sql = "SELECT s.*
+        FROM catalog_optimizations_staging s
+        WHERE s.status = 'pending'
+           OR (
+                s.status = 'failed'
+                AND s.error_message LIKE :repair_prefix
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM catalog_optimizations_staging newer
+                    WHERE newer.product_id = s.product_id
+                      AND newer.channel = s.channel
+                      AND newer.id > s.id
+                      AND newer.status IN ('pending','published','rejected')
+                )
+           )
+        ORDER BY s.id ASC
+        LIMIT " . (int)$limit;
+$stmt = $db->prepare($sql);
+$stmt->execute(['repair_prefix' => CATALOG_HARD_REPAIR_PREFIX . '%']);
+$rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $scanned = 0;
 $hardFound = 0;
+$resumed = 0;
 $repaired = 0;
 $failed = 0;
 $skipped = 0;
@@ -98,6 +126,9 @@ foreach ($rows as $row) {
     $productId = (int)($row['product_id'] ?? 0);
     $channel = strtolower(trim((string)($row['channel'] ?? '')));
     $provider = catalog_ai_normalize_provider((string)($row['provider_used'] ?? 'gemini'));
+    $rowStatus = strtolower(trim((string)($row['status'] ?? '')));
+    $isInterruptedRepair = $rowStatus === 'failed'
+        && str_starts_with((string)($row['error_message'] ?? ''), CATALOG_HARD_REPAIR_PREFIX);
 
     if ($stagingId <= 0 || $productId <= 0 || !array_key_exists($channel, catalog_ai_channels())) {
         $skipped++;
@@ -113,26 +144,44 @@ foreach ($rows as $row) {
         continue;
     }
 
-    $data = catalog_hard_repair_data($row);
-    $quality = ai_catalog_quality_report($data, $channel, $product);
-    $hard = catalog_hard_repair_failures($quality);
-    if ($hard === []) {
-        continue;
-    }
-    $hardFound++;
+    if ($isInterruptedRepair) {
+        $hardFound++;
+        $resumed++;
+    } else {
+        $data = catalog_hard_repair_data($row);
+        $quality = ai_catalog_quality_report($data, $channel, $product);
+        $hard = catalog_hard_repair_failures($quality);
+        if ($hard === []) {
+            continue;
+        }
+        $hardFound++;
 
-    // O rascunho invalido sai imediatamente da fila de aprovacao. Mantemos a
-    // linha como evidencia auditavel em vez de apaga-la.
-    $mark = $db->prepare(
-        "UPDATE catalog_optimizations_staging
-         SET status = 'failed', error_message = ?, updated_at = NOW()
-         WHERE id = ? AND status = 'pending'"
+        // O rascunho invalido sai imediatamente da fila de aprovacao. Mantemos
+        // a linha como evidencia auditavel em vez de apaga-la.
+        $mark = $db->prepare(
+            "UPDATE catalog_optimizations_staging
+             SET status = 'failed', error_message = ?, updated_at = NOW()
+             WHERE id = ? AND status = 'pending'"
+        );
+        $mark->execute([
+            CATALOG_HARD_REPAIR_PREFIX . implode(', ', $hard),
+            $stagingId,
+        ]);
+        if ($mark->rowCount() !== 1) {
+            $skipped++;
+            continue;
+        }
+    }
+
+    // Reconfirma imediatamente antes de consumir IA que nao apareceu um
+    // substituto valido/decidido mais novo enquanto esta linha era processada.
+    $superseded = $db->prepare(
+        "SELECT COUNT(*) FROM catalog_optimizations_staging
+         WHERE product_id = ? AND channel = ? AND id > ?
+           AND status IN ('pending','published','rejected')"
     );
-    $mark->execute([
-        'Substituido automaticamente: hard quality gate ' . implode(', ', $hard),
-        $stagingId,
-    ]);
-    if ($mark->rowCount() !== 1) {
+    $superseded->execute([$productId, $channel, $stagingId]);
+    if ((int)$superseded->fetchColumn() > 0) {
         $skipped++;
         continue;
     }
@@ -150,6 +199,7 @@ foreach ($rows as $row) {
 
 echo 'catalog_hard_repair_scanned=' . $scanned . PHP_EOL;
 echo 'catalog_hard_repair_found=' . $hardFound . PHP_EOL;
+echo 'catalog_hard_repair_resumed=' . $resumed . PHP_EOL;
 echo 'catalog_hard_repair_success=' . $repaired . PHP_EOL;
 echo 'catalog_hard_repair_failed=' . $failed . PHP_EOL;
 echo 'catalog_hard_repair_skipped=' . $skipped . PHP_EOL;
