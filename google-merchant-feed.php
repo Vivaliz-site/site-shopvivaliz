@@ -16,9 +16,9 @@ $baseUrl = is_array($officialData) && trim((string)($officialData['base_url'] ??
 $products = svcr_products();
 $identifierMap = svgf_catalog_identifier_map(__DIR__);
 
-function gm_xml(string $value): string
+function gm_xml(string|int|float $value): string
 {
-    return htmlspecialchars($value, ENT_XML1 | ENT_COMPAT, 'UTF-8');
+    return htmlspecialchars((string)$value, ENT_XML1 | ENT_COMPAT, 'UTF-8');
 }
 
 function gm_gtin(array $product): string
@@ -95,6 +95,7 @@ function gm_unique_id_map(array $products): array
 
     $result = [];
     foreach ($groups as $baseId => $members) {
+        $baseId = (string)$baseId;
         ksort($members, SORT_STRING);
         $used = [];
         $position = 0;
