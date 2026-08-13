@@ -124,6 +124,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           node --check admin/assets/image-generation-workflow.js
+          node --check admin/assets/image-workflow-safety.js
           node --check admin/assets/image-provider-health.js
           php tests/image-admin-workflow-test.php
           php tests/image-admin-workflow-v3-test.php
