@@ -94,12 +94,12 @@ function catalog_generated_sanitize_long_text(string $text, array $product): str
 
 function catalog_generated_strip_hype_prefix(string $title): string
 {
-    $pattern = '/^(?:chega\s+de|diga\s+adeus|adeus|elimine(?:\s+de\s+vez)?|transforme|potencialize|maximize|imperd[ií]vel|incr[ií]vel|revolucion[aá]rio|ultim[ií]ssima\s+chance|n[aã]o\s+perca|garanta\s+j[aá]|corra)\b[\s:!?.-]*/iu';
+    // Aceita pontuacao/emoji decorativo antes da chamada e remove mais de uma
+    // chamada consecutiva. O validador dobra pontuacao/acentos antes de testar
+    // o prefixo; a normalizacao precisa ser pelo menos tao robusta quanto ele.
+    $pattern = '/^[^\p{L}\p{N}]*(?:chega\s+de|diga\s+adeus|adeus|elimine(?:\s+de\s+vez)?|transforme|potencialize|maximize|imperd[ií]vel|incr[ií]vel|revolucion[aá]rio|ultim[ií]ssima\s+chance|n[aã]o\s+perca|garanta\s+j[aá]|corra)\b[\s:!?.\-–—]*/iu';
     $title = trim($title);
-    // Dados legados podem ter acumulado mais de uma chamada promocional no
-    // inicio (ex.: "Imperdivel: Garanta ja..."). Removemos todas as camadas
-    // conhecidas antes de derivar a identidade factual.
-    for ($round = 0; $round < 4; $round++) {
+    for ($round = 0; $round < 8; $round++) {
         $next = preg_replace($pattern, '', $title) ?? $title;
         if ($next === $title) break;
         $title = trim($next);
@@ -111,46 +111,31 @@ function catalog_generated_strip_hype_prefix(string $title): string
     return catalog_generated_cleanup_spacing($title);
 }
 
-/**
- * Remove copy promocional somente do nome legado usado como identidade quando
- * marca/modelo nao existem. Sem isso o contrato poderia ficar impossivel:
- * exigir que o titulo comece por "Imperdivel ..." e simultaneamente reprovar
- * qualquer titulo que comece por "Imperdivel".
- *
- * @return array<string,mixed>
- */
-function catalog_generated_normalize_product_identity(array $product): array
-{
-    $brand = trim((string)($product['brand'] ?? ''));
-    $model = trim((string)($product['model'] ?? ''));
-    if ($brand !== '' || $model !== '') return $product;
-
-    $name = trim((string)($product['name'] ?? ''));
-    if ($name === '') return $product;
-
-    $clean = catalog_generated_strip_hype_prefix($name);
-    $clean = preg_replace('/^[\p{P}\p{S}\s]+/u', '', $clean) ?? $clean;
-    $clean = catalog_generated_cleanup_spacing($clean);
-    if ($clean !== '') {
-        $product['name'] = $clean;
-    }
-    return $product;
-}
-
 function catalog_generated_identity_prefix(array $product): string
 {
-    $product = catalog_generated_normalize_product_identity($product);
     $brand = trim((string)($product['brand'] ?? ''));
     $model = trim((string)($product['model'] ?? ''));
     if ($brand !== '' && $model !== '') return $brand . ' ' . $model;
     if ($brand !== '') return $brand;
     if ($model !== '') return $model;
 
-    $name = trim((string)($product['name'] ?? ''));
-    if ($name === '') return '';
-    $tokens = preg_split('/\s+/u', $name) ?: [];
-    $tokens = array_values(array_filter(array_map('trim', $tokens), static fn(string $token): bool => $token !== ''));
-    return implode(' ', array_slice($tokens, 0, 3));
+    // O nome-fonte e factual, mas cadastros legados podem ter sido salvos com
+    // copy promocional antes do nome real. Nao reintroduza esse preambulo ao
+    // reconstruir a identidade depois que o titulo gerado ja foi limpo.
+    $name = catalog_generated_strip_hype_prefix((string)($product['name'] ?? ''));
+    $name = preg_replace('/^[^\p{L}\p{N}]+/u', '', trim($name)) ?? trim($name);
+    $name = catalog_generated_cleanup_spacing($name);
+    if ($name !== '') {
+        $tokens = preg_split('/\s+/u', $name) ?: [];
+        $tokens = array_values(array_filter(array_map('trim', $tokens), static fn(string $token): bool => $token !== ''));
+        if ($tokens !== []) return implode(' ', array_slice($tokens, 0, 3));
+    }
+
+    foreach (['sku', 'gtin'] as $key) {
+        $fallback = trim((string)($product[$key] ?? ''));
+        if ($fallback !== '') return $fallback;
+    }
+    return '';
 }
 
 function catalog_generated_truncate(string $text, int $max): string
@@ -191,15 +176,10 @@ function catalog_generated_normalize_list(mixed $raw, array $product, ?int $maxI
 
 /**
  * @param array<string,mixed> $data
- * @param array<string,mixed> $product
  * @return array<string,mixed>
  */
-function catalog_generated_normalize(array $data, string $channel, array &$product): array
+function catalog_generated_normalize(array $data, string $channel, array $product): array
 {
-    // A mesma identidade factual limpa passa a ser usada pelo normalizador e
-    // pelo quality gate logo depois desta chamada. Isso resolve cadastros
-    // legados sem enfraquecer nenhum check.
-    $product = catalog_generated_normalize_product_identity($product);
     $policy = ai_catalog_policy($channel);
 
     $title = catalog_generated_sanitize_short_text((string)($data['optimized_title'] ?? ''), $product);
