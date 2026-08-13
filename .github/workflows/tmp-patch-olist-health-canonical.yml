@@ -98,13 +98,13 @@ jobs:
           if refresh_count != 1:
               raise SystemExit('failed to remove Olist refresh writer from integration monitor')
 
-          old_remediation = r'''        $remediation = $fix
-              ? 'A renovacao automatica falhou; reautorize o aplicativo.'
-              : 'Use Atualizar agora para renovar; se persistir, reautorize.';'''
-          new_remediation = r'''        $remediation = 'O daemon central de renovacao e o unico escritor OAuth; verifique o servico e, se persistir, reautorize.';'''
-          if old_remediation not in text:
-              raise SystemExit('legacy remediation text missing')
-          text = text.replace(old_remediation, new_remediation, 1)
+          remediation_pattern = re.compile(
+              r"\s*\$remediation = \$fix\s*\n\s*\? 'A renovacao automatica falhou; reautorize o aplicativo\.'\s*\n\s*: 'Use Atualizar agora para renovar; se persistir, reautorize\.';"
+          )
+          new_remediation = "\n        $remediation = 'O daemon central de renovacao e o unico escritor OAuth; verifique o servico e, se persistir, reautorize.';"
+          text, remediation_count = remediation_pattern.subn(new_remediation, text, count=1)
+          if remediation_count != 1:
+              raise SystemExit('failed to replace legacy Olist remediation')
 
           path.write_text(text, encoding='utf-8')
 
