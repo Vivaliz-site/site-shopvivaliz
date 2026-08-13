@@ -806,6 +806,10 @@ def main() -> int:
         target_ids = args.only
     else:
         target_ids = [i["id"] for i in select_targets(ml)]
+    if args.skip_applied:
+        done = already_applied()
+        target_ids = [i for i in target_ids if i not in done]
+        log(f"[scan] {len(done)} ja otimizados anteriormente foram pulados")
     if args.limit:
         target_ids = target_ids[: args.limit]
     log(
