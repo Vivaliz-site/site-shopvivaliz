@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/MarketplaceRuntime.php';
+require_once __DIR__ . '/TinyV3Runtime.php';
 require_once dirname(__DIR__) . '/tiny-order-push.php';
 
 final class SvTinyPublisher
@@ -15,15 +16,13 @@ final class SvTinyPublisher
         if ($sku === '') throw new RuntimeException('Produto sem SKU para atualização no Tiny/Olist.');
         $tinyId = $this->resolveTinyId($productId, $product);
         if (!svtop_tiny_credentials_configured()) throw new RuntimeException('Credenciais Tiny/Olist não configuradas.');
-        $token = svtop_tiny_get_token();
-        if ($token === '') throw new RuntimeException('Não foi possível obter access token Tiny/Olist.');
         $title = $this->limit(trim((string)($content['title'] ?? '')), 120);
         $description = trim((string)($content['description'] ?? ''));
         if ($title === '' || $description === '') throw new RuntimeException('Título ou descrição vazios para Tiny/Olist.');
         $payload = [
             'descricao' => $title,
             'sku' => $sku,
-            'observacoes' => $this->notes($content),
+            'descricaoComplementar' => $this->notes($content),
             'seo' => [
                 'titulo' => $this->limit((string)($content['meta_title'] ?? $title), 120),
                 'descricao' => (string)($content['meta_description'] ?? $description),
@@ -31,20 +30,20 @@ final class SvTinyPublisher
             ],
         ];
         sv_market_assert_no_commerce_fields($payload, 'Tiny/Olist product text update');
-        $response = svtop_tiny_request('PUT', '/produtos/' . $tinyId, $token, $payload);
+        $response = sv_market_tiny_request_v3('PUT', '/produtos/' . $tinyId, $payload);
         if (!in_array((int)$response['status'], [200, 204], true)) {
             $message = is_array($response['json'] ?? null) ? (string)($response['json']['mensagem'] ?? $response['json']['message'] ?? '') : '';
             throw new SvMarketplaceException($message !== '' ? $message : sv_market_safe_excerpt((string)$response['body']), (int)$response['status']);
         }
-        $read = svtop_tiny_request('GET', '/produtos/' . $tinyId, $token);
+        $read = sv_market_tiny_request_v3('GET', '/produtos/' . $tinyId);
         if ((int)$read['status'] !== 200) throw new SvMarketplaceException('Tiny/Olist aceitou o PUT, mas o read-back falhou.', (int)$read['status']);
         $readJson = is_array($read['json'] ?? null) ? $read['json'] : [];
         $readProduct = is_array($readJson['produto'] ?? null) ? $readJson['produto'] : $readJson;
         $readTitle = trim((string)($readProduct['descricao'] ?? ''));
         if ($readTitle !== '' && $readTitle !== $title) throw new RuntimeException('Tiny/Olist não confirmou o título atualizado no read-back.');
-        $readNotes = trim((string)($readProduct['observacoes'] ?? ''));
-        if ($readNotes !== '' && $readNotes !== trim((string)$payload['observacoes'])) {
-            throw new RuntimeException('Tiny/Olist não confirmou a descrição/observações no read-back.');
+        $readDescription = trim((string)($readProduct['descricaoComplementar'] ?? $readProduct['descricao_complementar'] ?? ''));
+        if ($readDescription !== '' && $this->normalizeText($readDescription) !== $this->normalizeText((string)$payload['descricaoComplementar'])) {
+            throw new RuntimeException('Tiny/Olist não confirmou a descrição complementar no read-back.');
         }
         $readSeo = is_array($readProduct['seo'] ?? null) ? $readProduct['seo'] : [];
         if ($readSeo !== []) {
@@ -64,10 +63,10 @@ final class SvTinyPublisher
             'external_id' => (string)$tinyId,
             'http_status' => (int)$response['status'],
             'request_id' => '',
-            'fields' => ['descricao', 'observacoes', 'seo.titulo', 'seo.descricao', 'seo.keywords'],
+            'fields' => ['descricao', 'descricaoComplementar', 'seo.titulo', 'seo.descricao', 'seo.keywords'],
             'response' => [
                 'title_confirmed' => true,
-                'description_confirmed' => $readNotes !== '',
+                'description_confirmed' => $readDescription !== '',
                 'seo_confirmed' => $readSeo !== [],
             ],
             'verified' => true,
@@ -224,6 +223,15 @@ final class SvTinyPublisher
         $bullets = is_array($content['bullet_points'] ?? null) ? $content['bullet_points'] : [];
         if ($bullets !== []) $parts[] = implode("\n", array_map(static fn($value): string => '• ' . trim((string)$value), $bullets));
         return trim(implode("\n\n", array_filter($parts, static fn(string $part): bool => $part !== '')));
+    }
+
+    private function normalizeText(string $value): string
+    {
+        $value = html_entity_decode($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $value = str_replace(["\r\n", "\r", "\xC2\xA0"], ["\n", "\n", ' '], $value);
+        $value = preg_replace('/[ \t]+/u', ' ', $value) ?? $value;
+        $value = preg_replace('/\n{3,}/u', "\n\n", $value) ?? $value;
+        return trim($value);
     }
 
     private function limit(string $value, int $length): string

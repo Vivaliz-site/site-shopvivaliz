@@ -112,6 +112,16 @@ jobs:
         run: php scripts/quality/validate-auto-image-carousel.php
       - name: Politica premium de otimizacao por marketplace
         run: php tests/catalog-optimization-policy-test.php
+      - name: Workflow operacional do Admin de otimizacao
+        run: |
+          set -Eeuo pipefail
+          node --check admin/assets/catalog-optimization-workflow.js
+          php tests/catalog-admin-workflow-v3-test.php
+      - name: Workflow operacional do AI Image Studio
+        run: |
+          set -Eeuo pipefail
+          node --check admin/assets/ai-image-studio-workflow.js
+          php tests/image-admin-workflow-v3-test.php
       - name: Identidade e qualidade de imagens do Admin
         run: php tests/image-identity-policy-test.php
 

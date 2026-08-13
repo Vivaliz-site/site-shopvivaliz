@@ -1,0 +1,99 @@
+name: Repair catalog hard quality pending
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'admin/catalog-optimization/repair_hard_quality_pending.php'
+      - '.github/workflows/repair-catalog-hard-quality-pending.yml'
+  workflow_run:
+    workflows: ['Master Production Pipeline 24/7']
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-catalog-hard-quality-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    if: >-
+      ${{ github.event_name != 'workflow_run' ||
+          (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: production
+    env:
+      TARGET_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - name: Validate target production SHA
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::Invalid target SHA'; exit 1; }
+          echo "target_release_sha=$TARGET_SHA"
+
+      - name: Configure verified production SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::Production SSH key missing'; exit 2; }
+          test -n "$known_hosts" || { echo '::error::Production known_hosts missing'; exit 3; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Wait for exact production release
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          deployed=''
+          for attempt in $(seq 1 120); do
+            deployed="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+              ubuntu@137.131.156.17 \
+              'if test -r /home/ubuntu/shopvivaliz-deploy/current/.release-sha; then cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha; else printf missing; fi')"
+            if [[ "$deployed" == "$TARGET_SHA" ]]; then
+              echo 'production_release_exact=true'
+              break
+            fi
+            echo "waiting_for_production_release_attempt=${attempt}"
+            sleep 15
+          done
+          if [[ "$deployed" != "$TARGET_SHA" ]]; then
+            echo '::error::Exact deployed SHA was not observed in production before timeout.'
+            exit 4
+          fi
+
+      - name: Repair existing hard-failed pending drafts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          cd /home/ubuntu/shopvivaliz-deploy/current
+          test -r admin/catalog-optimization/repair_hard_quality_pending.php
+          php admin/catalog-optimization/repair_hard_quality_pending.php --limit=2000
+          REMOTE
+
+      - name: Safety invariant
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo 'catalog_repair_publishes_marketplace=false'
+          echo 'catalog_invalid_pending_kept_for_manual_fix=false'
+          echo 'catalog_repair_interruption_resumable=true'
+          echo 'secret_values_printed=false'

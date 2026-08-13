@@ -1,0 +1,87 @@
+name: Fred-Win Remote Action
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ops/fredwin-request.json"
+
+permissions:
+  contents: read
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          test -n "$VM_KEY" || { echo "SHOPVIVALIZ_VM_SSH_KEY missing"; exit 2; }
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Resolve allowlisted action
+        id: action
+        shell: bash
+        run: |
+          ACTION="$(jq -r '.action // "health"' ops/fredwin-request.json)"
+          case "$ACTION" in
+            health)
+              COMMAND=""
+              ;;
+            open_shopvivaliz)
+              COMMAND="powershell -NoProfile -Command \"\$task='ShopVivalizOpenSite'; \$user=[System.Security.Principal.WindowsIdentity]::GetCurrent().Name; \$args='-NoProfile -WindowStyle Hidden -Command \\\"Start-Process ''''https://shopvivaliz.com.br/''''\\\"'; \$action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument \$args; \$trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1); \$principal=New-ScheduledTaskPrincipal -UserId \$user -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName \$task -Action \$action -Trigger \$trigger -Principal \$principal -Force | Out-Null; Start-ScheduledTask -TaskName \$task; Start-Sleep -Seconds 5; Unregister-ScheduledTask -TaskName \$task -Confirm:\$false\""
+              ;;
+            open_exchange_admin)
+              COMMAND="powershell -NoProfile -Command \"Start-Process 'https://admin.exchange.microsoft.com/'\""
+              ;;
+            open_microsoft_365)
+              COMMAND="powershell -NoProfile -Command \"Start-Process 'https://portal.office.com/'\""
+              ;;
+            open_email_login_pair)
+              COMMAND="powershell -NoProfile -Command \"\$task='ShopVivalizOpenEmailLogin'; \$user=[System.Security.Principal.WindowsIdentity]::GetCurrent().Name; \$args='-NoProfile -WindowStyle Hidden -Command \\\"Start-Process ''''https://admin.exchange.microsoft.com/''''; Start-Sleep -Seconds 1; Start-Process ''''https://admin.microsoft.com/''''\\\"'; \$action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument \$args; \$trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1); \$principal=New-ScheduledTaskPrincipal -UserId \$user -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName \$task -Action \$action -Trigger \$trigger -Principal \$principal -Force | Out-Null; Start-ScheduledTask -TaskName \$task; Start-Sleep -Seconds 5; Unregister-ScheduledTask -TaskName \$task -Confirm:\$false\""
+              ;;
+            install_mcp_startup)
+              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"\$repo='C:\\site-shopvivaliz'; \$bat=Join-Path \$repo 'iniciar-fredwin-mcp.bat'; \$nl=[Environment]::NewLine; \$content='@echo off'+\$nl+'cd /d C:\\site-shopvivaliz'+\$nl+'powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \\\"C:\\site-shopvivaliz\\scripts\\fredwin-remote-bootstrap.ps1\\\"'+\$nl+'exit /b 0'+\$nl; [IO.File]::WriteAllText(\$bat,\$content,[Text.Encoding]::ASCII); \$task='ShopVivaliz FredWin MCP Startup'; \$user=[System.Security.Principal.WindowsIdentity]::GetCurrent().Name; \$action=New-ScheduledTaskAction -Execute \$bat; \$trigger=New-ScheduledTaskTrigger -AtLogOn -User \$user; \$principal=New-ScheduledTaskPrincipal -UserId \$user -LogonType Interactive -RunLevel Highest; Register-ScheduledTask -TaskName \$task -Action \$action -Trigger \$trigger -Principal \$principal -Description 'Start ShopVivaliz Fred-Win MCP and reverse tunnel at Windows logon' -Force | Out-Null; \$t=Get-ScheduledTask -TaskName \$task; Write-Output ('BAT=' + \$bat); Write-Output ('TASK=' + \$t.TaskName); Write-Output ('STATE=' + \$t.State); Write-Output ('USER=' + \$user)\""
+              ;;
+            *)
+              echo "Action not allowlisted: $ACTION"
+              exit 3
+              ;;
+          esac
+          echo "action=$ACTION" >> "$GITHUB_OUTPUT"
+          printf '%s' "$COMMAND" | base64 -w0 > /tmp/fredwin-command.b64
+
+      - name: Check private MCP path through VM
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health'
+
+      - name: Execute allowlisted action
+        if: steps.action.outputs.action != 'health'
+        run: |
+          CMD_B64="$(cat /tmp/fredwin-command.b64)"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
+          import base64, json, os, urllib.request
+          command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
+          body = json.dumps({'params': {'command': command, 'timeout': 30}}).encode('utf-8')
+          req = urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command', data=body, headers={'Content-Type':'application/json'}, method='POST')
+          with urllib.request.urlopen(req, timeout=40) as response:
+              payload=json.loads(response.read().decode('utf-8'))
+          print(json.dumps(payload, ensure_ascii=False))
+          result=payload.get('result') or {}
+          if result.get('success') is not True:
+              raise SystemExit('Fred-Win action failed')
+          PY"
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/fredwin-command.b64

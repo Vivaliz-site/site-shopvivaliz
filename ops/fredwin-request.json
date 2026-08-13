@@ -1,5 +1,5 @@
 {
-  "action": "health",
-  "requested_at": "2026-08-08T18:24:00-03:00",
-  "reason": "Recheck Fred-Win relay after Google Ads OAuth runtime repair"
+  "action": "install_mcp_startup",
+  "requested_at": "2026-08-12T18:16:00-03:00",
+  "reason": "Retry BAT and Windows logon task installation after fixing shell escaping"
 }

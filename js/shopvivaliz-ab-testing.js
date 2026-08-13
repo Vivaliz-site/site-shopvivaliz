@@ -31,4 +31,15 @@
   };
 
   window.ShopVivalizABTest = state;
+
+  // Bootstrap do módulo dedicado de imagens históricas de categoria.
+  // Evita manter regra visual dentro deste shim e preserva compatibilidade
+  // com a inclusão já existente no index.php.
+  if (!document.querySelector('script[data-sv-category-images]')) {
+    var script = document.createElement('script');
+    script.src = '/js/category-real-images-v52.js?v=20260812-2';
+    script.defer = true;
+    script.dataset.svCategoryImages = 'historical-20260810';
+    document.head.appendChild(script);
+  }
 })();

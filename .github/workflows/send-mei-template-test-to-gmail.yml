@@ -1,13 +1,14 @@
-name: Send controlled MEI template test through Graph App-Only
+name: Recover storefront upload mapping
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/send-mei-template-test-to-gmail.yml']
+    paths:
+      - '.github/workflows/send-mei-template-test-to-gmail.yml'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  send-test:
+  recover-storefront:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -18,42 +19,42 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Send official template through Microsoft Graph App-Only to forwarding address
+      - name: Locate and recover upload mapping safely
         run: |
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
-          cd /home/ubuntu/mei-mg-email
-          /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'
-          import os
-          from pathlib import Path
-          from urllib.parse import urlencode
-          from dotenv import load_dotenv
-          load_dotenv('.env', override=True)
-          from app.email_provider import MicrosoftGraphEmailProvider
-
-          recipient='atendimento@shopvivaliz.com.br'
-          subject='MEI: Ganhe Certificado Digital + 10 Notas Fiscais por mes [DIAG-ROUTE-1245]'
-          template_path=Path('templates/mei-contabilidade-melo.html')
-          if not template_path.exists():
-              raise SystemExit(f'TEMPLATE_NOT_FOUND:{template_path}')
-          template=template_path.read_text(encoding='utf-8')
-          base_url=os.environ['BASE_URL_DESCADASTRO'].rstrip('?')
-          unsubscribe_url=f"{base_url}?{urlencode({'email': recipient})}"
-          body=(template
-                .replace('{{nome_fantasia}}','Equipe ShopVivaliz')
-                .replace('{{razao_social}}','ShopVivaliz')
-                .replace('{{cnpj}}','')
-                .replace('{{unsubscribe_url}}',unsubscribe_url))
-          provider=MicrosoftGraphEmailProvider()
-          result=provider.send(to=recipient, subject=subject, body=body)
-          print(f'success={result.success}')
-          print(f'status={getattr(result,"status",None)}')
-          print(f'message_id={getattr(result,"message_id",None)}')
-          print(f'error={getattr(result,"error",None)}')
-          if not result.success or getattr(result,'status',None) != 'submitted':
-              raise SystemExit('TEST_SEND_NOT_SUBMITTED')
-          print('TEST_GRAPH_ROUTED_SUBMITTED_OK')
-          PY
+          BASE=/home/ubuntu/shopvivaliz-deploy
+          SHARED="$BASE/shared/uploads"
+          mkdir -p "$SHARED"
+          echo "before_files=$(find "$SHARED" -type f 2>/dev/null | wc -l)"
+          echo '=== exact mapping candidates ==='
+          find /home/ubuntu -type f -name 'olist_imagens_site_mapeamento.csv' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n 20 || true
+          candidate=$(find /home/ubuntu -type f -name 'olist_imagens_site_mapeamento.csv' ! -path "$SHARED/*" -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n 1 | cut -d' ' -f2- || true)
+          if [ -n "$candidate" ] && [ -f "$candidate" ]; then
+            source_dir=$(dirname "$candidate")
+            backup="$BASE/shared/upload-recovery-backup-$(date +%Y%m%d-%H%M%S)"
+            mkdir -p "$backup"
+            cp -a "$SHARED/." "$backup/" 2>/dev/null || true
+            echo "recovery_source=$source_dir"
+            cp -a -n "$source_dir/." "$SHARED/"
+          else
+            echo 'recovery_source=none'
+          fi
+          echo "after_files=$(find "$SHARED" -type f 2>/dev/null | wc -l)"
+          if test -f "$SHARED/olist_imagens_site_mapeamento.csv"; then
+            echo 'mapping_csv=present'
+            echo "mapping_rows=$(wc -l < "$SHARED/olist_imagens_site_mapeamento.csv")"
+          else
+            echo 'mapping_csv=missing'
+          fi
+          echo "uploads_link=$(readlink -f "$BASE/current/uploads" 2>/dev/null || true)"
+          html=$(mktemp)
+          curl -sS --max-time 30 -H 'Host: shopvivaliz.com.br' http://127.0.0.1/ > "$html"
+          echo "category_images=$(grep -c 'category-slide-img' "$html" || true)"
+          echo "product_cards=$(grep -c 'product-card' "$html" || true)"
+          grep -oE '<img[^>]+class="product[^>]*>|<img[^>]+src="[^"]+"[^>]*>' "$html" | head -n 30 || true
+          rm -f "$html"
+          echo "email_worker=$(systemctl is-active mei-mg-email-worker.service || true)"
           EOF
       - name: Cleanup
         if: always()

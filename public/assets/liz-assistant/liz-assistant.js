@@ -91,6 +91,7 @@
     const panel = root.querySelector('#sv-liz-panel');
     const close = root.querySelector('.sv-close');
     const msgs = root.querySelector('.sv-msgs');
+    const form = root.querySelector('.sv-form');
     const input = root.querySelector('input');
     const submitButton = root.querySelector('.sv-form button[type="submit"]');
     const heroVideo = root.querySelector('.sv-hero video');
@@ -233,12 +234,23 @@
       }
     }
 
-    root.querySelector('form').addEventListener('submit', event => {
+    form.addEventListener('submit', event => {
       event.preventDefault();
       const text = input.value.trim();
       if (!text || requestInFlight) return;
       input.value = '';
       ask(text);
+    });
+
+    // Enter dentro da Liz deve ter exatamente o mesmo comportamento do botão
+    // Enviar. Isolamos a tecla para impedir handlers globais/legados da página
+    // (por exemplo, busca com IA) de também receberem o mesmo evento.
+    input.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' || event.isComposing || event.shiftKey) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      if (!requestInFlight && input.value.trim()) form.requestSubmit(submitButton);
     });
 
     let abandonmentTriggered = false;

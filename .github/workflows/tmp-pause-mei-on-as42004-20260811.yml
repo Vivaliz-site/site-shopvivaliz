@@ -1,0 +1,31 @@
+name: Pause MEI sender on AS42004
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-pause-mei-on-as42004-20260811.yml']
+permissions:
+  contents: read
+jobs:
+  pause:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Pause worker safely
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          sudo systemctl stop mei-mg-email-worker.service || true
+          echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
+          sudo systemctl --no-pager --full status mei-mg-email-worker.service | sed -n '1,20p' || true
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

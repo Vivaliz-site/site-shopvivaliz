@@ -186,6 +186,10 @@ jobs:
           test -f "$deploy_script"
           git -C "$repo" rev-parse --is-inside-work-tree >/dev/null
           git -C "$repo" remote get-url origin >/dev/null
+          # The deploy clone is canonically owned by ubuntu. Repair legacy or
+          # sudo-created ownership drift before Git needs to write new objects.
+          sudo chown -R ubuntu:ubuntu "$repo"
+          test -w "$repo/.git/objects"
           git -C "$repo" fetch --no-tags origin "$expected_sha"
           git -C "$repo" cat-file -e "${expected_sha}^{commit}"
           git -C "$repo" cat-file -e "${expected_sha}:scripts/deploy-production.sh"
