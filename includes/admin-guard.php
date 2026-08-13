@@ -122,15 +122,15 @@ if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAiRoutineUiPages, t
         $svAssetVersion = static function (string $relativePath): string {
             $path = dirname(__DIR__) . $relativePath;
             $mtime = is_file($path) ? (int)filemtime($path) : 0;
-            return $mtime > 0 ? (string)$mtime : '20260813a';
+            return $mtime > 0 ? (string)$mtime : '20260813b';
         };
 
         if ($svAdminScriptName === '/admin/catalog-optimization/admin_catalog.php') {
-            // The catalog page now has one owner for selection, generation,
+            // The catalog page has one owner for selection, generation,
             // review and apply. Do not stack the legacy hotfix listeners here:
             // duplicated capture handlers were one of the causes of the
-            // confusing/fragile Admin behavior.
-            echo "\n<script src=\"/admin/assets/catalog-optimization-workflow-v3.js?v=" . $svAssetVersion('/admin/assets/catalog-optimization-workflow-v3.js') . "\"></script>\n";
+            // confusing and fragile Admin behavior.
+            echo "\n<script src=\"/admin/assets/catalog-optimization-workflow.js?v=" . $svAssetVersion('/admin/assets/catalog-optimization-workflow.js') . "\"></script>\n";
             return;
         }
 
