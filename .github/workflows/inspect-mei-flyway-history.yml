@@ -1,0 +1,57 @@
+name: Inspect MEI Flyway history V019-V024
+
+on:
+  push:
+    branches:
+      - ops/inspect-mei-v020-stash
+    paths:
+      - '.github/workflows/inspect-mei-flyway-history.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  history:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Query only Flyway history versions 19 through 24
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 240s ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          import json, os, psycopg
+          from psycopg.rows import dict_row
+          load_dotenv('.env', override=True)
+          with psycopg.connect(os.environ['DATABASE_URL'], connect_timeout=10, row_factory=dict_row) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("set transaction read only")
+                  cur.execute("set statement_timeout='15s'")
+                  cur.execute('''
+                    select installed_rank, version, description, script, checksum, success
+                      from mei_email.flyway_schema_history
+                     where version in ('19','20','21','22','23','24')
+                     order by installed_rank
+                  ''')
+                  print('FLYWAY_HISTORY='+json.dumps([dict(r) for r in cur.fetchall()], ensure_ascii=False))
+          PY
+          echo 'WORKER_RESUME_ALLOWED=false'
+          EOF
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey
