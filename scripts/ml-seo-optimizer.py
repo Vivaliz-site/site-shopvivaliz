@@ -672,6 +672,32 @@ def optimize_item(ml: ML, client, item_id: str, apply: bool, research: bool = Tr
             result["problems"].append(f"PUT item {st}: {json.dumps(resp, ensure_ascii=False)[:400]}")
             result["status"] = "erro"
             return result
+        # Atributos com `allow_variations` sao anexados ao titulo pelo ML. Se o titulo
+        # resultante piorar (palavra repetida ou estouro de limite), desfaz esses.
+        varying = {
+            a["id"]
+            for a in ctx["usable"]
+            if (a.get("tags") or {}).get("allow_variations")
+        } & {a["id"] for a in attributes}
+        if varying:
+            _, after = ml.call("GET", f"/items/{item_id}?attributes=id,title")
+            new_title = (after or {}).get("title") or ""
+            words = [norm(w) for w in re.findall(r"[^\W\d_]{4,}", new_title, flags=re.UNICODE)]
+            degraded = len(words) != len(set(words)) or len(new_title) > ctx["max_title"]
+            result["title_after_attributes"] = new_title
+            if degraded:
+                ml.call(
+                    "PUT",
+                    f"/items/{item_id}",
+                    body={"attributes": [{"id": a, "value_id": None, "value_name": None}
+                                         for a in sorted(varying)]},
+                )
+                result["problems"].append(
+                    f"atributos de variacao revertidos: piorariam o titulo -> {new_title!r}"
+                )
+                result["changes"]["attributes"] = [
+                    a for a in attributes if a["id"] not in varying
+                ]
     if description and norm(description) != norm(ctx["description"]):
         st, resp = ml.call("PUT", f"/items/{item_id}/description", body={"plain_text": description})
         if st not in (200, 201):
