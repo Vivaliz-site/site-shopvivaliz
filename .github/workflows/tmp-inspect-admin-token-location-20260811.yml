@@ -1,7 +1,7 @@
 name: Inspect admin credential names only
 on:
   push:
-    branches: [main]
+    branches: [ops/inspect-mei-v020-stash]
     paths: ['.github/workflows/tmp-inspect-admin-token-location-20260811.yml']
 permissions:
   contents: read
@@ -14,12 +14,14 @@ jobs:
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
         run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
       - name: Inspect credential names and worker state only
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          timeout 180s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           echo WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)
           echo 'ENV_KEYS:'
@@ -27,9 +29,10 @@ jobs:
             sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' /home/ubuntu/mei-mg-email/.env | grep -Ei 'admin|token|graph|m365|exchange|defender|tenant|client|secret|cert' || true
           fi
           echo 'CREDENTIAL_FILES:'
-          find /home/ubuntu/.shopvivaliz /home/ubuntu/mei-mg-email -maxdepth 3 -type f 2>/dev/null | grep -Ei 'admin|token|graph|m365|exchange|defender|cert|secret|cred' | sed 's#^#/file #g' | head -100 || true
+          find /home/ubuntu/.shopvivaliz /home/ubuntu/mei-mg-email -maxdepth 4 -type f 2>/dev/null | grep -Ei 'admin|token|graph|m365|exchange|defender|cert|secret|cred' | sed 's#^#/file #g' | head -150 || true
           echo 'SYSTEMD_ENV_KEYS:'
           sudo systemctl show mei-mg-email-worker.service -p Environment 2>/dev/null | sed 's/Environment=//' | tr ' ' '\n' | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' | grep -Ei 'admin|token|graph|m365|exchange|defender|tenant|client|secret|cert' || true
+          echo 'WORKER_RESUME_ALLOWED=false'
           EOF
       - name: Cleanup
         if: always()
