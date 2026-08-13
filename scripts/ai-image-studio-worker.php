@@ -17,6 +17,14 @@ foreach ($argv as $arg) {
     }
 }
 
+$db = ai_studio_db();
+if (!$db instanceof PDO) {
+    fwrite(STDERR, "[ai-image-worker] Banco de dados indisponivel; resultados nao poderiam ser persistidos em staging.\n");
+    sv_log('ai_image_worker_database_unavailable', 'queue', ['once' => $once]);
+    exit(2);
+}
+svcp_ensure_schema($db);
+
 fwrite(STDOUT, "[ai-image-worker] Starting with limit={$limit}, idle_sleep={$idleSleep}s\n");
 sv_log('ai_image_worker_started', 'queue', ['limit' => $limit, 'idle_sleep' => $idleSleep, 'once' => $once]);
 
@@ -41,15 +49,56 @@ while (true) {
         }
 
         try {
-            $result = ai_studio_process_queued_job($payload);
-            sv_queue_finish($jobId, (($result['success'] ?? false) ? 'done' : 'failed'), null);
-            fwrite(STDOUT, "[ai-image-worker] Job {$jobId} finished with status=" . (($result['success'] ?? false) ? 'done' : 'failed') . "\n");
+            $productId = (int)($payload['product_id'] ?? 0);
+            $provider = (string)($payload['provider'] ?? '');
+            $imageTypes = is_array($payload['image_types'] ?? null)
+                ? array_values(array_map('strval', $payload['image_types']))
+                : ['cover', 'hero', 'ambient'];
+            $modelOverride = trim((string)($payload['model_override'] ?? ''));
+            $targetChannel = strtolower(trim((string)($payload['target_channel'] ?? 'site')));
+            $product = is_array($payload['product'] ?? null) ? $payload['product'] : null;
+            $baseImagePath = trim((string)($payload['base_image_path'] ?? ''));
+            $baseImageIsTemp = (bool)($payload['base_image_is_temp'] ?? false);
+            $prompts = is_array($payload['prompts'] ?? null) ? $payload['prompts'] : null;
+
+            // A fila precisa usar a conexao real. O fluxo antigo chamava o
+            // helper com PDO nulo: os arquivos podiam ser gerados, mas nenhuma
+            // linha era inserida em product_images_staging, deixando o Admin
+            // sem resultados para revisar ou publicar.
+            $result = ai_studio_process_item(
+                $db,
+                $productId,
+                $provider,
+                $imageTypes,
+                $modelOverride !== '' ? $modelOverride : null,
+                $targetChannel,
+                $product,
+                $baseImagePath !== '' ? $baseImagePath : null,
+                $baseImageIsTemp,
+                $prompts
+            );
+
+            $success = (bool)($result['success'] ?? false);
+            $resultErrors = [];
+            $stagingIds = [];
+            foreach ((array)($result['results'] ?? []) as $row) {
+                $stagingId = (int)($row['staging_id'] ?? 0);
+                if ($stagingId > 0) $stagingIds[] = $stagingId;
+                $error = trim((string)($row['error'] ?? ''));
+                if ($error !== '') $resultErrors[] = $error;
+            }
+            $errorText = $success ? null : (trim((string)($result['error'] ?? '')) ?: implode(' | ', $resultErrors));
+            sv_queue_finish($jobId, $success ? 'done' : 'failed', $errorText !== '' ? $errorText : null);
+
+            fwrite(STDOUT, "[ai-image-worker] Job {$jobId} finished with status=" . ($success ? 'done' : 'failed') . " staging=" . implode(',', $stagingIds) . "\n");
             sv_log('ai_image_worker_job_finished', 'queue', [
                 'job_id' => $jobId,
-                'status' => (($result['success'] ?? false) ? 'done' : 'failed'),
-                'product_id' => (int)($payload['product_id'] ?? 0),
-                'provider' => (string)($payload['provider'] ?? ''),
-                'target_channel' => (string)($payload['target_channel'] ?? ''),
+                'status' => $success ? 'done' : 'failed',
+                'product_id' => $productId,
+                'provider' => $provider,
+                'target_channel' => $targetChannel,
+                'staging_ids' => $stagingIds,
+                'result_count' => count((array)($result['results'] ?? [])),
             ]);
         } catch (Throwable $e) {
             sv_queue_finish($jobId, 'failed', $e->getMessage());
