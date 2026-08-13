@@ -27,6 +27,19 @@ RULES: tuple[tuple[str, str, re.Pattern[str], str], ...] = (
     ("high", "optional_evidence", re.compile(joined(r"if-no-files-", r"found\s*:\s*warn"), re.I), "Workflow evidence is optional instead of required."),
 )
 
+# `set +e` is not failure suppression when a workflow deliberately captures the
+# command status, restores fail-fast immediately, creates mandatory evidence and
+# exits with exactly the captured status. This form is needed for diagnostics
+# that must be uploaded even when the audited command fails.
+CAPTURED_STATUS_BLOCK = re.compile(
+    r"(?ms)^(?P<indent>[ \t]*)set[ \t]+\+e[ \t]*$\n"
+    r"(?P<body>.*?)"
+    r"^(?P=indent)(?P<status>[A-Za-z_][A-Za-z0-9_]*)=\$\?[ \t]*$\n"
+    r"^(?P=indent)set[ \t]+-e[ \t]*$\n"
+    r"(?P<tail>.*?)"
+    r"^(?P=indent)exit[ \t]+[\"']?\$\{?(?P=status)\}?[\"']?[ \t]*$"
+)
+
 WRITE_PERMISSION = re.compile(r"(?m)^\s{2}(contents|issues|pull-requests|actions)\s*:\s*write\s*$", re.I)
 AUTO_TRIGGER = re.compile(r"(?m)^\s{2}(push|schedule|issues|workflow_run|repository_dispatch)\s*:")
 MUTATION = re.compile(joined(r"git\s+pu", r"sh|gh\s+(?:pr\s+merge|issue\s+(?:create|edit|close|comment))"), re.I)
@@ -53,13 +66,26 @@ def excerpt(value: str) -> str:
     return " ".join(value.strip().split())[:200]
 
 
+def safely_rethrown_set_plus_e_offsets(text: str) -> set[int]:
+    offsets: set[int] = set()
+    marker = re.compile(r"(?m)^[ \t]*set[ \t]+\+e[ \t]*$")
+    for block in CAPTURED_STATUS_BLOCK.finditer(text):
+        found = marker.search(block.group(0))
+        if found is not None:
+            offsets.add(block.start() + found.start())
+    return offsets
+
+
 def audit_workflow(path: Path) -> list[Finding]:
     relative = path.relative_to(ROOT).as_posix()
     text = path.read_text(encoding="utf-8", errors="replace")
     findings: list[Finding] = []
+    safe_set_plus_e = safely_rethrown_set_plus_e_offsets(text)
 
     for severity, rule, pattern, message in RULES:
         for match in pattern.finditer(text):
+            if rule == "set_plus_e" and match.start() in safe_set_plus_e:
+                continue
             findings.append(Finding(severity, rule, relative, line_number(text, match.start()), message, excerpt(match.group(0))))
 
     write_permissions = list(WRITE_PERMISSION.finditer(text))

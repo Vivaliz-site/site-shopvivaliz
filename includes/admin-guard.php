@@ -114,7 +114,7 @@ if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAdminUiPages, true)
         $svAssetVersion = static function (string $relativePath): string {
             $path = dirname(__DIR__) . $relativePath;
             $mtime = is_file($path) ? (int)filemtime($path) : 0;
-            return $mtime > 0 ? (string)$mtime : '20260813h';
+            return $mtime > 0 ? (string)$mtime : '20260813i';
         };
 
         if ($svAdminScriptName === '/admin/index.php') {
@@ -127,6 +127,7 @@ if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAdminUiPages, true)
             echo "\n<script src=\"/admin/assets/catalog-optimization-workflow.js?v=" . $svAssetVersion('/admin/assets/catalog-optimization-workflow.js') . "\"></script>\n";
             echo "<script src=\"/admin/assets/catalog-change-intelligence.js?v=" . $svAssetVersion('/admin/assets/catalog-change-intelligence.js') . "\"></script>\n";
             echo "<script src=\"/admin/assets/catalog-effective-results.js?v=" . $svAssetVersion('/admin/assets/catalog-effective-results.js') . "\"></script>\n";
+            echo "<script src=\"/admin/assets/catalog-candidate-availability.js?v=" . $svAssetVersion('/admin/assets/catalog-candidate-availability.js') . "\"></script>\n";
             echo "<script src=\"/admin/assets/admin-mobile-completion.js?v=" . $svAssetVersion('/admin/assets/admin-mobile-completion.js') . "\"></script>\n";
             return;
         }

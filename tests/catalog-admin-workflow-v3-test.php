@@ -14,6 +14,10 @@ function sv_catalog_v3_assert(bool $condition, string $message): void
 
 $guard = file_get_contents($root . '/includes/admin-guard.php');
 $ui = file_get_contents($root . '/admin/assets/catalog-optimization-workflow.js');
+$availabilityUi = file_get_contents($root . '/admin/assets/catalog-candidate-availability.js');
+$candidateEndpoint = file_get_contents($root . '/admin/catalog-optimization/api/pending_candidates_unique.php');
+$cleanup = file_get_contents($root . '/scripts/maintenance/cleanup-ai-smoke-staging.php');
+$smokeWorkflow = file_get_contents($root . '/.github/workflows/ai-routines-production-smoke.yml');
 $resilient = file_get_contents($root . '/admin/catalog-optimization/api/optimize_catalog_resilient.php');
 $config = file_get_contents($root . '/admin/catalog-optimization/config_optimization.php');
 $textServices = file_get_contents($root . '/admin/catalog-optimization/src/TextAiServices.php');
@@ -23,6 +27,10 @@ $repairWorkflow = file_get_contents($root . '/.github/workflows/repair-catalog-h
 
 sv_catalog_v3_assert(is_string($guard) && $guard !== '', 'admin-guard.php precisa existir');
 sv_catalog_v3_assert(is_string($ui) && $ui !== '', 'workflow unificado precisa existir');
+sv_catalog_v3_assert(is_string($availabilityUi) && $availabilityUi !== '', 'diagnostico de disponibilidade precisa existir');
+sv_catalog_v3_assert(is_string($candidateEndpoint) && $candidateEndpoint !== '', 'endpoint de candidatos precisa existir');
+sv_catalog_v3_assert(is_string($cleanup) && $cleanup !== '', 'limpeza de staging de smoke precisa existir');
+sv_catalog_v3_assert(is_string($smokeWorkflow) && $smokeWorkflow !== '', 'matriz de smoke precisa existir');
 sv_catalog_v3_assert(is_string($resilient) && $resilient !== '', 'API resiliente precisa existir');
 sv_catalog_v3_assert(is_string($config) && $config !== '', 'configuracao de IA do catalogo precisa existir');
 sv_catalog_v3_assert(is_string($textServices) && $textServices !== '', 'servicos de provider precisam existir');
@@ -31,8 +39,9 @@ sv_catalog_v3_assert(is_string($repair) && $repair !== '', 'reparo de pendencias
 sv_catalog_v3_assert(is_string($repairWorkflow) && $repairWorkflow !== '', 'workflow de reparo pos-deploy precisa existir');
 
 sv_catalog_v3_assert(
-    str_contains($guard, 'catalog-optimization-workflow.js'),
-    'Admin deve carregar o workflow unificado do catalogo'
+    str_contains($guard, 'catalog-optimization-workflow.js')
+    && str_contains($guard, 'catalog-candidate-availability.js'),
+    'Admin deve carregar o workflow unificado e o diagnostico de disponibilidade'
 );
 sv_catalog_v3_assert(
     !str_contains($guard, 'catalog-resilient-run-hotfix.js') && !str_contains($guard, 'catalog-candidate-race-guard.js'),
@@ -75,6 +84,37 @@ sv_catalog_v3_assert(
 sv_catalog_v3_assert(
     str_contains($ui, "document.createElement('details')") && str_contains($ui, 'sv-regen-details'),
     'Regeneracao recolhida deve continuar acessivel por disclosure nativo'
+);
+
+sv_catalog_v3_assert(
+    str_contains($candidateEndpoint, "'summary' => [")
+    && str_contains($candidateEndpoint, "'active' =>")
+    && str_contains($candidateEndpoint, "'eligible' =>")
+    && str_contains($candidateEndpoint, "'in_review' =>"),
+    'Endpoint deve separar produtos ativos, elegiveis e em revisao'
+);
+sv_catalog_v3_assert(
+    str_contains($candidateEndpoint, 'cat_candidate_active_sql')
+    && str_contains($candidateEndpoint, "NOT IN ('published','rejected','failed')"),
+    'Elegibilidade deve tolerar schemas ativos e bloquear somente rascunhos operacionais'
+);
+sv_catalog_v3_assert(
+    str_contains($availabilityUi, 'Todos os produtos deste canal já estão em revisão')
+    && str_contains($availabilityUi, 'Ir para Revisar e aplicar')
+    && str_contains($availabilityUi, 'in_review'),
+    'Fila vazia deve explicar rascunhos existentes e levar para a revisao'
+);
+sv_catalog_v3_assert(
+    str_contains($cleanup, "result['staging_id']")
+    && str_contains($cleanup, "status = 'rejected'")
+    && str_contains($cleanup, 'catalog_candidates_shopee_eligible='),
+    'Limpeza deve usar IDs explicitos dos relatorios, retirar smoke da fila e diagnosticar Shopee'
+);
+sv_catalog_v3_assert(
+    substr_count($smokeWorkflow, 'cleanup_smoke_staging') >= 4
+    && str_contains($smokeWorkflow, "trap 'cleanup_smoke_staging || true' EXIT")
+    && str_contains($smokeWorkflow, 'scripts/maintenance/cleanup-ai-smoke-staging.php'),
+    'Matriz deve limpar staging tecnico antes, depois e no encerramento de seguranca'
 );
 
 sv_catalog_v3_assert(
@@ -173,4 +213,4 @@ sv_catalog_v3_assert(
     'Reparo pos-deploy deve ignorar pushes intermediarios, aceitar release descendente e manter fila v2 serial/retomavel'
 );
 
-fwrite(STDOUT, "COMPROVADO: toda saida gerada e auto-normalizada, hard failure nao vira trabalho manual e reparo legado nao fica preso em SHA intermediario.\n");
+fwrite(STDOUT, "COMPROVADO: candidatos ficam disponiveis, smokes nao bloqueiam a fila, hard failure nao vira trabalho manual e reparo legado nao fica preso em SHA intermediario.\n");
