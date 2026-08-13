@@ -1,0 +1,41 @@
+name: Inspect MEI Flyway history V014 V017 V018
+
+on:
+  push:
+    branches:
+      - ops/inspect-mei-v020-stash
+    paths:
+      - '.github/workflows/inspect-mei-flyway-history-014-018.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Read Flyway rows only
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 120s ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=8 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then exit 81; fi
+          timeout 30s docker exec mei-mg-email-db psql -X -v ON_ERROR_STOP=1 -U postgres -d mei_mg_email -At -F '|' -c "set statement_timeout='10s'; select installed_rank,version,description,script,checksum,success from mei_email.flyway_schema_history where version in ('014','017','018') order by installed_rank;"
+          echo 'WORKER_RESUME_ALLOWED=false'
+          EOF
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey
