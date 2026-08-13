@@ -181,7 +181,7 @@ def analyze(client, pics: list[dict]) -> dict:
         model=MODEL,
         max_tokens=8000,
         system=[{"type": "text", "text": VISION_PROMPT, "cache_control": {"type": "ephemeral"}}],
-        output_config={"effort": "medium", "format": {"type": "json_schema", "schema": SCHEMA}},
+        output_config=_seo.output_config(MODEL, "medium", SCHEMA),
         messages=[{"role": "user", "content": content}],
     )
     if resp.stop_reason == "refusal":
