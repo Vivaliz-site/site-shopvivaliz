@@ -13,7 +13,7 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 3
     environment: production
     steps:
       - name: Configure verified production SSH
@@ -38,37 +38,59 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+          if timeout 35s ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 -o ServerAliveInterval=10 -o ServerAliveCountMax=2 \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 'php -d display_errors=0 -r '\''
-              $path = "/home/ubuntu/shopvivaliz-deploy/shared/.env";
-              $env = [];
-              foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-                $line = trim($line);
-                if ($line === "" || str_starts_with($line, "#") || !str_contains($line, "=")) continue;
-                if (str_starts_with($line, "export ")) $line = trim(substr($line, 7));
-                [$k, $v] = explode("=", $line, 2);
-                $v = trim($v);
-                if (strlen($v) >= 2 && (($v[0] === "\"" && $v[strlen($v)-1] === "\"") || ($v[0] === "\x27" && $v[strlen($v)-1] === "\x27"))) $v = substr($v, 1, -1);
-                $env[trim($k)] = $v;
+            ubuntu@137.131.156.17 'timeout 15s php -d display_errors=0' <<'PHP'
+          <?php
+          $path = '/home/ubuntu/shopvivaliz-deploy/shared/.env';
+          $env = [];
+          foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+              $line = trim($line);
+              if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) continue;
+              if (str_starts_with($line, 'export ')) $line = trim(substr($line, 7));
+              [$key, $value] = explode('=', $line, 2);
+              $value = trim($value);
+              if (strlen($value) >= 2) {
+                  $first = $value[0];
+                  $last = $value[strlen($value) - 1];
+                  if (($first === '"' && $last === '"') || ($first === "'" && $last === "'")) $value = substr($value, 1, -1);
               }
-              $host = trim((string)($env["DB_HOST"] ?? "localhost")) ?: "localhost";
-              $portRaw = trim((string)($env["DB_PORT"] ?? "3306"));
-              $port = ctype_digit($portRaw) ? (int)$portRaw : 3306;
-              $name = trim((string)($env["DB_NAME"] ?? $env["DB_DATABASE"] ?? ""));
-              $user = trim((string)($env["DB_USER"] ?? $env["DB_USERNAME"] ?? ""));
-              $pass = (string)($env["DB_PASS"] ?? $env["DB_PASSWORD"] ?? "");
-              $local = in_array(strtolower($host), ["localhost", "127.0.0.1", "::1"], true);
-              echo "db_host_scope=" . ($local ? "local" : "remote") . PHP_EOL;
-              echo "db_identity_fields_present=" . (($name !== "" && $user !== "" && strtolower($user) !== "root") ? "true" : "false") . PHP_EOL;
-              try {
-                $pdo = new PDO(sprintf("mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4", $host, $port, $name), $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5]);
-                $ok = (int)$pdo->query("SELECT 1")->fetchColumn() === 1;
-                echo "db_select_one=" . ($ok ? "true" : "false") . PHP_EOL;
-              } catch (Throwable $e) {
-                echo "db_select_one=false" . PHP_EOL;
-                echo "db_failure_class=" . get_class($e) . PHP_EOL;
-              }
-              echo "secret_values_printed=false" . PHP_EOL;
-            '\''' 
+              $env[trim($key)] = $value;
+          }
+          $host = trim((string)($env['DB_HOST'] ?? 'localhost')) ?: 'localhost';
+          $portRaw = trim((string)($env['DB_PORT'] ?? '3306'));
+          $port = ctype_digit($portRaw) ? (int)$portRaw : 3306;
+          $name = trim((string)($env['DB_NAME'] ?? $env['DB_DATABASE'] ?? ''));
+          $user = trim((string)($env['DB_USER'] ?? $env['DB_USERNAME'] ?? ''));
+          $pass = (string)($env['DB_PASS'] ?? $env['DB_PASSWORD'] ?? '');
+          $local = in_array(strtolower($host), ['localhost', '127.0.0.1', '::1'], true);
+          echo 'db_host_scope=' . ($local ? 'local' : 'remote') . PHP_EOL;
+          echo 'db_identity_fields_present=' . (($name !== '' && $user !== '' && strtolower($user) !== 'root') ? 'true' : 'false') . PHP_EOL;
+          try {
+              $pdo = new PDO(
+                  sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', $host, $port, $name),
+                  $user,
+                  $pass,
+                  [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5]
+              );
+              $ok = (int)$pdo->query('SELECT 1')->fetchColumn() === 1;
+              echo 'db_select_one=' . ($ok ? 'true' : 'false') . PHP_EOL;
+          } catch (Throwable $error) {
+              echo 'db_select_one=false' . PHP_EOL;
+              echo 'db_failure_class=' . get_class($error) . PHP_EOL;
+          }
+          echo 'secret_values_printed=false' . PHP_EOL;
+          PHP
+          then
+            echo 'db_diagnostic_command_completed=true'
+          else
+            rc=$?
+            echo "db_diagnostic_command_completed=false"
+            if [[ "$rc" -eq 124 ]]; then
+              echo 'db_diagnostic_failure=bounded_timeout'
+            else
+              echo 'db_diagnostic_failure=transport_or_remote_failure'
+            fi
+            echo 'secret_values_printed=false'
+          fi
