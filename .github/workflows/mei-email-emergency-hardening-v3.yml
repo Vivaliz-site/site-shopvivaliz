@@ -1,0 +1,208 @@
+name: Emergency MEI email hardening v3
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mei-email-emergency-hardening-v3.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  harden-v3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      EXPECTED_MEI_SHA: 28a2a71d4ccb9cfc2849e86cfc3ec23ee9900a20
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Wait for VM and assert fail-closed
+        run: |
+          set -euo pipefail
+          opts=(-o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey)
+          ready=false
+          for attempt in $(seq 1 15); do
+            echo "V3_SSH_ATTEMPT=$attempt"
+            if timeout 50s ssh "${opts[@]}" ubuntu@137.131.156.17 'echo V3_SSH_READY=true'; then ready=true; break; fi
+            sleep 20
+          done
+          test "$ready" = true
+          ssh "${opts[@]}" ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          sudo systemctl kill --kill-who=all --signal=SIGKILL mei-mg-email-worker.service || true
+          sudo systemctl stop mei-mg-email-worker.service || true
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then echo 'V3_WORKER_STOP_FAILED=true'; exit 80; fi
+          sudo install -d -m 0750 -o ubuntu -g ubuntu /var/lib/mei-mg-email
+          if [ ! -f /var/lib/mei-mg-email/sender_blocked.pause ]; then
+            cat <<'EOPAUSE' | sudo tee /var/lib/mei-mg-email/sender_blocked.pause >/dev/null
+          sender=naoresponda@dev.shopvivaliz.com.br
+          error=550 5.1.8 Access denied, bad outbound sender AS(42004)
+          source=emergency_hardening_v3
+          resume_allowed=false
+          EOPAUSE
+            sudo chown ubuntu:ubuntu /var/lib/mei-mg-email/sender_blocked.pause
+            sudo chmod 0640 /var/lib/mei-mg-email/sender_blocked.pause
+          fi
+          echo 'V3_WORKER_STOPPED=true'
+          echo 'WORKER_RESUME_ALLOWED=false'
+          EOF
+
+      - name: Normalize local MEI repository without network
+        run: |
+          set -euo pipefail
+          opts=(-o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey)
+          ssh "${opts[@]}" ubuntu@137.131.156.17 "EXPECTED_MEI_SHA='$EXPECTED_MEI_SHA' bash -s" <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          for pid in $(pgrep -x git 2>/dev/null || true); do
+            cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
+            if [ "$cwd" = "$PWD" ]; then kill -TERM "$pid" 2>/dev/null || true; fi
+          done
+          sleep 2
+          timeout 20s git cat-file -e "$EXPECTED_MEI_SHA^{commit}"
+          dirty="$(timeout 30s git status --porcelain=v1 --untracked-files=normal | wc -l | tr -d ' ')"
+          echo "V3_PRE_NORMALIZE_DIRTY=$dirty"
+          if [ "$dirty" -gt 0 ]; then
+            timeout 90s git stash push -u -m "emergency-v3-pre-normalize-$(date -u +%Y%m%dT%H%M%SZ)" >/dev/null
+            echo 'V3_PARTIAL_STATE_PRESERVED=true'
+          fi
+          timeout 90s git checkout -B main "$EXPECTED_MEI_SHA"
+          head="$(git rev-parse HEAD)"
+          test "$head" = "$EXPECTED_MEI_SHA"
+          test -z "$(timeout 30s git status --porcelain=v1 --untracked-files=normal)"
+          echo "V3_DEPLOY_SHA=$head"
+          echo "V3_STASH_COUNT=$(git stash list | wc -l | tr -d ' ')"
+          EOF
+
+      - name: Wait for VM load and apply Flyway migrations
+        run: |
+          set -euo pipefail
+          opts=(-o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=30 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey)
+          ssh "${opts[@]}" ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          for round in $(seq 1 18); do
+            load="$(awk '{print $1}' /proc/loadavg)"
+            avail_kb="$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)"
+            echo "V3_RESOURCE_CHECK round=$round load1=$load mem_available_kb=$avail_kb"
+            if awk -v l="$load" -v m="$avail_kb" 'BEGIN { exit ! (l < 2.5 && m > 262144) }'; then break; fi
+            sleep 20
+          done
+          load="$(awk '{print $1}' /proc/loadavg)"
+          avail_kb="$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)"
+          awk -v l="$load" -v m="$avail_kb" 'BEGIN { exit ! (l < 2.5 && m > 262144) }' || { echo 'V3_RESOURCE_GATE_FAILED=true'; exit 81; }
+          timeout 30s docker info >/dev/null
+          echo 'V3_DOCKER_READY=true'
+          existing="$(timeout 20s docker ps -q --filter label=com.docker.compose.project=mei-mg-email --filter label=com.docker.compose.service=flyway 2>/dev/null || true)"
+          if [ -n "$existing" ]; then
+            echo 'V3_EXISTING_FLYWAY=true'
+            for wait_round in $(seq 1 16); do
+              existing="$(timeout 20s docker ps -q --filter label=com.docker.compose.project=mei-mg-email --filter label=com.docker.compose.service=flyway 2>/dev/null || true)"
+              [ -z "$existing" ] && break
+              echo "V3_EXISTING_FLYWAY_WAIT=$wait_round"
+              sleep 15
+            done
+          fi
+          existing="$(timeout 20s docker ps -q --filter label=com.docker.compose.project=mei-mg-email --filter label=com.docker.compose.service=flyway 2>/dev/null || true)"
+          [ -z "$existing" ] || { echo 'V3_FLYWAY_BUSY=true'; exit 82; }
+          rm -f /tmp/mei-flyway-v3.log /tmp/mei-flyway-v3.rc
+          (
+            set +e
+            timeout 300s docker compose run --rm --no-deps flyway migrate > /tmp/mei-flyway-v3.log 2>&1
+            echo $? > /tmp/mei-flyway-v3.rc
+          ) &
+          bg=$!
+          while kill -0 "$bg" 2>/dev/null; do echo 'V3_FLYWAY_HEARTBEAT=true'; sleep 15; done
+          wait "$bg" || true
+          rc="$(cat /tmp/mei-flyway-v3.rc 2>/dev/null || echo 99)"
+          tail -n 100 /tmp/mei-flyway-v3.log | sed -E 's#(jdbc:postgresql://)[^ ]+#\1[redacted]#g'
+          echo "V3_FLYWAY_RC=$rc"
+          test "$rc" = 0
+          echo 'V3_FLYWAY_MIGRATE_OK=true'
+          EOF
+
+      - name: Install monitoring and validate Mail.Read
+        run: |
+          set -euo pipefail
+          opts=(-o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey)
+          ssh "${opts[@]}" ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          bash scripts/instalar_monitoramento_vm.sh
+          if [ -x .venv/bin/python ]; then py=.venv/bin/python; else py=python3; fi
+          timeout 180s "$py" scripts/auditar_graph_mail_read.py
+          echo 'V3_MONITOR_AND_MAIL_READ_OK=true'
+          EOF
+
+      - name: Configure Exchange and remove sender restriction
+        run: |
+          set -euo pipefail
+          opts=(-o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=60 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey)
+          ssh "${opts[@]}" ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          command -v pwsh >/dev/null
+          timeout 600s pwsh -NoProfile -Command '
+            $ErrorActionPreference = "Stop"
+            if (-not (Get-Module -ListAvailable -Name ExchangeOnlineManagement)) {
+              Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+              Install-Module ExchangeOnlineManagement -Scope CurrentUser -Force -AllowClobber
+            }
+            Import-Module ExchangeOnlineManagement
+            Write-Host "V3_EXO_MODULE_READY=true"
+          '
+          timeout 600s pwsh -NoProfile -File ./scripts/configurar_exchange_deliverability.ps1
+          timeout 600s pwsh -NoProfile -File ./scripts/desbloquear_exchange_app_cert.ps1 -ConfirmUnblock
+          echo 'V3_EXCHANGE_PHASE_OK=true'
+          EOF
+
+      - name: Verify final state without resuming worker
+        run: |
+          set -euo pipefail
+          opts=(-o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=30 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey)
+          ssh "${opts[@]}" ubuntu@137.131.156.17 "EXPECTED_MEI_SHA='$EXPECTED_MEI_SHA' bash -s" <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          test -f /var/lib/mei-mg-email/sender_blocked.pause
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then echo 'V3_WORKER_ACTIVE_UNSAFE=true'; exit 90; fi
+          sudo systemctl is-active mei-mg-email-monitor.service
+          sudo systemctl is-active mei-mg-email-ndr-guard.service
+          sudo systemctl is-active mei-mg-email-base-sync.timer
+          sudo systemctl is-enabled mei-mg-email-ndr-guard.service
+          sudo systemctl is-enabled mei-mg-email-base-sync.timer
+          head="$(git rev-parse HEAD)"
+          test "$head" = "$EXPECTED_MEI_SHA"
+          rm -f /tmp/mei-flyway-info-v3.log /tmp/mei-flyway-info-v3.rc
+          (
+            set +e
+            timeout 240s docker compose run --rm --no-deps flyway info > /tmp/mei-flyway-info-v3.log 2>&1
+            echo $? > /tmp/mei-flyway-info-v3.rc
+          ) &
+          bg=$!
+          while kill -0 "$bg" 2>/dev/null; do echo 'V3_FLYWAY_INFO_HEARTBEAT=true'; sleep 15; done
+          wait "$bg" || true
+          rc="$(cat /tmp/mei-flyway-info-v3.rc 2>/dev/null || echo 99)"
+          tail -n 80 /tmp/mei-flyway-info-v3.log | sed -E 's#(jdbc:postgresql://)[^ ]+#\1[redacted]#g'
+          test "$rc" = 0
+          grep -Eq '(^|[[:space:]])22([[:space:]]|\|).*Success|V022' /tmp/mei-flyway-info-v3.log
+          grep -Eq '(^|[[:space:]])23([[:space:]]|\|).*Success|V023' /tmp/mei-flyway-info-v3.log
+          grep -Eq '(^|[[:space:]])24([[:space:]]|\|).*Success|V024' /tmp/mei-flyway-info-v3.log
+          echo "V3_VERIFY_SHA=$head"
+          echo 'V3_DEPLOY_HARDENING_OK=true'
+          echo 'WORKER_RESUME_ALLOWED=false'
+          EOF
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/vmkey

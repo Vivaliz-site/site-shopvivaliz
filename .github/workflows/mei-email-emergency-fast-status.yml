@@ -1,0 +1,43 @@
+name: Emergency MEI VM fast status
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mei-email-emergency-fast-status.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Minimal read-only status
+        run: |
+          set -euo pipefail
+          timeout 70s ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          echo 'FAST_SSH_READY=true'
+          uptime
+          free -m | head -n 3
+          df -h / | tail -n 2
+          echo "FAST_GIT_PROCESS_COUNT=$(ps -eo comm= | grep -c '^git$' || true)"
+          echo "FAST_DOCKER_PROCESS_COUNT=$(ps -eo comm= | grep -c '^docker$' || true)"
+          echo "FAST_PWSH_PROCESS_COUNT=$(ps -eo comm= | grep -c '^pwsh$' || true)"
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then echo 'FAST_WORKER_ACTIVE=true'; exit 30; else echo 'FAST_WORKER_ACTIVE=false'; fi
+          echo 'WORKER_RESUME_ALLOWED=false'
+          EOF
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/vmkey
