@@ -65,7 +65,7 @@ sv_catalog_v3_assert(
     'Refinamento deve ter uma unica definicao e uma unica chamada no fluxo'
 );
 sv_catalog_v3_assert(
-    str_contains($resilient, "if ($warnings['hard'] === [] && $initialScore >= 85)"),
+    str_contains($resilient, "if (\$warnings['hard'] === [] && \$initialScore >= 85)"),
     'Segunda chamada de IA deve acontecer apenas quando houver bloqueio ou score baixo'
 );
 
