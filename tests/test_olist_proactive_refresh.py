@@ -21,6 +21,14 @@ def test_systemd_checks_every_five_minutes_with_thirty_minute_margin() -> None:
     assert "/shared/private/olist-tokens.json" in service
 
 
+def test_legacy_service_intervals_cannot_weaken_proactive_refresh() -> None:
+    assert renewer.MAX_CHECK_INTERVAL == 300
+    assert renewer.MAX_RETRY_INTERVAL == 300
+    assert renewer.effective_loop_intervals(7200, 900) == (300, 300)
+    assert renewer.effective_loop_intervals(300, 300) == (300, 300)
+    assert renewer.effective_loop_intervals(30, 30) == (60, 60)
+
+
 def test_rotating_token_store_has_priority_over_stale_env(tmp_path: Path, monkeypatch) -> None:
     env_file = tmp_path / ".env"
     token_file = tmp_path / "private" / "olist-tokens.json"

@@ -13,7 +13,7 @@ permissions:
 jobs:
   status:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 6
     steps:
       - name: Configure VM SSH key
         env:
@@ -24,17 +24,34 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Read worker state only
+      - name: Read hardening state only
         run: |
           set -euo pipefail
           ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
           sudo systemctl show mei-mg-email-worker.service -p ActiveState -p SubState -p MainPID -p ExecMainStatus --no-pager
           if sudo systemctl is-active --quiet mei-mg-email-worker.service; then
             echo 'STATUS_WORKER_ACTIVE=true'
             exit 30
           fi
           echo 'STATUS_WORKER_ACTIVE=false'
+          echo "STATUS_GIT_SHA=$(git rev-parse HEAD)"
+          echo "STATUS_GIT_DIRTY_COUNT=$(git status --porcelain=v1 --untracked-files=normal | wc -l | tr -d ' ')"
+          echo "STATUS_STASH_COUNT=$(git stash list | wc -l | tr -d ' ')"
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo 'STATUS_SENTINEL_PRESENT=true'; else echo 'STATUS_SENTINEL_PRESENT=false'; fi
+          for unit in mei-mg-email-monitor.service mei-mg-email-ndr-guard.service mei-mg-email-base-sync.timer; do
+            state="$(sudo systemctl is-active "$unit" 2>/dev/null || true)"
+            echo "STATUS_UNIT_${unit//[^A-Za-z0-9]/_}=$state"
+          done
+          echo 'STATUS_DOCKER_BEGIN'
+          docker ps -a --format '{{.Names}}|{{.Status}}' | grep -E '^mei-mg-email-(db|flyway)\|' || true
+          echo 'STATUS_FLYWAY_LOG_BEGIN'
+          docker logs --tail 30 mei-mg-email-flyway 2>&1 | sed -E 's#(jdbc:postgresql://)[^ ]+#\1[redacted]#g' || true
+          echo 'STATUS_FLYWAY_LOG_END'
+          echo 'STATUS_PROCESS_COUNTS_BEGIN'
+          ps -eo comm= | sort | uniq -c | grep -E '(^| )(bash|python3|pwsh|docker|java)$' || true
+          echo 'STATUS_PROCESS_COUNTS_END'
           echo 'WORKER_RESUME_ALLOWED=false'
           EOF
       - name: Cleanup SSH key
