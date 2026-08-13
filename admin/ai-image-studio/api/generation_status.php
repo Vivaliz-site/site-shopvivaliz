@@ -77,25 +77,24 @@ function ais_status_queue_rows(array $jobIds): array
 }
 
 /** @return list<array<string,mixed>> */
-function ais_status_staging_rows(PDO $db, int $productId, string $channel, string $requestedAt): array
+function ais_status_staging_rows(PDO $db, int $jobId, int $productId): array
 {
-    if ($productId <= 0 || $channel === '') return [];
-    $since = strtotime($requestedAt);
-    $sinceSql = $since !== false ? date('Y-m-d H:i:s', $since - 120) : date('Y-m-d H:i:s', time() - 86400);
+    if ($jobId <= 0 || $productId <= 0) return [];
     try {
         $stmt = $db->prepare(
-            'SELECT id, product_id, image_type, provider_used, status, local_path, error_message, created_at, updated_at '
+            'SELECT id, source_job_id, product_id, image_type, provider_used, status, local_path, error_message, created_at, updated_at '
             . 'FROM product_images_staging '
-            . 'WHERE product_id = ? AND target_channels_json LIKE ? AND created_at >= ? '
-            . 'ORDER BY created_at DESC, id DESC LIMIT 20'
+            . 'WHERE source_job_id = ? AND product_id = ? '
+            . 'ORDER BY id DESC LIMIT 20'
         );
-        $stmt->execute([$productId, '%"' . $channel . '"%', $sinceSql]);
+        $stmt->execute([$jobId, $productId]);
         $latestByType = [];
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
             $type = strtolower(trim((string)($row['image_type'] ?? '')));
             if ($type === '' || isset($latestByType[$type])) continue;
             $latestByType[$type] = [
                 'staging_id' => (int)($row['id'] ?? 0),
+                'source_job_id' => (int)($row['source_job_id'] ?? 0),
                 'image_type' => $type,
                 'provider_used' => (string)($row['provider_used'] ?? ''),
                 'status' => strtolower(trim((string)($row['status'] ?? ''))),
@@ -116,6 +115,7 @@ try {
     $queueRows = ais_status_queue_rows($jobIds);
     $db = function_exists('ai_studio_db') ? ai_studio_db() : null;
     if (!$db instanceof PDO) throw new RuntimeException('Banco do Image Studio indisponivel.');
+    svcp_ensure_schema($db);
 
     $jobs = [];
     $summary = ['queued' => 0, 'running' => 0, 'done' => 0, 'failed' => 0, 'unknown' => 0, 'partial_failure' => 0, 'total' => count($jobIds)];
@@ -149,12 +149,11 @@ try {
         $summary[$status]++;
         $productId = (int)($payload['product_id'] ?? 0);
         $channel = strtolower(trim((string)($payload['target_channel'] ?? 'site')));
-        $requestedAt = (string)($payload['requested_at'] ?? $row['created_at'] ?? '');
         $requestedTypes = array_values(array_unique(array_filter(array_map(
             static fn(mixed $type): string => strtolower(trim((string)$type)),
             (array)($payload['image_types'] ?? [])
         ))));
-        $staging = ais_status_staging_rows($db, $productId, $channel, $requestedAt);
+        $staging = ais_status_staging_rows($db, $jobId, $productId);
         $stagingByType = [];
         foreach ($staging as $stagingRow) {
             $type = (string)($stagingRow['image_type'] ?? '');
