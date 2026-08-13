@@ -97,6 +97,57 @@ catalog_normalizer_assert($providerHard === [], 'saida do provider deve chegar s
 catalog_normalizer_assert(ai_catalog_title_starts_with_identity((string)$providerNormalized['optimized_title'], $product), 'provider deve corrigir identidade antes de devolver a saida');
 catalog_normalizer_assert(stripos(ai_catalog_text_blob($providerNormalized), 'original') === false, 'provider deve remover claim de originalidade nao comprovado');
 
+// Regressao do incidente de producao: um cadastro legado pode ter o proprio
+// nome-fonte iniciado por copy promocional. A identidade factual usada pelo
+// gate e pelo normalizador deve ignorar esse preambulo em vez de reintroduzi-lo.
+$legacyProduct = [
+    'name' => '🔥 Imperdivel! Transforme Suporte Veicular Vivaliz VX10 para Celular',
+    'description' => 'Suporte veicular para celular com fixacao no painel.',
+    'category' => 'Acessorio automotivo',
+    'brand' => '',
+    'model' => '',
+    'sku' => 'VX10-LEGACY',
+    'gtin' => '',
+    'color' => 'Preto',
+    'size' => '',
+    'material' => '',
+    'specs' => 'Fixacao no painel',
+    'olist_id' => '',
+];
+$legacyRaw = [
+    'optimized_title' => '🔥 Imperdivel! Transforme Suporte Veicular Vivaliz VX10!',
+    'optimized_description' => 'Suporte veicular para celular com fixacao no painel.',
+    'bullet_points' => ['Fixacao no painel', 'Cor preta', 'Uso veicular'],
+    'seo_keywords' => ['suporte veicular', 'celular'],
+    'marketing_hooks' => ['Fixacao no painel'],
+    'meta_title' => 'Suporte Veicular Vivaliz',
+    'meta_description' => 'Suporte veicular para celular com fixacao no painel.',
+];
+$legacy = catalog_generated_normalize($legacyRaw, 'site', $legacyProduct);
+$legacyQuality = ai_catalog_quality_report($legacy, 'site', $legacyProduct);
+$legacyHard = catalog_normalizer_hard_failures($legacyQuality);
+$legacyIdentity = ai_catalog_identity_candidates($legacyProduct);
+
+catalog_normalizer_assert(!ai_catalog_title_has_hype_prefix((string)$legacy['optimized_title']), 'nome legado nao pode reintroduzir hype no titulo normalizado');
+catalog_normalizer_assert(ai_catalog_title_starts_with_identity((string)$legacy['optimized_title'], $legacyProduct), 'nome legado limpo deve continuar satisfazendo identidade');
+catalog_normalizer_assert(in_array('suporte veicular vivaliz', $legacyIdentity, true), 'fallback de identidade deve ignorar preambulo promocional do nome-fonte');
+catalog_normalizer_assert($legacyHard === [], 'cadastro legado com hype no nome deve ficar sem hard failures: ' . implode(', ', $legacyHard));
+
+// Se o nome legado for somente chamada promocional e nao houver marca/modelo,
+// SKU/GTIN sao identificadores factuais e podem ser usados como ultimo fallback.
+$technicalProduct = $legacyProduct;
+$technicalProduct['name'] = 'Imperdivel!';
+$technicalProduct['sku'] = 'SKU-FACT-123';
+$technicalRaw = $legacyRaw;
+$technicalRaw['optimized_title'] = 'Imperdivel!';
+$technical = catalog_generated_normalize($technicalRaw, 'erp', $technicalProduct);
+$technicalQuality = ai_catalog_quality_report($technical, 'erp', $technicalProduct);
+$technicalHard = catalog_normalizer_hard_failures($technicalQuality);
+
+catalog_normalizer_assert(str_starts_with(ai_catalog_fold_text((string)$technical['optimized_title']), 'sku fact 123'), 'fallback tecnico deve usar SKU factual quando o nome limpo fica vazio');
+catalog_normalizer_assert(!ai_catalog_title_has_hype_prefix((string)$technical['optimized_title']), 'fallback tecnico nao pode carregar hype');
+catalog_normalizer_assert($technicalHard === [], 'fallback tecnico deve satisfazer hard gates: ' . implode(', ', $technicalHard));
+
 // A edicao manual continua fail-closed: o normalizador nao e aplicado ao
 // validador puro quando nao existe uma nova chamada de provider.
 unset($GLOBALS['ai_catalog_validation_context']);
@@ -125,4 +176,4 @@ catalog_normalizer_assert((array)$erp['marketing_hooks'] === [], 'ERP nao deve c
 catalog_normalizer_assert(count((array)$erp['bullet_points']) <= 8, 'ERP deve respeitar bullet max');
 catalog_normalizer_assert($erpHard === [], 'ERP normalizado nao deve manter hard failure: ' . implode(', ', $erpHard));
 
-fwrite(STDOUT, "COMPROVADO: providers auto-normalizam identidade/claims/limites; edicao manual invalida continua bloqueada.\n");
+fwrite(STDOUT, "COMPROVADO: providers auto-normalizam identidade/claims/limites; identidade legada com hype e corrigida; edicao manual invalida continua bloqueada.\n");
