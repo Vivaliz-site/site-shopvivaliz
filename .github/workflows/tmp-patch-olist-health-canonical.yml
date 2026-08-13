@@ -69,13 +69,15 @@ jobs:
           if writer_count != 1:
               raise SystemExit('failed to remove legacy Olist env token writer')
 
-          old_candidates = r'''    foreach ([
-              svih_env('OLIST_ACCESS_TOKEN'),
-              svih_env('TINY_ACCESS_TOKEN'),
-              svih_env('TOKEN_API_OLIST'),
-              (string)($stored['OLIST_ACCESS_TOKEN'] ?? ''),
-              (string)($stored['TINY_ACCESS_TOKEN'] ?? ''),
-          ] as $token) {'''
+          candidate_pattern = re.compile(
+              r"    foreach \(\[\n"
+              r"\s+svih_env\('OLIST_ACCESS_TOKEN'\),\n"
+              r"\s+svih_env\('TINY_ACCESS_TOKEN'\),\n"
+              r"\s+svih_env\('TOKEN_API_OLIST'\),\n"
+              r"\s+\(string\)\(\$stored\['OLIST_ACCESS_TOKEN'\] \?\? ''\),\n"
+              r"\s+\(string\)\(\$stored\['TINY_ACCESS_TOKEN'\] \?\? ''\),\n"
+              r"\s+\] as \$token\) \{"
+          )
           new_candidates = r'''    foreach ([
               (string)($stored['OLIST_ACCESS_TOKEN'] ?? ''),
               (string)($stored['TINY_ACCESS_TOKEN'] ?? ''),
@@ -83,9 +85,9 @@ jobs:
               svih_env('TINY_ACCESS_TOKEN'),
               svih_env('TOKEN_API_OLIST'),
           ] as $token) {'''
-          if old_candidates not in text:
-              raise SystemExit('legacy access candidate ordering missing')
-          text = text.replace(old_candidates, new_candidates, 1)
+          text, candidate_count = candidate_pattern.subn(new_candidates, text, count=1)
+          if candidate_count != 1:
+              raise SystemExit('failed to reorder Olist access candidates')
 
           refresh_pattern = re.compile(
               r"    \$fixes = \[\];\n    \$lastError = '';\n    \$lastStatus = 0;\n    if \(\$fix\) \{.*?\n    \}\n\n(?=    \$hasCompleteCandidate)",
