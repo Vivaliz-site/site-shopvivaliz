@@ -122,7 +122,7 @@ if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAiRoutineUiPages, t
         $svAssetVersion = static function (string $relativePath): string {
             $path = dirname(__DIR__) . $relativePath;
             $mtime = is_file($path) ? (int)filemtime($path) : 0;
-            return $mtime > 0 ? (string)$mtime : '20260813d';
+            return $mtime > 0 ? (string)$mtime : '20260813e';
         };
 
         if ($svAdminScriptName === '/admin/catalog-optimization/admin_catalog.php') {
@@ -131,10 +131,12 @@ if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAiRoutineUiPages, t
             return;
         }
 
-        // Dashboard e validacao de imagens compartilham somente o controlador
-        // unificado novo. Nao carregamos o controlador anterior nem o hotfix
-        // generico para evitar listeners concorrentes na selecao, fila, revisao
-        // e publicacao.
+        // Dashboard e validacao de imagens compartilham um unico controlador
+        // operacional. O preflight abaixo e apenas diagnostico e nao registra
+        // listeners concorrentes de selecao, fila, revisao ou publicacao.
         echo "\n<script src=\"/admin/assets/image-generation-workflow.js?v=" . $svAssetVersion('/admin/assets/image-generation-workflow.js') . "\"></script>\n";
+        if ($svAdminScriptName === '/admin/ai-image-studio/admin_dashboard.php') {
+            echo "<script src=\"/admin/assets/image-provider-health.js?v=" . $svAssetVersion('/admin/assets/image-provider-health.js') . "\"></script>\n";
+        }
     });
 }
