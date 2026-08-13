@@ -1,0 +1,67 @@
+name: Fred-Win Exchange UI unblock retry
+
+on:
+  push:
+    branches: [ops/inspect-mei-v020-stash]
+    paths:
+      - '.github/workflows/fred-win-exchange-uia-unblock-retry.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Configure VM key and stop worker
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'sudo systemctl stop mei-mg-email-worker.service || true; ! sudo systemctl is-active --quiet mei-mg-email-worker.service'
+      - name: Start existing Fred-Win unblock task
+        run: |
+          set -euo pipefail
+          cmd='powershell -NoProfile -ExecutionPolicy Bypass -Command "$repo=\"C:\site-shopvivaliz\"; $branch=\"ops/inspect-mei-v020-stash\"; $work=\"C:\Temp\shopvivaliz-exchange-recovery\"; New-Item -ItemType Directory -Force -Path $work | Out-Null; Set-Location $repo; git fetch origin $branch; $utf8=New-Object System.Text.UTF8Encoding($false); $pyText=(git show (\"origin/$branch:scripts/fredwin-exchange-restricted-sender.py\")) -join \"`n\"; [IO.File]::WriteAllText((Join-Path $work \"fredwin-exchange-restricted-sender.py\"),$pyText,$utf8); $psText=(git show (\"origin/$branch:scripts/fredwin-exchange-restricted-sender-launch.ps1\")) -join \"`n\"; [IO.File]::WriteAllText((Join-Path $work \"fredwin-exchange-restricted-sender-launch.ps1\"),$psText,$utf8); $log=\"C:\site-shopvivaliz\logs\exchange-restricted-sender-unblock.log\"; Remove-Item $log -Force -ErrorAction SilentlyContinue; $task=\"ShopVivalizExchangeRestrictedSender\"; Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue; $user=(Get-CimInstance Win32_ComputerSystem).UserName; $launcher=Join-Path $work \"fredwin-exchange-restricted-sender-launch.ps1\"; $action=New-ScheduledTaskAction -Execute \"powershell.exe\" -Argument (\"-NoProfile -ExecutionPolicy Bypass -File `\"\"+$launcher+\"`\" -Mode unblock\"); $trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5); $principal=New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName $task -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null; Start-ScheduledTask -TaskName $task; Write-Output (\"TASK_STARTED=\"+$task)"'
+          encoded="$(printf '%s' "$cmd" | base64 -w0)"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "FREDWIN_COMMAND_B64='$encoded' python3 - <<'PY'
+          import base64,json,os,urllib.request
+          command=base64.b64decode(os.environ['FREDWIN_COMMAND_B64']).decode()
+          body=json.dumps({'params':{'command':command,'timeout':120}}).encode()
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=140) as r: payload=json.loads(r.read().decode())
+          result=payload.get('result') or {}
+          print(result.get('output') or '')
+          if result.get('success') is not True: raise SystemExit(1)
+          PY"
+      - name: Poll result
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 40); do
+            cmd='powershell -NoProfile -ExecutionPolicy Bypass -Command "$log=\"C:\site-shopvivaliz\logs\exchange-restricted-sender-unblock.log\"; if(Test-Path $log){Get-Content $log -Tail 120}"'
+            encoded="$(printf '%s' "$cmd" | base64 -w0)"
+            out="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "FREDWIN_COMMAND_B64='$encoded' python3 - <<'PY'
+          import base64,json,os,urllib.request
+          command=base64.b64decode(os.environ['FREDWIN_COMMAND_B64']).decode()
+          body=json.dumps({'params':{'command':command,'timeout':45}}).encode()
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=60) as r: payload=json.loads(r.read().decode())
+          result=payload.get('result') or {}
+          print(result.get('output') or '')
+          PY")"
+            printf '%s\n' "$out"
+            if grep -Eq 'EXCHANGE_UI_(UNBLOCK_CONFIRMED|SENDER_NOT_LISTED)' <<<"$out"; then exit 0; fi
+            if grep -Eq 'EXCHANGE_UI_(AUTH_REQUIRED|UNBLOCK_UNCONFIRMED|ERROR|TIMEOUT|SELECT_FAILED|UNBLOCK_BUTTON_NOT_FOUND)|PYTHON_EXEC_END rc=[1-9]' <<<"$out"; then exit 31; fi
+            sleep 10
+          done
+          exit 32
+      - name: Keep worker stopped
+        if: always()
+        run: ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'sudo systemctl stop mei-mg-email-worker.service || true'
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
