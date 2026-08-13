@@ -286,7 +286,30 @@ function ai_studio_unique_filename(int $productId, string $imageType, string $ex
 
 function ai_studio_reference_fallback_enabled(): bool
 {
-    return strtolower(trim((string)(getenv('AI_STUDIO_REFERENCE_FALLBACK') ?: '1'))) !== '0';
+    // Uma cópia da foto de referência não é uma geração de IA. O padrão
+    // precisa falhar fechado para que crédito esgotado, cota ou indisponibilidade
+    // do provedor não apareçam no Admin como imagem pendente de aprovação.
+    return strtolower(trim((string)(getenv('AI_STUDIO_REFERENCE_FALLBACK') ?: '0'))) === '1';
+}
+
+function ai_studio_is_capacity_failure(Throwable $error): bool
+{
+    if ($error instanceof AiStudioApiException && in_array($error->httpStatus, [402, 429], true)) {
+        return true;
+    }
+
+    $message = strtolower($error->getMessage());
+    foreach ([
+        'no credits remaining', 'insufficient credits', 'insufficient_quota',
+        'prepayment credits are depleted', 'credit balance', 'billing',
+        'quota exceeded', 'quota_exceeded', 'resource_exhausted',
+    ] as $marker) {
+        if (str_contains($message, $marker)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 function ai_studio_copy_reference_image_to_file(string $sourcePath, string $destinationPath): void
@@ -471,6 +494,8 @@ function ai_studio_process_item(
         $qropeModel = trim((string)(getenv('QROPE_IMAGE_MODEL') ?: ''));
 
         $results = [];
+        /** @var array<string,Throwable> $capacityBlockedProviders */
+        $capacityBlockedProviders = [];
         foreach ($imageTypes as $imageType) {
             $prompt = $prompts[$imageType];
             $filename = ai_studio_unique_filename($productId, $imageType);
@@ -480,6 +505,10 @@ function ai_studio_process_item(
             try {
                 $lastError = null;
                 foreach ($imageCandidates as $candidateProvider) {
+                    if (isset($capacityBlockedProviders[$candidateProvider])) {
+                        $lastError = $capacityBlockedProviders[$candidateProvider];
+                        continue;
+                    }
                     try {
                         $candidateModelOverride = ($candidateProvider === $provider || ($provider === 'claude' && $candidateProvider === 'openai'))
                             ? $modelOverride
@@ -492,6 +521,9 @@ function ai_studio_process_item(
                     } catch (Throwable $candidateError) {
                         $lastError = $candidateError;
                         @unlink($destination);
+                        if (ai_studio_is_capacity_failure($candidateError)) {
+                            $capacityBlockedProviders[$candidateProvider] = $candidateError;
+                        }
                         error_log("[ai-image-studio] produto #{$productId} canal={$targetChannel} tipo={$imageType} provider={$candidateProvider} fallback: " . $candidateError->getMessage());
                         continue;
                     }

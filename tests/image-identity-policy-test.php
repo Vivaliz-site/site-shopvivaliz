@@ -113,6 +113,15 @@ try {
     iip_assert(ai_studio_normalize_provider('gpt') === 'openai', 'gpt alias must normalize to openai');
     iip_assert(ai_studio_normalize_provider('gemini') === 'google', 'gemini alias must normalize to google');
 
+    putenv('AI_STUDIO_REFERENCE_FALLBACK');
+    iip_assert(!ai_studio_reference_fallback_enabled(), 'reference copy must be fail-closed by default');
+    putenv('AI_STUDIO_REFERENCE_FALLBACK=1');
+    iip_assert(ai_studio_reference_fallback_enabled(), 'reference copy needs explicit opt-in');
+    putenv('AI_STUDIO_REFERENCE_FALLBACK');
+    iip_assert(ai_studio_is_capacity_failure(new AiStudioApiException('credits depleted', 429)), 'HTTP 429 must stop repeated image attempts in one job');
+    iip_assert(ai_studio_is_capacity_failure(new AiStudioApiException('Insufficient credits')), 'credit failure text must stop repeated image attempts in one job');
+    iip_assert(!ai_studio_is_capacity_failure(new AiStudioApiException('temporary network timeout')), 'transport failures must remain retryable');
+
     // Este helper é uma ordem genérica histórica e ainda pode conter provedores
     // de prompt. A decisão de motor FINAL de imagem é exercida no process_item.
     $claudeFallback = ai_studio_provider_fallback_order('claude');
@@ -124,6 +133,8 @@ try {
     iip_assert(str_contains($processSource, "'groq' => ['openrouter', 'openai', 'google']"), 'Groq real image flow must end in supported image-output engines');
     iip_assert(str_contains($processSource, "'claude' => ['openai', 'google', 'openrouter']"), 'Claude real image flow must end in supported image-output engines');
     iip_assert(str_contains($processSource, "'groq' => throw new AiStudioApiException"), 'Groq must not expose a direct image client');
+    iip_assert(str_contains($processSource, "getenv('AI_STUDIO_REFERENCE_FALLBACK') ?: '0'"), 'reference fallback must be disabled unless explicitly enabled');
+    iip_assert(str_contains($processSource, 'capacityBlockedProviders'), 'capacity failure must block repeated image attempts in a job');
 
     $openRouterImageSource = file_get_contents(__DIR__ . '/../admin/ai-image-studio/src/OpenRouterImageClient.php');
     iip_assert(is_string($openRouterImageSource), 'OpenRouter dedicated image client must exist');

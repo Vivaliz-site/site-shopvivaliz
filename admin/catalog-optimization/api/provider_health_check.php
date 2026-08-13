@@ -81,6 +81,44 @@ function cat_health_probe(string $provider, string $key): array
     }
 }
 
+function cat_health_is_capacity_failure(string $message): bool
+{
+    $message = strtolower($message);
+    foreach ([
+        'no credits remaining', 'insufficient credits', 'insufficient_quota',
+        'prepayment credits are depleted', 'credit balance', 'billing',
+        'quota exceeded', 'quota_exceeded', 'resource_exhausted',
+    ] as $marker) {
+        if (str_contains($message, $marker)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/** @return array{message:string,updated_at:string}|null */
+function cat_health_recent_capacity_failure(PDO $db, string $provider): ?array
+{
+    try {
+        $stmt = $db->prepare(
+            "SELECT LEFT(error_message, 220) AS message, updated_at
+             FROM catalog_optimizations_staging
+             WHERE updated_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)
+               AND error_message IS NOT NULL AND error_message <> ''
+               AND provider_used = ?
+             ORDER BY updated_at DESC, id DESC LIMIT 1"
+        );
+        $stmt->execute([$provider]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!is_array($row) || !cat_health_is_capacity_failure((string)($row['message'] ?? ''))) {
+            return null;
+        }
+        return ['message' => (string)$row['message'], 'updated_at' => (string)$row['updated_at']];
+    } catch (Throwable) {
+        return null;
+    }
+}
+
 $pools = [
     'openai' => CATALOG_AI_OPENAI_API_KEY,
     'gemini' => CATALOG_AI_GOOGLE_GEMINI_API_KEY,
@@ -90,9 +128,18 @@ $pools = [
 ];
 
 $results = [];
+$db = catalog_ai_db();
 foreach ($pools as $provider => $keys) {
     $firstKey = (is_array($keys) && $keys !== []) ? (string)$keys[0] : '';
     $probe = cat_health_probe($provider, $firstKey);
+    $capacityFailure = $db instanceof PDO ? cat_health_recent_capacity_failure($db, $provider) : null;
+    if ($probe['ok'] && $capacityFailure !== null) {
+        $probe = [
+            'ok' => false,
+            'detail' => 'Chave válida, mas a execução falhou por capacidade nas últimas 24h, em '
+                . $capacityFailure['updated_at'] . ': ' . $capacityFailure['message'],
+        ];
+    }
     $results[$provider] = [
         'ok' => $probe['ok'],
         'detail' => $probe['detail'],
