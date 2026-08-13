@@ -98,7 +98,7 @@ sv_image_v3_assert(
     'Identidade visual deve ser requisito de revisao humana, nao afirmacao automatica'
 );
 sv_image_v3_assert(
-    str_contains($safetyUi, 'confirmacao humana')
+    str_contains($safetyUi, 'Confirme explicitamente a revisão visual')
     && str_contains($safetyUi, 'A confirmação não é preenchida automaticamente')
     && str_contains($safetyUi, 'iv-bulk-visual-review')
     && str_contains($safetyUi, "event.stopImmediatePropagation()"),
