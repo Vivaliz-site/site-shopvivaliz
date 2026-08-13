@@ -787,7 +787,7 @@ def main() -> int:
         target_ids = target_ids[: args.limit]
     log(
         f"[run] {'APLICANDO' if apply else 'DRY-RUN'} em {len(target_ids)} anuncios"
-        f" | pesquisa web: {'nao' if args.no_research else 'sim'}"
+        f" | modelo: {MODEL} | pesquisa web: {'nao' if args.no_research else 'sim'}"
     )
 
     results, done = [], [0]
