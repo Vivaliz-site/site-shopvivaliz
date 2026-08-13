@@ -26,6 +26,7 @@ foreach (compact('guard', 'ui', 'profilesApi', 'profiles', 'pending', 'enqueue',
 }
 
 iv_assert(str_contains($guard, 'image-generation-workflow.js'), 'Admin deve carregar o controlador unificado de imagens');
+iv_assert(!str_contains($guard, 'ai-image-studio-workflow.js'), 'Admin não deve empilhar o controlador anterior de imagens');
 iv_assert(!str_contains($guard, 'ai-routines-hotfix-ui.js'), 'Admin não deve empilhar o hotfix legado de imagens');
 iv_assert(str_contains($ui, '/api/channel_profiles.php'), 'UI deve carregar inteligência visual por canal');
 iv_assert(str_contains($ui, '/api/pending_candidates.php'), 'UI deve carregar candidatos pela API segura');
