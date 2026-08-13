@@ -126,8 +126,10 @@ jobs:
           node --check admin/assets/image-generation-workflow.js
           node --check admin/assets/image-workflow-safety.js
           node --check admin/assets/image-provider-health.js
+          node --check admin/assets/image-professional-ops.js
           php tests/image-admin-workflow-test.php
           php tests/image-admin-workflow-v3-test.php
+          php tests/image-professional-ops-test.php
       - name: Identidade e qualidade de imagens do Admin
         run: php tests/image-identity-policy-test.php
 
