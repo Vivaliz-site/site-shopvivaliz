@@ -5,9 +5,15 @@ on:
     branches: [ops/inspect-mei-v020-stash]
     paths:
       - '.github/workflows/fred-win-exchange-uia-unblock.yml'
+      - 'scripts/fredwin-exchange-restricted-sender.py'
+      - 'scripts/fredwin-exchange-restricted-sender-launch.ps1'
 
 permissions:
   contents: read
+
+concurrency:
+  group: fredwin-exchange-restricted-sender
+  cancel-in-progress: false
 
 jobs:
   unblock:
@@ -26,29 +32,86 @@ jobs:
           chmod 600 ~/.ssh/vmkey
           ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'sudo systemctl stop mei-mg-email-worker.service || true; ! sudo systemctl is-active --quiet mei-mg-email-worker.service'
 
-      - name: Run interactive Exchange recovery through Fred-Win MCP
+      - name: Launch interactive recovery task through Fred-Win MCP
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY' > /tmp/body.json
-          import json
-          command = r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $repo='C:\site-shopvivaliz'; $work='C:\Temp\shopvivaliz-exchange-recovery'; New-Item -ItemType Directory -Force -Path $work | Out-Null; Set-Location $repo; git fetch origin ops/inspect-mei-v020-stash; if($LASTEXITCODE -ne 0){throw 'FREDWIN_GIT_FETCH_FAILED'}; cmd /c ('git show origin/ops/inspect-mei-v020-stash:scripts/fredwin-exchange-restricted-sender.py > ' + $work + '\fredwin-exchange-restricted-sender.py'); if($LASTEXITCODE -ne 0){throw 'FREDWIN_SCRIPT_EXPORT_FAILED'}; cmd /c ('git show origin/ops/inspect-mei-v020-stash:scripts/fredwin-exchange-restricted-sender-launch.ps1 > ' + $work + '\fredwin-exchange-restricted-sender-launch.ps1'); if($LASTEXITCODE -ne 0){throw 'FREDWIN_LAUNCHER_EXPORT_FAILED'}; py -3 -c \"import playwright.sync_api; print('PLAYWRIGHT_READY=true')\"; if($LASTEXITCODE -ne 0){throw 'PLAYWRIGHT_NOT_READY'}; $log='C:\site-shopvivaliz\logs\exchange-restricted-sender-unblock.log'; Remove-Item $log -Force -ErrorAction SilentlyContinue; $task='ShopVivalizExchangeRestrictedSender'; $user=(Get-CimInstance Win32_ComputerSystem).UserName; if([string]::IsNullOrWhiteSpace($user)){throw 'NO_INTERACTIVE_USER'}; $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -ExecutionPolicy Bypass -File ' + $work + '\fredwin-exchange-restricted-sender-launch.ps1 -Mode unblock'); $trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1); $principal=New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName $task -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null; Start-ScheduledTask -TaskName $task; $done=$false; for($i=0;$i -lt 300;$i++){Start-Sleep -Seconds 2; if(Test-Path $log){$txt=Get-Content $log -Raw -ErrorAction SilentlyContinue; if($txt -match 'EXCHANGE_UI_(UNBLOCK_CONFIRMED|SENDER_NOT_LISTED|AUTH_REQUIRED|UNBLOCK_UNCONFIRMED|ERROR|TIMEOUT|SELECT_FAILED|UNBLOCK_BUTTON_NOT_FOUND)'){$done=$true;break}}}; if(Test-Path $log){Get-Content $log -Tail 120}else{Write-Output 'EXCHANGE_UI_LOG_MISSING'}; $info=Get-ScheduledTaskInfo -TaskName $task -ErrorAction SilentlyContinue; if($info){Write-Output ('EXCHANGE_UI_TASK_RESULT=' + $info.LastTaskResult)}; Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue; if(-not $done){throw 'EXCHANGE_UI_RESULT_TIMEOUT'}; $final=Get-Content $log -Raw; if($final -notmatch 'EXCHANGE_UI_(UNBLOCK_CONFIRMED|SENDER_NOT_LISTED)'){throw 'EXCHANGE_UI_UNBLOCK_FAILED'}; Write-Output 'EXCHANGE_UI_RECOVERY_OK=true'"'''
-          print(json.dumps({'params': {'command': command, 'timeout': 780}}))
-          PY
-          BODY_B64="$(base64 -w0 /tmp/body.json)"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "BODY_B64='$BODY_B64' python3 - <<'PY'
+
+          mcp_exec() {
+            local command="$1"
+            local encoded
+            encoded="$(printf '%s' "$command" | base64 -w0)"
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "FREDWIN_COMMAND_B64='$encoded' python3 - <<'PY'
           import base64, json, os, urllib.request
-          body = base64.b64decode(os.environ['BODY_B64'])
-          req = urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command', data=body, headers={'Content-Type':'application/json'}, method='POST')
-          with urllib.request.urlopen(req, timeout=820) as response:
-              payload = json.loads(response.read().decode('utf-8'))
-          result = payload.get('result') or {}
+          command=base64.b64decode(os.environ['FREDWIN_COMMAND_B64']).decode('utf-8')
+          body=json.dumps({'params':{'command':command,'timeout':120}}).encode('utf-8')
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=140) as response:
+              payload=json.loads(response.read().decode('utf-8'))
+          result=payload.get('result') or {}
           print(result.get('output') or '')
           if result.get('error'):
               print(result.get('error'))
-          if result.get('success') is not True or 'EXCHANGE_UI_RECOVERY_OK=true' not in (result.get('output') or ''):
-              raise SystemExit('FREDWIN_EXCHANGE_UI_RECOVERY_FAILED')
+          if result.get('success') is not True:
+              raise SystemExit('FREDWIN_COMMAND_FAILED')
           PY"
+          }
+
+          read -r -d '' launch_command <<'PS' || true
+          powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $repo='C:\site-shopvivaliz'; $work='C:\Temp\shopvivaliz-exchange-recovery'; $branch='ops/inspect-mei-v020-stash'; New-Item -ItemType Directory -Force -Path $work | Out-Null; Set-Location $repo; git fetch origin $branch; if($LASTEXITCODE -ne 0){throw 'FREDWIN_GIT_FETCH_FAILED'}; $utf8=New-Object System.Text.UTF8Encoding($false); $pyText=(git show ('origin/'+$branch+':scripts/fredwin-exchange-restricted-sender.py')) -join \"`n\"; if($LASTEXITCODE -ne 0){throw 'FREDWIN_PY_EXPORT_FAILED'}; [IO.File]::WriteAllText((Join-Path $work 'fredwin-exchange-restricted-sender.py'),$pyText,$utf8); $psText=(git show ('origin/'+$branch+':scripts/fredwin-exchange-restricted-sender-launch.ps1')) -join \"`n\"; if($LASTEXITCODE -ne 0){throw 'FREDWIN_PS_EXPORT_FAILED'}; [IO.File]::WriteAllText((Join-Path $work 'fredwin-exchange-restricted-sender-launch.ps1'),$psText,$utf8); py -3 -c \"import playwright.sync_api; print('PLAYWRIGHT_READY=true')\"; if($LASTEXITCODE -ne 0){throw 'PLAYWRIGHT_NOT_READY'}; $log='C:\site-shopvivaliz\logs\exchange-restricted-sender-unblock.log'; Remove-Item $log -Force -ErrorAction SilentlyContinue; $task='ShopVivalizExchangeRestrictedSender'; Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue; $user=(Get-CimInstance Win32_ComputerSystem).UserName; if([string]::IsNullOrWhiteSpace($user)){throw 'NO_INTERACTIVE_USER'}; $launcher=Join-Path $work 'fredwin-exchange-restricted-sender-launch.ps1'; $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -ExecutionPolicy Bypass -File \"'+$launcher+'\" -Mode unblock'); $trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5); $principal=New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName $task -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null; Start-ScheduledTask -TaskName $task; Write-Output ('EXCHANGE_UI_TASK_STARTED user='+$user); Write-Output ('EXCHANGE_UI_TASK_STATE='+(Get-ScheduledTask -TaskName $task).State)"
+          PS
+
+          launch_output="$(mcp_exec "$launch_command")"
+          printf '%s\n' "$launch_output"
+          grep -Fq 'EXCHANGE_UI_TASK_STARTED' <<<"$launch_output"
+
+      - name: Poll interactive recovery result
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mcp_exec() {
+            local command="$1"
+            local encoded
+            encoded="$(printf '%s' "$command" | base64 -w0)"
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "FREDWIN_COMMAND_B64='$encoded' python3 - <<'PY'
+          import base64, json, os, urllib.request
+          command=base64.b64decode(os.environ['FREDWIN_COMMAND_B64']).decode('utf-8')
+          body=json.dumps({'params':{'command':command,'timeout':45}}).encode('utf-8')
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=60) as response:
+              payload=json.loads(response.read().decode('utf-8'))
+          result=payload.get('result') or {}
+          print(result.get('output') or '')
+          if result.get('success') is not True:
+              raise SystemExit('FREDWIN_POLL_FAILED')
+          PY"
+          }
+
+          read -r -d '' poll_command <<'PS' || true
+          powershell -NoProfile -ExecutionPolicy Bypass -Command "$log='C:\site-shopvivaliz\logs\exchange-restricted-sender-unblock.log'; if(Test-Path $log){Write-Output 'EXCHANGE_LOG_BEGIN'; Get-Content $log -Tail 160; Write-Output 'EXCHANGE_LOG_END'}else{Write-Output 'EXCHANGE_LOG_MISSING'}; $task=Get-ScheduledTask -TaskName 'ShopVivalizExchangeRestrictedSender' -ErrorAction SilentlyContinue; if($task){$info=Get-ScheduledTaskInfo -TaskName $task.TaskName; Write-Output ('TASK_STATE='+$task.State); Write-Output ('TASK_RESULT='+$info.LastTaskResult); Write-Output ('TASK_LAST_RUN='+$info.LastRunTime)}else{Write-Output 'TASK_ABSENT'}"
+          PS
+
+          success=0
+          for attempt in $(seq 1 60); do
+            output=''
+            if output="$(mcp_exec "$poll_command" 2>&1)"; then
+              printf '%s\n' "$output"
+              if grep -Eq 'EXCHANGE_UI_(UNBLOCK_CONFIRMED|SENDER_NOT_LISTED)' <<<"$output"; then
+                success=1
+                break
+              fi
+              if grep -Eq 'EXCHANGE_UI_(AUTH_REQUIRED|UNBLOCK_UNCONFIRMED|ERROR|TIMEOUT|SELECT_FAILED|UNBLOCK_BUTTON_NOT_FOUND)|LAUNCHER_ERROR=|PYTHON_EXEC_END rc=[1-9]' <<<"$output"; then
+                echo 'EXCHANGE_UI_TERMINAL_FAILURE=true'
+                exit 31
+              fi
+            else
+              echo "EXCHANGE_UI_POLL_RETRY=$attempt"
+            fi
+            sleep 10
+          done
+          test "$success" -eq 1 || { echo 'EXCHANGE_UI_RECOVERY_TIMEOUT=true'; exit 32; }
+          echo 'EXCHANGE_UI_RECOVERY_OK=true'
 
       - name: Verify production worker remains stopped
         shell: bash
@@ -59,4 +122,4 @@ jobs:
       - name: Cleanup
         if: always()
         shell: bash
-        run: rm -f ~/.ssh/vmkey /tmp/body.json
+        run: rm -f ~/.ssh/vmkey
