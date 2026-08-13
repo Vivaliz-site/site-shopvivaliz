@@ -224,9 +224,16 @@ SQL);
             $db->exec("ALTER TABLE `product_images_staging` MODIFY `status` VARCHAR(32) NOT NULL DEFAULT 'pending'");
         }
         svcp_widen_provider_column($db, 'product_images_staging');
+        svcp_add_column_if_missing($db, 'product_images_staging', 'source_job_id', 'BIGINT UNSIGNED NULL AFTER `product_id`');
         svcp_add_column_if_missing($db, 'product_images_staging', 'target_channels_json', 'LONGTEXT NULL AFTER `error_message`');
         svcp_add_column_if_missing($db, 'product_images_staging', 'publication_summary_json', 'LONGTEXT NULL AFTER `target_channels_json`');
         svcp_add_column_if_missing($db, 'product_images_staging', 'published_at', 'DATETIME NULL AFTER `publication_summary_json`');
+        svcp_add_index_if_missing(
+            $db,
+            'product_images_staging',
+            'idx_product_images_staging_source_job',
+            ['source_job_id', 'product_id', 'status', 'id']
+        );
     }
 
     $done = true;
