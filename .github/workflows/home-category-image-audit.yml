@@ -60,14 +60,18 @@ jobs:
           set -Eeuo pipefail
           php -S 127.0.0.1:8080 -t . > /tmp/shopvivaliz-category-audit-php.log 2>&1 &
           echo $! > /tmp/shopvivaliz-category-audit-php.pid
+          ready=0
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
             if curl --silent --show-error --fail --max-time 5 http://127.0.0.1:8080/api/catalog/products.php?limit=1 >/dev/null; then
-              exit 0
+              ready=1
+              break
             fi
             sleep 1
           done
-          cat /tmp/shopvivaliz-category-audit-php.log >&2 || true
-          exit 1
+          if [ "$ready" -ne 1 ]; then
+            cat /tmp/shopvivaliz-category-audit-php.log >&2
+            exit 1
+          fi
       - name: Validate home category images
         env:
           BASE_URL: ${{ github.event_name == 'pull_request' && 'http://127.0.0.1:8080' || 'https://shopvivaliz.com.br' }}
@@ -76,8 +80,12 @@ jobs:
       - name: Stop isolated PR storefront
         if: ${{ always() && github.event_name == 'pull_request' }}
         run: |
+          set -Eeuo pipefail
           if [ -f /tmp/shopvivaliz-category-audit-php.pid ]; then
-            kill "$(cat /tmp/shopvivaliz-category-audit-php.pid)" 2>/dev/null || true
+            pid="$(cat /tmp/shopvivaliz-category-audit-php.pid)"
+            if kill -0 "$pid" 2>/dev/null; then
+              kill "$pid"
+            fi
           fi
       - name: Upload evidence
         if: always()
