@@ -92,6 +92,25 @@ function catalog_generated_sanitize_long_text(string $text, array $product): str
     return catalog_generated_sanitize_short_text($text, $product);
 }
 
+function catalog_generated_strip_hype_prefix(string $title): string
+{
+    // Aceita pontuacao/emoji decorativo antes da chamada e remove mais de uma
+    // chamada consecutiva. O validador dobra pontuacao/acentos antes de testar
+    // o prefixo; a normalizacao precisa ser pelo menos tao robusta quanto ele.
+    $pattern = '/^[^\p{L}\p{N}]*(?:chega\s+de|diga\s+adeus|adeus|elimine(?:\s+de\s+vez)?|transforme|potencialize|maximize|imperd[ií]vel|incr[ií]vel|revolucion[aá]rio|ultim[ií]ssima\s+chance|n[aã]o\s+perca|garanta\s+j[aá]|corra)\b[\s:!?.\-–—]*/iu';
+    $title = trim($title);
+    for ($round = 0; $round < 8; $round++) {
+        $next = preg_replace($pattern, '', $title) ?? $title;
+        if ($next === $title) break;
+        $title = trim($next);
+    }
+    // O quality gate trata ! e ? em titulo como copy promocional, mesmo quando
+    // aparecem no fim. Remover essa pontuacao e uma regra estrutural e nao
+    // altera nenhum fato do produto.
+    $title = preg_replace('/[!?]+/u', '', $title) ?? $title;
+    return catalog_generated_cleanup_spacing($title);
+}
+
 function catalog_generated_identity_prefix(array $product): string
 {
     $brand = trim((string)($product['brand'] ?? ''));
@@ -100,22 +119,23 @@ function catalog_generated_identity_prefix(array $product): string
     if ($brand !== '') return $brand;
     if ($model !== '') return $model;
 
-    $name = trim((string)($product['name'] ?? ''));
-    if ($name === '') return '';
-    $tokens = preg_split('/\s+/u', $name) ?: [];
-    $tokens = array_values(array_filter(array_map('trim', $tokens), static fn(string $token): bool => $token !== ''));
-    return implode(' ', array_slice($tokens, 0, 3));
-}
+    // O nome-fonte e factual, mas cadastros legados podem ter sido salvos com
+    // copy promocional antes do nome real. Nao reintroduza esse preambulo ao
+    // reconstruir a identidade depois que o titulo gerado ja foi limpo.
+    $name = catalog_generated_strip_hype_prefix((string)($product['name'] ?? ''));
+    $name = preg_replace('/^[^\p{L}\p{N}]+/u', '', trim($name)) ?? trim($name);
+    $name = catalog_generated_cleanup_spacing($name);
+    if ($name !== '') {
+        $tokens = preg_split('/\s+/u', $name) ?: [];
+        $tokens = array_values(array_filter(array_map('trim', $tokens), static fn(string $token): bool => $token !== ''));
+        if ($tokens !== []) return implode(' ', array_slice($tokens, 0, 3));
+    }
 
-function catalog_generated_strip_hype_prefix(string $title): string
-{
-    $pattern = '/^(?:chega\s+de|diga\s+adeus|adeus|elimine(?:\s+de\s+vez)?|transforme|potencialize|maximize|imperd[ií]vel|incr[ií]vel|revolucion[aá]rio|ultim[ií]ssima\s+chance|n[aã]o\s+perca|garanta\s+j[aá]|corra)\b[\s:!?.-]*/iu';
-    $title = preg_replace($pattern, '', trim($title)) ?? trim($title);
-    // O quality gate trata ! e ? em titulo como copy promocional, mesmo quando
-    // aparecem no fim. Remover essa pontuacao e uma regra estrutural e nao
-    // altera nenhum fato do produto.
-    $title = preg_replace('/[!?]+/u', '', $title) ?? $title;
-    return catalog_generated_cleanup_spacing($title);
+    foreach (['sku', 'gtin'] as $key) {
+        $fallback = trim((string)($product[$key] ?? ''));
+        if ($fallback !== '') return $fallback;
+    }
+    return '';
 }
 
 function catalog_generated_truncate(string $text, int $max): string
