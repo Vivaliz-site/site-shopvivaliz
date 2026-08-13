@@ -408,14 +408,14 @@ def research_product(client, item: dict, ctx: dict) -> str:
         f"DESCRICAO ATUAL: {(ctx['description'] or '(vazia)')[:1500]}\n\n"
         f"Preciso confirmar principalmente: {', '.join(wanted) or 'especificacoes gerais'}."
     )
-    tools = [{"type": "web_search_20260209", "name": "web_search", "max_uses": 5}]
+    tools = [web_search_tool(MODEL)]
     messages = [{"role": "user", "content": prompt}]
     for _ in range(3):  # o loop server-side de busca pode devolver pause_turn
         resp = client.messages.create(
             model=MODEL,
             max_tokens=4000,
             system=RESEARCH_PROMPT,
-            output_config={"effort": "medium"},
+            output_config=output_config(MODEL, "medium"),
             tools=tools,
             messages=messages,
         )
