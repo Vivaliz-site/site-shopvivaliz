@@ -1,9 +1,8 @@
 name: Check and unblock M365 restricted sender app-only
 on:
   push:
-    branches: [main]
+    branches: [ops/inspect-mei-v020-stash]
     paths: ['.github/workflows/unblock-m365-sender-app-only.yml']
-  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -11,18 +10,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Configure VM key
+      - name: Configure VM key and stop sender
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
         run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'sudo systemctl stop mei-mg-email-worker.service || true'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'sudo systemctl stop mei-mg-email-worker.service || true; ! sudo systemctl is-active --quiet mei-mg-email-worker.service'
       - name: Copy certificate material transiently from VM
         run: |
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17:/home/ubuntu/.shopvivaliz/m365/graph-auth.crt /tmp/graph-auth.crt
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17:/home/ubuntu/.shopvivaliz/m365/graph-auth.key /tmp/graph-auth.key
+          set -euo pipefail
+          scp -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17:/home/ubuntu/.shopvivaliz/m365/graph-auth.crt /tmp/graph-auth.crt
+          scp -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17:/home/ubuntu/.shopvivaliz/m365/graph-auth.key /tmp/graph-auth.key
           chmod 600 /tmp/graph-auth.key
       - name: Check restricted sender and unblock if present
         shell: pwsh
@@ -43,12 +45,21 @@ jobs:
           if ($blocked.Count -gt 0) {
             $blocked | Select-Object SenderAddress,Reason,BlockedAt | Format-List
             Remove-BlockedSenderAddress -SenderAddress $sender -Reason 'Authorized ShopVivaliz sender restored after incident remediation' -Confirm:$false
-            Start-Sleep -Seconds 5
           }
-          $after=@(Get-BlockedSenderAddress -SenderAddress $sender -ErrorAction Stop)
+          $deadline=(Get-Date).ToUniversalTime().AddMinutes(5)
+          do {
+            Start-Sleep -Seconds 10
+            $after=@(Get-BlockedSenderAddress -SenderAddress $sender -ErrorAction Stop)
+            Write-Host ('BLOCKED_POLL='+$after.Count)
+          } while ($after.Count -ne 0 -and (Get-Date).ToUniversalTime() -lt $deadline)
           Write-Host ('BLOCKED_AFTER='+$after.Count)
           Disconnect-ExchangeOnline -Confirm:$false
           if ($after.Count -ne 0) { throw 'SENDER_STILL_BLOCKED' }
+          Write-Host 'EXCHANGE_UNBLOCK_CONFIRMED=true'
+      - name: Keep worker stopped after unblock
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 '! sudo systemctl is-active --quiet mei-mg-email-worker.service && echo WORKER_RESUME_ALLOWED=false'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey /tmp/graph-auth.crt /tmp/graph-auth.key
