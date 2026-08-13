@@ -1,4 +1,4 @@
-name: Inspect MEI Flyway history local
+name: Inspect MEI rolling 24h sends
 
 on:
   push:
@@ -25,13 +25,33 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Query local PostgreSQL Flyway history only
+      - name: Query production rolling 24h read only
         shell: bash
         run: |
           set -euo pipefail
           timeout 180s ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=10 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
-          timeout 30s docker exec mei-mg-email-db psql -X -v ON_ERROR_STOP=1 -U postgres -d mei_mg_email -At -F '|' -c "set statement_timeout='10s'; select installed_rank,version,description,script,checksum,success from mei_email.flyway_schema_history where version in ('019','020','021','022','023','024') order by installed_rank;"
+          echo "WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          timeout 45s docker exec mei-mg-email-db psql -X -v ON_ERROR_STOP=1 -U postgres -d mei_mg_email -At -F '|' <<'SQL'
+          set statement_timeout='20s';
+          select 'WINDOW', now(), now() - interval '24 hours';
+          select 'SUBMITTED_24H', count(*)
+            from mei_email.envios
+           where status::text in ('submitted','delivered','enviado')
+             and coalesce(submitted_at, enviado_em) >= now() - interval '24 hours';
+          select 'ENVIADO_EM_24H', count(*)
+            from mei_email.envios
+           where enviado_em >= now() - interval '24 hours';
+          select 'STATUS_24H', status::text, count(*)
+            from mei_email.envios
+           where coalesce(submitted_at, enviado_em) >= now() - interval '24 hours'
+           group by status::text
+           order by status::text;
+          select 'LAST_SUBMISSION', max(coalesce(submitted_at, enviado_em))
+            from mei_email.envios
+           where status::text in ('submitted','delivered','enviado');
+          SQL
+          echo 'QUERY_READ_ONLY=true'
           echo 'WORKER_RESUME_ALLOWED=false'
           EOF
       - name: Cleanup
