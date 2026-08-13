@@ -610,8 +610,9 @@ def optimize_item(ml: ML, client, item_id: str, apply: bool, research: bool = Tr
         result["problems"].append(f"claude: {exc}")
         return result
 
-    title, title_problems = validate_title(proposal.get("title"), item, ctx)
-    attributes, attr_notes = validate_attributes(proposal.get("attributes"), ctx)
+    blob = source_blob(item, ctx, findings)
+    title, title_problems = validate_title(proposal.get("title"), item, ctx, blob)
+    attributes, attr_notes = validate_attributes(proposal.get("attributes"), ctx, blob)
     description, desc_problems = validate_description(proposal.get("description"))
     result["problems"] += title_problems + desc_problems
     result["attribute_notes"] = attr_notes
