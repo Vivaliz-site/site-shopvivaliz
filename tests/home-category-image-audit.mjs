@@ -10,10 +10,19 @@ fs.mkdirSync(outputDir, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 
 async function audit(name, viewport, isMobile = false) {
-  const context = await browser.newContext({ viewport, isMobile, locale: 'pt-BR' });
+  const context = await browser.newContext({
+    viewport,
+    isMobile,
+    locale: 'pt-BR',
+    userAgent: 'ShopVivaliz-Production-Health/1.0',
+    extraHTTPHeaders: { 'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8' },
+  });
   const page = await context.newPage();
   const response = await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-  if (!response || response.status() >= 400) throw new Error(`home_http_status=${response?.status() ?? 'none'}`);
+  if (!response || response.status() >= 400) {
+    await page.screenshot({ path: path.join(outputDir, `home-http-failure-${name}.png`), fullPage: true }).catch(() => {});
+    throw new Error(`home_http_status=${response?.status() ?? 'none'}`);
+  }
   await page.waitForSelector('.home-categories .category-slide img.category-slide-img', { timeout: 45_000 });
 
   if (injectBranchScript) {
