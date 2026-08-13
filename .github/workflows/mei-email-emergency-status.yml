@@ -13,7 +13,7 @@ permissions:
 jobs:
   status:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 6
     steps:
       - name: Configure VM SSH key
         env:
@@ -44,6 +44,11 @@ jobs:
             state="$(sudo systemctl is-active "$unit" 2>/dev/null || true)"
             echo "STATUS_UNIT_${unit//[^A-Za-z0-9]/_}=$state"
           done
+          echo 'STATUS_DOCKER_BEGIN'
+          docker ps -a --format '{{.Names}}|{{.Status}}' | grep -E '^mei-mg-email-(db|flyway)\|' || true
+          echo 'STATUS_FLYWAY_LOG_BEGIN'
+          docker logs --tail 30 mei-mg-email-flyway 2>&1 | sed -E 's#(jdbc:postgresql://)[^ ]+#\1[redacted]#g' || true
+          echo 'STATUS_FLYWAY_LOG_END'
           echo 'STATUS_PROCESS_COUNTS_BEGIN'
           ps -eo comm= | sort | uniq -c | grep -E '(^| )(bash|python3|pwsh|docker|java)$' || true
           echo 'STATUS_PROCESS_COUNTS_END'
