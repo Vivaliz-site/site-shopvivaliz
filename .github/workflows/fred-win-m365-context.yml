@@ -1,4 +1,4 @@
-name: Read Fred-Win Exchange recovery result
+name: Inspect Fred-Win Restricted entities browser
 
 on:
   push:
@@ -23,13 +23,14 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Read recovery log and task state
+
+      - name: Read browser UI markers without clicking
         run: |
           set -euo pipefail
           python3 - <<'PY' > /tmp/body.json
           import json
-          ps=r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "$log='C:\site-shopvivaliz\logs\exchange-restricted-sender-unblock.log'; if(Test-Path $log){Write-Output 'EXCHANGE_LOG_BEGIN'; Get-Content $log -Tail 160; Write-Output 'EXCHANGE_LOG_END'}else{Write-Output 'EXCHANGE_LOG_MISSING'}; $task=Get-ScheduledTask -TaskName 'ShopVivalizExchangeRestrictedSender' -ErrorAction SilentlyContinue; if($task){$info=Get-ScheduledTaskInfo -TaskName $task.TaskName; Write-Output ('TASK_STATE='+$task.State); Write-Output ('TASK_RESULT='+$info.LastTaskResult); Write-Output ('TASK_LAST_RUN='+$info.LastRunTime)}else{Write-Output 'TASK_ABSENT'}; Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'python|chrome' -and ([string]$_.CommandLine -match 'exchange-restricted-sender|security.microsoft.com') } | ForEach-Object { Write-Output ('RECOVERY_PROCESS='+$_.ProcessId+';NAME='+$_.Name) }"'''
-          print(json.dumps({'params':{'command':ps,'timeout':120}}))
+          ps=r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; Add-Type -AssemblyName UIAutomationClient; Add-Type -AssemblyName UIAutomationTypes; $root=[System.Windows.Automation.AutomationElement]::RootElement; $wins=$root.FindAll([System.Windows.Automation.TreeScope]::Children,[System.Windows.Automation.Condition]::TrueCondition); $count=0; foreach($w in $wins){$title=[string]$w.Current.Name; if($title -notmatch 'Chrome|Edge|Microsoft'){continue}; $count++; Write-Output ('BROWSER_TITLE='+$title); $all=$w.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition); $restricted=$false; $sender=$false; $unblock=$false; $auth=$false; $url=''; foreach($e in $all){$name=[string]$e.Current.Name; if([string]::IsNullOrWhiteSpace($name)){continue}; $low=$name.ToLowerInvariant(); if($low -match 'restricted entities|entidades restritas'){$restricted=$true}; if($low -match 'naoresponda@dev\.shopvivaliz\.com\.br'){$sender=$true}; if($low -match '^unblock$|^desbloquear$'){$unblock=$true; Write-Output ('UNBLOCK_CONTROL='+$e.Current.ControlType.ProgrammaticName+':'+$name)}; if($low -match 'sign in|entrar|pick an account|escolha uma conta'){$auth=$true}; if($e.Current.ControlType -eq [System.Windows.Automation.ControlType]::Edit){try{$p=$e.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern); $v=[string]$p.Current.Value; if($v -match '^https?://(security|admin\.exchange)\.microsoft\.com'){$url=$v}}catch{}}}; if($url){Write-Output ('BROWSER_URL='+$url)}; Write-Output ('RESTRICTED_ENTITIES_MARKER='+$restricted); Write-Output ('SENDER_VISIBLE='+$sender); Write-Output ('UNBLOCK_VISIBLE='+$unblock); Write-Output ('AUTH_REQUIRED_VISIBLE='+$auth); Write-Output '---'}; Write-Output ('BROWSER_WINDOW_COUNT='+$count)"'''
+          print(json.dumps({'params':{'command':ps,'timeout':90}}))
           PY
           BODY_B64="$(base64 -w0 /tmp/body.json)"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "BODY_B64='$BODY_B64' python3 - <<'PY'
@@ -39,19 +40,29 @@ jobs:
           for attempt in range(1,7):
               try:
                   req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
-                  with urllib.request.urlopen(req,timeout=140) as r:
+                  with urllib.request.urlopen(req,timeout=110) as r:
                       payload=json.loads(r.read().decode())
-                  print(json.dumps(payload,ensure_ascii=False))
-                  if not (payload.get('result') or {}).get('success'):
+                  result=payload.get('result') or {}
+                  print(result.get('output') or '')
+                  if result.get('error'):
+                      print(result.get('error'))
+                  if result.get('success') is not True:
                       raise SystemExit(1)
                   break
               except Exception as exc:
                   last=exc
                   print(f'MCP_RETRY={attempt} error={type(exc).__name__}')
-                  time.sleep(10)
+                  time.sleep(8)
           else:
               raise SystemExit(f'MCP_UNAVAILABLE: {last}')
           PY"
+
+      - name: Keep worker stopped
+        if: always()
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            'sudo systemctl stop mei-mg-email-worker.service || true; ! sudo systemctl is-active --quiet mei-mg-email-worker.service'
+
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey /tmp/body.json
