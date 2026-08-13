@@ -118,13 +118,16 @@ jobs:
           [ -z "$existing" ] || { echo 'V3_FLYWAY_BUSY=true'; exit 82; }
           rm -f /tmp/mei-flyway-v3.log /tmp/mei-flyway-v3.rc
           (
-            set +e
-            timeout 300s docker compose run --rm --no-deps flyway migrate > /tmp/mei-flyway-v3.log 2>&1
-            echo $? > /tmp/mei-flyway-v3.rc
+            if timeout 300s docker compose run --rm --no-deps flyway migrate > /tmp/mei-flyway-v3.log 2>&1; then
+              rc=0
+            else
+              rc=$?
+            fi
+            printf '%s\n' "$rc" > /tmp/mei-flyway-v3.rc
           ) &
           bg=$!
           while kill -0 "$bg" 2>/dev/null; do echo 'V3_FLYWAY_HEARTBEAT=true'; sleep 15; done
-          wait "$bg" || true
+          wait "$bg"
           rc="$(cat /tmp/mei-flyway-v3.rc 2>/dev/null || echo 99)"
           tail -n 100 /tmp/mei-flyway-v3.log | sed -E 's#(jdbc:postgresql://)[^ ]+#\1[redacted]#g'
           echo "V3_FLYWAY_RC=$rc"
@@ -185,13 +188,16 @@ jobs:
           test "$head" = "$EXPECTED_MEI_SHA"
           rm -f /tmp/mei-flyway-info-v3.log /tmp/mei-flyway-info-v3.rc
           (
-            set +e
-            timeout 240s docker compose run --rm --no-deps flyway info > /tmp/mei-flyway-info-v3.log 2>&1
-            echo $? > /tmp/mei-flyway-info-v3.rc
+            if timeout 240s docker compose run --rm --no-deps flyway info > /tmp/mei-flyway-info-v3.log 2>&1; then
+              rc=0
+            else
+              rc=$?
+            fi
+            printf '%s\n' "$rc" > /tmp/mei-flyway-info-v3.rc
           ) &
           bg=$!
           while kill -0 "$bg" 2>/dev/null; do echo 'V3_FLYWAY_INFO_HEARTBEAT=true'; sleep 15; done
-          wait "$bg" || true
+          wait "$bg"
           rc="$(cat /tmp/mei-flyway-info-v3.rc 2>/dev/null || echo 99)"
           tail -n 80 /tmp/mei-flyway-info-v3.log | sed -E 's#(jdbc:postgresql://)[^ ]+#\1[redacted]#g'
           test "$rc" = 0
