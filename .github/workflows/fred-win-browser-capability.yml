@@ -2,7 +2,7 @@ name: Fred-Win Browser Capability
 
 on:
   push:
-    branches: [main]
+    branches: [ops/inspect-mei-v020-stash]
     paths:
       - ".github/workflows/fred-win-browser-capability.yml"
 
