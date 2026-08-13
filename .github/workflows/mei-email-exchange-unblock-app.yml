@@ -1,0 +1,38 @@
+name: MEI Exchange restricted sender unblock
+
+on:
+  push:
+    branches: [ops/inspect-mei-v020-stash]
+    paths:
+      - '.github/workflows/mei-email-exchange-unblock-app.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  unblock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Confirm and remove Exchange sender restriction
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'REMOTE'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          sudo systemctl stop mei-mg-email-worker.service || true
+          ! sudo systemctl is-active --quiet mei-mg-email-worker.service
+          pwsh -NoProfile -File ./scripts/desbloquear_exchange_app_cert.ps1 -ConfirmUnblock
+          echo 'WORKER_RESUME_ALLOWED=false'
+          REMOTE
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
