@@ -69,8 +69,15 @@ sv_image_v3_assert(
 );
 sv_image_v3_assert(
     str_contains($statusApi, '[redacted]')
-    && str_contains($statusApi, "array_slice(\$ids, 0, 100)"),
-    'Endpoint de andamento deve limitar lote e redigir padroes de credencial'
+    && str_contains($statusApi, "array_slice(\$jobIds, 0, 100)")
+    && str_contains($statusApi, "'limit' => 100")
+    && str_contains($statusApi, "'truncated'"),
+    'Endpoint de andamento deve limitar lote, sinalizar truncamento e redigir padroes de credencial'
+);
+sv_image_v3_assert(
+    str_contains($statusApi, 'Bearer [redacted]')
+    && str_contains($statusApi, 'refresh_token'),
+    'Redacao deve cobrir headers Bearer e tokens em mensagens de erro'
 );
 sv_image_v3_assert(
     str_contains($pendingApi, "'has_image'")
