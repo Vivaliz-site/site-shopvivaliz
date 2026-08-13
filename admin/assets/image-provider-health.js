@@ -40,12 +40,12 @@
       const detail = String(info.detail || (info.ok ? 'Disponível.' : 'Indisponível.'));
       return `<span class="iv-chip ${info.ok ? 'good' : 'bad'}" title="${esc(detail)}">${info.ok ? '✓' : '✕'} ${esc(labels[key] || key)}${total ? ` · ${count}/${total}` : ''}</span>`;
     }).join('') || '<span class="iv-chip warn">Nenhum provedor retornou status.</span>';
+
     const selected = $('#iv-provider')?.value || '';
     const current = cached[selected];
     const role = $('#iv-role');
     if (role && current) {
-      const base = role.dataset.healthBase || role.textContent || '';
-      role.dataset.healthBase = base;
+      const base = String(role.textContent || '').replace(/\s+·\s+preflight\s+(?:disponível|indisponível:.*)$/iu, '').trim();
       role.textContent = `${base}${base ? ' · ' : ''}${current.ok ? 'preflight disponível' : 'preflight indisponível: ' + current.detail}`;
     }
   }
