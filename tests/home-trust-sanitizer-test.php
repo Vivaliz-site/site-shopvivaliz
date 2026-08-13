@@ -2,7 +2,8 @@
 
 declare(strict_types=1);
 
-require_once dirname(__DIR__) . '/includes/home-trust-sanitizer.php';
+$root = dirname(__DIR__);
+require_once $root . '/includes/home-trust-sanitizer.php';
 
 $fixture = <<<'HTML'
 <!doctype html><html><head>
@@ -26,31 +27,44 @@ $fixture = <<<'HTML'
 </body></html>
 HTML;
 
-$output = svhts_sanitize_home_html($fixture);
 $failures = [];
 $expect = static function (bool $condition, string $message) use (&$failures): void {
     if (!$condition) $failures[] = $message;
 };
 
-foreach (['Ana Paula M.', 'Marcos Silva T.', 'Julia Costa F.', 'AggregateRating', 'ratingCount', "alert('Inscrição realizada com sucesso!')", 'images.unsplash.com'] as $forbidden) {
-    $expect(!str_contains($output, $forbidden), 'Conteudo nao confiavel permaneceu: ' . $forbidden);
-}
+$assertSanitized = static function (string $output, string $context) use ($expect): void {
+    foreach (['Ana Paula M.', 'Marcos Silva T.', 'Julia Costa F.', 'AggregateRating', 'ratingCount', "alert('Inscrição realizada com sucesso!')", 'images.unsplash.com'] as $forbidden) {
+        $expect(!str_contains($output, $forbidden), $context . ': conteudo nao confiavel permaneceu: ' . $forbidden);
+    }
+    foreach (['Avaliações reais, sem conteúdo demonstrativo.', 'A inscrição por e-mail ainda não está ativa.', '/catalogo', '/contato', '/public/assets/category-images/cat-organizacao.jpg'] as $required) {
+        $expect(str_contains($output, $required), $context . ': conteudo confiavel ausente: ' . $required);
+    }
+    $expect(str_contains($output, 'class="testimonials-grid"'), $context . ': hook de testimonials para o JS foi removido.');
+    $expect(str_contains($output, '<!-- FAQ Section -->'), $context . ': FAQ foi removido junto com a newsletter.');
+};
 
-foreach (['Avaliações reais, sem conteúdo demonstrativo.', '/api/testimonials.php', 'A inscrição por e-mail ainda não está ativa.', '/catalogo', '/contato', '/public/assets/category-images/cat-organizacao.jpg'] as $required) {
-    // /api/testimonials.php e uma garantia de arquitetura do JS, nao deve ser
-    // inserida pelo sanitizador. O estado server-side precisa apenas preservar
-    // a secao que o JS reconhece; tratamos essa excecao abaixo.
-    if ($required === '/api/testimonials.php') continue;
-    $expect(str_contains($output, $required), 'Conteudo confiavel ausente: ' . $required);
-}
-$expect(str_contains($output, 'class="testimonials-grid"'), 'Hook de testimonials para o JS foi removido.');
-$expect(str_contains($output, '<!-- FAQ Section -->'), 'FAQ foi removido junto com a newsletter.');
+$output = svhts_sanitize_home_html($fixture);
+$assertSanitized($output, 'fixture');
 
 if (preg_match('~<script type="application/ld\+json">(.*?)</script>~s', $output, $match) !== 1) {
-    $failures[] = 'JSON-LD nao encontrado apos sanitizacao.';
+    $failures[] = 'Fixture: JSON-LD nao encontrado apos sanitizacao.';
 } else {
     json_decode($match[1], true);
-    $expect(json_last_error() === JSON_ERROR_NONE, 'JSON-LD ficou invalido: ' . json_last_error_msg());
+    $expect(json_last_error() === JSON_ERROR_NONE, 'Fixture: JSON-LD ficou invalido: ' . json_last_error_msg());
+}
+
+// Garante que os regexes continuam alcançando o index.php real. Nao executamos
+// a home nem acessamos banco/secrets; tratamos o arquivo como texto e validamos
+// exatamente o HTML/PHP versionado que sera renderizado em producao.
+$indexSource = @file_get_contents($root . '/index.php');
+if (!is_string($indexSource) || $indexSource === '') {
+    $failures[] = 'Nao foi possivel ler index.php para regressao real.';
+} else {
+    $expect(str_contains($indexSource, 'AggregateRating'), 'Index real deixou de conter o marcador esperado; revisar/remover o filtro legado.');
+    $expect(str_contains($indexSource, 'Ana Paula M.'), 'Index real deixou de conter o depoimento legado esperado; revisar/remover o filtro legado.');
+    $expect(str_contains($indexSource, "alert('Inscrição realizada com sucesso!')"), 'Index real deixou de conter a newsletter legada esperada; revisar/remover o filtro legado.');
+    $sanitizedIndex = svhts_sanitize_home_html($indexSource);
+    $assertSanitized($sanitizedIndex, 'index.php');
 }
 
 if ($failures !== []) {
