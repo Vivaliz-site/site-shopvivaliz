@@ -63,7 +63,7 @@ def home(p):
   k=p.evaluate("""()=>{let d=document.querySelector('details.sv-admin-card-details');if(!d)return'';d.querySelector('summary')?.click();return d.dataset.sectionKey||''}""")
   if k:
    p.wait_for_timeout(250);slow=again(p,1800) or slow
-   try:p.wait_for_function("k=>[...document.querySelectorAll('details.sv-admin-card-details')].some(d=>d.dataset.sectionKey===k&&d.open)",k,timeout=9000);sv=True
+   try:p.wait_for_function("k=>[...document.querySelectorAll('details.sv-admin-card-details')].some(d=>d.dataset.sectionKey===k&&d.open)",arg=k,timeout=9000);sv=True
    except T:pass
  e={'/admin/ai-image-studio/admin_dashboard.php','/admin/catalog-optimization/admin_catalog.php','/admin/produtos.php','/admin/pedidos.php'}
  return {'authenticated':True,'status':s,'navigation_slow':slow,'details':x['details'],'opened':op,'closed':cl,'saved':sv,'actions':{'Abrir seções','Recolher seções'}<=set(x['actions']),'dock':x['dock'] and e<=set(x['paths']),'padding':x['padding'],'overflow':x['overflow']}
@@ -103,7 +103,7 @@ def main():
    if h.get('authenticated'):
     r['authenticated_profile']='ephemeral-audit-session';stage='catalog';r['catalog']=catalog(p);stage='image';r['image']=image(p)
    r['blocked_mutations']=bl[:20]
-  except Exception as e:r['errors'].append({'stage':stage,'type':type(e).__name__,'path':path(p.url)})
+  except Exception as e:r['errors'].append({'stage':stage,'type':type(e).__name__,'path':path(p.url),'detail':str(e)[:280]})
   finally:c.close();b.close()
  l=r['login'];h=r['home'];c=r['catalog'];m=r['image'];checks={'login_google':l.get('google_visible') and l.get('google_canonical'),'authenticated_profile':bool(r['authenticated_profile']),'home':all((h.get('authenticated'),h.get('details',0)>0,h.get('opened'),h.get('closed'),h.get('saved'),h.get('actions'),h.get('dock'),h.get('padding',0)>=70,h.get('overflow',999)<=4)),'catalog':all((c.get('authenticated'),c.get('sort'),c.get('options'),c.get('product'),c.get('urgent'),c.get('overflow',999)<=4)),'image':all((m.get('authenticated'),m.get('items',0)>0,m.get('products',0)>0,m.get('variants',0)>0,m.get('eligible'),m.get('preflight'),m.get('shown'),m.get('saved'),m.get('restored'),m.get('actionbar'),m.get('overflow',999)<=4))};r['failures']=[k for k,v in checks.items() if not v];r['overall']=not r['failures'];r['finished_at']=ts();emit(r,0 if r['overall'] else 7)
 if __name__=='__main__':
