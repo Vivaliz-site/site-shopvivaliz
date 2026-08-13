@@ -58,9 +58,8 @@ def home(p):
  x=p.evaluate("""()=>{let d=[...document.querySelectorAll('details.sv-admin-card-details')],k=document.querySelector('#sv-admin-mobile-dock');return{details:d.length,dock:!!(k&&getComputedStyle(k).display!='none'&&k.getBoundingClientRect().height>1),paths:k?[...k.querySelectorAll('a')].map(a=>new URL(a.href,location.href).pathname):[],actions:[...document.querySelectorAll('#sv-admin-section-actions button')].map(b=>(b.textContent||'').trim()),padding:parseFloat(getComputedStyle(document.body).paddingBottom)||0,overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth)}}""")
  op=cl=sv=False
  if x['details']:
-  o=p.get_by_role('button',name='Abrir seções');c=p.get_by_role('button',name='Recolher seções')
-  if o.count():o.first.click();p.wait_for_timeout(180);op=p.evaluate("()=>[...document.querySelectorAll('details.sv-admin-card-details')].every(d=>d.open)")
-  if c.count():c.first.click();p.wait_for_timeout(180);cl=p.evaluate("()=>[...document.querySelectorAll('details.sv-admin-card-details')].every(d=>!d.open)")
+  op=p.evaluate("()=>{let b=[...document.querySelectorAll('#sv-admin-section-actions button')].find(x=>(x.textContent||'').trim()==='Abrir seções');if(!b)return false;b.click();return true}");p.wait_for_timeout(180);op=op and p.evaluate("()=>[...document.querySelectorAll('details.sv-admin-card-details')].every(d=>d.open)")
+  cl=p.evaluate("()=>{let b=[...document.querySelectorAll('#sv-admin-section-actions button')].find(x=>(x.textContent||'').trim()==='Recolher seções');if(!b)return false;b.click();return true}");p.wait_for_timeout(180);cl=cl and p.evaluate("()=>[...document.querySelectorAll('details.sv-admin-card-details')].every(d=>!d.open)")
   k=p.evaluate("""()=>{let d=document.querySelector('details.sv-admin-card-details');if(!d)return'';d.querySelector('summary')?.click();return d.dataset.sectionKey||''}""")
   if k:
    p.wait_for_timeout(250);slow=again(p,1800) or slow
@@ -77,7 +76,7 @@ def catalog(p):
  q=p.locator('#sv-effective-sort');v=q.count()>0 and q.first.is_visible();o=pr=ur=[]
  if v:
   o=q.first.locator('option').evaluate_all('e=>e.map(x=>x.value)');js="()=>[...document.querySelectorAll('#sv-fredwin-sort-fixture article')].map(a=>a.querySelector('strong')?.textContent.trim())"
-  q.first.select_option('product');p.wait_for_timeout(220);pr=p.evaluate(js);q.first.select_option('urgent');p.wait_for_timeout(220);ur=p.evaluate(js)
+  p.evaluate("v=>{let s=document.querySelector('#sv-effective-sort');s.value=v;s.dispatchEvent(new Event('change',{bubbles:true}))}",'product');p.wait_for_timeout(220);pr=p.evaluate(js);p.evaluate("v=>{let s=document.querySelector('#sv-effective-sort');s.value=v;s.dispatchEvent(new Event('change',{bubbles:true}))}",'urgent');p.wait_for_timeout(220);ur=p.evaluate(js)
  return {'authenticated':True,'status':s,'navigation_slow':slow,'sort':v,'options':{'recent','urgent','channel','status','product'}<=set(o),'product':pr==['Alpha','Beta','Zeta'],'urgent':ur==['Zeta','Beta','Alpha'],'overflow':p.evaluate('()=>Math.max(0,document.documentElement.scrollWidth-innerWidth)')}
 def image(p):
  s,slow=nav(p,'/admin/ai-image-studio/admin_dashboard.php',3000);a=auth(p)
@@ -90,10 +89,8 @@ def image(p):
  if z:
   sa=p.evaluate("x=>{let d=JSON.parse(localStorage.getItem(x.key)||'{}'),r=d?.products?.[x.id];return !!(r?.selected&&r?.types?.includes(x.type))}",z);r=p.locator('#iv-run')
   if r.count():
-   try:r.first.click(timeout=4000)
-   except:pass
-   p.wait_for_timeout(350);sh=p.locator('#sv-img-preflight.show').count()>0;c=p.locator('#sv-img-preflight .sv-img-cancel')
-   if c.count():c.first.click()
+   p.evaluate("()=>document.querySelector('#iv-run')?.click()");p.wait_for_timeout(350);sh=p.locator('#sv-img-preflight.show').count()>0
+   p.evaluate("()=>document.querySelector('#sv-img-preflight .sv-img-cancel')?.click()")
   slow=again(p,2700) or slow;re=p.evaluate("x=>{let i=document.querySelector('.iv-item[data-product-id=\"'+CSS.escape(x.id)+'\"]');if(!i)return false;let p=i.querySelector(':scope>summary input.iv-check'),v=[...i.querySelectorAll('.iv-variant input.iv-check')].find(n=>n.value===x.type);return !!(p?.checked&&v?.checked)}",z)
  return {'authenticated':True,'status':s,'navigation_slow':slow,**x,'eligible':bool(z),'preflight':p.locator('#sv-img-preflight').count()>0,'shown':sh,'saved':sa,'restored':re,'actionbar':p.locator('.iv-actionbar').count()>0,'overflow':p.evaluate('()=>Math.max(0,document.documentElement.scrollWidth-innerWidth)')}
 def main():
