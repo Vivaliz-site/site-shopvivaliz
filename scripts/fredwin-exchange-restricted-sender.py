@@ -159,7 +159,7 @@ def confirm_dialog(page: Page) -> bool:
 
 
 def wait_for_portal(page: Page) -> None:
-    deadline = time.time() + 120
+    deadline = time.time() + 90
     while time.time() < deadline:
         text = body_text(page).casefold()
         if any(marker in text for marker in ("restricted entities", "entidades restritas", "restricted users")):
@@ -170,21 +170,38 @@ def wait_for_portal(page: Page) -> None:
     raise RuntimeError("EXCHANGE_UI_PORTAL_NOT_READY")
 
 
-def _copy_profile() -> Path:
+def _original_user_data() -> Path:
     original = Path(os.environ["LOCALAPPDATA"]) / "Google" / "Chrome" / "User Data"
     if not original.is_dir():
         raise RuntimeError("CHROME_USER_DATA_MISSING")
+    return original
+
+
+def _profile_names(original: Path) -> list[str]:
+    names: list[str] = []
+    for child in original.iterdir():
+        if not child.is_dir():
+            continue
+        if child.name != "Default" and not child.name.startswith("Profile "):
+            continue
+        if (child / "Preferences").is_file():
+            names.append(child.name)
+    names.sort(key=lambda value: (value != "Default", value))
+    if not names:
+        raise RuntimeError("CHROME_PROFILES_MISSING")
+    out("EXCHANGE_UI_PROFILE_COUNT=" + str(len(names)))
+    return names
+
+
+def _copy_profile(original: Path, profile_name: str) -> Path:
     shutil.rmtree(PROFILE_COPY, ignore_errors=True)
     PROFILE_COPY.mkdir(parents=True, exist_ok=True)
     local_state = original / "Local State"
     if local_state.is_file():
         shutil.copy2(local_state, PROFILE_COPY / "Local State")
 
-    source_default = original / "Default"
-    target_default = PROFILE_COPY / "Default"
-    if not source_default.is_dir():
-        raise RuntimeError("CHROME_DEFAULT_PROFILE_MISSING")
-
+    source_profile = original / profile_name
+    target_profile = PROFILE_COPY / profile_name
     ignored = {
         "Cache",
         "Code Cache",
@@ -201,8 +218,8 @@ def _copy_profile() -> Path:
     def ignore_names(_directory: str, names: list[str]) -> set[str]:
         return {name for name in names if name in ignored or name.endswith(".tmp")}
 
-    shutil.copytree(source_default, target_default, ignore=ignore_names, dirs_exist_ok=True)
-    out("EXCHANGE_UI_PROFILE_COPY_OK")
+    shutil.copytree(source_profile, target_profile, ignore=ignore_names, dirs_exist_ok=True)
+    out("EXCHANGE_UI_PROFILE_COPY_OK=" + profile_name)
     return PROFILE_COPY
 
 
@@ -222,12 +239,12 @@ def _wait_debug_endpoint() -> str:
     raise RuntimeError("CHROME_DEBUG_ENDPOINT_TIMEOUT " + last_error[:200])
 
 
-def _start_chrome(profile: Path) -> subprocess.Popen:
+def _start_chrome(profile_root: Path, profile_name: str) -> subprocess.Popen:
     command = [
         str(CHROME),
         f"--remote-debugging-port={DEBUG_PORT}",
-        f"--user-data-dir={profile}",
-        "--profile-directory=Default",
+        f"--user-data-dir={profile_root}",
+        f"--profile-directory={profile_name}",
         "--force-renderer-accessibility",
         "--no-first-run",
         "--no-default-browser-check",
@@ -236,7 +253,7 @@ def _start_chrome(profile: Path) -> subprocess.Popen:
         TARGET,
     ]
     process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    out(f"EXCHANGE_UI_CHROME_STARTED pid={process.pid}")
+    out(f"EXCHANGE_UI_CHROME_STARTED profile={profile_name} pid={process.pid}")
     return process
 
 
@@ -246,10 +263,47 @@ def _pick_page(browser: Browser) -> Page:
             if "security.microsoft.com" in page.url:
                 return page
     if browser.contexts:
-        context = browser.contexts[0]
-    else:
-        raise RuntimeError("CHROME_CONTEXT_MISSING")
-    return context.new_page()
+        return browser.contexts[0].new_page()
+    raise RuntimeError("CHROME_CONTEXT_MISSING")
+
+
+def _perform(page: Page, mode: str, profile_name: str) -> int:
+    page.goto(TARGET, wait_until="domcontentloaded", timeout=120000)
+    wait_for_portal(page)
+    out("EXCHANGE_UI_AUTHENTICATED_PROFILE=" + profile_name)
+    out("EXCHANGE_UI_URL=" + page.url)
+    out("EXCHANGE_UI_TITLE=" + page.title())
+    listed = sender_is_listed(page)
+    out("EXCHANGE_UI_SENDER_LISTED=" + str(listed).lower())
+    if mode == "probe":
+        page.screenshot(path=str(SCREENSHOT), full_page=False)
+        out("EXCHANGE_UI_PROBE_OK")
+        return 0
+    if not listed:
+        out("EXCHANGE_UI_SENDER_NOT_LISTED")
+        return 0
+    if not select_sender(page):
+        out("EXCHANGE_UI_SELECT_FAILED")
+        return 11
+    time.sleep(2)
+    if not click_named(page, ["Unblock", "Desbloquear"]):
+        out("EXCHANGE_UI_UNBLOCK_BUTTON_NOT_FOUND")
+        return 12
+    time.sleep(3)
+    confirm_dialog(page)
+    time.sleep(15)
+
+    for attempt in range(1, 10):
+        page.goto(TARGET, wait_until="domcontentloaded", timeout=120000)
+        wait_for_portal(page)
+        if not sender_is_listed(page):
+            out("EXCHANGE_UI_UNBLOCK_CONFIRMED")
+            return 0
+        out(f"EXCHANGE_UI_STILL_LISTED_ATTEMPT={attempt}")
+        time.sleep(10)
+    page.screenshot(path=str(SCREENSHOT), full_page=False)
+    out("EXCHANGE_UI_UNBLOCK_UNCONFIRMED")
+    return 13
 
 
 def run(mode: str) -> int:
@@ -258,70 +312,54 @@ def run(mode: str) -> int:
         out("EXCHANGE_UI_CHROME_MISSING")
         return 2
 
-    chrome_process: subprocess.Popen | None = None
-    browser: Browser | None = None
     try:
-        subprocess.run(["taskkill", "/IM", "chrome.exe", "/F"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-        time.sleep(4)
-        profile = _copy_profile()
-        chrome_process = _start_chrome(profile)
-        endpoint = _wait_debug_endpoint()
-
-        with sync_playwright() as playwright:
-            browser = playwright.chromium.connect_over_cdp(endpoint, timeout=60000)
-            page = _pick_page(browser)
-            page.goto(TARGET, wait_until="domcontentloaded", timeout=120000)
-            wait_for_portal(page)
-            out("EXCHANGE_UI_URL=" + page.url)
-            out("EXCHANGE_UI_TITLE=" + page.title())
-            listed = sender_is_listed(page)
-            out("EXCHANGE_UI_SENDER_LISTED=" + str(listed).lower())
-            if mode == "probe":
-                page.screenshot(path=str(SCREENSHOT), full_page=False)
-                out("EXCHANGE_UI_PROBE_OK")
-                return 0
-            if not listed:
-                out("EXCHANGE_UI_SENDER_NOT_LISTED")
-                return 0
-            if not select_sender(page):
-                out("EXCHANGE_UI_SELECT_FAILED")
-                return 11
-            time.sleep(2)
-            if not click_named(page, ["Unblock", "Desbloquear"]):
-                out("EXCHANGE_UI_UNBLOCK_BUTTON_NOT_FOUND")
-                return 12
-            time.sleep(3)
-            confirm_dialog(page)
-            time.sleep(15)
-
-            for attempt in range(1, 10):
-                page.goto(TARGET, wait_until="domcontentloaded", timeout=120000)
-                wait_for_portal(page)
-                if not sender_is_listed(page):
-                    out("EXCHANGE_UI_UNBLOCK_CONFIRMED")
-                    return 0
-                out(f"EXCHANGE_UI_STILL_LISTED_ATTEMPT={attempt}")
-                time.sleep(10)
-            page.screenshot(path=str(SCREENSHOT), full_page=False)
-            out("EXCHANGE_UI_UNBLOCK_UNCONFIRMED")
-            return 13
-    except PlaywrightTimeoutError as exc:
-        out("EXCHANGE_UI_TIMEOUT=" + str(exc).replace("\n", " ")[:500])
-        return 14
+        original = _original_user_data()
+        profile_names = _profile_names(original)
     except Exception as exc:
-        out("EXCHANGE_UI_ERROR=" + type(exc).__name__ + ":" + str(exc).replace("\n", " ")[:700])
+        out("EXCHANGE_UI_ERROR=" + type(exc).__name__ + ":" + str(exc)[:500])
         return 15
-    finally:
+
+    auth_required = 0
+    for profile_name in profile_names:
+        browser: Browser | None = None
+        chrome_process: subprocess.Popen | None = None
         try:
-            if browser is not None:
-                browser.close()
-        except Exception:
-            pass
-        if chrome_process is not None:
+            subprocess.run(["taskkill", "/IM", "chrome.exe", "/F"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            time.sleep(4)
+            profile_root = _copy_profile(original, profile_name)
+            chrome_process = _start_chrome(profile_root, profile_name)
+            endpoint = _wait_debug_endpoint()
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.connect_over_cdp(endpoint, timeout=60000)
+                page = _pick_page(browser)
+                return _perform(page, mode, profile_name)
+        except PlaywrightTimeoutError as exc:
+            out("EXCHANGE_UI_PROFILE_TIMEOUT=" + profile_name + ":" + str(exc).replace("\n", " ")[:400])
+        except RuntimeError as exc:
+            if str(exc) == "EXCHANGE_UI_AUTH_REQUIRED":
+                auth_required += 1
+                out("EXCHANGE_UI_PROFILE_AUTH_REQUIRED=" + profile_name)
+            else:
+                out("EXCHANGE_UI_PROFILE_ERROR=" + profile_name + ":" + str(exc).replace("\n", " ")[:500])
+        except Exception as exc:
+            out("EXCHANGE_UI_PROFILE_ERROR=" + profile_name + ":" + type(exc).__name__ + ":" + str(exc).replace("\n", " ")[:500])
+        finally:
             try:
-                chrome_process.terminate()
+                if browser is not None:
+                    browser.close()
             except Exception:
                 pass
+            if chrome_process is not None:
+                try:
+                    chrome_process.terminate()
+                except Exception:
+                    pass
+
+    if auth_required == len(profile_names):
+        out("EXCHANGE_UI_AUTH_REQUIRED_ALL_PROFILES")
+    else:
+        out("EXCHANGE_UI_NO_USABLE_ADMIN_PROFILE")
+    return 15
 
 
 def main() -> int:
