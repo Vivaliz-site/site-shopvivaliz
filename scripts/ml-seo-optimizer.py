@@ -438,6 +438,29 @@ def ask_claude(client, item: dict, ctx: dict, research: str = "") -> dict:
 # --------------------------------------------------------------------------- validacao
 
 
+def source_blob(item: dict, ctx: dict, research: str = "") -> str:
+    """Tudo que se sabe do produto, normalizado, para checar se um dado tem lastro."""
+    parts = [item.get("title") or "", ctx.get("description") or "", research or ""]
+    for attr in item.get("attributes") or []:
+        parts.append(str(attr.get("value_name") or ""))
+    return norm(" ".join(parts)).replace(",", ".")
+
+
+def unsupported_numbers(text: str, blob: str) -> list[str]:
+    """Numeros no texto proposto que nao aparecem em nenhum dado de origem.
+
+    Medida, potencia, capacidade e codigo de modelo inventados sao o pior erro
+    possivel numa ficha tecnica, entao qualquer numero sem lastro barra a mudanca.
+    """
+    bad = []
+    for token in re.findall(r"[^\s]*\d[^\s]*", norm(text).replace(",", ".")):
+        digits = re.findall(r"\d+(?:\.\d+)?", token)
+        if digits and all(d in blob for d in digits):
+            continue
+        bad.append(token)
+    return bad
+
+
 def validate_title(raw: str, item: dict, ctx: dict) -> tuple[str | None, list[str]]:
     problems: list[str] = []
     title = re.sub(r"\s+", " ", (raw or "").replace("\n", " ")).strip(" -|*/")
