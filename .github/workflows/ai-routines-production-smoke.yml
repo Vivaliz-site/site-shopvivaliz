@@ -11,10 +11,12 @@ on:
       - 'admin/ai-image-studio/src/OpenRouterImageClient.php'
       - 'admin/ai-image-studio/src/ImageChannelProfile.php'
       - 'admin/ai-image-studio/api/channel_profiles.php'
+      - 'admin/ai-image-studio/api/provider_health_check.php'
       - 'admin/ai-image-studio/api/pending_candidates.php'
       - 'admin/ai-image-studio/api/enqueue_generation.php'
       - 'admin/ai-image-studio/api/generation_status.php'
       - 'admin/assets/image-generation-workflow.js'
+      - 'admin/assets/image-provider-health.js'
       - 'admin/catalog-optimization/src/TextAiServices.php'
       - 'admin/catalog-optimization/api/optimize_catalog_resilient.php'
       - 'admin/catalog-optimization/api/pending_candidates_unique.php'
@@ -54,7 +56,7 @@ jobs:
           echo "changed files: $changed"
           run_image=false
           run_catalog=false
-          if grep -qE '^(admin/ai-image-studio/(process_item\.php|src/(OpenRouterImageClient|ImageChannelProfile)\.php|api/(channel_profiles|pending_candidates|enqueue_generation|generation_status)\.php)|admin/assets/image-generation-workflow\.js|scripts/(ai-routines-production-smoke|ai-image-production-smoke-v2|ai-image-studio-worker)\.php|includes/admin-guard\.php|\.github/workflows/ai-routines-production-smoke\.yml)$' <<<"$changed"; then
+          if grep -qE '^(admin/ai-image-studio/(process_item\.php|src/(OpenRouterImageClient|ImageChannelProfile)\.php|api/(channel_profiles|provider_health_check|pending_candidates|enqueue_generation|generation_status)\.php)|admin/assets/(image-generation-workflow|image-provider-health)\.js|scripts/(ai-routines-production-smoke|ai-image-production-smoke-v2|ai-image-studio-worker)\.php|includes/admin-guard\.php|\.github/workflows/ai-routines-production-smoke\.yml)$' <<<"$changed"; then
             run_image=true
           fi
           if grep -qE '^(admin/catalog-optimization/(src/TextAiServices\.php|api/(optimize_catalog_resilient|pending_candidates_unique)\.php)|admin/assets/(catalog-optimization-workflow|catalog-change-intelligence)\.js|scripts/ai-routines-production-smoke\.php|includes/admin-guard\.php|\.github/workflows/ai-routines-production-smoke\.yml)$' <<<"$changed"; then
