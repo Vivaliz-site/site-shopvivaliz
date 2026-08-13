@@ -1,0 +1,108 @@
+name: One-shot restore verified DB runtime
+
+on:
+  push:
+    branches:
+      - ops/restore-verified-runtime-20260813
+    paths:
+      - '.github/workflows/ops-restore-verified-runtime-once.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: restore-verified-runtime-production
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: production
+    steps:
+      - name: Checkout exact recovery code
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Validate recovery script
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php -l scripts/restore-verified-db-runtime.php
+          ! grep -nE '(DB_PASS|PASSWORD|SECRET|TOKEN|KEY)=[^$[:space:]]+' scripts/restore-verified-db-runtime.php
+
+      - name: Configure verified production SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::Production SSH key missing'; exit 2; }
+          test -n "$known_hosts" || { echo '::error::Production known_hosts missing'; exit 3; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Restore only a verified DB tuple
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 php < scripts/restore-verified-db-runtime.php
+
+      - name: Reconcile runtime and prove local health
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          shared='/home/ubuntu/shopvivaliz-deploy/shared'
+          current='/home/ubuntu/shopvivaliz-deploy/current'
+          sudo chown ubuntu:www-data "$shared/.env"
+          chmod 0640 "$shared/.env"
+          php "$current/scripts/materialize-runtime-secrets.php"
+          sudo chown ubuntu:www-data "$shared/.env" "$shared/runtime-secrets.php"
+          chmod 0640 "$shared/.env" "$shared/runtime-secrets.php"
+          sudo python3 "$current/scripts/env_keyset_guard.py" verify \
+            --env "$shared/.env" --lock /etc/shopvivaliz/env-keyset.lock.json
+          sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-shopee-token-renewer.service
+          sleep 5
+          token_status="$(systemctl is-active shopvivaliz-token-renewer.service)"
+          shopee_status="$(systemctl is-active shopvivaliz-shopee-token-renewer.service)"
+          test "$token_status" = active
+          test "$shopee_status" = active
+          orders_body="$(mktemp)"
+          olist_body="$(mktemp)"
+          trap 'rm -f "$orders_body" "$olist_body"' EXIT
+          orders_code="$(curl --silent --show-error --connect-timeout 5 --max-time 20 \
+            -H 'Host: shopvivaliz.com.br' -o "$orders_body" -w '%{http_code}' \
+            'http://127.0.0.1/api/orders/health.php')"
+          olist_code="$(curl --silent --show-error --connect-timeout 5 --max-time 20 \
+            -H 'Host: shopvivaliz.com.br' -o "$olist_body" -w '%{http_code}' \
+            'http://127.0.0.1/api/olist/webhook-health.php')"
+          test "$orders_code" = 200
+          test "$olist_code" = 200
+          php -r '
+            foreach (array_slice($argv, 1) as $path) {
+              $payload = json_decode((string)file_get_contents($path), true);
+              if (!is_array($payload) || ($payload["ok"] ?? false) !== true) exit(1);
+            }
+          ' "$orders_body" "$olist_body"
+          echo 'verified_db_runtime_restored=true'
+          echo 'orders_health_ok=true'
+          echo 'olist_health_ok=true'
+          echo 'runtime_keyset_monotonic=true'
+          echo 'secret_values_printed=false'
+          REMOTE
