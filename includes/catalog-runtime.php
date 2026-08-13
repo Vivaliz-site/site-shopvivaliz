@@ -213,6 +213,13 @@ function svcr_has_available_product(array $products): bool
     return false;
 }
 
+function svcr_select_catalog_products(array $products, array $fallbackProducts): array
+{
+    if ($products !== [] && svcr_has_available_product($products)) return $products;
+    if (svcr_has_available_product($fallbackProducts)) return $fallbackProducts;
+    return $products !== [] ? $products : $fallbackProducts;
+}
+
 function svcr_products(): array
 {
     $root = dirname(__DIR__);
@@ -300,12 +307,7 @@ function svcr_products(): array
         ];
     }
 
-    if ($products !== [] && svcr_has_available_product($products)) return $products;
-
-    $fallbackProducts = svcr_fallback_products($root);
-    if (svcr_has_available_product($fallbackProducts)) return $fallbackProducts;
-
-    return $products !== [] ? $products : $fallbackProducts;
+    return svcr_select_catalog_products($products, svcr_fallback_products($root));
 }
 
 function svcr_collect_image_urls(array $item): array
