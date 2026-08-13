@@ -486,12 +486,18 @@ def validate_title(raw: str, item: dict, ctx: dict, blob: str = "") -> tuple[str
         seen.add(w)
     if dupes:
         problems.append("palavra repetida no titulo: " + ", ".join(sorted(dupes)))
+    if blob:
+        orphans = unsupported_numbers(title, blob)
+        if orphans:
+            problems.append("titulo com numero sem lastro nos dados: " + ", ".join(orphans))
     if problems:
         return None, problems
     return title, []
 
 
-def validate_attributes(proposed: list[dict], ctx: dict) -> tuple[list[dict], list[str]]:
+def validate_attributes(
+    proposed: list[dict], ctx: dict, blob: str = ""
+) -> tuple[list[dict], list[str]]:
     """Converte os valores da IA em payload valido para o ML, descartando o que nao casa."""
     by_id = {a["id"]: a for a in ctx["usable"]}
     out, notes = [], []
