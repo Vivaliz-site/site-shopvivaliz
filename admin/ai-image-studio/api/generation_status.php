@@ -18,6 +18,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
 $rawIds = $_GET['job_ids'] ?? $_GET['ids'] ?? '';
 $values = is_array($rawIds) ? $rawIds : preg_split('/[,\s]+/', (string)$rawIds, -1, PREG_SPLIT_NO_EMPTY);
 $jobIds = array_values(array_unique(array_filter(array_map('intval', (array)$values), static fn(int $id): bool => $id > 0)));
+$requestedJobCount = count($jobIds);
 $jobIds = array_slice($jobIds, 0, 100);
 
 if ($jobIds === []) {
@@ -29,11 +30,22 @@ if ($jobIds === []) {
 function ais_sanitize_error(string $error): string
 {
     $error = trim($error);
-    if ($error !== '') {
-        $error = preg_replace('/(?:sk-(?:proj-)?|AIza|ant-api)[A-Za-z0-9_\-]{8,}/', '[redacted]', $error) ?? $error;
-        $error = mb_substr($error, 0, 360, 'UTF-8');
+    if ($error === '') {
+        return '';
     }
-    return $error;
+
+    $patterns = [
+        '/(?:sk-(?:proj-)?|AIza|ant-api)[A-Za-z0-9_\-]{8,}/i' => '[redacted]',
+        '/Bearer\s+[A-Za-z0-9._~+\-\/=]+/i' => 'Bearer [redacted]',
+        '/([?&](?:key|api_key|token|access_token|refresh_token)=)[^&\s]+/i' => '$1[redacted]',
+        '/((?:api[_-]?key|authorization|access[_-]?token|refresh[_-]?token|secret)\s*[:=]\s*["\']?)[^\s"\'&,;]+/i' => '$1[redacted]',
+    ];
+    foreach ($patterns as $pattern => $replacement) {
+        $error = preg_replace($pattern, $replacement, $error) ?? $error;
+    }
+
+    $error = preg_replace('/\s+/u', ' ', $error) ?? $error;
+    return mb_substr(trim($error), 0, 360, 'UTF-8');
 }
 
 /** @return array<int,array<string,mixed>> */
@@ -63,7 +75,7 @@ function ais_status_queue_rows(array $jobIds): array
             $found[(int)$row['id']] = $row;
         }
     } catch (Throwable $e) {
-        error_log('[ai-image-studio] generation_status queue: ' . $e->getMessage());
+        error_log('[ai-image-studio] generation_status queue: ' . ais_sanitize_error($e->getMessage()));
     }
     return $found;
 }
@@ -100,7 +112,7 @@ function ais_status_staging_rows(PDO $db, int $productId, string $channel, strin
         }
         return array_values($latestByType);
     } catch (Throwable $e) {
-        error_log('[ai-image-studio] generation_status staging: ' . $e->getMessage());
+        error_log('[ai-image-studio] generation_status staging: ' . ais_sanitize_error($e->getMessage()));
         return [];
     }
 }
@@ -177,10 +189,16 @@ try {
         'success' => true,
         'jobs' => $jobs,
         'summary' => $summary,
+        'request' => [
+            'requested_job_count' => $requestedJobCount,
+            'returned_job_count' => count($jobIds),
+            'limit' => 100,
+            'truncated' => $requestedJobCount > count($jobIds),
+        ],
         'queue' => function_exists('sv_queue_summary') ? sv_queue_summary() : null,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
-    error_log('[ai-image-studio] generation_status: ' . $e->getMessage());
+    error_log('[ai-image-studio] generation_status: ' . ais_sanitize_error($e->getMessage()));
     http_response_code(500);
     echo json_encode([
         'success' => false,
