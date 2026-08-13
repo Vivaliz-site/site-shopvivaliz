@@ -14,6 +14,14 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('current_runner_blob="$(git -C "$repo" hash-object -- "$deploy_script")"', text)
         self.assertIn('test "$(git -C "$repo" hash-object -- "$deploy_script")" = "$expected_runner_blob"', text)
 
+    def test_master_pipeline_ignores_only_untracked_clone_noise(self) -> None:
+        text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
+        self.assertIn('git -C "$repo" config status.showUntrackedFiles no', text)
+        self.assertIn('status --porcelain=v1 --untracked-files=no', text)
+        self.assertNotIn('status --porcelain=v1 --untracked-files=all', text)
+        self.assertIn('Unexpected dirty deploy checkout:', text)
+        self.assertIn("git archive", (ROOT / "scripts/deploy-production.sh").read_text(encoding="utf-8"))
+
     def test_busy_lock_waits_long_enough_for_canonical_cron_then_reconciles(self) -> None:
         text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
         self.assertIn('timeout-minutes: 20', text)
