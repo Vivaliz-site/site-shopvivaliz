@@ -1,0 +1,93 @@
+name: MEI hardening live probe branch
+
+on:
+  push:
+    branches:
+      - ops/mei-post-hardening-seed-20260813
+    paths:
+      - '.github/workflows/mei-email-live-probe-branch.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Read-only hardening state
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o ConnectTimeout=20 \
+            -o ServerAliveInterval=20 \
+            -o ServerAliveCountMax=6 \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'bash -s' <<'REMOTE'
+          set -euo pipefail
+          state_dir='/var/lib/mei-mg-email'
+          log="$state_dir/deploy-hardening-20260813.log"
+          status_file="$state_dir/deploy-hardening-20260813.status"
+          pid_file="$state_dir/deploy-hardening-20260813.pid"
+          repo='/home/ubuntu/mei-mg-email'
+
+          echo "PROBE_TIME_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then
+            echo 'PROBE_WORKER_ACTIVE=true'
+          else
+            echo 'PROBE_WORKER_ACTIVE=false'
+          fi
+          echo "PROBE_MEI_SHA=$(git -C "$repo" rev-parse HEAD)"
+          if [[ -f "$state_dir/sender_blocked.pause" ]]; then echo 'PROBE_SENTINEL_PRESENT=true'; else echo 'PROBE_SENTINEL_PRESENT=false'; fi
+          if [[ -f "$status_file" ]]; then echo "PROBE_HARDENING_STATUS=$(cat "$status_file")"; else echo 'PROBE_HARDENING_STATUS=pending'; fi
+          if [[ -f "$pid_file" ]]; then
+            pid="$(cat "$pid_file" 2>/dev/null || true)"
+            echo "PROBE_HARDENING_PID=$pid"
+            if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then echo 'PROBE_HARDENING_PROCESS=running'; else echo 'PROBE_HARDENING_PROCESS=not-running'; fi
+          else
+            echo 'PROBE_HARDENING_PID=missing'
+          fi
+          echo "PROBE_FLYWAY_PROCESSES=$(ps -eo comm= | grep -Eci '^(flyway|java)$' || true)"
+          echo "PROBE_PWSH_PROCESSES=$(ps -eo comm= | grep -c '^pwsh$' || true)"
+          echo "PROBE_DOCKER_FLYWAY=$(docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}' | grep -i flyway || true)"
+          echo 'PROBE_AUX_SERVICES_BEGIN'
+          for unit in mei-mg-email-monitor.service mei-mg-email-ndr-guard.service mei-mg-email-base-sync.timer; do
+            printf '%s=' "$unit"
+            sudo systemctl is-active "$unit" || true
+          done
+          echo 'PROBE_AUX_SERVICES_END'
+          echo 'PROBE_LOG_TAIL_BEGIN'
+          if [[ -f "$log" ]]; then
+            tail -n 60 "$log" \
+              | sed -E 's/([A-Za-z0-9_]*(PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Za-z0-9_]*=)[^[:space:]]+/\1[REDACTED]/Ig' \
+              | sed -E 's#(jdbc:postgresql://)[^[:space:]]+#\1[REDACTED]#g'
+          else
+            echo 'log-missing'
+          fi
+          echo 'PROBE_LOG_TAIL_END'
+          echo 'WORKER_RESUME_ALLOWED=false'
+          REMOTE
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
