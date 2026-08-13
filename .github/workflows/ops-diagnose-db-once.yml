@@ -1,0 +1,74 @@
+name: One-shot diagnose DB connectivity
+
+on:
+  push:
+    branches:
+      - ops/restore-verified-runtime-20260813
+    paths:
+      - '.github/workflows/ops-diagnose-db-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - name: Configure verified production SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key"
+          test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Diagnose DB without printing connection values
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'php -d display_errors=0 -r '\''
+              $path = "/home/ubuntu/shopvivaliz-deploy/shared/.env";
+              $env = [];
+              foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+                $line = trim($line);
+                if ($line === "" || str_starts_with($line, "#") || !str_contains($line, "=")) continue;
+                if (str_starts_with($line, "export ")) $line = trim(substr($line, 7));
+                [$k, $v] = explode("=", $line, 2);
+                $v = trim($v);
+                if (strlen($v) >= 2 && (($v[0] === "\"" && $v[strlen($v)-1] === "\"") || ($v[0] === "\x27" && $v[strlen($v)-1] === "\x27"))) $v = substr($v, 1, -1);
+                $env[trim($k)] = $v;
+              }
+              $host = trim((string)($env["DB_HOST"] ?? "localhost")) ?: "localhost";
+              $portRaw = trim((string)($env["DB_PORT"] ?? "3306"));
+              $port = ctype_digit($portRaw) ? (int)$portRaw : 3306;
+              $name = trim((string)($env["DB_NAME"] ?? $env["DB_DATABASE"] ?? ""));
+              $user = trim((string)($env["DB_USER"] ?? $env["DB_USERNAME"] ?? ""));
+              $pass = (string)($env["DB_PASS"] ?? $env["DB_PASSWORD"] ?? "");
+              $local = in_array(strtolower($host), ["localhost", "127.0.0.1", "::1"], true);
+              echo "db_host_scope=" . ($local ? "local" : "remote") . PHP_EOL;
+              echo "db_identity_fields_present=" . (($name !== "" && $user !== "" && strtolower($user) !== "root") ? "true" : "false") . PHP_EOL;
+              try {
+                $pdo = new PDO(sprintf("mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4", $host, $port, $name), $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5]);
+                $ok = (int)$pdo->query("SELECT 1")->fetchColumn() === 1;
+                echo "db_select_one=" . ($ok ? "true" : "false") . PHP_EOL;
+              } catch (Throwable $e) {
+                echo "db_select_one=false" . PHP_EOL;
+                echo "db_failure_class=" . get_class($e) . PHP_EOL;
+              }
+              echo "secret_values_printed=false" . PHP_EOL;
+            '\''' 
