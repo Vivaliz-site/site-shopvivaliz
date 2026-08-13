@@ -61,7 +61,32 @@ TOKEN_PATH = os.environ.get(
 )
 REPORT_DIR = os.environ.get("ML_SEO_REPORT_DIR", "/home/ubuntu/shopvivaliz-deploy/shared/logs/ml-seo")
 API = "https://api.mercadolibre.com"
-MODEL = "claude-opus-5"
+# Modelo economico por padrao. As validacoes deterministicas de `validate_*` e
+# `unsupported_numbers` e que garantem a integridade do dado, nao o porte do modelo.
+MODEL = os.environ.get("ML_SEO_MODEL", "claude-haiku-4-5")
+
+# `output_config.effort` e o web_search com filtragem dinamica so existem nos modelos
+# maiores; em Haiku 4.5 esses parametros dao erro.
+EFFORT_MODELS = ("claude-opus-", "claude-sonnet-5", "claude-fable-", "claude-mythos-")
+WEB_SEARCH_2026 = EFFORT_MODELS + ("claude-sonnet-4-6",)
+
+
+def supports_effort(model: str) -> bool:
+    return model.startswith(EFFORT_MODELS)
+
+
+def output_config(model: str, effort: str, schema: dict | None = None) -> dict:
+    cfg: dict = {}
+    if supports_effort(model):
+        cfg["effort"] = effort
+    if schema:
+        cfg["format"] = {"type": "json_schema", "schema": schema}
+    return cfg
+
+
+def web_search_tool(model: str, max_uses: int = 5) -> dict:
+    version = "web_search_20260209" if model.startswith(WEB_SEARCH_2026) else "web_search_20250305"
+    return {"type": version, "name": "web_search", "max_uses": max_uses}
 
 # Termos proibidos em titulo pelas diretrizes do ML (promocao, frete, condicao de pagamento).
 BANNED_TITLE = [
