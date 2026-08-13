@@ -19,19 +19,19 @@ from typing import Any
 from scripts.env_keyset_guard import assert_monotonic_text
 
 
-ENV_PATH = Path(
-    os.environ.get(
-        "SHOPVIVALIZ_ENV_PATH",
-        "c:/site-shopvivaliz/.env" if os.name == "nt" else "/home/ubuntu/shopvivaliz-deploy/current/.env",
-    )
+DEFAULT_ENV_PATH = Path(
+    "c:/site-shopvivaliz/.env"
+    if os.name == "nt"
+    else "/home/ubuntu/shopvivaliz-deploy/current/.env"
 )
+DEFAULT_TOKEN_STORE_PATH = Path(
+    "c:/site-shopvivaliz/storage/private/olist-tokens.json"
+    if os.name == "nt"
+    else "/home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json"
+)
+ENV_PATH = Path(os.environ.get("SHOPVIVALIZ_ENV_PATH", str(DEFAULT_ENV_PATH)))
 TOKEN_STORE_PATH = Path(
-    os.environ.get(
-        "SHOPVIVALIZ_OLIST_TOKEN_FILE",
-        "c:/site-shopvivaliz/storage/private/olist-tokens.json"
-        if os.name == "nt"
-        else "/home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json",
-    )
+    os.environ.get("SHOPVIVALIZ_OLIST_TOKEN_FILE", str(DEFAULT_TOKEN_STORE_PATH))
 )
 TOKEN_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
 DEFAULT_CHECK_INTERVAL = 300
@@ -51,6 +51,15 @@ SAFE_OAUTH_ERROR_CODES = frozenset(
 )
 
 
+def current_token_store_path() -> Path:
+    """Return the shared production store, but keep tests/local runs isolated."""
+    if TOKEN_STORE_PATH != DEFAULT_TOKEN_STORE_PATH or "SHOPVIVALIZ_OLIST_TOKEN_FILE" in os.environ:
+        return TOKEN_STORE_PATH
+    if ENV_PATH != DEFAULT_ENV_PATH:
+        return ENV_PATH.parent / "storage/private/olist-tokens.json"
+    return TOKEN_STORE_PATH
+
+
 def _read_env() -> dict[str, str]:
     config: dict[str, str] = {}
     if not ENV_PATH.is_file():
@@ -65,10 +74,11 @@ def _read_env() -> dict[str, str]:
 
 
 def read_token_store() -> dict[str, Any]:
-    if not TOKEN_STORE_PATH.is_file():
+    path = current_token_store_path()
+    if not path.is_file():
         return {}
     try:
-        payload = json.loads(TOKEN_STORE_PATH.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError):
         return {}
     return payload if isinstance(payload, dict) else {}
@@ -204,12 +214,24 @@ def renew_token(config: dict[str, str]) -> dict[str, Any] | None:
     return None
 
 
-def _atomic_write(path: Path, text: str, mode: int, uid: int | None, gid: int | None) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if os.name != "nt":
-        os.chmod(path.parent, 0o770)
-        if uid is not None and gid is not None:
-            os.chown(path.parent, uid, gid)
+def _atomic_write(
+    path: Path,
+    text: str,
+    mode: int,
+    uid: int | None,
+    gid: int | None,
+    *,
+    prepare_private_parent: bool = False,
+) -> None:
+    if prepare_private_parent:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if os.name != "nt":
+            os.chmod(path.parent, 0o770)
+            if uid is not None and gid is not None:
+                os.chown(path.parent, uid, gid)
+    elif not path.parent.is_dir():
+        raise RuntimeError("diretorio de destino ausente")
+
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     temporary = Path(temporary_name)
     try:
@@ -293,11 +315,12 @@ def update_token_store(new_token: str, new_refresh_token: str, result: dict[str,
     env_stat = env_target.stat()
     payload = json.dumps(store, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     _atomic_write(
-        TOKEN_STORE_PATH,
+        current_token_store_path(),
         payload,
         0o660,
         env_stat.st_uid if os.name != "nt" else None,
         env_stat.st_gid if os.name != "nt" else None,
+        prepare_private_parent=True,
     )
 
 
