@@ -195,6 +195,24 @@ function svcr_filter_storefront_rows(array $rows): array
     }));
 }
 
+function svcr_fallback_products(string $root): array
+{
+    $fallback = $root . '/api/catalog/fallback-products.json';
+    $rows = is_file($fallback) ? json_decode((string)file_get_contents($fallback), true) : [];
+    return is_array($rows) ? svcr_filter_storefront_rows($rows) : [];
+}
+
+function svcr_has_available_product(array $products): bool
+{
+    foreach ($products as $product) {
+        if (!is_array($product)) continue;
+        if (svcr_item_price($product) > 0 && (int)($product['stock'] ?? $product['estoque_disponivel'] ?? 0) > 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function svcr_products(): array
 {
     $root = dirname(__DIR__);
@@ -216,9 +234,7 @@ function svcr_products(): array
     }
 
     if ($items === []) {
-        $fallback = $root . '/api/catalog/fallback-products.json';
-        $rows = is_file($fallback) ? json_decode((string)file_get_contents($fallback), true) : [];
-        return is_array($rows) ? svcr_filter_storefront_rows($rows) : [];
+        return svcr_fallback_products($root);
     }
 
     $products = [];
@@ -284,10 +300,12 @@ function svcr_products(): array
         ];
     }
 
-    if ($products !== []) return $products;
-    $fallback = $root . '/api/catalog/fallback-products.json';
-    $rows = is_file($fallback) ? json_decode((string)file_get_contents($fallback), true) : [];
-    return is_array($rows) ? svcr_filter_storefront_rows($rows) : [];
+    if ($products !== [] && svcr_has_available_product($products)) return $products;
+
+    $fallbackProducts = svcr_fallback_products($root);
+    if (svcr_has_available_product($fallbackProducts)) return $fallbackProducts;
+
+    return $products !== [] ? $products : $fallbackProducts;
 }
 
 function svcr_collect_image_urls(array $item): array
