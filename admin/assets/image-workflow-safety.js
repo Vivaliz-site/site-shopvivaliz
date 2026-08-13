@@ -167,8 +167,103 @@
     .iv-bulk-visual-confirm{display:flex;align-items:flex-start;gap:7px;font-size:12px;font-weight:800;color:#0f4f82;max-width:380px}
     .iv-bulk-visual-confirm input{margin-top:1px;width:17px;height:17px;accent-color:#1769aa}
     .iv-white-first-block{margin:10px 0;padding:9px 10px;border:1px solid #fecaca;border-radius:8px;background:#fff1f1;color:#991b1b;font-weight:800}
+    .iv-source-audit{margin:9px 0;padding:9px 10px;border-radius:9px;border:1px solid #bfdbfe;background:#eff6ff;color:#075985;font-size:12px;font-weight:800}
+    .iv-source-audit.bad{border-color:#fecaca;background:#fff1f1;color:#991b1b}
   `;
   document.head.appendChild(style);
+
+  const sourceCache = new Map();
+  const sourceRequested = new Set();
+  let sourceScheduled = false;
+
+  function stagingId(card) {
+    const input = $('input[name="selected_ids[]"]', card) || $('input[name="staging_id"]', card);
+    return Number(input?.value || 0);
+  }
+
+  function sourceNotice(card) {
+    let notice = $('.iv-source-audit', card);
+    if (!notice) {
+      notice = document.createElement('div');
+      notice.className = 'iv-source-audit';
+      const body = $('.iv-review-body', card) || card;
+      body.insertBefore(notice, body.firstChild || null);
+    }
+    return notice;
+  }
+
+  function blockUnverifiableSource(card, message) {
+    card.dataset.sourceAuditable = '0';
+    card.dataset.state = 'blocked';
+    const notice = sourceNotice(card);
+    notice.className = 'iv-source-audit bad';
+    notice.textContent = message;
+    const publish = $('button.publish', card);
+    if (publish) {
+      publish.disabled = true;
+      publish.title = 'Publicação bloqueada até existir referência visual auditável.';
+    }
+  }
+
+  function applySourceAudit(card, item) {
+    if (!item?.source_auditable || !item?.source_image_ref) {
+      blockUnverifiableSource(card, 'Referência visual não persistida. Gere novamente pelo dashboard antes de qualquer publicação.');
+      return;
+    }
+    card.dataset.sourceAuditable = '1';
+    card.dataset.sourceJobId = String(Number(item.source_job_id || 0));
+    card.dataset.productId = String(Number(item.product_id || 0));
+    const before = $('.compare img[alt="Foto real do produto"]', card);
+    if (before) {
+      before.src = item.source_image_ref;
+      before.dataset.auditSource = 'staging';
+    }
+    const heading = $$('.compare h3', card).find((node) => /Antes/i.test(node.textContent || ''));
+    if (heading) heading.textContent = 'Antes — foto real usada na geração';
+    const notice = sourceNotice(card);
+    notice.className = 'iv-source-audit';
+    const job = Number(item.source_job_id || 0);
+    notice.textContent = job > 0
+      ? `Referência visual auditável registrada pelo job #${job}. A comparação abaixo usa exatamente a fonte fornecida à IA.`
+      : 'Referência visual auditável registrada no staging. A comparação abaixo usa exatamente a fonte fornecida à IA.';
+  }
+
+  async function fetchSourceBatch(ids) {
+    const response = await fetch(`/admin/ai-image-studio/api/review_sources.php?ids=${encodeURIComponent(ids.join(','))}`, {
+      credentials: 'same-origin',
+      headers: {'Accept': 'application/json'},
+    });
+    if (response.redirected || /\/auth\/login\.php/i.test(response.url || '')) throw new Error('Sessão administrativa expirada.');
+    const data = await response.json();
+    if (!response.ok || data?.success === false) throw new Error(data?.error || `Falha HTTP ${response.status}.`);
+    for (const item of data.items || []) sourceCache.set(Number(item.staging_id), item);
+  }
+
+  async function loadSourceAudit() {
+    sourceScheduled = false;
+    const cards = $$('.iv-review-card, article.card').filter((card) => stagingId(card) > 0);
+    const ids = [...new Set(cards.map(stagingId).filter((id) => id > 0 && !sourceCache.has(id) && !sourceRequested.has(id)))];
+    ids.forEach((id) => sourceRequested.add(id));
+    try {
+      for (let offset = 0; offset < ids.length; offset += 100) await fetchSourceBatch(ids.slice(offset, offset + 100));
+    } catch (error) {
+      cards.forEach((card) => {
+        const id = stagingId(card);
+        if (ids.includes(id)) blockUnverifiableSource(card, `Não foi possível comprovar a foto de referência: ${error.message}`);
+      });
+    }
+    cards.forEach((card) => {
+      const id = stagingId(card);
+      if (sourceCache.has(id)) applySourceAudit(card, sourceCache.get(id));
+      else if (ids.includes(id)) blockUnverifiableSource(card, 'O staging não retornou uma referência visual auditável. Gere novamente antes de publicar.');
+    });
+  }
+
+  function scheduleSourceAudit() {
+    if (sourceScheduled) return;
+    sourceScheduled = true;
+    setTimeout(loadSourceAudit, 30);
+  }
 
   function enforceCard(card) {
     if (card.dataset.ivVisualConfirmReady === '1') return;
@@ -234,12 +329,74 @@
     }, true);
   }
 
+  document.addEventListener('click', (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
+
+    const publish = target.closest('button.publish');
+    if (publish) {
+      const card = publish.closest('.iv-review-card, article.card');
+      if (!card || card.dataset.sourceAuditable === '1') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      blockUnverifiableSource(card, 'Publicação bloqueada: primeiro comprove a mesma foto real que foi fornecida à IA.');
+      return;
+    }
+
+    const regenerate = target.closest('button.regenerate');
+    if (regenerate) {
+      const card = regenerate.closest('.iv-review-card, article.card');
+      const productId = Number(card?.dataset.productId || 0);
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const suffix = productId > 0 ? `?product_id=${encodeURIComponent(String(productId))}` : '';
+      if (window.confirm('Para manter a trilha de auditoria da foto real, a regeneração agora começa no dashboard. Ir para a geração auditável?')) {
+        location.href = `/admin/ai-image-studio/admin_dashboard.php${suffix}`;
+      }
+      return;
+    }
+
+    const bulkApply = target.closest('.iv-bulk .apply');
+    if (bulkApply) {
+      const selected = $$('input[name="selected_ids[]"][form="bulk-action-form"]:checked');
+      const blocked = selected.filter((input) => input.closest('.iv-review-card, article.card')?.dataset.sourceAuditable !== '1');
+      if (!blocked.length) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      window.alert(`${blocked.length} imagem(ns) selecionada(s) não possuem referência visual auditável. Gere-as novamente antes de aplicar.`);
+    }
+  }, true);
+
+  document.addEventListener('submit', (event) => {
+    const form = event.target instanceof HTMLFormElement ? event.target : null;
+    if (!form) return;
+    const submitter = event.submitter instanceof HTMLElement ? event.submitter : null;
+    if (submitter?.classList.contains('publish')) {
+      const card = form.closest('.iv-review-card, article.card');
+      if (card?.dataset.sourceAuditable === '1') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (card) blockUnverifiableSource(card, 'Publicação bloqueada: a foto real usada na geração não foi comprovada.');
+      return;
+    }
+    if (form.id === 'bulk-action-form') {
+      const action = $('select[name="bulk_action"]', form)?.value || '';
+      if (action !== 'bulk_publish') return;
+      const selected = $$('input[name="selected_ids[]"][form="bulk-action-form"]:checked');
+      if (selected.every((input) => input.closest('.iv-review-card, article.card')?.dataset.sourceAuditable === '1')) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      window.alert('O lote contém imagem sem referência visual auditável. A publicação foi bloqueada.');
+    }
+  }, true);
+
   const enforce = () => {
     $$('.iv-review-card').forEach(enforceCard);
     enforceBulk();
+    scheduleSourceAudit();
   };
   enforce();
   const observer = new MutationObserver(enforce);
   observer.observe(document.documentElement, {childList: true, subtree: true});
-  setTimeout(() => observer.disconnect(), 15000);
+  setTimeout(() => observer.disconnect(), 20000);
 })();
