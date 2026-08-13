@@ -58,6 +58,60 @@ function ai_catalog_fold_text(string $text): string
 }
 
 /** @return list<string> */
+function ai_catalog_hype_prefixes(): array
+{
+    return [
+        'chega de',
+        'diga adeus',
+        'adeus',
+        'elimine de vez',
+        'elimine',
+        'transforme',
+        'potencialize',
+        'maximize',
+        'imperdivel',
+        'incrivel',
+        'revolucionario',
+        'ultimissima chance',
+        'nao perca',
+        'garanta ja',
+        'corra',
+    ];
+}
+
+/**
+ * Remove somente chamadas promocionais do inicio de um texto ja dobrado.
+ * O loop e intencional: nomes legados podem carregar mais de uma chamada
+ * sequencial (ex.: "Imperdivel! Transforme ...").
+ */
+function ai_catalog_folded_without_hype_prefix(string $text): string
+{
+    $normalized = ai_catalog_fold_text($text);
+    if ($normalized === '') return '';
+
+    $prefixes = ai_catalog_hype_prefixes();
+    usort($prefixes, static fn(string $a, string $b): int => strlen($b) <=> strlen($a));
+    for ($round = 0; $round < 8; $round++) {
+        $changed = false;
+        foreach ($prefixes as $prefix) {
+            if ($normalized === $prefix) {
+                $normalized = '';
+                $changed = true;
+                break;
+            }
+            $needle = $prefix . ' ';
+            if (str_starts_with($normalized, $needle)) {
+                $normalized = trim(substr($normalized, strlen($needle)));
+                $changed = true;
+                break;
+            }
+        }
+        if (!$changed || $normalized === '') break;
+    }
+    return $normalized;
+}
+
+/** @return list<string> */
 function ai_catalog_identity_candidates(array $product): array
 {
     $candidates = [];
@@ -74,7 +128,11 @@ function ai_catalog_identity_candidates(array $product): array
         }
     }
 
-    $sourceName = ai_catalog_fold_text((string)($product['name'] ?? ''));
+    // Nomes legados podem ter sido cadastrados com copy promocional antes da
+    // identidade real. Esse preambulo nao faz parte da identidade factual e,
+    // se mantido aqui, tornaria os gates "identidade primeiro" e "sem hype"
+    // mutuamente impossiveis de satisfazer.
+    $sourceName = ai_catalog_folded_without_hype_prefix((string)($product['name'] ?? ''));
     if ($sourceName !== '') {
         $tokens = preg_split('/\s+/u', $sourceName) ?: [];
         $picked = [];
@@ -85,6 +143,18 @@ function ai_catalog_identity_candidates(array $product): array
         }
         if ($picked !== []) {
             $candidates[] = implode(' ', $picked);
+        }
+    }
+
+    // Fallback estritamente factual para um cadastro excepcional cujo nome
+    // inteiro seja apenas copy promocional e nao tenha marca/modelo.
+    if ($candidates === []) {
+        foreach (['sku', 'gtin'] as $key) {
+            $candidate = ai_catalog_fold_text((string)($product[$key] ?? ''));
+            if ($candidate !== '') {
+                $candidates[] = $candidate;
+                break;
+            }
         }
     }
 
@@ -105,27 +175,10 @@ function ai_catalog_title_starts_with_identity(string $title, array $product): b
 
 function ai_catalog_title_has_hype_prefix(string $title): bool
 {
-    $prefixes = [
-        'chega de',
-        'adeus',
-        'diga adeus',
-        'elimine',
-        'elimine de vez',
-        'transforme',
-        'potencialize',
-        'maximize',
-        'imperdivel',
-        'incrivel',
-        'revolucionario',
-        'ultimissima chance',
-        'nao perca',
-        'garanta ja',
-        'corra',
-    ];
     $normalized = ai_catalog_fold_text($title);
     if ($normalized === '') return false;
-    foreach ($prefixes as $prefix) {
-        if (str_starts_with($normalized, $prefix)) {
+    foreach (ai_catalog_hype_prefixes() as $prefix) {
+        if ($normalized === $prefix || str_starts_with($normalized, $prefix . ' ')) {
             return true;
         }
     }
