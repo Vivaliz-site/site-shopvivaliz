@@ -2,7 +2,7 @@ name: Fred-Win M365 Context
 
 on:
   push:
-    branches: [main]
+    branches: [ops/inspect-mei-v020-stash]
     paths:
       - ".github/workflows/fred-win-m365-context.yml"
 
@@ -12,12 +12,13 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 6
     steps:
       - name: Configure VM key
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
         run: |
+          set -euo pipefail
           test -n "$VM_KEY" || exit 2
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
@@ -26,15 +27,15 @@ jobs:
         run: |
           python3 - <<'PY' > /tmp/body.json
           import json
-          ps=r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "Write-Output ('AZ_CLI=' + [bool](Get-Command az -ErrorAction SilentlyContinue)); if(Get-Command az -ErrorAction SilentlyContinue){ $a=(az account show --query '{tenantId:tenantId,state:state}' -o json 2>$null); if($LASTEXITCODE -eq 0){ Write-Output ('AZ_ACCOUNT=' + $a) } else { Write-Output 'AZ_ACCOUNT=none' } }; Write-Output ('AZ_MODULE=' + [bool](Get-Module -ListAvailable Az.Accounts)); if(Get-Module -ListAvailable Az.Accounts){ Import-Module Az.Accounts -ErrorAction SilentlyContinue; $c=Get-AzContext -ErrorAction SilentlyContinue; if($c){ Write-Output ('AZ_CONTEXT_TENANT=' + $c.Tenant.Id); Write-Output ('AZ_CONTEXT_ACCOUNT_TYPE=' + $c.Account.Type) } else { Write-Output 'AZ_CONTEXT=none' } }; Write-Output ('MG_MODULE=' + [bool](Get-Module -ListAvailable Microsoft.Graph.Authentication)); if(Get-Module -ListAvailable Microsoft.Graph.Authentication){ Import-Module Microsoft.Graph.Authentication -ErrorAction SilentlyContinue; $m=Get-MgContext -ErrorAction SilentlyContinue; if($m){ Write-Output ('MG_CONTEXT_CLIENT=' + $m.ClientId); Write-Output ('MG_CONTEXT_TENANT=' + $m.TenantId); Write-Output ('MG_CONTEXT_AUTHTYPE=' + $m.AuthType); Write-Output ('MG_CONTEXT_SCOPES=' + (($m.Scopes | Sort-Object) -join ',')) } else { Write-Output 'MG_CONTEXT=none' } }; Write-Output ('EXO_MODULE=' + [bool](Get-Module -ListAvailable ExchangeOnlineManagement)); $cache=Join-Path $env:LOCALAPPDATA 'mei-mg-email\microsoft-graph-token.json'; Write-Output ('LEGACY_GRAPH_CACHE=' + (Test-Path $cache))"'''
-          print(json.dumps({'params':{'command':ps,'timeout':120}}))
+          ps=r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "Write-Output ('AZ_CLI=' + [bool](Get-Command az -ErrorAction SilentlyContinue)); if(Get-Command az -ErrorAction SilentlyContinue){ $a=(az account show --query '{tenantId:tenantId,state:state,userType:user.type}' -o json 2>$null); if($LASTEXITCODE -eq 0){ Write-Output ('AZ_ACCOUNT=' + $a) } else { Write-Output 'AZ_ACCOUNT=none' } }; Write-Output ('AZ_MODULE=' + [bool](Get-Module -ListAvailable Az.Accounts)); if(Get-Module -ListAvailable Az.Accounts){ Import-Module Az.Accounts -ErrorAction SilentlyContinue; $c=Get-AzContext -ErrorAction SilentlyContinue; if($c){ Write-Output ('AZ_CONTEXT_TENANT=' + $c.Tenant.Id); Write-Output ('AZ_CONTEXT_ACCOUNT_TYPE=' + $c.Account.Type) } else { Write-Output 'AZ_CONTEXT=none' } }; Write-Output ('MG_MODULE=' + [bool](Get-Module -ListAvailable Microsoft.Graph.Authentication)); if(Get-Module -ListAvailable Microsoft.Graph.Authentication){ Import-Module Microsoft.Graph.Authentication -ErrorAction SilentlyContinue; $m=Get-MgContext -ErrorAction SilentlyContinue; if($m){ Write-Output ('MG_CONTEXT_CLIENT=' + $m.ClientId); Write-Output ('MG_CONTEXT_TENANT=' + $m.TenantId); Write-Output ('MG_CONTEXT_AUTHTYPE=' + $m.AuthType); Write-Output ('MG_CONTEXT_SCOPES=' + (($m.Scopes | Sort-Object) -join ',')) } else { Write-Output 'MG_CONTEXT=none' } }; Write-Output ('EXO_MODULE=' + [bool](Get-Module -ListAvailable ExchangeOnlineManagement)); Write-Output ('EXO_CONNECTIONS=' + (@(Get-ConnectionInformation -ErrorAction SilentlyContinue).Count)); $cache=Join-Path $env:LOCALAPPDATA 'mei-mg-email\microsoft-graph-token.json'; Write-Output ('LEGACY_GRAPH_CACHE=' + (Test-Path $cache)); if(Test-Path $cache){ try{$j=Get-Content $cache -Raw|ConvertFrom-Json; Write-Output ('CACHE_HAS_ACCESS_TOKEN=' + [bool]$j.access_token); Write-Output ('CACHE_HAS_REFRESH_TOKEN=' + [bool]$j.refresh_token); Write-Output ('CACHE_SCOPE=' + [string]$j.scope); Write-Output ('CACHE_EXPIRES=' + [string]$j.expires_at)}catch{Write-Output 'CACHE_PARSE=false'} }"'''
+          print(json.dumps({'params':{'command':ps,'timeout':150}}))
           PY
           BODY_B64="$(base64 -w0 /tmp/body.json)"
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 "BODY_B64='$BODY_B64' python3 - <<'PY'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "BODY_B64='$BODY_B64' python3 - <<'PY'
           import os,base64,urllib.request
           body=base64.b64decode(os.environ['BODY_B64'])
           req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
-          with urllib.request.urlopen(req,timeout=140) as r: print(r.read().decode())
+          with urllib.request.urlopen(req,timeout=170) as r: print(r.read().decode())
           PY"
       - name: Cleanup
         if: always()
