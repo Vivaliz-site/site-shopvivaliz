@@ -1,0 +1,99 @@
+name: Locate MEI V020 in likely backups
+
+on:
+  push:
+    branches:
+      - ops/inspect-mei-v020-stash
+    paths:
+      - '.github/workflows/find-mei-v020-backups.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  backups:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Search bounded backup locations by checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 300s ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=15 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          python3 - <<'PY'
+          import glob, os, subprocess, zlib
+          TARGET=10857321
+
+          def signed32(v):
+              return v if v < 2**31 else v - 2**32
+          def checksum(data):
+              text=data.decode('utf-8-sig')
+              crc=0
+              for line in text.splitlines():
+                  crc=zlib.crc32(line.encode('utf-8'), crc)
+              return signed32(crc & 0xffffffff)
+
+          roots=[]
+          patterns=[
+              '/home/ubuntu/mei-mg-email*',
+              '/home/ubuntu/*mei*',
+              '/home/ubuntu/*email*',
+              '/home/ubuntu/*backup*',
+              '/home/ubuntu/*archive*',
+              '/home/ubuntu/shopvivaliz-deploy/shared',
+              '/var/backups',
+              '/tmp',
+          ]
+          for pattern in patterns:
+              for p in glob.glob(pattern):
+                  if os.path.isdir(p) and p not in roots:
+                      roots.append(p)
+          print('BACKUP_ROOTS=' + '|'.join(sorted(roots)))
+
+          found={}
+          for root in roots:
+              try:
+                  proc=subprocess.run(
+                      ['timeout','25s','find',root,'-maxdepth','7','-type','f','-name','V020__*.sql','-size','-200k','-print'],
+                      text=True,capture_output=True,errors='replace'
+                  )
+              except Exception:
+                  continue
+              for path in proc.stdout.splitlines():
+                  found[path]=None
+
+          print(f'BACKUP_V020_FILES={len(found)}')
+          matches=0
+          for path in sorted(found):
+              try:
+                  data=open(path,'rb').read()
+                  value=checksum(data)
+              except Exception as exc:
+                  print(f'BACKUP_READ_ERROR path={path} type={type(exc).__name__}')
+                  continue
+              match=value==TARGET
+              print(f'BACKUP_V020 path={path} checksum={value} target_match={str(match).lower()} bytes={len(data)}')
+              if match:
+                  matches+=1
+                  print('BACKUP_TARGET_CONTENT_BEGIN')
+                  print(data.decode('utf-8-sig'))
+                  print('BACKUP_TARGET_CONTENT_END')
+          print(f'BACKUP_TARGET_MATCHES={matches}')
+          PY
+          echo 'WORKER_RESUME_ALLOWED=false'
+          EOF
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey
