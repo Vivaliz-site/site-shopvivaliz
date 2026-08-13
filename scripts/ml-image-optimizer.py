@@ -306,8 +306,11 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--only", action="append", default=[])
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--model", default=MODEL, help=f"modelo Claude (padrao {MODEL})")
     args = ap.parse_args()
     apply = args.apply and not args.dry_run
+    globals()["MODEL"] = args.model
+    _seo.MODEL = args.model
 
     import anthropic
 
