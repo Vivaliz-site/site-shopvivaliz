@@ -41,34 +41,55 @@ if (!$db instanceof PDO) {
 
 svcp_ensure_schema($db);
 
-function ais_pending_active_product_sql(PDO $db, string $alias = 'p'): string
+/** @return array<string,true> */
+function ais_pending_table_columns(PDO $db, string $table): array
 {
-    $prefix = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 'p';
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $table)) {
+        return [];
+    }
     $columns = [];
     try {
-        $stmt = $db->query('SHOW COLUMNS FROM products');
+        $stmt = $db->query('SHOW COLUMNS FROM `' . $table . '`');
         foreach ($stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [] as $row) {
             $field = strtolower((string)($row['Field'] ?? ''));
-            if ($field !== '') {
-                $columns[$field] = true;
-            }
+            if ($field !== '') $columns[$field] = true;
         }
     } catch (Throwable) {
-        $columns = ['active' => true];
+        return [];
     }
+    return $columns;
+}
 
+function ais_pending_active_product_sql(array $columns, string $alias = 'p'): string
+{
+    $prefix = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 'p';
     $parts = [];
     foreach (['active', 'is_active', 'ativo'] as $column) {
         if (isset($columns[$column])) {
-            $parts[] = "COALESCE({$prefix}.{$column}, 0) = 1";
+            $parts[] = "COALESCE({$prefix}.`{$column}`, 0) = 1";
         }
     }
     foreach (['situacao', 'status'] as $column) {
         if (isset($columns[$column])) {
-            $parts[] = "UPPER(COALESCE({$prefix}.{$column}, 'A')) NOT IN ('I','INATIVO','INACTIVE','DESATIVADO','DISABLED','EXCLUIDO','DELETED')";
+            $parts[] = "UPPER(COALESCE({$prefix}.`{$column}`, 'A')) NOT IN ('I','INATIVO','INACTIVE','DESATIVADO','DISABLED','EXCLUIDO','DELETED')";
         }
     }
     return $parts !== [] ? implode(' AND ', $parts) : '1=1';
+}
+
+/** @param list<string> $candidates */
+function ais_pending_product_expr(array $columns, array $candidates, string $output, string $alias = 'p'): string
+{
+    $prefix = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 'p';
+    $parts = [];
+    foreach ($candidates as $column) {
+        $key = strtolower($column);
+        if (isset($columns[$key])) {
+            $parts[] = "NULLIF(TRIM(COALESCE({$prefix}.`{$column}`, '')), '')";
+        }
+    }
+    if ($parts === []) return "'' AS `{$output}`";
+    return 'COALESCE(' . implode(', ', $parts) . ", '') AS `{$output}`";
 }
 
 /** @return array{width:int,height:int} */
@@ -90,24 +111,16 @@ function ais_pending_image_dimensions(array $row, string $resolved, string $proj
             break;
         }
     }
-    if ($width > 0 && $height > 0) {
-        return ['width' => $width, 'height' => $height];
-    }
+    if ($width > 0 && $height > 0) return ['width' => $width, 'height' => $height];
 
     $localCandidates = [];
-    if (str_starts_with($resolved, '/')) {
-        $localCandidates[] = $projectRoot . $resolved;
-    }
+    if (str_starts_with($resolved, '/')) $localCandidates[] = $projectRoot . $resolved;
     foreach (['local_url', 'site_url'] as $field) {
         $path = trim((string)($row[$field] ?? ''));
-        if ($path !== '' && str_starts_with($path, '/')) {
-            $localCandidates[] = $projectRoot . $path;
-        }
+        if ($path !== '' && str_starts_with($path, '/')) $localCandidates[] = $projectRoot . $path;
     }
     foreach (array_values(array_unique($localCandidates)) as $path) {
-        if (!is_file($path)) {
-            continue;
-        }
+        if (!is_file($path)) continue;
         $size = @getimagesize($path);
         if (is_array($size) && (int)($size[0] ?? 0) > 0 && (int)($size[1] ?? 0) > 0) {
             return ['width' => (int)$size[0], 'height' => (int)$size[1]];
@@ -117,53 +130,68 @@ function ais_pending_image_dimensions(array $row, string $resolved, string $proj
 }
 
 /** @return array{url:string,type:string,width:int,height:int} */
-function ais_pending_source_image(PDO $db, array $product, string $projectRoot): array
+function ais_pending_source_from_gallery_row(array $row, string $projectRoot): array
 {
-    $sku = trim((string)($product['sku'] ?? ''));
-    if ($sku !== '') {
-        try {
-            $stmt = $db->prepare('SELECT * FROM olist_product_images WHERE sku = ? LIMIT 20');
-            $stmt->execute([$sku]);
-            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-            usort($rows, static function (array $a, array $b): int {
-                return [-(int)($a['is_primary'] ?? 0), (int)($a['position'] ?? 9999), (int)($a['id'] ?? 999999)]
-                    <=> [-(int)($b['is_primary'] ?? 0), (int)($b['position'] ?? 9999), (int)($b['id'] ?? 999999)];
-            });
-            foreach ($rows as $row) {
-                $status = strtolower(trim((string)($row['status'] ?? '')));
-                if (in_array($status, ['error', 'deleted', 'inactive'], true)) {
-                    continue;
-                }
-                $resolved = '';
-                if (function_exists('svsis_resolve_image_url')) {
-                    $resolved = trim((string)svsis_resolve_image_url($row, $projectRoot));
-                }
-                if ($resolved === '') {
-                    foreach (['original_url_olist', 'image_url', 'original_url', 'site_url', 'local_url'] as $field) {
-                        $value = trim((string)($row[$field] ?? ''));
-                        if ($value === '') {
-                            continue;
-                        }
-                        if (preg_match('~^https?://~i', $value) === 1 || str_starts_with($value, '/')) {
-                            $resolved = $value;
-                            break;
-                        }
-                    }
-                }
-                if ($resolved !== '') {
-                    $dimensions = ais_pending_image_dimensions($row, $resolved, $projectRoot);
-                    return [
-                        'url' => $resolved,
-                        'type' => 'galeria_erp',
-                        'width' => $dimensions['width'],
-                        'height' => $dimensions['height'],
-                    ];
-                }
+    $resolved = '';
+    if (function_exists('svsis_resolve_image_url')) {
+        $resolved = trim((string)svsis_resolve_image_url($row, $projectRoot));
+    }
+    if ($resolved === '') {
+        foreach (['original_url_olist', 'image_url', 'original_url', 'site_url', 'local_url'] as $field) {
+            $value = trim((string)($row[$field] ?? ''));
+            if ($value === '') continue;
+            if (preg_match('~^https?://~i', $value) === 1 || str_starts_with($value, '/')) {
+                $resolved = $value;
+                break;
             }
-        } catch (Throwable $e) {
-            error_log('[ai-image-studio] readiness da galeria indisponivel SKU ' . $sku . ': ' . $e->getMessage());
         }
     }
+    if ($resolved === '') return ['url' => '', 'type' => 'ausente', 'width' => 0, 'height' => 0];
+    $dimensions = ais_pending_image_dimensions($row, $resolved, $projectRoot);
+    return [
+        'url' => $resolved,
+        'type' => 'galeria_erp',
+        'width' => $dimensions['width'],
+        'height' => $dimensions['height'],
+    ];
+}
+
+/** @param list<string> $skus @return array<string,array{url:string,type:string,width:int,height:int}> */
+function ais_pending_gallery_sources(PDO $db, array $skus, string $projectRoot): array
+{
+    $skus = array_values(array_unique(array_filter(array_map('trim', $skus), static fn(string $sku): bool => $sku !== '')));
+    if ($skus === []) return [];
+
+    $columns = ais_pending_table_columns($db, 'olist_product_images');
+    if (!isset($columns['sku'])) return [];
+    $sources = [];
+    foreach (array_chunk($skus, 200) as $chunk) {
+        $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+        $where = "sku IN ({$placeholders})";
+        if (isset($columns['status'])) {
+            $where .= " AND (status IS NULL OR status = '' OR status NOT IN ('error','deleted','inactive'))";
+        }
+        $order = ['sku ASC'];
+        if (isset($columns['is_primary'])) $order[] = 'is_primary DESC';
+        if (isset($columns['position'])) $order[] = 'position ASC';
+        if (isset($columns['id'])) $order[] = 'id ASC';
+        $stmt = $db->prepare('SELECT * FROM olist_product_images WHERE ' . $where . ' ORDER BY ' . implode(', ', $order));
+        $stmt->execute($chunk);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+            $sku = trim((string)($row['sku'] ?? ''));
+            if ($sku === '' || isset($sources[$sku])) continue;
+            $source = ais_pending_source_from_gallery_row($row, $projectRoot);
+            if ($source['url'] !== '') $sources[$sku] = $source;
+        }
+    }
+    return $sources;
+}
+
+/** @return array{url:string,type:string,width:int,height:int} */
+function ais_pending_source_image(array $product, array $gallerySources, string $projectRoot): array
+{
+    $sku = trim((string)($product['sku'] ?? ''));
+    if ($sku !== '' && isset($gallerySources[$sku])) return $gallerySources[$sku];
 
     $legacy = trim((string)($product['image_ref'] ?? ''));
     if ($legacy !== '') {
@@ -205,19 +233,13 @@ function ais_pending_readiness(array $product, array $source, string $targetChan
 
     $name = trim((string)($product['name'] ?? ''));
     if ($name !== '') $score += 15; else $missing[] = 'nome';
-
     $sku = trim((string)($product['sku'] ?? ''));
     if ($sku !== '') $score += 10; else $missing[] = 'SKU';
-
     $category = trim((string)($product['category'] ?? ''));
     if ($category !== '') $score += 10; else $missing[] = 'categoria';
-
     $identity = trim((string)($product['brand'] ?? '')) . trim((string)($product['model'] ?? ''));
     if ($identity !== '') $score += 10; else $missing[] = 'marca/modelo';
-
-    $appearance = trim((string)($product['color'] ?? ''))
-        . trim((string)($product['material'] ?? ''))
-        . trim((string)($product['size'] ?? ''));
+    $appearance = trim((string)($product['color'] ?? '')) . trim((string)($product['material'] ?? '')) . trim((string)($product['size'] ?? ''));
     if ($appearance !== '') $score += 10; else $missing[] = 'cor/material/tamanho';
 
     $score = min(100, $score);
@@ -239,10 +261,24 @@ function ais_pending_readiness(array $product, array $source, string $targetChan
 }
 
 try {
+    $productColumns = ais_pending_table_columns($db, 'products');
+    if (!isset($productColumns['id'])) throw new RuntimeException('Tabela products sem id.');
+    $select = [
+        'p.id',
+        ais_pending_product_expr($productColumns, ['name', 'nome', 'descricao'], 'name'),
+        ais_pending_product_expr($productColumns, ['image_url', 'imagem_principal_url', 'primary_image_url', 'imagem'], 'image_ref'),
+        ais_pending_product_expr($productColumns, ['sku'], 'sku'),
+        ais_pending_product_expr($productColumns, ['olist_id'], 'olist_id'),
+        ais_pending_product_expr($productColumns, ['category', 'categoria', 'category_name', 'nome_categoria'], 'category'),
+        ais_pending_product_expr($productColumns, ['brand', 'marca', 'manufacturer', 'fabricante'], 'brand'),
+        ais_pending_product_expr($productColumns, ['model', 'modelo', 'part_number', 'mpn'], 'model'),
+        ais_pending_product_expr($productColumns, ['color', 'cor'], 'color'),
+        ais_pending_product_expr($productColumns, ['size', 'tamanho'], 'size'),
+        ais_pending_product_expr($productColumns, ['material'], 'material'),
+    ];
     $stmt = $db->prepare(
-        'SELECT p.id, p.name, p.image_url, p.sku '
-        . 'FROM products p '
-        . 'WHERE ' . ais_pending_active_product_sql($db, 'p') . ' '
+        'SELECT ' . implode(', ', $select) . ' FROM products p '
+        . 'WHERE ' . ais_pending_active_product_sql($productColumns, 'p') . ' '
         . 'AND NOT EXISTS ('
         . ' SELECT 1 FROM product_images_staging s '
         . ' WHERE s.product_id = p.id '
@@ -253,19 +289,15 @@ try {
     );
     $stmt->execute(['%"' . $targetChannel . '"%']);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $skus = array_values(array_filter(array_map(static fn(array $row): string => trim((string)($row['sku'] ?? '')), $rows)));
+    $gallerySources = ais_pending_gallery_sources($db, $skus, $projectRoot);
 
     $items = [];
     $summary = ['ready' => 0, 'limited_context' => 0, 'blocked' => 0];
-    foreach ($rows as $row) {
-        $productId = (int)($row['id'] ?? 0);
-        if ($productId <= 0) {
-            continue;
-        }
-        $context = ai_studio_fetch_product($db, $productId) ?? [];
-        if ($context === []) {
-            continue;
-        }
-        $source = ais_pending_source_image($db, $context, $projectRoot);
+    foreach ($rows as $context) {
+        $productId = (int)($context['id'] ?? 0);
+        if ($productId <= 0 || trim((string)($context['name'] ?? '')) === '') continue;
+        $source = ais_pending_source_image($context, $gallerySources, $projectRoot);
         $readiness = ais_pending_readiness($context, $source, $targetChannel);
         $summary[$readiness['state']] = ($summary[$readiness['state']] ?? 0) + 1;
 
@@ -279,8 +311,8 @@ try {
 
         $items[] = [
             'id' => $productId,
-            'name' => trim((string)($context['name'] ?? $row['name'] ?? '')),
-            'sku' => trim((string)($context['sku'] ?? $row['sku'] ?? '')),
+            'name' => trim((string)($context['name'] ?? '')),
+            'sku' => trim((string)($context['sku'] ?? '')),
             'category' => trim((string)($context['category'] ?? '')),
             'brand' => trim((string)($context['brand'] ?? '')),
             'model' => trim((string)($context['model'] ?? '')),
@@ -310,6 +342,8 @@ try {
         'items' => $items,
         'count' => count($items),
         'summary' => $summary,
+        'query_strategy' => 'batched_products_and_gallery',
+        'gallery_batches' => $skus === [] ? 0 : (int)ceil(count(array_unique($skus)) / 200),
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
     error_log('[ai-image-studio] pending_candidates: ' . $e->getMessage());
