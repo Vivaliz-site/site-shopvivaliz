@@ -61,12 +61,14 @@ TOKEN_PATH = os.environ.get(
 )
 REPORT_DIR = os.environ.get("ML_SEO_REPORT_DIR", "/home/ubuntu/shopvivaliz-deploy/shared/logs/ml-seo")
 API = "https://api.mercadolibre.com"
-# Haiku 4.5 e o modelo mais barato que atende: ~US$7 no catalogo inteiro (~160
-# anuncios) contra ~US$10 de Sonnet 5 e ~US$20 de Opus 5. Quem garante a integridade
-# do dado sao as validacoes deterministicas (`validate_*`, `unsupported_numbers`), nao
-# o porte do modelo -- especificacao sem lastro nos dados de origem e barrada aqui.
-# Para rodar com mais qualidade de redacao: --model claude-sonnet-5
-MODEL = os.environ.get("ML_SEO_MODEL", "claude-haiku-4-5")
+# Sonnet 5 e o ponto de equilibrio deste lote: ~US$10 no catalogo inteiro (~160
+# anuncios) contra ~US$7 de Haiku 4.5 e ~US$20 de Opus 5 -- US$3 a mais que o mais
+# barato, com bem menos erro em especificacao tecnica e redacao em portugues. Quem
+# garante a integridade do dado sao as validacoes deterministicas (`validate_*`,
+# `unsupported_numbers`), nao o porte do modelo: especificacao sem lastro nos dados
+# de origem e barrada aqui de qualquer jeito.
+# Para cortar custo: --model claude-haiku-4-5
+MODEL = os.environ.get("ML_SEO_MODEL", "claude-sonnet-5")
 
 # `output_config.effort` e o web_search com filtragem dinamica so existem nos modelos
 # maiores; em Haiku 4.5 esses parametros dao erro.
