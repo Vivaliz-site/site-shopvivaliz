@@ -1,0 +1,78 @@
+name: Inspect preserved MEI V020 only
+
+on:
+  push:
+    branches:
+      - ops/inspect-mei-v020-stash
+    paths:
+      - '.github/workflows/inspect-mei-v020-stash.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-v020:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Read only V020 files from preserved stash
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 240s ssh \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=12 \
+            -o StrictHostKeyChecking=no \
+            -i ~/.ssh/vmkey \
+            ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo "V020_HEAD_SHA=$(git rev-parse HEAD)"
+          echo "V020_STASH_COUNT=$(git stash list | wc -l | tr -d ' ')"
+          git rev-parse --verify 'stash@{0}' >/dev/null
+
+          echo 'V020_TRACKED_PATHS_BEGIN'
+          git ls-tree -r --name-only 'stash@{0}' | grep '^db/migrations/V020' || true
+          echo 'V020_TRACKED_PATHS_END'
+
+          if git rev-parse --verify 'stash@{0}^3' >/dev/null 2>&1; then
+            echo 'V020_UNTRACKED_PATHS_BEGIN'
+            git ls-tree -r --name-only 'stash@{0}^3' | grep '^db/migrations/V020' || true
+            echo 'V020_UNTRACKED_PATHS_END'
+          fi
+
+          emit_tree() {
+            tree="$1"
+            paths="$(git ls-tree -r --name-only "$tree" | grep '^db/migrations/V020' || true)"
+            while IFS= read -r path; do
+              [ -n "$path" ] || continue
+              echo "V020_CONTENT_BEGIN tree=$tree path=$path"
+              git show "$tree:$path"
+              echo "V020_CONTENT_END tree=$tree path=$path"
+            done <<< "$paths"
+          }
+
+          emit_tree 'stash@{0}'
+          if git rev-parse --verify 'stash@{0}^3' >/dev/null 2>&1; then
+            emit_tree 'stash@{0}^3'
+          fi
+          echo 'WORKER_RESUME_ALLOWED=false'
+          EOF
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey
