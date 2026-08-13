@@ -117,9 +117,11 @@ jobs:
           set -Eeuo pipefail
           node --check admin/assets/catalog-optimization-workflow.js
           node --check admin/assets/catalog-change-intelligence.js
+          node --check admin/assets/catalog-effective-results.js
           php tests/catalog-admin-workflow-v3-test.php
           php tests/catalog-change-intelligence-test.php
           php tests/catalog-generated-data-normalizer-test.php
+          php tests/catalog-change-set-test.php
       - name: Workflow inteligente do AI Image Studio
         run: |
           set -Eeuo pipefail
@@ -127,6 +129,7 @@ jobs:
           node --check admin/assets/image-workflow-safety.js
           node --check admin/assets/image-provider-health.js
           node --check admin/assets/image-professional-ops.js
+          node --check admin/assets/image-generation-usability-v2.js
           php tests/image-admin-workflow-test.php
           php tests/image-admin-workflow-v3-test.php
           php tests/image-professional-ops-test.php
@@ -138,6 +141,7 @@ jobs:
           node --check js/public-experience-v1.js
           node --check js/admin-automation.js
           php tests/site-ops-visual-integrity-test.php
+          php tests/admin-mobile-ai-ux-test.php
       - name: Contrato live do catalogo sem cache legado
         run: php tests/catalog-live-fallback-test.php
 
