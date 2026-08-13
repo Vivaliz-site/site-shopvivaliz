@@ -561,8 +561,16 @@ def optimize_item(ml: ML, client, item_id: str, apply: bool, research: bool = Tr
         "description": ctx["description"],
     }
 
+    findings = ""
+    if research and ctx["missing"]:
+        try:
+            findings = research_product(client, item, ctx)
+            result["research_confirmed"] = findings.upper().startswith("PRODUTO IDENTIFICADO: SIM")
+        except Exception as exc:  # noqa: BLE001 - pesquisa e opcional, segue sem ela
+            result["problems"].append(f"pesquisa web falhou: {exc}")
+
     try:
-        proposal = ask_claude(client, item, ctx)
+        proposal = ask_claude(client, item, ctx, findings)
     except Exception as exc:  # noqa: BLE001 - falha de IA nao pode derrubar o lote
         result["problems"].append(f"claude: {exc}")
         return result
