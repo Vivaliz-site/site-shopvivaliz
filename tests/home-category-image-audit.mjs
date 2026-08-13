@@ -30,6 +30,17 @@ async function audit(name, viewport, isMobile = false) {
     await page.addScriptTag({ path: path.resolve('js/public-experience-v1.js') });
   }
 
+  // As imagens da home sao corretamente lazy no site real. No auditor, primeiro
+  // levamos a secao para a viewport e depois mudamos apenas os elementos da
+  // pagina de teste para eager; assim a assercao mede URL/arquivo quebrado, nao
+  // o comportamento normal de lazy loading fora da viewport horizontal.
+  await page.locator('.home-categories').scrollIntoViewIfNeeded();
+  await page.evaluate(() => {
+    document.querySelectorAll('.home-categories img.category-slide-img').forEach((img) => {
+      if (img instanceof HTMLImageElement) img.loading = 'eager';
+    });
+  });
+
   await page.waitForFunction(() => {
     const cards = Array.from(document.querySelectorAll('.home-categories .category-slide'));
     return cards.length >= 5 && cards.every((card) => {
@@ -37,7 +48,6 @@ async function audit(name, viewport, isMobile = false) {
       return img instanceof HTMLImageElement && img.complete;
     });
   }, { timeout: 45_000 });
-  await page.locator('.home-categories').scrollIntoViewIfNeeded();
   await page.waitForTimeout(1200);
 
   const metrics = await page.evaluate(() => {
