@@ -467,10 +467,7 @@ def ask_claude(client, item: dict, ctx: dict, research: str = "") -> dict:
         model=MODEL,
         max_tokens=8000,
         system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
-        output_config={
-            "effort": "high",
-            "format": {"type": "json_schema", "schema": RESPONSE_SCHEMA},
-        },
+        output_config=output_config(MODEL, "high", RESPONSE_SCHEMA),
         messages=[{"role": "user", "content": build_user_prompt(item, ctx, research)}],
     )
     if resp.stop_reason == "refusal":
