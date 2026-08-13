@@ -9,7 +9,7 @@ var testimonialsInstalled = false;
 
 function esc(value) {
   return String(value || '').replace(/[&<>"']/g, function (char) {
-    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'})[char];
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[char];
   });
 }
 function initials(name) {
