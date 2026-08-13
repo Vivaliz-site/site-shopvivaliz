@@ -138,6 +138,8 @@ jobs:
           node --check js/public-experience-v1.js
           node --check js/admin-automation.js
           php tests/site-ops-visual-integrity-test.php
+      - name: Contrato live do catalogo sem cache legado
+        run: php tests/catalog-live-fallback-test.php
 
 # Validacao de producao e evidencia canonica pertencem ao
 # Post-deploy Monitoring do Master Production Pipeline. O QA permanece
