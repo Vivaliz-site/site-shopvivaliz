@@ -130,7 +130,7 @@ function ais_enqueue_existing_job(
             $pdo = sv_queue_db();
             $stmt = $pdo->prepare(
                 "SELECT id, job_type, payload, status, attempts, created_at, started_at, finished_at, last_error "
-                . "FROM queue_jobs WHERE job_type = ? AND status IN ('queued','running') ORDER BY id DESC LIMIT 250"
+                . "FROM queue_jobs WHERE job_type = ? AND status IN ('queued','running') ORDER BY id DESC"
             );
             $stmt->execute(['ai_image_studio.process_item']);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -185,6 +185,18 @@ $rawTypes = $input['image_types'] ?? ai_studio_channel_recommended_types($target
 $imageTypes = is_array($rawTypes)
     ? array_values(array_unique(array_intersect(array_map('strval', $rawTypes), ['cover', 'white', 'hero', 'ambient'])))
     : [];
+
+$coverNormalized = false;
+if (in_array($targetChannel, ['ml', 'amazon', 'tiktok'], true) && in_array('cover', $imageTypes, true)) {
+    $imageTypes = array_values(array_unique(array_map(
+        static fn(string $type): string => $type === 'cover' ? 'white' : $type,
+        $imageTypes
+    )));
+    $coverNormalized = true;
+}
+$normalizationMessage = $coverNormalized
+    ? 'Neste canal, a variante cover foi normalizada para white para preservar a ordem canonica da capa. '
+    : '';
 
 if ($productId <= 0) {
     http_response_code(400);
@@ -262,7 +274,8 @@ try {
             'target_channel' => $targetChannel,
             'image_types' => (array)($existing['image_types'] ?? []),
             'model' => (string)($existing['model'] ?? ''),
-            'message' => 'Uma geracao equivalente ja esta em andamento; a fila existente foi reutilizada.',
+            'cover_normalized_to_white' => $coverNormalized,
+            'message' => $normalizationMessage . 'Uma geracao equivalente ja esta em andamento; a fila existente foi reutilizada.',
         ];
     } else {
         $imageSource = '';
@@ -310,6 +323,7 @@ try {
                 'target_channel' => $targetChannel,
                 'types' => $imageTypes,
                 'source' => preg_match('~^https?://~i', $imageSource) ? 'remote' : 'local',
+                'cover_normalized_to_white' => $coverNormalized,
             ]);
 
             $responseCode = 202;
@@ -326,8 +340,9 @@ try {
                 'target_channel' => $targetChannel,
                 'image_types' => $imageTypes,
                 'recommended_types' => ai_studio_channel_recommended_types($targetChannel),
+                'cover_normalized_to_white' => $coverNormalized,
                 'queue' => function_exists('sv_queue_summary') ? sv_queue_summary() : null,
-                'message' => 'Produto enfileirado. A tela pode acompanhar o status sem perder a selecao.',
+                'message' => $normalizationMessage . 'Produto enfileirado. A tela pode acompanhar o status sem perder a selecao.',
             ];
         }
     }
