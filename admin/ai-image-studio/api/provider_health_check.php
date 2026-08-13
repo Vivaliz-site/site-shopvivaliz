@@ -51,7 +51,45 @@ function ais_health_probe(string $provider, string $key): array
     }
 }
 
+/** @return array{message:string,updated_at:string}|null */
+function ais_health_recent_capacity_failure(PDO $db, string $provider): ?array
+{
+    $provider = ai_studio_normalize_provider($provider);
+    $providerPatterns = match ($provider) {
+        'openai' => ['openai', '%+openai'],
+        'google' => ['google', '%+google'],
+        'openrouter' => ['openrouter', '%+openrouter'],
+        default => [],
+    };
+    if ($providerPatterns === []) {
+        return null;
+    }
+
+    try {
+        $stmt = $db->prepare(
+            "SELECT LEFT(error_message, 220) AS message, updated_at
+             FROM product_images_staging
+             WHERE updated_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)
+               AND error_message IS NOT NULL AND error_message <> ''
+               AND (provider_used = ? OR provider_used LIKE ?)
+             ORDER BY updated_at DESC, id DESC LIMIT 1"
+        );
+        $stmt->execute($providerPatterns);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!is_array($row)) {
+            return null;
+        }
+        $exception = new AiStudioApiException((string)($row['message'] ?? ''));
+        return ai_studio_is_capacity_failure($exception)
+            ? ['message' => (string)$row['message'], 'updated_at' => (string)$row['updated_at']]
+            : null;
+    } catch (Throwable) {
+        return null;
+    }
+}
+
 $results = [];
+$db = ai_studio_db();
 foreach ([
     'openai' => ai_studio_secret_pool('AI_STUDIO_OPENAI_API_KEY', ['AI_STUDIO_OPENAI_API_KEY', 'OPENAI_API_KEY']),
     'google' => ai_studio_secret_pool('AI_STUDIO_GOOGLE_IMAGEN_API_KEY', ['AI_STUDIO_GOOGLE_IMAGEN_API_KEY', 'GOOGLE_IMAGEN_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_GEMINI_API_KEY']),
@@ -61,11 +99,36 @@ foreach ([
 ] as $provider => $keys) {
     $firstKey = $keys[0] ?? '';
     $probe = ais_health_probe($provider, $firstKey);
+    $capacityFailure = $db instanceof PDO ? ais_health_recent_capacity_failure($db, $provider) : null;
+    if ($probe['ok'] && $capacityFailure !== null) {
+        $probe = [
+            'ok' => false,
+            'detail' => 'Chave válida, mas a execução falhou por capacidade nas últimas 24h, em '
+                . $capacityFailure['updated_at'] . ': ' . $capacityFailure['message'],
+        ];
+    }
     $results[$provider] = [
         'ok' => $probe['ok'],
         'detail' => $probe['detail'],
         'key_count' => count($keys),
     ];
+}
+
+// Claude melhora o prompt, mas não gera a imagem final. Ele só fica apto para
+// o fluxo de imagem quando ao menos um editor real está apto a executar.
+if (($results['claude']['ok'] ?? false) === true) {
+    $imageEditors = ['openai', 'google', 'openrouter'];
+    $allBlocked = true;
+    foreach ($imageEditors as $imageEditor) {
+        if (($results[$imageEditor]['ok'] ?? false) === true) {
+            $allBlocked = false;
+            break;
+        }
+    }
+    if ($allBlocked) {
+        $results['claude']['ok'] = false;
+        $results['claude']['detail'] = 'Chave válida para otimizar prompt, mas nenhum editor de imagem (OpenAI, Gemini ou OpenRouter) está apto para concluir a edição.';
+    }
 }
 
 echo json_encode([

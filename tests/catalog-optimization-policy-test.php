@@ -146,6 +146,11 @@ cot_assert(catalog_ai_normalize_provider('gpt') === 'openai', 'gpt alias must re
 cot_assert(catalog_ai_provider_fallback_order('claude') === ['claude', 'openai', 'gemini', 'openrouter', 'groq'], 'claude fallback order must prefer the requested provider first');
 cot_assert(catalog_ai_provider_fallback_order('gpt') === ['openai', 'gemini', 'openrouter', 'groq', 'claude'], 'gpt fallback order must normalize to openai and exhaust text providers before claude');
 
+$catalogHealthSource = file_get_contents(__DIR__ . '/../admin/catalog-optimization/api/provider_health_check.php');
+cot_assert(is_string($catalogHealthSource), 'catalog provider health source must be readable');
+cot_assert(str_contains($catalogHealthSource, 'catalog_optimizations_staging'), 'catalog provider health must inspect persisted execution errors');
+cot_assert(str_contains($catalogHealthSource, 'cat_health_is_capacity_failure'), 'catalog provider health must distinguish capacity failures from valid keys');
+
 // Prompts nao devem receber preco/estoque e devem conter identificadores factuais.
 $userPrompt = ai_catalog_build_user_prompt($product, 'ml');
 cot_assert(stripos($userPrompt, 'preco') === false, 'user prompt must not contain price field');

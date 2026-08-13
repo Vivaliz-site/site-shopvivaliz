@@ -7,15 +7,24 @@ require_once dirname(__DIR__) . '/tiny-order-push.php';
  * Runtime resiliente para chamadas Tiny/Olist API v3 usadas pelos publicadores.
  *
  * Regras:
- * - prioriza o cache privado rotativo de tokens sobre valores estaticos do .env;
+ * - usa um cache privado compartilhado entre releases e o daemon renovador;
+ * - renova preventivamente quando o access token entra na janela de 30 minutos;
  * - em HTTP 401 tenta renovar o OAuth uma unica vez e repete a chamada;
- * - testa apenas aliases de credenciais ja configurados no ambiente;
  * - persiste access/refresh tokens rotacionados atomicamente, sem logar segredos.
  */
 
+const SV_MARKET_TINY_REFRESH_MARGIN_SECONDS = 1800;
+
 function sv_market_tiny_token_path(): string
 {
-    return dirname(__DIR__, 2) . '/storage/private/tokens.json';
+    $configured = getenv('SHOPVIVALIZ_OLIST_TOKEN_FILE');
+    if (is_string($configured) && trim($configured) !== '') {
+        return trim($configured);
+    }
+    if (PHP_OS_FAMILY === 'Windows') {
+        return dirname(__DIR__, 2) . '/storage/private/olist-tokens.json';
+    }
+    return '/home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json';
 }
 
 /** @return array<string,mixed> */
@@ -49,11 +58,10 @@ function sv_market_tiny_persist_tokens(array $tokens): void
 {
     $path = sv_market_tiny_token_path();
     $dir = dirname($path);
-    if (!is_dir($dir) && !@mkdir($dir, 0750, true) && !is_dir($dir)) {
+    if (!is_dir($dir) && !@mkdir($dir, 0770, true) && !is_dir($dir)) {
         throw new RuntimeException('Nao foi possivel criar o diretorio privado de tokens Tiny/Olist.');
     }
 
-    $existingMode = is_file($path) ? (fileperms($path) & 0777) : 0640;
     $payload = json_encode($tokens, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     if (!is_string($payload)) {
         throw new RuntimeException('Nao foi possivel serializar os tokens Tiny/Olist.');
@@ -68,10 +76,11 @@ function sv_market_tiny_persist_tokens(array $tokens): void
         if (@file_put_contents($tmp, $payload, LOCK_EX) === false) {
             throw new RuntimeException('Nao foi possivel gravar o token Tiny/Olist.');
         }
-        @chmod($tmp, $existingMode ?: 0640);
+        @chmod($tmp, 0660);
         if (!@rename($tmp, $path)) {
             throw new RuntimeException('Nao foi possivel publicar o token Tiny/Olist atomicamente.');
         }
+        @chmod($path, 0660);
     } finally {
         if (is_file($tmp)) {
             @unlink($tmp);
@@ -95,6 +104,62 @@ function sv_market_tiny_access_token(): string
         }
     }
     return function_exists('svtop_tiny_get_token') ? trim((string)svtop_tiny_get_token()) : '';
+}
+
+function sv_market_tiny_jwt_expiry_epoch(string $token): int
+{
+    $parts = explode('.', $token);
+    if (count($parts) < 2 || trim($parts[1]) === '') {
+        return 0;
+    }
+    $segment = strtr($parts[1], '-_', '+/');
+    $padding = strlen($segment) % 4;
+    if ($padding !== 0) {
+        $segment .= str_repeat('=', 4 - $padding);
+    }
+    $decoded = base64_decode($segment, true);
+    if (!is_string($decoded) || $decoded === '') {
+        return 0;
+    }
+    $json = json_decode($decoded, true);
+    if (!is_array($json)) {
+        return 0;
+    }
+    $expiry = (int)($json['exp'] ?? 0);
+    return $expiry > 0 ? $expiry : 0;
+}
+
+function sv_market_tiny_expiry_epoch(string $token): int
+{
+    $tokens = sv_market_tiny_token_store();
+    $storedToken = trim((string)($tokens['OLIST_ACCESS_TOKEN'] ?? $tokens['TINY_ACCESS_TOKEN'] ?? ''));
+    if ($storedToken !== '' && hash_equals($storedToken, $token)) {
+        $storedExpiry = (int)($tokens['expires_at_epoch'] ?? 0);
+        if ($storedExpiry > 0) {
+            return $storedExpiry;
+        }
+        $storedIso = trim((string)($tokens['expires_at'] ?? ''));
+        if ($storedIso !== '') {
+            $parsed = strtotime($storedIso);
+            if (is_int($parsed) && $parsed > 0) {
+                return $parsed;
+            }
+        }
+    }
+    return sv_market_tiny_jwt_expiry_epoch($token);
+}
+
+function sv_market_tiny_token_requires_refresh(string $token, ?int $now = null): bool
+{
+    if ($token === '') {
+        return true;
+    }
+    $expiry = sv_market_tiny_expiry_epoch($token);
+    if ($expiry <= 0) {
+        return true;
+    }
+    $current = $now ?? time();
+    return ($expiry - $current) <= SV_MARKET_TINY_REFRESH_MARGIN_SECONDS;
 }
 
 /**
@@ -186,6 +251,13 @@ function sv_market_tiny_refresh_access_token(): array
             $tokens['OLIST_REFRESH_TOKEN'] = $newRefresh;
             $tokens['TINY_REFRESH_TOKEN'] = $newRefresh;
             $tokens['updated_at'] = gmdate('c');
+            $expiresIn = max(0, (int)($json['expires_in'] ?? 0));
+            if ($expiresIn > 0) {
+                $expiresAt = time() + $expiresIn;
+                $tokens['expires_in'] = $expiresIn;
+                $tokens['expires_at_epoch'] = $expiresAt;
+                $tokens['expires_at'] = gmdate('c', $expiresAt);
+            }
             sv_market_tiny_persist_tokens($tokens);
 
             putenv('OLIST_ACCESS_TOKEN=' . $accessToken);
@@ -210,17 +282,34 @@ function sv_market_tiny_refresh_access_token(): array
     throw new RuntimeException('Renovacao OAuth Tiny/Olist recusada: HTTP ' . $lastHttp . $safeError . '. Gere novas chaves do aplicativo no ERP e atualize os secrets de producao.');
 }
 
+function sv_market_tiny_ensure_access_token(): string
+{
+    $token = sv_market_tiny_access_token();
+    if (!sv_market_tiny_token_requires_refresh($token)) {
+        return $token;
+    }
+
+    $expiry = $token !== '' ? sv_market_tiny_expiry_epoch($token) : 0;
+    try {
+        $refreshed = sv_market_tiny_refresh_access_token();
+        return $refreshed['access_token'];
+    } catch (Throwable $error) {
+        // Se o refresh preventivo falhar transitoriamente, continue usando o
+        // token ainda valido; o daemon tenta novamente a cada poucos minutos.
+        if ($token !== '' && $expiry > (time() + 60)) {
+            return $token;
+        }
+        throw $error;
+    }
+}
+
 /**
  * @param array<string,mixed>|null $payload
  * @return array{status:int,body:string,json:array<string,mixed>}
  */
 function sv_market_tiny_request_v3(string $method, string $path, ?array $payload = null): array
 {
-    $token = sv_market_tiny_access_token();
-    if ($token === '') {
-        $refreshed = sv_market_tiny_refresh_access_token();
-        $token = $refreshed['access_token'];
-    }
+    $token = sv_market_tiny_ensure_access_token();
 
     $response = svtop_tiny_request($method, $path, $token, $payload);
     if ((int)$response['status'] !== 401) {

@@ -36,6 +36,12 @@ if (empty($_SESSION['is_admin']) || !is_numeric($_SESSION['is_admin'])) {
     $adminResolved = false;
     $userId = (int)$_SESSION['user_id'];
 
+    // Keep the lightweight PDO path as the normal lookup. If it cannot
+    // resolve the authenticated user (including a transient query failure),
+    // lazily load the canonical mysqli Database class used by auth/login.php
+    // and retry before denying access. This avoids opening a second database
+    // connection for anonymous requests, cached admin sessions, and healthy
+    // PDO-backed requests.
     if (function_exists('sv_pdo')) {
         try {
             $db = sv_pdo();
@@ -58,6 +64,9 @@ if (empty($_SESSION['is_admin']) || !is_numeric($_SESSION['is_admin'])) {
 
     if (!$adminResolved) {
         try {
+            // config/database.php eagerly initializes its singleton, so it
+            // must only be loaded when the PDO lookup genuinely failed to
+            // resolve the authenticated account.
             require_once __DIR__ . '/../config/database.php';
 
             if (class_exists('Database')) {
@@ -117,19 +126,14 @@ if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAiRoutineUiPages, t
         };
 
         if ($svAdminScriptName === '/admin/catalog-optimization/admin_catalog.php') {
-            echo "\n<script src=\"/admin/assets/catalog-optimization-workflow.js?v="
-                . $svAssetVersion('/admin/assets/catalog-optimization-workflow.js') . "\"></script>\n";
-            echo "<script src=\"/admin/assets/catalog-change-intelligence.js?v="
-                . $svAssetVersion('/admin/assets/catalog-change-intelligence.js') . "\"></script>\n";
+            echo "\n<script src=\"/admin/assets/catalog-optimization-workflow.js?v=" . $svAssetVersion('/admin/assets/catalog-optimization-workflow.js') . "\"></script>\n";
+            echo "<script src=\"/admin/assets/catalog-change-intelligence.js?v=" . $svAssetVersion('/admin/assets/catalog-change-intelligence.js') . "\"></script>\n";
             return;
         }
 
-        if (in_array($svAdminScriptName, [
-            '/admin/ai-image-studio/admin_dashboard.php',
-            '/admin/ai-image-studio/admin_validate.php',
-        ], true)) {
-            echo "\n<script src=\"/admin/assets/image-generation-workflow.js?v="
-                . $svAssetVersion('/admin/assets/image-generation-workflow.js') . "\"></script>\n";
-        }
+        // Dashboard e validacao de imagens compartilham um unico controlador
+        // operacional. Isso substitui o hotfix generico e evita listeners
+        // duplicados entre selecao, fila, revisao e publicacao.
+        echo "\n<script src=\"/admin/assets/ai-image-studio-workflow.js?v=" . $svAssetVersion('/admin/assets/ai-image-studio-workflow.js') . "\"></script>\n";
     });
 }
