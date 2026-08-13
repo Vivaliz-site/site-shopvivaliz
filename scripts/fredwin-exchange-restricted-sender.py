@@ -1,20 +1,24 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
+import shutil
 import subprocess
-import sys
 import time
+import urllib.request
 from pathlib import Path
 
-from playwright.sync_api import Frame, Locator, Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
+from playwright.sync_api import Browser, Frame, Locator, Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
 
 SENDER = "naoresponda@dev.shopvivaliz.com.br"
 TARGET = "https://security.microsoft.com/restrictedentities"
 CHROME = Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
 LOG_DIR = Path(r"C:\site-shopvivaliz\logs")
 SCREENSHOT = LOG_DIR / "exchange-restricted-sender.png"
+PROFILE_COPY = Path(r"C:\Temp\shopvivaliz-exchange-profile")
+DEBUG_PORT = 9223
 
 
 def out(message: str) -> None:
@@ -37,7 +41,7 @@ def body_text(page: Page) -> str:
 
 def visible_first(locator: Locator) -> Locator | None:
     try:
-        count = min(locator.count(), 30)
+        count = min(locator.count(), 40)
     except Exception:
         return None
     for index in range(count):
@@ -155,14 +159,97 @@ def confirm_dialog(page: Page) -> bool:
 
 
 def wait_for_portal(page: Page) -> None:
-    deadline = time.time() + 90
+    deadline = time.time() + 120
     while time.time() < deadline:
         text = body_text(page).casefold()
-        if any(marker in text for marker in ("restricted entities", "entidades restritas", "security.microsoft.com")):
+        if any(marker in text for marker in ("restricted entities", "entidades restritas", "restricted users")):
             return
         if any(marker in text for marker in ("sign in", "entrar", "escolha uma conta", "pick an account")):
             raise RuntimeError("EXCHANGE_UI_AUTH_REQUIRED")
         time.sleep(3)
+    raise RuntimeError("EXCHANGE_UI_PORTAL_NOT_READY")
+
+
+def _copy_profile() -> Path:
+    original = Path(os.environ["LOCALAPPDATA"]) / "Google" / "Chrome" / "User Data"
+    if not original.is_dir():
+        raise RuntimeError("CHROME_USER_DATA_MISSING")
+    shutil.rmtree(PROFILE_COPY, ignore_errors=True)
+    PROFILE_COPY.mkdir(parents=True, exist_ok=True)
+    local_state = original / "Local State"
+    if local_state.is_file():
+        shutil.copy2(local_state, PROFILE_COPY / "Local State")
+
+    source_default = original / "Default"
+    target_default = PROFILE_COPY / "Default"
+    if not source_default.is_dir():
+        raise RuntimeError("CHROME_DEFAULT_PROFILE_MISSING")
+
+    ignored = {
+        "Cache",
+        "Code Cache",
+        "GPUCache",
+        "GrShaderCache",
+        "ShaderCache",
+        "DawnCache",
+        "Crashpad",
+        "BrowserMetrics",
+        "OptimizationHints",
+        "Safe Browsing Network",
+    }
+
+    def ignore_names(_directory: str, names: list[str]) -> set[str]:
+        return {name for name in names if name in ignored or name.endswith(".tmp")}
+
+    shutil.copytree(source_default, target_default, ignore=ignore_names, dirs_exist_ok=True)
+    out("EXCHANGE_UI_PROFILE_COPY_OK")
+    return PROFILE_COPY
+
+
+def _wait_debug_endpoint() -> str:
+    endpoint = f"http://127.0.0.1:{DEBUG_PORT}/json/version"
+    deadline = time.time() + 60
+    last_error = ""
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(endpoint, timeout=3) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            if payload.get("webSocketDebuggerUrl"):
+                return f"http://127.0.0.1:{DEBUG_PORT}"
+        except Exception as exc:
+            last_error = f"{type(exc).__name__}:{exc}"
+        time.sleep(2)
+    raise RuntimeError("CHROME_DEBUG_ENDPOINT_TIMEOUT " + last_error[:200])
+
+
+def _start_chrome(profile: Path) -> subprocess.Popen:
+    command = [
+        str(CHROME),
+        f"--remote-debugging-port={DEBUG_PORT}",
+        f"--user-data-dir={profile}",
+        "--profile-directory=Default",
+        "--force-renderer-accessibility",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-background-mode",
+        "--new-window",
+        TARGET,
+    ]
+    process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    out(f"EXCHANGE_UI_CHROME_STARTED pid={process.pid}")
+    return process
+
+
+def _pick_page(browser: Browser) -> Page:
+    for context in browser.contexts:
+        for page in context.pages:
+            if "security.microsoft.com" in page.url:
+                return page
+    if browser.contexts:
+        context = browser.contexts[0]
+    else:
+        raise RuntimeError("CHROME_CONTEXT_MISSING")
+    return context.new_page()
 
 
 def run(mode: str) -> int:
@@ -171,21 +258,18 @@ def run(mode: str) -> int:
         out("EXCHANGE_UI_CHROME_MISSING")
         return 2
 
-    subprocess.run(["taskkill", "/IM", "chrome.exe", "/F"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-    time.sleep(3)
+    chrome_process: subprocess.Popen | None = None
+    browser: Browser | None = None
+    try:
+        subprocess.run(["taskkill", "/IM", "chrome.exe", "/F"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        time.sleep(4)
+        profile = _copy_profile()
+        chrome_process = _start_chrome(profile)
+        endpoint = _wait_debug_endpoint()
 
-    user_data = Path(os.environ["LOCALAPPDATA"]) / "Google" / "Chrome" / "User Data"
-    with sync_playwright() as playwright:
-        context = playwright.chromium.launch_persistent_context(
-            str(user_data),
-            executable_path=str(CHROME),
-            headless=False,
-            no_viewport=True,
-            args=["--profile-directory=Default", "--force-renderer-accessibility", "--new-window"],
-            timeout=120000,
-        )
-        page = context.pages[0] if context.pages else context.new_page()
-        try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.connect_over_cdp(endpoint, timeout=60000)
+            page = _pick_page(browser)
             page.goto(TARGET, wait_until="domcontentloaded", timeout=120000)
             wait_for_portal(page)
             out("EXCHANGE_UI_URL=" + page.url)
@@ -210,7 +294,7 @@ def run(mode: str) -> int:
             confirm_dialog(page)
             time.sleep(15)
 
-            for attempt in range(1, 7):
+            for attempt in range(1, 10):
                 page.goto(TARGET, wait_until="domcontentloaded", timeout=120000)
                 wait_for_portal(page)
                 if not sender_is_listed(page):
@@ -221,22 +305,23 @@ def run(mode: str) -> int:
             page.screenshot(path=str(SCREENSHOT), full_page=False)
             out("EXCHANGE_UI_UNBLOCK_UNCONFIRMED")
             return 13
-        except PlaywrightTimeoutError as exc:
-            out("EXCHANGE_UI_TIMEOUT=" + str(exc).splitlines()[0])
+    except PlaywrightTimeoutError as exc:
+        out("EXCHANGE_UI_TIMEOUT=" + str(exc).replace("\n", " ")[:500])
+        return 14
+    except Exception as exc:
+        out("EXCHANGE_UI_ERROR=" + type(exc).__name__ + ":" + str(exc).replace("\n", " ")[:700])
+        return 15
+    finally:
+        try:
+            if browser is not None:
+                browser.close()
+        except Exception:
+            pass
+        if chrome_process is not None:
             try:
-                page.screenshot(path=str(SCREENSHOT), full_page=False)
+                chrome_process.terminate()
             except Exception:
                 pass
-            return 14
-        except Exception as exc:
-            out("EXCHANGE_UI_ERROR=" + str(exc).replace("\n", " ")[:500])
-            try:
-                page.screenshot(path=str(SCREENSHOT), full_page=False)
-            except Exception:
-                pass
-            return 15
-        finally:
-            context.close()
 
 
 def main() -> int:
