@@ -13,16 +13,16 @@ function sv_catalog_v3_assert(bool $condition, string $message): void
 }
 
 $guard = file_get_contents($root . '/includes/admin-guard.php');
-$ui = file_get_contents($root . '/admin/assets/catalog-optimization-workflow-v3.js');
+$ui = file_get_contents($root . '/admin/assets/catalog-optimization-workflow.js');
 $resilient = file_get_contents($root . '/admin/catalog-optimization/api/optimize_catalog_resilient.php');
 
 sv_catalog_v3_assert(is_string($guard) && $guard !== '', 'admin-guard.php precisa existir');
-sv_catalog_v3_assert(is_string($ui) && $ui !== '', 'workflow v3 precisa existir');
+sv_catalog_v3_assert(is_string($ui) && $ui !== '', 'workflow unificado precisa existir');
 sv_catalog_v3_assert(is_string($resilient) && $resilient !== '', 'API resiliente precisa existir');
 
 sv_catalog_v3_assert(
-    str_contains($guard, 'catalog-optimization-workflow-v3.js'),
-    'Admin deve carregar o workflow unificado v3'
+    str_contains($guard, 'catalog-optimization-workflow.js'),
+    'Admin deve carregar o workflow unificado do catalogo'
 );
 sv_catalog_v3_assert(
     !str_contains($guard, 'catalog-resilient-run-hotfix.js') && !str_contains($guard, 'catalog-candidate-race-guard.js'),
@@ -55,6 +55,10 @@ sv_catalog_v3_assert(
     'Fluxo deve recuperar o ponto de revisao depois de salvar/aplicar/recarregar'
 );
 sv_catalog_v3_assert(
+    str_contains($ui, 'state.selected = new Set()') || str_contains($ui, 'selected: new Set()'),
+    'Selecao deve persistir ao filtrar a lista sem depender apenas do DOM visivel'
+);
+sv_catalog_v3_assert(
     str_contains($resilient, 'catalog_resilient_refine_quality')
     && str_contains($resilient, 'quality_initial_score')
     && str_contains($resilient, 'quality_refined'),
@@ -69,4 +73,4 @@ sv_catalog_v3_assert(
     'Segunda chamada de IA deve acontecer apenas quando houver bloqueio ou score baixo'
 );
 
-fwrite(STDOUT, "COMPROVADO: workflow v3 do Admin de otimizacao possui selecao unica, progresso, revisao/aplicacao explicita e refinamento controlado.\n");
+fwrite(STDOUT, "COMPROVADO: workflow unificado do Admin possui selecao estavel, progresso, revisao/aplicacao explicita e refinamento controlado.\n");
