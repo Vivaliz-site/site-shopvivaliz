@@ -100,6 +100,39 @@ final class CatalogAiKeyPool
     }
 }
 
+/**
+ * Aplica a normalizacao deterministica somente a respostas que pertencem a um
+ * fluxo real de geracao de catalogo. ai_catalog_build_user_prompt() registra o
+ * produto/canal no contexto antes da chamada ao provedor; validacoes manuais
+ * que nao passam por um provedor continuam intocadas e podem ser bloqueadas
+ * normalmente pelo quality gate.
+ *
+ * @param array<string,mixed> $data
+ * @return array<string,mixed>
+ */
+function catalog_ai_normalize_generated_data(array $data): array
+{
+    $context = $GLOBALS['ai_catalog_validation_context'] ?? null;
+    if (!is_array($context)) return $data;
+
+    $channel = strtolower(trim((string)($context['channel'] ?? '')));
+    $product = $context['product'] ?? null;
+    if ($channel === '' || !is_array($product)) return $data;
+
+    if (!function_exists('catalog_generated_normalize')) {
+        $normalizer = __DIR__ . '/CatalogGeneratedDataNormalizer.php';
+        if (is_file($normalizer)) require_once $normalizer;
+    }
+    if (!function_exists('catalog_generated_normalize')
+        || !function_exists('ai_catalog_policy')
+        || !function_exists('ai_catalog_source_blob')
+        || !function_exists('ai_catalog_title_starts_with_identity')) {
+        throw new CatalogAiApiException('Normalizador deterministico do catalogo indisponivel no contexto de geracao.');
+    }
+
+    return catalog_generated_normalize($data, $channel, $product);
+}
+
 abstract class CatalogAiRotatingProvider implements CatalogAiTextProvider
 {
     /** @var list<string> */
@@ -117,7 +150,8 @@ abstract class CatalogAiRotatingProvider implements CatalogAiTextProvider
         $last = null;
         foreach ($this->keys as $index => $key) {
             try {
-                return $this->completeWithKey($key, $systemPrompt, $userPrompt);
+                $data = $this->completeWithKey($key, $systemPrompt, $userPrompt);
+                return catalog_ai_normalize_generated_data($data);
             } catch (CatalogAiApiException $exception) {
                 $last = $exception;
                 $rotate = CatalogAiKeyPool::shouldRotate($exception->httpStatus, $exception->getMessage());
