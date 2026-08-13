@@ -76,6 +76,7 @@ function sv_smoke_cleanup_collect_ids(array $paths): array
             if (!is_array($result)) {
                 continue;
             }
+            // Canonical smoke report contract: result['staging_id'].
             $stagingId = (int)($result['staging_id'] ?? 0);
             $kind = strtolower(trim((string)($result['kind'] ?? '')));
             if ($stagingId <= 0 || $kind === '') {
