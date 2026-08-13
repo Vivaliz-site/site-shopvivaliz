@@ -1,0 +1,46 @@
+name: Inspect MEI production migration stash
+
+on:
+  push:
+    branches: [ops/inspect-mei-v020-stash]
+    paths:
+      - '.github/workflows/mei-email-stash-migration-inspect.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect stash only
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'REMOTE'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo 'STASH_LIST_BEGIN'
+          git stash list
+          echo 'STASH_LIST_END'
+          echo 'STASH_NAMES_BEGIN'
+          git stash show --name-status stash@{0} || true
+          echo 'STASH_NAMES_END'
+          for f in db/migrations/V014__cnpj_alphanumeric_and_submission_guard.sql db/migrations/V017__optimize_submission_trigger.sql db/migrations/V018__index_envios_enviado_em.sql db/migrations/V019__deduplicate_shared_email_without_exclusion.sql db/migrations/V020__national_scope_and_cleanup_policy.sql; do
+            echo "FILE_BEGIN=$f"
+            git diff --no-ext-diff --unified=20 HEAD stash@{0} -- "$f" || true
+            echo "FILE_END=$f"
+          done
+          echo 'WORKER_RESUME_ALLOWED=false'
+          REMOTE
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
