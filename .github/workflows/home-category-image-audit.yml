@@ -5,10 +5,13 @@ on:
     paths:
       - 'index.php'
       - 'api/catalog/products.php'
+      - 'api/catalog/category-images.php'
       - 'includes/catalog-runtime.php'
       - 'includes/catalog-image-enrich.php'
       - 'public/assets/category-images/**'
       - 'js/public-experience-v1.js'
+      - 'js/category-real-images-v52.js'
+      - 'js/shopvivaliz-ab-testing.js'
       - 'tests/home-category-image-audit.mjs'
       - '.github/workflows/home-category-image-audit.yml'
   workflow_dispatch:
@@ -41,6 +44,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           node --check js/public-experience-v1.js
+          node --check js/category-real-images-v52.js
+          node --check js/shopvivaliz-ab-testing.js
           node --check tests/home-category-image-audit.mjs
       - name: Install Chromium
         run: |

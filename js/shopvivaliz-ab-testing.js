@@ -32,14 +32,14 @@
 
   window.ShopVivalizABTest = state;
 
-  // Bootstrap do módulo dedicado de imagens históricas de categoria.
-  // Evita manter regra visual dentro deste shim e preserva compatibilidade
-  // com a inclusão já existente no index.php.
+  // Bootstrap da ponte de aliases de categorias. A selecao principal continua
+  // em public-experience-v1.js; este modulo apenas promove fallbacks usando o
+  // endpoint real de categorias quando o nome de apresentacao difere do ERP.
   if (!document.querySelector('script[data-sv-category-images]')) {
     var script = document.createElement('script');
-    script.src = '/js/category-real-images-v52.js?v=20260812-2';
+    script.src = '/js/category-real-images-v52.js?v=20260813-3';
     script.defer = true;
-    script.dataset.svCategoryImages = 'historical-20260810';
+    script.dataset.svCategoryImages = 'live-alias-20260813';
     document.head.appendChild(script);
   }
 })();
