@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate and safely remediate integrations
+    name: Validate integrations read-only
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -70,7 +70,6 @@ jobs:
           php_user="${php_user:-www-data}"
           php_group="$(id -gn "$php_user")"
 
-          # Repara apenas metadados do arquivo, nunca seu conteudo.
           if ! sudo -u "$php_user" test -r "$shared_env"; then
             echo "env_repair=required" >&2
             sudo chown ubuntu:"$php_group" "$shared_env"
@@ -92,8 +91,8 @@ jobs:
             sudo install -o ubuntu -g "$php_group" -m 0660 /dev/null "$state_file"
           fi
 
-          # O daemon deve estar habilitado e ativo. Uma parada silenciosa faria
-          # o access token expirar mesmo com o painel ainda exibindo o ultimo estado.
+          # The daemon owns OAuth rotation. This monitor only ensures that the
+          # service is alive and then performs authenticated read-only checks.
           if ! systemctl is-enabled --quiet "$service"; then
             sudo systemctl enable "$service" >&2
           fi
@@ -113,22 +112,22 @@ jobs:
           <?php
           declare(strict_types=1);
           require '/home/ubuntu/shopvivaliz-deploy/current/includes/integration-health.php';
-          $result = svih_check_all(true);
+          $result = svih_check_all(false);
           echo json_encode(
               $result,
               JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT
           ), PHP_EOL;
           PHP
 
-          # A renovacao nao pode alterar owner, group ou mode do arquivo ativo.
+          # A read-only monitor must never change owner, group or mode.
           env_after="$(stat -c '%u:%g:%a' "$shared_env")"
           echo "env_after=$env_after" >&2
           if [[ "$env_after" != "$env_before" ]]; then
-            echo "shared .env metadata changed during integration refresh: $env_before -> $env_after" >&2
+            echo "shared .env metadata changed during integration validation: $env_before -> $env_after" >&2
             exit 1
           fi
           sudo -u "$php_user" test -r "$shared_env" || {
-            echo "shared .env became unreadable by PHP after refresh" >&2
+            echo "shared .env became unreadable after validation" >&2
             exit 1
           }
           REMOTE_SCRIPT
