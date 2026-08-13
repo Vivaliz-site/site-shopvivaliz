@@ -32,12 +32,7 @@ function ais_health_sanitize(string $message): string
     return mb_substr(trim($message), 0, 220, 'UTF-8');
 }
 
-/**
- * Testa um provedor sem gerar imagem/conteudo real. A resposta devolvida ao
- * browser nunca inclui a chave e passa por redacao defensiva.
- *
- * @return array{ok:bool,detail:string}
- */
+/** @return array{ok:bool,detail:string} */
 function ais_health_probe(string $provider, string $key): array
 {
     if ($key === '') return ['ok' => false, 'detail' => 'Nenhuma chave configurada.'];
@@ -53,7 +48,6 @@ function ais_health_probe(string $provider, string $key): array
         $status = (int)$response['status'];
         $body = (string)$response['body'];
         if ($status >= 200 && $status < 300) return ['ok' => true, 'detail' => 'Autenticação válida.'];
-
         $decoded = json_decode($body, true);
         $message = is_array($decoded) ? (string)($decoded['error']['message'] ?? $decoded['error'] ?? '') : '';
         if ($message === '') $message = 'HTTP ' . $status;
@@ -66,29 +60,24 @@ function ais_health_probe(string $provider, string $key): array
 /** @param list<string> $keys @return array{ok:bool,detail:string,working_keys:int,checked_keys:int} */
 function ais_health_probe_pool(string $provider, array $keys): array
 {
-    if ($keys === []) {
-        return ['ok' => false, 'detail' => 'Nenhuma chave configurada.', 'working_keys' => 0, 'checked_keys' => 0];
-    }
-    $working = 0;
+    if ($keys === []) return ['ok' => false, 'detail' => 'Nenhuma chave configurada.', 'working_keys' => 0, 'checked_keys' => 0];
     $errors = [];
+    $checked = 0;
     foreach ($keys as $key) {
+        $checked++;
         $probe = ais_health_probe($provider, (string)$key);
         if ($probe['ok']) {
-            $working++;
-        } elseif ($probe['detail'] !== '') {
-            $errors[] = $probe['detail'];
+            return [
+                'ok' => true,
+                'detail' => $checked === 1 ? 'Chave principal autenticou corretamente.' : "Uma chave de fallback autenticou após {$checked} tentativa(s).",
+                'working_keys' => 1,
+                'checked_keys' => $checked,
+            ];
         }
-    }
-    if ($working > 0) {
-        return [
-            'ok' => true,
-            'detail' => $working === 1 ? '1 chave autenticou corretamente.' : $working . ' chaves autenticaram corretamente.',
-            'working_keys' => $working,
-            'checked_keys' => count($keys),
-        ];
+        if ($probe['detail'] !== '') $errors[] = $probe['detail'];
     }
     $detail = $errors !== [] ? implode(' | ', array_slice(array_values(array_unique($errors)), 0, 2)) : 'Nenhuma chave autenticou.';
-    return ['ok' => false, 'detail' => ais_health_sanitize($detail), 'working_keys' => 0, 'checked_keys' => count($keys)];
+    return ['ok' => false, 'detail' => ais_health_sanitize($detail), 'working_keys' => 0, 'checked_keys' => $checked];
 }
 
 /** @return array{message:string,updated_at:string}|null */
@@ -102,7 +91,6 @@ function ais_health_recent_capacity_failure(PDO $db, string $provider): ?array
         default => [],
     };
     if ($providerPatterns === []) return null;
-
     try {
         $stmt = $db->prepare(
             "SELECT LEFT(error_message, 220) AS message, updated_at
@@ -150,8 +138,6 @@ foreach ($pools as $provider => $keys) {
     ];
 }
 
-// Claude e Groq atuam como otimizadores de prompt no fluxo de imagens. Eles
-// só são operacionalmente aptos se algum editor visual puder concluir pixels.
 $imageEditors = ['openai', 'google', 'openrouter'];
 $hasEditor = false;
 foreach ($imageEditors as $imageEditor) {
