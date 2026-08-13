@@ -65,16 +65,3 @@ if (!function_exists('sv_bootstrap_env')) {
 }
 
 sv_bootstrap_env();
-
-// A home possui um filtro de confianca server-side que precisa iniciar antes
-// do primeiro byte de HTML para abranger tambem JSON-LD e navegadores sem JS.
-// O registro e estritamente limitado a requests web de `/` ou `/index.php`;
-// CLI, APIs, Admin e demais paginas nao recebem output buffering adicional.
-if (PHP_SAPI !== 'cli' && isset($_SERVER['REQUEST_URI'])) {
-    $svBootstrapPath = parse_url((string)$_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '';
-    if ($svBootstrapPath === '/' || $svBootstrapPath === '/index.php') {
-        require_once dirname(__DIR__) . '/includes/home-trust-sanitizer.php';
-        svhts_register($svBootstrapPath);
-    }
-    unset($svBootstrapPath);
-}
