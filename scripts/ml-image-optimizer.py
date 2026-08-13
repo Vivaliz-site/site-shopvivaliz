@@ -123,12 +123,53 @@ def squareness(w: int, h: int) -> float:
     return min(w, h) / max(w, h)
 
 
+def fetch_thumb(url: str) -> tuple[str, str] | None:
+    """Baixa a foto e reduz para classificacao visual.
+
+    O CDN do ML (http2.mlstatic.com) recusa o download feito pelo lado da Anthropic,
+    entao a imagem tem de ir como base64. Reduzir para 768px no lado maior corta o
+    custo em tokens sem atrapalhar a decisao (produto x infografico x colagem).
+    """
+    import base64
+    import io
+    import urllib.request
+
+    from PIL import Image
+
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            raw = resp.read()
+        img = Image.open(io.BytesIO(raw))
+        img = img.convert("RGB")
+        img.thumbnail((THUMB_EDGE, THUMB_EDGE), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=82)
+        return "image/jpeg", base64.standard_b64encode(buf.getvalue()).decode()
+    except Exception:  # noqa: BLE001 - foto inacessivel apenas sai da analise
+        return None
+
+
 def analyze(client, pics: list[dict]) -> dict:
     content: list[dict] = []
+    usable = 0
     for idx, pic in enumerate(pics):
         w, h = dims(pic)
+        thumb = fetch_thumb(pic.get("secure_url") or pic.get("url") or "")
+        if not thumb:
+            content.append({"type": "text", "text": f"Foto {idx} — {w}x{h} (imagem indisponivel)"})
+            continue
+        media_type, b64 = thumb
+        usable += 1
         content.append({"type": "text", "text": f"Foto {idx} — resolucao {w}x{h}"})
-        content.append({"type": "image", "source": {"type": "url", "url": pic["secure_url"]}})
+        content.append(
+            {
+                "type": "image",
+                "source": {"type": "base64", "media_type": media_type, "data": b64},
+            }
+        )
+    if not usable:
+        raise RuntimeError("nenhuma foto pode ser baixada")
     content.append(
         {
             "type": "text",
