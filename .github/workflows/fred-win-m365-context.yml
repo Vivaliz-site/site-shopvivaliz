@@ -1,4 +1,4 @@
-name: Inspect Fred-Win Restricted entities browser
+name: Inspect Fred-Win Opera profile
 
 on:
   push:
@@ -24,12 +24,12 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
 
-      - name: Read browser UI markers without clicking
+      - name: Read Opera installation and profile metadata
         run: |
           set -euo pipefail
           python3 - <<'PY' > /tmp/body.json
           import json
-          ps=r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; Add-Type -AssemblyName UIAutomationClient; Add-Type -AssemblyName UIAutomationTypes; $root=[System.Windows.Automation.AutomationElement]::RootElement; $wins=$root.FindAll([System.Windows.Automation.TreeScope]::Children,[System.Windows.Automation.Condition]::TrueCondition); $count=0; foreach($w in $wins){$title=[string]$w.Current.Name; if($title -notmatch 'Chrome|Edge|Microsoft'){continue}; $count++; Write-Output ('BROWSER_TITLE='+$title); $all=$w.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition); $restricted=$false; $sender=$false; $unblock=$false; $auth=$false; $url=''; foreach($e in $all){$name=[string]$e.Current.Name; if([string]::IsNullOrWhiteSpace($name)){continue}; $low=$name.ToLowerInvariant(); if($low -match 'restricted entities|entidades restritas'){$restricted=$true}; if($low -match 'naoresponda@dev\.shopvivaliz\.com\.br'){$sender=$true}; if($low -match '^unblock$|^desbloquear$'){$unblock=$true; Write-Output ('UNBLOCK_CONTROL='+$e.Current.ControlType.ProgrammaticName+':'+$name)}; if($low -match 'sign in|entrar|pick an account|escolha uma conta'){$auth=$true}; if($e.Current.ControlType -eq [System.Windows.Automation.ControlType]::Edit){try{$p=$e.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern); $v=[string]$p.Current.Value; if($v -match '^https?://(security|admin\.exchange)\.microsoft\.com'){$url=$v}}catch{}}}; if($url){Write-Output ('BROWSER_URL='+$url)}; Write-Output ('RESTRICTED_ENTITIES_MARKER='+$restricted); Write-Output ('SENDER_VISIBLE='+$sender); Write-Output ('UNBLOCK_VISIBLE='+$unblock); Write-Output ('AUTH_REQUIRED_VISIBLE='+$auth); Write-Output '---'}; Write-Output ('BROWSER_WINDOW_COUNT='+$count)"'''
+          ps=r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "$candidates=@((Join-Path $env:LOCALAPPDATA 'Programs\Opera\opera.exe'),(Join-Path $env:LOCALAPPDATA 'Programs\Opera GX\opera.exe'),'C:\Program Files\Opera\opera.exe','C:\Program Files\Opera GX\opera.exe'); foreach($p in $candidates){Write-Output ('OPERA_EXE_CANDIDATE='+$p+';EXISTS='+(Test-Path $p))}; $roots=@((Join-Path $env:APPDATA 'Opera Software'),(Join-Path $env:LOCALAPPDATA 'Opera Software')); foreach($root in $roots){Write-Output ('OPERA_ROOT='+$root+';EXISTS='+(Test-Path $root)); if(Test-Path $root){Get-ChildItem $root -Directory -ErrorAction SilentlyContinue | ForEach-Object {Write-Output ('OPERA_PROFILE_DIR='+$_.FullName); foreach($name in @('Local State','Preferences','Cookies','Login Data')){$f=Join-Path $_.FullName $name; if(Test-Path $f){Write-Output ('PROFILE_FILE='+$name+';SIZE='+(Get-Item $f).Length+';UPDATED='+(Get-Item $f).LastWriteTime.ToString('o'))}}}}}; Get-CimInstance Win32_Process | Where-Object {$_.Name -match '^opera'} | Select-Object -First 20 | ForEach-Object {Write-Output ('OPERA_PROCESS='+$_.ProcessId+';NAME='+$_.Name+';CMD='+(([string]$_.CommandLine) -replace '--[^ ]*(password|token|secret)[^ ]*','[REDACTED]'))}"'''
           print(json.dumps({'params':{'command':ps,'timeout':90}}))
           PY
           BODY_B64="$(base64 -w0 /tmp/body.json)"
