@@ -7,9 +7,19 @@ const outputDir = process.env.OUTPUT_DIR || 'test-results/production-image-audit
 const injectBranchScript = process.env.GITHUB_EVENT_NAME === 'pull_request';
 fs.mkdirSync(outputDir, { recursive: true });
 
+const source = fs.readFileSync('js/public-experience-v1.js', 'utf8');
+for (const [needle, label] of [
+  ["value === '/index.php'", 'suporte a /index.php'],
+  ['fetchCatalogPage(page)', 'paginacao do catalogo'],
+  ['image.onerror = function', 'fallback para imagem quebrada'],
+  ['Nunca reutiliza deliberadamente', 'fallback quando imagem real ja foi usada'],
+]) {
+  if (!source.includes(needle)) throw new Error(`source_guard_missing:${label}`);
+}
+
 const browser = await chromium.launch({ headless: true });
 
-async function audit(name, viewport, isMobile = false) {
+async function audit(name, viewport, isMobile = false, route = '/') {
   const context = await browser.newContext({
     viewport,
     isMobile,
@@ -20,27 +30,26 @@ async function audit(name, viewport, isMobile = false) {
   const page = await context.newPage();
 
   // Executa a versao da branch antes de qualquer script da pagina. Isso evita
-  // bloqueio por CSP de uma <script> injetada tardiamente e tambem garante que
-  // o guard global faca a versao de producao ceder lugar ao codigo em revisao.
+  // bloqueio por CSP de uma <script> injetada tardiamente e garante que o guard
+  // global faca a versao de producao ceder lugar ao codigo em revisao.
   if (injectBranchScript) {
     await page.addInitScript({ path: path.resolve('js/public-experience-v1.js') });
   }
 
-  const response = await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+  const response = await page.goto(`${baseUrl}${route}`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   if (!response || response.status() >= 400) {
     await page.screenshot({ path: path.join(outputDir, `home-http-failure-${name}.png`), fullPage: true }).catch(() => {});
-    throw new Error(`home_http_status=${response?.status() ?? 'none'}`);
+    throw new Error(`home_http_status=${route}:${response?.status() ?? 'none'}`);
   }
   await page.waitForSelector('.home-categories .category-slide img.category-slide-img', { timeout: 45_000 });
 
-  if (injectBranchScript) {
-    // A selecao das fotos depende de /api/catalog/products.php. Espera a branch
-    // marcar cada card como catalog ou fallback antes de medir o DOM.
-    await page.waitForFunction(() => {
-      const images = Array.from(document.querySelectorAll('.home-categories img.category-slide-img'));
-      return images.length >= 5 && images.every((img) => img instanceof HTMLImageElement && !!img.dataset.svCategorySource);
-    }, { timeout: 45_000 });
-  }
+  // Tanto na PR (script injetado) quanto no audit pos-deploy, esperamos a
+  // selecao terminar. Em producao isso tambem prova que o JS implantado esta
+  // ativo, em vez de validar apenas o HTML server-side anterior.
+  await page.waitForFunction(() => {
+    const images = Array.from(document.querySelectorAll('.home-categories img.category-slide-img'));
+    return images.length >= 5 && images.every((img) => img instanceof HTMLImageElement && !!img.dataset.svCategorySource);
+  }, { timeout: 45_000 });
 
   // As imagens da home sao corretamente lazy no site real. No auditor, primeiro
   // levamos a secao para a viewport e depois mudamos apenas os elementos da
@@ -60,7 +69,7 @@ async function audit(name, viewport, isMobile = false) {
       return img instanceof HTMLImageElement && img.complete;
     });
   }, { timeout: 45_000 });
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(800);
 
   const metrics = await page.evaluate(() => {
     const cards = Array.from(document.querySelectorAll('.home-categories .category-slide')).map((card) => {
@@ -114,9 +123,23 @@ async function audit(name, viewport, isMobile = false) {
 try {
   const desktop = await audit('desktop', { width: 1440, height: 1000 });
   const mobile = await audit('mobile', { width: 390, height: 844 }, true);
-  const report = { checkedAt: new Date().toISOString(), injectedBranchScript: injectBranchScript, desktop, mobile, ok: desktop.ok && mobile.ok };
+  const directIndex = await audit('direct-index', { width: 1024, height: 900 }, false, '/index.php');
+  const report = {
+    checkedAt: new Date().toISOString(),
+    injectedBranchScript: injectBranchScript,
+    desktop,
+    mobile,
+    directIndex,
+    ok: desktop.ok && mobile.ok && directIndex.ok,
+  };
   fs.writeFileSync(path.join(outputDir, 'home-categories.json'), `${JSON.stringify(report, null, 2)}\n`, 'utf8');
-  console.log(JSON.stringify({ ok: report.ok, injectedBranchScript: injectBranchScript, desktop: desktop.assertions, mobile: mobile.assertions }));
+  console.log(JSON.stringify({
+    ok: report.ok,
+    injectedBranchScript: injectBranchScript,
+    desktop: desktop.assertions,
+    mobile: mobile.assertions,
+    directIndex: directIndex.assertions,
+  }));
   if (!report.ok) throw new Error('home_category_images_failed');
 } finally {
   await browser.close();

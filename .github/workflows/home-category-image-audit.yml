@@ -3,6 +3,11 @@ name: Home Category Image Audit
 on:
   pull_request:
     paths:
+      - 'index.php'
+      - 'api/catalog/products.php'
+      - 'includes/catalog-runtime.php'
+      - 'includes/catalog-image-enrich.php'
+      - 'public/assets/category-images/**'
       - 'js/public-experience-v1.js'
       - 'tests/home-category-image-audit.mjs'
       - '.github/workflows/home-category-image-audit.yml'
@@ -27,7 +32,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-          ref: ${{ github.event_name == 'workflow_run' && 'main' || github.sha }}
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

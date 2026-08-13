@@ -22,6 +22,10 @@ function stars(value) {
   var rating = Math.max(1, Math.min(5, Number(value) || 5));
   return '★'.repeat(rating) + '☆'.repeat(5 - rating);
 }
+function isHomePath(path) {
+  var value = String(path || '');
+  return value === '/' || value === '/index.php';
+}
 function normalizeText(value) {
   return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 }
@@ -96,25 +100,58 @@ function extractCatalogRows(data) {
   if (data && Array.isArray(data.data)) return data.data;
   return [];
 }
+function fetchCatalogPage(page) {
+  return fetch('/api/catalog/products.php?limit=200&available=1&page=' + encodeURIComponent(String(page)), {
+    headers:{Accept:'application/json'},
+    credentials:'same-origin'
+  }).then(function (response) {
+    if (!response.ok) throw new Error('category_catalog_request_failed');
+    return response.json();
+  }).then(function (data) {
+    return {
+      rows: extractCatalogRows(data).filter(function (row) { return row && typeof row === 'object'; }),
+      totalPages: Math.max(1, Number(data && data.total_pages) || 1)
+    };
+  });
+}
+function fetchAllCatalogRows() {
+  var rows = [];
+  function load(page, knownTotalPages) {
+    return fetchCatalogPage(page).then(function (result) {
+      rows = rows.concat(result.rows);
+      var totalPages = Math.max(knownTotalPages || 1, result.totalPages || 1);
+      if (page < totalPages) return load(page + 1, totalPages);
+      return rows;
+    });
+  }
+  return load(1, 1);
+}
+function markCategoryFallback(image, categoryName, preferredFallback) {
+  if (!(image instanceof HTMLImageElement)) return;
+  var fallback = isValidCatalogImage(preferredFallback)
+    ? String(preferredFallback)
+    : localCategoryFallback(categoryName);
+  image.onerror = null;
+  image.src = fallback;
+  image.alt = 'Produto da categoria ' + categoryName;
+  image.dataset.svCategorySource = 'local-fallback';
+  delete image.dataset.svProductSku;
+}
 function installHomeCategoryImages() {
-  if (homeCategoryImagesInstalled || window.location.pathname !== '/') return;
+  if (homeCategoryImagesInstalled || !isHomePath(window.location.pathname)) return;
   var cards = Array.prototype.slice.call(document.querySelectorAll('.home-categories .category-slide'));
   if (!cards.length) return;
   homeCategoryImagesInstalled = true;
-  fetch('/api/catalog/products.php?limit=200&available=1', {headers:{Accept:'application/json'}, credentials:'same-origin'})
-    .then(function (response) {
-      if (!response.ok) throw new Error('category_catalog_request_failed');
-      return response.json();
-    })
-    .then(function (data) {
-      var rows = extractCatalogRows(data).filter(function (row) { return row && typeof row === 'object'; });
+  fetchAllCatalogRows()
+    .then(function (rows) {
       var used = Object.create(null);
       cards.forEach(function (card) {
         var label = card.querySelector('strong');
         var image = card.querySelector('img.category-slide-img');
-        if (!label || !image) return;
+        if (!label || !(image instanceof HTMLImageElement)) return;
         var categoryName = String(label.textContent || '').trim();
         var normalizedCategory = normalizeText(categoryName);
+        var serverRenderedSrc = String(image.currentSrc || image.getAttribute('src') || '').trim();
         var candidates = rows.filter(function (row) {
           var sameCategory = normalizeText(row.category) === normalizedCategory;
           var name = normalizeText(row.name);
@@ -131,17 +168,19 @@ function installHomeCategoryImages() {
         for (var i = 0; i < candidates.length; i += 1) {
           if (!used[candidates[i].image]) { chosen = candidates[i]; break; }
         }
-        if (!chosen && candidates.length) chosen = candidates[0];
         if (chosen) {
+          image.onerror = function () {
+            markCategoryFallback(image, categoryName, serverRenderedSrc);
+          };
           image.src = chosen.image;
           image.alt = String(chosen.row.name || ('Produto da categoria ' + categoryName));
           image.dataset.svCategorySource = 'catalog';
           image.dataset.svProductSku = String(chosen.row.sku || chosen.row.id || '');
           used[chosen.image] = true;
         } else {
-          image.src = localCategoryFallback(categoryName);
-          image.alt = 'Produto da categoria ' + categoryName;
-          image.dataset.svCategorySource = 'local-fallback';
+          // Nunca reutiliza deliberadamente uma imagem ja usada. Se a categoria
+          // nao tiver uma alternativa real unica, prefere fallback local.
+          markCategoryFallback(image, categoryName, serverRenderedSrc);
         }
         image.loading = 'lazy';
         image.decoding = 'async';
@@ -151,8 +190,8 @@ function installHomeCategoryImages() {
       cards.forEach(function (card) {
         var label = card.querySelector('strong');
         var image = card.querySelector('img.category-slide-img');
-        if (!label || !image) return;
-        if (/unsplash\.com/i.test(String(image.src || ''))) image.src = localCategoryFallback(label.textContent || '');
+        if (!label || !(image instanceof HTMLImageElement)) return;
+        markCategoryFallback(image, String(label.textContent || '').trim(), image.currentSrc || image.getAttribute('src') || '');
       });
     });
 }
@@ -236,7 +275,7 @@ function installMobileNav() {
   var nav = document.createElement('nav');
   var path = window.location.pathname || '/';
   var links = [
-    {href:'/',label:'Início',icon:'⌂',active:path==='/'},
+    {href:'/',label:'Início',icon:'⌂',active:isHomePath(path)},
     {href:'/catalogo',label:'Busca',icon:'⌕',active:/^\/catalogo\b/i.test(path)},
     {href:'/carrinho',label:'Carrinho',icon:'🛒',active:/^\/carrinho\b/i.test(path)},
     {href:'/blog/',label:'Blog',icon:'✎',active:/^\/blog\b/i.test(path)},
@@ -256,7 +295,7 @@ function updatePageState() {
   var path = window.location.pathname || '/';
   var isProduct = /^\/produto(?:\/|$)/i.test(path);
   var isCatalog = /^\/catalogo(?:\/|$)/i.test(path);
-  var isHome = path === '/';
+  var isHome = isHomePath(path);
   var nearTop = window.scrollY < 420;
 
   body.classList.toggle('sv-page-product', isProduct);
