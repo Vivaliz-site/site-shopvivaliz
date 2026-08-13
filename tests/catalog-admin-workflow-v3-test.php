@@ -55,8 +55,16 @@ sv_catalog_v3_assert(
     'Fluxo deve recuperar o ponto de revisao depois de salvar/aplicar/recarregar'
 );
 sv_catalog_v3_assert(
-    str_contains($ui, 'state.selected = new Set()') || str_contains($ui, 'selected: new Set()'),
+    str_contains($ui, 'selected: new Set()'),
     'Selecao deve persistir ao filtrar a lista sem depender apenas do DOM visivel'
+);
+sv_catalog_v3_assert(
+    str_contains($ui, 'requestGeneration') && str_contains($ui, 'requestGeneration !== state.requestGeneration'),
+    'Respostas antigas de candidatos nao podem sobrescrever o canal atual'
+);
+sv_catalog_v3_assert(
+    str_contains($ui, "document.createElement('details')") && str_contains($ui, 'sv-regen-details'),
+    'Regeneracao recolhida deve continuar acessivel por disclosure nativo'
 );
 sv_catalog_v3_assert(
     str_contains($resilient, 'catalog_resilient_refine_quality')
@@ -73,4 +81,4 @@ sv_catalog_v3_assert(
     'Segunda chamada de IA deve acontecer apenas quando houver bloqueio ou score baixo'
 );
 
-fwrite(STDOUT, "COMPROVADO: workflow unificado do Admin possui selecao estavel, progresso, revisao/aplicacao explicita e refinamento controlado.\n");
+fwrite(STDOUT, "COMPROVADO: workflow unificado do Admin possui selecao estavel, protecao contra respostas antigas, progresso, revisao/aplicacao explicita e refinamento controlado.\n");
