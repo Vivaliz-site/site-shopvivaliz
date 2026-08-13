@@ -113,11 +113,15 @@ sv_catalog_v3_assert(
 );
 
 sv_catalog_v3_assert(
-    str_contains($repair, "WHERE status = 'pending'")
+    str_contains($repair, "s.status = 'pending'")
+    && str_contains($repair, "s.status = 'failed'")
+    && str_contains($repair, 'CATALOG_HARD_REPAIR_PREFIX')
+    && str_contains($repair, "newer.status IN ('pending','published','rejected')")
+    && str_contains($repair, 'catalog_hard_repair_resumed=')
     && str_contains($repair, 'ai_catalog_quality_report($data, $channel, $product)')
     && str_contains($repair, "SET status = 'failed'")
     && str_contains($repair, 'ai_catalog_process_item($db, $productId, $channel, $provider)'),
-    'Pendencias antigas com hard failure devem sair da aprovacao e ser regeneradas automaticamente'
+    'Pendencias hard e reparos interrompidos devem ser retomados sem duplicar substitutos validos'
 );
 sv_catalog_v3_assert(
     str_contains($repair, 'catalog_hard_repair_publication_attempted=false')
@@ -130,8 +134,10 @@ sv_catalog_v3_assert(
     && str_contains($repairWorkflow, "github.event.workflow_run.conclusion == 'success'")
     && str_contains($repairWorkflow, 'TARGET_SHA:')
     && str_contains($repairWorkflow, '"$deployed" == "$TARGET_SHA"')
+    && str_contains($repairWorkflow, 'cancel-in-progress: false')
+    && str_contains($repairWorkflow, 'catalog_repair_interruption_resumable=true')
     && str_contains($repairWorkflow, 'php admin/catalog-optimization/repair_hard_quality_pending.php --limit=2000'),
-    'Reparo legado deve rodar automaticamente para o SHA exato de cada deploy de producao bem-sucedido'
+    'Reparo pos-deploy deve ser serial, nao cancelavel e sempre mirar o SHA efetivamente implantado'
 );
 
-fwrite(STDOUT, "COMPROVADO: Admin auto-repara qualidade nova, limpa pendencias hard legadas apos deploy bem-sucedido sem publicar e preserva rotacao de credenciais Gemini.\n");
+fwrite(STDOUT, "COMPROVADO: Admin auto-repara qualidade nova, retoma reparos interrompidos sem publicar e preserva rotacao de credenciais Gemini.\n");
