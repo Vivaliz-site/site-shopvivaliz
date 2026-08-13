@@ -34,10 +34,10 @@
 
   // Bootstrap da ponte de aliases de categorias. A selecao principal continua
   // em public-experience-v1.js; este modulo apenas promove fallbacks usando o
-  // endpoint real de categorias quando o nome de apresentacao difere do ERP.
+  // catalogo publico quando o nome de apresentacao difere do ERP.
   if (!document.querySelector('script[data-sv-category-images]')) {
     var script = document.createElement('script');
-    script.src = '/js/category-real-images-v52.js?v=20260813-3';
+    script.src = '/js/category-real-images-v52.js?v=20260813-4';
     script.defer = true;
     script.dataset.svCategoryImages = 'live-alias-20260813';
     document.head.appendChild(script);
