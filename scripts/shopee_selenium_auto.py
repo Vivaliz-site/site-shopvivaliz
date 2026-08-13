@@ -265,11 +265,26 @@ def run_automation():
 
             print(f"[OK] Relatorio: {report_file.relative_to(ROOT)}\n")
 
-            print("[INFO] Navegador pode ser fechado manualmente")
-            print("[INFO] Ou pressione Ctrl+C para encerrar\n")
+            print("[INFO] NAVEGADOR PERMANECE ABERTO")
+            print("[INFO] Voce pode:")
+            print("  - Revisar as mudancas manualmente")
+            print("  - Fazer mais otimizacoes manualmente")
+            print("  - Fechar o navegador quando terminar (Ctrl+W)")
+            print("  - Ou digitar 'X' para encerrar o script agora\n")
 
-            # Manter navegador aberto
-            input("[AGUARDANDO] Pressione Enter para fechar o navegador...")
+            # Dar opcao de manter aberto ou fechar
+            try:
+                escolha = input("[OPCAO] Digite 'X' para encerrar (ou deixe vazio para manter navegador aberto): ").strip().upper()
+                if escolha == 'X':
+                    pass  # Vai fechar normalmente
+                else:
+                    print("\n[INFO] Navegador seguira aberto...")
+                    print("[INFO] Feche-o manualmente quando terminar\n")
+                    # Manter aberto indefinidamente
+                    while True:
+                        time.sleep(1)
+            except KeyboardInterrupt:
+                pass
 
             return True
 
