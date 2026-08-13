@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
           ref: ${{ github.event_name == 'workflow_run' && 'main' || github.sha }}
@@ -32,6 +32,11 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - name: Validate audit source
+        run: |
+          set -Eeuo pipefail
+          node --check js/public-experience-v1.js
+          node --check tests/home-category-image-audit.mjs
       - name: Install Chromium
         run: |
           set -Eeuo pipefail

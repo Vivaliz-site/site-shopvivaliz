@@ -10,7 +10,7 @@ var homeCategoryImagesInstalled = false;
 
 function esc(value) {
   return String(value || '').replace(/[&<>"']/g, function (char) {
-    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'})[char];
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[char];
   });
 }
 function initials(name) {
@@ -37,7 +37,12 @@ function rowImages(row) {
   });
   ['images','imagens','gallery','galeria'].forEach(function (field) {
     var list = row && Array.isArray(row[field]) ? row[field] : [];
-    list.forEach(function (value) { if (isValidCatalogImage(value)) values.push(String(value).trim()); });
+    list.forEach(function (value) {
+      var candidate = value && typeof value === 'object'
+        ? (value.url || value.image_url || value.src || '')
+        : value;
+      if (isValidCatalogImage(candidate)) values.push(String(candidate).trim());
+    });
   });
   return values.filter(function (value, index, all) { return all.indexOf(value) === index; });
 }
@@ -96,7 +101,7 @@ function installHomeCategoryImages() {
   var cards = Array.prototype.slice.call(document.querySelectorAll('.home-categories .category-slide'));
   if (!cards.length) return;
   homeCategoryImagesInstalled = true;
-  fetch('/api/catalog/products.php?limit=500', {headers:{Accept:'application/json'}, credentials:'same-origin'})
+  fetch('/api/catalog/products.php?limit=200&available=1', {headers:{Accept:'application/json'}, credentials:'same-origin'})
     .then(function (response) {
       if (!response.ok) throw new Error('category_catalog_request_failed');
       return response.json();
@@ -113,7 +118,9 @@ function installHomeCategoryImages() {
         var candidates = rows.filter(function (row) {
           var sameCategory = normalizeText(row.category) === normalizedCategory;
           var name = normalizeText(row.name);
-          var semanticRepair = normalizedCategory.indexOf('caixa') !== -1 && normalizedCategory.indexOf('ferrament') !== -1 && (name.indexOf('caixa') !== -1 || name.indexOf('maleta') !== -1) && name.indexOf('ferrament') !== -1;
+          var semanticRepair = normalizedCategory.indexOf('caixa') !== -1 && normalizedCategory.indexOf('ferrament') !== -1
+            && (name.indexOf('caixa') !== -1 || name.indexOf('maleta') !== -1)
+            && name.indexOf('ferrament') !== -1;
           return sameCategory || semanticRepair;
         }).map(function (row) {
           return {row:row, image:bestRowImage(row), score:categoryCandidateScore(categoryName, row)};
