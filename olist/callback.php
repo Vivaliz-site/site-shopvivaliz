@@ -1,14 +1,13 @@
 <?php
 /**
- * OAuth Callback - Troca código por token e salva em .env
- * Documentação: https://api-docs.erp.olist.com/documentacao/comecando/autenticacao
+ * OAuth Callback - troca codigo por token e salva no runtime privado.
+ * Documentacao: https://api-docs.erp.olist.com/documentacao/comecando/autenticacao
  */
 
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
 
-// Carregar .env
 $envFile = dirname(__DIR__) . '/.env';
 $clientId = '';
 $clientSecret = '';
@@ -16,31 +15,27 @@ $clientSecret = '';
 if (is_file($envFile)) {
     foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
         if (str_starts_with($line, 'OLIST_CLIENT_ID=')) {
-            $clientId = explode('=', $line, 2)[1] ?? '';
+            $clientId = trim((string)(explode('=', $line, 2)[1] ?? ''), " \t\n\r\0\x0B\"'");
         } elseif (str_starts_with($line, 'OLIST_CLIENT_SECRET=')) {
-            $clientSecret = explode('=', $line, 2)[1] ?? '';
+            $clientSecret = trim((string)(explode('=', $line, 2)[1] ?? ''), " \t\n\r\0\x0B\"'");
         }
     }
 }
 
-if (strlen(trim($clientId)) < 16 && is_file($envFile)) {
+if (strlen($clientId) < 16 && is_file($envFile)) {
     foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
         if (str_starts_with($line, 'TINY_CLIENT_ID=')) {
-            $clientId = explode('=', $line, 2)[1] ?? '';
+            $clientId = trim((string)(explode('=', $line, 2)[1] ?? ''), " \t\n\r\0\x0B\"'");
         }
     }
 }
-if (strlen(trim($clientSecret)) < 16 && is_file($envFile)) {
+if (strlen($clientSecret) < 16 && is_file($envFile)) {
     foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
         if (str_starts_with($line, 'TINY_CLIENT_SECRET=')) {
-            $clientSecret = explode('=', $line, 2)[1] ?? '';
+            $clientSecret = trim((string)(explode('=', $line, 2)[1] ?? ''), " \t\n\r\0\x0B\"'");
         }
     }
 }
-
-// ============================================================
-// PASSO 1: Verificar erro ou código
-// ============================================================
 
 $error = $_GET['error'] ?? null;
 $code = $_GET['code'] ?? null;
@@ -48,8 +43,8 @@ $code = $_GET['code'] ?? null;
 if ($error) {
     http_response_code(400);
     echo json_encode([
-        'erro' => 'Autorização negada',
-        'detalhes' => $_GET['error_description'] ?? $error,
+        'erro' => 'Autorizacao negada',
+        'oauth_error' => preg_replace('/[^a-z0-9_\-]/i', '', (string)$error),
     ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
     exit;
 }
@@ -57,15 +52,19 @@ if ($error) {
 if (!$code) {
     http_response_code(400);
     echo json_encode([
-        'erro' => 'Código não recebido',
-        'acao' => 'Clique no link de login novamente',
+        'erro' => 'Codigo nao recebido',
+        'acao' => 'Inicie a autorizacao novamente.',
     ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
     exit;
 }
 
-// ============================================================
-// PASSO 2: Trocar código por token
-// ============================================================
+if (strlen($clientId) < 16 || strlen($clientSecret) < 16) {
+    http_response_code(503);
+    echo json_encode([
+        'erro' => 'Credenciais do aplicativo Olist nao configuradas no runtime privado.',
+    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    exit;
+}
 
 $configuredRedirectUri = getenv('OLIST_REDIRECT_URI') ?: getenv('URL_REDIRCT_OLIST') ?: getenv('TINY_REDIRECT_URI') ?: '';
 $redirectHost = strtolower((string)(parse_url($configuredRedirectUri, PHP_URL_HOST) ?: ''));
@@ -78,94 +77,141 @@ $postData = http_build_query([
     'grant_type' => 'authorization_code',
     'client_id' => $clientId,
     'client_secret' => $clientSecret,
-    'code' => $code,
+    'code' => (string)$code,
     'redirect_uri' => $redirectUri,
-]);
+], '', '&', PHP_QUERY_RFC3986);
 
 $context = stream_context_create([
     'http' => [
         'method' => 'POST',
-        'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
+        'header' => "Content-Type: application/x-www-form-urlencoded\r\nAccept: application/json\r\n",
         'content' => $postData,
         'timeout' => 30,
+        'ignore_errors' => true,
     ],
-    'https' => [
-        'method' => 'POST',
-        'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
-        'content' => $postData,
-        'timeout' => 30,
-    ]
 ]);
 
 $response = @file_get_contents($tokenUrl, false, $context);
+$tokenData = is_string($response) ? json_decode($response, true) : null;
 
-if (!$response) {
-    http_response_code(500);
-    echo json_encode([
-        'erro' => 'Falha ao conectar com servidor OAuth',
-        'endpoint' => $tokenUrl,
-    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-    exit;
-}
-
-$tokenData = json_decode($response, true);
-
-if (!isset($tokenData['access_token'])) {
+if (!is_array($tokenData) || !isset($tokenData['access_token'])) {
+    $oauthError = is_array($tokenData) ? (string)($tokenData['error'] ?? '') : '';
     http_response_code(401);
     echo json_encode([
         'erro' => 'Falha ao trocar codigo por token',
-        'detalhes_oauth' => $tokenData,
+        'oauth_error' => preg_replace('/[^a-z0-9_\-]/i', '', $oauthError),
     ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
     exit;
 }
 
-// ============================================================
-// PASSO 3: Salvar tokens em .env
-// ============================================================
+$accessToken = trim((string)$tokenData['access_token']);
+$refreshToken = trim((string)($tokenData['refresh_token'] ?? ''));
+$expiresIn = max(0, (int)($tokenData['expires_in'] ?? 0));
 
-$accessToken = $tokenData['access_token'];
-$refreshToken = $tokenData['refresh_token'] ?? '';
-$expiresIn = $tokenData['expires_in'] ?? 14400;
+if ($accessToken === '' || $refreshToken === '') {
+    http_response_code(502);
+    echo json_encode([
+        'erro' => 'Resposta OAuth incompleta: access/refresh token obrigatorios.',
+    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    exit;
+}
 
-$envContent = is_file($envFile) ? file_get_contents($envFile) : '';
-
+$envContent = is_file($envFile) ? (string)file_get_contents($envFile) : '';
 $replacements = [
     'OLIST_ACCESS_TOKEN' => $accessToken,
     'OLIST_REFRESH_TOKEN' => $refreshToken,
     'TINY_ACCESS_TOKEN' => $accessToken,
     'TINY_REFRESH_TOKEN' => $refreshToken,
+    'TOKEN_API_OLIST' => $accessToken,
 ];
 
 foreach ($replacements as $key => $value) {
     $pattern = '/^' . preg_quote($key, '/') . '=.*/m';
     if (preg_match($pattern, $envContent)) {
-        $envContent = preg_replace($pattern, $key . '=' . $value, $envContent);
+        $envContent = (string)preg_replace($pattern, $key . '=' . $value, $envContent);
     } else {
-        $envContent .= "\n$key=$value";
+        $envContent .= ($envContent !== '' && !str_ends_with($envContent, "\n") ? "\n" : '') . $key . '=' . $value . "\n";
     }
 }
 
-$written = file_put_contents($envFile, $envContent);
-
-if ($written === false) {
+$envDir = dirname($envFile);
+$envTmp = tempnam($envDir, '.olist-env-');
+if ($envTmp === false) {
     http_response_code(500);
-    echo json_encode([
-        'erro' => 'Token obtido do Tiny mas falha ao gravar em .env (verifique permissao de escrita para o usuario do PHP)',
-    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    echo json_encode(['erro' => 'Falha ao preparar persistencia OAuth.'], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    exit;
+}
+try {
+    if (file_put_contents($envTmp, $envContent, LOCK_EX) === false) {
+        throw new RuntimeException('env_write_failed');
+    }
+    $mode = is_file($envFile) ? (fileperms($envFile) & 0777) : 0640;
+    @chmod($envTmp, $mode ?: 0640);
+    if (!@rename($envTmp, $envFile)) {
+        throw new RuntimeException('env_replace_failed');
+    }
+} catch (Throwable) {
+    @unlink($envTmp);
+    http_response_code(500);
+    echo json_encode(['erro' => 'Token obtido, mas falhou a persistencia privada.'], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
     exit;
 }
 
-// ============================================================
-// SUCESSO!
-// ============================================================
+// Mantem o daemon e o runtime PHP no mesmo estado rotativo. O diretorio e
+// provisionado pelo servico Olist com grupo www-data; se ainda nao estiver
+// disponivel, o .env salvo acima continua sendo a fonte de recuperacao.
+$tokenStorePath = getenv('SHOPVIVALIZ_OLIST_TOKEN_FILE');
+if (!is_string($tokenStorePath) || trim($tokenStorePath) === '') {
+    $tokenStorePath = PHP_OS_FAMILY === 'Windows'
+        ? dirname(__DIR__) . '/storage/private/olist-tokens.json'
+        : '/home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json';
+}
+$tokenStorePath = trim($tokenStorePath);
+$tokenStoreDir = dirname($tokenStorePath);
+$tokenStoreSaved = false;
+if (is_dir($tokenStoreDir) && is_writable($tokenStoreDir)) {
+    $store = [];
+    if (is_file($tokenStorePath) && is_readable($tokenStorePath)) {
+        $decodedStore = json_decode((string)file_get_contents($tokenStorePath), true);
+        if (is_array($decodedStore)) {
+            $store = $decodedStore;
+        }
+    }
+    $store['OLIST_ACCESS_TOKEN'] = $accessToken;
+    $store['TINY_ACCESS_TOKEN'] = $accessToken;
+    $store['OLIST_REFRESH_TOKEN'] = $refreshToken;
+    $store['TINY_REFRESH_TOKEN'] = $refreshToken;
+    $store['updated_at'] = gmdate('c');
+    if ($expiresIn > 0) {
+        $expiresAt = time() + $expiresIn;
+        $store['expires_in'] = $expiresIn;
+        $store['expires_at_epoch'] = $expiresAt;
+        $store['expires_at'] = gmdate('c', $expiresAt);
+    }
+    $storePayload = json_encode($store, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (is_string($storePayload)) {
+        $storeTmp = tempnam($tokenStoreDir, '.olist-token-');
+        if ($storeTmp !== false) {
+            if (file_put_contents($storeTmp, $storePayload . PHP_EOL, LOCK_EX) !== false) {
+                @chmod($storeTmp, 0660);
+                $tokenStoreSaved = @rename($storeTmp, $tokenStorePath);
+                if ($tokenStoreSaved) {
+                    @chmod($tokenStorePath, 0660);
+                }
+            }
+            if (is_file($storeTmp)) {
+                @unlink($storeTmp);
+            }
+        }
+    }
+}
 
 http_response_code(200);
 echo json_encode([
     'sucesso' => true,
-    'mensagem' => 'Token V3 obtido e salvo com sucesso!',
-    'access_token' => substr($accessToken, 0, 50) . '...',
-    'expires_in_horas' => round($expiresIn / 3600, 1),
-    'arquivo_atualizado' => '.env',
-    'proximo_passo' => 'Acesse https://shopvivaliz.com.br/olist/test-token-v3.php para testar',
+    'mensagem' => 'OAuth Olist ativado e salvo com sucesso.',
+    'token_salvo' => true,
+    'token_store_sincronizado' => $tokenStoreSaved,
+    'refresh_preventivo' => true,
+    'refresh_margin_seconds' => 1800,
 ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-?>
