@@ -14,21 +14,22 @@ function sv_image_v3_assert(bool $condition, string $message): void
 
 $guard = file_get_contents($root . '/includes/admin-guard.php');
 $ui = file_get_contents($root . '/admin/assets/image-generation-workflow.js');
+$healthUi = file_get_contents($root . '/admin/assets/image-provider-health.js');
+$healthApi = file_get_contents($root . '/admin/ai-image-studio/api/provider_health_check.php');
 $statusApi = file_get_contents($root . '/admin/ai-image-studio/api/generation_status.php');
 $pendingApi = file_get_contents($root . '/admin/ai-image-studio/api/pending_candidates.php');
 $enqueueApi = file_get_contents($root . '/admin/ai-image-studio/api/enqueue_generation.php');
 
-sv_image_v3_assert(is_string($guard) && $guard !== '', 'admin-guard.php precisa existir');
-sv_image_v3_assert(is_string($ui) && $ui !== '', 'workflow unificado de imagem precisa existir');
-sv_image_v3_assert(is_string($statusApi) && $statusApi !== '', 'API de andamento da fila precisa existir');
-sv_image_v3_assert(is_string($pendingApi) && $pendingApi !== '', 'API de candidatos precisa existir');
-sv_image_v3_assert(is_string($enqueueApi) && $enqueueApi !== '', 'API de enfileiramento precisa existir');
+foreach (compact('guard', 'ui', 'healthUi', 'healthApi', 'statusApi', 'pendingApi', 'enqueueApi') as $name => $content) {
+    sv_image_v3_assert(is_string($content) && $content !== '', "{$name} precisa existir e ter conteúdo");
+}
 
 sv_image_v3_assert(
     str_contains($guard, 'image-generation-workflow.js')
+    && str_contains($guard, 'image-provider-health.js')
     && !str_contains($guard, 'ai-image-studio-workflow.js')
     && !str_contains($guard, 'ai-routines-hotfix-ui.js'),
-    'Image Studio deve ter um unico controlador ativo, sem empilhar controladores antigos'
+    'Image Studio deve ter um unico controlador ativo e apenas um complemento diagnostico'
 );
 sv_image_v3_assert(
     str_contains($ui, '/api/pending_candidates.php')
@@ -61,6 +62,25 @@ sv_image_v3_assert(
     && str_contains($ui, 'recommended_types')
     && str_contains($ui, 'Usar recomendação inteligente do canal'),
     'UI deve oferecer plano visual e regeneracao orientados pelo canal'
+);
+sv_image_v3_assert(
+    str_contains($healthUi, 'Validar IAs')
+    && str_contains($healthUi, '/api/provider_health_check.php')
+    && str_contains($healthUi, 'working_key_count'),
+    'Dashboard deve oferecer preflight explicito dos provedores sem gerar imagem'
+);
+sv_image_v3_assert(
+    str_contains($healthApi, 'ais_health_probe_pool')
+    && str_contains($healthApi, 'working_key_count')
+    && str_contains($healthApi, "foreach (['claude', 'groq'] as \$optimizer)")
+    && str_contains($healthApi, "'has_visual_editor' => \$hasEditor"),
+    'Preflight deve validar todo o pool e exigir editor visual para Claude/Groq'
+);
+sv_image_v3_assert(
+    str_contains($healthApi, 'ais_health_sanitize')
+    && str_contains($healthApi, 'Bearer [redacted]')
+    && str_contains($healthApi, 'refresh_token'),
+    'Preflight nao pode devolver segredo em erro de chave, rede ou capacidade'
 );
 sv_image_v3_assert(
     str_contains($ui, 'Comparar foto real e imagem gerada')
@@ -121,4 +141,4 @@ sv_image_v3_assert(
     'Enfileiramento deve deduplicar somente pedidos equivalentes e continuar fail-closed sem foto real valida'
 );
 
-fwrite(STDOUT, "COMPROVADO: Image Studio possui controlador unico, consultas em lote, fila precisa por variante e revisao humana segura.\n");
+fwrite(STDOUT, "COMPROVADO: Image Studio possui controlador unico, preflight dos pools, consultas em lote, fila precisa por variante e revisao humana segura.\n");
