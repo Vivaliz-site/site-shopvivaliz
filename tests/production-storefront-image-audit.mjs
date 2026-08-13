@@ -39,14 +39,46 @@ try {
 
   await page.waitForSelector('.product-card .product-image img', { timeout: 45_000 });
 
-  // Trigger native lazy-loading for every visible catalog card.
-  const documentHeight = await page.evaluate(() => document.documentElement.scrollHeight);
-  for (let y = 0; y <= documentHeight; y += 650) {
-    await page.evaluate((scrollY) => window.scrollTo(0, scrollY), y);
-    await page.waitForTimeout(220);
+  // Trigger native lazy-loading across the full catalog. Recompute the document
+  // height on every pass because cards/images can increase it while rendering.
+  let previousHeight = 0;
+  for (let pass = 0; pass < 3; pass += 1) {
+    const documentHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+    for (let y = 0; y <= documentHeight; y += 650) {
+      await page.evaluate((scrollY) => window.scrollTo(0, scrollY), y);
+      await page.waitForTimeout(250);
+    }
+    if (documentHeight === previousHeight) break;
+    previousHeight = documentHeight;
   }
+
+  // Some browsers do not start a native lazy image until that exact element is
+  // intersected. Visit every still-incomplete image individually, then wait for
+  // either load/error completion. The final assertions remain strict: zero
+  // incomplete and zero broken product images are required.
+  const imageCount = await page.locator('.product-card .product-image img').count();
+  for (let index = 0; index < imageCount; index += 1) {
+    const image = page.locator('.product-card .product-image img').nth(index);
+    const complete = await image.evaluate((img) => img instanceof HTMLImageElement && img.complete);
+    if (complete) continue;
+    await image.scrollIntoViewIfNeeded();
+    try {
+      await page.waitForFunction(
+        (position) => {
+          const images = Array.from(document.querySelectorAll('.product-card .product-image img'));
+          const img = images[position];
+          return img instanceof HTMLImageElement && img.complete;
+        },
+        index,
+        { timeout: 15_000 },
+      );
+    } catch {
+      // Keep the image incomplete so the strict assertion below reports it.
+    }
+  }
+
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.waitForTimeout(3_000);
+  await page.waitForTimeout(1_000);
 
   metrics = await page.evaluate(() => {
     const cards = Array.from(document.querySelectorAll('.product-card'));
@@ -106,6 +138,8 @@ try {
     fallbackWithinLimit: metrics.fallbackProductImages <= maxFallback,
     noBrokenProductImages: metrics.brokenProductImages === 0,
     noIncompleteProductImages: metrics.incompleteProductImages === 0,
+    noImageHttpFailures: metrics.imageHttpFailureCount === 0,
+    noImageRequestFailures: metrics.imageRequestFailureCount === 0,
   };
   metrics.assertions = assertions;
   metrics.ok = Object.values(assertions).every(Boolean);
