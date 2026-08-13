@@ -634,10 +634,11 @@ def optimize_item(ml: ML, client, item_id: str, apply: bool, research: bool = Tr
     result["keywords"] = proposal.get("keywords")
     result["ai_notes"] = proposal.get("notes")
 
-    payload: dict = {}
+    # O titulo nao vai no PUT (campo travado pelo family_name); fica como recomendacao.
     if title and norm(title) != norm(item.get("title") or ""):
-        payload["title"] = title
-        result["changes"]["title"] = {"de": item.get("title"), "para": title}
+        result["suggested_title"] = {"atual": item.get("title"), "sugerido": title}
+
+    payload: dict = {}
     if attributes:
         payload["attributes"] = attributes
         result["changes"]["attributes"] = attributes
