@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Otimizador inteligente de títulos para Shopee.
-- Tenta usar API se tokens estiverem disponíveis
-- Fallback para browser automation se necessário
+Otimizador inteligente de titulos para Shopee.
+- Tenta usar API se tokens estiverem disponiveis
+- Fallback para browser automation se necessario
 """
 import argparse
 import sys
 import json
 import os
 from pathlib import Path
+
+# Garantir UTF-8 no Windows
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
