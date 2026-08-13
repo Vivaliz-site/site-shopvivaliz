@@ -80,6 +80,38 @@ function ais_enqueue_request_signature(string $provider, array $imageTypes, stri
     ], JSON_UNESCAPED_SLASHES) ?: '');
 }
 
+function ais_enqueue_lock_name(int $productId, string $targetChannel, string $provider, array $imageTypes, string $model): string
+{
+    $signature = hash('sha256', implode('|', [
+        (string)$productId,
+        strtolower(trim($targetChannel)),
+        ais_enqueue_request_signature($provider, $imageTypes, $model),
+    ]));
+    return 'aiimg_' . substr($signature, 0, 56);
+}
+
+function ais_enqueue_acquire_lock(PDO $db, string $lockName): bool
+{
+    try {
+        $stmt = $db->prepare('SELECT GET_LOCK(?, 10)');
+        $stmt->execute([$lockName]);
+        return (int)$stmt->fetchColumn() === 1;
+    } catch (Throwable $e) {
+        error_log('[ai-image-studio] lock de deduplicacao indisponivel: ' . $e->getMessage());
+        return false;
+    }
+}
+
+function ais_enqueue_release_lock(PDO $db, string $lockName): void
+{
+    try {
+        $stmt = $db->prepare('SELECT RELEASE_LOCK(?)');
+        $stmt->execute([$lockName]);
+    } catch (Throwable $e) {
+        error_log('[ai-image-studio] falha ao liberar lock de deduplicacao: ' . $e->getMessage());
+    }
+}
+
 /** @return array<string,mixed>|null */
 function ais_enqueue_existing_job(
     int $productId,
@@ -196,104 +228,119 @@ if ($providers === []) {
     exit;
 }
 
-$existing = ais_enqueue_existing_job($productId, $targetChannel, $provider, $imageTypes, $model);
-if (is_array($existing) && (int)($existing['id'] ?? 0) > 0) {
-    http_response_code(202);
-    echo json_encode([
-        'success' => true,
-        'queued' => true,
-        'deduplicated' => true,
-        'job_id' => (int)$existing['id'],
-        'job_status' => (string)$existing['status'],
-        'product_id' => $productId,
-        'provider_requested' => $provider,
-        'provider_in_queue' => (string)($existing['provider'] ?? ''),
-        'target_channel' => $targetChannel,
-        'image_types' => (array)($existing['image_types'] ?? []),
-        'model' => (string)($existing['model'] ?? ''),
-        'message' => 'Uma geracao equivalente ja esta em andamento; a fila existente foi reutilizada sem descartar variantes novas.',
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    exit;
-}
-
-$baseImagePath = null;
-$baseImageIsTemp = false;
-$imageSource = '';
-$sourceErrors = [];
-foreach (ais_enqueue_image_candidates($db, $product, $projectRoot) as $candidate) {
-    try {
-        $baseImagePath = ai_studio_resolve_base_image($candidate, $projectRoot, $productId);
-        $baseImageIsTemp = str_starts_with($baseImagePath, AI_STUDIO_BASE_IMAGE_TMP_DIR);
-        $imageSource = $candidate;
-        break;
-    } catch (Throwable $e) {
-        $sourceErrors[] = $e->getMessage();
-    }
-}
-
-if (!is_string($baseImagePath) || $baseImagePath === '') {
-    if ($sourceErrors !== []) {
-        error_log('[ai-image-studio] Nenhuma fonte visual valida para produto #' . $productId . ': ' . (string)end($sourceErrors));
-    }
-    http_response_code(422);
+$lockName = ais_enqueue_lock_name($productId, $targetChannel, $provider, $imageTypes, $model);
+if (!ais_enqueue_acquire_lock($db, $lockName)) {
+    http_response_code(409);
     echo json_encode([
         'success' => false,
-        'error' => 'Nenhuma foto real valida foi encontrada. Sincronize a galeria do ERP/Tiny ou corrija a foto principal.',
+        'error' => 'Outra solicitacao equivalente esta sendo criada. Aguarde alguns segundos e atualize o andamento.',
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
-$product['image_ref'] = $imageSource;
-$prompts = ai_studio_default_prompts((string)$product['name'], $targetChannel, $product);
+$responseCode = 500;
+$response = ['success' => false, 'error' => 'Nao foi possivel enfileirar a geracao.'];
+$baseImagePath = null;
+$baseImageIsTemp = false;
 
 try {
-    $jobId = sv_queue_enqueue('ai_image_studio.process_item', [
-        'product_id' => $productId,
-        'provider' => $provider,
-        'image_types' => $imageTypes,
-        'model_override' => $model !== '' ? $model : null,
-        'target_channel' => $targetChannel,
-        'product' => $product,
-        'prompts' => $prompts,
-        'base_image_path' => $baseImagePath,
-        'base_image_is_temp' => $baseImageIsTemp,
-        'requested_at' => gmdate(DATE_ATOM),
-    ], 25);
+    // A leitura e a insercao ficam dentro do mesmo lock nomeado. Assim dois
+    // POSTs concorrentes para a mesma assinatura nao podem observar ausencia
+    // simultaneamente e criar jobs duplicados.
+    $existing = ais_enqueue_existing_job($productId, $targetChannel, $provider, $imageTypes, $model);
+    if (is_array($existing) && (int)($existing['id'] ?? 0) > 0) {
+        $responseCode = 202;
+        $response = [
+            'success' => true,
+            'queued' => true,
+            'deduplicated' => true,
+            'job_id' => (int)$existing['id'],
+            'job_status' => (string)$existing['status'],
+            'product_id' => $productId,
+            'provider_requested' => $provider,
+            'provider_in_queue' => (string)($existing['provider'] ?? ''),
+            'target_channel' => $targetChannel,
+            'image_types' => (array)($existing['image_types'] ?? []),
+            'model' => (string)($existing['model'] ?? ''),
+            'message' => 'Uma geracao equivalente ja esta em andamento; a fila existente foi reutilizada.',
+        ];
+    } else {
+        $imageSource = '';
+        $sourceErrors = [];
+        foreach (ais_enqueue_image_candidates($db, $product, $projectRoot) as $candidate) {
+            try {
+                $baseImagePath = ai_studio_resolve_base_image($candidate, $projectRoot, $productId);
+                $baseImageIsTemp = str_starts_with($baseImagePath, AI_STUDIO_BASE_IMAGE_TMP_DIR);
+                $imageSource = $candidate;
+                break;
+            } catch (Throwable $e) {
+                $sourceErrors[] = $e->getMessage();
+            }
+        }
 
-    sv_log('ai_image_studio_job_enqueued_resilient', 'queue', [
-        'job_id' => $jobId,
-        'product_id' => $productId,
-        'provider' => $provider,
-        'target_channel' => $targetChannel,
-        'types' => $imageTypes,
-        'source' => preg_match('~^https?://~i', $imageSource) ? 'remote' : 'local',
-    ]);
+        if (!is_string($baseImagePath) || $baseImagePath === '') {
+            if ($sourceErrors !== []) {
+                error_log('[ai-image-studio] Nenhuma fonte visual valida para produto #' . $productId . ': ' . (string)end($sourceErrors));
+            }
+            $responseCode = 422;
+            $response = [
+                'success' => false,
+                'error' => 'Nenhuma foto real valida foi encontrada. Sincronize a galeria do ERP/Tiny ou corrija a foto principal.',
+            ];
+        } else {
+            $product['image_ref'] = $imageSource;
+            $prompts = ai_studio_default_prompts((string)$product['name'], $targetChannel, $product);
+            $jobId = sv_queue_enqueue('ai_image_studio.process_item', [
+                'product_id' => $productId,
+                'provider' => $provider,
+                'image_types' => $imageTypes,
+                'model_override' => $model !== '' ? $model : null,
+                'target_channel' => $targetChannel,
+                'product' => $product,
+                'prompts' => $prompts,
+                'base_image_path' => $baseImagePath,
+                'base_image_is_temp' => $baseImageIsTemp,
+                'requested_at' => gmdate(DATE_ATOM),
+            ], 25);
 
-    http_response_code(202);
-    echo json_encode([
-        'success' => true,
-        'queued' => true,
-        'deduplicated' => false,
-        'job_id' => $jobId,
-        'job_status' => 'queued',
-        'product_id' => $productId,
-        'provider_requested' => $provider,
-        'provider_role' => in_array($provider, ['groq', 'claude'], true) ? 'prompt_optimizer_plus_visual_editor' : 'visual_editor',
-        'provider_candidates' => $providers,
-        'target_channel' => $targetChannel,
-        'image_types' => $imageTypes,
-        'recommended_types' => ai_studio_channel_recommended_types($targetChannel),
-        'queue' => function_exists('sv_queue_summary') ? sv_queue_summary() : null,
-        'message' => 'Produto enfileirado. A tela pode acompanhar o status sem perder a selecao.',
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            sv_log('ai_image_studio_job_enqueued_resilient', 'queue', [
+                'job_id' => $jobId,
+                'product_id' => $productId,
+                'provider' => $provider,
+                'target_channel' => $targetChannel,
+                'types' => $imageTypes,
+                'source' => preg_match('~^https?://~i', $imageSource) ? 'remote' : 'local',
+            ]);
+
+            $responseCode = 202;
+            $response = [
+                'success' => true,
+                'queued' => true,
+                'deduplicated' => false,
+                'job_id' => $jobId,
+                'job_status' => 'queued',
+                'product_id' => $productId,
+                'provider_requested' => $provider,
+                'provider_role' => in_array($provider, ['groq', 'claude'], true) ? 'prompt_optimizer_plus_visual_editor' : 'visual_editor',
+                'provider_candidates' => $providers,
+                'target_channel' => $targetChannel,
+                'image_types' => $imageTypes,
+                'recommended_types' => ai_studio_channel_recommended_types($targetChannel),
+                'queue' => function_exists('sv_queue_summary') ? sv_queue_summary() : null,
+                'message' => 'Produto enfileirado. A tela pode acompanhar o status sem perder a selecao.',
+            ];
+        }
+    }
 } catch (Throwable $e) {
     if ($baseImageIsTemp && is_string($baseImagePath) && is_file($baseImagePath)) {
         @unlink($baseImagePath);
     }
     error_log('[ai-image-studio] Falha ao enfileirar produto #' . $productId . ': ' . $e->getMessage());
-    http_response_code(500);
-    echo json_encode([
-        'success' => false,
-        'error' => 'Nao foi possivel enfileirar a geracao.',
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $responseCode = 500;
+    $response = ['success' => false, 'error' => 'Nao foi possivel enfileirar a geracao.'];
+} finally {
+    ais_enqueue_release_lock($db, $lockName);
 }
+
+http_response_code($responseCode);
+echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
