@@ -17,6 +17,18 @@ for (const [needle, label] of [
   if (!source.includes(needle)) throw new Error(`source_guard_missing:${label}`);
 }
 
+const aliasSource = fs.readFileSync('js/category-real-images-v52.js', 'utf8');
+for (const [needle, label] of [
+  ['/api/catalog/category-images.php', 'endpoint real de categorias'],
+  ["'organizacao':'armarios e organizacao'", 'alias de organizacao'],
+  ['__svCategoryAliasRepairDone', 'marcador de conclusao'],
+]) {
+  if (!aliasSource.includes(needle)) throw new Error(`alias_source_guard_missing:${label}`);
+}
+if (/s3\.amazonaws\.com\/tiny-anexos-us/i.test(aliasSource)) {
+  throw new Error('alias_source_guard_historical_urls');
+}
+
 const browser = await chromium.launch({ headless: true });
 
 async function audit(name, viewport, isMobile = false, route = '/') {
@@ -29,11 +41,10 @@ async function audit(name, viewport, isMobile = false, route = '/') {
   });
   const page = await context.newPage();
 
-  // Executa a versao da branch antes de qualquer script da pagina. Isso evita
-  // bloqueio por CSP de uma <script> injetada tardiamente e garante que o guard
-  // global faca a versao de producao ceder lugar ao codigo em revisao.
   if (injectBranchScript) {
+    await page.route('**/js/category-real-images-v52.js*', (routeHandle) => routeHandle.abort());
     await page.addInitScript({ path: path.resolve('js/public-experience-v1.js') });
+    await page.addInitScript({ path: path.resolve('js/category-real-images-v52.js') });
   }
 
   const response = await page.goto(`${baseUrl}${route}`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
@@ -43,18 +54,12 @@ async function audit(name, viewport, isMobile = false, route = '/') {
   }
   await page.waitForSelector('.home-categories .category-slide img.category-slide-img', { timeout: 45_000 });
 
-  // Tanto na PR (script injetado) quanto no audit pos-deploy, esperamos a
-  // selecao terminar. Em producao isso tambem prova que o JS implantado esta
-  // ativo, em vez de validar apenas o HTML server-side anterior.
+  await page.waitForFunction(() => window.__svCategoryAliasRepairDone === true, { timeout: 45_000 });
   await page.waitForFunction(() => {
     const images = Array.from(document.querySelectorAll('.home-categories img.category-slide-img'));
     return images.length >= 5 && images.every((img) => img instanceof HTMLImageElement && !!img.dataset.svCategorySource);
   }, { timeout: 45_000 });
 
-  // As imagens da home sao corretamente lazy no site real. No auditor, primeiro
-  // levamos a secao para a viewport e depois mudamos apenas os elementos da
-  // pagina de teste para eager; assim a assercao mede URL/arquivo quebrado, nao
-  // o comportamento normal de lazy loading fora da viewport horizontal.
   await page.locator('.home-categories').scrollIntoViewIfNeeded();
   await page.evaluate(() => {
     document.querySelectorAll('.home-categories img.category-slide-img').forEach((img) => {
