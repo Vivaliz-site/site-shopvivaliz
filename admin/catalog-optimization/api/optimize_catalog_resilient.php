@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../../includes/admin-guard.php';
 require_once __DIR__ . '/optimize_catalog.php';
+require_once __DIR__ . '/../src/CatalogGeneratedDataNormalizer.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -87,6 +88,11 @@ function catalog_resilient_quality_is_better(array $candidate, array $current): 
  * como tarefa editorial: se o provedor nao conseguir corrigir, o chamador
  * descarta essa saida e tenta o proximo provedor.
  *
+ * Antes de avaliar cada nova tentativa, invariantes objetivos sao normalizados
+ * deterministicamente (identidade do titulo, claims nao comprovados, limites
+ * de meta/bullets/hooks). Assim nao gastamos chamadas de IA para corrigir algo
+ * que o proprio sistema consegue garantir sem inventar fatos.
+ *
  * @return array{data:array<string,mixed>,quality:array<string,mixed>,refined:bool,initial_score:int,attempts:int}
  */
 function catalog_resilient_refine_quality(
@@ -121,7 +127,7 @@ function catalog_resilient_refine_quality(
             . ": o rascunho atual recebeu score {$score}/100."
             . ($issues !== [] ? " Corrija especificamente estes checks: " . implode(', ', $issues) . '.' : '')
             . "\nREGRA DE SAIDA: nenhum check HARD pode permanecer reprovado. Se houver conflito entre estilo e fatos, preserve os fatos e ajuste a redacao/estrutura."
-            . "\nMantenha somente fatos comprovados na origem. Nao invente atributos, beneficios, compatibilidade, garantia ou condicoes comerciais."
+            . "\nMantenha somente fatos comprovados na origem. Nao invente atributos, beneficios, compatibilidade, garantia, originalidade ou condicoes comerciais."
             . "\nResponda novamente com o JSON COMPLETO no mesmo contrato, corrigindo tamanho, identidade, repeticao, estrutura e politica do canal."
             . "\nRASCUNHO ATUAL PARA CORRIGIR:\n" . $previous;
 
@@ -131,6 +137,9 @@ function catalog_resilient_refine_quality(
                 ai_catalog_build_system_prompt($channel),
                 $refinementPrompt
             );
+            if (is_array($candidate)) {
+                $candidate = catalog_generated_normalize($candidate, $channel, $product);
+            }
             if (!is_array($candidate) || catalog_resilient_structure_errors($candidate) !== []) {
                 continue;
             }
@@ -212,6 +221,12 @@ foreach ($providers as $resolvedProvider) {
             ai_catalog_build_system_prompt($channel),
             $userPrompt
         );
+        $normalizationApplied = false;
+        if (is_array($data)) {
+            $rawData = $data;
+            $data = catalog_generated_normalize($data, $channel, $product);
+            $normalizationApplied = $data !== $rawData;
+        }
         $structureErrors = is_array($data) ? catalog_resilient_structure_errors($data) : ['resposta nao retornou um objeto de catalogo'];
 
         if ($structureErrors !== []) {
@@ -221,6 +236,11 @@ foreach ($providers as $resolvedProvider) {
                 ai_catalog_build_system_prompt($channel),
                 $retryPrompt
             );
+            if (is_array($data)) {
+                $rawRetryData = $data;
+                $data = catalog_generated_normalize($data, $channel, $product);
+                $normalizationApplied = $normalizationApplied || $data !== $rawRetryData;
+            }
             $structureErrors = is_array($data) ? catalog_resilient_structure_errors($data) : ['resposta nao retornou um objeto de catalogo'];
         }
 
@@ -270,7 +290,9 @@ foreach ($providers as $resolvedProvider) {
             $quality
         );
 
-        $status = $refinement['refined'] ? 'generated_after_auto_repair' : 'generated';
+        $status = $refinement['refined']
+            ? 'generated_after_auto_repair'
+            : ($normalizationApplied ? 'generated_after_deterministic_repair' : 'generated');
         ai_catalog_provider_audit_log($resolvedProvider, $channel, 'ok', $status, $productId);
 
         echo json_encode([
@@ -282,6 +304,7 @@ foreach ($providers as $resolvedProvider) {
             'staging_id' => $stagingId,
             'quality_score' => (int)$quality['score'],
             'quality_initial_score' => (int)$refinement['initial_score'],
+            'quality_normalized' => $normalizationApplied,
             'quality_refined' => (bool)$refinement['refined'],
             'quality_refinement_attempts' => (int)$refinement['attempts'],
             'needs_review' => $softWarnings !== [],
@@ -289,7 +312,9 @@ foreach ($providers as $resolvedProvider) {
             'soft_warnings' => $softWarnings,
             'message' => $refinement['refined']
                 ? 'Conteudo corrigido automaticamente pela IA, aprovado no quality gate e pronto para aprovacao.'
-                : 'Conteudo aprovado no quality gate e pronto para aprovacao.',
+                : ($normalizationApplied
+                    ? 'Conteudo normalizado automaticamente, aprovado no quality gate e pronto para aprovacao.'
+                    : 'Conteudo aprovado no quality gate e pronto para aprovacao.'),
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     } catch (Throwable $e) {
