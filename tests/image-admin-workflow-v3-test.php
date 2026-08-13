@@ -98,11 +98,21 @@ sv_image_v3_assert(
     'Identidade visual deve ser requisito de revisao humana, nao afirmacao automatica'
 );
 sv_image_v3_assert(
-    str_contains($safetyUi, 'confirmacao humana ter')
+    str_contains($safetyUi, 'confirmacao humana')
     && str_contains($safetyUi, 'A confirmação não é preenchida automaticamente')
     && str_contains($safetyUi, 'iv-bulk-visual-review')
     && str_contains($safetyUi, "event.stopImmediatePropagation()"),
     'Publicacao individual e em lote deve exigir confirmacao visual humana explicita antes do handler de envio'
+);
+sv_image_v3_assert(
+    str_contains($safetyUi, "box.addEventListener('change', invalidate)")
+    && str_contains($safetyUi, 'checkbox.checked = false'),
+    'Confirmacao visual em lote deve ser invalidada sempre que a selecao mudar'
+);
+sv_image_v3_assert(
+    str_contains($safetyUi, "sessionStorage.setItem('ivModel'")
+    && str_contains($safetyUi, "event.target.id !== 'iv-provider'"),
+    'Troca de provedor deve persistir o modelo compativel atualizado'
 );
 sv_image_v3_assert(
     !str_contains($ui, 'Groq — prompt + editor visual')
@@ -129,6 +139,12 @@ sv_image_v3_assert(
     'Dashboard deve paginar polling acima de 100 jobs e recompor todos os resultados'
 );
 sv_image_v3_assert(
+    str_contains($safetyUi, 'const trackedJobs = new Map()')
+    && str_contains($safetyUi, 'setInterval(async () =>')
+    && str_contains($safetyUi, 'trackedJobs.clear()'),
+    'Monitor de longa duracao deve continuar consultando jobs ate todos terminarem'
+);
+sv_image_v3_assert(
     str_contains($statusApi, 'Bearer [redacted]')
     && str_contains($statusApi, 'refresh_token'),
     'Redacao deve cobrir headers Bearer e tokens em mensagens de erro'
@@ -143,8 +159,16 @@ sv_image_v3_assert(
     str_contains($statusApi, 'WHERE source_job_id = ? AND product_id = ?')
     && str_contains($schema, "'source_job_id'")
     && str_contains($worker, 'SET source_job_id = ?')
-    && str_contains($worker, 'correlacionar todos os resultados de staging ao job da fila'),
-    'Status deve correlacionar staging ao job exato, nunca por janela temporal produto/canal'
+    && str_contains($worker, 'beginTransaction()')
+    && str_contains($worker, 'commit()')
+    && str_contains($worker, 'correlacionar atomicamente todos os resultados de staging ao job da fila'),
+    'Staging deve ser correlacionado ao job exato dentro da mesma transacao para nao criar resultados publicaveis orfaos'
+);
+sv_image_v3_assert(
+    str_contains($worker, '$db = ai_studio_db();')
+    && str_contains($worker, 'if (!$db instanceof PDO)')
+    && str_contains($worker, 'rollBack()'),
+    'Worker de longa duracao deve renovar a conexao antes de cada job e reverter staging incompleto em erro'
 );
 sv_image_v3_assert(
     str_contains($statusApi, "throw new RuntimeException('Backend de fila indisponivel.'")
@@ -162,9 +186,16 @@ sv_image_v3_assert(
     && str_contains($enqueueApi, 'hash_equals($requestedSignature')
     && str_contains($enqueueApi, 'GET_LOCK(?, 10)')
     && str_contains($enqueueApi, 'RELEASE_LOCK(?)')
+    && !str_contains($enqueueApi, 'LIMIT 250')
     && str_contains($enqueueApi, 'ai_studio_resolve_base_image')
     && str_contains($enqueueApi, 'Nenhuma foto real valida foi encontrada'),
-    'Enfileiramento deve deduplicar pedidos equivalentes sob lock atomico e continuar fail-closed sem foto real valida'
+    'Enfileiramento deve deduplicar todos os jobs ativos equivalentes sob lock atomico e continuar fail-closed sem foto real valida'
+);
+sv_image_v3_assert(
+    str_contains($enqueueApi, 'cover_normalized_to_white')
+    && str_contains($safetyUi, 'STRICT_WHITE_CHANNELS')
+    && str_contains($safetyUi, "type === 'cover'"),
+    'Canais white-first devem normalizar novas capas para white e bloquear covers legadas na publicacao'
 );
 
-fwrite(STDOUT, "COMPROVADO: Image Studio possui controlador unico, lock atomico, polling paginado, correlacao por job e confirmacao visual humana.\n");
+fwrite(STDOUT, "COMPROVADO: Image Studio possui lock atomico, polling paginado e duravel, staging transacional e confirmacao visual humana.\n");
