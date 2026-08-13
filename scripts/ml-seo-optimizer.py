@@ -679,13 +679,16 @@ def main() -> int:
         target_ids = [i["id"] for i in select_targets(ml)]
     if args.limit:
         target_ids = target_ids[: args.limit]
-    log(f"[run] {'APLICANDO' if apply else 'DRY-RUN'} em {len(target_ids)} anuncios")
+    log(
+        f"[run] {'APLICANDO' if apply else 'DRY-RUN'} em {len(target_ids)} anuncios"
+        f" | pesquisa web: {'nao' if args.no_research else 'sim'}"
+    )
 
     results, done = [], [0]
 
     def work(item_id: str):
         try:
-            res = optimize_item(ml, client, item_id, apply)
+            res = optimize_item(ml, client, item_id, apply, research=not args.no_research)
         except Exception as exc:  # noqa: BLE001
             res = {"id": item_id, "status": "erro", "problems": [repr(exc)]}
         done[0] += 1
