@@ -14,12 +14,21 @@
     color: var(--muted);
     overflow-x: auto;
     white-space: nowrap;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
 }
+.progress-steps::-webkit-scrollbar { display: none; }
 
 .progress-steps .step { padding: 4px 10px; border-radius: 20px; }
 .progress-steps .step.active { background: var(--brand); color: #fff; }
 .progress-steps .step.done { color: var(--accent); }
 .step-arrow { color: var(--line); font-size: 18px; }
+
+/* Nao existe contrato de reserva de estoque no backend do checkout. O timer
+   legado criava urgencia artificial e podia induzir o cliente a acreditar que
+   o item estava efetivamente separado. Mantemos o markup temporariamente para
+   compatibilidade, mas ele nao deve ser exibido. */
+.checkout-timer-banner { display: none !important; }
 
 /* ── Checkout Cards ── */
 .checkout-card {
@@ -68,38 +77,61 @@
 .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .form-group { display: grid; gap: 6px; font-size: 14px; font-weight: 700; }
 .form-group input,
-.form-group textarea {
+.form-group textarea,
+.form-group select {
     width: 100%;
+    min-height: 44px;
     border: 1.5px solid var(--line);
     border-radius: 8px;
     padding: 11px 14px;
     font: inherit;
     font-size: 15px;
     color: var(--ink);
-    transition: border-color 0.15s;
+    background: #fff;
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
+.form-group textarea { min-height: 92px; resize: vertical; }
 .form-group input:focus,
-.form-group textarea:focus {
+.form-group textarea:focus,
+.form-group select:focus {
     outline: none;
     border-color: var(--brand);
     box-shadow: 0 0 0 3px rgba(17,102,216,0.12);
+}
+.form-group input:focus-visible,
+.form-group textarea:focus-visible,
+.form-group select:focus-visible {
+    outline: 3px solid rgba(53,199,89,.55);
+    outline-offset: 2px;
 }
 
 /* ── Payment Options ── */
 .payment-select-title { font-weight: 800; font-size: 14px; margin: 6px 0 10px; }
 .payment-options { display: grid; grid-template-columns: minmax(0, 320px); gap: 10px; }
-.payment-opt { cursor: pointer; }
-.payment-opt input[type=radio] { display: none; }
+.payment-opt { cursor: pointer; position: relative; }
+/* Nao usar display:none: o radio precisa permanecer focavel e operavel por
+   teclado/leitor de tela. O controle visual continua sendo o card adjacente. */
+.payment-opt input[type=radio] {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    opacity: 0;
+    pointer-events: none;
+    inset-inline-start: 0;
+    inset-block-start: 0;
+}
 .payment-opt-box {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 4px;
+    min-height: 104px;
     padding: 14px 10px;
     border: 1.5px solid var(--line);
     border-radius: 10px;
     text-align: center;
-    transition: all 0.15s;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.15s;
     font-size: 13px;
 }
 .payment-opt-box .pay-icon { font-size: 22px; }
@@ -109,12 +141,18 @@
     border-color: var(--brand);
     background: #eef4ff;
     color: var(--brand);
+    box-shadow: 0 0 0 2px rgba(17,102,216,.08);
+}
+.payment-opt input[type=radio]:focus-visible + .payment-opt-box {
+    outline: 3px solid #35c759;
+    outline-offset: 3px;
 }
 .payment-opt-box:hover { border-color: var(--brand); }
 
 /* ── Submit button ── */
 .btn-checkout {
     width: 100%;
+    min-height: 48px;
     padding: 15px;
     font-size: 16px;
     border-radius: 10px;
@@ -139,8 +177,11 @@
     text-decoration: none;
 }
 
-.checkout-support-inline a:hover {
-    text-decoration: underline;
+.checkout-support-inline a:hover { text-decoration: underline; }
+.checkout-support-inline a:focus-visible {
+    outline: 3px solid #35c759;
+    outline-offset: 3px;
+    border-radius: 4px;
 }
 
 /* ── Checkout Status ── */
@@ -167,7 +208,8 @@
 .summary-item-info span { display: block; font-size: 12px; color: var(--muted); margin-top: 3px; }
 
 .summary-totals { border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 8px; }
-.summary-row { display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+.summary-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; }
+.summary-row > :last-child { text-align: right; }
 .summary-total { font-size: 16px; font-weight: 800; margin-top: 4px; }
 
 /* ── Trust badges ── */
@@ -189,6 +231,8 @@
     padding: 36px 32px;
     max-width: 440px;
     width: 100%;
+    max-height: min(720px, calc(100vh - 32px));
+    overflow-y: auto;
     text-align: center;
     box-shadow: 0 20px 60px rgba(22,32,51,0.2);
 }
@@ -204,6 +248,7 @@
 }
 .pix-key-box span { flex: 1; font-family: monospace; font-size: 15px; word-break: break-all; }
 .btn-copy {
+    min-height: 44px;
     padding: 8px 14px; background: var(--brand); color: #fff;
     border: none; border-radius: 6px; font-weight: 700; font-size: 13px; cursor: pointer;
     white-space: nowrap;
@@ -221,4 +266,5 @@
     .payment-options { grid-template-columns: 1fr; }
     .checkout-card { padding: 18px; }
     .modal-box { padding: 28px 20px; }
+    .progress-steps { padding-inline: 2px; }
 }
