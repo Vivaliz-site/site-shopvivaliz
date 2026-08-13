@@ -152,10 +152,13 @@ jobs:
           : > "$log"
           cd "$repo"
           nohup bash -lc '
-            set +e
+            set -euo pipefail
             cd /home/ubuntu/mei-mg-email
-            flock -n /var/lock/mei-mg-email-hardening.lock bash scripts/deploy_hardening_20260813.sh >>"$1" 2>&1
-            rc=$?
+            if flock -n /var/lock/mei-mg-email-hardening.lock bash scripts/deploy_hardening_20260813.sh >>"$1" 2>&1; then
+              rc=0
+            else
+              rc=$?
+            fi
             printf "%s\n" "$rc" >"$2"
             exit "$rc"
           ' _ "$log" "$status_file" >/dev/null 2>&1 &
