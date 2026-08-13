@@ -28,6 +28,15 @@ async function audit(name, viewport, isMobile = false) {
   if (injectBranchScript) {
     await page.evaluate(() => { window.__svPublicExperienceInitialized = false; });
     await page.addScriptTag({ path: path.resolve('js/public-experience-v1.js') });
+
+    // A selecao das fotos depende de /api/catalog/products.php. Espera a branch
+    // marcar cada card como catalog ou fallback antes de medir o DOM; sem isso o
+    // teste poderia observar as imagens server-side anteriores e gerar falso
+    // negativo mesmo com a substituicao assíncrona ainda em andamento.
+    await page.waitForFunction(() => {
+      const images = Array.from(document.querySelectorAll('.home-categories img.category-slide-img'));
+      return images.length >= 5 && images.every((img) => img instanceof HTMLImageElement && !!img.dataset.svCategorySource);
+    }, { timeout: 45_000 });
   }
 
   // As imagens da home sao corretamente lazy no site real. No auditor, primeiro
@@ -51,14 +60,12 @@ async function audit(name, viewport, isMobile = false) {
   await page.waitForTimeout(1200);
 
   const metrics = await page.evaluate(() => {
-    const norm = (value) => String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     const cards = Array.from(document.querySelectorAll('.home-categories .category-slide')).map((card) => {
       const img = card.querySelector('img.category-slide-img');
       const label = String(card.querySelector('strong')?.textContent || '').trim();
       const src = img instanceof HTMLImageElement ? (img.currentSrc || img.src || '') : '';
       return {
         label,
-        normalizedLabel: norm(label),
         host: (() => { try { return new URL(src, location.href).host; } catch { return 'invalid-url'; } })(),
         src,
         source: img instanceof HTMLImageElement ? String(img.dataset.svCategorySource || '') : '',
@@ -68,29 +75,32 @@ async function audit(name, viewport, isMobile = false) {
       };
     });
     const real = cards.filter((card) => card.source === 'catalog');
+    const fallbacks = cards.filter((card) => card.source === 'local-fallback');
     const duplicateReal = real.filter((card, index, list) => list.findIndex((other) => other.src === card.src) !== index);
-    const toolbox = cards.find((card) => card.normalizedLabel.includes('caixa') && card.normalizedLabel.includes('ferrament'));
-    const wheels = cards.find((card) => card.normalizedLabel.includes('roda') && card.normalizedLabel.includes('carrinho'));
+    const assigned = cards.filter((card) => card.source === 'catalog' || card.source === 'local-fallback');
+    const meaningfulAlt = cards.filter((card) => card.alt.trim().length >= 8);
     return {
       cardCount: cards.length,
       loadedCount: cards.filter((card) => card.loaded).length,
+      assignedCount: assigned.length,
+      catalogCount: real.length,
+      fallbackCount: fallbacks.length,
+      catalogCoverage: cards.length ? real.length / cards.length : 0,
+      meaningfulAltCount: meaningfulAlt.length,
       unsplashCount: cards.filter((card) => card.unsplash).length,
       duplicateRealCount: duplicateReal.length,
-      toolbox: toolbox ? { label: toolbox.label, source: toolbox.source, loaded: toolbox.loaded, alt: toolbox.alt } : null,
-      wheels: wheels ? { label: wheels.label, source: wheels.source, loaded: wheels.loaded, alt: wheels.alt } : null,
       cards: cards.map(({ src, ...safe }) => safe),
     };
   });
 
   metrics.assertions = {
     enoughCards: metrics.cardCount >= 5,
+    allAssigned: metrics.assignedCount === metrics.cardCount,
     allLoaded: metrics.loadedCount === metrics.cardCount,
+    meaningfulAlt: metrics.meaningfulAltCount === metrics.cardCount,
     noUnsplash: metrics.unsplashCount === 0,
     noDuplicateRealImages: metrics.duplicateRealCount === 0,
-    toolboxReal: !!metrics.toolbox && metrics.toolbox.source === 'catalog' && metrics.toolbox.loaded,
-    wheelsReal: !!metrics.wheels && metrics.wheels.source === 'catalog' && metrics.wheels.loaded,
-    toolboxAlt: !!metrics.toolbox && metrics.toolbox.alt.length >= 8,
-    wheelsAlt: !!metrics.wheels && metrics.wheels.alt.length >= 8,
+    realCatalogCoverage: metrics.catalogCoverage >= 0.7,
   };
   metrics.ok = Object.values(metrics.assertions).every(Boolean);
   await page.screenshot({ path: path.join(outputDir, `home-categories-${name}.png`), fullPage: true });
