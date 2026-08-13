@@ -155,9 +155,9 @@ def optimize_title(product: dict) -> str:
     return optimized[:120].strip()
 
 def try_browser_optimization():
-    """Fallback: otimizar via automação de browser."""
-    print("🌐 Iniciando automação de browser para Shopee...")
-    print("   Nota: Este método é mais lento, mas não requer tokens API")
+    """Fallback: otimizar via automacao de browser."""
+    print("[BROWSER] Iniciando automacao de browser para Shopee...")
+    print("   Nota: Este metodo eh mais lento, mas nao requer tokens API")
 
     try:
         from selenium import webdriver
@@ -168,25 +168,25 @@ def try_browser_optimization():
         driver = webdriver.Chrome()
         driver.get("https://seller.shopee.com.br")
 
-        print("❓ Aguardando login manual (60 segundos)...")
+        print("[BROWSER] Aguardando login manual (60 segundos)...")
         WebDriverWait(driver, 60).until(
             EC.presence_of_element_located((By.CLASS_NAME, "product-item"))
         )
 
-        print("✓ Login detectado")
-        print("📦 Procurando produtos...")
+        print("[OK] Login detectado")
+        print("[BROWSER] Procurando produtos...")
 
         # Procurar por produtos
         products = driver.find_elements(By.CLASS_NAME, "product-item")
-        print(f"✓ {len(products)} produtos encontrados")
+        print(f"[OK] {len(products)} produtos encontrados")
 
         optimized = 0
-        for i, product in enumerate(products[:50], 1):  # Limitar a 50 para não demorar muito
+        for i, product in enumerate(products[:50], 1):  # Limitar a 50 para nao demorar muito
             try:
                 # Clicar no produto
                 product.click()
 
-                # Aguardar editor de título
+                # Aguardar editor de titulo
                 WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, "input[name*='title']"))
                 )
@@ -194,7 +194,7 @@ def try_browser_optimization():
                 title_field = driver.find_element(By.CSS_SELECTOR, "input[name*='title']")
                 current = title_field.get_attribute("value") or ""
 
-                # Otimizar título
+                # Otimizar titulo
                 optimized_title = optimize_title({"item_name": current})
 
                 if optimized_title != current:
@@ -213,19 +213,19 @@ def try_browser_optimization():
 
             except Exception as e:
                 if i <= 3:
-                    print(f"   ⚠️ Erro no item {i}: {e}")
+                    print(f"   [AVISO] Erro no item {i}: {e}")
 
         driver.quit()
 
-        print(f"\n✅ Browser automation concluída!")
+        print(f"\n[OK] Browser automation concluida!")
         print(f"   Otimizados: {optimized}")
         return True
 
     except ImportError:
-        print("❌ Selenium não instalado. Instale com: pip install selenium")
+        print("[ERRO] Selenium nao instalado. Instale com: pip install selenium")
         return False
     except Exception as e:
-        print(f"❌ Erro no browser: {e}")
+        print(f"[ERRO] Falha no browser: {e}")
         return False
 
 def main():
