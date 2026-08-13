@@ -364,20 +364,26 @@ def research_product(client, item: dict, ctx: dict) -> str:
         f"DESCRICAO ATUAL: {(ctx['description'] or '(vazia)')[:1500]}\n\n"
         f"Preciso confirmar principalmente: {', '.join(wanted) or 'especificacoes gerais'}."
     )
-    resp = client.messages.create(
-        model=MODEL,
-        max_tokens=4000,
-        system=RESEARCH_PROMPT,
-        output_config={"effort": "medium"},
-        tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": 5}],
-        messages=[{"role": "user", "content": prompt}],
-    )
-    if resp.stop_reason == "refusal":
-        return ""
+    tools = [{"type": "web_search_20260209", "name": "web_search", "max_uses": 5}]
+    messages = [{"role": "user", "content": prompt}]
+    for _ in range(3):  # o loop server-side de busca pode devolver pause_turn
+        resp = client.messages.create(
+            model=MODEL,
+            max_tokens=4000,
+            system=RESEARCH_PROMPT,
+            output_config={"effort": "medium"},
+            tools=tools,
+            messages=messages,
+        )
+        if resp.stop_reason == "refusal":
+            return ""
+        if resp.stop_reason != "pause_turn":
+            break
+        messages = [messages[0], {"role": "assistant", "content": resp.content}]
     return "\n".join(b.text for b in resp.content if b.type == "text").strip()
 
 
-def build_user_prompt(item: dict, ctx: dict) -> str:
+def build_user_prompt(item: dict, ctx: dict, research: str = "") -> str:
     path = " > ".join(p["name"] for p in (ctx["category"].get("path_from_root") or []))
     payload = {
         "id": item["id"],
