@@ -1,0 +1,88 @@
+name: Cleanup stale MEI Git processes
+
+on:
+  push:
+    branches:
+      - ops/inspect-mei-v020-stash
+    paths:
+      - '.github/workflows/cleanup-stale-mei-git-processes.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Terminate only stale Git processes rooted in MEI repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          connected=0
+          for attempt in $(seq 1 12); do
+            if timeout 45s ssh \
+              -o BatchMode=yes \
+              -o ConnectTimeout=10 \
+              -o ServerAliveInterval=10 \
+              -o ServerAliveCountMax=3 \
+              -o StrictHostKeyChecking=no \
+              -i ~/.ssh/vmkey \
+              ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          repo='/home/ubuntu/mei-mg-email'
+          worker='mei-mg-email-worker.service'
+          if sudo systemctl is-active --quiet "$worker"; then
+            echo 'CLEANUP_ABORT_WORKER_ACTIVE=true'
+            exit 60
+          fi
+          echo 'CLEANUP_WORKER_CONFIRMED_OFF=true'
+
+          killed=0
+          skipped=0
+          while read -r pid etimes comm; do
+            [ "$comm" = 'git' ] || continue
+            cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
+            case "$cwd" in
+              "$repo"|"$repo"/*)
+                if [ "$etimes" -ge 300 ]; then
+                  echo "CLEANUP_STALE_GIT pid=$pid age_s=$etimes cwd=$cwd"
+                  kill -TERM "$pid" 2>/dev/null || true
+                  killed=$((killed + 1))
+                else
+                  skipped=$((skipped + 1))
+                fi
+                ;;
+            esac
+          done < <(ps -eo pid=,etimes=,comm=)
+          sleep 3
+          echo "CLEANUP_STALE_GIT_TERMINATED=$killed"
+          echo "CLEANUP_RECENT_GIT_SKIPPED=$skipped"
+          echo "CLEANUP_LOAD=$(cut -d' ' -f1-3 /proc/loadavg)"
+          echo "CLEANUP_MEM_AVAILABLE_KB=$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)"
+          echo 'WORKER_RESUME_ALLOWED=false'
+          EOF
+            then
+              connected=1
+              break
+            fi
+            echo "CLEANUP_SSH_RETRY=$attempt"
+            sleep 20
+          done
+          test "$connected" -eq 1
+
+      - name: Cleanup key
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey
