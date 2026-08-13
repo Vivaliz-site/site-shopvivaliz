@@ -122,12 +122,18 @@ if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAiRoutineUiPages, t
         $svAssetVersion = static function (string $relativePath): string {
             $path = dirname(__DIR__) . $relativePath;
             $mtime = is_file($path) ? (int)filemtime($path) : 0;
-            return $mtime > 0 ? (string)$mtime : '20260811a';
+            return $mtime > 0 ? (string)$mtime : '20260813b';
         };
-        echo "\n<script src=\"/admin/assets/ai-routines-hotfix-ui.js?v=" . $svAssetVersion('/admin/assets/ai-routines-hotfix-ui.js') . "\"></script>\n";
+
         if ($svAdminScriptName === '/admin/catalog-optimization/admin_catalog.php') {
-            echo "<script src=\"/admin/assets/catalog-resilient-run-hotfix.js?v=" . $svAssetVersion('/admin/assets/catalog-resilient-run-hotfix.js') . "\"></script>\n";
-            echo "<script src=\"/admin/assets/catalog-candidate-race-guard.js?v=" . $svAssetVersion('/admin/assets/catalog-candidate-race-guard.js') . "\"></script>\n";
+            // The catalog page has one owner for selection, generation,
+            // review and apply. Do not stack the legacy hotfix listeners here:
+            // duplicated capture handlers were one of the causes of the
+            // confusing and fragile Admin behavior.
+            echo "\n<script src=\"/admin/assets/catalog-optimization-workflow.js?v=" . $svAssetVersion('/admin/assets/catalog-optimization-workflow.js') . "\"></script>\n";
+            return;
         }
+
+        echo "\n<script src=\"/admin/assets/ai-routines-hotfix-ui.js?v=" . $svAssetVersion('/admin/assets/ai-routines-hotfix-ui.js') . "\"></script>\n";
     });
 }
