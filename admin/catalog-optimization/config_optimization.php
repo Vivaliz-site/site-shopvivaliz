@@ -32,12 +32,12 @@ function catalog_ai_env_key_pool(array $baseNames): array
 }
 
 define('CATALOG_AI_OPENAI_API_KEY', catalog_ai_env_key_pool(['OPENAI_API_KEY']));
-define('CATALOG_AI_GOOGLE_GEMINI_API_KEY', catalog_ai_env_key_pool([
-    'GOOGLE_GEMINI_API_KEY',
-    'GEMINI_API_KEY',
-    'GOOGLE_API_KEY',
-    'GOOGLE_IMAGEN_API_KEY',
-]));
+$catalogGeminiBasePool = catalog_ai_env_key_pool(['GOOGLE_GEMINI_API_KEY', 'GEMINI_API_KEY']);
+$catalogGeminiGoogleAliasPool = catalog_ai_env_key_pool(['GOOGLE_API_KEY', 'GOOGLE_IMAGEN_API_KEY']);
+define(
+    'CATALOG_AI_GOOGLE_GEMINI_API_KEY',
+    array_values(array_unique(array_merge($catalogGeminiBasePool, $catalogGeminiGoogleAliasPool)))
+);
 define('CATALOG_AI_CLAUDE_API_KEY', catalog_ai_env_key_pool(['CLAUDE_API_KEY', 'ANTHROPIC_API_KEY']));
 define('CATALOG_AI_OPENROUTER_API_KEY', catalog_ai_env_key_pool(['OPENROUTER_API_KEY']));
 define('CATALOG_AI_GROQ_API_KEY', catalog_ai_env_key_pool(['GROQ_API_KEY']));
