@@ -22,6 +22,24 @@ function catalog_normalizer_hard_failures(array $quality): array
     ));
 }
 
+final class CatalogNormalizerFakeProvider extends CatalogAiRotatingProvider
+{
+    /** @param array<string,mixed> $fixture */
+    public function __construct(private array $fixture)
+    {
+        parent::__construct(['fake-key'], 'fake-model', 1);
+    }
+
+    protected function providerName(): string { return 'Fake'; }
+    protected function missingKeyMessage(): string { return 'Fake key missing.'; }
+
+    /** @return array<string,mixed> */
+    protected function completeWithKey(string $key, string $systemPrompt, string $userPrompt): array
+    {
+        return $this->fixture;
+    }
+}
+
 $product = [
     'name' => 'Suporte Veicular Vivaliz VX10 para Celular',
     'description' => 'Suporte veicular para celular com fixacao no painel.',
@@ -69,6 +87,27 @@ catalog_normalizer_assert(stripos(ai_catalog_text_blob($normalized), 'original')
 catalog_normalizer_assert(preg_match(catalog_generated_protected_commerce_pattern(), ai_catalog_text_blob($normalized)) !== 1, 'preco/estoque/desconto devem permanecer ausentes');
 catalog_normalizer_assert($hard === [], 'normalizacao objetiva deve eliminar hard failures deterministicas: ' . implode(', ', $hard));
 
+// Prova que toda saida dos providers rotativos passa pela mesma normalizacao.
+// Isso cobre API direta, bulk/cron, smoke, reparo e "Regenerar e reauditar".
+ai_catalog_build_user_prompt($product, 'tiktok');
+$providerNormalized = (new CatalogNormalizerFakeProvider($raw))->complete('system', 'user');
+$providerQuality = ai_catalog_quality_report($providerNormalized, 'tiktok', $product);
+$providerHard = catalog_normalizer_hard_failures($providerQuality);
+catalog_normalizer_assert($providerHard === [], 'saida do provider deve chegar sem hard failures deterministicas: ' . implode(', ', $providerHard));
+catalog_normalizer_assert(ai_catalog_title_starts_with_identity((string)$providerNormalized['optimized_title'], $product), 'provider deve corrigir identidade antes de devolver a saida');
+catalog_normalizer_assert(stripos(ai_catalog_text_blob($providerNormalized), 'original') === false, 'provider deve remover claim de originalidade nao comprovado');
+
+// A edicao manual continua fail-closed: o normalizador nao e aplicado ao
+// validador puro quando nao existe uma nova chamada de provider.
+unset($GLOBALS['ai_catalog_validation_context']);
+$manualRejected = false;
+try {
+    ai_catalog_validate_ai_response($raw, 'tiktok', $product);
+} catch (CatalogAiApiException) {
+    $manualRejected = true;
+}
+catalog_normalizer_assert($manualRejected, 'conteudo manual invalido deve continuar bloqueado, nao silenciosamente reescrito');
+
 $erpRaw = $raw;
 $erpRaw['optimized_title'] = 'Transforme seu cadastro com Vivaliz VX10';
 $erpRaw['optimized_description'] = 'Suporte veicular para celular com fixacao no painel.';
@@ -86,4 +125,4 @@ catalog_normalizer_assert((array)$erp['marketing_hooks'] === [], 'ERP nao deve c
 catalog_normalizer_assert(count((array)$erp['bullet_points']) <= 8, 'ERP deve respeitar bullet max');
 catalog_normalizer_assert($erpHard === [], 'ERP normalizado nao deve manter hard failure: ' . implode(', ', $erpHard));
 
-fwrite(STDOUT, "COMPROVADO: normalizador corrige identidade, claims nao comprovados, campos protegidos e limites objetivos sem inventar fatos.\n");
+fwrite(STDOUT, "COMPROVADO: providers auto-normalizam identidade/claims/limites; edicao manual invalida continua bloqueada.\n");
