@@ -1,0 +1,99 @@
+name: MEI email post-unblock controlled test
+
+on:
+  push:
+    branches: [ops/inspect-mei-v020-stash]
+    paths:
+      - '.github/workflows/mei-email-post-unblock-controlled-test.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mei-email-post-unblock-controlled-test
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Inspect fail-closed production state
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 300s ssh -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=10 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'REMOTE'
+          set -euo pipefail
+          repo=/home/ubuntu/mei-mg-email
+          worker=mei-mg-email-worker.service
+          sudo systemctl stop "$worker" || true
+          if sudo systemctl is-active --quiet "$worker"; then
+            echo 'PRETEST_WORKER_STOP_FAILED=true'
+            exit 10
+          fi
+          echo 'PRETEST_WORKER_STOPPED=true'
+          cd "$repo"
+          echo "PRETEST_SHA=$(git rev-parse HEAD)"
+          echo "PRETEST_BRANCH=$(git rev-parse --abbrev-ref HEAD)"
+          echo "PRETEST_DIRTY_COUNT=$(git status --porcelain=v1 --untracked-files=normal | wc -l | tr -d ' ')"
+          echo "PRETEST_SENTINEL_PRESENT=$(test -e /var/lib/mei-mg-email/sender_blocked.pause && echo true || echo false)"
+          echo "PRETEST_MONITOR_STATE=$(sudo systemctl is-active mei-mg-email-monitor.service 2>/dev/null || true)"
+          echo "PRETEST_NDR_GUARD_STATE=$(sudo systemctl is-active mei-mg-email-ndr-guard.service 2>/dev/null || true)"
+          echo "PRETEST_BASE_TIMER_STATE=$(sudo systemctl is-active mei-mg-email-base-sync.timer 2>/dev/null || true)"
+          timeout 60s docker exec mei-mg-email-db psql -X -v ON_ERROR_STOP=1 -U postgres -d mei_mg_email -At -F '|' <<'SQL'
+          set statement_timeout='30s';
+          select 'COUNTS',
+                 count(*) filter (where status::text in ('submitted','delivered','enviado') and coalesce(submitted_at,enviado_em)>=now()-interval '24 hours'),
+                 count(*) filter (where status::text='pendente'),
+                 count(*) filter (where status::text='enviando')
+            from mei_email.envios;
+          select 'POLICY',
+                 count(*) filter (where marketing_autorizado is not true),
+                 count(*) filter (where mei_verificado is not true),
+                 count(*) filter (where opt_out is true)
+            from mei_email.empresas;
+          select 'FLYWAY',version,script,checksum,success
+            from mei_email.flyway_schema_history
+           where version in ('019','020','021','022','023','024')
+           order by installed_rank;
+          SQL
+          echo 'WORKER_RESUME_ALLOWED=false'
+          REMOTE
+
+      - name: Validate Graph credentials and submit one controlled message
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 300s ssh -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=10 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'REMOTE'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          sudo systemctl stop mei-mg-email-worker.service || true
+          ! sudo systemctl is-active --quiet mei-mg-email-worker.service
+          .venv/bin/python scripts/auditar_graph_token.py
+          TEST_RECIPIENT=atendimento@shopvivaliz.com.br .venv/bin/python scripts/enviar_teste_microsoft_graph.py
+          echo 'CONTROLLED_TEST_COMMAND_OK=true'
+          echo 'WORKER_RESUME_ALLOWED=false'
+          REMOTE
+
+      - name: Verify worker remains stopped
+        if: always()
+        shell: bash
+        run: |
+          ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            'sudo systemctl stop mei-mg-email-worker.service || true; ! sudo systemctl is-active --quiet mei-mg-email-worker.service; echo WORKER_RESUME_ALLOWED=false'
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey
