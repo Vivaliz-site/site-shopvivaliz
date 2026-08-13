@@ -113,7 +113,7 @@ if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAiRoutineUiPages, t
         $svAssetVersion = static function (string $relativePath): string {
             $path = dirname(__DIR__) . $relativePath;
             $mtime = is_file($path) ? (int)filemtime($path) : 0;
-            return $mtime > 0 ? (string)$mtime : '20260813f';
+            return $mtime > 0 ? (string)$mtime : '20260813g';
         };
 
         if ($svAdminScriptName === '/admin/catalog-optimization/admin_catalog.php') {
@@ -123,13 +123,14 @@ if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAiRoutineUiPages, t
         }
 
         // Um unico controlador continua dono de selecao, fila, revisao e
-        // publicacao. A camada safety somente veta confirmacoes inseguras e
-        // pagina consultas de status acima do limite autenticado de 100 jobs;
-        // ela nunca enfileira, publica ou altera selecao por conta propria.
+        // publicacao. As camadas auxiliares somente observam, bloqueiam riscos,
+        // retomam acompanhamento e oferecem diagnostico operacional; elas nunca
+        // publicam nem aprovam imagens automaticamente.
         echo "\n<script src=\"/admin/assets/image-generation-workflow.js?v=" . $svAssetVersion('/admin/assets/image-generation-workflow.js') . "\"></script>\n";
         echo "<script src=\"/admin/assets/image-workflow-safety.js?v=" . $svAssetVersion('/admin/assets/image-workflow-safety.js') . "\"></script>\n";
         if ($svAdminScriptName === '/admin/ai-image-studio/admin_dashboard.php') {
             echo "<script src=\"/admin/assets/image-provider-health.js?v=" . $svAssetVersion('/admin/assets/image-provider-health.js') . "\"></script>\n";
+            echo "<script src=\"/admin/assets/image-professional-ops.js?v=" . $svAssetVersion('/admin/assets/image-professional-ops.js') . "\"></script>\n";
         }
     });
 }
