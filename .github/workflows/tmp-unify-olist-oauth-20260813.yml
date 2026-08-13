@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   unify:
-    if: ${{ !startsWith(github.event.head_commit.message, 'fix: unificar ciclo OAuth') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -32,7 +31,9 @@ jobs:
               '.github/workflows/recover-olist-oauth-from-backups.yml',
           ]:
               s=s.replace(f'    "{path}",\n', '')
-          s=re.sub(r'# Manual workflow only orchestrates the canonical daemon\..*?# Quality gate stops validating deleted recovery implementations and adds the\n# single-writer contract instead\..*?qg\.write_text\(q, encoding="utf-8"\)\n\n', '', s, count=1, flags=re.S)
+          start=s.index('# Manual workflow only orchestrates the canonical daemon.')
+          end=s.index('Path("docs/TINY-TOKEN-RENEWAL-SETUP.md")')
+          s=s[:start] + s[end:]
           p.write_text(s, encoding='utf-8')
           PY
 
