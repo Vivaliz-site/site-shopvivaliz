@@ -14,6 +14,7 @@
     {name:'meta_description', key:'meta_description', label:'Meta description'}
   ];
   const PROMO = /(?:r\$|pre[cç]o|desconto|cupom|frete\s+gr[aá]tis|parcel(?:a|as|ado|amento)|imperd[ií]vel|corra|garanta\s+j[aá]|n[aã]o\s+perca|oferta|promo[cç][aã]o)/iu;
+  const ORIGINAL_PLACEHOLDER = /^(?:—|nao existe valor externo separado|não existe valor externo separado|sem valor externo separado|campo interno|valor não disponível|valor nao disponivel)/iu;
   const CHANNELS = {
     ml:{label:'Mercado Livre',titleMax:60,titleMin:20,descMin:140,bullets:[3,5],focus:'Identidade do produto, marca/modelo e atributos reais. Sem preço, frete, promoção ou emoji.',priority:['Título','Descrição','Bullet points']},
     shopee:{label:'Shopee',titleMax:120,titleMin:35,descMin:220,bullets:[3,5],focus:'Leitura mobile, descoberta por busca e pontos de decisão escaneáveis. Sem urgência artificial.',priority:['Título','Descrição','Bullet points']},
@@ -44,14 +45,19 @@
     if (list) return text.split(/[\n,|]+/).map((v)=>v.trim().replace(/^[-•]+\s*/, '')).filter(Boolean).map((v)=>v.toLocaleLowerCase('pt-BR')).sort().join('|');
     return text.replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
   }
+  function sourceOriginal(value) {
+    const text = String(value ?? '').replace(/\r/g, '').trim();
+    if (!text || ORIGINAL_PLACEHOLDER.test(text)) return '';
+    return text;
+  }
   function originals(article) {
     const values = {};
     const root = $('.sv-original-inner', article) || $('.compare>div:first-child', article);
     if (!root) return values;
     const labels = $$('.before-label', root);
     labels.forEach((label, index) => {
-      const value = label.nextElementSibling?.classList.contains('before') ? label.nextElementSibling.textContent : '';
-      if (FIELD_MAP[index]) values[FIELD_MAP[index].key] = value || '';
+      const raw = label.nextElementSibling?.classList.contains('before') ? label.nextElementSibling.textContent : '';
+      if (FIELD_MAP[index]) values[FIELD_MAP[index].key] = sourceOriginal(raw);
     });
     return values;
   }
