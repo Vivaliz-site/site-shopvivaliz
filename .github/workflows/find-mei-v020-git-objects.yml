@@ -1,0 +1,99 @@
+name: Locate applied MEI V020 in Git objects
+
+on:
+  push:
+    branches:
+      - ops/inspect-mei-v020-stash
+    paths:
+      - '.github/workflows/find-mei-v020-git-objects.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  locate-objects:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Scan reachable and dangling Git blobs by Flyway checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 300s ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=15 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          python3 - <<'PY'
+          import subprocess, zlib
+          TARGET = 10857321
+
+          def signed32(value):
+              return value if value < 2**31 else value - 2**32
+
+          def checksum(data):
+              try:
+                  text = data.decode('utf-8-sig')
+              except UnicodeDecodeError:
+                  return None
+              crc = 0
+              for line in text.splitlines():
+                  crc = zlib.crc32(line.encode('utf-8'), crc)
+              return signed32(crc & 0xffffffff)
+
+          candidates = {}
+          reachable = subprocess.check_output(['git','rev-list','--objects','--all'], text=True, errors='replace')
+          for row in reachable.splitlines():
+              parts = row.split(' ', 1)
+              if len(parts) == 2 and 'V020__' in parts[1] and parts[1].endswith('.sql'):
+                  candidates[parts[0]] = 'reachable:' + parts[1]
+
+          fsck = subprocess.run(['git','fsck','--unreachable','--no-reflogs','--no-progress'], text=True, capture_output=True, errors='replace')
+          for row in fsck.stdout.splitlines():
+              parts = row.split()
+              if len(parts) >= 3 and parts[1] == 'blob':
+                  candidates.setdefault(parts[2], 'dangling-blob')
+
+          print(f'GIT_OBJECT_CANDIDATES={len(candidates)}')
+          matched = 0
+          inspected = 0
+          for oid, origin in candidates.items():
+              try:
+                  size = int(subprocess.check_output(['git','cat-file','-s',oid], text=True).strip())
+              except Exception:
+                  continue
+              if size > 200000:
+                  continue
+              try:
+                  data = subprocess.check_output(['git','cat-file','-p',oid])
+              except Exception:
+                  continue
+              if origin == 'dangling-blob' and b'V020' not in data and b'marketing_autorizado' not in data and b'campanhas' not in data:
+                  continue
+              inspected += 1
+              value = checksum(data)
+              if value == TARGET:
+                  matched += 1
+                  print(f'V020_TARGET_MATCH oid={oid} origin={origin} bytes={size}')
+                  print('V020_TARGET_CONTENT_BEGIN')
+                  print(data.decode('utf-8-sig'))
+                  print('V020_TARGET_CONTENT_END')
+              elif origin.startswith('reachable:'):
+                  print(f'V020_REACHABLE oid={oid} checksum={value} origin={origin} bytes={size}')
+          print(f'GIT_OBJECT_INSPECTED={inspected}')
+          print(f'GIT_OBJECT_TARGET_MATCHES={matched}')
+          PY
+          echo 'WORKER_RESUME_ALLOWED=false'
+          EOF
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey
