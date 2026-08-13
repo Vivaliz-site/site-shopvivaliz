@@ -198,7 +198,10 @@ echo 'smoke_image_ids_found=' . count($imageIds) . PHP_EOL;
 echo 'smoke_catalog_rows_rejected=' . $catalogRejected . PHP_EOL;
 echo 'smoke_image_rows_rejected=' . $imageRejected . PHP_EOL;
 echo 'catalog_active_products=' . (int)$diagnostics['active'] . PHP_EOL;
-foreach (['ml', 'shopee', 'amazon', 'tiktok', 'site', 'erp'] as $channel) {
-    echo 'catalog_candidates_' . $channel . '_eligible=' . (int)($diagnostics[$channel] ?? 0) . PHP_EOL;
-}
+echo 'catalog_candidates_ml_eligible=' . (int)($diagnostics['ml'] ?? 0) . PHP_EOL;
+echo 'catalog_candidates_shopee_eligible=' . (int)($diagnostics['shopee'] ?? 0) . PHP_EOL;
+echo 'catalog_candidates_amazon_eligible=' . (int)($diagnostics['amazon'] ?? 0) . PHP_EOL;
+echo 'catalog_candidates_tiktok_eligible=' . (int)($diagnostics['tiktok'] ?? 0) . PHP_EOL;
+echo 'catalog_candidates_site_eligible=' . (int)($diagnostics['site'] ?? 0) . PHP_EOL;
+echo 'catalog_candidates_erp_eligible=' . (int)($diagnostics['erp'] ?? 0) . PHP_EOL;
 echo "smoke_staging_cleanup_complete=true\n";
