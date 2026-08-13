@@ -171,6 +171,8 @@ jobs:
           set -euo pipefail
           ssh \
             -o BatchMode=yes \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=20 \
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
@@ -183,6 +185,48 @@ jobs:
           deploy_script="$repo/scripts/deploy-production.sh"
           deploy_log='/home/ubuntu/shopvivaliz-deploy/logs/deploy.log'
 
+          # Keep local Git operations unchanged, but bound/retry only the
+          # network subcommands that can fail transiently against GitHub.
+          git_retry_dir="$(mktemp -d /tmp/shopvivaliz-git-retry.XXXXXX)"
+          cleanup_git_retry() {
+            rm -rf -- "$git_retry_dir"
+          }
+          trap cleanup_git_retry EXIT
+          cat > "$git_retry_dir/git" <<'GIT_RETRY_WRAPPER'
+          #!/usr/bin/env bash
+          set -u
+          network_command=0
+          for argument in "$@"; do
+            case "$argument" in
+              fetch|ls-remote)
+                network_command=1
+                break
+                ;;
+            esac
+          done
+          if [[ "$network_command" -eq 0 ]]; then
+            exec /usr/bin/git "$@"
+          fi
+
+          status=0
+          for attempt in 1 2 3; do
+            if timeout 90s /usr/bin/git "$@"; then
+              exit 0
+            else
+              status=$?
+            fi
+            if [[ "$attempt" -lt 3 ]]; then
+              echo "Transient Git network failure; retrying attempt=$((attempt + 1))/3" >&2
+              sleep $((attempt * 5))
+            fi
+          done
+          exit "$status"
+          GIT_RETRY_WRAPPER
+          chmod 0755 "$git_retry_dir/git"
+          export PATH="$git_retry_dir:$PATH"
+          test -x /usr/bin/git
+          command -v timeout >/dev/null
+
           test -f "$deploy_script"
           git -C "$repo" rev-parse --is-inside-work-tree >/dev/null
           git -C "$repo" remote get-url origin >/dev/null
@@ -194,11 +238,12 @@ jobs:
           git -C "$repo" cat-file -e "${expected_sha}^{commit}"
           git -C "$repo" cat-file -e "${expected_sha}:scripts/deploy-production.sh"
 
-          # Always stage the deploy runner from the exact validated SHA. A
-          # clean checkout can still be stale because fetch does not update the
-          # worktree. Preserve any different runner first, without resetting or
-          # deleting unrelated repository state.
-          dirty="$(git -C "$repo" status --porcelain=v1 --untracked-files=all)"
+          # Releases are created from git archive of the validated SHA, so
+          # untracked files in the long-lived deploy clone cannot enter a
+          # release. Avoid enumerating that potentially huge tree and keep the
+          # safety gate strict for tracked/index modifications only.
+          git -C "$repo" config status.showUntrackedFiles no
+          dirty="$(git -C "$repo" status --porcelain=v1 --untracked-files=no)"
           if [[ -n "$dirty" ]]; then
             dirty_paths="$(printf '%s\n' "$dirty" | sed -E 's/^.. //')"
             if [[ "$dirty_paths" != 'scripts/deploy-production.sh' ]]; then
@@ -344,6 +389,8 @@ jobs:
           set -euo pipefail
           ssh \
             -o BatchMode=yes \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=20 \
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \

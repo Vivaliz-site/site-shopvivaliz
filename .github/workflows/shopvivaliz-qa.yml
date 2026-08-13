@@ -118,7 +118,9 @@ jobs:
           node --check admin/assets/catalog-optimization-workflow.js
           node --check admin/assets/catalog-change-intelligence.js
           node --check admin/assets/image-generation-workflow.js
+          node --check admin/assets/ai-image-studio-workflow.js
           php tests/catalog-admin-workflow-v3-test.php
+          php tests/catalog-generated-data-normalizer-test.php
           php tests/catalog-change-intelligence-test.php
           php tests/image-admin-workflow-test.php
           php tests/image-admin-workflow-v3-test.php

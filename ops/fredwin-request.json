@@ -1,5 +1,5 @@
 {
-  "action": "install_mcp_startup",
-  "requested_at": "2026-08-12T18:16:00-03:00",
-  "reason": "Retry BAT and Windows logon task installation after fixing shell escaping"
+  "action": "verify_auto_sync",
+  "requested_at": "2026-08-13T04:22:00-03:00",
+  "reason": "Verify Windows auto-sync task, repository state, and latest local-sync log against documented behavior"
 }

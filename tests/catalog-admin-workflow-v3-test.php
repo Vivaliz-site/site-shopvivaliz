@@ -16,6 +16,8 @@ $guard = file_get_contents($root . '/includes/admin-guard.php');
 $ui = file_get_contents($root . '/admin/assets/catalog-optimization-workflow.js');
 $resilient = file_get_contents($root . '/admin/catalog-optimization/api/optimize_catalog_resilient.php');
 $config = file_get_contents($root . '/admin/catalog-optimization/config_optimization.php');
+$textServices = file_get_contents($root . '/admin/catalog-optimization/src/TextAiServices.php');
+$normalizer = file_get_contents($root . '/admin/catalog-optimization/src/CatalogGeneratedDataNormalizer.php');
 $repair = file_get_contents($root . '/admin/catalog-optimization/repair_hard_quality_pending.php');
 $repairWorkflow = file_get_contents($root . '/.github/workflows/repair-catalog-hard-quality-pending.yml');
 
@@ -23,6 +25,8 @@ sv_catalog_v3_assert(is_string($guard) && $guard !== '', 'admin-guard.php precis
 sv_catalog_v3_assert(is_string($ui) && $ui !== '', 'workflow unificado precisa existir');
 sv_catalog_v3_assert(is_string($resilient) && $resilient !== '', 'API resiliente precisa existir');
 sv_catalog_v3_assert(is_string($config) && $config !== '', 'configuracao de IA do catalogo precisa existir');
+sv_catalog_v3_assert(is_string($textServices) && $textServices !== '', 'servicos de provider precisam existir');
+sv_catalog_v3_assert(is_string($normalizer) && $normalizer !== '', 'normalizador deterministico precisa existir');
 sv_catalog_v3_assert(is_string($repair) && $repair !== '', 'reparo de pendencias hard precisa existir');
 sv_catalog_v3_assert(is_string($repairWorkflow) && $repairWorkflow !== '', 'workflow de reparo pos-deploy precisa existir');
 
@@ -74,6 +78,20 @@ sv_catalog_v3_assert(
 );
 
 sv_catalog_v3_assert(
+    str_contains($normalizer, 'function catalog_generated_normalize(')
+    && str_contains($normalizer, 'catalog_generated_identity_prefix')
+    && str_contains($normalizer, 'catalog_generated_unsourced_claim_patterns')
+    && str_contains($normalizer, 'catalog_generated_protected_commerce_pattern'),
+    'Normalizador deve corrigir identidade, claims e campos comerciais por regra deterministica'
+);
+sv_catalog_v3_assert(
+    str_contains($textServices, 'function catalog_ai_normalize_generated_data(')
+    && str_contains($textServices, "__DIR__ . '/CatalogGeneratedDataNormalizer.php'")
+    && str_contains($textServices, 'return catalog_ai_normalize_generated_data($data);'),
+    'Toda saida real de provider deve passar pelo normalizador antes de voltar ao chamador'
+);
+
+sv_catalog_v3_assert(
     str_contains($resilient, 'catalog_resilient_refine_quality')
     && str_contains($resilient, 'quality_initial_score')
     && str_contains($resilient, 'quality_refined')
@@ -88,6 +106,11 @@ sv_catalog_v3_assert(
     str_contains($resilient, 'const CATALOG_RESILIENT_MAX_QUALITY_REFINEMENTS = 3;')
     && str_contains($resilient, 'for ($attempt = 1; $attempt <= CATALOG_RESILIENT_MAX_QUALITY_REFINEMENTS; $attempt++)'),
     'Falhas de qualidade devem receber ate tres revisoes automaticas controladas por provedor'
+);
+sv_catalog_v3_assert(
+    str_contains($resilient, 'catalog_generated_normalize($data, $channel, $product)')
+    && str_contains($resilient, 'catalog_generated_normalize($candidate, $channel, $product)'),
+    'API resiliente deve normalizar primeira tentativa e refinamentos antes do gate'
 );
 sv_catalog_v3_assert(
     str_contains($resilient, "if (\$warnings['hard'] === [] && \$score >= 85)"),
@@ -118,10 +141,11 @@ sv_catalog_v3_assert(
     && str_contains($repair, 'CATALOG_HARD_REPAIR_PREFIX')
     && str_contains($repair, "newer.status IN ('pending','published','rejected')")
     && str_contains($repair, 'catalog_hard_repair_resumed=')
-    && str_contains($repair, 'ai_catalog_quality_report($data, $channel, $product)')
-    && str_contains($repair, "SET status = 'failed'")
-    && str_contains($repair, 'ai_catalog_process_item($db, $productId, $channel, $provider)'),
-    'Pendencias hard e reparos interrompidos devem ser retomados sem duplicar substitutos validos'
+    && str_contains($repair, 'catalog_hard_repair_generate(')
+    && str_contains($repair, 'CATALOG_HARD_REPAIR_PROVIDER_ATTEMPTS = 2')
+    && str_contains($repair, 'catalog_generated_normalize($data, $channel, $product)')
+    && str_contains($repair, "SET status = 'failed'"),
+    'Pendencias hard e reparos interrompidos devem ser retomados com normalizacao e nova tentativa guiada'
 );
 sv_catalog_v3_assert(
     str_contains($repair, 'catalog_hard_repair_publication_attempted=false')
@@ -132,12 +156,21 @@ sv_catalog_v3_assert(
 sv_catalog_v3_assert(
     str_contains($repairWorkflow, "workflows: ['Master Production Pipeline 24/7']")
     && str_contains($repairWorkflow, "github.event.workflow_run.conclusion == 'success'")
+    && str_contains($repairWorkflow, 'workflow_dispatch:')
+    && !str_contains($repairWorkflow, "\n  push:")
     && str_contains($repairWorkflow, 'TARGET_SHA:')
-    && str_contains($repairWorkflow, '"$deployed" == "$TARGET_SHA"')
+    && str_contains($repairWorkflow, 'production-catalog-hard-quality-repair-v2')
+    && str_contains($repairWorkflow, 'merge-base --is-ancestor "$target" "$deployed"')
+    && str_contains($repairWorkflow, "production_release_relation=\$relation")
     && str_contains($repairWorkflow, 'cancel-in-progress: false')
+    && str_contains($repairWorkflow, 'ServerAliveInterval=30')
+    && str_contains($repairWorkflow, 'ServerAliveCountMax=6')
     && str_contains($repairWorkflow, 'catalog_repair_interruption_resumable=true')
+    && str_contains($repairWorkflow, 'catalog_repair_ssh_keepalive=true')
+    && str_contains($repairWorkflow, 'catalog_repair_push_trigger=false')
+    && str_contains($repairWorkflow, 'catalog_repair_accepts_deployed_descendant=true')
     && str_contains($repairWorkflow, 'php admin/catalog-optimization/repair_hard_quality_pending.php --limit=2000'),
-    'Reparo pos-deploy deve ser serial, nao cancelavel e sempre mirar o SHA efetivamente implantado'
+    'Reparo pos-deploy deve ignorar pushes intermediarios, aceitar release descendente e manter fila v2 serial/retomavel'
 );
 
-fwrite(STDOUT, "COMPROVADO: Admin auto-repara qualidade nova, retoma reparos interrompidos sem publicar e preserva rotacao de credenciais Gemini.\n");
+fwrite(STDOUT, "COMPROVADO: toda saida gerada e auto-normalizada, hard failure nao vira trabalho manual e reparo legado nao fica preso em SHA intermediario.\n");

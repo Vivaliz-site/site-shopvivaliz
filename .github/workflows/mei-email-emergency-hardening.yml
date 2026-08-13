@@ -1,0 +1,88 @@
+name: Emergency MEI email hardening
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mei-email-emergency-hardening.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: P0 keep bulk worker stopped
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          sudo systemctl kill --kill-who=all --signal=SIGKILL mei-mg-email-worker.service || true
+          sudo systemctl stop mei-mg-email-worker.service || true
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then
+            echo 'EMERGENCY_WORKER_STOP_FAILED=true'
+            exit 10
+          fi
+          echo 'EMERGENCY_WORKER_STOPPED=true'
+          EOF
+
+      - name: Preserve VM changes, update repository and run hardening
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          dirty_count="$(git status --porcelain=v1 --untracked-files=normal | wc -l | tr -d ' ')"
+          echo "EMERGENCY_VM_DIRTY_ENTRIES=$dirty_count"
+          if [ "$dirty_count" -gt 0 ]; then
+            stash_name="emergency-pre-hardening-$(date -u +%Y%m%dT%H%M%SZ)"
+            git stash push -u -m "$stash_name" >/dev/null
+            echo "EMERGENCY_VM_CHANGES_PRESERVED=true"
+            echo "EMERGENCY_VM_STASH_REF=stash@{0}"
+          else
+            echo "EMERGENCY_VM_CHANGES_PRESERVED=not_needed"
+          fi
+          git fetch origin main
+          git checkout -B main origin/main
+          test -z "$(git status --porcelain=v1 --untracked-files=normal)"
+          echo "EMERGENCY_DEPLOY_SHA=$(git rev-parse HEAD)"
+          bash scripts/deploy_hardening_20260813.sh
+          EOF
+
+      - name: Verify fail-closed production state
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          test -f /var/lib/mei-mg-email/sender_blocked.pause
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then
+            echo 'VERIFY_WORKER_ACTIVE_UNSAFE=true'
+            exit 12
+          fi
+          echo 'VERIFY_WORKER_STOPPED=true'
+          echo "VERIFY_DEPLOY_SHA=$(git rev-parse HEAD)"
+          sudo systemctl is-active mei-mg-email-monitor.service
+          sudo systemctl is-active mei-mg-email-ndr-guard.service
+          sudo systemctl is-active mei-mg-email-base-sync.timer
+          sudo systemctl is-enabled mei-mg-email-ndr-guard.service
+          sudo systemctl is-enabled mei-mg-email-base-sync.timer
+          echo 'WORKER_RESUME_ALLOWED=false'
+          EOF
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/vmkey

@@ -1,0 +1,82 @@
+name: Emergency MEI VM recovery probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mei-email-emergency-recovery-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Wait for SSH and inspect Flyway safely
+        run: |
+          set -euo pipefail
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey)
+          ready=false
+          for attempt in $(seq 1 12); do
+            echo "SSH_PROBE_ATTEMPT=$attempt"
+            if timeout 35s ssh "${ssh_opts[@]}" ubuntu@137.131.156.17 'echo SSH_PROBE_READY=true' >/tmp/ssh_probe.out 2>/tmp/ssh_probe.err; then
+              cat /tmp/ssh_probe.out
+              ready=true
+              break
+            fi
+            tail -n 2 /tmp/ssh_probe.err || true
+            sleep 20
+          done
+          if [ "$ready" != true ]; then
+            echo 'SSH_PROBE_READY=false'
+            exit 40
+          fi
+
+          timeout 90s ssh "${ssh_opts[@]}" ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then
+            sudo systemctl kill --kill-who=all --signal=SIGKILL mei-mg-email-worker.service || true
+            sudo systemctl stop mei-mg-email-worker.service || true
+          fi
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then
+            echo 'PROBE_WORKER_ACTIVE_UNSAFE=true'
+            exit 41
+          fi
+          echo 'PROBE_WORKER_ACTIVE=false'
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo 'PROBE_SENTINEL_PRESENT=true'; else echo 'PROBE_SENTINEL_PRESENT=false'; fi
+          echo "PROBE_GIT_SHA=$(git rev-parse HEAD)"
+          echo "PROBE_STASH_COUNT=$(git stash list | wc -l | tr -d ' ')"
+          echo 'PROBE_UPTIME_BEGIN'
+          uptime || true
+          free -m | head -n 3 || true
+          df -h / | tail -n 2 || true
+          echo 'PROBE_DOCKER_BEGIN'
+          timeout 15s docker ps -a --filter label=com.docker.compose.project=mei-mg-email --format '{{.ID}}|{{.Names}}|{{.Status}}' || true
+          timeout 15s docker stats --no-stream --format '{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}' 2>/dev/null | grep '^mei-mg-email' || true
+          echo 'PROBE_FLYWAY_BEGIN'
+          ids="$(timeout 15s docker ps -aq --filter label=com.docker.compose.project=mei-mg-email --filter label=com.docker.compose.service=flyway 2>/dev/null || true)"
+          for id in $ids; do
+            timeout 10s docker inspect -f '{{.Name}}|status={{.State.Status}}|exit={{.State.ExitCode}}|started={{.State.StartedAt}}|finished={{.State.FinishedAt}}' "$id" || true
+            timeout 10s docker logs --tail 50 "$id" 2>&1 | sed -E 's#(jdbc:postgresql://)[^ ]+#\1[redacted]#g' || true
+          done
+          echo 'PROBE_FLYWAY_END'
+          echo 'WORKER_RESUME_ALLOWED=false'
+          EOF
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/ssh_probe.out /tmp/ssh_probe.err

@@ -1,11 +1,6 @@
 name: Repair catalog hard quality pending
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'admin/catalog-optimization/repair_hard_quality_pending.php'
-      - '.github/workflows/repair-catalog-hard-quality-pending.yml'
   workflow_run:
     workflows: ['Master Production Pipeline 24/7']
     types: [completed]
@@ -14,8 +9,11 @@ on:
 permissions:
   contents: read
 
+# Fila v2: a fila anterior pode conter uma execucao antiga de push esperando
+# um SHA intermediario que foi corretamente superado por um descendente. A nova
+# fila e serial e nao cancelavel, mas nao fica bloqueada por esse legado.
 concurrency:
-  group: production-catalog-hard-quality-repair
+  group: production-catalog-hard-quality-repair-v2
   cancel-in-progress: false
 
 jobs:
@@ -54,25 +52,48 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Wait for exact production release
+      - name: Wait for production release containing target
         shell: bash
         run: |
           set -Eeuo pipefail
-          deployed=''
+          relation='other'
           for attempt in $(seq 1 120); do
-            deployed="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            relation="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              ubuntu@137.131.156.17 \
-              'if test -r /home/ubuntu/shopvivaliz-deploy/current/.release-sha; then cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha; else printf missing; fi')"
-            if [[ "$deployed" == "$TARGET_SHA" ]]; then
-              echo 'production_release_exact=true'
+              ubuntu@137.131.156.17 'bash -s' -- "$TARGET_SHA" <<'REMOTE'
+          set -Eeuo pipefail
+          target="$1"
+          repo='/home/ubuntu/shopvivaliz-deploy/repo'
+          marker='/home/ubuntu/shopvivaliz-deploy/current/.release-sha'
+          if [[ ! -r "$marker" ]]; then
+            printf 'missing'
+            exit 0
+          fi
+          deployed="$(cat "$marker")"
+          if [[ "$deployed" == "$target" ]]; then
+            printf 'exact'
+            exit 0
+          fi
+          if [[ "$deployed" =~ ^[0-9a-f]{40}$ ]] \
+            && git -C "$repo" cat-file -e "${target}^{commit}" 2>/dev/null \
+            && git -C "$repo" cat-file -e "${deployed}^{commit}" 2>/dev/null \
+            && git -C "$repo" merge-base --is-ancestor "$target" "$deployed"; then
+            printf 'descendant'
+            exit 0
+          fi
+          printf 'other'
+          REMOTE
+          )"
+            if [[ "$relation" == 'exact' || "$relation" == 'descendant' ]]; then
+              echo "production_release_relation=$relation"
               break
             fi
             echo "waiting_for_production_release_attempt=${attempt}"
             sleep 15
           done
-          if [[ "$deployed" != "$TARGET_SHA" ]]; then
-            echo '::error::Exact deployed SHA was not observed in production before timeout.'
+          if [[ "$relation" != 'exact' && "$relation" != 'descendant' ]]; then
+            echo '::error::A deployed release containing the target SHA was not observed before timeout.'
             exit 4
           fi
 
@@ -81,6 +102,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
             ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
@@ -96,4 +118,7 @@ jobs:
           echo 'catalog_repair_publishes_marketplace=false'
           echo 'catalog_invalid_pending_kept_for_manual_fix=false'
           echo 'catalog_repair_interruption_resumable=true'
+          echo 'catalog_repair_ssh_keepalive=true'
+          echo 'catalog_repair_push_trigger=false'
+          echo 'catalog_repair_accepts_deployed_descendant=true'
           echo 'secret_values_printed=false'

@@ -5,8 +5,8 @@ declare(strict_types=1);
 /**
  * Repara rascunhos antigos que ficaram em pending apesar de reprovados por
  * checks hard. O script nunca publica em marketplace: ele remove o rascunho
- * invalido da fila de aprovacao e gera um novo staging usando o pipeline
- * validado/fallback de provedores.
+ * invalido da fila de aprovacao e gera um novo staging usando normalizacao
+ * deterministica + nova tentativa guiada + fallback de provedores.
  *
  * O reparo e retomavel: se uma execucao for interrompida depois de marcar um
  * rascunho antigo como failed e antes de criar o substituto valido, a proxima
@@ -25,8 +25,10 @@ if (PHP_SAPI !== 'cli') {
 
 require_once __DIR__ . '/config_optimization.php';
 require_once __DIR__ . '/api/optimize_catalog.php';
+require_once __DIR__ . '/src/CatalogGeneratedDataNormalizer.php';
 
 const CATALOG_HARD_REPAIR_PREFIX = 'Substituido automaticamente: hard quality gate ';
+const CATALOG_HARD_REPAIR_PROVIDER_ATTEMPTS = 2;
 
 $limit = 500;
 foreach (array_slice($argv, 1) as $arg) {
@@ -85,6 +87,81 @@ function catalog_hard_repair_failures(array $quality): array
         }
     }
     return $failed;
+}
+
+/**
+ * Gera um substituto valido sem delegar ao usuario nenhuma correcao de hard
+ * gate. Cada provedor recebe ate duas tentativas: a primeira e normalizada por
+ * codigo; se ainda falhar, a segunda recebe o erro exato do gate. Depois o
+ * fluxo passa ao proximo provedor/chave disponivel.
+ *
+ * @return array{success:bool,provider_used?:string,staging_id?:int,error?:string}
+ */
+function catalog_hard_repair_generate(PDO $db, int $productId, string $channel, string $preferredProvider, array $product): array
+{
+    $providers = ai_catalog_provider_candidates($preferredProvider);
+    if ($providers === []) {
+        return ['success' => false, 'error' => 'Nenhum provedor de texto possui chave ativa disponivel.'];
+    }
+
+    $systemPrompt = ai_catalog_build_system_prompt($channel);
+    $basePrompt = ai_catalog_build_user_prompt($product, $channel);
+    $lastError = 'Nenhum provedor conseguiu produzir conteudo publicavel.';
+
+    foreach ($providers as $resolvedProvider) {
+        if (!ai_catalog_provider_available($resolvedProvider)) {
+            ai_catalog_provider_audit_log($resolvedProvider, $channel, 'skip', 'cooldown', $productId);
+            continue;
+        }
+
+        $correction = '';
+        for ($attempt = 1; $attempt <= CATALOG_HARD_REPAIR_PROVIDER_ATTEMPTS; $attempt++) {
+            try {
+                $prompt = $basePrompt . $correction;
+                $data = catalog_ai_make_provider($resolvedProvider)->complete($systemPrompt, $prompt);
+                if (!is_array($data)) {
+                    throw new RuntimeException('Resposta do provedor nao retornou um objeto de catalogo.');
+                }
+
+                $data = catalog_generated_normalize($data, $channel, $product);
+                ai_catalog_validate_ai_response($data, $channel, $product);
+                $quality = ai_catalog_quality_report($data, $channel, $product);
+                $stagingId = ai_catalog_insert_staging_row(
+                    $db,
+                    $productId,
+                    $channel,
+                    $resolvedProvider,
+                    $data,
+                    'pending',
+                    null,
+                    $quality
+                );
+                ai_catalog_provider_audit_log($resolvedProvider, $channel, 'ok', 'legacy_hard_gate_auto_repaired', $productId);
+                return [
+                    'success' => true,
+                    'provider_used' => $resolvedProvider,
+                    'staging_id' => $stagingId,
+                ];
+            } catch (Throwable $e) {
+                $lastError = $e->getMessage();
+                ai_catalog_provider_audit_log(
+                    $resolvedProvider,
+                    $channel,
+                    'fail',
+                    'legacy_repair_attempt_' . $attempt . ': ' . $lastError,
+                    $productId
+                );
+                error_log('[catalog-optimization] reparo legado falhou produto #' . $productId
+                    . ' canal=' . $channel . ' provider=' . $resolvedProvider
+                    . ' tentativa=' . $attempt . ': ' . $lastError);
+                $correction = "\n\nCORRECAO AUTOMATICA OBRIGATORIA: a tentativa anterior foi rejeitada: {$lastError}."
+                    . " Corrija exatamente essa falha. Comece o titulo pela identidade factual do produto, remova claims nao comprovados e respeite todos os limites do canal."
+                    . " Responda novamente com o JSON completo e somente com fatos presentes na origem.";
+            }
+        }
+    }
+
+    return ['success' => false, 'error' => $lastError];
 }
 
 // Inclui:
@@ -186,10 +263,7 @@ foreach ($rows as $row) {
         continue;
     }
 
-    // ai_catalog_process_item nunca cria pending antes de passar pelo mesmo
-    // validador hard usado na publicacao e ja possui fallback de provedores e
-    // rotacao de pools de credenciais.
-    $result = ai_catalog_process_item($db, $productId, $channel, $provider);
+    $result = catalog_hard_repair_generate($db, $productId, $channel, $provider, $product);
     if (($result['success'] ?? false) === true) {
         $repaired++;
     } else {
