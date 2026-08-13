@@ -1,0 +1,166 @@
+name: Temporary Patch Olist Health Canonical Store
+
+on:
+  push:
+    branches:
+      - fix/olist-health-canonical-store-20260813
+    paths:
+      - '.github/workflows/tmp-patch-olist-health-canonical.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/olist-health-canonical-store-20260813
+      - name: Patch monitor and add regression
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('includes/integration-health.php')
+          text = path.read_text(encoding='utf-8')
+
+          old_path = "$path = BASE_PATH . '/storage/private/tokens.json';"
+          new_path = "$path = svih_olist_token_store_path();"
+          if text.count(old_path) != 1:
+              raise SystemExit('expected legacy Olist token path exactly once')
+          text = text.replace(old_path, new_path)
+
+          marker = "function svih_save_env_tokens(array $values): bool\n{"
+          if marker not in text:
+              raise SystemExit('legacy env token writer marker missing')
+
+          helper = r'''function svih_olist_token_store_path(): string
+          {
+              $explicit = trim((string)(getenv('SHOPVIVALIZ_OLIST_TOKEN_FILE') ?: ''));
+              if ($explicit !== '') {
+                  return $explicit;
+              }
+
+              $projectParent = dirname(BASE_PATH);
+              $deployRoot = basename($projectParent) === 'releases'
+                  ? dirname($projectParent)
+                  : $projectParent;
+              $sharedStore = $deployRoot . '/shared/private/olist-tokens.json';
+              if (is_dir($deployRoot . '/shared')) {
+                  return $sharedStore;
+              }
+
+              return BASE_PATH . '/storage/private/olist-tokens.json';
+          }
+
+          '''
+          text = text.replace(marker, helper + marker, 1)
+
+          writer_pattern = re.compile(
+              r"function svih_save_env_tokens\(array \$values\): bool\n\{.*?\n\}\n\n(?=function svih_olist_api)",
+              re.S,
+          )
+          text, writer_count = writer_pattern.subn('', text, count=1)
+          if writer_count != 1:
+              raise SystemExit('failed to remove legacy Olist env token writer')
+
+          old_candidates = r'''    foreach ([
+              svih_env('OLIST_ACCESS_TOKEN'),
+              svih_env('TINY_ACCESS_TOKEN'),
+              svih_env('TOKEN_API_OLIST'),
+              (string)($stored['OLIST_ACCESS_TOKEN'] ?? ''),
+              (string)($stored['TINY_ACCESS_TOKEN'] ?? ''),
+          ] as $token) {'''
+          new_candidates = r'''    foreach ([
+              (string)($stored['OLIST_ACCESS_TOKEN'] ?? ''),
+              (string)($stored['TINY_ACCESS_TOKEN'] ?? ''),
+              svih_env('OLIST_ACCESS_TOKEN'),
+              svih_env('TINY_ACCESS_TOKEN'),
+              svih_env('TOKEN_API_OLIST'),
+          ] as $token) {'''
+          if old_candidates not in text:
+              raise SystemExit('legacy access candidate ordering missing')
+          text = text.replace(old_candidates, new_candidates, 1)
+
+          refresh_pattern = re.compile(
+              r"    \$fixes = \[\];\n    \$lastError = '';\n    \$lastStatus = 0;\n    if \(\$fix\) \{.*?\n    \}\n\n(?=    \$hasCompleteCandidate)",
+              re.S,
+          )
+          replacement = "    $fixes = [];\n    $lastError = '';\n    $lastStatus = 0;\n\n"
+          text, refresh_count = refresh_pattern.subn(replacement, text, count=1)
+          if refresh_count != 1:
+              raise SystemExit('failed to remove Olist refresh writer from integration monitor')
+
+          old_remediation = r'''        $remediation = $fix
+              ? 'A renovacao automatica falhou; reautorize o aplicativo.'
+              : 'Use Atualizar agora para renovar; se persistir, reautorize.';'''
+          new_remediation = r'''        $remediation = 'O daemon central de renovacao e o unico escritor OAuth; verifique o servico e, se persistir, reautorize.';'''
+          if old_remediation not in text:
+              raise SystemExit('legacy remediation text missing')
+          text = text.replace(old_remediation, new_remediation, 1)
+
+          path.write_text(text, encoding='utf-8')
+
+          test = Path('tests/olist-integration-health-readonly-test.php')
+          test.write_text(r'''<?php
+          declare(strict_types=1);
+
+          $path = dirname(__DIR__) . '/includes/integration-health.php';
+          $source = file_get_contents($path);
+          if (!is_string($source)) {
+              fwrite(STDERR, "integration-health.php unreadable\n");
+              exit(1);
+          }
+
+          $checks = [
+              'canonical store helper' => str_contains($source, 'function svih_olist_token_store_path(): string'),
+              'canonical store filename' => str_contains($source, "olist-tokens.json"),
+              'explicit store override' => str_contains($source, "SHOPVIVALIZ_OLIST_TOKEN_FILE"),
+              'legacy env token writer removed' => !str_contains($source, 'function svih_save_env_tokens('),
+          ];
+
+          $start = strpos($source, 'function svih_olist(bool $fix): array');
+          $end = strpos($source, 'function svih_ml(bool $fix): array');
+          if ($start === false || $end === false || $end <= $start) {
+              fwrite(STDERR, "Unable to isolate Olist monitor section\n");
+              exit(1);
+          }
+          $olist = substr($source, $start, $end - $start);
+          $checks['Olist monitor cannot refresh'] = !str_contains($olist, "grant_type' => 'refresh_token'");
+          $checks['Olist monitor cannot call token endpoint'] = !str_contains($olist, '/protocol/openid-connect/token');
+          $checks['Olist monitor cannot persist env tokens'] = !str_contains($olist, 'svih_save_env_tokens');
+
+          $storedPos = strpos($olist, "(string)(\$stored['OLIST_ACCESS_TOKEN'] ?? '')");
+          $envPos = strpos($olist, "svih_env('OLIST_ACCESS_TOKEN')");
+          $checks['canonical access token precedes env fallback'] = $storedPos !== false && $envPos !== false && $storedPos < $envPos;
+
+          foreach ($checks as $name => $ok) {
+              if (!$ok) {
+                  fwrite(STDERR, "FAIL: {$name}\n");
+                  exit(1);
+              }
+          }
+          echo "Olist integration health read-only contract OK\n";
+          ''', encoding='utf-8')
+          PY
+
+          php -l includes/integration-health.php
+          php -l tests/olist-integration-health-readonly-test.php
+          php tests/olist-integration-health-readonly-test.php
+          git diff --check
+
+      - name: Commit code changes only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'ShopVivaliz Ops'
+          git config user.email 'ops@shopvivaliz.local'
+          git add includes/integration-health.php tests/olist-integration-health-readonly-test.php
+          git diff --cached --check
+          git commit -m 'fix: ler OAuth Olist do store canonico no monitor'
+          git push origin HEAD:fix/olist-health-canonical-store-20260813
