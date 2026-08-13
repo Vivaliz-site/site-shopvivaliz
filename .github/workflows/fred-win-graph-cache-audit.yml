@@ -2,7 +2,7 @@ name: Fred-Win Graph Cache Audit
 
 on:
   push:
-    branches: [main]
+    branches: [ops/inspect-mei-v020-stash]
     paths:
       - ".github/workflows/fred-win-graph-cache-audit.yml"
 
