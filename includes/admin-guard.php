@@ -102,23 +102,30 @@ if (empty($_SESSION['is_admin'])) {
     exit;
 }
 
-$svAiRoutineUiPages = [
+$svAdminEnhancedUiPages = [
+    '/admin/index.php',
     '/admin/ai-image-studio/admin_dashboard.php',
     '/admin/ai-image-studio/admin_validate.php',
     '/admin/catalog-optimization/admin_catalog.php',
 ];
 $svAdminScriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''));
-if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAiRoutineUiPages, true)) {
+if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAdminEnhancedUiPages, true)) {
     register_shutdown_function(static function () use ($svAdminScriptName): void {
         $svAssetVersion = static function (string $relativePath): string {
             $path = dirname(__DIR__) . $relativePath;
             $mtime = is_file($path) ? (int)filemtime($path) : 0;
-            return $mtime > 0 ? (string)$mtime : '20260813g';
+            return $mtime > 0 ? (string)$mtime : '20260813h';
         };
+
+        if ($svAdminScriptName === '/admin/index.php') {
+            echo "\n<script src=\"/admin/assets/admin-mobile-operations.js?v=" . $svAssetVersion('/admin/assets/admin-mobile-operations.js') . "\"></script>\n";
+            return;
+        }
 
         if ($svAdminScriptName === '/admin/catalog-optimization/admin_catalog.php') {
             echo "\n<script src=\"/admin/assets/catalog-optimization-workflow.js?v=" . $svAssetVersion('/admin/assets/catalog-optimization-workflow.js') . "\"></script>\n";
             echo "<script src=\"/admin/assets/catalog-change-intelligence.js?v=" . $svAssetVersion('/admin/assets/catalog-change-intelligence.js') . "\"></script>\n";
+            echo "<script src=\"/admin/assets/catalog-effective-results.js?v=" . $svAssetVersion('/admin/assets/catalog-effective-results.js') . "\"></script>\n";
             return;
         }
 
@@ -131,6 +138,7 @@ if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAiRoutineUiPages, t
         if ($svAdminScriptName === '/admin/ai-image-studio/admin_dashboard.php') {
             echo "<script src=\"/admin/assets/image-provider-health.js?v=" . $svAssetVersion('/admin/assets/image-provider-health.js') . "\"></script>\n";
             echo "<script src=\"/admin/assets/image-professional-ops.js?v=" . $svAssetVersion('/admin/assets/image-professional-ops.js') . "\"></script>\n";
+            echo "<script src=\"/admin/assets/image-generation-usability-v2.js?v=" . $svAssetVersion('/admin/assets/image-generation-usability-v2.js') . "\"></script>\n";
         }
     });
 }
