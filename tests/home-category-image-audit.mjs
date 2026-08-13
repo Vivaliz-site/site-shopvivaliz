@@ -19,8 +19,8 @@ for (const [needle, label] of [
 
 const aliasSource = fs.readFileSync('js/category-real-images-v52.js', 'utf8');
 for (const [needle, label] of [
-  ['/api/catalog/category-images.php', 'endpoint real de categorias'],
-  ["'organizacao':'armarios e organizacao'", 'alias de organizacao'],
+  ['/api/catalog/products.php', 'fonte real de produtos'],
+  ["'organizacao':['armarios e organizacao']", 'alias de organizacao'],
   ['__svCategoryAliasRepairDone', 'marcador de conclusao'],
 ]) {
   if (!aliasSource.includes(needle)) throw new Error(`alias_source_guard_missing:${label}`);

@@ -8,68 +8,120 @@
     return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');
   }
 
+  function validImage(value){
+    var url=String(value||'').trim();
+    return !!url
+      && !/unsplash\.com|placeholder|logo-vivaliz|no[-_ ]?image|sem[-_ ]?imagem/i.test(url)
+      && url.indexOf('/public/assets/category-images/')===-1
+      && (/^https?:\/\//i.test(url)||url.charAt(0)==='/');
+  }
+
+  function rowImages(row){
+    var images=[];
+    [row&&row.image_url,row&&row.image].forEach(function(value){
+      if(validImage(value))images.push(String(value).trim());
+    });
+    var gallery=row&&Array.isArray(row.images)?row.images:[];
+    gallery.forEach(function(value){
+      var candidate=value&&typeof value==='object'?(value.url||value.image_url||value.src||''):value;
+      if(validImage(candidate))images.push(String(candidate).trim());
+    });
+    return images.filter(function(value,index,all){return all.indexOf(value)===index;});
+  }
+
   var aliases={
-    'rodizios & rodas':'rodizios',
-    'ferramentas':'ferramentas',
-    'organizacao':'armarios e organizacao',
-    'jardim & floreiras':'floreiras e jardim',
-    'ferragens & fixacao':'fixacao e ferragem'
+    'rodizios & rodas':['rodizios','rodas para carrinhos e moveis'],
+    'ferramentas':['ferramentas','ferramentas manuais','caixas de ferramentas'],
+    'organizacao':['armarios e organizacao'],
+    'jardim & floreiras':['floreiras e jardim','vasos decorativos'],
+    'ferragens & fixacao':['fixacao e ferragem','ferragens e fixacao']
   };
 
-  function isRealImage(url){
-    var value=String(url||'');
-    return !!value
-      && !/unsplash\.com|placeholder|logo-vivaliz/i.test(value)
-      && value.indexOf('/public/assets/category-images/')===-1;
+  function fetchPage(page){
+    return fetch('/api/catalog/products.php?limit=200&available=1&page='+encodeURIComponent(String(page)),{
+      headers:{Accept:'application/json'},credentials:'same-origin'
+    }).then(function(response){
+      if(!response.ok)throw new Error('category_alias_products_request_failed');
+      return response.json();
+    }).then(function(data){
+      return {
+        rows:data&&Array.isArray(data.products)?data.products:[],
+        totalPages:Math.max(1,Number(data&&data.total_pages)||1)
+      };
+    });
+  }
+
+  function fetchAll(){
+    var rows=[];
+    function load(page,totalPages){
+      return fetchPage(page).then(function(result){
+        rows=rows.concat(result.rows);
+        var pages=Math.max(totalPages||1,result.totalPages||1);
+        return page<pages?load(page+1,pages):rows;
+      });
+    }
+    return load(1,1);
+  }
+
+  function choose(label,rows,used){
+    var key=normalize(label);
+    var accepted=aliases[key]||[key];
+    var candidates=rows.filter(function(row){
+      return accepted.indexOf(normalize(row&&row.category))!==-1;
+    }).map(function(row){
+      return {row:row,images:rowImages(row)};
+    }).filter(function(item){return item.images.length>0;});
+
+    candidates.sort(function(a,b){
+      var aScore=(Number(a.row&&a.row.stock)>0?4:0)+(Number(a.row&&a.row.price)>0?2:0);
+      var bScore=(Number(b.row&&b.row.stock)>0?4:0)+(Number(b.row&&b.row.price)>0?2:0);
+      return bScore-aScore;
+    });
+
+    for(var i=0;i<candidates.length;i+=1){
+      for(var j=0;j<candidates[i].images.length;j+=1){
+        var url=candidates[i].images[j];
+        if(!used[url])return {row:candidates[i].row,url:url};
+      }
+    }
+    return null;
   }
 
   function finish(){window.__svCategoryAliasRepairDone=true;}
 
   function repair(cards){
-    fetch('/api/catalog/category-images.php',{headers:{Accept:'application/json'},credentials:'same-origin'})
-      .then(function(response){
-        if(!response.ok)throw new Error('category_images_request_failed');
-        return response.json();
-      })
-      .then(function(data){
-        var rows=data&&Array.isArray(data.categories)?data.categories:[];
-        var byCategory={};
-        rows.forEach(function(row){byCategory[normalize(row&&row.category)]=row;});
-        var used={};
+    fetchAll().then(function(rows){
+      var used={};
+      cards.forEach(function(card){
+        var title=card.querySelector('strong');
+        var image=card.querySelector('img.category-slide-img');
+        if(!title||!(image instanceof HTMLImageElement))return;
+        if(image.dataset.svCategorySource==='catalog'){
+          used[image.currentSrc||image.src]=true;
+          return;
+        }
 
-        cards.forEach(function(card){
-          var title=card.querySelector('strong');
-          var image=card.querySelector('img.category-slide-img');
-          if(!title||!(image instanceof HTMLImageElement))return;
-          if(image.dataset.svCategorySource==='catalog'){
-            used[image.currentSrc||image.src]=true;
-            return;
-          }
+        var label=String(title.textContent||'').trim();
+        var selected=choose(label,rows,used);
+        if(!selected)return;
 
-          var label=String(title.textContent||'').trim();
-          var key=aliases[normalize(label)]||normalize(label);
-          var row=byCategory[key];
-          var url=row&&String(row.image_url||'').trim();
-          if(!row||!isRealImage(url)||used[url])return;
-
-          var fallback=image.currentSrc||image.getAttribute('src')||'';
-          image.onerror=function(){
-            image.onerror=null;
-            image.src=fallback;
-            image.dataset.svCategorySource='local-fallback';
-            delete image.dataset.svProductSku;
-          };
-          image.src=url;
-          image.alt=String(row.product_name||('Produto da categoria '+label));
-          image.dataset.svCategorySource='catalog';
-          image.dataset.svProductSku=String(row.sku||'');
-          image.loading='lazy';
-          image.decoding='async';
-          used[url]=true;
-          card.classList.add('has-real-image');
-        });
-      })
-      .then(finish,finish);
+        var fallback=image.currentSrc||image.getAttribute('src')||'';
+        image.onerror=function(){
+          image.onerror=null;
+          image.src=fallback;
+          image.dataset.svCategorySource='local-fallback';
+          delete image.dataset.svProductSku;
+        };
+        image.src=selected.url;
+        image.alt=String(selected.row.name||('Produto da categoria '+label));
+        image.dataset.svCategorySource='catalog';
+        image.dataset.svProductSku=String(selected.row.sku||selected.row.id||'');
+        image.loading='lazy';
+        image.decoding='async';
+        used[selected.url]=true;
+        card.classList.add('has-real-image');
+      });
+    }).then(finish,finish);
   }
 
   function waitForPrimary(){
