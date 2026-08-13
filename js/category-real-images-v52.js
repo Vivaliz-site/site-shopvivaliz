@@ -69,6 +69,9 @@
           card.classList.add('has-real-image');
         });
       })
+      .catch(function(){
+        // public-experience-v1.js ja mantem fallback local seguro.
+      })
       .then(finish,finish);
   }
 
