@@ -53,14 +53,19 @@ function svs_env(string ...$keys): string {
     return '';
 }
 
-function svs_save_tokens(string $access, string $refresh): void {
-    $dir = svs_root() . '/storage/private';
-    @mkdir($dir, 0750, true);
-    file_put_contents("$dir/tokens.json", json_encode([
-        'OLIST_ACCESS_TOKEN'  => $access,
-        'OLIST_REFRESH_TOKEN' => $refresh,
-        'updated_at'          => date('c'),
-    ], JSON_PRETTY_PRINT), LOCK_EX);
+function svs_token_store_path(): string {
+    $configured = getenv('SHOPVIVALIZ_OLIST_TOKEN_FILE');
+    if (is_string($configured) && trim($configured) !== '') return trim($configured);
+    if (PHP_OS_FAMILY === 'Windows') return svs_root() . '/storage/private/olist-tokens.json';
+    return '/home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json';
+}
+
+function svs_read_token_store(): array {
+    $path = svs_token_store_path();
+    clearstatcache(true, $path);
+    if (!is_file($path) || !is_readable($path)) return [];
+    $decoded = json_decode((string)file_get_contents($path), true);
+    return is_array($decoded) ? $decoded : [];
 }
 
 /* ── HTTP helpers (usando stream contexts em vez de cURL) ── */
@@ -93,78 +98,18 @@ function svs_http_get(string $url, array $headers = [], int $timeout = 45): arra
     return ['status' => $status, 'body' => is_string($body) ? $body : '', 'error' => $err];
 }
 
-function svs_http_post(string $url, array $fields, array $extraHeaders = []): array {
-    $data = http_build_query($fields);
-    $headers = array_merge(
-        ['Content-Type: application/x-www-form-urlencoded', 'Content-Length: ' . strlen($data)],
-        $extraHeaders
-    );
-
-    $ctx = stream_context_create([
-        'http' => [
-            'method'        => 'POST',
-            'header'        => implode("\r\n", $headers) . "\r\n",
-            'content'       => $data,
-            'timeout'       => 30,
-            'ignore_errors' => true,
-        ],
-        'ssl' => [
-            'verify_peer' => true,
-            'verify_peer_name' => true,
-        ],
-    ]);
-
-    $body = @file_get_contents($url, false, $ctx);
-    $status = 0;
-
-    if ($http_response_header ?? null) {
-        preg_match('/HTTP\/\d\.\d (\d{3})/', $http_response_header[0], $m);
-        $status = (int)($m[1] ?? 0);
-    } else {
-        $status = 500;
-    }
-
-    return ['status' => $status, 'body' => is_string($body) ? $body : ''];
-}
-
-/* ── OAuth: obter access_token via refresh ── */
+/* ── OAuth: access token gerenciado exclusivamente pelo daemon ── */
 function svs_get_access_token(): string {
-    $TOKEN_URL    = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token';
-    $refresh      = svs_env('OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN');
-    $clientId     = svs_env('OLIST_CLIENT_ID');
-    $clientSecret = svs_env('OLIST_CLIENT_SECRET');
-    if (strlen($clientId) < 16) $clientId = svs_env('TINY_CLIENT_ID', 'CLIENT_ID_API_OLIST');
-    if (strlen($clientSecret) < 16) $clientSecret = svs_env('TINY_CLIENT_SECRET', 'CLIENT_SECRET_OLIST');
-
-    if ($refresh === '' || $clientId === '' || $clientSecret === '') {
-        throw new RuntimeException(
-            'credentials_missing: configure OLIST_CLIENT_ID, OLIST_CLIENT_SECRET e OLIST_REFRESH_TOKEN'
-        );
+    $store = svs_read_token_store();
+    foreach (['OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN'] as $key) {
+        $value = trim((string)($store[$key] ?? ''));
+        if ($value !== '') return $value;
     }
-
-    $res = svs_http_post($TOKEN_URL, [
-        'grant_type'    => 'refresh_token',
-        'client_id'     => $clientId,
-        'client_secret' => $clientSecret,
-        'refresh_token' => $refresh,
-    ]);
-
-    if ($res['status'] !== 200) {
-        $d = json_decode($res['body'], true);
-        $e = is_array($d) ? ($d['error_description'] ?? $d['error'] ?? '') : '';
-        throw new RuntimeException("oauth_refresh_failed HTTP {$res['status']}: $e");
+    $token = svs_env('OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN', 'TOKEN_API_OLIST');
+    if ($token === '') {
+        throw new RuntimeException('access_token_missing: aguarde shopvivaliz-token-renewer ou reautorize em /olist/connect.php');
     }
-
-    $json = json_decode($res['body'], true);
-    if (!is_array($json) || empty($json['access_token'])) {
-        throw new RuntimeException('oauth_invalid_payload: ' . substr($res['body'], 0, 200));
-    }
-
-    $newAccess  = (string)$json['access_token'];
-    $newRefresh = (string)($json['refresh_token'] ?? $refresh);
-    svs_save_tokens($newAccess, $newRefresh);
-    svs_log('Tokens OAuth renovados com sucesso.');
-    return $newAccess;
+    return $token;
 }
 
 /* ── Tiny v3: buscar todos os produtos com paginação ── */

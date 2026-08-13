@@ -204,78 +204,45 @@ PY;
     ];
 }
 
+function svtop_olist_token_store_path(): string
+{
+    $configured = getenv('SHOPVIVALIZ_OLIST_TOKEN_FILE');
+    if (is_string($configured) && trim($configured) !== '') {
+        return trim($configured);
+    }
+    if (PHP_OS_FAMILY === 'Windows') {
+        return svtop_root() . '/storage/private/olist-tokens.json';
+    }
+    return '/home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json';
+}
+
+/** @return array<string,mixed> */
+function svtop_olist_token_store(): array
+{
+    $path = svtop_olist_token_store_path();
+    clearstatcache(true, $path);
+    if (!is_file($path) || !is_readable($path)) {
+        return [];
+    }
+    $decoded = json_decode((string)file_get_contents($path), true);
+    return is_array($decoded) ? $decoded : [];
+}
+
 function svtop_tiny_credentials_configured(): bool
 {
-    return svtop_env('OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN') !== ''
-        && svtop_env('OLIST_CLIENT_ID', 'TINY_CLIENT_ID') !== ''
-        && svtop_env('OLIST_CLIENT_SECRET', 'TINY_CLIENT_SECRET') !== '';
+    return svtop_tiny_get_token() !== '';
 }
 
 function svtop_tiny_get_token(): string
 {
-    $TOKEN_URL    = 'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token';
-    $accessToken  = svtop_env('OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN');
-    if ($accessToken !== '') {
-        return $accessToken;
-    }
-    $refresh      = svtop_env('OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN');
-    $clientId     = svtop_env('OLIST_CLIENT_ID',     'TINY_CLIENT_ID');
-    $clientSecret = svtop_env('OLIST_CLIENT_SECRET', 'TINY_CLIENT_SECRET');
-    if ($refresh === '' || $clientId === '' || $clientSecret === '') return '';
-
-    $ch = curl_init($TOKEN_URL);
-    curl_setopt_array($ch, [
-        CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => http_build_query([
-            'grant_type'    => 'refresh_token',
-            'client_id'     => $clientId,
-            'client_secret' => $clientSecret,
-            'refresh_token' => $refresh,
-        ]),
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 20,
-        CURLOPT_HTTPHEADER     => ['Content-Type: application/x-www-form-urlencoded'],
-    ]);
-    $body   = curl_exec($ch);
-    $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-    curl_close($ch);
-    if ($status !== 200) {
-        $fallback = svtop_python_request('POST', $TOKEN_URL, [
-            'Content-Type' => 'application/x-www-form-urlencoded',
-            'Accept' => 'application/json',
-            'User-Agent' => 'ShopVivaliz/3.0',
-        ], http_build_query([
-            'grant_type'    => 'refresh_token',
-            'client_id'     => $clientId,
-            'client_secret' => $clientSecret,
-            'refresh_token' => $refresh,
-        ]));
-        if ($fallback['status'] !== 200) {
-            return '';
+    $store = svtop_olist_token_store();
+    foreach (['OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN'] as $key) {
+        $value = trim((string)($store[$key] ?? ''));
+        if ($value !== '') {
+            return $value;
         }
-        $json = json_decode((string)$fallback['raw'], true);
-        return is_array($json) ? (string)($json['access_token'] ?? '') : '';
     }
-    $json = json_decode(is_string($body) ? $body : '', true);
-    if (is_array($json)) {
-        return (string)($json['access_token'] ?? '');
-    }
-
-    $fallback = svtop_python_request('POST', $TOKEN_URL, [
-        'Content-Type' => 'application/x-www-form-urlencoded',
-        'Accept' => 'application/json',
-        'User-Agent' => 'ShopVivaliz/3.0',
-    ], http_build_query([
-        'grant_type'    => 'refresh_token',
-        'client_id'     => $clientId,
-        'client_secret' => $clientSecret,
-        'refresh_token' => $refresh,
-    ]));
-    if ($fallback['status'] !== 200) {
-        return '';
-    }
-    $json = json_decode((string)$fallback['raw'], true);
-    return is_array($json) ? (string)($json['access_token'] ?? '') : '';
+    return svtop_env('OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN', 'TOKEN_API_OLIST');
 }
 
 function svtop_tiny_request(string $method, string $path, string $token, ?array $payload = null): array
