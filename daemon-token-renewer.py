@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import binascii
 import json
 import os
 import tempfile
@@ -52,7 +53,7 @@ SAFE_OAUTH_ERROR_CODES = frozenset(
 
 
 def current_token_store_path() -> Path:
-    """Return the shared production store, but keep tests/local runs isolated."""
+    """Return the shared production store, while isolating tests/local runs."""
     if TOKEN_STORE_PATH != DEFAULT_TOKEN_STORE_PATH or "SHOPVIVALIZ_OLIST_TOKEN_FILE" in os.environ:
         return TOKEN_STORE_PATH
     if ENV_PATH != DEFAULT_ENV_PATH:
@@ -118,6 +119,7 @@ def oauth_client_candidates(config: dict[str, str]) -> list[tuple[str, str, str]
     for alias, id_key, secret_key in (
         ("olist", "OLIST_CLIENT_ID", "OLIST_CLIENT_SECRET"),
         ("tiny", "TINY_CLIENT_ID", "TINY_CLIENT_SECRET"),
+        ("legacy", "CLIENT_ID_API_OLIST", "CLIENT_SECRET_OLIST"),
     ):
         client_id = config.get(id_key, "").strip()
         client_secret = config.get(secret_key, "").strip()
@@ -132,15 +134,18 @@ def oauth_client_candidates(config: dict[str, str]) -> list[tuple[str, str, str]
 def oauth_refresh_candidates(config: dict[str, str]) -> list[tuple[str, str]]:
     candidates: list[tuple[str, str]] = []
     seen: set[str] = set()
-    for alias, key in (
-        ("olist", "OLIST_REFRESH_TOKEN"),
-        ("tiny", "TINY_REFRESH_TOKEN"),
-    ):
-        token = config.get(key, "").strip()
-        if not token or token in seen:
-            continue
-        seen.add(token)
-        candidates.append((alias, token))
+    sources: tuple[dict[str, Any], ...] = (read_token_store(), config, _read_env())
+    for source in sources:
+        for alias, key in (
+            ("olist", "OLIST_REFRESH_TOKEN"),
+            ("tiny", "TINY_REFRESH_TOKEN"),
+        ):
+            value = source.get(key)
+            token = value.strip() if isinstance(value, str) else ""
+            if not token or token in seen:
+                continue
+            seen.add(token)
+            candidates.append((alias, token))
     return candidates
 
 
@@ -214,24 +219,27 @@ def renew_token(config: dict[str, str]) -> dict[str, Any] | None:
     return None
 
 
+def ensure_token_store_parent() -> None:
+    path = current_token_store_path()
+    if not ENV_PATH.exists():
+        return
+    env_target = ENV_PATH.resolve(strict=True)
+    env_stat = env_target.stat()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if os.name != "nt":
+        os.chmod(path.parent, 0o770)
+        os.chown(path.parent, env_stat.st_uid, env_stat.st_gid)
+
+
 def _atomic_write(
     path: Path,
     text: str,
     mode: int,
     uid: int | None,
     gid: int | None,
-    *,
-    prepare_private_parent: bool = False,
 ) -> None:
-    if prepare_private_parent:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if os.name != "nt":
-            os.chmod(path.parent, 0o770)
-            if uid is not None and gid is not None:
-                os.chown(path.parent, uid, gid)
-    elif not path.parent.is_dir():
+    if not path.parent.is_dir():
         raise RuntimeError("diretorio de destino ausente")
-
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     temporary = Path(temporary_name)
     try:
@@ -289,6 +297,7 @@ def update_env(new_token: str, new_refresh_token: str) -> None:
 
 
 def update_token_store(new_token: str, new_refresh_token: str, result: dict[str, Any]) -> None:
+    ensure_token_store_parent()
     store = read_token_store()
     expires_in_raw = result.get("expires_in")
     try:
@@ -320,7 +329,6 @@ def update_token_store(new_token: str, new_refresh_token: str, result: dict[str,
         0o660,
         env_stat.st_uid if os.name != "nt" else None,
         env_stat.st_gid if os.name != "nt" else None,
-        prepare_private_parent=True,
     )
 
 
@@ -333,7 +341,7 @@ def _decode_jwt_exp(token: str) -> int | None:
     try:
         payload = json.loads(base64.urlsafe_b64decode(segment + padding).decode("utf-8"))
         value = int(payload.get("exp")) if isinstance(payload, dict) else 0
-    except (ValueError, TypeError, UnicodeError, json.JSONDecodeError):
+    except (ValueError, TypeError, UnicodeError, json.JSONDecodeError, binascii.Error):
         return None
     return value if value > 0 else None
 
@@ -389,6 +397,7 @@ def renew_once() -> dict[str, Any] | None:
 
 
 def check_and_renew(refresh_margin: int) -> tuple[bool, bool]:
+    ensure_token_store_parent()
     config = get_config()
     if not token_requires_refresh(config, refresh_margin):
         expiry = token_expiry_epoch(config)
