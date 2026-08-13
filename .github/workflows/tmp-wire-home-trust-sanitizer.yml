@@ -1,0 +1,75 @@
+name: Temporary Wire Home Trust Sanitizer
+
+on:
+  push:
+    branches:
+      - audit/home-trust-hardening-20260813
+    paths:
+      - '.github/workflows/tmp-wire-home-trust-sanitizer.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: audit/home-trust-hardening-20260813
+      - name: Wire sanitizer directly in index and strengthen regression
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          index = Path('index.php')
+          text = index.read_text(encoding='utf-8')
+          anchor = "require_once __DIR__ . '/config/bootstrap-env.php';\n"
+          wiring = """require_once __DIR__ . '/config/bootstrap-env.php';
+
+// Filtro de confianca exclusivo da home. O registro ocorre aqui, em vez de
+// alterar o bootstrap global, para iniciar antes do primeiro byte de HTML sem
+// afetar Admin, APIs, CLI ou outras paginas.
+require_once __DIR__ . '/includes/home-trust-sanitizer.php';
+$svHomeRequestPath = parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH) ?: '/';
+svhts_register($svHomeRequestPath);
+unset($svHomeRequestPath);
+"""
+          if text.count(anchor) != 1:
+              raise SystemExit('bootstrap anchor not found exactly once in index.php')
+          if "includes/home-trust-sanitizer.php" in text or "svhts_register($svHomeRequestPath)" in text:
+              raise SystemExit('home sanitizer wiring already present unexpectedly')
+          text = text.replace(anchor, wiring, 1)
+          index.write_text(text, encoding='utf-8')
+
+          test = Path('tests/home-trust-sanitizer-test.php')
+          source = test.read_text(encoding='utf-8')
+          anchor_test = "    $expect(str_contains($indexSource, 'AggregateRating'), 'Index real deixou de conter o marcador esperado; revisar/remover o filtro legado.');\n"
+          additions = """    $expect(str_contains($indexSource, "require_once __DIR__ . '/includes/home-trust-sanitizer.php';"), 'Index real deixou de carregar o sanitizador server-side.');
+    $expect(str_contains($indexSource, 'svhts_register($svHomeRequestPath);'), 'Index real deixou de registrar o sanitizador antes do HTML.');
+"""
+          if source.count(anchor_test) != 1:
+              raise SystemExit('test anchor not found exactly once')
+          source = source.replace(anchor_test, additions + anchor_test, 1)
+          test.write_text(source, encoding='utf-8')
+          PY
+
+          php -l index.php
+          php -l includes/home-trust-sanitizer.php
+          php -l tests/home-trust-sanitizer-test.php
+          php tests/home-trust-sanitizer-test.php
+          git diff --check
+
+      - name: Commit only product and regression changes
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'ShopVivaliz Ops'
+          git config user.email 'ops@shopvivaliz.local'
+          git add index.php tests/home-trust-sanitizer-test.php
+          git diff --cached --check
+          git commit -m 'fix: ativar sanitizador de confianca direto na home'
+          git push origin HEAD:audit/home-trust-hardening-20260813
