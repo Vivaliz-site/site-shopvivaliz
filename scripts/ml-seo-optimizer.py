@@ -6,8 +6,21 @@ Alvo: itens do seller com sold_quantity == 0, status active e catalog_listing ==
 (Anuncios de catalogo tem titulo/ficha/fotos herdados do produto de catalogo e nao
 sao editaveis pelo vendedor; itens com venda tem o titulo travado pelo ML.)
 
-Campos otimizados: title, attributes (ficha tecnica), sale_terms (garantia) e
-description. A categoria sugerida pelo domain_discovery e apenas reportada.
+IMPORTANTE - o que da para editar (ver docs/MERCADO-LIVRE-API.md):
+Todos os anuncios desse seller sao `user_product_listing` (tem `family_name` e
+`user_product_id`). Nesses anuncios o campo `title` NAO e editavel pela API:
+`PUT /items/{id}` com `title` responde 400 "You cannot modify the title if the item
+has a family_name", e `family_name` tambem e rejeitado (400 BODY_INVALID_FIELDS, ate
+com o valor identico ao atual). `PUT /user-products/{id}` nao existe (404).
+
+O ML RECOMPOE o titulo a partir dos atributos: preencher um atributo de variacao
+(tag `allow_variations`) faz o valor ser anexado ao titulo automaticamente. Entao a
+ficha tecnica e, ao mesmo tempo, o principal fator de posicionamento e o unico
+caminho para mexer no titulo.
+
+Campos otimizados aqui: attributes (ficha tecnica) e description. O titulo ideal e
+apenas reportado como sugestao para edicao manual, e a categoria sugerida pelo
+domain_discovery tambem e so reportada.
 
 O conteudo e gerado pelo Claude (claude-opus-5) a partir dos dados reais do anuncio
 e validado deterministicamente aqui antes de qualquer PUT: nada e enviado ao ML sem
