@@ -1,0 +1,91 @@
+name: Terminate stale MEI base sync only
+
+on:
+  push:
+    branches:
+      - ops/inspect-mei-v020-stash
+    paths:
+      - '.github/workflows/terminate-stale-mei-base-sync.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  terminate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Terminate only verified stale base-sync tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 240s ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          repo='/home/ubuntu/mei-mg-email'
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then
+            echo 'STALESYNC_ABORT_WORKER_ACTIVE=true'
+            exit 72
+          fi
+          echo 'STALESYNC_WORKER_OFF=true'
+
+          parent=''
+          child=''
+          while read -r pid ppid etimes comm; do
+            case "$comm" in python|python3) ;; *) continue ;; esac
+            [ "$etimes" -ge 21600 ] || continue
+            cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
+            [ "$cwd" = "$repo" ] || continue
+            mapfile -d '' parts < "/proc/$pid/cmdline" || true
+            script=''
+            for part in "${parts[@]}"; do
+              case "$part" in
+                *scripts/sincronizar_base_diaria.py) script='sync';;
+                *scripts/ingest_from_huggingface.py) script='ingest';;
+              esac
+            done
+            case "$script" in
+              sync) parent="$pid"; echo "STALESYNC_PARENT pid=$pid age_s=$etimes";;
+              ingest) child="$pid"; echo "STALESYNC_CHILD pid=$pid ppid=$ppid age_s=$etimes";;
+            esac
+          done < <(ps -eo pid=,ppid=,etimes=,comm=)
+
+          test -n "$parent" || { echo 'STALESYNC_PARENT_NOT_FOUND=true'; exit 73; }
+          if [ -n "$child" ]; then
+            actual_ppid="$(awk '/^PPid:/ {print $2}' "/proc/$child/status" 2>/dev/null || true)"
+            test "$actual_ppid" = "$parent" || { echo 'STALESYNC_PARENT_CHILD_MISMATCH=true'; exit 74; }
+          fi
+
+          [ -z "$child" ] || kill -TERM "$child" 2>/dev/null || true
+          kill -TERM "$parent" 2>/dev/null || true
+          for i in $(seq 1 10); do
+            alive=0
+            [ -n "$child" ] && kill -0 "$child" 2>/dev/null && alive=1 || true
+            kill -0 "$parent" 2>/dev/null && alive=1 || true
+            [ "$alive" -eq 0 ] && break
+            sleep 2
+          done
+          if [ -n "$child" ] && kill -0 "$child" 2>/dev/null; then kill -KILL "$child" 2>/dev/null || true; fi
+          if kill -0 "$parent" 2>/dev/null; then kill -KILL "$parent" 2>/dev/null || true; fi
+          sleep 2
+          if { [ -n "$child" ] && kill -0 "$child" 2>/dev/null; } || kill -0 "$parent" 2>/dev/null; then
+            echo 'STALESYNC_TERMINATE_FAILED=true'
+            exit 75
+          fi
+          echo 'STALESYNC_TERMINATED=true'
+          echo "STALESYNC_LOAD_AFTER=$(cut -d' ' -f1-3 /proc/loadavg)"
+          echo 'WORKER_RESUME_ALLOWED=false'
+          EOF
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey
