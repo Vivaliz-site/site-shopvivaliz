@@ -307,6 +307,10 @@ DIRETRIZES DE TITULO DO MERCADO LIVRE (obrigatorias):
 - Sem informacao que ja e um campo estruturado do anuncio (preco, condicao "novo", garantia) a menos que diferencie o produto.
 - Escrito em Title Case natural do portugues (primeira letra das palavras relevantes em maiuscula).
 
+ATENCAO: neste seller o titulo NAO e editavel pela API (o anuncio tem family_name e o ML recompoe o titulo a partir dos atributos). O titulo que voce escrever entra no relatorio como recomendacao para edicao manual. O que efetivamente vai ao ar sao a FICHA TECNICA e a DESCRICAO - trate as duas como o entregavel principal.
+
+Alguns atributos sao anexados ao titulo pelo ML automaticamente. Por isso, ao preencher um atributo, prefira o valor que faca sentido lido dentro do titulo e nao repita palavra que ja esta no titulo atual.
+
 FICHA TECNICA (atributos):
 - Preencher o maximo de atributos relevantes que voce consegue deduzir com seguranca dos dados fornecidos. Ficha completa e um dos maiores fatores de posicionamento no ML.
 - Se o atributo tem lista de valores permitidos, escolher EXATAMENTE um valor da lista (copie o texto do valor).
