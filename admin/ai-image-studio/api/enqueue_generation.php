@@ -29,18 +29,15 @@ function ais_enqueue_image_candidates(PDO $db, array $product, string $projectRo
 
     if ($sku !== '') {
         try {
-            $stmt = $db->prepare('SELECT * FROM olist_product_images WHERE sku = ? LIMIT 20');
+            $stmt = $db->prepare(
+                "SELECT * FROM olist_product_images "
+                . "WHERE sku = ? "
+                . "AND (status IS NULL OR status = '' OR status NOT IN ('error','deleted','inactive')) "
+                . "ORDER BY is_primary DESC, position ASC, id ASC LIMIT 20"
+            );
             $stmt->execute([$sku]);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-            usort($rows, static function (array $a, array $b): int {
-                return [-(int)($a['is_primary'] ?? 0), (int)($a['position'] ?? 9999), (int)($a['id'] ?? 999999)]
-                    <=> [-(int)($b['is_primary'] ?? 0), (int)($b['position'] ?? 9999), (int)($b['id'] ?? 999999)];
-            });
             foreach ($rows as $row) {
-                $status = strtolower(trim((string)($row['status'] ?? '')));
-                if (in_array($status, ['error', 'deleted', 'inactive'], true)) {
-                    continue;
-                }
                 $resolved = '';
                 if (function_exists('svsis_resolve_image_url')) {
                     $resolved = trim((string)svsis_resolve_image_url($row, $projectRoot));
@@ -71,9 +68,27 @@ function ais_enqueue_image_candidates(PDO $db, array $product, string $projectRo
     return $candidates;
 }
 
-/** @return array<string,mixed>|null */
-function ais_enqueue_existing_job(int $productId, string $targetChannel): ?array
+/** @param list<string> $imageTypes */
+function ais_enqueue_request_signature(string $provider, array $imageTypes, string $model): string
 {
+    $types = array_values(array_unique(array_map('strval', $imageTypes)));
+    sort($types, SORT_STRING);
+    return hash('sha256', json_encode([
+        'provider' => strtolower(trim($provider)),
+        'image_types' => $types,
+        'model' => trim($model),
+    ], JSON_UNESCAPED_SLASHES) ?: '');
+}
+
+/** @return array<string,mixed>|null */
+function ais_enqueue_existing_job(
+    int $productId,
+    string $targetChannel,
+    string $provider,
+    array $imageTypes,
+    string $model
+): ?array {
+    $requestedSignature = ais_enqueue_request_signature($provider, $imageTypes, $model);
     try {
         $rows = [];
         if (sv_queue_uses_file_backend()) {
@@ -101,14 +116,23 @@ function ais_enqueue_existing_job(int $productId, string $targetChannel): ?array
             if (!is_array($payload)) continue;
             if ((int)($payload['product_id'] ?? 0) !== $productId) continue;
             if (strtolower(trim((string)($payload['target_channel'] ?? 'site'))) !== $targetChannel) continue;
+
+            $queuedTypes = array_values(array_map('strval', (array)($payload['image_types'] ?? [])));
+            $queuedProvider = (string)($payload['provider'] ?? '');
+            $queuedModel = trim((string)($payload['model_override'] ?? ''));
+            if (!hash_equals($requestedSignature, ais_enqueue_request_signature($queuedProvider, $queuedTypes, $queuedModel))) {
+                continue;
+            }
+
             return [
                 'id' => (int)($row['id'] ?? 0),
                 'status' => $status,
                 'attempts' => (int)($row['attempts'] ?? 0),
                 'created_at' => (string)($row['created_at'] ?? ''),
                 'started_at' => $row['started_at'] ?? null,
-                'image_types' => array_values(array_map('strval', (array)($payload['image_types'] ?? []))),
-                'provider' => (string)($payload['provider'] ?? ''),
+                'image_types' => $queuedTypes,
+                'provider' => $queuedProvider,
+                'model' => $queuedModel,
             ];
         }
     } catch (Throwable $e) {
@@ -172,7 +196,7 @@ if ($providers === []) {
     exit;
 }
 
-$existing = ais_enqueue_existing_job($productId, $targetChannel);
+$existing = ais_enqueue_existing_job($productId, $targetChannel, $provider, $imageTypes, $model);
 if (is_array($existing) && (int)($existing['id'] ?? 0) > 0) {
     http_response_code(202);
     echo json_encode([
@@ -186,7 +210,8 @@ if (is_array($existing) && (int)($existing['id'] ?? 0) > 0) {
         'provider_in_queue' => (string)($existing['provider'] ?? ''),
         'target_channel' => $targetChannel,
         'image_types' => (array)($existing['image_types'] ?? []),
-        'message' => 'Este produto ja possui uma geracao em andamento para o mesmo canal. A fila existente foi reutilizada.',
+        'model' => (string)($existing['model'] ?? ''),
+        'message' => 'Uma geracao equivalente ja esta em andamento; a fila existente foi reutilizada sem descartar variantes novas.',
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
@@ -207,11 +232,13 @@ foreach (ais_enqueue_image_candidates($db, $product, $projectRoot) as $candidate
 }
 
 if (!is_string($baseImagePath) || $baseImagePath === '') {
+    if ($sourceErrors !== []) {
+        error_log('[ai-image-studio] Nenhuma fonte visual valida para produto #' . $productId . ': ' . (string)end($sourceErrors));
+    }
     http_response_code(422);
-    $suffix = $sourceErrors !== [] ? ' Ultimo erro: ' . (string)end($sourceErrors) : '';
     echo json_encode([
         'success' => false,
-        'error' => 'Nenhuma foto real valida foi encontrada. Sincronize a galeria do ERP/Tiny ou corrija a foto principal.' . $suffix,
+        'error' => 'Nenhuma foto real valida foi encontrada. Sincronize a galeria do ERP/Tiny ou corrija a foto principal.',
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
@@ -267,6 +294,6 @@ try {
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'error' => 'Nao foi possivel enfileirar a geracao: ' . $e->getMessage(),
+        'error' => 'Nao foi possivel enfileirar a geracao.',
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
