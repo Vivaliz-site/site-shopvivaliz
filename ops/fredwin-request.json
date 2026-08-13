@@ -1,5 +1,5 @@
 {
-  "action": "verify_auto_sync",
-  "requested_at": "2026-08-13T07:54:00-03:00",
-  "reason": "Confirm idempotent auto-sync scheduling after bootstrap fix: task result, next run cadence, relay health, and local main state"
+  "action": "open_exchange_admin",
+  "requested_at": "2026-08-13T20:42:00Z",
+  "reason": "Complete the Microsoft-required interactive administrator authentication for the AS(42004) Restricted entities recovery; silent delegated refresh is blocked by Security Defaults AADSTS530035"
 }
