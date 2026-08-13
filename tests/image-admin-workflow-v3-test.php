@@ -14,22 +14,26 @@ function sv_image_v3_assert(bool $condition, string $message): void
 
 $guard = file_get_contents($root . '/includes/admin-guard.php');
 $ui = file_get_contents($root . '/admin/assets/image-generation-workflow.js');
+$safetyUi = file_get_contents($root . '/admin/assets/image-workflow-safety.js');
 $healthUi = file_get_contents($root . '/admin/assets/image-provider-health.js');
 $healthApi = file_get_contents($root . '/admin/ai-image-studio/api/provider_health_check.php');
 $statusApi = file_get_contents($root . '/admin/ai-image-studio/api/generation_status.php');
 $pendingApi = file_get_contents($root . '/admin/ai-image-studio/api/pending_candidates.php');
 $enqueueApi = file_get_contents($root . '/admin/ai-image-studio/api/enqueue_generation.php');
+$schema = file_get_contents($root . '/includes/catalog-publication-schema.php');
+$worker = file_get_contents($root . '/scripts/ai-image-studio-worker.php');
 
-foreach (compact('guard', 'ui', 'healthUi', 'healthApi', 'statusApi', 'pendingApi', 'enqueueApi') as $name => $content) {
+foreach (compact('guard', 'ui', 'safetyUi', 'healthUi', 'healthApi', 'statusApi', 'pendingApi', 'enqueueApi', 'schema', 'worker') as $name => $content) {
     sv_image_v3_assert(is_string($content) && $content !== '', "{$name} precisa existir e ter conteúdo");
 }
 
 sv_image_v3_assert(
     str_contains($guard, 'image-generation-workflow.js')
+    && str_contains($guard, 'image-workflow-safety.js')
     && str_contains($guard, 'image-provider-health.js')
     && !str_contains($guard, 'ai-image-studio-workflow.js')
     && !str_contains($guard, 'ai-routines-hotfix-ui.js'),
-    'Image Studio deve ter um unico controlador ativo e apenas um complemento diagnostico'
+    'Image Studio deve ter um unico controlador ativo, camada safety e complemento diagnostico'
 );
 sv_image_v3_assert(
     str_contains($ui, '/api/pending_candidates.php')
@@ -74,7 +78,7 @@ sv_image_v3_assert(
     && str_contains($healthApi, 'working_key_count')
     && str_contains($healthApi, "foreach (['claude', 'groq'] as \$optimizer)")
     && str_contains($healthApi, "'has_visual_editor' => \$hasEditor"),
-    'Preflight deve validar todo o pool e exigir editor visual para Claude/Groq'
+    'Preflight deve validar o pool ate encontrar chave util e exigir editor visual para Claude/Groq'
 );
 sv_image_v3_assert(
     str_contains($healthApi, 'ais_health_sanitize')
@@ -92,6 +96,13 @@ sv_image_v3_assert(
     str_contains($ui, 'Confirmar identidade, cor, forma, proporção e acessórios')
     && !str_contains($ui, '>Identidade preservada<'),
     'Identidade visual deve ser requisito de revisao humana, nao afirmacao automatica'
+);
+sv_image_v3_assert(
+    str_contains($safetyUi, 'confirmacao humana ter')
+    && str_contains($safetyUi, 'A confirmação não é preenchida automaticamente')
+    && str_contains($safetyUi, 'iv-bulk-visual-review')
+    && str_contains($safetyUi, "event.stopImmediatePropagation()"),
+    'Publicacao individual e em lote deve exigir confirmacao visual humana explicita antes do handler de envio'
 );
 sv_image_v3_assert(
     !str_contains($ui, 'Groq — prompt + editor visual')
@@ -112,6 +123,12 @@ sv_image_v3_assert(
     'Endpoint de andamento deve limitar lote, sinalizar truncamento e redigir padroes de credencial'
 );
 sv_image_v3_assert(
+    str_contains($safetyUi, 'offset += 100')
+    && str_contains($safetyUi, "chunks: chunks.length")
+    && str_contains($safetyUi, 'returned_job_count: jobs.length'),
+    'Dashboard deve paginar polling acima de 100 jobs e recompor todos os resultados'
+);
+sv_image_v3_assert(
     str_contains($statusApi, 'Bearer [redacted]')
     && str_contains($statusApi, 'refresh_token'),
     'Redacao deve cobrir headers Bearer e tokens em mensagens de erro'
@@ -121,6 +138,13 @@ sv_image_v3_assert(
     && str_contains($statusApi, "'missing' => \$missingTypes")
     && str_contains($ui, "job.result_state==='partial_failure'"),
     'Falha parcial de variantes deve aparecer explicitamente no backend e na UI'
+);
+sv_image_v3_assert(
+    str_contains($statusApi, 'WHERE source_job_id = ? AND product_id = ?')
+    && str_contains($schema, "'source_job_id'")
+    && str_contains($worker, 'SET source_job_id = ?')
+    && str_contains($worker, 'correlacionar todos os resultados de staging ao job da fila'),
+    'Status deve correlacionar staging ao job exato, nunca por janela temporal produto/canal'
 );
 sv_image_v3_assert(
     str_contains($statusApi, "throw new RuntimeException('Backend de fila indisponivel.'")
@@ -136,9 +160,11 @@ sv_image_v3_assert(
 sv_image_v3_assert(
     str_contains($enqueueApi, 'ais_enqueue_request_signature')
     && str_contains($enqueueApi, 'hash_equals($requestedSignature')
+    && str_contains($enqueueApi, 'GET_LOCK(?, 10)')
+    && str_contains($enqueueApi, 'RELEASE_LOCK(?)')
     && str_contains($enqueueApi, 'ai_studio_resolve_base_image')
     && str_contains($enqueueApi, 'Nenhuma foto real valida foi encontrada'),
-    'Enfileiramento deve deduplicar somente pedidos equivalentes e continuar fail-closed sem foto real valida'
+    'Enfileiramento deve deduplicar pedidos equivalentes sob lock atomico e continuar fail-closed sem foto real valida'
 );
 
-fwrite(STDOUT, "COMPROVADO: Image Studio possui controlador unico, preflight dos pools, consultas em lote, fila precisa por variante e revisao humana segura.\n");
+fwrite(STDOUT, "COMPROVADO: Image Studio possui controlador unico, lock atomico, polling paginado, correlacao por job e confirmacao visual humana.\n");
