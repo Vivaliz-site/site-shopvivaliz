@@ -29,6 +29,61 @@ if (/s3\.amazonaws\.com\/tiny-anexos-us/i.test(aliasSource)) {
   throw new Error('alias_source_guard_historical_urls');
 }
 
+async function catalogDiagnostics() {
+  const diagnostic = {
+    apiStatus: 0,
+    apiTotal: 0,
+    apiReturned: 0,
+    availableCount: 0,
+    imageCount: 0,
+    fallbackStatus: 0,
+    fallbackJsonValid: false,
+    fallbackRows: 0,
+    fallbackAvailable: 0,
+    fallbackWithImage: 0,
+    merchantStatus: 0,
+    merchantItems: 0,
+  };
+
+  try {
+    const response = await fetch(`${baseUrl}/api/catalog/products.php?limit=200`);
+    diagnostic.apiStatus = response.status;
+    const payload = await response.json();
+    const products = Array.isArray(payload?.products) ? payload.products : [];
+    diagnostic.apiTotal = Number(payload?.total || 0);
+    diagnostic.apiReturned = products.length;
+    diagnostic.availableCount = products.filter((product) => Number(product?.stock || 0) > 0 && Number(product?.price || 0) > 0).length;
+    diagnostic.imageCount = products.filter((product) => String(product?.image_url || '').trim() !== '').length;
+  } catch (error) {
+    diagnostic.apiError = error instanceof Error ? error.message : String(error);
+  }
+
+  try {
+    const response = await fetch(`${baseUrl}/api/catalog/fallback-products.json`, { headers: { Accept: 'application/json' } });
+    diagnostic.fallbackStatus = response.status;
+    const text = await response.text();
+    const payload = JSON.parse(text);
+    diagnostic.fallbackJsonValid = !!payload && typeof payload === 'object';
+    const rows = Array.isArray(payload) ? payload : Object.values(payload || {}).filter((row) => row && typeof row === 'object' && !Array.isArray(row));
+    diagnostic.fallbackRows = rows.length;
+    diagnostic.fallbackAvailable = rows.filter((row) => Number(row?.stock || 0) > 0 && Number(row?.price || 0) > 0).length;
+    diagnostic.fallbackWithImage = rows.filter((row) => String(row?.image_url || '').trim() !== '').length;
+  } catch (error) {
+    diagnostic.fallbackError = error instanceof Error ? error.message : String(error);
+  }
+
+  try {
+    const response = await fetch(`${baseUrl}/google-merchant-feed.php`, { headers: { Accept: 'application/xml,text/xml;q=0.9,*/*;q=0.8' } });
+    diagnostic.merchantStatus = response.status;
+    const xml = await response.text();
+    diagnostic.merchantItems = (xml.match(/<item>/g) || []).length;
+  } catch (error) {
+    diagnostic.merchantError = error instanceof Error ? error.message : String(error);
+  }
+
+  return diagnostic;
+}
+
 const browser = await chromium.launch({ headless: true });
 
 async function audit(name, viewport, isMobile = false, route = '/') {
@@ -126,12 +181,14 @@ async function audit(name, viewport, isMobile = false, route = '/') {
 }
 
 try {
+  const catalog = await catalogDiagnostics();
   const desktop = await audit('desktop', { width: 1440, height: 1000 });
   const mobile = await audit('mobile', { width: 390, height: 844 }, true);
   const directIndex = await audit('direct-index', { width: 1024, height: 900 }, false, '/index.php');
   const report = {
     checkedAt: new Date().toISOString(),
     injectedBranchScript: injectBranchScript,
+    catalog,
     desktop,
     mobile,
     directIndex,
@@ -141,6 +198,7 @@ try {
   console.log(JSON.stringify({
     ok: report.ok,
     injectedBranchScript: injectBranchScript,
+    catalog,
     desktop: desktop.assertions,
     mobile: mobile.assertions,
     directIndex: directIndex.assertions,
