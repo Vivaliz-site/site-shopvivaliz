@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'daemon-token-renewer.py'
+      - 'daemon-sync-products.py'
+      - 'sync-daemon-to-db.php'
       - 'olist/callback.php'
       - 'includes/marketplace/TinyV3Runtime.php'
       - 'includes/tiny-order-push.php'
@@ -14,11 +16,15 @@ on:
       - main
     paths:
       - 'daemon-token-renewer.py'
+      - 'daemon-sync-products.py'
+      - 'sync-daemon-to-db.php'
       - 'olist/callback.php'
       - 'includes/marketplace/TinyV3Runtime.php'
       - 'includes/tiny-order-push.php'
       - 'olist/sync-products.php'
       - '.github/workflows/refresh-olist-token-2h.yml'
+  schedule:
+    - cron: '17 */2 * * *'
   workflow_dispatch:
     inputs:
       confirmation:
@@ -46,7 +52,8 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m py_compile daemon-token-renewer.py
+          python3 -m py_compile daemon-token-renewer.py daemon-sync-products.py
+          php -l sync-daemon-to-db.php
           php -l olist/callback.php
           php -l includes/marketplace/TinyV3Runtime.php
           php -l includes/tiny-order-push.php
@@ -69,14 +76,15 @@ jobs:
           PY
 
   refresh:
-    name: Run canonical refresh on production VM
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    name: Refresh OAuth and reconcile production catalog
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' }}
     needs: safety
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 15
     environment: production
     steps:
-      - name: Require explicit confirmation
+      - name: Require explicit confirmation for manual execution
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         shell: bash
         env:
           CONFIRMATION: ${{ inputs.confirmation }}
@@ -98,7 +106,7 @@ jobs:
           printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
-      - name: Refresh once and prove canonical token store
+      - name: Refresh token and reconcile catalog once
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -110,6 +118,8 @@ jobs:
           export SHOPVIVALIZ_OLIST_TOKEN_FILE="$shared/private/olist-tokens.json"
           cd "$current"
           python3 daemon-token-renewer.py --once
+          python3 daemon-sync-products.py --once --workers 4
+          php sync-daemon-to-db.php
           python3 - <<'PY'
           import json, time, urllib.request
           from pathlib import Path
@@ -119,6 +129,11 @@ jobs:
           refresh=data.get('OLIST_REFRESH_TOKEN') or data.get('TINY_REFRESH_TOKEN') or ''
           expires=int(data.get('expires_at_epoch') or 0)
           assert token and refresh and expires > int(time.time())
+          cache=Path('/home/ubuntu/shopvivaliz-deploy/shared/storage/products-cache-ativos.json')
+          catalog=json.loads(cache.read_text())
+          items=catalog.get('itens') or []
+          available=sum(1 for item in items if int(item.get('estoque_disponivel') or 0) > 0)
+          assert items and available > 0
           req=urllib.request.Request(
               'https://api.tiny.com.br/public-api/v3/produtos?limit=1&offset=0',
               headers={'Authorization':'Bearer '+token,'Accept':'application/json'},
@@ -126,11 +141,30 @@ jobs:
           with urllib.request.urlopen(req, timeout=20) as response:
               assert int(response.status) == 200
           print('olist_api_http=200')
+          print('catalog_items='+str(len(items)))
+          print('catalog_available='+str(available))
           print('remaining_seconds='+str(expires-int(time.time())))
           PY
           systemctl is-active --quiet shopvivaliz-token-renewer.service
           systemctl is-enabled --quiet shopvivaliz-token-renewer.service
           REMOTE
+      - name: Verify public available catalog
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+          curl --fail --silent --show-error --max-time 30 \
+            'https://shopvivaliz.com.br/api/catalog/products.php?limit=1&available=1&no_cache=1' \
+            -o "$body"
+          python3 - "$body" <<'PY'
+          import json, pathlib, sys
+          data=json.loads(pathlib.Path(sys.argv[1]).read_text())
+          products=data.get('products') or []
+          assert data.get('ok') is True and products
+          assert int(products[0].get('stock') or 0) > 0
+          print('public_available_catalog=ok')
+          PY
       - name: Remove SSH material
         if: always()
         run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
