@@ -33,7 +33,7 @@ $expect = static function (bool $condition, string $message) use (&$failures): v
 };
 
 $assertSanitized = static function (string $output, string $context) use ($expect): void {
-    foreach (['Ana Paula M.', 'Marcos Silva T.', 'Julia Costa F.', 'AggregateRating', 'ratingCount', "alert('Inscrição realizada com sucesso!')", 'images.unsplash.com'] as $forbidden) {
+    foreach (['Ana Paula M.', 'Marcos Silva T.', 'Julia Costa F.', 'AggregateRating', 'ratingCount', 'Inscrição realizada com sucesso!', 'images.unsplash.com'] as $forbidden) {
         $expect(!str_contains($output, $forbidden), $context . ': conteudo nao confiavel permaneceu: ' . $forbidden);
     }
     foreach (['Avaliações reais, sem conteúdo demonstrativo.', 'A inscrição por e-mail ainda não está ativa.', '/catalogo', '/contato', '/public/assets/category-images/cat-organizacao.jpg'] as $required) {
@@ -66,7 +66,7 @@ if (!is_string($indexSource) || $indexSource === '') {
 } else {
     $expect(str_contains($indexSource, 'AggregateRating'), 'Index real deixou de conter o marcador esperado; revisar/remover o filtro legado.');
     $expect(str_contains($indexSource, 'Ana Paula M.'), 'Index real deixou de conter o depoimento legado esperado; revisar/remover o filtro legado.');
-    $expect(str_contains($indexSource, "alert('Inscrição realizada com sucesso!')"), 'Index real deixou de conter a newsletter legada esperada; revisar/remover o filtro legado.');
+    $expect(str_contains($indexSource, "alert('Inscrição realizada com sucesso!"), 'Index real deixou de conter a newsletter legada esperada; revisar/remover o filtro legado.');
     $sanitizedIndex = svhts_sanitize_home_html($indexSource);
     $assertSanitized($sanitizedIndex, 'index.php');
 }
