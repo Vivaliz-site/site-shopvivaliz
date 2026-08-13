@@ -55,6 +55,7 @@ REPORT_DIR = os.environ.get("ML_IMG_REPORT_DIR", "/home/ubuntu/shopvivaliz-deplo
 MAX_PICS_ANALYZED = 12
 GOOD_RES = 1200  # a partir daqui o ML habilita zoom
 MIN_RES = 500  # abaixo disso o ML considera baixa qualidade
+THUMB_EDGE = 768  # lado maior enviado ao modelo (classificacao, nao inspecao fina)
 
 VISION_PROMPT = """Voce avalia fotos de anuncio do Mercado Livre Brasil para escolher qual delas deve ser a CAPA (primeira foto).
 
