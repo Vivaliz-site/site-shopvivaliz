@@ -178,6 +178,7 @@ jobs:
           php tests/runtime-env-reader-test.php
           php tests/runtime-secrets-materializer-test.php
           php tests/storefront-image-source-test.php
+          php tests/catalog-generated-data-normalizer-test.php
 
       - name: Guard automatic product image carousel
         shell: bash
