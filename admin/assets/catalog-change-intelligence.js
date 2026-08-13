@@ -21,7 +21,7 @@
     amazon:{label:'Amazon',titleMax:200,titleMin:45,descMin:220,bullets:[5,5],focus:'Título limpo, cinco bullets factuais e termos de busca complementares, sem repetição.',priority:['Título','Bullet points','Termos de busca']},
     tiktok:{label:'TikTok Shop',titleMax:300,titleMin:40,titleIdeal:150,descMin:300,bullets:[3,5],focus:'Identificação imediata e selling points factuais para mobile. Sem medo, escassez ou claims subjetivos.',priority:['Título','Descrição','Hooks comerciais']},
     site:{label:'ShopVivaliz',titleMax:70,titleMin:30,descMin:320,bullets:[3,5],metaTitleMax:60,metaDescriptionMax:160,focus:'SEO/GEO factual, resposta direta, semântica long-tail e metadados únicos.',priority:['Título','Descrição','Meta title','Meta description']},
-    erp:{label:'Olist / Tiny',titleMax:120,titleMin:15,descMin:40,bullets:[0,8],focus:'Cadastro técnico padronizado, sem linguagem promocional. SEO e hooks devem permanecer vazios.',priority:['Título','Descrição']}
+    erp:{label:'Olist / Tiny',titleMax:120,titleMin:15,descMin:40,bullets:[0,8],focus:'Cadastro técnico padronizado, sem linguagem promocional. Termos de busca oficiais do Olist/Tiny podem ser preservados; hooks comerciais internos devem permanecer vazios.',priority:['Título','Descrição','Termos de busca']}
   };
 
   const style = document.createElement('style');
@@ -102,7 +102,7 @@
       if(len>rule.metaDescriptionMax) issues.push(`Meta description excede ${rule.metaDescriptionMax} caracteres.`); else if(len>=110) good.push('Meta description em faixa útil.'); else if(len) issues.push('Meta description curta; procure 110–160 caracteres factuais.');
     }
     if (PROMO.test(value) && field.name!=='marketing_hooks') issues.push('Detectada linguagem comercial protegida ou promocional; remova antes de aplicar.');
-    if (rule===CHANNELS.erp && ['seo_keywords','marketing_hooks'].includes(field.name) && len) issues.push('No ERP técnico este campo deve ficar vazio.');
+    if (rule===CHANNELS.erp && field.name==='marketing_hooks' && len) issues.push('No ERP técnico, hooks comerciais internos devem ficar vazios.');
     return {issues,good};
   }
 
