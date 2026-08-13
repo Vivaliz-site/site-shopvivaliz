@@ -1,0 +1,62 @@
+name: MEI email recovery diagnostics
+
+on:
+  push:
+    branches: [ops/inspect-mei-v020-stash]
+    paths:
+      - '.github/workflows/mei-email-recovery-diagnostics.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Read production blockers
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'REMOTE'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo "NOW=$(date -Is)"
+          echo "GIT_SHA=$(git rev-parse HEAD)"
+          echo "GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)"
+          echo "GIT_DIRTY_COUNT=$(git status --porcelain=v1 --untracked-files=normal | wc -l | tr -d ' ')"
+          echo "STASH_COUNT=$(git stash list | wc -l | tr -d ' ')"
+          echo "SENTINEL_PRESENT=$(test -e /var/lib/mei-mg-email/sender_blocked.pause && echo true || echo false)"
+          echo "WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo "MONITOR_STATE=$(sudo systemctl is-active mei-mg-email-monitor.service 2>/dev/null || true)"
+          echo "NDR_GUARD_STATE=$(sudo systemctl is-active mei-mg-email-ndr-guard.service 2>/dev/null || true)"
+          echo "BASE_TIMER_STATE=$(sudo systemctl is-active mei-mg-email-base-sync.timer 2>/dev/null || true)"
+          echo 'DB_COUNTS_BEGIN'
+          docker exec mei-mg-email-db psql -X -U postgres -d mei_mg_email -At -F '|' -c "select count(*) filter (where status::text in ('submitted','delivered','enviado') and coalesce(submitted_at,enviado_em,criado_em)>=now()-interval '24 hours') as sent24h, count(*) filter (where status::text in ('pending','pendente')) as pending, count(*) filter (where status::text='enviando') as sending, max(coalesce(submitted_at,enviado_em,criado_em)) filter (where status::text in ('submitted','delivered','enviado')) as last_sent from mei_email.envios;"
+          echo 'DB_COUNTS_END'
+          echo 'FLYWAY_HISTORY_BEGIN'
+          docker exec mei-mg-email-db psql -X -U postgres -d mei_mg_email -At -F '|' -c "select version,script,checksum,success from mei_email.flyway_schema_history where version in ('019','020','021','022','023','024') order by installed_rank;"
+          echo 'FLYWAY_HISTORY_END'
+          echo 'FLYWAY_VALIDATE_BEGIN'
+          timeout 90s docker compose run --rm flyway validate || true
+          echo 'FLYWAY_VALIDATE_END'
+          echo 'FLYWAY_INFO_BEGIN'
+          timeout 90s docker compose run --rm flyway info || true
+          echo 'FLYWAY_INFO_END'
+          echo 'RECENT_AS42004_BEGIN'
+          journalctl -u mei-mg-email-worker.service --since '2 hours ago' --no-pager | grep -E 'AS\(42004\)|5\.1\.8|sender_blocked' | tail -n 50 || true
+          echo 'RECENT_AS42004_END'
+          REMOTE
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
