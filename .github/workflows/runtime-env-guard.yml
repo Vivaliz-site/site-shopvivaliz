@@ -137,7 +137,9 @@ jobs:
             "${VM_USER}@${VM_HOST}" 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
           body="$(mktemp)"
-          trap 'rm -f "$body"' EXIT
+          headers="$(mktemp)"
+          trap 'rm -f "$body" "$headers"' EXIT
+
           code="$(curl --silent --show-error --connect-timeout 5 --max-time 20 \
             -H 'Host: shopvivaliz.com.br' \
             -o "$body" -w '%{http_code}' \
@@ -151,10 +153,28 @@ jobs:
             echo '::error::Login ainda exibe indisponibilidade do banco.'
             exit 1
           fi
-          if ! grep -q 'Continuar com Google' "$body"; then
-            echo '::error::Botao Continuar com Google ausente.'
+          if ! grep -Eq 'Continuar com Google|Entrar com Google' "$body"; then
+            echo '::error::Botao de acesso com Google ausente.'
             exit 1
           fi
+
+          google_code="$(curl --silent --show-error --connect-timeout 5 --max-time 20 \
+            -H 'Host: shopvivaliz.com.br' \
+            -D "$headers" -o /dev/null -w '%{http_code}' \
+            'http://127.0.0.1/auth/google-start.php?redirect=%2Fadmin%2F')"
+          echo "google_start_http_status=$google_code"
+          if [[ "$google_code" != '302' && "$google_code" != '303' ]]; then
+            echo '::error::Inicio do OAuth Google nao redirecionou.'
+            exit 1
+          fi
+          if ! grep -Eqi '^location:[[:space:]]*https://accounts\.google\.com/' "$headers"; then
+            echo '::error::Inicio do OAuth Google nao apontou para o dominio oficial.'
+            exit 1
+          fi
+
           echo 'login_database_error=false'
           echo 'google_login_visible=true'
+          echo 'google_oauth_redirect_valid=true'
           REMOTE
+
+# End of production runtime env guard.
