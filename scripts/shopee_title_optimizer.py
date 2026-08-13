@@ -229,28 +229,28 @@ def try_browser_optimization():
         return False
 
 def main():
-    parser = argparse.ArgumentParser(description="Otimizar títulos de produtos na Shopee")
+    parser = argparse.ArgumentParser(description="Otimizar titulos de produtos na Shopee")
     parser.add_argument("--method", choices=["api", "browser", "auto"], default="auto",
-                        help="Método: api (Shopee Partner API), browser (automação), ou auto (tenta API, fallback browser)")
+                        help="Metodo: api (Shopee Partner API), browser (automacao), ou auto (tenta API, fallback browser)")
     parser.add_argument("--dry-run", action="store_true",
-                        help="Simular sem fazer alterações (não aplicável a browser)")
+                        help="Simular sem fazer alteracoes (nao aplicavel a browser)")
 
     args = parser.parse_args()
 
     print("=" * 60)
-    print("🛍️  OTIMIZADOR INTELIGENTE DE TÍTULOS - SHOPEE")
+    print("OTIMIZADOR SEO INTELIGENTE PARA SHOPEE")
     print("=" * 60)
     print()
 
     if args.method == "api" or args.method == "auto":
-        print(f"Tentando método: API Shopee Partner")
+        print(f"Tentando metodo: API Shopee Partner")
         if try_api_optimization():
             return 0
         elif args.method == "api":
             return 1
-        # Fallback automático
+        # Fallback automatico
         print("\n" + "-" * 60)
-        print("API indisponível. Tentando browser automation...\n")
+        print("API indisponivel. Tentando browser automation...\n")
 
     # Browser fallback
     if try_browser_optimization():
