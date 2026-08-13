@@ -1,0 +1,47 @@
+name: Inspect preserved MEI V019 only
+
+on:
+  push:
+    branches:
+      - ops/inspect-mei-v020-stash
+    paths:
+      - '.github/workflows/inspect-mei-v019-stash.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-v019:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Read only preserved V019 SQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 180s ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=10 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          tree='stash@{0}^3'
+          path='db/migrations/V019__deduplicate_shared_email_without_exclusion.sql'
+          git rev-parse --verify "$tree" >/dev/null
+          git cat-file -e "$tree:$path"
+          echo "V019_CONTENT_BEGIN path=$path"
+          git show "$tree:$path"
+          echo 'V019_CONTENT_END'
+          echo 'WORKER_RESUME_ALLOWED=false'
+          EOF
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey
