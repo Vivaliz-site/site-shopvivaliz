@@ -21,6 +21,11 @@ function sv_audit_expect(bool $condition, string $message): void
     }
 }
 
+function sv_audit_strlen(string $value): int
+{
+    return function_exists('mb_strlen') ? mb_strlen($value, 'UTF-8') : strlen($value);
+}
+
 $adminIndex = sv_audit_read($root . '/admin/automacao-ia-multicanal/index.php');
 $adminDashboard = sv_audit_read($root . '/admin/automacao-ia-multicanal/pages/dashboard.php');
 $adminAutomations = sv_audit_read($root . '/admin/automacao-ia-multicanal/pages/automacoes.php');
@@ -69,6 +74,20 @@ sv_audit_expect(str_contains($orderEntry, "require __DIR__ . '/create-validated.
 foreach (['svoa_resolve_items', 'item_price_mismatch', 'shipping_quote_invalid', 'svir_reserve'] as $guard) {
     sv_audit_expect(str_contains($orderValidated, $guard), 'Guarda autoritativa de pedido ausente: ' . $guard);
 }
+
+// SEO: produto.php acrescenta " | Vivaliz" depois de svseo_title(..., 70).
+// O helper reserva o sufixo para manter o <title> completo dentro de 65 chars,
+// sem reduzir o limite de 150 caracteres usado pelo Merchant Feed.
+require_once $root . '/includes/product-seo.php';
+$seoFixture = [
+    'name' => 'Caixa de Ferramentas Profissional Reforcada com Organizador Superior e Travas Metalicas',
+    'brand' => 'Fercar',
+    'sku' => 'TESTE-SEO-001',
+];
+$storefrontTitle = svseo_title($seoFixture, 70) . ' | Vivaliz';
+$merchantTitle = svseo_title($seoFixture, 150);
+sv_audit_expect(sv_audit_strlen($storefrontTitle) <= 65, 'Title completo de produto excede 65 caracteres.');
+sv_audit_expect(sv_audit_strlen($merchantTitle) > 56, 'Limite do storefront vazou para o titulo do Merchant Feed.');
 
 if ($failures !== []) {
     foreach ($failures as $failure) {
