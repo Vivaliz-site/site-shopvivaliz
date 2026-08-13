@@ -71,7 +71,52 @@ function ais_pending_active_product_sql(PDO $db, string $alias = 'p'): string
     return $parts !== [] ? implode(' AND ', $parts) : '1=1';
 }
 
-/** @return array{url:string,type:string} */
+/** @return array{width:int,height:int} */
+function ais_pending_image_dimensions(array $row, string $resolved, string $projectRoot): array
+{
+    $width = 0;
+    $height = 0;
+    foreach (['source_width', 'width', 'image_width', 'original_width'] as $field) {
+        $candidate = (int)($row[$field] ?? 0);
+        if ($candidate > 0) {
+            $width = $candidate;
+            break;
+        }
+    }
+    foreach (['source_height', 'height', 'image_height', 'original_height'] as $field) {
+        $candidate = (int)($row[$field] ?? 0);
+        if ($candidate > 0) {
+            $height = $candidate;
+            break;
+        }
+    }
+    if ($width > 0 && $height > 0) {
+        return ['width' => $width, 'height' => $height];
+    }
+
+    $localCandidates = [];
+    if (str_starts_with($resolved, '/')) {
+        $localCandidates[] = $projectRoot . $resolved;
+    }
+    foreach (['local_url', 'site_url'] as $field) {
+        $path = trim((string)($row[$field] ?? ''));
+        if ($path !== '' && str_starts_with($path, '/')) {
+            $localCandidates[] = $projectRoot . $path;
+        }
+    }
+    foreach (array_values(array_unique($localCandidates)) as $path) {
+        if (!is_file($path)) {
+            continue;
+        }
+        $size = @getimagesize($path);
+        if (is_array($size) && (int)($size[0] ?? 0) > 0 && (int)($size[1] ?? 0) > 0) {
+            return ['width' => (int)$size[0], 'height' => (int)$size[1]];
+        }
+    }
+    return ['width' => $width, 'height' => $height];
+}
+
+/** @return array{url:string,type:string,width:int,height:int} */
 function ais_pending_source_image(PDO $db, array $product, string $projectRoot): array
 {
     $sku = trim((string)($product['sku'] ?? ''));
@@ -106,7 +151,13 @@ function ais_pending_source_image(PDO $db, array $product, string $projectRoot):
                     }
                 }
                 if ($resolved !== '') {
-                    return ['url' => $resolved, 'type' => 'galeria_erp'];
+                    $dimensions = ais_pending_image_dimensions($row, $resolved, $projectRoot);
+                    return [
+                        'url' => $resolved,
+                        'type' => 'galeria_erp',
+                        'width' => $dimensions['width'],
+                        'height' => $dimensions['height'],
+                    ];
                 }
             }
         } catch (Throwable $e) {
@@ -116,16 +167,41 @@ function ais_pending_source_image(PDO $db, array $product, string $projectRoot):
 
     $legacy = trim((string)($product['image_ref'] ?? ''));
     if ($legacy !== '') {
-        return ['url' => $legacy, 'type' => 'produto_principal'];
+        $dimensions = ais_pending_image_dimensions([], $legacy, $projectRoot);
+        return [
+            'url' => $legacy,
+            'type' => 'produto_principal',
+            'width' => $dimensions['width'],
+            'height' => $dimensions['height'],
+        ];
     }
-    return ['url' => '', 'type' => 'ausente'];
+    return ['url' => '', 'type' => 'ausente', 'width' => 0, 'height' => 0];
 }
 
-/** @return array{score:int,state:string,missing:list<string>} */
-function ais_pending_readiness(array $product, bool $hasImage): array
+/** @return array{score:int,state:string,missing:list<string>,resolution_state:string,recommended_side:int} */
+function ais_pending_readiness(array $product, array $source, string $targetChannel): array
 {
-    $score = $hasImage ? 45 : 0;
+    $hasImage = trim((string)($source['url'] ?? '')) !== '';
+    $score = $hasImage ? 35 : 0;
     $missing = [];
+    $profile = ai_studio_channel_public_profile($targetChannel);
+    $recommendedSide = max(600, (int)($profile['recommended_side'] ?? 1000));
+    $width = max(0, (int)($source['width'] ?? 0));
+    $height = max(0, (int)($source['height'] ?? 0));
+    $resolutionState = 'unknown';
+
+    if ($hasImage && $width > 0 && $height > 0) {
+        $score += 5;
+        if (min($width, $height) >= $recommendedSide) {
+            $score += 5;
+            $resolutionState = 'recommended';
+        } else {
+            $resolutionState = 'below_target';
+            $missing[] = 'resolução da foto abaixo do alvo';
+        }
+    } elseif ($hasImage) {
+        $missing[] = 'resolução da foto não verificada';
+    }
 
     $name = trim((string)($product['name'] ?? ''));
     if ($name !== '') $score += 15; else $missing[] = 'nome';
@@ -153,7 +229,13 @@ function ais_pending_readiness(array $product, bool $hasImage): array
     } else {
         $state = 'limited_context';
     }
-    return ['score' => $score, 'state' => $state, 'missing' => array_values(array_unique($missing))];
+    return [
+        'score' => $score,
+        'state' => $state,
+        'missing' => array_values(array_unique($missing)),
+        'resolution_state' => $resolutionState,
+        'recommended_side' => $recommendedSide,
+    ];
 }
 
 try {
@@ -184,7 +266,7 @@ try {
             continue;
         }
         $source = ais_pending_source_image($db, $context, $projectRoot);
-        $readiness = ais_pending_readiness($context, $source['url'] !== '');
+        $readiness = ais_pending_readiness($context, $source, $targetChannel);
         $summary[$readiness['state']] = ($summary[$readiness['state']] ?? 0) + 1;
 
         $identity = array_values(array_filter([
@@ -207,6 +289,10 @@ try {
             'size' => trim((string)($context['size'] ?? '')),
             'source_image_url' => $source['url'],
             'source_type' => $source['type'],
+            'source_width' => (int)$source['width'],
+            'source_height' => (int)$source['height'],
+            'source_resolution_state' => $readiness['resolution_state'],
+            'recommended_side' => $readiness['recommended_side'],
             'has_image' => $source['url'] !== '',
             'readiness_score' => $readiness['score'],
             'readiness_state' => $readiness['state'],
