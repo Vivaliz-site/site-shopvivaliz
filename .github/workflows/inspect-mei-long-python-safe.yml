@@ -1,0 +1,69 @@
+name: Inspect long-running MEI Python safely
+
+on:
+  push:
+    branches:
+      - ops/inspect-mei-v020-stash
+    paths:
+      - '.github/workflows/inspect-mei-long-python-safe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect only long Python rooted in MEI repo
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 180s ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=10 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          repo='/home/ubuntu/mei-mg-email'
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then
+            echo 'LONGPY_ABORT_WORKER_ACTIVE=true'
+            exit 71
+          fi
+          echo 'LONGPY_WORKER_OFF=true'
+          echo 'LONGPY_BEGIN'
+          while read -r pid ppid etimes state comm; do
+            case "$comm" in python|python3) ;; *) continue ;; esac
+            [ "$etimes" -ge 1800 ] || continue
+            cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
+            case "$cwd" in "$repo"|"$repo"/*) ;; *) continue ;; esac
+            exe="$(readlink -f "/proc/$pid/exe" 2>/dev/null || true)"
+            cgroup="$(tr '\n' ';' < "/proc/$pid/cgroup" 2>/dev/null || true)"
+            script='unknown'
+            if [ -r "/proc/$pid/cmdline" ]; then
+              mapfile -d '' parts < "/proc/$pid/cmdline" || true
+              for part in "${parts[@]}"; do
+                case "$part" in
+                  *.py|*/scripts/*|*/worker/*) script="$part"; break ;;
+                esac
+              done
+            fi
+            printf 'LONGPY pid=%s ppid=%s age_s=%s state=%s comm=%s cwd=%s exe=%s script=%s cgroup=%s\n' "$pid" "$ppid" "$etimes" "$state" "$comm" "$cwd" "$exe" "$script" "$cgroup"
+          done < <(ps -eo pid=,ppid=,etimes=,state=,comm=)
+          echo 'LONGPY_END'
+          echo "DSTATE_COUNT=$(ps -eo state= | awk '$1 ~ /^D/ {n++} END {print n+0}')"
+          echo 'DSTATE_TOP_BEGIN'
+          ps -eo pid=,ppid=,etimes=,state=,comm= | awk '$4 ~ /^D/ {print}' | head -n 30
+          echo 'DSTATE_TOP_END'
+          echo 'WORKER_RESUME_ALLOWED=false'
+          EOF
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey
