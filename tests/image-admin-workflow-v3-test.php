@@ -18,12 +18,13 @@ $safetyUi = file_get_contents($root . '/admin/assets/image-workflow-safety.js');
 $healthUi = file_get_contents($root . '/admin/assets/image-provider-health.js');
 $healthApi = file_get_contents($root . '/admin/ai-image-studio/api/provider_health_check.php');
 $statusApi = file_get_contents($root . '/admin/ai-image-studio/api/generation_status.php');
+$reviewSourcesApi = file_get_contents($root . '/admin/ai-image-studio/api/review_sources.php');
 $pendingApi = file_get_contents($root . '/admin/ai-image-studio/api/pending_candidates.php');
 $enqueueApi = file_get_contents($root . '/admin/ai-image-studio/api/enqueue_generation.php');
 $schema = file_get_contents($root . '/includes/catalog-publication-schema.php');
 $worker = file_get_contents($root . '/scripts/ai-image-studio-worker.php');
 
-foreach (compact('guard', 'ui', 'safetyUi', 'healthUi', 'healthApi', 'statusApi', 'pendingApi', 'enqueueApi', 'schema', 'worker') as $name => $content) {
+foreach (compact('guard', 'ui', 'safetyUi', 'healthUi', 'healthApi', 'statusApi', 'reviewSourcesApi', 'pendingApi', 'enqueueApi', 'schema', 'worker') as $name => $content) {
     sv_image_v3_assert(is_string($content) && $content !== '', "{$name} precisa existir e ter conteúdo");
 }
 
@@ -161,8 +162,25 @@ sv_image_v3_assert(
     && str_contains($worker, 'SET source_job_id = ?')
     && str_contains($worker, 'beginTransaction()')
     && str_contains($worker, 'commit()')
-    && str_contains($worker, 'correlacionar atomicamente todos os resultados de staging ao job da fila'),
+    && str_contains($worker, 'correlacionar atomicamente todos os resultados e a referencia visual ao job da fila'),
     'Staging deve ser correlacionado ao job exato dentro da mesma transacao para nao criar resultados publicaveis orfaos'
+);
+sv_image_v3_assert(
+    str_contains($schema, "'source_image_ref'")
+    && str_contains($worker, '$sourceImageRef')
+    && str_contains($worker, 'source_image_ref = ?')
+    && str_contains($reviewSourcesApi, 'source_image_ref')
+    && str_contains($reviewSourcesApi, "'source_auditable' => \$source !== ''")
+    && str_contains($safetyUi, '/api/review_sources.php')
+    && str_contains($safetyUi, 'before.src = item.source_image_ref')
+    && str_contains($safetyUi, 'Antes — foto real usada na geração'),
+    'Revisao deve persistir e exibir exatamente a foto de referencia fornecida ao modelo'
+);
+sv_image_v3_assert(
+    str_contains($safetyUi, 'blockUnverifiableSource')
+    && str_contains($safetyUi, 'dataset.sourceAuditable')
+    && str_contains($safetyUi, 'a regeneração agora começa no dashboard'),
+    'Referencia ausente deve bloquear publicacao e regeneracao antiga deve voltar ao fluxo auditavel do dashboard'
 );
 sv_image_v3_assert(
     str_contains($worker, '$db = ai_studio_db();')
@@ -198,4 +216,4 @@ sv_image_v3_assert(
     'Canais white-first devem normalizar novas capas para white e bloquear covers legadas na publicacao'
 );
 
-fwrite(STDOUT, "COMPROVADO: Image Studio possui lock atomico, polling paginado e duravel, staging transacional e confirmacao visual humana.\n");
+fwrite(STDOUT, "COMPROVADO: Image Studio possui fila auditavel, referencia visual persistida, polling duravel e confirmacao humana.\n");

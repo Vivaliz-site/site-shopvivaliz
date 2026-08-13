@@ -62,6 +62,7 @@ while (true) {
             $modelOverride = trim((string)($payload['model_override'] ?? ''));
             $targetChannel = strtolower(trim((string)($payload['target_channel'] ?? 'site')));
             $product = is_array($payload['product'] ?? null) ? $payload['product'] : null;
+            $sourceImageRef = is_array($product) ? trim((string)($product['image_ref'] ?? '')) : '';
             $baseImagePath = trim((string)($payload['base_image_path'] ?? ''));
             $baseImageIsTemp = (bool)($payload['base_image_is_temp'] ?? false);
             $prompts = is_array($payload['prompts'] ?? null) ? $payload['prompts'] : null;
@@ -94,13 +95,17 @@ while (true) {
                 $stagingIds = array_values(array_unique($stagingIds));
 
                 if ($stagingIds !== []) {
+                    if ($sourceImageRef === '') {
+                        throw new RuntimeException('A fila nao preservou a referencia visual usada na geracao.');
+                    }
                     $placeholders = implode(',', array_fill(0, count($stagingIds), '?'));
                     $stamp = $db->prepare(
-                        "UPDATE product_images_staging SET source_job_id = ? WHERE product_id = ? AND source_job_id IS NULL AND id IN ({$placeholders})"
+                        "UPDATE product_images_staging SET source_job_id = ?, source_image_ref = ? "
+                        . "WHERE product_id = ? AND source_job_id IS NULL AND id IN ({$placeholders})"
                     );
-                    $stamp->execute(array_merge([$jobId, $productId], $stagingIds));
+                    $stamp->execute(array_merge([$jobId, $sourceImageRef, $productId], $stagingIds));
                     if ($stamp->rowCount() !== count($stagingIds)) {
-                        throw new RuntimeException('Nao foi possivel correlacionar atomicamente todos os resultados de staging ao job da fila.');
+                        throw new RuntimeException('Nao foi possivel correlacionar atomicamente todos os resultados e a referencia visual ao job da fila.');
                     }
                 }
                 $db->commit();
@@ -120,6 +125,7 @@ while (true) {
                 'provider' => $provider,
                 'target_channel' => $targetChannel,
                 'staging_ids' => $stagingIds,
+                'reference_source' => preg_match('~^https?://~i', $sourceImageRef) ? 'remote' : 'local',
                 'result_count' => count((array)($result['results'] ?? [])),
             ]);
         } catch (Throwable $e) {
