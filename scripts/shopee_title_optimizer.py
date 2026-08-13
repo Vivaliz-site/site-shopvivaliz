@@ -21,33 +21,50 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 def try_api_optimization():
-    """Tenta otimizar via API Shopee."""
+    """Tenta otimizar via API Shopee com SEO inteligente."""
     try:
         from utils.shopee_client import ShopeeClient
 
-        print("🔌 Tentando conectar à API Shopee...")
+        print("[API] Conectando a Shopee Partner API...")
         client = ShopeeClient()
 
-        print("📦 Recuperando catálogo...")
+        print("[API] Recuperando catalogo...")
         products = list(client.iter_all_products(page_size=100))
-        print(f"✓ {len(products)} produtos encontrados")
+        print(f"[OK] {len(products)} produtos encontrados")
 
         optimized = 0
         errors = []
 
-        print("\n🚀 Iniciando otimização de títulos...")
+        # Tentar usar geradores de SEO se disponivel
+        seo_generator = None
+        try:
+            from ia.seo.shopee_seo import generate as generate_seo
+            seo_generator = generate_seo
+            print("[OK] Gerador SEO com IA disponivel")
+        except ImportError:
+            print("[INFO] Gerador SEO nao disponivel, usando heuristica")
+
+        print("\n[INICIO] Otimizando titulos com SEO...")
         for i, product in enumerate(products, 1):
             try:
                 item_id = int(product.get("item_id"))
                 current_title = product.get("item_name", "")
 
-                # Otimizar título: adicionar atributos úteis
-                optimized_title = optimize_title(product)
+                # Usar gerador SEO se disponivel, caso contrario usar otimizacao basica
+                if seo_generator:
+                    try:
+                        seo_data = seo_generator(product)
+                        optimized_title = seo_data.get("title", current_title)
+                    except:
+                        optimized_title = optimize_title(product)
+                else:
+                    optimized_title = optimize_title(product)
 
                 if optimized_title != current_title:
-                    print(f"[{i}/{len(products)}] ID: {item_id}")
-                    print(f"  Antes: {current_title[:80]}")
-                    print(f"  Depois: {optimized_title[:80]}")
+                    if i <= 10 or i % 50 == 0:
+                        print(f"[{i}/{len(products)}] ID: {item_id}")
+                        print(f"  Antes : {current_title[:80]}")
+                        print(f"  Depois: {optimized_title[:80]}")
 
                     # Atualizar na API
                     client.update_product(item_id, title=optimized_title)
@@ -56,39 +73,40 @@ def try_api_optimization():
                     # Verificar leitura
                     verified = client.get_product_details([item_id])
                     if verified and verified[0].get("item_name") == optimized_title:
-                        print("  ✅ Verificado com sucesso")
+                        if i <= 10 or i % 50 == 0:
+                            print("  [OK] Verificado")
                     else:
-                        print("  ⚠️ Falha na verificação")
-                        errors.append(f"Item {item_id} não foi persistido corretamente")
+                        print("  [AVISO] Falha na verificacao")
+                        errors.append(f"Item {item_id} nao persistiu corretamente")
                 else:
-                    if i <= 3 or i % 20 == 0:
-                        print(f"[{i}/{len(products)}] ID: {item_id} - Sem mudanças")
+                    if i <= 3 or i % 100 == 0:
+                        print(f"[{i}/{len(products)}] ID: {item_id} - Sem mudancas")
 
             except Exception as e:
                 errors.append(f"Item {item_id}: {str(e)}")
-                if i <= 3:
-                    print(f"  ❌ Erro: {e}")
+                if i <= 5:
+                    print(f"  [ERRO] {e}")
 
-        print(f"\n✅ Otimização concluída!")
+        print(f"\n[RESULTADO] Otimizacao concluida!")
         print(f"   Total de produtos: {len(products)}")
         print(f"   Atualizados: {optimized}")
         print(f"   Erros: {len(errors)}")
 
         if errors:
-            print("\n⚠️ Erros encontrados:")
+            print("\n[ERROS] Encontrados:")
             for error in errors[:10]:
                 print(f"   - {error}")
 
         return True
 
     except ImportError as e:
-        print(f"❌ Módulos não disponíveis: {e}")
+        print(f"[ERRO] Modulos nao disponiveis: {e}")
         return False
     except RuntimeError as e:
-        print(f"❌ Erro de configuração: {e}")
+        print(f"[ERRO] Configuracao invalida: {e}")
         return False
     except Exception as e:
-        print(f"❌ Erro na API: {type(e).__name__}: {e}")
+        print(f"[ERRO] Falha na API: {type(e).__name__}: {e}")
         return False
 
 def optimize_title(product: dict) -> str:
