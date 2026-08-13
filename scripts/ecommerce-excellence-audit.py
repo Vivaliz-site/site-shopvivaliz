@@ -274,13 +274,50 @@ def validate_page(url: str, body: bytes, headers: dict[str, str], findings: list
             add(findings, "warning", "missing_security_header", f"Missing response header {header}", path)
 
 
+def catalog_sample_product_path(base_url: str) -> string:
+    """Return one currently available public product route from the live catalog API."""
+    status, _, body, _ = fetch(base_url.rstrip("/") + "/api/catalog/products.php?limit=1&available=1")
+    if status != 200:
+        return ""
+    try:
+        payload = json.loads(body.decode("utf-8", errors="strict"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return ""
+
+    rows: list[dict[str, Any]] = []
+    if isinstance(payload, list):
+        rows = [item for item in payload if isinstance(item, dict)]
+    elif isinstance(payload, dict):
+        for key in ("products", "produtos", "items", "itens", "data"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                rows = [item for item in value if isinstance(item, dict)]
+                if rows:
+                    break
+            elif isinstance(value, dict):
+                rows = [item for item in value.values() if isinstance(item, dict)]
+                if rows:
+                    break
+        if not rows and any(key in payload for key in ("slug", "sku", "id")):
+            rows = [payload]
+
+    for product in rows:
+        slug = str(product.get("slug") or "").strip()
+        if slug:
+            return "/produto/" + urllib.parse.quote(slug, safe="-")
+    return ""
+
+
 def validate_live(base_url: str) -> dict[str, Any]:
     base_url = base_url.rstrip("/")
     findings: list[Finding] = []
     checked: list[dict[str, Any]] = []
     endpoints = ["/", "/catalogo", "/sobre", "/contato", "/faq", "/blog", "/carrinho", "/checkout"]
-    sample_product = "/produto/chave-teste-140mm-100500v"
-    endpoints.append(sample_product)
+    sample_product = catalog_sample_product_path(base_url)
+    if sample_product:
+        endpoints.append(sample_product)
+    else:
+        add(findings, "blocker", "catalog_sample_unavailable", "Live catalog API did not provide an available product for product-page validation", "/api/catalog/products.php")
 
     for endpoint in endpoints:
         url = base_url + endpoint
