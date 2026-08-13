@@ -100,3 +100,7 @@ def test_callback_never_returns_token_material_and_syncs_rotating_store() -> Non
     assert "'refresh_preventivo' => true" in source
     assert "/shared/private/olist-tokens.json" in source
     assert "expires_at_epoch" in source
+    assert "realpath($envFile)" in source
+    assert "is_writable($envTarget)" in source
+    assert "'env_sincronizado' => $envSynced" in source
+    assert "if (!$tokenStoreSaved)" in source
