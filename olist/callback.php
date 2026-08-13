@@ -116,50 +116,9 @@ if ($accessToken === '' || $refreshToken === '') {
     exit;
 }
 
-$envContent = is_file($envFile) ? (string)file_get_contents($envFile) : '';
-$replacements = [
-    'OLIST_ACCESS_TOKEN' => $accessToken,
-    'OLIST_REFRESH_TOKEN' => $refreshToken,
-    'TINY_ACCESS_TOKEN' => $accessToken,
-    'TINY_REFRESH_TOKEN' => $refreshToken,
-    'TOKEN_API_OLIST' => $accessToken,
-];
-
-foreach ($replacements as $key => $value) {
-    $pattern = '/^' . preg_quote($key, '/') . '=.*/m';
-    if (preg_match($pattern, $envContent)) {
-        $envContent = (string)preg_replace($pattern, $key . '=' . $value, $envContent);
-    } else {
-        $envContent .= ($envContent !== '' && !str_ends_with($envContent, "\n") ? "\n" : '') . $key . '=' . $value . "\n";
-    }
-}
-
-$envDir = dirname($envFile);
-$envTmp = tempnam($envDir, '.olist-env-');
-if ($envTmp === false) {
-    http_response_code(500);
-    echo json_encode(['erro' => 'Falha ao preparar persistencia OAuth.'], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-    exit;
-}
-try {
-    if (file_put_contents($envTmp, $envContent, LOCK_EX) === false) {
-        throw new RuntimeException('env_write_failed');
-    }
-    $mode = is_file($envFile) ? (fileperms($envFile) & 0777) : 0640;
-    @chmod($envTmp, $mode ?: 0640);
-    if (!@rename($envTmp, $envFile)) {
-        throw new RuntimeException('env_replace_failed');
-    }
-} catch (Throwable) {
-    @unlink($envTmp);
-    http_response_code(500);
-    echo json_encode(['erro' => 'Token obtido, mas falhou a persistencia privada.'], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-    exit;
-}
-
-// Mantem o daemon e o runtime PHP no mesmo estado rotativo. O diretorio e
-// provisionado pelo servico Olist com grupo www-data; se ainda nao estiver
-// disponivel, o .env salvo acima continua sendo a fonte de recuperacao.
+// O token store compartilhado e a gravacao obrigatoria do callback. Ele e
+// provisionado pelo renovador com grupo www-data e modo 0660, enquanto o .env
+// compartilhado pode permanecer 0640 e somente leitura para o processo web.
 $tokenStorePath = getenv('SHOPVIVALIZ_OLIST_TOKEN_FILE');
 if (!is_string($tokenStorePath) || trim($tokenStorePath) === '') {
     $tokenStorePath = PHP_OS_FAMILY === 'Windows'
@@ -168,40 +127,91 @@ if (!is_string($tokenStorePath) || trim($tokenStorePath) === '') {
 }
 $tokenStorePath = trim($tokenStorePath);
 $tokenStoreDir = dirname($tokenStorePath);
+
+if (!is_dir($tokenStoreDir) || !is_writable($tokenStoreDir)) {
+    http_response_code(503);
+    echo json_encode([
+        'erro' => 'Armazenamento privado OAuth indisponivel. Reinicie o renovador Olist e tente novamente.',
+    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    exit;
+}
+
+$store = [];
+if (is_file($tokenStorePath) && is_readable($tokenStorePath)) {
+    $decodedStore = json_decode((string)file_get_contents($tokenStorePath), true);
+    if (is_array($decodedStore)) {
+        $store = $decodedStore;
+    }
+}
+$store['OLIST_ACCESS_TOKEN'] = $accessToken;
+$store['TINY_ACCESS_TOKEN'] = $accessToken;
+$store['OLIST_REFRESH_TOKEN'] = $refreshToken;
+$store['TINY_REFRESH_TOKEN'] = $refreshToken;
+$store['updated_at'] = gmdate('c');
+if ($expiresIn > 0) {
+    $expiresAt = time() + $expiresIn;
+    $store['expires_in'] = $expiresIn;
+    $store['expires_at_epoch'] = $expiresAt;
+    $store['expires_at'] = gmdate('c', $expiresAt);
+}
+
+$storePayload = json_encode($store, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 $tokenStoreSaved = false;
-if (is_dir($tokenStoreDir) && is_writable($tokenStoreDir)) {
-    $store = [];
-    if (is_file($tokenStorePath) && is_readable($tokenStorePath)) {
-        $decodedStore = json_decode((string)file_get_contents($tokenStorePath), true);
-        if (is_array($decodedStore)) {
-            $store = $decodedStore;
+if (is_string($storePayload)) {
+    $storeTmp = tempnam($tokenStoreDir, '.olist-token-');
+    if ($storeTmp !== false) {
+        if (file_put_contents($storeTmp, $storePayload . PHP_EOL, LOCK_EX) !== false) {
+            @chmod($storeTmp, 0660);
+            $tokenStoreSaved = @rename($storeTmp, $tokenStorePath);
+            if ($tokenStoreSaved) {
+                @chmod($tokenStorePath, 0660);
+            }
+        }
+        if (is_file($storeTmp)) {
+            @unlink($storeTmp);
         }
     }
-    $store['OLIST_ACCESS_TOKEN'] = $accessToken;
-    $store['TINY_ACCESS_TOKEN'] = $accessToken;
-    $store['OLIST_REFRESH_TOKEN'] = $refreshToken;
-    $store['TINY_REFRESH_TOKEN'] = $refreshToken;
-    $store['updated_at'] = gmdate('c');
-    if ($expiresIn > 0) {
-        $expiresAt = time() + $expiresIn;
-        $store['expires_in'] = $expiresIn;
-        $store['expires_at_epoch'] = $expiresAt;
-        $store['expires_at'] = gmdate('c', $expiresAt);
+}
+
+if (!$tokenStoreSaved) {
+    http_response_code(500);
+    echo json_encode([
+        'erro' => 'Token obtido, mas falhou a persistencia no armazenamento privado.',
+    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    exit;
+}
+
+// Sincronizar o .env e best-effort. O daemon roda como ubuntu e reconcilia o
+// .env na proxima renovacao mesmo quando o processo web nao possui escrita.
+$envSynced = false;
+$envTarget = realpath($envFile);
+if (is_string($envTarget) && $envTarget !== '' && is_file($envTarget) && is_readable($envTarget) && is_writable($envTarget)) {
+    $envContent = (string)file_get_contents($envTarget);
+    $replacements = [
+        'OLIST_ACCESS_TOKEN' => $accessToken,
+        'OLIST_REFRESH_TOKEN' => $refreshToken,
+        'TINY_ACCESS_TOKEN' => $accessToken,
+        'TINY_REFRESH_TOKEN' => $refreshToken,
+        'TOKEN_API_OLIST' => $accessToken,
+    ];
+    foreach ($replacements as $key => $value) {
+        $pattern = '/^' . preg_quote($key, '/') . '=.*/m';
+        if (preg_match($pattern, $envContent)) {
+            $envContent = (string)preg_replace($pattern, $key . '=' . $value, $envContent);
+        } else {
+            $envContent .= ($envContent !== '' && !str_ends_with($envContent, "\n") ? "\n" : '') . $key . '=' . $value . "\n";
+        }
     }
-    $storePayload = json_encode($store, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    if (is_string($storePayload)) {
-        $storeTmp = tempnam($tokenStoreDir, '.olist-token-');
-        if ($storeTmp !== false) {
-            if (file_put_contents($storeTmp, $storePayload . PHP_EOL, LOCK_EX) !== false) {
-                @chmod($storeTmp, 0660);
-                $tokenStoreSaved = @rename($storeTmp, $tokenStorePath);
-                if ($tokenStoreSaved) {
-                    @chmod($tokenStorePath, 0660);
-                }
-            }
-            if (is_file($storeTmp)) {
-                @unlink($storeTmp);
-            }
+
+    $envTmp = tempnam(dirname($envTarget), '.olist-env-');
+    if ($envTmp !== false) {
+        if (file_put_contents($envTmp, $envContent, LOCK_EX) !== false) {
+            $mode = fileperms($envTarget) & 0777;
+            @chmod($envTmp, $mode ?: 0640);
+            $envSynced = @rename($envTmp, $envTarget);
+        }
+        if (is_file($envTmp)) {
+            @unlink($envTmp);
         }
     }
 }
@@ -211,7 +221,8 @@ echo json_encode([
     'sucesso' => true,
     'mensagem' => 'OAuth Olist ativado e salvo com sucesso.',
     'token_salvo' => true,
-    'token_store_sincronizado' => $tokenStoreSaved,
+    'token_store_sincronizado' => true,
+    'env_sincronizado' => $envSynced,
     'refresh_preventivo' => true,
     'refresh_margin_seconds' => 1800,
 ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
