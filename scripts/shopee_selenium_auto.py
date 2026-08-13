@@ -73,34 +73,66 @@ def run_automation():
             driver.get("https://seller.shopee.com.br/portal/product/list")
             time.sleep(3)
 
-            # Tentar encontrar produtos
-            print("[CHROME] Procurando produtos...")
+            # Aguardar que usuario navegue para produtos
+            print("[CHROME] Aguardando pagina de produtos...")
+            print("[INFO] Navegue para a pagina de produtos ou aguarde")
+            print("[INFO] Script procurara por produtos a cada 3 segundos")
+            print("[INFO] Voce tem 60 segundos para carregar a pagina\n")
 
             products = None
-            selectors = [
-                "[data-item-id]",
-                ".product-item",
-                "[class*='ProductList']",
-            ]
+            search_time = 0
 
-            for selector in selectors:
-                try:
-                    products = WebDriverWait(driver, 5).until(
-                        EC.presence_of_all_elements_located((By.CSS_SELECTOR, selector))
-                    )
-                    if products:
-                        print(f"[OK] {len(products)} produtos encontrados\n")
-                        break
-                except:
-                    pass
+            while search_time < 60:
+                selectors = [
+                    "[data-item-id]",
+                    ".product-item",
+                    "[class*='product']",
+                    "tr[data-row-index]",
+                    "[class*='Product']",
+                ]
 
-            if not products:
-                print("[AVISO] Nenhum produto encontrado")
-                print("[DICA] Certifique-se que:")
-                print("  - Tem produtos publicados na loja")
-                print("  - A pagina carregou completamente")
-                print("  - Esta na guia correta do painel")
-                return False
+                for selector in selectors:
+                    try:
+                        products = driver.find_elements(By.CSS_SELECTOR, selector)
+                        if len(products) > 0:
+                            print(f"\n[OK] {len(products)} produtos detectados!")
+                            break
+                    except:
+                        pass
+
+                if products and len(products) > 0:
+                    break
+
+                print(f"  [{search_time}s] Procurando produtos...")
+                time.sleep(3)
+                search_time += 3
+
+            if not products or len(products) == 0:
+                print("\n[AVISO] Nenhum produto encontrado apos 60 segundos")
+                print("[DICA] Você pode:")
+                print("  1. Clicar em 'Produto' no menu lateral")
+                print("  2. Aguardar a pagina carregar completamente")
+                print("  3. Script continuara procurando\n")
+
+                # Dar mais 30 segundos
+                for i in range(10):
+                    try:
+                        for selector in ["[data-item-id]", ".product-item"]:
+                            products = driver.find_elements(By.CSS_SELECTOR, selector)
+                            if len(products) > 0:
+                                print(f"[OK] {len(products)} produtos encontrados agora!")
+                                break
+                        if products and len(products) > 0:
+                            break
+                    except:
+                        pass
+                    time.sleep(3)
+
+                if not products or len(products) == 0:
+                    print("\n[ERRO] Nao conseguiu encontrar produtos")
+                    print("[OPCAO] Feche o navegador (Ctrl+W) ou deixe aberto para tentar manualmente")
+                    input("[PRESSIONE ENTER] para fechar o script...")
+                    return False
 
             # Processar
             stats = {
