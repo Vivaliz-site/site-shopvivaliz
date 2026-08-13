@@ -1,0 +1,49 @@
+name: Repair MEI virtualenv import path
+
+on:
+  push:
+    branches: [ops/inspect-mei-v020-stash]
+    paths:
+      - '.github/workflows/fix-mei-venv-pythonpath.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Add repository root to virtualenv site packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 180s ssh -o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=10 -o ServerAliveCountMax=10 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'REMOTE'
+          set -euo pipefail
+          repo=/home/ubuntu/mei-mg-email
+          sudo systemctl stop mei-mg-email-worker.service || true
+          ! sudo systemctl is-active --quiet mei-mg-email-worker.service
+          cd "$repo"
+          site_dir="$(.venv/bin/python -c 'import site; print(site.getsitepackages()[0])')"
+          test -d "$site_dir"
+          printf '%s\n' "$repo" > "$site_dir/mei_mg_email_repo.pth"
+          .venv/bin/python -c 'import app, worker; print("MEI_VENV_IMPORT_PATH_OK=true")'
+          echo "MEI_VENV_SITE_DIR=$site_dir"
+          echo 'WORKER_RESUME_ALLOWED=false'
+          REMOTE
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey
