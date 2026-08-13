@@ -1,0 +1,94 @@
+name: Locate MEI V020 by checksum
+
+on:
+  push:
+    branches:
+      - ops/inspect-mei-v020-stash
+    paths:
+      - '.github/workflows/find-mei-v020-checksum.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  locate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Find V020 files and compute Flyway-style checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 300s ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=15 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          python3 - <<'PY'
+          import os, subprocess, zlib
+          TARGET = 10857321
+
+          def signed32(value):
+              return value if value < 2**31 else value - 2**32
+
+          def flyway_checksum_bytes(data: bytes):
+              crc = 0
+              # Flyway checksum is CRC32 over each logical UTF-8 line without line separators.
+              text = data.decode('utf-8-sig')
+              for line in text.splitlines():
+                  crc = zlib.crc32(line.encode('utf-8'), crc)
+              return signed32(crc & 0xffffffff)
+
+          candidates = []
+          roots = ['/home/ubuntu']
+          try:
+              out = subprocess.check_output(
+                  ['timeout','90s','find',*roots,'-type','f','-name','V020__*.sql','-size','-200k','-print'],
+                  text=True, stderr=subprocess.DEVNULL,
+              )
+              candidates.extend(p.strip() for p in out.splitlines() if p.strip())
+          except subprocess.CalledProcessError as exc:
+              if exc.returncode != 124:
+                  raise
+
+          seen = set()
+          print('V020_CHECKSUM_SCAN_BEGIN')
+          for path in sorted(candidates):
+              if path in seen:
+                  continue
+              seen.add(path)
+              try:
+                  data = open(path, 'rb').read()
+                  checksum = flyway_checksum_bytes(data)
+              except Exception as exc:
+                  print(f'V020_CANDIDATE_READ_ERROR path={path} type={type(exc).__name__}')
+                  continue
+              match = 'true' if checksum == TARGET else 'false'
+              print(f'V020_CANDIDATE path={path} checksum={checksum} target_match={match} bytes={len(data)}')
+          print('V020_CHECKSUM_SCAN_END')
+
+          for spec in [
+              'stash@{0}^3:db/migrations/V020__national_scope_and_cleanup_policy.sql',
+              'HEAD:db/migrations/V020__refresh_pending_campaign_copy.sql',
+          ]:
+              try:
+                  data = subprocess.check_output(['git','show',spec])
+              except subprocess.CalledProcessError:
+                  continue
+              checksum = flyway_checksum_bytes(data)
+              print(f'V020_GIT_OBJECT spec={spec} checksum={checksum} target_match={str(checksum == TARGET).lower()} bytes={len(data)}')
+          PY
+          echo 'WORKER_RESUME_ALLOWED=false'
+          EOF
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey
