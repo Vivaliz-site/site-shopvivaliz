@@ -7,6 +7,7 @@ on:
       - 'scripts/ai-routines-production-smoke.php'
       - 'scripts/ai-image-production-smoke-v2.php'
       - 'scripts/ai-image-studio-worker.php'
+      - 'scripts/maintenance/cleanup-ai-smoke-staging.php'
       - 'admin/ai-image-studio/process_item.php'
       - 'admin/ai-image-studio/src/OpenRouterImageClient.php'
       - 'admin/ai-image-studio/src/ImageChannelProfile.php'
@@ -22,6 +23,7 @@ on:
       - 'admin/catalog-optimization/api/pending_candidates_unique.php'
       - 'admin/assets/catalog-optimization-workflow.js'
       - 'admin/assets/catalog-change-intelligence.js'
+      - 'admin/assets/catalog-candidate-availability.js'
       - 'includes/admin-guard.php'
       - '.github/workflows/ai-routines-production-smoke.yml'
 
@@ -56,10 +58,10 @@ jobs:
           echo "changed files: $changed"
           run_image=false
           run_catalog=false
-          if grep -qE '^(admin/ai-image-studio/(process_item\.php|src/(OpenRouterImageClient|ImageChannelProfile)\.php|api/(channel_profiles|provider_health_check|pending_candidates|enqueue_generation|generation_status)\.php)|admin/assets/(image-generation-workflow|image-provider-health)\.js|scripts/(ai-routines-production-smoke|ai-image-production-smoke-v2|ai-image-studio-worker)\.php|includes/admin-guard\.php|\.github/workflows/ai-routines-production-smoke\.yml)$' <<<"$changed"; then
+          if grep -qE '^(admin/ai-image-studio/(process_item\.php|src/(OpenRouterImageClient|ImageChannelProfile)\.php|api/(channel_profiles|provider_health_check|pending_candidates|enqueue_generation|generation_status)\.php)|admin/assets/(image-generation-workflow|image-provider-health)\.js|scripts/(ai-routines-production-smoke|ai-image-production-smoke-v2|ai-image-studio-worker)\.php|scripts/maintenance/cleanup-ai-smoke-staging\.php|includes/admin-guard\.php|\.github/workflows/ai-routines-production-smoke\.yml)$' <<<"$changed"; then
             run_image=true
           fi
-          if grep -qE '^(admin/catalog-optimization/(src/TextAiServices\.php|api/(optimize_catalog_resilient|pending_candidates_unique)\.php)|admin/assets/(catalog-optimization-workflow|catalog-change-intelligence)\.js|scripts/ai-routines-production-smoke\.php|includes/admin-guard\.php|\.github/workflows/ai-routines-production-smoke\.yml)$' <<<"$changed"; then
+          if grep -qE '^(admin/catalog-optimization/(src/TextAiServices\.php|api/(optimize_catalog_resilient|pending_candidates_unique)\.php)|admin/assets/(catalog-optimization-workflow|catalog-change-intelligence|catalog-candidate-availability)\.js|scripts/ai-routines-production-smoke\.php|scripts/maintenance/cleanup-ai-smoke-staging\.php|includes/admin-guard\.php|\.github/workflows/ai-routines-production-smoke\.yml)$' <<<"$changed"; then
             run_catalog=true
           fi
           if [[ "$run_image" == "false" && "$run_catalog" == "false" ]]; then
@@ -140,8 +142,15 @@ jobs:
           current=/home/ubuntu/shopvivaliz-deploy/current
           test "$(cat "$current/.release-sha")" = "$expected_sha"
           cd "$current"
-          export AI_PRODUCTION_SMOKE_CONFIRM=RUN_ALL_PROVIDER_CHANNEL_SMOKES
 
+          cleanup_smoke_staging() {
+            php scripts/maintenance/cleanup-ai-smoke-staging.php \
+              --reports-dir=/home/ubuntu/shopvivaliz-deploy/shared/logs
+          }
+          cleanup_smoke_staging
+          trap 'cleanup_smoke_staging || true' EXIT
+
+          export AI_PRODUCTION_SMOKE_CONFIRM=RUN_ALL_PROVIDER_CHANNEL_SMOKES
           skip_image_flag="1"; [[ "$run_image" == "true" ]] && skip_image_flag="0"
           skip_catalog_flag="1"; [[ "$run_catalog" == "true" ]] && skip_catalog_flag="0"
           php scripts/ai-routines-production-smoke.php \
@@ -176,6 +185,9 @@ jobs:
             if ((int)($i["attempted_total"]??0) !== (int)($i["expected_total"]??0)) exit(4);
             if (!empty($r["publication_performed"]) || !empty($i["publication_performed"])) exit(5);
           ' "$report" "$image_report"
+
+          cleanup_smoke_staging
+          trap - EXIT
           REMOTE
 
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \

@@ -1,5 +1,5 @@
 {
   "action": "open_exchange_admin",
-  "requested_at": "2026-08-13T20:42:00Z",
-  "reason": "Complete the Microsoft-required interactive administrator authentication for the AS(42004) Restricted entities recovery; silent delegated refresh is blocked by Security Defaults AADSTS530035"
+  "requested_at": "2026-08-13T22:17:12Z",
+  "reason": "User requested the Exchange Admin Center window be opened now on Fred-Win to complete the Microsoft-required interactive administrator authentication for AS(42004) Restricted entities recovery"
 }
