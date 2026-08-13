@@ -36,6 +36,8 @@ TOKEN_STORE_PATH = Path(
 )
 TOKEN_URL = "https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
 DEFAULT_CHECK_INTERVAL = 300
+MAX_CHECK_INTERVAL = 300
+MAX_RETRY_INTERVAL = 300
 DEFAULT_REFRESH_MARGIN = 1800
 SAFE_OAUTH_ERROR_CODES = frozenset(
     {
@@ -414,6 +416,13 @@ def check_and_renew(refresh_margin: int) -> tuple[bool, bool]:
     return (renew_once() is not None), True
 
 
+def effective_loop_intervals(requested_interval: int, requested_retry_interval: int) -> tuple[int, int]:
+    """Never allow legacy service arguments to weaken proactive refresh timing."""
+    check_interval = min(MAX_CHECK_INTERVAL, max(60, int(requested_interval)))
+    retry_interval = min(MAX_RETRY_INTERVAL, max(60, int(requested_retry_interval)))
+    return check_interval, retry_interval
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--once", action="store_true", help="Forca uma renovacao e encerra")
@@ -434,6 +443,13 @@ def main() -> int:
             print(f"[!] Renovação falhou com segurança: {type(exc).__name__}")
             return 1
 
+    check_interval, retry_interval = effective_loop_intervals(args.interval, args.retry_interval)
+    if check_interval != args.interval or retry_interval != args.retry_interval:
+        print(
+            "[+] Intervalos Olist protegidos: "
+            f"check_seconds={check_interval} retry_seconds={retry_interval}"
+        )
+
     while True:
         try:
             ok, attempted = check_and_renew(args.refresh_margin)
@@ -442,9 +458,9 @@ def main() -> int:
         except Exception as exc:
             print(f"[!] Renovação falhou com segurança: {type(exc).__name__}")
             ok, attempted = False, True
-        delay = args.interval if ok else args.retry_interval
+        delay = check_interval if ok else retry_interval
         if attempted and not ok:
-            delay = min(delay, args.retry_interval)
+            delay = min(delay, retry_interval)
         time.sleep(max(60, delay))
 
 
