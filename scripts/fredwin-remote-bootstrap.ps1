@@ -80,18 +80,37 @@ function Ensure-AutoSyncTask {
         return
     }
 
-    $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-    $arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $AutoSyncScript + '"'
-    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments -WorkingDirectory $Repo
-    $logonTrigger = New-ScheduledTaskTrigger -AtLogOn -User $user
-    $periodicTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 3650)
-    $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Highest
-    $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+    try {
+        $existing = Get-ScheduledTask -TaskName $AutoSyncTaskName -ErrorAction SilentlyContinue
+        if ($existing) {
+            $actionText = (($existing.Actions | ForEach-Object { ([string]$_.Execute) + ' ' + ([string]$_.Arguments) }) -join ' ')
+            $pointsToAutoSync = $actionText -like '*local-auto-sync.ps1*'
+            if ($pointsToAutoSync) {
+                $info = Get-ScheduledTaskInfo -TaskName $AutoSyncTaskName -ErrorAction SilentlyContinue
+                Log ("Auto-sync task already valid state=" + $existing.State + " next_run=" + $info.NextRunTime + "; preserving existing schedule")
+                return
+            }
+            Log "Auto-sync task exists but action is stale; recreating"
+        }
 
-    Register-ScheduledTask -TaskName $AutoSyncTaskName -Action $action -Trigger @($logonTrigger, $periodicTrigger) -Principal $principal -Settings $settings -Description "ShopVivaliz local Git fast-forward sync, Graph mail guard and Fred-Win MCP/tunnel self-heal" -Force | Out-Null
-    $task = Get-ScheduledTask -TaskName $AutoSyncTaskName -ErrorAction Stop
-    $info = Get-ScheduledTaskInfo -TaskName $AutoSyncTaskName -ErrorAction Stop
-    Log ("Auto-sync task ensured state=" + $task.State + " next_run=" + $info.NextRunTime)
+        $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $AutoSyncScript + '"'
+        $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments -WorkingDirectory $Repo
+        $logonTrigger = New-ScheduledTaskTrigger -AtLogOn -User $user
+        $periodicTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5) -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 3650)
+        $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Highest
+        $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+
+        Register-ScheduledTask -TaskName $AutoSyncTaskName -Action $action -Trigger @($logonTrigger, $periodicTrigger) -Principal $principal -Settings $settings -Description "ShopVivaliz local Git fast-forward sync, Graph mail guard and Fred-Win MCP/tunnel self-heal" -Force | Out-Null
+        $task = Get-ScheduledTask -TaskName $AutoSyncTaskName -ErrorAction Stop
+        $info = Get-ScheduledTaskInfo -TaskName $AutoSyncTaskName -ErrorAction Stop
+        Log ("Auto-sync task ensured state=" + $task.State + " next_run=" + $info.NextRunTime)
+    }
+    catch {
+        # A standard, non-elevated shell may not be allowed to create an elevated scheduled task.
+        # Do not let that prevent MCP/tunnel repair; record the condition for an admin to fix later.
+        Log ("WARNING unable to ensure auto-sync scheduled task: " + $_.Exception.Message)
+    }
 }
 
 function Stop-ManagedTunnel {
@@ -110,8 +129,8 @@ function Stop-ManagedTunnel {
 if (!(Test-Path $McpScript)) { throw "MCP script missing: $McpScript" }
 if (!(Test-Path $TunnelScript)) { throw "Tunnel script missing: $TunnelScript" }
 
-# 0) Ensure the periodic local auto-sync exists. This makes the Windows side self-healing
-# after logon and every five minutes without overlapping instances.
+# 0) Ensure the periodic local auto-sync exists. The check is intentionally idempotent:
+# once a valid task exists, bootstrap preserves its trigger instead of resetting NextRunTime.
 Ensure-AutoSyncTask
 
 # 1) Ensure the MCP responds to HTTP health, not merely that the TCP port is open.
