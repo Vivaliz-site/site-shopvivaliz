@@ -1,5 +1,5 @@
 {
   "action": "verify_auto_sync",
-  "requested_at": "2026-08-13T07:51:00-03:00",
-  "reason": "Verify recurrent Windows auto-sync cycle after successful 07:46 run, including Fred-Win MCP relay health and repository/log state"
+  "requested_at": "2026-08-13T07:54:00-03:00",
+  "reason": "Confirm idempotent auto-sync scheduling after bootstrap fix: task result, next run cadence, relay health, and local main state"
 }
