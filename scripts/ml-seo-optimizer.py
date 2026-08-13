@@ -655,6 +655,9 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=0, help="processa no maximo N anuncios")
     ap.add_argument("--only", action="append", default=[], help="processa apenas estes MLB ids")
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument(
+        "--no-research", action="store_true", help="nao pesquisa especificacoes na web"
+    )
     args = ap.parse_args()
     apply = args.apply and not args.dry_run
 
