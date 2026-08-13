@@ -536,7 +536,7 @@ def validate_description(raw: str) -> tuple[str | None, list[str]]:
 # --------------------------------------------------------------------------- pipeline
 
 
-def optimize_item(ml: ML, client, item_id: str, apply: bool) -> dict:
+def optimize_item(ml: ML, client, item_id: str, apply: bool, research: bool = True) -> dict:
     result = {"id": item_id, "status": "skipped", "problems": [], "changes": {}}
     status, item = ml.call("GET", f"/items/{item_id}")
     if status != 200:
