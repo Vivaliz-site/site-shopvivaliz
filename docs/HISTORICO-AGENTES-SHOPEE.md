@@ -674,7 +674,7 @@ não pôde ser confirmada.
 Esses workflows chamam `scripts/shopee_full_catalog_optimizer.py` e
 `scripts/shopee_production_seo_apply.py` (lidos nesta sessão). **Isso não resolve o bloqueio
 estrutural desta rotina**: o otimizador constrói título/descrição a partir de `attribute_list` do
-próprio produto (marca/modelo/material/tamanho/cor) e gera imagens via IA — regras genéricas de
+própio produto (marca/modelo/material/tamanho/cor) e gera imagens via IA — regras genéricas de
 SEO, sem nenhuma chamada a endpoint de analytics do Shopee Open Platform. Não há cálculo de CTR,
 taxa de conversão, comparação alto-vs-baixo-desempenho, nem A/B testing medido — os itens 1, 3, 9
 e 10 das instruções desta rotina continuam tecnicamente inexequíveis com o código atual, mesmo
@@ -842,35 +842,41 @@ ocorreu; o achado estrutural e o bloqueio de credencial já foram comunicados no
 e permanecem sem ação humana pendente (renovar OAuth2 do Tiny e/ou decidir se vale integrar a API
 de analytics do Shopee Open Platform).
 
-### 9.20 Atualização — ciclo de 2026-08-11 (~07h UTC), 25º ciclo — estado idêntico ao ciclo 24, sem fato novo
+### 9.20 Atualização — ciclo de 2026-08-13 (~13h UTC), 25º ciclo — gap de 3 dias sem registro; estado idêntico ao ciclo 24, sem fato novo
 
-Checagem completa: `env | grep -iE "SHOPEE|TINY|OLIST"` continua vazio neste sandbox (esperado).
-`.github/workflows/` continua com apenas `shopee-optimizer-safety.yml`/`shopee-production-seo.yml`
-— o par baseado em Tiny/Olist (`fetch-shopee-listings.yml`/`optimize-shopee-listings.yml`) ainda
-ausente. Artefato mais recente em `listings/` (por nome/timestamp) continua
-`shopee-listings-20260726-080756.json` (`status: partial`, `total_products: 0`, mesmo erro `"Falha
-ao renovar token: Invalid client or Invalid client credentials"` / `"Autenticação falhou (401)."`)
-— nenhum arquivo novo desde 2026-07-26, agora **16 dias** sem extração de catálogo funcional.
+Lacuna de ~3 dias sem entrada nesta seção desde o ciclo 24 (2026-08-10 13h UTC) — mesma limitação
+já registrada nos ciclos 19 e 24: sem acesso a logs do scheduler para confirmar se a rotina
+simplesmente não disparou nesse intervalo ou se disparou sem registrar aqui.
 
-Via `mcp__github__actions_list` (`shopee-production-seo.yml`): as mesmas 5 execuções de
+Checagem completa (não só incremental, dado o gap): `env | grep -i SHOPEE` continua vazio neste
+sandbox (esperado — sessões deste tipo não recebem GitHub Secrets injetados). `git status` mostrou
+`HEAD detached from refs/heads/main`, sem alterações locais pendentes antes desta entrada.
+`.github/workflows/` continua com
+apenas `shopee-optimizer-safety.yml`/`shopee-production-seo.yml` (mais `olist-sync.yml` e
+`refresh-olist-token-2h.yml`, não relacionados a Shopee) — o par baseado em Tiny/Olist
+(`fetch-shopee-listings.yml`/`optimize-shopee-listings.yml`) ainda ausente. Artefato mais recente
+em `listings/` (por nome, ordenado) continua `shopee-listings-20260726-080756.json` — nenhum
+arquivo novo desde 2026-07-26, agora **18 dias** sem extração de catálogo funcional.
+
+Via `mcp__github__actions_list`: `shopee-production-seo.yml` segue com as mesmas 5 execuções de
 2026-07-30 (`id`s 30585266165, 30571531668, 30571478470, 30571242284, 30570700034), todas
-`conclusion: failure` — nenhuma execução nova desde então; o passo real de apply ("Apply SEO to
-real Shopee catalog") segue nunca tendo rodado com sucesso. `git log` desde o ciclo 24
-(`d3c7ab4`, 2026-08-10 21:39 UTC-3) não toca `scripts/shopee_full_catalog_optimizer.py`,
-`scripts/shopee_production_seo_apply.py`, `scripts/utils/shopee_client.py`, `listings/` nem os
-dois workflows Shopee existentes.
+`conclusion: failure` — nenhuma execução nova desde então, ou seja, o passo real de apply nunca
+rodou com sucesso em nenhum momento até agora. `shopee-optimizer-safety.yml` (dry-run/testes) não
+tem execução nova desde 2026-07-31 (`id` mais recente 30592928579). `git log --since="2026-08-10"
+origin/main` sobre `scripts/shopee_*`, `listings/`, `tasks-queue.json` não retorna nada; o único
+commit novo em `origin/main` no intervalo é `370d931` ("fix: send provider health authentication
+headers correctly"), não relacionado a Shopee.
 
 O achado estrutural dos ciclos 19–24 (nenhuma chamada a endpoint de analytics do Shopee Open
 Platform nos scripts de produção — sem CTR, taxa de conversão, comparação alto-vs-baixo-desempenho
 ou A/B testing medido; itens 1, 3, 9 e 10 desta rotina de 6h permanecem tecnicamente inexequíveis
 mesmo que a credencial `SHOPEE_*` esteja presente) não foi re-verificado linha a linha nesta sessão
-por já ter sido confirmado repetidamente.
+por já ter sido confirmado repetidamente; nenhum commit no intervalo toca esses scripts.
 
 Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
 CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. Nenhuma notificação
 push enviada neste ciclo — nenhum dos critérios de novo aviso (workflows Tiny recriados, artefato
 novo com erro diferente, ou execução de `shopee-production-seo.yml` com apply real bem-sucedido)
-ocorreu; o achado estrutural e o bloqueio de credencial já foram comunicados extensivamente nos
-ciclos anteriores (24 ciclos / ~6 dias de reconfirmações) e permanecem sem ação humana pendente
-(renovar OAuth2 do Tiny em `accounts.tiny.com.br` e/ou decidir se vale integrar a API de analytics
-do Shopee Open Platform).
+ocorreu; o achado estrutural e o bloqueio de credencial já foram comunicados nos ciclos anteriores
+e permanecem sem ação humana pendente (renovar OAuth2 do Tiny e/ou decidir se vale integrar a API
+de analytics do Shopee Open Platform).
