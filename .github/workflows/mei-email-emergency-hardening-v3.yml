@@ -40,8 +40,18 @@ jobs:
           test "$ready" = true
           ssh "${opts[@]}" ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
-          sudo systemctl kill --kill-who=all --signal=SIGKILL mei-mg-email-worker.service || true
-          sudo systemctl stop mei-mg-email-worker.service || true
+          if sudo systemctl kill --kill-who=all --signal=SIGKILL mei-mg-email-worker.service; then
+            echo 'V3_WORKER_KILL_SENT=true'
+          else
+            kill_rc=$?
+            echo "V3_WORKER_KILL_RC=$kill_rc"
+          fi
+          if sudo systemctl stop mei-mg-email-worker.service; then
+            echo 'V3_WORKER_STOP_COMMAND_OK=true'
+          else
+            stop_rc=$?
+            echo "V3_WORKER_STOP_RC=$stop_rc"
+          fi
           if sudo systemctl is-active --quiet mei-mg-email-worker.service; then echo 'V3_WORKER_STOP_FAILED=true'; exit 80; fi
           sudo install -d -m 0750 -o ubuntu -g ubuntu /var/lib/mei-mg-email
           if [ ! -f /var/lib/mei-mg-email/sender_blocked.pause ]; then
@@ -65,9 +75,33 @@ jobs:
           ssh "${opts[@]}" ubuntu@137.131.156.17 "EXPECTED_MEI_SHA='$EXPECTED_MEI_SHA' bash -s" <<'EOF'
           set -euo pipefail
           cd /home/ubuntu/mei-mg-email
-          for pid in $(pgrep -x git 2>/dev/null || true); do
-            cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
-            if [ "$cwd" = "$PWD" ]; then kill -TERM "$pid" 2>/dev/null || true; fi
+          pids=''
+          if pids="$(pgrep -x git 2>/dev/null)"; then
+            :
+          else
+            pgrep_rc=$?
+            if [ "$pgrep_rc" -ne 1 ]; then
+              echo "V3_GIT_PROCESS_SCAN_RC=$pgrep_rc"
+              exit 83
+            fi
+            pids=''
+          fi
+          for pid in $pids; do
+            cwd=''
+            if cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null)"; then
+              :
+            else
+              echo "V3_GIT_PROCESS_CWD_UNREADABLE=$pid"
+              continue
+            fi
+            if [ "$cwd" = "$PWD" ]; then
+              if kill -TERM "$pid" 2>/dev/null; then
+                echo "V3_LOCAL_GIT_TERMINATED=$pid"
+              else
+                kill_rc=$?
+                echo "V3_LOCAL_GIT_TERMINATE_RC=$kill_rc"
+              fi
+            fi
           done
           sleep 2
           timeout 20s git cat-file -e "$EXPECTED_MEI_SHA^{commit}"
@@ -101,31 +135,52 @@ jobs:
           done
           load="$(awk '{print $1}' /proc/loadavg)"
           avail_kb="$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)"
-          awk -v l="$load" -v m="$avail_kb" 'BEGIN { exit ! (l < 2.5 && m > 262144) }' || { echo 'V3_RESOURCE_GATE_FAILED=true'; exit 81; }
+          if ! awk -v l="$load" -v m="$avail_kb" 'BEGIN { exit ! (l < 2.5 && m > 262144) }'; then
+            echo 'V3_RESOURCE_GATE_FAILED=true'
+            exit 81
+          fi
           timeout 30s docker info >/dev/null
           echo 'V3_DOCKER_READY=true'
-          existing="$(timeout 20s docker ps -q --filter label=com.docker.compose.project=mei-mg-email --filter label=com.docker.compose.service=flyway 2>/dev/null || true)"
+          existing="$(timeout 20s docker ps -q --filter label=com.docker.compose.project=mei-mg-email --filter label=com.docker.compose.service=flyway)"
           if [ -n "$existing" ]; then
             echo 'V3_EXISTING_FLYWAY=true'
             for wait_round in $(seq 1 16); do
-              existing="$(timeout 20s docker ps -q --filter label=com.docker.compose.project=mei-mg-email --filter label=com.docker.compose.service=flyway 2>/dev/null || true)"
+              existing="$(timeout 20s docker ps -q --filter label=com.docker.compose.project=mei-mg-email --filter label=com.docker.compose.service=flyway)"
               [ -z "$existing" ] && break
               echo "V3_EXISTING_FLYWAY_WAIT=$wait_round"
               sleep 15
             done
           fi
-          existing="$(timeout 20s docker ps -q --filter label=com.docker.compose.project=mei-mg-email --filter label=com.docker.compose.service=flyway 2>/dev/null || true)"
-          [ -z "$existing" ] || { echo 'V3_FLYWAY_BUSY=true'; exit 82; }
+          existing="$(timeout 20s docker ps -q --filter label=com.docker.compose.project=mei-mg-email --filter label=com.docker.compose.service=flyway)"
+          if [ -n "$existing" ]; then
+            echo 'V3_FLYWAY_BUSY=true'
+            exit 82
+          fi
           rm -f /tmp/mei-flyway-v3.log /tmp/mei-flyway-v3.rc
           (
-            rc=0
-            timeout 300s docker compose run --rm --no-deps flyway migrate > /tmp/mei-flyway-v3.log 2>&1 || rc=$?
+            if timeout 300s docker compose run --rm --no-deps flyway migrate > /tmp/mei-flyway-v3.log 2>&1; then
+              rc=0
+            else
+              rc=$?
+            fi
             printf '%s\n' "$rc" > /tmp/mei-flyway-v3.rc
           ) &
           bg=$!
           while kill -0 "$bg" 2>/dev/null; do echo 'V3_FLYWAY_HEARTBEAT=true'; sleep 15; done
-          wait "$bg" || true
-          rc="$(cat /tmp/mei-flyway-v3.rc 2>/dev/null || echo 99)"
+          if wait "$bg"; then
+            wait_rc=0
+          else
+            wait_rc=$?
+          fi
+          if [ "$wait_rc" -ne 0 ]; then
+            echo "V3_FLYWAY_WRAPPER_RC=$wait_rc"
+            exit "$wait_rc"
+          fi
+          if [ -r /tmp/mei-flyway-v3.rc ]; then
+            rc="$(cat /tmp/mei-flyway-v3.rc)"
+          else
+            rc=99
+          fi
           tail -n 100 /tmp/mei-flyway-v3.log | sed -E 's#(jdbc:postgresql://)[^ ]+#\1[redacted]#g'
           echo "V3_FLYWAY_RC=$rc"
           test "$rc" = 0
@@ -185,14 +240,29 @@ jobs:
           test "$head" = "$EXPECTED_MEI_SHA"
           rm -f /tmp/mei-flyway-info-v3.log /tmp/mei-flyway-info-v3.rc
           (
-            rc=0
-            timeout 240s docker compose run --rm --no-deps flyway info > /tmp/mei-flyway-info-v3.log 2>&1 || rc=$?
+            if timeout 240s docker compose run --rm --no-deps flyway info > /tmp/mei-flyway-info-v3.log 2>&1; then
+              rc=0
+            else
+              rc=$?
+            fi
             printf '%s\n' "$rc" > /tmp/mei-flyway-info-v3.rc
           ) &
           bg=$!
           while kill -0 "$bg" 2>/dev/null; do echo 'V3_FLYWAY_INFO_HEARTBEAT=true'; sleep 15; done
-          wait "$bg" || true
-          rc="$(cat /tmp/mei-flyway-info-v3.rc 2>/dev/null || echo 99)"
+          if wait "$bg"; then
+            wait_rc=0
+          else
+            wait_rc=$?
+          fi
+          if [ "$wait_rc" -ne 0 ]; then
+            echo "V3_FLYWAY_INFO_WRAPPER_RC=$wait_rc"
+            exit "$wait_rc"
+          fi
+          if [ -r /tmp/mei-flyway-info-v3.rc ]; then
+            rc="$(cat /tmp/mei-flyway-info-v3.rc)"
+          else
+            rc=99
+          fi
           tail -n 80 /tmp/mei-flyway-info-v3.log | sed -E 's#(jdbc:postgresql://)[^ ]+#\1[redacted]#g'
           test "$rc" = 0
           grep -Eq '(^|[[:space:]])22([[:space:]]|\|).*Success|V022' /tmp/mei-flyway-info-v3.log

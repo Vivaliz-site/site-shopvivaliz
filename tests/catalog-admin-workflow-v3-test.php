@@ -156,15 +156,21 @@ sv_catalog_v3_assert(
 sv_catalog_v3_assert(
     str_contains($repairWorkflow, "workflows: ['Master Production Pipeline 24/7']")
     && str_contains($repairWorkflow, "github.event.workflow_run.conclusion == 'success'")
+    && str_contains($repairWorkflow, 'workflow_dispatch:')
+    && !str_contains($repairWorkflow, "\n  push:")
     && str_contains($repairWorkflow, 'TARGET_SHA:')
-    && str_contains($repairWorkflow, '"$deployed" == "$TARGET_SHA"')
+    && str_contains($repairWorkflow, 'production-catalog-hard-quality-repair-v2')
+    && str_contains($repairWorkflow, 'merge-base --is-ancestor "$target" "$deployed"')
+    && str_contains($repairWorkflow, "production_release_relation=\$relation")
     && str_contains($repairWorkflow, 'cancel-in-progress: false')
     && str_contains($repairWorkflow, 'ServerAliveInterval=30')
     && str_contains($repairWorkflow, 'ServerAliveCountMax=6')
     && str_contains($repairWorkflow, 'catalog_repair_interruption_resumable=true')
     && str_contains($repairWorkflow, 'catalog_repair_ssh_keepalive=true')
+    && str_contains($repairWorkflow, 'catalog_repair_push_trigger=false')
+    && str_contains($repairWorkflow, 'catalog_repair_accepts_deployed_descendant=true')
     && str_contains($repairWorkflow, 'php admin/catalog-optimization/repair_hard_quality_pending.php --limit=2000'),
-    'Reparo pos-deploy deve ser serial, retomavel, com keepalive e sempre mirar o SHA efetivamente implantado'
+    'Reparo pos-deploy deve ignorar pushes intermediarios, aceitar release descendente e manter fila v2 serial/retomavel'
 );
 
-fwrite(STDOUT, "COMPROVADO: toda saida gerada e auto-normalizada, hard failure nao vira trabalho manual e reparo legado e retomavel.\n");
+fwrite(STDOUT, "COMPROVADO: toda saida gerada e auto-normalizada, hard failure nao vira trabalho manual e reparo legado nao fica preso em SHA intermediario.\n");
