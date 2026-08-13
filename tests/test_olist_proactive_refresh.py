@@ -89,3 +89,14 @@ def test_php_runtime_refreshes_proactively_and_keeps_401_only_as_fallback() -> N
     assert "sv_market_tiny_ensure_access_token" in source
     assert "expires_at_epoch" in source
     assert "if ((int)$response['status'] !== 401)" in source
+
+
+def test_callback_never_returns_token_material_and_syncs_rotating_store() -> None:
+    source = (ROOT / "olist/callback.php").read_text(encoding="utf-8")
+    assert "substr($accessToken" not in source
+    assert "'access_token' =>" not in source
+    assert "'detalhes_oauth'" not in source
+    assert "'token_salvo' => true" in source
+    assert "'refresh_preventivo' => true" in source
+    assert "/shared/private/olist-tokens.json" in source
+    assert "expires_at_epoch" in source
