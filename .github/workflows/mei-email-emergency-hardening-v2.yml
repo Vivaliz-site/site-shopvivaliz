@@ -108,9 +108,9 @@ jobs:
           fi
           rm -f /tmp/mei-flyway-v2.log /tmp/mei-flyway-v2.rc
           (
-            set +e
-            timeout 360s docker compose run --rm flyway migrate > /tmp/mei-flyway-v2.log 2>&1
-            echo $? > /tmp/mei-flyway-v2.rc
+            rc=0
+            timeout 360s docker compose run --rm flyway migrate > /tmp/mei-flyway-v2.log 2>&1 || rc=$?
+            printf '%s\n' "$rc" > /tmp/mei-flyway-v2.rc
           ) &
           bg=$!
           while kill -0 "$bg" 2>/dev/null; do
@@ -176,9 +176,9 @@ jobs:
           sudo systemctl is-enabled mei-mg-email-base-sync.timer
           rm -f /tmp/mei-flyway-info-v2.log /tmp/mei-flyway-info-v2.rc
           (
-            set +e
-            timeout 240s docker compose run --rm flyway info > /tmp/mei-flyway-info-v2.log 2>&1
-            echo $? > /tmp/mei-flyway-info-v2.rc
+            rc=0
+            timeout 240s docker compose run --rm flyway info > /tmp/mei-flyway-info-v2.log 2>&1 || rc=$?
+            printf '%s\n' "$rc" > /tmp/mei-flyway-info-v2.rc
           ) &
           bg=$!
           while kill -0 "$bg" 2>/dev/null; do echo 'V2_FLYWAY_INFO_HEARTBEAT=true'; sleep 15; done
