@@ -754,6 +754,22 @@ def select_targets(ml: ML) -> list[dict]:
     return targets
 
 
+def already_applied() -> set[str]:
+    """Ids ja otimizados em execucoes anteriores, lidos dos relatorios de apply."""
+    import glob
+
+    done: set[str] = set()
+    for path in glob.glob(os.path.join(REPORT_DIR, "ml-seo-apply-*.json")):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                for res in json.load(fh).get("results", []):
+                    if res.get("status") == "aplicado":
+                        done.add(res["id"])
+        except (OSError, json.JSONDecodeError):
+            continue
+    return done
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--apply", action="store_true", help="grava as mudancas no ML")
