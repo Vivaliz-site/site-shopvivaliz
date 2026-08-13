@@ -13,10 +13,16 @@ O conteudo e gerado pelo Claude (claude-opus-5) a partir dos dados reais do anun
 e validado deterministicamente aqui antes de qualquer PUT: nada e enviado ao ML sem
 passar pelas regras de `validate_*`.
 
+Quando a ficha tecnica esta incompleta, roda antes uma etapa de pesquisa web
+(web_search server-side do Claude) para levantar as especificacoes reais do produto
+a partir do fabricante/revendedores. O resultado dessa pesquisa entra no prompt como
+DADO, nunca como instrucao, e continua sujeito as mesmas validacoes.
+
 Uso:
     python3 ml-seo-optimizer.py --dry-run --limit 5
     python3 ml-seo-optimizer.py --apply
     python3 ml-seo-optimizer.py --apply --only MLB1234567890
+    python3 ml-seo-optimizer.py --apply --no-research   # sem pesquisa web
 
 Ver docs/MERCADO-LIVRE-API.md para as regras da API que motivam cada validacao.
 """
