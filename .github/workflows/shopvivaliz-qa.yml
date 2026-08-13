@@ -114,7 +114,7 @@ jobs:
         run: php tests/catalog-optimization-policy-test.php
       - name: Workflow operacional do Admin de otimizacao
         run: |
-          set -e
+          set -Eeuo pipefail
           node --check admin/assets/catalog-optimization-workflow.js
           php tests/catalog-admin-workflow-v3-test.php
       - name: Identidade e qualidade de imagens do Admin
