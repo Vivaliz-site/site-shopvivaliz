@@ -26,6 +26,7 @@ $guard = admin_ux_read($root, 'includes/admin-guard.php');
 $catalogUi = admin_ux_read($root, 'admin/assets/catalog-effective-results.js');
 $imageUi = admin_ux_read($root, 'admin/assets/image-generation-usability-v2.js');
 $overviewUi = admin_ux_read($root, 'admin/assets/admin-ai-overview.js');
+$completionUi = admin_ux_read($root, 'admin/assets/admin-mobile-completion.js');
 $overviewApi = admin_ux_read($root, 'admin/api/ai-routine-summary.php');
 $responsiveCss = admin_ux_read($root, 'css/admin-zoom-responsive.css');
 $login = admin_ux_read($root, 'auth/login.php');
@@ -35,6 +36,7 @@ foreach ([
     'catalog-effective-results.js',
     'image-generation-usability-v2.js',
     'admin-ai-overview.js',
+    'admin-mobile-completion.js',
 ] as $asset) {
     admin_ux_assert(str_contains($guard, $asset), "O carregador do Admin precisa incluir {$asset}.");
 }
@@ -58,6 +60,14 @@ admin_ux_assert(str_contains($overviewUi, 'Otimização de Cadastro'), 'A centra
 admin_ux_assert(str_contains($overviewApi, 'product_images_staging'), 'O resumo de imagens deve usar a fila real.');
 admin_ux_assert(str_contains($overviewApi, 'catalog_optimizations_staging'), 'O resumo de cadastro deve usar os rascunhos reais.');
 
+admin_ux_assert(str_contains($completionUi, 'sv-admin-card-details'), 'As secoes extensas da central devem ser recolhiveis.');
+admin_ux_assert(str_contains($completionUi, 'sv-admin-mobile-dock'), 'A central deve oferecer atalhos fixos no celular.');
+admin_ux_assert(str_contains($completionUi, 'dataset.effectiveSort'), 'Resultados devem oferecer ordenacao operacional.');
+foreach (['recent', 'urgent', 'channel', 'status'] as $sortMode) {
+    admin_ux_assert(str_contains($completionUi, 'value="' . $sortMode . '"'), "A ordenacao {$sortMode} deve existir.");
+}
+admin_ux_assert(str_contains($completionUi, 'env(safe-area-inset-bottom)'), 'O complemento mobile deve respeitar a area segura do aparelho.');
+
 admin_ux_assert(str_contains($responsiveCss, 'min-height: 44px'), 'Controles moveis precisam de alvo de toque adequado.');
 admin_ux_assert(str_contains($responsiveCss, 'env(safe-area-inset-bottom)'), 'O layout deve respeitar a area segura do aparelho.');
 admin_ux_assert(str_contains($responsiveCss, 'grid-template-columns: repeat(2, minmax(0, 1fr))'), 'Atalhos do Admin devem ficar compactos no celular.');
@@ -67,4 +77,4 @@ admin_ux_assert(str_contains($login, 'Entrar com Google'), 'O botao do Google de
 admin_ux_assert(str_contains($googleStart, "sv_social_google_auth_url('login'"), 'O inicio do Google deve usar o fluxo OAuth canonico.');
 admin_ux_assert(str_contains($googleStart, 'session_write_close'), 'O estado OAuth deve ser persistido antes do redirecionamento.');
 
-fwrite(STDOUT, "COMPROVADO: central, rotinas de IA, resultados recolhiveis, selecao e acesso Google possuem contratos de interface e carregamento.\n");
+fwrite(STDOUT, "COMPROVADO: central, rotinas de IA, resultados recolhiveis, selecao, ordenacao e acesso Google possuem contratos de interface e carregamento.\n");

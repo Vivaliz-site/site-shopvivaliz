@@ -119,6 +119,7 @@ if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAdminUiPages, true)
 
         if ($svAdminScriptName === '/admin/index.php') {
             echo "\n<script src=\"/admin/assets/admin-ai-overview.js?v=" . $svAssetVersion('/admin/assets/admin-ai-overview.js') . "\"></script>\n";
+            echo "<script src=\"/admin/assets/admin-mobile-completion.js?v=" . $svAssetVersion('/admin/assets/admin-mobile-completion.js') . "\"></script>\n";
             return;
         }
 
@@ -126,6 +127,7 @@ if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAdminUiPages, true)
             echo "\n<script src=\"/admin/assets/catalog-optimization-workflow.js?v=" . $svAssetVersion('/admin/assets/catalog-optimization-workflow.js') . "\"></script>\n";
             echo "<script src=\"/admin/assets/catalog-change-intelligence.js?v=" . $svAssetVersion('/admin/assets/catalog-change-intelligence.js') . "\"></script>\n";
             echo "<script src=\"/admin/assets/catalog-effective-results.js?v=" . $svAssetVersion('/admin/assets/catalog-effective-results.js') . "\"></script>\n";
+            echo "<script src=\"/admin/assets/admin-mobile-completion.js?v=" . $svAssetVersion('/admin/assets/admin-mobile-completion.js') . "\"></script>\n";
             return;
         }
 
