@@ -1,0 +1,54 @@
+(() => {
+  'use strict';
+
+  const button = document.getElementById('sv-test-health');
+  const status = document.getElementById('sv-admin-live-status');
+  if (!button || !status) return;
+
+  function setStatus(message, kind) {
+    status.textContent = message;
+    status.classList.remove('ok', 'err');
+    if (kind) status.classList.add(kind);
+  }
+
+  async function testHealth() {
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    setStatus('Consultando a saúde real da aplicação...', '');
+
+    try {
+      const response = await fetch('/api/health.php', {
+        method: 'GET',
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store'
+      });
+
+      if (response.redirected || /\/auth\/login\.php/i.test(response.url || '')) {
+        throw new Error('Sessão administrativa expirada. Entre novamente.');
+      }
+
+      const text = await response.text();
+      let payload = null;
+      try { payload = JSON.parse(text); } catch (_) {}
+
+      if (!response.ok) {
+        throw new Error(`Health endpoint respondeu HTTP ${response.status}.`);
+      }
+
+      const healthy = payload && (payload.ok === true || payload.status === 'ok' || payload.status === 'healthy');
+      if (!healthy) {
+        throw new Error('O endpoint respondeu, mas não confirmou estado saudável. Consulte o Monitor principal.');
+      }
+
+      setStatus('Saúde confirmada pelo endpoint real da aplicação. Use Conexões para validar cada marketplace/provedor.', 'ok');
+    } catch (error) {
+      setStatus(error && error.message ? error.message : 'Não foi possível confirmar a saúde da aplicação.', 'err');
+    } finally {
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+    }
+  }
+
+  button.addEventListener('click', testHealth);
+})();
