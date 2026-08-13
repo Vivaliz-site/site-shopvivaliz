@@ -115,7 +115,7 @@ jobs:
       - name: Workflow operacional do Admin de otimizacao
         run: |
           set -e
-          node --check admin/assets/catalog-optimization-workflow-v3.js
+          node --check admin/assets/catalog-optimization-workflow.js
           php tests/catalog-admin-workflow-v3-test.php
       - name: Identidade e qualidade de imagens do Admin
         run: php tests/image-identity-policy-test.php
