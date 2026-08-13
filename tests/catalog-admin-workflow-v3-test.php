@@ -103,7 +103,7 @@ sv_catalog_v3_assert(
 );
 sv_catalog_v3_assert(
     str_contains($config, "catalog_ai_env_key_pool(['GOOGLE_GEMINI_API_KEY', 'GEMINI_API_KEY'])")
-    && str_contains($config, "$baseName . 'S'")
+    && str_contains($config, "\$baseName . 'S'")
     && str_contains($config, 'for ($index = 1; $index <= 10; $index++)'),
     'Pool Gemini deve aceitar bundles, aliases e chaves numeradas para rotacao automatica'
 );
