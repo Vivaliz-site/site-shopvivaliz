@@ -16,11 +16,15 @@ $guard = file_get_contents($root . '/includes/admin-guard.php');
 $ui = file_get_contents($root . '/admin/assets/catalog-optimization-workflow.js');
 $resilient = file_get_contents($root . '/admin/catalog-optimization/api/optimize_catalog_resilient.php');
 $config = file_get_contents($root . '/admin/catalog-optimization/config_optimization.php');
+$repair = file_get_contents($root . '/admin/catalog-optimization/repair_hard_quality_pending.php');
+$repairWorkflow = file_get_contents($root . '/.github/workflows/repair-catalog-hard-quality-pending.yml');
 
 sv_catalog_v3_assert(is_string($guard) && $guard !== '', 'admin-guard.php precisa existir');
 sv_catalog_v3_assert(is_string($ui) && $ui !== '', 'workflow unificado precisa existir');
 sv_catalog_v3_assert(is_string($resilient) && $resilient !== '', 'API resiliente precisa existir');
 sv_catalog_v3_assert(is_string($config) && $config !== '', 'configuracao de IA do catalogo precisa existir');
+sv_catalog_v3_assert(is_string($repair) && $repair !== '', 'reparo de pendencias hard precisa existir');
+sv_catalog_v3_assert(is_string($repairWorkflow) && $repairWorkflow !== '', 'workflow de reparo pos-deploy precisa existir');
 
 sv_catalog_v3_assert(
     str_contains($guard, 'catalog-optimization-workflow.js'),
@@ -108,4 +112,24 @@ sv_catalog_v3_assert(
     'Pool Gemini deve aceitar bundles, aliases e chaves numeradas para rotacao automatica'
 );
 
-fwrite(STDOUT, "COMPROVADO: workflow do Admin usa selecao estavel, qualidade auto-reparada, rejeita hard failures antes do staging e preserva rotacao de credenciais Gemini.\n");
+sv_catalog_v3_assert(
+    str_contains($repair, "WHERE status = 'pending'")
+    && str_contains($repair, 'ai_catalog_quality_report($data, $channel, $product)')
+    && str_contains($repair, "SET status = 'failed'")
+    && str_contains($repair, 'ai_catalog_process_item($db, $productId, $channel, $provider)'),
+    'Pendencias antigas com hard failure devem sair da aprovacao e ser regeneradas automaticamente'
+);
+sv_catalog_v3_assert(
+    str_contains($repair, 'catalog_hard_repair_publication_attempted=false')
+    && !str_contains($repair, 'CatalogPublisher')
+    && !str_contains($repair, 'publish('),
+    'Reparo de qualidade nunca pode publicar em marketplace'
+);
+sv_catalog_v3_assert(
+    str_contains($repairWorkflow, 'Wait for exact production release')
+    && str_contains($repairWorkflow, '"$deployed" == "$GITHUB_SHA"')
+    && str_contains($repairWorkflow, 'php admin/catalog-optimization/repair_hard_quality_pending.php --limit=2000'),
+    'Reparo legado deve rodar automaticamente somente depois do SHA exato chegar a producao'
+);
+
+fwrite(STDOUT, "COMPROVADO: Admin auto-repara qualidade nova, limpa pendencias hard legadas sem publicar e preserva rotacao de credenciais Gemini.\n");
