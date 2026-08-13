@@ -112,14 +112,18 @@ jobs:
         run: php scripts/quality/validate-auto-image-carousel.php
       - name: Politica premium de otimizacao por marketplace
         run: php tests/catalog-optimization-policy-test.php
-      - name: Fluxos inteligentes do Admin de catalogo e imagens
+      - name: Workflow inteligente do Admin de otimizacao
         run: |
           set -Eeuo pipefail
           node --check admin/assets/catalog-optimization-workflow.js
           node --check admin/assets/catalog-change-intelligence.js
-          node --check admin/assets/image-generation-workflow.js
           php tests/catalog-admin-workflow-v3-test.php
           php tests/catalog-change-intelligence-test.php
+          php tests/catalog-generated-data-normalizer-test.php
+      - name: Workflow inteligente do AI Image Studio
+        run: |
+          set -Eeuo pipefail
+          node --check admin/assets/image-generation-workflow.js
           php tests/image-admin-workflow-test.php
           php tests/image-admin-workflow-v3-test.php
       - name: Identidade e qualidade de imagens do Admin
