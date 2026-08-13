@@ -1,0 +1,79 @@
+name: Inspect MEI historical checksums 014 017 018
+
+on:
+  push:
+    branches:
+      - ops/inspect-mei-v020-stash
+    paths:
+      - '.github/workflows/inspect-mei-historical-checksums-014-018.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Compare preserved migration objects to production checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 240s ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then
+            echo 'HIST_ABORT_WORKER_ACTIVE=true'
+            exit 79
+          fi
+          python3 - <<'PY'
+          import subprocess, zlib
+
+          targets = {
+              'V014__cnpj_alphanumeric_and_submission_guard.sql': 2116743560,
+              'V017__optimize_submission_trigger.sql': 1690705898,
+              'V018__index_envios_enviado_em.sql': -410986482,
+          }
+
+          def checksum(data: bytes) -> int:
+              text = data.decode('utf-8-sig')
+              crc = 0
+              for line in text.splitlines():
+                  crc = zlib.crc32(line.encode('utf-8'), crc)
+              return crc if crc < 2**31 else crc - 2**32
+
+          trees = ['HEAD', 'stash@{0}', 'stash@{0}^1', 'stash@{0}^2']
+          for name, target in targets.items():
+              path = 'db/migrations/' + name
+              print(f'HIST_TARGET path={path} checksum={target}')
+              for tree in trees:
+                  spec = f'{tree}:{path}'
+                  try:
+                      data = subprocess.check_output(['git','show',spec], stderr=subprocess.DEVNULL)
+                  except subprocess.CalledProcessError:
+                      continue
+                  value = checksum(data)
+                  print(f'HIST_CANDIDATE path={path} tree={tree} checksum={value} match={str(value == target).lower()} bytes={len(data)}')
+                  if value == target:
+                      print(f'HIST_CONTENT_BEGIN path={path} tree={tree}')
+                      print(data.decode('utf-8-sig'))
+                      print(f'HIST_CONTENT_END path={path} tree={tree}')
+          PY
+          echo 'WORKER_RESUME_ALLOWED=false'
+          EOF
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey
