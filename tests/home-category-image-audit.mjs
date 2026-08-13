@@ -18,6 +18,14 @@ async function audit(name, viewport, isMobile = false) {
     extraHTTPHeaders: { 'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8' },
   });
   const page = await context.newPage();
+
+  // Executa a versao da branch antes de qualquer script da pagina. Isso evita
+  // bloqueio por CSP de uma <script> injetada tardiamente e tambem garante que
+  // o guard global faca a versao de producao ceder lugar ao codigo em revisao.
+  if (injectBranchScript) {
+    await page.addInitScript({ path: path.resolve('js/public-experience-v1.js') });
+  }
+
   const response = await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   if (!response || response.status() >= 400) {
     await page.screenshot({ path: path.join(outputDir, `home-http-failure-${name}.png`), fullPage: true }).catch(() => {});
@@ -26,13 +34,8 @@ async function audit(name, viewport, isMobile = false) {
   await page.waitForSelector('.home-categories .category-slide img.category-slide-img', { timeout: 45_000 });
 
   if (injectBranchScript) {
-    await page.evaluate(() => { window.__svPublicExperienceInitialized = false; });
-    await page.addScriptTag({ path: path.resolve('js/public-experience-v1.js') });
-
     // A selecao das fotos depende de /api/catalog/products.php. Espera a branch
-    // marcar cada card como catalog ou fallback antes de medir o DOM; sem isso o
-    // teste poderia observar as imagens server-side anteriores e gerar falso
-    // negativo mesmo com a substituicao assíncrona ainda em andamento.
+    // marcar cada card como catalog ou fallback antes de medir o DOM.
     await page.waitForFunction(() => {
       const images = Array.from(document.querySelectorAll('.home-categories img.category-slide-img'));
       return images.length >= 5 && images.every((img) => img instanceof HTMLImageElement && !!img.dataset.svCategorySource);
