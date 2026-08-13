@@ -90,20 +90,44 @@ def test_refresh_persists_provider_expiry_metadata(tmp_path: Path, monkeypatch) 
     assert payload["expires_at_epoch"] == 15400
 
 
-def test_php_runtime_refreshes_proactively_and_keeps_401_only_as_fallback() -> None:
+def test_daemon_owns_cross_process_rotation_lock() -> None:
+    source = MODULE_PATH.read_text(encoding="utf-8")
+    assert "def oauth_rotation_lock()" in source
+    assert "olist-token-rotation.lock" in source
+    assert "with oauth_rotation_lock():" in source
+    assert "update_token_store(access_token, refresh_token, result)" in source
+
+
+def test_php_runtime_is_consumer_only_and_retries_only_after_store_rotation() -> None:
     source = (ROOT / "includes/marketplace/TinyV3Runtime.php").read_text(encoding="utf-8")
+    endpoint = "accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
     assert "SV_MARKET_TINY_REFRESH_MARGIN_SECONDS = 1800" in source
     assert "/shared/private/olist-tokens.json" in source
     assert "sv_market_tiny_ensure_access_token" in source
     assert "expires_at_epoch" in source
+    assert endpoint not in source
+    assert "sv_market_tiny_refresh_access_token" not in source
     assert "if ((int)$response['status'] !== 401)" in source
+    assert "!hash_equals($before, $after)" in source
 
 
-def test_callback_never_returns_token_material_and_syncs_rotating_store() -> None:
+def test_business_consumers_cannot_rotate_refresh_tokens() -> None:
+    endpoint = "accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token"
+    for relative in (
+        "includes/tiny-order-push.php",
+        "olist/sync-products.php",
+    ):
+        source = (ROOT / relative).read_text(encoding="utf-8")
+        assert endpoint not in source, relative
+    assert "svtop_olist_token_store" in (ROOT / "includes/tiny-order-push.php").read_text(encoding="utf-8")
+    assert "svs_read_token_store" in (ROOT / "olist/sync-products.php").read_text(encoding="utf-8")
+
+
+def test_callback_never_returns_token_material_and_shares_rotation_lock() -> None:
     source = (ROOT / "olist/callback.php").read_text(encoding="utf-8")
     assert "substr($accessToken" not in source
     assert "'access_token' =>" not in source
-    assert "'detalhes_oauth'" not in source
+    assert "'refresh_token' =>" not in source
     assert "'token_salvo' => true" in source
     assert "'refresh_preventivo' => true" in source
     assert "/shared/private/olist-tokens.json" in source
@@ -111,4 +135,19 @@ def test_callback_never_returns_token_material_and_syncs_rotating_store() -> Non
     assert "realpath($envFile)" in source
     assert "is_writable($envTarget)" in source
     assert "'env_sincronizado' => $envSynced" in source
-    assert "if (!$tokenStoreSaved)" in source
+    assert "olist-token-rotation.lock" in source
+    assert "flock($rotationLock, LOCK_EX)" in source
+
+
+def test_legacy_oauth_executors_are_removed() -> None:
+    for relative in (
+        "api/olist/login.php",
+        "api/olist/callback.php",
+        "api/olist/refresh-token.php",
+        "scripts/get-tiny-oauth-token.py",
+        "scripts/playwright-get-token.py",
+        ".github/workflows/one-time-olist-refresh.yml",
+        ".github/workflows/recover-olist-runtime.yml",
+        ".github/workflows/recover-olist-oauth-from-backups.yml",
+    ):
+        assert not (ROOT / relative).exists(), relative
