@@ -27,10 +27,10 @@ Status usados:
 | Olist/Tiny OAuth | VALIDADO | Rotação foi consolidada em store/daemon canônico; monitor foi tornado read-only e atualizado para ler a fonte autoritativa. |
 | CI, governança e política | VALIDADO | QA, Quality Gate, Repository Governance, Policy Engine, History Integrity, Autonomy Boundary e auditoria de agentes executados nas correções desta rodada. |
 | Storefront mobile | VALIDADO / CORRIGIDO | Browser Audit em viewport mobile; ajustes em alvos de toque, pagamento, widgets globais, consentimento e imagens de categorias. |
-| Imagens das categorias da home | CORRIGIDO | Seleção prioriza foto real do catálogo, evita Unsplash/repetição e possui auditor Playwright dedicado. |
-| Prova social da home | CORRIGIDO | HTML server-side deixa de entregar depoimentos demonstrativos; `/api/testimonials.php` continua sendo a fonte de avaliações publicadas. |
-| `AggregateRating` estático da home | CORRIGIDO | Objeto histórico sem fonte auditável é removido no HTML final da rota `/`. |
-| Newsletter da home | CORRIGIDO | Removido falso `alert()` de sucesso sem persistência; enquanto não existir backend comprovado, a home mostra CTAs reais para catálogo/atendimento. |
+| Imagens das categorias da home | CORRIGIDO | Seleção prioriza foto real do catálogo, pagina todo o catálogo, evita Unsplash/repetição e possui fallback para URL quebrada + auditor Playwright dedicado. |
+| Prova social da home | VALIDADO | O guard canônico `public-trust-guard-core.php` remove depoimentos demonstrativos do HTML final; `/api/testimonials.php` é a fonte das avaliações publicadas. |
+| `AggregateRating` estático da home | VALIDADO | O mesmo guard remove nós `AggregateRating` de `index.php` antes de servir o JSON-LD. |
+| Newsletter da home | VALIDADO | `newsletter-v1.js` intercepta o formulário, exige consentimento, usa honeypot e envia ao backend real `/api/newsletter/subscribe.php`; nenhum segundo sanitizador foi criado. |
 | Consentimento de cookies | VALIDADO / CORRIGIDO | Escolha continua persistida e Consent Mode é atualizado; layout mobile foi compactado sem reduzir alvos de toque. |
 
 ## Achados estruturais que não devem ser “corrigidos” às cegas
@@ -52,10 +52,10 @@ Status usados:
 
 Esses itens não devem ser marcados como resolvidos por alteração cosmética no repositório; exigem evidência da plataforma correspondente.
 
-## Regressões adicionadas nesta rodada
+## Regressões usadas nesta rodada
 
 - `tests/site-ops-visual-integrity-test.php`
 - `tests/home-category-image-audit.mjs`
-- `tests/home-trust-sanitizer-test.php`
+- `tests/public-trust-guard-test.php` (canônico já existente)
 
 O objetivo é impedir retorno de estados falsos no Admin/home, urgência enganosa no checkout, perda de acessibilidade, títulos SEO excessivos, imagens genéricas quando há foto real e regressões de confiança no HTML server-side.
