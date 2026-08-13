@@ -40,8 +40,15 @@ def again(p,ms):
  except T:slow=True
  return slow or settle(p,ms)
 def auth(p):
- x=p.evaluate("""()=>{let t=(document.body?.innerText||'').toLowerCase(),g=[...document.querySelectorAll('a,button')].some(n=>/entrar com google/i.test(n.textContent||''));return{path:location.pathname,markers:document.querySelectorAll('body.admin-surface,.admin-overview,.ais-wrap,#iv-list,.sv-effective-toolbar').length,login:!!document.querySelector('input[type=password]')||g||t.includes('acesse sua conta')}}""")
+ try:x=p.evaluate("""()=>{let t=(document.body?.innerText||'').toLowerCase(),g=[...document.querySelectorAll('a,button')].some(n=>/entrar com google/i.test(n.textContent||''));return{path:location.pathname,markers:document.querySelectorAll('body.admin-surface,.admin-overview,.ais-wrap,#iv-list,.sv-effective-toolbar').length,login:!!document.querySelector('input[type=password]')||g||t.includes('acesse sua conta')}}""")
+ except T:return {'path':path(p.url),'markers':0,'login':False,'authenticated':False,'timeout':True}
  x['authenticated']=x['path'].startswith('/admin') and x['markers']>0 and not x['login'];return x
+def tap(q):
+ if not q.count():return False
+ try:q.first.click(timeout=4500);return True
+ except T:
+  try:q.first.evaluate('e=>e.click()');return True
+  except Exception:return False
 def login(w,ch):
  b=w.chromium.launch(executable_path=ch,headless=True);c=b.new_context(viewport={'width':390,'height':844},service_workers="block");z=[];guard(c,z);p=c.new_page()
  try:
@@ -52,6 +59,8 @@ def home(p):
  try:p.wait_for_selector('body.admin-surface',timeout=12000)
  except T:pass
  a=auth(p)
+ if a.get('timeout'):
+  slow=again(p,1800) or slow;a=auth(p)
  if not a['authenticated']:return {'authenticated':False,'path':a['path'],'status':s,'navigation_slow':slow}
  try:p.wait_for_selector('details.sv-admin-card-details',timeout=9000)
  except T:pass
@@ -59,8 +68,8 @@ def home(p):
  op=cl=sv=False
  if x['details']:
   o=p.get_by_role('button',name='Abrir seções');c=p.get_by_role('button',name='Recolher seções')
-  if o.count():o.first.click();p.wait_for_timeout(180);op=p.evaluate("()=>[...document.querySelectorAll('details.sv-admin-card-details')].every(d=>d.open)")
-  if c.count():c.first.click();p.wait_for_timeout(180);cl=p.evaluate("()=>[...document.querySelectorAll('details.sv-admin-card-details')].every(d=>!d.open)")
+  if tap(o):p.wait_for_timeout(180);op=p.evaluate("()=>[...document.querySelectorAll('details.sv-admin-card-details')].every(d=>d.open)")
+  if tap(c):p.wait_for_timeout(180);cl=p.evaluate("()=>[...document.querySelectorAll('details.sv-admin-card-details')].every(d=>!d.open)")
   k=p.evaluate("""()=>{let d=document.querySelector('details.sv-admin-card-details');if(!d)return'';d.querySelector('summary')?.click();return d.dataset.sectionKey||''}""")
   if k:
    p.wait_for_timeout(250);slow=again(p,1800) or slow
@@ -70,6 +79,8 @@ def home(p):
  return {'authenticated':True,'status':s,'navigation_slow':slow,'details':x['details'],'opened':op,'closed':cl,'saved':sv,'actions':{'Abrir seções','Recolher seções'}<=set(x['actions']),'dock':x['dock'] and e<=set(x['paths']),'padding':x['padding'],'overflow':x['overflow']}
 def catalog(p):
  s,slow=nav(p,'/admin/catalog-optimization/admin_catalog.php',2400);a=auth(p)
+ if a.get('timeout'):
+  slow=again(p,1800) or slow;a=auth(p)
  if not a['authenticated']:return {'authenticated':False,'path':a['path'],'status':s,'navigation_slow':slow}
  p.evaluate("""()=>{let t=document.querySelector('#sv-effective-toolbar');if(!t){t=document.createElement('div');t.id='sv-effective-toolbar';t.innerHTML='<span id=sv-effective-visible-count></span>';document.body.prepend(t)}let h=document.querySelector('#sv-fredwin-sort-fixture');if(!h){h=document.createElement('section');h.id='sv-fredwin-sort-fixture';document.body.append(h)}h.innerHTML='<article class="sv-review-card is-ready" data-sv-state="ready" data-effective-loaded="1" data-effective-count="1" data-sv-search="site Alpha"><input type=hidden name=staging_id value=990001><strong>Alpha</strong></article><article class="sv-review-card" data-sv-search="mercado livre Beta"><input type=hidden name=staging_id value=990002><strong>Beta</strong></article><article class="sv-review-card has-failure" data-sv-state="fail" data-sv-search="shopee Zeta"><input type=hidden name=staging_id value=990003><strong>Zeta</strong></article>';let q=document.createElement('script');q.src='/admin/assets/admin-mobile-completion.js?smoke='+Date.now();document.head.append(q)}""")
  try:p.wait_for_selector('#sv-effective-sort',timeout=9000)
@@ -81,6 +92,8 @@ def catalog(p):
  return {'authenticated':True,'status':s,'navigation_slow':slow,'sort':v,'options':{'recent','urgent','channel','status','product'}<=set(o),'product':pr==['Alpha','Beta','Zeta'],'urgent':ur==['Zeta','Beta','Alpha'],'overflow':p.evaluate('()=>Math.max(0,document.documentElement.scrollWidth-innerWidth)')}
 def image(p):
  s,slow=nav(p,'/admin/ai-image-studio/admin_dashboard.php',3000);a=auth(p)
+ if a.get('timeout'):
+  slow=again(p,1800) or slow;a=auth(p)
  if not a['authenticated']:return {'authenticated':False,'path':a['path'],'status':s,'navigation_slow':slow}
  try:p.wait_for_selector('.iv-item[data-product-id]',timeout=12000)
  except T:pass
