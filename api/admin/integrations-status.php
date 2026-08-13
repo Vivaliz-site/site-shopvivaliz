@@ -15,9 +15,9 @@ $refreshRequested = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST'
 $state = svih_read_state();
 $checkedAt = strtotime((string)($state['checked_at'] ?? '')) ?: 0;
 if ($state === [] || $checkedAt < time() - 65 * 60 || $refreshRequested) {
-    // O clique em "Atualizar agora" executa de fato as rotinas seguras de
-    // renovacao. A leitura automatica apenas valida o estado atual.
-    $state = svih_check_all($refreshRequested);
+    // Atualizar agora apenas refaz as verificacoes. A rotacao OAuth pertence
+    // exclusivamente ao daemon shopvivaliz-token-renewer.
+    $state = svih_check_all(false);
 }
 
 // Acrescenta ao monitor central as mesmas conexões oficiais usadas pela

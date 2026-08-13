@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import base64
 import binascii
 import json
@@ -16,6 +17,11 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows local development
+    fcntl = None
 
 from scripts.env_keyset_guard import assert_monotonic_text
 
@@ -61,6 +67,23 @@ def current_token_store_path() -> Path:
     if ENV_PATH != DEFAULT_ENV_PATH:
         return ENV_PATH.parent / "storage/private/olist-tokens.json"
     return TOKEN_STORE_PATH
+
+
+@contextlib.contextmanager
+def oauth_rotation_lock():
+    """Serialize production refresh-token rotation across processes."""
+    ensure_token_store_parent()
+    path = current_token_store_path().parent / "olist-token-rotation.lock"
+    with path.open("a+", encoding="utf-8") as handle:
+        if os.name != "nt":
+            os.chmod(path, 0o660)
+        if fcntl is not None:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            if fcntl is not None:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _read_env() -> dict[str, str]:
@@ -382,27 +405,33 @@ def token_requires_refresh(config: dict[str, str], refresh_margin: int, now: int
 
 
 def renew_once() -> dict[str, Any] | None:
-    config = get_config()
-    result = renew_token(config)
-    access_token = result.get("access_token") if isinstance(result, dict) else None
-    if not isinstance(access_token, str) or not access_token:
-        return None
-    refresh_token = result.get("refresh_token") or result.get("_sv_refresh_token_fallback")
-    if not isinstance(refresh_token, str) or not refresh_token:
-        return None
-    credential_alias = str(result.get("_sv_credential_alias") or "")
-    refresh_alias = str(result.get("_sv_refresh_alias") or "")
+    with oauth_rotation_lock():
+        config = get_config()
+        result = renew_token(config)
+        access_token = result.get("access_token") if isinstance(result, dict) else None
+        if not isinstance(access_token, str) or not access_token:
+            return None
+        refresh_token = result.get("refresh_token") or result.get("_sv_refresh_token_fallback")
+        if not isinstance(refresh_token, str) or not refresh_token:
+            return None
+        credential_alias = str(result.get("_sv_credential_alias") or "")
+        refresh_alias = str(result.get("_sv_refresh_alias") or "")
 
-    update_token_store(access_token, refresh_token, result)
-    update_env(access_token, refresh_token)
+        # Canonical rotating store is authoritative. Persist it before the
+        # compatibility .env so a successful provider rotation is never lost.
+        update_token_store(access_token, refresh_token, result)
+        try:
+            update_env(access_token, refresh_token)
+        except Exception as exc:
+            print(f"[!] Token store atualizado; sincronizacao .env pendente: {type(exc).__name__}")
 
-    if credential_alias and refresh_alias:
-        print(
-            f"[+] Credencial OAuth aceita: credential_alias={credential_alias} "
-            f"refresh_alias={refresh_alias}"
-        )
-    print(f"[+] Token Olist renovado preventivamente em {datetime.now(timezone.utc).isoformat()}")
-    return result
+        if credential_alias and refresh_alias:
+            print(
+                f"[+] Credencial OAuth aceita: credential_alias={credential_alias} "
+                f"refresh_alias={refresh_alias}"
+            )
+        print(f"[+] Token Olist renovado preventivamente em {datetime.now(timezone.utc).isoformat()}")
+        return result
 
 
 def check_and_renew(refresh_margin: int) -> tuple[bool, bool]:
