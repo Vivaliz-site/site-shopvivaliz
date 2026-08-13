@@ -674,7 +674,7 @@ não pôde ser confirmada.
 Esses workflows chamam `scripts/shopee_full_catalog_optimizer.py` e
 `scripts/shopee_production_seo_apply.py` (lidos nesta sessão). **Isso não resolve o bloqueio
 estrutural desta rotina**: o otimizador constrói título/descrição a partir de `attribute_list` do
-própio produto (marca/modelo/material/tamanho/cor) e gera imagens via IA — regras genéricas de
+próprio produto (marca/modelo/material/tamanho/cor) e gera imagens via IA — regras genéricas de
 SEO, sem nenhuma chamada a endpoint de analytics do Shopee Open Platform. Não há cálculo de CTR,
 taxa de conversão, comparação alto-vs-baixo-desempenho, nem A/B testing medido — os itens 1, 3, 9
 e 10 das instruções desta rotina continuam tecnicamente inexequíveis com o código atual, mesmo
