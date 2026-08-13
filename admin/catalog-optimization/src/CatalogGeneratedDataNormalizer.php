@@ -110,7 +110,12 @@ function catalog_generated_identity_prefix(array $product): string
 function catalog_generated_strip_hype_prefix(string $title): string
 {
     $pattern = '/^(?:chega\s+de|diga\s+adeus|adeus|elimine(?:\s+de\s+vez)?|transforme|potencialize|maximize|imperd[ií]vel|incr[ií]vel|revolucion[aá]rio|ultim[ií]ssima\s+chance|n[aã]o\s+perca|garanta\s+j[aá]|corra)\b[\s:!?.-]*/iu';
-    return catalog_generated_cleanup_spacing(preg_replace($pattern, '', trim($title)) ?? trim($title));
+    $title = preg_replace($pattern, '', trim($title)) ?? trim($title);
+    // O quality gate trata ! e ? em titulo como copy promocional, mesmo quando
+    // aparecem no fim. Remover essa pontuacao e uma regra estrutural e nao
+    // altera nenhum fato do produto.
+    $title = preg_replace('/[!?]+/u', '', $title) ?? $title;
+    return catalog_generated_cleanup_spacing($title);
 }
 
 function catalog_generated_truncate(string $text, int $max): string
