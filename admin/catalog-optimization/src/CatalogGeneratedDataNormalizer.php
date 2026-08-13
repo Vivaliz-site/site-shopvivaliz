@@ -92,8 +92,54 @@ function catalog_generated_sanitize_long_text(string $text, array $product): str
     return catalog_generated_sanitize_short_text($text, $product);
 }
 
+function catalog_generated_strip_hype_prefix(string $title): string
+{
+    $pattern = '/^(?:chega\s+de|diga\s+adeus|adeus|elimine(?:\s+de\s+vez)?|transforme|potencialize|maximize|imperd[ií]vel|incr[ií]vel|revolucion[aá]rio|ultim[ií]ssima\s+chance|n[aã]o\s+perca|garanta\s+j[aá]|corra)\b[\s:!?.-]*/iu';
+    $title = trim($title);
+    // Dados legados podem ter acumulado mais de uma chamada promocional no
+    // inicio (ex.: "Imperdivel: Garanta ja..."). Removemos todas as camadas
+    // conhecidas antes de derivar a identidade factual.
+    for ($round = 0; $round < 4; $round++) {
+        $next = preg_replace($pattern, '', $title) ?? $title;
+        if ($next === $title) break;
+        $title = trim($next);
+    }
+    // O quality gate trata ! e ? em titulo como copy promocional, mesmo quando
+    // aparecem no fim. Remover essa pontuacao e uma regra estrutural e nao
+    // altera nenhum fato do produto.
+    $title = preg_replace('/[!?]+/u', '', $title) ?? $title;
+    return catalog_generated_cleanup_spacing($title);
+}
+
+/**
+ * Remove copy promocional somente do nome legado usado como identidade quando
+ * marca/modelo nao existem. Sem isso o contrato poderia ficar impossivel:
+ * exigir que o titulo comece por "Imperdivel ..." e simultaneamente reprovar
+ * qualquer titulo que comece por "Imperdivel".
+ *
+ * @return array<string,mixed>
+ */
+function catalog_generated_normalize_product_identity(array $product): array
+{
+    $brand = trim((string)($product['brand'] ?? ''));
+    $model = trim((string)($product['model'] ?? ''));
+    if ($brand !== '' || $model !== '') return $product;
+
+    $name = trim((string)($product['name'] ?? ''));
+    if ($name === '') return $product;
+
+    $clean = catalog_generated_strip_hype_prefix($name);
+    $clean = preg_replace('/^[\p{P}\p{S}\s]+/u', '', $clean) ?? $clean;
+    $clean = catalog_generated_cleanup_spacing($clean);
+    if ($clean !== '') {
+        $product['name'] = $clean;
+    }
+    return $product;
+}
+
 function catalog_generated_identity_prefix(array $product): string
 {
+    $product = catalog_generated_normalize_product_identity($product);
     $brand = trim((string)($product['brand'] ?? ''));
     $model = trim((string)($product['model'] ?? ''));
     if ($brand !== '' && $model !== '') return $brand . ' ' . $model;
@@ -105,17 +151,6 @@ function catalog_generated_identity_prefix(array $product): string
     $tokens = preg_split('/\s+/u', $name) ?: [];
     $tokens = array_values(array_filter(array_map('trim', $tokens), static fn(string $token): bool => $token !== ''));
     return implode(' ', array_slice($tokens, 0, 3));
-}
-
-function catalog_generated_strip_hype_prefix(string $title): string
-{
-    $pattern = '/^(?:chega\s+de|diga\s+adeus|adeus|elimine(?:\s+de\s+vez)?|transforme|potencialize|maximize|imperd[ií]vel|incr[ií]vel|revolucion[aá]rio|ultim[ií]ssima\s+chance|n[aã]o\s+perca|garanta\s+j[aá]|corra)\b[\s:!?.-]*/iu';
-    $title = preg_replace($pattern, '', trim($title)) ?? trim($title);
-    // O quality gate trata ! e ? em titulo como copy promocional, mesmo quando
-    // aparecem no fim. Remover essa pontuacao e uma regra estrutural e nao
-    // altera nenhum fato do produto.
-    $title = preg_replace('/[!?]+/u', '', $title) ?? $title;
-    return catalog_generated_cleanup_spacing($title);
 }
 
 function catalog_generated_truncate(string $text, int $max): string
@@ -156,10 +191,15 @@ function catalog_generated_normalize_list(mixed $raw, array $product, ?int $maxI
 
 /**
  * @param array<string,mixed> $data
+ * @param array<string,mixed> $product
  * @return array<string,mixed>
  */
-function catalog_generated_normalize(array $data, string $channel, array $product): array
+function catalog_generated_normalize(array $data, string $channel, array &$product): array
 {
+    // A mesma identidade factual limpa passa a ser usada pelo normalizador e
+    // pelo quality gate logo depois desta chamada. Isso resolve cadastros
+    // legados sem enfraquecer nenhum check.
+    $product = catalog_generated_normalize_product_identity($product);
     $policy = ai_catalog_policy($channel);
 
     $title = catalog_generated_sanitize_short_text((string)($data['optimized_title'] ?? ''), $product);
