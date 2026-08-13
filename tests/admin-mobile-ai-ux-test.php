@@ -62,7 +62,7 @@ admin_ux_assert(str_contains($overviewApi, 'catalog_optimizations_staging'), 'O 
 
 admin_ux_assert(str_contains($completionUi, 'sv-admin-card-details'), 'As secoes extensas da central devem ser recolhiveis.');
 admin_ux_assert(str_contains($completionUi, 'sv-admin-mobile-dock'), 'A central deve oferecer atalhos fixos no celular.');
-admin_ux_assert(str_contains($completionUi, 'data.effectiveSort'), 'Resultados devem oferecer ordenacao operacional.');
+admin_ux_assert(str_contains($completionUi, 'dataset.effectiveSort'), 'Resultados devem oferecer ordenacao operacional.');
 foreach (['recent', 'urgent', 'channel', 'status'] as $sortMode) {
     admin_ux_assert(str_contains($completionUi, 'value="' . $sortMode . '"'), "A ordenacao {$sortMode} deve existir.");
 }
