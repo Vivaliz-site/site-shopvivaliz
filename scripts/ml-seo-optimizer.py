@@ -781,6 +781,11 @@ def main() -> int:
         "--no-research", action="store_true", help="nao pesquisa especificacoes na web"
     )
     ap.add_argument("--model", default=MODEL, help=f"modelo Claude (padrao {MODEL})")
+    ap.add_argument(
+        "--skip-applied",
+        action="store_true",
+        help="pula anuncios ja otimizados em execucoes anteriores",
+    )
     args = ap.parse_args()
     globals()["MODEL"] = args.model
     apply = args.apply and not args.dry_run
