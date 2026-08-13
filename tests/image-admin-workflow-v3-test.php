@@ -75,7 +75,7 @@ sv_image_v3_assert(
 );
 sv_image_v3_assert(
     !str_contains($ui, 'Groq — prompt + editor visual')
-    && str_contains($ui, "option[value=\"groq\"]"),
+    && str_contains($ui, 'option[value="groq"]'),
     'Regeneracao nao deve oferecer Groq quando o formulario servidor nao conclui pixels com ele'
 );
 sv_image_v3_assert(
@@ -98,7 +98,7 @@ sv_image_v3_assert(
 );
 sv_image_v3_assert(
     str_contains($statusApi, "'partial_failure'")
-    && str_contains($statusApi, "'missing' => $missingTypes")
+    && str_contains($statusApi, "'missing' => \$missingTypes")
     && str_contains($ui, "job.result_state==='partial_failure'"),
     'Falha parcial de variantes deve aparecer explicitamente no backend e na UI'
 );
