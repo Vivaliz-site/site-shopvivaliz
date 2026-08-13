@@ -762,7 +762,9 @@ def main() -> int:
     ap.add_argument(
         "--no-research", action="store_true", help="nao pesquisa especificacoes na web"
     )
+    ap.add_argument("--model", default=MODEL, help=f"modelo Claude (padrao {MODEL})")
     args = ap.parse_args()
+    globals()["MODEL"] = args.model
     apply = args.apply and not args.dry_run
 
     try:
