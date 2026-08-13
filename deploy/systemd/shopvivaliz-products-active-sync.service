@@ -1,0 +1,25 @@
+[Unit]
+Description=ShopVivaliz Active Products and Stock Sync
+After=network-online.target shopvivaliz-token-renewer.service
+Wants=network-online.target shopvivaliz-token-renewer.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/current
+Environment=PRODUCTS_ACTIVE_SYNC_INTERVAL=10800
+ExecStart=/usr/bin/bash /home/ubuntu/shopvivaliz-deploy/current/scripts/products-active-sync-loop.sh
+Restart=always
+RestartSec=30
+TimeoutStopSec=30
+UMask=0002
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/home/ubuntu/shopvivaliz-deploy/shared
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

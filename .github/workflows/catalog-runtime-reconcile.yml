@@ -1,0 +1,104 @@
+name: Catalog Runtime Reconcile
+
+on:
+  workflow_run:
+    workflows: ['Master Production Pipeline 24/7']
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: catalog-runtime-reconcile
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - name: Checkout failed production SHA
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Restore canonical catalog polling and verify availability
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' -- "$EXPECTED_SHA" <<'REMOTE'
+          set -euo pipefail
+          expected_sha="$1"
+          current='/home/ubuntu/shopvivaliz-deploy/current'
+          shared='/home/ubuntu/shopvivaliz-deploy/shared'
+          unit='shopvivaliz-products-active-sync.service'
+          test "$(cat "$current/.release-sha")" = "$expected_sha"
+          test -r "$current/deploy/systemd/$unit"
+          cache="$shared/storage/products-cache-ativos.json"
+          if [ -e "$cache" ]; then
+            sudo chown ubuntu:www-data "$cache"
+            sudo chmod 0664 "$cache"
+          fi
+          sudo install -o root -g root -m 0644 "$current/deploy/systemd/$unit" "/etc/systemd/system/$unit"
+          sudo systemctl daemon-reload
+          sudo systemctl enable --now "$unit"
+          sudo systemctl restart "$unit"
+          base='https://shopvivaliz.com.br/api/catalog/products.php?limit=1&available=1&no_cache=1'
+          ok=0
+          for attempt in $(seq 1 60); do
+            body="$(curl --silent --show-error --max-time 20 "$base" || true)"
+            if python3 - "$body" <<'PY'
+          import json, sys
+          try:
+              data = json.loads(sys.argv[1])
+          except Exception:
+              raise SystemExit(1)
+          products = data.get('products') or []
+          raise SystemExit(0 if data.get('ok') is True and len(products) > 0 and int(products[0].get('stock') or 0) > 0 else 1)
+          PY
+            then
+              ok=1
+              break
+            fi
+            sleep 10
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo 'Catalog availability did not recover from official ERP sync' >&2
+            journalctl -u "$unit" -n 40 --no-pager -o cat >&2 || true
+            exit 1
+          fi
+          systemctl is-active --quiet "$unit"
+          echo 'catalog_availability=restored'
+          REMOTE
+
+      - name: Re-run failed production jobs
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.actions.reRunWorkflowFailedJobs({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.payload.workflow_run.id,
+            });
