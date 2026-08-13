@@ -122,18 +122,17 @@ if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAiRoutineUiPages, t
         $svAssetVersion = static function (string $relativePath): string {
             $path = dirname(__DIR__) . $relativePath;
             $mtime = is_file($path) ? (int)filemtime($path) : 0;
-            return $mtime > 0 ? (string)$mtime : '20260813b';
+            return $mtime > 0 ? (string)$mtime : '20260813c';
         };
 
         if ($svAdminScriptName === '/admin/catalog-optimization/admin_catalog.php') {
-            // The catalog page has one owner for selection, generation,
-            // review and apply. Do not stack the legacy hotfix listeners here:
-            // duplicated capture handlers were one of the causes of the
-            // confusing and fragile Admin behavior.
             echo "\n<script src=\"/admin/assets/catalog-optimization-workflow.js?v=" . $svAssetVersion('/admin/assets/catalog-optimization-workflow.js') . "\"></script>\n";
             return;
         }
 
-        echo "\n<script src=\"/admin/assets/ai-routines-hotfix-ui.js?v=" . $svAssetVersion('/admin/assets/ai-routines-hotfix-ui.js') . "\"></script>\n";
+        // Dashboard e validacao de imagens compartilham um unico controlador
+        // operacional. Isso substitui o hotfix generico e evita listeners
+        // duplicados entre selecao, fila, revisao e publicacao.
+        echo "\n<script src=\"/admin/assets/ai-image-studio-workflow.js?v=" . $svAssetVersion('/admin/assets/ai-image-studio-workflow.js') . "\"></script>\n";
     });
 }

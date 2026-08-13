@@ -8,6 +8,9 @@ on:
       - 'scripts/ai-image-production-smoke-v2.php'
       - 'admin/ai-image-studio/process_item.php'
       - 'admin/ai-image-studio/src/OpenRouterImageClient.php'
+      - 'admin/ai-image-studio/api/enqueue_generation.php'
+      - 'admin/ai-image-studio/api/generation_status.php'
+      - 'admin/assets/ai-image-studio-workflow.js'
       - 'admin/catalog-optimization/src/TextAiServices.php'
       - '.github/workflows/ai-routines-production-smoke.yml'
 
@@ -42,7 +45,7 @@ jobs:
           echo "changed files: $changed"
           run_image=false
           run_catalog=false
-          if grep -qE '^(admin/ai-image-studio/process_item\.php|admin/ai-image-studio/src/OpenRouterImageClient\.php|scripts/ai-routines-production-smoke\.php|scripts/ai-image-production-smoke-v2\.php|\.github/workflows/ai-routines-production-smoke\.yml)$' <<<"$changed"; then
+          if grep -qE '^(admin/ai-image-studio/process_item\.php|admin/ai-image-studio/src/OpenRouterImageClient\.php|admin/ai-image-studio/api/enqueue_generation\.php|admin/ai-image-studio/api/generation_status\.php|admin/assets/ai-image-studio-workflow\.js|scripts/ai-routines-production-smoke\.php|scripts/ai-image-production-smoke-v2\.php|\.github/workflows/ai-routines-production-smoke\.yml)$' <<<"$changed"; then
             run_image=true
           fi
           if grep -qE '^(admin/catalog-optimization/src/TextAiServices\.php|scripts/ai-routines-production-smoke\.php|\.github/workflows/ai-routines-production-smoke\.yml)$' <<<"$changed"; then
