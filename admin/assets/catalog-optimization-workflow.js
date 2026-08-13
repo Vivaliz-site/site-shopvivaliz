@@ -161,7 +161,7 @@
     if ($(`#provider option[value="${CSS.escape(initialProvider)}"]`)) $('#provider').value = initialProvider;
     if ($(`#channel option[value="${CSS.escape(initialChannel)}"]`)) $('#channel').value = initialChannel;
 
-    const state = { items: [], selected: new Set(), query: '', filter: 'all', busy: false };
+    const state = { items: [], selected: new Set(), query: '', filter: 'all', busy: false, requestGeneration: 0 };
     const candidateList = $('#candidate-list');
     const summary = $('#candidate-summary');
     const runButton = $('#run');
@@ -185,6 +185,10 @@
       selectedLabel.textContent = count ? `${count} produto${count === 1 ? '' : 's'} selecionado${count === 1 ? '' : 's'}` : 'Nenhum produto selecionado';
       runButton.disabled = state.busy || count === 0;
       runButton.textContent = count ? `Otimizar selecionados (${count})` : 'Otimizar selecionados';
+      ['channel', 'provider', 'load-limit', 'load-candidates', 'retry'].forEach((id) => {
+        const element = $(`#${id}`);
+        if (element) element.disabled = state.busy;
+      });
     }
 
     function renderSummary() {
@@ -253,6 +257,7 @@
 
     async function loadCandidates() {
       if (state.busy) return;
+      const requestGeneration = ++state.requestGeneration;
       state.selected.clear();
       refreshSelection();
       candidateList.innerHTML = '<div class="sv-empty">Carregando produtos elegíveis...</div>';
@@ -261,9 +266,11 @@
         const channel = $('#channel').value;
         const limit = Math.max(0, Math.min(5000, Number($('#load-limit').value || 0)));
         const data = await fetchJson(`/admin/catalog-optimization/api/pending_candidates_unique.php?${new URLSearchParams({ channel, limit: String(limit) })}`);
+        if (requestGeneration !== state.requestGeneration) return;
         state.items = Array.isArray(data.items) ? data.items : [];
         renderCandidates();
       } catch (error) {
+        if (requestGeneration !== state.requestGeneration) return;
         state.items = [];
         const box = document.createElement('div');
         box.className = 'sv-empty';
@@ -384,8 +391,6 @@
           window.alert('Não há falhas pendentes para reprocessar.');
           return;
         }
-        // Falhas podem pertencer a canais/provedores diferentes; cada item é
-        // reprocessado isoladamente para manter sua configuração original.
         state.busy = true;
         refreshSelection();
         progressStart(unique.map((item) => Number(item.product_id)), 'Reprocessando falhas');
