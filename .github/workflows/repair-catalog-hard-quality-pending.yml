@@ -61,6 +61,7 @@ jobs:
           deployed=''
           for attempt in $(seq 1 120); do
             deployed="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
               ubuntu@137.131.156.17 \
               'if test -r /home/ubuntu/shopvivaliz-deploy/current/.release-sha; then cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha; else printf missing; fi')"
@@ -81,6 +82,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
             ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
@@ -96,4 +98,5 @@ jobs:
           echo 'catalog_repair_publishes_marketplace=false'
           echo 'catalog_invalid_pending_kept_for_manual_fix=false'
           echo 'catalog_repair_interruption_resumable=true'
+          echo 'catalog_repair_ssh_keepalive=true'
           echo 'secret_values_printed=false'

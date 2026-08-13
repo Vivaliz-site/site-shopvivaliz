@@ -117,6 +117,7 @@ jobs:
           set -Eeuo pipefail
           node --check admin/assets/catalog-optimization-workflow.js
           php tests/catalog-admin-workflow-v3-test.php
+          php tests/catalog-generated-data-normalizer-test.php
       - name: Workflow operacional do AI Image Studio
         run: |
           set -Eeuo pipefail
