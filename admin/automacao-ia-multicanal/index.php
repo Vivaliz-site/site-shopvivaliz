@@ -9,19 +9,16 @@ if (!headers_sent()) {
 }
 
 /**
- * Painel de Administração - Automação IA Multi-Canal
- * Sistema para gerenciar cadastro de produtos em múltiplos canais
- * com textos e imagens otimizados por IA.
+ * Central administrativa da automacao IA multicanal.
+ *
+ * Este modulo funciona como cockpit de navegacao. Escritas e publicacoes devem
+ * ocorrer somente nos modulos canonicos, que possuem seus proprios gates,
+ * auditoria e validacao. Nao exibimos KPIs sinteticos nem rotas sem backend.
  */
 $page = strtolower(trim((string)($_GET['page'] ?? 'dashboard')));
 $pages = [
     'dashboard' => 'pages/dashboard.php',
     'automacoes' => 'pages/automacoes.php',
-    'produtos' => 'pages/produtos.php',
-    'canais' => 'pages/canais.php',
-    'historico' => 'pages/historico.php',
-    'configuracoes' => 'pages/configuracoes.php',
-    'manual' => 'pages/manual.php',
 ];
 if (!isset($pages[$page])) {
     $page = 'dashboard';
@@ -37,8 +34,11 @@ if (!isset($pages[$page])) {
     <link rel="stylesheet" href="/css/admin-zoom-responsive.css?v=20260719-1">
     <style>
         .sv-admin-return{display:inline-flex;align-items:center;gap:6px;margin:12px 12px 4px;padding:9px 12px;border-radius:8px;text-decoration:none;font-weight:800;color:#173b63;background:#eef2f7}
-        .admin-topbar{gap:12px;flex-wrap:wrap}.topbar-actions{display:flex;gap:8px;flex-wrap:wrap}
-        @media(max-width:760px){.admin-container{min-width:0}.admin-sidebar{width:100%;max-width:none;position:relative}.admin-main{min-width:0}.admin-topbar,.admin-content{padding-left:14px!important;padding-right:14px!important}.topbar-actions .btn{flex:1 1 150px}}
+        .admin-topbar{gap:12px;flex-wrap:wrap}.topbar-actions{display:flex;gap:8px;flex-wrap:wrap}.topbar-actions a{text-decoration:none}
+        .sv-admin-live-status{min-height:20px;margin:8px 32px 0;color:#475569;font-size:13px;font-weight:700}
+        .sv-admin-live-status.ok{color:#067647}.sv-admin-live-status.err{color:#b42318}
+        @media(max-width:760px){.admin-container{min-width:0}.admin-sidebar{width:100%;max-width:none;position:relative;height:auto;padding:14px}.admin-main{min-width:0;margin-left:0}.sidebar-header{text-align:left;margin:12px 0 16px}.sidebar-menu{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.menu-item{min-height:44px;display:flex;align-items:center}.admin-topbar,.admin-content{padding-left:14px!important;padding-right:14px!important}.sv-admin-live-status{margin-left:14px;margin-right:14px}.topbar-actions{width:100%}.topbar-actions .btn{flex:1 1 150px;min-height:44px}}
+        @media(max-width:430px){.sidebar-menu{grid-template-columns:1fr}}
     </style>
 </head>
 <body>
@@ -47,17 +47,16 @@ if (!isset($pages[$page])) {
             <a class="sv-admin-return" href="/admin/">← Central Admin</a>
             <div class="sidebar-header">
                 <h2>Automação IA</h2>
-                <p>Multi-Canal</p>
+                <p>Operação multicanal auditável</p>
             </div>
 
             <nav class="sidebar-menu" aria-label="Automação IA multicanal">
-                <a href="?page=dashboard" class="menu-item <?= $page === 'dashboard' ? 'active' : '' ?>">📊 Dashboard</a>
-                <a href="?page=automacoes" class="menu-item <?= $page === 'automacoes' ? 'active' : '' ?>">⚙️ Automações</a>
-                <a href="?page=produtos" class="menu-item <?= $page === 'produtos' ? 'active' : '' ?>">📦 Produtos</a>
-                <a href="?page=canais" class="menu-item <?= $page === 'canais' ? 'active' : '' ?>">🎯 Canais</a>
-                <a href="?page=historico" class="menu-item <?= $page === 'historico' ? 'active' : '' ?>">📋 Histórico</a>
-                <a href="?page=configuracoes" class="menu-item <?= $page === 'configuracoes' ? 'active' : '' ?>">⚡ Configurações</a>
-                <a href="?page=manual" class="menu-item <?= $page === 'manual' ? 'active' : '' ?>">📖 Manual</a>
+                <a href="?page=dashboard" class="menu-item <?= $page === 'dashboard' ? 'active' : '' ?>">📊 Visão operacional</a>
+                <a href="?page=automacoes" class="menu-item <?= $page === 'automacoes' ? 'active' : '' ?>">⚙️ Rotinas canônicas</a>
+                <a href="/admin/produtos.php" class="menu-item">📦 Produtos</a>
+                <a href="/admin/connections.php" class="menu-item">🔗 Conexões</a>
+                <a href="/admin/audit-dashboard.php" class="menu-item">📋 Auditoria</a>
+                <a href="/admin/settings.php" class="menu-item">🛠️ Configurações</a>
             </nav>
         </aside>
 
@@ -65,10 +64,11 @@ if (!isset($pages[$page])) {
             <div class="admin-topbar">
                 <h1>Automação IA para Cadastro Multi-Canal</h1>
                 <div class="topbar-actions">
-                    <button class="btn btn-primary" type="button" onclick="openModal('newAutomacao')">➕ Nova Automação</button>
-                    <button class="btn btn-secondary" type="button" onclick="testConnection()">🧪 Testar Conexão</button>
+                    <a class="btn btn-primary" href="/admin/orchestrator.php">🧠 Abrir Orchestrator</a>
+                    <button class="btn btn-secondary" type="button" id="sv-test-health">🧪 Testar saúde</button>
                 </div>
             </div>
+            <div id="sv-admin-live-status" class="sv-admin-live-status" role="status" aria-live="polite"></div>
 
             <div class="admin-content">
                 <?php
@@ -76,46 +76,13 @@ if (!isset($pages[$page])) {
                 if (is_file($pageFile)) {
                     include $pageFile;
                 } else {
-                    echo '<section class="card"><h2>Página indisponível</h2><p>O módulo solicitado não foi encontrado.</p></section>';
+                    echo '<section class="section"><h2>Página indisponível</h2><p>O módulo solicitado não foi encontrado.</p></section>';
                 }
                 ?>
             </div>
         </main>
     </div>
 
-    <div id="newAutomacao" class="modal" aria-hidden="true">
-        <div class="modal-content">
-            <h2>Nova Automação</h2>
-            <form id="formNovaAutomacao">
-                <div class="form-group">
-                    <label>Nome da Automação</label>
-                    <input type="text" name="nome" required>
-                </div>
-                <div class="form-group">
-                    <label>ERP Conectado</label>
-                    <select name="erp" required>
-                        <option value="">Selecione...</option>
-                        <option value="tiny">Tiny ERP</option>
-                        <option value="bling">Bling ERP</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Canais de Destino</label>
-                    <div class="checkbox-group">
-                        <label><input type="checkbox" name="canais" value="tiktok"> TikTok Shop</label>
-                        <label><input type="checkbox" name="canais" value="amazon"> Amazon</label>
-                        <label><input type="checkbox" name="canais" value="mercadolivre"> Mercado Livre</label>
-                        <label><input type="checkbox" name="canais" value="shopify"> Shopify</label>
-                    </div>
-                </div>
-                <div class="form-actions">
-                    <button type="button" onclick="closeModal('newAutomacao')" class="btn btn-secondary">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Criar Automação</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <script src="/js/admin-automation.js"></script>
+    <script src="/js/admin-automation.js?v=20260813-1"></script>
 </body>
 </html>

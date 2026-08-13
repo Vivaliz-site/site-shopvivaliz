@@ -1,241 +1,40 @@
 <?php
+declare(strict_types=1);
 require_once __DIR__ . '/../../../includes/admin-guard.php';
-/**
- * Gerenciamento de Automações
- * Criar, editar, ativar/desativar automações
- */
 ?>
 <div class="automacoes-container">
-    <div class="page-header">
-        <h2>Automações Configuradas</h2>
-        <button class="btn btn-primary" onclick="openModal('newAutomacao')">
-            ➕ Nova Automação
-        </button>
+    <section class="section" style="margin-bottom:18px">
+        <h2>Rotinas canônicas</h2>
+        <p style="margin:0;color:#64748b;line-height:1.65;max-width:920px">
+            A listagem antiga desta página continha automações demonstrativas, números fixos e botões sem backend persistente. Ela foi substituída por atalhos para as rotinas reais do ShopVivaliz. Assim, nenhuma tela administrativa apresenta execução fictícia como se fosse estado de produção.
+        </p>
+    </section>
+
+    <div class="kpi-row">
+        <a class="kpi-card" href="/admin/catalog-optimization/admin_catalog.php" style="text-decoration:none;color:inherit">
+            <div class="kpi-icon">📝</div>
+            <div class="kpi-info"><h3>Conteúdo multicanal</h3><p style="margin:0;color:#475569;line-height:1.5">Otimização assistida de cadastro com revisão e quality gate.</p></div>
+        </a>
+        <a class="kpi-card" href="/admin/ai-image-studio/admin_dashboard.php" style="text-decoration:none;color:inherit">
+            <div class="kpi-icon">🖼️</div>
+            <div class="kpi-info"><h3>Geração de imagens</h3><p style="margin:0;color:#475569;line-height:1.5">Lotes rastreáveis usando a foto real como referência visual.</p></div>
+        </a>
+        <a class="kpi-card" href="/admin/orchestrator.php" style="text-decoration:none;color:inherit">
+            <div class="kpi-icon">🧠</div>
+            <div class="kpi-info"><h3>Orchestrator</h3><p style="margin:0;color:#475569;line-height:1.5">Fila e coordenação das rotinas autônomas disponíveis.</p></div>
+        </a>
+        <a class="kpi-card" href="/admin/connections.php" style="text-decoration:none;color:inherit">
+            <div class="kpi-icon">🔐</div>
+            <div class="kpi-info"><h3>Conexões</h3><p style="margin:0;color:#475569;line-height:1.5">Estado de OAuth, credenciais e integrações externas.</p></div>
+        </a>
     </div>
 
-    <!-- Filtros -->
-    <div class="filter-bar">
-        <input type="text" placeholder="Buscar automação..." class="filter-input">
-        <select class="filter-select">
-            <option>Todos os status</option>
-            <option>Ativas</option>
-            <option>Pausadas</option>
-            <option>Erro</option>
-        </select>
-        <select class="filter-select">
-            <option>Todos os canais</option>
-            <option>TikTok</option>
-            <option>Amazon</option>
-            <option>Mercado Livre</option>
-        </select>
-    </div>
-
-    <!-- Lista de Automações -->
-    <div class="automacoes-list">
-        <!-- Automação 1 -->
-        <div class="automacao-item">
-            <div class="automacao-header">
-                <div class="automacao-title">
-                    <h3>TikTok - Descrições com Emojis</h3>
-                    <span class="status-badge active">🟢 Ativa</span>
-                </div>
-                <div class="automacao-actions">
-                    <button class="btn-icon" title="Editar">✏️</button>
-                    <button class="btn-icon" title="Pausar">⏸️</button>
-                    <button class="btn-icon" title="Executar agora">▶️</button>
-                    <button class="btn-icon" title="Deletar">🗑️</button>
-                </div>
-            </div>
-
-            <div class="automacao-body">
-                <div class="automation-config">
-                    <div class="config-group">
-                        <label>ERP Conectado:</label>
-                        <span>Tiny ERP</span>
-                    </div>
-                    <div class="config-group">
-                        <label>IA Utilizada:</label>
-                        <span>OpenAI (GPT-4)</span>
-                    </div>
-                    <div class="config-group">
-                        <label>Processamento de Imagem:</label>
-                        <span>Cloudinary</span>
-                    </div>
-                    <div class="config-group">
-                        <label>Frequência:</label>
-                        <span>A cada 2 horas</span>
-                    </div>
-                </div>
-
-                <div class="automation-prompt">
-                    <h4>Prompt de IA:</h4>
-                    <p>"Atue como especialista em TikTok Shop. Com base nesses dados de produto, crie uma descrição envolvente com emojis, focada em engajamento e tons casual. Máximo 150 caracteres."</p>
-                </div>
-
-                <div class="automation-channels">
-                    <h4>Canais de Destino:</h4>
-                    <div class="channel-tags">
-                        <span class="channel-tag tiktok">TikTok Shop</span>
-                    </div>
-                </div>
-
-                <div class="automation-stats">
-                    <div class="stat">
-                        <span class="stat-label">Produtos Processados:</span>
-                        <span class="stat-value">145</span>
-                    </div>
-                    <div class="stat">
-                        <span class="stat-label">Taxa de Sucesso:</span>
-                        <span class="stat-value">96.5%</span>
-                    </div>
-                    <div class="stat">
-                        <span class="stat-label">Última Execução:</span>
-                        <span class="stat-value">há 2 horas</span>
-                    </div>
-                </div>
-            </div>
+    <section class="section" style="margin-top:18px">
+        <h2>Princípios operacionais</h2>
+        <div class="activity-feed">
+            <div class="activity-item success"><span class="activity-icon">1</span><div class="activity-content"><p><strong>Dados reais:</strong> status e contadores devem vir da fonte autoritativa da rotina, nunca de HTML estático.</p></div></div>
+            <div class="activity-item success"><span class="activity-icon">2</span><div class="activity-content"><p><strong>Revisão explícita:</strong> geração de conteúdo ou imagem não equivale a publicação.</p></div></div>
+            <div class="activity-item success"><span class="activity-icon">3</span><div class="activity-content"><p><strong>Falha fechada:</strong> se uma integração não puder ser comprovada, a interface deve mostrar o bloqueio em vez de assumir sucesso.</p></div></div>
         </div>
-
-        <!-- Automação 2 -->
-        <div class="automacao-item">
-            <div class="automacao-header">
-                <div class="automacao-title">
-                    <h3>Amazon - Otimização SEO</h3>
-                    <span class="status-badge active">🟢 Ativa</span>
-                </div>
-                <div class="automacao-actions">
-                    <button class="btn-icon" title="Editar">✏️</button>
-                    <button class="btn-icon" title="Pausar">⏸️</button>
-                    <button class="btn-icon" title="Executar agora">▶️</button>
-                    <button class="btn-icon" title="Deletar">🗑️</button>
-                </div>
-            </div>
-
-            <div class="automacao-body">
-                <div class="automation-config">
-                    <div class="config-group">
-                        <label>ERP Conectado:</label>
-                        <span>Tiny ERP</span>
-                    </div>
-                    <div class="config-group">
-                        <label>IA Utilizada:</label>
-                        <span>OpenAI (GPT-4)</span>
-                    </div>
-                    <div class="config-group">
-                        <label>Processamento de Imagem:</label>
-                        <span>Bannerbear</span>
-                    </div>
-                    <div class="config-group">
-                        <label>Frequência:</label>
-                        <span>A cada 4 horas</span>
-                    </div>
-                </div>
-
-                <div class="automation-prompt">
-                    <h4>Prompt de IA:</h4>
-                    <p>"Criar título otimizado para Amazon com palavras-chave. Incluir especificações técnicas. Máximo 200 caracteres. Sem emojis. Foco em SEO."</p>
-                </div>
-
-                <div class="automation-channels">
-                    <h4>Canais de Destino:</h4>
-                    <div class="channel-tags">
-                        <span class="channel-tag amazon">Amazon</span>
-                    </div>
-                </div>
-
-                <div class="automation-stats">
-                    <div class="stat">
-                        <span class="stat-label">Produtos Processados:</span>
-                        <span class="stat-value">128</span>
-                    </div>
-                    <div class="stat">
-                        <span class="stat-label">Taxa de Sucesso:</span>
-                        <span class="stat-value">92.2%</span>
-                    </div>
-                    <div class="stat">
-                        <span class="stat-label">Última Execução:</span>
-                        <span class="stat-value">há 4 horas</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Automação 3 -->
-        <div class="automacao-item">
-            <div class="automacao-header">
-                <div class="automacao-title">
-                    <h3>Mercado Livre - Descrição Padrão</h3>
-                    <span class="status-badge paused">🟡 Pausada</span>
-                </div>
-                <div class="automacao-actions">
-                    <button class="btn-icon" title="Editar">✏️</button>
-                    <button class="btn-icon" title="Ativar">▶️</button>
-                    <button class="btn-icon" title="Deletar">🗑️</button>
-                </div>
-            </div>
-
-            <div class="automacao-body">
-                <div class="automation-config">
-                    <div class="config-group">
-                        <label>ERP Conectado:</label>
-                        <span>Bling ERP</span>
-                    </div>
-                    <div class="config-group">
-                        <label>IA Utilizada:</label>
-                        <span>OpenAI (GPT-3.5)</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+    </section>
 </div>
-
-<style>
-.automacao-item {
-    background: #fff;
-    border: 1px solid #e5e9f0;
-    border-radius: 12px;
-    margin-bottom: 16px;
-    overflow: hidden;
-}
-
-.automacao-header {
-    padding: 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #e5e9f0;
-}
-
-.automacao-title {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-}
-
-.automacao-body {
-    padding: 16px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
-}
-
-.automation-config {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.config-group {
-    display: flex;
-    justify-content: space-between;
-    font-size: 14px;
-}
-
-.automation-prompt,
-.automation-channels {
-    padding: 12px;
-    background: #f4f6fb;
-    border-radius: 8px;
-}
-</style>
