@@ -38,7 +38,7 @@
   };
 
   function fetchPage(page){
-    return fetch('/api/catalog/products.php?limit=200&available=1&page='+encodeURIComponent(String(page)),{
+    return fetch('/api/catalog/products.php?limit=200&page='+encodeURIComponent(String(page)),{
       headers:{Accept:'application/json'},credentials:'same-origin'
     }).then(function(response){
       if(!response.ok)throw new Error('category_alias_products_request_failed');
