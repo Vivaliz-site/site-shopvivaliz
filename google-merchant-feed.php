@@ -49,6 +49,75 @@ function gm_id(array $product): string
     return substr(trim($normalized, '-_'), 0, 50);
 }
 
+function gm_product_identity(array $product): string
+{
+    $parts = [];
+    foreach (['olist_product_id', 'id', 'slug', 'sku', 'name', 'nome'] as $field) {
+        $parts[] = trim((string)($product[$field] ?? ''));
+    }
+    return hash('sha256', implode('|', $parts));
+}
+
+function gm_id_suffix(array $product, string $identity): string
+{
+    foreach (['olist_product_id', 'id', 'slug'] as $field) {
+        $raw = trim((string)($product[$field] ?? ''));
+        if ($raw === '') continue;
+        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $raw);
+        $normalized = preg_replace('/[^A-Za-z0-9_-]+/', '-', is_string($ascii) ? $ascii : $raw) ?: '';
+        $normalized = trim($normalized, '-_');
+        if ($normalized !== '') return substr($normalized, 0, 14);
+    }
+    return substr($identity, 0, 10);
+}
+
+/**
+ * Google Merchant exige g:id unico e estavel. Mantemos o ID historico para
+ * produtos sem colisao e, somente quando dois registros normalizam para o
+ * mesmo ID, adicionamos um discriminador deterministico ao segundo e seguintes.
+ * Nenhum SKU ou dado comercial do catalogo e alterado.
+ *
+ * @param array<int,mixed> $products
+ * @return array<string,string> identity => merchant id
+ */
+function gm_unique_id_map(array $products): array
+{
+    $groups = [];
+    foreach ($products as $product) {
+        if (!is_array($product)) continue;
+        $baseId = gm_id($product);
+        if ($baseId === '') continue;
+        $identity = gm_product_identity($product);
+        if (!isset($groups[$baseId][$identity])) {
+            $groups[$baseId][$identity] = $product;
+        }
+    }
+
+    $result = [];
+    foreach ($groups as $baseId => $members) {
+        ksort($members, SORT_STRING);
+        $used = [];
+        $position = 0;
+        foreach ($members as $identity => $product) {
+            $candidate = $baseId;
+            if ($position > 0) {
+                $suffix = gm_id_suffix($product, $identity);
+                $room = max(1, 50 - strlen($suffix) - 1);
+                $candidate = substr($baseId, 0, $room) . '-' . $suffix;
+            }
+            if (isset($used[$candidate])) {
+                $suffix = substr($identity, 0, 10);
+                $room = max(1, 50 - strlen($suffix) - 1);
+                $candidate = substr($baseId, 0, $room) . '-' . $suffix;
+            }
+            $used[$candidate] = true;
+            $result[$identity] = $candidate;
+            $position++;
+        }
+    }
+    return $result;
+}
+
 function gm_absolute_url(string $baseUrl, string $url): string
 {
     $url = trim($url);
@@ -66,6 +135,9 @@ function gm_optional(array $product, array $fields, int $max = 100): string
     return '';
 }
 
+$merchantIdMap = gm_unique_id_map($products);
+$emittedProductIdentities = [];
+
 echo '<?xml version="1.0" encoding="UTF-8"?>' . PHP_EOL;
 echo '<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">' . PHP_EOL;
 echo '<channel>' . PHP_EOL;
@@ -76,7 +148,11 @@ echo '<description>Produtos ativos da ShopVivaliz para o Google Merchant Center.
 foreach ($products as $product) {
     if (!is_array($product)) continue;
 
-    $id = gm_id($product);
+    $identity = gm_product_identity($product);
+    if (isset($emittedProductIdentities[$identity])) continue;
+    $emittedProductIdentities[$identity] = true;
+
+    $id = $merchantIdMap[$identity] ?? gm_id($product);
     $rawSku = trim((string)($product['sku'] ?? $product['olist_product_id'] ?? $product['id'] ?? ''));
     $slug = trim((string)($product['slug'] ?? ''));
     $name = svseo_human_name($product);
