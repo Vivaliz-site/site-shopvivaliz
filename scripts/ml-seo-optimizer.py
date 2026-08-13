@@ -461,7 +461,7 @@ def unsupported_numbers(text: str, blob: str) -> list[str]:
     return bad
 
 
-def validate_title(raw: str, item: dict, ctx: dict) -> tuple[str | None, list[str]]:
+def validate_title(raw: str, item: dict, ctx: dict, blob: str = "") -> tuple[str | None, list[str]]:
     problems: list[str] = []
     title = re.sub(r"\s+", " ", (raw or "").replace("\n", " ")).strip(" -|*/")
     if not title:
