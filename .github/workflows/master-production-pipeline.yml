@@ -238,11 +238,12 @@ jobs:
           git -C "$repo" cat-file -e "${expected_sha}^{commit}"
           git -C "$repo" cat-file -e "${expected_sha}:scripts/deploy-production.sh"
 
-          # Always stage the deploy runner from the exact validated SHA. A
-          # clean checkout can still be stale because fetch does not update the
-          # worktree. Preserve any different runner first, without resetting or
-          # deleting unrelated repository state.
-          dirty="$(git -C "$repo" status --porcelain=v1 --untracked-files=all)"
+          # Releases are created from git archive of the validated SHA, so
+          # untracked files in the long-lived deploy clone cannot enter a
+          # release. Avoid enumerating that potentially huge tree and keep the
+          # safety gate strict for tracked/index modifications only.
+          git -C "$repo" config status.showUntrackedFiles no
+          dirty="$(git -C "$repo" status --porcelain=v1 --untracked-files=no)"
           if [[ -n "$dirty" ]]; then
             dirty_paths="$(printf '%s\n' "$dirty" | sed -E 's/^.. //')"
             if [[ "$dirty_paths" != 'scripts/deploy-production.sh' ]]; then
