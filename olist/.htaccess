@@ -1,6 +1,10 @@
 Options +FollowSymLinks
 RewriteEngine On
 
+# O catalogo publicado e parte da release imutavel. Estes escritores so podem
+# ser executados internamente (CLI/rotina controlada), nunca por requisicao web.
+RewriteRule ^(?:sync-products|sync-agora|direct-sync)\.php$ - [F,L,NC]
+
 <IfModule mod_rewrite.c>
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
