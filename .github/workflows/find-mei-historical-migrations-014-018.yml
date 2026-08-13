@@ -1,0 +1,146 @@
+name: Locate exact MEI V014 V017 V018 history
+
+on:
+  push:
+    branches:
+      - ops/inspect-mei-v020-stash
+    paths:
+      - '.github/workflows/find-mei-historical-migrations-014-018.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  locate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Scan Git history reflogs and small SQL blobs by exact checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 420s ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then
+            echo 'HISTSCAN_ABORT_WORKER_ACTIVE=true'
+            exit 80
+          fi
+          python3 - <<'PY'
+          import subprocess, zlib
+
+          TARGETS = {
+              2116743560: 'V014',
+              1690705898: 'V017',
+              -410986482: 'V018',
+          }
+          PATHS = {
+              'V014': 'db/migrations/V014__cnpj_alphanumeric_and_submission_guard.sql',
+              'V017': 'db/migrations/V017__optimize_submission_trigger.sql',
+              'V018': 'db/migrations/V018__index_envios_enviado_em.sql',
+          }
+
+          def signed32(v):
+              return v if v < 2**31 else v - 2**32
+          def checksum(data):
+              try:
+                  text = data.decode('utf-8-sig')
+              except UnicodeDecodeError:
+                  return None
+              crc = 0
+              for line in text.splitlines():
+                  crc = zlib.crc32(line.encode('utf-8'), crc)
+              return signed32(crc & 0xffffffff)
+
+          seen_specs = set()
+          matched = set()
+          print('HISTORY_PATH_SCAN_BEGIN')
+          for label, path in PATHS.items():
+              revs = []
+              for cmd in [
+                  ['git','rev-list','--all','--',path],
+                  ['git','reflog','--all','--format=%H'],
+              ]:
+                  try:
+                      out = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+                  except subprocess.CalledProcessError:
+                      continue
+                  revs.extend(x.strip() for x in out.splitlines() if x.strip())
+              for rev in dict.fromkeys(revs):
+                  spec = f'{rev}:{path}'
+                  if spec in seen_specs:
+                      continue
+                  seen_specs.add(spec)
+                  try:
+                      data = subprocess.check_output(['git','show',spec], stderr=subprocess.DEVNULL)
+                  except subprocess.CalledProcessError:
+                      continue
+                  value = checksum(data)
+                  if value in TARGETS:
+                      matched.add(value)
+                      print(f'HIST_TARGET_MATCH label={TARGETS[value]} checksum={value} rev={rev} path={path} bytes={len(data)}')
+                      print(f'HIST_TARGET_CONTENT_BEGIN label={TARGETS[value]}')
+                      print(data.decode('utf-8-sig'))
+                      print(f'HIST_TARGET_CONTENT_END label={TARGETS[value]}')
+          print('HISTORY_PATH_SCAN_END')
+
+          # Search reachable and unreachable small blobs too, in case the file
+          # existed only in a local edit/staged state and is no longer named.
+          oids = set()
+          try:
+              out = subprocess.check_output(['git','rev-list','--objects','--all'], text=True, errors='replace')
+              for row in out.splitlines():
+                  if row:
+                      oids.add(row.split(' ',1)[0])
+          except subprocess.CalledProcessError:
+              pass
+          fsck = subprocess.run(['git','fsck','--unreachable','--no-reflogs','--no-progress'], text=True, capture_output=True, errors='replace')
+          for row in fsck.stdout.splitlines():
+              parts = row.split()
+              if len(parts) >= 3 and parts[1] == 'blob':
+                  oids.add(parts[2])
+
+          print(f'HISTORY_BLOB_CANDIDATES={len(oids)}')
+          inspected = 0
+          for oid in oids:
+              try:
+                  kind = subprocess.check_output(['git','cat-file','-t',oid], text=True, stderr=subprocess.DEVNULL).strip()
+                  if kind != 'blob':
+                      continue
+                  size = int(subprocess.check_output(['git','cat-file','-s',oid], text=True, stderr=subprocess.DEVNULL).strip())
+                  if size > 12000:
+                      continue
+                  data = subprocess.check_output(['git','cat-file','-p',oid], stderr=subprocess.DEVNULL)
+              except Exception:
+                  continue
+              if b'set search_path' not in data.lower() and b'create index' not in data.lower() and b'create or replace function' not in data.lower():
+                  continue
+              inspected += 1
+              value = checksum(data)
+              if value in TARGETS and value not in matched:
+                  matched.add(value)
+                  print(f'BLOB_TARGET_MATCH label={TARGETS[value]} checksum={value} oid={oid} bytes={size}')
+                  print(f'BLOB_TARGET_CONTENT_BEGIN label={TARGETS[value]}')
+                  print(data.decode('utf-8-sig'))
+                  print(f'BLOB_TARGET_CONTENT_END label={TARGETS[value]}')
+          print(f'HISTORY_BLOBS_INSPECTED={inspected}')
+          print('HISTORY_MATCHED=' + ','.join(str(v) for v in sorted(matched)))
+          PY
+          echo 'WORKER_RESUME_ALLOWED=false'
+          EOF
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey
