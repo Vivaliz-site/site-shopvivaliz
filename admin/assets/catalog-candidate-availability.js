@@ -7,8 +7,6 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   let requestGeneration = 0;
   let refreshTimer = 0;
-  let observer = null;
-  let patching = false;
   let lastSummary = null;
 
   const style = document.createElement('style');
@@ -45,18 +43,27 @@
       chip.className = 'sv-candidate-review-chip';
       host.appendChild(chip);
     }
-    chip.innerHTML = `<strong>${inReview}</strong> em revisão`;
+    const text = `${inReview} em revisão`;
+    if (chip.textContent !== text) chip.textContent = text;
     chip.title = 'Produtos com rascunho aberto, publicação em andamento ou falha de publicação para este canal.';
   }
 
   function renderZeroState(summary) {
     const list = $('#candidate-list');
-    if (!list || Number(summary.eligible || 0) > 0) return;
+    if (!list) return;
+    const eligible = Number(summary.eligible || 0);
+    if (eligible > 0) {
+      delete list.dataset.svCandidateZeroSignature;
+      return;
+    }
     const empty = $('.sv-empty', list);
     if (!empty) return;
 
     const active = Number(summary.active || 0);
     const inReview = Number(summary.in_review || 0);
+    const signature = `${active}|${eligible}|${inReview}`;
+    if (list.dataset.svCandidateZeroSignature === signature && empty.classList.contains('sv-candidate-zero-state')) return;
+    list.dataset.svCandidateZeroSignature = signature;
     empty.className = 'sv-empty sv-candidate-zero-state';
     empty.innerHTML = '';
 
@@ -93,13 +100,8 @@
   }
 
   function patch(summary) {
-    patching = true;
-    try {
-      addReviewChip(summary);
-      renderZeroState(summary);
-    } finally {
-      patching = false;
-    }
+    addReviewChip(summary);
+    renderZeroState(summary);
   }
 
   async function refresh() {
@@ -129,7 +131,9 @@
   }
 
   function start() {
-    if (!$('#candidate-list') || !$('#candidate-summary')) {
+    const list = $('#candidate-list');
+    const summary = $('#candidate-summary');
+    if (!list || !summary) {
       window.setTimeout(start, 120);
       return;
     }
@@ -137,12 +141,17 @@
     $('#load-candidates')?.addEventListener('click', () => schedule(180));
     $('#load-limit')?.addEventListener('change', () => schedule(120));
 
-    observer = new MutationObserver(() => {
-      if (patching || !lastSummary) return;
-      window.requestAnimationFrame(() => patch(lastSummary));
+    let pendingPatch = false;
+    const observer = new MutationObserver(() => {
+      if (!lastSummary || pendingPatch) return;
+      pendingPatch = true;
+      window.requestAnimationFrame(() => {
+        pendingPatch = false;
+        patch(lastSummary);
+      });
     });
-    observer.observe($('#candidate-list'), { childList: true, subtree: true });
-    observer.observe($('#candidate-summary'), { childList: true, subtree: true });
+    observer.observe(list, { childList: true, subtree: true });
+    observer.observe(summary, { childList: true, subtree: true });
     schedule(40);
   }
 
