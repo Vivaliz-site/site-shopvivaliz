@@ -50,6 +50,13 @@ sv_image_v3_assert(
     'Prontidao deve considerar contexto e resolucao da foto real'
 );
 sv_image_v3_assert(
+    str_contains($pendingApi, 'ais_pending_gallery_sources')
+    && str_contains($pendingApi, 'array_chunk($skus, 200)')
+    && str_contains($pendingApi, "'query_strategy' => 'batched_products_and_gallery'")
+    && !str_contains($pendingApi, 'ai_studio_fetch_product($db, $productId)'),
+    'Lista ampla de candidatos deve usar consultas em lote, sem N+1 por produto'
+);
+sv_image_v3_assert(
     str_contains($ui, 'essential_types')
     && str_contains($ui, 'recommended_types')
     && str_contains($ui, 'Usar recomendação inteligente do canal'),
@@ -60,6 +67,16 @@ sv_image_v3_assert(
     && str_contains($ui, 'local_reference')
     && str_contains($ui, 'Regenerar antes de publicar'),
     'Revisao deve comparar a referencia real e bloquear fallback sem edicao visual'
+);
+sv_image_v3_assert(
+    str_contains($ui, 'Confirmar identidade, cor, forma, proporção e acessórios')
+    && !str_contains($ui, '>Identidade preservada<'),
+    'Identidade visual deve ser requisito de revisao humana, nao afirmacao automatica'
+);
+sv_image_v3_assert(
+    !str_contains($ui, 'Groq — prompt + editor visual')
+    && str_contains($ui, "option[value=\"groq\"]"),
+    'Regeneracao nao deve oferecer Groq quando o formulario servidor nao conclui pixels com ele'
 );
 sv_image_v3_assert(
     str_contains($statusApi, "require_once __DIR__ . '/../../../includes/admin-guard.php'")
@@ -80,15 +97,28 @@ sv_image_v3_assert(
     'Redacao deve cobrir headers Bearer e tokens em mensagens de erro'
 );
 sv_image_v3_assert(
+    str_contains($statusApi, "'partial_failure'")
+    && str_contains($statusApi, "'missing' => $missingTypes")
+    && str_contains($ui, "job.result_state==='partial_failure'"),
+    'Falha parcial de variantes deve aparecer explicitamente no backend e na UI'
+);
+sv_image_v3_assert(
+    str_contains($statusApi, "throw new RuntimeException('Backend de fila indisponivel.'")
+    && str_contains($statusApi, "throw new RuntimeException('Staging de imagens indisponivel.'"),
+    'Falha de backend nao pode ser convertida silenciosamente em job desconhecido'
+);
+sv_image_v3_assert(
     str_contains($pendingApi, "'has_image'")
     && str_contains($pendingApi, "'source_image_url'")
     && str_contains($pendingApi, "'source_resolution_state'"),
     'Candidatos devem provar fonte visual e qualidade basica sem expor dados desnecessarios'
 );
 sv_image_v3_assert(
-    str_contains($enqueueApi, 'ai_studio_resolve_base_image')
+    str_contains($enqueueApi, 'ais_enqueue_request_signature')
+    && str_contains($enqueueApi, 'hash_equals($requestedSignature')
+    && str_contains($enqueueApi, 'ai_studio_resolve_base_image')
     && str_contains($enqueueApi, 'Nenhuma foto real valida foi encontrada'),
-    'Enfileiramento deve continuar fail-closed sem foto real valida'
+    'Enfileiramento deve deduplicar somente pedidos equivalentes e continuar fail-closed sem foto real valida'
 );
 
-fwrite(STDOUT, "COMPROVADO: Image Studio possui controlador unico, selecao explicita, prontidao por fonte/resolucao, fila acompanhada e revisao humana segura.\n");
+fwrite(STDOUT, "COMPROVADO: Image Studio possui controlador unico, consultas em lote, fila precisa por variante e revisao humana segura.\n");
