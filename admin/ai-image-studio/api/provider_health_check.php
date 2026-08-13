@@ -3,8 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../../includes/admin-guard.php';
-require_once __DIR__ . '/../config.php';
-require_once __DIR__ . '/../src/AiServices.php';
+require_once __DIR__ . '/../process_item.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
