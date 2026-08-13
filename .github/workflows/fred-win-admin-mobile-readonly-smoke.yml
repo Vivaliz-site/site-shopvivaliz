@@ -143,8 +143,9 @@ jobs:
         run: |
           set -Eeuo pipefail
           result_path='test-results/fredwin-admin-mobile-smoke/result.json'
+          remote_log='/tmp/fredwin-smoke-remote.log'
           mkdir -p "$(dirname "$result_path")"
-          printf '%s\n' '{"schema":2,"overall":false,"status":"started"}' > "$result_path"
+          printf '%s\n' '{"schema":3,"overall":false,"status":"started"}' > "$result_path"
           gzip -c tests/fredwin-admin-mobile-smoke.py | base64 -w0 > /tmp/fredwin-smoke.py.gz.b64
           script_b64="$(cat /tmp/fredwin-smoke.py.gz.b64)"
 
@@ -180,17 +181,16 @@ jobs:
           PY
 
           body_b64="$(base64 -w0 /tmp/fredwin-smoke-body.json)"
+          set +e
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
-            "BODY_B64='$body_b64' RESULT_PATH='$result_path' python3 - <<'PY'
+            "BODY_B64='$body_b64' python3 - <<'PY'
           import base64
           import json
           import os
-          import pathlib
           import urllib.request
 
-          target = pathlib.Path(os.environ['RESULT_PATH'])
           body = base64.b64decode(os.environ['BODY_B64'])
           request = urllib.request.Request(
               'http://127.0.0.1:5557/mcp/tool/execute_command',
@@ -210,20 +210,17 @@ jobs:
                   marker = line.split('=', 1)[1].strip()
 
           if not marker:
-              diagnostic = {
-                  'schema': 2,
+              decoded = {
+                  'schema': 3,
                   'overall': False,
                   'failures': ['structured_result_missing'],
                   'relay_success': result.get('success'),
                   'output_tail': output[-1200:],
                   'error_tail': error[-1200:],
               }
-              target.write_text(json.dumps(diagnostic, ensure_ascii=False, indent=2), encoding='utf-8')
-              print(json.dumps(diagnostic, ensure_ascii=False, indent=2))
-              raise SystemExit(8)
+          else:
+              decoded = json.loads(base64.b64decode(marker).decode('utf-8'))
 
-          decoded = json.loads(base64.b64decode(marker).decode('utf-8'))
-          target.write_text(json.dumps(decoded, ensure_ascii=False, indent=2), encoding='utf-8')
           print(json.dumps({
               'overall': decoded.get('overall'),
               'authenticated_profile': decoded.get('authenticated_profile'),
@@ -235,9 +232,48 @@ jobs:
               'blocked_mutation_count': len(decoded.get('blocked_mutations', [])),
               'errors': decoded.get('errors', []),
           }, ensure_ascii=False, indent=2))
+          raw = json.dumps(decoded, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+          print('SV_REMOTE_RESULT_B64=' + base64.b64encode(raw).decode('ascii'))
+          if not marker:
+              raise SystemExit(8)
           if result.get('success') is not True or decoded.get('overall') is not True:
               raise SystemExit(7)
-          PY"
+          PY" > "$remote_log" 2>&1
+          remote_status=$?
+          set -e
+
+          python3 - "$remote_log" "$result_path" <<'PY'
+          import base64
+          import json
+          import pathlib
+          import sys
+
+          log_path = pathlib.Path(sys.argv[1])
+          target = pathlib.Path(sys.argv[2])
+          text = log_path.read_text(encoding='utf-8', errors='replace')
+          marker = ''
+          visible = []
+          for line in text.splitlines():
+              if line.startswith('SV_REMOTE_RESULT_B64='):
+                  marker = line.split('=', 1)[1].strip()
+              else:
+                  visible.append(line)
+          if visible:
+              print('\n'.join(visible))
+          if not marker:
+              decoded = {
+                  'schema': 3,
+                  'overall': False,
+                  'failures': ['remote_result_missing'],
+                  'output_tail': text[-1600:],
+              }
+              target.write_text(json.dumps(decoded, ensure_ascii=False, indent=2), encoding='utf-8')
+              raise SystemExit(8)
+          decoded = json.loads(base64.b64decode(marker).decode('utf-8'))
+          target.write_text(json.dumps(decoded, ensure_ascii=False, indent=2), encoding='utf-8')
+          PY
+
+          exit "$remote_status"
 
       - name: Revoke ephemeral admin audit session
         if: always()
@@ -274,4 +310,4 @@ jobs:
         shell: bash
         run: |
           rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts" \
-            /tmp/fredwin-smoke.py.gz.b64 /tmp/fredwin-smoke-body.json
+            /tmp/fredwin-smoke.py.gz.b64 /tmp/fredwin-smoke-body.json /tmp/fredwin-smoke-remote.log
