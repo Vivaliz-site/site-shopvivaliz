@@ -14,6 +14,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
     exit;
 }
 
+const CATALOG_RESILIENT_MAX_QUALITY_REFINEMENTS = 3;
+
 /** @return list<string> */
 function catalog_resilient_structure_errors(array $data): array
 {
@@ -80,12 +82,12 @@ function catalog_resilient_quality_is_better(array $candidate, array $current): 
 }
 
 /**
- * Faz no máximo uma revisão editorial extra quando o primeiro rascunho tem
- * bloqueio hard ou score realmente baixo. A revisão usa o mesmo provedor para
- * não transformar uma melhoria de qualidade em uma cascata imprevisível de
- * chamadas/fallbacks.
+ * Revisa automaticamente a saida ate ela ficar publicavel ou ate atingir o
+ * limite controlado de tentativas. O usuario nunca deve receber uma falha hard
+ * como tarefa editorial: se o provedor nao conseguir corrigir, o chamador
+ * descarta essa saida e tenta o proximo provedor.
  *
- * @return array{data:array<string,mixed>,quality:array<string,mixed>,refined:bool,initial_score:int}
+ * @return array{data:array<string,mixed>,quality:array<string,mixed>,refined:bool,initial_score:int,attempts:int}
  */
 function catalog_resilient_refine_quality(
     string $provider,
@@ -96,41 +98,60 @@ function catalog_resilient_refine_quality(
     array $quality
 ): array {
     $initialScore = (int)($quality['score'] ?? 0);
-    $warnings = catalog_resilient_quality_warnings($quality);
-    if ($warnings['hard'] === [] && $initialScore >= 85) {
-        return ['data' => $data, 'quality' => $quality, 'refined' => false, 'initial_score' => $initialScore];
-    }
+    $bestData = $data;
+    $bestQuality = $quality;
+    $refined = false;
+    $attempts = 0;
 
-    $issues = array_values(array_unique(array_merge($warnings['hard'], $warnings['soft'])));
-    $previous = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    if (!is_string($previous)) {
-        return ['data' => $data, 'quality' => $quality, 'refined' => false, 'initial_score' => $initialScore];
-    }
-
-    $refinementPrompt = $baseUserPrompt
-        . "\n\nREVISAO DE QUALIDADE OBRIGATORIA: o rascunho anterior recebeu score {$initialScore}/100."
-        . ($issues !== [] ? " Corrija especificamente estes checks: " . implode(', ', $issues) . '.' : '')
-        . "\nMantenha somente fatos comprovados na origem. Nao invente atributos, beneficios, compatibilidade, garantia ou condicoes comerciais."
-        . "\nResponda novamente com o JSON COMPLETO no mesmo contrato, melhorando clareza, identidade, tamanho e estrutura conforme a politica do canal."
-        . "\nRASCUNHO ANTERIOR PARA REVISAR:\n" . $previous;
-
-    try {
-        $candidate = catalog_ai_make_provider($provider)->complete(
-            ai_catalog_build_system_prompt($channel),
-            $refinementPrompt
-        );
-        if (!is_array($candidate) || catalog_resilient_structure_errors($candidate) !== []) {
-            return ['data' => $data, 'quality' => $quality, 'refined' => false, 'initial_score' => $initialScore];
+    for ($attempt = 1; $attempt <= CATALOG_RESILIENT_MAX_QUALITY_REFINEMENTS; $attempt++) {
+        $warnings = catalog_resilient_quality_warnings($bestQuality);
+        $score = (int)($bestQuality['score'] ?? 0);
+        if ($warnings['hard'] === [] && $score >= 85) {
+            break;
         }
-        $candidateQuality = ai_catalog_quality_report($candidate, $channel, $product);
-        if (!catalog_resilient_quality_is_better($candidateQuality, $quality)) {
-            return ['data' => $data, 'quality' => $quality, 'refined' => false, 'initial_score' => $initialScore];
+
+        $issues = array_values(array_unique(array_merge($warnings['hard'], $warnings['soft'])));
+        $previous = json_encode($bestData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (!is_string($previous)) {
+            break;
         }
-        return ['data' => $candidate, 'quality' => $candidateQuality, 'refined' => true, 'initial_score' => $initialScore];
-    } catch (Throwable $e) {
-        error_log('[catalog-optimization] revisao de qualidade ignorada provider=' . $provider . ' canal=' . $channel . ': ' . $e->getMessage());
-        return ['data' => $data, 'quality' => $quality, 'refined' => false, 'initial_score' => $initialScore];
+
+        $refinementPrompt = $baseUserPrompt
+            . "\n\nREVISAO AUTOMATICA OBRIGATORIA {$attempt}/" . CATALOG_RESILIENT_MAX_QUALITY_REFINEMENTS
+            . ": o rascunho atual recebeu score {$score}/100."
+            . ($issues !== [] ? " Corrija especificamente estes checks: " . implode(', ', $issues) . '.' : '')
+            . "\nREGRA DE SAIDA: nenhum check HARD pode permanecer reprovado. Se houver conflito entre estilo e fatos, preserve os fatos e ajuste a redacao/estrutura."
+            . "\nMantenha somente fatos comprovados na origem. Nao invente atributos, beneficios, compatibilidade, garantia ou condicoes comerciais."
+            . "\nResponda novamente com o JSON COMPLETO no mesmo contrato, corrigindo tamanho, identidade, repeticao, estrutura e politica do canal."
+            . "\nRASCUNHO ATUAL PARA CORRIGIR:\n" . $previous;
+
+        $attempts++;
+        try {
+            $candidate = catalog_ai_make_provider($provider)->complete(
+                ai_catalog_build_system_prompt($channel),
+                $refinementPrompt
+            );
+            if (!is_array($candidate) || catalog_resilient_structure_errors($candidate) !== []) {
+                continue;
+            }
+            $candidateQuality = ai_catalog_quality_report($candidate, $channel, $product);
+            if (catalog_resilient_quality_is_better($candidateQuality, $bestQuality)) {
+                $bestData = $candidate;
+                $bestQuality = $candidateQuality;
+                $refined = true;
+            }
+        } catch (Throwable $e) {
+            error_log('[catalog-optimization] revisao automatica falhou provider=' . $provider . ' canal=' . $channel . ' tentativa=' . $attempt . ': ' . $e->getMessage());
+        }
     }
+
+    return [
+        'data' => $bestData,
+        'quality' => $bestQuality,
+        'refined' => $refined,
+        'initial_score' => $initialScore,
+        'attempts' => $attempts,
+    ];
 }
 
 $rawBody = file_get_contents('php://input') ?: '';
@@ -178,7 +199,7 @@ if ($providers === []) {
     exit;
 }
 
-$lastError = 'Nenhum provedor conseguiu gerar um rascunho valido.';
+$lastError = 'Nenhum provedor conseguiu gerar um rascunho publicavel.';
 foreach ($providers as $resolvedProvider) {
     if (!ai_catalog_provider_available($resolvedProvider)) {
         ai_catalog_provider_audit_log($resolvedProvider, $channel, 'skip', 'cooldown', $productId);
@@ -194,10 +215,6 @@ foreach ($providers as $resolvedProvider) {
         $structureErrors = is_array($data) ? catalog_resilient_structure_errors($data) : ['resposta nao retornou um objeto de catalogo'];
 
         if ($structureErrors !== []) {
-            // Resposta truncada/incompleta e comum em modelos menores; uma
-            // segunda tentativa no mesmo provedor, com os campos faltantes
-            // explicitados, recupera a maioria dos casos sem gastar o
-            // fallback para outro provedor.
             $retryPrompt = $userPrompt . "\n\nATENCAO: a tentativa anterior veio incompleta (" . implode(', ', $structureErrors)
                 . "). Responda de novo com o JSON completo, garantindo TODAS as chaves obrigatorias preenchidas, mesmo que precise ser mais conciso no texto.";
             $data = catalog_ai_make_provider($resolvedProvider)->complete(
@@ -229,6 +246,19 @@ foreach ($providers as $resolvedProvider) {
         $hardWarnings = $warningSets['hard'];
         $softWarnings = $warningSets['soft'];
 
+        if ($hardWarnings !== []) {
+            $lastError = 'Quality gate continua reprovado apos reparo automatico com ' . $resolvedProvider
+                . ': ' . implode(', ', $hardWarnings);
+            ai_catalog_provider_audit_log($resolvedProvider, $channel, 'fail', 'quality_gate_hard_failed', $productId);
+            error_log('[catalog-optimization] descartando saida nao publicavel produto #' . $productId . ' canal=' . $channel . ' provider=' . $resolvedProvider . ' checks=' . implode(',', $hardWarnings));
+            continue;
+        }
+
+        // O mesmo validador usado antes da publicacao precisa aceitar a saida
+        // antes que ela seja gravada como pending. Qualquer rejeicao aqui faz
+        // fallback para o proximo provedor, em vez de criar trabalho manual.
+        ai_catalog_validate_ai_response($data, $channel, $product);
+
         $stagingId = ai_catalog_insert_staging_row(
             $db,
             $productId,
@@ -240,10 +270,7 @@ foreach ($providers as $resolvedProvider) {
             $quality
         );
 
-        $status = $hardWarnings === [] ? 'generated' : 'generated_with_quality_warnings';
-        if ($refinement['refined']) {
-            $status .= '_after_refinement';
-        }
+        $status = $refinement['refined'] ? 'generated_after_auto_repair' : 'generated';
         ai_catalog_provider_audit_log($resolvedProvider, $channel, 'ok', $status, $productId);
 
         echo json_encode([
@@ -256,12 +283,13 @@ foreach ($providers as $resolvedProvider) {
             'quality_score' => (int)$quality['score'],
             'quality_initial_score' => (int)$refinement['initial_score'],
             'quality_refined' => (bool)$refinement['refined'],
-            'needs_review' => $hardWarnings !== [] || $softWarnings !== [],
-            'hard_warnings' => $hardWarnings,
+            'quality_refinement_attempts' => (int)$refinement['attempts'],
+            'needs_review' => $softWarnings !== [],
+            'hard_warnings' => [],
             'soft_warnings' => $softWarnings,
-            'message' => $hardWarnings === []
-                ? ($refinement['refined'] ? 'Rascunho refinado pela IA e pronto para revisao.' : 'Rascunho gerado e pronto para revisao.')
-                : 'Rascunho gerado com alertas. Revise e corrija antes de publicar.',
+            'message' => $refinement['refined']
+                ? 'Conteudo corrigido automaticamente pela IA, aprovado no quality gate e pronto para aprovacao.'
+                : 'Conteudo aprovado no quality gate e pronto para aprovacao.',
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     } catch (Throwable $e) {
@@ -301,4 +329,5 @@ echo json_encode([
     'provider' => $provider,
     'staging_id' => $failedId,
     'error' => $lastError,
+    'message' => 'A geracao foi rejeitada automaticamente porque nenhum provedor conseguiu produzir conteudo publicavel. Nenhuma correcao manual e exigida para liberar uma saida invalida.',
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
