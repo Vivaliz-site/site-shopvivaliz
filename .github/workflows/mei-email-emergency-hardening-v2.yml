@@ -117,7 +117,7 @@ jobs:
             echo 'V2_FLYWAY_HEARTBEAT=true'
             sleep 15
           done
-          wait "$bg" || true
+          wait "$bg"
           rc="$(cat /tmp/mei-flyway-v2.rc 2>/dev/null || echo 99)"
           tail -n 80 /tmp/mei-flyway-v2.log | sed -E 's#(jdbc:postgresql://)[^ ]+#\1[redacted]#g'
           echo "V2_FLYWAY_RC=$rc"
@@ -182,7 +182,7 @@ jobs:
           ) &
           bg=$!
           while kill -0 "$bg" 2>/dev/null; do echo 'V2_FLYWAY_INFO_HEARTBEAT=true'; sleep 15; done
-          wait "$bg" || true
+          wait "$bg"
           rc="$(cat /tmp/mei-flyway-info-v2.rc 2>/dev/null || echo 99)"
           cat /tmp/mei-flyway-info-v2.log | sed -E 's#(jdbc:postgresql://)[^ ]+#\1[redacted]#g'
           test "$rc" = 0
