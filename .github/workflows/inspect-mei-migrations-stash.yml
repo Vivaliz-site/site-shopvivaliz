@@ -1,0 +1,48 @@
+name: Inspect preserved MEI migrations only
+
+on:
+  push:
+    branches:
+      - ops/inspect-mei-v020-stash
+    paths:
+      - '.github/workflows/inspect-mei-migrations-stash.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: List only preserved migration files V019 onward
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 240s ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          git rev-parse --verify 'stash@{0}' >/dev/null
+          for tree in 'stash@{0}' 'stash@{0}^3'; do
+            if git rev-parse --verify "$tree" >/dev/null 2>&1; then
+              echo "MIGRATION_PATHS_BEGIN tree=$tree"
+              git ls-tree -r --name-only "$tree" | grep -E '^db/migrations/V0(19|2[0-9])__' || true
+              echo "MIGRATION_PATHS_END tree=$tree"
+            fi
+          done
+          echo 'WORKER_RESUME_ALLOWED=false'
+          EOF
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey
