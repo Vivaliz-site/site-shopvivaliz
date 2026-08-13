@@ -126,36 +126,23 @@ function svih_env_targets(): array
     ]));
 }
 
-function svih_save_env_tokens(array $values): bool
+function svih_olist_token_store_path(): string
 {
-    $saved = false;
-    foreach (svih_env_targets() as $path) {
-        if (!is_file($path) || !is_writable($path)) {
-            continue;
-        }
-
-        $lines = file($path, FILE_IGNORE_NEW_LINES) ?: [];
-        foreach ($values as $key => $value) {
-            if (!is_string($key) || !is_string($value) || $value === '') {
-                continue;
-            }
-            $found = false;
-            foreach ($lines as &$line) {
-                if (preg_match('/^\s*' . preg_quote($key, '/') . '\s*=/', (string)$line)) {
-                    $line = $key . '=' . $value;
-                    $found = true;
-                }
-            }
-            unset($line);
-            if (!$found) {
-                $lines[] = $key . '=' . $value;
-            }
-        }
-        if (file_put_contents($path, implode(PHP_EOL, $lines) . PHP_EOL, LOCK_EX) !== false) {
-            $saved = true;
-        }
+    $explicit = trim((string)(getenv('SHOPVIVALIZ_OLIST_TOKEN_FILE') ?: ''));
+    if ($explicit !== '') {
+        return $explicit;
     }
-    return $saved;
+
+    $projectParent = dirname(BASE_PATH);
+    $deployRoot = basename($projectParent) === 'releases'
+        ? dirname($projectParent)
+        : $projectParent;
+    $sharedStore = $deployRoot . '/shared/private/olist-tokens.json';
+    if (is_dir($deployRoot . '/shared')) {
+        return $sharedStore;
+    }
+
+    return BASE_PATH . '/storage/private/olist-tokens.json';
 }
 
 function svih_olist_api(string $accessToken): array
@@ -244,7 +231,7 @@ function svih_olist_candidates(array $stored): array
 
 function svih_olist(bool $fix): array
 {
-    $path = BASE_PATH . '/storage/private/tokens.json';
+    $path = svih_olist_token_store_path();
     $stored = svih_read_json($path);
     $candidates = svih_olist_candidates($stored);
     $primary = $candidates[0] ?? [
@@ -254,12 +241,12 @@ function svih_olist(bool $fix): array
 
     $accessCandidates = [];
     foreach ([
-        svih_env('OLIST_ACCESS_TOKEN'),
-        svih_env('TINY_ACCESS_TOKEN'),
-        svih_env('TOKEN_API_OLIST'),
-        (string)($stored['OLIST_ACCESS_TOKEN'] ?? ''),
-        (string)($stored['TINY_ACCESS_TOKEN'] ?? ''),
-    ] as $token) {
+    (string)($stored['OLIST_ACCESS_TOKEN'] ?? ''),
+    (string)($stored['TINY_ACCESS_TOKEN'] ?? ''),
+    svih_env('OLIST_ACCESS_TOKEN'),
+    svih_env('TINY_ACCESS_TOKEN'),
+    svih_env('TOKEN_API_OLIST'),
+] as $token) {
         $token = svih_strip_bearer((string)$token);
         if ($token !== '' && !in_array($token, $accessCandidates, true)) {
             $accessCandidates[] = $token;
@@ -297,71 +284,6 @@ function svih_olist(bool $fix): array
     $fixes = [];
     $lastError = '';
     $lastStatus = 0;
-    if ($fix) {
-        foreach ($candidates as $candidate) {
-            if (!$candidate['complete']) {
-                continue;
-            }
-            $response = svih_http(
-                'POST',
-                'https://accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token',
-                ['Accept: application/json'],
-                [
-                    'grant_type' => 'refresh_token',
-                    'refresh_token' => (string)$candidate['refresh_token'],
-                    'client_id' => (string)$candidate['client_id'],
-                    'client_secret' => (string)$candidate['client_secret'],
-                ]
-            );
-            $lastError = (string)($response['data']['error'] ?? $response['error'] ?? 'refresh_failed');
-            $lastStatus = (int)$response['status'];
-            if (!$response['ok'] || empty($response['data']['access_token'])) {
-                continue;
-            }
-
-            $access = svih_strip_bearer((string)$response['data']['access_token']);
-            $refresh = (string)($response['data']['refresh_token'] ?? $candidate['refresh_token']);
-            $expiresAt = time() + max(0, (int)($response['data']['expires_in'] ?? 0));
-            $saved = [
-                'OLIST_ACCESS_TOKEN' => $access,
-                'OLIST_REFRESH_TOKEN' => $refresh,
-                'TINY_ACCESS_TOKEN' => $access,
-                'TINY_REFRESH_TOKEN' => $refresh,
-                'credential_family' => (string)$candidate['family'],
-                'client_id_fingerprint' => hash('sha256', (string)$candidate['client_id']),
-                'expires_at' => $expiresAt,
-                'updated_at' => gmdate('c'),
-            ];
-            svih_write_json($path, $saved);
-            $envSaved = svih_save_env_tokens([
-                'OLIST_ACCESS_TOKEN' => $access,
-                'OLIST_REFRESH_TOKEN' => $refresh,
-                'TINY_ACCESS_TOKEN' => $access,
-                'TINY_REFRESH_TOKEN' => $refresh,
-                'TOKEN_API_OLIST' => $access,
-            ]);
-
-            $api = svih_olist_api($access);
-            if ($api['ok']) {
-                $fixes[] = 'Olist/Tiny: token renovado automaticamente.';
-                if (!$envSaved) {
-                    $fixes[] = 'Token persistido no armazenamento privado; ambiente compartilhado sem permissao de escrita.';
-                }
-                $tokens['access_token'] = svih_token_meta($access, 'private-file', $expiresAt);
-                $tokens['refresh_token'] = svih_token_meta($refresh, 'private-file');
-                return array_merge([
-                    'name' => 'Olist / Tiny',
-                    'key' => 'olist_tiny',
-                    'status' => 'connected',
-                    'message' => 'Token renovado e API validada.',
-                    'remediation' => null,
-                    'tokens' => $tokens,
-                    'fixes' => $fixes,
-                    'provider_status' => $api['status'],
-                ], $action);
-            }
-        }
-    }
 
     $hasCompleteCandidate = count(array_filter(
         $candidates,
@@ -380,9 +302,7 @@ function svih_olist(bool $fix): array
         $message = $accessCandidates === []
             ? 'Access token nao configurado ou indisponivel.'
             : 'Access token expirado ou rejeitado pela API.';
-        $remediation = $fix
-            ? 'A renovacao automatica falhou; reautorize o aplicativo.'
-            : 'Use Atualizar agora para renovar; se persistir, reautorize.';
+        $remediation = 'O daemon central de renovacao e o unico escritor OAuth; verifique o servico e, se persistir, reautorize.';
     }
 
     return array_merge([
