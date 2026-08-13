@@ -122,17 +122,19 @@ if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAiRoutineUiPages, t
         $svAssetVersion = static function (string $relativePath): string {
             $path = dirname(__DIR__) . $relativePath;
             $mtime = is_file($path) ? (int)filemtime($path) : 0;
-            return $mtime > 0 ? (string)$mtime : '20260813c';
+            return $mtime > 0 ? (string)$mtime : '20260813d';
         };
 
         if ($svAdminScriptName === '/admin/catalog-optimization/admin_catalog.php') {
             echo "\n<script src=\"/admin/assets/catalog-optimization-workflow.js?v=" . $svAssetVersion('/admin/assets/catalog-optimization-workflow.js') . "\"></script>\n";
+            echo "<script src=\"/admin/assets/catalog-change-intelligence.js?v=" . $svAssetVersion('/admin/assets/catalog-change-intelligence.js') . "\"></script>\n";
             return;
         }
 
-        // Dashboard e validacao de imagens compartilham um unico controlador
-        // operacional. Isso substitui o hotfix generico e evita listeners
-        // duplicados entre selecao, fila, revisao e publicacao.
-        echo "\n<script src=\"/admin/assets/ai-image-studio-workflow.js?v=" . $svAssetVersion('/admin/assets/ai-image-studio-workflow.js') . "\"></script>\n";
+        // Dashboard e validacao de imagens compartilham somente o controlador
+        // unificado novo. Nao carregamos o controlador anterior nem o hotfix
+        // generico para evitar listeners concorrentes na selecao, fila, revisao
+        // e publicacao.
+        echo "\n<script src=\"/admin/assets/image-generation-workflow.js?v=" . $svAssetVersion('/admin/assets/image-generation-workflow.js') . "\"></script>\n";
     });
 }
