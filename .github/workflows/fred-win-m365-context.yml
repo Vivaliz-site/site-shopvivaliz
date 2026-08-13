@@ -1,4 +1,4 @@
-name: Inspect Fred-Win Opera profile
+name: Read live Fred-Win Exchange recovery
 
 on:
   push:
@@ -24,12 +24,12 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
 
-      - name: Read Opera installation and profile metadata
+      - name: Read current recovery log and task
         run: |
           set -euo pipefail
           python3 - <<'PY' > /tmp/body.json
           import json
-          ps=r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "$candidates=@((Join-Path $env:LOCALAPPDATA 'Programs\Opera\opera.exe'),(Join-Path $env:LOCALAPPDATA 'Programs\Opera GX\opera.exe'),'C:\Program Files\Opera\opera.exe','C:\Program Files\Opera GX\opera.exe'); foreach($p in $candidates){Write-Output ('OPERA_EXE_CANDIDATE='+$p+';EXISTS='+(Test-Path $p))}; $roots=@((Join-Path $env:APPDATA 'Opera Software'),(Join-Path $env:LOCALAPPDATA 'Opera Software')); foreach($root in $roots){Write-Output ('OPERA_ROOT='+$root+';EXISTS='+(Test-Path $root)); if(Test-Path $root){Get-ChildItem $root -Directory -ErrorAction SilentlyContinue | ForEach-Object {Write-Output ('OPERA_PROFILE_DIR='+$_.FullName); foreach($name in @('Local State','Preferences','Cookies','Login Data')){$f=Join-Path $_.FullName $name; if(Test-Path $f){Write-Output ('PROFILE_FILE='+$name+';SIZE='+(Get-Item $f).Length+';UPDATED='+(Get-Item $f).LastWriteTime.ToString('o'))}}}}}; Get-CimInstance Win32_Process | Where-Object {$_.Name -match '^opera'} | Select-Object -First 20 | ForEach-Object {Write-Output ('OPERA_PROCESS='+$_.ProcessId+';NAME='+$_.Name+';CMD='+(([string]$_.CommandLine) -replace '--[^ ]*(password|token|secret)[^ ]*','[REDACTED]'))}"'''
+          ps=r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "$log='C:\site-shopvivaliz\logs\exchange-restricted-sender-unblock.log'; if(Test-Path $log){Write-Output 'EXCHANGE_LOG_BEGIN'; Get-Content $log -Tail 120; Write-Output 'EXCHANGE_LOG_END'}else{Write-Output 'EXCHANGE_LOG_MISSING'}; $task=Get-ScheduledTask -TaskName 'ShopVivalizExchangeRestrictedSender' -ErrorAction SilentlyContinue; if($task){$info=Get-ScheduledTaskInfo -TaskName $task.TaskName; Write-Output ('TASK_STATE='+$task.State); Write-Output ('TASK_RESULT='+$info.LastTaskResult); Write-Output ('TASK_LAST_RUN='+$info.LastRunTime)}else{Write-Output 'TASK_ABSENT'}; Get-CimInstance Win32_Process | Where-Object {$_.Name -match 'opera|python' -and ([string]$_.CommandLine -match 'restricted|security.microsoft.com|playwright')} | Select-Object -First 20 | ForEach-Object {Write-Output ('RECOVERY_PROCESS='+$_.ProcessId+';NAME='+$_.Name)}"'''
           print(json.dumps({'params':{'command':ps,'timeout':90}}))
           PY
           BODY_B64="$(base64 -w0 /tmp/body.json)"
