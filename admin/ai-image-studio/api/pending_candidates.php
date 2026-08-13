@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../../includes/admin-guard.php';
 require_once __DIR__ . '/../process_item.php';
+require_once __DIR__ . '/../src/ImageChannelProfile.php';
+
+$projectRoot = dirname(__DIR__, 3);
+$storefrontResolver = $projectRoot . '/includes/storefront-image-source.php';
+if (is_file($storefrontResolver)) {
+    require_once $storefrontResolver;
+}
 
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -15,7 +22,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
 }
 
 $targetChannel = strtolower(trim((string)($_GET['target_channel'] ?? 'site')));
-$rawLimit = (int)($_GET['limit'] ?? 12);
+$rawLimit = (int)($_GET['limit'] ?? 100);
 $limit = $rawLimit <= 0 ? 5000 : max(1, min(5000, $rawLimit));
 $profiles = ai_studio_channel_profiles();
 
@@ -49,6 +56,7 @@ function ais_pending_active_product_sql(PDO $db, string $alias = 'p'): string
     } catch (Throwable) {
         $columns = ['active' => true];
     }
+
     $parts = [];
     foreach (['active', 'is_active', 'ativo'] as $column) {
         if (isset($columns[$column])) {
@@ -63,13 +71,92 @@ function ais_pending_active_product_sql(PDO $db, string $alias = 'p'): string
     return $parts !== [] ? implode(' AND ', $parts) : '1=1';
 }
 
+/** @return array{url:string,type:string} */
+function ais_pending_source_image(PDO $db, array $product, string $projectRoot): array
+{
+    $sku = trim((string)($product['sku'] ?? ''));
+    if ($sku !== '') {
+        try {
+            $stmt = $db->prepare('SELECT * FROM olist_product_images WHERE sku = ? LIMIT 20');
+            $stmt->execute([$sku]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            usort($rows, static function (array $a, array $b): int {
+                return [-(int)($a['is_primary'] ?? 0), (int)($a['position'] ?? 9999), (int)($a['id'] ?? 999999)]
+                    <=> [-(int)($b['is_primary'] ?? 0), (int)($b['position'] ?? 9999), (int)($b['id'] ?? 999999)];
+            });
+            foreach ($rows as $row) {
+                $status = strtolower(trim((string)($row['status'] ?? '')));
+                if (in_array($status, ['error', 'deleted', 'inactive'], true)) {
+                    continue;
+                }
+                $resolved = '';
+                if (function_exists('svsis_resolve_image_url')) {
+                    $resolved = trim((string)svsis_resolve_image_url($row, $projectRoot));
+                }
+                if ($resolved === '') {
+                    foreach (['original_url_olist', 'image_url', 'original_url', 'site_url', 'local_url'] as $field) {
+                        $value = trim((string)($row[$field] ?? ''));
+                        if ($value === '') {
+                            continue;
+                        }
+                        if (preg_match('~^https?://~i', $value) === 1 || str_starts_with($value, '/')) {
+                            $resolved = $value;
+                            break;
+                        }
+                    }
+                }
+                if ($resolved !== '') {
+                    return ['url' => $resolved, 'type' => 'galeria_erp'];
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('[ai-image-studio] readiness da galeria indisponivel SKU ' . $sku . ': ' . $e->getMessage());
+        }
+    }
+
+    $legacy = trim((string)($product['image_ref'] ?? ''));
+    if ($legacy !== '') {
+        return ['url' => $legacy, 'type' => 'produto_principal'];
+    }
+    return ['url' => '', 'type' => 'ausente'];
+}
+
+/** @return array{score:int,state:string,missing:list<string>} */
+function ais_pending_readiness(array $product, bool $hasImage): array
+{
+    $score = $hasImage ? 45 : 0;
+    $missing = [];
+
+    $name = trim((string)($product['name'] ?? ''));
+    if ($name !== '') $score += 15; else $missing[] = 'nome';
+
+    $sku = trim((string)($product['sku'] ?? ''));
+    if ($sku !== '') $score += 10; else $missing[] = 'SKU';
+
+    $category = trim((string)($product['category'] ?? ''));
+    if ($category !== '') $score += 10; else $missing[] = 'categoria';
+
+    $identity = trim((string)($product['brand'] ?? '')) . trim((string)($product['model'] ?? ''));
+    if ($identity !== '') $score += 10; else $missing[] = 'marca/modelo';
+
+    $appearance = trim((string)($product['color'] ?? ''))
+        . trim((string)($product['material'] ?? ''))
+        . trim((string)($product['size'] ?? ''));
+    if ($appearance !== '') $score += 10; else $missing[] = 'cor/material/tamanho';
+
+    $score = min(100, $score);
+    if (!$hasImage) {
+        $state = 'blocked';
+        array_unshift($missing, 'foto real');
+    } elseif ($score >= 70) {
+        $state = 'ready';
+    } else {
+        $state = 'limited_context';
+    }
+    return ['score' => $score, 'state' => $state, 'missing' => array_values(array_unique($missing))];
+}
+
 try {
-    // Nao seleciona colunas opcionais (como products.category), porque o schema
-    // de producao nao garante esses campos. O contexto adicional e resolvido
-    // depois por ai_studio_fetch_product(), que ja conhece os aliases legados.
-    //
-    // Falhas/rejeicoes podem ser tentadas novamente. Qualquer imagem ainda
-    // pendente, enviada ou publicada bloqueia nova geracao para o mesmo canal.
     $stmt = $db->prepare(
         'SELECT p.id, p.name, p.image_url, p.sku '
         . 'FROM products p '
@@ -86,27 +173,57 @@ try {
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
     $items = [];
+    $summary = ['ready' => 0, 'limited_context' => 0, 'blocked' => 0];
     foreach ($rows as $row) {
         $productId = (int)($row['id'] ?? 0);
         if ($productId <= 0) {
             continue;
         }
         $context = ai_studio_fetch_product($db, $productId) ?? [];
+        if ($context === []) {
+            continue;
+        }
+        $source = ais_pending_source_image($db, $context, $projectRoot);
+        $readiness = ais_pending_readiness($context, $source['url'] !== '');
+        $summary[$readiness['state']] = ($summary[$readiness['state']] ?? 0) + 1;
+
+        $identity = array_values(array_filter([
+            trim((string)($context['brand'] ?? '')),
+            trim((string)($context['model'] ?? '')),
+            trim((string)($context['color'] ?? '')),
+            trim((string)($context['material'] ?? '')),
+            trim((string)($context['size'] ?? '')),
+        ], static fn(string $value): bool => $value !== ''));
+
         $items[] = [
             'id' => $productId,
-            'name' => trim((string)($row['name'] ?? '')),
-            'sku' => trim((string)($row['sku'] ?? '')),
-            'image_url' => trim((string)($row['image_url'] ?? '')),
+            'name' => trim((string)($context['name'] ?? $row['name'] ?? '')),
+            'sku' => trim((string)($context['sku'] ?? $row['sku'] ?? '')),
             'category' => trim((string)($context['category'] ?? '')),
-            'has_image' => trim((string)($context['image_ref'] ?? '')) !== '',
+            'brand' => trim((string)($context['brand'] ?? '')),
+            'model' => trim((string)($context['model'] ?? '')),
+            'color' => trim((string)($context['color'] ?? '')),
+            'material' => trim((string)($context['material'] ?? '')),
+            'size' => trim((string)($context['size'] ?? '')),
+            'source_image_url' => $source['url'],
+            'source_type' => $source['type'],
+            'has_image' => $source['url'] !== '',
+            'readiness_score' => $readiness['score'],
+            'readiness_state' => $readiness['state'],
+            'missing_context' => $readiness['missing'],
+            'identity_summary' => implode(' · ', $identity),
+            'essential_types' => ai_studio_channel_recommended_types($targetChannel, true),
+            'recommended_types' => ai_studio_channel_recommended_types($targetChannel, false),
         ];
     }
 
     echo json_encode([
         'success' => true,
         'target_channel' => $targetChannel,
+        'profile' => ai_studio_channel_public_profile($targetChannel),
         'items' => $items,
         'count' => count($items),
+        'summary' => $summary,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
     error_log('[ai-image-studio] pending_candidates: ' . $e->getMessage());
