@@ -511,6 +511,12 @@ def validate_attributes(
         if aid in ctx["filled"]:
             continue  # nunca sobrescreve dado ja preenchido pelo vendedor
         allowed = attr.get("values") or []
+        # Valor de lista vem do proprio ML; numero livre precisa existir nos dados de origem.
+        if blob and not allowed:
+            orphans = unsupported_numbers(value, blob)
+            if orphans:
+                notes.append(f"{aid}: {value!r} tem numero sem lastro nos dados")
+                continue
         if allowed:
             match = next((v for v in allowed if norm(v["name"]) == norm(value)), None)
             if not match:
