@@ -10,79 +10,273 @@ on:
 permissions:
   contents: read
 
+env:
+  MEI_EXPECTED_SHA: 28a2a71d4ccb9cfc2849e86cfc3ec23ee9900a20
+
 jobs:
   harden:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 50
     steps:
-      - name: Configure VM SSH key
+      - name: Configure verified SSH host
+        shell: bash
         env:
-          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          test -n "$VM_KEY"
-          mkdir -p ~/.ssh
-          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
-          chmod 600 ~/.ssh/vmkey
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
-      - name: P0 keep bulk worker stopped
+      - name: P0 keep bulk worker stopped and stage exact MEI commit
+        shell: bash
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          ssh \
+            -o BatchMode=yes \
+            -o ConnectTimeout=20 \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=20 \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'bash -s' -- "$MEI_EXPECTED_SHA" <<'REMOTE'
           set -euo pipefail
-          sudo systemctl kill --kill-who=all --signal=SIGKILL mei-mg-email-worker.service || true
-          sudo systemctl stop mei-mg-email-worker.service || true
-          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then
+          expected_sha="$1"
+          repo='/home/ubuntu/mei-mg-email'
+          worker='mei-mg-email-worker.service'
+          state_dir='/var/lib/mei-mg-email'
+          sentinel="$state_dir/sender_blocked.pause"
+
+          timeout 30s sudo systemctl stop "$worker" || true
+          if sudo systemctl is-active --quiet "$worker"; then
+            timeout 15s sudo systemctl kill --kill-who=all --signal=SIGKILL "$worker" || true
+            sleep 2
+          fi
+          if sudo systemctl is-active --quiet "$worker"; then
             echo 'EMERGENCY_WORKER_STOP_FAILED=true'
             exit 10
           fi
           echo 'EMERGENCY_WORKER_STOPPED=true'
-          EOF
 
-      - name: Preserve VM changes, update repository and run hardening
+          sudo install -d -m 0750 -o ubuntu -g ubuntu "$state_dir"
+          if [[ ! -f "$sentinel" ]]; then
+            cat <<'PAUSE' | sudo tee "$sentinel" >/dev/null
+          sender=naoresponda@dev.shopvivaliz.com.br
+          error=550 5.1.8 Access denied, bad outbound sender AS(42004)
+          source=emergency_mei_email_hardening_v3
+          resume_allowed=false
+          PAUSE
+            sudo chown ubuntu:ubuntu "$sentinel"
+            sudo chmod 0640 "$sentinel"
+          fi
+          echo 'EMERGENCY_SENTINEL_PRESENT=true'
+
+          cd "$repo"
+          current_sha="$(git rev-parse HEAD)"
+          if [[ "$current_sha" != "$expected_sha" ]]; then
+            dirty_count="$(git status --porcelain=v1 --untracked-files=normal | wc -l | tr -d ' ')"
+            if [[ "$dirty_count" -gt 0 ]]; then
+              stash_name="emergency-pre-hardening-v3-$(date -u +%Y%m%dT%H%M%SZ)"
+              git stash push -u -m "$stash_name" >/dev/null
+              echo 'EMERGENCY_VM_CHANGES_PRESERVED=true'
+            fi
+            fetch_ok=0
+            for attempt in 1 2 3; do
+              if timeout 120s git fetch origin main; then
+                fetch_ok=1
+                break
+              fi
+              echo "EMERGENCY_GIT_FETCH_RETRY=$attempt"
+              sleep $((attempt * 5))
+            done
+            test "$fetch_ok" -eq 1
+            git checkout -B main origin/main
+          fi
+          test "$(git rev-parse HEAD)" = "$expected_sha"
+          echo "EMERGENCY_DEPLOY_SHA=$expected_sha"
+          echo "EMERGENCY_STASH_COUNT=$(git stash list | wc -l | tr -d ' ')"
+          echo 'WORKER_RESUME_ALLOWED=false'
+          REMOTE
+
+      - name: Wait for any orphan Flyway run then launch hardening in background
+        shell: bash
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          ssh \
+            -o BatchMode=yes \
+            -o ConnectTimeout=20 \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=20 \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'bash -s' <<'REMOTE'
           set -euo pipefail
-          cd /home/ubuntu/mei-mg-email
-          dirty_count="$(git status --porcelain=v1 --untracked-files=normal | wc -l | tr -d ' ')"
-          echo "EMERGENCY_VM_DIRTY_ENTRIES=$dirty_count"
-          if [ "$dirty_count" -gt 0 ]; then
-            stash_name="emergency-pre-hardening-$(date -u +%Y%m%dT%H%M%SZ)"
-            git stash push -u -m "$stash_name" >/dev/null
-            echo "EMERGENCY_VM_CHANGES_PRESERVED=true"
-            echo "EMERGENCY_VM_STASH_REF=stash@{0}"
-          else
-            echo "EMERGENCY_VM_CHANGES_PRESERVED=not_needed"
+          repo='/home/ubuntu/mei-mg-email'
+          state_dir='/var/lib/mei-mg-email'
+          log="$state_dir/deploy-hardening-20260813.log"
+          status_file="$state_dir/deploy-hardening-20260813.status"
+          pid_file="$state_dir/deploy-hardening-20260813.pid"
+
+          for attempt in $(seq 1 60); do
+            running_flyway="$(docker ps --format '{{.Names}}|{{.Image}}|{{.Command}}' | grep -i flyway || true)"
+            if [[ -z "$running_flyway" ]]; then
+              break
+            fi
+            echo "EMERGENCY_WAIT_ORPHAN_FLYWAY attempt=$attempt"
+            sleep 10
+          done
+          if docker ps --format '{{.Names}}|{{.Image}}|{{.Command}}' | grep -qi flyway; then
+            echo 'EMERGENCY_ORPHAN_FLYWAY_STILL_RUNNING=true'
+            docker ps --format '{{.Names}}|{{.Status}}' | grep -i flyway || true
+            exit 31
           fi
-          git fetch origin main
-          git checkout -B main origin/main
-          test -z "$(git status --porcelain=v1 --untracked-files=normal)"
-          echo "EMERGENCY_DEPLOY_SHA=$(git rev-parse HEAD)"
-          bash scripts/deploy_hardening_20260813.sh
-          EOF
+
+          if [[ -f "$pid_file" ]]; then
+            old_pid="$(cat "$pid_file" 2>/dev/null || true)"
+            if [[ "$old_pid" =~ ^[0-9]+$ ]] && kill -0 "$old_pid" 2>/dev/null; then
+              echo "EMERGENCY_HARDENING_ALREADY_RUNNING pid=$old_pid"
+              exit 0
+            fi
+          fi
+
+          rm -f "$status_file" "$pid_file"
+          : > "$log"
+          cd "$repo"
+          nohup bash -lc '
+            set -euo pipefail
+            cd /home/ubuntu/mei-mg-email
+            if flock -n /var/lock/mei-mg-email-hardening.lock bash scripts/deploy_hardening_20260813.sh >>"$1" 2>&1; then
+              rc=0
+            else
+              rc=$?
+            fi
+            printf "%s\n" "$rc" >"$2"
+            exit "$rc"
+          ' _ "$log" "$status_file" >/dev/null 2>&1 &
+          pid=$!
+          printf '%s\n' "$pid" > "$pid_file"
+          echo "EMERGENCY_HARDENING_STARTED pid=$pid"
+          echo 'WORKER_RESUME_ALLOWED=false'
+          REMOTE
+
+      - name: Poll hardening status
+        shell: bash
+        run: |
+          set -euo pipefail
+          completed=0
+          for attempt in $(seq 1 120); do
+            output=''
+            if output="$(ssh \
+              -o BatchMode=yes \
+              -o ConnectTimeout=20 \
+              -o ServerAliveInterval=30 \
+              -o ServerAliveCountMax=20 \
+              -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+              -i "$HOME/.ssh/id_rsa" \
+              ubuntu@137.131.156.17 \
+              'bash -s' <<'REMOTE'
+          set -euo pipefail
+          state_dir='/var/lib/mei-mg-email'
+          log="$state_dir/deploy-hardening-20260813.log"
+          status_file="$state_dir/deploy-hardening-20260813.status"
+          pid_file="$state_dir/deploy-hardening-20260813.pid"
+          state='UNKNOWN'
+          if [[ -f "$status_file" ]]; then
+            state="DONE:$(cat "$status_file")"
+          elif [[ -f "$pid_file" ]]; then
+            pid="$(cat "$pid_file" 2>/dev/null || true)"
+            if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
+              state='RUNNING'
+            fi
+          fi
+          echo "STATE=$state"
+          if [[ -f "$log" ]]; then
+            tail -n 12 "$log" \
+              | sed -E 's/([A-Za-z0-9_]*(PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Za-z0-9_]*=)[^[:space:]]+/\1[REDACTED]/Ig'
+          fi
+          REMOTE
+            )"; then
+              printf '%s\n' "$output"
+            else
+              echo "EMERGENCY_POLL_SSH_RETRY=$attempt"
+              sleep 15
+              continue
+            fi
+
+            state="$(printf '%s\n' "$output" | sed -n 's/^STATE=//p' | head -1)"
+            case "$state" in
+              DONE:0)
+                completed=1
+                break
+                ;;
+              DONE:*)
+                echo "EMERGENCY_HARDENING_FAILED state=$state"
+                exit 40
+                ;;
+              RUNNING|UNKNOWN|'')
+                sleep 15
+                ;;
+              *)
+                echo "EMERGENCY_UNEXPECTED_STATE=$state"
+                sleep 15
+                ;;
+            esac
+          done
+          test "$completed" -eq 1 || { echo 'EMERGENCY_HARDENING_TIMEOUT=true'; exit 41; }
 
       - name: Verify fail-closed production state
+        shell: bash
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          ssh \
+            -o BatchMode=yes \
+            -o ConnectTimeout=20 \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=20 \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'bash -s' -- "$MEI_EXPECTED_SHA" <<'REMOTE'
           set -euo pipefail
+          expected_sha="$1"
           cd /home/ubuntu/mei-mg-email
+          status_file='/var/lib/mei-mg-email/deploy-hardening-20260813.status'
+          log='/var/lib/mei-mg-email/deploy-hardening-20260813.log'
+          test -f "$status_file"
+          test "$(cat "$status_file")" = '0'
+          test "$(git rev-parse HEAD)" = "$expected_sha"
           test -f /var/lib/mei-mg-email/sender_blocked.pause
+          grep -Fq 'DEPLOY_HARDENING_OK' "$log"
+          grep -Fq 'DEPLOY_EXCHANGE_UNBLOCK_CONFIRMED=true' "$log"
+          grep -Fq 'WORKER_RESUME_ALLOWED=false' "$log"
           if sudo systemctl is-active --quiet mei-mg-email-worker.service; then
             echo 'VERIFY_WORKER_ACTIVE_UNSAFE=true'
             exit 12
           fi
           echo 'VERIFY_WORKER_STOPPED=true'
-          echo "VERIFY_DEPLOY_SHA=$(git rev-parse HEAD)"
+          echo "VERIFY_DEPLOY_SHA=$expected_sha"
           sudo systemctl is-active mei-mg-email-monitor.service
           sudo systemctl is-active mei-mg-email-ndr-guard.service
           sudo systemctl is-active mei-mg-email-base-sync.timer
           sudo systemctl is-enabled mei-mg-email-ndr-guard.service
           sudo systemctl is-enabled mei-mg-email-base-sync.timer
+          echo 'VERIFY_SENTINEL_PRESENT=true'
+          echo 'VERIFY_EXCHANGE_UNBLOCK_CONFIRMED=true'
+          echo 'VERIFY_HARDENING_COMPLETE=true'
           echo 'WORKER_RESUME_ALLOWED=false'
-          EOF
+          REMOTE
 
       - name: Cleanup SSH key
         if: always()
-        run: rm -f ~/.ssh/vmkey
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
