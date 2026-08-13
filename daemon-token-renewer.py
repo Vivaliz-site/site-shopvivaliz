@@ -231,30 +231,6 @@ def ensure_token_store_parent() -> None:
         os.chown(path.parent, env_stat.st_uid, env_stat.st_gid)
 
 
-def _atomic_write(
-    path: Path,
-    text: str,
-    mode: int,
-    uid: int | None,
-    gid: int | None,
-) -> None:
-    if not path.parent.is_dir():
-        raise RuntimeError("diretorio de destino ausente")
-    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-    temporary = Path(temporary_name)
-    try:
-        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.chmod(temporary, mode)
-        if os.name != "nt" and uid is not None and gid is not None:
-            os.chown(temporary, uid, gid)
-        os.replace(temporary, path)
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
 def update_env(new_token: str, new_refresh_token: str) -> None:
     target = ENV_PATH.resolve(strict=True)
     content = target.read_text(encoding="utf-8")
@@ -282,18 +258,49 @@ def update_env(new_token: str, new_refresh_token: str) -> None:
     assert_monotonic_text(content, candidate_text)
 
     original = target.stat()
-    _atomic_write(
-        target,
-        candidate_text,
-        original.st_mode & 0o777,
-        original.st_uid if os.name != "nt" else None,
-        original.st_gid if os.name != "nt" else None,
-    )
-    updated = target.stat()
-    if (updated.st_mode & 0o777) != (original.st_mode & 0o777):
-        raise RuntimeError("permissao do .env mudou durante renovacao Olist")
-    if os.name != "nt" and (updated.st_uid != original.st_uid or updated.st_gid != original.st_gid):
-        raise RuntimeError("owner/group do .env mudou durante renovacao Olist")
+    mode = original.st_mode & 0o777
+    descriptor, temporary_name = tempfile.mkstemp(prefix=".env.", dir=target.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(candidate_text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, mode)
+        if os.name != "nt":
+            os.chown(temporary, original.st_uid, original.st_gid)
+        os.replace(temporary, target)
+        updated = target.stat()
+        if (updated.st_mode & 0o777) != mode:
+            raise RuntimeError("permissao do .env mudou durante renovacao Olist")
+        if os.name != "nt" and (updated.st_uid != original.st_uid or updated.st_gid != original.st_gid):
+            raise RuntimeError("owner/group do .env mudou durante renovacao Olist")
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _atomic_write_private(
+    path: Path,
+    text: str,
+    mode: int,
+    uid: int | None,
+    gid: int | None,
+) -> None:
+    if not path.parent.is_dir():
+        raise RuntimeError("diretorio de destino ausente")
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, mode)
+        if os.name != "nt" and uid is not None and gid is not None:
+            os.chown(temporary, uid, gid)
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def update_token_store(new_token: str, new_refresh_token: str, result: dict[str, Any]) -> None:
@@ -323,7 +330,7 @@ def update_token_store(new_token: str, new_refresh_token: str, result: dict[str,
     env_target = ENV_PATH.resolve(strict=True)
     env_stat = env_target.stat()
     payload = json.dumps(store, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-    _atomic_write(
+    _atomic_write_private(
         current_token_store_path(),
         payload,
         0o660,
