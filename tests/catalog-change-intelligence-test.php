@@ -28,9 +28,11 @@ foreach (['Mercado Livre','Shopee','Amazon','TikTok Shop','ShopVivaliz','Olist /
 }
 ci_assert(str_contains($ui, 'Mostrar somente campos alterados'), 'Usuário deve poder focar apenas no que mudou');
 ci_assert(str_contains($ui, 'Restaurar original'), 'Cada campo alterado deve permitir restauração segura');
+ci_assert(str_contains($ui, 'sourceOriginal') && str_contains($ui, 'ORIGINAL_PLACEHOLDER'), 'Restauração precisa separar valor de origem de texto explicativo da UI');
+ci_assert(str_contains($ui, "ORIGINAL_PLACEHOLDER.test(text)"), 'Placeholders do comparativo devem restaurar vazio, nunca prosa da interface');
 ci_assert(str_contains($ui, 'Alterado') && str_contains($ui, 'Sem mudança') && str_contains($ui, 'Novo') && str_contains($ui, 'Removido'), 'Estados de alteração precisam ser explícitos');
 ci_assert(str_contains($ui, 'Assistente') && str_contains($ui, 'quality'), 'Assistente local deve orientar sem substituir o quality gate do servidor');
 ci_assert(str_contains($ui, 'preço') && str_contains($ui, 'frete') && str_contains($ui, 'cupom'), 'Auxiliar deve alertar sobre condições comerciais protegidas');
 ci_assert(str_contains($main, 'Revisar e aplicar') && str_contains($main, 'Otimizar selecionados'), 'Camada de inteligência deve complementar, não substituir, o fluxo operacional');
 
-fwrite(STDOUT, "COMPROVADO: resultados do catálogo sinalizam campos alterados, permitem restaurar o original e oferecem orientação inteligente por canal.\n");
+fwrite(STDOUT, "COMPROVADO: resultados do catálogo sinalizam mudanças, restauram somente dados reais e oferecem orientação inteligente por canal.\n");
