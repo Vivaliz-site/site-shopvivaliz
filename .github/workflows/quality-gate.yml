@@ -104,8 +104,6 @@ jobs:
             tests/test_agent_docs_gate.py \
             daemon-sync-products.py \
             tests/daemon-sync-images-regression.py \
-            scripts/recover-olist-oauth-from-backups.py \
-            tests/test_recover_olist_oauth_from_backups.py \
             scripts/env_keyset_guard.py \
             tests/test_env_keyset_guard.py \
             tests/test_env_writer_monotonic_policy.py \
@@ -133,11 +131,34 @@ jobs:
           set -Eeuo pipefail
           python3 -m unittest tests/test_configure_erp_oauth_static_runtime.py -v
 
-      - name: Run Olist OAuth backup recovery safety tests
+      - name: Enforce single Olist OAuth writer
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m unittest tests/test_recover_olist_oauth_from_backups.py -v
+          python3 - <<'PY'
+          from pathlib import Path
+          endpoint='accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token'
+          consumers=[
+              'includes/marketplace/TinyV3Runtime.php',
+              'includes/tiny-order-push.php',
+              'olist/sync-products.php',
+          ]
+          for name in consumers:
+              assert endpoint not in Path(name).read_text(encoding='utf-8'), name
+          assert endpoint in Path('daemon-token-renewer.py').read_text(encoding='utf-8')
+          assert endpoint in Path('olist/callback.php').read_text(encoding='utf-8')
+          for removed in [
+              'api/olist/callback.php',
+              'api/olist/refresh-token.php',
+              'scripts/get-tiny-oauth-token.py',
+              'scripts/playwright-get-token.py',
+              '.github/workflows/one-time-olist-refresh.yml',
+              '.github/workflows/recover-olist-runtime.yml',
+              '.github/workflows/recover-olist-oauth-from-backups.yml',
+          ]:
+              assert not Path(removed).exists(), removed
+          print('olist_oauth_single_writer_contract=ok')
+          PY
 
       - name: Run catalog daemon image regression test
         shell: bash
