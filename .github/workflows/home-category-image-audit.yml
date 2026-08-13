@@ -1,0 +1,52 @@
+name: Home Category Image Audit
+
+on:
+  pull_request:
+    paths:
+      - 'js/public-experience-v1.js'
+      - 'tests/home-category-image-audit.mjs'
+      - '.github/workflows/home-category-image-audit.yml'
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['Master Production Pipeline 24/7']
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: home-category-image-audit-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'workflow_run' && 'main' || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install Chromium
+        run: |
+          set -Eeuo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Validate home category images
+        env:
+          BASE_URL: https://shopvivaliz.com.br
+          OUTPUT_DIR: test-results/home-category-image-audit
+        run: node tests/home-category-image-audit.mjs
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: home-category-image-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/home-category-image-audit/
+          if-no-files-found: error
+          retention-days: 30
