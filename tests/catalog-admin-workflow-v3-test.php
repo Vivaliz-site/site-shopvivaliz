@@ -126,10 +126,12 @@ sv_catalog_v3_assert(
     'Reparo de qualidade nunca pode publicar em marketplace'
 );
 sv_catalog_v3_assert(
-    str_contains($repairWorkflow, 'Wait for exact production release')
-    && str_contains($repairWorkflow, '"$deployed" == "$GITHUB_SHA"')
+    str_contains($repairWorkflow, "workflows: ['Master Production Pipeline 24/7']")
+    && str_contains($repairWorkflow, "github.event.workflow_run.conclusion == 'success'")
+    && str_contains($repairWorkflow, 'TARGET_SHA:')
+    && str_contains($repairWorkflow, '"$deployed" == "$TARGET_SHA"')
     && str_contains($repairWorkflow, 'php admin/catalog-optimization/repair_hard_quality_pending.php --limit=2000'),
-    'Reparo legado deve rodar automaticamente somente depois do SHA exato chegar a producao'
+    'Reparo legado deve rodar automaticamente para o SHA exato de cada deploy de producao bem-sucedido'
 );
 
-fwrite(STDOUT, "COMPROVADO: Admin auto-repara qualidade nova, limpa pendencias hard legadas sem publicar e preserva rotacao de credenciais Gemini.\n");
+fwrite(STDOUT, "COMPROVADO: Admin auto-repara qualidade nova, limpa pendencias hard legadas apos deploy bem-sucedido sem publicar e preserva rotacao de credenciais Gemini.\n");
