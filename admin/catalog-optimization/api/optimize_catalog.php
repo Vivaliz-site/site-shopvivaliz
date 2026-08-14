@@ -431,6 +431,25 @@ function ai_catalog_build_user_prompt(array $product, string $channel): string
         $lines[] = $label . ': ' . ($value !== '' ? $value : '(nao informado)');
     }
     $lines[] = '';
+
+    // O quality gate ai_catalog_title_starts_with_identity() exige que o titulo
+    // gerado comece (por igualdade de prefixo, ignorando acentos/maiusculas) por
+    // um destes candidatos calculados deterministicamente. Sem mostrar os
+    // candidatos exatos aqui, a IA so via uma instrucao generica de "Marca +
+    // Modelo" e nao tinha como acertar o prefixo byte a byte — foi a causa de
+    // ~90% das falhas do gate (2026-08-13, ver docs/MEMORIA-AGENTES.md).
+    $identityCandidates = ai_catalog_identity_candidates($product);
+    if ($identityCandidates !== []) {
+        $lines[] = 'REGRA OBRIGATORIA DE TITULO: optimized_title deve comecar, ignorando '
+            . 'acentuacao e caixa, por um destes textos (escolha o mais completo que fizer '
+            . 'sentido para o produto, mantendo a ordem exata das palavras): "'
+            . implode('" ou "', $identityCandidates)
+            . '". So depois desse inicio continue com o restante da identificacao exigida '
+            . 'pela politica do canal (especificacao, atributo diferenciador etc). Nao insira '
+            . 'nenhuma palavra promocional ou generica antes desse inicio.';
+        $lines[] = '';
+    }
+
     $lines[] = 'Otimize o cadastro respeitando integralmente a politica do canal e sem criar nenhum fato ausente.';
     return implode("\n", $lines);
 }
