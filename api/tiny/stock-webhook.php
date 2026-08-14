@@ -31,6 +31,18 @@ function svtw_json(int $status, array $payload): never
     exit;
 }
 
+require_once dirname(__DIR__, 2) . '/includes/webhook-secret.php';
+
+// SEGURANCA: gravar saldo e uma operacao sensivel -- um POST anonimo podia
+// zerar o estoque de qualquer SKU (derrubando as vendas) ou inflar o saldo
+// (gerando venda sem lastro). Como a Tiny nao assina, exigimos segredo
+// compartilhado na URL configurada no painel. Ver includes/webhook-secret.php
+// para o rollout em duas etapas.
+if (!sv_webhook_secret_gate('tiny-stock')) {
+    svtw_log('Requisicao rejeitada: chave ausente ou invalida');
+    svtw_json(401, ['ok' => false, 'error' => 'unauthorized']);
+}
+
 $raw = file_get_contents('php://input') ?: '';
 $body = json_decode($raw, true);
 
@@ -49,6 +61,13 @@ if ($sku === '' || $saldo === null) {
 }
 
 $stock = (int)round((float)$saldo);
+
+// Limite de sanidade: saldo negativo nao existe e valores absurdos indicam
+// payload corrompido ou forjado. Rejeitamos em vez de gravar.
+if ($stock < 0 || $stock > 1000000) {
+    svtw_log("Saldo fora do intervalo aceitavel: sku={$sku} saldo={$saldo}");
+    svtw_json(200, ['ok' => true, 'ignored' => true, 'reason' => 'stock_out_of_range']);
+}
 $catalogPath = dirname(__DIR__, 2) . '/api/catalog/fallback-products.json';
 
 $fp = fopen($catalogPath, 'c+');

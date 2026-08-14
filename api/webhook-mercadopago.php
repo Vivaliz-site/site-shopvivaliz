@@ -120,20 +120,40 @@ if ($webhookSecret === '' || $accessToken === '') {
     svmp_webhook_response(503, 'gateway_unconfigured');
 }
 
+// SEGURANCA: a validacao de assinatura precisa acontecer ANTES de qualquer
+// efeito colateral. Antes, o enfileiramento e o svmp_webhook_response(200,
+// 'queued') -- que chama exit() -- vinham primeiro, tornando a verificacao de
+// assinatura logo abaixo codigo inalcancavel. Na pratica o webhook do Mercado
+// Pago aceitava qualquer POST nao autenticado e criava um job interno.
+if (!svmp_validate_webhook_signature($signature, $requestId, $dataId, $webhookSecret)) {
+    error_log('[MercadoPago] webhook rejected: invalid signature request=' . substr($requestId, 0, 80) . ' sig_len=' . strlen($signature) . ' data_id=' . substr($dataId, 0, 80));
+    svmp_webhook_response(401, 'invalid_signature');
+}
+
+// O marcador auth_validated replica a defesa ja usada pelo InfinitePay: o
+// worker recusa jobs que nao passaram pela borda autenticada.
 $queuedId = sv_webhook_enqueue('mercadopago', [
     'raw' => $raw,
     'data_id' => $dataId,
     'topic' => $topic,
     'signature' => $signature,
     'request_id' => $requestId,
+    'auth_validated' => true,
     'received_at' => date(DATE_ATOM),
 ]);
 error_log('[MercadoPago] webhook queued id=' . $queuedId . ' data=' . $dataId);
 svmp_webhook_response(200, 'queued');
-if (!svmp_validate_webhook_signature($signature, $requestId, $dataId, $webhookSecret)) {
-    error_log('[MercadoPago] webhook rejected: invalid signature request=' . substr($requestId, 0, 80) . ' sig_len=' . strlen($signature) . ' data_id=' . substr($dataId, 0, 80));
-    svmp_webhook_response(401, 'invalid_signature');
-}
+
+// -----------------------------------------------------------------------
+// CODIGO INALCANCAVEL (mantido apenas como referencia historica).
+//
+// svmp_webhook_response() chama exit(), entao nada abaixo desta linha roda.
+// O processamento real do pagamento vive em
+// includes/webhook-job-dispatcher.php :: sv_webhook_job_dispatch_mercadopago(),
+// executado por scripts/queue-worker.php. Editar o bloco abaixo NAO tem
+// efeito em producao -- altere o dispatcher.
+// -----------------------------------------------------------------------
+/*
 
 try {
     $isOrder = $topic === 'order' || str_starts_with(strtoupper($dataId), 'ORD');
@@ -398,3 +418,5 @@ try {
     error_log('[MercadoPago] webhook internal failure: resource=' . substr($dataId, 0, 80) . ' type=' . get_class($e));
     svmp_webhook_response(500, 'internal_error');
 }
+
+*/

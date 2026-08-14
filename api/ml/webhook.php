@@ -34,7 +34,22 @@ file_put_contents($logDir . '/ml-webhooks.log', $line, FILE_APPEND | LOCK_EX);
 // checkout do site (storage/orders/*.json), sem derrubar o webhook em
 // caso de erro -- ML reduz/desativa notificacoes apos varias respostas
 // nao-2xx, entao sempre respondemos 200 e so logamos falhas internas.
-if ($entry['topic'] === 'orders_v2' && $entry['resource'] !== '') {
+// SEGURANCA (SSRF): $resource vem do corpo/query da requisicao e era
+// concatenado direto em 'https://api.mercadolibre.com' . $resource dentro de
+// ml_sync_order_from_webhook(). Um valor como '/../..%2f' ou uma barra dupla
+// permitiria redirecionar a chamada autenticada para outro caminho -- ou
+// outro host -- levando junto o token do Mercado Livre. O ML sempre envia
+// resource no formato /orders/{id}; qualquer outra coisa e descartada.
+$resourceIsSafe = (bool)preg_match('#^/orders/\d+$#', $entry['resource']);
+if ($entry['topic'] === 'orders_v2' && $entry['resource'] !== '' && !$resourceIsSafe) {
+    file_put_contents(
+        $logDir . '/ml-webhook-errors.log',
+        json_encode(['at' => gmdate('c'), 'resource' => $entry['resource'], 'error' => 'resource_rejeitado_formato_invalido'], JSON_UNESCAPED_UNICODE) . "\n",
+        FILE_APPEND | LOCK_EX
+    );
+}
+
+if ($entry['topic'] === 'orders_v2' && $resourceIsSafe) {
     try {
         ml_sync_order_from_webhook($entry['resource']);
     } catch (Throwable $e) {

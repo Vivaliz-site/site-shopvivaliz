@@ -9,10 +9,19 @@
     if (state === 'error') node.style.cssText = 'background:#fee2e2;color:#991b1b';
   }
 
+  // SEGURANCA (XSS): os itens vem de respostas de API (ex.: olist.message e
+  // olist.remediation, que podem repassar texto de um servico externo).
+  // Concatenar em innerHTML permitia injetar HTML no painel administrativo.
+  // textContent monta a mesma lista sem interpretar marcacao.
   function setList(id, items) {
     const node = document.getElementById(id);
     if (!node) return;
-    node.innerHTML = items.map(function (item) { return '<li>' + item + '</li>'; }).join('');
+    node.textContent = '';
+    items.forEach(function (item) {
+      const li = document.createElement('li');
+      li.textContent = String(item == null ? '' : item);
+      node.appendChild(li);
+    });
   }
 
   function yesNo(value) { return value ? 'OK' : 'Pendente'; }

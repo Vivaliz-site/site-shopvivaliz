@@ -1,20 +1,33 @@
 <?php
 declare(strict_types=1);
 
+// SEGURANCA: esta pagina liga/desliga o frete gratis e define o valor minimo.
+// Estava acessivel sem autenticacao -- confirmado em producao com HTTP 200
+// anonimo. Um POST anonimo podia habilitar frete gratis com limiar zero para
+// toda a loja. A pagina irma admin/configuracoes-frete.php ja era protegida.
+require_once __DIR__ . '/../includes/admin-guard.php';
 require_once __DIR__ . '/../config/bootstrap-env.php';
 require_once __DIR__ . '/../includes/site-settings.php';
+require_once __DIR__ . '/../includes/csrf.php';
+
+$message = '';
 
 // POST: Salvar configurações
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $enabled = isset($_POST['free_shipping_enabled']) ? '1' : '0';
-    $threshold = (float)($_POST['free_shipping_threshold'] ?? '0');
+    if (!sv_csrf_valid('admin-settings-frete', $_POST['csrf_token'] ?? null)) {
+        http_response_code(400);
+        $message = '⚠️ Sessão expirada ou token inválido. Recarregue a página.';
+    } else {
+        $enabled = isset($_POST['free_shipping_enabled']) ? '1' : '0';
+        $threshold = (float)($_POST['free_shipping_threshold'] ?? '0');
 
-    if ($threshold < 0) $threshold = 0;
+        if ($threshold < 0) $threshold = 0;
 
-    sv_setting_set('free_shipping_enabled', $enabled);
-    sv_setting_set('free_shipping_threshold', (string)$threshold);
+        sv_setting_set('free_shipping_enabled', $enabled);
+        sv_setting_set('free_shipping_threshold', (string)$threshold);
 
-    $message = '✅ Configurações atualizadas com sucesso!';
+        $message = '✅ Configurações atualizadas com sucesso!';
+    }
 }
 
 // GET: Carregar configurações atuais
@@ -152,7 +165,7 @@ $threshold = $config['threshold'] > 0 ? $config['threshold'] : '';
         <h1>⚙️ Configurações de Frete Grátis</h1>
         <p class="subtitle">Controle se o frete grátis está ativado no site e defina o valor mínimo de compra.</p>
 
-        <?php if (isset($message)): ?>
+        <?php if ($message !== ""): ?>
             <div class="message"><?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?></div>
         <?php endif; ?>
 
@@ -161,6 +174,7 @@ $threshold = $config['threshold'] > 0 ? $config['threshold'] : '';
         </div>
 
         <form method="POST">
+            <?= sv_csrf_input('admin-settings-frete') ?>
             <div class="form-group">
                 <div class="checkbox-group">
                     <input type="checkbox" id="free_shipping_enabled" name="free_shipping_enabled" value="1" <?= $enabled ?>>

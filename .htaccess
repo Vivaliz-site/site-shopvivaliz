@@ -117,6 +117,26 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^C.*shopee-sync\.php$ - [F,L,NC]
     RewriteRule ^api/(?:catalog/test-normalize\.php|(?:pagarme|melhorenvio|olist)/diagnostic(?:-full)?\.php|sync-cache-endpoint\.php|sync/full-sync\.php)$ - [F,L,NC]
 
+    # SEGURANCA: dumps internos do catalogo carregam avg_cost_price (custo
+    # medio) e a lista de fornecedores. Nunca podem ser servidos ao publico —
+    # a vitrine le esses arquivos pelo filesystem (PHP), nao por HTTP.
+    RewriteRule ^api/catalog/fallback-products\.json - [F,L,NC]
+    RewriteRule ^api/catalog/fallback-products\.json\.backup - [F,L,NC]
+    RewriteRule ^uploads/olist_imagens_site_mapeamento\.csv$ - [F,L,NC]
+    RewriteRule \.(?:bak|backup|old|orig|sql|sqlite|log|ini)$ - [F,L,NC]
+
+    # SEGURANCA: api/autonomous/ e maquinaria interna dos agentes (exec() de
+    # ps/df/free/mysqldump, gestao de incidentes). Nada no site consome esses
+    # arquivos por HTTP -- so a CLI, via scripts/autonomous-orchestrator-loop.sh.
+    # Hoje respondem 200 (corpo vazio, sao apenas classes); negar a rota remove
+    # a superficie antes que algum arquivo passe a executar no include.
+    RewriteRule ^api/autonomous/ - [F,L,NC]
+
+    # SEGURANCA: classes e arquivos de configuracao dos modulos de IA do admin
+    # sao apenas includes (definem constantes com nomes de chaves de API).
+    # Nao ha motivo para serem alcancaveis por HTTP.
+    RewriteRule ^admin/(?:catalog-optimization|ai-image-studio)/(?:src/|config) - [F,L,NC]
+
     # Aliases operacionais canonicos para SRE/monitoramento externo.
     RewriteRule ^health/?$ health.php [L,QSA]
     RewriteRule ^metrics/?$ metrics.php [L,QSA]
