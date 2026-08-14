@@ -518,7 +518,10 @@ final class AiStudioHuggingFaceImageEditClient extends AiStudioRotatingClient
         $mime = AiStudioHttpClient::detectImageMime($baseImagePath);
 
         $this->withKeyRotation(function (string $key) use ($prompt, $binary, $mime, $destinationPath): void {
-            $url = 'https://api-inference.huggingface.co/models/' . rawurlencode($this->model);
+            // api-inference.huggingface.co foi descontinuado; o substituto
+            // direto e o roteador de Inference Providers, path "hf-inference"
+            // (mesmo contrato de payload do endpoint classico).
+            $url = 'https://router.huggingface.co/hf-inference/models/' . rawurlencode($this->model);
             $dataUri = 'data:' . $mime . ';base64,' . base64_encode($binary);
             [$status, $body, $contentType] = self::requestRaw($url, [
                 'Authorization' => 'Bearer ' . $key,
