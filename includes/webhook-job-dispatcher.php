@@ -29,6 +29,14 @@ function sv_webhook_job_dispatch(array $job): array
 
 function sv_webhook_job_dispatch_mercadopago(array $payload): array
 {
+    // A borda HTTP (api/webhook-mercadopago.php) valida a assinatura x-signature
+    // antes de criar o job. Exigir este marcador impede que um job criado sem
+    // passar pela verificacao altere o status de pagamento de um pedido --
+    // mesma defesa ja aplicada ao InfinitePay.
+    if (($payload['auth_validated'] ?? false) !== true) {
+        return ['success' => false, 'error' => 'auth_not_validated'];
+    }
+
     $dataId = trim((string)($payload['data_id'] ?? ''));
     $topic = strtolower(trim((string)($payload['topic'] ?? '')));
     if ($dataId === '') {

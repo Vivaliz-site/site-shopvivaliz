@@ -1,8 +1,13 @@
 <?php
 declare(strict_types=1);
 
+// SEGURANCA: esta pagina grava em site_settings (links de redes sociais,
+// incluindo o WhatsApp usado pelo botao de atendimento do site) e estava
+// acessivel sem autenticacao -- confirmado em producao com HTTP 200 anonimo.
+require_once __DIR__ . '/../includes/admin-guard.php';
 require_once __DIR__ . '/../config/bootstrap-env.php';
 require_once __DIR__ . '/../includes/site-settings.php';
+require_once __DIR__ . '/../includes/csrf.php';
 
 $message = '';
 $error = '';
@@ -16,6 +21,10 @@ $fields = [
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!sv_csrf_valid('admin-settings', $_POST['csrf_token'] ?? null)) {
+        http_response_code(400);
+        $error = 'Sessao expirada ou token invalido. Recarregue a pagina e tente de novo.';
+    } else {
     try {
         foreach ($fields as $key => $label) {
             $value = trim((string)($_POST[$key] ?? ''));
@@ -25,6 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } catch (Throwable $e) {
         error_log('[AdminSettings] save failed: ' . $e->getMessage());
         $error = 'Não foi possível salvar as configurações agora.';
+    }
     }
 }
 
@@ -116,6 +126,7 @@ function sv_admin_h(string $value): string
         <?php endif; ?>
 
         <form method="post" action="">
+            <?= sv_csrf_input('admin-settings') ?>
             <div class="form-group">
                 <label for="instagram">Instagram</label>
                 <input id="instagram" name="instagram" type="url" value="<?= sv_admin_h($values['instagram']) ?>" placeholder="https://instagram.com/shopvivaliz">

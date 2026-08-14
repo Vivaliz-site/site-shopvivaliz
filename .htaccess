@@ -125,6 +125,13 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^uploads/olist_imagens_site_mapeamento\.csv$ - [F,L,NC]
     RewriteRule \.(?:bak|backup|old|orig|sql|sqlite|log|ini)$ - [F,L,NC]
 
+    # SEGURANCA: api/autonomous/ e maquinaria interna dos agentes (exec() de
+    # ps/df/free/mysqldump, gestao de incidentes). Nada no site consome esses
+    # arquivos por HTTP -- so a CLI, via scripts/autonomous-orchestrator-loop.sh.
+    # Hoje respondem 200 (corpo vazio, sao apenas classes); negar a rota remove
+    # a superficie antes que algum arquivo passe a executar no include.
+    RewriteRule ^api/autonomous/ - [F,L,NC]
+
     # Aliases operacionais canonicos para SRE/monitoramento externo.
     RewriteRule ^health/?$ health.php [L,QSA]
     RewriteRule ^metrics/?$ metrics.php [L,QSA]
