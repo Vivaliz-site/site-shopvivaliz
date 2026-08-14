@@ -99,15 +99,14 @@ function ai_studio_provider_fallback_order(string $preferred): array
 {
     $preferred = ai_studio_normalize_provider($preferred);
     $order = match ($preferred) {
-        'openai' => ['openai', 'google', 'openrouter', 'huggingface', 'groq', 'claude'],
-        'google' => ['google', 'openai', 'openrouter', 'huggingface', 'groq', 'claude'],
-        'claude' => ['openai', 'google', 'openrouter', 'huggingface', 'groq'],
-        'openrouter' => ['openrouter', 'huggingface', 'groq', 'openai', 'google', 'claude'],
-        'groq' => ['groq', 'openrouter', 'huggingface', 'openai', 'google', 'claude'],
-        'huggingface' => ['huggingface', 'openrouter', 'openai', 'google', 'groq', 'claude'],
-        default => ['openai', 'google', 'openrouter', 'huggingface', 'groq'],
+        'openai' => ['openai', 'google', 'openrouter', 'groq', 'claude'],
+        'google' => ['google', 'openai', 'openrouter', 'groq', 'claude'],
+        'claude' => ['openai', 'google', 'openrouter', 'groq'],
+        'openrouter' => ['openrouter', 'groq', 'openai', 'google', 'claude'],
+        'groq' => ['groq', 'openrouter', 'openai', 'google', 'claude'],
+        default => ['openai', 'google', 'openrouter', 'groq'],
     };
-    return array_values(array_unique(array_filter($order, static fn(string $value): bool => in_array($value, ['openai', 'google', 'claude', 'openrouter', 'groq', 'huggingface'], true))));
+    return array_values(array_unique(array_filter($order, static fn(string $value): bool => in_array($value, ['openai', 'google', 'claude', 'openrouter', 'groq'], true))));
 }
 
 function ai_studio_provider_has_key(string $provider): bool
