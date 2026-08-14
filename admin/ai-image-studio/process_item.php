@@ -88,12 +88,13 @@ function ai_studio_image_provider_candidates(string $preferred): array
     // nativo de geração/edição de imagem. Quando escolhido, ele atua como
     // otimizador de prompt e a edição final usa um motor visual disponível.
     $order = match ($preferred) {
-        'openai' => ['openai', 'google', 'openrouter'],
-        'google' => ['google', 'openai', 'openrouter'],
-        'claude' => ['openai', 'google', 'openrouter'],
-        'openrouter' => ['openrouter', 'openai', 'google'],
-        'groq' => ['openrouter', 'openai', 'google'],
-        default => ['openai', 'google', 'openrouter'],
+        'openai' => ['openai', 'google', 'openrouter', 'huggingface'],
+        'google' => ['google', 'openai', 'openrouter', 'huggingface'],
+        'claude' => ['openai', 'google', 'openrouter', 'huggingface'],
+        'openrouter' => ['openrouter', 'huggingface', 'openai', 'google'],
+        'groq' => ['openrouter', 'huggingface', 'openai', 'google'],
+        'huggingface' => ['huggingface', 'openrouter', 'openai', 'google'],
+        default => ['openai', 'google', 'openrouter', 'huggingface'],
     };
     return array_values(array_unique(array_filter($order, static fn(string $provider): bool => ai_studio_provider_has_key($provider))));
 }
@@ -111,6 +112,10 @@ function ai_studio_build_image_client(string $provider, ?string $modelOverride, 
                 'HTTP-Referer' => defined('AI_STUDIO_OPENROUTER_HTTP_REFERER') ? AI_STUDIO_OPENROUTER_HTTP_REFERER : 'https://shopvivaliz.com.br',
                 'X-OpenRouter-Title' => defined('AI_STUDIO_OPENROUTER_APP_TITLE') ? AI_STUDIO_OPENROUTER_APP_TITLE : 'ShopVivaliz',
             ]
+        ),
+        'huggingface' => new AiStudioHuggingFaceImageEditClient(
+            ai_studio_secret_pool('AI_STUDIO_HUGGINGFACE_API_KEY', ['AI_STUDIO_HUGGINGFACE_API_KEY', 'HUGGINGFACE_API_KEY', 'HUGGINGFACE_API_TOKEN', 'HF_TOKEN']),
+            $modelOverride !== null && trim($modelOverride) !== '' ? trim($modelOverride) : (defined('AI_STUDIO_HUGGINGFACE_IMAGE_MODEL') ? AI_STUDIO_HUGGINGFACE_IMAGE_MODEL : 'timbrooks/instruct-pix2pix')
         ),
         'groq' => throw new AiStudioApiException('Groq não possui saída de imagem direta; use-o como otimizador de prompt.'),
         default => throw new AiStudioApiException("Provider de imagem invalido: {$provider}."),
@@ -409,7 +414,7 @@ function ai_studio_process_item(
     $provider = ai_studio_normalize_provider($provider);
     $targetChannel = strtolower(trim($targetChannel));
     $profiles = ai_studio_channel_profiles();
-    if (!in_array($provider, ['openai', 'google', 'claude', 'openrouter', 'groq'], true)) {
+    if (!in_array($provider, ['openai', 'google', 'claude', 'openrouter', 'groq', 'huggingface'], true)) {
         return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'results' => [], 'error' => "Provider invalido: '{$provider}'."];
     }
     if (!isset($profiles[$targetChannel])) {

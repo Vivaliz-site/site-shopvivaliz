@@ -130,8 +130,8 @@ try {
 
     $processSource = file_get_contents(__DIR__ . '/../admin/ai-image-studio/process_item.php');
     iip_assert(is_string($processSource), 'process_item source must be readable');
-    iip_assert(str_contains($processSource, "'groq' => ['openrouter', 'openai', 'google']"), 'Groq real image flow must end in supported image-output engines');
-    iip_assert(str_contains($processSource, "'claude' => ['openai', 'google', 'openrouter']"), 'Claude real image flow must end in supported image-output engines');
+    iip_assert(str_contains($processSource, "'groq' => ['openrouter', 'huggingface', 'openai', 'google']"), 'Groq real image flow must end in supported image-output engines');
+    iip_assert(str_contains($processSource, "'claude' => ['openai', 'google', 'openrouter', 'huggingface']"), 'Claude real image flow must end in supported image-output engines');
     iip_assert(str_contains($processSource, "'groq' => throw new AiStudioApiException"), 'Groq must not expose a direct image client');
     iip_assert(str_contains($processSource, "getenv('AI_STUDIO_REFERENCE_FALLBACK') ?: '0'"), 'reference fallback must be disabled unless explicitly enabled');
     iip_assert(str_contains($processSource, 'capacityBlockedProviders'), 'capacity failure must block repeated image attempts in a job');
