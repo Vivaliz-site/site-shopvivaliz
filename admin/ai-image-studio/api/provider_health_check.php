@@ -140,7 +140,7 @@ foreach ($pools as $provider => $keys) {
     ];
 }
 
-$imageEditors = ['openai', 'google', 'openrouter'];
+$imageEditors = ['openai', 'google', 'openrouter', 'huggingface'];
 $hasEditor = false;
 foreach ($imageEditors as $imageEditor) {
     if (($results[$imageEditor]['ok'] ?? false) === true) {
@@ -151,7 +151,7 @@ foreach ($imageEditors as $imageEditor) {
 foreach (['claude', 'groq'] as $optimizer) {
     if (($results[$optimizer]['ok'] ?? false) === true && !$hasEditor) {
         $results[$optimizer]['ok'] = false;
-        $results[$optimizer]['detail'] = 'Autenticação válida para otimizar prompt, mas nenhum editor de imagem (OpenAI, Gemini ou OpenRouter) está apto para concluir os pixels.';
+        $results[$optimizer]['detail'] = 'Autenticação válida para otimizar prompt, mas nenhum editor de imagem (OpenAI, Gemini, OpenRouter ou Hugging Face) está apto para concluir os pixels.';
     }
 }
 
