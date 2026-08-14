@@ -1,0 +1,152 @@
+/* Home mobile corrections v1 — rotacao de categorias, hierarquia e UI flutuante. */
+@media (max-width: 768px) {
+  html.sv-home-page body.sv-page-home {
+    overflow-x: clip !important;
+    padding-bottom: calc(86px + env(safe-area-inset-bottom)) !important;
+  }
+
+  html.sv-home-page body.sv-page-home header.sv-navbar {
+    padding: 5px 0 !important;
+  }
+  html.sv-home-page body.sv-page-home header.sv-navbar .nav-inner {
+    min-height: 50px !important;
+    padding-inline: 10px !important;
+  }
+  html.sv-home-page body.sv-page-home header.sv-navbar .brand-link {
+    padding: 4px 9px !important;
+  }
+  html.sv-home-page body.sv-page-home header.sv-navbar .brand-logo-img {
+    height: 34px !important;
+    max-width: 160px !important;
+    object-fit: contain !important;
+  }
+  html.sv-home-page body.sv-page-home header.sv-navbar .menu-toggle {
+    width: 42px !important;
+    height: 42px !important;
+  }
+
+  /* O ornamento lateral antigo cruza o subtitulo em telas estreitas. */
+  html.sv-home-page body.sv-page-home .home-categories .section-heading::before,
+  html.sv-home-page body.sv-page-home .home-categories .section-heading::after,
+  html.sv-home-page body.sv-page-home .home-products .section-heading::before,
+  html.sv-home-page body.sv-page-home .home-products .section-heading::after,
+  html.sv-home-page body.sv-page-home .home-section-intro::before,
+  html.sv-home-page body.sv-page-home .home-section-intro::after,
+  html.sv-home-page body.sv-page-home .section-header-container::before,
+  html.sv-home-page body.sv-page-home .section-header-container::after {
+    content: none !important;
+    display: none !important;
+  }
+
+  html.sv-home-page body.sv-page-home .home-categories .section-heading,
+  html.sv-home-page body.sv-page-home .home-products .section-heading {
+    position: relative !important;
+    display: grid !important;
+    justify-items: center !important;
+    gap: 6px !important;
+    width: min(100%, 540px) !important;
+    margin: 0 auto 14px !important;
+    padding: 0 16px !important;
+    text-align: center !important;
+  }
+  html.sv-home-page body.sv-page-home .home-categories .section-heading h2,
+  html.sv-home-page body.sv-page-home .home-products .section-heading h2 {
+    max-width: 14ch !important;
+    margin: 0 auto !important;
+    font-size: clamp(25px, 7.4vw, 31px) !important;
+    line-height: 1.04 !important;
+    text-wrap: balance !important;
+  }
+  html.sv-home-page body.sv-page-home .home-categories .section-heading p,
+  html.sv-home-page body.sv-page-home .home-products .section-heading p {
+    position: relative !important;
+    z-index: 2 !important;
+    max-width: 34ch !important;
+    margin: 0 auto !important;
+    font-size: 13px !important;
+    line-height: 1.38 !important;
+    text-wrap: pretty !important;
+  }
+
+  /* Cards menores, toque confiavel e transicao de imagem sem layout shift. */
+  html.sv-home-page body.sv-page-home .categories-track .category-slide {
+    flex: 0 0 min(43vw, 170px) !important;
+    width: min(43vw, 170px) !important;
+    min-width: min(43vw, 170px) !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+  }
+  html.sv-home-page body.sv-page-home .category-slide-image-wrapper {
+    position: relative !important;
+    overflow: hidden !important;
+    background: #f8fafc !important;
+    contain: paint !important;
+  }
+  html.sv-home-page body.sv-page-home .category-slide-image-wrapper img {
+    display: block !important;
+    width: 100% !important;
+    object-fit: contain !important;
+    object-position: center !important;
+    will-change: opacity, transform;
+  }
+  html.sv-home-page body.sv-page-home .category-slide strong {
+    min-height: 2.35em !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+    line-height: 1.18 !important;
+  }
+
+  /* WhatsApp e Liz dividem a mesma linha acima do menu sem cobrir conteudo. */
+  html.sv-home-page body.sv-page-home .sv-support-dock {
+    left: 12px !important;
+    bottom: calc(92px + env(safe-area-inset-bottom)) !important;
+    gap: 0 !important;
+  }
+  html.sv-home-page body.sv-page-home .sv-support-button {
+    width: 48px !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    padding: 0 !important;
+  }
+  html.sv-home-page body.sv-page-home #sv-liz-launcher {
+    right: 12px !important;
+    bottom: calc(92px + env(safe-area-inset-bottom)) !important;
+    width: 54px !important;
+    height: 54px !important;
+  }
+  html.sv-home-page body.sv-page-home #sv-liz-bubble {
+    right: 76px !important;
+    bottom: calc(98px + env(safe-area-inset-bottom)) !important;
+    max-width: min(210px, calc(100vw - 150px)) !important;
+  }
+  html.sv-home-page body.sv-page-home .sv-mobile-nav-bar {
+    bottom: max(8px, env(safe-area-inset-bottom)) !important;
+  }
+
+  /* Se o consentimento estiver visivel, ele tem prioridade sobre atalhos. */
+  html.sv-home-page body.sv-page-home:has(#sv-privacy-consent) .sv-support-dock,
+  html.sv-home-page body.sv-page-home:has(#sv-privacy-consent) #sv-liz-launcher,
+  html.sv-home-page body.sv-page-home:has(#sv-privacy-consent) #sv-liz-bubble,
+  html.sv-home-page body.sv-page-home:has(#sv-privacy-consent) .sv-mobile-nav-bar {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+}
+
+@media (max-width: 430px) {
+  html.sv-home-page body.sv-page-home .home-categories,
+  html.sv-home-page body.sv-page-home .home-products {
+    padding-block: 16px !important;
+  }
+  html.sv-home-page body.sv-page-home .home-categories + .home-products {
+    padding-top: 8px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .category-slide-image-wrapper img.sv-auto-carousel-image {
+    transition: none !important;
+  }
+}
