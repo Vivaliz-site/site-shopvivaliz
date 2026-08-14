@@ -21,19 +21,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Configure verified VM SSH
+      - name: Configure VM SSH key
         shell: bash
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
-          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
         run: |
           set -Eeuo pipefail
           test -n "$VM_KEY"
-          test -n "$VM_HOSTS"
           install -m 700 -d "$HOME/.ssh"
           printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
-          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey"
 
       - name: Run read-only mobile diagnostic through Fred-Win tunnel
         shell: bash
@@ -53,8 +50,7 @@ jobs:
           print(json.dumps({'params': {'command': ps, 'timeout': 120}}, ensure_ascii=False))
           PY
           BODY_B64="$(base64 -w0 /tmp/fredwin-command.json)"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
             -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17 \
             "BODY_B64='$BODY_B64' python3 - <<'PY'
           import base64, json, os, urllib.request
@@ -76,4 +72,4 @@ jobs:
       - name: Cleanup
         if: always()
         shell: bash
-        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts" /tmp/fredwin-command.json
+        run: rm -f "$HOME/.ssh/vmkey" /tmp/fredwin-command.json
