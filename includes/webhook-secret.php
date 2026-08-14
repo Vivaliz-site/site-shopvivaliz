@@ -26,20 +26,34 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/runtime-env-reader.php';
 
-function sv_webhook_secret_expected(): string
+/** @return list<string> */
+function sv_webhook_secrets_expected(string $provider = ''): array
 {
-    $secret = svre_value(['OLIST_WEBHOOK_SECRET', 'TINY_WEBHOOK_SECRET', 'SHOPVIVALIZ_AGENT_KEY']);
-    if ($secret !== '') {
-        return $secret;
+    $keys = [];
+    if (stripos($provider, 'tiny') !== false) {
+        $keys = ['TINY_WEBHOOK_SECRET', 'OLIST_WEBHOOK_SECRET', 'SHOPVIVALIZ_AGENT_KEY'];
+    } else {
+        $keys = ['OLIST_WEBHOOK_SECRET', 'TINY_WEBHOOK_SECRET', 'SHOPVIVALIZ_AGENT_KEY'];
     }
 
-    foreach (['OLIST_WEBHOOK_SECRET', 'TINY_WEBHOOK_SECRET', 'SHOPVIVALIZ_AGENT_KEY'] as $name) {
-        $value = getenv($name);
-        if (is_string($value) && trim($value) !== '') {
-            return trim($value);
+    $secrets = [];
+    foreach ($keys as $name) {
+        $val = svre_value($name);
+        if ($val === '') {
+            $val = (string)(getenv($name) ?: '');
+        }
+        $val = trim($val);
+        if ($val !== '' && !in_array($val, $secrets, true)) {
+            $secrets[] = $val;
         }
     }
-    return '';
+    return $secrets;
+}
+
+function sv_webhook_secret_expected(string $provider = ''): string
+{
+    $secrets = sv_webhook_secrets_expected($provider);
+    return $secrets[0] ?? '';
 }
 
 function sv_webhook_secret_provided(): string
@@ -55,13 +69,24 @@ function sv_webhook_secret_provided(): string
 }
 
 /** A requisicao apresentou o segredo correto? */
-function sv_webhook_secret_valid(): bool
+function sv_webhook_secret_valid(string $provider = ''): bool
 {
-    $expected = sv_webhook_secret_expected();
-    if ($expected === '') {
+    $provided = sv_webhook_secret_provided();
+    if ($provided === '') {
         return false;
     }
-    return hash_equals($expected, sv_webhook_secret_provided());
+
+    $secrets = sv_webhook_secrets_expected($provider);
+    if ($secrets === []) {
+        return false;
+    }
+
+    foreach ($secrets as $expected) {
+        if (hash_equals($expected, $provided)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**
@@ -73,11 +98,11 @@ function sv_webhook_secret_valid(): bool
  */
 function sv_webhook_secret_gate(string $provider, bool $destructive = false): bool
 {
-    if (sv_webhook_secret_valid()) {
+    if (sv_webhook_secret_valid($provider)) {
         return true;
     }
 
-    $expected = sv_webhook_secret_expected();
+    $expected = sv_webhook_secret_expected($provider);
     $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '?');
 
     if ($expected === '' && !$destructive) {
