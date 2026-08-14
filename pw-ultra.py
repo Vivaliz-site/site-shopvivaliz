@@ -159,6 +159,7 @@ async def main():
             # ===== [5] CHECKOUT =====
             log_msg("[5/12] Iniciando checkout...")
             seletores_checkout = [
+                "a:has-text('Finalizar pedido')",
                 "button:has-text('Finalizar Compra')",
                 "button:has-text('Comprar')",
                 "button:has-text('Prosseguir')",
@@ -221,7 +222,7 @@ async def main():
             ]
 
             for selector in seletores_frete:
-                if await try_click(page, selector, timeout=10000, retries=2):
+                if await try_click(page, selector, timeout=2000, retries=1):
                     log_msg("[OK] Frete calculado")
                     await page.wait_for_timeout(3000)
                     break
@@ -238,7 +239,7 @@ async def main():
             ]
 
             for selector in seletores_proximo:
-                if await try_click(page, selector, timeout=10000, retries=2):
+                if await try_click(page, selector, timeout=2000, retries=1):
                     log_msg("[OK] Continuou para proxima etapa")
                     await page.wait_for_load_state("domcontentloaded")
                     await page.wait_for_timeout(2000)
@@ -270,6 +271,7 @@ async def main():
             # ===== [10] GERAR BOLETO =====
             log_msg("[10/12] Gerando boleto...")
             seletores_gerar = [
+                "button:has-text('Confirmar pedido')",
                 "button:has-text('Gerar Boleto')",
                 "button:has-text('Confirmar Pedido')",
                 "button:has-text('Finalizar')",

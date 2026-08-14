@@ -32,7 +32,7 @@ function sv_blog_make_article(
         'updated_at' => '2026-07-25',
         'author' => 'Equipe ShopVivaliz',
         'reading_time' => $readingTime,
-        'image' => $image,
+        'image' => '/public/assets/blog/' . $slug . '.jpg',
         'image_alt' => $imageAlt,
         'meta_title' => $metaTitle,
         'meta_description' => $metaDescription,

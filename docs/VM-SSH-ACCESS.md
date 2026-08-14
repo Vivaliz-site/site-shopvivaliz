@@ -45,6 +45,31 @@ para onde a nova privada foi salva.
   pedido explicitamente numa sessão anterior e recusado por esse motivo; o
   Secret do GitHub Actions foi a alternativa acordada com o dono do negócio.
 
+## 🔐 Setup GitHub Secrets (Adicionar/Atualizar Chave)
+
+### Como Adicionar a Chave SSH ao GitHub Secrets
+
+**Via Web (Recomendado):**
+1. Acesse: https://github.com/Vivaliz-site/site-shopvivaliz/settings/secrets/actions
+2. Clique em **New repository secret**
+3. **Name:** `SHOPVIVALIZ_VM_SSH_KEY` (ou `SSH_KEY_PROD_VM` se preferir)
+4. **Value:** Cole o CONTEÚDO COMPLETO da chave privada (incluindo `-----BEGIN RSA PRIVATE KEY-----` e `-----END RSA PRIVATE KEY-----`)
+5. Clique **Add secret**
+
+**Via CLI (GitHub CLI):**
+```bash
+gh secret set SHOPVIVALIZ_VM_SSH_KEY < C:\Users\FRED\Downloads\ssh-key-2026-07-04.key
+```
+
+**Verificar se Secret está configurado:**
+```bash
+gh secret list
+```
+
+⚠️ **IMPORTANTE:** A chave privada **nunca** deve ser commitada no repositório. Ela só deve existir em:
+- GitHub Secrets (para uso em workflows automáticos)
+- Máquina local do Fred (para acesso direto via terminal)
+
 ### Como usar o Secret (dentro de um GitHub Actions workflow)
 
 O Secret só pode ser lido de dentro de um workflow do GitHub Actions (nunca
@@ -102,6 +127,69 @@ Para fixar produção em um branch/SHA específico e impedir retorno automático
 ```text
 /home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref
 ```
+
+## 🤖 Prompt Padrão para Agentes Autônomos
+
+Use este prompt quando quiser que um agente Claude acesse a VM para executar uma tarefa:
+
+```
+Você tem acesso à VM de produção ShopVivaliz via SSH para completar esta tarefa:
+
+**Credenciais e Ambiente:**
+- Host: 137.131.156.17
+- Usuário: ubuntu
+- Chave SSH: Configurada em GitHub Secrets como SHOPVIVALIZ_VM_SSH_KEY
+- Diretório de deploy ativo: /home/ubuntu/shopvivaliz-deploy/
+- Diretório de código: /home/ubuntu/shopvivaliz-deploy/current/
+- Environment vars (produção): /home/ubuntu/shopvivaliz-deploy/shared/.env
+
+**Estrutura de Diretórios:**
+```
+/home/ubuntu/
+├── shopvivaliz-deploy/        ← Deployment ativo (Apache aponta para current/)
+│   ├── repo/                  ← Clone git sincronizado
+│   ├── releases/              ← Releases imutáveis (timestamped)
+│   ├── current/               ← Symlink para release ativa
+│   └── shared/.env            ← Environment real (NUNCA sobrescrever!)
+│
+└── site-shopvivaliz/          ← Checkout separado para daemons
+    ├── .env                   ← Environment para daemons
+    └── logs/                  ← Arquivos de log
+```
+
+**Tarefa:** [DESCRIÇÃO AQUI]
+
+**Passos para executar:**
+1. Conecte via SSH:
+   ssh -i ~/.ssh/id_rsa ubuntu@137.131.156.17
+
+2. Navegue para o diretório apropriado:
+   - Deploy ativo: cd /home/ubuntu/shopvivaliz-deploy/current
+   - Daemons: cd /home/ubuntu/site-shopvivaliz
+
+3. Execute a tarefa: [COMANDO AQUI]
+
+4. Retorne:
+   - Output completo do comando
+   - Status final (sucesso/falha)
+   - Logs relevantes se houver erro
+   - Tempo de execução
+
+**Comandos Úteis:**
+- Ver status do deploy: ls -lha /home/ubuntu/shopvivaliz-deploy/current
+- Ver logs: tail -f /home/ubuntu/site-shopvivaliz/logs/*.log
+- Forçar deploy imediato: sudo /usr/local/lib/shopvivaliz/deploy-production.sh
+- Reiniciar serviços: sudo systemctl restart shopvivaliz-24x7
+- Verificar espaço: df -h
+
+**Cuidados:**
+- NÃO edite /home/ubuntu/shopvivaliz-deploy/shared/.env (ambiente real!)
+- Use sudo apenas para operações de deploy/serviços
+- Confirme qualquer comando potencialmente destrutivo antes de executar
+- Verifique logs após qualquer mudança
+```
+
+---
 
 ## Histórico / troubleshooting já mapeado
 

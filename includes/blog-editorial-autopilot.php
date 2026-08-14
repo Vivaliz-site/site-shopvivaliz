@@ -114,7 +114,7 @@ function sv_blog_editorial_build_article(string $title, string $weekdayKey): arr
         'title' => $title,
         'excerpt' => $excerpt,
         'category' => $profile['category'],
-        'image_url' => $profile['image_url'],
+        'image_url' => '/public/assets/blog/' . $slug . '.jpg',
         'image_alt' => $title,
         'content' => sv_blog_editorial_sections($title, $profile, $weekdayKey),
         'faq' => sv_blog_editorial_faq($title, $profile, $weekdayKey),

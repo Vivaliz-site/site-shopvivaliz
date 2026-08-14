@@ -676,6 +676,12 @@ if ($notFound) {
                         </div>
                     <?php endif; ?>
                     <span class="product-price-label"><?= sv_esc($priceLabel) ?></span>
+                    <?php if ($priceRaw > 0): ?>
+                        <?php $pixPrice = $priceRaw * 0.95; ?>
+                        <div class="pix-discount-badge" style="display:inline-flex; align-items:center; gap:6px; background:#e6f4ea; color:#137333; padding:6px 12px; border-radius:8px; font-weight:700; font-size:14px; margin-top:8px; border:1px solid #ceebd5;">
+                            <span>⚡ ou R$ <?= number_format($pixPrice, 2, ',', '.') ?> no PIX (5% OFF)</span>
+                        </div>
+                    <?php endif; ?>
                     <?php if ($priceRaw === 0.0): ?>
                         <span class="price-hint">Fale com a equipe para confirmar valor e disponibilidade</span>
                     <?php elseif ($stockRaw <= 0): ?>
