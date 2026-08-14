@@ -47,6 +47,7 @@ function ai_studio_normalize_provider(string $provider): string
         'claude' => 'claude',
         'groq', 'qrope' => 'groq',
         'openrouter' => 'openrouter',
+        'huggingface', 'hugging_face', 'hf' => 'huggingface',
         default => strtolower(trim($provider)),
     };
 }
