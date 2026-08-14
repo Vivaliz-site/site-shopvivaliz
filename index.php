@@ -342,6 +342,16 @@ function sv_home_contact_url(array $product): string
 
 function sv_home_featured_products(int $limit = 8): array
 {
+    $apcu = function_exists('apcu_fetch') && function_exists('apcu_store');
+    $apcuKey = 'sv_home_featured_products_v2_' . $limit;
+    if ($apcu) {
+        $ok = false;
+        $stored = apcu_fetch($apcuKey, $ok);
+        if ($ok && is_array($stored)) {
+            return $stored;
+        }
+    }
+
     $products = [];
     $salesRank = sv_home_sales_rank_map();
     foreach (sv_home_catalog_source_rows() as $row) {
@@ -403,7 +413,11 @@ function sv_home_featured_products(int $limit = 8): array
         return (float)($b['price'] ?? 0) <=> (float)($a['price'] ?? 0);
     });
 
-    return array_slice($products, 0, $limit);
+    $sliced = array_slice($products, 0, $limit);
+    if ($apcu) {
+        apcu_store($apcuKey, $sliced, 60);
+    }
+    return $sliced;
 }
 
 function sv_home_catalog_count(): int
@@ -478,6 +492,16 @@ function sv_home_category_icon(string $category): string
 
 function sv_home_top_categories(int $limit = 8): array
 {
+    $apcu = function_exists('apcu_fetch') && function_exists('apcu_store');
+    $apcuKey = 'sv_home_top_categories_v2_' . $limit;
+    if ($apcu) {
+        $ok = false;
+        $stored = apcu_fetch($apcuKey, $ok);
+        if ($ok && is_array($stored)) {
+            return $stored;
+        }
+    }
+
     $counts = [];
     $categoryImages = [];
     foreach (sv_home_catalog_source_rows() as $row) {
@@ -548,7 +572,11 @@ function sv_home_top_categories(int $limit = 8): array
         ];
     }
 
-    return array_slice($result, 0, $limit);
+    $sliced = array_slice($result, 0, $limit);
+    if ($apcu) {
+        apcu_store($apcuKey, $sliced, 60);
+    }
+    return $sliced;
 }
 
 $layoutLoaderFile = __DIR__ . '/includes/layout-loader.php';
