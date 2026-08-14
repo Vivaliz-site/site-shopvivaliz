@@ -16,11 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
       - name: Configure VM SSH key
         shell: bash
         env:
@@ -36,16 +31,16 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          SCRIPT_B64="$(base64 -w0 tests/fredwin-home-mobile-diagnostic.py)"
-          python3 - "$SCRIPT_B64" <<'PY' > /tmp/fredwin-command.json
-          import json, sys
-          script_b64 = sys.argv[1]
+          python3 <<'PY' > /tmp/fredwin-command.json
+          import json
           ps = (
               "powershell -NoProfile -ExecutionPolicy Bypass -Command \""
               "$ErrorActionPreference='Stop'; "
-              "$tmp=Join-Path $env:TEMP ('sv-home-diag-' + [guid]::NewGuid().ToString('N') + '.py'); "
-              f"[IO.File]::WriteAllBytes($tmp,[Convert]::FromBase64String('{script_b64}')); "
-              "try { py -3 $tmp } finally { Remove-Item -Force $tmp -ErrorAction SilentlyContinue }\""
+              "Set-Location 'C:\\site-shopvivaliz'; "
+              "git fetch --quiet origin 'diag/fredwin-home-mobile-20260814'; "
+              "if($LASTEXITCODE -ne 0){ throw 'git_fetch_failed' }; "
+              "git show 'FETCH_HEAD:tests/fredwin-home-mobile-diagnostic.py' | py -3 -; "
+              "if($LASTEXITCODE -ne 0){ throw 'diagnostic_failed' }\""
           )
           print(json.dumps({'params': {'command': ps, 'timeout': 120}}, ensure_ascii=False))
           PY
