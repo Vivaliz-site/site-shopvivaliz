@@ -4,6 +4,10 @@
  * Alterna a galeria da página do produto e as imagens dos cards a cada três
  * segundos. A rotação pausa enquanto o cliente interage com o conteúdo e só
  * mantém timers para elementos visíveis.
+ *
+ * Os cards de categoria são controlados exclusivamente por
+ * category-real-images-v52.js, que conhece o vínculo categoria/produto e evita
+ * que dois temporizadores disputem o mesmo elemento.
  */
 (function () {
   'use strict';
@@ -188,7 +192,7 @@
   }
 
   function initProductCardCarousels() {
-    document.querySelectorAll('.product-image[data-images], .category-slide-image-wrapper[data-images]').forEach(function (element) {
+    document.querySelectorAll('.product-image[data-images]').forEach(function (element) {
       if (carousels.has(element)) return;
 
       var image = element.querySelector('img');
