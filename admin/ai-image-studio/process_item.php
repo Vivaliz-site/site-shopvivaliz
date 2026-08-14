@@ -112,10 +112,6 @@ function ai_studio_build_image_client(string $provider, ?string $modelOverride, 
                 'X-OpenRouter-Title' => defined('AI_STUDIO_OPENROUTER_APP_TITLE') ? AI_STUDIO_OPENROUTER_APP_TITLE : 'ShopVivaliz',
             ]
         ),
-        'huggingface' => new AiStudioHuggingFaceImageEditClient(
-            ai_studio_secret_pool('AI_STUDIO_HUGGINGFACE_API_KEY', ['AI_STUDIO_HUGGINGFACE_API_KEY', 'HUGGINGFACE_API_KEY', 'HUGGINGFACE_API_TOKEN', 'HF_TOKEN']),
-            $modelOverride !== null && trim($modelOverride) !== '' ? trim($modelOverride) : (defined('AI_STUDIO_HUGGINGFACE_IMAGE_MODEL') ? AI_STUDIO_HUGGINGFACE_IMAGE_MODEL : 'timbrooks/instruct-pix2pix')
-        ),
         'groq' => throw new AiStudioApiException('Groq não possui saída de imagem direta; use-o como otimizador de prompt.'),
         default => throw new AiStudioApiException("Provider de imagem invalido: {$provider}."),
     };
