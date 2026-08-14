@@ -94,7 +94,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && ($_GET['preview'] ?? '') 
     $previewPageSize = max(25, min(500, $rawPageSize));
     $previewPage = max(1, (int)($_GET['page'] ?? 1));
 
-    if (!in_array($previewProvider, ['openai', 'google', 'claude', 'openrouter', 'groq'], true)) {
+    if (!in_array($previewProvider, ['openai', 'google', 'claude', 'openrouter', 'groq', 'huggingface'], true)) {
         $batchError = 'Selecione um provedor valido.';
     } elseif (!isset($channelProfiles[$previewChannel])) {
         $batchError = 'Selecione um marketplace valido.';
@@ -148,7 +148,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['run_batch'
     $productIds = array_values(array_unique(array_filter(array_map('intval', $selectedProducts), static fn(int $value): bool => $value > 0)));
     $imageTypesByProduct = (array)($_POST['image_types'] ?? []);
 
-    if (!in_array($provider, ['openai', 'google', 'claude', 'openrouter', 'groq'], true)) {
+    if (!in_array($provider, ['openai', 'google', 'claude', 'openrouter', 'groq', 'huggingface'], true)) {
         $batchError = 'Selecione um provedor valido.';
     } elseif (!isset($channelProfiles[$targetChannel])) {
         $batchError = 'Marketplace de destino invalido.';
