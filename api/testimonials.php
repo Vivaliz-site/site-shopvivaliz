@@ -26,10 +26,10 @@ function sv_testimonials_moderate_pending(TestimonialsRepository $repo, LizTesti
 }
 
 $repo = new TestimonialsRepository();
-$moderator = new LizTestimonialModerator();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 if ($method === 'GET') {
-    sv_testimonials_moderate_pending($repo, $moderator, 10);
+    // Backfill rápido das avaliações antigas: usa as mesmas regras da Liz sem depender de chamada externa.
+    sv_testimonials_moderate_pending($repo, new LizTestimonialModerator(false), 50);
     echo json_encode(['ok' => true, 'items' => $repo->approved(12)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
@@ -62,6 +62,7 @@ if (mb_strlen($name) < 2 || mb_strlen($name) > 80 || mb_strlen($message) < 20 ||
     exit;
 }
 try {
+    $moderator = new LizTestimonialModerator(true);
     $decision = $moderator->moderate($input);
     $row = $repo->submit($input, $decision);
     $_SESSION['testimonial_last_submit'] = time();
