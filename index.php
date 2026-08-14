@@ -104,6 +104,22 @@ function sv_home_pick_best_image(array $row): string
 
 function sv_home_catalog_source_rows(): array
 {
+    static $localCache = null;
+    if ($localCache !== null) {
+        return $localCache;
+    }
+
+    $apcu = function_exists('apcu_fetch') && function_exists('apcu_store');
+    $apcuKey = 'sv_home_catalog_source_rows_v1';
+    if ($apcu) {
+        $ok = false;
+        $stored = apcu_fetch($apcuKey, $ok);
+        if ($ok && is_array($stored)) {
+            $localCache = $stored;
+            return $localCache;
+        }
+    }
+
     $runtime = svcr_products();
     $csvPath = __DIR__ . '/uploads/olist_imagens_site_mapeamento.csv';
 
@@ -153,10 +169,21 @@ function sv_home_catalog_source_rows(): array
             $row['images'] = array_values(array_unique(array_filter(array_merge($existing, $mapped['images']))));
         }
         unset($row);
-        return $runtime;
+        
+        $localCache = $runtime;
+        if ($apcu) {
+            apcu_store($apcuKey, $localCache, 60);
+        }
+        return $localCache;
     }
 
-    if ($runtime !== []) return $runtime;
+    if ($runtime !== []) {
+        $localCache = $runtime;
+        if ($apcu) {
+            apcu_store($apcuKey, $localCache, 60);
+        }
+        return $localCache;
+    }
 
     $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';
     if (is_file($jsonPath) && is_readable($jsonPath)) {
