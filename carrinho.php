@@ -88,10 +88,18 @@ header('Content-Type: text/html; charset=UTF-8');
                 <svg viewBox="0 0 24 24" style="width: 28px; height: 28px; flex-shrink: 0; fill: #35c759;"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
                 <div><strong>Compra 100% Segura</strong><br><span>Ambiente criptografado com Checkout PIX rápido.</span></div>
             </div>
-            <div style="margin-top:20px;display:grid;gap:6px">
-                <div style="font-size:12px;color:var(--muted);font-weight:600">🔒 Compra segura</div>
-                <div style="font-size:12px;color:var(--muted);font-weight:600">🚚 Envio para todo Brasil</div>
-                <div style="font-size:12px;color:var(--muted);font-weight:600">↩️ 7 dias corridos para troca/devolução</div>
+            <div style="margin-top:16px;padding:12px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;display:grid;gap:8px">
+                <div style="font-size:12px;color:var(--ink);font-weight:700">💳 Formas de pagamento aceitas:</div>
+                <div style="font-size:12px;color:var(--muted);line-height:1.4">
+                    ⚡ <strong>PIX com 5% de desconto</strong><br>
+                    💳 <strong>Cartão de Crédito</strong> em até 6x sem juros<br>
+                    📄 <strong>Boleto Bancário</strong> com confirmação rápida
+                </div>
+            </div>
+            <div style="margin-top:16px;display:grid;gap:6px">
+                <div style="font-size:12px;color:var(--muted);font-weight:600">🔒 Compra segura e dados protegidos</div>
+                <div style="font-size:12px;color:var(--muted);font-weight:600">🚚 Envio rápido para todo Brasil</div>
+                <div style="font-size:12px;color:var(--muted);font-weight:600">↩️ 7 dias corridos para troca ou devolução</div>
             </div>
         </aside>
     </div>
