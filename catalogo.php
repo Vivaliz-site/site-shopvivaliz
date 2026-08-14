@@ -579,7 +579,18 @@ $svNavCurrent = 'catalogo';
                             <div class="product-category"><?= sv_catalog_esc($product['category']) ?></div>
                         <?php endif; ?>
                         <h2><?= sv_catalog_esc($product['name']) ?></h2>
-                        <div class="product-price"><?= sv_catalog_esc(sv_catalog_money((float)$product['price'])) ?></div>
+                        <div class="product-price-wrap" style="display:flex; flex-direction:column; gap:2px; margin: 6px 0;">
+                            <div class="product-price" style="font-size: 1.15rem; font-weight: 800; color: #0f172a;"><?= sv_catalog_esc(sv_catalog_money((float)$product['price'])) ?></div>
+                            <?php if ((float)$product['price'] > 0): ?>
+                                <?php $pixCardPrice = (float)$product['price'] * 0.95; ?>
+                                <div style="font-size: 11px; font-weight: 700; color: #059669; display: flex; align-items: center; gap: 4px;">
+                                    <span>⚡ R$ <?= number_format($pixCardPrice, 2, ',', '.') ?> no PIX (5% OFF)</span>
+                                </div>
+                                <div style="font-size: 11px; color: #64748b; font-weight: 600;">
+                                    <span>ou 3x de R$ <?= number_format((float)$product['price'] / 3, 2, ',', '.') ?> sem juros</span>
+                                </div>
+                            <?php endif; ?>
+                        </div>
                         <?php if (!empty($product['tags'])): ?>
                             <div class="product-tags">
                                 <?php foreach (array_slice($product['tags'], 0, 3) as $tag): ?>

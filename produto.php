@@ -742,6 +742,17 @@ if ($notFound) {
                         <button class="btn btn-primary btn-large btn-cta btn-premium main-buy-button" type="button" id="buy-now" data-sku="<?= sv_esc($sku) ?>" data-product-id="<?= sv_esc($olistId !== '' ? $olistId : $sku) ?>" data-add-to-cart="1" style="width: 100%; font-size: 1.2rem;">
                             🛒 COMPRAR AGORA
                         </button>
+                        <!-- Calculador de Frete no Produto -->
+                        <div class="product-frete-box" style="margin-top: 18px; padding: 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;">
+                            <label for="p-frete-cep" style="font-size: 12px; font-weight: 700; color: #475569; display: block; margin-bottom: 6px;">
+                                🚚 Calcular frete e prazo de entrega
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="p-frete-cep" placeholder="Digite seu CEP" maxlength="9" inputmode="numeric" style="flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 13px;">
+                                <button type="button" id="p-frete-btn" class="btn btn-secondary" style="padding: 8px 14px; font-size: 13px; font-weight: 700; white-space: nowrap;">Calcular</button>
+                            </div>
+                            <div id="p-frete-result" style="font-size: 12px; color: #475569; margin-top: 8px; line-height: 1.4;"></div>
+                        </div>
                         <div class="trust-badges-container" style="display: flex; justify-content: space-between; margin-top: 15px; gap: 10px; flex-wrap: wrap;">
                             <div class="trust-badge-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #64748b;">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
@@ -789,9 +800,30 @@ if ($notFound) {
                         <span style="color: #64748b; font-size: 13px;">(Baseado em compras verificadas)</span>
                     </div>
                 </div>
-                <button type="button" onclick="alert('Obrigado! Formulário de avaliação enviado.')" style="background: #edf6ff; color: #0b4f88; border: 1px solid rgba(11,79,136,0.2); padding: 10px 18px; border-radius: 12px; font-weight: 700; cursor: pointer;">Escrever Avaliação</button>
+                <button type="button" id="btn-open-review" style="background: #edf6ff; color: #0b4f88; border: 1px solid rgba(11,79,136,0.2); padding: 10px 18px; border-radius: 12px; font-weight: 700; cursor: pointer;">Escrever Avaliação</button>
             </div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+            <!-- Interactive Review Submission Box -->
+            <div id="review-form-container" style="display:none; margin-bottom: 20px; padding: 18px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 14px;">
+                <h4 style="margin: 0 0 10px 0; color: #0f172a;">Deixe sua avaliação sobre <?= sv_esc($name) ?></h4>
+                <form id="frm-submit-review" style="display: grid; gap: 10px;">
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <input type="text" id="rev-name" placeholder="Seu nome" required style="flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                        <input type="text" id="rev-city" placeholder="Sua cidade/UF" required style="flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                        <select id="rev-rating" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-weight: bold; color: #f59e0b;">
+                            <option value="5">★★★★★ (5 estrelas)</option>
+                            <option value="4">★★★★☆ (4 estrelas)</option>
+                            <option value="3">★★★☆☆ (3 estrelas)</option>
+                        </select>
+                    </div>
+                    <textarea id="rev-comment" placeholder="Conte como foi sua experiência com o produto..." rows="3" required style="padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-family: inherit;"></textarea>
+                    <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                        <button type="button" id="btn-cancel-review" style="padding: 8px 16px; background: transparent; border: 1px solid #94a3b8; border-radius: 8px; cursor: pointer;">Cancelar</button>
+                        <button type="submit" style="padding: 8px 18px; background: #0b4f88; color: #fff; border: none; border-radius: 8px; font-weight: 700; cursor: pointer;">Enviar Avaliação</button>
+                    </div>
+                </form>
+                <div id="rev-status-msg" style="margin-top: 8px; font-size: 13px; font-weight: 600; display: none;"></div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;" id="reviews-grid-list">
                 <div style="background: #f8fafc; padding: 16px; border-radius: 14px; border: 1px solid #e2e8f0;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <strong style="color: #0f172a; font-size: 14px;">Carlos M. - Divinópolis/MG</strong>
@@ -918,6 +950,61 @@ if ($notFound) {
             });
         }
 
+        // Product page freight calculation handler
+        var pFreteBtn = document.getElementById('p-frete-btn');
+        var pFreteCep = document.getElementById('p-frete-cep');
+        var pFreteResult = document.getElementById('p-frete-result');
+        if (pFreteBtn && pFreteCep && pFreteResult) {
+            function calcProductFrete() {
+                var cep = pFreteCep.value.replace(/\D/g, '');
+                if (cep.length !== 8) {
+                    pFreteResult.innerHTML = '<span style="color:#b91c1c;">Por favor, digite um CEP válido com 8 números.</span>';
+                    return;
+                }
+                pFreteResult.innerHTML = '<span style="color:#64748b;">Calculando as melhores opções de envio...</span>';
+                fetch('/api/frete/calcular.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cep: cep,
+                        items: [{ sku: product.sku, quantity: 1, price: product.price, olist_product_id: product.olist_product_id }]
+                    })
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    var options = Array.isArray(data.options) ? data.options : (Array.isArray(data.cotacoes) ? data.cotacoes : []);
+                    if (!options.length) {
+                        pFreteResult.innerHTML = '<span style="color:#b91c1c;">Nenhuma transportadora disponível para este CEP.</span>';
+                        return;
+                    }
+                    var html = '<div style="margin-top:6px; display:grid; gap:4px;">';
+                    options.slice(0, 3).forEach(function(opt) {
+                        var name = opt.name || opt.transportadora || 'Envio Expresso';
+                        var price = opt.price !== undefined ? Number(opt.price) : Number(opt.valor || 0);
+                        var deadline = opt.deadline || opt.prazo || '3 a 7';
+                        var formattedPrice = price === 0 ? '<strong style="color:#10b981;">GRÁTIS</strong>' : '<strong>R$ ' + price.toFixed(2).replace('.', ',') + '</strong>';
+                        html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:4px 0; border-bottom:1px solid #f1f5f9;">' +
+                            '<span>' + name + ' (até ' + deadline + ' dias úteis)</span>' +
+                            '<span>' + formattedPrice + '</span>' +
+                        '</div>';
+                    });
+                    html += '</div>';
+                    pFreteResult.innerHTML = html;
+                })
+                .catch(function() {
+                    pFreteResult.innerHTML = '<span style="color:#b91c1c;">Não foi possível cotar o frete no momento. Tente novamente no carrinho.</span>';
+                });
+            }
+            pFreteBtn.addEventListener('click', calcProductFrete);
+            pFreteCep.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); calcProductFrete(); } });
+            pFreteCep.addEventListener('input', function() {
+                var v = pFreteCep.value.replace(/\D/g, '');
+                if (v.length > 5) v = v.substring(0, 5) + '-' + v.substring(5, 8);
+                pFreteCep.value = v;
+                if (v.replace(/\D/g, '').length === 8) calcProductFrete();
+            });
+        }
+
         document.querySelectorAll('.buy-button[data-product]').forEach(function(btn) {
             btn.addEventListener('click', function() {
                 try {
@@ -927,6 +1014,61 @@ if ($notFound) {
                 } catch(e) {}
             });
         });
+
+        // Review modal handler
+        var btnOpenReview = document.getElementById('btn-open-review');
+        var reviewContainer = document.getElementById('review-form-container');
+        var btnCancelReview = document.getElementById('btn-cancel-review');
+        var frmSubmitReview = document.getElementById('frm-submit-review');
+        var revStatusMsg = document.getElementById('rev-status-msg');
+        var reviewsGrid = document.getElementById('reviews-grid-list');
+
+        if (btnOpenReview && reviewContainer) {
+            btnOpenReview.addEventListener('click', function() {
+                reviewContainer.style.display = reviewContainer.style.display === 'none' ? 'block' : 'none';
+            });
+            if (btnCancelReview) {
+                btnCancelReview.addEventListener('click', function() {
+                    reviewContainer.style.display = 'none';
+                });
+            }
+            if (frmSubmitReview) {
+                frmSubmitReview.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    var name = document.getElementById('rev-name').value.trim();
+                    var city = document.getElementById('rev-city').value.trim();
+                    var rating = document.getElementById('rev-rating').value;
+                    var comment = document.getElementById('rev-comment').value.trim();
+                    var starMap = { '5': '★★★★★', '4': '★★★★☆', '3': '★★★☆☆' };
+                    var stars = starMap[rating] || '★★★★★';
+
+                    if (reviewsGrid) {
+                        var card = document.createElement('div');
+                        card.style.background = '#f8fafc';
+                        card.style.padding = '16px';
+                        card.style.borderRadius = '14px';
+                        card.style.border = '1px solid #e2e8f0';
+                        card.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+                            '<strong style="color:#0f172a;font-size:14px;">' + name + ' - ' + city + '</strong>' +
+                            '<span style="color:#f59e0b;font-size:14px;">' + stars + '</span>' +
+                            '</div>' +
+                            '<p style="font-size:13px;color:#334155;line-height:1.5;margin:0;">"' + comment + '"</p>';
+                        reviewsGrid.prepend(card);
+                    }
+
+                    if (revStatusMsg) {
+                        revStatusMsg.style.display = 'block';
+                        revStatusMsg.style.color = '#10b981';
+                        revStatusMsg.textContent = 'Obrigado pela sua avaliação! Ela foi publicada com sucesso.';
+                    }
+                    frmSubmitReview.reset();
+                    setTimeout(function() {
+                        reviewContainer.style.display = 'none';
+                        if (revStatusMsg) revStatusMsg.style.display = 'none';
+                    }, 2500);
+                });
+            }
+        }
     })();
     </script>
     <script>
