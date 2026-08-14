@@ -9,13 +9,12 @@ on:
 permissions:
   contents: write
 
-environment: production
-
 jobs:
   audit:
     if: github.repository == 'Vivaliz-site/site-shopvivaliz' && github.actor == 'fredmourao-ai'
     runs-on: ubuntu-latest
     timeout-minutes: 50
+    environment: production
     steps:
       - name: Checkout bootstrap
         uses: actions/checkout@v7
