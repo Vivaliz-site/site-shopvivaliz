@@ -495,3 +495,91 @@ PROMPT;
         }, 'Claude');
     }
 }
+
+/**
+ * Editor de imagem gratuito via Hugging Face Inference API (InstructPix2Pix
+ * por padrao). Mesmo contrato dos demais editores: parte sempre da foto real
+ * do produto e aplica o prompt como instrucao de edicao, nunca gera do zero.
+ * A Inference API devolve os bytes da imagem direto no corpo da resposta em
+ * caso de sucesso; em falha (modelo ainda carregando, cota, chave invalida)
+ * devolve JSON, entao a distincao e feita pelo Content-Type da resposta.
+ */
+final class AiStudioHuggingFaceImageEditClient extends AiStudioRotatingClient
+{
+    public function editImageToFile(string $prompt, string $baseImagePath, string $destinationPath): void
+    {
+        if (!is_file($baseImagePath) || !is_readable($baseImagePath)) throw new AiStudioApiException('Imagem base ausente ou ilegível.');
+        $binary = @file_get_contents($baseImagePath);
+        if (!is_string($binary)) throw new AiStudioApiException('Falha ao ler imagem base.');
+        if (strlen($binary) > 10 * 1024 * 1024) throw new AiStudioApiException('Imagem base excede o limite pratico de 10 MB do Hugging Face.');
+        $mime = AiStudioHttpClient::detectImageMime($baseImagePath);
+
+        $this->withKeyRotation(function (string $key) use ($prompt, $binary, $mime, $destinationPath): void {
+            $url = 'https://api-inference.huggingface.co/models/' . rawurlencode($this->model);
+            $dataUri = 'data:' . $mime . ';base64,' . base64_encode($binary);
+            [$status, $body, $contentType] = self::requestRaw($url, [
+                'Authorization' => 'Bearer ' . $key,
+                'Content-Type' => 'application/json',
+                'Accept' => 'image/png, application/json',
+                'X-Wait-For-Model' => 'true',
+            ], [
+                'inputs' => $dataUri,
+                'parameters' => [
+                    'prompt' => $prompt,
+                    'image_guidance_scale' => 1.5,
+                    'guidance_scale' => 7.5,
+                ],
+            ]);
+
+            $looksLikeImage = str_starts_with($contentType, 'image/')
+                || str_starts_with($body, "\x89PNG")
+                || str_starts_with($body, "\xFF\xD8\xFF");
+
+            if ($status < 200 || $status >= 300 || !$looksLikeImage) {
+                $decoded = json_decode($body, true);
+                $message = is_array($decoded)
+                    ? (string)($decoded['error'] ?? $decoded['message'] ?? substr($body, 0, 300))
+                    : substr($body, 0, 300);
+                if (is_array($decoded) && isset($decoded['estimated_time'])) {
+                    $message = 'Modelo ainda carregando no Hugging Face (estimated_time=' . $decoded['estimated_time'] . 's); tente novamente em instantes. ' . $message;
+                }
+                throw new AiStudioApiException("Hugging Face Inference API retornou HTTP {$status}: {$message}", $status, is_array($decoded) ? $decoded : []);
+            }
+
+            if (file_put_contents($destinationPath, $body) === false) {
+                throw new AiStudioApiException('Falha ao gravar imagem Hugging Face.');
+            }
+        }, 'Hugging Face');
+        AiStudioHttpClient::validateOutputImage($destinationPath, 512);
+    }
+
+    /** @return array{0:int,1:string,2:string} status, body, content-type */
+    private static function requestRaw(string $url, array $headers, array $jsonBody): array
+    {
+        $handle = curl_init();
+        if ($handle === false) throw new AiStudioApiException('Falha ao inicializar cURL (Hugging Face).');
+        $httpHeaders = [];
+        foreach ($headers as $name => $value) $httpHeaders[] = $name . ': ' . $value;
+        $encoded = json_encode($jsonBody, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (!is_string($encoded)) throw new AiStudioApiException('Falha ao codificar JSON (Hugging Face): ' . json_last_error_msg());
+        curl_setopt_array($handle, [
+            CURLOPT_URL => $url,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_POSTFIELDS => $encoded,
+            CURLOPT_HTTPHEADER => $httpHeaders,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 180,
+            CURLOPT_CONNECTTIMEOUT => 15,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+        ]);
+        $raw = curl_exec($handle);
+        $errno = curl_errno($handle);
+        $error = curl_error($handle);
+        $status = (int)curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+        $contentType = strtolower((string)curl_getinfo($handle, CURLINFO_CONTENT_TYPE));
+        curl_close($handle);
+        if ($errno !== 0 || !is_string($raw)) throw new AiStudioApiException("Erro de transporte cURL (Hugging Face) #{$errno}: {$error}");
+        return [$status, $raw, $contentType];
+    }
+}
