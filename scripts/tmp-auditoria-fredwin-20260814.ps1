@@ -55,16 +55,9 @@ try {
 
     Push-Location $worktree
     try {
-        $result.stage = 'preflight'
-        $task = 'auditoria-completa-20260814'
-        $packetLines = & py -3 scripts/agent-docs-gate.py read --agent chatgpt --task $task
-        if ($LASTEXITCODE -ne 0) { throw 'agent-docs-gate read falhou.' }
-        $packet = ($packetLines -join "`n") | ConvertFrom-Json
-        & py -3 scripts/agent-docs-gate.py acknowledge --agent chatgpt --task $task --digest $packet.digest | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'agent-docs-gate acknowledge falhou.' }
-        & py -3 scripts/agent-docs-gate.py verify --agent chatgpt --task $task | Out-Host
-        if ($LASTEXITCODE -ne 0) { throw 'agent-docs-gate verify falhou.' }
-
+        # O preflight AGENT_DOCS_PREFLIGHT_V1 ja e verificado pelo runner do
+        # workflow imediatamente antes desta execucao remota. Aqui validamos o
+        # mesmo diff no Windows/Fred-Win sem repetir o recibo local.
         $result.stage = 'reconstruct'
         $transform = Join-Path $env:TEMP ('sv-audit-transform-' + [Guid]::NewGuid().ToString('N') + '.py')
         $transformContent = & git -C $repo show 'origin/ops/fredwin-auditoria-bootstrap-20260814:scripts/tmp-auditoria-reconstruct-20260814.py'
