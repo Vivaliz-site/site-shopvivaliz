@@ -24,6 +24,51 @@ if (!is_file($scriptPath)) {
     }
 }
 
+$categoryScriptPath = $root . '/public/assets/storefront/category-image-rotation-v2.js';
+if (!is_file($categoryScriptPath)) {
+    $errors[] = 'missing script: public/assets/storefront/category-image-rotation-v2.js';
+} elseif (filesize($categoryScriptPath) === 0) {
+    $errors[] = 'empty script: public/assets/storefront/category-image-rotation-v2.js';
+} else {
+    $categoryScript = (string) file_get_contents($categoryScriptPath);
+    foreach ([
+        'var INTERVAL_MS = 3000',
+        'data-sv-category-images',
+        'wrapper.removeAttribute(LEGACY_ATTR)',
+        'new Image()',
+        'failed[entry.src] = true',
+        'IntersectionObserver',
+        'visibilitychange',
+        'prefers-reduced-motion',
+        'Pausar fotos',
+        'Reproduzir fotos',
+        'INTERACTION_PAUSE_MS',
+        'shopvivaliz:category-image-change',
+    ] as $needle) {
+        if (!str_contains($categoryScript, $needle)) {
+            $errors[] = "category rotation script missing token: {$needle}";
+        }
+    }
+}
+
+$assetLoaderPath = $root . '/includes/liz-assistant-assets.php';
+if (!is_file($assetLoaderPath)) {
+    $errors[] = 'missing asset loader: includes/liz-assistant-assets.php';
+} else {
+    $assetLoader = (string) file_get_contents($assetLoaderPath);
+    if (!str_contains($assetLoader, '/public/assets/storefront/category-image-rotation-v2.js?v=')) {
+        $errors[] = 'asset loader missing category rotation v2';
+    }
+    $categoryPos = strpos($assetLoader, 'category-image-rotation-v2.js');
+    $legacyPos = strpos($assetLoader, 'liz-assistant.js');
+    if ($categoryPos === false || $legacyPos === false || $categoryPos > $legacyPos) {
+        $errors[] = 'category rotation must load before deferred Liz/widget assets';
+    }
+    if (preg_match('/category-image-rotation-v2\.js[^\n]+defer/', $assetLoader) === 1) {
+        $errors[] = 'category rotation cannot be deferred because it must claim cards before the legacy carousel';
+    }
+}
+
 $pages = [
     'index.php' => '/js/auto-image-carousel.js?v=',
     'home.php' => '/js/auto-image-carousel.js?v=',
