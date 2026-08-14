@@ -12,7 +12,11 @@ require_once __DIR__ . '/../config/constants.php';
  */
 function sv_pdo_connect(): ?PDO
 {
-    $dsn = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=%s', DB_HOST, DB_PORT, DB_NAME, DB_CHARSET);
+    if (DB_HOST === 'localhost' || DB_HOST === '127.0.0.1' || DB_HOST === '') {
+        $dsn = sprintf('mysql:unix_socket=/var/run/mysqld/mysqld.sock;dbname=%s;charset=%s', DB_NAME, DB_CHARSET);
+    } else {
+        $dsn = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=%s', DB_HOST, DB_PORT, DB_NAME, DB_CHARSET);
+    }
 
     try {
         $pdo = new PDO($dsn, DB_USER, DB_PASS, [
