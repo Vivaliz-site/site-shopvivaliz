@@ -1,22 +1,64 @@
 <?php
 /**
- * Proxy ViaCEP - Evita bloqueio CORS
+ * Proxy ViaCEP - Evita bloqueio CORS & Implementa Cache em Banco SQLite Local
  */
-header('Content-Type: application/json');
+declare(strict_types=1);
+
+header('Content-Type: application/json; charset=UTF-8');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST');
+header('Access-Control-Allow-Methods: GET');
 
 $cep = preg_replace('/\D/', '', $_GET['cep'] ?? '');
 
 if (strlen($cep) !== 8) {
     http_response_code(400);
-    echo json_encode(['erro' => true, 'mensagem' => 'CEP inválido']);
+    echo json_encode(['erro' => true, 'mensagem' => 'CEP inválido'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-$url = "https://viacep.com.br/ws/$cep/json/";
+// Inicializar base de cache SQLite local na pasta de storage/
+$dbPath = __DIR__ . '/../storage/viacep_cache.db';
+$db = null;
 
-// Tentar com curl primeiro (preferred em produção)
+try {
+    $dbDir = dirname($dbPath);
+    if (!is_dir($dbDir)) {
+        @mkdir($dbDir, 0755, true);
+    }
+    $db = new PDO('sqlite:' . $dbPath);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $db->exec("CREATE TABLE IF NOT EXISTS cep_cache (
+        cep TEXT PRIMARY KEY,
+        response TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+    )");
+} catch (Throwable $e) {
+    // Se o SQLite falhar, apenas prossegue sem cache para não travar a requisição
+    error_log('SQLite viacep_cache initialization failed: ' . $e->getMessage());
+}
+
+// 1. Tentar buscar do Cache SQLite local (validade de 30 dias)
+if ($db instanceof PDO) {
+    try {
+        $stmt = $db->prepare('SELECT response, created_at FROM cep_cache WHERE cep = :cep LIMIT 1');
+        $stmt->execute([':cep' => $cep]);
+        $cached = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($cached) {
+            $age = time() - (int)$cached['created_at'];
+            if ($age < 30 * 86400) {
+                echo $cached['response'];
+                exit;
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('SQLite cache read failed: ' . $e->getMessage());
+    }
+}
+
+$url = "https://viacep.com.br/ws/$cep/json/";
+$response = null;
+
+// 2. Tentar com curl primeiro (preferred em produção)
 if (function_exists('curl_init')) {
     $ch = curl_init();
     curl_setopt_array($ch, [
@@ -26,18 +68,15 @@ if (function_exists('curl_init')) {
         CURLOPT_SSL_VERIFYPEER => true,
     ]);
 
-    $response = curl_exec($ch);
+    $exec = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
-    if ($httpCode === 200) {
-        echo $response;
-    } else {
-        http_response_code(500);
-        echo json_encode(['erro' => true, 'mensagem' => 'Erro ao conectar ViaCEP']);
+    if ($httpCode === 200 && is_string($exec)) {
+        $response = $exec;
     }
 } else {
-    // Fallback: usar file_get_contents (funciona em qualquer lugar)
+    // Fallback: usar file_get_contents
     $context = stream_context_create([
         'http' => [
             'timeout' => 5,
@@ -47,20 +86,33 @@ if (function_exists('curl_init')) {
             'verify_peer' => false,
         ]
     ]);
-
-    $response = @file_get_contents($url, false, $context);
-
-    if ($response !== false) {
-        // Verificar se é um JSON válido
-        $data = json_decode($response, true);
-        if ($data && !isset($data['erro'])) {
-            echo $response;
-        } else {
-            http_response_code(404);
-            echo json_encode(['erro' => true, 'mensagem' => 'CEP não encontrado']);
-        }
-    } else {
-        http_response_code(500);
-        echo json_encode(['erro' => true, 'mensagem' => 'Erro ao conectar ViaCEP']);
+    $exec = @file_get_contents($url, false, $context);
+    if (is_string($exec)) {
+        $response = $exec;
     }
 }
+
+if ($response !== null) {
+    $data = json_decode($response, true);
+    if (is_array($data) && !isset($data['erro'])) {
+        // Gravar no cache local antes de responder
+        if ($db instanceof PDO) {
+            try {
+                $stmt = $db->prepare('INSERT OR REPLACE INTO cep_cache (cep, response, created_at) VALUES (:cep, :response, :created_at)');
+                $stmt->execute([
+                    ':cep' => $cep,
+                    ':response' => $response,
+                    ':created_at' => time()
+                ]);
+            } catch (Throwable $e) {
+                error_log('SQLite cache write failed: ' . $e->getMessage());
+            }
+        }
+        echo $response;
+        exit;
+    }
+}
+
+// Fallback de erro
+http_response_code(500);
+echo json_encode(['erro' => true, 'mensagem' => 'Não foi possível consultar o CEP agora.'], JSON_UNESCAPED_UNICODE);

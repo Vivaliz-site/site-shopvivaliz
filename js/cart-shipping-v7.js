@@ -69,6 +69,24 @@
     return false;
   }
   refreshIfExpired();
+  input.addEventListener('input', function () {
+    var val = this.value.replace(/\D/g, '');
+    if (val.length > 5) {
+      this.value = val.substring(0, 5) + '-' + val.substring(5, 8);
+    } else {
+      this.value = val;
+    }
+    if (val.length === 8) {
+      button.click();
+    }
+  });
+  input.addEventListener('blur', function () {
+    var val = this.value.replace(/\D/g, '');
+    if (val.length === 8) {
+      var quote = loadQuote();
+      if (!quote || quote.cep !== val) button.click();
+    }
+  });
   button.addEventListener('click',function(event){
     event.preventDefault();event.stopImmediatePropagation();
     var items=cart();
