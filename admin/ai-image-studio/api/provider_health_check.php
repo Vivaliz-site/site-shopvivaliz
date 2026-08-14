@@ -42,7 +42,6 @@ function ais_health_probe(string $provider, string $key): array
             'claude' => AiStudioHttpClient::request('GET', 'https://api.anthropic.com/v1/models', ['x-api-key' => $key, 'anthropic-version' => '2023-06-01'], null, 12),
             'openrouter' => AiStudioHttpClient::request('GET', 'https://openrouter.ai/api/v1/key', ['Authorization' => 'Bearer ' . $key], null, 12),
             'groq' => AiStudioHttpClient::request('GET', 'https://api.groq.com/openai/v1/models', ['Authorization' => 'Bearer ' . $key], null, 12),
-            'huggingface' => AiStudioHttpClient::request('GET', 'https://huggingface.co/api/whoami-v2', ['Authorization' => 'Bearer ' . $key], null, 12),
             default => ['status' => 0, 'body' => ''],
         };
         $status = (int)$response['status'];
@@ -88,7 +87,6 @@ function ais_health_recent_capacity_failure(PDO $db, string $provider): ?array
         'openai' => ['openai', '%+openai'],
         'google' => ['google', '%+google'],
         'openrouter' => ['openrouter', '%+openrouter'],
-        'huggingface' => ['huggingface', '%+huggingface'],
         default => [],
     };
     if ($providerPatterns === []) return null;
@@ -119,7 +117,6 @@ $pools = [
     'claude' => ai_studio_secret_pool('AI_STUDIO_CLAUDE_API_KEY', ['AI_STUDIO_CLAUDE_API_KEY', 'CLAUDE_API_KEY', 'ANTHROPIC_API_KEY']),
     'openrouter' => ai_studio_secret_pool('AI_STUDIO_OPENROUTER_API_KEY', ['AI_STUDIO_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY']),
     'groq' => ai_studio_secret_pool('AI_STUDIO_GROQ_API_KEY', ['AI_STUDIO_GROQ_API_KEY', 'GROQ_API_KEY']),
-    'huggingface' => ai_studio_secret_pool('AI_STUDIO_HUGGINGFACE_API_KEY', ['AI_STUDIO_HUGGINGFACE_API_KEY', 'HUGGINGFACE_API_KEY', 'HUGGINGFACE_API_TOKEN', 'HF_TOKEN']),
 ];
 $results = [];
 $db = ai_studio_db();
@@ -140,7 +137,7 @@ foreach ($pools as $provider => $keys) {
     ];
 }
 
-$imageEditors = ['openai', 'google', 'openrouter', 'huggingface'];
+$imageEditors = ['openai', 'google', 'openrouter'];
 $hasEditor = false;
 foreach ($imageEditors as $imageEditor) {
     if (($results[$imageEditor]['ok'] ?? false) === true) {
@@ -151,7 +148,7 @@ foreach ($imageEditors as $imageEditor) {
 foreach (['claude', 'groq'] as $optimizer) {
     if (($results[$optimizer]['ok'] ?? false) === true && !$hasEditor) {
         $results[$optimizer]['ok'] = false;
-        $results[$optimizer]['detail'] = 'Autenticação válida para otimizar prompt, mas nenhum editor de imagem (OpenAI, Gemini, OpenRouter ou Hugging Face) está apto para concluir os pixels.';
+        $results[$optimizer]['detail'] = 'Autenticação válida para otimizar prompt, mas nenhum editor de imagem (OpenAI, Gemini ou OpenRouter) está apto para concluir os pixels.';
     }
 }
 

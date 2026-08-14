@@ -47,8 +47,6 @@ define('AI_STUDIO_GROQ_API_BASE_URL', (string)(getenv('GROQ_API_BASE_URL') ?: 'h
 define('AI_STUDIO_GROQ_IMAGE_MODEL', (string)(getenv('GROQ_IMAGE_MODEL') ?: 'openai/gpt-oss-20b'));
 define('AI_STUDIO_OPENROUTER_API_KEY', ai_studio_env_key_pool(['AI_STUDIO_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY']));
 define('AI_STUDIO_OPENROUTER_API_BASE_URL', (string)(getenv('OPENROUTER_API_BASE_URL') ?: 'https://openrouter.ai/api/v1'));
-define('AI_STUDIO_HUGGINGFACE_API_KEY', ai_studio_env_key_pool(['AI_STUDIO_HUGGINGFACE_API_KEY', 'HUGGINGFACE_API_KEY', 'HUGGINGFACE_API_TOKEN', 'HF_TOKEN']));
-define('AI_STUDIO_HUGGINGFACE_IMAGE_MODEL', (string)(getenv('HUGGINGFACE_IMAGE_MODEL') ?: 'timbrooks/instruct-pix2pix'));
 define('AI_STUDIO_OPENROUTER_HTTP_REFERER', (string)(getenv('OPENROUTER_HTTP_REFERER') ?: 'https://shopvivaliz.com.br'));
 define('AI_STUDIO_OPENROUTER_APP_TITLE', (string)(getenv('OPENROUTER_APP_TITLE') ?: 'ShopVivaliz'));
 
