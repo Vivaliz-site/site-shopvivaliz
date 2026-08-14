@@ -1,0 +1,86 @@
+name: Fred-Win Home Mobile Fix Smoke
+
+on:
+  push:
+    branches:
+      - fix/home-mobile-categories-liz-20260814
+    paths:
+      - 'js/auto-image-carousel.js'
+      - 'css/home-mobile-corrections-v1.css'
+      - 'includes/asset-bundle-manifest.php'
+      - 'includes/liz-assistant-assets.php'
+      - 'public/assets/liz-assistant/liz-assistant-corrections-v1.*'
+      - 'tests/home-mobile-category-liz-contract-test.php'
+      - 'tests/fredwin-home-mobile-fix-smoke.py'
+      - '.github/workflows/fredwin-home-mobile-fix-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout for static contract
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Static contract
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php tests/home-mobile-category-liz-contract-test.php
+          node --check js/auto-image-carousel.js
+          node --check public/assets/liz-assistant/liz-assistant-corrections-v1.js
+          php -l includes/asset-bundle-manifest.php
+          php -l includes/liz-assistant-assets.php
+
+      - name: Configure VM SSH key
+        shell: bash
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          chmod 600 "$HOME/.ssh/vmkey"
+
+      - name: Execute branch smoke on Fred-Win Chrome
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 <<'PY' > /tmp/fredwin-command.json
+          import json
+          ps = (
+              "powershell -NoProfile -ExecutionPolicy Bypass -Command \""
+              "$ErrorActionPreference='Stop'; $env:PYTHONIOENCODING='utf-8'; "
+              "Set-Location 'C:\\site-shopvivaliz'; "
+              "git fetch --quiet origin 'fix/home-mobile-categories-liz-20260814'; "
+              "if($LASTEXITCODE -ne 0){ throw 'git_fetch_failed' }; "
+              "git show 'FETCH_HEAD:tests/fredwin-home-mobile-fix-smoke.py' | py -3 -; "
+              "if($LASTEXITCODE -ne 0){ throw 'smoke_failed' }\""
+          )
+          print(json.dumps({'params': {'command': ps, 'timeout': 150}}, ensure_ascii=False))
+          PY
+          BODY_B64="$(base64 -w0 /tmp/fredwin-command.json)"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17 \
+            "BODY_B64='$BODY_B64' python3 - <<'PY'
+          import base64, json, os, urllib.request
+          body=base64.b64decode(os.environ['BODY_B64'])
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=180) as response:
+              payload=json.loads(response.read().decode('utf-8'))
+          result=payload.get('result') or {}
+          print(json.dumps(result,ensure_ascii=False))
+          if result.get('success') is not True:
+              raise SystemExit('Fred-Win smoke failed')
+          PY"
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/vmkey" /tmp/fredwin-command.json
