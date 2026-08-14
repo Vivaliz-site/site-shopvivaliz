@@ -39,6 +39,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
     lizg_reply(405, ['ok' => false, 'error' => 'Método não permitido.']);
 }
 
+// CUSTO/ABUSO: este endpoint e publico e cada chamada consome cota paga da
+// API do Gemini. Sem limite, qualquer um podia usa-lo como proxy gratuito de
+// LLM na conta da loja. api/liz-intelligent.php (o endpoint que o widget da
+// vitrine realmente usa) ja tinha limite; estes dois nao tinham.
+require_once dirname(__DIR__) . '/includes/rate-limiter.php';
+$lizgIp = (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+if (!RateLimiter::isAllowed('liz-general:' . $lizgIp, 10, 60)) {
+    lizg_reply(429, ['ok' => false, 'error' => 'Muitas perguntas seguidas. Aguarde um minuto.']);
+}
+
 $input = json_decode((string)file_get_contents('php://input'), true);
 $message = trim((string)($input['message'] ?? ''));
 if ($message === '' || mb_strlen($message, 'UTF-8') > 2000) {

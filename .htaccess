@@ -132,6 +132,11 @@ AddCharset UTF-8 .html .txt .php .json
     # a superficie antes que algum arquivo passe a executar no include.
     RewriteRule ^api/autonomous/ - [F,L,NC]
 
+    # SEGURANCA: classes e arquivos de configuracao dos modulos de IA do admin
+    # sao apenas includes (definem constantes com nomes de chaves de API).
+    # Nao ha motivo para serem alcancaveis por HTTP.
+    RewriteRule ^admin/(?:catalog-optimization|ai-image-studio)/(?:src/|config) - [F,L,NC]
+
     # Aliases operacionais canonicos para SRE/monitoramento externo.
     RewriteRule ^health/?$ health.php [L,QSA]
     RewriteRule ^metrics/?$ metrics.php [L,QSA]

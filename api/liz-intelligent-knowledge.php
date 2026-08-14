@@ -40,6 +40,14 @@ if ($message === '') {
     lizk_json_response(400, ['ok' => false, 'error' => 'Mensagem ausente.']);
 }
 
+// CUSTO/ABUSO: encaminha para a Liz, que consome cota paga de LLM. Mesmo
+// limite por IP aplicado aos demais pontos de entrada publicos.
+require_once dirname(__DIR__) . '/includes/rate-limiter.php';
+$lizkIp = (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+if (!RateLimiter::isAllowed('liz-knowledge:' . $lizkIp, 10, 60)) {
+    lizk_json_response(429, ['ok' => false, 'error' => 'Muitas perguntas seguidas. Aguarde um minuto.']);
+}
+
 $matches = sv_liz_knowledge_search($message, 3);
 
 $input['message'] = $message;
