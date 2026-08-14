@@ -88,13 +88,12 @@ function ai_studio_image_provider_candidates(string $preferred): array
     // nativo de geração/edição de imagem. Quando escolhido, ele atua como
     // otimizador de prompt e a edição final usa um motor visual disponível.
     $order = match ($preferred) {
-        'openai' => ['openai', 'google', 'openrouter', 'huggingface'],
-        'google' => ['google', 'openai', 'openrouter', 'huggingface'],
-        'claude' => ['openai', 'google', 'openrouter', 'huggingface'],
-        'openrouter' => ['openrouter', 'huggingface', 'openai', 'google'],
-        'groq' => ['openrouter', 'huggingface', 'openai', 'google'],
-        'huggingface' => ['huggingface', 'openrouter', 'openai', 'google'],
-        default => ['openai', 'google', 'openrouter', 'huggingface'],
+        'openai' => ['openai', 'google', 'openrouter'],
+        'google' => ['google', 'openai', 'openrouter'],
+        'claude' => ['openai', 'google', 'openrouter'],
+        'openrouter' => ['openrouter', 'openai', 'google'],
+        'groq' => ['openrouter', 'openai', 'google'],
+        default => ['openai', 'google', 'openrouter'],
     };
     return array_values(array_unique(array_filter($order, static fn(string $provider): bool => ai_studio_provider_has_key($provider))));
 }
