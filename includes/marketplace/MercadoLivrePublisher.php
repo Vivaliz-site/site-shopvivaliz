@@ -19,21 +19,42 @@ final class SvMercadoLivrePublisher
         if ($title === '' || $description === '') throw new RuntimeException('Título ou descrição vazios para o Mercado Livre.');
         $itemPayload = ['title' => $this->limit($title, 60)];
         sv_market_assert_no_commerce_fields($itemPayload, 'Mercado Livre item update');
-        $itemResponse = ml_http_json('PUT', 'https://api.mercadolibre.com/items/' . rawurlencode($itemId), $itemPayload);
+
+        // Anuncios com family_name (user_product_listing) recusam PUT title com
+        // 400 "You cannot modify the title if the item has a family_name" — o ML
+        // recompoe o titulo a partir dos atributos nesses anuncios (ver
+        // docs/MERCADO-LIVRE-API.md). Isso e o catalogo inteiro deste seller
+        // (2026-08-13), entao o fluxo trata como esperado em vez de derrubar a
+        // publicacao inteira: segue so com a descricao.
+        $titleUpdated = false;
+        $itemResponse = [];
+        try {
+            $itemResponse = ml_http_json('PUT', 'https://api.mercadolibre.com/items/' . rawurlencode($itemId), $itemPayload);
+            $titleUpdated = true;
+        } catch (RuntimeException $exception) {
+            if (!str_contains($exception->getMessage(), 'family_name') && !str_contains($exception->getMessage(), 'family name')) {
+                throw $exception;
+            }
+        }
+
         $descriptionPayload = ['plain_text' => $description];
         sv_market_assert_no_commerce_fields($descriptionPayload, 'Mercado Livre description update');
         $descriptionResponse = ml_http_json('PUT', 'https://api.mercadolibre.com/items/' . rawurlencode($itemId) . '/description?api_version=2', $descriptionPayload);
         $itemReadback = ml_http_get('https://api.mercadolibre.com/items/' . rawurlencode($itemId));
         $descriptionReadback = ml_http_get('https://api.mercadolibre.com/items/' . rawurlencode($itemId) . '/description');
-        if (trim((string)($itemReadback['title'] ?? '')) !== $itemPayload['title'] || trim((string)($descriptionReadback['plain_text'] ?? '')) === '') {
-            throw new RuntimeException('O Mercado Livre aceitou a chamada, mas o read-back não confirmou título/descrição.');
+        if ($titleUpdated && trim((string)($itemReadback['title'] ?? '')) !== $itemPayload['title']) {
+            throw new RuntimeException('O Mercado Livre aceitou a chamada, mas o read-back não confirmou o título.');
+        }
+        if (trim((string)($descriptionReadback['plain_text'] ?? '')) === '') {
+            throw new RuntimeException('O Mercado Livre aceitou a chamada, mas o read-back não confirmou a descrição.');
         }
         sv_market_save_mapping($this->db, $productId, 'ml', $itemId, $sku, ['status' => $itemReadback['status'] ?? null]);
         return [
             'status' => 'published', 'operation' => 'PUT /items/{id} + PUT /items/{id}/description',
             'external_id' => $itemId, 'http_status' => 200, 'request_id' => '',
-            'fields' => ['title', 'description'],
-            'response' => ['item_status' => $itemReadback['status'] ?? null, 'title_confirmed' => true, 'description_confirmed' => true,
+            'fields' => $titleUpdated ? ['title', 'description'] : ['description'],
+            'response' => ['item_status' => $itemReadback['status'] ?? null, 'title_confirmed' => $titleUpdated, 'description_confirmed' => true,
+                'title_skipped_reason' => $titleUpdated ? null : 'family_name: título não editável neste anúncio, apenas ficha técnica/descrição',
                 'item_response' => array_intersect_key($itemResponse, array_flip(['id', 'title', 'status'])),
                 'description_response' => array_intersect_key($descriptionResponse, array_flip(['text', 'plain_text']))],
             'verified' => true,
