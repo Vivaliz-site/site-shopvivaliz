@@ -44,9 +44,13 @@ jobs:
           rm -rf /tmp/shopvivaliz-auditoria
           git worktree add --detach /tmp/shopvivaliz-auditoria origin/main
           python3 scripts/tmp-auditoria-reconstruct-20260814.py /tmp/shopvivaliz-auditoria
-          mapfile -t actual < <(git -C /tmp/shopvivaliz-auditoria diff --name-only | sort)
+          mapfile -t actual < <({
+            git -C /tmp/shopvivaliz-auditoria diff --name-only
+            git -C /tmp/shopvivaliz-auditoria ls-files --others --exclude-standard
+          } | sed '/^$/d' | sort -u)
           printf '%s\n' "${actual[@]}" > /tmp/audit-files.txt
           test "${#actual[@]}" -eq 16 || { echo '::error::Expected exactly 16 changed files'; cat /tmp/audit-files.txt; exit 10; }
+          grep -qx 'includes/webhook-secret.php' /tmp/audit-files.txt || { echo '::error::New webhook helper was not reconstructed'; exit 12; }
           node --check /tmp/shopvivaliz-auditoria/js/admin-dashboard.js
           for f in \
             includes/pdo-database.php includes/site-settings.php includes/webhook-secret.php \
@@ -134,6 +138,8 @@ jobs:
           base_sha="$(git rev-parse origin/main)"
           files="$(git diff --name-only origin/main...HEAD | wc -l | tr -d ' ')"
           commits="$(git rev-list --count origin/main..HEAD)"
+          test "$files" -eq 16
+          test "$commits" -eq 3
           python3 - "$base_sha" "$head_sha" "$files" "$commits" <<'PY' > "$GITHUB_WORKSPACE/test-results/fredwin-auditoria/branch.json"
           import json,sys
           print(json.dumps({'ok':True,'branch':'sec/auditoria-completa','base_sha':sys.argv[1],'head_sha':sys.argv[2],'changed_files':int(sys.argv[3]),'commits':int(sys.argv[4])},indent=2))
