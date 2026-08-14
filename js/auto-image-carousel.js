@@ -188,21 +188,22 @@
   }
 
   function initProductCardCarousels() {
-    document.querySelectorAll('.product-image[data-images]').forEach(function (element) {
+    document.querySelectorAll('.product-image[data-images], .category-slide-image-wrapper[data-images]').forEach(function (element) {
       if (carousels.has(element)) return;
 
       var image = element.querySelector('img');
       var images = parseImages(element.getAttribute('data-images'));
-      var currentSrc = image && image.getAttribute('src');
+      var currentSrc = image && (image.getAttribute('src') || image.currentSrc);
       if (currentSrc && images.indexOf(currentSrc) === -1) images.unshift(currentSrc);
       if (!image || images.length < 2) return;
 
       var currentIndex = Math.max(0, images.indexOf(currentSrc));
       var carousel = createCarousel(element, function () {
         currentIndex = (currentIndex + 1) % images.length;
+        image.style.transition = 'opacity 0.25s ease-in-out';
         image.style.opacity = '0.7';
         image.src = images[currentIndex];
-        image.style.opacity = '1';
+        setTimeout(function () { image.style.opacity = '1'; }, 100);
       });
       image.addEventListener('error', function () {
         currentIndex = (currentIndex + 1) % images.length;

@@ -222,6 +222,11 @@ function svcr_select_catalog_products(array $products, array $fallbackProducts):
 
 function svcr_products(): array
 {
+    static $cachedProducts = null;
+    if ($cachedProducts !== null) {
+        return $cachedProducts;
+    }
+
     $root = dirname(__DIR__);
     $cache = $root . '/storage/products-cache-ativos.json';
     $payload = is_file($cache) ? json_decode((string)file_get_contents($cache), true) : [];
@@ -307,7 +312,8 @@ function svcr_products(): array
         ];
     }
 
-    return svcr_select_catalog_products($products, svcr_fallback_products($root));
+    $cachedProducts = svcr_select_catalog_products($products, svcr_fallback_products($root));
+    return $cachedProducts;
 }
 
 function svcr_collect_image_urls(array $item): array

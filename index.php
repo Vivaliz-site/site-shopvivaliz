@@ -451,9 +451,19 @@ function sv_home_top_categories(int $limit = 8): array
         }
         $counts[$category] = ($counts[$category] ?? 0) + 1;
         if (!isset($categoryImages[$category])) {
-            $image = sv_home_pick_best_image($row);
-            if ($image !== '') {
-                $categoryImages[$category] = $image;
+            $categoryImages[$category] = [];
+        }
+        $image = sv_home_pick_best_image($row);
+        if ($image !== '' && !in_array($image, $categoryImages[$category], true)) {
+            $categoryImages[$category][] = $image;
+        }
+        if (is_array($row['images'] ?? null)) {
+            foreach ($row['images'] as $additional) {
+                $additional = trim((string)$additional);
+                if ($additional !== '' && !in_array($additional, $categoryImages[$category], true)) {
+                    $categoryImages[$category][] = $additional;
+                    if (count($categoryImages[$category]) >= 8) break;
+                }
             }
         }
     }
@@ -470,19 +480,19 @@ function sv_home_top_categories(int $limit = 8): array
                     break;
                 }
             }
-            $productImage = trim((string)($categoryImages[$category] ?? ''));
-            // Os cinco grupos principais já possuem assets locais 360x360 curados e leves.
-            // Para eles, evitar baixar uma foto remota de produto (frequentemente 1200x1200)
-            // apenas para preencher um card de 240x240. Categorias sem um desses grupos
-            // continuam usando a primeira imagem real do catálogo, preservando precisão.
+            $catImgList = $categoryImages[$category] ?? [];
+            $productImage = trim((string)($catImgList[0] ?? ''));
             $icon = ($preferLocal && str_starts_with($localIcon, '/public/assets/category-images/'))
                 ? $localIcon
                 : ($productImage !== '' ? $productImage : $localIcon);
+
+            $carouselImages = array_values(array_unique(array_filter(array_merge([$icon], $catImgList))));
 
             $result[] = [
                 'name' => $category,
                 'count' => $count,
                 'icon' => $icon,
+                'images' => array_slice($carouselImages, 0, 8),
                 'href' => '/catalogo?categoria=' . rawurlencode($category),
             ];
             if (count($result) >= $limit) break;
@@ -882,8 +892,9 @@ $svNavCurrent = '';
                     <button type="button" class="home-scroller-arrow" data-dir="-1" aria-label="Categorias anteriores">‹</button>
                     <div class="home-scroller-track categories-track">
                         <?php foreach ($homeCategories as $category): ?>
+                            <?php $catImagesJson = json_encode($category['images'] ?? [$category['icon']], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>
                             <a class="category-slide" href="<?= sv_home_esc($category['href']) ?>">
-                                <div class="category-slide-image-wrapper">
+                                <div class="category-slide-image-wrapper" data-images="<?= sv_home_esc($catImagesJson) ?>">
                                     <img src="<?= sv_home_esc($category['icon']) ?>" alt="<?= sv_home_esc($category['name']) ?>" class="category-slide-img" width="240" height="240" loading="lazy" fetchpriority="low" decoding="async">
                                 </div>
                                 <strong><?= sv_home_esc($category['name']) ?></strong>
