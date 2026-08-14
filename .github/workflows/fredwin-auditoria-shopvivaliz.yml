@@ -7,29 +7,56 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+
+environment: production
 
 jobs:
-  inspect:
+  audit:
     if: github.repository == 'Vivaliz-site/site-shopvivaliz' && github.actor == 'fredmourao-ai'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: production
+    timeout-minutes: 50
     steps:
-      - name: Checkout
+      - name: Checkout bootstrap
         uses: actions/checkout@v7
         with:
-          persist-credentials: false
+          fetch-depth: 0
+          persist-credentials: true
 
-      - name: Preflight docs on runner
+      - name: Preflight docs
         shell: bash
         run: |
           set -Eeuo pipefail
-          task='auditoria-completa-20260814-bootstrap'
+          task='auditoria-completa-20260814'
           packet="$(python3 scripts/agent-docs-gate.py read --agent chatgpt --task "$task")"
           digest="$(printf '%s' "$packet" | python3 -c 'import json,sys; print(json.load(sys.stdin)["digest"])')"
           python3 scripts/agent-docs-gate.py acknowledge --agent chatgpt --task "$task" --digest "$digest" >/dev/null
           python3 scripts/agent-docs-gate.py verify --agent chatgpt --task "$task"
+
+      - name: Prepare reconstructed audit on current main
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git fetch origin main --prune
+          if git ls-remote --exit-code --heads origin refs/heads/sec/auditoria-completa >/dev/null 2>&1; then
+            echo '::error::sec/auditoria-completa already exists; refusing to overwrite it.'
+            exit 9
+          fi
+          rm -rf /tmp/shopvivaliz-auditoria
+          git worktree add --detach /tmp/shopvivaliz-auditoria origin/main
+          python3 scripts/tmp-auditoria-reconstruct-20260814.py /tmp/shopvivaliz-auditoria
+          mapfile -t actual < <(git -C /tmp/shopvivaliz-auditoria diff --name-only | sort)
+          printf '%s\n' "${actual[@]}" > /tmp/audit-files.txt
+          test "${#actual[@]}" -eq 16 || { echo '::error::Expected exactly 16 changed files'; cat /tmp/audit-files.txt; exit 10; }
+          node --check /tmp/shopvivaliz-auditoria/js/admin-dashboard.js
+          for f in \
+            includes/pdo-database.php includes/site-settings.php includes/webhook-secret.php \
+            includes/webhook-job-dispatcher.php includes/secure-session.php index.php \
+            admin/settings.php admin/settings-frete.php api/webhook-mercadopago.php \
+            api/olist/webhook.php api/tiny/stock-webhook.php api/ml/webhook.php \
+            api/liz-general.php api/liz-intelligent-knowledge.php; do
+            php -l "/tmp/shopvivaliz-auditoria/$f"
+          done
 
       - name: Configure verified VM access
         shell: bash
@@ -49,75 +76,83 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Inspect Fred-Win for audit patch
+      - name: Validate reconstructed audit on Fred-Win
         shell: bash
         run: |
           set -Eeuo pipefail
           mkdir -p test-results/fredwin-auditoria
-          cat > /tmp/inspect.ps1 <<'PS1'
-          $ErrorActionPreference='Stop'
-          $paths=@(
-            'C:\site-shopvivaliz\auditoria-shopvivaliz.patch',
-            'C:\Users\FRED\site-shopvivaliz\auditoria-shopvivaliz.patch',
-            'C:\Users\FRED\Downloads\auditoria-shopvivaliz.patch',
-            'C:\Users\FRED\Desktop\auditoria-shopvivaliz.patch',
-            'C:\Users\FRED\Documents\auditoria-shopvivaliz.patch'
-          )
-          $found=$paths | Where-Object { Test-Path $_ -PathType Leaf } | Select-Object -First 1
-          if(-not $found){
-            foreach($root in @('C:\Users\FRED\Downloads','C:\Users\FRED\Desktop','C:\Users\FRED\Documents','C:\Users\FRED\site-shopvivaliz')){
-              if(-not (Test-Path $root)){continue}
-              $item=Get-ChildItem -Path $root -Filter 'auditoria-shopvivaliz.patch' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-              if($item){$found=$item.FullName;break}
-            }
-          }
-          $repo=@('C:\site-shopvivaliz','C:\Users\FRED\site-shopvivaliz') | Where-Object { Test-Path (Join-Path $_ '.git') } | Select-Object -First 1
-          $obj=[ordered]@{patch_found=[bool]$found;patch_path=$found;patch_sha256=$null;patch_bytes=$null;repo=$repo;repo_status=$null;repo_head=$null}
-          if($found){$obj.patch_sha256=(Get-FileHash -Algorithm SHA256 $found).Hash.ToLowerInvariant();$obj.patch_bytes=(Get-Item $found).Length}
-          if($repo){$obj.repo_status=((& git -C $repo status --porcelain) -join "`n");$obj.repo_head=((& git -C $repo rev-parse HEAD).Trim())}
-          $json=$obj|ConvertTo-Json -Compress
-          Write-Output ('SV_AUDIT_INSPECT_B64='+[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json)))
-          PS1
-          gzip -c /tmp/inspect.ps1 | base64 -w0 > /tmp/inspect.b64
-          script_b64="$(cat /tmp/inspect.b64)"
-          python3 - "$script_b64" <<'PY' > /tmp/body.json
-          import json,sys
-          b=sys.argv[1]
-          cmd=('powershell -NoProfile -ExecutionPolicy Bypass -Command "'
-               "$p=Join-Path $env:TEMP 'sv-audit-inspect.ps1';"
-               f"$d=[Convert]::FromBase64String('{b}');"
-               "$i=[IO.MemoryStream]::new($d);$g=[IO.Compression.GzipStream]::new($i,[IO.Compression.CompressionMode]::Decompress);"
-               "$o=[IO.MemoryStream]::new();$g.CopyTo($o);[IO.File]::WriteAllBytes($p,$o.ToArray());"
-               "$g.Dispose();$i.Dispose();$o.Dispose();try{& powershell -NoProfile -ExecutionPolicy Bypass -File $p;$c=$LASTEXITCODE}finally{Remove-Item $p -Force -ErrorAction SilentlyContinue};exit $c"
-               '"')
-          print(json.dumps({'params':{'command':cmd,'timeout':300}}))
+          python3 - <<'PY' > /tmp/body.json
+          import json
+          command = r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop';$r='C:\site-shopvivaliz';git -C $r fetch origin ops/fredwin-auditoria-bootstrap-20260814 --prune;if($LASTEXITCODE-ne 0){exit 30};$p=Join-Path $env:TEMP 'sv-audit-validate.ps1';git -C $r show 'origin/ops/fredwin-auditoria-bootstrap-20260814:scripts/tmp-auditoria-fredwin-20260814.ps1' | Set-Content -Path $p -Encoding UTF8;try{& powershell -NoProfile -ExecutionPolicy Bypass -File $p;$c=$LASTEXITCODE}finally{Remove-Item $p -Force -ErrorAction SilentlyContinue};exit $c"'''
+          print(json.dumps({'params': {'command': command, 'timeout': 2700}}))
           PY
           body_b64="$(base64 -w0 /tmp/body.json)"
+          set +e
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
             "BODY_B64='$body_b64' python3 - <<'PY'
           import base64,json,os,urllib.request
           body=base64.b64decode(os.environ['BODY_B64'])
           req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
-          with urllib.request.urlopen(req,timeout=360) as r: relay=json.loads(r.read().decode())
-          result=relay.get('result') or {}; output=str(result.get('output') or ''); marker=''
+          with urllib.request.urlopen(req,timeout=2760) as r: relay=json.loads(r.read().decode())
+          result=relay.get('result') or {}; output=str(result.get('output') or ''); error=str(result.get('error') or ''); marker=''
           for line in output.splitlines():
-            if line.startswith('SV_AUDIT_INSPECT_B64='): marker=line.split('=',1)[1].strip()
-          data=json.loads(base64.b64decode(marker).decode()) if marker else {'patch_found':False,'error':'structured_result_missing','output_tail':output[-2000:]}
+              if line.startswith('SV_AUDIT_VALIDATE_B64='): marker=line.split('=',1)[1].strip()
+          data=json.loads(base64.b64decode(marker).decode()) if marker else {'ok':False,'stage':'structured_result_missing','output_tail':output[-6000:],'error_tail':error[-3000:]}
           data['relay_success']=result.get('success')
           print(json.dumps(data,ensure_ascii=False))
-          if result.get('success') is not True: raise SystemExit(7)
-          PY" > test-results/fredwin-auditoria/inspect.json
-          python3 -m json.tool test-results/fredwin-auditoria/inspect.json
+          if result.get('success') is not True or data.get('ok') is not True: raise SystemExit(7)
+          PY" > test-results/fredwin-auditoria/validation.json
+          rc=$?
+          set -e
+          python3 -m json.tool test-results/fredwin-auditoria/validation.json || true
+          exit "$rc"
 
-      - name: Upload result
+      - name: Commit three audit changesets and push branch
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd /tmp/shopvivaliz-auditoria
+          git checkout -b sec/auditoria-completa
+          git config user.name 'ShopVivaliz Audit'
+          git config user.email 'noreply@shopvivaliz.com.br'
+
+          git add \
+            .htaccess admin/settings.php admin/settings-frete.php \
+            api/ml/webhook.php api/olist/webhook.php api/tiny/stock-webhook.php \
+            api/webhook-mercadopago.php includes/secure-session.php \
+            includes/webhook-job-dispatcher.php includes/webhook-secret.php
+          git commit -m 'sec: endurecer admin e autenticacao dos webhooks'
+
+          git add includes/pdo-database.php includes/site-settings.php index.php
+          git commit -m 'perf: reduzir round-trips de settings e bloqueio da home'
+
+          git add api/liz-general.php api/liz-intelligent-knowledge.php js/admin-dashboard.js
+          git commit -m 'sec: limitar Liz e remover renderizacao HTML insegura no admin'
+
+          test -z "$(git status --porcelain)" || { git status --short; exit 11; }
+          git push -u origin sec/auditoria-completa
+          head_sha="$(git rev-parse HEAD)"
+          base_sha="$(git rev-parse origin/main)"
+          files="$(git diff --name-only origin/main...HEAD | wc -l | tr -d ' ')"
+          commits="$(git rev-list --count origin/main..HEAD)"
+          python3 - "$base_sha" "$head_sha" "$files" "$commits" <<'PY' > "$GITHUB_WORKSPACE/test-results/fredwin-auditoria/branch.json"
+          import json,sys
+          print(json.dumps({'ok':True,'branch':'sec/auditoria-completa','base_sha':sys.argv[1],'head_sha':sys.argv[2],'changed_files':int(sys.argv[3]),'commits':int(sys.argv[4])},indent=2))
+          PY
+          cat "$GITHUB_WORKSPACE/test-results/fredwin-auditoria/branch.json"
+
+      - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: fredwin-auditoria-inspect-${{ github.run_id }}-${{ github.run_attempt }}
-          path: test-results/fredwin-auditoria/inspect.json
-          if-no-files-found: error
+          name: fredwin-auditoria-shopvivaliz-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/fredwin-auditoria/
+          if-no-files-found: warn
           retention-days: 14
 
       - name: Cleanup
         if: always()
-        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts" /tmp/inspect.ps1 /tmp/inspect.b64 /tmp/body.json
+        shell: bash
+        run: |
+          git worktree remove --force /tmp/shopvivaliz-auditoria 2>/dev/null || true
+          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts" /tmp/body.json /tmp/audit-files.txt
