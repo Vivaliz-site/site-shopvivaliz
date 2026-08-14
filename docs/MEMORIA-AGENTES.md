@@ -38,6 +38,19 @@
 
 ---
 
+### 2026-08-14 — git-auto-sync local acumulou 62 commits sem push (branch protection bloqueia push direto)
+**Sistema/arquivo:** repo local em C:\SITE-SHOPVIVALIZ, workflow de auto-sync (ver `windows-auto-push-setup.md` na memória do usuário)
+**O que descobri:** o `main` local estava 61-62 commits à frente de `origin/main` e o daemon de auto-sync não estava conseguindo enviar nada — `git push origin main` falha com "pre-push: push direto para branch protegida bloqueado: main". O daemon aparentemente vinha commitando local silenciosamente sem notar a falha do push. Todo esse trabalho não estava perdido, só não publicado.
+**Por quê importa:** qualquer agente que rode `git push origin main` direto vai falhar; o caminho é sempre branch + PR + merge (squash), como o CLAUDE.md já manda. Se alguém tentar "resolver" a divergência com `git reset --hard origin/main` **isso descarta os commits locais não enviados** (recuperável via `git reflog`, mas evite — prefira `git merge origin/main` para preservar o histórico local). O backlog de 62 commits ainda existe e não foi resolvido nesta sessão (fora de escopo); só extraí e enviei via PR o fix isolado de que eu precisava (`git diff <base> <commit> -- <arquivo> | git apply`).
+**Ver também:** —
+
+### 2026-08-13 — Prompt de Otimização de Cadastro não ensinava a IA a regra que o gate valida
+**Sistema/arquivo:** `admin/catalog-optimization/api/optimize_catalog.php` (`ai_catalog_quality_report` / `ai_catalog_title_starts_with_identity` / `ai_catalog_build_user_prompt`)
+**O que descobri:** o gate de qualidade exige que `optimized_title` comece por um "candidato de identidade" (marca, marca+modelo, ou as 3 primeiras palavras do nome original, todos calculados por `ai_catalog_identity_candidates()` com normalização de acento/caixa). O prompt enviado à IA nunca mostrava esses candidatos — só a instrução genérica "Produto + Marca + Modelo" do texto de política do canal — então a IA não tinha como acertar o prefixo exato. Em produção isso derrubava 60 dos 68 rascunhos `failed`/`rejected` (todos por `title_starts_with_identity`). Corrigido em `main` via PR #956: o prompt agora recebe a lista literal de candidatos aceitos. Testado ao vivo: mesmo produto/provedor, quality_score foi de reprovado para 100.
+**Por quê importa:** um "hard quality gate" que valida algo que o gerador nunca foi instruído a fazer é um contrato quebrado silencioso — parece um problema de IA/prompt ruim, mas é um bug de integração entre o validador e o prompt-builder. Ao adicionar qualquer novo `check` em `ai_catalog_quality_report`, sempre espelhar a regra explicitamente no prompt (`ai_catalog_build_user_prompt`), nunca assumir que uma instrução vaga na política do canal é suficiente.
+**Ver também:** `admin/catalog-optimization/repair_hard_quality_pending.php` reprocessa os itens presos por esse gate sem publicar nada.
+
+
 ### 2026-08-13 — Título do anúncio do ML não é editável quando o item tem `family_name`
 **Sistema/arquivo:** API de Items do Mercado Livre; `scripts/ml-seo-optimizer.py`, `scripts/ml-image-optimizer.py`
 **O que descobri:** todos os 158 anúncios ativos sem venda do seller são `user_product_listing` (têm `family_name` + `user_product_id`). Nesses itens `PUT /items/{id}` com `title` responde 400 `"You cannot modify the title if the item has a family_name"`, e mandar `family_name` também é recusado (400 `BODY_INVALID_FIELDS`) **mesmo com o valor idêntico ao atual**. `PUT /user-products/{id}` não existe (404). Em compensação, o ML **recompõe o título a partir dos atributos**: preencher um atributo com tag `allow_variations` faz o valor ser anexado ao título (comprovado: `FINISH=Polido` virou " ... Prateado Polido" no título). O que aceita PUT é `attributes`, `pictures` e `/items/{id}/description`.
