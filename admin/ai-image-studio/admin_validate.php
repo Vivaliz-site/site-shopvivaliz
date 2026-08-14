@@ -186,7 +186,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 $adminInstruction = trim((string)($_POST['prompt_used'] ?? ''));
                 if ($adminInstruction === '') throw new RuntimeException('Informe a instrucao de cena antes de regenerar.');
                 $engine = ai_studio_normalize_provider((string)($_POST['regeneration_engine'] ?? 'openai'));
-                if (!in_array($engine, ['openai', 'google', 'claude', 'openrouter', 'groq', 'huggingface'], true)) throw new RuntimeException('Motor de regeneracao invalido.');
+                if (!in_array($engine, ['openai', 'google', 'claude', 'openrouter', 'groq'], true)) throw new RuntimeException('Motor de regeneracao invalido.');
 
                 $targetChannel = ais_intended_channel($row);
                 if ($targetChannel === '') $targetChannel = strtolower(trim((string)($_POST['channel'] ?? '')));
