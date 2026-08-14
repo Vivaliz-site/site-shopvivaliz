@@ -414,7 +414,7 @@ function ai_studio_process_item(
     $provider = ai_studio_normalize_provider($provider);
     $targetChannel = strtolower(trim($targetChannel));
     $profiles = ai_studio_channel_profiles();
-    if (!in_array($provider, ['openai', 'google', 'claude', 'openrouter', 'groq'], true)) {
+    if (!in_array($provider, ['openai', 'google', 'claude', 'openrouter', 'groq', 'huggingface'], true)) {
         return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'results' => [], 'error' => "Provider invalido: '{$provider}'."];
     }
     if (!isset($profiles[$targetChannel])) {
