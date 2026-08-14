@@ -35,7 +35,10 @@ $layoutCss = sv_audit_read($root . '/css/layout-polish-v1.css');
 $publicJs = sv_audit_read($root . '/js/public-experience-v1.js');
 $lizAssets = sv_audit_read($root . '/includes/liz-assistant-assets.php');
 $lizIdentity = sv_audit_read($root . '/public/assets/liz-assistant/liz-identity-v2.js');
-$categoryRotation = sv_audit_read($root . '/public/assets/storefront/category-image-rotation-v2.js');
+$genericCarousel = sv_audit_read($root . '/js/auto-image-carousel.js');
+$categoryRotation = sv_audit_read($root . '/js/category-real-images-v52.js');
+$categoryApi = sv_audit_read($root . '/api/catalog/category-images.php');
+$categoryBootstrap = sv_audit_read($root . '/js/shopvivaliz-ab-testing.js');
 $orderEntry = sv_audit_read($root . '/api/orders/create.php');
 $orderValidated = sv_audit_read($root . '/api/orders/create-validated.php');
 
@@ -72,29 +75,53 @@ foreach (['sv-page-catalog', 'sv-catalog-top', 'sv-page-home', 'sv-home-top'] as
     sv_audit_expect(str_contains($publicJs, $stateClass), 'Estado visual global ausente: ' . $stateClass);
 }
 
-// Home: as categorias usam uma camada exclusiva para evitar disputa com o
-// carrossel generico e trocam fotos reais a cada tres segundos com recuperacao.
+// Home: um unico modulo especializado controla as categorias. A origem fornece
+// uma foto principal por produto distinto antes de recorrer a outras fotos do
+// mesmo item, e o intervalo declarado e de tres segundos.
+sv_audit_expect(
+    !str_contains($genericCarousel, '.category-slide-image-wrapper[data-images]'),
+    'O carrossel generico nao pode disputar os cards de categoria.'
+);
 foreach ([
-    '/public/assets/storefront/category-image-rotation-v2.js?v=',
-    '/public/assets/liz-assistant/liz-identity-v2.js?v=',
-] as $asset) {
-    sv_audit_expect(str_contains($lizAssets, $asset), 'Asset global ausente no loader: ' . $asset);
-}
-foreach ([
-    'var INTERVAL_MS = 3000',
-    'data-sv-category-images',
-    'wrapper.removeAttribute(LEGACY_ATTR)',
+    "CATEGORY_ENDPOINT = '/api/catalog/category-images.php'",
+    'CATEGORY_ROTATION_INTERVAL = 3000',
+    "wrapper.removeAttribute('data-images')",
     'new Image()',
-    'failed[entry.src] = true',
-    'sv-category-rotation-toggle',
+    'state.failed[item.src] = true',
+    'IntersectionObserver',
+    'visibilitychange',
     'prefers-reduced-motion',
-    'shopvivaliz:category-image-change',
+    'INTERACTION_PAUSE = 10000',
+    'category.items',
+    'catalog-rotation',
 ] as $token) {
     sv_audit_expect(str_contains($categoryRotation, $token), 'Protecao do carrossel de categorias ausente: ' . $token);
 }
+foreach ([
+    'SV_CATEGORY_IMAGE_LIMIT = 8',
+    'sv_category_product_key',
+    'sv_category_product_images',
+    "'items' => \$items",
+    "'rotation_interval_ms' => 3000",
+    'Uma foto principal por produto distinto',
+] as $token) {
+    sv_audit_expect(str_contains($categoryApi, $token), 'Protecao da origem de imagens por categoria ausente: ' . $token);
+}
+sv_audit_expect(
+    str_contains($categoryBootstrap, '/js/category-real-images-v52.js?v='),
+    'A home deixou de carregar o modulo canonico de imagens por categoria.'
+);
 
 // Liz: manter identidade explicita, retrato focado, fallback de marca e
 // alinhamento dos canais flutuantes acima da navegacao inferior do celular.
+sv_audit_expect(
+    str_contains($lizAssets, '/public/assets/liz-assistant/liz-identity-v2.js?v='),
+    'Asset de identidade visual da Liz ausente no loader.'
+);
+sv_audit_expect(
+    !str_contains($lizAssets, 'category-image-rotation-v2.js'),
+    'Loader da Liz voltou a carregar um segundo carrossel de categorias.'
+);
 foreach ([
     '--sv-floating-channel-size:56px',
     'sv-liz-portrait-v2',
@@ -109,10 +136,6 @@ foreach ([
 ] as $token) {
     sv_audit_expect(str_contains($lizIdentity, $token), 'Protecao da identidade visual da Liz ausente: ' . $token);
 }
-sv_audit_expect(
-    strpos($lizAssets, 'category-image-rotation-v2.js') < strpos($lizAssets, 'liz-assistant.js'),
-    'A rotacao de categorias deve reivindicar os cards antes do carrossel legado.'
-);
 
 // Pedidos: preservar a cadeia autoritativa que recalcula itens e assina frete.
 sv_audit_expect(str_contains($orderEntry, "require __DIR__ . '/create-validated.php';"), 'Entrada de pedidos deixou de usar o fluxo validado.');
