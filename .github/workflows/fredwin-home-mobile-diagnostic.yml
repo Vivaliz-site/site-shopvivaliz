@@ -36,6 +36,7 @@ jobs:
           ps = (
               "powershell -NoProfile -ExecutionPolicy Bypass -Command \""
               "$ErrorActionPreference='Stop'; "
+              "$env:PYTHONIOENCODING='utf-8'; "
               "Set-Location 'C:\\site-shopvivaliz'; "
               "git fetch --quiet origin 'diag/fredwin-home-mobile-20260814'; "
               "if($LASTEXITCODE -ne 0){ throw 'git_fetch_failed' }; "
