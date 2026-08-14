@@ -33,6 +33,9 @@ $adminJs = sv_audit_read($root . '/js/admin-automation.js');
 $checkoutCss = sv_audit_read($root . '/css/checkout.css');
 $layoutCss = sv_audit_read($root . '/css/layout-polish-v1.css');
 $publicJs = sv_audit_read($root . '/js/public-experience-v1.js');
+$lizAssets = sv_audit_read($root . '/includes/liz-assistant-assets.php');
+$lizIdentity = sv_audit_read($root . '/public/assets/liz-assistant/liz-identity-v2.js');
+$categoryRotation = sv_audit_read($root . '/public/assets/storefront/category-image-rotation-v2.js');
 $orderEntry = sv_audit_read($root . '/api/orders/create.php');
 $orderValidated = sv_audit_read($root . '/api/orders/create-validated.php');
 
@@ -68,6 +71,48 @@ sv_audit_expect(str_contains($publicJs, 'if (!isPublicPath(window.location.pathn
 foreach (['sv-page-catalog', 'sv-catalog-top', 'sv-page-home', 'sv-home-top'] as $stateClass) {
     sv_audit_expect(str_contains($publicJs, $stateClass), 'Estado visual global ausente: ' . $stateClass);
 }
+
+// Home: as categorias usam uma camada exclusiva para evitar disputa com o
+// carrossel generico e trocam fotos reais a cada tres segundos com recuperacao.
+foreach ([
+    '/public/assets/storefront/category-image-rotation-v2.js?v=',
+    '/public/assets/liz-assistant/liz-identity-v2.js?v=',
+] as $asset) {
+    sv_audit_expect(str_contains($lizAssets, $asset), 'Asset global ausente no loader: ' . $asset);
+}
+foreach ([
+    'var INTERVAL_MS = 3000',
+    'data-sv-category-images',
+    'wrapper.removeAttribute(LEGACY_ATTR)',
+    'new Image()',
+    'failed[entry.src] = true',
+    'sv-category-rotation-toggle',
+    'prefers-reduced-motion',
+    'shopvivaliz:category-image-change',
+] as $token) {
+    sv_audit_expect(str_contains($categoryRotation, $token), 'Protecao do carrossel de categorias ausente: ' . $token);
+}
+
+// Liz: manter identidade explicita, retrato focado, fallback de marca e
+// alinhamento dos canais flutuantes acima da navegacao inferior do celular.
+foreach ([
+    '--sv-floating-channel-size:56px',
+    'sv-liz-portrait-v2',
+    'sv-liz-head-v2',
+    'Assistente virtual da ShopVivaliz',
+    'BRAND_FALLBACK',
+    'body.sv-liz-panel-open .sv-support-dock',
+    'sv-has-mobile-bottom-nav',
+    'env(safe-area-inset-bottom,0px)',
+    '.sv-msg.sv-bot::before',
+    'Fale com a Liz',
+] as $token) {
+    sv_audit_expect(str_contains($lizIdentity, $token), 'Protecao da identidade visual da Liz ausente: ' . $token);
+}
+sv_audit_expect(
+    strpos($lizAssets, 'category-image-rotation-v2.js') < strpos($lizAssets, 'liz-assistant.js'),
+    'A rotacao de categorias deve reivindicar os cards antes do carrossel legado.'
+);
 
 // Pedidos: preservar a cadeia autoritativa que recalcula itens e assina frete.
 sv_audit_expect(str_contains($orderEntry, "require __DIR__ . '/create-validated.php';"), 'Entrada de pedidos deixou de usar o fluxo validado.');
