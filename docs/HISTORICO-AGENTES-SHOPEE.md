@@ -904,3 +904,31 @@ critério de aviso definido nos ciclos anteriores. Recomendação para quando o 
 permanece a mesma: (1) renovar OAuth2 do Tiny e recriar os workflows dedicados, e/ou (2) decidir
 se vale integrar a API de analytics do Shopee Open Platform para viabilizar os itens 1/3/9/10, e/ou
 (3) reduzir o escopo desta rotina de 6h para apenas o que o código hoje sustenta.
+
+### 9.21 Atualização — ciclo de 2026-08-14 (~19h UTC), 26º ciclo — estado idêntico ao ciclo 25, sem fato novo
+
+Checagem completa: `env | grep -iE "SHOPEE|TINY|OLIST"` continua vazio neste sandbox. Em
+`origin/main` (confirmado via `git fetch origin main`, mesma árvore do `HEAD` desta sessão),
+`.github/workflows/` continua só com `shopee-optimizer-safety.yml`/`shopee-production-seo.yml`;
+o par `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` continua ausente. Artefato mais
+recente em `listings/` continua `shopee-listings-20260726-080756.json` (`status: partial`,
+`total_products: 0`, mesmos dois erros de token OAuth2 já documentados) — agora **19 dias** sem
+extração de catálogo funcional.
+
+Via `mcp__github__actions_list`: `shopee-production-seo.yml` segue com as mesmas 5 execuções de
+2026-07-30 (todas `conclusion: failure`), nenhuma execução nova. `shopee-optimizer-safety.yml`
+segue sem execução nova desde 2026-07-31 (essas execuções são só testes de segurança/compilação
+dos scripts via push/PR, não tocam a API real da Shopee — não contam como sinal de progresso do
+bloqueio de fundo). Nenhum commit relacionado a Shopee/Tiny entre o ciclo 25 (2026-08-14 01:17
+UTC) e este ciclo além deste próprio registro.
+
+Achado estrutural dos ciclos 19–25 (scripts de produção não chamam nenhum endpoint de analytics
+do Shopee Open Platform — itens 1, 3, 9 e 10 desta rotina de 6h permanecem tecnicamente
+inexequíveis mesmo com credencial presente) permanece válido; não releido linha a linha neste
+ciclo por não ter mudado desde a última confirmação direta.
+
+Nenhuma otimização aplicada, nenhum dado de CTR/conversão/venda inventado. Nenhuma notificação
+push enviada neste ciclo — nenhum dos três critérios de novo aviso ocorreu. Recomendação
+inalterada: (1) renovar OAuth2 do Tiny e recriar os workflows dedicados, e/ou (2) decidir se vale
+integrar a API de analytics do Shopee Open Platform para viabilizar os itens 1/3/9/10, e/ou (3)
+reduzir o escopo desta rotina de 6h para apenas o que o código hoje sustenta.
