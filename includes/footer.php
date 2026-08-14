@@ -222,7 +222,7 @@ footer::before {
                         </div>
                     </div>
                     <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
-                        <img src="/images/selo-ssl-seguro.webp" alt="Certificação SSL - Secure SSL Encryption" style="height: 40px; width: auto;">
+                        <img src="/images/selo-ssl-seguro.webp" alt="Certificação SSL - Secure SSL Encryption" width="120" height="40" style="height: 40px; width: auto;">
                         <span style="display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: #f3f7fb; color: #284b7a; font-weight: 700;">Checkout protegido</span>
                         <span style="display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px; background: #f3f7fb; color: #284b7a; font-weight: 700;">Dados protegidos</span>
                     </div>
@@ -231,8 +231,8 @@ footer::before {
                 <div class="footer-legal-card" style="background: #fff; border: 1px solid #dbe5ef; border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; justify-content: space-between; min-height: 110px;">
                     <strong style="display: block; color: #22324a; margin-bottom: 8px;">Pagamentos aceitos</strong>
                     <div style="display: flex; align-items: center; justify-content: center; gap: 16px; height: 100%; flex: 1; flex-wrap: wrap;">
-                        <img src="/images/mercado-pago-logo.jpg" alt="Mercado Pago" style="max-width: 160px; width: 100%; height: auto; max-height: 90px; object-fit: contain; border-radius: 4px;">
-                        <img src="/images/infinitepay-logo.svg" alt="InfinitePay" style="max-width: 160px; width: 100%; height: auto; max-height: 90px; object-fit: contain; border-radius: 4px;">
+                        <img src="/images/mercado-pago-logo.svg" alt="Mercado Pago - Pagamento Seguro" width="140" height="36" style="max-width: 140px; width: auto; height: 36px; object-fit: contain; border-radius: 4px;">
+                        <img src="/images/infinitepay-logo.svg" alt="InfinitePay" width="120" height="32" style="max-width: 120px; width: auto; height: 32px; object-fit: contain; border-radius: 4px;">
                     </div>
                 </div>
             </div>

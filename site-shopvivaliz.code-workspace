@@ -6,7 +6,7 @@
     }
   ],
   "settings": {
-    "workbench.colorTheme": "Ayu Dark",
+    "workbench.colorTheme": "Dark Modern",
     "workbench.iconTheme": "material-icon-theme",
     "terminal.integrated.defaultProfile.windows": "PowerShell",
     "terminal.integrated.cwd": "${workspaceFolder}",
