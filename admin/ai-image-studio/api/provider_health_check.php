@@ -117,7 +117,6 @@ $pools = [
     'claude' => ai_studio_secret_pool('AI_STUDIO_CLAUDE_API_KEY', ['AI_STUDIO_CLAUDE_API_KEY', 'CLAUDE_API_KEY', 'ANTHROPIC_API_KEY']),
     'openrouter' => ai_studio_secret_pool('AI_STUDIO_OPENROUTER_API_KEY', ['AI_STUDIO_OPENROUTER_API_KEY', 'OPENROUTER_API_KEY']),
     'groq' => ai_studio_secret_pool('AI_STUDIO_GROQ_API_KEY', ['AI_STUDIO_GROQ_API_KEY', 'GROQ_API_KEY']),
-    'huggingface' => ai_studio_secret_pool('AI_STUDIO_HUGGINGFACE_API_KEY', ['AI_STUDIO_HUGGINGFACE_API_KEY', 'HUGGINGFACE_API_KEY', 'HUGGINGFACE_API_TOKEN', 'HF_TOKEN']),
 ];
 $results = [];
 $db = ai_studio_db();
