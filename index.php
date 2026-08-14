@@ -542,6 +542,12 @@ $svNavCurrent = '';
     <meta property="og:site_name" content="ShopVivaliz">
     <meta property="og:image:alt" content="ShopVivaliz - Loja online">
     <meta property="og:locale" content="pt_BR">
+    <!-- PERF: praticamente todas as fotos de produto da vitrine sao servidas
+         por s3.amazonaws.com (anexos do ERP Tiny). Sem preconnect, cada uma
+         paga DNS + TCP + TLS antes do primeiro byte. O preconnect do Unsplash
+         permanece apenas porque ele ainda e usado como imagem de fallback. -->
+    <link rel="preconnect" href="https://s3.amazonaws.com" crossorigin>
+    <link rel="dns-prefetch" href="https://s3.amazonaws.com">
     <link rel="preconnect" href="https://images.unsplash.com" crossorigin>
     <link rel="dns-prefetch" href="https://images.unsplash.com">
     <meta name="twitter:card" content="summary_large_image">
@@ -1266,7 +1272,7 @@ $svNavCurrent = '';
     </script>
     <!-- Shim temporario: limpa variantes persistidas sem executar experimento. -->
     <script src="/js/shopvivaliz-ab-testing.js?v=1.0.0" defer></script>
-    <script src="/js/auto-image-carousel.js?v=20260811-1"></script>
+    <script src="/js/auto-image-carousel.js?v=20260811-1" defer></script>
 
     <!-- Popup de Cupons Promocionais -->
     <?php echo sv_popup_cupons_html(); ?>
