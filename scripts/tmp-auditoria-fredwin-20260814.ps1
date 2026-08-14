@@ -1,3 +1,7 @@
+param(
+    [string]$ResultPath = ''
+)
+
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
@@ -21,6 +25,13 @@ $transform = $null
 function Emit-Result {
     param([hashtable]$Value)
     $json = $Value | ConvertTo-Json -Depth 8 -Compress
+    if ($ResultPath -ne '') {
+        $parent = Split-Path -Parent $ResultPath
+        if ($parent -and -not (Test-Path $parent)) {
+            New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        }
+        [IO.File]::WriteAllText($ResultPath, $json, (New-Object Text.UTF8Encoding($false)))
+    }
     $bytes = [Text.Encoding]::UTF8.GetBytes($json)
     Write-Output ('SV_AUDIT_VALIDATE_B64=' + [Convert]::ToBase64String($bytes))
 }
@@ -123,7 +134,7 @@ try {
         $qualityOutput = @(& php scripts\quality\run-all.php 2>&1)
         $qualityExit = $LASTEXITCODE
         $qualityText = ($qualityOutput -join "`n")
-        $result.quality_tail = (($qualityOutput | Select-Object -Last 80) -join "`n")
+        $result.quality_tail = (($qualityOutput | Select-Object -Last 100) -join "`n")
         $result.quality_tail | Write-Host
         if ($qualityExit -ne 0 -or $qualityText -notmatch 'All ShopVivaliz quality checks passed') {
             throw ('Quality gates falharam, exit=' + $qualityExit)
