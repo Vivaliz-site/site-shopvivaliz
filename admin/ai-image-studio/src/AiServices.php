@@ -131,7 +131,7 @@ function ai_studio_resolve_image_engine(string $preferred): string
             return $candidate;
         }
     }
-    throw new AiStudioApiException('Nenhuma chave de edicao de imagem (OpenAI, Gemini, Claude, OpenRouter ou Groq) está configurada no ambiente privado.');
+    throw new AiStudioApiException('Nenhuma chave de edicao de imagem (OpenAI, Gemini, Claude, OpenRouter, Hugging Face ou Groq) está configurada no ambiente privado.');
 }
 
 final class AiStudioOpenAiCompatibleClient extends AiStudioRotatingClient
