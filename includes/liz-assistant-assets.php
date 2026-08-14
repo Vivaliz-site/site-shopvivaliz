@@ -12,7 +12,6 @@ function sv_render_liz_assistant_assets(): void
     $root = dirname(__DIR__);
     $cssPath = $root . '/public/assets/liz-assistant/liz-assistant.css';
     $jsPath = $root . '/public/assets/liz-assistant/liz-assistant.js';
-    $categoryRotationPath = $root . '/public/assets/storefront/category-image-rotation-v2.js';
     $identityPath = $root . '/public/assets/liz-assistant/liz-identity-v2.js';
 
     $assetVersion = static function (string $path): string {
@@ -21,7 +20,6 @@ function sv_render_liz_assistant_assets(): void
 
     $cssVersion = $assetVersion($cssPath);
     $jsVersion = $assetVersion($jsPath);
-    $categoryRotationVersion = $assetVersion($categoryRotationPath);
     $identityVersion = $assetVersion($identityPath);
     $cssHref = '/public/assets/liz-assistant/liz-assistant.css?v=' . rawurlencode($cssVersion);
 
@@ -34,13 +32,6 @@ function sv_render_liz_assistant_assets(): void
     echo '<link rel="stylesheet" href="' . htmlspecialchars($cssHref, ENT_QUOTES, 'UTF-8')
         . '" media="print" onload="this.media=\'all\';this.onload=null;">' . "\n";
     echo '<noscript><link rel="stylesheet" href="' . htmlspecialchars($cssHref, ENT_QUOTES, 'UTF-8') . '"></noscript>' . "\n";
-
-    // The category layer is intentionally synchronous here. This include is
-    // emitted after the storefront content and before the legacy generic image
-    // carousel, so it can claim category cards and prevent two timers from
-    // competing for the same image element.
-    echo '<script src="/public/assets/storefront/category-image-rotation-v2.js?v='
-        . htmlspecialchars($categoryRotationVersion, ENT_QUOTES, 'UTF-8') . '"></script>' . "\n";
 
     echo '<script src="/public/assets/liz-assistant/liz-assistant.js?v='
         . htmlspecialchars($jsVersion, ENT_QUOTES, 'UTF-8') . '" defer></script>' . "\n";
