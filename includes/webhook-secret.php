@@ -24,8 +24,15 @@ declare(strict_types=1);
  * mesmo na etapa 1.
  */
 
+require_once __DIR__ . '/runtime-env-reader.php';
+
 function sv_webhook_secret_expected(): string
 {
+    $secret = svre_value(['OLIST_WEBHOOK_SECRET', 'TINY_WEBHOOK_SECRET', 'SHOPVIVALIZ_AGENT_KEY']);
+    if ($secret !== '') {
+        return $secret;
+    }
+
     foreach (['OLIST_WEBHOOK_SECRET', 'TINY_WEBHOOK_SECRET', 'SHOPVIVALIZ_AGENT_KEY'] as $name) {
         $value = getenv($name);
         if (is_string($value) && trim($value) !== '') {
