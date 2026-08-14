@@ -1,7 +1,7 @@
 # Histórico de Agentes Shopee — ShopVivaliz
 
 **Repositório:** `fredmourao-ai/site-shopvivaliz`  
-**Última atualização:** 2026-07-25  
+**Última atualização:** 2026-08-14  
 **Branch de origem:** `claude/guth-portfolio-access-81jjq2`
 
 > Documento de consulta para agentes. Descreve o que foi implementado, como usar, quais secrets são necessários e quais limitações existem.
@@ -841,3 +841,66 @@ novo com erro diferente, ou execução de `shopee-production-seo.yml` com apply 
 ocorreu; o achado estrutural e o bloqueio de credencial já foram comunicados nos ciclos anteriores
 e permanecem sem ação humana pendente (renovar OAuth2 do Tiny e/ou decidir se vale integrar a API
 de analytics do Shopee Open Platform).
+
+### 9.20 Atualização — ciclo de 2026-08-14 (~13h UTC), 25º ciclo — gap de 4 dias sem registro; estado idêntico ao ciclo 24, sem fato novo que mude a recomendação
+
+Lacuna de ~4 dias sem entrada nesta seção desde o ciclo 24 (2026-08-10 13h UTC) — mesma limitação
+já registrada nos ciclos 19/24: sem acesso a logs do scheduler para confirmar se a rotina
+simplesmente não disparou nesse intervalo ou se disparou sem registrar aqui.
+
+Checagem completa (não só incremental, dado o gap): `env | grep -iE "SHOPEE|TINY|OLIST"` continua
+vazio neste sandbox (esperado). `origin/main` (`git fetch origin main`, confirmado como a mesma
+árvore do `HEAD` desta sessão) continua com apenas `shopee-optimizer-safety.yml`/
+`shopee-production-seo.yml` sob `.github/workflows/` — o par baseado em Tiny/Olist
+(`fetch-shopee-listings.yml`/`optimize-shopee-listings.yml`) ainda ausente. Artefato mais recente
+em `listings/` (por `sort`, não `ls -t`) continua `shopee-listings-20260726-080756.json` (mesmo
+erro de token já documentado) — nenhum arquivo novo desde 2026-07-26, agora **19 dias** sem
+extração de catálogo funcional.
+
+Via `mcp__github__actions_list`: `shopee-production-seo.yml` segue com as mesmas 5 execuções de
+2026-07-30 (`id`s 30585266165, 30571531668, 30571478470, 30571242284, 30570700034), todas
+`conclusion: failure` — nenhuma execução nova desde então. `shopee-optimizer-safety.yml` também
+sem execução nova desde 2026-07-31 (últimas 10 execuções listadas seguem sendo as de
+2026-07-30/31).
+
+**Achado novo, mas irrelevante pro bloqueio de fundo:** `git log -- scripts/utils/shopee_client.py
+scripts/shopee_full_catalog_optimizer.py scripts/shopee_production_seo_apply.py
+.github/workflows/shopee-production-seo.yml .github/workflows/shopee-optimizer-safety.yml` em
+`origin/main` aponta como commit mais recente `3d1345f` (13/08, "ops: make Fred-Win bootstrap
+self-heal auto-sync and tunnel", autor real `fredmourao@gmail.com`) — um commit atípico de
+**3998 arquivos / +665544 linhas** que recria esses 5 arquivos como adição pura (`git show
+--name-status` confirma `A`, não existiam no commit pai) junto com milhares de outros arquivos
+sem relação (`web/index.html`, `validate-everything.sh`, `tmp-gh-email-artifact/*`, um
+`utils/shopee_client.py` duplicado de 9 linhas na raiz, distinto do real em
+`scripts/utils/`). Parece um merge/restore acidental de uma árvore de trabalho local inteira, não
+uma mudança funcional nos scripts do otimizador — o conteúdo de `shopee_production_seo_apply.py`
+e `shopee_full_catalog_optimizer.py` pós-commit segue sem qualquer chamada a endpoint de
+analytics do Shopee Open Platform (confirmado por leitura direta dos arquivos nesta sessão, não
+só por ausência no diff). Não investigado a fundo por estar fora do escopo desta rotina
+(otimização de catálogo, não hardening de repositório) — registrado aqui para o caso de um
+próximo agente de manutenção de repo precisar investigar a causa desse commit.
+
+Nota também sobre ambiguidade de ambiente local: comandos `git log --all` neste sandbox mostram
+um branch local `main` divergente de `origin/main` (contém commits `156fc74`/`c8f96e3`,
+"fix(shopee): persist refreshed tokens/refresh expired tokens", 2026-08-06, tocando
+`scripts/utils/shopee_client.py`) que **não são ancestrais de `origin/main`** — ou seja, essa
+correção de token nunca foi mesclada na branch real (`origin/main` = fonte de verdade por
+`CLAUDE.md`). Um agente futuro que rodar `git log --all` ou `git branch -a --contains` neste tipo
+de sandbox deve conferir contra `origin/main` explicitamente antes de concluir que uma correção
+já está em produção — o branch local `main` deste ambiente não é confiável como referência.
+
+O achado estrutural dos ciclos 19–24 (nenhuma chamada a endpoint de analytics do Shopee Open
+Platform nos scripts de produção — sem CTR, taxa de conversão, comparação alto-vs-baixo-desempenho
+ou A/B testing medido; itens 1, 3, 9 e 10 desta rotina de 6h permanecem tecnicamente inexequíveis
+mesmo que a credencial `SHOPEE_*` esteja presente) permanece válido, reconfirmado por leitura
+direta dos scripts nesta sessão.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. Nenhuma notificação
+push enviada neste ciclo — nenhum dos critérios de novo aviso (workflows Tiny recriados, artefato
+novo com erro diferente, execução de `shopee-production-seo.yml` com apply real bem-sucedido)
+ocorreu; o commit atípico `3d1345f` não altera a recomendação de fundo e não é, por si só,
+critério de aviso definido nos ciclos anteriores. Recomendação para quando o usuário tiver tempo
+permanece a mesma: (1) renovar OAuth2 do Tiny e recriar os workflows dedicados, e/ou (2) decidir
+se vale integrar a API de analytics do Shopee Open Platform para viabilizar os itens 1/3/9/10, e/ou
+(3) reduzir o escopo desta rotina de 6h para apenas o que o código hoje sustenta.
