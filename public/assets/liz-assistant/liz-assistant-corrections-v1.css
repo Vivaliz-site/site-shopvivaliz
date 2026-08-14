@@ -1,0 +1,74 @@
+/* Correcoes finais da Liz: marca oficial, menos obstrucao e safe areas. */
+#sv-liz-launcher {
+  display: grid;
+  place-items: center;
+  background: #fff !important;
+}
+#sv-liz-launcher img {
+  width: 86% !important;
+  height: 86% !important;
+  padding: 5px !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  border-radius: 50%;
+  background: #fff;
+}
+#sv-liz-panel .sv-hero {
+  min-height: 72px;
+  height: 72px;
+  align-items: center;
+  padding: 8px 14px;
+  background: linear-gradient(135deg,#f8fbff,#eef8f3);
+}
+.sv-liz-official-brand {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #173b63;
+  text-align: left;
+}
+.sv-liz-official-brand img {
+  width: min(150px, 42%);
+  height: 48px;
+  object-fit: contain;
+}
+.sv-liz-official-brand span {
+  max-width: 150px;
+  font-size: 12px;
+  line-height: 1.25;
+  font-weight: 800;
+}
+
+@media (max-width: 600px) {
+  #sv-liz-launcher {
+    width: 54px !important;
+    height: 54px !important;
+    right: 12px !important;
+  }
+  #sv-liz-panel {
+    top: max(4px, env(safe-area-inset-top)) !important;
+    right: max(4px, env(safe-area-inset-right)) !important;
+    bottom: max(4px, env(safe-area-inset-bottom)) !important;
+    left: max(4px, env(safe-area-inset-left)) !important;
+  }
+  #sv-liz-panel .sv-hero {
+    min-height: 64px;
+    height: 64px;
+    padding: 7px 10px;
+  }
+  .sv-liz-official-brand {
+    gap: 8px;
+  }
+  .sv-liz-official-brand img {
+    width: min(132px, 44%);
+    height: 42px;
+  }
+  .sv-liz-official-brand span {
+    font-size: 11px;
+  }
+  .sv-form {
+    padding-bottom: max(6px, env(safe-area-inset-bottom)) !important;
+  }
+}
