@@ -88,6 +88,7 @@ function ais_health_recent_capacity_failure(PDO $db, string $provider): ?array
         'openai' => ['openai', '%+openai'],
         'google' => ['google', '%+google'],
         'openrouter' => ['openrouter', '%+openrouter'],
+        'huggingface' => ['huggingface', '%+huggingface'],
         default => [],
     };
     if ($providerPatterns === []) return null;
