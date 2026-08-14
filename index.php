@@ -559,10 +559,14 @@ $homeItemsPerPage = function_exists('sv_get_products_config')
     ? (int)(sv_get_products_config()['itemsPerPage'] ?? 8)
     : 8;
 $featuredProducts = sv_home_featured_products($homeItemsPerPage > 0 ? $homeItemsPerPage : 8);
+$timings['featured_products_load'] = microtime(true) - $t0;
 $featuredProductsCount = count($featuredProducts);
 $catalogCount = sv_home_catalog_count();
+$timings['catalog_count_load'] = microtime(true) - $t0;
 $heroBanners = sv_home_banners();
+$timings['hero_banners_load'] = microtime(true) - $t0;
 $homeCategories = sv_home_top_categories(10);
+$timings['home_categories_load'] = microtime(true) - $t0;
 $svNavCurrent = '';
 ?>
 <!DOCTYPE html>
