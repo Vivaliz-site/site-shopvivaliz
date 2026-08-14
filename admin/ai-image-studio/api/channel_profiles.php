@@ -56,13 +56,6 @@ $providers = [
         'pixel_editor' => false,
         'prompt_optimizer' => true,
     ],
-    'huggingface' => [
-        'label' => 'Hugging Face (gratuito)',
-        'role' => 'Edicao direta da foto real via Inference API gratuita',
-        'default_model' => defined('AI_STUDIO_HUGGINGFACE_IMAGE_MODEL') ? (string)AI_STUDIO_HUGGINGFACE_IMAGE_MODEL : 'timbrooks/instruct-pix2pix',
-        'pixel_editor' => true,
-        'prompt_optimizer' => false,
-    ],
 ];
 
 echo json_encode([
