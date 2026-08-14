@@ -38,6 +38,13 @@
 
 ---
 
+### 2026-08-13 — Título do anúncio do ML não é editável quando o item tem `family_name`
+**Sistema/arquivo:** API de Items do Mercado Livre; `scripts/ml-seo-optimizer.py`, `scripts/ml-image-optimizer.py`
+**O que descobri:** todos os 158 anúncios ativos sem venda do seller são `user_product_listing` (têm `family_name` + `user_product_id`). Nesses itens `PUT /items/{id}` com `title` responde 400 `"You cannot modify the title if the item has a family_name"`, e mandar `family_name` também é recusado (400 `BODY_INVALID_FIELDS`) **mesmo com o valor idêntico ao atual**. `PUT /user-products/{id}` não existe (404). Em compensação, o ML **recompõe o título a partir dos atributos**: preencher um atributo com tag `allow_variations` faz o valor ser anexado ao título (comprovado: `FINISH=Polido` virou " ... Prateado Polido" no título). O que aceita PUT é `attributes`, `pictures` e `/items/{id}/description`.
+**Por quê importa:** qualquer rotina de SEO que planeje "reescrever o título via API" vai bater em 400 no primeiro item e parecer bug de autenticação/payload. O caminho real é ficha técnica + descrição — e mexer em atributo de variação tem efeito colateral no título, então tem que reler o título depois do PUT e reverter se piorar.
+**Ver também:** `docs/MERCADO-LIVRE-API.md` (limites por categoria, filtros de atributo, health 404, CDN de imagem bloqueado para download externo)
+
+
 ## Entradas
 
 ### 2026-08-13 — Ciclo 6h de otimização Shopee: reconfirmação, nenhuma mudança desde a reconfirmação de 08-12 19:11 UTC (não notifiquei)
