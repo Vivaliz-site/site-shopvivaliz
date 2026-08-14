@@ -22,10 +22,10 @@
       var items = Array.isArray(data.items) ? data.items : [];
       if (items.length) {
         grid.innerHTML = items.slice(0, 6).map(render).join('');
-        if (intro) intro.textContent = 'Avaliações reais publicadas após moderação da equipe.';
+        if (intro) intro.textContent = 'Avaliações reais publicadas após moderação automática da Liz.';
       } else {
         grid.innerHTML = '<div class="testimonial-empty"><p>Ainda não há avaliações publicadas.</p><a class="btn btn-primary" href="/avaliacoes.php">Seja o primeiro a avaliar</a></div>';
-        if (intro) intro.textContent = 'Envie sua experiência. Todas as avaliações passam por moderação antes da publicação.';
+        if (intro) intro.textContent = 'Envie sua experiência. A Liz faz a moderação automática antes da publicação.';
       }
       var link = document.createElement('p');
       link.className = 'testimonial-submit-link';

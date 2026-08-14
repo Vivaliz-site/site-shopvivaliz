@@ -33,7 +33,7 @@ final class BlogArticleRepository
     public function published(string $query = '', string $category = '', int $limit = 100): array
     {
         if (!$this->db) {
-            return sv_blog_search_articles($query, $category, $limit);
+            return $this->normalizeArticles(sv_blog_search_articles($query, $category, $limit));
         }
 
         $sql = "SELECT * FROM blog_articles WHERE status = 'published' AND (published_at IS NULL OR published_at <= UTC_TIMESTAMP())";
@@ -58,7 +58,7 @@ final class BlogArticleRepository
 
         $stmt = $this->db->prepare($sql);
         if (!$stmt) {
-            return sv_blog_search_articles($query, $category, $limit);
+            return $this->normalizeArticles(sv_blog_search_articles($query, $category, $limit));
         }
         $stmt->bind_param($types, ...$params);
         $stmt->execute();
@@ -69,7 +69,7 @@ final class BlogArticleRepository
         }
         $stmt->close();
 
-        return $articles ?: sv_blog_search_articles($query, $category, $limit);
+        return $articles ?: $this->normalizeArticles(sv_blog_search_articles($query, $category, $limit));
     }
 
     public function findPublishedBySlug(string $slug): ?array
@@ -77,7 +77,7 @@ final class BlogArticleRepository
         if (!$this->db) {
             foreach (sv_blog_articles() as $article) {
                 if (($article['slug'] ?? '') === $slug) {
-                    return $article;
+                    return $this->normalizeArticle($article);
                 }
             }
             return null;
@@ -183,7 +183,7 @@ final class BlogArticleRepository
 
     private function hydrate(array $row): array
     {
-        return [
+        return $this->normalizeArticle([
             'id' => (int)$row['id'],
             'slug' => (string)$row['slug'],
             'title' => (string)$row['title'],
@@ -203,7 +203,69 @@ final class BlogArticleRepository
             'reading_time' => (int)$row['reading_time'],
             'published_at' => $row['published_at'] ? substr((string)$row['published_at'], 0, 10) : null,
             'updated_at' => $row['updated_at'] ? substr((string)$row['updated_at'], 0, 10) : null,
+        ]);
+    }
+
+    private function normalizeArticles(array $articles): array
+    {
+        return array_map(fn(array $article): array => $this->normalizeArticle($article), $articles);
+    }
+
+    private function normalizeArticle(array $article): array
+    {
+        $currentImage = (string)($article['image'] ?? $article['image_url'] ?? '');
+        $resolvedImage = $this->resolveImage($currentImage, $article);
+        $article['image'] = $resolvedImage;
+        if (array_key_exists('image_url', $article)) {
+            $article['image_url'] = $resolvedImage;
+        }
+        return $article;
+    }
+
+    private function resolveImage(string $image, array $article): string
+    {
+        $image = trim($image);
+        if ($image !== '' && (str_starts_with($image, 'http://') || str_starts_with($image, 'https://') || str_starts_with($image, '//'))) {
+            return $image;
+        }
+
+        if ($image !== '') {
+            $path = (string)(parse_url($image, PHP_URL_PATH) ?: $image);
+            $absolute = dirname(__DIR__) . '/' . ltrim($path, '/');
+            if (is_file($absolute)) {
+                return $image;
+            }
+        }
+
+        return $this->fallbackImageFor($article);
+    }
+
+    private function fallbackImageFor(array $article): string
+    {
+        $keywords = $article['keywords'] ?? [];
+        $keywordText = is_array($keywords) ? implode(' ', array_map('strval', $keywords)) : (string)$keywords;
+        $haystack = implode(' ', [
+            (string)($article['title'] ?? ''),
+            (string)($article['category'] ?? ''),
+            $keywordText,
+        ]);
+        $ascii = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $haystack);
+        $haystack = strtolower(is_string($ascii) && $ascii !== '' ? $ascii : $haystack);
+
+        $rules = [
+            '/rodizio|rodizios|roda|rodas/' => '/public/assets/category-images/cat-rodizios.jpg',
+            '/jardim|jardinagem|planta|plantas/' => '/public/assets/category-images/cat-jardim.jpg',
+            '/ferramenta|ferramentas|reparo|reparos|conserto|consertos/' => '/public/assets/category-images/cat-ferramentas.jpg',
+            '/ferragem|ferragens|fixador|fixadores|bucha|buchas|parafuso|parafusos|cadeado|cadeados|dobradica|puxador|gancho|suporte/' => '/public/assets/category-images/cat-ferragens.jpg',
+            '/organizacao|organizar|organizador|organizadores|armario|cozinha|lavanderia|garagem|estoque|caixa|quarto|limpeza|acessorio|acessorios/' => '/public/assets/category-images/cat-organizacao.jpg',
         ];
+        foreach ($rules as $pattern => $fallback) {
+            if (preg_match($pattern, $haystack) === 1) {
+                return $fallback;
+            }
+        }
+
+        return '/public/assets/category-images/cat-organizacao.jpg';
     }
 
     private function decodeJson(?string $value): array
@@ -252,6 +314,7 @@ final class BlogArticleRepository
 
     private function insertScheduledArticle(array $article, string $scheduledAtUtc): bool
     {
+        $article['image_url'] = $this->resolveImage((string)($article['image_url'] ?? ''), $article);
         $sql = "INSERT INTO blog_articles
             (slug,title,excerpt,category,image_url,image_alt,content_json,faq_json,keywords_json,meta_title,meta_description,related_products_url,author,status,featured,reading_time,scheduled_at)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'scheduled',?,?,?)

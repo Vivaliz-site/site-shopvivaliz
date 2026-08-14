@@ -4,9 +4,32 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store');
 require_once dirname(__DIR__) . '/includes/testimonials-repository.php';
+require_once dirname(__DIR__) . '/includes/liz-testimonial-moderator.php';
+
+function sv_testimonials_moderate_pending(TestimonialsRepository $repo, LizTestimonialModerator $moderator, int $limit = 10): void
+{
+    foreach ($repo->pendingUnmoderated($limit) as $row) {
+        try {
+            $decision = $moderator->moderate($row);
+            $repo->moderate(
+                (string)($row['id'] ?? ''),
+                (string)($decision['status'] ?? 'pending'),
+                (string)($decision['reason'] ?? 'moderacao_liz'),
+                (string)($decision['moderated_by'] ?? 'liz'),
+                (string)($decision['provider'] ?? 'rules'),
+                ($decision['model'] ?? null) !== null ? (string)$decision['model'] : null
+            );
+        } catch (Throwable $e) {
+            error_log('Falha na moderação automática de avaliação pela Liz: ' . $e->getMessage());
+        }
+    }
+}
+
 $repo = new TestimonialsRepository();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 if ($method === 'GET') {
+    // Backfill rápido das avaliações antigas: usa as mesmas regras da Liz sem depender de chamada externa.
+    sv_testimonials_moderate_pending($repo, new LizTestimonialModerator(false), 50);
     echo json_encode(['ok' => true, 'items' => $repo->approved(12)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
@@ -39,10 +62,25 @@ if (mb_strlen($name) < 2 || mb_strlen($name) > 80 || mb_strlen($message) < 20 ||
     exit;
 }
 try {
-    $repo->submit($input);
+    $moderator = new LizTestimonialModerator(true);
+    $decision = $moderator->moderate($input);
+    $row = $repo->submit($input, $decision);
     $_SESSION['testimonial_last_submit'] = time();
-    echo json_encode(['ok' => true, 'message' => 'Avaliação enviada para moderação.'], JSON_UNESCAPED_UNICODE);
+
+    $status = (string)($row['status'] ?? 'pending');
+    $messageText = match ($status) {
+        'approved' => 'Avaliação aprovada pela Liz e publicada. Obrigado por compartilhar sua experiência!',
+        'rejected' => 'Avaliação recebida, mas não foi publicada porque a moderação identificou conteúdo incompatível com as regras.',
+        default => 'Avaliação recebida pela Liz e encaminhada para revisão da equipe antes da publicação.',
+    };
+
+    echo json_encode([
+        'ok' => true,
+        'status' => $status,
+        'message' => $messageText,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
+    error_log('Falha ao salvar/moderar avaliação: ' . $e->getMessage());
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => 'Não foi possível enviar a avaliação agora.']);
 }

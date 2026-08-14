@@ -27,10 +27,14 @@ final class TestimonialsRepository
         return $ok !== false && rename($tmp, $this->file);
     }
 
-    public function submit(array $data): array
+    public function submit(array $data, ?array $moderation = null): array
     {
         $rows = $this->readAll();
         $id = bin2hex(random_bytes(8));
+        $allowedStatuses = ['pending','approved','rejected','hidden'];
+        $status = $moderation !== null ? (string)($moderation['status'] ?? 'pending') : 'pending';
+        if (!in_array($status, $allowedStatuses, true)) $status = 'pending';
+        $moderatedAt = $moderation !== null ? gmdate('c') : null;
         $row = [
             'id' => $id,
             'name' => trim(strip_tags((string)($data['name'] ?? ''))),
@@ -38,10 +42,15 @@ final class TestimonialsRepository
             'rating' => max(1, min(5, (int)($data['rating'] ?? 5))),
             'message' => trim(strip_tags((string)($data['message'] ?? ''))),
             'order_reference' => trim(strip_tags((string)($data['order_reference'] ?? ''))),
-            'status' => 'pending',
+            'status' => $status,
             'created_at' => gmdate('c'),
-            'moderated_at' => null,
-            'moderation_reason' => null,
+            'moderated_at' => $moderatedAt,
+            'moderation_reason' => $moderation !== null ? trim(strip_tags((string)($moderation['reason'] ?? ''))) : null,
+            'moderated_by' => $moderation !== null ? trim(strip_tags((string)($moderation['moderated_by'] ?? 'liz'))) : null,
+            'moderation_provider' => $moderation !== null ? trim(strip_tags((string)($moderation['provider'] ?? ''))) : null,
+            'moderation_model' => $moderation !== null && ($moderation['model'] ?? null) !== null
+                ? trim(strip_tags((string)$moderation['model']))
+                : null,
         ];
         $rows[] = $row;
         if (!$this->writeAll($rows)) throw new RuntimeException('Não foi possível salvar a avaliação.');
@@ -62,8 +71,23 @@ final class TestimonialsRepository
         return array_values(array_filter($this->readAll(), fn(array $r): bool => ($r['status'] ?? '') === $status));
     }
 
-    public function moderate(string $id, string $status, ?string $reason = null): bool
+    public function pendingUnmoderated(int $limit = 10): array
     {
+        $rows = array_values(array_filter($this->readAll(), static function (array $row): bool {
+            return ($row['status'] ?? '') === 'pending' && empty($row['moderated_at']);
+        }));
+        usort($rows, fn(array $a, array $b): int => strcmp((string)($a['created_at'] ?? ''), (string)($b['created_at'] ?? '')));
+        return array_slice($rows, 0, max(1, $limit));
+    }
+
+    public function moderate(
+        string $id,
+        string $status,
+        ?string $reason = null,
+        ?string $moderatedBy = null,
+        ?string $provider = null,
+        ?string $model = null
+    ): bool {
         if (!in_array($status, ['pending','approved','rejected','hidden'], true)) return false;
         $rows = $this->readAll();
         $changed = false;
@@ -72,6 +96,9 @@ final class TestimonialsRepository
             $row['status'] = $status;
             $row['moderated_at'] = gmdate('c');
             $row['moderation_reason'] = $reason ? trim(strip_tags($reason)) : null;
+            $row['moderated_by'] = $moderatedBy ? trim(strip_tags($moderatedBy)) : 'admin';
+            $row['moderation_provider'] = $provider ? trim(strip_tags($provider)) : null;
+            $row['moderation_model'] = $model ? trim(strip_tags($model)) : null;
             $changed = true;
             break;
         }
