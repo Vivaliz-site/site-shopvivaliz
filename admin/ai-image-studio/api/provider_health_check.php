@@ -42,6 +42,7 @@ function ais_health_probe(string $provider, string $key): array
             'claude' => AiStudioHttpClient::request('GET', 'https://api.anthropic.com/v1/models', ['x-api-key' => $key, 'anthropic-version' => '2023-06-01'], null, 12),
             'openrouter' => AiStudioHttpClient::request('GET', 'https://openrouter.ai/api/v1/key', ['Authorization' => 'Bearer ' . $key], null, 12),
             'groq' => AiStudioHttpClient::request('GET', 'https://api.groq.com/openai/v1/models', ['Authorization' => 'Bearer ' . $key], null, 12),
+            'huggingface' => AiStudioHttpClient::request('GET', 'https://huggingface.co/api/whoami-v2', ['Authorization' => 'Bearer ' . $key], null, 12),
             default => ['status' => 0, 'body' => ''],
         };
         $status = (int)$response['status'];
