@@ -700,8 +700,14 @@ if ($notFound) {
                     <span class="product-price-label"><?= sv_esc($priceLabel) ?></span>
                     <?php if ($priceRaw > 0): ?>
                         <?php $pixPrice = $priceRaw * 0.95; ?>
-                        <div class="pix-discount-badge" style="display:inline-flex; align-items:center; gap:6px; background:var(--accent-bg); color:var(--accent); padding:6px 12px; border-radius:8px; font-weight:700; font-size:14px; margin-top:8px; border:1px solid rgba(5,150,105,0.18);">
-                            <span>⚡ ou R$ <?= number_format($pixPrice, 2, ',', '.') ?> no PIX (5% OFF)</span>
+                        <?php $installments = 3; $installmentValue = $priceRaw / $installments; ?>
+                        <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">
+                            <div class="pix-discount-badge" style="display:inline-flex; align-items:center; gap:6px; background:var(--accent-bg); color:var(--accent); padding:6px 12px; border-radius:8px; font-weight:700; font-size:14px; border:1px solid rgba(5,150,105,0.18); width:fit-content;">
+                                <span>⚡ ou R$ <?= number_format($pixPrice, 2, ',', '.') ?> no PIX (5% OFF)</span>
+                            </div>
+                            <div class="installment-label" style="font-size:13px; color:#64748b; font-weight:600;">
+                                <span>💳 Em até <?= $installments ?>x de R$ <?= number_format($installmentValue, 2, ',', '.') ?> sem juros</span>
+                            </div>
                         </div>
                     <?php endif; ?>
                     <?php if ($priceRaw === 0.0): ?>
