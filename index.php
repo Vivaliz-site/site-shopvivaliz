@@ -1,6 +1,10 @@
 <?php
 declare(strict_types=1);
 
+$t0 = microtime(true);
+$timings = [];
+$timings['start'] = 0.0;
+
 // Precisa iniciar a sessao antes de qualquer output: esta pagina tem HTML
 // suficiente antes do include do navbar (JSON-LD, meta tags) para estourar o
 // buffer de saida do PHP, o que envia os headers cedo e faz o session_start()
@@ -9,6 +13,7 @@ declare(strict_types=1);
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+$timings['session_start'] = microtime(true) - $t0;
 
 // Cache: 'no-cache' obriga revalidacao a cada request (conteudo nunca fica stale),
 // mas permite resposta 304 quando nada mudou — ao contrario de 'no-store', que
@@ -17,6 +22,7 @@ if (session_status() === PHP_SESSION_NONE) {
 header('Cache-Control: no-cache, must-revalidate');
 
 require_once __DIR__ . '/config/bootstrap-env.php';
+$timings['bootstrap_env'] = microtime(true) - $t0;
 
 // Configuração Dinâmica de Ambiente
 $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
@@ -24,11 +30,17 @@ $host = $_SERVER['HTTP_HOST'] ?? 'shopvivaliz.com.br';
 define('BASE_URL', $scheme . '://' . $host);
 define('APP_NAME', 'ShopVivaliz');
 require_once __DIR__ . '/includes/product-price-enrich.php';
+$timings['price_enrich'] = microtime(true) - $t0;
 require_once __DIR__ . '/includes/catalog-runtime.php';
+$timings['catalog_runtime'] = microtime(true) - $t0;
 require_once __DIR__ . '/includes/ml-ranking.php';
+$timings['ml_ranking'] = microtime(true) - $t0;
 require_once __DIR__ . '/includes/site-settings.php';
+$timings['site_settings'] = microtime(true) - $t0;
 require_once __DIR__ . '/includes/popup-cupons.php';
+$timings['popup_cupons'] = microtime(true) - $t0;
 $svFreeShipping = sv_free_shipping_config();
+$timings['free_shipping'] = microtime(true) - $t0;
 
 function sv_home_esc(string $value): string
 {
@@ -1305,3 +1317,11 @@ $svNavCurrent = '';
     <?php echo sv_popup_cupons_html(); ?>
 </body>
 </html>
+<?php
+$timings['total'] = microtime(true) - $t0;
+echo "\n<!-- PHP Exec Timings:\n";
+foreach ($timings as $key => $elapsed) {
+    printf("  %s: %.4fs\n", $key, $elapsed);
+}
+echo "-->\n";
+?>
