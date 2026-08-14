@@ -9,13 +9,12 @@ on:
 permissions:
   contents: read
 
-environment: production
-
 jobs:
-  audit:
+  inspect:
     if: github.repository == 'Vivaliz-site/site-shopvivaliz' && github.actor == 'fredmourao-ai'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
+    environment: production
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -50,242 +49,74 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Verify Fred-Win relay
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
-            'curl -fsS --connect-timeout 5 --max-time 12 http://127.0.0.1:5557/health'
-
-      - name: Find patch, apply, validate and push audit branch on Fred-Win
+      - name: Inspect Fred-Win for audit patch
         shell: bash
         run: |
           set -Eeuo pipefail
           mkdir -p test-results/fredwin-auditoria
-          cat > /tmp/fredwin-auditoria.ps1 <<'PS1'
-          $ErrorActionPreference = 'Stop'
-          $ProgressPreference = 'SilentlyContinue'
-
-          function Emit-Result([hashtable]$Result) {
-              $json = $Result | ConvertTo-Json -Depth 8 -Compress
-              $bytes = [Text.Encoding]::UTF8.GetBytes($json)
-              Write-Output ('SV_AUDIT_RESULT_B64=' + [Convert]::ToBase64String($bytes))
-          }
-
-          $result = [ordered]@{
-              ok = $false
-              stage = 'start'
-              patch_found = $false
-              patch_path = $null
-              patch_sha256 = $null
-              repo = $null
-              main_sha = $null
-              apply_mode = $null
-              quality_passed = $false
-              pushed = $false
-              branch = 'sec/auditoria-completa'
-              errors = @()
-          }
-          $worktree = $null
-
-          try {
-              $repoCandidates = @('C:\site-shopvivaliz', 'C:\Users\FRED\site-shopvivaliz')
-              $repo = $repoCandidates | Where-Object { Test-Path (Join-Path $_ '.git') } | Select-Object -First 1
-              if (-not $repo) { throw 'Repositorio ShopVivaliz nao encontrado nos caminhos esperados.' }
-              $result.repo = $repo
-
-              $patchCandidates = @(
-                  'C:\site-shopvivaliz\auditoria-shopvivaliz.patch',
-                  'C:\Users\FRED\site-shopvivaliz\auditoria-shopvivaliz.patch',
-                  'C:\Users\FRED\Downloads\auditoria-shopvivaliz.patch',
-                  'C:\Users\FRED\Desktop\auditoria-shopvivaliz.patch',
-                  'C:\Users\FRED\Documents\auditoria-shopvivaliz.patch'
-              )
-              $patch = $patchCandidates | Where-Object { Test-Path $_ -PathType Leaf } | Select-Object -First 1
-              if (-not $patch) {
-                  foreach ($root in @('C:\Users\FRED\Downloads','C:\Users\FRED\Desktop','C:\Users\FRED\Documents')) {
-                      if (-not (Test-Path $root)) { continue }
-                      $found = Get-ChildItem -Path $root -Filter 'auditoria-shopvivaliz.patch' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-                      if ($found) { $patch = $found.FullName; break }
-                  }
-              }
-              if (-not $patch) {
-                  $result.stage = 'patch_not_found'
-                  $result.checked_paths = $patchCandidates
-                  Emit-Result $result
-                  exit 20
-              }
-              $result.patch_found = $true
-              $result.patch_path = $patch
-              $result.patch_sha256 = (Get-FileHash -Algorithm SHA256 $patch).Hash.ToLowerInvariant()
-
-              & git -C $repo fetch origin --prune
-              if ($LASTEXITCODE -ne 0) { throw 'git fetch origin falhou.' }
-              $mainSha = (& git -C $repo rev-parse origin/main).Trim()
-              $result.main_sha = $mainSha
-
-              $worktree = Join-Path $env:TEMP ('shopvivaliz-audit-' + [Guid]::NewGuid().ToString('N'))
-              & git -C $repo worktree add --detach $worktree origin/main
-              if ($LASTEXITCODE -ne 0) { throw 'git worktree add falhou.' }
-
-              Push-Location $worktree
-              try {
-                  $result.stage = 'preflight'
-                  $task = 'auditoria-completa-20260814'
-                  $packet = & py -3 scripts/agent-docs-gate.py read --agent chatgpt --task $task
-                  if ($LASTEXITCODE -ne 0) { throw 'agent-docs-gate read falhou.' }
-                  $digest = (($packet -join "`n") | ConvertFrom-Json).digest
-                  & py -3 scripts/agent-docs-gate.py acknowledge --agent chatgpt --task $task --digest $digest | Out-Null
-                  if ($LASTEXITCODE -ne 0) { throw 'agent-docs-gate acknowledge falhou.' }
-                  & py -3 scripts/agent-docs-gate.py verify --agent chatgpt --task $task | Out-Host
-                  if ($LASTEXITCODE -ne 0) { throw 'agent-docs-gate verify falhou.' }
-
-                  $result.stage = 'apply_patch'
-                  & git am $patch
-                  if ($LASTEXITCODE -eq 0) {
-                      $result.apply_mode = 'git_am'
-                  } else {
-                      & git am --abort 2>$null
-                      & git apply --check $patch
-                      if ($LASTEXITCODE -ne 0) {
-                          $result.stage = 'patch_conflict'
-                          $result.errors += 'git am e git apply --check falharam contra a main atual.'
-                          Emit-Result $result
-                          exit 21
-                      }
-                      & git apply $patch
-                      if ($LASTEXITCODE -ne 0) { throw 'git apply falhou apos check limpo.' }
-                      & git add -A
-                      & git -c user.name='ChatGPT ShopVivaliz' -c user.email='noreply@openai.com' commit -m 'sec+perf: auditoria completa (TTFB home, webhooks sem auth, vazamento de custo)'
-                      if ($LASTEXITCODE -ne 0) { throw 'git commit do fallback falhou.' }
-                      $result.apply_mode = 'git_apply_commit'
-                  }
-
-                  $result.stage = 'php_lint'
-                  $phpFiles = @(
-                      'includes/pdo-database.php',
-                      'includes/site-settings.php',
-                      'includes/webhook-secret.php',
-                      'includes/webhook-job-dispatcher.php',
-                      'includes/secure-session.php',
-                      'index.php',
-                      'admin/settings.php',
-                      'admin/settings-frete.php',
-                      'api/webhook-mercadopago.php',
-                      'api/olist/webhook.php',
-                      'api/tiny/stock-webhook.php',
-                      'api/ml/webhook.php',
-                      'api/liz-general.php',
-                      'api/liz-intelligent-knowledge.php'
-                  )
-                  foreach ($file in $phpFiles) {
-                      & php -l $file | Out-Host
-                      if ($LASTEXITCODE -ne 0) { throw "PHP lint falhou: $file" }
-                  }
-
-                  $result.stage = 'quality_gates'
-                  & php scripts\quality\run-all.php | Tee-Object -Variable qualityOutput | Out-Host
-                  $qualityExit = $LASTEXITCODE
-                  $qualityText = ($qualityOutput -join "`n")
-                  if ($qualityExit -ne 0 -or $qualityText -notmatch 'All ShopVivaliz quality checks passed') {
-                      throw "Quality gates falharam (exit=$qualityExit)."
-                  }
-                  $result.quality_passed = $true
-
-                  $result.stage = 'push'
-                  $result.head_sha = (& git rev-parse HEAD).Trim()
-                  $result.changed_files = [int]((& git diff --name-only origin/main...HEAD | Measure-Object).Count)
-                  $result.stat = (& git diff --stat origin/main...HEAD) -join "`n"
-                  & git push origin HEAD:refs/heads/sec/auditoria-completa
-                  if ($LASTEXITCODE -ne 0) { throw 'git push da branch sec/auditoria-completa falhou.' }
-                  $result.pushed = $true
-                  $result.stage = 'complete'
-                  $result.ok = $true
-                  Emit-Result $result
-              } finally {
-                  Pop-Location
-              }
-          } catch {
-              $result.errors += $_.Exception.Message
-              Emit-Result $result
-              exit 1
-          } finally {
-              if ($worktree -and (Test-Path $worktree) -and $result.stage -ne 'patch_conflict') {
-                  try { & git -C $result.repo worktree remove --force $worktree 2>$null | Out-Null } catch {}
-              }
-          }
-          PS1
-
-          gzip -c /tmp/fredwin-auditoria.ps1 | base64 -w0 > /tmp/fredwin-auditoria.ps1.gz.b64
-          script_b64="$(cat /tmp/fredwin-auditoria.ps1.gz.b64)"
-          python3 - "$script_b64" <<'PY' > /tmp/fredwin-auditoria-body.json
-          import json, sys
-          encoded = sys.argv[1]
-          command = (
-              'powershell -NoProfile -ExecutionPolicy Bypass -Command "'
-              "$ErrorActionPreference='Stop';"
-              "$path=Join-Path $env:TEMP 'shopvivaliz-auditoria.ps1';"
-              f"$data=[Convert]::FromBase64String('{encoded}');"
-              "$input=[IO.MemoryStream]::new($data);"
-              "$gzip=[IO.Compression.GzipStream]::new($input,[IO.Compression.CompressionMode]::Decompress);"
-              "$output=[IO.MemoryStream]::new();$gzip.CopyTo($output);"
-              "[IO.File]::WriteAllBytes($path,$output.ToArray());"
-              "$gzip.Dispose();$input.Dispose();$output.Dispose();"
-              "try { & powershell -NoProfile -ExecutionPolicy Bypass -File $path; $code=$LASTEXITCODE } "
-              "finally { Remove-Item $path -Force -ErrorAction SilentlyContinue }; exit $code"
-              '"'
+          cat > /tmp/inspect.ps1 <<'PS1'
+          $ErrorActionPreference='Stop'
+          $paths=@(
+            'C:\site-shopvivaliz\auditoria-shopvivaliz.patch',
+            'C:\Users\FRED\site-shopvivaliz\auditoria-shopvivaliz.patch',
+            'C:\Users\FRED\Downloads\auditoria-shopvivaliz.patch',
+            'C:\Users\FRED\Desktop\auditoria-shopvivaliz.patch',
+            'C:\Users\FRED\Documents\auditoria-shopvivaliz.patch'
           )
-          print(json.dumps({'params': {'command': command, 'timeout': 2100}}))
+          $found=$paths | Where-Object { Test-Path $_ -PathType Leaf } | Select-Object -First 1
+          if(-not $found){
+            foreach($root in @('C:\Users\FRED\Downloads','C:\Users\FRED\Desktop','C:\Users\FRED\Documents','C:\Users\FRED\site-shopvivaliz')){
+              if(-not (Test-Path $root)){continue}
+              $item=Get-ChildItem -Path $root -Filter 'auditoria-shopvivaliz.patch' -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+              if($item){$found=$item.FullName;break}
+            }
+          }
+          $repo=@('C:\site-shopvivaliz','C:\Users\FRED\site-shopvivaliz') | Where-Object { Test-Path (Join-Path $_ '.git') } | Select-Object -First 1
+          $obj=[ordered]@{patch_found=[bool]$found;patch_path=$found;patch_sha256=$null;patch_bytes=$null;repo=$repo;repo_status=$null;repo_head=$null}
+          if($found){$obj.patch_sha256=(Get-FileHash -Algorithm SHA256 $found).Hash.ToLowerInvariant();$obj.patch_bytes=(Get-Item $found).Length}
+          if($repo){$obj.repo_status=((& git -C $repo status --porcelain) -join "`n");$obj.repo_head=((& git -C $repo rev-parse HEAD).Trim())}
+          $json=$obj|ConvertTo-Json -Compress
+          Write-Output ('SV_AUDIT_INSPECT_B64='+[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($json)))
+          PS1
+          gzip -c /tmp/inspect.ps1 | base64 -w0 > /tmp/inspect.b64
+          script_b64="$(cat /tmp/inspect.b64)"
+          python3 - "$script_b64" <<'PY' > /tmp/body.json
+          import json,sys
+          b=sys.argv[1]
+          cmd=('powershell -NoProfile -ExecutionPolicy Bypass -Command "'
+               "$p=Join-Path $env:TEMP 'sv-audit-inspect.ps1';"
+               f"$d=[Convert]::FromBase64String('{b}');"
+               "$i=[IO.MemoryStream]::new($d);$g=[IO.Compression.GzipStream]::new($i,[IO.Compression.CompressionMode]::Decompress);"
+               "$o=[IO.MemoryStream]::new();$g.CopyTo($o);[IO.File]::WriteAllBytes($p,$o.ToArray());"
+               "$g.Dispose();$i.Dispose();$o.Dispose();try{& powershell -NoProfile -ExecutionPolicy Bypass -File $p;$c=$LASTEXITCODE}finally{Remove-Item $p -Force -ErrorAction SilentlyContinue};exit $c"
+               '"')
+          print(json.dumps({'params':{'command':cmd,'timeout':300}}))
           PY
-
-          body_b64="$(base64 -w0 /tmp/fredwin-auditoria-body.json)"
-          set +e
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+          body_b64="$(base64 -w0 /tmp/body.json)"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
             "BODY_B64='$body_b64' python3 - <<'PY'
-          import base64, json, os, pathlib, urllib.request
-          body = base64.b64decode(os.environ['BODY_B64'])
-          req = urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command', data=body, headers={'Content-Type':'application/json'}, method='POST')
-          try:
-              with urllib.request.urlopen(req, timeout=2160) as response:
-                  relay = json.loads(response.read().decode('utf-8'))
-          except Exception as exc:
-              pathlib.Path('test-results/fredwin-auditoria/result.json').write_text(json.dumps({'ok':False,'stage':'relay_error','error':str(exc)}, indent=2), encoding='utf-8')
-              raise
-          result = relay.get('result') or {}
-          output = str(result.get('output') or '')
-          error = str(result.get('error') or '')
-          marker = ''
+          import base64,json,os,pathlib,urllib.request
+          body=base64.b64decode(os.environ['BODY_B64'])
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=360) as r: relay=json.loads(r.read().decode())
+          result=relay.get('result') or {}; output=str(result.get('output') or ''); marker=''
           for line in output.splitlines():
-              if line.startswith('SV_AUDIT_RESULT_B64='):
-                  marker = line.split('=',1)[1].strip()
-          if marker:
-              decoded = json.loads(base64.b64decode(marker).decode('utf-8'))
-          else:
-              decoded = {'ok':False,'stage':'structured_result_missing','relay_success':result.get('success'),'output_tail':output[-4000:],'error_tail':error[-4000:]}
-          pathlib.Path('test-results/fredwin-auditoria/result.json').write_text(json.dumps(decoded, ensure_ascii=False, indent=2), encoding='utf-8')
-          print(json.dumps(decoded, ensure_ascii=False, indent=2))
-          if result.get('success') is not True or decoded.get('ok') is not True:
-              raise SystemExit(7)
+            if line.startswith('SV_AUDIT_INSPECT_B64='): marker=line.split('=',1)[1].strip()
+          data=json.loads(base64.b64decode(marker).decode()) if marker else {'patch_found':False,'error':'structured_result_missing','output_tail':output[-2000:]}
+          pathlib.Path('test-results/fredwin-auditoria/inspect.json').write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+          print(json.dumps(data,ensure_ascii=False,indent=2))
+          if result.get('success') is not True: raise SystemExit(7)
           PY"
-          remote_status=$?
-          set -e
-          exit "$remote_status"
 
       - name: Upload result
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: fredwin-auditoria-shopvivaliz-${{ github.run_id }}-${{ github.run_attempt }}
-          path: test-results/fredwin-auditoria/result.json
+          name: fredwin-auditoria-inspect-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/fredwin-auditoria/inspect.json
           if-no-files-found: error
           retention-days: 14
 
       - name: Cleanup
         if: always()
-        shell: bash
-        run: |
-          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts" /tmp/fredwin-auditoria.ps1 /tmp/fredwin-auditoria.ps1.gz.b64 /tmp/fredwin-auditoria-body.json
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts" /tmp/inspect.ps1 /tmp/inspect.b64 /tmp/body.json
