@@ -62,7 +62,9 @@ try {
         & py -3 $transform $worktree | Out-Host
         if ($LASTEXITCODE -ne 0) { throw 'Reconstrucao da auditoria falhou.' }
 
-        $changed = @(& git diff --name-only)
+        $tracked = @(& git diff --name-only)
+        $untracked = @(& git ls-files --others --exclude-standard)
+        $changed = @(($tracked + $untracked) | Where-Object { $_ -ne '' } | Sort-Object -Unique)
         $expected = @(
             '.htaccess',
             'admin/settings.php',
