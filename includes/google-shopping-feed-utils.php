@@ -159,6 +159,22 @@ function svgf_collect_identifier_rows(mixed $node, array &$map): void
  */
 function svgf_catalog_identifier_map(string $root): array
 {
+    static $localCache = null;
+    if ($localCache !== null) {
+        return $localCache;
+    }
+
+    $apcu = function_exists('apcu_fetch') && function_exists('apcu_store');
+    $apcuKey = 'sv_catalog_identifier_map_v1';
+    if ($apcu) {
+        $ok = false;
+        $stored = apcu_fetch($apcuKey, $ok);
+        if ($ok && is_array($stored)) {
+            $localCache = $stored;
+            return $localCache;
+        }
+    }
+
     $map = [];
     foreach ([
         $root . '/storage/products-cache-ativos.json',
@@ -169,7 +185,12 @@ function svgf_catalog_identifier_map(string $root): array
         if (!is_array($payload)) continue;
         svgf_collect_identifier_rows($payload, $map);
     }
-    return $map;
+
+    $localCache = $map;
+    if ($apcu) {
+        apcu_store($apcuKey, $localCache, 120); // Cache por 2 minutos
+    }
+    return $localCache;
 }
 
 function svgf_xml(string $value): string
