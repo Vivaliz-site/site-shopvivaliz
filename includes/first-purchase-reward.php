@@ -42,114 +42,27 @@ function svfpr_generate_code(): string
     return 'VIVA5-' . strtoupper(substr(bin2hex(random_bytes(5)), 0, 10));
 }
 
-/**
- * Cria exatamente um cupom de recompensa por e-mail de cliente.
- * A UNIQUE(customer_email) transforma webhooks repetidos em operacao idempotente.
- *
- * @return array{created:bool,code:string,expires_at:string,email_sent:bool}
- */
-function svfpr_issue_for_approved_order(array $order): array
+function svfpr_has_prior_paid_order(string $email, string $currentOrder): bool
 {
-    $email = svfpr_normalize_email((string)($order['customer']['email'] ?? ''));
-    $name = trim((string)($order['customer']['name'] ?? 'Cliente')) ?: 'Cliente';
-    $orderNumber = trim((string)($order['order_number'] ?? ''));
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL) || $orderNumber === '') {
-        return ['created' => false, 'code' => '', 'expires_at' => '', 'email_sent' => false];
-    }
-
-    svfpr_ensure_schema();
-    $pdo = sv_pdo();
-
-    // Se o cliente ja recebeu a recompensa, nao cria nem reenvia outra.
-    $existing = $pdo->prepare('SELECT coupon_code, expires_at, email_sent_at FROM customer_reward_coupons WHERE customer_email = :email LIMIT 1');
-    $existing->execute([':email' => $email]);
-    $row = $existing->fetch();
-    if (is_array($row)) {
-        return [
-            'created' => false,
-            'code' => (string)($row['coupon_code'] ?? ''),
-            'expires_at' => (string)($row['expires_at'] ?? ''),
-            'email_sent' => !empty($row['email_sent_at']),
-        ];
-    }
-
-    $expiresAt = date('Y-m-d H:i:s', time() + SVFPR_VALID_DAYS * 86400);
-    $code = '';
-
-    for ($attempt = 0; $attempt < 5; $attempt++) {
-        $candidate = svfpr_generate_code();
-        try {
-            $pdo->beginTransaction();
-
-            $coupon = $pdo->prepare(
-                'INSERT INTO coupons
-                    (code, description, discount_type, discount_value, min_order_value, starts_at, ends_at, expires_at, max_uses, used_count, is_active)
-                 VALUES
-                    (:code, :description, :type, :value, 0, NOW(), :expires_at, :expires_at, 1, 0, 1)'
-            );
-            $coupon->execute([
-                ':code' => $candidate,
-                ':description' => 'Presente da primeira compra: 5% OFF por 30 dias',
-                ':type' => 'percent',
-                ':value' => SVFPR_DISCOUNT_PERCENT,
-                ':expires_at' => $expiresAt,
-            ]);
-
-            $reward = $pdo->prepare(
-                'INSERT INTO customer_reward_coupons (customer_email, coupon_code, source_order, expires_at)
-                 VALUES (:email, :code, :order_number, :expires_at)'
-            );
-            $reward->execute([
-                ':email' => $email,
-                ':code' => $candidate,
-                ':order_number' => $orderNumber,
-                ':expires_at' => $expiresAt,
-            ]);
-
-            $pdo->commit();
-            $code = $candidate;
-            break;
-        } catch (Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-
-            // Webhooks concorrentes podem chegar simultaneamente. Se outro
-            // processo venceu a corrida pela UNIQUE(customer_email), retornamos
-            // o cupom ja criado e nao geramos um segundo beneficio.
-            $check = $pdo->prepare('SELECT coupon_code, expires_at, email_sent_at FROM customer_reward_coupons WHERE customer_email = :email LIMIT 1');
-            $check->execute([':email' => $email]);
-            $won = $check->fetch();
-            if (is_array($won)) {
-                return [
-                    'created' => false,
-                    'code' => (string)($won['coupon_code'] ?? ''),
-                    'expires_at' => (string)($won['expires_at'] ?? ''),
-                    'email_sent' => !empty($won['email_sent_at']),
-                ];
-            }
-            if ($attempt === 4) {
-                error_log('[FirstPurchaseReward] issue failed order=' . $orderNumber . ' ' . $e->getMessage());
-                return ['created' => false, 'code' => '', 'expires_at' => '', 'email_sent' => false];
-            }
-        }
-    }
-
-    if ($code === '') {
-        return ['created' => false, 'code' => '', 'expires_at' => '', 'email_sent' => false];
-    }
-
-    $emailSent = false;
     try {
-        require_once dirname(__DIR__) . '/scripts/mailer.php';
-        $emailSent = send_email($email, svfpr_email_subject(), svfpr_email_html($name, $code, $expiresAt));
-        if ($emailSent) {
-            $mark = $pdo->prepare('UPDATE customer_reward_coupons SET email_sent_at = NOW() WHERE customer_email = :email AND coupon_code = :code');
-            $mark->execute([':email' => $email, ':code' => $code]);
-        }
+        $stmt = sv_pdo()->prepare(
+            "SELECT 1 FROM orders
+             WHERE LOWER(email) = :email
+               AND order_number <> :order_number
+               AND LOWER(order_status) IN (
+                   'pagamento_aprovado','payment_approved','aprovado','paid','completed',
+                   'nota_fiscal_enviada','pronto_para_enviar','enviado','entregue'
+               )
+             LIMIT 1"
+        );
+        $stmt->execute([':email' => $email, ':order_number' => $currentOrder]);
+        return (bool)$stmt->fetchColumn();
     } catch (Throwable $e) {
-        error_log('[FirstPurchaseReward] email failed order=' . $orderNumber . ' ' . $e->getMessage());
+        error_log('[FirstPurchaseReward] prior paid lookup failed: ' . $e->getMessage());
+        // Falha fechada: nao conceder beneficio de primeira compra sem conseguir
+        // verificar com seguranca o historico do cliente.
+        return true;
     }
-
-    return ['created' => true, 'code' => $code, 'expires_at' => $expiresAt, 'email_sent' => $emailSent];
 }
 
 function svfpr_email_subject(): string
@@ -173,7 +86,7 @@ function svfpr_email_html(string $name, string $code, string $expiresAt): string
         . '<p style="margin:0;opacity:.95;font-size:16px">Obrigado por escolher a ShopVivaliz.</p></div>'
         . '<div style="background:#fff;padding:30px 28px;border-radius:0 0 20px 20px;border:1px solid #dfe7ef;border-top:0">'
         . '<p style="font-size:16px">Olá, <strong>' . $safeName . '</strong>!</p>'
-        . '<p style="font-size:16px;line-height:1.65">Como agradecimento por realizar sua <strong>primeira compra</strong>, você ganhou um cupom exclusivo de <strong>5% OFF</strong> para usar na próxima compra.</p>'
+        . '<p style="font-size:16px;line-height:1.65">Como agradecimento por realizar sua <strong>primeira compra com pagamento aprovado</strong>, você ganhou um cupom exclusivo de <strong>5% OFF</strong> para usar na próxima compra.</p>'
         . '<div style="margin:26px 0;padding:22px;background:#f0fdf4;border:2px dashed #0f8f62;border-radius:16px;text-align:center">'
         . '<div style="font-size:13px;font-weight:700;color:#46627a;text-transform:uppercase;letter-spacing:.08em">Seu cupom exclusivo</div>'
         . '<div style="font-size:30px;font-weight:900;letter-spacing:.05em;color:#07345d;margin:8px 0">' . $safeCode . '</div>'
@@ -182,6 +95,117 @@ function svfpr_email_html(string $name, string $code, string $expiresAt): string
         . '<p style="text-align:center;margin:28px 0 8px"><a href="' . $esc($shopUrl) . '/catalogo" style="display:inline-block;background:#173B63;color:#fff;text-decoration:none;font-weight:800;padding:14px 24px;border-radius:12px">Escolher minha próxima compra</a></p>'
         . '<p style="font-size:12px;color:#7a8b9a;text-align:center;margin-top:26px">ShopVivaliz • benefício concedido automaticamente após a confirmação da primeira compra.</p>'
         . '</div></div></body></html>';
+}
+
+function svfpr_send_reward_email(string $email, string $name, string $code, string $expiresAt): bool
+{
+    try {
+        require_once dirname(__DIR__) . '/scripts/mailer.php';
+        return send_email($email, svfpr_email_subject(), svfpr_email_html($name, $code, $expiresAt));
+    } catch (Throwable $e) {
+        error_log('[FirstPurchaseReward] email failed: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/** @return array{created:bool,code:string,expires_at:string,email_sent:bool,eligible:bool} */
+function svfpr_issue_for_approved_order(array $order): array
+{
+    $email = svfpr_normalize_email((string)($order['customer']['email'] ?? ''));
+    $name = trim((string)($order['customer']['name'] ?? 'Cliente')) ?: 'Cliente';
+    $orderNumber = trim((string)($order['order_number'] ?? ''));
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL) || $orderNumber === '') {
+        return ['created' => false, 'code' => '', 'expires_at' => '', 'email_sent' => false, 'eligible' => false];
+    }
+
+    svfpr_ensure_schema();
+    $pdo = sv_pdo();
+
+    $existing = $pdo->prepare('SELECT coupon_code, expires_at, email_sent_at FROM customer_reward_coupons WHERE customer_email = :email LIMIT 1');
+    $existing->execute([':email' => $email]);
+    $row = $existing->fetch();
+    if (is_array($row)) {
+        $code = (string)($row['coupon_code'] ?? '');
+        $expiresAt = (string)($row['expires_at'] ?? '');
+        $sent = !empty($row['email_sent_at']);
+        if (!$sent && $code !== '' && $expiresAt !== '' && strtotime($expiresAt) >= time()) {
+            $sent = svfpr_send_reward_email($email, $name, $code, $expiresAt);
+            if ($sent) {
+                $mark = $pdo->prepare('UPDATE customer_reward_coupons SET email_sent_at = NOW() WHERE customer_email = :email AND coupon_code = :code AND email_sent_at IS NULL');
+                $mark->execute([':email' => $email, ':code' => $code]);
+            }
+        }
+        return ['created' => false, 'code' => $code, 'expires_at' => $expiresAt, 'email_sent' => $sent, 'eligible' => true];
+    }
+
+    if (svfpr_has_prior_paid_order($email, $orderNumber)) {
+        return ['created' => false, 'code' => '', 'expires_at' => '', 'email_sent' => false, 'eligible' => false];
+    }
+
+    $expiresAt = date('Y-m-d H:i:s', time() + SVFPR_VALID_DAYS * 86400);
+    $code = '';
+    for ($attempt = 0; $attempt < 5; $attempt++) {
+        $candidate = svfpr_generate_code();
+        try {
+            $pdo->beginTransaction();
+            $coupon = $pdo->prepare(
+                'INSERT INTO coupons
+                    (code, description, discount_type, discount_value, min_order_value, starts_at, ends_at, expires_at, max_uses, used_count, is_active)
+                 VALUES
+                    (:code, :description, :type, :value, 0, NOW(), :expires_at, :expires_at, 1, 0, 1)'
+            );
+            $coupon->execute([
+                ':code' => $candidate,
+                ':description' => 'Presente da primeira compra: 5% OFF por 30 dias',
+                ':type' => 'percent',
+                ':value' => SVFPR_DISCOUNT_PERCENT,
+                ':expires_at' => $expiresAt,
+            ]);
+            $reward = $pdo->prepare(
+                'INSERT INTO customer_reward_coupons (customer_email, coupon_code, source_order, expires_at)
+                 VALUES (:email, :code, :order_number, :expires_at)'
+            );
+            $reward->execute([
+                ':email' => $email,
+                ':code' => $candidate,
+                ':order_number' => $orderNumber,
+                ':expires_at' => $expiresAt,
+            ]);
+            $pdo->commit();
+            $code = $candidate;
+            break;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $check = $pdo->prepare('SELECT coupon_code, expires_at, email_sent_at FROM customer_reward_coupons WHERE customer_email = :email LIMIT 1');
+            $check->execute([':email' => $email]);
+            $won = $check->fetch();
+            if (is_array($won)) {
+                return [
+                    'created' => false,
+                    'code' => (string)($won['coupon_code'] ?? ''),
+                    'expires_at' => (string)($won['expires_at'] ?? ''),
+                    'email_sent' => !empty($won['email_sent_at']),
+                    'eligible' => true,
+                ];
+            }
+            if ($attempt === 4) {
+                error_log('[FirstPurchaseReward] issue failed order=' . $orderNumber . ' ' . $e->getMessage());
+                return ['created' => false, 'code' => '', 'expires_at' => '', 'email_sent' => false, 'eligible' => false];
+            }
+        }
+    }
+
+    if ($code === '') {
+        return ['created' => false, 'code' => '', 'expires_at' => '', 'email_sent' => false, 'eligible' => false];
+    }
+
+    $emailSent = svfpr_send_reward_email($email, $name, $code, $expiresAt);
+    if ($emailSent) {
+        $mark = $pdo->prepare('UPDATE customer_reward_coupons SET email_sent_at = NOW() WHERE customer_email = :email AND coupon_code = :code');
+        $mark->execute([':email' => $email, ':code' => $code]);
+    }
+
+    return ['created' => true, 'code' => $code, 'expires_at' => $expiresAt, 'email_sent' => $emailSent, 'eligible' => true];
 }
 
 function svfpr_coupon_owner(string $code): string
@@ -215,7 +239,7 @@ function svfpr_mark_coupon_redeemed(string $code, string $email, string $orderNu
         );
         $stmt->execute([':order_number' => $orderNumber, ':code' => $code, ':email' => $email]);
         if ($stmt->rowCount() > 0) {
-            $use = $pdo->prepare('UPDATE coupons SET used_count = used_count + 1, is_active = 0 WHERE code = :code AND used_count < max_uses');
+            $use = $pdo->prepare('UPDATE coupons SET used_count = used_count + 1, is_active = 0 WHERE code = :code AND (max_uses = 0 OR used_count < max_uses)');
             $use->execute([':code' => $code]);
         }
         $pdo->commit();
