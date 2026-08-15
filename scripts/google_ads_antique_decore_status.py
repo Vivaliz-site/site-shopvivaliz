@@ -59,8 +59,9 @@ def main() -> int:
              campaign.contains_eu_political_advertising,
              metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions
       FROM campaign
-      WHERE campaign.name = '{safe}' AND campaign.status != 'REMOVED'
-      DURING TODAY
+      WHERE campaign.name = '{safe}'
+        AND campaign.status != 'REMOVED'
+        AND segments.date DURING TODAY
     """))
     if len(campaigns) != 1:
         raise SystemExit("CAMPAIGN_INVARIANT_FAILED count=" + str(len(campaigns)))
@@ -97,6 +98,9 @@ def main() -> int:
     purchase_like = [r for r in conversion_rows if any(x in r.conversion_action.name.lower() for x in ("purchase", "compra", "pedido", "sale"))]
     if not purchase_like:
         raise SystemExit("PURCHASE_CONVERSION_GUARD_FAILED")
+    primary_purchase = [r for r in purchase_like if bool(r.conversion_action.primary_for_goal)]
+    if not primary_purchase:
+        raise SystemExit("PRIMARY_PURCHASE_CONVERSION_GUARD_FAILED")
 
     policy = []
     all_approved = True
