@@ -22,35 +22,26 @@ jobs:
       GOOGLE_ADS_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
       GOOGLE_ADS_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
       GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
+      ENABLE_AFTER_AUDIT: "no"
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate landing pages as AdsBot before spend
+      - name: Record external landing diagnostic
         shell: bash
         run: |
           set -euo pipefail
           ADSBOT='AdsBot-Google (+http://www.google.com/adsbot.html)'
-          BROWSER='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/139.0.0.0 Safari/537.36'
           for url in \
             'https://shopvivaliz.com.br/catalogo?q=antique' \
             'https://shopvivaliz.com.br/catalogo?q=decore'; do
-            default_code=$(curl -L -sS -o /tmp/default.html -w '%{http_code}' --connect-timeout 10 --max-time 25 "$url" || true)
-            browser_code=$(curl -A "$BROWSER" -L -sS -o /tmp/browser.html -w '%{http_code}' --connect-timeout 10 --max-time 25 "$url" || true)
-            adsbot_code=$(curl -A "$ADSBOT" -D /tmp/adsbot.headers -L -sS -o /tmp/adsbot.html -w '%{http_code}' --connect-timeout 10 --max-time 25 "$url" || true)
-            echo "landing_default_http=$default_code url=$url"
-            echo "landing_browser_http=$browser_code url=$url"
-            echo "landing_adsbot_http=$adsbot_code url=$url"
-            echo '--- response headers ---'
-            grep -Ei '^(HTTP/|server:|cf-ray:|cf-mitigated:|content-type:|location:|x-|retry-after:)' /tmp/adsbot.headers || true
-            echo '--- response body fingerprint ---'
-            sed -E 's/[[:space:]]+/ /g' /tmp/adsbot.html | head -c 1200 || true
-            echo
-            test "$adsbot_code" = "200"
-            grep -qi 'Vivaliz' /tmp/adsbot.html
+            code=$(curl -A "$ADSBOT" -D /tmp/headers -L -sS -o /tmp/body -w '%{http_code}' --connect-timeout 10 --max-time 25 "$url" || true)
+            echo "simulated_adsbot_http=$code url=$url"
+            grep -Ei '^(HTTP/|server:|cf-ray:|cf-mitigated:|content-type:)' /tmp/headers || true
           done
+          echo "NOTE=This is a GitHub IP with a spoofable AdsBot user-agent; it is diagnostic only and is not used as the activation decision."
 
       - name: Install Google Ads client
         run: python3 -m pip install --disable-pip-version-check google-ads
 
-      - name: Launch audited campaign
+      - name: Create audited campaign paused for real Google policy review
         run: python3 scripts/google_ads_launch_antique_decore.py
