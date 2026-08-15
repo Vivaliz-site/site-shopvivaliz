@@ -18,20 +18,24 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Direct read-only queue snapshot
+      - name: Indexed read-only queue snapshot
         run: |
           timeout 240s ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -u
           echo "SNAPSHOT_TIME=$(date -Is)"
           echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
           if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo 'SENTINEL=true'; else echo 'SENTINEL=false'; fi
-          echo '=== STATUS_COUNTS ==='
-          timeout 25s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -Atc "set statement_timeout='15s'; select status::text||'='||count(*) from mei_email.envios group by status order by status;" || echo 'STATUS_COUNTS_FAILED=true'
-          echo '=== QUEUE ==='
-          timeout 25s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -Atc "set statement_timeout='15s'; select 'pending='||count(*) from mei_email.envios where status::text in ('pending','pendente'); select 'processing='||count(*) from mei_email.envios where status::text in ('enviando','processing'); select 'sent24='||count(*) from mei_email.envios where status::text in ('submitted','delivered','enviado') and coalesce(submitted_at,enviado_em,criado_em)>=now()-interval '24 hours'; select 'last_submission='||coalesce(max(coalesce(submitted_at,enviado_em,criado_em))::text,'') from mei_email.envios where status::text in ('submitted','delivered','enviado');" || echo 'QUEUE_QUERY_FAILED=true'
+          echo '=== INDEXES ==='
+          timeout 20s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -Atc "set statement_timeout='12s'; select indexname||'|'||indexdef from pg_indexes where schemaname='mei_email' and tablename in ('envios','lotes') order by tablename,indexname;" || echo 'INDEX_QUERY_FAILED=true'
           echo '=== PG_ACTIVITY ==='
-          timeout 25s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -Atc "set statement_timeout='15s'; select coalesce(state,'')||'|'||coalesce(wait_event_type,'')||'|'||coalesce(wait_event,'')||'|'||count(*) from pg_stat_activity where datname='mei_mg_email' group by 1,2,3 order by 4 desc;" || echo 'PG_ACTIVITY_FAILED=true'
-          echo 'DIRECT_READ_DONE=true'
+          timeout 20s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -Atc "set statement_timeout='12s'; select pid||'|'||coalesce(state,'')||'|'||coalesce(wait_event_type,'')||'|'||coalesce(wait_event,'')||'|'||coalesce((now()-query_start)::text,'')||'|'||left(regexp_replace(query,E'[\\n\\r]+',' ','g'),220) from pg_stat_activity where datname='mei_mg_email' order by query_start nulls last;" || echo 'PG_ACTIVITY_FAILED=true'
+          echo '=== LOT_QUEUE ==='
+          timeout 20s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -Atc "set statement_timeout='12s'; select 'pending_lots='||count(*)||'|pending_capacity='||coalesce(sum(tamanho),0) from mei_email.lotes where status='pendente'::mei_email.status_lote; select 'processing_lots='||count(*)||'|processing_capacity='||coalesce(sum(tamanho),0) from mei_email.lotes where status='processando'::mei_email.status_lote;" || echo 'LOT_QUEUE_FAILED=true'
+          echo '=== PROCESSING_LOTS ==='
+          timeout 20s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -Atc "set statement_timeout='12s'; select id||'|'||campanha_id||'|'||numero||'|'||tamanho||'|'||tentativas||'|'||coalesce(iniciado_em::text,'') from mei_email.lotes where status='processando'::mei_email.status_lote order by iniciado_em nulls last limit 20;" || echo 'PROCESSING_LOTS_FAILED=true'
+          echo '=== RECENT_CAMPAIGNS ==='
+          timeout 20s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -Atc "set statement_timeout='12s'; select id||'|'||status::text||'|'||total_empresas||'|'||total_enviados||'|'||total_falhas||'|'||criado_em::text||'|'||nome from mei_email.campanhas order by criado_em desc limit 20;" || echo 'CAMPAIGNS_FAILED=true'
+          echo 'INDEXED_READ_DONE=true'
           EOF
       - name: Cleanup
         if: always()
