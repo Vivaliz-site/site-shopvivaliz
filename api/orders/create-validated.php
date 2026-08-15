@@ -77,13 +77,10 @@ $fingerprint = ['cep'=>$shippingCep,'items'=>$fingerprintItems,'service_id'=>$se
 $expected = hash_hmac('sha256', json_encode($fingerprint, JSON_UNESCAPED_SLASHES), svq_secret());
 if (!hash_equals($expected, $quoteId)) svq_fail(409,'shipping_quote_invalid','O valor do frete foi alterado ou não corresponde à cotação. Calcule novamente.');
 
-// A oferta "Compre Junto" é apenas proposta pelo navegador. O servidor
-// confirma que exatamente dois SKUs distintos da oferta existem entre os
-// itens autoritativos e calcula 3% sobre esses itens usando o preço real.
-$buyTogether = svbt_validate_offer($body['buy_together_offer'] ?? null, $resolved['items']);
-if (($body['buy_together_offer'] ?? null) !== null && ($body['buy_together_offer'] ?? '') !== '' && !$buyTogether['active']) {
-    svq_fail(422, 'buy_together_invalid', 'A oferta Compre Junto não é mais válida para este carrinho. Atualize a página.');
-}
+// Regra automática: qualquer pedido com dois ou mais SKUs distintos recebe
+// 3% sobre todos os itens. O cliente não precisa ativar cupom ou carregar um
+// token de oferta; a decisão e o cálculo são feitos apenas pelo servidor.
+$buyTogether = svbt_validate_offer(null, $resolved['items']);
 $body['buy_together'] = $buyTogether;
 
 $itemsSubtotal = array_reduce(
@@ -95,8 +92,6 @@ $promotionalSubtotal = max(0.0, round($itemsSubtotal - (float)$buyTogether['amou
 
 $couponCode = trim((string)($body['coupon_code'] ?? ''));
 if ($couponCode !== '') {
-    // Cupom é aplicado sobre o subtotal já reduzido pelo Compre Junto. Assim
-    // não há desconto de cupom sobre uma parcela que já foi abatida.
     $coupon = svcp_validate($couponCode, $promotionalSubtotal);
     if (!$coupon['ok']) svq_fail(422,'coupon_invalid','Cupom inválido ou não aplicável a este carrinho.');
     $body['coupon'] = $coupon;
