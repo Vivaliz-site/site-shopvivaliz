@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from copy import deepcopy
@@ -29,8 +30,8 @@ from shopee_full_catalog_optimizer import (  # noqa: E402
 from utils.shopee_client import ShopeeClient  # noqa: E402
 
 CONFIRMATION = "APPLY_ALL_SHOPEE_PRODUCTS"
-BACKUP_DIR = ROOT / "storage" / "private" / "shopee-production-backups"
-REPORT_DIR = ROOT / "logs" / "shopee-production-seo"
+BACKUP_DIR = Path(os.environ.get("SHOPEE_PRODUCTION_BACKUP_DIR") or (ROOT / "storage" / "private" / "shopee-production-backups"))
+REPORT_DIR = Path(os.environ.get("SHOPEE_PRODUCTION_REPORT_DIR") or (ROOT / "logs" / "shopee-production-seo"))
 
 
 def verify_exact(before: dict[str, Any], expected: dict[str, Any], actual: dict[str, Any]) -> list[str]:
