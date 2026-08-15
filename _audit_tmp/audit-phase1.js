@@ -37,7 +37,7 @@ async function auditHomePage(page) {
   console.log('🏠 Auditando HOME...');
   report += '\n## 1️⃣ HOME PAGE\n\n';
 
-  await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+  await page.goto(BASE_URL, { waitUntil: 'load', timeout: 45000 });
 
   const { metrics, consoleMessages } = await capturePageMetrics(page, 'HOME');
   report += `### Performance Metrics\n`;
@@ -88,9 +88,9 @@ async function auditCatalogPage(page) {
   });
 
   if (catalogLinks.length > 0) {
-    await page.goto(catalogLinks[0], { waitUntil: 'networkidle' });
+    await page.goto(catalogLinks[0], { waitUntil: 'load', timeout: 45000 });
   } else {
-    await page.goto(`${BASE_URL}/catalogo/`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/catalogo/`, { waitUntil: 'load', timeout: 45000 });
   }
 
   const { metrics, consoleMessages } = await capturePageMetrics(page, 'CATALOG');
@@ -130,9 +130,9 @@ async function auditProductPage(page) {
   });
 
   if (productLink) {
-    await page.goto(productLink, { waitUntil: 'networkidle' });
+    await page.goto(productLink, { waitUntil: 'load', timeout: 45000 });
   } else {
-    await page.goto(`${BASE_URL}/produto/`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/produto/`, { waitUntil: 'load', timeout: 45000 });
   }
 
   const { metrics, consoleMessages } = await capturePageMetrics(page, 'PDP');
@@ -183,9 +183,9 @@ async function auditCart(page) {
   });
 
   if (cartLink) {
-    await page.goto(cartLink, { waitUntil: 'networkidle' });
+    await page.goto(cartLink, { waitUntil: 'load', timeout: 45000 });
   } else {
-    await page.goto(`${BASE_URL}/carrinho/`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/carrinho/`, { waitUntil: 'load', timeout: 45000 });
   }
 
   const cartElements = await page.evaluate(() => {
@@ -218,9 +218,9 @@ async function auditCheckout(page) {
   });
 
   if (checkoutLink) {
-    await page.goto(checkoutLink, { waitUntil: 'networkidle' });
+    await page.goto(checkoutLink, { waitUntil: 'load', timeout: 45000 });
   } else {
-    await page.goto(`${BASE_URL}/checkout-v2/`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE_URL}/checkout-v2/`, { waitUntil: 'load', timeout: 45000 });
   }
 
   const checkoutElements = await page.evaluate(() => {
