@@ -1,0 +1,57 @@
+name: Ops Finalize Performance Fast 20260815
+on:
+  push:
+    branches: [ops/performance-audit-20260815]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          SHOPVIVALIZ_VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          KEY="${ORACLE_VM_SSH_KEY:-}"; [ -n "$KEY" ] || KEY="${SHOPVIVALIZ_VM_SSH_KEY:-}"
+          test -n "$KEY"; mkdir -p ~/.ssh; printf '%s\n' "$KEY" > ~/.ssh/vmkey; chmod 600 ~/.ssh/vmkey
+      - name: Verify bounded
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=12 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'timeout 180 bash -s' <<'SH'
+          set -u
+          echo '--- LINKS ---'
+          ls -ld /var/www/shopvivaliz /home/ubuntu/shopvivaliz-deploy/current /home/ubuntu/shopvivaliz-deploy/repo 2>/dev/null || true
+          echo VARWWW=$(readlink -f /var/www/shopvivaliz 2>/dev/null || true)
+          echo CURRENT=$(readlink -f /home/ubuntu/shopvivaliz-deploy/current 2>/dev/null || true)
+          echo REPO_SHA=$(git -C /home/ubuntu/shopvivaliz-deploy/repo rev-parse HEAD 2>/dev/null || true)
+          echo '--- MARKERS CURRENT ---'
+          C=/home/ubuntu/shopvivaliz-deploy/current
+          grep -q 's-maxage=30' "$C/index.php" 2>/dev/null && echo HOME_PUBLIC_CACHE_FIX=true || echo HOME_PUBLIC_CACHE_FIX=false
+          grep -q 'shopvivaliz-home-catalog-source-v1.json' "$C/index.php" 2>/dev/null && echo HOME_FILE_CACHE_FIX=true || echo HOME_FILE_CACHE_FIX=false
+          grep -q 'ga4ClientIdFromCookie' "$C/js/shopvivaliz-google-events.js" 2>/dev/null && echo GA4_COOKIE_IDENTITY_FIX=true || echo GA4_COOKIE_IDENTITY_FIX=false
+          grep -q "'gbraid' => \$gbraid" "$C/api/orders/process-validated.php" 2>/dev/null && echo CLICK_ID_PERSISTENCE_FIX=true || echo CLICK_ID_PERSISTENCE_FIX=false
+          echo '--- APACHE ---'
+          sudo apache2ctl configtest 2>&1 || true
+          grep -E '^[[:space:]]*(StartServers|MinSpareServers|MaxSpareServers|MaxRequestWorkers|MaxConnectionsPerChild)' /etc/apache2/mods-enabled/mpm_prefork.conf 2>/dev/null || true
+          grep -nE '^[[:space:]]*extension[[:space:]]*=[[:space:]]*curl([.]so)?[[:space:]]*$' /etc/php/8.3/apache2/php.ini 2>/dev/null || echo APACHE_PHPINI_CURL_EXPLICIT=false
+          echo '--- CPU/SWAP ---'
+          uptime
+          free -m
+          ps -eo pid,user,%cpu,%mem,ni,args --sort=-%cpu | head -18
+          echo '--- PROMOTION CANDIDATES ---'
+          for d in /home/ubuntu/shopvivaliz-deploy/repo/scripts /home/ubuntu/shopvivaliz-deploy/repo /home/ubuntu/site-shopvivaliz/scripts; do
+            [ -d "$d" ] || continue
+            find "$d" -maxdepth 2 -type f \( -name '*deploy*.sh' -o -name '*release*.sh' -o -name '*promot*.sh' -o -name '*sync*.sh' \) -print 2>/dev/null
+          done | head -80
+          echo '--- TIMINGS ---'
+          for path in / / /catalogo/ /checkout; do
+            curl --max-time 8 -sS -o /dev/null -H 'Host: shopvivaliz.com.br' -w "$path code=%{http_code} ttfb=%{time_starttransfer} total=%{time_total}\n" "http://127.0.0.1$path" || echo "$path timeout"
+          done
+          echo '--- HOME HEADERS ---'
+          curl --max-time 8 -sSI -H 'Host: shopvivaliz.com.br' http://127.0.0.1/ | sed -n '1,30p' || true
+          SH
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
