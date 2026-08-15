@@ -326,9 +326,31 @@ async function runAudit() {
     }
   }
 
+  // Screenshots mobile (390x844 - iPhone 12/13) das mesmas páginas visitadas
+  report += '\n## 📱 SCREENSHOTS MOBILE (390x844)\n\n';
+  const mobilePages = [
+    ['home', BASE_URL],
+    ['catalogo', `${BASE_URL}/catalogo/`],
+    ['produto', page.url().includes('/produto') ? page.url() : `${BASE_URL}/produto/`],
+  ];
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const [name, url] of mobilePages) {
+    try {
+      await page.goto(url, { waitUntil: 'load', timeout: 45000 });
+      await page.waitForTimeout(1000);
+      await page.screenshot({ path: path.join(__dirname, `mobile-${name}.png`), fullPage: true });
+      report += `📸 \`mobile-${name}.png\` capturado (${url})\n`;
+    } catch (e) {
+      report += `❌ Falha ao capturar mobile-${name}: ${e.message}\n`;
+    }
+  }
+
   report += '\n---\n\n';
   report += `### 📊 Resumo Final\n`;
   report += `Auditoria concluída. Screenshots e métricas capturadas.\n`;
+  report += `Total de erros de console: ${consoleLog.filter(c => c.type === 'error' || c.type === 'pageerror').length}\n`;
+  report += `Total de warnings: ${consoleLog.filter(c => c.type === 'warning').length}\n`;
+  report += `Total de requisições falhas: ${failedRequests.length}\n`;
 
   {
     // Salvar relatório
