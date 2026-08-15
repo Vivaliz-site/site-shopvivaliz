@@ -162,11 +162,19 @@ def probe(url: str, timeout: float, keep_body: bool = True) -> Probe:
 def parse_sitemap(xml_text: str, base: str) -> list[str]:
     root = ET.fromstring(xml_text)
     urls: list[str] = []
-    for element in root.iter():
-        if element.tag.endswith("loc") and element.text:
-            value = canonicalize(base, element.text.strip())
+    # Only direct <url><loc> entries are page URLs. Namespaced <image:loc>
+    # elements describe media attached to a page and must never be counted as
+    # standalone sitemap pages/orphans.
+    for url_element in root.iter():
+        if url_element.tag.rsplit("}", 1)[-1] != "url":
+            continue
+        for child in url_element:
+            if child.tag.rsplit("}", 1)[-1] != "loc" or not child.text:
+                continue
+            value = canonicalize(base, child.text.strip())
             if value and value not in urls:
                 urls.append(value)
+            break
     return urls
 
 
