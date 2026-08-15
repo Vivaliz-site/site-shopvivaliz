@@ -1,0 +1,133 @@
+name: Fix Public Performance 20260815
+on:
+  push:
+    branches: [fix/public-performance-20260815]
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/public-performance-20260815
+      - name: Patch public performance
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p=Path('index.php'); s=p.read_text()
+          old="""// Precisa iniciar a sessao antes de qualquer output: esta pagina tem HTML
+          // suficiente antes do include do navbar (JSON-LD, meta tags) para estourar o
+          // buffer de saida do PHP, o que envia os headers cedo e faz o session_start()
+          // tardio do navbar.php falhar silenciosamente (usuario aparece deslogado mesmo
+          // apos login). Mesma causa raiz ja corrigida em catalogo.php.
+          if (session_status() === PHP_SESSION_NONE) {
+              session_start();
+          }
+          $timings['session_start'] = microtime(true) - $t0;
+
+          // Cache: 'no-cache' obriga revalidacao a cada request (conteudo nunca fica stale),
+          // mas permite resposta 304 quando nada mudou — ao contrario de 'no-store', que
+          // forcava o download completo do HTML em toda visita. Precos e estoque continuam
+          // sempre atualizados; o ganho e apenas de banda/latencia em visitas repetidas.
+          header('Cache-Control: no-cache, must-revalidate');
+          """
+          new="""// Visitantes anonimos nao precisam criar uma sessao PHP. Criar PHPSESSID na
+          // home impedia cache compartilhado e mantinha locks de sessao sem necessidade.
+          // Se o navegador ja possui a sessao (usuario autenticado), ela e retomada antes
+          // de qualquer output para preservar o estado de login no navbar.
+          $svHasSessionCookie = isset($_COOKIE[session_name()]) && $_COOKIE[session_name()] !== '';
+          if ($svHasSessionCookie && session_status() === PHP_SESSION_NONE) {
+              session_start();
+          }
+          $timings['session_start'] = microtime(true) - $t0;
+
+          // Cache curto apenas para anonimos. Preco/estoque sao revalidados de forma
+          // autoritativa no carrinho/checkout; 30 s aqui reduzem carga sem comprometer
+          // a seguranca comercial. Usuarios com sessao continuam sem cache compartilhado.
+          if ($svHasSessionCookie) {
+              header('Cache-Control: private, no-cache, must-revalidate');
+          } else {
+              header('Cache-Control: public, max-age=15, s-maxage=30, stale-while-revalidate=60');
+              header('Vary: Cookie', false);
+          }
+          """
+          if old not in s: raise SystemExit('index session/cache anchor not found')
+          s=s.replace(old,new,1)
+
+          old="""    $apcu = function_exists('apcu_fetch') && function_exists('apcu_store');
+              $apcuKey = 'sv_home_catalog_source_rows_v1';
+              if ($apcu) {
+          """
+          new="""    $apcu = function_exists('apcu_fetch') && function_exists('apcu_store');
+              $apcuKey = 'sv_home_catalog_source_rows_v1';
+              $fileCache = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'shopvivaliz-home-catalog-source-v1.json';
+              if (!$apcu && is_file($fileCache) && (time() - (int)@filemtime($fileCache)) <= 30) {
+                  $cached = json_decode((string)@file_get_contents($fileCache), true);
+                  if (is_array($cached) && $cached !== []) {
+                      $localCache = $cached;
+                      return $localCache;
+                  }
+              }
+              if ($apcu) {
+          """
+          if old not in s: raise SystemExit('index cache read anchor not found')
+          s=s.replace(old,new,1)
+
+          old="""        $localCache = $runtime;
+                  if ($apcu) {
+                      apcu_store($apcuKey, $localCache, 300);
+                  }
+                  return $localCache;
+          """
+          new="""        $localCache = $runtime;
+                  if ($apcu) {
+                      apcu_store($apcuKey, $localCache, 300);
+                  } else {
+                      $encoded = json_encode($localCache, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                      if (is_string($encoded)) {
+                          $tmpCache = $fileCache . '.' . getmypid() . '.tmp';
+                          if (@file_put_contents($tmpCache, $encoded, LOCK_EX) !== false) {
+                              @rename($tmpCache, $fileCache);
+                          } else {
+                              @unlink($tmpCache);
+                          }
+                      }
+                  }
+                  return $localCache;
+          """
+          if s.count(old) < 2: raise SystemExit('index cache write anchors missing')
+          s=s.replace(old,new,2)
+          p.write_text(s)
+
+          p=Path('includes/navbar.php'); s=p.read_text()
+          old="""if (session_status() === PHP_SESSION_NONE) {
+              @session_start();
+          }
+          """
+          new="""// Paginas publicas nao devem criar PHPSESSID para todo visitante anonimo.
+          // Retoma a sessao somente quando o cliente ja possui cookie de sessao.
+          if (session_status() === PHP_SESSION_NONE && isset($_COOKIE[session_name()]) && $_COOKIE[session_name()] !== '') {
+              @session_start();
+          }
+          """
+          if old not in s: raise SystemExit('navbar session anchor not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Validate PHP
+        run: |
+          php -l index.php
+          php -l includes/navbar.php
+          grep -q 's-maxage=30' index.php
+          grep -q 'shopvivaliz-home-catalog-source-v1.json' index.php
+      - name: Commit fixes
+        run: |
+          set -euo pipefail
+          git config user.name 'Frederico mourao'
+          git config user.email 'fredmourao@gmail.com'
+          git add index.php includes/navbar.php
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'perf: reduce anonymous home latency and session load'
+          git push origin HEAD:fix/public-performance-20260815
