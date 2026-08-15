@@ -402,6 +402,53 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
         });
     })();
+
+    /* Carrinho abandonado: registra o e-mail (fire-and-forget, nunca bloqueia
+       o checkout) quando o cliente preenche o campo e sai dele, pra permitir
+       e-mail de recuperacao depois caso nao finalize a compra. */
+    (function trackAbandonment() {
+        var TOKEN_KEY = 'shopvivaliz_checkout_session_token';
+        var form = document.getElementById('checkout-form');
+        var emailField = form && form.querySelector('[name="customer_email"]');
+        if (!form || !emailField) return;
+
+        function getToken() {
+            var token = null;
+            try { token = sessionStorage.getItem(TOKEN_KEY); } catch (e) {}
+            if (!token) {
+                token = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now().toString(16) + Math.random().toString(16).slice(2));
+                try { sessionStorage.setItem(TOKEN_KEY, token); } catch (e) {}
+            }
+            return token;
+        }
+
+        var sent = false;
+        emailField.addEventListener('blur', function () {
+            var email = (emailField.value || '').trim();
+            if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+
+            var nameField = form.querySelector('[name="customer_name"]');
+            var cart = getCart();
+            var total = 0;
+            (cart || []).forEach(function (item) {
+                total += (Number(item.price) || 0) * (Number(item.quantity) || 1);
+            });
+
+            fetch('/api/checkout/track-abandonment.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: email,
+                    name: nameField ? nameField.value : '',
+                    session_token: getToken(),
+                    cart_items: (cart || []).map(function (item) { return { name: item.name }; }),
+                    cart_total: total
+                })
+            }).catch(function () {});
+            sent = true;
+        });
+    })();
+
     function clearCart() {
         if (window.ShopVivalizCart && typeof window.ShopVivalizCart.clear === 'function') {
             window.ShopVivalizCart.clear();

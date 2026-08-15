@@ -202,6 +202,30 @@ function sv_account_ensure_schema(): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
     );
 
+    // Carrinho abandonado: captura o e-mail assim que o cliente preenche o
+    // campo no checkout (antes de finalizar), pra permitir e-mail de
+    // recuperacao se ele sair sem comprar. Nao persiste dados de pagamento,
+    // so email + snapshot leve do carrinho (nome dos itens) pra personalizar
+    // o e-mail. recovered_at marca quando o mesmo e-mail concluiu um pedido
+    // depois do abandono (nao manda e-mail de recuperacao nesse caso).
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS checkout_abandonments (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            email VARCHAR(160) NOT NULL,
+            customer_name VARCHAR(120) NULL,
+            cart_snapshot TEXT NULL,
+            cart_total DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+            session_token CHAR(64) NOT NULL,
+            recovery_email_sent_at DATETIME NULL,
+            recovered_at DATETIME NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE INDEX idx_checkout_abandon_session (session_token),
+            INDEX idx_checkout_abandon_email (email),
+            INDEX idx_checkout_abandon_pending (recovery_email_sent_at, recovered_at, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
+
     $existingIndexes = [];
     $idxStmt = $pdo->query('SHOW INDEX FROM orders');
     foreach ($idxStmt->fetchAll() as $row) {
