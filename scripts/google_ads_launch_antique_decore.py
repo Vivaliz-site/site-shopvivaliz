@@ -12,6 +12,7 @@ import google_ads_create_search_campaign as creator
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "scripts" / "google_ads_campaign_live_ready.json"
 EXPECTED_NAME = "ShopVivaliz-Search-Vasos-Antique-Decore-2026-08"
+BUDGET_NAME = EXPECTED_NAME + " Budget"
 
 
 def client_from_env() -> GoogleAdsClient:
@@ -58,6 +59,67 @@ def validate_config(config: dict) -> None:
             raise SystemExit("CONFIG_BLOCKED: RSA description over 90 chars")
 
 
+def get_or_create_budget(client: GoogleAdsClient, customer_id: str) -> str:
+    ga = client.get_service("GoogleAdsService")
+    safe = BUDGET_NAME.replace("'", "\\'")
+    rows = list(ga.search(customer_id=customer_id, query=f"""
+      SELECT campaign_budget.resource_name, campaign_budget.amount_micros,
+             campaign_budget.reference_count, campaign_budget.status
+      FROM campaign_budget
+      WHERE campaign_budget.name = '{safe}'
+        AND campaign_budget.status != 'REMOVED'
+    """))
+    for row in rows:
+        b = row.campaign_budget
+        if int(b.amount_micros) == 10_000_000 and int(b.reference_count) == 0:
+            print("REUSING_ORPHAN_BUDGET=" + b.resource_name)
+            return b.resource_name
+    return creator.create_budget(client, customer_id, EXPECTED_NAME, 10.0)
+
+
+def create_campaign(client: GoogleAdsClient, customer_id: str, config: dict, budget_resource: str) -> str:
+    service = client.get_service("CampaignService")
+    operation = client.get_type("CampaignOperation")
+    campaign = operation.create
+    campaign.name = config["campaign"]["name"]
+    campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.SEARCH
+    campaign.status = client.enums.CampaignStatusEnum.PAUSED
+    campaign.campaign_budget = budget_resource
+    campaign.contains_eu_political_advertising = (
+        client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
+    )
+    campaign.manual_cpc.enhanced_cpc_enabled = False
+    campaign.network_settings.target_google_search = True
+    campaign.network_settings.target_search_network = False
+    campaign.network_settings.target_content_network = False
+    campaign.network_settings.target_partner_search_network = False
+    response = service.mutate_campaigns(customer_id=customer_id, operations=[operation])
+    return response.results[0].resource_name
+
+
+def cleanup_unused_duplicate_budgets(client: GoogleAdsClient, customer_id: str, keep_resource: str) -> None:
+    ga = client.get_service("GoogleAdsService")
+    safe = BUDGET_NAME.replace("'", "\\'")
+    rows = list(ga.search(customer_id=customer_id, query=f"""
+      SELECT campaign_budget.resource_name, campaign_budget.reference_count, campaign_budget.status
+      FROM campaign_budget
+      WHERE campaign_budget.name = '{safe}'
+        AND campaign_budget.status != 'REMOVED'
+    """))
+    ops = []
+    for row in rows:
+        b = row.campaign_budget
+        if b.resource_name != keep_resource and int(b.reference_count) == 0:
+            op = client.get_type("CampaignBudgetOperation")
+            op.remove = b.resource_name
+            ops.append(op)
+    if ops:
+        client.get_service("CampaignBudgetService").mutate_campaign_budgets(
+            customer_id=customer_id, operations=ops
+        )
+        print("REMOVED_UNUSED_DUPLICATE_BUDGETS=" + str(len(ops)))
+
+
 def enable_resource_status(client: GoogleAdsClient, customer_id: str, service_name: str, operation_name: str, resource_names: list[str], enum_value) -> None:
     service = client.get_service(service_name)
     operations = []
@@ -93,8 +155,8 @@ def main() -> int:
     customer_id = os.environ["GOOGLE_ADS_CUSTOMER_ID"].replace("-", "").strip()
 
     creator.assert_campaign_name_available(client, customer_id, EXPECTED_NAME)
-    budget = creator.create_budget(client, customer_id, EXPECTED_NAME, 10.0)
-    campaign = creator.create_campaign(client, customer_id, config, budget)
+    budget = get_or_create_budget(client, customer_id)
+    campaign = create_campaign(client, customer_id, config, budget)
     creator.create_campaign_criteria(client, customer_id, campaign, config["negative_keywords"])
 
     ad_groups: list[str] = []
@@ -112,7 +174,8 @@ def main() -> int:
     ga = client.get_service("GoogleAdsService")
     safe = EXPECTED_NAME.replace("'", "\\'")
     rows = list(ga.search(customer_id=customer_id, query=f"""
-      SELECT campaign.id, campaign.name, campaign.status, campaign_budget.amount_micros
+      SELECT campaign.id, campaign.name, campaign.status, campaign_budget.amount_micros,
+             campaign.contains_eu_political_advertising
       FROM campaign
       WHERE campaign.name = '{safe}' AND campaign.status != 'REMOVED'
       LIMIT 1
@@ -138,6 +201,8 @@ def main() -> int:
     """))
     if len(group_rows) != 2 or len(ad_rows) != 2:
         raise SystemExit(f"AUDIT_BLOCKED: expected 2 groups/2 ads, got {len(group_rows)}/{len(ad_rows)}")
+
+    cleanup_unused_duplicate_budgets(client, customer_id, budget)
 
     if enable_after_audit:
         enable_resource_status(client, customer_id, "AdGroupAdService", "AdGroupAdOperation", ads, client.enums.AdGroupAdStatusEnum.ENABLED)
@@ -165,6 +230,7 @@ def main() -> int:
     print("daily_budget_brl=10.00")
     print("ad_groups=2")
     print("ads=2")
+    print("eu_political_ads=DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING")
     print("final_urls=" + " | ".join(final_urls))
     print("purchase_like_conversion_actions=" + (" | ".join(purchase_like) if purchase_like else "none_detected"))
     for r in ad_rows:
