@@ -28,8 +28,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: seo-integrity-audit
-  cancel-in-progress: true
+  group: seo-integrity-audit-${{ github.event_name }}
+  cancel-in-progress: false
 
 jobs:
   audit:
