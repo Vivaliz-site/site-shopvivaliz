@@ -1,0 +1,59 @@
+name: Ops Performance Audit 20260815
+on:
+  push:
+    branches: [ops/performance-audit-20260815]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          SHOPVIVALIZ_VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          KEY="${ORACLE_VM_SSH_KEY:-}"; [ -n "$KEY" ] || KEY="${SHOPVIVALIZ_VM_SSH_KEY:-}"
+          test -n "$KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Audit production
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=12 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'SH'
+          set -u
+          echo '--- SYSTEM ---'
+          uptime || true
+          free -h || true
+          df -h / /home || true
+          ps -eo pid,comm,%cpu,%mem --sort=-%cpu | head -15 || true
+          echo '--- SERVICES ---'
+          systemctl --no-pager --plain status nginx 2>/dev/null | head -20 || true
+          systemctl --no-pager --plain status php8.3-fpm 2>/dev/null | head -20 || systemctl --no-pager --plain status php8.2-fpm 2>/dev/null | head -20 || true
+          echo '--- RELEASE ---'
+          readlink -f /home/ubuntu/shopvivaliz-deploy/current || true
+          cd /home/ubuntu/shopvivaliz-deploy/repo 2>/dev/null && echo REPO_SHA=$(git rev-parse HEAD) || true
+          echo '--- LOCAL TIMINGS ---'
+          for path in / /catalogo /carrinho /checkout /api/health.php?health=1; do
+            for n in 1 2 3; do
+              curl -sS -o /dev/null -H 'Host: shopvivaliz.com.br' -w "$path run=$n code=%{http_code} ttfb=%{time_starttransfer} total=%{time_total} bytes=%{size_download}\n" "http://127.0.0.1$path" || true
+            done
+          done
+          echo '--- RESPONSE HEADERS ---'
+          curl -sSI -H 'Host: shopvivaliz.com.br' http://127.0.0.1/ | sed -n '1,30p' || true
+          echo '--- NGINX PERFORMANCE CONFIG ---'
+          nginx -T 2>/dev/null | grep -Ei 'worker_processes|worker_connections|gzip|brotli|fastcgi_cache|proxy_cache|expires|cache-control|keepalive|http2' | head -120 || true
+          echo '--- PHP FPM CONFIG ---'
+          grep -RHE '^(pm\.|request_terminate_timeout|php_admin_value\[memory_limit\])' /etc/php/*/fpm/pool.d/*.conf 2>/dev/null | head -80 || true
+          echo '--- LARGE ASSETS ---'
+          CURRENT=/home/ubuntu/shopvivaliz-deploy/current
+          find "$CURRENT" -type f \( -name '*.jpg' -o -name '*.jpeg' -o -name '*.png' -o -name '*.webp' -o -name '*.js' -o -name '*.css' \) -printf '%s %p\n' 2>/dev/null | sort -nr | head -30 || true
+          echo '--- LOG ERRORS ---'
+          sudo tail -n 100 /var/log/nginx/error.log 2>/dev/null || true
+          echo '--- ACCESS SAMPLE ---'
+          sudo tail -n 50 /var/log/nginx/access.log 2>/dev/null || true
+          SH
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
