@@ -32,6 +32,8 @@ $manifest = sv_contract_read($root, 'includes/asset-bundle-manifest.php');
 $lizAssets = sv_contract_read($root, 'includes/liz-assistant-assets.php');
 $lizJs = sv_contract_read($root, 'public/assets/liz-assistant/liz-assistant-corrections-v1.js');
 $lizCss = sv_contract_read($root, 'public/assets/liz-assistant/liz-assistant-corrections-v1.css');
+$promoJs = sv_contract_read($root, 'js/mixed-cart-promo-v1.js');
+$promoCss = sv_contract_read($root, 'css/mixed-cart-promo-v1.css');
 
 sv_contract_assert(str_contains($carousel, 'var ROTATION_INTERVAL = 3000;'), 'Rotacao precisa permanecer em 3 segundos.');
 sv_contract_assert(str_contains($carousel, "element.classList.contains('category-slide-image-wrapper')"), 'Categorias precisam ter tratamento proprio.');
@@ -47,9 +49,14 @@ sv_contract_assert(str_contains($homeCss, ':has(#sv-privacy-consent)'), 'Consent
 
 sv_contract_assert(str_contains($lizAssets, 'liz-assistant-corrections-v1.css'), 'CSS de correcao da Liz precisa ser carregado.');
 sv_contract_assert(str_contains($lizAssets, 'liz-assistant-corrections-v1.js'), 'JS de correcao da Liz precisa ser carregado.');
-sv_contract_assert(str_contains($lizJs, "const OFFICIAL_LOGO = '/public/assets/liz-assistant/logo-oficial.svg';"), 'Liz deve usar a marca oficial.');
-sv_contract_assert(str_contains($lizJs, "hero.innerHTML = '';"), 'Arte antiga do dialogo deve ser removida.');
-sv_contract_assert(str_contains($lizCss, '#sv-liz-launcher img'), 'Avatar oficial precisa de enquadramento proprio.');
-sv_contract_assert(str_contains($lizCss, '.sv-liz-official-brand'), 'Dialogo deve ter faixa oficial da marca.');
+sv_contract_assert(str_contains($lizJs, "const MASCOT_AVATAR = '/public/assets/liz-assistant/liz-avatar.png';"), 'Botao da Liz deve usar o mascote.');
+sv_contract_assert(str_contains($lizJs, "const MASCOT_VIDEO = '/public/assets/liz-assistant/liz-acenando.webm';"), 'Dialogo da Liz deve preservar o mascote animado.');
+sv_contract_assert(!str_contains($lizJs, 'OFFICIAL_LOGO'), 'Logo da loja nao pode substituir o mascote da Liz.');
+sv_contract_assert(str_contains($lizCss, '#sv-liz-launcher img'), 'Mascote precisa de enquadramento proprio no botao.');
+sv_contract_assert(str_contains($lizCss, '#sv-liz-panel .sv-hero video'), 'Mascote animado precisa de enquadramento no dialogo.');
 
-fwrite(STDOUT, "COMPROVADO: categorias rotacionam fotos reais a cada 3s e Liz usa identidade oficial com layout mobile seguro.\n");
+sv_contract_assert(str_contains($promoJs, '3% OFF com 2+ produtos diferentes'), 'Oferta compacta deve manter a regra de produtos diferentes.');
+sv_contract_assert(str_contains($promoCss, 'grid-template-columns: 34px minmax(0, 1fr) auto;'), 'Banner promocional mobile deve usar layout compacto.');
+sv_contract_assert(str_contains($promoCss, '.sv-mixed-promo-home .sv-mixed-promo__copy'), 'Banner promocional precisa de tratamento exclusivo na home.');
+
+fwrite(STDOUT, "COMPROVADO: categorias rotacionam fotos reais, Liz exibe o mascote e a oferta de 3% fica compacta no mobile.\n");
