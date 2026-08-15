@@ -18,9 +18,6 @@ function svpts_sanitize_product_html(string $html): string
     $patterns = [
         '~<div\s+style="color:\s*#fbbf24;[^\"]*">\s*★★★★★.*?\(4\.9/5\s*-\s*Excelente\).*?</div>~si' => '',
         '~<!--\s*Customer Reviews Widget\s*-->\s*<section\s+class="container sv-reviews-section".*?</section>~si' => svpts_honest_reviews_section(),
-        // Produto esgotado em recomendacao ocupa espaco de venda sem poder
-        // converter. Mantemos a pagina individual acessivel, mas removemos
-        // esses cards da vitrine de relacionados da pagina de produto.
         '~<article\s+class="product-card\s+is-out-of-stock".*?</article>~si' => '',
     ];
 
@@ -30,19 +27,18 @@ function svpts_sanitize_product_html(string $html): string
         return $html;
     }
 
-    // A oferta "Compre Junto" e real e validada no servidor: 3% nos dois
-    // itens do par. O template legado ainda usa a copy antiga, portanto a
-    // saida publica e normalizada aqui sem alterar os precos-base do catalogo.
+    // A promocao e automatica para qualquer carrinho com 2+ SKUs distintos.
+    // O CTA legado continua levando ao produto complementar; portanto a copy
+    // deve explicar a condicao sem prometer uma acao que o link nao executa.
     $sanitized = str_replace(
         'Compre Junto e Economize (Combo Recomendado)',
-        'Compre junto: 3% OFF nos 2 itens',
+        'Compre junto: 3% OFF com 2+ produtos diferentes',
         $sanitized
     );
-    $sanitized = str_replace('>Adicionar Combo</a>', '>Adicionar os 2 com 3% OFF</a>', $sanitized);
+    $sanitized = str_replace('>Adicionar Combo</a>', '>Ver produto complementar e ganhar 3% OFF</a>', $sanitized);
 
-    // A pagina antiga anunciava 5% no PIX e 3x sem juros sem uma regra
-    // autoritativa equivalente no pedido. Nao prometemos condicoes que o
-    // backend nao calcula. As formas reais permanecem apresentadas no checkout.
+    // Remove condicoes comerciais legadas que nao sao calculadas de forma
+    // autoritativa no pedido atual.
     $sanitized = preg_replace(
         '~<div\s+class="pix-discount-badge"[^>]*>.*?</div>~si',
         '<div class="pix-discount-badge" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;font-weight:700;font-size:14px;"><span>⚡ PIX disponível no checkout</span></div>',
@@ -58,16 +54,12 @@ function svpts_sanitize_product_html(string $html): string
 
     $sanitized = str_replace('Garantia de Fábrica', 'Suporte antes e depois da compra', $sanitized);
 
-    // Se todos os relacionados estavam esgotados, evita deixar um bloco vazio
-    // com apenas o titulo "Voce tambem pode gostar".
     $sanitized = preg_replace(
         '~<section\s+class="container related-products">\s*<h2[^>]*>.*?</h2>\s*<div\s+class="product-grid related-grid">\s*</div>\s*</section>~si',
         '',
         $sanitized
     ) ?? $sanitized;
 
-    // Defesa em profundidade: nenhum texto de prova social simulada pode sair
-    // mesmo que o markup legado seja alterado e deixe de casar com o regex.
     $forbidden = [
         'Carlos M. - Divinópolis/MG',
         'Fernanda S. - São Paulo/SP',
