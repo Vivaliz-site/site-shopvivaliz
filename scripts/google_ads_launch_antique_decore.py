@@ -86,6 +86,7 @@ def main() -> int:
     if missing:
         raise SystemExit("MISSING_SECRETS: " + ",".join(missing))
 
+    enable_after_audit = os.getenv("ENABLE_AFTER_AUDIT", "no").strip().lower() == "yes"
     config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     validate_config(config)
     client = client_from_env()
@@ -128,16 +129,20 @@ def main() -> int:
       WHERE campaign.name = '{safe}' AND ad_group.status != 'REMOVED'
     """))
     ad_rows = list(ga.search(customer_id=customer_id, query=f"""
-      SELECT ad_group_ad.ad.id, ad_group_ad.status
+      SELECT ad_group_ad.ad.id, ad_group_ad.status,
+             ad_group_ad.policy_summary.approval_status,
+             ad_group_ad.policy_summary.review_status,
+             ad_group_ad.ad.final_urls
       FROM ad_group_ad
       WHERE campaign.name = '{safe}' AND ad_group_ad.status != 'REMOVED'
     """))
     if len(group_rows) != 2 or len(ad_rows) != 2:
         raise SystemExit(f"AUDIT_BLOCKED: expected 2 groups/2 ads, got {len(group_rows)}/{len(ad_rows)}")
 
-    enable_resource_status(client, customer_id, "AdGroupAdService", "AdGroupAdOperation", ads, client.enums.AdGroupAdStatusEnum.ENABLED)
-    enable_resource_status(client, customer_id, "AdGroupService", "AdGroupOperation", ad_groups, client.enums.AdGroupStatusEnum.ENABLED)
-    enable_resource_status(client, customer_id, "CampaignService", "CampaignOperation", [campaign], client.enums.CampaignStatusEnum.ENABLED)
+    if enable_after_audit:
+        enable_resource_status(client, customer_id, "AdGroupAdService", "AdGroupAdOperation", ads, client.enums.AdGroupAdStatusEnum.ENABLED)
+        enable_resource_status(client, customer_id, "AdGroupService", "AdGroupOperation", ad_groups, client.enums.AdGroupStatusEnum.ENABLED)
+        enable_resource_status(client, customer_id, "CampaignService", "CampaignOperation", [campaign], client.enums.CampaignStatusEnum.ENABLED)
 
     conversion_rows = list(ga.search(customer_id=customer_id, query="""
       SELECT conversion_action.id, conversion_action.name, conversion_action.status, conversion_action.primary_for_goal
@@ -154,7 +159,7 @@ def main() -> int:
       DURING TODAY
     """))
 
-    print("LAUNCH_OK")
+    print("LAUNCH_OK" if enable_after_audit else "CREATED_PAUSED_FOR_POLICY_REVIEW")
     print("campaign_name=" + EXPECTED_NAME)
     print("campaign_resource=" + campaign)
     print("daily_budget_brl=10.00")
@@ -162,7 +167,16 @@ def main() -> int:
     print("ads=2")
     print("final_urls=" + " | ".join(final_urls))
     print("purchase_like_conversion_actions=" + (" | ".join(purchase_like) if purchase_like else "none_detected"))
+    for r in ad_rows:
+        ps = r.ad_group_ad.policy_summary
+        print(
+            "ad_policy=" + str(r.ad_group_ad.ad.id)
+            + ":approval=" + ps.approval_status.name
+            + ":review=" + ps.review_status.name
+            + ":status=" + r.ad_group_ad.status.name
+        )
     if final:
+        print("campaign_id=" + str(final[0].campaign.id))
         print("campaign_status=" + final[0].campaign.status.name)
         print("impressions_today=" + str(final[0].metrics.impressions))
         print("clicks_today=" + str(final[0].metrics.clicks))
