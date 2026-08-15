@@ -82,9 +82,38 @@ Ao adicionar novo arquivo em `/includes/` que precisa ser público:
 
 ---
 
-## 🔴 CRÍTICO: Pipeline de otimização/sincronização Shopee 100% inoperante — OAuth2 do Tiny quebrado há 3+ semanas, e desde 2026-07-27 os workflows nem existem mais
+## 🟡 Pipeline de otimização Shopee: leitura restaurada via nova integração direta (sem Tiny); escrita em produção ainda manual
 
-**Última atualização:** 2026-07-27
+**Última atualização:** 2026-08-15
+
+### Atualização 2026-08-15 — novo pipeline direto (sem Tiny OAuth2), leitura confirmada em produção
+Fred reescreveu a integração hoje (commit `abf3c8f`, 03:21 UTC) para não depender mais do OAuth2
+do Tiny ERP (problema original abaixo, nunca resolvido): novo workflow
+`.github/workflows/shopee-runtime-health.yml` roda a cada 6h + após todo `Master Production
+Pipeline 24/7`, faz SSH na VM de produção e chama `scripts/shopee_runtime_preflight.py`
+(read-only) usando credenciais `SHOPEE_PARTNER_ID`/`SHOPEE_PARTNER_KEY`/`SHOPEE_SHOP_ID` +
+tokens em `shopvivaliz-deploy/shared/shopee-tokens.json` na própria VM — não GitHub Secrets
+rotativos, não Tiny. Confirmado via GitHub Actions API rodando com sucesso repetidamente desde
+06:21 UTC de hoje (`catalog_read: true`, `detail_read: true`). `.github/workflows/shopee-optimizer-safety.yml`
+(gate de CI para esses scripts) também verde em todo push/PR de hoje.
+
+**O que ainda não está resolvido:** a aplicação real de otimizações (títulos/descrições/preços)
+em produção continua só via `.github/workflows/shopee-production-seo.yml`
+(`Shopee SEO Production Apply`), que é **exclusivamente `workflow_dispatch` manual** com um input
+`confirmation` que exige digitar literalmente `APPLY_ALL_SHOPEE_PRODUCTS` — não tem `schedule`,
+não roda em push. Última execução registrada: **2026-07-30, falhou** (antes da reescrita de
+hoje); nenhuma execução confirmada da versão nova ainda. `fetch-shopee-listings.yml` /
+`optimize-shopee-listings.yml` (os antigos, dependentes do Tiny) continuam ausentes do repo, mas
+isso agora parece irrelevante já que o novo caminho não usa o Tiny.
+
+**Próximo passo (ação humana):** disparar `shopee-production-seo.yml` manualmente com
+`limit` pequeno (ex: `1`) pra confirmar que o caminho de escrita funciona de ponta a ponta antes
+de considerar o pipeline totalmente restaurado. Sessões autônomas do ciclo "Otimização Shopee 6h"
+não devem disparar esse `workflow_dispatch` sozinhas — o gate de confirmação digitada é
+intencional.
+
+**Ver também:** `docs/MEMORIA-AGENTES.md` (entrada 2026-08-15, "Ciclo 6h de otimização Shopee:
+primeira mudança real desde 07-26"), `docs/HISTORICO-AGENTES-SHOPEE.md` seção 9.
 
 ### Atualização 2026-07-27
 `fetch-shopee-listings.yml` e `optimize-shopee-listings.yml` **não existem mais** em
