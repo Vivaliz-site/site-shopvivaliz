@@ -31,13 +31,42 @@ $socialImage = 'https://shopvivaliz.com.br/images/logo-vivaliz.png';
 <meta name="twitter:image" content="<?= htmlspecialchars($socialImage, ENT_QUOTES, 'UTF-8') ?>">
 <link rel="stylesheet" href="/css/responsive.css">
 <link rel="stylesheet" href="/css/footer-pages.css?v=20260728-1">
+<script type="application/ld+json">
+<?php
+// sameAs de marketplaces (Amazon/Mercado Livre/Shopee/TikTok Shop) fica de fora
+// ate termos os links reais dos perfis oficiais de cada canal -- ver
+// docs/admin-test-user.md e CHANGELOG.md 2026-07-09 sobre por que nao
+// inventamos URLs de redes sociais/perfis "provaveis".
+$aboutSchema = [
+    '@context' => 'https://schema.org',
+    '@type' => 'Organization',
+    '@id' => 'https://shopvivaliz.com.br/#organization',
+    'name' => $fantasyName,
+    'legalName' => $legalName,
+    'url' => 'https://shopvivaliz.com.br/',
+    'logo' => 'https://shopvivaliz.com.br/images/logo-vivaliz.png',
+    'address' => [
+        '@type' => 'PostalAddress',
+        'addressLocality' => 'Divinópolis',
+        'addressRegion' => 'MG',
+        'addressCountry' => 'BR',
+    ],
+    'contactPoint' => [
+        '@type' => 'ContactPoint',
+        'telephone' => '+55-37-99937-4112',
+        'contactType' => 'customer service',
+    ],
+];
+echo json_encode($aboutSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+?>
+</script>
 <?php include dirname(__DIR__) . '/includes/head-analytics.php'; ?>
 </head>
 <body>
 <?php $svNavCurrent = 'sobre'; include __DIR__ . '/../includes/navbar.php'; ?>
 <main class="brand-page"><section class="brand-hero"><div class="container"><div class="brand-hero-card"><span class="brand-eyebrow">Sobre nós</span><h1>Soluções práticas para casa, organização e manutenção.</h1><p>A <?= htmlspecialchars($fantasyName) ?> reúne ferragens, rodízios, ferramentas e utilidades em um catálogo online com informações claras e atendimento direto.</p><div class="brand-hero-actions"><a class="brand-btn" href="/catalogo">Ver produtos</a><a class="brand-btn-secondary" href="/contato">Falar com a equipe</a></div></div></div></section>
 <div class="container"><section class="brand-section"><div class="brand-grid brand-grid-3">
-<article class="brand-card"><h2>Quem somos</h2><p><strong><?= htmlspecialchars($legalName) ?></strong>, CNPJ <?= htmlspecialchars($cnpj) ?>, opera a loja online <?= htmlspecialchars($fantasyName) ?>.</p></article>
+<article class="brand-card"><h2>Quem somos</h2><p><strong><?= htmlspecialchars($legalName) ?></strong>, CNPJ <?= htmlspecialchars($cnpj) ?>, opera a loja online <?= htmlspecialchars($fantasyName) ?>. Desde 2023 também vendemos em marketplaces como Amazon, Mercado Livre, Shopee e TikTok Shop, além do nosso site oficial.</p></article>
 <article class="brand-card"><h2>O que oferecemos</h2><p>Produtos para organização, manutenção e uso doméstico, com preço, disponibilidade e condições de entrega apresentados no site e no carrinho.</p></article>
 <article class="brand-card"><h2>Nosso compromisso</h2><p>Trabalhar com informação objetiva, atendimento acessível e transparência nas etapas de compra, pagamento, entrega e pós-venda.</p></article>
 </div></section></div></main><?php include __DIR__ . '/../includes/footer.php'; ?></body></html>
