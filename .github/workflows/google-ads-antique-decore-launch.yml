@@ -36,10 +36,15 @@ jobs:
             'https://shopvivaliz.com.br/catalogo?q=decore'; do
             default_code=$(curl -L -sS -o /tmp/default.html -w '%{http_code}' --connect-timeout 10 --max-time 25 "$url" || true)
             browser_code=$(curl -A "$BROWSER" -L -sS -o /tmp/browser.html -w '%{http_code}' --connect-timeout 10 --max-time 25 "$url" || true)
-            adsbot_code=$(curl -A "$ADSBOT" -L -sS -o /tmp/adsbot.html -w '%{http_code}' --connect-timeout 10 --max-time 25 "$url" || true)
+            adsbot_code=$(curl -A "$ADSBOT" -D /tmp/adsbot.headers -L -sS -o /tmp/adsbot.html -w '%{http_code}' --connect-timeout 10 --max-time 25 "$url" || true)
             echo "landing_default_http=$default_code url=$url"
             echo "landing_browser_http=$browser_code url=$url"
             echo "landing_adsbot_http=$adsbot_code url=$url"
+            echo '--- response headers ---'
+            grep -Ei '^(HTTP/|server:|cf-ray:|cf-mitigated:|content-type:|location:|x-|retry-after:)' /tmp/adsbot.headers || true
+            echo '--- response body fingerprint ---'
+            sed -E 's/[[:space:]]+/ /g' /tmp/adsbot.html | head -c 1200 || true
+            echo
             test "$adsbot_code" = "200"
             grep -qi 'Vivaliz' /tmp/adsbot.html
           done
