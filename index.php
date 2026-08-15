@@ -602,11 +602,11 @@ $svNavCurrent = '';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Vivaliz - Loja online com produtos de qualidade. Rodízios, ferragens, utilidades e muito mais. Compre com segurança.">
+    <meta name="description" content="Rodízios e rodas para móveis, caixas de ferramentas, vasos decorativos e utilidades domésticas com entrega para todo o Brasil. Compre online na Vivaliz com segurança.">
     <meta name="theme-color" content="#173B63">
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
-    <meta property="og:title" content="Vivaliz | Loja Online">
-    <meta property="og:description" content="Produtos de qualidade. Compre online com entrega rápida.">
+    <meta property="og:title" content="Vivaliz | Rodízios, Ferragens e Utilidades Domésticas">
+    <meta property="og:description" content="Rodízios e rodas para móveis, caixas de ferramentas, vasos decorativos e utilidades domésticas. Compre online com entrega rápida.">
     <meta property="og:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square-v2.png">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://shopvivaliz.com.br/">
@@ -622,8 +622,8 @@ $svNavCurrent = '';
     <link rel="preconnect" href="https://images.unsplash.com" crossorigin>
     <link rel="dns-prefetch" href="https://images.unsplash.com">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Vivaliz | Loja Online">
-    <meta name="twitter:description" content="Produtos de qualidade. Compre online com entrega rápida.">
+    <meta name="twitter:title" content="Vivaliz | Rodízios, Ferragens e Utilidades Domésticas">
+    <meta name="twitter:description" content="Rodízios e rodas para móveis, caixas de ferramentas, vasos decorativos e utilidades domésticas. Compre online com entrega rápida.">
     <meta name="twitter:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square-v2.png">
     <link rel="canonical" href="https://shopvivaliz.com.br/">
     <link rel="icon" href="/images/favicon.svg?v=2026-07-27" type="image/svg+xml">
@@ -633,7 +633,7 @@ $svNavCurrent = '';
     <meta name="msapplication-TileColor" content="#173B63">
     <meta name="theme-color" content="#173B63">
 
-    <title>Vivaliz | Loja Online</title>
+    <title>Vivaliz | Rodízios, Ferragens e Utilidades Domésticas</title>
 
     <?php
         // Bundle consolidado (2026-08-05): substitui 9 <link>/arquivos CSS
@@ -706,6 +706,7 @@ $svNavCurrent = '';
         {
           "@type": "Store",
           "name": "Vivaliz",
+          "description": "Rodízios e rodas para móveis, caixas de ferramentas, ferragens, vasos decorativos e utilidades domésticas com entrega para todo o Brasil.",
           "url": "https://shopvivaliz.com.br",
           "image": "https://shopvivaliz.com.br/images/logo-vivaliz-square-v2.png",
           "telephone": "+55-37-99937-4112",
@@ -763,14 +764,6 @@ $svNavCurrent = '';
               echo implode(",\n            ", $seoItems);
             ?>
           ]
-        },
-        {
-          "@type": "AggregateRating",
-          "name": "Avaliações Vivaliz",
-          "ratingValue": "4.8",
-          "ratingCount": "347",
-          "bestRating": "5",
-          "worstRating": "1"
         },
         {
           "@type": "BreadcrumbList",
