@@ -1,0 +1,114 @@
+name: Ops Performance Tune 20260815
+on:
+  push:
+    branches: [ops/performance-audit-20260815]
+permissions:
+  contents: read
+jobs:
+  tune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          SHOPVIVALIZ_VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          KEY="${ORACLE_VM_SSH_KEY:-}"; [ -n "$KEY" ] || KEY="${SHOPVIVALIZ_VM_SSH_KEY:-}"
+          test -n "$KEY"; mkdir -p ~/.ssh; printf '%s\n' "$KEY" > ~/.ssh/vmkey; chmod 600 ~/.ssh/vmkey
+      - name: Tune production safely
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=12 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'SH'
+          set -euo pipefail
+          TS=$(date +%Y%m%d-%H%M%S)
+          echo '--- BEFORE ---'
+          uptime
+          free -h
+          ps -eo pid,ppid,user,%cpu,%mem,ni,args --sort=-%cpu | head -25
+          echo '--- LAYOUT ---'
+          ls -ld /var/www/shopvivaliz /home/ubuntu/shopvivaliz-deploy/current /home/ubuntu/shopvivaliz-deploy/repo || true
+          readlink -f /var/www/shopvivaliz || true
+          readlink -f /home/ubuntu/shopvivaliz-deploy/current || true
+          echo '--- CUPS DISCOVERY ---'
+          systemctl list-unit-files --type=service | grep -E '^cups-browsed\.service' || true
+          systemctl is-active cups-browsed.service 2>/dev/null || true
+          snap services 2>/dev/null | grep -Ei 'cups|printer' || true
+          ps -eo pid,args | grep -E '[c]ups-browsed' || true
+          # Disable printer discovery only; the web store has no printing dependency.
+          if systemctl list-unit-files --type=service 2>/dev/null | grep -q '^cups-browsed.service'; then
+            sudo systemctl disable --now cups-browsed.service || true
+            echo 'SYSTEM_CUPS_BROWSED_DISABLED=true'
+          fi
+          if command -v snap >/dev/null 2>&1 && snap services 2>/dev/null | grep -qE 'cups.*cups-browsed'; then
+            svc=$(snap services 2>/dev/null | awk '/cups.*cups-browsed/{print $1; exit}')
+            if [ -n "${svc:-}" ]; then sudo snap stop --disable "$svc" || true; echo "SNAP_CUPS_BROWSED_DISABLED=$svc"; fi
+          fi
+          echo '--- APACHE PREFORK ---'
+          MPM=/etc/apache2/mods-enabled/mpm_prefork.conf
+          test -f "$MPM"
+          sudo cp -a "$MPM" "$MPM.bak.$TS"
+          sudo python3 - "$MPM" <<'PY'
+          from pathlib import Path
+          import re,sys
+          p=Path(sys.argv[1]); s=p.read_text()
+          vals={
+            'StartServers':'2',
+            'MinSpareServers':'2',
+            'MaxSpareServers':'4',
+            'MaxRequestWorkers':'12',
+            'MaxConnectionsPerChild':'500',
+          }
+          for k,v in vals.items():
+              pat=rf'(?mi)^\s*{re.escape(k)}\s+\d+\s*$'
+              if re.search(pat,s): s=re.sub(pat,f'        {k}             {v}',s,count=1)
+              else: s += f'\n{k} {v}\n'
+          p.write_text(s)
+          PY
+          sudo apache2ctl configtest
+          echo '--- PHP CURL DUPLICATE ---'
+          grep -RniE '^[[:space:]]*extension[[:space:]]*=[[:space:]]*curl(\.so)?' /etc/php/8.3 2>/dev/null || true
+          # Do not modify curl automatically unless the same SAPI loads it from >1 explicit config line.
+          for sapi in apache2 cli; do
+            if [ -d "/etc/php/8.3/$sapi/conf.d" ]; then
+              cnt=$(grep -RHlE '^[[:space:]]*extension[[:space:]]*=[[:space:]]*curl(\.so)?' "/etc/php/8.3/$sapi/conf.d" 2>/dev/null | wc -l || true)
+              echo "CURL_EXPLICIT_FILES_${sapi}=$cnt"
+            fi
+          done
+          echo '--- OPcache APACHE ---'
+          ls -l /etc/php/8.3/apache2/conf.d/*opcache* 2>/dev/null || true
+          grep -RniE '^[;[:space:]]*opcache\.(enable|memory_consumption|interned_strings_buffer|max_accelerated_files|validate_timestamps|revalidate_freq)' /etc/php/8.3/mods-available/opcache.ini /etc/php/8.3/apache2/conf.d 2>/dev/null | head -80 || true
+          # Add a small Apache-only OPcache tuning file. Does not affect CLI workers.
+          OPC=/etc/php/8.3/apache2/conf.d/99-shopvivaliz-opcache.ini
+          if [ -f "$OPC" ]; then sudo cp -a "$OPC" "$OPC.bak.$TS"; fi
+          cat <<'EOF' | sudo tee "$OPC" >/dev/null
+          opcache.enable=1
+          opcache.memory_consumption=96
+          opcache.interned_strings_buffer=8
+          opcache.max_accelerated_files=10000
+          opcache.validate_timestamps=1
+          opcache.revalidate_freq=30
+          opcache.max_wasted_percentage=10
+          EOF
+          # Background compute is valuable but should not preempt interactive HTTP.
+          echo '--- RENICE BACKGROUND ---'
+          pgrep -af 'ml/train\.py|master_processor\.py|sync-daemon-to-db\.php|orders-shipments-generic-processor\.php|project-director\.php' || true
+          for pid in $(pgrep -f 'ml/train\.py|master_processor\.py|sync-daemon-to-db\.php|orders-shipments-generic-processor\.php|project-director\.php' || true); do
+            sudo renice 10 -p "$pid" >/dev/null 2>&1 || true
+          done
+          sudo apache2ctl configtest
+          sudo systemctl reload apache2
+          sleep 3
+          echo '--- AFTER ---'
+          uptime
+          free -h
+          ps -eo pid,ppid,user,%cpu,%mem,ni,args --sort=-%cpu | head -25
+          echo '--- TIMINGS ---'
+          for path in / /catalogo/ /carrinho /checkout; do
+            for n in 1 2 3; do
+              curl --max-time 12 -sS -o /dev/null -H 'Host: shopvivaliz.com.br' -w "$path run=$n code=%{http_code} ttfb=%{time_starttransfer} total=%{time_total} bytes=%{size_download}\n" "http://127.0.0.1$path" || echo "$path run=$n TIMEOUT"
+            done
+          done
+          SH
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
