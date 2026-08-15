@@ -192,7 +192,7 @@ async function auditCart(page) {
     return {
       cartItems: document.querySelectorAll('[class*="cart-item"], tr').length,
       totalPrice: document.querySelector('[class*="total"]')?.textContent || 'N/A',
-      checkoutBtn: !!document.querySelector('button:has-text("Checkout"), [class*="checkout"]'),
+      checkoutBtn: !!document.querySelector('[class*="checkout"]') || Array.from(document.querySelectorAll('button, a')).some(b => /checkout|finalizar/i.test(b.textContent)),
       quantityInputs: document.querySelectorAll('input[type="number"], [class*="quantity"]').length,
     };
   });
