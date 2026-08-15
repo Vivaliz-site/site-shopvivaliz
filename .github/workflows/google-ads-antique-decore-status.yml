@@ -60,7 +60,7 @@ jobs:
             body="$tmpdir/page-$idx.html"
             code="$(curl --silent --show-error --location --max-time 20 --output "$body" --write-out '%{http_code}' "$url")"
             test "$code" = '200' || { echo "LANDING_PAGE_GUARD_FAILED url=$url http=$code" >&2; exit 1; }
-            if grep -Eiq 'VOLTEI5|5%[[:space:]]*OFF[[:space:]]*NA[[:space:]]*1|5%[[:space:]]*(OFF|DE DESCONTO).*(PRIMEIRA|1.?)[[:space:]]*COMPRA' "$body"; then
+            if grep -Eiq 'VOLTEI5|VIVALIZ10|PRIMEIRA10|10%[[:space:]]*(OFF|DE DESCONTO).*(PRIMEIRA|1.?)[[:space:]]*COMPRA|5%[[:space:]]*OFF[[:space:]]*NA[[:space:]]*1|5%[[:space:]]*(OFF|DE DESCONTO).*(PRIMEIRA|1.?)[[:space:]]*COMPRA' "$body"; then
               echo "STALE_PROMO_CLAIM_GUARD_FAILED url=$url" >&2
               exit 1
             fi
