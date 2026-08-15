@@ -184,7 +184,7 @@ function sv_home_catalog_source_rows(): array
         
         $localCache = $runtime;
         if ($apcu) {
-            apcu_store($apcuKey, $localCache, 60);
+            apcu_store($apcuKey, $localCache, 300);
         }
         return $localCache;
     }
@@ -192,7 +192,7 @@ function sv_home_catalog_source_rows(): array
     if ($runtime !== []) {
         $localCache = $runtime;
         if ($apcu) {
-            apcu_store($apcuKey, $localCache, 60);
+            apcu_store($apcuKey, $localCache, 300);
         }
         return $localCache;
     }
@@ -415,7 +415,7 @@ function sv_home_featured_products(int $limit = 8): array
 
     $sliced = array_slice($products, 0, $limit);
     if ($apcu) {
-        apcu_store($apcuKey, $sliced, 60);
+        apcu_store($apcuKey, $sliced, 300);
     }
     return $sliced;
 }
@@ -574,7 +574,7 @@ function sv_home_top_categories(int $limit = 8): array
 
     $sliced = array_slice($result, 0, $limit);
     if ($apcu) {
-        apcu_store($apcuKey, $sliced, 60);
+        apcu_store($apcuKey, $sliced, 300);
     }
     return $sliced;
 }
