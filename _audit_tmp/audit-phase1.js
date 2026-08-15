@@ -145,7 +145,7 @@ async function auditProductPage(page) {
       productTitle: document.querySelector('h1')?.textContent.trim() || 'N/A',
       price: document.querySelector('[class*="price"]')?.textContent || 'N/A',
       images: document.querySelectorAll('img[alt*="product" i], img[class*="gallery"]').length,
-      addToCartBtn: !!document.querySelector('button:has-text("Adicionar ao Carrinho"), [class*="add-to-cart"]'),
+      addToCartBtn: !!document.querySelector('[class*="add-to-cart"]') || Array.from(document.querySelectorAll('button')).some(b => /adicionar ao carrinho/i.test(b.textContent)),
       variationOptions: document.querySelectorAll('select, [class*="variation"], [class*="option"]').length,
     };
   });
