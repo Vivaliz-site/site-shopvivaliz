@@ -65,6 +65,36 @@ async function capturePageMetrics(page, pageName) {
   return { metrics };
 }
 
+function reportPerf(metrics) {
+  report += `### Performance Metrics\n`;
+  report += `- DOM Content Loaded: ${metrics.domContentLoaded}ms\n`;
+  report += `- Load Complete: ${metrics.loadComplete}ms\n`;
+  report += `- First Paint: ${metrics.firstPaint}ms\n`;
+  report += `- First Contentful Paint: ${metrics.firstContentfulPaint}ms\n`;
+  report += `- Recursos carregados: ${metrics.resourceTiming}\n`;
+  report += `- Transfer size total: ${(metrics.totalTransferSize / 1024).toFixed(1)} KB\n`;
+  if (metrics.slowest.length > 0) {
+    report += `- Recursos mais lentos (>300ms):\n`;
+    metrics.slowest.forEach(r => report += `  - ${r.name}: ${r.duration}ms\n`);
+  }
+  report += '\n';
+}
+
+function reportPageErrors(pageName) {
+  const errors = consoleLog.filter(m => m.page === pageName && (m.type === 'error' || m.type === 'warning' || m.type === 'pageerror'));
+  if (errors.length > 0) {
+    report += `### ⚠️ Console Errors/Warnings\n`;
+    errors.forEach(err => report += `- [${err.type.toUpperCase()}] ${err.text}\n`);
+    report += '\n';
+  }
+  const failed = failedRequests.filter(f => f.page === pageName);
+  if (failed.length > 0) {
+    report += `### 🔴 Requisições Falhas (${pageName})\n`;
+    failed.forEach(f => report += `- [${f.resourceType}] ${f.url} → ${f.failure}\n`);
+    report += '\n';
+  }
+}
+
 async function auditHomePage(page) {
   console.log('🏠 Auditando HOME...');
   report += '\n## 1️⃣ HOME PAGE\n\n';
