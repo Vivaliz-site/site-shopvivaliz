@@ -21,18 +21,21 @@ jobs:
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=12 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'SH'
           set -u
           echo '--- SYSTEM ---'; uptime; free -h; df -h /
-          echo '--- TOP ---'; ps -eo pid,comm,%cpu,%mem,etime --sort=-%cpu | head -20
+          echo '--- TOP FULL ---'; ps -eo pid,ppid,user,%cpu,%mem,etime,args --sort=-%cpu | head -25
           echo '--- RELEASE ---'; readlink -f /home/ubuntu/shopvivaliz-deploy/current; cd /home/ubuntu/shopvivaliz-deploy/repo && echo REPO_SHA=$(git rev-parse HEAD)
-          echo '--- SERVICES ---'; systemctl is-active nginx || true; systemctl is-active php8.3-fpm || systemctl is-active php8.2-fpm || true
+          echo '--- SERVICES ---'; systemctl is-active apache2 || true; systemctl is-active nginx || true
+          echo '--- PHP CACHE ---'; php -r 'echo "PHP=".PHP_VERSION.PHP_EOL; echo "SAPI=".PHP_SAPI.PHP_EOL; echo "APCU=".(function_exists("apcu_fetch")?"yes":"no").PHP_EOL; echo "OPCACHE=".(function_exists("opcache_get_status")?"yes":"no").PHP_EOL; $s=function_exists("opcache_get_status")?opcache_get_status(false):false; echo "OPCACHE_ENABLED=".(is_array($s)&&!empty($s["opcache_enabled"])?"yes":"no").PHP_EOL;' || true
+          echo '--- APACHE MODULES ---'; apache2ctl -M 2>/dev/null | grep -Ei 'php|mpm|cache|expires|headers|deflate|brotli|http2' || true
+          echo '--- APACHE MPM ---'; apache2ctl -V 2>/dev/null | grep -E 'Server MPM|THREAD|PROCESS' || true; grep -RHE '^[[:space:]]*(StartServers|MinSpareServers|MaxSpareServers|ServerLimit|MaxRequestWorkers|MaxConnectionsPerChild)' /etc/apache2/mods-enabled/mpm*.conf 2>/dev/null || true
           echo '--- TIMINGS MAX10 ---'
-          for path in / /catalogo /carrinho /api/health.php?health=1; do
+          for path in / /catalogo/ /carrinho /checkout /api/health.php?health=1; do
             curl --max-time 10 -sS -o /dev/null -H 'Host: shopvivaliz.com.br' -w "$path code=%{http_code} ttfb=%{time_starttransfer} total=%{time_total} bytes=%{size_download}\n" "http://127.0.0.1$path" || echo "$path TIMEOUT"
           done
-          echo '--- FPM ---'; grep -RHE '^(pm =|pm\.max_children|pm\.start_servers|pm\.min_spare_servers|pm\.max_spare_servers|pm\.max_requests|request_terminate_timeout)' /etc/php/*/fpm/pool.d/*.conf 2>/dev/null || true
-          echo '--- PROCESSES ---'; pgrep -af 'php-fpm|postgres|mysql|mariadb|redis|nginx' || true
-          echo '--- CURRENT ERRORS ---'; sudo tail -n 60 /var/log/nginx/error.log 2>/dev/null || true
+          echo '--- HEADERS ---'; curl --max-time 10 -sSI -H 'Host: shopvivaliz.com.br' http://127.0.0.1/ | sed -n '1,35p' || true
+          echo '--- APACHE VHOST ---'; apache2ctl -S 2>/dev/null || true; grep -RHE 'DocumentRoot|DirectoryIndex|AllowOverride|ExpiresActive|Cache-Control|SetOutputFilter|AddOutputFilterByType' /etc/apache2/sites-enabled /etc/apache2/conf-enabled 2>/dev/null | head -120 || true
+          echo '--- CURRENT ERRORS ---'; sudo tail -n 80 /var/log/apache2/error.log 2>/dev/null || true
           echo '--- DISK HOT ---'; du -sh /home/ubuntu/shopvivaliz-deploy/shared/* 2>/dev/null | sort -hr | head -20 || true
-          echo '--- LARGE ASSETS ---'; find /home/ubuntu/shopvivaliz-deploy/current -type f -printf '%s %p\n' 2>/dev/null | sort -nr | head -20 || true
+          echo '--- LARGE ASSETS ---'; find /home/ubuntu/shopvivaliz-deploy/current -type f -printf '%s %p\n' 2>/dev/null | sort -nr | head -25 || true
           SH
       - name: Cleanup
         if: always()
