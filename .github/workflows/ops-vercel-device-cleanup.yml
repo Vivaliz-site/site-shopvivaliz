@@ -1,0 +1,143 @@
+name: Ops - Vercel Device Cleanup Once
+
+on:
+  push:
+    branches:
+      - 'ops/vercel-domain-cleanup-20260815'
+    paths:
+      - '.github/workflows/ops-vercel-device-cleanup.yml'
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Request Vercel device authorization
+        id: device
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: '985'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          CLIENT_ID='cl_HYyOPBNtFMfHhaUn9L4QPfTZz6TP47bp'
+          discovery="$(curl -fsS https://vercel.com/.well-known/openid-configuration)"
+          device_endpoint="$(jq -r '.device_authorization_endpoint' <<<"$discovery")"
+          token_endpoint="$(jq -r '.token_endpoint' <<<"$discovery")"
+          response="$(curl -fsS -X POST "$device_endpoint" \
+            -H 'Content-Type: application/x-www-form-urlencoded' \
+            --data-urlencode "client_id=$CLIENT_ID" \
+            --data-urlencode 'scope=openid offline_access')"
+
+          device_code="$(jq -r '.device_code' <<<"$response")"
+          user_code="$(jq -r '.user_code' <<<"$response")"
+          verification_uri="$(jq -r '.verification_uri_complete // .verification_uri' <<<"$response")"
+          interval="$(jq -r '.interval // 5' <<<"$response")"
+          expires_in="$(jq -r '.expires_in // 900' <<<"$response")"
+
+          test -n "$device_code" && test "$device_code" != null
+          test -n "$verification_uri" && test "$verification_uri" != null
+          echo "::add-mask::$device_code"
+
+          {
+            echo "device_code=$device_code"
+            echo "token_endpoint=$token_endpoint"
+            echo "interval=$interval"
+            echo "expires_in=$expires_in"
+            echo "client_id=$CLIENT_ID"
+          } >> "$GITHUB_OUTPUT"
+
+          body=$(cat <<EOF
+          Vercel device authorization is ready for the one-time domain cleanup.
+
+          Approval URL: $verification_uri
+          User code: $user_code
+
+          This workflow will only remove `dev.shopvivaliz.com.br` from project `prj_hxV5YR2srW8thdYXtwcKAIBDZSn7` after successful Vercel authorization. No token will be printed or persisted.
+          EOF
+          )
+
+          jq -n --arg body "$body" '{body:$body}' > /tmp/comment.json
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$REPO/issues/$PR_NUMBER/comments" \
+            --data-binary @/tmp/comment.json >/dev/null
+
+      - name: Wait for authorization and remove exact domain
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: '985'
+          DEVICE_CODE: ${{ steps.device.outputs.device_code }}
+          TOKEN_ENDPOINT: ${{ steps.device.outputs.token_endpoint }}
+          INTERVAL: ${{ steps.device.outputs.interval }}
+          EXPIRES_IN: ${{ steps.device.outputs.expires_in }}
+          CLIENT_ID: ${{ steps.device.outputs.client_id }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          deadline=$(( $(date +%s) + EXPIRES_IN ))
+          access_token=''
+
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            response="$(curl -sS -X POST "$TOKEN_ENDPOINT" \
+              -H 'Content-Type: application/x-www-form-urlencoded' \
+              --data-urlencode "client_id=$CLIENT_ID" \
+              --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:device_code' \
+              --data-urlencode "device_code=$DEVICE_CODE")"
+
+            access_token="$(jq -r '.access_token // empty' <<<"$response")"
+            if [ -n "$access_token" ]; then
+              echo "::add-mask::$access_token"
+              break
+            fi
+
+            error="$(jq -r '.error // empty' <<<"$response")"
+            case "$error" in
+              authorization_pending|'') sleep "$INTERVAL" ;;
+              slow_down) sleep $(( INTERVAL + 5 )) ;;
+              *) echo "VERCEL_DEVICE_AUTH_FAILED=$error"; exit 2 ;;
+            esac
+          done
+
+          test -n "$access_token" || { echo 'VERCEL_DEVICE_AUTH_TIMEOUT'; exit 3; }
+
+          project_url='https://api.vercel.com/v9/projects/prj_hxV5YR2srW8thdYXtwcKAIBDZSn7?teamId=team_SIKJDRk7Q2CTvJRJdttmJBeJ'
+          project_status="$(curl -sS -o /tmp/project.json -w '%{http_code}' \
+            -H "Authorization: Bearer $access_token" "$project_url")"
+          test "$project_status" = '200' || { echo "VERCEL_PROJECT_ACCESS_STATUS=$project_status"; exit 4; }
+          project_id="$(jq -r '.id // empty' /tmp/project.json)"
+          test "$project_id" = 'prj_hxV5YR2srW8thdYXtwcKAIBDZSn7' || { echo 'VERCEL_PROJECT_MISMATCH'; exit 5; }
+
+          endpoint='https://api.vercel.com/v9/projects/prj_hxV5YR2srW8thdYXtwcKAIBDZSn7/domains/dev.shopvivaliz.com.br?teamId=team_SIKJDRk7Q2CTvJRJdttmJBeJ'
+          delete_status="$(curl -sS -o /tmp/delete.json -w '%{http_code}' \
+            -X DELETE -H "Authorization: Bearer $access_token" "$endpoint")"
+
+          case "$delete_status" in
+            200|204|404) result="Domain cleanup completed (HTTP $delete_status)." ;;
+            *) echo "VERCEL_DELETE_STATUS=$delete_status"; cat /tmp/delete.json; exit 6 ;;
+          esac
+
+          verify_status="$(curl -sS -o /tmp/verify.json -w '%{http_code}' \
+            -H "Authorization: Bearer $access_token" "$endpoint")"
+          if [ "$verify_status" != '404' ]; then
+            echo "VERCEL_VERIFY_STATUS=$verify_status"
+            exit 7
+          fi
+
+          body="$result Verified absent from the Vercel project (HTTP 404)."
+          jq -n --arg body "$body" '{body:$body}' > /tmp/comment.json
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$REPO/issues/$PR_NUMBER/comments" \
+            --data-binary @/tmp/comment.json >/dev/null
