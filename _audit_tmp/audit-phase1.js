@@ -304,6 +304,7 @@ async function runAudit() {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
   const page = await context.newPage();
+  attachGlobalListeners(page);
 
   // Set viewport para testar responsividade
   await page.setViewportSize({ width: 1440, height: 900 });
