@@ -272,11 +272,14 @@ async function auditCheckout(page) {
     return links.find(a => a.href.includes('/checkout') || a.textContent.toLowerCase().includes('checkout'))?.href;
   });
 
+  currentPageName = 'CHECKOUT';
   if (checkoutLink) {
     await page.goto(checkoutLink, { waitUntil: 'load', timeout: 45000 });
   } else {
     await page.goto(`${BASE_URL}/checkout-v2/`, { waitUntil: 'load', timeout: 45000 });
   }
+  await page.waitForTimeout(1500);
+  reportPageErrors('CHECKOUT');
 
   const checkoutElements = await page.evaluate(() => {
     return {
