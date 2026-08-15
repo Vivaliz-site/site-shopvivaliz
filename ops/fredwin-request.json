@@ -1,5 +1,5 @@
 {
   "action": "email_retention_validate",
-  "requested_at": "2026-08-14T23:08:00-03:00",
-  "reason": "Validate V025 operational purge and anti-reimport policy on Fred-Win before production deployment"
+  "requested_at": "2026-08-14T23:14:00-03:00",
+  "reason": "Rerun Fred-Win validation using retention-only pytest plus local Flyway migrate and purge dry-run"
 }
