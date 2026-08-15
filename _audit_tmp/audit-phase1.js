@@ -234,11 +234,14 @@ async function auditCart(page) {
     return links.find(a => a.href.includes('/carrinho') || a.textContent.toLowerCase().includes('carrinho'))?.href;
   });
 
+  currentPageName = 'CARRINHO';
   if (cartLink) {
     await page.goto(cartLink, { waitUntil: 'load', timeout: 45000 });
   } else {
     await page.goto(`${BASE_URL}/carrinho/`, { waitUntil: 'load', timeout: 45000 });
   }
+  await page.waitForTimeout(1500);
+  reportPageErrors('CARRINHO');
 
   const cartElements = await page.evaluate(() => {
     return {
