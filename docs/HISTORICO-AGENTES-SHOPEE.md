@@ -947,3 +947,27 @@ workflows dedicados, e/ou (2) decidir se vale integrar a API de analytics do Sho
 para viabilizar os itens 1/3/9/10 da rotina de 6h, e/ou (3) reduzir o escopo desta rotina para
 apenas o que o código hoje sustenta (título/descrição determinísticos por atributo de catálogo,
 sem CTR/A-B/preço/imagem).
+
+### 9.22 Atualização — ciclo de 2026-08-15 (~19h UTC), 27º ciclo — estado idêntico ao ciclo 26, sem fato novo
+
+Checagem ~6h depois do ciclo 26, sem reinvestigar do zero: `origin/main` confirmado em `3e8cc59`
+(`git fetch origin main`). `.github/workflows/` continua só com `shopee-optimizer-safety.yml`/
+`shopee-production-seo.yml`/`shopee-runtime-health.yml` sob Shopee; o par `fetch-shopee-listings.yml`/
+`optimize-shopee-listings.yml` segue ausente. `listings/` continua parado em
+`shopee-listings-20260726-080756.json` — agora **20 dias** sem extração de catálogo pela via Tiny.
+`env | grep -iE "SHOPEE|TINY|OLIST"` continua vazio neste sandbox (esperado).
+
+Via `mcp__github__actions_list`: `shopee-production-seo.yml` segue com as mesmas 5 execuções de
+2026-07-30 (`id`s 30585266165, 30571531668, 30571478470, 30571242284, 30570700034), todas
+`conclusion: failure` — nenhuma execução nova desde então, ou seja, o único caminho real de escrita
+segue nunca tendo rodado com sucesso. `shopee-runtime-health.yml` segue rodando a cada 6h/pós-deploy
+com `conclusion: success` (última: `31902108347`, 2026-08-15T18:47:38Z) — confirma leitura de
+catálogo/detalhe real, não expõe CTR/conversão/venda por SKU (achado estrutural dos ciclos 19–21,
+reconfirmado sem mudança).
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. Nenhuma notificação
+push enviada neste ciclo — nenhum dos critérios de aviso definidos (workflows Tiny recriados,
+artefato novo com erro diferente, execução de `shopee-production-seo.yml` com apply real
+bem-sucedido) ocorreu. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos
+19–26.
