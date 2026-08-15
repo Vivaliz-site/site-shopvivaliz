@@ -250,21 +250,28 @@ async function runAudit() {
   // Set viewport para testar responsividade
   await page.setViewportSize({ width: 1440, height: 900 });
 
-  try {
-    await auditHomePage(page);
-    await auditCatalogPage(page);
-    await auditProductPage(page);
-    await auditCart(page);
-    await auditCheckout(page);
+  const steps = [
+    ['HOME', auditHomePage],
+    ['CATALOGO', auditCatalogPage],
+    ['PDP', auditProductPage],
+    ['CARRINHO', auditCart],
+    ['CHECKOUT', auditCheckout],
+  ];
 
-    report += '\n---\n\n';
-    report += `### 📊 Resumo Final\n`;
-    report += `Auditoria concluída com sucesso. Screenshots e métricas capturadas.\n`;
+  for (const [name, fn] of steps) {
+    try {
+      await fn(page);
+    } catch (error) {
+      report += `\n\n❌ ERRO EM ${name}:\n${error.message}\n\n`;
+      console.log(`❌ Erro em ${name}: ${error.message}`);
+    }
+  }
 
-  } catch (error) {
-    report += `\n\n❌ ERRO DURANTE AUDITORIA:\n`;
-    report += `${error.message}\n`;
-  } finally {
+  report += '\n---\n\n';
+  report += `### 📊 Resumo Final\n`;
+  report += `Auditoria concluída. Screenshots e métricas capturadas.\n`;
+
+  {
     // Salvar relatório
     fs.writeFileSync(REPORT_PATH, report);
     console.log(`\n✅ Relatório salvo em: ${REPORT_PATH}`);
