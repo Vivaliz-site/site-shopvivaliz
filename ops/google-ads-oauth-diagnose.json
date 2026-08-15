@@ -1,5 +1,5 @@
 {
   "job": "direct-production-secrets",
-  "requested_at": "2026-08-15T00:44:00-03:00",
-  "reason": "Verify whether the stored Google Ads refresh token is authorized and can access the configured Google Ads customer directly from GitHub Production secrets"
+  "requested_at": "2026-08-15T01:00:00-03:00",
+  "reason": "Retest Google Ads production API immediately after developer token upgraded from test access to Explorer/Analytics access and API contact email was updated"
 }
