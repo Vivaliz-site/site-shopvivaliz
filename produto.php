@@ -1033,39 +1033,63 @@ if ($notFound) {
                 });
             }
             if (frmSubmitReview) {
+                // Ate 2026-08-15 este handler so montava um card no DOM e
+                // dizia "publicada com sucesso" sem enviar nada a lugar
+                // nenhum -- a avaliacao sumia no reload. Agora envia de
+                // verdade pro mesmo endpoint que avaliacoes.php usa
+                // (/api/testimonials.php), com o mesmo fluxo real de
+                // moderacao (Liz + revisao humana quando necessario).
                 frmSubmitReview.addEventListener('submit', function(e) {
                     e.preventDefault();
+                    var submitBtn = frmSubmitReview.querySelector('button[type="submit"]');
                     var name = document.getElementById('rev-name').value.trim();
                     var city = document.getElementById('rev-city').value.trim();
                     var rating = document.getElementById('rev-rating').value;
                     var comment = document.getElementById('rev-comment').value.trim();
-                    var starMap = { '5': '★★★★★', '4': '★★★★☆', '3': '★★★☆☆' };
-                    var stars = starMap[rating] || '★★★★★';
 
-                    if (reviewsGrid) {
-                        var card = document.createElement('div');
-                        card.style.background = '#f8fafc';
-                        card.style.padding = '16px';
-                        card.style.borderRadius = '14px';
-                        card.style.border = '1px solid #e2e8f0';
-                        card.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
-                            '<strong style="color:#0f172a;font-size:14px;">' + name + ' - ' + city + '</strong>' +
-                            '<span style="color:#f59e0b;font-size:14px;">' + stars + '</span>' +
-                            '</div>' +
-                            '<p style="font-size:13px;color:#334155;line-height:1.5;margin:0;">"' + comment + '"</p>';
-                        reviewsGrid.prepend(card);
-                    }
-
+                    if (submitBtn) submitBtn.disabled = true;
                     if (revStatusMsg) {
                         revStatusMsg.style.display = 'block';
-                        revStatusMsg.style.color = '#10b981';
-                        revStatusMsg.textContent = 'Obrigado pela sua avaliação! Ela foi publicada com sucesso.';
+                        revStatusMsg.style.color = '#64748b';
+                        revStatusMsg.textContent = 'Enviando...';
                     }
-                    frmSubmitReview.reset();
-                    setTimeout(function() {
-                        reviewContainer.style.display = 'none';
-                        if (revStatusMsg) revStatusMsg.style.display = 'none';
-                    }, 2500);
+
+                    var formData = new FormData();
+                    formData.append('name', name);
+                    formData.append('city', city);
+                    formData.append('rating', rating);
+                    formData.append('message', comment);
+
+                    fetch('/api/testimonials.php', {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'Accept': 'application/json' }
+                    })
+                        .then(function(r) { return r.json(); })
+                        .then(function(data) {
+                            if (revStatusMsg) {
+                                revStatusMsg.style.display = 'block';
+                                revStatusMsg.style.color = data.ok ? '#10b981' : '#b91c1c';
+                                revStatusMsg.textContent = data.message || data.error || 'Avaliação enviada para análise.';
+                            }
+                            if (data.ok) {
+                                frmSubmitReview.reset();
+                                setTimeout(function() {
+                                    reviewContainer.style.display = 'none';
+                                    if (revStatusMsg) revStatusMsg.style.display = 'none';
+                                }, 3500);
+                            }
+                        })
+                        .catch(function() {
+                            if (revStatusMsg) {
+                                revStatusMsg.style.display = 'block';
+                                revStatusMsg.style.color = '#b91c1c';
+                                revStatusMsg.textContent = 'Não foi possível enviar agora. Tente novamente em instantes.';
+                            }
+                        })
+                        .finally(function() {
+                            if (submitBtn) submitBtn.disabled = false;
+                        });
                 });
             }
         }

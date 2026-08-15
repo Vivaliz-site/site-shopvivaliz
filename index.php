@@ -422,7 +422,35 @@ function sv_home_featured_products(int $limit = 8): array
 
 function sv_home_catalog_count(): int
 {
-    return count(sv_home_catalog_source_rows());
+    // sv_home_catalog_source_rows() monta a lista completa enriquecida
+    // (imagens, ranking, ml_score) só pra fins de exibição do catálogo --
+    // caro demais pra rodar só pra contar. O total de produtos ativos muda
+    // pouco (sync do Tiny roda a cada poucas horas), então cacheia o
+    // COUNT isoladamente com TTL bem mais longo que o cache dos rows.
+    static $localCache = null;
+    if ($localCache !== null) {
+        return $localCache;
+    }
+
+    $apcu = function_exists('apcu_fetch') && function_exists('apcu_store');
+    $apcuKey = 'sv_home_catalog_count_v1';
+    if ($apcu) {
+        $ok = false;
+        $stored = apcu_fetch($apcuKey, $ok);
+        if ($ok && is_int($stored)) {
+            $localCache = $stored;
+            return $localCache;
+        }
+    }
+
+    // svcr_products() já é o dado bruto autoritativo (sem o custo extra de
+    // enriquecimento de imagem/ranking que sv_home_catalog_source_rows faz).
+    $count = count(svcr_products());
+    $localCache = $count;
+    if ($apcu) {
+        apcu_store($apcuKey, $count, 1800);
+    }
+    return $count;
 }
 
 function sv_home_banners(): array
@@ -433,7 +461,7 @@ function sv_home_banners(): array
             'image' => '/public/assets/home-banners/banner-primeira-compra.webp',
             'tag' => 'OFERTA EXCLUSIVA',
             'title' => 'Tudo o que você precisa.',
-            'subtitle' => 'Ganhe 5% de desconto na sua primeira compra com o cupom VOLTEI5.',
+            'subtitle' => 'Ganhe 10% de desconto na sua primeira compra com o cupom VIVALIZ10.',
             'primary' => ['label' => 'Aproveitar Desconto', 'href' => '/catalogo'],
             'secondary' => ['label' => 'Falar com vendas', 'href' => '/contato'],
         ],
@@ -1048,51 +1076,14 @@ $svNavCurrent = '';
         </div>
     </section>
 
-    <!-- Testimonials Section -->
-    <section class="home-testimonials home-section-shell home-section-soft">
-        <div class="container">
-            <div class="section-heading section-heading-centered sv-reveal home-section-intro">
-                <div>
-                    <h2>O que nossos clientes dizem</h2>
-                    <p class="muted">Confira a opinião de quem já comprou e aprovou nossos produtos e atendimento.</p>
-                </div>
-            </div>
-            <div class="testimonials-grid">
-                <div class="testimonial-card sv-reveal sv-reveal-delay-1">
-                    <div class="testimonial-stars"><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span></div>
-                    <p>"Comprei rodízios em gel para o meu armário e a qualidade é fantástica! O deslizamento é suave e silencioso. Entrega muito rápida."</p>
-                    <div class="testimonial-author">
-                        <span class="testimonial-avatar testimonial-avatar-initials" aria-hidden="true">AP</span>
-                        <div>
-                            <strong>Ana Paula M.</strong>
-                            <span>São Paulo - SP</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="testimonial-card sv-reveal sv-reveal-delay-2">
-                    <div class="testimonial-stars"><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span></div>
-                    <p>"Excelente atendimento! O suporte tirou minhas dúvidas sobre a compatibilidade do engate rápido para mangueira. Indico a todos!"</p>
-                    <div class="testimonial-author">
-                        <span class="testimonial-avatar testimonial-avatar-initials" aria-hidden="true">MS</span>
-                        <div>
-                            <strong>Marcos Silva T.</strong>
-                            <span>Curitiba - PR</span>
-                        </div>
-                    </div>
-                </div>
-                <div class="testimonial-card sv-reveal sv-reveal-delay-3">
-                    <div class="testimonial-stars"><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span><span class="testimonial-star">★</span></div>
-                    <p>"As caixas organizadoras superaram minhas expectativas. Super resistentes e bonitas. Site fácil de comprar pelo celular e seguro."</p>
-                    <div class="testimonial-author">
-                        <span class="testimonial-avatar testimonial-avatar-initials" aria-hidden="true">JC</span>
-                        <div>
-                            <strong>Julia Costa F.</strong>
-                            <span>Belo Horizonte - MG</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <!-- Testimonials Section: depoimentos fixos removidos em 2026-08-15 --
+         eram texto inventado (nomes, cidades e avaliacoes fabricados), o
+         mesmo problema ja corrigido em produto.php via
+         svpts_honest_reviews_section(). Reusa a mesma secao honesta aqui. -->
+    <section class="container sv-reviews-section home-section-shell home-section-soft" aria-labelledby="sv-home-reviews-title" style="margin-top:40px;padding:24px;background:#fff;border:1px solid rgba(11,79,136,.1);border-radius:20px;">
+        <h2 id="sv-home-reviews-title" style="font-size:20px;font-weight:800;color:#07345d;margin:0 0 8px;">Avaliações de clientes</h2>
+        <p style="margin:0 0 16px;color:#475569;line-height:1.6;">Avaliações reais aparecem aqui assim que enviadas por clientes e moderadas pela equipe.</p>
+        <a href="/avaliacoes.php" class="btn btn-secondary" style="display:inline-flex;text-decoration:none;">Ver e enviar avaliações</a>
     </section>
 
     <!-- Premium Newsletter Section -->

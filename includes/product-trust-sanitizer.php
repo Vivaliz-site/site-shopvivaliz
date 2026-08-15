@@ -37,20 +37,13 @@ function svpts_sanitize_product_html(string $html): string
     );
     $sanitized = str_replace('>Adicionar Combo</a>', '>Ver produto complementar e ganhar 3% OFF</a>', $sanitized);
 
-    // Remove condicoes comerciais legadas que nao sao calculadas de forma
-    // autoritativa no pedido atual.
-    $sanitized = preg_replace(
-        '~<div\s+class="pix-discount-badge"[^>]*>.*?</div>~si',
-        '<div class="pix-discount-badge" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;font-weight:700;font-size:14px;"><span>⚡ PIX disponível no checkout</span></div>',
-        $sanitized,
-        1
-    ) ?? $sanitized;
-    $sanitized = preg_replace(
-        '~<div\s+class="installment-label"[^>]*>.*?</div>~si',
-        '<div class="installment-label" style="font-size:13px;color:#64748b;font-weight:600;"><span>💳 Parcelamento disponível no checkout</span></div>',
-        $sanitized,
-        1
-    ) ?? $sanitized;
+    // NOTA HISTORICA: ate 2026-08-15 esta funcao substituia o badge de PIX/
+    // parcelamento por um texto generico ("disponivel no checkout"), sob a
+    // premissa de que o valor exibido nao era calculado de forma autoritativa.
+    // Isso deixou de ser verdade: produto.php calcula pixPrice e
+    // installmentValue diretamente de $priceRaw (preco real do produto) --
+    // ver produto.php linhas ~702-709. Sanitizar esse bloco hoje so serve pra
+    // apagar um desconto real que o cliente teria direito de ver. Removido.
 
     $sanitized = str_replace('Garantia de Fábrica', 'Suporte antes e depois da compra', $sanitized);
 
