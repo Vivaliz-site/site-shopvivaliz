@@ -1,0 +1,39 @@
+name: Ops Performance Fast Audit 20260815
+on:
+  push:
+    branches: [ops/performance-audit-20260815]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          SHOPVIVALIZ_VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          KEY="${ORACLE_VM_SSH_KEY:-}"; [ -n "$KEY" ] || KEY="${SHOPVIVALIZ_VM_SSH_KEY:-}"
+          test -n "$KEY"; mkdir -p ~/.ssh; printf '%s\n' "$KEY" > ~/.ssh/vmkey; chmod 600 ~/.ssh/vmkey
+      - name: Bounded audit
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=12 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'SH'
+          set -u
+          echo '--- SYSTEM ---'; uptime; free -h; df -h /
+          echo '--- TOP ---'; ps -eo pid,comm,%cpu,%mem,etime --sort=-%cpu | head -20
+          echo '--- RELEASE ---'; readlink -f /home/ubuntu/shopvivaliz-deploy/current; cd /home/ubuntu/shopvivaliz-deploy/repo && echo REPO_SHA=$(git rev-parse HEAD)
+          echo '--- SERVICES ---'; systemctl is-active nginx || true; systemctl is-active php8.3-fpm || systemctl is-active php8.2-fpm || true
+          echo '--- TIMINGS MAX10 ---'
+          for path in / /catalogo /carrinho /api/health.php?health=1; do
+            curl --max-time 10 -sS -o /dev/null -H 'Host: shopvivaliz.com.br' -w "$path code=%{http_code} ttfb=%{time_starttransfer} total=%{time_total} bytes=%{size_download}\n" "http://127.0.0.1$path" || echo "$path TIMEOUT"
+          done
+          echo '--- FPM ---'; grep -RHE '^(pm =|pm\.max_children|pm\.start_servers|pm\.min_spare_servers|pm\.max_spare_servers|pm\.max_requests|request_terminate_timeout)' /etc/php/*/fpm/pool.d/*.conf 2>/dev/null || true
+          echo '--- PROCESSES ---'; pgrep -af 'php-fpm|postgres|mysql|mariadb|redis|nginx' || true
+          echo '--- CURRENT ERRORS ---'; sudo tail -n 60 /var/log/nginx/error.log 2>/dev/null || true
+          echo '--- DISK HOT ---'; du -sh /home/ubuntu/shopvivaliz-deploy/shared/* 2>/dev/null | sort -hr | head -20 || true
+          echo '--- LARGE ASSETS ---'; find /home/ubuntu/shopvivaliz-deploy/current -type f -printf '%s %p\n' 2>/dev/null | sort -nr | head -20 || true
+          SH
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
