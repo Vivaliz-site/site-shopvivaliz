@@ -1,0 +1,128 @@
+name: Ops - Remove stale Vercel domain via VM once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/ops-vercel-domain-via-vm-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  remove-domain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo 'SSH_KEY_MISSING'; exit 1; }
+          test -n "$known_hosts" || { echo 'KNOWN_HOSTS_MISSING'; exit 1; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Remove stale Vercel project domain using existing VM auth
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          token=""
+
+          env_file='/home/ubuntu/shopvivaliz-deploy/shared/.env'
+          if [ -r "$env_file" ]; then
+            token="$(python3 - "$env_file" <<'PY'
+          import sys
+          path=sys.argv[1]
+          names={'VERCEL_TOKEN','VERCEL_ACCESS_TOKEN','VERCEL_API_TOKEN','VERCEL_AUTH_TOKEN'}
+          found={}
+          with open(path, encoding='utf-8', errors='ignore') as f:
+              for raw in f:
+                  line=raw.strip()
+                  if not line or line.startswith('#') or '=' not in line:
+                      continue
+                  k,v=line.split('=',1)
+                  k=k.strip()
+                  if k in names:
+                      v=v.strip().strip('"').strip("'")
+                      if v:
+                          found[k]=v
+          for name in ('VERCEL_TOKEN','VERCEL_ACCESS_TOKEN','VERCEL_API_TOKEN','VERCEL_AUTH_TOKEN'):
+              if found.get(name):
+                  print(found[name], end='')
+                  break
+          PY
+          )"
+          fi
+
+          if [ -z "$token" ]; then
+            for auth_file in \
+              "$HOME/.local/share/com.vercel.cli/auth.json" \
+              "$HOME/.config/com.vercel.cli/auth.json" \
+              "$HOME/.vercel/auth.json"; do
+              if [ -r "$auth_file" ]; then
+                token="$(python3 - "$auth_file" <<'PY'
+          import json,sys
+          try:
+              data=json.load(open(sys.argv[1], encoding='utf-8'))
+              value=data.get('token') or data.get('accessToken') or ''
+              if isinstance(value,str): print(value,end='')
+          except Exception:
+              pass
+          PY
+          )"
+                [ -n "$token" ] && break
+              fi
+            done
+          fi
+
+          if [ -z "$token" ]; then
+            echo 'VERCEL_AUTH_NOT_FOUND'
+            exit 2
+          fi
+
+          endpoint='https://api.vercel.com/v9/projects/prj_hxV5YR2srW8thdYXtwcKAIBDZSn7/domains/dev.shopvivaliz.com.br?teamId=team_SIKJDRk7Q2CTvJRJdttmJBeJ'
+          get_status="$(curl -sS -o /tmp/vercel-domain-get.json -w '%{http_code}' \
+            --url "$endpoint" \
+            --header "Authorization: Bearer ${token}" \
+            --header 'Content-Type: application/json')"
+          echo "VERCEL_DOMAIN_GET_STATUS=${get_status}"
+          if [ "$get_status" = '404' ]; then
+            echo 'VERCEL_DOMAIN_ALREADY_ABSENT'
+            exit 0
+          fi
+          if [ "$get_status" != '200' ]; then
+            echo 'VERCEL_AUTH_OR_ACCESS_FAILED'
+            exit 3
+          fi
+
+          delete_status="$(curl -sS -o /tmp/vercel-domain-delete.json -w '%{http_code}' \
+            --request DELETE \
+            --url "$endpoint" \
+            --header "Authorization: Bearer ${token}" \
+            --header 'Content-Type: application/json')"
+          echo "VERCEL_DOMAIN_DELETE_STATUS=${delete_status}"
+          case "$delete_status" in
+            200|204) echo 'VERCEL_DOMAIN_REMOVED' ;;
+            *) echo 'VERCEL_DOMAIN_DELETE_FAILED'; exit 4 ;;
+          esac
+          REMOTE
+
+      - name: Remove SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
