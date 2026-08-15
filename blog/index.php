@@ -101,7 +101,7 @@ $blogSchema = [
                 <span class="knowledge-eyebrow">Central de Conhecimento ShopVivaliz</span>
                 <h1>Escolhas melhores começam com informação confiável.</h1>
                 <p>Guias práticos, cuidados, comparativos e respostas para ajudar você a comprar com segurança e aproveitar melhor cada produto.</p>
-                <form class="knowledge-search" method="get" action="/blog" role="search">
+                <form class="knowledge-search" method="get" action="/blog/" role="search">
                     <label class="sr-only" for="knowledge-q">Buscar na Central de Conhecimento</label>
                     <input id="knowledge-q" type="search" name="q" value="<?= sv_blog_escape($query) ?>" placeholder="Busque por rodízio, ferragens, organização..." enterkeyhint="search">
                     <?php if ($categoryFilter !== ''): ?>
@@ -120,7 +120,7 @@ $blogSchema = [
             <?php if ($isFiltered): ?>
                 <p class="knowledge-filter-summary" role="status">
                     Filtro ativo<?= $query !== '' ? ': busca por “' . sv_blog_escape($query) . '”' : '' ?><?= $categoryFilter !== '' ? ' em ' . sv_blog_escape($categoryFilter) : '' ?>.
-                    <a href="/blog">Limpar filtros</a>
+                    <a href="/blog/">Limpar filtros</a>
                 </p>
             <?php endif; ?>
             <?php if ($articles === []): ?>
@@ -154,10 +154,10 @@ $blogSchema = [
             <div class="knowledge-panel">
                 <h2>Categorias</h2>
                 <ul class="knowledge-category-list">
-                    <li><a href="/blog"<?= $categoryFilter === '' ? ' aria-current="page"' : '' ?>><span>Todas</span><strong><?= $totalArticles ?></strong></a></li>
+                    <li><a href="/blog/"<?= $categoryFilter === '' ? ' aria-current="page"' : '' ?>><span>Todas</span><strong><?= $totalArticles ?></strong></a></li>
                     <?php foreach ($categories as $category => $count): ?>
                         <li>
-                            <a href="/blog?categoria=<?= rawurlencode((string)$category) ?><?= $query !== '' ? '&q=' . rawurlencode($query) : '' ?>"<?= strcasecmp($categoryFilter, (string)$category) === 0 ? ' aria-current="page"' : '' ?>>
+                            <a href="/blog/?categoria=<?= rawurlencode((string)$category) ?><?= $query !== '' ? '&q=' . rawurlencode($query) : '' ?>"<?= strcasecmp($categoryFilter, (string)$category) === 0 ? ' aria-current="page"' : '' ?>>
                                 <span><?= sv_blog_escape((string)$category) ?></span><strong><?= (int)$count ?></strong>
                             </a>
                         </li>
@@ -172,7 +172,7 @@ $blogSchema = [
             <div class="knowledge-panel">
                 <h2>Precisa de ajuda?</h2>
                 <p>A Liz pode ajudar a encontrar produtos e responder dúvidas durante sua navegação.</p>
-                <a href="/catalogo">Explorar catálogo</a>
+                <a href="/catalogo/">Explorar catálogo</a>
             </div>
         </aside>
     </div>
