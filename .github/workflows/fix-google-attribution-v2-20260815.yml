@@ -1,0 +1,168 @@
+name: Fix Google Attribution V2 20260815
+on:
+  push:
+    branches: [fix/google-attribution-20260815]
+    paths: ['.github/workflows/fix-google-attribution-v2-20260815.yml']
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/google-attribution-20260815
+      - name: Patch files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_between(text, start, end, replacement):
+              a=text.index(start); b=text.index(end,a)
+              return text[:a]+replacement+text[b:]
+
+          p=Path('js/shopvivaliz-google-events.js'); s=p.read_text()
+          start='  function funnelClientId() {'
+          end='  function captureGclsAndUtmParams() {'
+          new=r'''  function readCookie(name) {
+            try {
+              var match = String(document.cookie || '').split(';').map(function (part) { return part.trim(); }).find(function (part) { return part.indexOf(name + '=') === 0; });
+              return match ? decodeURIComponent(match.slice(name.length + 1)) : '';
+            } catch (error) { return ''; }
+          }
+
+          function ga4ClientIdFromCookie() {
+            var ga = readCookie('_ga');
+            var match = ga.match(/^GA\d+\.\d+\.(\d+)\.(\d+)$/);
+            return match ? (match[1] + '.' + match[2]) : '';
+          }
+
+          function ga4SessionIdFromCookies() {
+            var cookies = String(document.cookie || '').split(';');
+            for (var i = 0; i < cookies.length; i++) {
+              var pair = cookies[i].trim();
+              if (pair.indexOf('_ga_') !== 0 || pair.indexOf('=') < 0) continue;
+              var value = decodeURIComponent(pair.slice(pair.indexOf('=') + 1));
+              var legacy = value.match(/^GS\d+(?:\.\d+)?\.(\d+)/);
+              if (legacy) return legacy[1];
+              var modern = value.match(/(?:^|\$)s(\d+)(?:\$|$)/);
+              if (modern) return modern[1];
+            }
+            return '';
+          }
+
+          function funnelClientId() {
+            var key = 'sv_funnel_client_v1';
+            try {
+              if (analyticsConsentGranted()) {
+                var clientId = ga4ClientIdFromCookie();
+                if (clientId) {
+                  var sessionId = ga4SessionIdFromCookies();
+                  var identity = sessionId ? (clientId + '|' + sessionId) : clientId;
+                  localStorage.setItem(key, identity);
+                  return identity;
+                }
+              }
+              var existing = String(localStorage.getItem(key) || '');
+              if (/^\d+\.\d+(?:\|\d+)?$/.test(existing) || /^[a-f0-9-]{16,64}$/i.test(existing)) return existing;
+              var created = randomId();
+              localStorage.setItem(key, created);
+              return created;
+            } catch (error) { return randomId(); }
+          }
+
+          '''
+          s=replace_between(s,start,end,new)
+          old="""      var gclid = params.get('gclid');
+                if (gclid) localStorage.setItem('sv_gclid', gclid);
+          """
+          new2="""      ['gclid', 'gbraid', 'wbraid', 'dclid'].forEach(function (key) {
+                var value = params.get(key);
+                if (value) localStorage.setItem('sv_' + key, value);
+              });
+          """
+          if old not in s: raise SystemExit('JS click-id marker missing')
+          p.write_text(s.replace(old,new2,1))
+
+          p=Path('checkout.php'); s=p.read_text()
+          old="""        // Capturar gclid (Google Click ID) da URL ou localStorage
+                  try {
+                      var params = new URLSearchParams(window.location.search);
+                      var gclid = params.get('gclid') || localStorage.getItem('sv_gclid') || '';
+                      if (gclid) payload.gclid = gclid;
+          """
+          new="""        // Capturar identificadores de clique Google da URL ou localStorage.
+                  try {
+                      var params = new URLSearchParams(window.location.search);
+                      ['gclid', 'gbraid', 'wbraid', 'dclid'].forEach(function (key) {
+                          var value = params.get(key) || localStorage.getItem('sv_' + key) || '';
+                          if (value) payload[key] = value;
+                      });
+          """
+          if old not in s: raise SystemExit('checkout click-id marker missing')
+          p.write_text(s.replace(old,new,1))
+
+          p=Path('api/orders/process-validated.php'); s=p.read_text()
+          old="$gclid = trim((string)($body['gclid'] ?? ''));"
+          new="$gclid = trim((string)($body['gclid'] ?? ''));\n$gbraid = trim((string)($body['gbraid'] ?? ''));\n$wbraid = trim((string)($body['wbraid'] ?? ''));\n$dclid = trim((string)($body['dclid'] ?? ''));"
+          if old not in s: raise SystemExit('process gclid marker missing')
+          s=s.replace(old,new,1)
+          old="strlen($funnelClientId) > 128 || strlen($gclid) > 255 || strlen($utmSource) > 255"
+          new="strlen($funnelClientId) > 128 || strlen($gclid) > 255 || strlen($gbraid) > 255 || strlen($wbraid) > 255 || strlen($dclid) > 255 || strlen($utmSource) > 255"
+          if old not in s: raise SystemExit('process length marker missing')
+          s=s.replace(old,new,1)
+          old="    'gclid' => $gclid,\n    'utm' => ["
+          new="    'gclid' => $gclid,\n    'gbraid' => $gbraid,\n    'wbraid' => $wbraid,\n    'dclid' => $dclid,\n    'utm' => ["
+          if old not in s: raise SystemExit('process record marker missing')
+          p.write_text(s.replace(old,new,1))
+
+          p=Path('includes/ga4-order-conversion.php'); s=p.read_text()
+          start='    // Measurement Protocol accepts a positive numeric session id or the full'
+          end="    return ['client_id' => $clientId, 'session_id' => $sessionId];"
+          new=r'''    // Measurement Protocol session_id must be numeric. Normalize historical cookie values.
+              if ($sessionId !== '' && preg_match('/^\d+$/', $sessionId) !== 1) {
+                  if (preg_match('/^GS\d+(?:\.\d+)?\.(\d+)/', $sessionId, $legacy) === 1) {
+                      $sessionId = (string)$legacy[1];
+                  } elseif (preg_match('/(?:^|\$)s(\d+)(?:\$|$)/', $sessionId, $modern) === 1) {
+                      $sessionId = (string)$modern[1];
+                  } else {
+                      $sessionId = '';
+                  }
+              }
+              if ($sessionId !== '' && (preg_match('/^\d+$/', $sessionId) !== 1 || strlen($sessionId) > 20)) {
+                  $sessionId = '';
+              }
+
+          '''
+          s=replace_between(s,start,end,new)
+          p.write_text(s)
+
+          p=Path('checkout-return.php'); s=p.read_text()
+          s=s.replace("$confirmCheck = min(4, max(0, (int)($_GET['confirm_check'] ?? 0)));", "$confirmCheck = min(10, max(0, (int)($_GET['confirm_check'] ?? 0)));")
+          s=s.replace("$confirmCheck < 4;", "$confirmCheck < 10;")
+          p.write_text(s)
+          PY
+      - name: Validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check js/shopvivaliz-google-events.js
+          php -l checkout.php
+          php -l api/orders/process-validated.php
+          php -l includes/ga4-order-conversion.php
+          php -l checkout-return.php
+          grep -q "'gbraid' => \$gbraid" api/orders/process-validated.php
+          grep -q "confirmCheck = min(10" checkout-return.php
+          grep -q "ga4ClientIdFromCookie" js/shopvivaliz-google-events.js
+      - name: Commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'ShopVivaliz Ops'
+          git config user.email 'actions@users.noreply.github.com'
+          git add js/shopvivaliz-google-events.js checkout.php api/orders/process-validated.php includes/ga4-order-conversion.php checkout-return.php
+          git commit -m 'fix: preserve Google click and GA4 session attribution'
+          git push origin HEAD:fix/google-attribution-20260815
