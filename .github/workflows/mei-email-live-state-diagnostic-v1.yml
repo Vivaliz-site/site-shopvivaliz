@@ -1,0 +1,46 @@
+name: MEI email live state diagnostic v1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mei-email-live-state-diagnostic-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Read live state
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=10 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set +e
+          echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null)"
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo 'SENTINEL=present'; else echo 'SENTINEL=absent'; fi
+          timeout 15s docker ps -a --filter name=mei-mg-email-db --format 'DB={{.ID}}|{{.Status}}'
+          timeout 15s docker inspect -f 'DB_STATE={{.State.Status}} restart={{.RestartCount}} oom={{.State.OOMKilled}} started={{.State.StartedAt}}' mei-mg-email-db
+          timeout 15s docker exec mei-mg-email-db pg_isready -U postgres -d mei_mg_email
+          echo "PGREADY_RC=$?"
+          timeout 20s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -Atc "select 'DB_NOW='||now(); select 'V025='||coalesce((select version||':'||success from mei_email.flyway_schema_history where version='025' order by installed_rank desc limit 1),'missing');"
+          echo "PSQL_RC=$?"
+          timeout 20s docker logs --tail 80 mei-mg-email-db 2>&1 | tail -n 80
+          EOF
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/vmkey
