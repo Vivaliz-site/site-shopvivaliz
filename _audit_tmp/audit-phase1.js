@@ -225,7 +225,7 @@ async function auditCheckout(page) {
 
   const checkoutElements = await page.evaluate(() => {
     return {
-      formFields: document.querySelectorAll('input[type!="hidden"]').length,
+      formFields: Array.from(document.querySelectorAll('input')).filter(i => i.type !== 'hidden').length,
       steps: document.querySelectorAll('[class*="step"], [class*="stage"]').length,
       paymentMethods: document.querySelectorAll('[class*="payment"], input[name*="payment"]').length,
       securityBadges: document.querySelectorAll('img[alt*="ssl" i], [class*="security"]').length,
