@@ -1,0 +1,32 @@
+name: Fix Public Performance V2 20260815
+on:
+  push:
+    branches: [fix/public-performance-v2-20260815]
+permissions:
+  contents: write
+jobs:
+  rebase:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/public-performance-v2-20260815
+          fetch-depth: 0
+      - name: Apply validated performance commit
+        run: |
+          set -euo pipefail
+          git config user.name 'Frederico mourao'
+          git config user.email 'fredmourao@gmail.com'
+          git fetch origin fix/public-performance-20260815
+          git cherry-pick 764b2f2131c3b27e1b244f0332bbf8e39de25494
+      - name: Validate merged code and policy
+        run: |
+          set -euo pipefail
+          php -l index.php
+          php -l includes/navbar.php
+          php tests/commercial-policy-regression-test.php
+          grep -q 's-maxage=30' index.php
+          grep -q 'shopvivaliz-home-catalog-source-v1.json' index.php
+          ! grep -q 'VIVALIZ10' index.php
+      - name: Push rebased fix
+        run: git push origin HEAD:fix/public-performance-v2-20260815
