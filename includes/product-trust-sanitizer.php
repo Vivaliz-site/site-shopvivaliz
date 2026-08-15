@@ -18,7 +18,6 @@ function svpts_sanitize_product_html(string $html): string
     $patterns = [
         '~<div\s+style="color:\s*#fbbf24;[^\"]*">\s*★★★★★.*?\(4\.9/5\s*-\s*Excelente\).*?</div>~si' => '',
         '~<!--\s*Customer Reviews Widget\s*-->\s*<section\s+class="container sv-reviews-section".*?</section>~si' => svpts_honest_reviews_section(),
-        '~<section\s+class="container sv-compre-junto".*?</section>~si' => '',
         // Produto esgotado em recomendacao ocupa espaco de venda sem poder
         // converter. Mantemos a pagina individual acessivel, mas removemos
         // esses cards da vitrine de relacionados da pagina de produto.
@@ -30,6 +29,34 @@ function svpts_sanitize_product_html(string $html): string
         error_log('product-trust-sanitizer: regex failure');
         return $html;
     }
+
+    // A oferta "Compre Junto" e real e validada no servidor: 3% nos dois
+    // itens do par. O template legado ainda usa a copy antiga, portanto a
+    // saida publica e normalizada aqui sem alterar os precos-base do catalogo.
+    $sanitized = str_replace(
+        'Compre Junto e Economize (Combo Recomendado)',
+        'Compre junto: 3% OFF nos 2 itens',
+        $sanitized
+    );
+    $sanitized = str_replace('>Adicionar Combo</a>', '>Adicionar os 2 com 3% OFF</a>', $sanitized);
+
+    // A pagina antiga anunciava 5% no PIX e 3x sem juros sem uma regra
+    // autoritativa equivalente no pedido. Nao prometemos condicoes que o
+    // backend nao calcula. As formas reais permanecem apresentadas no checkout.
+    $sanitized = preg_replace(
+        '~<div\s+class="pix-discount-badge"[^>]*>.*?</div>~si',
+        '<div class="pix-discount-badge" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;font-weight:700;font-size:14px;"><span>⚡ PIX disponível no checkout</span></div>',
+        $sanitized,
+        1
+    ) ?? $sanitized;
+    $sanitized = preg_replace(
+        '~<div\s+class="installment-label"[^>]*>.*?</div>~si',
+        '<div class="installment-label" style="font-size:13px;color:#64748b;font-weight:600;"><span>💳 Parcelamento disponível no checkout</span></div>',
+        $sanitized,
+        1
+    ) ?? $sanitized;
+
+    $sanitized = str_replace('Garantia de Fábrica', 'Suporte antes e depois da compra', $sanitized);
 
     // Se todos os relacionados estavam esgotados, evita deixar um bloco vazio
     // com apenas o titulo "Voce tambem pode gostar".
@@ -47,7 +74,6 @@ function svpts_sanitize_product_html(string $html): string
         '(Baseado em compras verificadas)',
         '4.9 / 5.0',
         '4.9/5 - Excelente',
-        'Compre Junto e Economize (Combo Recomendado)',
     ];
     foreach ($forbidden as $claim) {
         $sanitized = str_replace($claim, '', $sanitized);
