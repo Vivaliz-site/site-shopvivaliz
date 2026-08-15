@@ -1,0 +1,66 @@
+name: MEI email Postgres host diagnostic v1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mei-email-postgres-hostdiag-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Inspect PostgreSQL from host
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=10 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set +e
+          echo 'HOST_RESOURCES_BEGIN'
+          df -h /
+          df -i /
+          free -m
+          uptime
+          echo 'HOST_RESOURCES_END'
+
+          echo 'DB_PROCESS_BEGIN'
+          timeout 20s docker top mei-mg-email-db -eo pid,ppid,stat,etime,pcpu,pmem,args
+          echo "DOCKER_TOP_RC=$?"
+          pid="$(timeout 10s docker inspect -f '{{.State.Pid}}' mei-mg-email-db 2>/dev/null)"
+          echo "CONTAINER_PID=$pid"
+          if [ -n "$pid" ] && [ "$pid" != 0 ]; then
+            sudo ps -o pid,ppid,stat,etime,pcpu,pmem,wchan:32,args -p "$pid"
+            sudo cat "/proc/$pid/status" | grep -E '^(Name|State|VmRSS|VmSwap|Threads):' || true
+          fi
+          echo 'DB_PROCESS_END'
+
+          echo 'RAW_DB_LOG_BEGIN'
+          logpath="$(timeout 10s docker inspect -f '{{.LogPath}}' mei-mg-email-db 2>/dev/null)"
+          echo "LOGPATH=$logpath"
+          if [ -n "$logpath" ] && [ -f "$logpath" ]; then
+            sudo tail -n 200 "$logpath"
+          fi
+          echo 'RAW_DB_LOG_END'
+
+          echo 'KERNEL_ERRORS_BEGIN'
+          sudo dmesg --ctime 2>/dev/null | grep -Ei 'oom|killed process|I/O error|ext4|xfs|nvme|blk|postgres' | tail -n 80 || true
+          echo 'KERNEL_ERRORS_END'
+          EOF
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/vmkey
