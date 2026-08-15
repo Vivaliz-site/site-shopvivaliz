@@ -1,5 +1,6 @@
 {
-  "requested_at": "2026-08-15T10:24:00-03:00",
-  "campaign_id": "24144257692",
-  "reason": "Read-only diagnosis for zero-impression enabled R$10/day campaign"
+  "requested_at": "2026-08-15T11:22:34-03:00",
+  "campaign": "ShopVivaliz-Search-Vasos-Antique-Decore-2026-08",
+  "mode": "read_only_preflight",
+  "checks": ["budget_exact_10_brl", "exact_ad_groups", "primary_purchase_conversion", "ad_policy"]
 }
