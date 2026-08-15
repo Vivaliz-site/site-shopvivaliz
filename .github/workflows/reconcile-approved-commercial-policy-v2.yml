@@ -18,100 +18,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Reconcile storefront and ad guards
-        shell: bash
+      - name: Reconcile files
+        run: python3 scripts/reconcile_commercial_policy.py
+      - name: Validate policy
         run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          index = Path('index.php')
-          text = index.read_text(encoding='utf-8')
-          replacements = {
-              "'alt' => 'Banner Vivaliz com 5% de desconto na primeira compra',": "'alt' => 'Banner Vivaliz com 3% OFF automatico em carrinho com 2 ou mais produtos diferentes',",
-              "'subtitle' => 'Ganhe 10% de desconto na sua primeira compra com o cupom VIVALIZ10.',": "'subtitle' => 'Leve 2 ou mais produtos diferentes e ganhe 3% OFF automatico no carrinho.',",
-              "'primary' => ['label' => 'Aproveitar Desconto', 'href' => '/catalogo'],": "'primary' => ['label' => 'Ver produtos', 'href' => '/catalogo'],",
-          }
-          for old, new in replacements.items():
-              if old not in text:
-                  raise SystemExit(f'INDEX_EXPECTED_TEXT_NOT_FOUND={old}')
-              text = text.replace(old, new, 1)
-          index.write_text(text, encoding='utf-8')
-
-          sanitizer = Path('includes/product-trust-sanitizer.php')
-          text = sanitizer.read_text(encoding='utf-8')
-          old = '''    // NOTA HISTORICA: ate 2026-08-15 esta funcao substituia o badge de PIX/
-    // parcelamento por um texto generico ("disponivel no checkout"), sob a
-    // premissa de que o valor exibido nao era calculado de forma autoritativa.
-    // Isso deixou de ser verdade: produto.php calcula pixPrice e
-    // installmentValue diretamente de $priceRaw (preco real do produto) --
-    // ver produto.php linhas ~702-709. Sanitizar esse bloco hoje so serve pra
-    // apagar um desconto real que o cliente teria direito de ver. Removido.
-'''
-          new = '''    // Condicoes de PIX/parcelamento so podem ser exibidas quando forem
-    // autoritativas no pedido. Mantemos copy neutra no storefront para nao
-    // transformar um calculo visual em promessa comercial nao aprovada.
-    $sanitized = preg_replace(
-        '~<div\\s+class="pix-discount-badge"[^>]*>.*?</div>~si',
-        '<div class="pix-discount-badge" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;font-weight:700;font-size:14px;"><span>⚡ PIX disponível no checkout</span></div>',
-        $sanitized,
-        1
-    ) ?? $sanitized;
-    $sanitized = preg_replace(
-        '~<div\\s+class="installment-label"[^>]*>.*?</div>~si',
-        '<div class="installment-label" style="font-size:13px;color:#64748b;font-weight:600;"><span>💳 Parcelamento disponível no checkout</span></div>',
-        $sanitized,
-        1
-    ) ?? $sanitized;
-'''
-          if old not in text:
-              raise SystemExit('SANITIZER_EXPECTED_BLOCK_NOT_FOUND')
-          sanitizer.write_text(text.replace(old, new, 1), encoding='utf-8')
-
-          ads = Path('.github/workflows/google-ads-antique-decore-status.yml')
-          text = ads.read_text(encoding='utf-8')
-          old = "VOLTEI5|5%[[:space:]]*OFF[[:space:]]*NA[[:space:]]*1|5%[[:space:]]*(OFF|DE DESCONTO).*(PRIMEIRA|1.?)[[:space:]]*COMPRA"
-          new = "VOLTEI5|VIVALIZ10|PRIMEIRA10|10%[[:space:]]*(OFF|DE DESCONTO).*(PRIMEIRA|1.?)[[:space:]]*COMPRA|5%[[:space:]]*OFF[[:space:]]*NA[[:space:]]*1|5%[[:space:]]*(OFF|DE DESCONTO).*(PRIMEIRA|1.?)[[:space:]]*COMPRA"
-          if old not in text:
-              raise SystemExit('ADS_GUARD_EXPECTED_PATTERN_NOT_FOUND')
-          ads.write_text(text.replace(old, new, 1), encoding='utf-8')
-
-          guard = Path('tests/commercial-policy-regression-test.php')
-          guard.write_text(r'''<?php
-declare(strict_types=1);
-
-function policy_assert(bool $ok, string $message): void {
-    if (!$ok) { fwrite(STDERR, "FAIL: {$message}\n"); exit(1); }
-}
-
-$index = file_get_contents(dirname(__DIR__) . '/index.php') ?: '';
-$sanitizer = file_get_contents(dirname(__DIR__) . '/includes/product-trust-sanitizer.php') ?: '';
-
-policy_assert(!str_contains($index, 'VIVALIZ10'), 'public home must not advertise legacy VIVALIZ10');
-policy_assert(!str_contains($index, 'PRIMEIRA10'), 'public home must not advertise legacy PRIMEIRA10');
-policy_assert(!preg_match('/10%[^\n]{0,100}(primeira|1.?)\s*compra/iu', $index), 'public home must not claim 10% first purchase');
-policy_assert(str_contains($index, '3% OFF automatico no carrinho'), 'home must advertise only the approved automatic 3% cart offer');
-policy_assert(str_contains($sanitizer, 'PIX disponível no checkout'), 'PIX claim must stay neutral until checkout-authoritative');
-policy_assert(str_contains($sanitizer, 'Parcelamento disponível no checkout'), 'installment claim must stay neutral until checkout-authoritative');
-
-fwrite(STDOUT, "commercial_policy_regression=ok\n");
-''', encoding='utf-8')
-          PY
-
           php tests/commercial-policy-regression-test.php
           php -l index.php
           php -l includes/product-trust-sanitizer.php
-
       - name: Commit reconciliation
-        shell: bash
         run: |
           set -euo pipefail
-          git config user.name 'fredmourao-ai'
-          git config user.email 'fredmourao@gmail.com'
+          git config user.name fredmourao-ai
+          git config user.email fredmourao@gmail.com
           git add index.php includes/product-trust-sanitizer.php .github/workflows/google-ads-antique-decore-status.yml tests/commercial-policy-regression-test.php
           if git diff --cached --quiet; then
-            echo 'NO_CHANGES_NEEDED=true'
+            echo NO_CHANGES_NEEDED=true
             exit 0
           fi
           git commit -m 'fix: restore approved ShopVivaliz commercial policy'
