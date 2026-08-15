@@ -13,7 +13,7 @@ permissions:
 jobs:
   execute:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,6 +54,9 @@ jobs:
             verify_auto_sync)
               COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"\$repo='C:\\site-shopvivaliz'; Write-Output '=== TASKS ==='; Get-ScheduledTask | Where-Object { \$_.Actions.Execute -match 'powershell|pwsh|cmd' -and ((\$_.Actions.Arguments -join ' ') -match 'local-auto-sync|site-shopvivaliz') } | ForEach-Object { \$info=Get-ScheduledTaskInfo -TaskName \$_.TaskName -TaskPath \$_.TaskPath; Write-Output ('TASK=' + \$_.TaskName); Write-Output ('STATE=' + \$_.State); Write-Output ('LAST_RUN=' + \$info.LastRunTime); Write-Output ('LAST_RESULT=' + \$info.LastTaskResult); Write-Output ('NEXT_RUN=' + \$info.NextRunTime); Write-Output ('ACTION=' + ((\$_.Actions | ForEach-Object { \$_.Execute + ' ' + \$_.Arguments }) -join ' || ')); Write-Output '---' }; Write-Output '=== REPO ==='; Set-Location \$repo; Write-Output ('BRANCH=' + (git rev-parse --abbrev-ref HEAD)); Write-Output ('HEAD=' + (git rev-parse HEAD)); Write-Output ('ORIGIN_MAIN=' + (git rev-parse origin/main)); Write-Output ('STATUS=' + ((git status --porcelain) -join ';')); Write-Output '=== LOG ==='; \$log=Get-ChildItem (Join-Path \$repo 'logs') -Filter 'local-sync-*.log' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if(\$log){Write-Output ('LOGFILE=' + \$log.FullName); Get-Content \$log.FullName -Tail 80}else{Write-Output 'NO_LOCAL_SYNC_LOG'}\""
               ;;
+            email_retention_validate)
+              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"\$repo='C:\\mei-mg-email'; if(!(Test-Path \$repo)){throw 'C:\\mei-mg-email not found'}; Set-Location \$repo; git fetch origin; git reset --hard origin/main; if(\$LASTEXITCODE -ne 0){throw 'git sync failed'}; Write-Output ('EMAIL_REPO_HEAD=' + (git rev-parse HEAD)); \$py=Join-Path \$repo '.venv\\Scripts\\python.exe'; if(!(Test-Path \$py)){throw 'python venv not found'}; & \$py -m pytest -q tests\\test_retention_policy.py tests\\test_worker_safety.py; if(\$LASTEXITCODE -ne 0){throw 'pytest failed'}; docker compose run --rm flyway -connectRetries=30 validate; if(\$LASTEXITCODE -ne 0){throw 'flyway validate failed'}; docker compose run --rm flyway -connectRetries=30 info; if(\$LASTEXITCODE -ne 0){throw 'flyway info failed'}; Write-Output 'EMAIL_RETENTION_VALIDATE_OK'\""
+              ;;
             *)
               echo "Action not allowlisted: $ACTION"
               exit 3
@@ -75,9 +78,9 @@ jobs:
             "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
           import base64, json, os, urllib.request
           command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
-          body = json.dumps({'params': {'command': command, 'timeout': 30}}).encode('utf-8')
+          body = json.dumps({'params': {'command': command, 'timeout': 180}}).encode('utf-8')
           req = urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command', data=body, headers={'Content-Type':'application/json'}, method='POST')
-          with urllib.request.urlopen(req, timeout=40) as response:
+          with urllib.request.urlopen(req, timeout=190) as response:
               payload=json.loads(response.read().decode('utf-8'))
           print(json.dumps(payload, ensure_ascii=False))
           result=payload.get('result') or {}
