@@ -78,12 +78,40 @@ jobs:
           except Exception:
               print('OAUTH_CLOUD_SCOPE=unknown')
 
-          headers={'Authorization':'Bearer ' + token,'Content-Type':'application/json'}
+          auth={'Authorization':'Bearer ' + token}
+          check_url=f'https://serviceusage.googleapis.com/v1/projects/{project}/services/{service}'
+
+          def get_state():
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(check_url, headers=auth), timeout=20) as r:
+                      data=json.loads(r.read().decode())
+                  return str(data.get('state','')).upper()
+              except urllib.error.HTTPError as e:
+                  body=e.read().decode(errors='ignore')
+                  try: err=json.loads(body)
+                  except Exception: err={}
+                  detail=err.get('error') if isinstance(err,dict) else {}
+                  print('SERVICE_STATE_CHECK_FAILED')
+                  print('http_code=' + str(e.code))
+                  if isinstance(detail,dict):
+                      print('status=' + str(detail.get('status','')))
+                      print('message=' + str(detail.get('message',''))[:700].replace('\n',' '))
+                  raise
+
+          state=get_state()
+          print('GOOGLE_ADS_API_STATE_BEFORE=' + (state or 'UNKNOWN'))
+          if state == 'ENABLED':
+              print('GOOGLE_ADS_API_ENABLE=already_enabled')
+              raise SystemExit(0)
+
           enable_url=f'https://serviceusage.googleapis.com/v1/projects/{project}/services/{service}:enable'
           try:
-              er=urllib.request.Request(enable_url, data=b'{}', headers=headers, method='POST')
+              er=urllib.request.Request(enable_url, data=b'{}', headers={**auth,'Content-Type':'application/json'}, method='POST')
               with urllib.request.urlopen(er, timeout=30) as r:
                   op=json.loads(r.read().decode())
+              print('ENABLE_REQUEST_ACCEPTED=yes')
+              if op.get('name'):
+                  print('ENABLE_OPERATION_RETURNED=yes')
           except urllib.error.HTTPError as e:
               body=e.read().decode(errors='ignore')
               try: err=json.loads(body)
@@ -96,27 +124,15 @@ jobs:
                   print('message=' + str(detail.get('message',''))[:700].replace('\n',' '))
               raise SystemExit(5)
 
-          name=str(op.get('name',''))
-          if name:
-              op_url='https://serviceusage.googleapis.com/v1/' + name.lstrip('/')
-              for _ in range(12):
-                  with urllib.request.urlopen(urllib.request.Request(op_url, headers={'Authorization':'Bearer ' + token}), timeout=20) as r:
-                      state=json.loads(r.read().decode())
-                  if state.get('done'):
-                      if state.get('error'):
-                          print('GOOGLE_ADS_API_ENABLE=operation_failed')
-                          print('message=' + str(state.get('error'))[:700].replace('\n',' '))
-                          raise SystemExit(6)
-                      break
-                  time.sleep(5)
-
-          check_url=f'https://serviceusage.googleapis.com/v1/projects/{project}/services/{service}'
-          with urllib.request.urlopen(urllib.request.Request(check_url, headers={'Authorization':'Bearer ' + token}), timeout=20) as r:
-              check=json.loads(r.read().decode())
-          enabled=str(check.get('state','')).upper()=='ENABLED'
-          print('GOOGLE_ADS_API_ENABLE=' + ('success' if enabled else 'not_confirmed'))
-          if not enabled:
-              raise SystemExit(7)
+          for _ in range(18):
+              time.sleep(5)
+              state=get_state()
+              if state == 'ENABLED':
+                  print('GOOGLE_ADS_API_ENABLE=success')
+                  raise SystemExit(0)
+          print('GOOGLE_ADS_API_ENABLE=not_confirmed')
+          print('GOOGLE_ADS_API_STATE_AFTER=' + (state or 'UNKNOWN'))
+          raise SystemExit(7)
           PY
 
       - name: Cleanup
