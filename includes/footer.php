@@ -26,7 +26,7 @@ foreach (['instagram', 'facebook', 'tiktok', 'youtube', 'whatsapp'] as $sv_socia
 $whatsapp = preg_replace('/\D+/', '', (string)($socialMedia['whatsapp'] ?? ''));
 $publicWhatsappUrl = $whatsapp !== ''
     ? 'https://wa.me/' . $whatsapp . '?text=' . rawurlencode('Olá! Vim pelo site da ShopVivaliz e gostaria de atendimento.')
-    : '/contato';
+    : '/contato/';
 $publicExperienceCss = dirname(__DIR__) . '/css/public-experience-v1.css';
 $publicExperienceJs = dirname(__DIR__) . '/js/public-experience-v1.js';
 $publicExperienceCssVersion = is_file($publicExperienceCss) ? (string)filemtime($publicExperienceCss) : '1';
@@ -197,15 +197,15 @@ footer::before {
 
             <div>
                 <strong>Institucional</strong>
-                <a href="/sobre">Quem somos</a>
-                <a href="/catalogo">Produtos</a>
+                <a href="/sobre/">Quem somos</a>
+                <a href="/catalogo/">Produtos</a>
                 <a href="/blog/">Blog</a>
             </div>
 
             <div>
                 <strong>Ajuda</strong>
-                <a href="/faq">Duvidas Frequentes</a>
-                <a href="/contato">Fale Conosco</a>
+                <a href="/faq/">Duvidas Frequentes</a>
+                <a href="/contato/">Fale Conosco</a>
             </div>
         </div>
 
@@ -260,7 +260,7 @@ footer::before {
                 <div class="footer-legal-column">
                     <strong style="display: block; color: #333; margin-bottom: 8px;">CONTATOS</strong>
                     <div style="line-height: 1.6;">
-                        <div><strong>E-mail:</strong> <a href="mailto:<?= htmlspecialchars($email) ?>"><?= htmlspecialchars($email) ?></a></div>
+                        <div><strong>E-mail:</strong> <!--email_off--><a href="mailto:<?= htmlspecialchars($email) ?>"><?= htmlspecialchars($email) ?></a><!--/email_off--></div>
                         <div><strong>Telefone:</strong> <?= htmlspecialchars($phone) ?></div>
                         <div><strong>Site:</strong> <?= htmlspecialchars($website) ?></div>
                     </div>
