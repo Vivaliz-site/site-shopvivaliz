@@ -14,9 +14,9 @@ $svNavCurrent = trim((string)$svNavCurrent, '/');
 
 $svNavLinks = [
     ['href' => '/', 'label' => 'Home', 'match' => ['']],
-    ['href' => '/catalogo', 'label' => 'Produtos', 'match' => ['catalogo', 'produtos', 'produto']],
-    ['href' => '/sobre', 'label' => 'Sobre', 'match' => ['sobre']],
-    ['href' => '/contato', 'label' => 'Contato', 'match' => ['contato']],
+    ['href' => '/catalogo/', 'label' => 'Produtos', 'match' => ['catalogo', 'produtos', 'produto']],
+    ['href' => '/sobre/', 'label' => 'Sobre', 'match' => ['sobre']],
+    ['href' => '/contato/', 'label' => 'Contato', 'match' => ['contato']],
     ['href' => '/carrinho', 'label' => 'Carrinho', 'match' => ['carrinho', 'checkout']],
 ];
 
@@ -32,7 +32,7 @@ $svCompanyProfile = @include dirname(__DIR__) . '/config/company-profile.php';
 $svWhatsappRaw = is_array($svCompanyProfile) ? (string)($svCompanyProfile['social_media']['whatsapp'] ?? '') : '';
 $svWhatsappDigits = preg_replace('/\D+/', '', $svWhatsappRaw);
 $svWhatsappMessage = rawurlencode('Ola! Vim pelo site da ShopVivaliz e gostaria de falar com a equipe.');
-$svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?text={$svWhatsappMessage}" : '/contato';
+$svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?text={$svWhatsappMessage}" : '/contato/';
 
 $svFreeShippingConfig = sv_free_shipping_config();
 $svPrimaryCoupon = sv_primary_active_coupon();
@@ -254,7 +254,7 @@ header.sv-navbar .menu-toggle {
                 <?php $isCurrent = in_array($svNavCurrent, $link['match'], true); ?>
                 <?php
                     $linkClasses = [];
-                    if ($link['href'] === '/catalogo') {
+                    if ($link['href'] === '/catalogo/') {
                         $linkClasses[] = 'sv-nav-cta';
                     }
                     if ($link['href'] === '/carrinho') {
