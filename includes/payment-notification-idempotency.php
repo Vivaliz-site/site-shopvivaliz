@@ -2,6 +2,42 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/first-purchase-reward.php';
+
+function svpn_process_commercial_rewards(array &$order, string $localStatus, string $currentStatus): void
+{
+    if ($localStatus !== 'payment_approved' || $currentStatus === 'payment_approved') {
+        return;
+    }
+
+    $email = strtolower(trim((string)($order['customer']['email'] ?? '')));
+    $orderNumber = trim((string)($order['order_number'] ?? ''));
+    $couponCode = strtoupper(trim((string)($order['coupon_code'] ?? '')));
+
+    // Cupons pessoais de recompra so sao consumidos quando o pagamento e
+    // aprovado. Criar um pedido e abandonar o pagamento nao queima o beneficio.
+    if ($couponCode !== '' && $email !== '' && $orderNumber !== '') {
+        svfpr_mark_coupon_redeemed($couponCode, $email, $orderNumber);
+    }
+
+    // A funcao de recompensa verifica no banco se existe compra paga anterior,
+    // garante uma unica emissao por e-mail e envia o template de 5%/30 dias.
+    try {
+        $reward = svfpr_issue_for_approved_order($order);
+        $order['rewards'] = is_array($order['rewards'] ?? null) ? $order['rewards'] : [];
+        $order['rewards']['first_purchase'] = [
+            'eligible' => (bool)($reward['eligible'] ?? false),
+            'created' => (bool)($reward['created'] ?? false),
+            'coupon_code' => (string)($reward['code'] ?? ''),
+            'expires_at' => (string)($reward['expires_at'] ?? ''),
+            'email_sent' => (bool)($reward['email_sent'] ?? false),
+            'processed_at' => date(DATE_ATOM),
+        ];
+    } catch (Throwable $e) {
+        error_log('[PaymentRewards] first purchase reward failed order=' . $orderNumber . ' ' . $e->getMessage());
+    }
+}
+
 /**
  * Reserves the admin payment-approved notification once per order.
  *
@@ -18,6 +54,8 @@ function svpn_prepare_admin_payment_notification(
     if ($localStatus !== 'payment_approved') {
         return false;
     }
+
+    svpn_process_commercial_rewards($order, $localStatus, $currentStatus);
 
     $occurredAt = $occurredAt ?: date(DATE_ATOM);
     $order['notifications'] = is_array($order['notifications'] ?? null)
@@ -47,7 +85,7 @@ function svpn_prepare_admin_payment_notification(
     }
 
     $orderNumber = trim((string)($order['order_number'] ?? ''));
-    $paymentId = trim((string)($order['mercadopago']['payment_id'] ?? ''));
+    $paymentId = trim((string)($order['mercadopago']['payment_id'] ?? $order['infinitepay']['payment_id'] ?? ''));
 
     $order['notifications']['admin_payment_received'] = [
         'status' => 'claimed',
