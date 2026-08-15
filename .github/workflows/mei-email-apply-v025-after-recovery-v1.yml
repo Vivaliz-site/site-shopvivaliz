@@ -1,0 +1,74 @@
+name: MEI email apply V025 after recovery v1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mei-email-apply-v025-after-recovery-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Sync code and apply V025
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          sudo systemctl stop mei-mg-email-worker.service || true
+          test -f /var/lib/mei-mg-email/sender_blocked.pause
+          cd /home/ubuntu/mei-mg-email
+          git fetch origin main
+          git reset --hard origin/main
+          timeout 15s docker exec mei-mg-email-db pg_isready -U postgres -d mei_mg_email
+
+          POSTGRES_PASSWORD="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' mei-mg-email-db | sed -n 's/^POSTGRES_PASSWORD=//p' | head -n1)"
+          test -n "$POSTGRES_PASSWORD"
+
+          ids="$(docker ps -aq --filter name=mei-mg-email-flyway 2>/dev/null || true)"
+          if [ -n "$ids" ]; then docker rm -f $ids >/dev/null 2>&1 || true; fi
+
+          timeout 180s docker run --rm --network host \
+            -e FLYWAY_URL='jdbc:postgresql://127.0.0.1:5433/mei_mg_email' \
+            -e FLYWAY_USER='postgres' \
+            -e FLYWAY_PASSWORD="$POSTGRES_PASSWORD" \
+            -e FLYWAY_SCHEMAS='mei_email' \
+            -e FLYWAY_DEFAULT_SCHEMA='mei_email' \
+            -v "$PWD/db/migrations:/flyway/sql:ro" \
+            flyway/flyway:10-alpine \
+            -validateOnMigrate=false -target=25 -lockRetryCount=3 migrate
+
+          timeout 20s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -Atc "select version||':'||description||':'||success from mei_email.flyway_schema_history where version='025' order by installed_rank desc limit 1" | tee /tmp/v025-state.txt
+          grep -Eq '^025:.*:t$' /tmp/v025-state.txt
+          echo 'V025_OK=true'
+          EOF
+
+      - name: Retention dry run
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          if [ -x .venv/bin/python ]; then py=.venv/bin/python; else py=python3; fi
+          timeout 240s "$py" scripts/purgar_base_operacional.py --batch-size 200
+          test -f /var/lib/mei-mg-email/sender_blocked.pause
+          echo 'DRYRUN_OK=true'
+          EOF
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/vmkey
