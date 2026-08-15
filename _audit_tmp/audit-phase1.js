@@ -10,27 +10,59 @@ report += `**Data:** ${new Date().toISOString()}\n`;
 report += `**URL Testada:** ${BASE_URL}\n`;
 report += `**Navegador:** Playwright + Chromium\n\n`;
 
+let currentPageName = 'INIT';
+const consoleLog = []; // { page, type, text }
+const failedRequests = []; // { page, url, status, resourceType }
+const slowRequests = []; // { page, url, duration }
+
+function attachGlobalListeners(page) {
+  page.on('console', msg => {
+    consoleLog.push({ page: currentPageName, type: msg.type(), text: msg.text() });
+  });
+  page.on('pageerror', err => {
+    consoleLog.push({ page: currentPageName, type: 'pageerror', text: err.message });
+  });
+  page.on('requestfailed', req => {
+    failedRequests.push({
+      page: currentPageName,
+      url: req.url(),
+      resourceType: req.resourceType(),
+      failure: req.failure()?.errorText || 'unknown',
+    });
+  });
+  page.on('response', res => {
+    if (res.status() >= 400) {
+      failedRequests.push({
+        page: currentPageName,
+        url: res.url(),
+        resourceType: res.request().resourceType(),
+        failure: `HTTP ${res.status()}`,
+      });
+    }
+  });
+}
+
 async function capturePageMetrics(page, pageName) {
+  currentPageName = pageName;
   const metrics = await page.evaluate(() => {
     const perf = performance.getEntriesByType('navigation')[0];
+    const resources = performance.getEntriesByType('resource');
     return {
       domContentLoaded: perf?.domContentLoadedEventEnd - perf?.domContentLoadedEventStart,
       loadComplete: perf?.loadEventEnd - perf?.loadEventStart,
-      firstPaint: performance.getEntriesByType('paint')[0]?.startTime || 'N/A',
-      resourceTiming: performance.getEntriesByType('resource').length,
+      firstPaint: performance.getEntriesByType('paint').find(p => p.name === 'first-paint')?.startTime || 'N/A',
+      firstContentfulPaint: performance.getEntriesByType('paint').find(p => p.name === 'first-contentful-paint')?.startTime || 'N/A',
+      resourceTiming: resources.length,
+      totalTransferSize: resources.reduce((sum, r) => sum + (r.transferSize || 0), 0),
+      slowest: resources
+        .filter(r => r.duration > 300)
+        .map(r => ({ name: r.name.split('/').pop(), duration: Math.round(r.duration) }))
+        .sort((a, b) => b.duration - a.duration)
+        .slice(0, 5),
     };
   });
 
-  const consoleMessages = [];
-  page.on('console', msg => {
-    consoleMessages.push({
-      type: msg.type(),
-      text: msg.text(),
-      location: msg.location(),
-    });
-  });
-
-  return { metrics, consoleMessages };
+  return { metrics };
 }
 
 async function auditHomePage(page) {
