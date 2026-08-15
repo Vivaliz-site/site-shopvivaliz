@@ -1,6 +1,8 @@
 import importlib.util
 import os
+import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -38,7 +40,11 @@ class ShopeeRuntimeCredentialsTest(unittest.TestCase):
         self.assertNotIn("DB_PASS", loaded)
 
     def test_preflight_presence_distinguishes_access_and_refresh_tokens(self):
-        module = load_module("shopee_runtime_preflight_test", "scripts/shopee_runtime_preflight.py")
+        fake_utils = types.ModuleType("utils")
+        fake_client_module = types.ModuleType("utils.shopee_client")
+        fake_client_module.ShopeeClient = object
+        with patch.dict(sys.modules, {"utils": fake_utils, "utils.shopee_client": fake_client_module}):
+            module = load_module("shopee_runtime_preflight_test", "scripts/shopee_runtime_preflight.py")
         values = {
             "SHOPEE_PARTNER_ID": "123",
             "SHOPEE_PARTNER_KEY": "key",
