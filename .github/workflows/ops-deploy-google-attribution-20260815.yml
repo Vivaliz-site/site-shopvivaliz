@@ -1,0 +1,48 @@
+name: Ops Deploy Google Attribution 20260815
+on:
+  push:
+    branches: [ops/finish-all-pendencias-20260815]
+    paths: ['.github/workflows/ops-deploy-google-attribution-20260815.yml']
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+      SHOPVIVALIZ_VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+    steps:
+      - name: Configure SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEY="${ORACLE_VM_SSH_KEY:-}"; [ -n "$KEY" ] || KEY="${SHOPVIVALIZ_VM_SSH_KEY:-}"
+          test -n "$KEY"; mkdir -p ~/.ssh; printf '%s\n' "$KEY" > ~/.ssh/vmkey; chmod 600 ~/.ssh/vmkey
+      - name: Deploy through existing safe sync and validate
+        shell: bash
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=12 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'SH'
+          set -euo pipefail
+          ROOT=/home/ubuntu/shopvivaliz-deploy/repo
+          SHARED_ROOT=/home/ubuntu/shopvivaliz-deploy/shared
+          /usr/bin/flock -w 30 /var/lock/shopvivaliz-deploy.lock env ROOT="$ROOT" SHARED_ROOT="$SHARED_ROOT" /usr/bin/bash /home/ubuntu/shopvivaliz-deploy/current/scripts/auto-sync-oracle.sh
+          CURRENT=/home/ubuntu/shopvivaliz-deploy/current
+          cd "$CURRENT"
+          echo "CURRENT_RELEASE=$(readlink -f "$CURRENT")"
+          gitrev=$(git rev-parse HEAD 2>/dev/null || true); echo "CURRENT_GIT_SHA=$gitrev"
+          node --check js/shopvivaliz-google-events.js
+          php -l checkout.php
+          php -l api/orders/process-validated.php
+          php -l includes/ga4-order-conversion.php
+          php -l checkout-return.php
+          grep -q 'ga4ClientIdFromCookie' js/shopvivaliz-google-events.js && echo 'GA4_COOKIE_IDENTITY_FIX=true'
+          grep -q "'gbraid' => \$gbraid" api/orders/process-validated.php && echo 'CLICK_ID_PERSISTENCE_FIX=true'
+          grep -q 'confirmCheck = min(10' checkout-return.php && echo 'CONFIRMATION_RETRY_FIX=true'
+          php -r 'require "config/bootstrap-env.php"; echo "RUNTIME_GOOGLE_ANALYTICS_ID=".((getenv("GOOGLE_ANALYTICS_ID")?:"")!==""?"present":"missing").PHP_EOL; echo "RUNTIME_GA4_SECRET=".((getenv("GA4_SECRET")?:"")!==""?"present":"missing").PHP_EOL;'
+          echo '--- CRONTAB ---'
+          crontab -l
+          SH
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
