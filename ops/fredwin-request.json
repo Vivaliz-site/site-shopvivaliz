@@ -1,5 +1,5 @@
 {
-  "action": "open_exchange_admin",
-  "requested_at": "2026-08-13T22:17:12Z",
-  "reason": "User requested the Exchange Admin Center window be opened now on Fred-Win to complete the Microsoft-required interactive administrator authentication for AS(42004) Restricted entities recovery"
+  "action": "email_retention_validate",
+  "requested_at": "2026-08-14T23:08:00-03:00",
+  "reason": "Validate V025 operational purge and anti-reimport policy on Fred-Win before production deployment"
 }
