@@ -114,17 +114,21 @@ jobs:
           [[ "$limit" =~ ^[0-9]+$ ]]
           cd /home/ubuntu/shopvivaliz-deploy/current
           run_dir="/home/ubuntu/shopvivaliz-deploy/shared/shopee-production-runs/$run_id"
-          mkdir -p "$run_dir"
-          chmod 750 "$run_dir"
+          backup_dir="/home/ubuntu/shopvivaliz-deploy/shared/shopee-production-backups"
+          report_dir="/home/ubuntu/shopvivaliz-deploy/shared/shopee-production-reports"
+          mkdir -p "$run_dir" "$backup_dir" "$report_dir"
+          chmod 750 "$run_dir" "$backup_dir" "$report_dir"
           export SHOPEE_TOKEN_FILE=/home/ubuntu/shopvivaliz-deploy/shared/shopee-tokens.json
+          export SHOPEE_PRODUCTION_BACKUP_DIR="$backup_dir"
+          export SHOPEE_PRODUCTION_REPORT_DIR="$report_dir"
           python3 scripts/shopee_runtime_exec.py \
             --env-file /home/ubuntu/shopvivaliz-deploy/shared/.env -- \
             python3 scripts/shopee_production_seo_apply.py \
               --confirm "$confirmation" --limit "$limit" \
             2>&1 | tee "$run_dir/executor-output.log"
 
-          report=$(find logs/shopee-production-seo -maxdepth 1 -type f -name 'production-run-*.json' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)
-          backup=$(find storage/private/shopee-production-backups -maxdepth 1 -type f -name 'catalog-before-*.json' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)
+          report=$(find "$report_dir" -maxdepth 1 -type f -name 'production-run-*.json' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)
+          backup=$(find "$backup_dir" -maxdepth 1 -type f -name 'catalog-before-*.json' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)
           test -n "$report" && test -r "$report"
           test -n "$backup" && test -r "$backup"
           cp "$report" "$run_dir/execution-report.json"
