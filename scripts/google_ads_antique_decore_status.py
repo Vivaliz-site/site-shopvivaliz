@@ -91,7 +91,8 @@ def main() -> int:
 
     conversion_rows = list(ga.search(customer_id=customer_id, query="""
       SELECT conversion_action.id, conversion_action.name, conversion_action.status,
-             conversion_action.primary_for_goal
+             conversion_action.primary_for_goal, conversion_action.include_in_conversions_metric,
+             conversion_action.type, conversion_action.origin, conversion_action.category
       FROM conversion_action
       WHERE conversion_action.status = 'ENABLED'
     """))
@@ -126,7 +127,16 @@ def main() -> int:
     print("cost_brl_today=" + f"{c.metrics.cost_micros / 1_000_000:.2f}")
     print("conversions_today=" + str(c.metrics.conversions))
     for r in purchase_like:
-        print("purchase_conversion=" + r.conversion_action.name + ":primary=" + str(bool(r.conversion_action.primary_for_goal)).lower())
+        action = r.conversion_action
+        print(
+            "purchase_conversion=" + action.name
+            + ":id=" + str(action.id)
+            + ":primary=" + str(bool(action.primary_for_goal)).lower()
+            + ":included=" + str(bool(action.include_in_conversions_metric)).lower()
+            + ":type=" + action.type.name
+            + ":origin=" + action.origin.name
+            + ":category=" + action.category.name
+        )
     for ad_id, approval, review, status in policy:
         print(f"ad_policy={ad_id}:approval={approval}:review={review}:status={status}")
 
