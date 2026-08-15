@@ -23,7 +23,7 @@ $phone = $company['phone'] ?? '(37) 99937-4112';
 <h2>3. Rastreamento</h2><p>Quando a transportadora disponibilizar o rastreio, o código ou link será enviado pelos canais cadastrados e poderá aparecer na área de pedidos. Algumas modalidades atualizam o rastreamento em etapas.</p>
 <h2>4. Endereço e recebimento</h2><p>Confira endereço, número, complemento e contato antes de concluir a compra. O cliente deve garantir que haja pessoa apta a receber a encomenda. Quantidade de tentativas, pontos de retirada e procedimentos de devolução seguem as regras da transportadora selecionada.</p>
 <h2>5. Atrasos, avarias e ocorrências</h2><p>Em caso de atraso, embalagem violada, avaria ou divergência, registre a ocorrência e fale com a equipe informando o número do pedido. Sempre que possível, fotografe a embalagem e o produto antes do uso.</p>
-<h2>6. Atendimento</h2><p>WhatsApp/telefone: <strong><?= htmlspecialchars($phone) ?></strong><br>E-mail: <strong><?= htmlspecialchars($email) ?></strong></p>
+<h2>6. Atendimento</h2><p>WhatsApp/telefone: <strong><?= htmlspecialchars($phone) ?></strong><br>E-mail: <strong><!--email_off--><?= htmlspecialchars($email) ?><!--/email_off--></strong></p>
 <p class="policy-note">As condições válidas para cada compra são as apresentadas no carrinho e no pedido no momento da contratação.</p>
 </section></main>
 <?php include __DIR__ . '/includes/footer.php'; ?>
