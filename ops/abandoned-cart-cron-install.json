@@ -1,0 +1,4 @@
+{
+  "requested_at": "2026-08-15T11:00:00-03:00",
+  "reason": "Install the abandoned cart recovery email cron on the Oracle VM per docs/carrinho-abandonado.md, requested explicitly by the business owner"
+}
