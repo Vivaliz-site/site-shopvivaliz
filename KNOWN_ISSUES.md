@@ -82,9 +82,54 @@ Ao adicionar novo arquivo em `/includes/` que precisa ser público:
 
 ---
 
-## 🔴 CRÍTICO: Pipeline de otimização/sincronização Shopee 100% inoperante — OAuth2 do Tiny quebrado há 3+ semanas, e desde 2026-07-27 os workflows nem existem mais
+## 🟡 Rotina de otimização inteligente Shopee (6h): credencial corrigida em 2026-08-14, mas falta integração de analytics (CTR/conversão)
 
-**Última atualização:** 2026-07-27
+**Última atualização:** 2026-08-15
+
+### Atualização 2026-08-15 — bloqueador primário corrigido; premissa dos registros abaixo (2026-07-XX) estava errada
+
+Os PRs `#979`/`#980` (usuário, 2026-08-14 ~21h -03) corrigiram a causa raiz real: o sandbox onde
+agentes autônomos rodam nunca recebeu os secrets operacionais, e cada ciclo da rotina de 6h
+tratou essa ausência **local** como prova de que a credencial Shopee não existia em lugar nenhum.
+Na verdade os tokens Shopee rotativos sempre estiveram presentes na VM de produção — só não
+estavam disponíveis no runner do GitHub Actions usado por `shopee-production-seo.yml`. O bloqueio
+"OAuth2 do Tiny" descrito abaixo referia-se a um pipeline (`fetch-shopee-listings.yml`/
+`optimize-shopee-listings.yml`) que **já não é o caminho real de produção**: o executor atual
+(`scripts/shopee_production_seo_apply.py`) fala direto com a API da Shopee, sem depender do
+Tiny/Olist.
+
+**O que foi corrigido:** `shopee-production-seo.yml` agora roda na própria VM (fonte canônica dos
+tokens rotativos, `shared/shopee-tokens.json`) em vez do runner do GitHub Actions; novo workflow
+`shopee-runtime-health.yml` (schedule a cada 6h) confirma leitura real de catálogo via SSH —
+rodando com sucesso desde o merge (3/3 execuções `conclusion: success` em 2026-08-15). Primeira
+confirmação de acesso real ao catálogo desde 2026-07-26 (19 dias).
+
+**O que ainda falta (novo bloqueador, mais restrito que o anterior):** nenhum dos scripts de
+produção (`shopee_full_catalog_optimizer.py`, `shopee_production_seo_apply.py`,
+`shopee_runtime_preflight.py`) chama qualquer endpoint de analytics do Shopee Open Platform
+(CTR, taxa de conversão, comparação alto/baixo desempenho, dado de A/B testing). Isso significa
+que a rotina agendada "Otimização Shopee 6h" consegue **ler e escrever** no catálogo real, mas os
+itens que dependem de dado de desempenho (análise de CTR/conversão, recomendação orientada a
+dado, A/B testing medido) continuam tecnicamente inexequíveis até alguém integrar esses
+endpoints. `shopee-production-seo.yml` (apply real) também ainda não foi executado com sucesso
+desde o fix — requer `workflow_dispatch` manual com confirmação humana digitada
+(`APPLY_ALL_SHOPEE_PRODUCTS`), que nenhum agente autônomo deve disparar sem dado real de
+desempenho para basear a decisão.
+
+**Ação sugerida para quando o usuário tiver tempo:** (1) rodar `shopee-production-seo.yml`
+manualmente com `limit` pequeno para validar o primeiro apply real desde o fix; (2) decidir se
+vale integrar os endpoints de analytics do Shopee Open Platform para viabilizar a análise
+orientada a dado; (3) alternativamente, reduzir o escopo da rotina de 6h para apenas leitura de
+catálogo + apply manual pontual, já que é o que o código hoje sustenta.
+
+**Ver também:** `docs/HISTORICO-AGENTES-SHOPEE.md` seção 9.21 (detalhe completo desta correção),
+PRs `#979`/`#980`.
+
+---
+
+### Registro anterior (até 2026-07-27) — mantido como histórico, ver correção acima
+
+**Última atualização (registro original):** 2026-07-27
 
 ### Atualização 2026-07-27
 `fetch-shopee-listings.yml` e `optimize-shopee-listings.yml` **não existem mais** em
