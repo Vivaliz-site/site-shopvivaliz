@@ -34,6 +34,26 @@
   transform-origin: 50% 20%;
 }
 
+/* No primeiro fold desktop, as camadas visuais antigas colocavam a Liz em
+   42vh, sobre a busca. Mantemos o mascote ao lado do titulo, acima do campo. */
+@media (min-width: 821px) {
+  #sv-liz-launcher {
+    width: 64px;
+    height: 64px;
+  }
+  html.sv-home-top #sv-liz-launcher,
+  body.sv-home-top #sv-liz-launcher {
+    top: clamp(108px, 17vh, 150px) !important;
+    bottom: auto !important;
+  }
+  body.sv-home-top .sv-support-dock {
+    top: clamp(113px, calc(17vh + 5px), 155px) !important;
+    bottom: auto !important;
+    left: 18px !important;
+    right: auto !important;
+  }
+}
+
 @media (max-width: 600px) {
   #sv-liz-launcher {
     width: 54px !important;
