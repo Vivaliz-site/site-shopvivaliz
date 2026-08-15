@@ -1,5 +1,5 @@
 {
-  "job": "360925a31e807fbaf8795ac3314a20c8",
-  "requested_at": "2026-08-08T18:26:00-03:00",
-  "reason": "Check whether Google Ads OAuth callback completed after user authorization"
+  "job": "direct-production-secrets",
+  "requested_at": "2026-08-15T00:44:00-03:00",
+  "reason": "Verify whether the stored Google Ads refresh token is authorized and can access the configured Google Ads customer directly from GitHub Production secrets"
 }
