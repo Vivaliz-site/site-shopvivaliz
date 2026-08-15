@@ -25,15 +25,18 @@ function svga4_order_browser_identity(array $order): array
         return ['client_id' => '', 'session_id' => ''];
     }
 
-    // Measurement Protocol accepts a positive numeric session id or the full
-    // Analytics session cookie. Keep validation intentionally narrow because
-    // this value is persisted from a consented first-party cookie.
-    if ($sessionId !== '') {
-        $numericSession = preg_match('/^\d+$/', $sessionId) === 1;
-        $cookieSession = preg_match('/^GS\d+(?:\.\d+)?[A-Za-z0-9.$_-]*$/', $sessionId) === 1;
-        if ((!$numericSession && !$cookieSession) || strlen($sessionId) > 96) {
+    // Measurement Protocol session_id must be numeric. Normalize historical cookie values.
+    if ($sessionId !== '' && preg_match('/^\d+$/', $sessionId) !== 1) {
+        if (preg_match('/^GS\d+(?:\.\d+)?\.(\d+)/', $sessionId, $legacy) === 1) {
+            $sessionId = (string)$legacy[1];
+        } elseif (preg_match('/(?:^|\$)s(\d+)(?:\$|$)/', $sessionId, $modern) === 1) {
+            $sessionId = (string)$modern[1];
+        } else {
             $sessionId = '';
         }
+    }
+    if ($sessionId !== '' && (preg_match('/^\d+$/', $sessionId) !== 1 || strlen($sessionId) > 20)) {
+        $sessionId = '';
     }
 
     return ['client_id' => $clientId, 'session_id' => $sessionId];

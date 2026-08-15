@@ -73,24 +73,60 @@
     return String(Date.now()) + Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2);
   }
 
-  function funnelClientId() {
-    var key = 'sv_funnel_client_v1';
-    try {
-      var existing = String(localStorage.getItem(key) || '').toLowerCase();
-      if (/^[a-f0-9-]{16,64}$/.test(existing)) return existing;
-      var created = randomId();
-      localStorage.setItem(key, created);
-      return created;
-    } catch (error) {
-      return randomId();
-    }
+  function readCookie(name) {
+  try {
+    var match = String(document.cookie || '').split(';').map(function (part) { return part.trim(); }).find(function (part) { return part.indexOf(name + '=') === 0; });
+    return match ? decodeURIComponent(match.slice(name.length + 1)) : '';
+  } catch (error) { return ''; }
+}
+
+function ga4ClientIdFromCookie() {
+  var ga = readCookie('_ga');
+  var match = ga.match(/^GA\d+\.\d+\.(\d+)\.(\d+)$/);
+  return match ? (match[1] + '.' + match[2]) : '';
+}
+
+function ga4SessionIdFromCookies() {
+  var cookies = String(document.cookie || '').split(';');
+  for (var i = 0; i < cookies.length; i++) {
+    var pair = cookies[i].trim();
+    if (pair.indexOf('_ga_') !== 0 || pair.indexOf('=') < 0) continue;
+    var value = decodeURIComponent(pair.slice(pair.indexOf('=') + 1));
+    var legacy = value.match(/^GS\d+(?:\.\d+)?\.(\d+)/);
+    if (legacy) return legacy[1];
+    var modern = value.match(/(?:^|\$)s(\d+)(?:\$|$)/);
+    if (modern) return modern[1];
   }
+  return '';
+}
+
+function funnelClientId() {
+  var key = 'sv_funnel_client_v1';
+  try {
+    if (analyticsConsentGranted()) {
+      var clientId = ga4ClientIdFromCookie();
+      if (clientId) {
+        var sessionId = ga4SessionIdFromCookies();
+        var identity = sessionId ? (clientId + '|' + sessionId) : clientId;
+        localStorage.setItem(key, identity);
+        return identity;
+      }
+    }
+    var existing = String(localStorage.getItem(key) || '');
+    if (/^\d+\.\d+(?:\|\d+)?$/.test(existing) || /^[a-f0-9-]{16,64}$/i.test(existing)) return existing;
+    var created = randomId();
+    localStorage.setItem(key, created);
+    return created;
+  } catch (error) { return randomId(); }
+}
 
   function captureGclsAndUtmParams() {
     try {
       var params = new URLSearchParams(window.location.search);
-      var gclid = params.get('gclid');
-      if (gclid) localStorage.setItem('sv_gclid', gclid);
+      ['gclid', 'gbraid', 'wbraid', 'dclid'].forEach(function (key) {
+      var value = params.get(key);
+      if (value) localStorage.setItem('sv_' + key, value);
+    });
 
       var utm_source = params.get('utm_source');
       if (utm_source) localStorage.setItem('sv_utm_source', utm_source);
