@@ -18,196 +18,168 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-from pathlib import Path
+          from pathlib import Path
 
-p=Path('js/shopvivaliz-google-events.js')
-s=p.read_text()
-old="""  function funnelClientId() {
-    var key = 'sv_funnel_client_v1';
-    try {
-      var existing = String(localStorage.getItem(key) || '').toLowerCase();
-      if (/^[a-f0-9-]{16,64}$/.test(existing)) return existing;
-      var created = randomId();
-      localStorage.setItem(key, created);
-      return created;
-    } catch (error) {
-      return randomId();
-    }
-  }
+          p=Path('js/shopvivaliz-google-events.js')
+          s=p.read_text()
+          old="""  function funnelClientId() {
+            var key = 'sv_funnel_client_v1';
+            try {
+              var existing = String(localStorage.getItem(key) || '').toLowerCase();
+              if (/^[a-f0-9-]{16,64}$/.test(existing)) return existing;
+              var created = randomId();
+              localStorage.setItem(key, created);
+              return created;
+            } catch (error) {
+              return randomId();
+            }
+          }
 
-  function captureGclsAndUtmParams() {
-    try {
-      var params = new URLSearchParams(window.location.search);
-      var gclid = params.get('gclid');
-      if (gclid) localStorage.setItem('sv_gclid', gclid);
+          function captureGclsAndUtmParams() {
+            try {
+              var params = new URLSearchParams(window.location.search);
+              var gclid = params.get('gclid');
+              if (gclid) localStorage.setItem('sv_gclid', gclid);
 
-      var utm_source = params.get('utm_source');
-"""
-new="""  function readCookie(name) {
-    try {
-      var escaped = name.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
-      var match = document.cookie.match(new RegExp('(?:^|;\\\\s*)' + escaped + '=([^;]+)'));
-      return match ? decodeURIComponent(match[1]) : '';
-    } catch (error) {
-      return '';
-    }
-  }
+              var utm_source = params.get('utm_source');
+          """
+          new="""  function readCookie(name) {
+            try {
+              var match = String(document.cookie || '').split(';').map(function (part) { return part.trim(); }).find(function (part) { return part.indexOf(name + '=') === 0; });
+              return match ? decodeURIComponent(match.slice(name.length + 1)) : '';
+            } catch (error) {
+              return '';
+            }
+          }
 
-  function ga4ClientIdFromCookie() {
-    var ga = readCookie('_ga');
-    var match = ga.match(/^GA\\d+\\.\\d+\\.(\\d+)\\.(\\d+)$/);
-    return match ? (match[1] + '.' + match[2]) : '';
-  }
+          function ga4ClientIdFromCookie() {
+            var ga = readCookie('_ga');
+            var match = ga.match(/^GA\\d+\\.\\d+\\.(\\d+)\\.(\\d+)$/);
+            return match ? (match[1] + '.' + match[2]) : '';
+          }
 
-  function ga4SessionIdFromCookies() {
-    var cookies = String(document.cookie || '').split(';');
-    for (var i = 0; i < cookies.length; i++) {
-      var pair = cookies[i].trim();
-      if (pair.indexOf('_ga_') !== 0 || pair.indexOf('=') < 0) continue;
-      var value = decodeURIComponent(pair.slice(pair.indexOf('=') + 1));
-      var legacy = value.match(/^GS\\d+(?:\\.\\d+)?\\.(\\d+)/);
-      if (legacy) return legacy[1];
-      var modern = value.match(/(?:^|\\$)s(\\d+)(?:\\$|$)/);
-      if (modern) return modern[1];
-    }
-    return '';
-  }
+          function ga4SessionIdFromCookies() {
+            var cookies = String(document.cookie || '').split(';');
+            for (var i = 0; i < cookies.length; i++) {
+              var pair = cookies[i].trim();
+              if (pair.indexOf('_ga_') !== 0 || pair.indexOf('=') < 0) continue;
+              var value = decodeURIComponent(pair.slice(pair.indexOf('=') + 1));
+              var legacy = value.match(/^GS\\d+(?:\\.\\d+)?\\.(\\d+)/);
+              if (legacy) return legacy[1];
+              var modern = value.match(/(?:^|\\$)s(\\d+)(?:\\$|$)/);
+              if (modern) return modern[1];
+            }
+            return '';
+          }
 
-  function funnelClientId() {
-    var key = 'sv_funnel_client_v1';
-    try {
-      if (analyticsConsentGranted()) {
-        var clientId = ga4ClientIdFromCookie();
-        if (clientId) {
-          var sessionId = ga4SessionIdFromCookies();
-          var identity = sessionId ? (clientId + '|' + sessionId) : clientId;
-          localStorage.setItem(key, identity);
-          return identity;
-        }
-      }
-      var existing = String(localStorage.getItem(key) || '');
-      if (/^\\d+\\.\\d+(?:\\|\\d+)?$/.test(existing) || /^[a-f0-9-]{16,64}$/i.test(existing)) return existing;
-      var created = randomId();
-      localStorage.setItem(key, created);
-      return created;
-    } catch (error) {
-      return randomId();
-    }
-  }
+          function funnelClientId() {
+            var key = 'sv_funnel_client_v1';
+            try {
+              if (analyticsConsentGranted()) {
+                var clientId = ga4ClientIdFromCookie();
+                if (clientId) {
+                  var sessionId = ga4SessionIdFromCookies();
+                  var identity = sessionId ? (clientId + '|' + sessionId) : clientId;
+                  localStorage.setItem(key, identity);
+                  return identity;
+                }
+              }
+              var existing = String(localStorage.getItem(key) || '');
+              if (/^\\d+\\.\\d+(?:\\|\\d+)?$/.test(existing) || /^[a-f0-9-]{16,64}$/i.test(existing)) return existing;
+              var created = randomId();
+              localStorage.setItem(key, created);
+              return created;
+            } catch (error) {
+              return randomId();
+            }
+          }
 
-  function captureGclsAndUtmParams() {
-    try {
-      var params = new URLSearchParams(window.location.search);
-      ['gclid', 'gbraid', 'wbraid', 'dclid'].forEach(function (key) {
-        var value = params.get(key);
-        if (value) localStorage.setItem('sv_' + key, value);
-      });
+          function captureGclsAndUtmParams() {
+            try {
+              var params = new URLSearchParams(window.location.search);
+              ['gclid', 'gbraid', 'wbraid', 'dclid'].forEach(function (key) {
+                var value = params.get(key);
+                if (value) localStorage.setItem('sv_' + key, value);
+              });
 
-      var utm_source = params.get('utm_source');
-"""
-if old not in s: raise SystemExit('JS anchor not found')
-s=s.replace(old,new)
-p.write_text(s)
+              var utm_source = params.get('utm_source');
+          """
+          if old not in s: raise SystemExit('JS anchor not found')
+          p.write_text(s.replace(old,new))
 
-p=Path('checkout.php')
-s=p.read_text()
-old="""        // Capturar gclid (Google Click ID) da URL ou localStorage
-        try {
-            var params = new URLSearchParams(window.location.search);
-            var gclid = params.get('gclid') || localStorage.getItem('sv_gclid') || '';
-            if (gclid) payload.gclid = gclid;
+          p=Path('checkout.php'); s=p.read_text()
+          old="""        // Capturar gclid (Google Click ID) da URL ou localStorage
+                  try {
+                      var params = new URLSearchParams(window.location.search);
+                      var gclid = params.get('gclid') || localStorage.getItem('sv_gclid') || '';
+                      if (gclid) payload.gclid = gclid;
 
-            // Capturar UTM parameters
-"""
-new="""        // Capturar identificadores de clique Google da URL ou localStorage.
-        // Auto-tagging pode usar gclid, gbraid, wbraid ou dclid dependendo do canal/privacidade.
-        try {
-            var params = new URLSearchParams(window.location.search);
-            ['gclid', 'gbraid', 'wbraid', 'dclid'].forEach(function (key) {
-                var value = params.get(key) || localStorage.getItem('sv_' + key) || '';
-                if (value) payload[key] = value;
-            });
+                      // Capturar UTM parameters
+          """
+          new="""        // Capturar identificadores de clique Google da URL ou localStorage.
+                  // Auto-tagging pode usar gclid, gbraid, wbraid ou dclid dependendo do canal/privacidade.
+                  try {
+                      var params = new URLSearchParams(window.location.search);
+                      ['gclid', 'gbraid', 'wbraid', 'dclid'].forEach(function (key) {
+                          var value = params.get(key) || localStorage.getItem('sv_' + key) || '';
+                          if (value) payload[key] = value;
+                      });
 
-            // Capturar UTM parameters
-"""
-if old not in s: raise SystemExit('checkout anchor not found')
-s=s.replace(old,new)
-p.write_text(s)
+                      // Capturar UTM parameters
+          """
+          if old not in s: raise SystemExit('checkout anchor not found')
+          p.write_text(s.replace(old,new))
 
-p=Path('api/orders/process-validated.php')
-s=p.read_text()
-old="""$funnelClientId = trim((string)($body['funnel_client_id'] ?? ''));
-$gclid = trim((string)($body['gclid'] ?? ''));
-$utmSource = trim((string)($body['utm_source'] ?? ''));
-"""
-new="""$funnelClientId = trim((string)($body['funnel_client_id'] ?? ''));
-$gclid = trim((string)($body['gclid'] ?? ''));
-$gbraid = trim((string)($body['gbraid'] ?? ''));
-$wbraid = trim((string)($body['wbraid'] ?? ''));
-$dclid = trim((string)($body['dclid'] ?? ''));
-$utmSource = trim((string)($body['utm_source'] ?? ''));
-"""
-if old not in s: raise SystemExit('process vars anchor not found')
-s=s.replace(old,new)
-old2="""strlen($funnelClientId) > 128 || strlen($gclid) > 255 || strlen($utmSource) > 255"""
-new2="""strlen($funnelClientId) > 128 || strlen($gclid) > 255 || strlen($gbraid) > 255 || strlen($wbraid) > 255 || strlen($dclid) > 255 || strlen($utmSource) > 255"""
-if old2 not in s: raise SystemExit('process validation anchor not found')
-s=s.replace(old2,new2)
-old3="""    'funnel_client_id' => $funnelClientId,
-    'gclid' => $gclid,
-    'utm' => [
-"""
-new3="""    'funnel_client_id' => $funnelClientId,
-    'gclid' => $gclid,
-    'gbraid' => $gbraid,
-    'wbraid' => $wbraid,
-    'dclid' => $dclid,
-    'utm' => [
-"""
-if old3 not in s: raise SystemExit('process record anchor not found')
-s=s.replace(old3,new3)
-p.write_text(s)
+          p=Path('api/orders/process-validated.php'); s=p.read_text()
+          old="$funnelClientId = trim((string)($body['funnel_client_id'] ?? ''));\n$gclid = trim((string)($body['gclid'] ?? ''));\n$utmSource = trim((string)($body['utm_source'] ?? ''));"
+          new="$funnelClientId = trim((string)($body['funnel_client_id'] ?? ''));\n$gclid = trim((string)($body['gclid'] ?? ''));\n$gbraid = trim((string)($body['gbraid'] ?? ''));\n$wbraid = trim((string)($body['wbraid'] ?? ''));\n$dclid = trim((string)($body['dclid'] ?? ''));\n$utmSource = trim((string)($body['utm_source'] ?? ''));"
+          if old not in s: raise SystemExit('process vars anchor not found')
+          s=s.replace(old,new)
+          old="strlen($funnelClientId) > 128 || strlen($gclid) > 255 || strlen($utmSource) > 255"
+          new="strlen($funnelClientId) > 128 || strlen($gclid) > 255 || strlen($gbraid) > 255 || strlen($wbraid) > 255 || strlen($dclid) > 255 || strlen($utmSource) > 255"
+          if old not in s: raise SystemExit('process validation anchor not found')
+          s=s.replace(old,new)
+          old="    'funnel_client_id' => $funnelClientId,\n    'gclid' => $gclid,\n    'utm' => ["
+          new="    'funnel_client_id' => $funnelClientId,\n    'gclid' => $gclid,\n    'gbraid' => $gbraid,\n    'wbraid' => $wbraid,\n    'dclid' => $dclid,\n    'utm' => ["
+          if old not in s: raise SystemExit('process record anchor not found')
+          p.write_text(s.replace(old,new))
 
-p=Path('includes/ga4-order-conversion.php')
-s=p.read_text()
-old="""    // Measurement Protocol accepts a positive numeric session id or the full
-    // Analytics session cookie. Keep validation intentionally narrow because
-    // this value is persisted from a consented first-party cookie.
-    if ($sessionId !== '') {
-        $numericSession = preg_match('/^\\d+$/', $sessionId) === 1;
-        $cookieSession = preg_match('/^GS\\d+(?:\\.\\d+)?[A-Za-z0-9.$_-]*$/', $sessionId) === 1;
-        if ((!$numericSession && !$cookieSession) || strlen($sessionId) > 96) {
-            $sessionId = '';
-        }
-    }
-"""
-new="""    // Measurement Protocol session_id must be numeric. Normalize any historical
-    // GA session cookie value that may have been persisted by older clients.
-    if ($sessionId !== '' && preg_match('/^\\d+$/', $sessionId) !== 1) {
-        if (preg_match('/^GS\\d+(?:\\.\\d+)?\\.(\\d+)/', $sessionId, $legacy) === 1) {
-            $sessionId = (string)$legacy[1];
-        } elseif (preg_match('/(?:^|\\$)s(\\d+)(?:\\$|$)/', $sessionId, $modern) === 1) {
-            $sessionId = (string)$modern[1];
-        } else {
-            $sessionId = '';
-        }
-    }
-    if ($sessionId !== '' && (preg_match('/^\\d+$/', $sessionId) !== 1 || strlen($sessionId) > 20)) {
-        $sessionId = '';
-    }
-"""
-if old not in s: raise SystemExit('ga4 session anchor not found')
-s=s.replace(old,new)
-p.write_text(s)
+          p=Path('includes/ga4-order-conversion.php'); s=p.read_text()
+          old="""    // Measurement Protocol accepts a positive numeric session id or the full
+              // Analytics session cookie. Keep validation intentionally narrow because
+              // this value is persisted from a consented first-party cookie.
+              if ($sessionId !== '') {
+                  $numericSession = preg_match('/^\\d+$/', $sessionId) === 1;
+                  $cookieSession = preg_match('/^GS\\d+(?:\\.\\d+)?[A-Za-z0-9.$_-]*$/', $sessionId) === 1;
+                  if ((!$numericSession && !$cookieSession) || strlen($sessionId) > 96) {
+                      $sessionId = '';
+                  }
+              }
+          """
+          new="""    // Measurement Protocol session_id must be numeric. Normalize any historical
+              // GA session cookie value that may have been persisted by older clients.
+              if ($sessionId !== '' && preg_match('/^\\d+$/', $sessionId) !== 1) {
+                  if (preg_match('/^GS\\d+(?:\\.\\d+)?\\.(\\d+)/', $sessionId, $legacy) === 1) {
+                      $sessionId = (string)$legacy[1];
+                  } elseif (preg_match('/(?:^|\\$)s(\\d+)(?:\\$|$)/', $sessionId, $modern) === 1) {
+                      $sessionId = (string)$modern[1];
+                  } else {
+                      $sessionId = '';
+                  }
+              }
+              if ($sessionId !== '' && (preg_match('/^\\d+$/', $sessionId) !== 1 || strlen($sessionId) > 20)) {
+                  $sessionId = '';
+              }
+          """
+          if old not in s: raise SystemExit('ga4 session anchor not found')
+          p.write_text(s.replace(old,new))
 
-p=Path('checkout-return.php')
-s=p.read_text()
-old="$confirmCheck = min(4, max(0, (int)($_GET['confirm_check'] ?? 0)));\n$shouldRetryConfirmation = $reportedApproved && !$serverApproved && $orderNumber !== '' && $confirmCheck < 4;"
-new="$confirmCheck = min(10, max(0, (int)($_GET['confirm_check'] ?? 0)));\n$shouldRetryConfirmation = $reportedApproved && !$serverApproved && $orderNumber !== '' && $confirmCheck < 10;"
-if old not in s: raise SystemExit('return retry anchor not found')
-s=s.replace(old,new)
-p.write_text(s)
-PY
+          p=Path('checkout-return.php'); s=p.read_text()
+          old="$confirmCheck = min(4, max(0, (int)($_GET['confirm_check'] ?? 0)));\n$shouldRetryConfirmation = $reportedApproved && !$serverApproved && $orderNumber !== '' && $confirmCheck < 4;"
+          new="$confirmCheck = min(10, max(0, (int)($_GET['confirm_check'] ?? 0)));\n$shouldRetryConfirmation = $reportedApproved && !$serverApproved && $orderNumber !== '' && $confirmCheck < 10;"
+          if old not in s: raise SystemExit('return retry anchor not found')
+          p.write_text(s.replace(old,new))
+          PY
       - name: Validate syntax
         shell: bash
         run: |
