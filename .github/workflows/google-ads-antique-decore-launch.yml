@@ -25,17 +25,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate landing pages before spend
+      - name: Validate landing pages as AdsBot before spend
         shell: bash
         run: |
           set -euo pipefail
+          ADSBOT='AdsBot-Google (+http://www.google.com/adsbot.html)'
+          BROWSER='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/139.0.0.0 Safari/537.36'
           for url in \
             'https://shopvivaliz.com.br/catalogo?q=antique' \
             'https://shopvivaliz.com.br/catalogo?q=decore'; do
-            code=$(curl -L -sS -o /tmp/page.html -w '%{http_code}' --connect-timeout 10 --max-time 25 "$url")
-            echo "landing_http=$code url=$url"
-            test "$code" = "200"
-            grep -qi 'Vivaliz' /tmp/page.html
+            default_code=$(curl -L -sS -o /tmp/default.html -w '%{http_code}' --connect-timeout 10 --max-time 25 "$url" || true)
+            browser_code=$(curl -A "$BROWSER" -L -sS -o /tmp/browser.html -w '%{http_code}' --connect-timeout 10 --max-time 25 "$url" || true)
+            adsbot_code=$(curl -A "$ADSBOT" -L -sS -o /tmp/adsbot.html -w '%{http_code}' --connect-timeout 10 --max-time 25 "$url" || true)
+            echo "landing_default_http=$default_code url=$url"
+            echo "landing_browser_http=$browser_code url=$url"
+            echo "landing_adsbot_http=$adsbot_code url=$url"
+            test "$adsbot_code" = "200"
+            grep -qi 'Vivaliz' /tmp/adsbot.html
           done
 
       - name: Install Google Ads client
