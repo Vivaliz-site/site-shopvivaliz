@@ -13,10 +13,11 @@ if (!is_file($scriptPath)) {
     $script = (string) file_get_contents($scriptPath);
     foreach ([
         'ROTATION_INTERVAL = 3000',
+        'INTERACTION_PAUSE = 10000',
         'initProductGallery',
         'initProductCardCarousels',
         'IntersectionObserver',
-        'pauseFor(10000)',
+        'pauseFor(INTERACTION_PAUSE)',
     ] as $needle) {
         if (!str_contains($script, $needle)) {
             $errors[] = "carousel script missing token: {$needle}";
