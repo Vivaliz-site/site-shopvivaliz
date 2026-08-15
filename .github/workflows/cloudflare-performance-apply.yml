@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
-      - name: Apply and verify Cloudflare performance settings
+      - name: Apply supported Cloudflare performance settings and verify
         env:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         shell: bash
@@ -26,25 +26,28 @@ jobs:
 
           zones=$(curl -sS -H "$AUTH" "$API/zones?name=shopvivaliz.com.br")
           zone_id=$(echo "$zones" | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d.get("result") or []; print(r[0]["id"] if r else "")')
+          plan=$(echo "$zones" | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d.get("result") or []; print(((r[0].get("plan") or {}).get("name")) if r else "")')
           test -n "$zone_id"
+          echo "PLAN=$plan"
 
-          put_setting() {
-            setting="$1"
-            payload="$2"
-            echo "APPLY[$setting]"
+          echo 'APPLY[brotli]=on'
+          curl -sS -X PATCH -H "$AUTH" -H 'Content-Type: application/json' \
+            "$API/zones/$zone_id/settings/brotli" --data '{"value":"on"}'
+          echo
+
+          echo 'AUTO_MINIFY_SKIPPED_DEPRECATED'
+
+          if echo "$plan" | grep -qi '^Free'; then
+            echo 'POLISH_UNAVAILABLE_ON_FREE_PLAN; ensuring off'
             curl -sS -X PATCH -H "$AUTH" -H 'Content-Type: application/json' \
-              "$API/zones/$zone_id/settings/$setting" \
-              --data "$payload"
+              "$API/zones/$zone_id/settings/polish" --data '{"value":"off"}'
             echo
-          }
-
-          put_setting minify '{"value":{"css":"on","html":"on","js":"on"}}'
-          put_setting brotli '{"value":"on"}'
-
-          echo 'APPLY[polish]=lossy (best effort; may be unavailable on Free plan)'
-          polish_resp=$(curl -sS -X PATCH -H "$AUTH" -H 'Content-Type: application/json' \
-            "$API/zones/$zone_id/settings/polish" --data '{"value":"lossy"}')
-          echo "$polish_resp"
+          else
+            echo 'APPLY[polish]=lossy'
+            curl -sS -X PATCH -H "$AUTH" -H 'Content-Type: application/json' \
+              "$API/zones/$zone_id/settings/polish" --data '{"value":"lossy"}'
+            echo
+          fi
 
           echo '--- VERIFY ---'
           for setting in cache_level brotli minify polish; do
