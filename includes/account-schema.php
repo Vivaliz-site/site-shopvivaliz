@@ -155,27 +155,37 @@ function sv_account_ensure_schema(): void
         }
     }
 
+    // display_in_navbar/display_in_popup controlam se o cupom e ANUNCIADO
+    // publicamente (via includes/active-coupons.php -> promotion-output-filter.php
+    // na home). Antes desta mudanca os cupons de boas-vindas existiam e eram
+    // validos no checkout, mas nunca apareciam anunciados em lugar nenhum --
+    // ninguem sabia que existiam. PRIMEIRA10 removido por ser duplicata exata
+    // de VIVALIZ10 (mesmo desconto, mesmo proposito); mantido so o codigo
+    // oficial pra evitar dois cupons concorrentes com a mesma oferta.
     $seedCoupons = [
-        ['VOLTEI5', 'Cupom carrinho abandonado (5%)', 'percent', 5.00],
-        ['VIVALIZ10', 'Primeira compra: 10% de desconto', 'percent', 10.00],
-        ['PRIMEIRA10', 'Primeira compra: 10% de desconto', 'percent', 10.00],
+        ['VOLTEI5', 'Cupom carrinho abandonado (5%)', 'percent', 5.00, 0, 0],
+        ['VIVALIZ10', 'Primeira compra: 10% de desconto', 'percent', 10.00, 1, 1],
     ];
     $seedCouponStmt = $pdo->prepare(
-        'INSERT INTO coupons (code, description, discount_type, discount_value, min_order_value, starts_at, ends_at, expires_at, max_uses, used_count, is_active)
-         VALUES (:code, :description, :discount_type, :discount_value, 0.00, NULL, NULL, NULL, 0, 0, 1)
+        'INSERT INTO coupons (code, description, discount_type, discount_value, min_order_value, starts_at, ends_at, expires_at, max_uses, used_count, is_active, display_in_navbar, display_in_popup)
+         VALUES (:code, :description, :discount_type, :discount_value, 0.00, NULL, NULL, NULL, 0, 0, 1, :display_in_navbar, :display_in_popup)
          ON DUPLICATE KEY UPDATE
             description = VALUES(description),
             discount_type = VALUES(discount_type),
             discount_value = VALUES(discount_value),
             is_active = 1,
+            display_in_navbar = VALUES(display_in_navbar),
+            display_in_popup = VALUES(display_in_popup),
             updated_at = NOW()'
     );
-    foreach ($seedCoupons as [$code, $description, $discountType, $discountValue]) {
+    foreach ($seedCoupons as [$code, $description, $discountType, $discountValue, $displayNavbar, $displayPopup]) {
         $seedCouponStmt->execute([
             ':code' => $code,
             ':description' => $description,
             ':discount_type' => $discountType,
             ':discount_value' => $discountValue,
+            ':display_in_navbar' => $displayNavbar,
+            ':display_in_popup' => $displayPopup,
         ]);
     }
 
