@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "ops/google-ads-enable-api-fredwin.json"
+      - ".github/workflows/google-ads-enable-api-fredwin.yml"
 
 permissions:
   contents: read
@@ -25,55 +26,99 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
 
-      - name: Check Fred-Win tunnel
-        shell: bash
-        run: |
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
-            'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health'
-
-      - name: Enable Google Ads API in OAuth project
+      - name: Enable Google Ads API through existing OAuth
         shell: bash
         run: |
           set -euo pipefail
-          cat >/tmp/enable-google-ads-api.ps1 <<'PS1'
-          $ErrorActionPreference='Stop'
-          $project='515723698609'
-          $gcloud=Get-Command gcloud -ErrorAction SilentlyContinue
-          if(-not $gcloud){ Write-Output 'GCLOUD_AVAILABLE=no'; exit 20 }
-          Write-Output 'GCLOUD_AVAILABLE=yes'
-          $active=(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>$null | Select-Object -First 1)
-          if(-not $active){ Write-Output 'GCLOUD_ACTIVE_AUTH=no'; exit 21 }
-          Write-Output 'GCLOUD_ACTIVE_AUTH=yes'
-          gcloud projects describe $project --format='value(projectNumber)' 1>$null 2>$null
-          if($LASTEXITCODE -ne 0){ Write-Output 'GCLOUD_PROJECT_ACCESS=no'; exit 22 }
-          Write-Output 'GCLOUD_PROJECT_ACCESS=yes'
-          gcloud services enable googleads.googleapis.com --project=$project --quiet 1>$null
-          if($LASTEXITCODE -ne 0){ Write-Output 'GOOGLE_ADS_API_ENABLE=failed'; exit 23 }
-          $enabled=(gcloud services list --enabled --project=$project --filter='name:googleads.googleapis.com' --format='value(name)' 2>$null)
-          if($enabled -match 'googleads.googleapis.com'){
-            Write-Output 'GOOGLE_ADS_API_ENABLE=success'
-          } else {
-            Write-Output 'GOOGLE_ADS_API_ENABLE=not_confirmed'
-            exit 24
-          }
-          PS1
-          PS_B64="$(iconv -f UTF-8 -t UTF-16LE /tmp/enable-google-ads-api.ps1 | base64 -w0)"
-          COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand $PS_B64"
-          CMD_B64="$(printf '%s' "$COMMAND" | base64 -w0)"
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
-            "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
-          import base64, json, os, urllib.request
-          command=base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
-          body=json.dumps({'params':{'command':command,'timeout':180}}).encode()
-          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
-          with urllib.request.urlopen(req,timeout=195) as r: payload=json.loads(r.read().decode())
-          result=payload.get('result') or {}
-          output=str(result.get('output') or '')
-          for line in output.splitlines():
-              if line.startswith(('GCLOUD_','GOOGLE_ADS_API_ENABLE=')): print(line)
-          if result.get('success') is not True: raise SystemExit('FREDWIN_COMMAND_FAILED')
-          PY"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
+          import json, time, urllib.parse, urllib.request, urllib.error
+          from pathlib import Path
+
+          project='515723698609'
+          service='googleads.googleapis.com'
+          env={}
+          p=Path('/home/ubuntu/shopvivaliz-deploy/shared/.env')
+          if not p.is_file():
+              print('VM_ENVFILE_MISSING')
+              raise SystemExit(2)
+          for raw in p.read_text(encoding='utf-8', errors='ignore').splitlines():
+              line=raw.strip()
+              if not line or line.startswith('#') or '=' not in line:
+                  continue
+              k,v=line.split('=',1)
+              env[k.strip()]=v.strip().strip('"\'')
+
+          required=['GOOGLE_OAUTH_CLIENT_ID','GOOGLE_OAUTH_CLIENT_SECRET','GOOGLE_ADS_REFRESH_TOKEN']
+          missing=[k for k in required if not env.get(k,'').strip()]
+          if missing:
+              print('OAUTH_INPUTS_MISSING=' + ','.join(missing))
+              raise SystemExit(3)
+
+          data=urllib.parse.urlencode({
+              'client_id':env['GOOGLE_OAUTH_CLIENT_ID'],
+              'client_secret':env['GOOGLE_OAUTH_CLIENT_SECRET'],
+              'refresh_token':env['GOOGLE_ADS_REFRESH_TOKEN'],
+              'grant_type':'refresh_token',
+          }).encode()
+          req=urllib.request.Request('https://oauth2.googleapis.com/token', data=data, headers={'Content-Type':'application/x-www-form-urlencoded'}, method='POST')
+          with urllib.request.urlopen(req, timeout=20) as r:
+              payload=json.loads(r.read().decode())
+          token=payload.get('access_token','')
+          if not token:
+              print('OAUTH_REFRESH_VALID=no')
+              raise SystemExit(4)
+          print('OAUTH_REFRESH_VALID=yes')
+
+          try:
+              with urllib.request.urlopen('https://oauth2.googleapis.com/tokeninfo?access_token=' + urllib.parse.quote(token), timeout=20) as r:
+                  info=json.loads(r.read().decode())
+              scopes=set(str(info.get('scope','')).split())
+              cloud_ok=('https://www.googleapis.com/auth/cloud-platform' in scopes) or ('https://www.googleapis.com/auth/service.management' in scopes)
+              print('OAUTH_CLOUD_SCOPE=' + ('yes' if cloud_ok else 'no'))
+          except Exception:
+              print('OAUTH_CLOUD_SCOPE=unknown')
+
+          headers={'Authorization':'Bearer ' + token,'Content-Type':'application/json'}
+          enable_url=f'https://serviceusage.googleapis.com/v1/projects/{project}/services/{service}:enable'
+          try:
+              er=urllib.request.Request(enable_url, data=b'{}', headers=headers, method='POST')
+              with urllib.request.urlopen(er, timeout=30) as r:
+                  op=json.loads(r.read().decode())
+          except urllib.error.HTTPError as e:
+              body=e.read().decode(errors='ignore')
+              try: err=json.loads(body)
+              except Exception: err={}
+              detail=err.get('error') if isinstance(err,dict) else {}
+              print('GOOGLE_ADS_API_ENABLE=failed')
+              print('http_code=' + str(e.code))
+              if isinstance(detail,dict):
+                  print('status=' + str(detail.get('status','')))
+                  print('message=' + str(detail.get('message',''))[:700].replace('\n',' '))
+              raise SystemExit(5)
+
+          name=str(op.get('name',''))
+          if name:
+              op_url='https://serviceusage.googleapis.com/v1/' + name.lstrip('/')
+              for _ in range(12):
+                  with urllib.request.urlopen(urllib.request.Request(op_url, headers={'Authorization':'Bearer ' + token}), timeout=20) as r:
+                      state=json.loads(r.read().decode())
+                  if state.get('done'):
+                      if state.get('error'):
+                          print('GOOGLE_ADS_API_ENABLE=operation_failed')
+                          print('message=' + str(state.get('error'))[:700].replace('\n',' '))
+                          raise SystemExit(6)
+                      break
+                  time.sleep(5)
+
+          check_url=f'https://serviceusage.googleapis.com/v1/projects/{project}/services/{service}'
+          with urllib.request.urlopen(urllib.request.Request(check_url, headers={'Authorization':'Bearer ' + token}), timeout=20) as r:
+              check=json.loads(r.read().decode())
+          enabled=str(check.get('state','')).upper()=='ENABLED'
+          print('GOOGLE_ADS_API_ENABLE=' + ('success' if enabled else 'not_confirmed'))
+          if not enabled:
+              raise SystemExit(7)
+          PY
 
       - name: Cleanup
         if: always()
-        run: rm -f ~/.ssh/vmkey /tmp/enable-google-ads-api.ps1
+        run: rm -f ~/.ssh/vmkey
