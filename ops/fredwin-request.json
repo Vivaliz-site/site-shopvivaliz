@@ -1,5 +1,5 @@
 {
-  "action": "email_retention_validate",
-  "requested_at": "2026-08-14T23:14:00-03:00",
-  "reason": "Rerun Fred-Win validation using retention-only pytest plus local Flyway migrate and purge dry-run"
+  "action": "health",
+  "requested_at": "2026-08-15T00:14:00-03:00",
+  "reason": "Validate Fred-Win private relay before storefront recovery, analytics and ads operations"
 }
