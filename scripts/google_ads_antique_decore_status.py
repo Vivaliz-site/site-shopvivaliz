@@ -41,6 +41,34 @@ def set_status(client, customer_id, service_name, operation_name, resource_names
     getattr(client.get_service(service_name), method)(customer_id=customer_id, operations=operations)
 
 
+def set_conversion_primary(client, customer_id, resource_names, primary):
+    if not resource_names:
+        return
+    operations = []
+    for rn in resource_names:
+        op = client.get_type("ConversionActionOperation")
+        op.update.resource_name = rn
+        op.update.primary_for_goal = primary
+        op.update_mask.paths.append("primary_for_goal")
+        operations.append(op)
+    client.get_service("ConversionActionService").mutate_conversion_actions(
+        customer_id=customer_id,
+        operations=operations,
+    )
+
+
+def fetch_purchase_conversions(ga, customer_id):
+    rows = list(ga.search(customer_id=customer_id, query="""
+      SELECT conversion_action.id, conversion_action.resource_name,
+             conversion_action.name, conversion_action.status,
+             conversion_action.primary_for_goal, conversion_action.include_in_conversions_metric,
+             conversion_action.type, conversion_action.origin, conversion_action.category
+      FROM conversion_action
+      WHERE conversion_action.status = 'ENABLED'
+    """))
+    return [r for r in rows if any(x in r.conversion_action.name.lower() for x in ("purchase", "compra", "pedido", "sale"))]
+
+
 def main() -> int:
     required = ["GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "GOOGLE_ADS_REFRESH_TOKEN", "GOOGLE_ADS_DEVELOPER_TOKEN", "GOOGLE_ADS_CUSTOMER_ID"]
     missing = [k for k in required if not os.getenv(k, "").strip()]
@@ -89,19 +117,36 @@ def main() -> int:
     if len(ads) != 2:
         raise SystemExit("AD_INVARIANT_FAILED count=" + str(len(ads)))
 
-    conversion_rows = list(ga.search(customer_id=customer_id, query="""
-      SELECT conversion_action.id, conversion_action.name, conversion_action.status,
-             conversion_action.primary_for_goal, conversion_action.include_in_conversions_metric,
-             conversion_action.type, conversion_action.origin, conversion_action.category
-      FROM conversion_action
-      WHERE conversion_action.status = 'ENABLED'
-    """))
-    purchase_like = [r for r in conversion_rows if any(x in r.conversion_action.name.lower() for x in ("purchase", "compra", "pedido", "sale"))]
+    purchase_like = fetch_purchase_conversions(ga, customer_id)
     if not purchase_like:
         raise SystemExit("PURCHASE_CONVERSION_GUARD_FAILED")
+
     primary_purchase = [r for r in purchase_like if bool(r.conversion_action.primary_for_goal)]
-    if not primary_purchase:
-        raise SystemExit("PRIMARY_PURCHASE_CONVERSION_GUARD_FAILED")
+    adjustment = "none"
+    if len(primary_purchase) > 1:
+        standard = [
+            r for r in primary_purchase
+            if r.conversion_action.type.name == "GOOGLE_ANALYTICS_4_PURCHASE"
+            and r.conversion_action.category.name == "PURCHASE"
+        ]
+        extra_custom = [
+            r for r in primary_purchase
+            if r.conversion_action.type.name == "GOOGLE_ANALYTICS_4_CUSTOM"
+            and r.conversion_action.category.name == "PURCHASE"
+        ]
+        if len(standard) == 1 and len(standard) + len(extra_custom) == len(primary_purchase) and extra_custom:
+            set_conversion_primary(
+                client,
+                customer_id,
+                [r.conversion_action.resource_name for r in extra_custom],
+                False,
+            )
+            adjustment = "demoted_duplicate_ga4_custom_purchase_to_secondary"
+            purchase_like = fetch_purchase_conversions(ga, customer_id)
+            primary_purchase = [r for r in purchase_like if bool(r.conversion_action.primary_for_goal)]
+
+    if len(primary_purchase) != 1:
+        raise SystemExit("PRIMARY_PURCHASE_CONVERSION_GUARD_FAILED count=" + str(len(primary_purchase)))
 
     policy = []
     all_approved = True
@@ -126,6 +171,7 @@ def main() -> int:
     print("clicks_today=" + str(c.metrics.clicks))
     print("cost_brl_today=" + f"{c.metrics.cost_micros / 1_000_000:.2f}")
     print("conversions_today=" + str(c.metrics.conversions))
+    print("conversion_guard_adjustment=" + adjustment)
     for r in purchase_like:
         action = r.conversion_action
         print(
