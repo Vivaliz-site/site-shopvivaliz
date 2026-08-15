@@ -39,18 +39,13 @@ jobs:
           test -s "$latest"
           echo "BACKUP=$latest"
 
-          # Ensure Postgres is reachable from the host-bound port.
           timeout 30s docker exec mei-mg-email-db pg_isready -U postgres -d mei_mg_email
-          set -a
-          . ./.env
-          set +a
-          test -n "${POSTGRES_PASSWORD:-}"
+          POSTGRES_PASSWORD="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' mei-mg-email-db | sed -n 's/^POSTGRES_PASSWORD=//p' | head -n1)"
+          test -n "$POSTGRES_PASSWORD"
 
-          # Clear only stale Flyway helpers; keep Postgres intact.
           ids="$(docker ps -aq --filter name=mei-mg-email-flyway)"
           if [ -n "$ids" ]; then docker rm -f $ids >/dev/null 2>&1 || true; fi
 
-          # Bypass broken Docker DNS: Flyway shares host network and connects to 127.0.0.1:5433.
           timeout 300s docker run --rm --network host \
             -e FLYWAY_URL='jdbc:postgresql://127.0.0.1:5433/mei_mg_email' \
             -e FLYWAY_USER='postgres' \
