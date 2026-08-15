@@ -69,23 +69,13 @@ async function auditHomePage(page) {
   console.log('🏠 Auditando HOME...');
   report += '\n## 1️⃣ HOME PAGE\n\n';
 
+  currentPageName = 'HOME';
   await page.goto(BASE_URL, { waitUntil: 'load', timeout: 45000 });
+  await page.waitForTimeout(1500);
 
-  const { metrics, consoleMessages } = await capturePageMetrics(page, 'HOME');
-  report += `### Performance Metrics\n`;
-  report += `- DOM Content Loaded: ${metrics.domContentLoaded}ms\n`;
-  report += `- Load Complete: ${metrics.loadComplete}ms\n`;
-  report += `- First Paint: ${metrics.firstPaint}ms\n`;
-  report += `- Recursos carregados: ${metrics.resourceTiming}\n\n`;
-
-  const errors = consoleMessages.filter(m => m.type === 'error' || m.type === 'warning');
-  if (errors.length > 0) {
-    report += `### ⚠️ Console Errors/Warnings\n`;
-    errors.forEach(err => {
-      report += `- [${err.type.toUpperCase()}] ${err.text}\n`;
-    });
-    report += '\n';
-  }
+  const { metrics } = await capturePageMetrics(page, 'HOME');
+  reportPerf(metrics);
+  reportPageErrors('HOME');
 
   // Screenshot
   await page.screenshot({ path: path.join(__dirname, 'home-full.png') });
