@@ -1,0 +1,78 @@
+name: Oracle DNS Recovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/oracle-dns-recovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repair-dns:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Repair Oracle VM DNS and verify network
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          echo '=== before ==='
+          cat /etc/resolv.conf || true
+          getent hosts github.com || true
+          systemctl is-active systemd-resolved || true
+
+          if systemctl list-unit-files systemd-resolved.service >/dev/null 2>&1; then
+            sudo systemctl restart systemd-resolved || true
+          fi
+
+          if command -v resolvectl >/dev/null 2>&1; then
+            default_if="$(ip route show default | awk 'NR==1{print $5}')"
+            if [[ -n "$default_if" ]]; then
+              sudo resolvectl dns "$default_if" 1.1.1.1 8.8.8.8 || true
+              sudo resolvectl domain "$default_if" '~.' || true
+              sudo resolvectl flush-caches || true
+            fi
+          fi
+
+          if ! getent hosts github.com >/dev/null 2>&1; then
+            if [[ -L /etc/resolv.conf ]]; then
+              sudo rm -f /etc/resolv.conf
+            else
+              sudo cp -a /etc/resolv.conf "/etc/resolv.conf.backup.$(date -u +%Y%m%dT%H%M%SZ)" || true
+            fi
+            printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\noptions timeout:2 attempts:3\n' | sudo tee /etc/resolv.conf >/dev/null
+          fi
+
+          echo '=== after ==='
+          cat /etc/resolv.conf
+          getent hosts github.com
+          curl -I --connect-timeout 10 --max-time 20 https://github.com/ >/dev/null
+          echo 'DNS_RECOVERY_OK'
+          REMOTE
