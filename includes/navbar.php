@@ -1,7 +1,9 @@
 <?php
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
+// Paginas publicas nao devem criar PHPSESSID para todo visitante anonimo.
+// Retoma a sessao somente quando o cliente ja possui cookie de sessao.
+if (session_status() === PHP_SESSION_NONE && isset($_COOKIE[session_name()]) && $_COOKIE[session_name()] !== '') {
     @session_start();
 }
 
