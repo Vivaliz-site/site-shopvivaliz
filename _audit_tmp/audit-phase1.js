@@ -145,10 +145,10 @@ async function auditCatalogPage(page) {
     await page.goto(`${BASE_URL}/catalogo/`, { waitUntil: 'load', timeout: 45000 });
   }
 
-  const { metrics, consoleMessages } = await capturePageMetrics(page, 'CATALOG');
-  report += `### Performance Metrics\n`;
-  report += `- DOM Content Loaded: ${metrics.domContentLoaded}ms\n`;
-  report += `- Load Complete: ${metrics.loadComplete}ms\n\n`;
+  await page.waitForTimeout(1500);
+  const { metrics } = await capturePageMetrics(page, 'CATALOG');
+  reportPerf(metrics);
+  reportPageErrors('CATALOG');
 
   const catalogElements = await page.evaluate(() => {
     return {
