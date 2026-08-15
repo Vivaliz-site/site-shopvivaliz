@@ -56,6 +56,16 @@ $aboutSchema = [
         'telephone' => '+55-37-99937-4112',
         'contactType' => 'customer service',
     ],
+    // sameAs: apenas perfis confirmados ao vivo no rodape do site (footer.php),
+    // nao valores de config/company-profile.php (que ficam null por padrao).
+    // Marketplaces (Amazon/ML/Shopee/TikTok Shop) ficam de fora ate termos os
+    // links publicos reais de cada canal -- ver CHANGELOG.md 2026-07-09 sobre
+    // por que nao inventamos URLs "provaveis".
+    'sameAs' => [
+        'https://www.facebook.com/shopvivaliz/',
+        'https://www.instagram.com/shopvivaliz/',
+        'https://www.tiktok.com/@shop_vivaliz',
+    ],
 ];
 echo json_encode($aboutSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
 ?>
