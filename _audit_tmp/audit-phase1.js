@@ -167,9 +167,9 @@ async function auditCart(page) {
 
   // Tentar clicar em "Adicionar ao Carrinho" se existir
   try {
-    const addToCartBtn = await page.$('button:has-text("Adicionar ao Carrinho"), [class*="add-to-cart"]');
-    if (addToCartBtn) {
-      await addToCartBtn.click();
+    const addToCartBtn = page.locator('[class*="add-to-cart"], button:has-text("Adicionar ao Carrinho")').first();
+    if (await addToCartBtn.count() > 0) {
+      await addToCartBtn.click({ timeout: 5000 });
       await page.waitForTimeout(2000); // Aguardar resposta
     }
   } catch (e) {
