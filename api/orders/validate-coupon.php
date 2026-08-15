@@ -8,6 +8,7 @@ header('Cache-Control: no-store');
 
 require_once dirname(__DIR__, 2) . '/includes/order-authoritative.php';
 require_once dirname(__DIR__, 2) . '/includes/coupons.php';
+require_once dirname(__DIR__, 2) . '/includes/buy-together.php';
 
 function svvc_json(int $status, array $payload): never
 {
@@ -36,9 +37,19 @@ if ($code === '') {
 }
 
 $resolved = svoa_resolve_items($items);
-$itemsSubtotal = array_reduce($resolved['items'], static fn(float $sum, array $item): float => $sum + $item['price'] * $item['quantity'], 0.0);
+if ($resolved['errors'] !== []) {
+    svvc_json(409, ['ok' => false, 'error' => 'order_items_invalid', 'items' => $resolved['errors']]);
+}
 
-$result = svcp_validate($code, $itemsSubtotal);
+$itemsSubtotal = array_reduce(
+    $resolved['items'],
+    static fn(float $sum, array $item): float => $sum + ((float)$item['price'] * (int)$item['quantity']),
+    0.0
+);
+$buyTogether = svbt_validate_offer(null, $resolved['items']);
+$subtotalAfterBuyTogether = max(0.0, round($itemsSubtotal - (float)$buyTogether['amount'], 2));
+
+$result = svcp_validate($code, $subtotalAfterBuyTogether);
 if (!$result['ok']) {
     svvc_json(422, ['ok' => false, 'error' => $result['error']]);
 }
@@ -49,4 +60,6 @@ svvc_json(200, [
     'percent' => $result['percent'],
     'amount' => $result['amount'],
     'label' => $result['label'],
+    'buy_together_active' => $buyTogether['active'],
+    'buy_together_discount' => $buyTogether['amount'],
 ]);
