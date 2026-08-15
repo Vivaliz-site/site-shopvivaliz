@@ -457,12 +457,12 @@ function sv_home_banners(): array
 {
     return [
         [
-            'alt' => 'Banner Vivaliz com 5% de desconto na primeira compra',
+            'alt' => 'Banner Vivaliz com 3% OFF automatico em carrinho com 2 ou mais produtos diferentes',
             'image' => '/public/assets/home-banners/banner-primeira-compra.webp',
             'tag' => 'OFERTA EXCLUSIVA',
             'title' => 'Tudo o que você precisa.',
-            'subtitle' => 'Ganhe 10% de desconto na sua primeira compra com o cupom VIVALIZ10.',
-            'primary' => ['label' => 'Aproveitar Desconto', 'href' => '/catalogo'],
+            'subtitle' => 'Leve 2 ou mais produtos diferentes e ganhe 3% OFF automatico no carrinho.',
+            'primary' => ['label' => 'Ver produtos', 'href' => '/catalogo'],
             'secondary' => ['label' => 'Falar com vendas', 'href' => '/contato'],
         ],
         [
