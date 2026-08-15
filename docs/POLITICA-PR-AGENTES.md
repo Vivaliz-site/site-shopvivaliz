@@ -33,6 +33,19 @@ Um agente não pode concluir que uma credencial inexiste no projeto apenas porqu
 
 Ausência em um desses contextos não prova ausência nos demais.
 
+### Fonte de verdade operacional para Shopee
+
+Para rotinas Shopee, o sandbox do agente **não é fonte de verdade de credenciais**. A sequência obrigatória de diagnóstico é:
+
+1. consultar a evidência mais recente do workflow `Credential Presence Audit`;
+2. considerar `/home/ubuntu/shopvivaliz-deploy/shared/.env` e `shared/runtime-secrets.php` como fontes canônicas do runtime da VM;
+3. executar/consultar `Shopee Runtime Health`, que faz leitura real e não mutante do catálogo;
+4. só declarar credencial ausente ou inválida quando houver evidência do ambiente operacional real.
+
+O fato de `SHOPEE_ACCESS_TOKEN`/`SHOPEE_REFRESH_TOKEN` não estarem materializados no ambiente GitHub Actions não significa que o runtime Shopee esteja sem tokens. Tokens rotativos podem existir apenas no runtime privado da VM. O workflow de aplicação real deve usar o runtime canônico da VM, sem copiar tokens rotativos para logs ou artefatos.
+
+Da mesma forma, `TINY_*` e `OLIST_*` não são pré-requisitos para o executor canônico `scripts/shopee_production_seo_apply.py`, que conversa diretamente com a Shopee por `scripts/utils/shopee_client.py`. Um agente não deve declarar a otimização Shopee bloqueada apenas porque antigos workflows Tiny/Olist (`fetch-shopee-listings.yml`/`optimize-shopee-listings.yml`) foram removidos.
+
 ## Encerramento obrigatório
 
 Ao finalizar uma tarefa, o agente deve verificar PRs abertas relacionadas à própria rodada. Se houver PR antiga, duplicada, obsoleta ou baseada em diagnóstico superado, deve encerrá-la com comentário explicativo. O repositório não deve acumular PRs pendentes de agentes sem um bloqueio ativo e documentado.

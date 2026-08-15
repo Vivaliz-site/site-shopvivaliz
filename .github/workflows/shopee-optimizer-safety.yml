@@ -5,19 +5,29 @@ on:
     paths:
       - 'scripts/shopee_full_catalog_optimizer.py'
       - 'scripts/shopee_production_seo_apply.py'
+      - 'scripts/shopee_runtime_exec.py'
+      - 'scripts/shopee_runtime_preflight.py'
+      - 'scripts/utils/shopee_client.py'
       - 'tests/test_shopee_optimizer_safety.py'
       - 'tests/test_shopee_production_seo.py'
+      - 'tests/test_shopee_runtime_credentials.py'
       - '.github/workflows/shopee-optimizer-safety.yml'
       - '.github/workflows/shopee-production-seo.yml'
+      - '.github/workflows/shopee-runtime-health.yml'
   push:
     branches: [main]
     paths:
       - 'scripts/shopee_full_catalog_optimizer.py'
       - 'scripts/shopee_production_seo_apply.py'
+      - 'scripts/shopee_runtime_exec.py'
+      - 'scripts/shopee_runtime_preflight.py'
+      - 'scripts/utils/shopee_client.py'
       - 'tests/test_shopee_optimizer_safety.py'
       - 'tests/test_shopee_production_seo.py'
+      - 'tests/test_shopee_runtime_credentials.py'
       - '.github/workflows/shopee-optimizer-safety.yml'
       - '.github/workflows/shopee-production-seo.yml'
+      - '.github/workflows/shopee-runtime-health.yml'
   workflow_dispatch:
 
 permissions:
@@ -32,7 +42,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Compile optimizers
-        run: python -m py_compile scripts/shopee_full_catalog_optimizer.py scripts/shopee_production_seo_apply.py scripts/utils/shopee_client.py
+      - name: Compile optimizers and runtime helpers
+        run: python -m py_compile scripts/shopee_full_catalog_optimizer.py scripts/shopee_production_seo_apply.py scripts/shopee_runtime_exec.py scripts/shopee_runtime_preflight.py scripts/utils/shopee_client.py
       - name: Run safety tests
-        run: python -m unittest -v tests/test_shopee_optimizer_safety.py tests/test_shopee_production_seo.py
+        run: python -m unittest -v tests/test_shopee_optimizer_safety.py tests/test_shopee_production_seo.py tests/test_shopee_runtime_credentials.py
