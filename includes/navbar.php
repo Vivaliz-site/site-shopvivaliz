@@ -8,6 +8,31 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once dirname(__DIR__) . '/includes/site-settings.php';
 require_once dirname(__DIR__) . '/includes/active-coupons.php';
 
+// Ponto comum das paginas publicas: remove hops 301 causados por templates
+// legados que ainda imprimem /catalogo, /contato ou /blog sem a barra final.
+// O filtro atua somente na resposta HTML de navegacao e nunca altera APIs,
+// catalogo persistido, preco ou estoque.
+if (empty($GLOBALS['sv_public_canonical_links_filter_registered']) && PHP_SAPI !== 'cli') {
+    $svCanonicalMethod = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+    if (in_array($svCanonicalMethod, ['GET', 'HEAD'], true)) {
+        $GLOBALS['sv_public_canonical_links_filter_registered'] = true;
+        ob_start(static function (string $html): string {
+            $patterns = [
+                '#https://shopvivaliz\.com\.br/catalogo(?=(?:\?|["\']))#' => 'https://shopvivaliz.com.br/catalogo/',
+                '#https://shopvivaliz\.com\.br/contato(?=(?:\?|["\']))#' => 'https://shopvivaliz.com.br/contato/',
+                '#https://shopvivaliz\.com\.br/blog(?=(?:\?|["\']))#' => 'https://shopvivaliz.com.br/blog/',
+                '#(?<=["\'])/catalogo(?=(?:\?|["\']))#' => '/catalogo/',
+                '#(?<=["\'])/contato(?=(?:\?|["\']))#' => '/contato/',
+                '#(?<=["\'])/blog(?=(?:\?|["\']))#' => '/blog/',
+            ];
+            foreach ($patterns as $pattern => $replacement) {
+                $html = preg_replace($pattern, $replacement, $html) ?? $html;
+            }
+            return $html;
+        });
+    }
+}
+
 $svNavCurrent = $svNavCurrent ?? trim((string)parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH), '/');
 $svNavCurrent = preg_replace('#^index\.php$#', '', $svNavCurrent);
 $svNavCurrent = trim((string)$svNavCurrent, '/');
