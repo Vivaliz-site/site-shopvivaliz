@@ -30,7 +30,7 @@ jobs:
           set -euo pipefail
           git config user.name fredmourao-ai
           git config user.email fredmourao@gmail.com
-          git add index.php includes/product-trust-sanitizer.php .github/workflows/google-ads-antique-decore-status.yml tests/commercial-policy-regression-test.php
+          git add index.php includes/product-trust-sanitizer.php tests/commercial-policy-regression-test.php
           if git diff --cached --quiet; then
             echo NO_CHANGES_NEEDED=true
             exit 0
