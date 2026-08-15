@@ -49,13 +49,22 @@ jobs:
             -i "$HOME/.ssh/id_rsa" \
             ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
           set -euo pipefail
+          tmpdir="$(mktemp -d /tmp/shopvivaliz-ads-landing.XXXXXX)"
+          trap 'rm -rf -- "$tmpdir"' EXIT
+          idx=0
           for url in \
             'https://shopvivaliz.com.br/catalogo?q=antique' \
             'https://shopvivaliz.com.br/catalogo?q=decore'
           do
-            code="$(curl --silent --show-error --location --max-time 20 --output /dev/null --write-out '%{http_code}' "$url")"
+            idx=$((idx + 1))
+            body="$tmpdir/page-$idx.html"
+            code="$(curl --silent --show-error --location --max-time 20 --output "$body" --write-out '%{http_code}' "$url")"
             test "$code" = '200' || { echo "LANDING_PAGE_GUARD_FAILED url=$url http=$code" >&2; exit 1; }
-            echo "LANDING_PAGE_OK url=$url http=$code"
+            if grep -Eiq 'VOLTEI5|5%[[:space:]]*OFF[[:space:]]*NA[[:space:]]*1|5%[[:space:]]*(OFF|DE DESCONTO).*(PRIMEIRA|1.?)[[:space:]]*COMPRA' "$body"; then
+              echo "STALE_PROMO_CLAIM_GUARD_FAILED url=$url" >&2
+              exit 1
+            fi
+            echo "LANDING_PAGE_OK url=$url http=$code stale_promo_claims=none"
           done
           REMOTE
 
