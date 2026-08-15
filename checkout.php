@@ -828,11 +828,13 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             if (clientId && String(clientId).length > 0) payload.funnel_client_id = clientId;
         } catch (ignore) {}
 
-        // Capturar gclid (Google Click ID) da URL ou localStorage
+        // Capturar identificadores de clique Google da URL ou localStorage.
         try {
             var params = new URLSearchParams(window.location.search);
-            var gclid = params.get('gclid') || localStorage.getItem('sv_gclid') || '';
-            if (gclid) payload.gclid = gclid;
+            ['gclid', 'gbraid', 'wbraid', 'dclid'].forEach(function (key) {
+                var value = params.get(key) || localStorage.getItem('sv_' + key) || '';
+                if (value) payload[key] = value;
+            });
 
             // Capturar UTM parameters
             var utm_source = params.get('utm_source') || localStorage.getItem('sv_utm_source') || '';

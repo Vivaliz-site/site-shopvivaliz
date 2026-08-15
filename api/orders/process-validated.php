@@ -168,12 +168,15 @@ if ($paymentMethod === '') {
 $deviceId = trim((string)($body['device_id'] ?? ''));
 $funnelClientId = trim((string)($body['funnel_client_id'] ?? ''));
 $gclid = trim((string)($body['gclid'] ?? ''));
+$gbraid = trim((string)($body['gbraid'] ?? ''));
+$wbraid = trim((string)($body['wbraid'] ?? ''));
+$dclid = trim((string)($body['dclid'] ?? ''));
 $utmSource = trim((string)($body['utm_source'] ?? ''));
 $utmMedium = trim((string)($body['utm_medium'] ?? ''));
 $utmCampaign = trim((string)($body['utm_campaign'] ?? ''));
 $utmContent = trim((string)($body['utm_content'] ?? ''));
 
-if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen($address) > 300 || strlen($streetName) > 300 || strlen($streetNumber) > 30 || strlen($complement) > 120 || strlen($neighborhood) > 120 || strlen($city) > 120 || strlen($state) > 2 || strlen($notes) > 1000 || strlen($deviceId) > 255 || strlen($cpf) > 14 || strlen($companyLegalName) > 180 || strlen($companyTradeName) > 180 || strlen($customerRegistrationDate) > 60 || strlen($customerId) > 120 || strlen($funnelClientId) > 128 || strlen($gclid) > 255 || strlen($utmSource) > 255 || strlen($utmMedium) > 255 || strlen($utmCampaign) > 255 || strlen($utmContent) > 255) {
+if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen($address) > 300 || strlen($streetName) > 300 || strlen($streetNumber) > 30 || strlen($complement) > 120 || strlen($neighborhood) > 120 || strlen($city) > 120 || strlen($state) > 2 || strlen($notes) > 1000 || strlen($deviceId) > 255 || strlen($cpf) > 14 || strlen($companyLegalName) > 180 || strlen($companyTradeName) > 180 || strlen($customerRegistrationDate) > 60 || strlen($customerId) > 120 || strlen($funnelClientId) > 128 || strlen($gclid) > 255 || strlen($gbraid) > 255 || strlen($wbraid) > 255 || strlen($dclid) > 255 || strlen($utmSource) > 255 || strlen($utmMedium) > 255 || strlen($utmCampaign) > 255 || strlen($utmContent) > 255) {
     svoi_release($idempotencyKey);
     svop_json(422, ['ok' => false, 'error' => 'field_too_long']);
 }
@@ -320,6 +323,9 @@ $record = [
     'payment_session_hash' => $paymentSessionToken !== '' ? hash('sha256', $paymentSessionToken) : '',
     'funnel_client_id' => $funnelClientId,
     'gclid' => $gclid,
+    'gbraid' => $gbraid,
+    'wbraid' => $wbraid,
+    'dclid' => $dclid,
     'utm' => [
         'source' => $utmSource,
         'medium' => $utmMedium,
