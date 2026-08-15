@@ -51,4 +51,14 @@ sv_test_assert(str_contains($filtered, 'revalidados no servidor'), 'checkout mus
 sv_test_assert(str_contains($filtered, 'customer_email:'), 'coupon preview must include checkout customer email');
 sv_test_assert(str_contains($filtered, '[name="customer_email"]'), 'coupon preview must read the email field');
 
+$svSeoTitle = 'Catalogo';
+$svSeoDescription = 'Teste';
+$svSeoUrl = '/catalogo?categoria=Vasos&utm_source=google';
+ob_start();
+include dirname(__DIR__) . '/includes/seo-meta.php';
+$seoOutput = (string)ob_get_clean();
+sv_test_assert(str_contains($seoOutput, 'href="https://shopvivaliz.com.br/catalogo"'), 'canonical must strip storefront query parameters');
+sv_test_assert(!str_contains($seoOutput, 'utm_source='), 'canonical metadata must not contain UTM parameters');
+sv_test_assert(!str_contains($seoOutput, 'categoria=Vasos'), 'catalog facet query must not leak into canonical metadata');
+
 fwrite(STDOUT, "ecommerce_excellence_regression=ok\n");
