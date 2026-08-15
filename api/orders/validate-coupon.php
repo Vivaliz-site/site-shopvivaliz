@@ -58,6 +58,22 @@ if (!$result['ok']) {
     svvc_json(422, ['ok' => false, 'error' => $result['error']]);
 }
 
+// Cupons pessoais nao podem sequer ser pre-validados sem o e-mail do cliente.
+// Isso evita revelar/apresentar um beneficio de outra pessoa na interface.
+if ($customerEmail === '') {
+    try {
+        $ownerStmt = sv_pdo()->prepare('SELECT owner_email FROM coupons WHERE code = :code LIMIT 1');
+        $ownerStmt->execute([':code' => $result['code']]);
+        $ownerEmail = strtolower(trim((string)($ownerStmt->fetchColumn() ?: '')));
+        if ($ownerEmail !== '') {
+            svvc_json(422, ['ok' => false, 'error' => 'coupon_customer_email_required']);
+        }
+    } catch (Throwable $e) {
+        error_log('[validate-coupon] owner lookup failed: ' . $e->getMessage());
+        svvc_json(503, ['ok' => false, 'error' => 'coupon_lookup_failed']);
+    }
+}
+
 svvc_json(200, [
     'ok' => true,
     'code' => $result['code'],
