@@ -23,14 +23,15 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
 DEFAULT_BASE = "https://shopvivaliz.com.br"
-USER_AGENT = "ShopVivaliz-SEO-Integrity-Audit/1.0 (+https://shopvivaliz.com.br)"
+USER_AGENT = "ShopVivaliz-SEO-Integrity-Audit/1.1 (+https://shopvivaliz.com.br)"
 HTML_TYPES = ("text/html", "application/xhtml+xml")
+MAX_DISCOVERY_PAGES = 50
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -93,9 +94,22 @@ def canonicalize(base: str, raw: str) -> str | None:
     if parts.scheme not in {"http", "https"} or parts.netloc.lower() != base_parts.netloc.lower():
         return None
     path = parts.path or "/"
-    # Fragments never affect server routing. Queries are retained because
-    # category/filter pages can be genuine internal destinations.
     return urllib.parse.urlunsplit((base_parts.scheme, base_parts.netloc, path, parts.query, ""))
+
+
+def is_discovery_page(url: str, base: str) -> bool:
+    """Return True for bounded pagination pages that expose otherwise hidden links."""
+    parts = urllib.parse.urlsplit(url)
+    base_parts = urllib.parse.urlsplit(base)
+    if parts.netloc.lower() != base_parts.netloc.lower():
+        return False
+    if parts.path not in {"/catalogo/", "/blog/"}:
+        return False
+    params = urllib.parse.parse_qs(parts.query, keep_blank_values=True)
+    if set(params) != {"pagina"}:
+        return False
+    values = params.get("pagina") or []
+    return len(values) == 1 and values[0].isdigit() and int(values[0]) >= 2
 
 
 def probe(url: str, timeout: float, keep_body: bool = True) -> Probe:
@@ -165,8 +179,62 @@ def parallel_probe(urls: Iterable[str], timeout: float, workers: int, keep_body:
             url = future_map[future]
             try:
                 results[url] = future.result()
-            except Exception as exc:  # defensive: audit should report, not crash silently
+            except Exception as exc:
                 results[url] = Probe(url=url, status=0, elapsed_ms=0, error=f"worker_error: {exc}")
+    return results
+
+
+def collect_page_links(
+    source: str,
+    result: Probe,
+    base: str,
+    incoming: Counter[str],
+    link_sources: dict[str, set[str]],
+    canonical_sources: dict[str, set[str]],
+) -> None:
+    if result.status != 200 or result.content_type not in HTML_TYPES:
+        return
+    page = PageParser()
+    try:
+        page.feed(result.body)
+    except Exception:
+        return
+    for href in page.links:
+        target = canonicalize(base, href)
+        if target:
+            incoming[target] += 1
+            link_sources[target].add(source)
+    canonical = canonicalize(base, page.canonical) if page.canonical else None
+    if canonical:
+        canonical_sources[canonical].add(source)
+
+
+def crawl_discovery_pages(
+    base: str,
+    timeout: float,
+    incoming: Counter[str],
+    link_sources: dict[str, set[str]],
+    canonical_sources: dict[str, set[str]],
+) -> dict[str, Probe]:
+    """Follow catalog/blog pagination so orphan detection sees the full link graph."""
+    queue: deque[str] = deque(
+        sorted(url for url in link_sources if is_discovery_page(url, base))
+    )
+    seen: set[str] = set()
+    results: dict[str, Probe] = {}
+
+    while queue and len(seen) < MAX_DISCOVERY_PAGES:
+        url = queue.popleft()
+        if url in seen:
+            continue
+        seen.add(url)
+        result = probe(url, timeout, keep_body=True)
+        results[url] = result
+        collect_page_links(url, result, base, incoming, link_sources, canonical_sources)
+        for target in sorted(link_sources):
+            if target not in seen and target not in queue and is_discovery_page(target, base):
+                queue.append(target)
+
     return results
 
 
@@ -176,6 +244,7 @@ def markdown_report(summary: dict, issues: dict[str, list[dict]]) -> str:
         "",
         f"- Base: `{summary['base']}`",
         f"- Sitemap URLs: **{summary['sitemap_urls']}**",
+        f"- Discovery pagination pages crawled: **{summary['discovery_pages']}**",
         f"- Internal targets checked: **{summary['internal_targets']}**",
         f"- Sitemap timeouts: **{summary['sitemap_timeouts']}**",
         f"- Sitemap 4XX/5XX: **{summary['sitemap_broken']}**",
@@ -229,21 +298,15 @@ def main() -> int:
     canonical_sources: dict[str, set[str]] = defaultdict(set)
 
     for source, result in sitemap_results.items():
-        if result.status != 200 or result.content_type not in HTML_TYPES:
-            continue
-        page = PageParser()
-        try:
-            page.feed(result.body)
-        except Exception:
-            continue
-        for href in page.links:
-            target = canonicalize(base, href)
-            if target:
-                incoming[target] += 1
-                link_sources[target].add(source)
-        canonical = canonicalize(base, page.canonical) if page.canonical else None
-        if canonical:
-            canonical_sources[canonical].add(source)
+        collect_page_links(source, result, base, incoming, link_sources, canonical_sources)
+
+    discovery_results = crawl_discovery_pages(
+        base,
+        args.timeout,
+        incoming,
+        link_sources,
+        canonical_sources,
+    )
 
     internal_targets = sorted(link_sources)
     target_results = parallel_probe(internal_targets, args.timeout, workers, keep_body=False)
@@ -300,7 +363,6 @@ def main() -> int:
                 "error": result.error,
             })
 
-    sitemap_set = set(sitemap_urls)
     root_url = base + "/"
     for url in sitemap_urls:
         if url == root_url:
@@ -311,6 +373,7 @@ def main() -> int:
     summary = {
         "base": base,
         "sitemap_urls": len(sitemap_urls),
+        "discovery_pages": len(discovery_results),
         "internal_targets": len(internal_targets),
         "sitemap_timeouts": len(issues["Sitemap timeouts"]),
         "sitemap_broken": len(issues["Sitemap 4XX/5XX"]),
@@ -325,6 +388,7 @@ def main() -> int:
         "summary": summary,
         "issues": issues,
         "sitemap_results": {url: asdict(result) | {"body": ""} for url, result in sitemap_results.items()},
+        "discovery_results": {url: asdict(result) | {"body": ""} for url, result in discovery_results.items()},
     }
     Path(args.json).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     Path(args.markdown).write_text(markdown_report(summary, issues), encoding="utf-8")
@@ -337,6 +401,7 @@ def main() -> int:
         summary["broken_internal"],
         summary["redirecting_internal"],
         summary["canonical_issues"],
+        summary["orphans"],
     ])
     if args.fail_on_issues and issue_total > 0:
         return 1
