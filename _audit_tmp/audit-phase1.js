@@ -187,10 +187,10 @@ async function auditProductPage(page) {
     await page.goto(`${BASE_URL}/produto/`, { waitUntil: 'load', timeout: 45000 });
   }
 
-  const { metrics, consoleMessages } = await capturePageMetrics(page, 'PDP');
-  report += `### Performance Metrics\n`;
-  report += `- DOM Content Loaded: ${metrics.domContentLoaded}ms\n`;
-  report += `- Load Complete: ${metrics.loadComplete}ms\n\n`;
+  await page.waitForTimeout(1500);
+  const { metrics } = await capturePageMetrics(page, 'PDP');
+  reportPerf(metrics);
+  reportPageErrors('PDP');
 
   const pdpElements = await page.evaluate(() => {
     return {
