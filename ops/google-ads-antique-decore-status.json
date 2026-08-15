@@ -1,5 +1,5 @@
 {
-  "requested_at": "2026-08-15T01:40:00-03:00",
+  "requested_at": "2026-08-15T01:43:00-03:00",
   "campaign": "ShopVivaliz-Search-Vasos-Antique-Decore-2026-08",
-  "action": "audit-conversion-origin-and-enable-only-if-fully-approved"
+  "action": "dedupe-primary-purchase-and-enable-only-if-fully-approved"
 }
