@@ -31,9 +31,13 @@ if (!is_array($body)) {
 }
 
 $code = trim((string)($body['coupon_code'] ?? ''));
+$customerEmail = strtolower(trim((string)($body['customer_email'] ?? '')));
 $items = is_array($body['items'] ?? null) ? $body['items'] : [];
 if ($code === '') {
     svvc_json(422, ['ok' => false, 'error' => 'coupon_empty']);
+}
+if ($customerEmail !== '' && filter_var($customerEmail, FILTER_VALIDATE_EMAIL) === false) {
+    svvc_json(422, ['ok' => false, 'error' => 'customer_email_invalid']);
 }
 
 $resolved = svoa_resolve_items($items);
@@ -49,7 +53,7 @@ $itemsSubtotal = array_reduce(
 $buyTogether = svbt_validate_offer(null, $resolved['items']);
 $subtotalAfterBuyTogether = max(0.0, round($itemsSubtotal - (float)$buyTogether['amount'], 2));
 
-$result = svcp_validate($code, $subtotalAfterBuyTogether);
+$result = svcp_validate($code, $subtotalAfterBuyTogether, $customerEmail);
 if (!$result['ok']) {
     svvc_json(422, ['ok' => false, 'error' => $result['error']]);
 }
