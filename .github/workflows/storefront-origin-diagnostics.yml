@@ -1,5 +1,6 @@
 name: Storefront Origin Diagnostics
 
+# Triggered operationally to diagnose storefront origin/edge failures.
 on:
   push:
     branches: [main]
@@ -40,74 +41,60 @@ jobs:
           who -q || true
           last reboot | head -n 8 || true
           echo
-
           echo '=== memory / disk / load ==='
           free -h
           df -h / /home/ubuntu
           cat /proc/loadavg
           echo
-
           echo '=== top CPU ==='
           ps -eo pid,ppid,user,%cpu,%mem,etime,stat,comm,args --sort=-%cpu | head -n 35
           echo
-
           echo '=== top memory ==='
           ps -eo pid,ppid,user,%cpu,%mem,etime,stat,comm,args --sort=-%mem | head -n 35
           echo
-
           echo '=== listening TCP ==='
           sudo ss -ltnp | sed -n '1,160p'
           echo
-
           echo '=== apache status/config ==='
           sudo systemctl --no-pager --full status apache2 | tail -n 60
           sudo apache2ctl -t
           sudo apache2ctl -S
           echo
-
           echo '=== enabled apache sites ==='
           ls -l /etc/apache2/sites-enabled/
           for f in /etc/apache2/sites-enabled/*; do echo "--- $f"; sudo sed -n '1,220p' "$f"; done
           echo
-
           echo '=== firewall ==='
           sudo ufw status verbose || true
           sudo iptables -S | sed -n '1,220p' || true
           echo
-
           echo '=== DNS ==='
           getent ahosts shopvivaliz.com.br || true
           getent ahosts www.shopvivaliz.com.br || true
           echo
-
           echo '=== local origin HTTP ==='
           curl -sS -D - -o /tmp/local-home -H 'Host: shopvivaliz.com.br' --connect-timeout 5 --max-time 20 http://127.0.0.1/ | head -n 60
           echo 'BODY_BYTES='$(wc -c </tmp/local-home 2>/dev/null)
           curl -sS -D - -o /tmp/local-health -H 'Host: shopvivaliz.com.br' --connect-timeout 5 --max-time 20 http://127.0.0.1/api/health/version.php | head -n 60
           cat /tmp/local-health
           echo
-
           echo '=== origin public IP HTTP ==='
           curl -sS -D - -o /tmp/ip-home -H 'Host: shopvivaliz.com.br' --connect-timeout 5 --max-time 20 http://137.131.156.17/ | head -n 80
           echo 'BODY_BYTES='$(wc -c </tmp/ip-home 2>/dev/null)
           echo
-
           echo '=== origin public IP HTTPS ==='
           curl -k -sS -D - -o /tmp/ip-https --resolve shopvivaliz.com.br:443:137.131.156.17 --connect-timeout 5 --max-time 20 https://shopvivaliz.com.br/ | head -n 100
           echo 'BODY_BYTES='$(wc -c </tmp/ip-https 2>/dev/null)
           echo
-
           echo '=== public Cloudflare path ==='
           curl -sS -D - -o /tmp/public-home --connect-timeout 10 --max-time 30 https://shopvivaliz.com.br/ | head -n 120
           echo 'BODY_BYTES='$(wc -c </tmp/public-home 2>/dev/null)
           head -c 500 /tmp/public-home 2>/dev/null; echo
           echo
-
           echo '=== recent apache access/errors ==='
           sudo tail -n 120 /var/log/apache2/access.log 2>/dev/null || true
           sudo tail -n 160 /var/log/apache2/error.log 2>/dev/null || true
           echo
-
           echo '=== recent kernel pressure ==='
           sudo journalctl -k --since '-2 hours' --no-pager | grep -Ei 'oom|killed process|out of memory|nf_conntrack|blocked for|I/O error|segfault' | tail -n 120 || true
           REMOTE
