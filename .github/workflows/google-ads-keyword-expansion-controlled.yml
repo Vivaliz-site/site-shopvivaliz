@@ -1,0 +1,180 @@
+name: Google Ads Controlled Keyword Expansion
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ops/google-ads-keyword-expansion-controlled.json"
+
+permissions:
+  contents: read
+
+jobs:
+  expand:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Validate and apply bounded keyword expansion
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
+          import json, urllib.parse, urllib.request, urllib.error
+          from pathlib import Path
+
+          TARGET='24144257692'
+          EXPECTED_GROUPS={'Vasos Antique Japi':'198606939545','Vasos Decore Japi':'198780496026'}
+          PROPOSED={
+              'Vasos Antique Japi':['vaso antique','vaso japi antique'],
+              'Vasos Decore Japi':['vaso decore','vaso japi decore'],
+          }
+          EXPECTED_BUDGET_MICROS=10_000_000
+
+          env={}
+          for raw in Path('/home/ubuntu/shopvivaliz-deploy/shared/.env').read_text(encoding='utf-8',errors='ignore').splitlines():
+              line=raw.strip()
+              if line and not line.startswith('#') and '=' in line:
+                  k,v=line.split('=',1); env[k.strip()]=v.strip().strip('"\'')
+
+          required=['GOOGLE_OAUTH_CLIENT_ID','GOOGLE_OAUTH_CLIENT_SECRET','GOOGLE_ADS_REFRESH_TOKEN','GOOGLE_ADS_DEVELOPER_TOKEN','GOOGLE_ADS_CUSTOMER_ID']
+          missing=[k for k in required if not env.get(k,'').strip()]
+          if missing:
+              raise SystemExit('MISSING_ENV=' + ','.join(missing))
+
+          td=urllib.parse.urlencode({
+              'client_id':env['GOOGLE_OAUTH_CLIENT_ID'],
+              'client_secret':env['GOOGLE_OAUTH_CLIENT_SECRET'],
+              'refresh_token':env['GOOGLE_ADS_REFRESH_TOKEN'],
+              'grant_type':'refresh_token'
+          }).encode()
+          with urllib.request.urlopen(urllib.request.Request('https://oauth2.googleapis.com/token',data=td,headers={'Content-Type':'application/x-www-form-urlencoded'},method='POST'),timeout=20) as r:
+              token=json.loads(r.read().decode())['access_token']
+
+          cid=env['GOOGLE_ADS_CUSTOMER_ID'].replace('-','').strip()
+          headers={'Content-Type':'application/json','Authorization':'Bearer '+token,'developer-token':env['GOOGLE_ADS_DEVELOPER_TOKEN']}
+          login=env.get('GOOGLE_ADS_LOGIN_CUSTOMER_ID','').replace('-','').strip()
+          if login: headers['login-customer-id']=login
+          search_url=f'https://googleads.googleapis.com/v25/customers/{cid}/googleAds:searchStream'
+
+          def search(gaql):
+              req=urllib.request.Request(search_url,data=json.dumps({'query':gaql}).encode(),headers=headers,method='POST')
+              with urllib.request.urlopen(req,timeout=30) as r:
+                  payload=json.loads(r.read().decode())
+              rows=[]
+              for batch in payload if isinstance(payload,list) else []:
+                  rows.extend(batch.get('results') or [])
+              return rows
+
+          campaign_rows=search(f'''SELECT campaign.id, campaign.status, campaign.serving_status, campaign.primary_status, campaign_budget.amount_micros FROM campaign WHERE campaign.id = {TARGET}''')
+          if len(campaign_rows)!=1:
+              raise SystemExit('GUARDRAIL_CAMPAIGN_NOT_UNIQUE')
+          c=campaign_rows[0]
+          budget=int(c.get('campaignBudget',{}).get('amountMicros','0'))
+          status=c.get('campaign',{}).get('status')
+          if budget != EXPECTED_BUDGET_MICROS:
+              raise SystemExit(f'GUARDRAIL_BUDGET_CHANGED={budget}')
+          if status != 'ENABLED':
+              raise SystemExit(f'GUARDRAIL_CAMPAIGN_STATUS={status}')
+          print('GUARDRAIL_CAMPAIGN_OK budget_micros='+str(budget))
+
+          group_rows=search(f'''SELECT ad_group.id, ad_group.name, ad_group.status FROM ad_group WHERE campaign.id = {TARGET} AND ad_group.status != 'REMOVED' ORDER BY ad_group.id''')
+          actual={r['adGroup']['name']:str(r['adGroup']['id']) for r in group_rows}
+          if actual != EXPECTED_GROUPS:
+              raise SystemExit('GUARDRAIL_GROUPS_MISMATCH='+json.dumps(actual,ensure_ascii=False,sort_keys=True))
+          print('GUARDRAIL_GROUPS_OK='+','.join(sorted(actual)))
+
+          kw_rows=search(f'''SELECT ad_group.id, ad_group.name, ad_group_criterion.criterion_id, ad_group_criterion.status, ad_group_criterion.negative, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type FROM keyword_view WHERE campaign.id = {TARGET} AND ad_group_criterion.status != 'REMOVED' ORDER BY ad_group.id, ad_group_criterion.criterion_id''')
+          existing=set()
+          negatives={name:set() for name in EXPECTED_GROUPS}
+          for r in kw_rows:
+              ag=r['adGroup']['name']; crit=r['adGroupCriterion']; text=(crit.get('keyword',{}).get('text') or '').strip().lower(); match=crit.get('keyword',{}).get('matchType')
+              if crit.get('negative'):
+                  negatives.setdefault(ag,set()).add(text)
+              else:
+                  existing.add((ag,text,match))
+
+          # Cross-theme negatives must remain present so Antique cannot match Decore and vice versa.
+          if 'decore' not in negatives.get('Vasos Antique Japi',set()):
+              raise SystemExit('GUARDRAIL_MISSING_NEGATIVE_DECORE')
+          if 'antique' not in negatives.get('Vasos Decore Japi',set()):
+              raise SystemExit('GUARDRAIL_MISSING_NEGATIVE_ANTIQUE')
+          print('GUARDRAIL_NEGATIVES_OK=yes')
+
+          operations=[]
+          requested=[]
+          for group_name,texts in PROPOSED.items():
+              gid=EXPECTED_GROUPS[group_name]
+              for text in texts:
+                  key=(group_name,text.lower(),'PHRASE')
+                  if key in existing:
+                      print('SKIP_EXISTING='+group_name+'|'+text+'|PHRASE')
+                      continue
+                  operations.append({'create':{
+                      'adGroup':f'customers/{cid}/adGroups/{gid}',
+                      'status':'ENABLED',
+                      'keyword':{'text':text,'matchType':'PHRASE'},
+                      'negative':False
+                  }})
+                  requested.append((group_name,text))
+
+          print('PROPOSED_NEW_KEYWORDS='+str(len(operations)))
+          for group_name,text in requested:
+              print('PROPOSED='+group_name+'|'+text+'|PHRASE')
+
+          if not operations:
+              print('RESULT=NO_CHANGES_NEEDED')
+              raise SystemExit(0)
+
+          mutate_url=f'https://googleads.googleapis.com/v25/customers/{cid}/adGroupCriteria:mutate'
+          def mutate(validate_only):
+              body={'operations':operations,'partialFailure':False,'validateOnly':validate_only}
+              req=urllib.request.Request(mutate_url,data=json.dumps(body).encode(),headers=headers,method='POST')
+              try:
+                  with urllib.request.urlopen(req,timeout=40) as r:
+                      return json.loads(r.read().decode())
+              except urllib.error.HTTPError as e:
+                  body=e.read().decode(errors='ignore')
+                  print(('VALIDATE' if validate_only else 'APPLY')+'_FAILED http='+str(e.code)+' body='+body[:3000].replace('\n',' '))
+                  raise
+
+          mutate(True)
+          print('VALIDATE_ONLY=PASS')
+          result=mutate(False)
+          print('APPLY=PASS results='+str(len(result.get('results') or [])))
+
+          # Post-write verification: budget/group invariants plus exact keyword existence.
+          post_campaign=search(f'''SELECT campaign.id, campaign.status, campaign_budget.amount_micros FROM campaign WHERE campaign.id = {TARGET}''')[0]
+          post_budget=int(post_campaign.get('campaignBudget',{}).get('amountMicros','0'))
+          if post_budget != EXPECTED_BUDGET_MICROS:
+              raise SystemExit(f'POST_GUARDRAIL_BUDGET_CHANGED={post_budget}')
+          post_groups=search(f'''SELECT ad_group.id, ad_group.name FROM ad_group WHERE campaign.id = {TARGET} AND ad_group.status != 'REMOVED' ORDER BY ad_group.id''')
+          post_actual={r['adGroup']['name']:str(r['adGroup']['id']) for r in post_groups}
+          if post_actual != EXPECTED_GROUPS:
+              raise SystemExit('POST_GUARDRAIL_GROUPS_MISMATCH='+json.dumps(post_actual,ensure_ascii=False,sort_keys=True))
+          post_kw=search(f'''SELECT ad_group.name, ad_group_criterion.status, ad_group_criterion.negative, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type FROM keyword_view WHERE campaign.id = {TARGET} AND ad_group_criterion.status != 'REMOVED' ''')
+          post_set={(r['adGroup']['name'],(r['adGroupCriterion'].get('keyword',{}).get('text') or '').strip().lower(),r['adGroupCriterion'].get('keyword',{}).get('matchType')) for r in post_kw if not r['adGroupCriterion'].get('negative')}
+          missing_post=[]
+          for group_name,texts in PROPOSED.items():
+              for text in texts:
+                  if (group_name,text.lower(),'PHRASE') not in post_set:
+                      missing_post.append(group_name+'|'+text)
+          if missing_post:
+              raise SystemExit('POST_GUARDRAIL_KEYWORDS_MISSING='+','.join(missing_post))
+          print('POST_GUARDRAILS_OK budget_micros='+str(post_budget))
+          print('RESULT=CONTROLLED_KEYWORD_EXPANSION_APPLIED')
+          PY
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
