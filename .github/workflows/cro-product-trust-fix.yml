@@ -1,0 +1,118 @@
+name: CRO Product Trust Fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cro-product-trust-fix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove fabricated proof and misleading combo copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('produto.php')
+          text = path.read_text(encoding='utf-8')
+          original = text
+
+          # 1) Remove fabricated 4.9 rating next to the product title.
+          text, n1 = re.subn(
+              r'''\s*<div style="color: #fbbf24; font-size: 14px; margin-bottom: 10px;">\s*★★★★★\s*<span style="color: #6b7280; font-size: 12px; margin-left: 5px;">\(4\.9/5 - Excelente\)</span>\s*</div>''',
+              '\n                <div style="color:#64748b; font-size:13px; margin-bottom:10px;">Avaliações são publicadas somente após moderação da equipe.</div>',
+              text,
+              count=1,
+          )
+
+          # 2) Replace fabricated review summary with honest status.
+          old_summary = '''                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                        <span style="color: #f59e0b; font-size: 18px;">★★★★★</span>
+                        <strong style="font-size: 15px; color: #1e293b;">4.9 / 5.0</strong>
+                        <span style="color: #64748b; font-size: 13px;">(Baseado em compras verificadas)</span>
+                    </div>'''
+          new_summary = '''                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                        <span style="color: #64748b; font-size: 13px;">Avaliações reais são exibidas após moderação. Ainda não há nota consolidada para este produto.</span>
+                    </div>'''
+          n2 = 1 if old_summary in text else 0
+          text = text.replace(old_summary, new_summary, 1)
+
+          # 3) Do not bias review submissions to only 3-5 stars.
+          old_options = '''                            <option value="5">★★★★★ (5 estrelas)</option>
+                            <option value="4">★★★★☆ (4 estrelas)</option>
+                            <option value="3">★★★☆☆ (3 estrelas)</option>'''
+          new_options = '''                            <option value="5">★★★★★ (5 estrelas)</option>
+                            <option value="4">★★★★☆ (4 estrelas)</option>
+                            <option value="3">★★★☆☆ (3 estrelas)</option>
+                            <option value="2">★★☆☆☆ (2 estrelas)</option>
+                            <option value="1">★☆☆☆☆ (1 estrela)</option>'''
+          n3 = 1 if old_options in text else 0
+          text = text.replace(old_options, new_options, 1)
+
+          # 4) Remove hardcoded fictional testimonials and show an honest empty state.
+          start = text.find('            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;" id="reviews-grid-list">')
+          end_marker = '            </div>\n        </section>\n        <?php endif; ?>'
+          end = text.find(end_marker, start) if start != -1 else -1
+          n4 = 0
+          if start != -1 and end != -1:
+              replacement = '''            <div style="display:grid; gap:16px;" id="reviews-grid-list">
+                <div style="background:#f8fafc; padding:16px; border-radius:14px; border:1px solid #e2e8f0; color:#475569; font-size:14px;">
+                    Ainda não há avaliações publicadas para este produto. Envie sua experiência para análise da equipe.
+                </div>
+'''
+              text = text[:start] + replacement + text[end:]
+              n4 = 1
+
+          # 5) The current combo is full-price and the CTA only opens the complementary product.
+          text, n5 = re.subn(
+              r'Compre Junto e Economize \(Combo Recomendado\)',
+              'Complete sua compra (produto complementar)',
+              text,
+              count=1,
+          )
+          text, n6 = re.subn(
+              r'>Adicionar Combo</a>',
+              '>Ver produto complementar</a>',
+              text,
+              count=1,
+          )
+
+          # 6) Avoid claiming a manufacturer warranty for every SKU unless product data proves it.
+          text, n7 = re.subn(r'<span>Garantia de Fábrica</span>', '<span>Suporte antes e depois da compra</span>', text, count=1)
+
+          counts = (n1, n2, n3, n4, n5, n6, n7)
+          print('patch_counts=' + ','.join(map(str, counts)))
+          if any(n != 1 for n in counts):
+              raise SystemExit('Expected exactly one match for each trust patch; refusing partial patch')
+          if text == original:
+              raise SystemExit('No changes produced')
+          path.write_text(text, encoding='utf-8')
+          PY
+          php -l produto.php
+          git diff --check
+          git diff -- produto.php
+
+      - name: Commit trust and CRO fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'shopvivaliz-ops-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add produto.php
+          git diff --cached --quiet && { echo 'No changes to commit'; exit 0; }
+          git commit -m 'fix(cro): remove fabricated product social proof'
+          git push origin HEAD:main
