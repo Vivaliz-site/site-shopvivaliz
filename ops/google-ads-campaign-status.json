@@ -1,5 +1,5 @@
 {
-  "requested_at": "2026-08-15T10:25:00-03:00",
+  "requested_at": "2026-08-15T11:00:00-03:00",
   "campaign_id": "24144257692",
-  "reason": "Confirm campaign primary and serving status after zero-delivery diagnosis"
+  "reason": "Fresh read-only campaign status check requested by the business owner in this session"
 }
