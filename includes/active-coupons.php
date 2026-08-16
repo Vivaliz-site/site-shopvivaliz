@@ -17,9 +17,20 @@ function sv_active_coupons(int $limit = 6): array
     static $cached = null;
 
     if ($cached === null) {
-        $cached = [];
+        $apcu = function_exists('apcu_fetch') && function_exists('apcu_store');
+        $apcuKey = 'sv_active_coupons_public_v1';
+        if ($apcu) {
+            $hit = false;
+            $stored = apcu_fetch($apcuKey, $hit);
+            if ($hit && is_array($stored)) {
+                $cached = $stored;
+            }
+        }
 
-        try {
+        if ($cached === null) {
+            $cached = [];
+
+            try {
             $pdo = sv_pdo();
             $stmt = $pdo->query(
                 'SELECT code, description, discount_type, discount_value,
@@ -65,8 +76,16 @@ function sv_active_coupons(int $limit = 6): array
                     'source' => 'database',
                 ];
             }
-        } catch (Throwable $e) {
-            error_log('[active-coupons] db lookup failed: ' . $e->getMessage());
+            } catch (Throwable $e) {
+                error_log('[active-coupons] db lookup failed: ' . $e->getMessage());
+            }
+
+            // Fonte publica apenas para anuncio no navbar. O checkout/API
+            // continuam validando o cupom na fonte autoritativa. TTL curto
+            // reduz conexoes MySQL durante picos sem manter oferta stale.
+            if ($apcu) {
+                apcu_store($apcuKey, $cached, 60);
+            }
         }
     }
 
