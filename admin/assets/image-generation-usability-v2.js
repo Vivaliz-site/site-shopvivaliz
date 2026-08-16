@@ -362,7 +362,7 @@
     insertResume();
     enhanceIntel();
     $('#iv-list')?.addEventListener('change', () => setTimeout(saveDraft, 0));
-    $('#iv-channel')?.addEventListener('change', () => { setTimeout(() => { initialized = false; initialize(); updateResume(); }, 500); });
+    $('#iv-channel')?.addEventListener('change', () => { setTimeout(() => { updateResume(); applyDraft(); }, 500); });
     $('#iv-provider')?.addEventListener('change', saveDraft);
     $('#iv-model')?.addEventListener('input', saveDraft);
     document.addEventListener('click', (event) => {

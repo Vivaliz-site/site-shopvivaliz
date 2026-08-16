@@ -1,0 +1,51 @@
+name: Patch Image Usability Reinit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/patch-image-usability-reinit.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz' && github.actor == 'fredmourao-ai'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+      - name: Remove duplicate reinitialization at source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('admin/assets/image-generation-usability-v2.js')
+          text = path.read_text(encoding='utf-8')
+          old = "    $('#iv-channel')?.addEventListener('change', () => { setTimeout(() => { initialized = false; initialize(); updateResume(); }, 500); });"
+          new = "    $('#iv-channel')?.addEventListener('change', () => { setTimeout(() => { updateResume(); applyDraft(); }, 500); });"
+          if old not in text:
+              raise SystemExit('expected duplicate reinitializer not found')
+          if text.count(old) != 1:
+              raise SystemExit(f'expected exactly one duplicate reinitializer, found {text.count(old)}')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          grep -Fq "setTimeout(() => { updateResume(); applyDraft(); }, 500)" admin/assets/image-generation-usability-v2.js
+          if grep -Fq "initialized = false; initialize(); updateResume();" admin/assets/image-generation-usability-v2.js; then
+            echo 'duplicate initializer still present' >&2
+            exit 1
+          fi
+      - name: Commit source fix
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'fredmourao-ai'
+          git config user.email 'fredmourao-ai@users.noreply.github.com'
+          git add admin/assets/image-generation-usability-v2.js
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix: prevent duplicate image run preflight listeners'
+          git push origin HEAD:main
