@@ -1,9 +1,29 @@
 <?php
 declare(strict_types=1);
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+
+// O checkout e generico para visitantes: carrinho e formulario vivem no
+// navegador. Retoma PHP session apenas quando ja existe cookie (ex.: login),
+// evitando Set-Cookie e permitindo cache curto de borda para GET/HEAD anonimo.
+$svCheckoutMethod = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+$svCheckoutSessionName = session_name();
+$svCheckoutHasSessionCookie = $svCheckoutSessionName !== ''
+    && isset($_COOKIE[$svCheckoutSessionName])
+    && trim((string)$_COOKIE[$svCheckoutSessionName]) !== '';
+$svCheckoutPublicCache = in_array($svCheckoutMethod, ['GET', 'HEAD'], true)
+    && !$svCheckoutHasSessionCookie;
+
+if ($svCheckoutHasSessionCookie && session_status() === PHP_SESSION_NONE) {
+    @session_start();
 }
+
 header('Content-Type: text/html; charset=UTF-8');
+if ($svCheckoutPublicCache) {
+    header('Cache-Control: public, max-age=0, s-maxage=15, stale-while-revalidate=30');
+    header('Vary: Cookie');
+} else {
+    header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+    header('Pragma: no-cache');
+}
 
 $runtimeSecretsFile = __DIR__ . '/config/runtime-secrets.php';
 if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
@@ -45,9 +65,12 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
     <link rel="stylesheet" href="/css/layout-polish-v1.css?v=2026-07-29-1">
     <?php require_once __DIR__ . '/includes/load-custom-css.php'; ?>
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
-    <!-- Mercado Pago SDK V2 + Device ID para fraude -->
-    <script src="https://sdk.mercadopago.com/js/v2"></script>
-    <script src="https://www.mercadopago.com/v2/security.js" output="deviceId"></script>
+    <!-- Mercado Pago: baixa em paralelo sem bloquear o parser; os scripts
+         defer executam antes de DOMContentLoaded, preservando o Device ID. -->
+    <link rel="preconnect" href="https://sdk.mercadopago.com" crossorigin>
+    <link rel="preconnect" href="https://www.mercadopago.com" crossorigin>
+    <script defer src="https://sdk.mercadopago.com/js/v2"></script>
+    <script defer src="https://www.mercadopago.com/v2/security.js" output="deviceId"></script>
 </head>
 <body>
 <?php $svNavCurrent = 'checkout'; include __DIR__ . '/includes/navbar.php'; ?>
@@ -326,16 +349,21 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
 (function () {
     // MercadoPago.js V2 initialization with Public Key
     var PUBLIC_KEY = <?= json_encode(svmp_env('MERCADOPAGO_PUBLIC_KEY')) ?>;
-    try {
-        if (PUBLIC_KEY && window.MercadoPago) {
-            // SDK V2 usa o construtor `new MercadoPago(...)`, nao o metodo
-            // estatico `.configure()` da API antiga (V1). O Device ID de
-            // fraude ja e coletado automaticamente pelo v2/security.js
-            // carregado no <head>, nao precisa de chamada manual.
-            new MercadoPago(PUBLIC_KEY, { locale: 'pt-BR' });
+    function svInitMercadoPagoSdk() {
+        try {
+            if (PUBLIC_KEY && window.MercadoPago) {
+                // Os SDKs sao defer: neste ponto (DOMContentLoaded) ja foram
+                // executados e o security.js teve chance de preencher deviceId.
+                new MercadoPago(PUBLIC_KEY, { locale: 'pt-BR' });
+            }
+        } catch (mpInitError) {
+            console.error('MercadoPago SDK init failed', mpInitError);
         }
-    } catch (mpInitError) {
-        console.error('MercadoPago SDK init failed', mpInitError);
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', svInitMercadoPagoSdk, { once: true });
+    } else {
+        svInitMercadoPagoSdk();
     }
 
     var PIX_KEY = <?= json_encode($pixKey) ?>;
