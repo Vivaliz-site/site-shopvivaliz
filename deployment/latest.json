@@ -1,19 +1,19 @@
 {
   "status": "PRODUCTION_UPDATED",
-  "sha": "5c9c667b389ec2040b7b038ebd77d40bf46162f2",
-  "workflow_run_id": "31956381005",
-  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31956381005",
+  "sha": "701ed878766d0036334125a93874d096c6af76e2",
+  "workflow_run_id": "31959275845",
+  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31959275845",
   "jobs": {
     "validate": "success",
     "deploy": "success",
     "smoke_test": "success"
   },
   "results": [
-    "OK Oracle repository sync: canonical=5c9c667b389ec2040b7b038ebd77d40bf46162f2 deployed=5c9c667b389ec2040b7b038ebd77d40bf46162f2",
+    "OK Oracle repository sync: canonical=701ed878766d0036334125a93874d096c6af76e2 deployed=701ed878766d0036334125a93874d096c6af76e2",
     "OK Oracle repository sync cron installed",
-    "OK release SHA marker: 5c9c667b389ec2040b7b038ebd77d40bf46162f2",
+    "OK release SHA marker: 701ed878766d0036334125a93874d096c6af76e2",
     "OK version: https://shopvivaliz.com.br/api/health/version.php (200)",
-    "OK public version endpoint: 5c9c667b389ec2040b7b038ebd77d40bf46162f2",
+    "OK public version endpoint: 701ed878766d0036334125a93874d096c6af76e2",
     "OK homepage: https://shopvivaliz.com.br/ (200)",
     "OK public homepage HTML contract",
     "OK mobile responsive header contract",
@@ -22,11 +22,11 @@
     "OK catalog: https://shopvivaliz.com.br/catalogo (200)",
     "OK catalog_api: https://shopvivaliz.com.br/api/catalog/products.php?limit=1&available=1 (200)",
     "OK catalog API payload",
-    "OK product: https://shopvivaliz.com.br/produto/assento-sanitario-oval-universal-soft-branco (200)",
+    "OK product: https://shopvivaliz.com.br/produto/assento-sanit%C3%A1rio-oval-universal-soft-branco-astra (200)",
     "OK cart: https://shopvivaliz.com.br/carrinho (200)",
     "OK checkout: https://shopvivaliz.com.br/checkout (200)",
     "OK css: https://shopvivaliz.com.br/css/shopvivaliz-core-consolidated.css (200)",
-    "OK admin redirect chain: final=200 redirects=1 effective=https://shopvivaliz.com.br/auth/login.php?redirect=%2Fadmin%2F%3Fsmoke%3D5c9c667b389e",
+    "OK admin redirect chain: final=200 redirects=1 effective=https://shopvivaliz.com.br/auth/login.php?redirect=%2Fadmin%2F%3Fsmoke%3D701ed878766d",
     "OK login session continuity and CSRF round-trip",
     "OK authenticated admin guard database fallback",
     "OK liz_health: https://shopvivaliz.com.br/api/liz-intelligent.php?health=1 (200)",
@@ -59,5 +59,5 @@
     "OK security header: x-content-type-options",
     "OK security header: content-security-policy"
   ],
-  "verified_at": "2026-08-16T15:43:56.947187+00:00"
+  "verified_at": "2026-08-16T16:42:12.921952+00:00"
 }
