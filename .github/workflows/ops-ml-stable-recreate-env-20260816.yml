@@ -1,0 +1,152 @@
+name: Ops ML Stable Recreate Env 20260816
+
+on:
+  push:
+    branches:
+      - ops/runtime-profile-20260815-2357
+    paths:
+      - '.github/workflows/ops-ml-stable-recreate-env-20260816.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Configure SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"; test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa; chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts; chmod 600 ~/.ssh/known_hosts
+
+      - name: Recreate ML stack on stable paths
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'timeout 300 bash -s' <<'SH'
+          set -euo pipefail
+          C=/home/ubuntu/shopvivaliz-deploy/current
+          R=/home/ubuntu/shopvivaliz-deploy/repo
+          S=/home/ubuntu/shopvivaliz-deploy/shared
+          E="$S/ml.env"
+          O="$S/ml-runtime/docker-compose.runtime.yml"
+          mkdir -p "$S/ml-runtime" "$S/storage/ml"
+
+          test -f "$E"
+          grep -q '^ML_POSTGRES_PASSWORD=' "$E"
+          test -f "$R/ml/docker-compose.yml"
+          test -f "$R/ml/schema.sql"
+          test -f "$C/ml/schema.sql"
+          cmp -s "$R/ml/schema.sql" "$C/ml/schema.sql"
+          sudo docker volume inspect ml_postgres_data >/dev/null
+
+          cat > "$O" <<'YAML'
+          services:
+            postgres:
+              volumes:
+                - postgres_data:/var/lib/postgresql/data
+                - /home/ubuntu/shopvivaliz-deploy/repo/ml/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+            api:
+              volumes:
+                - /home/ubuntu/shopvivaliz-deploy/shared/storage/ml:/app/storage/ml
+            trainer:
+              volumes:
+                - /home/ubuntu/shopvivaliz-deploy/shared/storage/ml:/app/storage/ml
+              cpus: 0.20
+              cpu_shares: 128
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  while true; do
+                    python /app/ml/train.py || true
+                    sleep 21600
+                  done
+          YAML
+          chmod 644 "$O"
+
+          docker compose --env-file "$E" -p ml -f "$R/ml/docker-compose.yml" -f "$O" config --quiet
+          echo STABLE_COMPOSE_VALID=true
+
+          fail_safe() {
+            rc=$?
+            trap - ERR
+            set +e
+            sudo docker stop -t 5 ml-trainer-1 >/dev/null 2>&1 || true
+            echo "ML_REPAIR_FAILED rc=$rc trainer_stopped=true"
+            exit "$rc"
+          }
+          trap fail_safe ERR
+
+          echo '--- RECREATE POSTGRES ---'
+          sudo docker stop -t 5 ml-trainer-1 >/dev/null 2>&1 || true
+          sudo docker compose --env-file "$E" -p ml -f "$R/ml/docker-compose.yml" -f "$O" \
+            up -d --no-build --force-recreate postgres
+
+          pg_ok=0
+          for i in $(seq 1 20); do
+            state="$(sudo docker inspect ml-postgres-1 --format '{{.State.Status}}' 2>/dev/null || true)"
+            health="$(sudo docker inspect ml-postgres-1 --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>/dev/null || true)"
+            echo "postgres attempt=$i state=$state health=$health"
+            if [ "$state" = running ] && [ "$health" = healthy ]; then pg_ok=1; break; fi
+            if [ "$state" = exited ] || [ "$state" = dead ]; then break; fi
+            sleep 4
+          done
+          test "$pg_ok" -eq 1
+
+          echo '--- RECREATE API AND TRAINER ---'
+          sudo docker compose --env-file "$E" -p ml -f "$R/ml/docker-compose.yml" -f "$O" \
+            up -d --no-build --force-recreate api trainer
+
+          api_ok=0
+          for i in $(seq 1 20); do
+            code="$(curl --max-time 5 -sS -o /tmp/mlhealth -w '%{http_code}' http://127.0.0.1:8091/health || true)"
+            body="$(head -c 300 /tmp/mlhealth 2>/dev/null || true)"
+            echo "api attempt=$i code=$code body=$body"
+            if [ "$code" = 200 ] && printf '%s' "$body" | grep -q '"ok":true'; then api_ok=1; break; fi
+            sleep 4
+          done
+          test "$api_ok" -eq 1
+
+          test "$(sudo docker inspect ml-trainer-1 --format '{{.State.Status}}')" = running
+          test "$(sudo docker inspect ml-trainer-1 --format '{{.HostConfig.NanoCpus}}')" -eq 200000000
+
+          echo '--- STABLE MOUNTS ---'
+          : > /tmp/mlmounts
+          for c in ml-postgres-1 ml-api-1 ml-trainer-1; do
+            echo "### $c" | tee -a /tmp/mlmounts
+            sudo docker inspect "$c" --format '{{range .Mounts}}{{printf "type=%s name=%s src=%s dst=%s rw=%v\n" .Type .Name .Source .Destination .RW}}{{end}}' | tee -a /tmp/mlmounts
+          done
+          ! grep -q '/releases/' /tmp/mlmounts
+          grep -q '/home/ubuntu/shopvivaliz-deploy/repo/ml/schema.sql' /tmp/mlmounts
+          grep -q '/home/ubuntu/shopvivaliz-deploy/shared/storage/ml' /tmp/mlmounts
+          rm -f /tmp/mlmounts
+
+          trap - ERR
+          echo '--- ML HEALTHY ---'
+          curl --max-time 6 -fsS http://127.0.0.1:8091/health; echo
+          curl --max-time 6 -fsS http://127.0.0.1:8091/status | head -c 1000; echo
+          sudo docker ps --format 'name={{.Names}} status={{.Status}}' | grep '^name=ml-' || true
+
+          echo '--- PRESSURE ---'
+          uptime
+          vmstat 1 3
+          echo '--- LATENCY ---'
+          for path in / /catalogo/ /catalogo/ /checkout /api/catalog/products.php?limit=1\&available=1; do
+            curl --max-time 12 -sS -o /dev/null -H 'Host: shopvivaliz.com.br' \
+              -w "$path code=%{http_code} ttfb=%{time_starttransfer} total=%{time_total}\n" \
+              "http://127.0.0.1$path" || echo "$path timeout"
+          done
+          SH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
