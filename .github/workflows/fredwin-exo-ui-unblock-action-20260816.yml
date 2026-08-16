@@ -19,7 +19,7 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Sync scripts and click Unblock only
+      - name: Sync, foreground Restricted Entities, and click Unblock
         run: |
           set -euo pipefail
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 - <<'"'"'PY'"'"'
@@ -35,6 +35,9 @@ jobs:
           sync=call("execute_git_command",{"command":"pull origin main","timeout":60},70)
           if not (sync.get("result") or {}).get("success"):
               raise SystemExit("FREDWIN_GIT_PULL_FAILED")
+          opened=call("execute_command",{"command":"powershell -NoProfile -Command \"Start-Process 'https://security.microsoft.com/restrictedentities'; Start-Sleep -Seconds 10\"","timeout":30},40)
+          if not (opened.get("result") or {}).get("success"):
+              raise SystemExit("FREDWIN_DEFENDER_OPEN_FAILED")
           run=call("execute_command",{"command":"powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\fredwin-exo-ui-schedule-unblock.ps1","timeout":90},100)
           if not (run.get("result") or {}).get("success"):
               raise SystemExit("FREDWIN_UI_UNBLOCK_ACTION_FAILED")
