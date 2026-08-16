@@ -1,4 +1,4 @@
-name: Patch Image Usability Reinit
+name: Patch Image Usability Singleton
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
         with:
           persist-credentials: true
           fetch-depth: 0
-      - name: Remove duplicate reinitialization at source
+      - name: Make usability controller a browser singleton
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -26,20 +26,22 @@ jobs:
           from pathlib import Path
           path = Path('admin/assets/image-generation-usability-v2.js')
           text = path.read_text(encoding='utf-8')
-          old = "    $('#iv-channel')?.addEventListener('change', () => { setTimeout(() => { initialized = false; initialize(); updateResume(); }, 500); });"
-          new = "    $('#iv-channel')?.addEventListener('change', () => { setTimeout(() => { updateResume(); applyDraft(); }, 500); });"
-          if old not in text:
-              raise SystemExit('expected duplicate reinitializer not found')
-          if text.count(old) != 1:
-              raise SystemExit(f'expected exactly one duplicate reinitializer, found {text.count(old)}')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          marker = "  if (window.__svImageGenerationUsabilityV2Loaded) return;\n  window.__svImageGenerationUsabilityV2Loaded = true;\n"
+          if marker not in text:
+              old = "  const page = location.pathname.replace(/\\/+$/, '');\n  if (page !== '/admin/ai-image-studio/admin_dashboard.php') return;\n\n"
+              new = old + marker + "\n"
+              if text.count(old) != 1:
+                  raise SystemExit(f'expected one page guard, found {text.count(old)}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
           PY
-          grep -Fq "setTimeout(() => { updateResume(); applyDraft(); }, 500)" admin/assets/image-generation-usability-v2.js
+          grep -Fq 'window.__svImageGenerationUsabilityV2Loaded' admin/assets/image-generation-usability-v2.js
+          test "$(grep -Fc 'window.__svImageGenerationUsabilityV2Loaded' admin/assets/image-generation-usability-v2.js)" -eq 2
           if grep -Fq "initialized = false; initialize(); updateResume();" admin/assets/image-generation-usability-v2.js; then
-            echo 'duplicate initializer still present' >&2
+            echo 'duplicate channel reinitializer still present' >&2
             exit 1
           fi
-      - name: Commit source fix
+      - name: Commit source hardening
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -47,5 +49,5 @@ jobs:
           git config user.email 'fredmourao-ai@users.noreply.github.com'
           git add admin/assets/image-generation-usability-v2.js
           git diff --cached --quiet && exit 0
-          git commit -m 'fix: prevent duplicate image run preflight listeners'
+          git commit -m 'fix: enforce singleton image usability preflight controller'
           git push origin HEAD:main
