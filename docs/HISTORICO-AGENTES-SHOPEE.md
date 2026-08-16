@@ -1,7 +1,7 @@
 # Histórico de Agentes Shopee — ShopVivaliz
 
 **Repositório:** `fredmourao-ai/site-shopvivaliz`  
-**Última atualização:** 2026-08-15  
+**Última atualização:** 2026-08-16  
 **Branch de origem:** `claude/guth-portfolio-access-81jjq2`
 
 > Documento de consulta para agentes. Descreve o que foi implementado, como usar, quais secrets são necessários e quais limitações existem.
@@ -947,3 +947,33 @@ workflows dedicados, e/ou (2) decidir se vale integrar a API de analytics do Sho
 para viabilizar os itens 1/3/9/10 da rotina de 6h, e/ou (3) reduzir o escopo desta rotina para
 apenas o que o código hoje sustenta (título/descrição determinísticos por atributo de catálogo,
 sem CTR/A-B/preço/imagem).
+
+### 9.22 Atualização — ciclo de 2026-08-16 (~07h UTC), 27º ciclo — estado idêntico ao ciclo 26, sem fato novo
+
+Checagem completa via `git fetch origin main` (HEAD desta sessão confirmado idêntico a `origin/main`,
+`2499137`) e `mcp__github__actions_list`/`get_job_logs`, sem depender do sandbox local para
+credenciais (`env | grep -iE "SHOPEE|TINY|OLIST"` continua vazio aqui, como esperado). `listings/`
+continua parado em `shopee-listings-20260726-080756.json` — **21 dias** sem extração de catálogo
+pela via antiga (Tiny). `.github/workflows/` continua só com `shopee-optimizer-safety.yml`/
+`shopee-production-seo.yml`/`shopee-runtime-health.yml` sob Shopee; o par
+`fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` segue ausente.
+
+`shopee-production-seo.yml` segue com as mesmas 5 execuções de 2026-07-30 (`id`s 30585266165,
+30571531668, 30571478470, 30571242284, 30570700034), todas `conclusion: failure`, sem execução
+nova desde então (esperado — não tem `schedule`, exige `workflow_dispatch` manual com frase de
+confirmação). `shopee-runtime-health.yml` seguiu rodando a cada 6h/após deploy e a execução mais
+recente antes deste registro (`31932750750`, 2026-08-16T06:59:24Z, `conclusion: success`) confirma
+por log real o mesmo estado do ciclo 26: `{"catalog_read": true, "detail_read": true, "status":
+"ok", "credential_presence": {"SHOPEE_ACCESS_TOKEN": true, "SHOPEE_PARTNER_ID": true,
+"SHOPEE_PARTNER_KEY": true, "SHOPEE_REFRESH_TOKEN": true, "SHOPEE_SHOP_ID": true}}`, com 5
+`sample_item_ids` reais lidos da API. Releitura direta de `scripts/shopee_runtime_exec.py` e
+`scripts/utils/shopee_client.py` (grep por `analytics`/`ctr`/`conversion_rate`) confirma que nenhum
+endpoint de analytics do Shopee Open Platform foi adicionado desde o ciclo 26 — os itens 1/3/9/10
+da rotina de 6h continuam tecnicamente inexequíveis.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. Nenhuma notificação
+push enviada neste ciclo — nenhum dos critérios de aviso definidos (workflows Tiny recriados,
+artefato novo com erro diferente, execução de `shopee-production-seo.yml` com apply real
+bem-sucedido) ocorreu. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos
+19–26.
