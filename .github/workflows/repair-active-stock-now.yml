@@ -38,8 +38,8 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+          ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
             'set -Eeuo pipefail; cd /home/ubuntu/shopvivaliz-deploy/current; test "$(cat .release-sha)" = "3b0e756f0691fdf5fb9d06e850e336f31a0806d0"; grep -Fq "/public-api/v3/estoque/" olist/fetch-estoque-v3.php; grep -Fq "authoritative_stock_coverage_below_90pct" olist/fetch-estoque-v3.php; grep -Fq "svcr_is_active_product" includes/catalog-runtime.php'
 
@@ -47,8 +47,8 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+          ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
             'set -Eeuo pipefail; cd /home/ubuntu/shopvivaliz-deploy/current; php olist/sync-on-webhook.php; php olist/fetch-estoque-v3.php; php sync-daemon-to-db.php'
 
@@ -56,8 +56,8 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+          ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
             'curl -fsS --connect-timeout 5 --max-time 20 "https://shopvivaliz.com.br/api/catalog/products.php?limit=5&available=1&no_cache=1" | python3 -c '\''import json,sys; d=json.load(sys.stdin); assert d.get("ok") is True and d.get("source")=="catalog_runtime" and int(d.get("total") or 0)>0 and len(d.get("products") or [])>0, d; print("available_active_products=", d.get("total"))'\'''
 
