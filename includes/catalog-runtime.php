@@ -289,13 +289,7 @@ function svcr_products(): array
 
     $products = [];
     foreach ($items as $item) {
-        if (!is_array($item) || svcr_is_preorder($item) || svcr_is_excluded_product($item)) continue;
-
-        $isPublished = $item['is_published'] ?? true;
-        if ($isPublished === 'false' || $isPublished === false || $isPublished === 0 || $isPublished === '0') continue;
-
-        $situation = strtoupper(trim((string)($item['situacao'] ?? 'A')));
-        if (!in_array($situation, ['A', 'ATIVO', 'ACTIVE'], true)) continue;
+        if (!is_array($item) || !svcr_is_active_product($item) || svcr_is_preorder($item) || svcr_is_excluded_product($item)) continue;
 
         $imagesList = svcr_collect_image_urls($item);
         $image = trim((string)($item['imagem_principal_url'] ?? $item['primary_image_url'] ?? $item['image_url'] ?? $item['imagem'] ?? ''));

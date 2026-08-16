@@ -24,28 +24,20 @@ jobs:
           set -Eeuo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
           p=Path('includes/catalog-runtime.php')
           t=p.read_text(encoding='utf-8')
-          old="""    foreach ($items as $item) {
-              if (!is_array($item) || svcr_is_preorder($item) || svcr_is_excluded_product($item)) continue;
-
-              $isPublished = $item['is_published'] ?? true;
-              if ($isPublished === 'false' || $isPublished === false || $isPublished === 0 || $isPublished === '0') continue;
-
-              $situation = strtoupper(trim((string)($item['situacao'] ?? 'A')));
-              if (!in_array($situation, ['A', 'ATIVO', 'ACTIVE'], true)) continue;
-
-              $imagesList = svcr_collect_image_urls($item);
-          """
-          new="""    foreach ($items as $item) {
-              if (!is_array($item) || !svcr_is_active_product($item) || svcr_is_preorder($item) || svcr_is_excluded_product($item)) continue;
-
-              $imagesList = svcr_collect_image_urls($item);
-          """
-          if old not in t:
-              raise SystemExit('legacy catalog loop not found exactly once')
-          t=t.replace(old,new,1)
-          p.write_text(t,encoding='utf-8')
+          start=t.find('function svcr_products(): array')
+          if start < 0:
+              raise SystemExit('svcr_products not found')
+          head=t[:start]
+          body=t[start:]
+          pattern=re.compile(r"(foreach \(\$items as \$item\) \{\s*)if \(!is_array\(\$item\).*?\$imagesList = svcr_collect_image_urls\(\$item\);", re.S)
+          replacement=r"\1if (!is_array($item) || !svcr_is_active_product($item) || svcr_is_preorder($item) || svcr_is_excluded_product($item)) continue;\n\n        $imagesList = svcr_collect_image_urls($item);"
+          body2,count=pattern.subn(replacement,body,count=1)
+          if count != 1:
+              raise SystemExit(f'canonical loop replacements={count}')
+          p.write_text(head+body2,encoding='utf-8')
           PY
           php -l includes/catalog-runtime.php
           grep -Fq '!svcr_is_active_product($item)' includes/catalog-runtime.php
@@ -57,5 +49,6 @@ jobs:
           git config user.name 'fredmourao-ai'
           git config user.email 'fredmourao-ai@users.noreply.github.com'
           git add includes/catalog-runtime.php
+          git diff --cached --quiet && exit 0
           git commit -m 'fix: apply strict active guard to canonical catalog rows'
           git push origin HEAD:main
