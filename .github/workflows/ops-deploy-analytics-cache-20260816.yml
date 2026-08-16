@@ -1,0 +1,106 @@
+name: Ops Deploy Analytics Cache 20260816
+
+on:
+  push:
+    branches:
+      - ops/deploy-analytics-cache-20260816
+    paths:
+      - '.github/workflows/ops-deploy-analytics-cache-20260816.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shopvivaliz-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Configure SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"; test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa; chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts; chmod 600 ~/.ssh/known_hosts
+
+      - name: Verify pinned main and deploy
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'timeout 480 bash -s' <<'SH'
+          set -euo pipefail
+          R=/home/ubuntu/shopvivaliz-deploy/repo
+          C=/home/ubuntu/shopvivaliz-deploy/current
+          expected='532b6803ad0c5b6b5383a4b8641088a67219b053'
+
+          git -C "$R" fetch origin main --prune
+          actual="$(git -C "$R" rev-parse origin/main)"
+          echo "ORIGIN_MAIN=$actual"
+          test "$actual" = "$expected"
+
+          timeout 420 flock -w 90 /var/lock/shopvivaliz-deploy.lock \
+            bash "$R/scripts/deploy-production.sh" main
+
+          live="$(cat "$C/.release-sha")"
+          echo "LIVE_SHA=$live"
+          test "$live" = "$expected"
+          php -l "$C/includes/analytics-tracking.php"
+          ! grep -q "setcookie('_ga'" "$C/includes/analytics-tracking.php"
+          grep -q 'ephemeralClientId' "$C/includes/analytics-tracking.php"
+
+          echo '--- HOME HEADERS ---'
+          home="$(curl --max-time 12 -sSI -H 'Host: shopvivaliz.com.br' http://127.0.0.1/)"
+          printf '%s\n' "$home" | sed -n '1,30p'
+          if printf '%s\n' "$home" | grep -qi '^Set-Cookie: _ga='; then
+            echo 'ERROR: home still emits server _ga cookie'
+            exit 31
+          fi
+          if printf '%s\n' "$home" | grep -qi '^Set-Cookie: PHPSESSID='; then
+            echo 'ERROR: anonymous home emits PHPSESSID'
+            exit 32
+          fi
+
+          echo '--- CATALOG HEADERS ---'
+          catalog="$(curl --max-time 12 -sSI -H 'Host: shopvivaliz.com.br' http://127.0.0.1/catalogo/)"
+          printf '%s\n' "$catalog" | sed -n '1,30p'
+          printf '%s\n' "$catalog" | grep -qi '^Cache-Control: public, max-age=15, s-maxage=30, stale-while-revalidate=60'
+          if printf '%s\n' "$catalog" | grep -qi '^Set-Cookie: _ga='; then
+            echo 'ERROR: catalog still emits server _ga cookie'
+            exit 33
+          fi
+          if printf '%s\n' "$catalog" | grep -qi '^Set-Cookie: PHPSESSID='; then
+            echo 'ERROR: anonymous catalog emits PHPSESSID'
+            exit 34
+          fi
+
+          echo '--- ML STATE ---'
+          curl --max-time 8 -fsS http://127.0.0.1:8091/health; echo
+          trainer_state="$(sudo docker inspect ml-trainer-1 --format '{{.State.Status}}')"
+          trainer_restart="$(sudo docker inspect ml-trainer-1 --format '{{.HostConfig.RestartPolicy.Name}}')"
+          echo "trainer_state=$trainer_state restart=$trainer_restart"
+          test "$trainer_state" = exited
+          test "$trainer_restart" = no
+
+          echo '--- LATENCY ---'
+          for path in / / /catalogo/ /catalogo/ /checkout /api/catalog/products.php?limit=1\&available=1; do
+            curl --max-time 12 -sS -o /dev/null -H 'Host: shopvivaliz.com.br' \
+              -w "$path code=%{http_code} ttfb=%{time_starttransfer} total=%{time_total}\n" \
+              "http://127.0.0.1$path" || echo "$path timeout"
+          done
+          echo '--- PRESSURE ---'
+          uptime
+          vmstat 1 3
+          free -m
+          SH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
