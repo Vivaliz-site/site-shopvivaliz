@@ -1,0 +1,96 @@
+name: Ops Catalog Profile 20260815
+
+on:
+  push:
+    branches:
+      - ops/catalog-profile-20260815-2340
+
+permissions:
+  contents: read
+
+jobs:
+  profile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Configure verified SSH host
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Profile current production catalog
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'timeout 120 bash -s' <<'SH'
+          set -euo pipefail
+          C=/home/ubuntu/shopvivaliz-deploy/current
+
+          echo '--- RELEASE ---'
+          cat "$C/.release-sha"
+
+          echo '--- CACHE FILES ---'
+          for f in "$C/storage/products-cache-ativos.json" "$C/api/catalog/fallback-products.json" "$C/storage/ml/product-scores.json"; do
+            if [ -f "$f" ]; then
+              stat -c '%n bytes=%s mtime=%Y' "$f"
+            else
+              echo "missing $f"
+            fi
+          done
+
+          echo '--- PHP STAGES ---'
+          php -d display_errors=1 -r '
+          $root="/home/ubuntu/shopvivaliz-deploy/current";
+          $t0=microtime(true);
+          require $root."/includes/catalog-runtime.php";
+          $t1=microtime(true);
+          $products=svcr_products();
+          $t2=microtime(true);
+          require $root."/includes/ml-ranking.php";
+          $ranked=sv_ml_rank_products($products);
+          $t3=microtime(true);
+          require $root."/includes/product-price-enrich.php";
+          $slice=array_slice($ranked,0,24);
+          $enriched=svp_enrich_products($slice);
+          $t4=microtime(true);
+          printf("require=%.4f normalize=%.4f rank=%.4f enrich24=%.4f count=%d peak_mb=%.1f\n",$t1-$t0,$t2-$t1,$t3-$t2,$t4-$t3,count($products),memory_get_peak_usage(true)/1048576);
+          '
+
+          echo '--- RAW JSON DECODE ---'
+          php -r '
+          $p="/home/ubuntu/shopvivaliz-deploy/current/storage/products-cache-ativos.json";
+          $t=microtime(true); $raw=file_get_contents($p); $t1=microtime(true); $v=json_decode($raw,true); $t2=microtime(true);
+          printf("read=%.4f decode=%.4f bytes=%d top_keys=%d peak_mb=%.1f\n",$t1-$t,$t2-$t1,strlen($raw),is_array($v)?count($v):0,memory_get_peak_usage(true)/1048576);
+          '
+
+          echo '--- CURRENT HTTP ---'
+          for path in / /catalogo/ /api/catalog/products.php?limit=1\&available=1 /checkout; do
+            curl --max-time 10 -sS -o /dev/null -H 'Host: shopvivaliz.com.br' \
+              -w "$path code=%{http_code} ttfb=%{time_starttransfer} total=%{time_total}\n" \
+              "http://127.0.0.1$path" || echo "$path timeout"
+          done
+
+          echo '--- TOP PROCESSES ---'
+          ps -eo pid,ppid,ni,pcpu,pmem,etime,comm --sort=-pcpu | head -25
+
+          echo '--- RUNNING SERVICES ---'
+          systemctl list-units --type=service --state=running --no-pager --no-legend | awk '{print $1}' | head -80
+
+          echo '--- LOAD ---'
+          uptime
+          free -m
+          SH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
