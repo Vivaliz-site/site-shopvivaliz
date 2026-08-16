@@ -1,0 +1,91 @@
+name: Ops ML Health Profile 20260816
+
+on:
+  push:
+    branches:
+      - ops/runtime-profile-20260815-2357
+    paths:
+      - '.github/workflows/ops-ml-health-profile-20260816.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Configure verified SSH host
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          SHOPVIVALIZ_VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          KEY="${ORACLE_VM_SSH_KEY:-}"
+          [ -n "$KEY" ] || KEY="${SHOPVIVALIZ_VM_SSH_KEY:-}"
+          test -n "$KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Inspect ML health without exposing env
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'timeout 120 bash -s' <<'SH'
+          set -euo pipefail
+          echo '--- DOCKER PS ALL ---'
+          sudo docker ps -a --format 'name={{.Names}} image={{.Image}} status={{.Status}}' | sort
+
+          echo '--- ML API HEALTH STATE ---'
+          sudo docker inspect ml-api-1 --format '{{json .State.Health}}' 2>/dev/null || true
+
+          echo '--- ML API RECENT LOGS ---'
+          sudo docker logs --tail 80 ml-api-1 2>&1 | sed -E 's#(postgresql://[^:[:space:]]+:)[^@[:space:]]+@#\1***@#g' | tail -80 || true
+
+          echo '--- ML TRAINER RECENT LOGS ---'
+          sudo docker logs --tail 80 ml-trainer-1 2>&1 | sed -E 's#(postgresql://[^:[:space:]]+:)[^@[:space:]]+@#\1***@#g' | tail -80 || true
+
+          echo '--- ML NETWORKS ---'
+          for c in ml-api-1 ml-trainer-1; do
+            echo "### $c"
+            sudo docker inspect "$c" --format '{{range $name,$v := .NetworkSettings.Networks}}{{printf "%s ip=%s aliases=%v\n" $name $v.IPAddress $v.Aliases}}{{end}}' 2>/dev/null || true
+          done
+          echo '--- POSTGRES CONTAINERS NETWORKS ---'
+          for c in $(sudo docker ps -a --format '{{.Names}}' | grep -E 'postgres|db' || true); do
+            echo "### $c"
+            sudo docker inspect "$c" --format '{{range $name,$v := .NetworkSettings.Networks}}{{printf "%s ip=%s aliases=%v\n" $name $v.IPAddress $v.Aliases}}{{end}}' 2>/dev/null || true
+          done
+
+          echo '--- ML LOCAL HTTP ---'
+          for path in /health /status; do
+            code=$(curl --max-time 8 -sS -o /tmp/mlbody -w '%{http_code}' "http://127.0.0.1:8091$path" || true)
+            echo "$path code=$code body=$(head -c 500 /tmp/mlbody 2>/dev/null || true)"
+          done
+
+          echo '--- CURRENT TRAINING STATUS ---'
+          cat /home/ubuntu/shopvivaliz-deploy/current/storage/ml/training-status.json 2>/dev/null | head -c 1200 || true
+          echo
+
+          echo '--- CURRENT PRESSURE ---'
+          uptime
+          vmstat 1 3
+          free -m
+          ps -eo pid,ppid,user,ni,stat,pcpu,pmem,rss,etime,args --sort=-pcpu | head -22
+
+          echo '--- LATENCY NOW ---'
+          for path in / /catalogo/ /catalogo/ /checkout /api/catalog/products.php?limit=1\&available=1; do
+            curl --max-time 12 -sS -o /dev/null -H 'Host: shopvivaliz.com.br' \
+              -w "$path code=%{http_code} ttfb=%{time_starttransfer} total=%{time_total}\n" \
+              "http://127.0.0.1$path" || echo "$path timeout"
+          done
+          SH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
