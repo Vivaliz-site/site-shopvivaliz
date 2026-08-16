@@ -15,6 +15,7 @@ require_once __DIR__ . '/src/AiServices.php';
 require_once __DIR__ . '/src/OpenRouterImageClient.php';
 require_once __DIR__ . '/src/ImageChannelProfile.php';
 require_once __DIR__ . '/../../includes/catalog-publication-schema.php';
+require_once __DIR__ . '/../../includes/catalog-runtime.php';
 require_once __DIR__ . '/../../core/queue/queue.php';
 
 /** @return array<string,string> */
@@ -177,6 +178,21 @@ function ai_studio_catalog_context_brief(array $productContext): string
     }
 
     return $parts === [] ? '' : implode(' | ', $parts);
+}
+
+function ai_studio_product_is_canonical_active(array $product): bool
+{
+    $sku = trim((string)($product['sku'] ?? ''));
+    $olistId = trim((string)($product['olist_id'] ?? $product['olist_product_id'] ?? ''));
+    if ($sku === '' && $olistId === '') return false;
+    foreach (svcr_products() as $active) {
+        if (!is_array($active)) continue;
+        $activeSku = trim((string)($active['sku'] ?? ''));
+        $activeOlistId = trim((string)($active['olist_product_id'] ?? $active['id'] ?? ''));
+        if ($sku !== '' && $activeSku !== '' && hash_equals($activeSku, $sku)) return true;
+        if ($olistId !== '' && $activeOlistId !== '' && hash_equals($activeOlistId, $olistId)) return true;
+    }
+    return false;
 }
 
 /** @return array{name:string,description:string,image_ref:string,sku:string,olist_id:string,category:string,brand:string,model:string,color:string,size:string,material:string}|null */
@@ -366,6 +382,9 @@ function ai_studio_enqueue_job(
     if ($product === null) {
         throw new AiStudioApiException("Produto #{$productId} nao encontrado para enfileirar.");
     }
+    if (!ai_studio_product_is_canonical_active($product)) {
+        throw new AiStudioApiException("Produto #{$productId} esta inativo, excluido ou fora do catalogo ativo canonico.");
+    }
     $baseImagePath = ai_studio_resolve_base_image($product['image_ref'], dirname(__DIR__, 2), $productId);
     $baseImageIsTemp = str_starts_with($baseImagePath, AI_STUDIO_BASE_IMAGE_TMP_DIR);
     $prompts = ai_studio_default_prompts($product['name'], $targetChannel, $product);
@@ -424,6 +443,9 @@ function ai_studio_process_item(
     $product = $productOverride ?? ai_studio_fetch_product($db, $productId);
     if ($product === null) {
         return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productId} nao encontrado ou sem nome."];
+    }
+    if (!ai_studio_product_is_canonical_active($product)) {
+        return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productId} esta inativo, excluido ou fora do catalogo ativo canonico."];
     }
 
     $profile = ai_studio_channel_profile($targetChannel);

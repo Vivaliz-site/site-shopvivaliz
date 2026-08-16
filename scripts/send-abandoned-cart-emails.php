@@ -13,9 +13,10 @@ declare(strict_types=1);
  *   - ainda nao completou um pedido com esse e-mail depois do abandono
  *     (checa contra orders.email + created_at)
  *
- * Envia com o cupom VOLTEI5 (5% off, ja existe na tabela coupons, so nao
- * era anunciado publicamente -- correto pra esse uso, que e justamente
- * direcionado e nao deve ser descoberto por quem nao abandonou carrinho).
+ * A recuperacao e puramente transacional: nao oferece cupom ou desconto
+ * adicional. Isso evita conflito com a politica comercial vigente, em que
+ * o beneficio de 5% e pessoal e emitido somente apos a primeira compra
+ * paga/aprovada.
  *
  * Uso: php scripts/send-abandoned-cart-emails.php
  */
@@ -27,9 +28,8 @@ require_once __DIR__ . '/mailer.php';
 
 const MIN_AGE_MINUTES = 60;
 const MAX_AGE_HOURS = 48;
-const COUPON_CODE = 'VOLTEI5';
 
-function sac_render_email(string $name, array $items, string $couponCode): string
+function sac_render_email(string $name, array $items): string
 {
     $greeting = $name !== '' ? htmlspecialchars($name, ENT_QUOTES, 'UTF-8') : 'tudo bem?';
     $itemsHtml = '';
@@ -45,9 +45,7 @@ function sac_render_email(string $name, array $items, string $couponCode): strin
         . '<h2 style="color:#173B63;">Oi, ' . $greeting . '</h2>'
         . '<p>Notamos que você deixou alguns itens no carrinho da Vivaliz:</p>'
         . $itemsHtml
-        . '<p>Pra te ajudar a fechar o pedido, preparamos um cupom de <strong>5% de desconto</strong>:</p>'
-        . '<p style="font-size:22px;font-weight:800;letter-spacing:1px;background:#eef5fb;color:#0b4f88;padding:12px 18px;border-radius:10px;display:inline-block;">'
-        . htmlspecialchars($couponCode, ENT_QUOTES, 'UTF-8') . '</p>'
+        . '<p>Seu carrinho continua disponível para você revisar itens, frete e condições antes de finalizar.</p>'
         . '<p><a href="https://shopvivaliz.com.br/carrinho" style="display:inline-block;margin-top:14px;background:#0b4f88;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:700;">Voltar ao carrinho</a></p>'
         . '<p style="margin-top:24px;font-size:12px;color:#64748b;">Se você já concluiu essa compra ou não reconhece este e-mail, pode ignorar esta mensagem.</p>'
         . '</div>';
@@ -88,8 +86,8 @@ foreach ($rows as $row) {
     $items = json_decode((string)($row['cart_snapshot'] ?? '[]'), true);
     $items = is_array($items) ? $items : [];
 
-    $html = sac_render_email($name, $items, COUPON_CODE);
-    $ok = send_email($email, 'Você esqueceu algo no seu carrinho — 5% OFF pra voltar', $html);
+    $html = sac_render_email($name, $items);
+    $ok = send_email($email, 'Você deixou itens no seu carrinho da Vivaliz', $html);
 
     if ($ok) {
         $upd = $pdo->prepare('UPDATE checkout_abandonments SET recovery_email_sent_at = NOW() WHERE id = :id');

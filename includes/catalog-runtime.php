@@ -186,12 +186,49 @@ function svcr_is_excluded_product(array $item): bool
     return false;
 }
 
+function svcr_flag_bool(mixed $value): ?bool
+{
+    if (is_bool($value)) return $value;
+    if (is_int($value) || is_float($value)) return ((int)$value) !== 0;
+    if (!is_string($value)) return null;
+    $normalized = svcr_lower(trim($value));
+    if ($normalized === '') return null;
+    if (in_array($normalized, ['1', 'true', 'yes', 'sim', 's', 'ativo', 'active', 'enabled', 'publicado', 'published'], true)) return true;
+    if (in_array($normalized, ['0', 'false', 'no', 'nao', 'não', 'n', 'inativo', 'inactive', 'disabled', 'excluido', 'excluído', 'deleted', 'removed', 'archived', 'arquivado'], true)) return false;
+    return null;
+}
+
+function svcr_is_active_product(array $item): bool
+{
+    foreach (['deleted', 'is_deleted', 'excluded', 'is_excluded', 'archived', 'is_archived', 'removed', 'is_removed'] as $field) {
+        if (!array_key_exists($field, $item)) continue;
+        if (svcr_flag_bool($item[$field]) === true) return false;
+    }
+    foreach (['deleted_at', 'excluded_at', 'archived_at', 'removed_at'] as $field) {
+        if (!array_key_exists($field, $item)) continue;
+        $value = trim((string)($item[$field] ?? ''));
+        if ($value !== '' && $value !== '0' && $value !== '0000-00-00 00:00:00') return false;
+    }
+    foreach (['active', 'is_active', 'ativo', 'enabled', 'is_enabled', 'is_published'] as $field) {
+        if (!array_key_exists($field, $item)) continue;
+        if (svcr_flag_bool($item[$field]) === false) return false;
+    }
+    $allowed = ['A', 'ATIVO', 'ACTIVE', 'ENABLED', 'PUBLICADO', 'PUBLISHED', 'DISPONIVEL', 'DISPONÍVEL', 'AVAILABLE'];
+    foreach (['situacao', 'situação', 'status', 'state', 'product_status', 'situacao_produto'] as $field) {
+        if (!array_key_exists($field, $item)) continue;
+        $value = trim((string)($item[$field] ?? ''));
+        if ($value === '') continue;
+        $normalized = function_exists('mb_strtoupper') ? mb_strtoupper($value, 'UTF-8') : strtoupper($value);
+        if (!in_array($normalized, $allowed, true)) return false;
+    }
+    return true;
+}
+
 function svcr_filter_storefront_rows(array $rows): array
 {
     return array_values(array_filter($rows, static function ($row): bool {
-        if (!is_array($row) || svcr_is_preorder($row) || svcr_is_excluded_product($row) || svcr_item_price($row) <= 0) return false;
-        $isPublished = $row['is_published'] ?? true;
-        return !($isPublished === 'false' || $isPublished === false || $isPublished === 0 || $isPublished === '0');
+        if (!is_array($row) || !svcr_is_active_product($row) || svcr_is_preorder($row) || svcr_is_excluded_product($row) || svcr_item_price($row) <= 0) return false;
+        return true;
     }));
 }
 
@@ -215,9 +252,10 @@ function svcr_has_available_product(array $products): bool
 
 function svcr_select_catalog_products(array $products, array $fallbackProducts): array
 {
-    if ($products !== [] && svcr_has_available_product($products)) return $products;
-    if (svcr_has_available_product($fallbackProducts)) return $fallbackProducts;
-    return $products !== [] ? $products : $fallbackProducts;
+    // Regra fail-closed: snapshots/fallbacks antigos nao comprovam o
+    // status atual no ERP. Somente a fonte canonica pode alimentar a
+    // vitrine, inclusive quando todos os itens ativos estao sem estoque.
+    return $products;
 }
 
 function svcr_products(): array
@@ -246,18 +284,15 @@ function svcr_products(): array
     }
 
     if ($items === []) {
-        return svcr_fallback_products($root);
-    }
+    // Sem snapshot canonico de ativos nao existe evidencia suficiente
+    // para publicar produtos. Falhar fechado evita ressuscitar itens
+    // inativos/excluidos por meio de um fallback historico.
+    return [];
+}
 
     $products = [];
     foreach ($items as $item) {
-        if (!is_array($item) || svcr_is_preorder($item) || svcr_is_excluded_product($item)) continue;
-
-        $isPublished = $item['is_published'] ?? true;
-        if ($isPublished === 'false' || $isPublished === false || $isPublished === 0 || $isPublished === '0') continue;
-
-        $situation = strtoupper(trim((string)($item['situacao'] ?? 'A')));
-        if (!in_array($situation, ['A', 'ATIVO', 'ACTIVE'], true)) continue;
+        if (!is_array($item) || !svcr_is_active_product($item) || svcr_is_preorder($item) || svcr_is_excluded_product($item)) continue;
 
         $imagesList = svcr_collect_image_urls($item);
         $image = trim((string)($item['imagem_principal_url'] ?? $item['primary_image_url'] ?? $item['image_url'] ?? $item['imagem'] ?? ''));

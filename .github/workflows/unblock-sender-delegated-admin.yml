@@ -28,7 +28,9 @@ jobs:
             Install-Module ExchangeOnlineManagement -Scope CurrentUser -Force -AllowClobber
           }
           Import-Module ExchangeOnlineManagement
-          Connect-ExchangeOnline -Device -Organization 'ContabilidadeMelo.onmicrosoft.com' -ShowBanner:$false
+          # Use the verified emergency Global Administrator account in the browser
+          # when prompted by the device-code flow. Do not authenticate as the sender mailbox.
+          Connect-ExchangeOnline -Device -ShowBanner:$false
           $sender='naoresponda@dev.shopvivaliz.com.br'
           $blocked=@(Get-BlockedSenderAddress -SenderAddress $sender -ErrorAction Stop)
           Write-Host ('BLOCKED_BEFORE='+$blocked.Count)
