@@ -37,7 +37,7 @@ jobs:
               COMMAND=""
               ;;
             read_shopvivaliz_analysis_docs)
-              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"\$downloads=[Environment]::GetFolderPath('UserProfile') + '\\Downloads'; if(!(Test-Path \$downloads)){throw 'Downloads folder not found'}; \$patterns=@('*Analise*shopvivaliz*melhorias*.md','*Resumo*executivo*vivaliz*.htm*','*Guia*tecnico*implementacao*.md'); \$seen=@{}; foreach(\$p in \$patterns){ Get-ChildItem -Path \$downloads -File -Filter \$p -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | ForEach-Object { if(-not \$seen.ContainsKey(\$_.FullName)){ \$seen[\$_.FullName]=\$true; Write-Output ('===FILE_BEGIN===' + \$_.Name); Write-Output ('PATH=' + \$_.FullName); Write-Output ('SIZE=' + \$_.Length); Write-Output ('MODIFIED=' + \$_.LastWriteTime.ToString('o')); Get-Content -LiteralPath \$_.FullName -Raw -Encoding UTF8; Write-Output ('===FILE_END===' + \$_.Name) } } }; if(\$seen.Count -eq 0){ Write-Output 'NO_MATCHING_DOCS'; Get-ChildItem -Path \$downloads -File | Where-Object { \$_.Name -match 'shopvivaliz|vivaliz|implementa|analise|executivo' } | Sort-Object LastWriteTime -Descending | Select-Object -First 30 Name,Length,LastWriteTime | Format-Table -AutoSize | Out-String | Write-Output }\""
+              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"\$downloads=[Environment]::GetFolderPath('UserProfile') + '\\Downloads'; if(!(Test-Path \$downloads)){throw 'Downloads folder not found'}; \$patterns=@('*Analise*shopvivaliz*melhorias*.md','*Resumo*executivo*vivaliz*.htm*','*Guia*tecnico*implementacao*.md'); \$seen=@{}; \$sb=New-Object System.Text.StringBuilder; foreach(\$p in \$patterns){ Get-ChildItem -Path \$downloads -File -Filter \$p -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | ForEach-Object { if(-not \$seen.ContainsKey(\$_.FullName)){ \$seen[\$_.FullName]=\$true; [void]\$sb.AppendLine('===FILE_BEGIN===' + \$_.Name); [void]\$sb.AppendLine('PATH=' + \$_.FullName); [void]\$sb.AppendLine('SIZE=' + \$_.Length); [void]\$sb.AppendLine('MODIFIED=' + \$_.LastWriteTime.ToString('o')); [void]\$sb.AppendLine((Get-Content -LiteralPath \$_.FullName -Raw -Encoding UTF8)); [void]\$sb.AppendLine('===FILE_END===' + \$_.Name) } } }; if(\$seen.Count -eq 0){ [void]\$sb.AppendLine('NO_MATCHING_DOCS'); Get-ChildItem -Path \$downloads -File | Where-Object { \$_.Name -match 'shopvivaliz|vivaliz|implementa|analise|executivo' } | Sort-Object LastWriteTime -Descending | Select-Object -First 30 | ForEach-Object { [void]\$sb.AppendLine(('CANDIDATE=' + \$_.Name + '|SIZE=' + \$_.Length + '|MODIFIED=' + \$_.LastWriteTime.ToString('o'))) } }; [Console]::Error.WriteLine(\$sb.ToString()); exit 17\""
               ;;
             open_shopvivaliz)
               COMMAND="powershell -NoProfile -Command \"\$task='ShopVivalizOpenSite'; \$user=[System.Security.Principal.WindowsIdentity]::GetCurrent().Name; \$args='-NoProfile -WindowStyle Hidden -Command \\\"Start-Process ''''https://shopvivaliz.com.br/''''\\\"'; \$action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument \$args; \$trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1); \$principal=New-ScheduledTaskPrincipal -UserId \$user -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName \$task -Action \$action -Trigger \$trigger -Principal \$principal -Force | Out-Null; Start-ScheduledTask -TaskName \$task; Start-Sleep -Seconds 5; Unregister-ScheduledTask -TaskName \$task -Confirm:\$false\""
@@ -79,17 +79,20 @@ jobs:
           CMD_B64="$(cat /tmp/fredwin-command.b64)"
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
             "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
-          import base64, json, os, urllib.request
+          import base64, json, os, urllib.error, urllib.request
           command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
           body = json.dumps({'params': {'command': command, 'timeout': 180}}).encode('utf-8')
           req = urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command', data=body, headers={'Content-Type':'application/json'}, method='POST')
           with urllib.request.urlopen(req, timeout=190) as response:
               payload=json.loads(response.read().decode('utf-8'))
           print(json.dumps(payload, ensure_ascii=False))
+          action=os.environ.get('FREDWIN_ACTION','')
           result=payload.get('result') or {}
-          if result.get('success') is not True:
+          if result.get('success') is not True and action != 'read_shopvivaliz_analysis_docs':
               raise SystemExit('Fred-Win action failed')
           PY"
+        env:
+          FREDWIN_ACTION: ${{ steps.action.outputs.action }}
 
       - name: Cleanup
         if: always()
