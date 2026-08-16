@@ -1,0 +1,67 @@
+name: Ops MEI SQL Inspect 20260816
+
+on:
+  push:
+    branches:
+      - ops/mei-profile-20260816
+    paths:
+      - '.github/workflows/ops-mei-sql-inspect-20260816.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - name: Configure SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"; test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa; chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts; chmod 600 ~/.ssh/known_hosts
+
+      - name: Inspect SQL and index metadata
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'timeout 100 bash -s' <<'SH'
+          set -euo pipefail
+          P=/home/ubuntu/mei-mg-email/scripts/disparar_10000_mei_mg.py
+          echo '--- SCRIPT METADATA ---'
+          stat -c 'path=%n size=%s mtime=%y owner=%U:%G mode=%a' "$P"
+          echo '--- SQL / LOOP LINES ---'
+          grep -n -C 10 -E 'SELECT|INSERT|UPDATE|DELETE|FROM |JOIN |WHERE |ORDER BY|LIMIT|OFFSET|NOT EXISTS|sleep\(|BATCH|LOTE|batch|lote|10_000|10000' "$P" | head -260 || true
+
+          echo '--- TABLE COLUMNS ---'
+          for t in empresas envios; do
+            echo "### $t"
+            sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -F '|' -Atqc "select ordinal_position,column_name,data_type,is_nullable from information_schema.columns where table_schema='mei_email' and table_name='$t' order by ordinal_position;" || true
+          done
+
+          echo '--- INDEX DEFINITIONS ---'
+          sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -F '|' -Atqc "select tablename,indexname,indexdef from pg_indexes where schemaname='mei_email' and tablename in ('empresas','envios') order by tablename,indexname;"
+
+          echo '--- TABLE SIZES / STATS ---'
+          sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -F '|' -Atqc "select relname,pg_size_pretty(pg_total_relation_size(relid)),n_live_tup,n_dead_tup,seq_scan,seq_tup_read,idx_scan,last_analyze,last_autoanalyze from pg_stat_user_tables where schemaname='mei_email' and relname in ('empresas','envios') order by relname;"
+
+          echo '--- EXTENSIONS ---'
+          sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -Atqc "select extname from pg_extension order by 1;"
+
+          echo '--- PRESSURE / LATENCY ---'
+          uptime
+          vmstat 1 3
+          for path in / /catalogo/ /checkout; do
+            curl --max-time 10 -sS -o /dev/null -H 'Host: shopvivaliz.com.br' -w "$path code=%{http_code} ttfb=%{time_starttransfer}\n" "http://127.0.0.1$path" || true
+          done
+          SH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
