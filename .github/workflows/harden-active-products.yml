@@ -1,0 +1,327 @@
+name: Harden Active Products
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/harden-active-products.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz' && github.actor == 'fredmourao-ai'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Enforce canonical active-only catalog and image flow
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # 1) Canonical storefront filter.
+          path = Path('includes/catalog-runtime.php')
+          text = path.read_text(encoding='utf-8')
+          marker = 'function svcr_is_active_product(array $item): bool'
+          if marker not in text:
+              anchor = 'function svcr_filter_storefront_rows(array $rows): array\n'
+              helper = r'''function svcr_flag_bool(mixed $value): ?bool
+          {
+              if (is_bool($value)) return $value;
+              if (is_int($value) || is_float($value)) return ((int)$value) !== 0;
+              if (!is_string($value)) return null;
+              $normalized = svcr_lower(trim($value));
+              if ($normalized === '') return null;
+              if (in_array($normalized, ['1', 'true', 'yes', 'sim', 's', 'ativo', 'active', 'enabled', 'publicado', 'published'], true)) return true;
+              if (in_array($normalized, ['0', 'false', 'no', 'nao', 'não', 'n', 'inativo', 'inactive', 'disabled', 'excluido', 'excluído', 'deleted', 'removed', 'archived', 'arquivado'], true)) return false;
+              return null;
+          }
+
+          function svcr_is_active_product(array $item): bool
+          {
+              foreach (['deleted', 'is_deleted', 'excluded', 'is_excluded', 'archived', 'is_archived', 'removed', 'is_removed'] as $field) {
+                  if (!array_key_exists($field, $item)) continue;
+                  if (svcr_flag_bool($item[$field]) === true) return false;
+              }
+              foreach (['deleted_at', 'excluded_at', 'archived_at', 'removed_at'] as $field) {
+                  if (!array_key_exists($field, $item)) continue;
+                  $value = trim((string)($item[$field] ?? ''));
+                  if ($value !== '' && $value !== '0' && $value !== '0000-00-00 00:00:00') return false;
+              }
+              foreach (['active', 'is_active', 'ativo', 'enabled', 'is_enabled', 'is_published'] as $field) {
+                  if (!array_key_exists($field, $item)) continue;
+                  if (svcr_flag_bool($item[$field]) === false) return false;
+              }
+              $allowed = ['A', 'ATIVO', 'ACTIVE', 'ENABLED', 'PUBLICADO', 'PUBLISHED', 'DISPONIVEL', 'DISPONÍVEL', 'AVAILABLE'];
+              foreach (['situacao', 'situação', 'status', 'state', 'product_status', 'situacao_produto'] as $field) {
+                  if (!array_key_exists($field, $item)) continue;
+                  $value = trim((string)($item[$field] ?? ''));
+                  if ($value === '') continue;
+                  $normalized = function_exists('mb_strtoupper') ? mb_strtoupper($value, 'UTF-8') : strtoupper($value);
+                  if (!in_array($normalized, $allowed, true)) return false;
+              }
+              return true;
+          }
+
+          '''
+              if text.count(anchor) != 1:
+                  raise SystemExit('catalog-runtime active helper anchor mismatch')
+              text = text.replace(anchor, helper + anchor, 1)
+
+          old = '''function svcr_filter_storefront_rows(array $rows): array
+          {
+              return array_values(array_filter($rows, static function ($row): bool {
+                  if (!is_array($row) || svcr_is_preorder($row) || svcr_is_excluded_product($row) || svcr_item_price($row) <= 0) return false;
+                  $isPublished = $row['is_published'] ?? true;
+                  return !($isPublished === 'false' || $isPublished === false || $isPublished === 0 || $isPublished === '0');
+              }));
+          }
+          '''
+          new = '''function svcr_filter_storefront_rows(array $rows): array
+          {
+              return array_values(array_filter($rows, static function ($row): bool {
+                  if (!is_array($row) || !svcr_is_active_product($row) || svcr_is_preorder($row) || svcr_is_excluded_product($row) || svcr_item_price($row) <= 0) return false;
+                  return true;
+              }));
+          }
+          '''
+          if old in text:
+              text = text.replace(old, new, 1)
+
+          old = '''function svcr_select_catalog_products(array $products, array $fallbackProducts): array
+          {
+              if ($products !== [] && svcr_has_available_product($products)) return $products;
+              if (svcr_has_available_product($fallbackProducts)) return $fallbackProducts;
+              return $products !== [] ? $products : $fallbackProducts;
+          }
+          '''
+          new = '''function svcr_select_catalog_products(array $products, array $fallbackProducts): array
+          {
+              // A fonte canonica sempre vence. O fallback existe apenas para
+              // indisponibilidade total da fonte, nunca para substituir um
+              // catalogo ativo por um espelho antigo com estoque diferente.
+              return $products !== [] ? $products : $fallbackProducts;
+          }
+          '''
+          if old in text:
+              text = text.replace(old, new, 1)
+
+          old = '''    foreach ($items as $item) {
+              if (!is_array($item) || svcr_is_preorder($item) || svcr_is_excluded_product($item)) continue;
+
+              $isPublished = $item['is_published'] ?? true;
+              if ($isPublished === 'false' || $isPublished === false || $isPublished === 0 || $isPublished === '0') continue;
+
+              $situation = strtoupper(trim((string)($item['situacao'] ?? 'A')));
+              if (!in_array($situation, ['A', 'ATIVO', 'ACTIVE'], true)) continue;
+          '''
+          new = '''    foreach ($items as $item) {
+              if (!is_array($item) || !svcr_is_active_product($item) || svcr_is_preorder($item) || svcr_is_excluded_product($item)) continue;
+          '''
+          if old in text:
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+
+          # 2) Shared canonical active matcher for Image Studio worker + direct queue.
+          path = Path('admin/ai-image-studio/process_item.php')
+          text = path.read_text(encoding='utf-8')
+          req = "require_once __DIR__ . '/../../includes/catalog-runtime.php';\n"
+          anchor = "require_once __DIR__ . '/../../includes/catalog-publication-schema.php';\n"
+          if req not in text:
+              if text.count(anchor) != 1:
+                  raise SystemExit('process_item require anchor mismatch')
+              text = text.replace(anchor, anchor + req, 1)
+
+          helper_marker = 'function ai_studio_product_is_canonical_active(array $product): bool'
+          if helper_marker not in text:
+              anchor = '/** @return array{name:string,description:string,image_ref:string,sku:string,olist_id:string,category:string,brand:string,model:string,color:string,size:string,material:string}|null */\nfunction ai_studio_fetch_product'
+              helper = '''function ai_studio_product_is_canonical_active(array $product): bool
+          {
+              $sku = trim((string)($product['sku'] ?? ''));
+              $olistId = trim((string)($product['olist_id'] ?? $product['olist_product_id'] ?? ''));
+              if ($sku === '' && $olistId === '') return false;
+              foreach (svcr_products() as $active) {
+                  if (!is_array($active)) continue;
+                  $activeSku = trim((string)($active['sku'] ?? ''));
+                  $activeOlistId = trim((string)($active['olist_product_id'] ?? $active['id'] ?? ''));
+                  if ($sku !== '' && $activeSku !== '' && hash_equals($activeSku, $sku)) return true;
+                  if ($olistId !== '' && $activeOlistId !== '' && hash_equals($activeOlistId, $olistId)) return true;
+              }
+              return false;
+          }
+
+          /** @return array{name:string,description:string,image_ref:string,sku:string,olist_id:string,category:string,brand:string,model:string,color:string,size:string,material:string}|null */
+          function ai_studio_fetch_product'''
+              if text.count(anchor) != 1:
+                  raise SystemExit('process_item helper anchor mismatch')
+              text = text.replace(anchor, helper, 1)
+
+          old = '''    if ($product === null) {
+              throw new AiStudioApiException("Produto #{$productId} nao encontrado para enfileirar.");
+          }
+              $baseImagePath = ai_studio_resolve_base_image'''
+          new = '''    if ($product === null) {
+              throw new AiStudioApiException("Produto #{$productId} nao encontrado para enfileirar.");
+          }
+              if (!ai_studio_product_is_canonical_active($product)) {
+                  throw new AiStudioApiException("Produto #{$productId} esta inativo, excluido ou fora do catalogo ativo canonico.");
+              }
+              $baseImagePath = ai_studio_resolve_base_image'''
+          if old in text:
+              text = text.replace(old, new, 1)
+          else:
+              # tolerate normal indentation from repository
+              needle = '''    if ($product === null) {
+                  throw new AiStudioApiException("Produto #{$productId} nao encontrado para enfileirar.");
+              }
+              $baseImagePath = ai_studio_resolve_base_image'''
+              repl = '''    if ($product === null) {
+                  throw new AiStudioApiException("Produto #{$productId} nao encontrado para enfileirar.");
+              }
+              if (!ai_studio_product_is_canonical_active($product)) {
+                  throw new AiStudioApiException("Produto #{$productId} esta inativo, excluido ou fora do catalogo ativo canonico.");
+              }
+              $baseImagePath = ai_studio_resolve_base_image'''
+              if needle in text:
+                  text = text.replace(needle, repl, 1)
+
+          needle = '''    if ($product === null) {
+              return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productId} nao encontrado ou sem nome."];
+          }
+
+              $profile = ai_studio_channel_profile'''
+          repl = '''    if ($product === null) {
+              return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productId} nao encontrado ou sem nome."];
+          }
+              if (!ai_studio_product_is_canonical_active($product)) {
+                  return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productId} esta inativo, excluido ou fora do catalogo ativo canonico."];
+              }
+
+              $profile = ai_studio_channel_profile'''
+          if needle in text:
+              text = text.replace(needle, repl, 1)
+          else:
+              needle = '''    if ($product === null) {
+                  return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productId} nao encontrado ou sem nome."];
+              }
+
+              $profile = ai_studio_channel_profile'''
+              repl = '''    if ($product === null) {
+                  return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productId} nao encontrado ou sem nome."];
+              }
+              if (!ai_studio_product_is_canonical_active($product)) {
+                  return ['success' => false, 'product_id' => $productId, 'provider' => $provider, 'target_channel' => $targetChannel, 'results' => [], 'error' => "Produto #{$productId} esta inativo, excluido ou fora do catalogo ativo canonico."];
+              }
+
+              $profile = ai_studio_channel_profile'''
+              if needle in text:
+                  text = text.replace(needle, repl, 1)
+          path.write_text(text, encoding='utf-8')
+
+          # 3) Pending candidates must be a subset of canonical active catalog.
+          path = Path('admin/ai-image-studio/api/pending_candidates.php')
+          text = path.read_text(encoding='utf-8')
+          req = "require_once $projectRoot . '/includes/catalog-runtime.php';\n"
+          anchor = "if (is_file($storefrontResolver)) {\n    require_once $storefrontResolver;\n}\n"
+          if req not in text:
+              if text.count(anchor) != 1:
+                  raise SystemExit('pending require anchor mismatch')
+              text = text.replace(anchor, anchor + req, 1)
+
+          marker = 'function ais_pending_is_canonical_active(array $product): bool'
+          if marker not in text:
+              anchor = 'try {\n    $productColumns = ais_pending_table_columns($db, \'products\');'
+              helper = '''function ais_pending_is_canonical_active(array $product): bool
+          {
+              return ai_studio_product_is_canonical_active($product);
+          }
+
+          try {
+              $productColumns = ais_pending_table_columns($db, 'products');'''
+              if text.count(anchor) != 1:
+                  raise SystemExit('pending helper anchor mismatch')
+              text = text.replace(anchor, helper, 1)
+
+          needle = '''    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+              $skus = array_values'''
+          repl = '''    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+              $rows = array_values(array_filter($rows, static fn(array $row): bool => ais_pending_is_canonical_active($row)));
+              $skus = array_values'''
+          if needle in text:
+              text = text.replace(needle, repl, 1)
+          else:
+              needle = '''    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+              $skus = array_values'''
+              if needle in text:
+                  text = text.replace(needle, repl, 1)
+          path.write_text(text, encoding='utf-8')
+
+          # 4) Direct enqueue endpoint also fails closed for inactive products.
+          path = Path('admin/ai-image-studio/api/enqueue_generation.php')
+          text = path.read_text(encoding='utf-8')
+          req = "require_once $projectRoot . '/includes/catalog-runtime.php';\n"
+          anchor = "if (is_file($storefrontResolver)) {\n    require_once $storefrontResolver;\n}\n"
+          if req not in text:
+              if text.count(anchor) != 1:
+                  raise SystemExit('enqueue require anchor mismatch')
+              text = text.replace(anchor, anchor + req, 1)
+
+          needle = '''if ($product === null) {
+              http_response_code(404);
+              echo json_encode(['success' => false, 'error' => "Produto #{$productId} nao encontrado ou sem nome."]);
+              exit;
+          }
+
+          $providers = ai_studio_image_provider_candidates'''
+          repl = '''if ($product === null) {
+              http_response_code(404);
+              echo json_encode(['success' => false, 'error' => "Produto #{$productId} nao encontrado ou sem nome."]);
+              exit;
+          }
+          if (!ai_studio_product_is_canonical_active($product)) {
+              http_response_code(409);
+              echo json_encode(['success' => false, 'error' => "Produto #{$productId} esta inativo, excluido ou fora do catalogo ativo canonico."]);
+              exit;
+          }
+
+          $providers = ai_studio_image_provider_candidates'''
+          if needle in text:
+              text = text.replace(needle, repl, 1)
+          path.write_text(text, encoding='utf-8')
+
+          # Syntax + invariants.
+          for f in [
+              'includes/catalog-runtime.php',
+              'admin/ai-image-studio/process_item.php',
+              'admin/ai-image-studio/api/pending_candidates.php',
+              'admin/ai-image-studio/api/enqueue_generation.php',
+          ]:
+              content = Path(f).read_text(encoding='utf-8')
+              if f == 'includes/catalog-runtime.php' and 'function svcr_is_active_product' not in content:
+                  raise SystemExit('active catalog guard missing')
+              if f != 'includes/catalog-runtime.php' and 'canonical_active' not in content and 'canonical active' not in content:
+                  raise SystemExit(f'canonical guard missing in {f}')
+          PY
+
+          php -l includes/catalog-runtime.php
+          php -l admin/ai-image-studio/process_item.php
+          php -l admin/ai-image-studio/api/pending_candidates.php
+          php -l admin/ai-image-studio/api/enqueue_generation.php
+
+      - name: Commit active-only hardening
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'fredmourao-ai'
+          git config user.email 'fredmourao-ai@users.noreply.github.com'
+          git add includes/catalog-runtime.php admin/ai-image-studio/process_item.php admin/ai-image-studio/api/pending_candidates.php admin/ai-image-studio/api/enqueue_generation.php
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix: enforce canonical active products across catalog and image studio'
+          git push origin HEAD:main
