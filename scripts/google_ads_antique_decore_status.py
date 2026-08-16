@@ -11,6 +11,7 @@ from pathlib import Path
 from google.ads.googleads.client import GoogleAdsClient
 
 CAMPAIGN_NAME = "ShopVivaliz-Search-Vasos-Antique-Decore-2026-08"
+CAMPAIGN_LAUNCH_DATE = "2026-08-15"
 EXPECTED_GROUPS = {"Vasos Antique Japi", "Vasos Decore Japi"}
 CONFIG_PATH = Path(__file__).with_name("google_ads_campaign_live_ready.json")
 STALE_PROMO_RE = re.compile(
@@ -156,7 +157,7 @@ def main() -> int:
 
     campaigns = list(ga.search(customer_id=customer_id, query=f"""
       SELECT campaign.id, campaign.resource_name, campaign.name, campaign.status,
-             campaign.start_date, campaign.campaign_budget, campaign_budget.amount_micros,
+             campaign.campaign_budget, campaign_budget.amount_micros,
              campaign.contains_eu_political_advertising
       FROM campaign
       WHERE campaign.name = '{safe}'
@@ -246,7 +247,7 @@ def main() -> int:
     today_row = today_rows[0] if today_rows else None
     today_impressions, today_clicks, today_cost_micros, today_conversions = metric_tuple(today_row)
 
-    start_date = str(c.campaign.start_date)
+    start_date = CAMPAIGN_LAUNCH_DATE
     end_date = date.today().isoformat()
     lifetime_rows = list(ga.search(customer_id=customer_id, query=f"""
       SELECT campaign.id, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions
