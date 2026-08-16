@@ -11,6 +11,7 @@ $storefrontResolver = $projectRoot . '/includes/storefront-image-source.php';
 if (is_file($storefrontResolver)) {
     require_once $storefrontResolver;
 }
+require_once $projectRoot . '/includes/catalog-runtime.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -260,6 +261,11 @@ function ais_pending_readiness(array $product, array $source, string $targetChan
     ];
 }
 
+function ais_pending_is_canonical_active(array $product): bool
+{
+    return ai_studio_product_is_canonical_active($product);
+}
+
 try {
     $productColumns = ais_pending_table_columns($db, 'products');
     if (!isset($productColumns['id'])) throw new RuntimeException('Tabela products sem id.');
@@ -289,6 +295,7 @@ try {
     );
     $stmt->execute(['%"' . $targetChannel . '"%']);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $rows = array_values(array_filter($rows, static fn(array $row): bool => ais_pending_is_canonical_active($row)));
     $skus = array_values(array_filter(array_map(static fn(array $row): string => trim((string)($row['sku'] ?? '')), $rows)));
     $gallerySources = ais_pending_gallery_sources($db, $skus, $projectRoot);
 

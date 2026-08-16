@@ -1,0 +1,61 @@
+name: Finish Active Runtime Guard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-active-runtime-loop.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz' && github.actor == 'fredmourao-ai'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+      - name: Replace legacy canonical loop filter
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('includes/catalog-runtime.php')
+          t=p.read_text(encoding='utf-8')
+          old="""    foreach ($items as $item) {
+              if (!is_array($item) || svcr_is_preorder($item) || svcr_is_excluded_product($item)) continue;
+
+              $isPublished = $item['is_published'] ?? true;
+              if ($isPublished === 'false' || $isPublished === false || $isPublished === 0 || $isPublished === '0') continue;
+
+              $situation = strtoupper(trim((string)($item['situacao'] ?? 'A')));
+              if (!in_array($situation, ['A', 'ATIVO', 'ACTIVE'], true)) continue;
+
+              $imagesList = svcr_collect_image_urls($item);
+          """
+          new="""    foreach ($items as $item) {
+              if (!is_array($item) || !svcr_is_active_product($item) || svcr_is_preorder($item) || svcr_is_excluded_product($item)) continue;
+
+              $imagesList = svcr_collect_image_urls($item);
+          """
+          if old not in t:
+              raise SystemExit('legacy catalog loop not found exactly once')
+          t=t.replace(old,new,1)
+          p.write_text(t,encoding='utf-8')
+          PY
+          php -l includes/catalog-runtime.php
+          grep -Fq '!svcr_is_active_product($item)' includes/catalog-runtime.php
+          ! grep -Fq "\$situation = strtoupper(trim((string)(\$item['situacao'] ?? 'A')))" includes/catalog-runtime.php
+      - name: Commit strict loop
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'fredmourao-ai'
+          git config user.email 'fredmourao-ai@users.noreply.github.com'
+          git add includes/catalog-runtime.php
+          git commit -m 'fix: apply strict active guard to canonical catalog rows'
+          git push origin HEAD:main
