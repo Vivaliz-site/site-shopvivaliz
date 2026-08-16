@@ -74,7 +74,7 @@ def home(p):
 def catalog(p):
  s,slow=nav(p,'/admin/catalog-optimization/admin_catalog.php',2400);a=auth(p)
  if not a['authenticated']:return {'authenticated':False,'path':a['path'],'status':s,'navigation_slow':slow}
- p.evaluate("""()=>{let t=document.querySelector('#sv-effective-toolbar');if(!t){t=document.createElement('div');t.id='sv-effective-toolbar';t.innerHTML='<span id=sv-effective-visible-count></span>';document.body.prepend(t)}let h=document.querySelector('#sv-fredwin-sort-fixture');if(!h){h=document.createElement('section');h.id='sv-fredwin-sort-fixture';document.body.append(h)}h.innerHTML='<article class="sv-review-card is-ready" data-sv-state="ready" data-effective-loaded="1" data-effective-count="1" data-sv-search="site Alpha"><input type=hidden name=staging_id value=990001><strong>Alpha</strong></article><article class="sv-review-card" data-sv-search="mercado livre Beta"><input type=hidden name=staging_id value=990002><strong>Beta</strong></article><article class="sv-review-card has-failure" data-sv-state="fail" data-sv-search="shopee Zeta"><input type=hidden name=staging_id value=990003><strong>Zeta</strong></article>';let q=document.createElement('script');q.src='/admin/assets/admin-mobile-completion.js?smoke='+Date.now();document.head.append(q)}""")
+ p.evaluate("""()=>{let t=document.querySelector('#sv-effective-toolbar');if(!t){t=document.createElement('div');t.id='sv-effective-toolbar';t.innerHTML='<span id=sv-effective-visible-count></span>';document.body.prepend(t)}let h=document.querySelector('#sv-fredwin-sort-fixture');if(!h){h=document.createElement('section');h.id='sv-fredwin-sort-fixture';document.body.append(h)}h.innerHTML='<article class="sv-review-card is-ready" data-sv-state="ready" data-effective-loaded="1" data-effective-count="1" data-sv-search="site Alpha"><input type=hidden name=staging_id value=990001><div class="source-title"><strong>Alpha</strong></div></article><article class="sv-review-card" data-sv-search="mercado livre Beta"><input type=hidden name=staging_id value=990002><div class="source-title"><strong>Beta</strong></div></article><article class="sv-review-card has-failure" data-sv-state="fail" data-sv-search="shopee Zeta"><input type=hidden name=staging_id value=990003><div class="source-title"><strong>Zeta</strong></div></article>';let q=document.createElement('script');q.src='/admin/assets/admin-mobile-completion.js?smoke='+Date.now();document.head.append(q)}""")
  try:p.wait_for_selector('#sv-effective-sort',timeout=9000)
  except T:pass
  q=p.locator('#sv-effective-sort');v=q.count()>0 and q.first.is_visible();o=pr=ur=[]
@@ -89,16 +89,20 @@ def image(p):
  except T:pass
  x=p.evaluate("""()=>({items:document.querySelectorAll('.iv-item[data-product-id]').length,products:document.querySelectorAll('.iv-item>summary input.iv-check').length,variants:document.querySelectorAll('.iv-variant input.iv-check').length})""")
  z=p.evaluate("""()=>{for(let i of document.querySelectorAll('.iv-item[data-product-id]')){let p=i.querySelector(':scope>summary input.iv-check:not(:disabled)'),v=i.querySelector('.iv-variant input.iv-check:not(:disabled)');if(!p||!v)continue;p.checked=true;p.dispatchEvent(new Event('change',{bubbles:true}));v.checked=true;v.dispatchEvent(new Event('change',{bubbles:true}));let c=document.querySelector('#iv-channel')?.value||'site';return{id:String(i.dataset.productId||''),type:String(v.value||''),key:'svImageDraftV3:'+c}}return null}""")
- p.wait_for_timeout(350);sa=sh=re=False
+ p.wait_for_timeout(350);sa=sh=pf=re=False
  if z:
   sa=p.evaluate("x=>{let d=JSON.parse(localStorage.getItem(x.key)||'{}'),r=d?.products?.[x.id];return !!(r?.selected&&r?.types?.includes(x.type))}",z);r=p.locator('#iv-run')
   if r.count():
+   try:p.wait_for_function("()=>{let b=document.querySelector('#iv-run');return !!(b&&!b.disabled)}",timeout=6000)
+   except T:pass
    try:r.first.click(timeout=4000)
    except:pass
-   p.wait_for_timeout(350);sh=p.locator('#sv-img-preflight.show').count()>0;c=p.locator('#sv-img-preflight .sv-img-cancel')
+   try:p.wait_for_selector('#sv-img-preflight.show',timeout=4000)
+   except T:pass
+   pf=p.locator('#sv-img-preflight').count()>0;sh=p.locator('#sv-img-preflight.show').count()>0;c=p.locator('#sv-img-preflight .sv-img-cancel')
    if c.count():c.first.click()
-  slow=again(p,2700) or slow;re=p.evaluate("x=>{let i=document.querySelector('.iv-item[data-product-id=\"' + CSS.escape(x.id) + '\"]');if(!i)return false;let p=i.querySelector(':scope>summary input.iv-check'),v=[...i.querySelectorAll('.iv-variant input.iv-check')].find(n=>n.value===x.type);return !!(p?.checked&&v?.checked)}",z)
- return {'authenticated':True,'status':s,'navigation_slow':slow,**x,'eligible':bool(z),'preflight':p.locator('#sv-img-preflight').count()>0,'shown':sh,'saved':sa,'restored':re,'actionbar':p.locator('.iv-actionbar').count()>0,'overflow':p.evaluate('()=>Math.max(0,document.documentElement.scrollWidth-innerWidth)')}
+  slow=again(p,2700) or slow;re=p.evaluate("x=>{let i=document.querySelector('.iv-item[data-product-id=\"'+CSS.escape(x.id)+'\"]');if(!i)return false;let p=i.querySelector(':scope>summary input.iv-check'),v=[...i.querySelectorAll('.iv-variant input.iv-check')].find(n=>n.value===x.type);return !!(p?.checked&&v?.checked)}",z)
+ return {'authenticated':True,'status':s,'navigation_slow':slow,**x,'eligible':bool(z),'preflight':pf,'shown':sh,'saved':sa,'restored':re,'actionbar':p.locator('.iv-actionbar').count()>0,'overflow':p.evaluate('()=>Math.max(0,document.documentElement.scrollWidth-innerWidth)')}
 def main():
  ch=chrome();sid=os.environ.get('SV_ADMIN_SESSION_ID','');sn=os.environ.get('SV_ADMIN_SESSION_NAME','PHPSESSID');r={'schema':4,'started_at':ts(),'login':{},'session_source':'ephemeral-audit-session','authenticated_profile':False,'home':{},'catalog':{},'image':{},'blocked_mutations':[],'errors':[]}
  if not sid or not sn:emit({**r,'overall':False,'failures':['ephemeral_session_missing'],'finished_at':ts()},8)
