@@ -55,7 +55,7 @@ def home(p):
  if not a['authenticated']:return {'authenticated':False,'path':a['path'],'status':s,'navigation_slow':slow}
  try:p.wait_for_selector('details.sv-admin-card-details',timeout=9000)
  except T:pass
- x=p.evaluate("""()=>{let d=[...document.querySelectorAll('details.sv-admin-card-details')],k=document.querySelector('#sv-admin-mobile-dock');return{details:d.length,dock:!!(k&&getComputedStyle(k).display!='none'&&k.getBoundingClientRect().height>1),paths:k?[...k.querySelectorAll('a')].map(a=>new URL(a.href,location.href).pathname):[],actions:[...document.querySelectorAll('#sv-admin-section-actions button')].map(b=>(b.textContent||'').trim()),padding:parseFloat(getComputedStyle(document.body).paddingBottom)||0,overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth)}}""")
+ x=p.evaluate("""()=>{let d=[...document.querySelectorAll('details.sv-admin-card-details')],k=document.querySelector('#sv-admin-mobile-dock'),menu=document.querySelector('.navbar-menu'),nav=document.querySelector('.navbar'),main=document.querySelector('main.catalog-page'),overview=document.querySelector('.admin-overview'),mc=menu?getComputedStyle(menu):null,nc=nav?getComputedStyle(nav):null,mr=main?.getBoundingClientRect(),or=overview?.getBoundingClientRect(),rgb=(nc?.backgroundColor||'').match(/[\d.]+/g)?.map(Number)||[],css=document.querySelector('link[href*="/css/admin-zoom-responsive.css"]')?.getAttribute('href')||'',mw=menu?.getBoundingClientRect().height||0,borders=mc?[mc.borderTopWidth,mc.borderRightWidth,mc.borderBottomWidth,mc.borderLeftWidth].map(parseFloat):[99];return{details:d.length,dock:!!(k&&getComputedStyle(k).display!='none'&&k.getBoundingClientRect().height>1),paths:k?[...k.querySelectorAll('a')].map(a=>new URL(a.href,location.href).pathname):[],actions:[...document.querySelectorAll('#sv-admin-section-actions button')].map(b=>(b.textContent||'').trim()),padding:parseFloat(getComputedStyle(document.body).paddingBottom)||0,overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth),mobile_nav:{flex_direction:mc?.flexDirection||'',menu_background:mc?.backgroundColor||'',menu_transparent:(mc?.backgroundColor==='rgba(0, 0, 0, 0)'||mc?.backgroundColor==='transparent'),nav_background:nc?.backgroundColor||'',nav_dark:rgb.length>=3&&Math.max(rgb[0],rgb[1],rgb[2])<100,borderless:borders.every(v=>Number.isFinite(v)&&v===0),shadowless:(mc?.boxShadow||'none')==='none',height:mw,height_reasonable:mw>=32&&mw<=64,viewport_width:innerWidth,main_width:mr?.width||0,overview_width:or?.width||0,main_not_compressed:!!(mr&&or&&mr.width>=innerWidth-4&&or.width>=innerWidth-24&&or.left<=12),css_href:css,css_cache_busted:/admin-zoom-responsive\.css\?v=[^&]+/.test(css)}}}""")
  op=cl=sv=False
  if x['details']:
   o=p.get_by_role('button',name='Abrir seções');c=p.get_by_role('button',name='Recolher seções')
@@ -64,10 +64,10 @@ def home(p):
   k=p.evaluate("""()=>{let d=document.querySelector('details.sv-admin-card-details');if(!d)return'';d.querySelector('summary')?.click();return d.dataset.sectionKey||''}""")
   if k:
    p.wait_for_timeout(250);slow=again(p,1800) or slow
-   try:p.wait_for_function("k=>[...document.querySelectorAll('details.sv-admin-card-details')].some(d=>d.dataset.sectionKey===k&&d.open)",k,timeout=9000);sv=True
+   try:p.wait_for_function("k=>[...document.querySelectorAll('details.sv-admin-card-details')].some(d=>d.dataset.sectionKey===k&&d.open)",arg=k,timeout=9000);sv=True
    except T:pass
  e={'/admin/ai-image-studio/admin_dashboard.php','/admin/catalog-optimization/admin_catalog.php','/admin/produtos.php','/admin/pedidos.php'}
- return {'authenticated':True,'status':s,'navigation_slow':slow,'details':x['details'],'opened':op,'closed':cl,'saved':sv,'actions':{'Abrir seções','Recolher seções'}<=set(x['actions']),'dock':x['dock'] and e<=set(x['paths']),'padding':x['padding'],'overflow':x['overflow']}
+ return {'authenticated':True,'status':s,'navigation_slow':slow,'details':x['details'],'opened':op,'closed':cl,'saved':sv,'actions':{'Abrir seções','Recolher seções'}<=set(x['actions']),'dock':x['dock'] and e<=set(x['paths']),'padding':x['padding'],'overflow':x['overflow'],'mobile_nav':x['mobile_nav']}
 def catalog(p):
  s,slow=nav(p,'/admin/catalog-optimization/admin_catalog.php',2400);a=auth(p)
  if not a['authenticated']:return {'authenticated':False,'path':a['path'],'status':s,'navigation_slow':slow}
@@ -97,19 +97,19 @@ def image(p):
   slow=again(p,2700) or slow;re=p.evaluate("x=>{let i=document.querySelector('.iv-item[data-product-id=\"'+CSS.escape(x.id)+'\"]');if(!i)return false;let p=i.querySelector(':scope>summary input.iv-check'),v=[...i.querySelectorAll('.iv-variant input.iv-check')].find(n=>n.value===x.type);return !!(p?.checked&&v?.checked)}",z)
  return {'authenticated':True,'status':s,'navigation_slow':slow,**x,'eligible':bool(z),'preflight':p.locator('#sv-img-preflight').count()>0,'shown':sh,'saved':sa,'restored':re,'actionbar':p.locator('.iv-actionbar').count()>0,'overflow':p.evaluate('()=>Math.max(0,document.documentElement.scrollWidth-innerWidth)')}
 def main():
- ch=chrome();sid=os.environ.get('SV_ADMIN_SESSION_ID','');sn=os.environ.get('SV_ADMIN_SESSION_NAME','PHPSESSID');r={'schema':3,'started_at':ts(),'login':{},'session_source':'ephemeral-audit-session','authenticated_profile':None,'home':{},'catalog':{},'image':{},'blocked_mutations':[],'errors':[]}
+ ch=chrome();sid=os.environ.get('SV_ADMIN_SESSION_ID','');sn=os.environ.get('SV_ADMIN_SESSION_NAME','PHPSESSID');r={'schema':4,'started_at':ts(),'login':{},'session_source':'ephemeral-audit-session','authenticated_profile':False,'home':{},'catalog':{},'image':{},'blocked_mutations':[],'errors':[]}
  if not sid or not sn:emit({**r,'overall':False,'failures':['ephemeral_session_missing'],'finished_at':ts()},8)
  with sync_playwright() as w:
   r['login']=login(w,ch);b=w.chromium.launch(executable_path=ch,headless=True);c=b.new_context(viewport={'width':390,'height':844},is_mobile=True,has_touch=True,locale='pt-BR',timezone_id='America/Sao_Paulo',service_workers="block");bl=[];guard(c,bl);c.add_cookies([{'name':sn,'value':sid,'url':B,'httpOnly':True,'secure':True,'sameSite':'Lax'}]);p=c.new_page();p.set_default_timeout(11000);stage='home'
   try:
    h=home(p);r['home']=h
    if h.get('authenticated'):
-    r['authenticated_profile']='ephemeral-audit-session';stage='catalog';r['catalog']=catalog(p);stage='image';r['image']=image(p)
+    r['authenticated_profile']=True;stage='catalog';r['catalog']=catalog(p);stage='image';r['image']=image(p)
    r['blocked_mutations']=bl[:20]
   except Exception as e:r['errors'].append({'stage':stage,'type':type(e).__name__,'path':path(p.url)})
   finally:c.close();b.close()
- l=r['login'];h=r['home'];c=r['catalog'];m=r['image'];checks={'login_google':l.get('google_visible') and l.get('google_canonical'),'authenticated_profile':bool(r['authenticated_profile']),'home':all((h.get('authenticated'),h.get('details',0)>0,h.get('opened'),h.get('closed'),h.get('saved'),h.get('actions'),h.get('dock'),h.get('padding',0)>=70,h.get('overflow',999)<=4)),'catalog':all((c.get('authenticated'),c.get('sort'),c.get('options'),c.get('product'),c.get('urgent'),c.get('overflow',999)<=4)),'image':all((m.get('authenticated'),m.get('items',0)>0,m.get('products',0)>0,m.get('variants',0)>0,m.get('eligible'),m.get('preflight'),m.get('shown'),m.get('saved'),m.get('restored'),m.get('actionbar'),m.get('overflow',999)<=4))};r['failures']=[k for k,v in checks.items() if not v];r['overall']=not r['failures'];r['finished_at']=ts();emit(r,0 if r['overall'] else 7)
+ l=r['login'];h=r['home'];c=r['catalog'];m=r['image'];mn=h.get('mobile_nav',{});checks={'login_google':l.get('google_visible') and l.get('google_canonical'),'authenticated_profile':r['authenticated_profile'] is True,'admin_load':h.get('status')==200 and not h.get('navigation_slow',True),'home':all((h.get('authenticated'),h.get('details',0)>0,h.get('opened'),h.get('closed'),h.get('saved'),h.get('actions'),h.get('dock'),h.get('padding',0)>=70,h.get('overflow',999)<=4)),'admin_mobile_nav':all((mn.get('flex_direction')=='row',mn.get('menu_transparent'),mn.get('nav_dark'),mn.get('borderless'),mn.get('shadowless'),mn.get('height_reasonable'),mn.get('main_not_compressed'),mn.get('css_cache_busted'))),'catalog':all((c.get('authenticated'),c.get('sort'),c.get('options'),c.get('product'),c.get('urgent'),c.get('overflow',999)<=4)),'image':all((m.get('authenticated'),m.get('items',0)>0,m.get('products',0)>0,m.get('variants',0)>0,m.get('eligible'),m.get('preflight'),m.get('shown'),m.get('saved'),m.get('restored'),m.get('actionbar'),m.get('overflow',999)<=4)),'errors':not r['errors']};r['checks']=checks;r['failures']=[k for k,v in checks.items() if not v];r['overall']=not r['failures'];r['finished_at']=ts();emit(r,0 if r['overall'] else 7)
 if __name__=='__main__':
  try:main()
  except SystemExit:raise
- except Exception as e:emit({'schema':3,'overall':False,'failures':['top_exception'],'errors':[type(e).__name__],'finished_at':ts()},9)
+ except Exception as e:emit({'schema':4,'overall':False,'failures':['top_exception'],'errors':[type(e).__name__],'finished_at':ts()},9)
