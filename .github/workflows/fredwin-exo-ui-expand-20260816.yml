@@ -21,6 +21,7 @@ jobs:
           chmod 600 ~/.ssh/vmkey
       - name: Sync scripts and expand restricted entity
         run: |
+          # Rerun marker: mouse-bounds fallback enabled.
           set -euo pipefail
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 - <<'"'"'PY'"'"'
           import json, urllib.request
