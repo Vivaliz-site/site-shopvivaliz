@@ -30,7 +30,7 @@ jobs:
           from dotenv import load_dotenv
           load_dotenv('.env', override=True)
           from app.email_provider import MicrosoftGraphEmailProvider
-          subject = 'ShopVivaliz status probe 20260816-1732-BRT'
+          subject = 'ShopVivaliz status probe 20260816-1918-BRT'
           result = MicrosoftGraphEmailProvider().send(
               'fredmourao@gmail.com',
               subject,
