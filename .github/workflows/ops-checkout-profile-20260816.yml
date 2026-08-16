@@ -1,0 +1,130 @@
+name: Ops Checkout Profile 20260816
+
+on:
+  push:
+    branches:
+      - ops/checkout-profile-20260816
+    paths:
+      - '.github/workflows/ops-checkout-profile-20260816.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  profile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Configure SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Profile checkout
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'timeout 150 bash -s' <<'SH'
+          set -euo pipefail
+          C=/home/ubuntu/shopvivaliz-deploy/current
+
+          echo '--- RELEASE / PRESSURE ---'
+          printf 'live_sha='; cat "$C/.release-sha"
+          uptime
+          free -m
+          vmstat 1 3
+
+          echo '--- PHP SESSION CONFIG ---'
+          php -r 'foreach (["session.save_handler","session.save_path","session.gc_probability","session.gc_divisor","session.gc_maxlifetime","output_buffering"] as $k) { echo $k,"=",ini_get($k),PHP_EOL; }'
+          save_path="$(php -r 'echo ini_get("session.save_path");')"
+          save_path="${save_path##*;}"
+          if [ -d "$save_path" ]; then
+            printf 'session_files='; find "$save_path" -maxdepth 1 -type f -name 'sess_*' 2>/dev/null | wc -l
+            du -sh "$save_path" 2>/dev/null || true
+          fi
+
+          echo '--- HTTP NO-COOKIE VS REUSED-COOKIE ---'
+          rm -f /tmp/sv-checkout-cookiejar
+          for i in 1 2 3; do
+            curl --max-time 12 -sS -o /dev/null -H 'Host: shopvivaliz.com.br' \
+              -w "fresh_$i code=%{http_code} ttfb=%{time_starttransfer} total=%{time_total}\n" \
+              http://127.0.0.1/checkout
+          done
+          for i in 1 2 3; do
+            curl --max-time 12 -sS -o /dev/null -H 'Host: shopvivaliz.com.br' \
+              -c /tmp/sv-checkout-cookiejar -b /tmp/sv-checkout-cookiejar \
+              -w "cookie_$i code=%{http_code} ttfb=%{time_starttransfer} total=%{time_total}\n" \
+              http://127.0.0.1/checkout
+          done
+          echo '--- ANON HEADERS ---'
+          curl --max-time 12 -sSI -H 'Host: shopvivaliz.com.br' http://127.0.0.1/checkout | sed -n '1,30p'
+
+          echo '--- DB MICROBENCHMARK ---'
+          cd "$C"
+          for i in 1 2 3; do
+            php -r '
+              $t0=microtime(true);
+              require "includes/pdo-database.php";
+              $t1=microtime(true);
+              $pdo=sv_pdo();
+              $t2=microtime(true);
+              $rows=[];
+              if ($pdo) {
+                $s=$pdo->query("SELECT code, description, discount_type, discount_value, starts_at, ends_at, expires_at, max_uses, used_count FROM coupons WHERE is_active = 1 AND display_in_popup = 1 AND (starts_at IS NULL OR starts_at <= NOW()) AND (COALESCE(expires_at, ends_at) IS NULL OR COALESCE(expires_at, ends_at) >= NOW()) AND (max_uses IS NULL OR max_uses = 0 OR used_count < max_uses) ORDER BY CASE discount_type WHEN \"percent\" THEN 1 WHEN \"shipping\" THEN 2 ELSE 3 END, discount_value DESC, code ASC LIMIT 6");
+                $rows=$s->fetchAll(PDO::FETCH_ASSOC);
+              }
+              $t3=microtime(true);
+              printf("pdo_require=%.4f connect=%.4f coupon_query=%.4f rows=%d total=%.4f\n",$t1-$t0,$t2-$t1,$t3-$t2,count($rows),$t3-$t0);
+            '
+          done
+
+          echo '--- PHP INCLUDE STAGES ---'
+          php -d display_errors=1 -r '
+            chdir("/home/ubuntu/shopvivaliz-deploy/current");
+            $_SERVER["REQUEST_METHOD"]="GET";
+            $_SERVER["REQUEST_URI"]="/checkout";
+            $_SERVER["SCRIPT_FILENAME"]=getcwd()."/checkout.php";
+            $_SERVER["SCRIPT_NAME"]="/checkout.php";
+            $_SERVER["PHP_SELF"]="/checkout.php";
+            $_SERVER["HTTP_HOST"]="shopvivaliz.com.br";
+            $_SERVER["REMOTE_ADDR"]="127.0.0.1";
+            $_COOKIE=[];
+            ob_start();
+            $t0=microtime(true);
+            session_id("checkoutprofile".bin2hex(random_bytes(6)));
+            session_start();
+            $t1=microtime(true);
+            $runtimeSecrets=require "config/runtime-secrets.php";
+            if (is_array($runtimeSecrets)) { foreach ($runtimeSecrets as $k=>$v) { if (is_string($k) && $k!=="" && getenv($k)===false && is_scalar($v)) { putenv($k."=".(string)$v); $_ENV[$k]=(string)$v; } } }
+            $t2=microtime(true);
+            require_once "includes/mercadopago-gateway.php";
+            $t3=microtime(true);
+            require_once "includes/load-custom-css.php";
+            $t4=microtime(true);
+            require_once "includes/head-analytics.php";
+            $t5=microtime(true);
+            $svNavCurrent="checkout";
+            include "includes/navbar.php";
+            $t6=microtime(true);
+            ob_end_clean();
+            session_write_close();
+            printf("session=%.4f secrets=%.4f mp_include=%.4f custom_css=%.4f analytics=%.4f navbar=%.4f total=%.4f peak_mb=%.1f\n",$t1-$t0,$t2-$t1,$t3-$t2,$t4-$t3,$t5-$t4,$t6-$t5,$t6-$t0,memory_get_peak_usage(true)/1048576);
+          '
+
+          echo '--- TOP CPU AFTER ---'
+          ps -eo pid,ppid,user,ni,stat,pcpu,pmem,rss,etime,args --sort=-pcpu | head -24
+          SH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
