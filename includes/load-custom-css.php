@@ -121,6 +121,10 @@ function load_custom_css(): void
             echo "    <link rel=\"stylesheet\" href=\"/css/admin-zoom-responsive.css?v="
                 . htmlspecialchars($adminCssVersion, ENT_QUOTES, 'UTF-8') . "\">\n";
         }
+        // A navbar publica possui sombra por padrao. No Admin mobile ela deve
+        // permanecer uma barra operacional plana; esta regra final impede que
+        // a sombra global volte a vencer a camada responsiva por ordem de carga.
+        echo "    <style>@media (max-width:720px){body.admin-surface .navbar{box-shadow:none!important}}</style>\n";
         return;
     }
 
