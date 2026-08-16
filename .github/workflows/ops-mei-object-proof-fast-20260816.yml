@@ -1,0 +1,41 @@
+name: Ops MEI Object Proof Fast 20260816
+
+on:
+  push:
+    branches: ["ops/mei-profile-20260816"]
+    paths: [".github/workflows/ops-mei-object-proof-fast-20260816.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Configure SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"; test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa; chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts; chmod 600 ~/.ssh/known_hosts
+      - name: Read current DB objects
+        run: |
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'timeout 45 bash -s' <<'SH'
+          set -euo pipefail
+          echo HISTORY
+          sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -F '|' -Atqc "select version,description,checksum,installed_on from mei_email.flyway_schema_history where version in ('014','017','018') order by installed_rank;"
+          echo FUNCTION
+          sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -Atqc "select pg_get_functiondef('mei_email.trg_marcar_empresa_submetida()'::regprocedure);"
+          echo TRIGGER
+          sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -Atqc "select pg_get_triggerdef(oid,true) from pg_trigger where tgname='envios_marcar_empresa_submetida' and tgrelid='mei_email.envios'::regclass;"
+          echo INDEXES
+          sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -F '|' -Atqc "select c.relname,i.indisvalid,i.indisready from pg_index i join pg_class c on c.oid=i.indexrelid where c.relname in ('idx_envios_enviado_em','idx_envios_enviado_em_v2') order by c.relname;"
+          SH
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
