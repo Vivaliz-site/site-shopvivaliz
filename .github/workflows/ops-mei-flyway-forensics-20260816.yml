@@ -41,58 +41,69 @@ jobs:
           printf 'origin_main='; git -C "$D" rev-parse origin/main
           git -C "$D" status --short --branch | head -30
 
+          echo '--- FLYWAY HISTORY LOCATION ---'
+          sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -F '|' -Atqc \
+            "select n.nspname,c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace where c.relname='flyway_schema_history';"
+
           echo '--- FLYWAY HISTORY 14/17/18/25 ---'
           sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -F '|' -Atqc \
-            "select installed_rank,version,description,type,script,checksum,installed_by,installed_on,execution_time,success from public.flyway_schema_history where version in ('14','17','18','25') order by installed_rank;"
+            "select installed_rank,version,description,type,script,checksum,installed_by,installed_on,execution_time,success from mei_email.flyway_schema_history where version in ('14','17','18','25') order by installed_rank;"
 
           echo '--- FLYWAY LAST 15 ---'
           sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -F '|' -Atqc \
-            "select installed_rank,version,description,checksum,installed_on,success from public.flyway_schema_history order by installed_rank desc limit 15;"
+            "select installed_rank,version,description,checksum,installed_on,success from mei_email.flyway_schema_history order by installed_rank desc limit 15;"
 
-          echo '--- V014 RELATED CURRENT DB OBJECTS ---'
+          echo '--- HISTORICAL CHECKSUMS ---'
+          python3 - "$D" <<'PY'
+          import subprocess, sys, zlib
+          repo=sys.argv[1]
+          cases={
+            'V014': ('db/migrations/V014__cnpj_alphanumeric_and_submission_guard.sql', [
+              '20e61bae0db483a7a10b0c6750fded7edef5cdb4',
+              '0a52fe455567ced7c5ab353142a4ace17e2c4cb2',
+              'origin/main']),
+            'V017': ('db/migrations/V017__optimize_submission_trigger.sql', [
+              '91adad6561f0aeafcfe4fae594608fd2f51b793b',
+              'c4030006ff79e19092843932638dbee40a08501c',
+              'origin/main']),
+            'V018': ('db/migrations/V018__index_envios_enviado_em.sql', [
+              '3561ba7a7cf23177aa8539a4d337002508455d37',
+              '4bba9741ceb599bc5ad2d93970a7eefc50850e88',
+              'origin/main']),
+          }
+          def flyway_checksum(data: bytes) -> int:
+              crc=0
+              text=data.decode('utf-8-sig')
+              for line in text.splitlines():
+                  crc=zlib.crc32(line.encode('utf-8'), crc)
+              value=crc & 0xffffffff
+              return value if value < 0x80000000 else value - 0x100000000
+          for label,(path,refs) in cases.items():
+              print(label, path)
+              for ref in refs:
+                  data=subprocess.check_output(['git','-C',repo,'show',f'{ref}:{path}'])
+                  print(f'  {ref} checksum={flyway_checksum(data)} bytes={len(data)}')
+          PY
+
+          echo '--- V014 DIFF INITIAL -> CURRENT ---'
+          git -C "$D" diff 20e61bae0db483a7a10b0c6750fded7edef5cdb4 origin/main -- db/migrations/V014__cnpj_alphanumeric_and_submission_guard.sql || true
+          echo '--- V017 DIFF INITIAL -> CURRENT ---'
+          git -C "$D" diff 91adad6561f0aeafcfe4fae594608fd2f51b793b origin/main -- db/migrations/V017__optimize_submission_trigger.sql || true
+          echo '--- V018 DIFF INITIAL -> CURRENT ---'
+          git -C "$D" diff 3561ba7a7cf23177aa8539a4d337002508455d37 origin/main -- db/migrations/V018__index_envios_enviado_em.sql || true
+
+          echo '--- CURRENT ENVIO TRIGGERS ---'
           sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -F '|' -Atqc \
             "select tgname,pg_get_triggerdef(oid,true) from pg_trigger where not tgisinternal and tgrelid='mei_email.envios'::regclass order by tgname;"
+
+          echo '--- CURRENT RELATED FUNCTIONS ---'
           sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -Atqc \
-            "select pg_get_functiondef(p.oid) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='mei_email' and p.proname ilike '%envio%' order by p.proname;" | head -c 12000 || true
+            "select p.proname||E'\n'||pg_get_functiondef(p.oid) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='mei_email' and (p.proname ilike '%submission%' or p.proname ilike '%submitted%' or p.proname ilike '%guard%' or p.proname ilike '%envio%') order by p.proname;" | head -c 24000 || true
           echo
 
-          echo '--- V017 CURRENT TRIGGER FUNCTION CANDIDATES ---'
-          sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -F '|' -Atqc \
-            "select p.proname,pg_get_functiondef(p.oid) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='mei_email' and (p.proname ilike '%submission%' or p.proname ilike '%submitted%' or p.proname ilike '%guard%') order by p.proname;" | head -c 16000 || true
-          echo
-
-          echo '--- V018 CURRENT INDEXES ON ENVIOS ---'
+          echo '--- CURRENT ENVIO INDEXES ---'
           sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -F '|' -Atqc \
             "select indexname,indexdef from pg_indexes where schemaname='mei_email' and tablename='envios' order by indexname;"
-
-          echo '--- HISTORICAL FILES: COMMITS / SIZES / DIFFS ---'
-          check_file() {
-            label="$1"; path="$2"; shift 2
-            echo "### $label $path"
-            for ref in "$@"; do
-              if git -C "$D" cat-file -e "$ref:$path" 2>/dev/null; then
-                bytes="$(git -C "$D" show "$ref:$path" | wc -c)"
-                lines="$(git -C "$D" show "$ref:$path" | wc -l)"
-                blob="$(git -C "$D" rev-parse "$ref:$path")"
-                echo "$ref blob=$blob bytes=$bytes lines=$lines"
-              else
-                echo "$ref MISSING"
-              fi
-            done
-          }
-          check_file V014 db/migrations/V014__cnpj_alphanumeric_and_submission_guard.sql \
-            20e61bae0db483a7a10b0c6750fded7edef5cdb4 0a52fe455567ced7c5ab353142a4ace17e2c4cb2 origin/main
-          check_file V017 db/migrations/V017__optimize_submission_trigger.sql \
-            91adad6561f0aeafcfe4fae594608fd2f51b793b c4030006ff79e19092843932638dbee40a08501c origin/main
-          check_file V018 db/migrations/V018__index_envios_enviado_em.sql \
-            3561ba7a7cf23177aa8539a4d337002508455d37 4bba9741ceb599bc5ad2d93970a7eefc50850e88 origin/main
-
-          echo '--- DIFF V014 ---'
-          git -C "$D" diff 20e61bae0db483a7a10b0c6750fded7edef5cdb4 0a52fe455567ced7c5ab353142a4ace17e2c4cb2 -- db/migrations/V014__cnpj_alphanumeric_and_submission_guard.sql || true
-          echo '--- DIFF V017 ---'
-          git -C "$D" diff 91adad6561f0aeafcfe4fae594608fd2f51b793b c4030006ff79e19092843932638dbee40a08501c -- db/migrations/V017__optimize_submission_trigger.sql || true
-          echo '--- DIFF V018 ---'
-          git -C "$D" diff 3561ba7a7cf23177aa8539a4d337002508455d37 4bba9741ceb599bc5ad2d93970a7eefc50850e88 -- db/migrations/V018__index_envios_enviado_em.sql || true
 
           echo '--- PRESSURE / STOREFRONT ---'
           uptime
