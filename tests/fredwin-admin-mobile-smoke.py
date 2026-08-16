@@ -1,3 +1,4 @@
+# Read-only Fred-Win Admin mobile smoke; verifies repaired Playwright arg handling and navbar metrics.
 import base64,json,os
 from datetime import datetime,timezone
 from pathlib import Path
