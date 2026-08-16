@@ -163,17 +163,24 @@ def main():
 
             page.select_option('#iv-channel', 'shopee')
             page.select_option('#iv-provider', 'openai')
-            page.wait_for_timeout(1800)
-            page.wait_for_selector('.iv-item', timeout=15000)
+            page.wait_for_function("() => document.querySelector('#iv-channel')?.value === 'shopee' && document.querySelector('#iv-provider')?.value === 'openai'", timeout=8000)
+            page.wait_for_function("() => [...document.querySelectorAll('.iv-item[data-product-id]')].some(item => item.querySelector('summary input.iv-check:not([disabled])') && item.querySelector('.iv-variant input.iv-check:not([disabled])'))", timeout=20000)
+            page.wait_for_timeout(900)
 
-            candidate = page.locator('.iv-item').filter(has=page.locator('summary input.iv-check:not([disabled])')).first
-            if candidate.count() == 0:
+            stable = page.evaluate("""() => {
+                const item = [...document.querySelectorAll('.iv-item[data-product-id]')].find(node =>
+                    node.querySelector('summary input.iv-check:not([disabled])') &&
+                    node.querySelector('.iv-variant input.iv-check:not([disabled])')
+                );
+                return item ? {id:item.dataset.productId || '', variants:item.querySelectorAll('.iv-variant input.iv-check:not([disabled])').length} : null;
+            }""")
+            if not stable or not stable.get('id') or int(stable.get('variants') or 0) < 1:
                 result['failures'].append('no_selectable_candidate')
             else:
-                product_id = int(candidate.get_attribute('data-product-id') or 0)
+                product_id = int(stable['id'])
                 result['selected_product_id'] = product_id
-                product_check = candidate.locator('summary input.iv-check').first
-                product_check.check()
+                candidate = page.locator(f'.iv-item[data-product-id="{product_id}"]')
+                candidate.locator('summary input.iv-check:not([disabled])').first.check()
                 page.wait_for_timeout(250)
 
                 variants = candidate.locator('.iv-variant input.iv-check:not([disabled])')
