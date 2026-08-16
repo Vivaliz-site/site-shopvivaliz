@@ -43,10 +43,7 @@ jobs:
           text = text.replace(old, new, 1)
 
           anchor = " op=cl=sv=False\n"
-          metrics = ''' n=p.evaluate("""()=>{let nav=document.querySelector('.navbar'),menu=document.querySelector('.navbar-menu'),overview=document.querySelector('.admin-overview'),ns=nav?getComputedStyle(nav):null,ms=menu?getComputedStyle(menu):null;return{menuFlex:ms?.flexDirection||'',menuBg:ms?.backgroundColor||'',menuShadow:ms?.boxShadow||'',navBg:ns?.backgroundColor||'',navShadow:ns?.boxShadow||'',height:nav?nav.getBoundingClientRect().height:0,contentWidth:overview?overview.getBoundingClientRect().width:0,viewportWidth:innerWidth}}""")
- x['navbar']=n
- op=cl=sv=False
-'''
+          metrics = " n=p.evaluate(\"\"\"()=>{let nav=document.querySelector('.navbar'),menu=document.querySelector('.navbar-menu'),overview=document.querySelector('.admin-overview'),ns=nav?getComputedStyle(nav):null,ms=menu?getComputedStyle(menu):null;return{menuFlex:ms?.flexDirection||'',menuBg:ms?.backgroundColor||'',menuShadow:ms?.boxShadow||'',navBg:ns?.backgroundColor||'',navShadow:ns?.boxShadow||'',height:nav?nav.getBoundingClientRect().height:0,contentWidth:overview?overview.getBoundingClientRect().width:0,viewportWidth:innerWidth}}\"\"\")\n x['navbar']=n\n op=cl=sv=False\n"
           if anchor not in text:
               raise SystemExit('home metrics insertion anchor not found')
           text = text.replace(anchor, metrics, 1)
