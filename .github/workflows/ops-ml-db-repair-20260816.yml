@@ -1,0 +1,122 @@
+name: Ops ML DB Repair 20260816
+
+on:
+  push:
+    branches:
+      - ops/runtime-profile-20260815-2357
+    paths:
+      - '.github/workflows/ops-ml-db-repair-20260816.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Configure verified SSH host
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          SHOPVIVALIZ_VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          KEY="${ORACLE_VM_SSH_KEY:-}"
+          [ -n "$KEY" ] || KEY="${SHOPVIVALIZ_VM_SSH_KEY:-}"
+          test -n "$KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Repair ML database conservatively
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'timeout 180 bash -s' <<'SH'
+          set -euo pipefail
+          echo '--- BEFORE ---'
+          sudo docker ps -a --format 'name={{.Names}} status={{.Status}}' | grep '^name=ml-' || true
+          echo '--- POSTGRES STATE ---'
+          sudo docker inspect ml-postgres-1 --format 'status={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}} restart={{.HostConfig.RestartPolicy.Name}}' || true
+          echo '--- POSTGRES LOGS ---'
+          sudo docker logs --tail 100 ml-postgres-1 2>&1 | tail -100 || true
+
+          # Stop the failing trainer loop while its database is unavailable.
+          sudo docker stop -t 10 ml-trainer-1 >/dev/null 2>&1 || true
+
+          # Re-use the existing database container and volume. No rm, no volume delete, no compose down.
+          sudo docker start ml-postgres-1 >/dev/null
+          healthy=0
+          for i in $(seq 1 12); do
+            state="$(sudo docker inspect ml-postgres-1 --format '{{.State.Status}}' 2>/dev/null || true)"
+            health="$(sudo docker inspect ml-postgres-1 --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>/dev/null || true)"
+            echo "postgres attempt=$i state=$state health=$health"
+            if [ "$state" = running ] && { [ "$health" = healthy ] || [ "$health" = none ]; }; then
+              healthy=1
+              break
+            fi
+            if [ "$state" = exited ] || [ "$state" = dead ]; then
+              break
+            fi
+            sleep 5
+          done
+
+          if [ "$healthy" -ne 1 ]; then
+            echo '--- POSTGRES FAILED TO START ---'
+            sudo docker inspect ml-postgres-1 --format 'status={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}}'
+            sudo docker logs --tail 120 ml-postgres-1 2>&1 | tail -120 || true
+            # Keep trainer stopped to avoid tight restart churn while DB is broken.
+            exit 20
+          fi
+
+          echo '--- POSTGRES RECOVERED ---'
+          sudo docker inspect ml-postgres-1 --format 'status={{.State.Status}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}'
+
+          # Restart API so DNS/database connections are fresh.
+          sudo docker restart -t 10 ml-api-1 >/dev/null
+          api_ok=0
+          for i in $(seq 1 12); do
+            code="$(curl --max-time 5 -sS -o /tmp/mlhealth -w '%{http_code}' http://127.0.0.1:8091/health || true)"
+            body="$(head -c 400 /tmp/mlhealth 2>/dev/null || true)"
+            echo "api attempt=$i code=$code body=$body"
+            if [ "$code" = 200 ] && printf '%s' "$body" | grep -q '"ok":true'; then
+              api_ok=1
+              break
+            fi
+            sleep 5
+          done
+          test "$api_ok" -eq 1
+
+          # Trainer may run one bounded training pass, then its normal six-hour sleep.
+          sudo docker start ml-trainer-1 >/dev/null
+          sudo docker update --cpus 0.20 --cpu-shares 128 ml-trainer-1 >/dev/null
+          sleep 8
+          trainer_state="$(sudo docker inspect ml-trainer-1 --format '{{.State.Status}}')"
+          echo "trainer_state=$trainer_state"
+          test "$trainer_state" = running
+
+          echo '--- AFTER ---'
+          sudo docker ps --format 'name={{.Names}} status={{.Status}}' | grep '^name=ml-' || true
+          curl --max-time 5 -fsS http://127.0.0.1:8091/health
+          echo
+          curl --max-time 5 -fsS http://127.0.0.1:8091/status | head -c 1200
+          echo
+          echo '--- PRESSURE ---'
+          uptime
+          vmstat 1 3
+          echo '--- LATENCY ---'
+          for path in / /catalogo/ /catalogo/ /checkout; do
+            curl --max-time 12 -sS -o /dev/null -H 'Host: shopvivaliz.com.br' \
+              -w "$path code=%{http_code} ttfb=%{time_starttransfer} total=%{time_total}\n" \
+              "http://127.0.0.1$path" || echo "$path timeout"
+          done
+          SH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
