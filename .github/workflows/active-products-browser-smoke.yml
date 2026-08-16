@@ -1,0 +1,202 @@
+name: Active Products Browser Smoke
+
+on:
+  workflow_run:
+    workflows:
+      - Master Production Pipeline 24/7
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  browser-smoke:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - name: Checkout deployed commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Validate smoke source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile tests/active-products-browser-smoke.py
+          grep -Fq 'SV_ACTIVE_PRODUCTS_BROWSER_B64=' tests/active-products-browser-smoke.py
+          grep -Fq 'pending_candidates.php' tests/active-products-browser-smoke.py
+          grep -Fq '/catalogo' tests/active-products-browser-smoke.py
+
+      - name: Configure verified VM access
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key"
+          test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Verify private relay health
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+            'curl -fsS --connect-timeout 5 --max-time 12 http://127.0.0.1:5557/health'
+
+      - name: Provision ephemeral admin audit session
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          session_id="$(openssl rand -hex 24)"
+          echo "::add-mask::$session_id"
+          session_name="$({
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+              -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+              'bash -s' -- "$session_id" <<'REMOTE'
+          set -Eeuo pipefail
+          sid="$1"
+          cd /home/ubuntu/shopvivaliz-deploy/current
+          name="$(sudo -u www-data php -d display_errors=0 -d session.use_strict_mode=0 -r '
+            require "includes/pdo-database.php";
+            $db = function_exists("sv_pdo") ? sv_pdo() : null;
+            if (!$db instanceof PDO) exit(2);
+            $id = (int)$db->query("SELECT id FROM users WHERE is_admin = 1 ORDER BY id ASC LIMIT 1")->fetchColumn();
+            if ($id < 1) exit(3);
+            session_id($argv[1]);
+            if (!session_start()) exit(4);
+            $_SESSION["user_id"] = $id;
+            $_SESSION["is_admin"] = 1;
+            $_SESSION["issued_at"] = time();
+            session_write_close();
+            echo session_name();
+          ' "$sid")"
+          test -n "$name"
+          printf '%s\n' "$name"
+          REMOTE
+          } | tail -n1 | tr -d '\r\n')"
+          [[ "$session_name" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]]
+          printf 'SV_ADMIN_SESSION_ID=%s\n' "$session_id" >> "$GITHUB_ENV"
+          printf 'SV_ADMIN_SESSION_NAME=%s\n' "$session_name" >> "$GITHUB_ENV"
+
+      - name: Execute Chrome active-only smoke on Fred Windows relay
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p test-results/active-products-browser-smoke
+          gzip -c tests/active-products-browser-smoke.py | base64 -w0 > /tmp/active-products-browser-smoke.py.gz.b64
+          script_b64="$(cat /tmp/active-products-browser-smoke.py.gz.b64)"
+
+          python3 - "$script_b64" "$SV_ADMIN_SESSION_NAME" "$SV_ADMIN_SESSION_ID" <<'PY' > /tmp/active-products-browser-body.json
+          import json,re,sys
+          encoded, session_name, session_id = sys.argv[1:4]
+          if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]*', session_name): raise SystemExit('invalid session name')
+          if not re.fullmatch(r'[a-f0-9]{48}', session_id): raise SystemExit('invalid session id')
+          command = (
+              'powershell -NoProfile -ExecutionPolicy Bypass -Command "'
+              "$ErrorActionPreference='Stop';"
+              f"$env:SV_ADMIN_SESSION_NAME='{session_name}';"
+              f"$env:SV_ADMIN_SESSION_ID='{session_id}';"
+              "$path=Join-Path $env:TEMP 'active-products-browser-smoke.py';"
+              f"$data=[Convert]::FromBase64String('{encoded}');"
+              "$input=[IO.MemoryStream]::new($data);"
+              "$gzip=[IO.Compression.GzipStream]::new($input,[IO.Compression.CompressionMode]::Decompress);"
+              "$output=[IO.MemoryStream]::new();$gzip.CopyTo($output);"
+              "[IO.File]::WriteAllBytes($path,$output.ToArray());"
+              "$gzip.Dispose();$input.Dispose();$output.Dispose();"
+              "try { & py -3 $path; $code=$LASTEXITCODE } finally { Remove-Item $path -Force -ErrorAction SilentlyContinue };"
+              "exit $code"
+              '"'
+          )
+          print(json.dumps({'params': {'command': command, 'timeout': 480}}))
+          PY
+
+          body_b64="$(base64 -w0 /tmp/active-products-browser-body.json)"
+          set +e
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+            "BODY_B64='$body_b64' python3 - <<'PY'
+          import base64,json,os,urllib.request
+          body=base64.b64decode(os.environ['BODY_B64'])
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=520) as response: relay=json.loads(response.read().decode())
+          result=relay.get('result') or {}; output=str(result.get('output') or ''); error=str(result.get('error') or '')
+          marker=''
+          for line in output.splitlines():
+              if line.startswith('SV_ACTIVE_PRODUCTS_BROWSER_B64='): marker=line.split('=',1)[1].strip()
+          if marker:
+              decoded=json.loads(base64.b64decode(marker).decode())
+          else:
+              decoded={'schema':1,'overall':False,'failures':['structured_result_missing'],'output_tail':output[-1600:],'error_tail':error[-1600:]}
+          raw=json.dumps(decoded,ensure_ascii=False,separators=(',',':')).encode()
+          print('SV_REMOTE_RESULT_B64='+base64.b64encode(raw).decode())
+          print(json.dumps(decoded,ensure_ascii=False,indent=2))
+          if result.get('success') is not True or decoded.get('overall') is not True: raise SystemExit(7)
+          PY" > /tmp/active-products-browser-remote.log 2>&1
+          status=$?
+          set -e
+
+          python3 - /tmp/active-products-browser-remote.log test-results/active-products-browser-smoke/result.json <<'PY'
+          import base64,json,pathlib,sys
+          text=pathlib.Path(sys.argv[1]).read_text(encoding='utf-8',errors='replace'); marker=''
+          for line in text.splitlines():
+              if line.startswith('SV_REMOTE_RESULT_B64='): marker=line.split('=',1)[1].strip()
+          if marker: data=json.loads(base64.b64decode(marker).decode())
+          else: data={'schema':1,'overall':False,'failures':['remote_result_missing'],'output_tail':text[-2000:]}
+          pathlib.Path(sys.argv[2]).write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
+          print(json.dumps(data,ensure_ascii=False,indent=2))
+          PY
+          exit "$status"
+
+      - name: Revoke ephemeral admin audit session
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ -n "${SV_ADMIN_SESSION_ID:-}" && -f "$HOME/.ssh/id_rsa" ]]; then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+              -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+              'bash -s' -- "$SV_ADMIN_SESSION_ID" <<'REMOTE'
+          set -Eeuo pipefail
+          cd /home/ubuntu/shopvivaliz-deploy/current
+          sudo -u www-data php -d display_errors=0 -d session.use_strict_mode=0 -r '
+            session_id($argv[1]); session_start(); $_SESSION=[]; session_destroy();
+          ' "$1"
+          REMOTE
+          fi
+
+      - name: Upload browser smoke result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: active-products-browser-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/active-products-browser-smoke/result.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts" /tmp/active-products-browser-smoke.py.gz.b64 /tmp/active-products-browser-body.json /tmp/active-products-browser-remote.log
