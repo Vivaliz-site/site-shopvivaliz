@@ -1,0 +1,107 @@
+name: Ops MEI Flyway Forensics 20260816
+
+on:
+  push:
+    branches:
+      - ops/mei-profile-20260816
+    paths:
+      - '.github/workflows/ops-mei-flyway-forensics-20260816.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Configure verified SSH host
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"; test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa; chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts; chmod 600 ~/.ssh/known_hosts
+
+      - name: Read-only Flyway and schema forensics
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'timeout 150 bash -s' <<'SH'
+          set -euo pipefail
+          D=/home/ubuntu/mei-mg-email
+          git -C "$D" fetch origin main --prune >/dev/null
+
+          echo '--- REPO ---'
+          printf 'worktree_head='; git -C "$D" rev-parse HEAD
+          printf 'origin_main='; git -C "$D" rev-parse origin/main
+          git -C "$D" status --short --branch | head -30
+
+          echo '--- FLYWAY HISTORY 14/17/18/25 ---'
+          sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -F '|' -Atqc \
+            "select installed_rank,version,description,type,script,checksum,installed_by,installed_on,execution_time,success from public.flyway_schema_history where version in ('14','17','18','25') order by installed_rank;"
+
+          echo '--- FLYWAY LAST 15 ---'
+          sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -F '|' -Atqc \
+            "select installed_rank,version,description,checksum,installed_on,success from public.flyway_schema_history order by installed_rank desc limit 15;"
+
+          echo '--- V014 RELATED CURRENT DB OBJECTS ---'
+          sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -F '|' -Atqc \
+            "select tgname,pg_get_triggerdef(oid,true) from pg_trigger where not tgisinternal and tgrelid='mei_email.envios'::regclass order by tgname;"
+          sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -Atqc \
+            "select pg_get_functiondef(p.oid) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='mei_email' and p.proname ilike '%envio%' order by p.proname;" | head -c 12000 || true
+          echo
+
+          echo '--- V017 CURRENT TRIGGER FUNCTION CANDIDATES ---'
+          sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -F '|' -Atqc \
+            "select p.proname,pg_get_functiondef(p.oid) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='mei_email' and (p.proname ilike '%submission%' or p.proname ilike '%submitted%' or p.proname ilike '%guard%') order by p.proname;" | head -c 16000 || true
+          echo
+
+          echo '--- V018 CURRENT INDEXES ON ENVIOS ---'
+          sudo docker exec -u postgres mei-mg-email-db psql -X -d mei_mg_email -P pager=off -F '|' -Atqc \
+            "select indexname,indexdef from pg_indexes where schemaname='mei_email' and tablename='envios' order by indexname;"
+
+          echo '--- HISTORICAL FILES: COMMITS / SIZES / DIFFS ---'
+          check_file() {
+            label="$1"; path="$2"; shift 2
+            echo "### $label $path"
+            for ref in "$@"; do
+              if git -C "$D" cat-file -e "$ref:$path" 2>/dev/null; then
+                bytes="$(git -C "$D" show "$ref:$path" | wc -c)"
+                lines="$(git -C "$D" show "$ref:$path" | wc -l)"
+                blob="$(git -C "$D" rev-parse "$ref:$path")"
+                echo "$ref blob=$blob bytes=$bytes lines=$lines"
+              else
+                echo "$ref MISSING"
+              fi
+            done
+          }
+          check_file V014 db/migrations/V014__cnpj_alphanumeric_and_submission_guard.sql \
+            20e61bae0db483a7a10b0c6750fded7edef5cdb4 0a52fe455567ced7c5ab353142a4ace17e2c4cb2 origin/main
+          check_file V017 db/migrations/V017__optimize_submission_trigger.sql \
+            91adad6561f0aeafcfe4fae594608fd2f51b793b c4030006ff79e19092843932638dbee40a08501c origin/main
+          check_file V018 db/migrations/V018__index_envios_enviado_em.sql \
+            3561ba7a7cf23177aa8539a4d337002508455d37 4bba9741ceb599bc5ad2d93970a7eefc50850e88 origin/main
+
+          echo '--- DIFF V014 ---'
+          git -C "$D" diff 20e61bae0db483a7a10b0c6750fded7edef5cdb4 0a52fe455567ced7c5ab353142a4ace17e2c4cb2 -- db/migrations/V014__cnpj_alphanumeric_and_submission_guard.sql || true
+          echo '--- DIFF V017 ---'
+          git -C "$D" diff 91adad6561f0aeafcfe4fae594608fd2f51b793b c4030006ff79e19092843932638dbee40a08501c -- db/migrations/V017__optimize_submission_trigger.sql || true
+          echo '--- DIFF V018 ---'
+          git -C "$D" diff 3561ba7a7cf23177aa8539a4d337002508455d37 4bba9741ceb599bc5ad2d93970a7eefc50850e88 -- db/migrations/V018__index_envios_enviado_em.sql || true
+
+          echo '--- PRESSURE / STOREFRONT ---'
+          uptime
+          vmstat 1 3
+          for path in / /catalogo/ /checkout; do
+            curl --max-time 10 -sS -o /dev/null -H 'Host: shopvivaliz.com.br' -w "$path code=%{http_code} ttfb=%{time_starttransfer}\n" "http://127.0.0.1$path" || true
+          done
+          SH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
