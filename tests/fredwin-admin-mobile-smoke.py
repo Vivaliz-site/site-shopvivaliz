@@ -86,28 +86,27 @@ def catalog(p):
   q.first.select_option('product');p.wait_for_timeout(220);pr=p.evaluate(js);q.first.select_option('urgent');p.wait_for_timeout(220);ur=p.evaluate(js)
  return {'authenticated':True,'status':s,'navigation_slow':slow,'sort':v,'options':{'recent','urgent','channel','status','product'}<=set(o),'product':pr==['Alpha','Beta','Zeta'],'urgent':ur==['Zeta','Beta','Alpha'],'overflow':p.evaluate('()=>Math.max(0,document.documentElement.scrollWidth-innerWidth)')}
 def image(p):
- s,slow=nav(p,'/admin/ai-image-studio/admin_dashboard.php',3000);a=auth(p)
+ s,slow=nav(p,'/admin/ai-image-studio/admin_dashboard.php',2200);a=auth(p)
  if not a['authenticated']:return {'authenticated':False,'path':a['path'],'status':s,'navigation_slow':slow}
- try:p.wait_for_selector('.iv-item[data-product-id]',timeout=20000)
+ base=p.evaluate("""()=>({wrap:document.querySelectorAll('.ais-wrap').length>0,form:document.querySelectorAll('.ais-form form[method=get]').length>0,target:!!document.querySelector('#target_channel'),provider:!!document.querySelector('#provider'),model:!!document.querySelector('#model'),pageSize:!!document.querySelector('#page_size'),overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth)})""")
+ ps,pslow=nav(p,'/admin/ai-image-studio/admin_dashboard.php?preview=1&target_channel=site&provider=openai&model=gpt-image-1&page_size=25',3200);slow=slow or pslow;pa=auth(p)
+ try:p.wait_for_selector('.ais-preview-list,.ais-alert.note',timeout=12000)
  except T:pass
- x=p.evaluate("""()=>({items:document.querySelectorAll('.iv-item[data-product-id]').length,products:document.querySelectorAll('.iv-item>summary input.iv-check').length,variants:document.querySelectorAll('.iv-variant input.iv-check').length})""")
- z=p.evaluate("""()=>{for(let i of document.querySelectorAll('.iv-item[data-product-id]')){let p=i.querySelector(':scope>summary input.iv-check:not(:disabled)'),v=i.querySelector('.iv-variant input.iv-check:not(:disabled)');if(!p||!v)continue;p.checked=true;p.dispatchEvent(new Event('change',{bubbles:true}));v.checked=true;v.dispatchEvent(new Event('change',{bubbles:true}));let c=document.querySelector('#iv-channel')?.value||'site';return{id:String(i.dataset.productId||''),type:String(v.value||''),key:'svImageDraftV3:'+c}}return null}""")
- p.wait_for_timeout(350);sa=sh=pf=re=False
- if z:
-  sa=p.evaluate("x=>{let d=JSON.parse(localStorage.getItem(x.key)||'{}'),r=d?.products?.[x.id];return !!(r?.selected&&r?.types?.includes(x.type))}",z);r=p.locator('#iv-run')
-  if r.count():
-   try:p.wait_for_function("()=>{let b=document.querySelector('#iv-run');return !!(b&&!b.disabled)}",timeout=6000)
-   except T:pass
-   try:r.first.click(timeout=4000)
-   except:pass
-   try:p.wait_for_selector('#sv-img-preflight.show',timeout=4000)
-   except T:pass
-   pf=p.locator('#sv-img-preflight').count()>0;sh=p.locator('#sv-img-preflight.show').count()>0;c=p.locator('#sv-img-preflight .sv-img-cancel')
-   if c.count():c.first.click()
-  slow=again(p,2700) or slow;re=p.evaluate("x=>{let i=document.querySelector('.iv-item[data-product-id=\"'+CSS.escape(x.id)+'\"]');if(!i)return false;let p=i.querySelector(':scope>summary input.iv-check'),v=[...i.querySelectorAll('.iv-variant input.iv-check')].find(n=>n.value===x.type);return !!(p?.checked&&v?.checked)}",z)
- return {'authenticated':True,'status':s,'navigation_slow':slow,**x,'eligible':bool(z),'preflight':pf,'shown':sh,'saved':sa,'restored':re,'actionbar':p.locator('.iv-actionbar').count()>0,'overflow':p.evaluate('()=>Math.max(0,document.documentElement.scrollWidth-innerWidth)')}
+ preview=p.evaluate("""()=>({items:document.querySelectorAll('.ais-preview-item').length,checks:document.querySelectorAll('[data-product-check]').length,list:document.querySelectorAll('.ais-preview-list').length>0,emptyNote:[...document.querySelectorAll('.ais-alert.note')].some(n=>/nenhum produto pendente/i.test(n.textContent||'')),selectAll:!!document.querySelector('#ais-select-all'),clearAll:!!document.querySelector('#ais-clear-all'),submit:!!document.querySelector('#ais-submit'),overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth)})""")
+ selection=True
+ if preview['checks']>0:
+  selection=False
+  sa=p.locator('#ais-select-all');ca=p.locator('#ais-clear-all')
+  if sa.count() and ca.count():
+   sa.first.click();p.wait_for_timeout(160)
+   picked=p.evaluate("()=>[...document.querySelectorAll('[data-product-check]')].every(x=>x.checked)&&!document.querySelector('#ais-submit')?.disabled")
+   ca.first.click();p.wait_for_timeout(160)
+   cleared=p.evaluate("()=>[...document.querySelectorAll('[data-product-check]')].every(x=>!x.checked)&&!!document.querySelector('#ais-submit')?.disabled")
+   selection=bool(picked and cleared)
+ previewReady=bool((preview['checks']>0 and preview['list'] and preview['selectAll'] and preview['clearAll'] and preview['submit'] and selection) or preview['emptyNote'])
+ return {'authenticated':True,'status':s,'navigation_slow':slow,'wrap':base['wrap'],'form':base['form'],'fields':all((base['target'],base['provider'],base['model'],base['pageSize'])),'preview_authenticated':pa.get('authenticated',False),'preview_status':ps,'preview_items':preview['items'],'preview_checks':preview['checks'],'preview_ready':previewReady,'selection_local':selection,'overflow':max(base['overflow'],preview['overflow'])}
 def main():
- ch=chrome();sid=os.environ.get('SV_ADMIN_SESSION_ID','');sn=os.environ.get('SV_ADMIN_SESSION_NAME','PHPSESSID');r={'schema':3,'started_at':ts(),'login':{},'session_source':'ephemeral-audit-session','authenticated_profile':None,'home':{},'catalog':{},'image':{},'blocked_mutations':[],'errors':[]}
+ ch=chrome();sid=os.environ.get('SV_ADMIN_SESSION_ID','');sn=os.environ.get('SV_ADMIN_SESSION_NAME','PHPSESSID');r={'schema':4,'started_at':ts(),'login':{},'session_source':'ephemeral-audit-session','authenticated_profile':None,'home':{},'catalog':{},'image':{},'blocked_mutations':[],'errors':[]}
  if not sid or not sn:emit({**r,'overall':False,'failures':['ephemeral_session_missing'],'finished_at':ts()},8)
  with sync_playwright() as w:
   r['login']=login(w,ch);b=w.chromium.launch(executable_path=ch,headless=True);c=b.new_context(viewport={'width':390,'height':844},is_mobile=True,has_touch=True,locale='pt-BR',timezone_id='America/Sao_Paulo',service_workers="block");bl=[];guard(c,bl);c.add_cookies([{'name':sn,'value':sid,'url':B,'httpOnly':True,'secure':True,'sameSite':'Lax'}]);p=c.new_page();p.set_default_timeout(11000);stage='home';active=p
@@ -122,8 +121,8 @@ def main():
     try:active.close()
     except:pass
    c.close();b.close()
- l=r['login'];h=r['home'];c=r['catalog'];m=r['image'];checks={'login_google':l.get('google_visible') and l.get('google_canonical'),'authenticated_profile':bool(r['authenticated_profile']),'home':all((h.get('authenticated'),h.get('details',0)>0,h.get('opened'),h.get('closed'),h.get('saved'),h.get('actions'),h.get('dock'),h.get('padding',0)>=70,h.get('overflow',999)<=4)),'catalog':all((c.get('authenticated'),c.get('sort'),c.get('options'),c.get('product'),c.get('urgent'),c.get('overflow',999)<=4)),'image':all((m.get('authenticated'),m.get('items',0)>0,m.get('products',0)>0,m.get('variants',0)>0,m.get('eligible'),m.get('preflight'),m.get('shown'),m.get('saved'),m.get('restored'),m.get('actionbar'),m.get('overflow',999)<=4))};n=h.get('navbar') or {};checks['navbar_mobile']=all((n.get('menuFlex')=='row',n.get('menuBg') in ('rgba(0, 0, 0, 0)','transparent'),n.get('menuShadow')=='none',n.get('navBg')=='rgb(17, 24, 39)',n.get('navShadow')=='none',0<n.get('height',999)<=60,n.get('viewportWidth')==390,n.get('contentWidth',0)>=360));r['failures']=[k for k,v in checks.items() if not v];r['overall']=not r['failures'];r['finished_at']=ts();emit(r,0 if r['overall'] else 7)
+ l=r['login'];h=r['home'];c=r['catalog'];m=r['image'];checks={'login_google':l.get('google_visible') and l.get('google_canonical'),'authenticated_profile':bool(r['authenticated_profile']),'home':all((h.get('authenticated'),h.get('details',0)>0,h.get('opened'),h.get('closed'),h.get('saved'),h.get('actions'),h.get('dock'),h.get('padding',0)>=70,h.get('overflow',999)<=4)),'catalog':all((c.get('authenticated'),c.get('sort'),c.get('options'),c.get('product'),c.get('urgent'),c.get('overflow',999)<=4)),'image':all((m.get('authenticated'),m.get('status')==200,m.get('wrap'),m.get('form'),m.get('fields'),m.get('preview_authenticated'),m.get('preview_status')==200,m.get('preview_ready'),m.get('selection_local'),m.get('overflow',999)<=4))};n=h.get('navbar') or {};checks['navbar_mobile']=all((n.get('menuFlex')=='row',n.get('menuBg') in ('rgba(0, 0, 0, 0)','transparent'),n.get('menuShadow')=='none',n.get('navBg')=='rgb(17, 24, 39)',n.get('navShadow')=='none',0<n.get('height',999)<=60,n.get('viewportWidth')==390,n.get('contentWidth',0)>=360));r['failures']=[k for k,v in checks.items() if not v];r['overall']=not r['failures'];r['finished_at']=ts();emit(r,0 if r['overall'] else 7)
 if __name__=='__main__':
  try:main()
  except SystemExit:raise
- except Exception as e:emit({'schema':3,'overall':False,'failures':['top_exception'],'errors':[type(e).__name__],'finished_at':ts()},9)
+ except Exception as e:emit({'schema':4,'overall':False,'failures':['top_exception'],'errors':[type(e).__name__],'finished_at':ts()},9)
