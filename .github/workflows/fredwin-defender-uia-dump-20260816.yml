@@ -20,27 +20,14 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Transfer diagnostic to VM
+      - name: Transfer diagnostics to VM
         run: |
           set -euo pipefail
-          scp -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey scripts/tmp-defender-uia-dump.ps1 ubuntu@137.131.156.17:/tmp/tmp-defender-uia-dump.ps1
-      - name: Write and run UIA diagnostic on Fred-Win
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey scripts/tmp-defender-uia-dump.ps1 scripts/tmp-fredwin-run-uia-dump.py ubuntu@137.131.156.17:/tmp/
+      - name: Run UIA diagnostic on Fred-Win
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 - <<'"'"'PY'"'"'
-          import json, urllib.request
-          base='http://127.0.0.1:5557/mcp/tool/'
-          with open('/tmp/tmp-defender-uia-dump.ps1','r',encoding='utf-8') as f:
-              ps=f.read()
-          def call(tool,params,timeout=30):
-              body=json.dumps({'params':params}).encode()
-              req=urllib.request.Request(base+tool,data=body,headers={'Content-Type':'application/json'},method='POST')
-              with urllib.request.urlopen(req,timeout=timeout) as r: return json.loads(r.read().decode())
-          w=call('write_file',{'path':'C:\\site-shopvivaliz\\scripts\\tmp-defender-uia-dump.ps1','content':ps})
-          print(json.dumps(w,ensure_ascii=False))
-          x=call('execute_command',{'command':'powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\tmp-defender-uia-dump.ps1','timeout':45},55)
-          print(json.dumps(x,ensure_ascii=False))
-          PY'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 /tmp/tmp-fredwin-run-uia-dump.py'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey
