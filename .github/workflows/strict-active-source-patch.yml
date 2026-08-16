@@ -25,44 +25,36 @@ jobs:
           set -Eeuo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           runtime = Path('includes/catalog-runtime.php')
           text = runtime.read_text(encoding='utf-8')
 
-          old = """function svcr_select_catalog_products(array $products, array $fallbackProducts): array
-          {
-              // A fonte canonica sempre vence. O fallback existe apenas para
-              // indisponibilidade total da fonte, nunca para substituir um
-              // catalogo ativo por um espelho antigo com estoque diferente.
-              return $products !== [] ? $products : $fallbackProducts;
-          }
-          """
-          new = """function svcr_select_catalog_products(array $products, array $fallbackProducts): array
+          pattern = re.compile(
+              r"function svcr_select_catalog_products\(array \$products, array \$fallbackProducts\): array\s*\{.*?\n\}",
+              re.S,
+          )
+          replacement = '''function svcr_select_catalog_products(array $products, array $fallbackProducts): array
           {
               // Regra fail-closed: snapshots/fallbacks antigos nao comprovam o
               // status atual no ERP. Somente a fonte canonica pode alimentar a
               // vitrine, inclusive quando todos os itens ativos estao sem estoque.
               return $products;
-          }
-          """
-          if old not in text:
-              raise SystemExit('catalog selection block not found')
-          text = text.replace(old, new, 1)
+          }'''
+          text, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'catalog selection replacements={count}')
 
-          old = """    if ($items === []) {
-              return svcr_fallback_products($root);
-          }
-          """
-          new = """    if ($items === []) {
+          needle = "if ($items === []) {\n        return svcr_fallback_products($root);\n    }"
+          replacement = '''if ($items === []) {
               // Sem snapshot canonico de ativos nao existe evidencia suficiente
               // para publicar produtos. Falhar fechado evita ressuscitar itens
               // inativos/excluidos por meio de um fallback historico.
               return [];
-          }
-          """
-          if old not in text:
+          }'''
+          if needle not in text:
               raise SystemExit('empty canonical source fallback block not found')
-          text = text.replace(old, new, 1)
+          text = text.replace(needle, replacement, 1)
           runtime.write_text(text, encoding='utf-8')
 
           test = Path('tests/catalog-runtime-fallback-selection-test.php')
