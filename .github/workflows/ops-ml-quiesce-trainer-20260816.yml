@@ -1,0 +1,78 @@
+name: Ops ML Quiesce Trainer 20260816
+
+on:
+  push:
+    branches:
+      - ops/runtime-profile-20260815-2357
+    paths:
+      - '.github/workflows/ops-ml-quiesce-trainer-20260816.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  quiesce:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Configure SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"; test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa; chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts; chmod 600 ~/.ssh/known_hosts
+
+      - name: Pause trainer and verify storefront
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'timeout 150 bash -s' <<'SH'
+          set -euo pipefail
+
+          echo '--- PRECHECK ML ---'
+          health="$(curl --max-time 8 -fsS http://127.0.0.1:8091/health)"
+          printf '%s\n' "$health"
+          printf '%s' "$health" | grep -q '"ok":true'
+          status="$(curl --max-time 8 -fsS http://127.0.0.1:8091/status)"
+          printf '%s\n' "$status" | head -c 1000; echo
+          printf '%s' "$status" | grep -q '"status":"trained"'
+
+          echo '--- PAUSE TRAINER ---'
+          sudo docker update --restart=no ml-trainer-1 >/dev/null
+          sudo docker stop -t 15 ml-trainer-1 >/dev/null 2>&1 || true
+          trainer_state="$(sudo docker inspect ml-trainer-1 --format '{{.State.Status}}')"
+          trainer_restart="$(sudo docker inspect ml-trainer-1 --format '{{.HostConfig.RestartPolicy.Name}}')"
+          echo "trainer_state=$trainer_state restart=$trainer_restart"
+          test "$trainer_state" = exited
+          test "$trainer_restart" = no
+
+          echo '--- API MUST REMAIN HEALTHY ---'
+          for i in $(seq 1 5); do
+            curl --max-time 8 -fsS http://127.0.0.1:8091/health
+            echo
+            sleep 2
+          done
+
+          sleep 10
+          echo '--- PRESSURE AFTER TRAINER STOP ---'
+          uptime
+          free -m
+          vmstat 1 5
+          ps -eo pid,ppid,user,ni,stat,pcpu,pmem,rss,etime,args --sort=-pcpu | head -22
+
+          echo '--- LATENCY AFTER TRAINER STOP ---'
+          for path in / / /catalogo/ /catalogo/ /catalogo/ /checkout /api/catalog/products.php?limit=1\&available=1; do
+            curl --max-time 12 -sS -o /dev/null -H 'Host: shopvivaliz.com.br' \
+              -w "$path code=%{http_code} ttfb=%{time_starttransfer} total=%{time_total}\n" \
+              "http://127.0.0.1$path" || echo "$path timeout"
+          done
+          SH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
