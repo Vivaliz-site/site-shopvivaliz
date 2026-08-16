@@ -1,0 +1,39 @@
+name: Reconcile approved commercial policy v2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/reconcile-approved-commercial-policy-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reconcile files
+        run: python3 scripts/reconcile_commercial_policy.py
+      - name: Validate policy
+        run: |
+          php tests/commercial-policy-regression-test.php
+          php -l index.php
+          php -l includes/product-trust-sanitizer.php
+      - name: Commit reconciliation
+        run: |
+          set -euo pipefail
+          git config user.name fredmourao-ai
+          git config user.email fredmourao@gmail.com
+          git add index.php includes/product-trust-sanitizer.php tests/commercial-policy-regression-test.php
+          if git diff --cached --quiet; then
+            echo NO_CHANGES_NEEDED=true
+            exit 0
+          fi
+          git commit -m 'fix: restore approved ShopVivaliz commercial policy'
+          git push origin HEAD:main

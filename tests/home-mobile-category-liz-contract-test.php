@@ -54,6 +54,11 @@ sv_contract_assert(str_contains($lizJs, "const MASCOT_VIDEO = '/public/assets/li
 sv_contract_assert(!str_contains($lizJs, 'OFFICIAL_LOGO'), 'Logo da loja nao pode substituir o mascote da Liz.');
 sv_contract_assert(str_contains($lizCss, '#sv-liz-launcher img'), 'Mascote precisa de enquadramento proprio no botao.');
 sv_contract_assert(str_contains($lizCss, '#sv-liz-panel .sv-hero video'), 'Mascote animado precisa de enquadramento no dialogo.');
+<<<<<<< HEAD
+=======
+sv_contract_assert(str_contains($lizCss, 'top: clamp(108px, 17vh, 150px) !important;'), 'Liz desktop deve ficar acima da busca no primeiro fold.');
+sv_contract_assert(str_contains($lizCss, 'body.sv-home-top .sv-support-dock'), 'WhatsApp desktop deve sair da faixa promocional no primeiro fold.');
+>>>>>>> origin/main
 
 sv_contract_assert(str_contains($promoJs, '3% OFF com 2+ produtos diferentes'), 'Oferta compacta deve manter a regra de produtos diferentes.');
 sv_contract_assert(str_contains($promoCss, 'grid-template-columns: 34px minmax(0, 1fr) auto;'), 'Banner promocional mobile deve usar layout compacto.');

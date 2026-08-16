@@ -5,21 +5,25 @@ $t0 = microtime(true);
 $timings = [];
 $timings['start'] = 0.0;
 
-// Precisa iniciar a sessao antes de qualquer output: esta pagina tem HTML
-// suficiente antes do include do navbar (JSON-LD, meta tags) para estourar o
-// buffer de saida do PHP, o que envia os headers cedo e faz o session_start()
-// tardio do navbar.php falhar silenciosamente (usuario aparece deslogado mesmo
-// apos login). Mesma causa raiz ja corrigida em catalogo.php.
-if (session_status() === PHP_SESSION_NONE) {
+// Visitantes anonimos nao precisam criar uma sessao PHP. Criar PHPSESSID na
+// home impedia cache compartilhado e mantinha locks de sessao sem necessidade.
+// Se o navegador ja possui a sessao (usuario autenticado), ela e retomada antes
+// de qualquer output para preservar o estado de login no navbar.
+$svHasSessionCookie = isset($_COOKIE[session_name()]) && $_COOKIE[session_name()] !== '';
+if ($svHasSessionCookie && session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 $timings['session_start'] = microtime(true) - $t0;
 
-// Cache: 'no-cache' obriga revalidacao a cada request (conteudo nunca fica stale),
-// mas permite resposta 304 quando nada mudou — ao contrario de 'no-store', que
-// forcava o download completo do HTML em toda visita. Precos e estoque continuam
-// sempre atualizados; o ganho e apenas de banda/latencia em visitas repetidas.
-header('Cache-Control: no-cache, must-revalidate');
+// Cache curto apenas para anonimos. Preco/estoque sao revalidados de forma
+// autoritativa no carrinho/checkout; 30 s aqui reduzem carga sem comprometer
+// a seguranca comercial. Usuarios com sessao continuam sem cache compartilhado.
+if ($svHasSessionCookie) {
+    header('Cache-Control: private, no-cache, must-revalidate');
+} else {
+    header('Cache-Control: public, max-age=15, s-maxage=30, stale-while-revalidate=60');
+    header('Vary: Cookie', false);
+}
 
 require_once __DIR__ . '/config/bootstrap-env.php';
 $timings['bootstrap_env'] = microtime(true) - $t0;
@@ -123,6 +127,14 @@ function sv_home_catalog_source_rows(): array
 
     $apcu = function_exists('apcu_fetch') && function_exists('apcu_store');
     $apcuKey = 'sv_home_catalog_source_rows_v1';
+    $fileCache = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'shopvivaliz-home-catalog-source-v1.json';
+    if (!$apcu && is_file($fileCache) && (time() - (int)@filemtime($fileCache)) <= 30) {
+        $cached = json_decode((string)@file_get_contents($fileCache), true);
+        if (is_array($cached) && $cached !== []) {
+            $localCache = $cached;
+            return $localCache;
+        }
+    }
     if ($apcu) {
         $ok = false;
         $stored = apcu_fetch($apcuKey, $ok);
@@ -185,6 +197,16 @@ function sv_home_catalog_source_rows(): array
         $localCache = $runtime;
         if ($apcu) {
             apcu_store($apcuKey, $localCache, 300);
+        } else {
+            $encoded = json_encode($localCache, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if (is_string($encoded)) {
+                $tmpCache = $fileCache . '.' . getmypid() . '.tmp';
+                if (@file_put_contents($tmpCache, $encoded, LOCK_EX) !== false) {
+                    @rename($tmpCache, $fileCache);
+                } else {
+                    @unlink($tmpCache);
+                }
+            }
         }
         return $localCache;
     }
@@ -193,6 +215,16 @@ function sv_home_catalog_source_rows(): array
         $localCache = $runtime;
         if ($apcu) {
             apcu_store($apcuKey, $localCache, 300);
+        } else {
+            $encoded = json_encode($localCache, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if (is_string($encoded)) {
+                $tmpCache = $fileCache . '.' . getmypid() . '.tmp';
+                if (@file_put_contents($tmpCache, $encoded, LOCK_EX) !== false) {
+                    @rename($tmpCache, $fileCache);
+                } else {
+                    @unlink($tmpCache);
+                }
+            }
         }
         return $localCache;
     }
@@ -457,12 +489,12 @@ function sv_home_banners(): array
 {
     return [
         [
-            'alt' => 'Banner Vivaliz com 5% de desconto na primeira compra',
+            'alt' => 'Banner Vivaliz com 3% OFF automatico em carrinho com 2 ou mais produtos diferentes',
             'image' => '/public/assets/home-banners/banner-primeira-compra.webp',
             'tag' => 'OFERTA EXCLUSIVA',
             'title' => 'Tudo o que você precisa.',
-            'subtitle' => 'Ganhe 10% de desconto na sua primeira compra com o cupom VIVALIZ10.',
-            'primary' => ['label' => 'Aproveitar Desconto', 'href' => '/catalogo'],
+            'subtitle' => 'Leve 2 ou mais produtos diferentes e ganhe 3% OFF automatico no carrinho.',
+            'primary' => ['label' => 'Ver produtos', 'href' => '/catalogo'],
             'secondary' => ['label' => 'Falar com vendas', 'href' => '/contato'],
         ],
         [
