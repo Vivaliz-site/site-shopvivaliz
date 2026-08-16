@@ -19,7 +19,7 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Probe tunnel and read visual log
+      - name: Probe tunnel and read exact unblock log
         run: |
           set -euo pipefail
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 - <<'"'"'PY'"'"'
@@ -34,7 +34,7 @@ jobs:
                   print("HEALTH_ERROR", type(e).__name__, str(e))
                   return False
           if get("http://127.0.0.1:5557/health"):
-              body=json.dumps({"params":{"path":"C:\\site-shopvivaliz\\logs\\fredwin-exo-ui-confirm-visual.log"}}).encode()
+              body=json.dumps({"params":{"path":"C:\\site-shopvivaliz\\logs\\fredwin-defender-unblock-exact.log"}}).encode()
               req=urllib.request.Request("http://127.0.0.1:5557/mcp/tool/read_file",data=body,headers={"Content-Type":"application/json"},method="POST")
               try:
                   with urllib.request.urlopen(req,timeout=15) as r:
