@@ -1,0 +1,87 @@
+name: Ops ML Stable Path Inspect 20260816
+
+on:
+  push:
+    branches:
+      - ops/runtime-profile-20260815-2357
+    paths:
+      - '.github/workflows/ops-ml-stable-path-inspect-20260816.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Configure SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          SHOPVIVALIZ_VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          KEY="${ORACLE_VM_SSH_KEY:-}"; [ -n "$KEY" ] || KEY="${SHOPVIVALIZ_VM_SSH_KEY:-}"
+          test -n "$KEY"; test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_rsa; chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts; chmod 600 ~/.ssh/known_hosts
+
+      - name: Inspect stable paths and mounts
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'timeout 100 bash -s' <<'SH'
+          set -euo pipefail
+          C=/home/ubuntu/shopvivaliz-deploy/current
+          R=/home/ubuntu/shopvivaliz-deploy/repo
+          S=/home/ubuntu/shopvivaliz-deploy/shared
+
+          echo '--- PATHS ---'
+          for p in "$C" "$R" "$S" "$C/ml/schema.sql" "$R/ml/schema.sql" "$C/storage/ml" "$R/storage/ml" "$S/storage/ml" "$S/ml"; do
+            if [ -e "$p" ] || [ -L "$p" ]; then
+              printf '%s -> %s type=' "$p" "$(readlink -f "$p" 2>/dev/null || true)"
+              stat -c '%F mode=%a' "$p" 2>/dev/null || true
+            else
+              echo "$p MISSING"
+            fi
+          done
+
+          echo '--- COMPOSE LABELS ---'
+          for c in ml-postgres-1 ml-api-1 ml-trainer-1; do
+            echo "### $c"
+            sudo docker inspect "$c" --format 'working_dir={{index .Config.Labels "com.docker.compose.project.working_dir"}} config={{index .Config.Labels "com.docker.compose.project.config_files"}} project={{index .Config.Labels "com.docker.compose.project"}} service={{index .Config.Labels "com.docker.compose.service"}}' 2>/dev/null || true
+          done
+
+          echo '--- MOUNTS ---'
+          for c in ml-postgres-1 ml-api-1 ml-trainer-1; do
+            echo "### $c"
+            sudo docker inspect "$c" --format '{{range .Mounts}}{{printf "type=%s name=%s src=%s dst=%s rw=%v\n" .Type .Name .Source .Destination .RW}}{{end}}' 2>/dev/null || true
+          done
+
+          echo '--- VOLUMES ---'
+          sudo docker volume ls --format '{{.Name}}' | grep '^ml_' || true
+          sudo docker volume inspect ml_postgres_data --format 'name={{.Name}} mount={{.Mountpoint}} labels={{json .Labels}}' 2>/dev/null || true
+
+          echo '--- REPO STATE ---'
+          git -C "$R" status --short --branch | head -40 || true
+          printf 'repo_head='; git -C "$R" rev-parse HEAD 2>/dev/null || true
+          printf 'origin_main='; git -C "$R" rev-parse origin/main 2>/dev/null || true
+          printf 'live_sha='; cat "$C/.release-sha" 2>/dev/null || true
+
+          echo '--- COMPOSE VERSION/CONFIG CHECK ---'
+          docker compose version || true
+          if [ -f "$R/ml/docker-compose.yml" ]; then
+            secret="$(sudo docker inspect ml-postgres-1 --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^POSTGRES_PASSWORD=//p' | head -1)"
+            test -n "$secret"
+            ML_POSTGRES_PASSWORD="$secret" docker compose -p ml -f "$R/ml/docker-compose.yml" config --quiet
+            echo REPO_COMPOSE_CONFIG_OK=true
+            unset secret
+          fi
+          SH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
