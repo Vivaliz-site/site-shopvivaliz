@@ -1,0 +1,96 @@
+name: Ops Runtime Profile 20260815
+
+on:
+  push:
+    branches:
+      - ops/runtime-profile-20260815-2357
+    paths:
+      - '.github/workflows/ops-runtime-profile-20260815.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  profile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Configure verified SSH host
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          SHOPVIVALIZ_VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          KEY="${ORACLE_VM_SSH_KEY:-}"
+          [ -n "$KEY" ] || KEY="${SHOPVIVALIZ_VM_SSH_KEY:-}"
+          test -n "$KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Bounded runtime profile
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'timeout 150 bash -s' <<'SH'
+          set -euo pipefail
+          C=/home/ubuntu/shopvivaliz-deploy/current
+
+          echo '--- RELEASE ---'
+          printf 'live_sha='; cat "$C/.release-sha"
+          printf 'main_clone='; git -C /home/ubuntu/shopvivaliz-deploy/repo rev-parse origin/main 2>/dev/null || true
+
+          echo '--- UPTIME MEMORY CPU ---'
+          uptime
+          free -m
+          nproc
+          grep -E 'MemTotal|MemAvailable|SwapTotal|SwapFree' /proc/meminfo
+
+          echo '--- VMSTAT ---'
+          vmstat 1 5
+
+          echo '--- TOP PROCESSES FULL ARGS ---'
+          ps -eo pid,ppid,user,ni,stat,pcpu,pmem,rss,etime,args --sort=-pcpu | head -35
+
+          echo '--- TOP RSS ---'
+          ps -eo pid,ppid,user,ni,pcpu,pmem,rss,etime,args --sort=-rss | head -30
+
+          echo '--- CUSTOM SYSTEMD SERVICES ---'
+          systemctl list-units --type=service --state=running --no-pager --no-legend \
+            | grep -Ei 'shop|vivaliz|catalog|agent|audit|ml|python|sync|tiny|olist|oracle|snap|apache|mysql' \
+            | head -80 || true
+
+          echo '--- TIMERS ---'
+          systemctl list-timers --all --no-pager --no-legend \
+            | grep -Ei 'shop|vivaliz|catalog|agent|audit|ml|sync|tiny|olist|cron|logrotate|apt|snap' \
+            | head -80 || true
+
+          echo '--- USER CRON ---'
+          crontab -l 2>/dev/null | sed -n '1,120p' || true
+
+          echo '--- ROOT CRON ---'
+          sudo crontab -l 2>/dev/null | sed -n '1,120p' || true
+
+          echo '--- APACHE PROCESS COUNT ---'
+          pgrep -c apache2 || true
+          ps -C apache2 -o pid,ppid,ni,pcpu,pmem,rss,etime,args --sort=-pcpu | head -25 || true
+
+          echo '--- LISTENERS ---'
+          sudo ss -lntp | head -40
+
+          echo '--- LOCAL LATENCY SAMPLE ---'
+          for path in / /catalogo/ /catalogo/ /checkout /api/catalog/products.php?limit=1\&available=1; do
+            curl --max-time 10 -sS -o /dev/null -H 'Host: shopvivaliz.com.br' \
+              -w "$path code=%{http_code} ttfb=%{time_starttransfer} total=%{time_total}\n" \
+              "http://127.0.0.1$path" || echo "$path timeout"
+          done
+          SH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
