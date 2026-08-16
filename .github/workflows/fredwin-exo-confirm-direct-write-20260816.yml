@@ -1,4 +1,4 @@
-name: Fred-Win EXO confirm direct write 20260816
+name: Fred-Win EXO confirm inline 20260816
 on:
   push:
     branches: [main]
@@ -19,23 +19,83 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Write helper directly to Fred-Win and confirm
+      - name: Confirm visible Defender modal through interactive Fred-Win session
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 - <<'"'"'PY'"'"'
-          import json,urllib.request
-          base="http://127.0.0.1:5557/mcp/tool/"
-          raw="https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/fredwin-exo-ui-confirm-visual.ps1"
-          content=urllib.request.urlopen(raw,timeout=20).read().decode("utf-8")
-          def call(tool,params,timeout):
-              body=json.dumps({"params":params}).encode(); req=urllib.request.Request(base+tool,data=body,headers={"Content-Type":"application/json"},method="POST")
-              with urllib.request.urlopen(req,timeout=timeout) as r: data=json.loads(r.read().decode())
-              print(json.dumps(data,ensure_ascii=False)); return data
-          wrote=call("write_file",{"path":"scripts/fredwin-exo-ui-confirm-visual.ps1","content":content},20)
-          if not (wrote.get("result") or {}).get("success"): raise SystemExit(2)
-          run=call("execute_command",{"command":"powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\fredwin-exo-ui-schedule-confirm-visual.ps1","timeout":70},80)
-          if not (run.get("result") or {}).get("success"): raise SystemExit(3)
-          PY'
+          ENCODED="$(python3 - <<'PY'
+          import base64
+          script = r'''$ErrorActionPreference='Stop'
+          $task='ShopVivaliz EXO Confirm Inline'
+          $log='C:\site-shopvivaliz\logs\fredwin-exo-confirm-inline.log'
+          $clickScript=@'
+          $ErrorActionPreference='Stop'
+          Add-Type -AssemblyName UIAutomationClient
+          Add-Type -AssemblyName UIAutomationTypes
+          Add-Type @"
+          using System;
+          using System.Runtime.InteropServices;
+          public static class ConfirmMouse {
+            [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+            [DllImport("user32.dll")] public static extern bool SetCursorPos(int X, int Y);
+            [DllImport("user32.dll")] public static extern void mouse_event(uint f,uint x,uint y,uint d,UIntPtr e);
+          }
+          "@
+          $log='C:\site-shopvivaliz\logs\fredwin-exo-confirm-inline.log'
+          Set-Content -LiteralPath $log -Value ('START='+(Get-Date).ToString('o')) -Encoding UTF8
+          $p=Get-Process opera -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -match 'Entidades restritas.*Microsoft Defender' } | Select-Object -First 1
+          if(-not $p){ Add-Content $log 'RESULT=DEFENDER_WINDOW_NOT_FOUND'; exit 2 }
+          Add-Content $log ('WINDOW='+$p.MainWindowTitle+'|SESSION='+$p.SessionId)
+          $root=[System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
+          $cond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty,[System.Windows.Automation.ControlType]::Document)
+          $docs=$root.FindAll([System.Windows.Automation.TreeScope]::Descendants,$cond)
+          $doc=$null
+          foreach($d in $docs){ $r=$d.Current.BoundingRectangle; if($r.Width -gt 900 -and $r.Height -gt 400){ $doc=$d; break } }
+          if(-not $doc){ Add-Content $log 'RESULT=DOCUMENT_NOT_FOUND'; exit 3 }
+          $r=$doc.Current.BoundingRectangle
+          Add-Content $log ('DOC=X'+[int]$r.X+'|Y'+[int]$r.Y+'|W'+[int]$r.Width+'|H'+[int]$r.Height)
+          $x=[int]($r.X+($r.Width*0.6000)); $y=[int]($r.Y+($r.Height*0.5960))
+          Add-Content $log ('TARGET=X'+$x+'|Y'+$y)
+          [ConfirmMouse]::SetForegroundWindow($p.MainWindowHandle)|Out-Null
+          Start-Sleep -Milliseconds 600
+          [ConfirmMouse]::SetCursorPos($x,$y)|Out-Null
+          Start-Sleep -Milliseconds 250
+          [ConfirmMouse]::mouse_event(2,0,0,0,[UIntPtr]::Zero)
+          [ConfirmMouse]::mouse_event(4,0,0,0,[UIntPtr]::Zero)
+          Start-Sleep -Seconds 3
+          Add-Content $log 'RESULT=CONFIRM_CLICKED'
+          '@
+          $inner=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($clickScript))
+          $user=(Get-CimInstance Win32_ComputerSystem).UserName
+          if([string]::IsNullOrWhiteSpace($user)){ throw 'NO_INTERACTIVE_USER' }
+          try{ Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue }catch{}
+          $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -EncodedCommand '+$inner)
+          $trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1)
+          $principal=New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
+          Register-ScheduledTask -TaskName $task -Action $action -Trigger $trigger -Principal $principal -Force|Out-Null
+          Start-ScheduledTask -TaskName $task
+          Start-Sleep -Seconds 10
+          if(Test-Path -LiteralPath $log){ Get-Content -LiteralPath $log -Raw }
+          $info=Get-ScheduledTaskInfo -TaskName $task
+          Write-Output ('TASK_RESULT='+$info.LastTaskResult)
+          try{ Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue }catch{}
+          if($info.LastTaskResult -ne 0){ exit 4 }
+          '''
+          print(base64.b64encode(script.encode('utf-16le')).decode())
+          PY
+          )"
+          COMMAND="powershell -NoProfile -EncodedCommand $ENCODED"
+          CMD_B64="$(printf '%s' "$COMMAND" | base64 -w0)"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
+          import base64,json,os,urllib.request
+          command=base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode()
+          body=json.dumps({'params':{'command':command,'timeout':45}}).encode()
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=55) as r:
+              payload=json.loads(r.read().decode())
+          print(json.dumps(payload,ensure_ascii=False))
+          result=payload.get('result') or {}
+          if result.get('success') is not True: raise SystemExit(3)
+          PY"
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey
