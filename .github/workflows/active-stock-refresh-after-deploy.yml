@@ -5,6 +5,7 @@ on:
   push:
     branches: [main]
     paths:
+      - '.github/workflows/active-stock-refresh-after-deploy.yml'
       - 'olist/fetch-estoque-v3.php'
       - 'olist/force-sync-cache.php'
       - 'olist/sync-on-webhook.php'
