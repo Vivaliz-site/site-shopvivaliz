@@ -159,6 +159,12 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{THE_REQUEST} \s/checkout\.php[\s?]
     RewriteRule ^checkout\.php$ /checkout [R=301,L]
 
+    # Compatibilidade de landing pages legadas usadas em campanhas Google Ads.
+    # Resolve diretamente pelos IDs atuais do catalogo, preservando query strings
+    # de tracking e sem alterar preco, estoque ou cadastro dos produtos.
+    RewriteRule ^produto/vaso-antique-55-75l-macchiato-japi-brown/?$ produto.php?id=341533994 [L,QSA,NC]
+    RewriteRule ^produto/vaso-decor-plantas-cilin-decore-34-28l-aco-corten-japi-168/?$ produto.php?id=350509721 [L,QSA,NC]
+
     # Nao reescrever arquivos e diretorios reais
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
