@@ -1,0 +1,50 @@
+name: MEI email post V025 state v2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mei-email-post-v025-state-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  state:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Verify protected runtime state
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          sudo systemctl reset-failed mei-mg-email-api.service || true
+          sudo systemctl start mei-mg-email-api.service
+          sleep 3
+          echo "API=$(sudo systemctl is-active mei-mg-email-api.service 2>/dev/null || true)"
+          echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo 'SENTINEL=present'; else echo 'SENTINEL=absent'; fi
+          timeout 60s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -Atc "
+            select 'TRIGGER_INSERT='||count(*) from pg_trigger where tgrelid='mei_email.empresas'::regclass and tgname='zz_empresas_block_suppressed_or_rejected_insert' and not tgisinternal;
+            select 'TRIGGER_UPDATE='||count(*) from pg_trigger where tgrelid='mei_email.empresas'::regclass and tgname='zz_empresas_purge_rejected_after_update' and not tgisinternal;
+            select 'TRIGGER_ENVIO='||count(*) from pg_trigger where tgrelid='mei_email.envios'::regclass and tgname='zz_envios_archive_and_purge_pii' and not tgisinternal;
+            select 'FN_CNPJ='||count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='mei_email' and p.proname='is_cnpj_suppressed';" | tee /tmp/post-v025-state.txt
+          grep -q '^TRIGGER_INSERT=1$' /tmp/post-v025-state.txt
+          grep -q '^TRIGGER_UPDATE=1$' /tmp/post-v025-state.txt
+          grep -q '^TRIGGER_ENVIO=1$' /tmp/post-v025-state.txt
+          grep -q '^FN_CNPJ=1$' /tmp/post-v025-state.txt
+          echo 'V025=runtime_verified'
+          EOF
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/vmkey
