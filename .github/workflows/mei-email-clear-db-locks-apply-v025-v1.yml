@@ -1,0 +1,95 @@
+name: MEI email clear DB locks apply V025 v1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mei-email-clear-db-locks-apply-v025-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Clear stale DB clients and apply V025
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          sudo systemctl stop mei-mg-email-worker.service || true
+          sudo systemctl stop mei-mg-email-auto-sync.timer 2>/dev/null || true
+          sudo systemctl stop mei-mg-email-auto-sync.service 2>/dev/null || true
+          sudo pkill -TERM -f '[f]lyway.*target=25' || true
+          sudo pkill -TERM -f 'scripts/disparar_10000_mei_mg.py' || true
+          sleep 5
+          sudo pkill -KILL -f '[f]lyway.*target=25' || true
+          ids="$(timeout 15s docker ps -aq --filter name=mei-mg-email-flyway 2>/dev/null || true)"
+          if [ -n "$ids" ]; then timeout 30s docker rm -f $ids >/dev/null 2>&1 || true; fi
+
+          cd /home/ubuntu/mei-mg-email
+          git fetch origin main
+          git reset --hard origin/main
+          test -s db/migrations/V025__purge_operational_records_and_block_reimport.sql
+
+          echo 'DB_CLIENTS_BEFORE_BEGIN'
+          timeout 25s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -P pager=off -c "
+            select pid, state, wait_event_type, wait_event,
+                   coalesce(extract(epoch from (now()-xact_start))::int,0) as xact_age_s,
+                   coalesce(extract(epoch from (now()-query_start))::int,0) as query_age_s,
+                   left(query,120) as query
+              from pg_stat_activity
+             where datname='mei_mg_email'
+               and backend_type='client backend'
+             order by xact_start nulls last, query_start;
+          " || true
+          echo 'DB_CLIENTS_BEFORE_END'
+
+          # Terminate Flyway sessions and stale client transactions older than 15 minutes.
+          timeout 25s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -Atc "
+            select 'TERMINATED='||pid||':'||pg_terminate_backend(pid)
+              from pg_stat_activity
+             where datname='mei_mg_email'
+               and pid <> pg_backend_pid()
+               and backend_type='client backend'
+               and (
+                    application_name ilike '%flyway%'
+                    or query ilike '%flyway_schema_history%'
+                    or (xact_start is not null and xact_start < now()-interval '15 minutes')
+                    or (state <> 'idle' and query_start < now()-interval '15 minutes')
+               );
+          " || true
+          sleep 8
+
+          timeout 25s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -Atc "select 'DB_OK='||now();"
+
+          # Apply the idempotent migration atomically and fail quickly on any remaining lock.
+          timeout 120s sh -c "{ printf '%s\n' \"set lock_timeout='15s'; set statement_timeout='90s';\"; cat db/migrations/V025__purge_operational_records_and_block_reimport.sql; } | docker exec -i mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -1"
+          echo 'V025_SQL_APPLIED=true'
+
+          timeout 30s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -Atc "
+            select 'TRIGGER_INSERT='||count(*) from pg_trigger where tgrelid='mei_email.empresas'::regclass and tgname='zz_empresas_block_suppressed_or_rejected_insert' and not tgisinternal;
+            select 'TRIGGER_UPDATE='||count(*) from pg_trigger where tgrelid='mei_email.empresas'::regclass and tgname='zz_empresas_purge_rejected_after_update' and not tgisinternal;
+            select 'TRIGGER_ENVIO='||count(*) from pg_trigger where tgrelid='mei_email.envios'::regclass and tgname='zz_envios_archive_and_purge_pii' and not tgisinternal;
+            select 'FN_CNPJ='||count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='mei_email' and p.proname='is_cnpj_suppressed';
+          " | tee /tmp/v025-lockfix.txt
+          grep -q '^TRIGGER_INSERT=1$' /tmp/v025-lockfix.txt
+          grep -q '^TRIGGER_UPDATE=1$' /tmp/v025-lockfix.txt
+          grep -q '^TRIGGER_ENVIO=1$' /tmp/v025-lockfix.txt
+          grep -q '^FN_CNPJ=1$' /tmp/v025-lockfix.txt
+          echo 'V025_RUNTIME_VERIFIED=true'
+          EOF
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/vmkey
