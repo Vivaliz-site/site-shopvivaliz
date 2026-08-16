@@ -1,0 +1,90 @@
+name: Active Stock Refresh After Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'olist/fetch-estoque-v3.php'
+      - 'olist/force-sync-cache.php'
+      - 'olist/sync-on-webhook.php'
+      - 'olist/webhook-receiver.php'
+      - 'sync-daemon-to-db.php'
+      - 'tests/authoritative-stock-refresh-contract-test.php'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: active-stock-refresh-production
+  cancel-in-progress: true
+
+jobs:
+  refresh-production:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    steps:
+      - name: Wait until this exact SHA is live
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          for attempt in $(seq 1 150); do
+            live="$(curl -fsS --connect-timeout 5 --max-time 15 https://shopvivaliz.com.br/api/health/version.php | python3 -c 'import json,sys; print((json.load(sys.stdin).get("git_sha") or "").strip())' 2>/dev/null || true)"
+            if [ "$live" = "$EXPECTED_SHA" ]; then
+              echo "Exact SHA is live: $live"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Expected SHA did not become live within 25 minutes" >&2
+          exit 1
+
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key"
+          test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Refresh canonical active products and authoritative stock
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+            'cd /home/ubuntu/shopvivaliz-deploy/current && php olist/sync-on-webhook.php && php olist/fetch-estoque-v3.php && php sync-daemon-to-db.php'
+
+      - name: Verify available active products
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl -fsS --connect-timeout 5 --max-time 20 'https://shopvivaliz.com.br/api/catalog/products.php?limit=5&available=1&no_cache=1' > /tmp/catalog.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/catalog.json',encoding='utf-8'))
+          assert data.get('ok') is True, data
+          assert data.get('source') == 'catalog_runtime', data
+          assert int(data.get('total') or 0) > 0, data
+          assert len(data.get('products') or []) > 0, data
+          print('available_active_products=', data.get('total'))
+          PY
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts" /tmp/catalog.json
