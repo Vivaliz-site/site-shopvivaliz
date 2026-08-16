@@ -1,0 +1,35 @@
+name: Fred-Win EXO UI submit unblock 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/fredwin-exo-ui-submit-unblock-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Click final Send in restricted sender dialog
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 - <<'"'"'PY'"'"'
+          import json,urllib.request
+          body=json.dumps({"params":{"command":"powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\fredwin-ui-schedule-click.ps1 -Name \"Enviar\" -RequireText \"NAORESPONDA@DEV.SHOPVIVALIZ.COM.BR\"","timeout":60}}).encode()
+          req=urllib.request.Request("http://127.0.0.1:5557/mcp/tool/execute_command",data=body,headers={"Content-Type":"application/json"},method="POST")
+          with urllib.request.urlopen(req,timeout=70) as r: data=json.loads(r.read().decode())
+          print(json.dumps(data,ensure_ascii=False))
+          if not (data.get("result") or {}).get("success"): raise SystemExit(3)
+          PY'
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
