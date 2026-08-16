@@ -1,0 +1,74 @@
+name: FredWin Read Analysis Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fredwin-read-analysis-docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Verify FredWin tunnel
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health'
+
+      - name: Stage only requested documents inside local Windows repo
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 - <<'"'"'PY'"'"'
+          import json, urllib.request
+          ps = r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "$downloads=[Environment]::GetFolderPath('UserProfile') + '\\Downloads'; $cache='C:\\site-shopvivaliz\\.fredwin-cache'; New-Item -ItemType Directory -Path $cache -Force | Out-Null; $targets=@(@('*Analise*shopvivaliz*melhorias*.md','analysis.md'),@('*Resumo*executivo*vivaliz*.htm*','executive.html'),@('*Guia*tecnico*implementacao*.md','guide.md')); foreach($t in $targets){ $f=Get-ChildItem -Path $downloads -File -Filter $t[0] -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if($f){ Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $cache $t[1]) -Force } }; exit 0"'''
+          body=json.dumps({'params':{'command':ps,'timeout':120}}).encode()
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=130) as r:
+              payload=json.loads(r.read().decode())
+          result=payload.get('result') or {}
+          if result.get('success') is not True:
+              raise SystemExit('FredWin staging failed: '+json.dumps(payload))
+          print('FREDWIN_STAGE_OK')
+          PY'
+
+      - name: Read staged documents through private MCP
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 - <<'"'"'PY'"'"'
+          import json, urllib.request
+          paths=['.fredwin-cache/analysis.md','.fredwin-cache/executive.html','.fredwin-cache/guide.md']
+          found=0
+          for path in paths:
+              body=json.dumps({'params':{'path':path}}).encode()
+              req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/read_file',data=body,headers={'Content-Type':'application/json'},method='POST')
+              with urllib.request.urlopen(req,timeout=30) as r:
+                  payload=json.loads(r.read().decode())
+              result=payload.get('result') or {}
+              if result.get('success') is True:
+                  found += 1
+                  print('===FREDWIN_FILE_BEGIN=== '+path)
+                  print(result.get('content',''))
+                  print('===FREDWIN_FILE_END=== '+path)
+              else:
+                  print('FREDWIN_FILE_MISSING '+path)
+          if found == 0:
+              raise SystemExit('No requested analysis documents found in Windows Downloads')
+          print(f'FREDWIN_DOCS_FOUND={found}')
+          PY'
+
+      - name: Cleanup key
+        if: always()
+        run: rm -f ~/.ssh/vmkey
