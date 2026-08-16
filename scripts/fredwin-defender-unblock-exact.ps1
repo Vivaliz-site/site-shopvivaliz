@@ -52,7 +52,7 @@ function Find-VisibleRegex($Root, [string]$Pattern, [string]$TypeName = '') {
 }
 
 function Find-All-VisibleRegex($Root, [string]$Pattern, [string]$TypeName = '') {
-    $matches = @()
+    $results = @()
     $all = Get-All $Root
     for ($i = 0; $i -lt $all.Count; $i++) {
         $e = $all.Item($i)
@@ -63,10 +63,10 @@ function Find-All-VisibleRegex($Root, [string]$Pattern, [string]$TypeName = '') 
             if ($e.Current.IsOffscreen) { continue }
             if (-not $e.Current.IsEnabled) { continue }
             if ($TypeName -and $e.Current.ControlType.ProgrammaticName -ne $TypeName) { continue }
-            $matches += $e
+            $results += $e
         } catch {}
     }
-    return $matches
+    return $results
 }
 
 function Click-Element($Process, $Element, [string]$Label) {
@@ -94,14 +94,6 @@ function Click-Element($Process, $Element, [string]$Label) {
             return
         }
     } catch { Log ('CLICK_SELECT_ERROR|LABEL=' + $Label + '|' + $_.Exception.Message) }
-    $pattern = $null
-    try {
-        if ($Element.TryGetCurrentPattern([System.Windows.Automation.LegacyIAccessiblePattern]::Pattern, [ref]$pattern)) {
-            $pattern.DoDefaultAction()
-            Log ('CLICK_OK|METHOD=LegacyIAccessiblePattern|LABEL=' + $Label)
-            return
-        }
-    } catch { Log ('CLICK_LEGACY_ERROR|LABEL=' + $Label + '|' + $_.Exception.Message) }
     if ($rect.IsEmpty -or $rect.Width -le 0 -or $rect.Height -le 0) { throw "No clickable bounds: $Label" }
     $x = [int]($rect.X + ($rect.Width / 2))
     $y = [int]($rect.Y + ($rect.Height / 2))
@@ -121,9 +113,17 @@ function Refresh-Context {
 }
 
 Refresh-Context
-$tabs = Find-All-VisibleRegex $Root '^Entidades restritas - Microsoft Defender$' 'ControlType.TabItem'
+$tabs = @(Find-All-VisibleRegex $Root '^Entidades restritas - Microsoft Defender$' 'ControlType.TabItem')
 if ($tabs.Count -lt 1) { throw 'Defender restricted entities tab not found' }
-$tab = $tabs | Sort-Object { $_.Current.BoundingRectangle.X } -Descending | Select-Object -First 1
+$tab = $null
+$maxX = -999999
+foreach ($candidate in $tabs) {
+    $candidateX = $candidate.Current.BoundingRectangle.X
+    if ($candidateX -gt $maxX) {
+        $maxX = $candidateX
+        $tab = $candidate
+    }
+}
 Click-Element $Process $tab 'DefenderTab'
 Start-Sleep -Seconds 3
 Refresh-Context
