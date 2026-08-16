@@ -31,3 +31,4 @@ jobs:
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey
+# guarded rerun after PowerShell automatic-variable fix
