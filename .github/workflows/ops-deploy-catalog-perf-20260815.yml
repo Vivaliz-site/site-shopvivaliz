@@ -1,0 +1,114 @@
+name: Ops Deploy Catalog Performance 20260815
+
+on:
+  push:
+    branches:
+      - ops/deploy-catalog-perf-20260815
+    paths:
+      - '.github/workflows/ops-deploy-catalog-perf-20260815.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shopvivaliz-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Configure verified SSH host
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          SHOPVIVALIZ_VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          KEY="${ORACLE_VM_SSH_KEY:-}"
+          [ -n "$KEY" ] || KEY="${SHOPVIVALIZ_VM_SSH_KEY:-}"
+          test -n "$KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Verify pinned main SHA
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'timeout 60 bash -s' <<'SH'
+          set -euo pipefail
+          R=/home/ubuntu/shopvivaliz-deploy/repo
+          git -C "$R" fetch origin main --prune
+          actual="$(git -C "$R" rev-parse origin/main)"
+          expected='47b972aefa21305bc4353aafded09fcd001affa4'
+          echo "ORIGIN_MAIN=$actual"
+          test "$actual" = "$expected"
+          SH
+
+      - name: Deploy immutable release with rollback protection
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'timeout 420 flock -w 90 /var/lock/shopvivaliz-deploy.lock bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/deploy-production.sh main'
+
+      - name: Verify live release headers and timings
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'timeout 150 bash -s' <<'SH'
+          set -euo pipefail
+          C=/home/ubuntu/shopvivaliz-deploy/current
+          expected='47b972aefa21305bc4353aafded09fcd001affa4'
+          live="$(cat "$C/.release-sha")"
+          echo "LIVE_SHA=$live"
+          test "$live" = "$expected"
+          grep -q 's-maxage=30' "$C/catalogo.php"
+          grep -q 'Vary: Cookie' "$C/catalogo.php"
+          php -l "$C/catalogo.php"
+          sudo apache2ctl configtest
+
+          echo '--- ANONYMOUS CATALOG HEADERS ---'
+          anon="$(curl --max-time 12 -sSI -H 'Host: shopvivaliz.com.br' http://127.0.0.1/catalogo/)"
+          printf '%s\n' "$anon" | sed -n '1,28p'
+          printf '%s\n' "$anon" | grep -qi '^Cache-Control: public, max-age=15, s-maxage=30, stale-while-revalidate=60'
+          printf '%s\n' "$anon" | grep -qi '^Vary: Cookie'
+          if printf '%s\n' "$anon" | grep -qi '^Set-Cookie: PHPSESSID='; then
+            echo 'ERROR: anonymous catalog created PHPSESSID'
+            exit 1
+          fi
+
+          echo '--- SESSION CATALOG HEADERS ---'
+          session_headers="$(curl --max-time 12 -sSI -H 'Host: shopvivaliz.com.br' -H 'Cookie: PHPSESSID=perfvalidation1234567890' http://127.0.0.1/catalogo/)"
+          printf '%s\n' "$session_headers" | sed -n '1,28p'
+          printf '%s\n' "$session_headers" | grep -qi '^Cache-Control: private, no-store, max-age=0, must-revalidate'
+
+          echo '--- LOCAL TIMINGS ---'
+          for path in / /catalogo/ /catalogo/ /catalogo/ /checkout; do
+            curl --max-time 12 -sS -o /dev/null -H 'Host: shopvivaliz.com.br' \
+              -w "$path code=%{http_code} ttfb=%{time_starttransfer} total=%{time_total}\n" \
+              "http://127.0.0.1$path"
+          done
+
+          echo '--- LOAD AND MEMORY ---'
+          uptime
+          free -m
+          ps -eo pid,ni,pcpu,pmem,comm --sort=-pcpu | head -18
+          SH
+
+      - name: Verify public HTTPS endpoint
+        run: |
+          set -euo pipefail
+          curl --max-time 20 -fsSI https://shopvivaliz.com.br/catalogo/ | sed -n '1,28p'
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
