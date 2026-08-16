@@ -1,19 +1,19 @@
 {
   "status": "PRODUCTION_UPDATED",
-  "sha": "06c9df3b19bae78f7c5b3c64cff5b231470e34e0",
-  "workflow_run_id": "31923737095",
-  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31923737095",
+  "sha": "532b6803ad0c5b6b5383a4b8641088a67219b053",
+  "workflow_run_id": "31924199511",
+  "workflow_run_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31924199511",
   "jobs": {
     "validate": "success",
     "deploy": "success",
     "smoke_test": "success"
   },
   "results": [
-    "OK Oracle repository sync: canonical=06c9df3b19bae78f7c5b3c64cff5b231470e34e0 deployed=06c9df3b19bae78f7c5b3c64cff5b231470e34e0",
+    "OK Oracle repository sync: canonical=532b6803ad0c5b6b5383a4b8641088a67219b053 deployed=532b6803ad0c5b6b5383a4b8641088a67219b053",
     "OK Oracle repository sync cron installed",
-    "OK release SHA marker: 06c9df3b19bae78f7c5b3c64cff5b231470e34e0",
+    "OK release SHA marker: 532b6803ad0c5b6b5383a4b8641088a67219b053",
     "OK version: https://shopvivaliz.com.br/api/health/version.php (200)",
-    "OK public version endpoint: 06c9df3b19bae78f7c5b3c64cff5b231470e34e0",
+    "OK public version endpoint: 532b6803ad0c5b6b5383a4b8641088a67219b053",
     "OK homepage: https://shopvivaliz.com.br/ (200)",
     "OK public homepage HTML contract",
     "OK mobile responsive header contract",
@@ -26,7 +26,7 @@
     "OK cart: https://shopvivaliz.com.br/carrinho (200)",
     "OK checkout: https://shopvivaliz.com.br/checkout (200)",
     "OK css: https://shopvivaliz.com.br/css/shopvivaliz-core-consolidated.css (200)",
-    "OK admin redirect chain: final=200 redirects=1 effective=https://shopvivaliz.com.br/auth/login.php?redirect=%2Fadmin%2F%3Fsmoke%3D06c9df3b19ba",
+    "OK admin redirect chain: final=200 redirects=1 effective=https://shopvivaliz.com.br/auth/login.php?redirect=%2Fadmin%2F%3Fsmoke%3D532b6803ad0c",
     "OK login session continuity and CSRF round-trip",
     "OK authenticated admin guard database fallback",
     "OK liz_health: https://shopvivaliz.com.br/api/liz-intelligent.php?health=1 (200)",
@@ -59,5 +59,5 @@
     "OK security header: x-content-type-options",
     "OK security header: content-security-policy"
   ],
-  "verified_at": "2026-08-16T03:19:08.840462+00:00"
+  "verified_at": "2026-08-16T03:33:23.546427+00:00"
 }
