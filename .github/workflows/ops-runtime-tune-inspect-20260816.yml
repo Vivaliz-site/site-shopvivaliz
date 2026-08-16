@@ -1,0 +1,99 @@
+name: Ops Runtime Tune Inspect 20260816
+
+on:
+  push:
+    branches:
+      - ops/runtime-tune-inspect-20260816
+    paths:
+      - '.github/workflows/ops-runtime-tune-inspect-20260816.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Configure verified SSH host
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          SHOPVIVALIZ_VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          KEY="${ORACLE_VM_SSH_KEY:-}"
+          [ -n "$KEY" ] || KEY="${SHOPVIVALIZ_VM_SSH_KEY:-}"
+          test -n "$KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Inspect tune targets
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'timeout 120 bash -s' <<'SH'
+          set -euo pipefail
+
+          echo '--- SYNC TIMER ---'
+          systemctl cat shopvivaliz-sync-safe.timer 2>/dev/null || true
+          echo '--- SYNC SERVICE ---'
+          systemctl cat shopvivaliz-sync-safe.service 2>/dev/null || true
+          echo '--- SYNC PROPERTIES ---'
+          systemctl show shopvivaliz-sync-safe.service \
+            -p FragmentPath -p ExecStart -p Nice -p CPUWeight -p IOWeight -p MemoryCurrent -p ActiveState -p SubState 2>/dev/null || true
+
+          echo '--- CUSTOM UNIT PROPERTIES ---'
+          for unit in \
+            shopvivaliz-agent.service \
+            shopvivaliz-agent-bridge.service \
+            shopvivaliz-catalog-audit.service \
+            shopvivaliz-orchestrator.service \
+            shopvivaliz-products-active-sync.service \
+            shopvivaliz-hourly-guardian.service; do
+            echo "### $unit"
+            systemctl show "$unit" \
+              -p FragmentPath -p ExecStart -p Nice -p CPUWeight -p IOWeight -p MemoryCurrent -p ActiveState -p SubState -p Restart 2>/dev/null || true
+          done
+
+          echo '--- UNIT FILES ---'
+          for unit in shopvivaliz-agent.service shopvivaliz-catalog-audit.service shopvivaliz-orchestrator.service; do
+            echo "### $unit"
+            systemctl cat "$unit" 2>/dev/null | sed -n '1,160p' || true
+          done
+
+          echo '--- DOCKER PS ---'
+          sudo docker ps --no-trunc --format 'id={{.ID}} name={{.Names}} image={{.Image}} status={{.Status}} command={{.Command}}' || true
+
+          echo '--- DOCKER RESOURCE SNAPSHOT ---'
+          sudo docker stats --no-stream --format 'name={{.Name}} cpu={{.CPUPerc}} mem={{.MemUsage}} pids={{.PIDs}}' || true
+
+          echo '--- ML CONTAINER INSPECT ---'
+          ids="$(sudo docker ps -q 2>/dev/null || true)"
+          for id in $ids; do
+            cmd="$(sudo docker inspect -f '{{.Path}} {{join .Args " "}}' "$id" 2>/dev/null || true)"
+            if printf '%s' "$cmd" | grep -q '/app/ml/train.py'; then
+              echo "ML_CONTAINER=$id"
+              sudo docker inspect -f 'name={{.Name}} image={{.Config.Image}} nano_cpus={{.HostConfig.NanoCpus}} cpu_shares={{.HostConfig.CpuShares}} cpus={{.HostConfig.CpusetCpus}} memory={{.HostConfig.Memory}} restart={{.HostConfig.RestartPolicy.Name}} cmd={{.Path}} {{join .Args " "}}' "$id"
+            fi
+          done
+
+          echo '--- CRON DUPLICATES ---'
+          echo '[ubuntu]'
+          crontab -l 2>/dev/null | grep -nE 'auto-sync-oracle|safe-repo-sync|git-auto-sync' || true
+          echo '[root]'
+          sudo crontab -l 2>/dev/null | grep -nE 'auto-sync-oracle|safe-repo-sync|git-auto-sync' || true
+
+          echo '--- CURRENT PRESSURE ---'
+          uptime
+          vmstat 1 3
+          SH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
