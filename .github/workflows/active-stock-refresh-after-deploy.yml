@@ -1,6 +1,7 @@
 name: Active Stock Refresh After Deploy
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -32,7 +33,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           for attempt in $(seq 1 150); do
-            live="$(curl -fsS --connect-timeout 5 --max-time 15 https://shopvivaliz.com.br/api/health/version.php | python3 -c 'import json,sys; print((json.load(sys.stdin).get("git_sha") or "").strip())' 2>/dev/null || true)"
+            live="$(curl -fsS --connect-timeout 5 --max-time 15 https://shopvivaliz.com.br/api/health/version.php | python3 -c 'import json,sys; print((json.load(sys.stdin).get("release_sha") or "").strip())' 2>/dev/null || true)"
             if [ "$live" = "$EXPECTED_SHA" ]; then
               echo "Exact SHA is live: $live"
               exit 0
