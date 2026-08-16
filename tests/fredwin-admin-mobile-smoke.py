@@ -56,6 +56,8 @@ def home(p):
  try:p.wait_for_selector('details.sv-admin-card-details',timeout=9000)
  except T:pass
  x=p.evaluate("""()=>{let d=[...document.querySelectorAll('details.sv-admin-card-details')],k=document.querySelector('#sv-admin-mobile-dock');return{details:d.length,dock:!!(k&&getComputedStyle(k).display!='none'&&k.getBoundingClientRect().height>1),paths:k?[...k.querySelectorAll('a')].map(a=>new URL(a.href,location.href).pathname):[],actions:[...document.querySelectorAll('#sv-admin-section-actions button')].map(b=>(b.textContent||'').trim()),padding:parseFloat(getComputedStyle(document.body).paddingBottom)||0,overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth)}}""")
+ n=p.evaluate("""()=>{let nav=document.querySelector('.navbar'),menu=document.querySelector('.navbar-menu'),overview=document.querySelector('.admin-overview'),ns=nav?getComputedStyle(nav):null,ms=menu?getComputedStyle(menu):null;return{menuFlex:ms?.flexDirection||'',menuBg:ms?.backgroundColor||'',menuShadow:ms?.boxShadow||'',navBg:ns?.backgroundColor||'',navShadow:ns?.boxShadow||'',height:nav?nav.getBoundingClientRect().height:0,contentWidth:overview?overview.getBoundingClientRect().width:0,viewportWidth:innerWidth}}""")
+ x['navbar']=n
  op=cl=sv=False
  if x['details']:
   o=p.get_by_role('button',name='Abrir seções');c=p.get_by_role('button',name='Recolher seções')
@@ -64,10 +66,10 @@ def home(p):
   k=p.evaluate("""()=>{let d=document.querySelector('details.sv-admin-card-details');if(!d)return'';d.querySelector('summary')?.click();return d.dataset.sectionKey||''}""")
   if k:
    p.wait_for_timeout(250);slow=again(p,1800) or slow
-   try:p.wait_for_function("k=>[...document.querySelectorAll('details.sv-admin-card-details')].some(d=>d.dataset.sectionKey===k&&d.open)",k,timeout=9000);sv=True
+   try:p.wait_for_function("k=>[...document.querySelectorAll('details.sv-admin-card-details')].some(d=>d.dataset.sectionKey===k&&d.open)",arg=k,timeout=9000);sv=True
    except T:pass
  e={'/admin/ai-image-studio/admin_dashboard.php','/admin/catalog-optimization/admin_catalog.php','/admin/produtos.php','/admin/pedidos.php'}
- return {'authenticated':True,'status':s,'navigation_slow':slow,'details':x['details'],'opened':op,'closed':cl,'saved':sv,'actions':{'Abrir seções','Recolher seções'}<=set(x['actions']),'dock':x['dock'] and e<=set(x['paths']),'padding':x['padding'],'overflow':x['overflow']}
+ return {'authenticated':True,'status':s,'navigation_slow':slow,'details':x['details'],'opened':op,'closed':cl,'saved':sv,'actions':{'Abrir seções','Recolher seções'}<=set(x['actions']),'dock':x['dock'] and e<=set(x['paths']),'padding':x['padding'],'overflow':x['overflow'],'navbar':x.get('navbar',{})}
 def catalog(p):
  s,slow=nav(p,'/admin/catalog-optimization/admin_catalog.php',2400);a=auth(p)
  if not a['authenticated']:return {'authenticated':False,'path':a['path'],'status':s,'navigation_slow':slow}
@@ -108,7 +110,7 @@ def main():
    r['blocked_mutations']=bl[:20]
   except Exception as e:r['errors'].append({'stage':stage,'type':type(e).__name__,'path':path(p.url)})
   finally:c.close();b.close()
- l=r['login'];h=r['home'];c=r['catalog'];m=r['image'];checks={'login_google':l.get('google_visible') and l.get('google_canonical'),'authenticated_profile':bool(r['authenticated_profile']),'home':all((h.get('authenticated'),h.get('details',0)>0,h.get('opened'),h.get('closed'),h.get('saved'),h.get('actions'),h.get('dock'),h.get('padding',0)>=70,h.get('overflow',999)<=4)),'catalog':all((c.get('authenticated'),c.get('sort'),c.get('options'),c.get('product'),c.get('urgent'),c.get('overflow',999)<=4)),'image':all((m.get('authenticated'),m.get('items',0)>0,m.get('products',0)>0,m.get('variants',0)>0,m.get('eligible'),m.get('preflight'),m.get('shown'),m.get('saved'),m.get('restored'),m.get('actionbar'),m.get('overflow',999)<=4))};r['failures']=[k for k,v in checks.items() if not v];r['overall']=not r['failures'];r['finished_at']=ts();emit(r,0 if r['overall'] else 7)
+ l=r['login'];h=r['home'];c=r['catalog'];m=r['image'];checks={'login_google':l.get('google_visible') and l.get('google_canonical'),'authenticated_profile':bool(r['authenticated_profile']),'home':all((h.get('authenticated'),h.get('details',0)>0,h.get('opened'),h.get('closed'),h.get('saved'),h.get('actions'),h.get('dock'),h.get('padding',0)>=70,h.get('overflow',999)<=4)),'catalog':all((c.get('authenticated'),c.get('sort'),c.get('options'),c.get('product'),c.get('urgent'),c.get('overflow',999)<=4)),'image':all((m.get('authenticated'),m.get('items',0)>0,m.get('products',0)>0,m.get('variants',0)>0,m.get('eligible'),m.get('preflight'),m.get('shown'),m.get('saved'),m.get('restored'),m.get('actionbar'),m.get('overflow',999)<=4))};n=h.get('navbar') or {};checks['navbar_mobile']=all((n.get('menuFlex')=='row',n.get('menuBg') in ('rgba(0, 0, 0, 0)','transparent'),n.get('menuShadow')=='none',n.get('navBg')=='rgb(17, 24, 39)',n.get('navShadow')=='none',0<n.get('height',999)<=60,n.get('viewportWidth')==390,n.get('contentWidth',0)>=360));r['failures']=[k for k,v in checks.items() if not v];r['overall']=not r['failures'];r['finished_at']=ts();emit(r,0 if r['overall'] else 7)
 if __name__=='__main__':
  try:main()
  except SystemExit:raise
