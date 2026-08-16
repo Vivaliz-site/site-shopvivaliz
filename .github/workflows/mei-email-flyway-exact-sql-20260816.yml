@@ -19,7 +19,7 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Inspect only Flyway client sessions
+      - name: Inspect PostgreSQL sessions
         run: |
           set -euo pipefail
           ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
@@ -31,7 +31,6 @@ jobs:
                      query
                 from pg_stat_activity
                where datname=current_database()
-                 and client_addr = inet ''172.19.0.3''
                order by query_start;
             " || true
           '
