@@ -28,7 +28,10 @@ jobs:
             Install-Module ExchangeOnlineManagement -Scope CurrentUser -Force -AllowClobber
           }
           Import-Module ExchangeOnlineManagement
-          Connect-ExchangeOnline -Device -Organization 'ContabilidadeMelo.onmicrosoft.com' -ShowBanner:$false
+          # Device authentication must use the authenticated account's home tenant.
+          # -Organization is for certificate/managed-identity scenarios and caused
+          # the previous successful-sign-in-but-no-resource-access failure.
+          Connect-ExchangeOnline -Device -ShowBanner:$false
           $sender='naoresponda@dev.shopvivaliz.com.br'
           $blocked=@(Get-BlockedSenderAddress -SenderAddress $sender -ErrorAction Stop)
           Write-Host ('BLOCKED_BEFORE='+$blocked.Count)
