@@ -1,0 +1,60 @@
+name: Fred-Win Defender UIA dump 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/fredwin-defender-uia-dump-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Write and run UIA diagnostic on Fred-Win
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 - <<'"'"'PY'"'"'
+          import json, urllib.request
+          base='http://127.0.0.1:5557/mcp/tool/'
+          ps=r'''$ErrorActionPreference='Stop'
+          Add-Type -AssemblyName UIAutomationClient
+          Add-Type -AssemblyName UIAutomationTypes
+          $procs=Get-Process opera -ErrorAction SilentlyContinue | Where-Object {$_.MainWindowHandle -ne 0}
+          foreach($p in $procs){
+            Write-Output ('WINDOW|PID='+$p.Id+'|TITLE='+$p.MainWindowTitle+'|HANDLE='+$p.MainWindowHandle+'|SESSION='+$p.SessionId)
+            try {
+              $root=[System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
+              if(-not $root){continue}
+              $all=$root.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.Condition]::TrueCondition)
+              for($i=0;$i -lt $all.Count;$i++){
+                $e=$all.Item($i)
+                $n=$e.Current.Name
+                if($n -and $n -match 'Sim|N.o|NAORESPONDA|Tem certeza|Desbloquear|Entidades restritas|Aviso|Enviar|Pr.xima'){
+                  $r=$e.Current.BoundingRectangle
+                  Write-Output ('ELEM|NAME='+$n+'|TYPE='+$e.Current.ControlType.ProgrammaticName+'|AID='+$e.Current.AutomationId+'|CLASS='+$e.Current.ClassName+'|FRAME='+$e.Current.FrameworkId+'|OFF='+$e.Current.IsOffscreen+'|EN='+$e.Current.IsEnabled+'|X='+[int]$r.X+'|Y='+[int]$r.Y+'|W='+[int]$r.Width+'|H='+[int]$r.Height)
+                }
+              }
+            } catch { Write-Output ('UIA_ERROR|'+$_.Exception.Message) }
+          }
+          '''
+          def call(tool,params,timeout=30):
+              body=json.dumps({'params':params}).encode()
+              req=urllib.request.Request(base+tool,data=body,headers={'Content-Type':'application/json'},method='POST')
+              with urllib.request.urlopen(req,timeout=timeout) as r: return json.loads(r.read().decode())
+          w=call('write_file',{'path':'C:\\site-shopvivaliz\\scripts\\tmp-defender-uia-dump.ps1','content':ps})
+          print(json.dumps(w,ensure_ascii=False))
+          x=call('execute_command',{'command':'powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\tmp-defender-uia-dump.ps1','timeout':45},55)
+          print(json.dumps(x,ensure_ascii=False))
+          PY'
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
