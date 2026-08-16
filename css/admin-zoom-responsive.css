@@ -203,7 +203,9 @@ table {
   .main-content,
   .content,
   .page-content {
+    width: 100%;
     max-width: calc(100vw - 16px);
+    margin-inline: auto;
   }
 
   .dashboard-grid,
@@ -223,6 +225,62 @@ table {
   .btn-group {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  /* Compatibilidade defensiva com layouts administrativos antigos. Algumas
+     sessoes restauradas pelo navegador ainda podem conter uma sidebar fixa de
+     desktop. Em viewport de telefone ela vira uma barra horizontal e nunca
+     pode comprimir o conteudo principal para a direita. */
+  body .sidebar,
+  body .admin-sidebar {
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+  }
+
+  body .main-content,
+  body .admin-main,
+  body .admin-content,
+  body .dashboard-content {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  body .sidebar nav,
+  body .sidebar ul,
+  body .admin-sidebar nav,
+  body .admin-sidebar ul {
+    display: flex !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important;
+    gap: 5px !important;
+    width: max-content;
+    min-width: 100%;
+    margin: 0 !important;
+    padding-block: 4px !important;
+    list-style: none !important;
+  }
+
+  body .sidebar li,
+  body .admin-sidebar li {
+    flex: 0 0 auto !important;
+  }
+
+  body .sidebar a,
+  body .admin-sidebar a {
+    display: inline-flex !important;
+    align-items: center !important;
+    min-height: 40px !important;
+    padding: 8px 10px !important;
+    white-space: nowrap !important;
   }
 
   .admin-surface > div:first-child {
@@ -339,7 +397,10 @@ table {
   }
 }
 
-@media (max-width: 390px) {
+/* Telefones atuais frequentemente reportam 393-430 CSS px. O breakpoint
+   antigo de 390 deixava dois cards apertados exatamente nos aparelhos mais
+   comuns. Ate 480 px priorizamos uma coluna legivel e alvos de toque maiores. */
+@media (max-width: 480px) {
   .admin-surface .admin-overview > div:first-child {
     grid-template-columns: 1fr !important;
   }
@@ -347,6 +408,14 @@ table {
   .admin-surface .admin-overview > div:first-child > a[href="/admin/ai-image-studio/admin_dashboard.php"],
   .admin-surface .admin-overview > div:first-child > a[href="/admin/catalog-optimization/admin_catalog.php"] {
     grid-column: auto;
+  }
+
+  .admin-surface .catalog-search {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-surface .catalog-search button {
+    width: 100%;
   }
 }
 
