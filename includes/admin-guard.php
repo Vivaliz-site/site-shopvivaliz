@@ -141,6 +141,7 @@ if (!isset($_GET['ajax']) && in_array($svAdminScriptName, $svAdminUiPages, true)
         if ($svAdminScriptName === '/admin/ai-image-studio/admin_dashboard.php') {
             echo "<script src=\"/admin/assets/image-provider-health.js?v=" . $svAssetVersion('/admin/assets/image-provider-health.js') . "\"></script>\n";
             echo "<script src=\"/admin/assets/image-professional-ops.js?v=" . $svAssetVersion('/admin/assets/image-professional-ops.js') . "\"></script>\n";
+            echo "<script src=\"/admin/assets/image-generation-init-guard.js?v=" . $svAssetVersion('/admin/assets/image-generation-init-guard.js') . "\"></script>\n";
             echo "<script src=\"/admin/assets/image-generation-usability-v2.js?v=" . $svAssetVersion('/admin/assets/image-generation-usability-v2.js') . "\"></script>\n";
         }
     });
