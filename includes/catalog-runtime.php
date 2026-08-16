@@ -252,10 +252,10 @@ function svcr_has_available_product(array $products): bool
 
 function svcr_select_catalog_products(array $products, array $fallbackProducts): array
 {
-    // A fonte canonica sempre vence. O fallback existe apenas para
-    // indisponibilidade total da fonte, nunca para substituir um
-    // catalogo ativo por um espelho antigo com estoque diferente.
-    return $products !== [] ? $products : $fallbackProducts;
+    // Regra fail-closed: snapshots/fallbacks antigos nao comprovam o
+    // status atual no ERP. Somente a fonte canonica pode alimentar a
+    // vitrine, inclusive quando todos os itens ativos estao sem estoque.
+    return $products;
 }
 
 function svcr_products(): array
@@ -284,8 +284,11 @@ function svcr_products(): array
     }
 
     if ($items === []) {
-        return svcr_fallback_products($root);
-    }
+    // Sem snapshot canonico de ativos nao existe evidencia suficiente
+    // para publicar produtos. Falhar fechado evita ressuscitar itens
+    // inativos/excluidos por meio de um fallback historico.
+    return [];
+}
 
     $products = [];
     foreach ($items as $item) {

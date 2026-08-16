@@ -13,8 +13,7 @@ function svcr_selection_assert(bool $condition, string $message): void
 
 $root = dirname(__DIR__);
 $fallback = svcr_fallback_products($root);
-svcr_selection_assert(count($fallback) >= 20, 'fallback curado precisa continuar util');
-svcr_selection_assert(svcr_has_available_product($fallback), 'fallback curado precisa provar produto disponivel');
+svcr_selection_assert(count($fallback) >= 20, 'fallback curado pode continuar existindo como artefato historico');
 
 $healthyCache = [[
     'sku' => 'CACHE-HEALTHY',
@@ -22,24 +21,30 @@ $healthyCache = [[
     'stock' => 3,
 ]];
 $healthySelection = svcr_select_catalog_products($healthyCache, $fallback);
-svcr_selection_assert(($healthySelection[0]['sku'] ?? '') === 'CACHE-HEALTHY', 'cache ERP saudavel precisa continuar prioritario');
+svcr_selection_assert(($healthySelection[0]['sku'] ?? '') === 'CACHE-HEALTHY', 'fonte canonica saudavel precisa continuar prioritaria');
 
 $zeroStockCache = [[
     'sku' => 'CACHE-ZERO-STOCK',
     'price' => 109.90,
     'stock' => 0,
 ]];
-$degradedSelection = svcr_select_catalog_products($zeroStockCache, $fallback);
-svcr_selection_assert(($degradedSelection[0]['sku'] ?? '') !== 'CACHE-ZERO-STOCK', 'cache ERP sem nenhum item disponivel nao pode bloquear o fallback');
-svcr_selection_assert(svcr_has_available_product($degradedSelection), 'selecao degradada precisa manter ao menos um produto disponivel');
+$zeroStockSelection = svcr_select_catalog_products($zeroStockCache, $fallback);
+svcr_selection_assert(($zeroStockSelection[0]['sku'] ?? '') === 'CACHE-ZERO-STOCK', 'fallback historico nao pode substituir a fonte canonica por causa de estoque');
+svcr_selection_assert(!svcr_has_available_product($zeroStockSelection), 'runtime nao pode fabricar disponibilidade usando snapshot antigo');
 
-$unavailableFallback = [[
-    'sku' => 'FALLBACK-ZERO-STOCK',
-    'price' => 79.90,
-    'stock' => 0,
-]];
-$noFabricationSelection = svcr_select_catalog_products($zeroStockCache, $unavailableFallback);
-svcr_selection_assert(($noFabricationSelection[0]['sku'] ?? '') === 'CACHE-ZERO-STOCK', 'sem fallback disponivel o runtime nao pode fabricar estoque nem trocar a fonte autoritativa');
-svcr_selection_assert(!svcr_has_available_product($noFabricationSelection), 'cenario sem disponibilidade real deve permanecer indisponivel');
+$noCanonicalSelection = svcr_select_catalog_products([], $fallback);
+svcr_selection_assert($noCanonicalSelection === [], 'sem fonte canonica o catalogo deve falhar fechado em vez de ressuscitar fallback historico');
 
-fwrite(STDOUT, "catalog-runtime-fallback-selection: ok\n");
+svcr_selection_assert(svcr_is_active_product(['situacao' => 'A']) === true, 'situacao A deve ser ativa');
+svcr_selection_assert(svcr_is_active_product(['status' => 'ACTIVE']) === true, 'status ACTIVE deve ser ativo');
+svcr_selection_assert(svcr_is_active_product(['active' => 1]) === true, 'active=1 deve ser ativo');
+svcr_selection_assert(svcr_is_active_product(['active' => 0]) === false, 'active=0 deve ser rejeitado');
+svcr_selection_assert(svcr_is_active_product(['is_published' => false]) === false, 'nao publicado deve ser rejeitado');
+svcr_selection_assert(svcr_is_active_product(['situacao' => 'I']) === false, 'situacao I deve ser rejeitada');
+svcr_selection_assert(svcr_is_active_product(['status' => 'INATIVO']) === false, 'status INATIVO deve ser rejeitado');
+svcr_selection_assert(svcr_is_active_product(['status' => 'DELETED']) === false, 'status DELETED deve ser rejeitado');
+svcr_selection_assert(svcr_is_active_product(['deleted' => true]) === false, 'deleted=true deve ser rejeitado');
+svcr_selection_assert(svcr_is_active_product(['archived' => '1']) === false, 'archived=1 deve ser rejeitado');
+svcr_selection_assert(svcr_is_active_product(['deleted_at' => '2026-08-16 10:00:00']) === false, 'deleted_at deve ser rejeitado');
+
+fwrite(STDOUT, "catalog-runtime-active-only-selection: ok\n");
