@@ -5,7 +5,6 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/active-stock-refresh-after-deploy.yml'
       - 'olist/fetch-estoque-v3.php'
       - 'olist/force-sync-cache.php'
       - 'olist/sync-on-webhook.php'
@@ -27,23 +26,6 @@ jobs:
     timeout-minutes: 30
     environment: production
     steps:
-      - name: Wait until this exact SHA is live
-        shell: bash
-        env:
-          EXPECTED_SHA: ${{ github.sha }}
-        run: |
-          set -Eeuo pipefail
-          for attempt in $(seq 1 150); do
-            live="$(curl -fsS --connect-timeout 5 --max-time 15 https://shopvivaliz.com.br/api/health/version.php | python3 -c 'import json,sys; print((json.load(sys.stdin).get("release_sha") or "").strip())' 2>/dev/null || true)"
-            if [ "$live" = "$EXPECTED_SHA" ]; then
-              echo "Exact SHA is live: $live"
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "Expected SHA did not become live within 25 minutes" >&2
-          exit 1
-
       - name: Configure verified SSH host
         shell: bash
         env:
@@ -62,31 +44,45 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
+      - name: Wait until this exact SHA is live on Oracle
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          for attempt in $(seq 1 150); do
+            live="$(ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
+              -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+              -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+              'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha 2>/dev/null || true' | tr -d '\r\n')"
+            if [ "$live" = "$EXPECTED_SHA" ]; then
+              echo "Exact SHA is live on Oracle: $live"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Expected SHA did not become live within 25 minutes" >&2
+          exit 1
+
       - name: Refresh canonical active products and authoritative stock
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+          ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
             'cd /home/ubuntu/shopvivaliz-deploy/current && php olist/sync-on-webhook.php && php olist/fetch-estoque-v3.php && php sync-daemon-to-db.php'
 
-      - name: Verify available active products
+      - name: Verify available active products from Oracle
         shell: bash
         run: |
           set -Eeuo pipefail
-          curl -fsS --connect-timeout 5 --max-time 20 'https://shopvivaliz.com.br/api/catalog/products.php?limit=5&available=1&no_cache=1' > /tmp/catalog.json
-          python3 - <<'PY'
-          import json
-          data=json.load(open('/tmp/catalog.json',encoding='utf-8'))
-          assert data.get('ok') is True, data
-          assert data.get('source') == 'catalog_runtime', data
-          assert int(data.get('total') or 0) > 0, data
-          assert len(data.get('products') or []) > 0, data
-          print('available_active_products=', data.get('total'))
-          PY
+          ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+            'curl -fsS --connect-timeout 5 --max-time 20 "https://shopvivaliz.com.br/api/catalog/products.php?limit=5&available=1&no_cache=1" | python3 -c '\''import json,sys; d=json.load(sys.stdin); assert d.get("ok") is True and d.get("source")=="catalog_runtime" and int(d.get("total") or 0)>0 and len(d.get("products") or [])>0, d; print("available_active_products=", d.get("total"))'\'''
 
       - name: Cleanup
         if: always()
         shell: bash
-        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts" /tmp/catalog.json
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
