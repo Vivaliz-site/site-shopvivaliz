@@ -49,6 +49,7 @@ jobs:
           grep -Fq 'SV_IMAGE_BROWSER_SMOKE_B64=' tests/image-run-browser-smoke.py
           grep -Fq "route.fulfill(status=200" tests/image-run-browser-smoke.py
           grep -Fq "method in {'POST', 'PUT', 'PATCH', 'DELETE'}" tests/image-run-browser-smoke.py
+          grep -Fq 'window.__svImageGenerationUsabilityV2Loaded' admin/assets/image-generation-usability-v2.js
 
       - name: Configure verified VM access
         shell: bash
