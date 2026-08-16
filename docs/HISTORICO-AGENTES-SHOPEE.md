@@ -947,3 +947,39 @@ workflows dedicados, e/ou (2) decidir se vale integrar a API de analytics do Sho
 para viabilizar os itens 1/3/9/10 da rotina de 6h, e/ou (3) reduzir o escopo desta rotina para
 apenas o que o código hoje sustenta (título/descrição determinísticos por atributo de catálogo,
 sem CTR/A-B/preço/imagem).
+
+### 9.22 Atualização — ciclo de 2026-08-16 (~00h UTC), 27º ciclo — estado idêntico ao ciclo 26, sem fato novo
+
+Checagem completa: `git fetch origin main` confirma HEAD desta sessão idêntico a `origin/main`
+(`7774b47`, detached). `listings/` continua parado em `shopee-listings-20260726-080756.json` —
+agora **21 dias** sem extração de catálogo pela via antiga (Tiny). `.github/workflows/` continua
+só com `shopee-optimizer-safety.yml`/`shopee-production-seo.yml`/`shopee-runtime-health.yml` sob
+Shopee; o par `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` segue ausente
+(confirmado via `ls .github/workflows/ | grep shopee`). Nenhum secret `TINY_*`/`OLIST_*`/`SHOPEE_*`
+neste ambiente de sessão (esperado, já documentado).
+
+`shopee-production-seo.yml` via `mcp__github__actions_list`: ainda só as mesmas 5 execuções de
+2026-07-30, todas `conclusion: failure`, nenhuma execução nova — critério de aviso "apply real
+bem-sucedido" não disparou. `shopee-runtime-health.yml`: última execução (`31916626958`,
+2026-08-16T00:11:43Z, job "Verify canonical VM credentials and catalog read") terminou
+`conclusion: success`, mesmo padrão dos ciclos anteriores (leitura não-mutante de catálogo/detalhe
+na VM) — não é fato novo, só reconfirma `runtime_shopee_comprovado` continua ativo. Nenhum commit
+desde o ciclo 26 (`git log --since` a partir do fetch de origem) toca credencial Tiny, workflows
+dedicados do pipeline antigo, ou `docs/POLITICA-PR-AGENTES.md`.
+
+O achado estrutural dos ciclos 19–26 (nenhuma chamada a endpoint de analytics do Shopee Open
+Platform nos scripts de produção — sem CTR, taxa de conversão, comparação alto-vs-baixo-desempenho
+ou A/B testing medido; itens 1, 3, 9 e 10 desta rotina de 6h permanecem tecnicamente inexequíveis
+mesmo com a credencial `SHOPEE_*` presente) permanece válido e não foi reavaliado nesta sessão
+(sem mudança de código que o afetasse).
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. Nenhuma notificação
+push enviada neste ciclo — nenhum dos critérios de novo aviso (workflows Tiny recriados, artefato
+novo com erro diferente, execução de `shopee-production-seo.yml` com apply real bem-sucedido)
+ocorreu. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos 19–26: (1)
+renovar OAuth2 do Tiny e recriar os workflows dedicados, e/ou (2) decidir se vale integrar a API
+de analytics do Shopee Open Platform para viabilizar os itens 1/3/9/10, e/ou (3) reduzir o escopo
+desta rotina de 6h para apenas o que o código hoje sustenta (título/descrição determinísticos por
+atributo de catálogo, sem CTR/A-B/preço/imagem).
+sem CTR/A-B/preço/imagem).
