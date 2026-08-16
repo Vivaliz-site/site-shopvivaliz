@@ -1,0 +1,229 @@
+name: Ops Runtime Tune 20260816
+
+on:
+  push:
+    branches:
+      - ops/runtime-tune-20260816
+    paths:
+      - '.github/workflows/ops-runtime-tune-20260816.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  tune:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Configure verified SSH host
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          SHOPVIVALIZ_VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          KEY="${ORACLE_VM_SSH_KEY:-}"
+          [ -n "$KEY" ] || KEY="${SHOPVIVALIZ_VM_SSH_KEY:-}"
+          test -n "$KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Apply reversible background limits
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'timeout 300 bash -s' <<'SH'
+          set -euo pipefail
+
+          ts="$(date +%Y%m%d-%H%M%S)"
+          backup="/home/ubuntu/shopvivaliz-deploy/shared/ops-backups/runtime-tune-$ts"
+          mkdir -p "$backup"
+
+          crontab -l > "$backup/ubuntu.cron" 2>/dev/null || :
+          sudo crontab -l > "$backup/root.cron" 2>/dev/null || :
+          timer_enabled="$(systemctl is-enabled shopvivaliz-sync-safe.timer 2>/dev/null || true)"
+          printf '%s\n' "$timer_enabled" > "$backup/sync-timer-enabled.txt"
+
+          units='shopvivaliz-agent.service shopvivaliz-agent-bridge.service shopvivaliz-catalog-audit.service shopvivaliz-orchestrator.service'
+          for unit in $units; do
+            dir="/etc/systemd/system/$unit.d"
+            file="$dir/90-shopvivaliz-performance.conf"
+            if sudo test -f "$file"; then
+              sudo cp -a "$file" "$backup/$unit.performance.conf"
+            fi
+          done
+
+          ml_present=0
+          ml_nano=0
+          ml_shares=0
+          if sudo docker inspect ml-trainer-1 >/dev/null 2>&1; then
+            ml_present=1
+            ml_nano="$(sudo docker inspect -f '{{.HostConfig.NanoCpus}}' ml-trainer-1)"
+            ml_shares="$(sudo docker inspect -f '{{.HostConfig.CpuShares}}' ml-trainer-1)"
+          fi
+          printf '%s %s %s\n' "$ml_present" "$ml_nano" "$ml_shares" > "$backup/ml-resource-before.txt"
+
+          rollback() {
+            rc=$?
+            trap - ERR
+            set +e
+            echo "ROLLBACK runtime tuning rc=$rc"
+            crontab "$backup/ubuntu.cron"
+            sudo crontab "$backup/root.cron"
+            if [ "$timer_enabled" = enabled ]; then
+              sudo systemctl enable --now shopvivaliz-sync-safe.timer
+            else
+              sudo systemctl disable --now shopvivaliz-sync-safe.timer
+            fi
+            for unit in $units; do
+              file="/etc/systemd/system/$unit.d/90-shopvivaliz-performance.conf"
+              saved="$backup/$unit.performance.conf"
+              if sudo test -f "$saved"; then
+                sudo mkdir -p "$(dirname "$file")"
+                sudo cp -a "$saved" "$file"
+              else
+                sudo rm -f "$file"
+              fi
+            done
+            sudo systemctl daemon-reload
+            for unit in $units; do sudo systemctl restart "$unit" || true; done
+            if [ "$ml_present" = 1 ]; then
+              if [ "$ml_nano" -gt 0 ]; then
+                python3 - "$ml_nano" <<'PY' > /tmp/ml-cpus-restore.txt
+import sys
+print(int(sys.argv[1]) / 1_000_000_000)
+PY
+                sudo docker update --cpus "$(cat /tmp/ml-cpus-restore.txt)" --cpu-shares "$ml_shares" ml-trainer-1 || true
+              else
+                sudo docker update --cpus 0 --cpu-shares "$ml_shares" ml-trainer-1 || true
+              fi
+            fi
+            exit "$rc"
+          }
+          trap rollback ERR
+
+          echo '--- BEFORE ---'
+          uptime
+          echo "backup=$backup"
+          echo "sync_timer=$timer_enabled"
+          echo '[ubuntu sync cron]'
+          grep -nE 'auto-sync-oracle|safe-repo-sync|git-auto-sync' "$backup/ubuntu.cron" || true
+          echo '[root sync cron]'
+          grep -nE 'auto-sync-oracle|safe-repo-sync|git-auto-sync' "$backup/root.cron" || true
+
+          # The deploy script owns the ubuntu */5 cron. Keep that single source of truth.
+          # Remove the legacy root duplicate and disable the duplicate systemd timer.
+          python3 - "$backup/root.cron" /tmp/root.cron.tuned <<'PY'
+from pathlib import Path
+import sys
+src = Path(sys.argv[1]).read_text(encoding='utf-8', errors='replace').splitlines()
+blocked = ('auto-sync-oracle.sh', 'safe-repo-sync.sh', 'git-auto-sync.py')
+kept = [line for line in src if not any(token in line for token in blocked)]
+Path(sys.argv[2]).write_text('\n'.join(kept) + ('\n' if kept else ''), encoding='utf-8')
+PY
+          sudo crontab /tmp/root.cron.tuned
+          rm -f /tmp/root.cron.tuned
+          sudo systemctl disable --now shopvivaliz-sync-safe.timer
+          sudo systemctl stop shopvivaliz-sync-safe.service 2>/dev/null || true
+
+          # Audit/orchestration workloads must yield to storefront traffic.
+          sudo mkdir -p /etc/systemd/system/shopvivaliz-agent.service.d
+          cat <<'EOF' | sudo tee /etc/systemd/system/shopvivaliz-agent.service.d/90-shopvivaliz-performance.conf >/dev/null
+          [Service]
+          Nice=10
+          CPUWeight=20
+          IOWeight=20
+          CPUQuota=20%
+          Environment=SHOPVIVALIZ_AGENT_INTERVAL_SECONDS=300
+          EOF
+
+          sudo mkdir -p /etc/systemd/system/shopvivaliz-orchestrator.service.d
+          cat <<'EOF' | sudo tee /etc/systemd/system/shopvivaliz-orchestrator.service.d/90-shopvivaliz-performance.conf >/dev/null
+          [Service]
+          Nice=10
+          CPUWeight=20
+          IOWeight=20
+          CPUQuota=20%
+          Environment=SHOPVIVALIZ_AGENT_INTERVAL_SECONDS=300
+          EOF
+
+          sudo mkdir -p /etc/systemd/system/shopvivaliz-catalog-audit.service.d
+          cat <<'EOF' | sudo tee /etc/systemd/system/shopvivaliz-catalog-audit.service.d/90-shopvivaliz-performance.conf >/dev/null
+          [Service]
+          Nice=10
+          CPUWeight=20
+          IOWeight=20
+          CPUQuota=10%
+          EOF
+
+          sudo mkdir -p /etc/systemd/system/shopvivaliz-agent-bridge.service.d
+          cat <<'EOF' | sudo tee /etc/systemd/system/shopvivaliz-agent-bridge.service.d/90-shopvivaliz-performance.conf >/dev/null
+          [Service]
+          Nice=10
+          CPUWeight=20
+          IOWeight=20
+          CPUQuota=10%
+          EOF
+
+          sudo systemctl daemon-reload
+          for unit in $units; do
+            sudo systemctl restart "$unit"
+            systemctl is-active --quiet "$unit"
+          done
+
+          if [ "$ml_present" = 1 ]; then
+            sudo docker update --cpus 0.20 --cpu-shares 128 ml-trainer-1 >/dev/null
+          fi
+
+          # Validate exactly one repository-sync scheduler remains: ubuntu cron.
+          ubuntu_sync_count="$(crontab -l 2>/dev/null | grep -Ec 'auto-sync-oracle\.sh|safe-repo-sync\.sh|git-auto-sync\.py' || true)"
+          root_sync_count="$(sudo crontab -l 2>/dev/null | grep -Ec 'auto-sync-oracle\.sh|safe-repo-sync\.sh|git-auto-sync\.py' || true)"
+          timer_state="$(systemctl is-enabled shopvivaliz-sync-safe.timer 2>/dev/null || true)"
+          test "$ubuntu_sync_count" -eq 1
+          test "$root_sync_count" -eq 0
+          test "$timer_state" = disabled
+
+          for unit in $units; do
+            systemctl is-active --quiet "$unit"
+          done
+
+          if [ "$ml_present" = 1 ]; then
+            test "$(sudo docker inspect -f '{{.HostConfig.NanoCpus}}' ml-trainer-1)" -eq 200000000
+          fi
+
+          trap - ERR
+
+          echo '--- APPLIED ---'
+          echo "ubuntu_sync_count=$ubuntu_sync_count root_sync_count=$root_sync_count timer=$timer_state"
+          for unit in $units; do
+            echo "### $unit"
+            systemctl show "$unit" -p Nice -p CPUWeight -p IOWeight -p CPUQuotaPerSecUSec -p ActiveState | tr '\n' ' '; echo
+          done
+          if [ "$ml_present" = 1 ]; then
+            sudo docker inspect -f 'ml-trainer nano_cpus={{.HostConfig.NanoCpus}} cpu_shares={{.HostConfig.CpuShares}}' ml-trainer-1
+          fi
+
+          sleep 12
+          echo '--- AFTER PRESSURE ---'
+          uptime
+          vmstat 1 5
+          free -m
+          echo '--- TOP CPU ---'
+          ps -eo pid,ppid,user,ni,stat,pcpu,pmem,rss,etime,args --sort=-pcpu | head -25
+
+          echo '--- LATENCY AFTER ---'
+          for path in / /catalogo/ /catalogo/ /checkout /api/catalog/products.php?limit=1\&available=1; do
+            curl --max-time 12 -sS -o /dev/null -H 'Host: shopvivaliz.com.br' \
+              -w "$path code=%{http_code} ttfb=%{time_starttransfer} total=%{time_total}\n" \
+              "http://127.0.0.1$path" || echo "$path timeout"
+          done
+          SH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
