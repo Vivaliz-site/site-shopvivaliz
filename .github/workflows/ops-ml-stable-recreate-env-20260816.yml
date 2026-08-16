@@ -60,8 +60,6 @@ jobs:
             trainer:
               volumes:
                 - /home/ubuntu/shopvivaliz-deploy/shared/storage/ml:/app/storage/ml
-              cpus: 0.20
-              cpu_shares: 128
               command:
                 - /bin/sh
                 - -c
@@ -116,6 +114,7 @@ jobs:
           done
           test "$api_ok" -eq 1
 
+          sudo docker update --cpus 0.20 --cpu-shares 128 ml-trainer-1 >/dev/null
           test "$(sudo docker inspect ml-trainer-1 --format '{{.State.Status}}')" = running
           test "$(sudo docker inspect ml-trainer-1 --format '{{.HostConfig.NanoCpus}}')" -eq 200000000
 
