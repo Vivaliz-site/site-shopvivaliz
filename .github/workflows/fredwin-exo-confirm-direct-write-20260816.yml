@@ -1,0 +1,41 @@
+name: Fred-Win EXO confirm direct write 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/fredwin-exo-confirm-direct-write-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  confirm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Write helper directly to Fred-Win and confirm
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 - <<'"'"'PY'"'"'
+          import json,urllib.request
+          base="http://127.0.0.1:5557/mcp/tool/"
+          raw="https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/fredwin-exo-ui-confirm-visual.ps1"
+          content=urllib.request.urlopen(raw,timeout=20).read().decode("utf-8")
+          def call(tool,params,timeout):
+              body=json.dumps({"params":params}).encode(); req=urllib.request.Request(base+tool,data=body,headers={"Content-Type":"application/json"},method="POST")
+              with urllib.request.urlopen(req,timeout=timeout) as r: data=json.loads(r.read().decode())
+              print(json.dumps(data,ensure_ascii=False)); return data
+          wrote=call("write_file",{"path":"scripts/fredwin-exo-ui-confirm-visual.ps1","content":content},20)
+          if not (wrote.get("result") or {}).get("success"): raise SystemExit(2)
+          run=call("execute_command",{"command":"powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\fredwin-exo-ui-schedule-confirm-visual.ps1","timeout":70},80)
+          if not (run.get("result") or {}).get("success"): raise SystemExit(3)
+          PY'
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
