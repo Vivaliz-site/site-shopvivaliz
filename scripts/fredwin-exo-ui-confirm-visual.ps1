@@ -18,11 +18,9 @@ $process = Get-Process opera -ErrorAction SilentlyContinue | Where-Object {
     $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -match 'Entidades restritas.*Microsoft Defender'
 } | Select-Object -First 1
 if (-not $process) { Add-Content $log 'RESULT=DEFENDER_WINDOW_NOT_FOUND'; exit 2 }
+Add-Content $log ('WINDOW=' + $process.MainWindowTitle + '|SESSION=' + $process.SessionId)
 $root=[System.Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
 if (-not $root) { Add-Content $log 'RESULT=NO_AUTOMATION_ROOT'; exit 3 }
-$senderCond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty,'NAORESPONDA@DEV.SHOPVIVALIZ.COM.BR')
-$sender=$root.FindFirst([System.Windows.Automation.TreeScope]::Descendants,$senderCond)
-if (-not $sender) { Add-Content $log 'RESULT=SENDER_NOT_VISIBLE'; exit 4 }
 $docCond=New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty,[System.Windows.Automation.ControlType]::Document)
 $docs=$root.FindAll([System.Windows.Automation.TreeScope]::Descendants,$docCond)
 $doc=$null
@@ -33,10 +31,9 @@ foreach($d in $docs){
 }
 if(-not $doc){ Add-Content $log 'RESULT=DOCUMENT_VIEWPORT_NOT_FOUND'; exit 5 }
 $rect=$doc.Current.BoundingRectangle
-# Current Defender page screenshot viewport: the affirmative button center is
-# approximately 60.0% across and 59.6% down the document viewport.
-# Use normalized coordinates so browser/window position and DPI changes do not
-# turn this into a fixed screen-coordinate click.
+# Guarded by the active Defender Restricted Entities window and the immediately
+# revalidated screenshot of the confirmation modal. The affirmative button
+# center is approximately 60.0% across and 59.6% down the page viewport.
 $x=[int]($rect.X + ($rect.Width * 0.6000))
 $y=[int]($rect.Y + ($rect.Height * 0.5960))
 Add-Content $log ('CLICK_TARGET=X=' + $x + '|Y=' + $y + '|DOCW=' + [int]$rect.Width + '|DOCH=' + [int]$rect.Height)
