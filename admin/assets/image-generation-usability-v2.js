@@ -4,6 +4,9 @@
   const page = location.pathname.replace(/\/+$/, '');
   if (page !== '/admin/ai-image-studio/admin_dashboard.php') return;
 
+  if (window.__svImageGenerationUsabilityV2Loaded) return;
+  window.__svImageGenerationUsabilityV2Loaded = true;
+
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const TYPES = { cover: 'Capa', white: 'Branco tecnico', hero: 'Hero', ambient: 'Ambientada' };
