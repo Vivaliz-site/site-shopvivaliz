@@ -14,15 +14,30 @@ public static class FredWinUnblockMouse {
 '@
 $log = 'C:\site-shopvivaliz\logs\fredwin-exo-ui-unblock.log'
 Set-Content -LiteralPath $log -Value ('START=' + (Get-Date).ToString('o')) -Encoding UTF8
-$process = Get-Process -ErrorAction SilentlyContinue | Where-Object {
-    $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -match 'Segurança e Conformidade|Entidades restritas|Microsoft Defender'
-} | Select-Object -First 1
-if (-not $process) { Add-Content $log 'RESULT=NO_BROWSER_WINDOW'; exit 2 }
-Add-Content $log ('WINDOW=' + $process.ProcessName + '|' + $process.MainWindowTitle + '|SESSION=' + $process.SessionId)
-$root = [System.Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
 $nameCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, 'Desbloquear')
-$target = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $nameCond)
-if (-not $target) { Add-Content $log 'RESULT=UNBLOCK_NOT_FOUND'; exit 3 }
+$process = $null
+$root = $null
+$target = $null
+$windows = @(Get-Process opera -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 })
+Add-Content $log ('OPERA_WINDOWS=' + $windows.Count)
+foreach ($candidate in $windows) {
+    Add-Content $log ('CANDIDATE=' + $candidate.Id + '|' + $candidate.MainWindowTitle + '|SESSION=' + $candidate.SessionId)
+    try {
+        $candidateRoot = [System.Windows.Automation.AutomationElement]::FromHandle($candidate.MainWindowHandle)
+        if (-not $candidateRoot) { continue }
+        $candidateTarget = $candidateRoot.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $nameCond)
+        if ($candidateTarget) {
+            $process = $candidate
+            $root = $candidateRoot
+            $target = $candidateTarget
+            break
+        }
+    } catch {
+        Add-Content $log ('CANDIDATE_ERROR=' + $_.Exception.Message)
+    }
+}
+if (-not $target) { Add-Content $log 'RESULT=UNBLOCK_NOT_FOUND_IN_OPERA_WINDOWS'; exit 3 }
+Add-Content $log ('WINDOW=' + $process.ProcessName + '|' + $process.MainWindowTitle + '|SESSION=' + $process.SessionId)
 $done = $false
 $pattern = $null
 if ($target.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) {
