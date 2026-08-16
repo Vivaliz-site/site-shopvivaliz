@@ -1,0 +1,83 @@
+name: Ops Deploy Main 20260815
+
+on:
+  push:
+    branches:
+      - ops/deploy-main-20260815-2356
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shopvivaliz-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Configure SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          SHOPVIVALIZ_VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          KEY="${ORACLE_VM_SSH_KEY:-}"
+          [ -n "$KEY" ] || KEY="${SHOPVIVALIZ_VM_SSH_KEY:-}"
+          test -n "$KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Deploy main using immutable release runner
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=12 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            'timeout 420 flock -w 90 /var/lock/shopvivaliz-deploy.lock bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/deploy-production.sh main'
+
+      - name: Verify production release and performance
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=12 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'timeout 150 bash -s' <<'SH'
+          set -euo pipefail
+          C=/home/ubuntu/shopvivaliz-deploy/current
+          R=/home/ubuntu/shopvivaliz-deploy/repo
+          current_sha="$(cat "$C/.release-sha")"
+          main_sha="$(git -C "$R" rev-parse origin/main)"
+          echo "CURRENT=$(readlink -f "$C")"
+          echo "CURRENT_SHA=$current_sha"
+          echo "MAIN_SHA=$main_sha"
+          test "$current_sha" = "$main_sha"
+
+          grep -q 's-maxage=30' "$C/index.php"
+          echo HOME_PUBLIC_CACHE_FIX=true
+          grep -q 'shopvivaliz-home-catalog-source-v1.json' "$C/index.php"
+          echo HOME_FILE_CACHE_FIX=true
+          grep -q 'ga4ClientIdFromCookie' "$C/js/shopvivaliz-google-events.js"
+          echo GA4_COOKIE_IDENTITY_FIX=true
+          grep -q "'gbraid' => \$gbraid" "$C/api/orders/process-validated.php"
+          echo CLICK_ID_PERSISTENCE_FIX=true
+
+          echo '--- VERSION HEALTH ---'
+          curl --max-time 10 -fsS -H 'Host: shopvivaliz.com.br' http://127.0.0.1/api/health/version.php
+          echo
+
+          echo '--- HOME HEADERS ---'
+          curl --max-time 10 -sSI -H 'Host: shopvivaliz.com.br' http://127.0.0.1/ | sed -n '1,24p'
+
+          echo '--- TIMINGS ---'
+          for path in / / /catalogo/ /checkout; do
+            curl --max-time 10 -sS -o /dev/null -H 'Host: shopvivaliz.com.br' \
+              -w "$path code=%{http_code} ttfb=%{time_starttransfer} total=%{time_total}\n" \
+              "http://127.0.0.1$path"
+          done
+
+          echo '--- LOAD ---'
+          uptime
+          free -m
+          SH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
