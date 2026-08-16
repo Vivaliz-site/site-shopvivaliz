@@ -24,12 +24,13 @@ jobs:
           set -euo pipefail
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 - <<'"'"'PY'"'"'
           import json,urllib.request
-          command='powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\fredwin-ui-schedule-click.ps1 -Name "Sim" -RequireText "NAORESPONDA@DEV.SHOPVIVALIZ.COM.BR"'
-          body=json.dumps({"params":{"command":command,"timeout":60}}).encode()
-          req=urllib.request.Request("http://127.0.0.1:5557/mcp/tool/execute_command",data=body,headers={"Content-Type":"application/json"},method="POST")
-          with urllib.request.urlopen(req,timeout=70) as r: data=json.loads(r.read().decode())
-          print(json.dumps(data,ensure_ascii=False))
-          if not (data.get("result") or {}).get("success"): raise SystemExit(3)
+          base="http://127.0.0.1:5557/mcp/tool/"
+          def call(tool,params,timeout):
+              body=json.dumps({"params":params}).encode(); req=urllib.request.Request(base+tool,data=body,headers={"Content-Type":"application/json"},method="POST")
+              with urllib.request.urlopen(req,timeout=timeout) as r: data=json.loads(r.read().decode())
+              print(json.dumps(data,ensure_ascii=False)); return data
+          run=call("execute_command",{"command":"powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\fredwin-ui-schedule-click.ps1 -Name \"Sim\" -RequireText \"NAORESPONDA@DEV.SHOPVIVALIZ.COM.BR\"","timeout":60},70)
+          if not (run.get("result") or {}).get("success"): raise SystemExit(3)
           PY'
       - name: Cleanup
         if: always()
