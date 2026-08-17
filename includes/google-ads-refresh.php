@@ -16,7 +16,7 @@ function refresh_google_ads_token(): ?string
     // Carregar variáveis
     $clientId = getenv('GOOGLE_OAUTH_CLIENT_ID');
     $clientSecret = getenv('GOOGLE_OAUTH_CLIENT_SECRET');
-    $refreshToken = getenv('GOOGLE_ADS_REFRESH_TOKEN');
+    $refreshToken = getenv('GOOGLE_OAUTH_REFRESH_TOKEN') ?: getenv('GOOGLE_ADS_REFRESH_TOKEN');
 
     if (!$clientId || !$clientSecret || !$refreshToken) {
         // Tentar ler diretamente do arquivo se getenv falhar
@@ -27,7 +27,10 @@ function refresh_google_ads_token(): ?string
         if (preg_match('/GOOGLE_OAUTH_CLIENT_SECRET\s*=\s*(.+)/', $content, $matches)) {
             $clientSecret = trim($matches[1], "\"' ");
         }
-        if (preg_match('/GOOGLE_ADS_REFRESH_TOKEN\s*=\s*(.+)/', $content, $matches)) {
+        if (preg_match('/GOOGLE_OAUTH_REFRESH_TOKEN\s*=\s*(.+)/', $content, $matches)) {
+            $refreshToken = trim($matches[1], "\"' ");
+        }
+        if (!$refreshToken && preg_match('/GOOGLE_ADS_REFRESH_TOKEN\s*=\s*(.+)/', $content, $matches)) {
             $refreshToken = trim($matches[1], "\"' ");
         }
     }

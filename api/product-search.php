@@ -127,7 +127,7 @@ require_once svcat_root() . '/includes/catalog-runtime.php';
 
 $limit = min(100, max(1, (int)($_GET['limit'] ?? 20)));
 $page = max(1, (int)($_GET['page'] ?? 1));
-$q = trim((string)($_GET['q'] ?? ''));
+$q = trim((string)($_GET['q'] ?? $_GET['busca'] ?? $_GET['query'] ?? ''));
 $sort = trim((string)($_GET['sort'] ?? 'relevance'));
 
 if ($q === '') {

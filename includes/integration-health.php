@@ -541,7 +541,12 @@ function svih_check_all(bool $fix = false): array
         ),
         svih_melhor_envio($fix),
         svih_config_only('Facebook CAPI', 'facebook_capi', ['FACEBOOK_ACCESS_TOKEN'], 'Configurar FACEBOOK_ACCESS_TOKEN.'),
-        svih_config_only('Google Ads', 'google_ads', ['GOOGLE_ADS_REFRESH_TOKEN'], 'Conectar OAuth do Google Ads.'),
+        svih_config_only(
+            'Google Ads',
+            'google_ads',
+            ['GOOGLE_OAUTH_REFRESH_TOKEN', 'GOOGLE_ADS_REFRESH_TOKEN'],
+            'Conectar OAuth do Google Ads.'
+        ),
         svih_config_only('TikTok Pixel', 'tiktok_pixel', ['TIKTOK_PIXEL_TOKEN'], 'Configurar TIKTOK_PIXEL_TOKEN.'),
         svih_config_only('SMTP / E-mail', 'smtp', ['SMTP_PASS', 'EMAIL_PASSWORD', 'MAIL_PASS'], 'Configurar credencial SMTP.'),
     ];
