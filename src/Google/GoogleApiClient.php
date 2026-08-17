@@ -22,7 +22,9 @@ final class GoogleApiClient
     }
 
     /**
-     * @param array<string,mixed>|null $jsonBody
+     * @param array<string,mixed>|null $jsonBody Google APIs use message/object
+     *        request bodies. An empty array is serialized as an empty JSON
+     *        object (`{}`), matching protobuf Empty/message semantics.
      * @param array<int,string> $extraHeaders
      * @return array{status:int,body:array<string,mixed>|array<int,mixed>|null,raw:string}
      */
@@ -65,7 +67,9 @@ final class GoogleApiClient
 
         $payload = null;
         if ($jsonBody !== null) {
-            $payload = json_encode($jsonBody, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $payload = $jsonBody === []
+                ? '{}'
+                : json_encode($jsonBody, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             if ($payload === false) {
                 throw new RuntimeException('Could not encode Google API request body as JSON.');
             }
