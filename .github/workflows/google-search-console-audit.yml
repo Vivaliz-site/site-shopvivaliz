@@ -1,6 +1,16 @@
 name: Google Search Console Audit
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/google-search-console-audit.yml'
+      - 'scripts/google-search-console-audit.php'
+      - 'scripts/google-api-health.php'
+      - 'scripts/lib/google_oauth.py'
+      - 'src/Google/OAuthTokenProvider.php'
+      - 'src/Google/GoogleApiClient.php'
   schedule:
     # 07:20 America/Sao_Paulo while Brazil remains UTC-3.
     - cron: '20 10 * * *'
