@@ -16,6 +16,21 @@ if ($svCatalogHasSessionCookie && session_status() === PHP_SESSION_NONE) {
     @session_start();
 }
 
+if (!empty($_GET['busca']) && empty($_GET['q'])) {
+    $canonicalQuery = trim((string)$_GET['busca']);
+    if ($canonicalQuery !== '') {
+        $params = ['q' => $canonicalQuery];
+        if (!empty($_GET['categoria'])) {
+            $params['categoria'] = trim((string)$_GET['categoria']);
+        }
+        if (!empty($_GET['pagina'])) {
+            $params['pagina'] = max(1, (int)$_GET['pagina']);
+        }
+        header('Location: /catalogo?' . http_build_query($params), true, 301);
+        exit;
+    }
+}
+
 header('Content-Type: text/html; charset=UTF-8');
 if ($svCatalogPublicCache) {
     header('Cache-Control: public, max-age=15, s-maxage=30, stale-while-revalidate=60');
