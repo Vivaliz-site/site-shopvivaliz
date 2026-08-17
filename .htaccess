@@ -56,11 +56,11 @@ AddCharset UTF-8 .html .txt .php .json
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Host legado da VNDA: toda leitura publica converge para o novo catalogo.
-    # QSD remove query strings antigas para nao carregar filtros/parametros da loja cancelada.
+    # Host legado da VNDA: canoniza para o dominio principal preservando a rota.
+    # Regras abaixo continuam consolidando categorias/rotas realmente legadas.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
     RewriteCond %{HTTP_HOST} ^www\.shopvivaliz\.com\.br$ [NC]
-    RewriteRule ^ https://shopvivaliz.com.br/catalogo [R=301,L,NE,QSD]
+    RewriteRule ^(.*)$ https://shopvivaliz.com.br/$1 [R=301,L,NE]
 
     # Nunca encaminhar operacoes de escrita pelo host legado.
     RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]

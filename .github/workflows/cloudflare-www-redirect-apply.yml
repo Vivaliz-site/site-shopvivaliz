@@ -1,0 +1,143 @@
+name: Cloudflare WWW Redirect Apply
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ops/cloudflare-www-redirect-apply.json"
+      - ".github/workflows/cloudflare-www-redirect-apply.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Apply Cloudflare redirect rules for legacy www catalog
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CF_TOKEN:-}" ]; then
+            echo 'CLOUDFLARE_API_TOKEN_MISSING'
+            exit 1
+          fi
+
+          python3 <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.request
+
+          token = os.environ.get('CF_TOKEN', '').strip()
+          api = 'https://api.cloudflare.com/client/v4'
+          zone_name = 'shopvivaliz.com.br'
+          ruleset_phase = 'http_request_dynamic_redirect'
+          headers = {
+              'Authorization': f'Bearer {token}',
+              'Content-Type': 'application/json',
+          }
+
+          def request(method, path, payload=None, allow_404=False):
+              body = None if payload is None else json.dumps(payload).encode('utf-8')
+              req = urllib.request.Request(api + path, data=body, method=method, headers=headers)
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as resp:
+                      return json.loads(resp.read().decode('utf-8'))
+              except urllib.error.HTTPError as exc:
+                  raw = exc.read().decode('utf-8', errors='replace')
+                  if allow_404 and exc.code == 404:
+                      return {'success': False, 'errors': [{'code': 404, 'message': 'not found'}], 'result': None}
+                  print(f'CLOUDFLARE_API_ERROR method={method} path={path} status={exc.code}', file=sys.stderr)
+                  print(raw, file=sys.stderr)
+                  raise
+
+          verify = request('GET', '/user/tokens/verify')
+          if not verify.get('success'):
+              print('TOKEN_VERIFY_FAILED')
+              print(json.dumps(verify.get('errors', []), ensure_ascii=False))
+              sys.exit(1)
+          print('TOKEN_VERIFY_OK')
+
+          zones = request('GET', f'/zones?name={zone_name}')
+          results = zones.get('result') or []
+          if not results:
+              print('ZONE_NOT_FOUND')
+              sys.exit(1)
+          zone_id = results[0]['id']
+          print(f'ZONE_FOUND name={zone_name}')
+
+          dns = request('GET', f'/zones/{zone_id}/dns_records?name=www.{zone_name}')
+          records = dns.get('result') or []
+          if records:
+              for record in records:
+                  print('DNS_WWW_RECORD type={type} proxied={proxied}'.format(
+                      type=record.get('type'),
+                      proxied=record.get('proxied'),
+                  ))
+          else:
+              print('DNS_WWW_RECORD_NOT_FOUND')
+
+          entry = request('GET', f'/zones/{zone_id}/rulesets/phases/{ruleset_phase}/entrypoint', allow_404=True)
+          current = entry.get('result') if entry.get('success') else None
+          existing_rules = list((current or {}).get('rules') or [])
+
+          managed_refs = {
+              'shopvivaliz_www_ferramentas_to_catalogo',
+              'shopvivaliz_www_to_apex',
+          }
+          preserved_rules = [rule for rule in existing_rules if rule.get('ref') not in managed_refs]
+
+          managed_rules = [
+              {
+                  'ref': 'shopvivaliz_www_ferramentas_to_catalogo',
+                  'description': 'Redirect legacy www /ferramentas page to the new catalog category',
+                  'enabled': True,
+                  'expression': '(http.host eq "www.shopvivaliz.com.br" and http.request.uri.path eq "/ferramentas")',
+                  'action': 'redirect',
+                  'action_parameters': {
+                      'from_value': {
+                          'status_code': 301,
+                          'target_url': {'value': 'https://shopvivaliz.com.br/catalogo?categoria=Ferramentas'},
+                          'preserve_query_string': False,
+                      }
+                  },
+              },
+              {
+                  'ref': 'shopvivaliz_www_to_apex',
+                  'description': 'Redirect remaining www traffic to the apex production domain',
+                  'enabled': True,
+                  'expression': '(http.host eq "www.shopvivaliz.com.br")',
+                  'action': 'redirect',
+                  'action_parameters': {
+                      'from_value': {
+                          'status_code': 301,
+                          'target_url': {'expression': 'concat("https://shopvivaliz.com.br", http.request.uri.path)'},
+                          'preserve_query_string': True,
+                      }
+                  },
+              },
+          ]
+
+          payload = {
+              'name': (current or {}).get('name') or 'ShopVivaliz dynamic redirects',
+              'description': 'Managed redirects for ShopVivaliz canonical host and legacy catalog URLs',
+              'kind': 'zone',
+              'phase': ruleset_phase,
+              'rules': managed_rules + preserved_rules,
+          }
+
+          updated = request('PUT', f'/zones/{zone_id}/rulesets/phases/{ruleset_phase}/entrypoint', payload)
+          if not updated.get('success'):
+              print('RULESET_UPDATE_FAILED')
+              print(json.dumps(updated.get('errors', []), ensure_ascii=False))
+              sys.exit(1)
+
+          refs = [rule.get('ref') for rule in (updated.get('result') or {}).get('rules', [])]
+          print('RULESET_UPDATE_OK')
+          print('MANAGED_REFS=' + ','.join(ref for ref in refs if ref in managed_refs))
+          PY
