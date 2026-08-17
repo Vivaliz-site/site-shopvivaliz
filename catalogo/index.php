@@ -15,6 +15,42 @@ ob_start(static function (string $html): string {
         '/catalogo/',
         $html
     ) ?? $html;
+
+    // Paginated category/catalog pages are distinct crawlable pages. Do not
+    // canonicalize pagina=2+ back to page 1, otherwise Google can collapse the
+    // deeper product links and report them as duplicate/canonical exclusions.
+    // Search-result pages remain noindex and keep the existing canonical policy.
+    $pageRaw = $_GET['pagina'] ?? 1;
+    $page = is_scalar($pageRaw) ? max(1, (int)$pageRaw) : 1;
+    $searchRaw = $_GET['q'] ?? $_GET['busca'] ?? '';
+    $search = is_scalar($searchRaw) ? trim((string)$searchRaw) : '';
+
+    if ($page > 1 && $search === '') {
+        $categoryRaw = $_GET['categoria'] ?? '';
+        $category = is_scalar($categoryRaw) ? trim((string)$categoryRaw) : '';
+        $params = [];
+        if ($category !== '') {
+            $params['categoria'] = $category;
+        }
+        $params['pagina'] = $page;
+        $canonical = 'https://shopvivaliz.com.br/catalogo/?'
+            . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+        $escapedCanonical = htmlspecialchars($canonical, ENT_QUOTES, 'UTF-8');
+
+        $html = preg_replace_callback(
+            '#<link\s+rel="canonical"\s+href="[^"]*">#i',
+            static fn(array $match): string => '<link rel="canonical" href="' . $escapedCanonical . '">',
+            $html,
+            1
+        ) ?? $html;
+        $html = preg_replace_callback(
+            '#<meta\s+property="og:url"\s+content="[^"]*">#i',
+            static fn(array $match): string => '<meta property="og:url" content="' . $escapedCanonical . '">',
+            $html,
+            1
+        ) ?? $html;
+    }
+
     return $html;
 });
 

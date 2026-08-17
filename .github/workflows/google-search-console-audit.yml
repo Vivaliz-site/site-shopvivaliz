@@ -1,0 +1,64 @@
+name: Google Search Console Audit
+
+on:
+  schedule:
+    # 07:20 America/Sao_Paulo while Brazil remains UTC-3.
+    - cron: '20 10 * * *'
+  workflow_dispatch:
+    inputs:
+      max_urls:
+        description: Maximum sitemap URLs to inspect (1-1900)
+        required: false
+        default: '100'
+      offset:
+        description: Sitemap offset for paged audits
+        required: false
+        default: '0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: google-search-console-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      GOOGLE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_OAUTH_REFRESH_TOKEN }}
+      GOOGLE_SEARCH_CONSOLE_SITE_URL: ${{ vars.GOOGLE_SEARCH_CONSOLE_SITE_URL }}
+      GOOGLE_SEARCH_CONSOLE_SITEMAP_URL: ${{ vars.GOOGLE_SEARCH_CONSOLE_SITEMAP_URL }}
+      GOOGLE_SITE_BASE_URL: https://shopvivaliz.com.br
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify PHP runtime
+        run: php -v
+
+      - name: Audit Search Console URLs
+        id: audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          max_urls='${{ github.event.inputs.max_urls || '100' }}'
+          offset='${{ github.event.inputs.offset || '0' }}'
+          php scripts/google-search-console-audit.php \
+            --max-urls="${max_urls}" \
+            --offset="${offset}" \
+            --output=reports/google-search-console-audit.json
+
+      - name: Upload Search Console audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: google-search-console-audit-${{ github.run_id }}
+          path: reports/google-search-console-audit.json
+          if-no-files-found: error
+          retention-days: 30
