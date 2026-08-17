@@ -1,6 +1,5 @@
 <?php
 declare(strict_types=1);
-if (session_status() === PHP_SESSION_NONE) { session_start(); }
 $pageTitle = 'Dúvidas frequentes sobre compras | ShopVivaliz';
 $pageDescription = 'Respostas sobre pedidos, pagamento, boleto, frete, entrega, troca, devolução, segurança e atendimento da ShopVivaliz.';
 $pageUrl = 'https://shopvivaliz.com.br/faq/';
@@ -15,6 +14,10 @@ $faqSchema = [
         ['@type' => 'Question', 'name' => 'Como solicitar troca ou devolução?', 'acceptedAnswer' => ['@type' => 'Answer', 'text' => 'Entre em contato informando o número do pedido e o motivo e consulte a Política de Trocas e Devoluções.']],
         ['@type' => 'Question', 'name' => 'O site é seguro?', 'acceptedAnswer' => ['@type' => 'Answer', 'text' => 'O site utiliza conexão HTTPS e os pagamentos são processados por prestadores especializados.']],
         ['@type' => 'Question', 'name' => 'Posso tirar dúvidas antes de comprar?', 'acceptedAnswer' => ['@type' => 'Answer', 'text' => 'Sim. Use a página de contato para falar com a equipe sobre compatibilidade, estoque, entrega ou pedido.']],
+        ['@type' => 'Question', 'name' => 'O preço e o estoque são confirmados quando?', 'acceptedAnswer' => ['@type' => 'Answer', 'text' => 'A vitrine mostra o catálogo ativo e o servidor confirma novamente preço e estoque ao finalizar o pedido. Se houver alteração, o checkout informa antes de criar a compra.']],
+        ['@type' => 'Question', 'name' => 'Preciso criar uma conta para comprar?', 'acceptedAnswer' => ['@type' => 'Answer', 'text' => 'Não. O checkout permite comprar como visitante. Informe dados válidos para pagamento, entrega e comunicação sobre o pedido.']],
+        ['@type' => 'Question', 'name' => 'Como confirmar medida ou compatibilidade?', 'acceptedAnswer' => ['@type' => 'Answer', 'text' => 'Confira descrição, imagens, SKU e especificações. Se ainda houver dúvida, envie o SKU e a aplicação pela página de contato antes de comprar.']],
+        ['@type' => 'Question', 'name' => 'Como funciona o selo Compra verificada?', 'acceptedAnswer' => ['@type' => 'Answer', 'text' => 'O selo só é aplicado quando número do pedido, e-mail e pagamento são confirmados no sistema. A moderação não exige que a avaliação seja positiva.']],
     ],
 ];
 ?>
@@ -52,4 +55,8 @@ $faqSchema = [
 <details><summary>Como solicitar troca ou devolução?</summary><p>Entre em contato informando o número do pedido e o motivo. Consulte também a <a href="/politica-devolucoes">Política de Trocas e Devoluções</a>.</p></details>
 <details><summary>O site é seguro?</summary><p>O site utiliza conexão HTTPS e os pagamentos são processados por prestadores especializados. Nunca envie senha ou código de confirmação por mensagem.</p></details>
 <details><summary>Posso tirar dúvidas antes de comprar?</summary><p>Sim. Use a página de <a href="/contato">contato</a> para falar com a equipe sobre compatibilidade, estoque, entrega ou pedido.</p></details>
+<details><summary>O preço e o estoque são confirmados quando?</summary><p>A vitrine mostra o catálogo ativo e o servidor confirma novamente preço e estoque ao finalizar o pedido. Se houver alteração, o checkout informa antes de criar a compra.</p></details>
+<details><summary>Preciso criar uma conta para comprar?</summary><p>Não. O checkout permite comprar como visitante. Informe dados válidos para pagamento, entrega e comunicação sobre o pedido.</p></details>
+<details><summary>Como confirmar medida ou compatibilidade?</summary><p>Confira descrição, imagens, SKU e especificações. Se ainda houver dúvida, envie o SKU e a aplicação pela página de <a href="/contato">contato</a> antes de comprar.</p></details>
+<details><summary>Como funciona o selo “Compra verificada”?</summary><p>O selo só é aplicado quando número do pedido, e-mail e pagamento são confirmados no sistema. A moderação não exige que a avaliação seja positiva.</p></details>
 </div></section></div></main><?php include __DIR__ . '/../includes/footer.php'; ?></body></html>

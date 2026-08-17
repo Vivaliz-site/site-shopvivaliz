@@ -1,5 +1,7 @@
 import os
+import re
 import zipfile
+import argparse
 from datetime import datetime
 from pathlib import Path
 
@@ -18,6 +20,7 @@ def create_cumulative_zip(output_dir='artifacts'):
     version = get_project_version()
     output_filename = f'shopvivaliz-cumulative-release-{version}.zip'
     output_path = Path(output_dir) / output_filename
+    output_path = output_path.resolve()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -30,6 +33,7 @@ def create_cumulative_zip(output_dir='artifacts'):
         r'logs/',
         r'node_modules/',
         r'vendor/',
+        r'artifacts/',
         r'\.vscode/',
         r'__pycache__/',
         r'\.git-guardian\.json$',
@@ -63,6 +67,9 @@ def create_cumulative_zip(output_dir='artifacts'):
                 file_path = Path(root) / file
                 relative_path = file_path.relative_to(project_root)
 
+                if file_path.resolve() == output_path:
+                    continue
+
                 # Ignorar arquivos que correspondem aos padrões
                 if any(re.search(pattern, str(relative_path)) for pattern in ignore_patterns):
 
@@ -70,9 +77,13 @@ def create_cumulative_zip(output_dir='artifacts'):
 
                 zipf.write(file_path, arcname=relative_path)
 
+    print(f'ZIP cumulativo criado: {output_path}')
+    return output_path
+
 
 
 if __name__ == '__main__':
-    # Adiciona um import re aqui, que é necessário para a função create_cumulative_zip
-    import re
-    create_cumulative_zip()
+    parser = argparse.ArgumentParser(description='Gera o ZIP cumulativo da ShopVivaliz.')
+    parser.add_argument('--output-dir', default='artifacts')
+    args = parser.parse_args()
+    create_cumulative_zip(args.output_dir)

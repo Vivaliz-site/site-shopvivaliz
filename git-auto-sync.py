@@ -106,7 +106,18 @@ def check_local_health() -> dict[str, Any]:
             if response.status not in (200, 207):
                 raise RuntimeError(f"Health endpoint returned HTTP {response.status}")
             if not isinstance(data, dict) or not data.get("ok", False):
-                raise RuntimeError("Health endpoint reported unhealthy state")
+                checks = data.get("checks") if isinstance(data, dict) else None
+                failed_checks = [
+                    str(name)
+                    for name, passed in (checks.items() if isinstance(checks, dict) else [])
+                    if passed is not True
+                ]
+                detail = ", ".join(failed_checks[:8]) or "sem detalhe de checks"
+                score = data.get("health_score_percent") if isinstance(data, dict) else None
+                raise RuntimeError(
+                    f"Health endpoint reported unhealthy state; score={score}; "
+                    f"failed_checks={detail}"
+                )
             score = float(data.get("health_score_percent", 0))
             if score < MINIMUM_HEALTH_SCORE:
                 raise RuntimeError(

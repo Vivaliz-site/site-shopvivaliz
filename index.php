@@ -229,65 +229,10 @@ function sv_home_catalog_source_rows(): array
         return $localCache;
     }
 
-    $jsonPath = __DIR__ . '/api/catalog/fallback-products.json';
-    if (is_file($jsonPath) && is_readable($jsonPath)) {
-        $decoded = json_decode((string)file_get_contents($jsonPath), true);
-        if (is_array($decoded) && $decoded !== []) {
-            // Filtrar apenas produtos com status 'A' (ativo) ou 'active'
-            return array_filter($decoded, static function($item) {
-                if (!is_array($item)) return false;
-                $status = strtoupper(trim((string)($item['status'] ?? 'A')));
-                return in_array($status, ['A', 'ACTIVE'], true);
-            });
-        }
-    }
-
-    $csvPath = __DIR__ . '/uploads/olist_imagens_site_mapeamento.csv';
-    if (!is_file($csvPath) || !is_readable($csvPath)) {
-        return [];
-    }
-
-    $rows = [];
-    $handle = fopen($csvPath, 'r');
-    if (!$handle) {
-        return [];
-    }
-
-    $header = fgetcsv($handle);
-    if (!is_array($header)) {
-        fclose($handle);
-        return [];
-    }
-
-    while (($line = fgetcsv($handle)) !== false) {
-        if (!is_array($line) || $line === []) {
-            continue;
-        }
-        $assoc = [];
-        foreach ($header as $i => $column) {
-            $key = trim((string)$column);
-            if ($key === '') {
-                continue;
-            }
-            $assoc[$key] = $line[$i] ?? '';
-        }
-        if (isset($assoc['site_url']) && $assoc['site_url'] !== '') {
-            $assoc['image_url'] = $assoc['site_url'];
-        } elseif (isset($assoc['original_url_olist']) && $assoc['original_url_olist'] !== '') {
-            $assoc['image_url'] = $assoc['original_url_olist'];
-        }
-        if (isset($assoc['nome_produto']) && $assoc['nome_produto'] !== '') {
-            $assoc['name'] = $assoc['nome_produto'];
-        }
-
-        if (($assoc['image_url'] ?? '') === '') {
-            continue;
-        }
-        $rows[] = $assoc;
-    }
-
-    fclose($handle);
-    return $rows;
+    // Sem a fonte canonica de produtos ativos, a vitrine falha fechada. CSV e
+    // snapshots historicos podem enriquecer imagem/conteudo, nunca provar que
+    // um item ainda pode ser vendido.
+    return [];
 }
 
 function sv_home_latest_sales_rows(): array
@@ -410,6 +355,8 @@ function sv_home_featured_products(int $limit = 8): array
             'stock' => (int)($row['stock'] ?? 0),
             'olist_product_id' => $olistProductId,
             'category' => trim((string)($row['category'] ?? '')),
+            'description' => trim((string)($row['description'] ?? '')),
+            'brand' => trim((string)($row['brand'] ?? '')),
             'slug' => trim((string)($row['slug'] ?? '')),
             'sales_score' => (float)($rank['score'] ?? 0),
             'sales_position' => (int)($rank['position'] ?? 999999),
@@ -547,7 +494,7 @@ function sv_home_category_icon(string $category): string
             return $img_url;
         }
     }
-    return 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&h=400&fit=crop';
+    return '/public/assets/category-images/cat-organizacao.jpg';
 }
 
 function sv_home_top_categories(int $limit = 8): array
@@ -622,16 +569,6 @@ function sv_home_top_categories(int $limit = 8): array
         }
     }
 
-    if (empty($result)) {
-        $result = [
-            ['name' => 'Rodízios & Rodas', 'count' => 42, 'icon' => '/public/assets/category-images/cat-rodizios.jpg', 'href' => '/catalogo?categoria=Rodízios'],
-            ['name' => 'Ferramentas', 'count' => 38, 'icon' => '/public/assets/category-images/cat-ferramentas.jpg', 'href' => '/catalogo?categoria=Ferramentas'],
-            ['name' => 'Organização', 'count' => 29, 'icon' => '/public/assets/category-images/cat-organizacao.jpg', 'href' => '/catalogo?categoria=Organização'],
-            ['name' => 'Jardim & Floreiras', 'count' => 24, 'icon' => '/public/assets/category-images/cat-jardim.jpg', 'href' => '/catalogo?categoria=Jardim'],
-            ['name' => 'Ferragens & Fixação', 'count' => 19, 'icon' => '/public/assets/category-images/cat-ferragens.jpg', 'href' => '/catalogo?categoria=Ferragens'],
-        ];
-    }
-
     $sliced = array_slice($result, 0, $limit);
     if ($apcu) {
         apcu_store($apcuKey, $sliced, 300);
@@ -662,28 +599,24 @@ $svNavCurrent = '';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Rodízios e rodas para móveis, caixas de ferramentas, vasos decorativos e utilidades domésticas com entrega para todo o Brasil. Compre online na Vivaliz com segurança.">
+    <meta name="description" content="Rodízios, ferragens, ferramentas e utilidades para reparar e organizar a casa. Consulte preço, estoque e frete por CEP na ShopVivaliz.">
     <meta name="theme-color" content="#173B63">
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
     <meta property="og:title" content="Vivaliz | Rodízios, Ferragens e Utilidades Domésticas">
-    <meta property="og:description" content="Rodízios e rodas para móveis, caixas de ferramentas, vasos decorativos e utilidades domésticas. Compre online com entrega rápida.">
+    <meta property="og:description" content="Rodízios, ferragens, ferramentas e utilidades com preço e estoque atualizados e frete calculado por CEP.">
     <meta property="og:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square-v2.png">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://shopvivaliz.com.br/">
     <meta property="og:site_name" content="ShopVivaliz">
     <meta property="og:image:alt" content="ShopVivaliz - Loja online">
     <meta property="og:locale" content="pt_BR">
-    <!-- PERF: praticamente todas as fotos de produto da vitrine sao servidas
-         por s3.amazonaws.com (anexos do ERP Tiny). Sem preconnect, cada uma
-         paga DNS + TCP + TLS antes do primeiro byte. O preconnect do Unsplash
-         permanece apenas porque ele ainda e usado como imagem de fallback. -->
+    <!-- As fotos de produto da vitrine sao servidas principalmente pelos
+         anexos do ERP Tiny; antecipa somente a origem efetivamente usada. -->
     <link rel="preconnect" href="https://s3.amazonaws.com" crossorigin>
     <link rel="dns-prefetch" href="https://s3.amazonaws.com">
-    <link rel="preconnect" href="https://images.unsplash.com" crossorigin>
-    <link rel="dns-prefetch" href="https://images.unsplash.com">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Vivaliz | Rodízios, Ferragens e Utilidades Domésticas">
-    <meta name="twitter:description" content="Rodízios e rodas para móveis, caixas de ferramentas, vasos decorativos e utilidades domésticas. Compre online com entrega rápida.">
+    <meta name="twitter:description" content="Rodízios, ferragens, ferramentas e utilidades com preço e estoque atualizados e frete calculado por CEP.">
     <meta name="twitter:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square-v2.png">
     <link rel="canonical" href="https://shopvivaliz.com.br/">
     <link rel="icon" href="/images/favicon.svg?v=2026-07-27" type="image/svg+xml">
@@ -774,7 +707,7 @@ $svNavCurrent = '';
           "address": {
             "@type": "PostalAddress",
             "streetAddress": "RUA CAMPINA VERDE, 841",
-            "addressLocality": "SAO JOSE - Divinópolis",
+            "addressLocality": "Divinópolis",
             "addressRegion": "MG",
             "postalCode": "35501-236",
             "addressCountry": "BR"
@@ -793,7 +726,7 @@ $svNavCurrent = '';
                   $pSku = htmlspecialchars((string)($p['sku'] ?? 'sem-sku'), ENT_QUOTES);
                   $pDesc = htmlspecialchars(preg_replace('/\s+/', ' ', trim(strip_tags((string)($p['description'] ?? '')))), ENT_QUOTES);
                   if ($pDesc === '') {
-                      $pDesc = 'Produto de qualidade Vivaliz para todo o Brasil.';
+                      $pDesc = 'Consulte informações, preço, estoque e frete deste produto na ShopVivaliz.';
                   }
                   $seoItems[] = '{
                     "@type": "ListItem",
@@ -806,10 +739,6 @@ $svNavCurrent = '';
                       "sku": "' . $pSku . '",
                       "mpn": "' . $pSku . '",
                       "description": "' . $pDesc . '",
-                      "brand": {
-                        "@type": "Brand",
-                        "name": "Vivaliz"
-                      },
                       "offers": {
                         "@type": "Offer",
                         "url": "' . $url . '",
@@ -858,7 +787,7 @@ $svNavCurrent = '';
               "name": "Como funciona a política de devolução?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "Você tem até 7 dias corridos após o recebimento para solicitar troca ou devolução. Em caso de defeito do produto, a devolução é gratuita."
+              "text": "Para compras online, o consumidor pode solicitar o direito de arrependimento em até 7 dias corridos após o recebimento. O atendimento orienta o procedimento conforme a Política de Trocas e Devoluções."
               }
             },
             {
@@ -866,7 +795,7 @@ $svNavCurrent = '';
               "name": "Quais são as formas de pagamento aceitas?",
               "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "Aceitamos PIX (com aprovação imediata), cartão de crédito em até 6x e boleto bancário. Todas as transações são seguras e criptografadas."
+              "text": "As formas de pagamento e o eventual parcelamento disponíveis são exibidos no checkout antes da confirmação do pedido."
               }
             },
             {
@@ -901,27 +830,27 @@ $svNavCurrent = '';
                 </div>
                 <?php endif; ?>
                 <p class="eyebrow hero-kicker">
-                    🛍️ Loja oficial Vivaliz
+                    Loja online de ferragens e utilidades
                 </p>
-                <h1>Tudo pra sua casa, <span class="gradient-word">com entrega rápida</span></h1>
-                <p>Rodízios, ferragens e utilidades com os melhores preços. Compre com segurança e receba em todo o Brasil.</p>
+                <h1>Encontre a peça certa para <span class="gradient-word">reparar, organizar e transformar</span></h1>
+                <p>Rodízios, ferragens, ferramentas e utilidades com preço e estoque atualizados. Consulte o frete pelo CEP e tire dúvidas com a equipe antes de comprar.</p>
 
                 <!-- Premium E-Commerce Search Bar -->
                 <div class="hero-search-container">
                     <form action="/catalogo" method="GET" class="hero-search-form">
                         <label for="hero-search-input" class="sr-only">Buscar produtos</label>
                         <span class="hero-search-icon">🔍</span>
-                        <input id="hero-search-input" type="text" name="busca" placeholder="O que você está procurando hoje? Ex: rodízios, ferramentas..." required>
+                        <input id="hero-search-input" type="text" name="q" placeholder="O que você está procurando hoje? Ex: rodízios, ferramentas..." required>
                         <button type="submit">Buscar</button>
                     </form>
                 </div>
 
                 <div class="cta-buttons hero-cta hero-cta-mt-24">
-                    <a href="/carrinho" class="btn btn-hero-secondary">
-                        🛒 Meu Carrinho
+                    <a href="/catalogo" class="btn btn-hero-primary">
+                        Ver produtos
                     </a>
-                    <a href="/blog/" class="btn btn-hero-secondary">
-                        📰 Ver blog
+                    <a href="/contato" class="btn btn-hero-secondary">
+                        Falar com a equipe
                     </a>
                 </div>
             </div>
@@ -936,8 +865,8 @@ $svNavCurrent = '';
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                 </span>
                 <div class="trust-bar-text">
-                    <strong>Compra 100% Segura</strong>
-                    <span>Dados protegidos com criptografia SSL</span>
+                    <strong>Conexão protegida</strong>
+                    <span>Site em HTTPS e pagamento processado por parceiros</span>
                 </div>
             </div>
             <div class="trust-bar-item" role="listitem">
@@ -945,8 +874,8 @@ $svNavCurrent = '';
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
                 </span>
                 <div class="trust-bar-text">
-                    <strong>Entrega em Todo o Brasil</strong>
-                    <span>Via transportadoras parceiras de confiança</span>
+                    <strong>Frete antes de comprar</strong>
+                    <span>Valor e prazo calculados pelo seu CEP</span>
                 </div>
             </div>
             <div class="trust-bar-item" role="listitem">
@@ -954,8 +883,8 @@ $svNavCurrent = '';
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
                 </span>
                 <div class="trust-bar-text">
-                    <strong>PIX com aprovação imediata</strong>
-                    <span>Pague via PIX, cartão ou boleto</span>
+                    <strong>Pagamento transparente</strong>
+                    <span>Opções disponíveis aparecem no checkout</span>
                 </div>
             </div>
             <div class="trust-bar-item" role="listitem">
@@ -963,8 +892,8 @@ $svNavCurrent = '';
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
                 </span>
                 <div class="trust-bar-text">
-                    <strong>7 dias para Troca</strong>
-                    <span>Devolução simples sem burocracia</span>
+                    <strong>Direito de arrependimento</strong>
+                    <span>Solicitação em até 7 dias após o recebimento</span>
                 </div>
             </div>
         </div>
@@ -1164,7 +1093,7 @@ $svNavCurrent = '';
                         Como funciona a política de devolução?
                         <span class="faq-icon">+</span>
                     </summary>
-                    <p class="faq-body">Você tem até 7 dias corridos após o recebimento para solicitar troca ou devolução. Em caso de defeito de fabricação, o frete de retorno é por nossa conta. O reembolso é processado em até 10 dias úteis após a confirmação do retorno.</p>
+                    <p class="faq-body">Para compras online, você pode solicitar o direito de arrependimento em até 7 dias corridos após o recebimento. Entre em contato com o número do pedido; a equipe orientará cada etapa conforme a <a href="/politica-devolucoes">Política de Trocas e Devoluções</a>.</p>
                 </details>
                 <details class="faq-item sv-reveal sv-reveal-delay-3">
                     <summary>
@@ -1172,7 +1101,7 @@ $svNavCurrent = '';
                         <span class="faq-icon">+</span>
                     </summary>
                     <div class="faq-body">
-                        <p>Aceitamos PIX (com aprovação imediata), cartão de crédito em até 6x e boleto bancário. Todas as transações são protegidas com criptografia SSL.</p>
+                        <p>As formas de pagamento e o eventual parcelamento disponíveis aparecem no checkout antes da confirmação. Assim, você vê as condições válidas para o pedido sem depender de uma promessa fixa.</p>
                         <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e9f0; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
                             <img src="/images/mercado-pago-logo.svg" alt="Mercado Pago - Formas de Pagamento" style="max-width: 100%; height: auto; width: 180px; border-radius: 10px;">
                             <img src="/images/infinitepay-logo.svg" alt="InfinitePay - Formas de Pagamento" style="max-width: 100%; height: auto; width: 180px; border-radius: 10px;">
@@ -1184,7 +1113,7 @@ $svNavCurrent = '';
                         Posso rastrear meu pedido?
                         <span class="faq-icon">+</span>
                     </summary>
-                    <p class="faq-body">Sim! Assim que o pedido for despachado, você receberá por e-mail o código de rastreamento para acompanhar cada etapa da entrega em tempo real.</p>
+                    <p class="faq-body">Consulte “Minha Conta &gt; Meus Pedidos”. Quando a transportadora disponibilizar rastreamento, o código ou link também poderá ser enviado pelos canais cadastrados.</p>
                 </details>
             </div>
             

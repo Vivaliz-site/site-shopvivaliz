@@ -69,22 +69,22 @@ HTML;
 
 $trackingCode = $GLOBALS['analytics']->getTrackingCode();
 
-$verifiedGtmId = 'GTM-TW4RPSQD';
-$hasVerifiedGtmLoader = str_contains(
-    $trackingCode,
-    'googletagmanager.com/gtm.js?id=' . $verifiedGtmId
-);
+$verifiedGtmId = (string)(getenv('GOOGLE_TAG_MANAGER_ID') ?: (getenv('GTM_ID') ?: 'GTM-PHZ55CP3'));
+$hasVerifiedGtmLoader = $verifiedGtmId !== ''
+    && str_contains($trackingCode, 'googletagmanager.com/gtm.js')
+    && str_contains($trackingCode, $verifiedGtmId);
 $hasDirectGoogleTag = str_contains($trackingCode, 'googletagmanager.com/gtag/js?id=');
 if ($hasVerifiedGtmLoader && $hasDirectGoogleTag) {
     $trackingCode = preg_replace(
-        '~<!-- Google tag \(gtag\.js\) -->\s*<script async src="https://www\.googletagmanager\.com/gtag/js\?id=[^"]+"></script>\s*<script>.*?</script>~s',
+        '~<!-- Google tag \((?:gtag\.js|GA4/Ads)\) -->\s*<script async src="https://www\.googletagmanager\.com/gtag/js\?id=[^"]+"></script>\s*<script>.*?</script>~s',
         '',
         $trackingCode
     ) ?? $trackingCode;
 
     $trackingPublicConfig = [
         'ga4Id' => (string)(getenv('GA4_ID') ?: 'G-1H55K1TZ5D'),
-        'googleAdsId' => (string)(getenv('GOOGLE_ADS_CONVERSION_ID') ?: ''),
+        'ga4MeasurementId' => (string)(getenv('GA4_ID') ?: 'G-1H55K1TZ5D'),
+        'googleAdsId' => (string)(getenv('GOOGLE_ADS_ID') ?: (getenv('GOOGLE_ADS_CONVERSION_ID') ?: '')),
         'googleAdsLabel' => (string)(getenv('GOOGLE_ADS_CONVERSION_LABEL') ?: ''),
         'currency' => 'BRL',
         'consentMode' => true,
@@ -154,9 +154,7 @@ if ($requestPath === '/produto' || str_starts_with($requestPath, '/produto/')) {
     require_once __DIR__ . '/product-video-embed-fix.php';
 }
 
-if (function_exists('track_page_view')) {
-    $title = $GLOBALS['page_title'] ?? 'Page';
-    $path = $_SERVER['REQUEST_URI'] ?? '/';
-    track_page_view($title, $path);
-}
+// Pageviews sao medidos no navegador por GA4/GTM depois do consentimento.
+// Enviar o mesmo evento por cURL no shutdown atrasava cada pagina publica e
+// ainda criava duplicidade. Eventos de compra continuam server-side no webhook.
 ?>

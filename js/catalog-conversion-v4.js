@@ -16,6 +16,7 @@
   window.addEventListener('resize',syncCatalogTop,{passive:true});
 
   var searchInput=document.getElementById('catalog-search');
+  var categorySelect=document.getElementById('catalog-category-select');
   if(searchInput&&!searchInput.getAttribute('placeholder')){
     searchInput.setAttribute('placeholder','Busque por produto, categoria ou SKU');
   }
@@ -57,7 +58,7 @@
     if(priceEl&&numeric>0&&!card.querySelector('.sv-installment')){
       var installment=document.createElement('span');
       installment.className='sv-installment';
-      installment.textContent='ou 6x de R$ '+(numeric/6).toFixed(2).replace('.',',')+' sem juros';
+      installment.textContent='Condições de pagamento no checkout';
       priceEl.insertAdjacentElement('afterend',installment);
     }
   });
@@ -108,9 +109,14 @@
         searchInput.scrollIntoView({behavior:'smooth',block:'center'});
         setTimeout(function(){searchInput.focus();},300);
       }
-      if(button.dataset.action==='filter'&&toggle){
-        toggle.click();
-        tools.scrollIntoView({behavior:'smooth',block:'start'});
+      if(button.dataset.action==='filter'){
+        if(categorySelect){
+          categorySelect.scrollIntoView({behavior:'smooth',block:'center'});
+          setTimeout(function(){categorySelect.focus();},300);
+        }else if(toggle){
+          toggle.click();
+          tools.scrollIntoView({behavior:'smooth',block:'start'});
+        }
       }
     });
   }
