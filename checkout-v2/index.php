@@ -80,9 +80,12 @@ function sv_checkout_shipping_note(float $shippingTotal, string $shippingLabel):
     return implode(' | ', $parts);
 }
 
-$pixKey = sv_checkout_env('LOJA_PIX_KEY') ?: 'contato@vivaliz.com.br';
-$pixName = sv_checkout_env('LOJA_PIX_NAME') ?: 'Vivaliz Store';
-$whatsapp = sv_checkout_env('LOJA_WHATSAPP');
+$companyProfile = @include dirname(__DIR__) . '/config/company-profile.php';
+$companyProfile = is_array($companyProfile) ? $companyProfile : [];
+$pixKey = sv_checkout_env('LOJA_PIX_KEY');
+$pixName = sv_checkout_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
+$whatsapp = preg_replace('/\D+/', '', sv_checkout_env('LOJA_WHATSAPP'))
+    ?: (preg_replace('/\D+/', '', (string)($companyProfile['social_media']['whatsapp'] ?? $companyProfile['phone'] ?? '')) ?: '');
 
 $pedidoCriado = false;
 $pedidoId = null;
@@ -665,8 +668,16 @@ Aguardo confirmacao e dados de pagamento. Obrigado!");
         function readShippingQuote() {
             try {
                 const value = JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null');
-                return value && typeof value === 'object' ? value : null;
+                if (!value || typeof value !== 'object') return null;
+                const expiresAt = Number(value.expires_at || 0);
+                const now = expiresAt > 1000000000000 ? Date.now() : Math.floor(Date.now() / 1000);
+                if (!expiresAt || expiresAt <= now) {
+                    localStorage.removeItem('shopvivaliz_shipping_quote');
+                    return null;
+                }
+                return value;
             } catch (error) {
+                localStorage.removeItem('shopvivaliz_shipping_quote');
                 return null;
             }
         }
