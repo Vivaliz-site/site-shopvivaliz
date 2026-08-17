@@ -15,45 +15,57 @@ jobs:
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
         run: |
+          set -euo pipefail
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Audit VM sender configuration and legacy references
+      - name: Diagnose MEI email runtime on VM
         run: |
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
-          set -euo pipefail
-          cd /home/ubuntu/mei-mg-email
-          echo 'WORKER_STATE_BEGIN'
-          systemctl is-active mei-mg-email-worker.service || true
-          systemctl is-enabled mei-mg-email-worker.service || true
-          echo 'WORKER_STATE_END'
-          echo 'SENDER_ENV_BEGIN'
-          grep -E '^(EMAIL_PROVIDER|MICROSOFT_GRAPH_USER|MICROSOFT_GRAPH_CLIENT_ID|MICROSOFT_GRAPH_TENANT_ID)=' .env 2>/dev/null || true
-          echo 'SENDER_ENV_END'
-          echo 'LEGACY_SENDER_REFS_BEGIN'
-          grep -RniE 'noreply@ContabilidadeMelo\.onmicrosoft\.com|noreply@contabilidademelo\.onmicrosoft\.com|ContabilidadeMelo\.onmicrosoft\.com' app worker scripts . 2>/dev/null \
-            | grep -vE '/\.git/|\.pre-dedup' \
-            | head -200 || true
-          echo 'LEGACY_SENDER_REFS_END'
-          echo 'SYSTEMD_BEGIN'
-          systemctl cat mei-mg-email-api.service 2>/dev/null || true
-          systemctl cat mei-mg-email-worker.service 2>/dev/null || true
-          echo 'SYSTEMD_END'
-          echo 'GRAPH_PROVIDER_BEGIN'
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('app/services/email_provider.py')
-          if not p.exists(): p=Path('scripts/m365/email_provider_server_app_only.py')
-          print(str(p))
-          s=p.read_text(errors='replace')
-          for needle in ['sendMail','MICROSOFT_GRAPH_USER','return SendResult(True)','saveToSentItems']:
-              print(needle, s.count(needle))
-          PY
-          echo 'GRAPH_PROVIDER_END'
+          set -u
+          cd /home/ubuntu/mei-mg-email || exit 10
+
+          echo '=== RUNTIME_DIAG_BEGIN ==='
+          date -u '+UTC=%Y-%m-%dT%H:%M:%SZ'
+          echo "APP_SHA=$(git rev-parse HEAD 2>/dev/null || true)"
+
+          echo '=== UNITS ==='
+          printf 'worker_active='; systemctl is-active mei-mg-email-worker.service || true
+          printf 'worker_enabled='; systemctl is-enabled mei-mg-email-worker.service || true
+          printf 'ndr_guard_active='; systemctl is-active mei-mg-email-ndr-guard.service || true
+          printf 'ndr_guard_enabled='; systemctl is-enabled mei-mg-email-ndr-guard.service || true
+          printf 'monitor_active='; systemctl is-active mei-mg-email-monitor.service || true
+
+          echo '=== SENTINEL ==='
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then
+            echo 'sentinel_present=true'
+            sudo sed -n '1,20p' /var/lib/mei-mg-email/sender_blocked.pause || true
+          else
+            echo 'sentinel_present=false'
+          fi
+          ls -l runtime/sender_blocked.pause /var/lib/mei-mg-email/sender_blocked.pause 2>&1 || true
+
+          echo '=== NDR_STATE ==='
+          sudo cat /var/lib/mei-mg-email/ndr_guard_state.json 2>/dev/null || echo 'ndr_state_missing=true'
+
+          echo '=== MONITOR_SNAPSHOT ==='
+          if [ -x .venv/bin/python ]; then
+            sudo -u ubuntu .venv/bin/python scripts/monitor_operacao.py --once || true
+          else
+            sudo -u ubuntu python3 scripts/monitor_operacao.py --once || true
+          fi
+
+          echo '=== WORKER_STATUS ==='
+          sudo systemctl status mei-mg-email-worker.service --no-pager -l || true
+
+          echo '=== WORKER_LOG_SINCE_1940_BRT ==='
+          sudo journalctl -u mei-mg-email-worker.service --since '2026-08-16 22:40:00 UTC' --no-pager -n 250 || true
+
+          echo '=== NDR_GUARD_LOG_SINCE_1930_BRT ==='
+          sudo journalctl -u mei-mg-email-ndr-guard.service --since '2026-08-16 22:30:00 UTC' --no-pager -n 200 || true
+
+          echo '=== RUNTIME_DIAG_END ==='
           EOF
-      - name: Confirm bulk sending remains disabled
-        run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 'if sudo systemctl is-active --quiet mei-mg-email-worker.service; then echo WORKER_ACTIVE_UNSAFE; exit 2; else echo BULK_WORKER_HELD; fi'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey
