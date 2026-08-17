@@ -9,7 +9,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 8
     steps:
       - name: Configure VM key
         env:
@@ -19,9 +19,9 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Lightweight MEI refill and runtime validation
+      - name: Refill MEI queue without DDL locks
         run: |
-          timeout 570s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          timeout 450s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           cd /home/ubuntu/mei-mg-email
           PY=.venv/bin/python
@@ -63,53 +63,27 @@ jobs:
           PY
           grep -E '^(META_ENVIOS_POR_DIA|MAX_ENVIOS_POR_DIA|RATE_LIMIT_ENVIOS_POR_MINUTO|QUEUE_MIN_PENDING|QUEUE_TARGET_PENDING)=' .env || true
 
-          echo '=== ENSURE_LIGHT_INDEXES ==='
-          timeout 300s "$PY" -u - <<'PY'
+          echo '=== INDEX_STATUS_NO_DDL ==='
+          timeout 30s "$PY" -u - <<'PY'
           from dotenv import load_dotenv
           load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
           import psycopg
           from app.config import settings
-          with psycopg.connect(settings.database_url, connect_timeout=8) as conn:
-              conn.autocommit = True
-              with conn.cursor() as cur:
-                  cur.execute("set statement_timeout = '180s'")
-                  cur.execute("set lock_timeout = '10s'")
-                  statements = [
-                      """
-                      create index if not exists idx_empresas_autoqueue_mei_mg
-                          on mei_email.empresas (cnpj)
-                          include (email, data_abertura)
-                          where tipo_regime = 'MEI'
-                            and uf = 'MG'
-                            and situacao_cadastral = 'ATIVA'
-                            and opt_out = false
-                            and provavel_terceiro = false
-                            and email is not null
-                            and enviado = false
-                            and marketing_autorizado = true
-                            and mei_verificado = true
-                      """,
-                      "create index if not exists idx_envios_cnpj_status_light on mei_email.envios (cnpj, status)",
-                      "create index if not exists idx_envios_email_norm_light on mei_email.envios (lower(btrim(email::text)))",
-                      "create index if not exists idx_lotes_status_light on mei_email.lotes (status)",
-                  ]
-                  for sql in statements:
-                      print('running_index=' + sql.split()[5], flush=True)
-                      cur.execute(sql)
-                  cur.execute('analyze mei_email.empresas')
-                  cur.execute('analyze mei_email.lotes')
-                  print('indexes_ready=true', flush=True)
+          names=('idx_empresas_autoqueue_mei_mg','idx_envios_cnpj_status_light','idx_envios_email_norm_light','idx_lotes_status_light')
+          with psycopg.connect(settings.database_url, connect_timeout=8, options='-c statement_timeout=15000') as conn, conn.cursor() as cur:
+              cur.execute("select indexname from pg_indexes where schemaname='mei_email' and indexname = any(%s)", (list(names),))
+              print('existing_indexes=' + repr(cur.fetchall()), flush=True)
           PY
 
-          echo '=== REFILL_QUEUE_LIGHT ==='
-          timeout 240s "$PY" -u - <<'PY'
+          echo '=== REFILL_QUEUE_ONLY ==='
+          timeout 300s "$PY" -u - <<'PY'
           from dotenv import load_dotenv
           load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
           import psycopg
           from app.config import settings
           from app.queue_manager import contar_pendentes, repor_fila_automatica
           import worker.worker_queue_first as wq
-          with psycopg.connect(settings.database_url, connect_timeout=8, options='-c statement_timeout=120000 -c lock_timeout=8000') as conn:
+          with psycopg.connect(settings.database_url, connect_timeout=8, options='-c statement_timeout=180000 -c lock_timeout=8000') as conn:
               print('settings_meta=' + str(settings.meta_envios_por_dia), flush=True)
               print('settings_max=' + str(settings.max_envios_por_dia), flush=True)
               print('settings_rate=' + str(settings.rate_limit_envios_por_minuto), flush=True)
@@ -118,28 +92,22 @@ jobs:
               print('quota_24h=' + str(wq._obter_envios_ultimas_24h_indexado(conn)), flush=True)
               before = contar_pendentes(conn)
               print('queue_pending_before=' + str(before), flush=True)
-              total = 0
-              for i in range(3):
-                  added = int(repor_fila_automatica(conn) or 0)
-                  conn.commit()
-                  total += added
-                  print(f'refill_round_{i+1}={added}', flush=True)
-                  if added == 0:
-                      break
+              added = int(repor_fila_automatica(conn) or 0)
+              conn.commit()
+              print('refill_round_1=' + str(added), flush=True)
               after = contar_pendentes(conn)
               print('queue_pending_after=' + str(after), flush=True)
-              print('refill_total=' + str(total), flush=True)
           PY
 
           echo '=== RESTART_WORKER ==='
           sudo systemctl restart mei-mg-email-worker.service
-          sleep 8
+          sleep 10
           echo 'worker_after='$(systemctl is-active mei-mg-email-worker.service || true)
           echo 'worker_enabled_after='$(systemctl is-enabled mei-mg-email-worker.service || true)
           test -f /var/lib/mei-mg-email/sender_blocked.pause && echo sentinel_after=true || echo sentinel_after=false
 
           echo '=== RECENT_WORKER_LOG ==='
-          timeout 25s sudo journalctl -u mei-mg-email-worker.service -n 120 --no-pager || true
+          timeout 30s sudo journalctl -u mei-mg-email-worker.service -n 140 --no-pager || true
           echo '=== END ==='
           EOF
       - name: Cleanup
