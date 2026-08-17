@@ -272,23 +272,52 @@ function installSupport() {
 }
 function installMobileNav() {
   if (window.innerWidth > 820 || !isPublicPath(window.location.pathname)) return;
-  if (document.querySelector('.sv-mobile-nav-bar,.sv-mobile-bottom-nav,.sv-checkout-mobile-total,.sv-mobile-buybar')) return;
-  var nav = document.createElement('nav');
+  var nav = document.querySelector('.sv-mobile-nav-bar');
   var path = window.location.pathname || '/';
+  var cartCount = 0;
+  try {
+    var items = window.ShopVivalizCart && typeof window.ShopVivalizCart.get === 'function'
+      ? window.ShopVivalizCart.get()
+      : JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
+    cartCount = Array.isArray(items) ? items.reduce(function (sum, item) {
+      return sum + (Number(item && item.quantity) || 1);
+    }, 0) : 0;
+  } catch (error) {
+    cartCount = 0;
+  }
+
   var links = [
     {href:'/',label:'Início',icon:'⌂',active:isHomePath(path)},
-    {href:'/catalogo',label:'Busca',icon:'⌕',active:/^\/catalogo\b/i.test(path)},
-    {href:'/carrinho',label:'Carrinho',icon:'🛒',active:/^\/carrinho\b/i.test(path)},
-    {href:'/blog/',label:'Blog',icon:'✎',active:/^\/blog\b/i.test(path)},
-    {href:'/auth/login.php',label:'Conta',icon:'◉',active:/^\/auth\b/i.test(path)}
+    {href:'/catalogo/',label:'Categorias',icon:'▦',active:/^\/catalogo\b/i.test(path)},
+    {href:'/catalogo/',label:'Busca',icon:'⌕',active:/^\/catalogo\b/i.test(path)},
+    {href:'/carrinho',label:'Carrinho',icon:'🛒',active:/^\/carrinho\b/i.test(path),badge:cartCount},
+    {href:'/contato/',label:'Liz/Ajuda',icon:'✆',active:/^\/contato\b/i.test(path) || /sv-liz/.test(location.hash || '')}
   ];
-  nav.className = 'sv-mobile-nav-bar';
-  nav.setAttribute('aria-label', 'Navegação rápida');
+
+  if (!nav) {
+    nav = document.createElement('nav');
+    nav.className = 'sv-mobile-nav-bar';
+    nav.setAttribute('aria-label', 'Navegação rápida');
+    document.body.appendChild(nav);
+  }
+
   nav.innerHTML = links.map(function (link) {
     var attrs = link.active ? ' aria-current="page" class="is-active"' : '';
-    return '<a href="' + link.href + '"' + attrs + '><span class="nav-icon" aria-hidden="true">' + link.icon + '</span><span>' + link.label + '</span></a>';
+    var badge = link.badge > 0 ? '<span class="nav-badge" aria-label="' + link.badge + ' itens no carrinho" style="position:absolute;top:2px;right:18px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:#ef4444;color:#fff;font-size:10px;line-height:16px;font-weight:900;box-shadow:0 8px 16px rgba(239,68,68,.28);">' + link.badge + '</span>' : '';
+    return '<a href="' + link.href + '" style="position:relative;"' + attrs + ' data-mobile-nav="' + link.label.toLowerCase().replace(/\s+/g, '-') + '"><span class="nav-icon" aria-hidden="true">' + link.icon + '</span><span>' + link.label + '</span>' + badge + '</a>';
   }).join('');
-  document.body.appendChild(nav);
+
+  nav.querySelectorAll('a[data-mobile-nav="liz/ajuda"]').forEach(function (link) {
+    link.addEventListener('click', function (event) {
+      var launcher = document.getElementById('sv-liz-launcher');
+      if (!launcher) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      launcher.click();
+    });
+  });
 }
 function updatePageState() {
   var body = document.body;
@@ -343,6 +372,10 @@ function init() {
   installTestimonials();
   installSupport();
   scheduleResponsivePass();
+  window.addEventListener('shopvivaliz:cart-updated', scheduleResponsivePass);
+  window.addEventListener('storage', function (event) {
+    if (event && event.key === 'shopvivaliz_cart') scheduleResponsivePass();
+  });
   if (typeof MutationObserver !== 'undefined' && document.body) {
     new MutationObserver(function (mutations) {
       var relevant = mutations.some(function (mutation) { return mutation.addedNodes.length || mutation.removedNodes.length; });

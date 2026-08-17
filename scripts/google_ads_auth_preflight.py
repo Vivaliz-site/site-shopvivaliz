@@ -19,7 +19,6 @@ REQUIRED_ENV = [
     "GOOGLE_OAUTH_CLIENT_SECRET",
     "GOOGLE_ADS_CUSTOMER_ID",
     "GOOGLE_ADS_DEVELOPER_TOKEN",
-    "GOOGLE_ADS_REFRESH_TOKEN",
 ]
 OAUTH_CLIENT_RE = re.compile(r"^[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$")
 CUSTOMER_ID_RE = re.compile(r"^\d{10}$")
@@ -53,6 +52,10 @@ def main() -> int:
     for key in REQUIRED_ENV:
         if is_placeholder(os.getenv(key, "")):
             errors.append(f"{key}=MISSING_OR_PLACEHOLDER")
+
+    refresh_token = os.getenv("GOOGLE_OAUTH_REFRESH_TOKEN", "").strip() or os.getenv("GOOGLE_ADS_REFRESH_TOKEN", "").strip()
+    if is_placeholder(refresh_token):
+        errors.append("GOOGLE_OAUTH_REFRESH_TOKEN_OR_GOOGLE_ADS_REFRESH_TOKEN=MISSING_OR_PLACEHOLDER")
 
     client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "").strip()
     if client_id and not is_placeholder(client_id) and not OAUTH_CLIENT_RE.fullmatch(client_id):
