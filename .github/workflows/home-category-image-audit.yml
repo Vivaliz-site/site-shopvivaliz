@@ -58,6 +58,21 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         run: |
           set -Eeuo pipefail
+          mkdir -p storage
+          php <<'PHP'
+          <?php
+          declare(strict_types=1);
+          $payload = json_decode((string) file_get_contents('api/catalog/fallback-products.json'), true, 512, JSON_THROW_ON_ERROR);
+          $rows = array_values(array_filter($payload, 'is_array'));
+          if (count($rows) < 20) {
+              throw new RuntimeException('Catalog fixture is unexpectedly small.');
+          }
+          file_put_contents(
+              'storage/products-cache-ativos.json',
+              json_encode(['products' => $rows], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
+              LOCK_EX
+          );
+          PHP
           php -S 127.0.0.1:8080 -t . > /tmp/shopvivaliz-category-audit-php.log 2>&1 &
           echo $! > /tmp/shopvivaliz-category-audit-php.pid
           ready=0
@@ -87,6 +102,7 @@ jobs:
               kill "$pid"
             fi
           fi
+          rm -f storage/products-cache-ativos.json
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v7

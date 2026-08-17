@@ -1,8 +1,15 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
+$svProductHasSessionCookie = isset($_COOKIE[session_name()]) && $_COOKIE[session_name()] !== '';
+if ($svProductHasSessionCookie && session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 header('Content-Type: text/html; charset=UTF-8');
+if ($svProductHasSessionCookie) {
+    header('Cache-Control: private, no-cache, must-revalidate');
+} else {
+    header('Cache-Control: public, max-age=15, s-maxage=30, stale-while-revalidate=60');
+    header('Vary: Cookie', false);
+}
 require_once __DIR__ . '/includes/catalog-runtime.php';
 require_once __DIR__ . '/includes/product-seo.php';
 
@@ -219,11 +226,18 @@ function sv_product_catalog(): array
     return $data = svcr_products();
 }
 
-function sv_product_related(string $sku, string $category, int $limit = 4): array
+function sv_product_related(string $sku, string $category, string $currentName = '', int $limit = 4): array
 {
     $all = sv_product_catalog();
-    $related = [];
-    $fallback = [];
+    $ranked = [];
+    $normalizeTokens = static function (string $value): array {
+        $value = sv_lower($value);
+        $value = strtr($value, ['á'=>'a','à'=>'a','ã'=>'a','â'=>'a','é'=>'e','ê'=>'e','í'=>'i','ó'=>'o','õ'=>'o','ô'=>'o','ú'=>'u','ç'=>'c']);
+        $parts = preg_split('/[^a-z0-9]+/', $value) ?: [];
+        $stop = ['para','com','sem','kit','unidade','produto','vivaliz','de','da','do','em'];
+        return array_values(array_unique(array_filter($parts, static fn(string $part): bool => strlen($part) >= 4 && !in_array($part, $stop, true))));
+    };
+    $currentTokens = $normalizeTokens($currentName);
     foreach ($all as $row) {
         if (!is_array($row)) continue;
         if (trim((string)($row['sku'] ?? '')) === $sku) continue;
@@ -238,14 +252,14 @@ function sv_product_related(string $sku, string $category, int $limit = 4): arra
             'slug'             => trim((string)($row['slug'] ?? '')),
             'category'         => $rowCat,
         ];
-        if ($category !== '' && $rowCat === $category) {
-            $related[] = $entry;
-            if (count($related) >= $limit) return $related;
-        } elseif (count($fallback) < $limit) {
-            $fallback[] = $entry;
-        }
+        $score = ($category !== '' && $rowCat === $category) ? 100 : 0;
+        $shared = array_intersect($currentTokens, $normalizeTokens($entry['name']));
+        $score += count($shared) * 12;
+        if ((int)$entry['stock'] > 0) $score += 4;
+        if ($score > 0) $ranked[] = ['score' => $score, 'entry' => $entry];
     }
-    return array_slice(array_merge($related, $fallback), 0, $limit);
+    usort($ranked, static fn(array $a, array $b): int => $b['score'] <=> $a['score']);
+    return array_slice(array_column($ranked, 'entry'), 0, $limit);
 }
 
 function sv_slugify(string $name, string $sku): string
@@ -270,9 +284,10 @@ function sv_product_find_slug(string $slug): array
         if (!is_array($row)) continue;
         $pSlug = strtolower(trim((string)($row['slug'] ?? '')));
         $cSlug = strtolower(sv_slugify((string)($row['name'] ?? ''), (string)($row['sku'] ?? '')));
+        $legacyNameSlug = strtolower(svcr_slug((string)($row['name'] ?? ''), ''));
         $rSku  = strtolower(trim((string)($row['sku'] ?? '')));
 
-        if ($pSlug === $slugNorm || $cSlug === $slugNorm || $rSku === $slugNorm || ($rSku !== '' && str_ends_with($slugNorm, '-' . $rSku))) {
+        if ($pSlug === $slugNorm || $cSlug === $slugNorm || $legacyNameSlug === $slugNorm || $rSku === $slugNorm || ($rSku !== '' && str_ends_with($slugNorm, '-' . $rSku))) {
             return $row;
         }
     }
@@ -294,6 +309,9 @@ function sv_product_find(string $sku, string $id): array
 
 function sv_product_infer_brand(array $product): string
 {
+    $explicit = trim((string)($product['brand'] ?? $product['marca'] ?? ''));
+    if ($explicit !== '') return $explicit;
+
     $name = sv_lower(trim((string)($product['name'] ?? '')));
     $tags = array_map(
         static fn ($tag): string => sv_lower(trim((string)$tag)),
@@ -306,7 +324,7 @@ function sv_product_infer_brand(array $product): string
         }
     }
 
-    return 'Vivaliz';
+    return '';
 }
 
 function sv_product_gtin(array $product): string
@@ -416,7 +434,7 @@ $galleryImages = $image !== '' && !in_array($image, $galleryImages, true)
     : $galleryImages;
 $galleryImages = array_slice($galleryImages, 0, 12);
 
-$related = $notFound ? [] : sv_product_enrich_many(sv_product_related($sku, $category));
+$related = $notFound ? [] : sv_product_enrich_many(sv_product_related($sku, $category, $name));
 $svNavCurrent = 'produto';
 $videoUrl = trim((string)($resolved['video_url'] ?? ''));
 $videoEmbedUrl = '';
@@ -437,9 +455,27 @@ $description = trim((string)($resolved['description'] ?? ''));
 if ($description === '') {
     $catPart  = $category !== '' ? " da categoria {$category}" : '';
     $tagPart  = !empty($tags) ? ' (' . implode(', ', array_slice($tags, 0, 3)) . ')' : '';
-    $description = "Confira {$name}{$catPart}{$tagPart}. Produto de qualidade com entrega para todo o Brasil. Compre na Vivaliz.";
+    $description = "Confira {$name}{$catPart}{$tagPart}. Consulte as imagens, o SKU, a disponibilidade e o frete pelo seu CEP antes de comprar.";
 }
 $seoDescription = $seoDescription !== '' ? $seoDescription : sv_product_trim(strip_tags($description), 155, '');
+$specifications = [];
+foreach ([
+    'Marca' => $brandName,
+    'SKU' => $sku,
+    'GTIN/EAN' => $gtin,
+    'Categoria' => $category,
+    'Garantia informada pelo fabricante' => trim((string)($resolved['warranty'] ?? '')),
+] as $label => $value) {
+    if (trim((string)$value) !== '') $specifications[$label] = trim((string)$value);
+}
+$dimensionsLabel = [];
+foreach (['Largura' => 'width', 'Altura' => 'height', 'Comprimento' => 'length'] as $label => $field) {
+    $value = (float)($resolved[$field] ?? 0);
+    if ($value > 0) $dimensionsLabel[] = $label . ': ' . rtrim(rtrim(number_format($value, 2, ',', '.'), '0'), ',') . ' cm';
+}
+if ($dimensionsLabel !== []) $specifications['Dimensões cadastradas'] = implode(' · ', $dimensionsLabel);
+$weight = (float)($resolved['weight'] ?? 0);
+if ($weight > 0) $specifications['Peso líquido cadastrado'] = rtrim(rtrim(number_format($weight, 3, ',', '.'), '0'), ',') . ' kg';
 
 if ($notFound) {
     http_response_code(404);
@@ -512,7 +548,6 @@ if ($notFound) {
         'mpn'            => $sku,
         'category'       => $category,
         'mainEntityOfPage' => $canonicalUrl,
-        'brand'          => ['@type' => 'Brand', 'name' => $brandName],
         'offers'         => [
             '@type'         => 'Offer',
             'url'           => $canonicalUrl,
@@ -527,6 +562,9 @@ if ($notFound) {
 
     if ($gtin !== '') {
         $jsonLd['gtin'] = $gtin;
+    }
+    if ($brandName !== '') {
+        $jsonLd['brand'] = ['@type' => 'Brand', 'name' => $brandName];
     }
 
     $faqJsonLd = [
@@ -676,9 +714,6 @@ if ($notFound) {
                     <div class="product-category"><?= sv_esc($category) ?></div>
                 <?php endif; ?>
                 <h1><?= sv_esc($name) ?></h1>
-                <div style="color: #fbbf24; font-size: 14px; margin-bottom: 10px;">
-                    ★★★★★ <span style="color: #6b7280; font-size: 12px; margin-left: 5px;">(4.9/5 - Excelente)</span>
-                </div>
                 <?php if ($priceRaw > 0 && $stockRaw > 0): ?>
                     <div class="desktop-buy-rail" aria-label="Compra rápida">
                         <div class="desktop-buy-rail__price">
@@ -690,7 +725,18 @@ if ($notFound) {
                         </button>
                     </div>
                 <?php endif; ?>
-                <div class="product-description"><?= $description ?></div>
+                <div class="product-description"><?= nl2br(sv_esc($description)) ?></div>
+                <?php if ($specifications !== []): ?>
+                <section aria-labelledby="product-specifications-title" style="margin:18px 0;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
+                    <h2 id="product-specifications-title" style="font-size:18px;margin:0 0 10px;color:#173b63;">Informações do produto</h2>
+                    <dl style="display:grid;grid-template-columns:minmax(130px,0.45fr) 1fr;gap:8px 14px;margin:0;">
+                        <?php foreach ($specifications as $specLabel => $specValue): ?>
+                            <dt style="font-weight:700;color:#475569;"><?= sv_esc($specLabel) ?></dt>
+                            <dd style="margin:0;color:#0f172a;"><?= sv_esc($specValue) ?></dd>
+                        <?php endforeach; ?>
+                    </dl>
+                </section>
+                <?php endif; ?>
                 <div class="product-price-block">
                     <?php if ($stockRaw > 0 && $stockRaw <= 5): ?>
                         <div class="urgency-tag">
@@ -699,14 +745,12 @@ if ($notFound) {
                     <?php endif; ?>
                     <span class="product-price-label"><?= sv_esc($priceLabel) ?></span>
                     <?php if ($priceRaw > 0): ?>
-                        <?php $pixPrice = $priceRaw * 0.95; ?>
-                        <?php $installments = 3; $installmentValue = $priceRaw / $installments; ?>
                         <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">
                             <div class="pix-discount-badge" style="display:inline-flex; align-items:center; gap:6px; background:var(--accent-bg); color:var(--accent); padding:6px 12px; border-radius:8px; font-weight:700; font-size:14px; border:1px solid rgba(5,150,105,0.18); width:fit-content;">
-                                <span>⚡ ou R$ <?= number_format($pixPrice, 2, ',', '.') ?> no PIX (5% OFF)</span>
+                                <span>PIX disponível no checkout</span>
                             </div>
                             <div class="installment-label" style="font-size:13px; color:#64748b; font-weight:600;">
-                                <span>💳 Em até <?= $installments ?>x de R$ <?= number_format($installmentValue, 2, ',', '.') ?> sem juros</span>
+                                <span>Parcelamento conforme a opção de pagamento escolhida</span>
                             </div>
                         </div>
                     <?php endif; ?>
@@ -756,11 +800,11 @@ if ($notFound) {
                         <div class="trust-badges-container" style="display: flex; justify-content: space-between; margin-top: 15px; gap: 10px; flex-wrap: wrap;">
                             <div class="trust-badge-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #64748b;">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                                <span>Pagamento 100% Seguro</span>
+                                <span>Pagamento processado em ambiente protegido</span>
                             </div>
                             <div class="trust-badge-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #64748b;">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                                <span>Garantia de Fábrica</span>
+                                <span><?= trim((string)($resolved['warranty'] ?? '')) !== '' ? 'Garantia informada: ' . sv_esc((string)$resolved['warranty']) : 'Condições exibidas antes do pagamento' ?></span>
                             </div>
                             <div class="trust-badge-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #64748b;">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
@@ -789,91 +833,21 @@ if ($notFound) {
                 <div class="status-line" id="product-status"></div>
                 <div class="product-sku-line">SKU: <?= sv_esc($sku) ?></div>
             </div>
-        <!-- Customer Reviews Widget -->
+        <!-- Avaliacoes reais: sem notas ou depoimentos inventados. -->
         <section class="container sv-reviews-section" style="margin-top: 40px; padding: 24px; background: #fff; border: 1px solid rgba(11,79,136,0.1); border-radius: 20px;">
             <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; border-bottom: 1px solid #edf2f7; padding-bottom: 16px;">
                 <div>
-                    <h3 style="font-size: 20px; font-weight: 800; color: #07345d; margin: 0;">Avaliações de Clientes</h3>
-                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
-                        <span style="color: #f59e0b; font-size: 18px;">★★★★★</span>
-                        <strong style="font-size: 15px; color: #1e293b;">4.9 / 5.0</strong>
-                        <span style="color: #64748b; font-size: 13px;">(Baseado em compras verificadas)</span>
-                    </div>
+                    <h3 style="font-size: 20px; font-weight: 800; color: #07345d; margin: 0;">Comprou este produto?</h3>
+                    <p style="color:#64748b;margin:6px 0 0;">Envie uma avaliação. O selo de compra verificada só aparece quando pedido e e-mail correspondem a uma compra confirmada.</p>
                 </div>
-                <button type="button" id="btn-open-review" style="background: #edf6ff; color: #0b4f88; border: 1px solid rgba(11,79,136,0.2); padding: 10px 18px; border-radius: 12px; font-weight: 700; cursor: pointer;">Escrever Avaliação</button>
+                <a href="/avaliacoes.php?produto=<?= rawurlencode($name) ?>&sku=<?= rawurlencode($sku) ?>" class="btn btn-secondary">Escrever avaliação</a>
             </div>
-            <!-- Interactive Review Submission Box -->
-            <div id="review-form-container" style="display:none; margin-bottom: 20px; padding: 18px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 14px;">
-                <h4 style="margin: 0 0 10px 0; color: #0f172a;">Deixe sua avaliação sobre <?= sv_esc($name) ?></h4>
-                <form id="frm-submit-review" style="display: grid; gap: 10px;">
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <input type="text" id="rev-name" placeholder="Seu nome" required style="flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
-                        <input type="text" id="rev-city" placeholder="Sua cidade/UF" required style="flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1;">
-                        <select id="rev-rating" style="padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-weight: bold; color: #f59e0b;">
-                            <option value="5">★★★★★ (5 estrelas)</option>
-                            <option value="4">★★★★☆ (4 estrelas)</option>
-                            <option value="3">★★★☆☆ (3 estrelas)</option>
-                        </select>
-                    </div>
-                    <textarea id="rev-comment" placeholder="Conte como foi sua experiência com o produto..." rows="3" required style="padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-family: inherit;"></textarea>
-                    <div style="display: flex; justify-content: flex-end; gap: 8px;">
-                        <button type="button" id="btn-cancel-review" style="padding: 8px 16px; background: transparent; border: 1px solid #94a3b8; border-radius: 8px; cursor: pointer;">Cancelar</button>
-                        <button type="submit" style="padding: 8px 18px; background: #0b4f88; color: #fff; border: none; border-radius: 8px; font-weight: 700; cursor: pointer;">Enviar Avaliação</button>
-                    </div>
-                </form>
-                <div id="rev-status-msg" style="margin-top: 8px; font-size: 13px; font-weight: 600; display: none;"></div>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;" id="reviews-grid-list">
-                <div style="background: #f8fafc; padding: 16px; border-radius: 14px; border: 1px solid #e2e8f0;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <strong style="color: #0f172a; font-size: 14px;">Carlos M. - Divinópolis/MG</strong>
-                        <span style="color: #f59e0b; font-size: 14px;">★★★★★</span>
-                    </div>
-                    <p style="font-size: 13px; color: #334155; line-height: 1.5; margin: 0;">"Excelente produto! A entrega foi super rápida e a qualidade veio exatamente como o descrito na loja. Recomendadíssimo!"</p>
-                </div>
-                <div style="background: #f8fafc; padding: 16px; border-radius: 14px; border: 1px solid #e2e8f0;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <strong style="color: #0f172a; font-size: 14px;">Fernanda S. - São Paulo/SP</strong>
-                        <span style="color: #f59e0b; font-size: 14px;">★★★★★</span>
-                    </div>
-                    <p style="font-size: 13px; color: #334155; line-height: 1.5; margin: 0;">"Comprei pela primeira vez usando o cupom de desconto e me surpreendi com a atenção e embalagem perfeita."</p>
-                </div>
-            </div>
+            <p style="margin:0;color:#475569;">Avaliações publicadas na página inicial passam por moderação. Conteúdo positivo e negativo pode ser publicado quando atende às regras.</p>
         </section>
         <?php endif; ?>
     </main>
 
     <?php if (!empty($related)): ?>
-    <section class="container sv-compre-junto" style="margin: 40px auto; padding: 24px; background: linear-gradient(135deg, #f8fafc, #edf5fd); border: 1px solid rgba(11,79,136,0.12); border-radius: 20px;">
-        <h2 style="font-size: 20px; font-weight: 800; color: #07345d; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#35c759" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 11V7a4 4 0 0 0-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
-            Compre Junto e Economize (Combo Recomendado)
-        </h2>
-        <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
-            <div style="display: flex; align-items: center; gap: 12px; background: #fff; padding: 12px 16px; border-radius: 14px; border: 1px solid rgba(0,0,0,0.08);">
-                <img src="<?= sv_esc($image) ?>" alt="<?= sv_esc($name) ?>" style="width: 54px; height: 54px; object-fit: contain;">
-                <div>
-                    <strong style="display: block; font-size: 13px; color: #0d1a29; max-width: 220px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"><?= sv_esc($name) ?></strong>
-                    <span style="color: #0b4f88; font-weight: 800; font-size: 14px;"><?= sv_esc(sv_money($priceRaw)) ?></span>
-                </div>
-            </div>
-            <span style="font-size: 22px; font-weight: 800; color: #35c759;">+</span>
-            <?php $comboItem = $related[0]; ?>
-            <div style="display: flex; align-items: center; gap: 12px; background: #fff; padding: 12px 16px; border-radius: 14px; border: 1px solid rgba(0,0,0,0.08);">
-                <img src="<?= sv_esc($comboItem['image_url']) ?>" alt="<?= sv_esc($comboItem['name']) ?>" style="width: 54px; height: 54px; object-fit: contain;">
-                <div>
-                    <strong style="display: block; font-size: 13px; color: #0d1a29; max-width: 220px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"><?= sv_esc($comboItem['name']) ?></strong>
-                    <span style="color: #0b4f88; font-weight: 800; font-size: 14px;"><?= sv_esc(sv_money((float)$comboItem['price'])) ?></span>
-                </div>
-            </div>
-            <div style="margin-left: auto; text-align: right; min-width: 180px;">
-                <div style="font-size: 12px; color: #66788d;">Valor dos 2 itens:</div>
-                <div style="font-size: 22px; font-weight: 900; color: #07345d;">R$ <?= number_format($priceRaw + (float)$comboItem['price'], 2, ',', '.') ?></div>
-                <a href="<?= sv_esc(sv_product_url($comboItem)) ?>" class="btn buy-button" data-sku="<?= sv_esc((string)$comboItem['sku']) ?>" data-product-id="<?= sv_esc((string)($comboItem['olist_product_id'] ?: $comboItem['sku'])) ?>" style="display: inline-flex; margin-top: 6px; padding: 8px 16px; font-size: 13px; font-weight: 800; background: linear-gradient(135deg, #0b4f88, #35c759); color: #fff; border-radius: 10px; text-decoration: none;">Adicionar Combo</a>
-            </div>
-        </div>
-    </section>
-
     <section class="container related-products">
         <h2 class="related-title">Você também pode gostar</h2>
         <div class="product-grid related-grid">
@@ -1015,84 +989,6 @@ if ($notFound) {
             });
         });
 
-        // Review modal handler
-        var btnOpenReview = document.getElementById('btn-open-review');
-        var reviewContainer = document.getElementById('review-form-container');
-        var btnCancelReview = document.getElementById('btn-cancel-review');
-        var frmSubmitReview = document.getElementById('frm-submit-review');
-        var revStatusMsg = document.getElementById('rev-status-msg');
-        var reviewsGrid = document.getElementById('reviews-grid-list');
-
-        if (btnOpenReview && reviewContainer) {
-            btnOpenReview.addEventListener('click', function() {
-                reviewContainer.style.display = reviewContainer.style.display === 'none' ? 'block' : 'none';
-            });
-            if (btnCancelReview) {
-                btnCancelReview.addEventListener('click', function() {
-                    reviewContainer.style.display = 'none';
-                });
-            }
-            if (frmSubmitReview) {
-                // Ate 2026-08-15 este handler so montava um card no DOM e
-                // dizia "publicada com sucesso" sem enviar nada a lugar
-                // nenhum -- a avaliacao sumia no reload. Agora envia de
-                // verdade pro mesmo endpoint que avaliacoes.php usa
-                // (/api/testimonials.php), com o mesmo fluxo real de
-                // moderacao (Liz + revisao humana quando necessario).
-                frmSubmitReview.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    var submitBtn = frmSubmitReview.querySelector('button[type="submit"]');
-                    var name = document.getElementById('rev-name').value.trim();
-                    var city = document.getElementById('rev-city').value.trim();
-                    var rating = document.getElementById('rev-rating').value;
-                    var comment = document.getElementById('rev-comment').value.trim();
-
-                    if (submitBtn) submitBtn.disabled = true;
-                    if (revStatusMsg) {
-                        revStatusMsg.style.display = 'block';
-                        revStatusMsg.style.color = '#64748b';
-                        revStatusMsg.textContent = 'Enviando...';
-                    }
-
-                    var formData = new FormData();
-                    formData.append('name', name);
-                    formData.append('city', city);
-                    formData.append('rating', rating);
-                    formData.append('message', comment);
-
-                    fetch('/api/testimonials.php', {
-                        method: 'POST',
-                        body: formData,
-                        headers: { 'Accept': 'application/json' }
-                    })
-                        .then(function(r) { return r.json(); })
-                        .then(function(data) {
-                            if (revStatusMsg) {
-                                revStatusMsg.style.display = 'block';
-                                revStatusMsg.style.color = data.ok ? '#10b981' : '#b91c1c';
-                                revStatusMsg.textContent = data.message || data.error || 'Avaliação enviada para análise.';
-                            }
-                            if (data.ok) {
-                                frmSubmitReview.reset();
-                                setTimeout(function() {
-                                    reviewContainer.style.display = 'none';
-                                    if (revStatusMsg) revStatusMsg.style.display = 'none';
-                                }, 3500);
-                            }
-                        })
-                        .catch(function() {
-                            if (revStatusMsg) {
-                                revStatusMsg.style.display = 'block';
-                                revStatusMsg.style.color = '#b91c1c';
-                                revStatusMsg.textContent = 'Não foi possível enviar agora. Tente novamente em instantes.';
-                            }
-                        })
-                        .finally(function() {
-                            if (submitBtn) submitBtn.disabled = false;
-                        });
-                });
-            }
-        }
     })();
     </script>
     <script>

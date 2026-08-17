@@ -241,7 +241,8 @@ function installTestimonials() {
       } else {
         grid.innerHTML = items.slice(0, 6).map(function (item) {
           var city = String(item.city || '').trim();
-          return '<article class="testimonial-card"><div class="testimonial-stars" aria-label="' + esc(item.rating) + ' de 5 estrelas">' + esc(stars(item.rating)) + '</div><p>“' + esc(item.message) + '”</p><div class="testimonial-author"><span class="testimonial-avatar sv-initials" aria-hidden="true">' + esc(initials(item.name)) + '</span><div><strong>' + esc(item.name) + '</strong>' + (city ? '<span>' + esc(city) + '</span>' : '') + '<small class="sv-moderated-label">✓ Avaliação moderada</small></div></div></article>';
+          var label = item.verified_purchase ? '✓ Compra verificada' : '✓ Avaliação moderada';
+          return '<article class="testimonial-card"><div class="testimonial-stars" aria-label="' + esc(item.rating) + ' de 5 estrelas">' + esc(stars(item.rating)) + '</div><p>“' + esc(item.message) + '”</p><div class="testimonial-author"><span class="testimonial-avatar sv-initials" aria-hidden="true">' + esc(initials(item.name)) + '</span><div><strong>' + esc(item.name) + '</strong>' + (city ? '<span>' + esc(city) + '</span>' : '') + '<small class="sv-moderated-label">' + label + '</small></div></div></article>';
         }).join('');
       }
       if (!section.querySelector('.sv-testimonial-actions')) {

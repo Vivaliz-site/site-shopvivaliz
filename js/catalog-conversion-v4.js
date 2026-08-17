@@ -57,7 +57,7 @@
     if(priceEl&&numeric>0&&!card.querySelector('.sv-installment')){
       var installment=document.createElement('span');
       installment.className='sv-installment';
-      installment.textContent='ou 6x de R$ '+(numeric/6).toFixed(2).replace('.',',')+' sem juros';
+      installment.textContent='Condições de pagamento no checkout';
       priceEl.insertAdjacentElement('afterend',installment);
     }
   });

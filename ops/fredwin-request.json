@@ -1,5 +1,5 @@
 {
-  "action": "open_exchange_admin",
-  "requested_at": "2026-08-16T17:44:00-03:00",
-  "reason": "Open Exchange Admin Center on Fred-Win using the authorized private relay to unblock the restricted sender"
+  "action": "open_shopvivaliz",
+  "requested_at": "2026-08-17T00:00:00Z",
+  "reason": "Open and validate ShopVivaliz 9.2.105 after the conversion-recovery deployment"
 }

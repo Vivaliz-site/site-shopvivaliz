@@ -28,23 +28,17 @@ svclf_assert(count($decoded) >= 20, 'fallback rastreado precisa manter um catalo
 
 require_once $root . '/includes/catalog-runtime.php';
 $products = svcr_products();
-svclf_assert(count($products) >= 20, 'svcr_products precisa servir o fallback quando o cache compartilhado estiver ausente');
-
-$available = array_values(array_filter(
-    $products,
-    static fn(array $product): bool => (int)($product['stock'] ?? 0) > 0 && (float)($product['price'] ?? 0) > 0
-));
-svclf_assert($available !== [], 'o fallback precisa conter pelo menos um produto disponivel com preco valido');
+svclf_assert($products === [], 'svcr_products deve falhar fechado quando o cache canonico de ativos estiver ausente');
 
 ob_start();
 require $root . '/google-merchant-feed.php';
 $feed = (string)ob_get_clean();
 $itemCount = substr_count($feed, '<item>');
-svclf_assert($itemCount >= 20, 'Merchant feed precisa continuar util sem o cache compartilhado; itens=' . $itemCount);
+svclf_assert($itemCount === 0, 'Merchant feed nao pode ressuscitar snapshot historico sem fonte canonica; itens=' . $itemCount);
 
 printf(
-    "catalog-live-fallback: ok products=%d available=%d merchant_items=%d\n",
+    "catalog-live-fail-closed: ok products=%d merchant_items=%d historical_rows=%d\n",
     count($products),
-    count($available),
-    $itemCount
+    $itemCount,
+    count(array_filter($decoded, 'is_array'))
 );

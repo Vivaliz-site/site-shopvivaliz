@@ -390,5 +390,11 @@
     });
   }
 
-  loadCatalog(input ? input.value.trim() : '', initialCategory, Number(params.get('page') || 1));
+  // O PHP ja entrega a primeira pagina, os filtros e o estado vazio. Evitar
+  // substituir tudo por skeletons no carregamento inicial elimina uma segunda
+  // chamada à API e o CLS causado pela expansão/remoção assíncrona do grid.
+  setActiveFilter(initialCategory);
+  if (initialSort !== 'relevance') {
+    loadCatalog(input ? input.value.trim() : '', initialCategory, Number(params.get('page') || 1));
+  }
 })();
