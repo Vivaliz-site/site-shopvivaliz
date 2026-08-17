@@ -9,7 +9,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 3
     steps:
       - name: Configure VM key
         env:
@@ -19,39 +19,46 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Keep MEI sender unblocked and worker active
+      - name: Query rolling 24h send count
         run: |
-          timeout 180s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          timeout 120s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           cd /home/ubuntu/mei-mg-email
-
-          echo '=== UNBLOCK_SENDER ==='
-          sudo rm -f /var/lib/mei-mg-email/sender_blocked.pause
-          rm -f runtime/sender_blocked.pause
-          ln -s /var/lib/mei-mg-email/sender_blocked.pause runtime/sender_blocked.pause
-          printf 'sentinel_present='; sudo test -f /var/lib/mei-mg-email/sender_blocked.pause && echo true || echo false
-
-          echo '=== ENABLE_RUNTIME ==='
-          sudo systemctl daemon-reload
-          sudo systemctl enable --now mei-mg-email-monitor.service || true
-          sudo systemctl enable --now mei-mg-email-base-sync.timer || true
-          sudo systemctl enable --now mei-mg-email-worker.service
-
-          echo '=== RUNTIME_STATE ==='
-          printf 'worker_active='; systemctl is-active mei-mg-email-worker.service || true
-          printf 'worker_enabled='; systemctl is-enabled mei-mg-email-worker.service || true
-          printf 'monitor_active='; systemctl is-active mei-mg-email-monitor.service || true
-          printf 'base_timer_active='; systemctl is-active mei-mg-email-base-sync.timer || true
-          printf 'base_timer_enabled='; systemctl is-enabled mei-mg-email-base-sync.timer || true
-          printf 'ndr_guard_active='; systemctl is-active mei-mg-email-ndr-guard.service || true
-          printf 'ndr_guard_enabled='; systemctl is-enabled mei-mg-email-ndr-guard.service || true
-          printf 'sentinel_present='; sudo test -f /var/lib/mei-mg-email/sender_blocked.pause && echo true || echo false
-
-          echo '=== WORKER_LOG ==='
-          sudo journalctl -u mei-mg-email-worker.service -n 40 --no-pager || true
-          echo '=== MONITOR_LOG ==='
-          sudo journalctl -u mei-mg-email-monitor.service -n 20 --no-pager || true
-          echo '=== END ==='
+          PY=.venv/bin/python
+          test -x "$PY" || PY=python3
+          "$PY" - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
+          import psycopg
+          from app.config import settings
+          with psycopg.connect(settings.database_url, connect_timeout=10) as conn, conn.cursor() as cur:
+              cur.execute("""
+                  select
+                    now() at time zone 'America/Sao_Paulo' as agora_brt,
+                    count(*) filter (
+                      where status::text in ('submitted','enviado')
+                        and enviado_em >= now() - interval '24 hours'
+                    ) as enviados_24h,
+                    count(*) filter (
+                      where status::text = 'submitted'
+                        and enviado_em >= now() - interval '24 hours'
+                    ) as submitted_24h,
+                    count(*) filter (
+                      where status::text = 'enviado'
+                        and enviado_em >= now() - interval '24 hours'
+                    ) as enviado_24h,
+                    max(enviado_em) filter (
+                      where status::text in ('submitted','enviado')
+                    ) as ultimo_envio
+                  from mei_email.envios
+              """)
+              row = cur.fetchone()
+              print('agora_brt=' + str(row[0]))
+              print('enviados_24h=' + str(row[1]))
+              print('submitted_24h=' + str(row[2]))
+              print('enviado_24h=' + str(row[3]))
+              print('ultimo_envio=' + str(row[4]))
+          PY
           EOF
       - name: Cleanup
         if: always()
