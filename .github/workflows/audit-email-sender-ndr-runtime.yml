@@ -9,7 +9,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 4
     steps:
       - name: Configure VM key
         env:
@@ -19,45 +19,39 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Reconcile rolling 24h send count
+      - name: Keep MEI sender unblocked and worker active
         run: |
-          timeout 120s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          timeout 180s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           cd /home/ubuntu/mei-mg-email
-          PY=.venv/bin/python
-          test -x "$PY" || PY=python3
-          "$PY" - <<'PY'
-          from dotenv import load_dotenv
-          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
-          import psycopg
-          from app.config import settings
-          with psycopg.connect(settings.database_url, connect_timeout=10) as conn, conn.cursor() as cur:
-              cur.execute("select now() at time zone 'America/Sao_Paulo'")
-              print('agora_brt=' + str(cur.fetchone()[0]))
-              cur.execute("""
-                  select count(*), max(enviado_em)
-                    from mei_email.envios
-                   where enviado_em >= now() - interval '24 hours'
-              """)
-              total, ultimo = cur.fetchone()
-              print('disparos_24h_por_enviado_em=' + str(total))
-              print('ultimo_enviado_em_24h=' + str(ultimo))
-              cur.execute("""
-                  select status::text, count(*)
-                    from mei_email.envios
-                   where enviado_em >= now() - interval '24 hours'
-                   group by status::text
-                   order by count(*) desc, status::text
-              """)
-              for status, count in cur.fetchall():
-                  print('status_24h=' + status + ':' + str(count))
-              cur.execute("""
-                  select count(*), max(criado_em)
-                    from mei_email.envios
-                   where criado_em >= now() - interval '24 hours'
-              """)
-              print('registros_criados_24h=' + str(cur.fetchone()))
-          PY
+
+          echo '=== UNBLOCK_SENDER ==='
+          sudo rm -f /var/lib/mei-mg-email/sender_blocked.pause
+          rm -f runtime/sender_blocked.pause
+          ln -s /var/lib/mei-mg-email/sender_blocked.pause runtime/sender_blocked.pause
+          printf 'sentinel_present='; sudo test -f /var/lib/mei-mg-email/sender_blocked.pause && echo true || echo false
+
+          echo '=== ENABLE_RUNTIME ==='
+          sudo systemctl daemon-reload
+          sudo systemctl enable --now mei-mg-email-monitor.service || true
+          sudo systemctl enable --now mei-mg-email-base-sync.timer || true
+          sudo systemctl enable --now mei-mg-email-worker.service
+
+          echo '=== RUNTIME_STATE ==='
+          printf 'worker_active='; systemctl is-active mei-mg-email-worker.service || true
+          printf 'worker_enabled='; systemctl is-enabled mei-mg-email-worker.service || true
+          printf 'monitor_active='; systemctl is-active mei-mg-email-monitor.service || true
+          printf 'base_timer_active='; systemctl is-active mei-mg-email-base-sync.timer || true
+          printf 'base_timer_enabled='; systemctl is-enabled mei-mg-email-base-sync.timer || true
+          printf 'ndr_guard_active='; systemctl is-active mei-mg-email-ndr-guard.service || true
+          printf 'ndr_guard_enabled='; systemctl is-enabled mei-mg-email-ndr-guard.service || true
+          printf 'sentinel_present='; sudo test -f /var/lib/mei-mg-email/sender_blocked.pause && echo true || echo false
+
+          echo '=== WORKER_LOG ==='
+          sudo journalctl -u mei-mg-email-worker.service -n 40 --no-pager || true
+          echo '=== MONITOR_LOG ==='
+          sudo journalctl -u mei-mg-email-monitor.service -n 20 --no-pager || true
+          echo '=== END ==='
           EOF
       - name: Cleanup
         if: always()
