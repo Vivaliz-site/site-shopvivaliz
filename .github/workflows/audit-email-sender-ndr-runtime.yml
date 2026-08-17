@@ -19,46 +19,82 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Add empresa email index for reconciliation
+      - name: Deploy external quota ledger and worker fix
         run: |
           timeout 210s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           cd /home/ubuntu/mei-mg-email
+          echo '=== UPDATE_CODE ==='
+          git fetch origin main
+          git reset --hard origin/main
           PY=.venv/bin/python
           test -x "$PY" || PY=python3
-          timeout 190s "$PY" -u - <<'PY'
-          from urllib.parse import urlparse
-          import hashlib
-          data={}
-          for line in open('/home/ubuntu/mei-mg-email/.env', encoding='utf-8'):
-              line=line.strip()
-              if line and not line.startswith('#') and '=' in line:
-                  k,v=line.split('=',1); data[k.strip()]=v.strip().strip('"').strip("'")
-          dburl=data.get('DATABASE_URL') or data.get('DATABASE_DSN')
-          p=urlparse(dburl)
-          print('database_host=' + str(p.hostname), flush=True)
-          print('database_name=' + (p.path or '').lstrip('/'), flush=True)
-          print('database_sha12=' + hashlib.sha256(dburl.encode()).hexdigest()[:12], flush=True)
+          echo '=== CREATE_LEDGER_AND_BACKFILL ==='
+          timeout 120s "$PY" -u - <<'PY'
           import psycopg
-          recipients=['adlercontabil@hotmail.com','carmo.contabilidade@hotmail.com','contabilidadegbi@paxnacional.com','contabilidademariahelenasg@hotamail.com','jfccontabilidade@hotmail.com','fiscal01@agilitycontabilidade.com.br','bi@bicontabil.co','fredmourao@gmail.com']
-          with psycopg.connect(dburl, connect_timeout=8) as conn:
+          from dotenv import load_dotenv
+          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
+          from app.config import settings
+          events = [
+            ('fredmourao@gmail.com','ShopVivaliz status probe 20260816-1935-BRT','2026-08-16T22:35:22+00:00','outlook:AAMk-rpoQ'),
+            ('fredmourao@gmail.com','Teste Outlook -> Gmail 16/08/2026 19:39','2026-08-16T22:39:54+00:00','outlook:AAMk-rpoR'),
+            ('fiscal01@agilitycontabilidade.com.br','Contabilidade Melo para MEI: plano mensal e suporte fiscal','2026-08-16T22:43:33+00:00','outlook:AAMk-rpoS'),
+            ('bi@bicontabil.co','Contabilidade Melo para MEI: plano mensal e suporte fiscal','2026-08-16T23:10:00+00:00','outlook:AAMk-rpoT'),
+            ('bi@bicontabil.co','Contabilidade Melo para MEI: plano mensal e suporte fiscal','2026-08-16T23:20:00+00:00','outlook:AAMk-rpoU'),
+            ('jfccontabilidade@hotmail.com','Contabilidade Melo para MEI: plano mensal e suporte fiscal','2026-08-16T23:50:00+00:00','outlook:AAMk-rpoV'),
+            ('contabilidadegbi@paxnacional.com','Contabilidade Melo para MEI: plano mensal e suporte fiscal','2026-08-17T00:04:21+00:00','outlook:AAMk-rpoW'),
+            ('contabilidademariahelenasg@hotamail.com','Contabilidade Melo para MEI: plano mensal e suporte fiscal','2026-08-17T00:06:28+00:00','outlook:AAMk-rpoX'),
+            ('carmo.contabilidade@hotmail.com','Contabilidade Melo para MEI: plano mensal e suporte fiscal','2026-08-17T00:07:02+00:00','outlook:AAMk-rpoY'),
+            ('adlercontabil@hotmail.com','Contabilidade Melo para MEI: plano mensal e suporte fiscal','2026-08-17T00:13:19+00:00','outlook:AAMk-rpoZ'),
+            ('fredmourao@gmail.com','ShopVivaliz Exchange Controlled Test 2026-08-16 21:34 BRT','2026-08-17T00:34:00+00:00','outlook:AAMk-rpoa'),
+          ]
+          with psycopg.connect(settings.database_url, connect_timeout=8) as conn:
               conn.autocommit=True
               with conn.cursor() as cur:
-                  cur.execute("set statement_timeout = '120s'")
-                  cur.execute("set lock_timeout = '5s'")
-                  print('stage=create_empresas_email_index_concurrently', flush=True)
-                  cur.execute("create index concurrently if not exists idx_empresas_email_normalizado on mei_email.empresas (lower(btrim(email::text)))")
-                  print('stage=analyze_empresas', flush=True)
-                  cur.execute('analyze mei_email.empresas')
-          with psycopg.connect(dburl, connect_timeout=8, options='-c statement_timeout=8000 -c lock_timeout=1500') as conn, conn.cursor() as cur:
-              cur.execute("select now() at time zone 'America/Sao_Paulo'")
-              print('agora_brt=' + str(cur.fetchone()[0]), flush=True)
-              cur.execute("select indexname from pg_indexes where schemaname='mei_email' and tablename='empresas' and indexname='idx_empresas_email_normalizado'")
-              print('empresa_email_index=' + repr(cur.fetchall()), flush=True)
-              for email in recipients:
-                  cur.execute("select cnpj, razao_social, nome_fantasia, email, enviado, enviado_em, marketing_autorizado, mei_verificado from mei_email.empresas where lower(btrim(email::text))=lower(btrim(%s)) limit 10", (email,))
-                  print('empresa=' + email + ' rows=' + repr(cur.fetchall()), flush=True)
+                  cur.execute("set statement_timeout = '30s'")
+                  cur.execute("""
+                    create table if not exists mei_email.envios_externos_cota (
+                      id uuid primary key default gen_random_uuid(),
+                      email citext not null,
+                      subject text not null,
+                      sent_at timestamptz not null,
+                      source text not null default 'outlook_reconciliation',
+                      provider_message_id text,
+                      metadata jsonb not null default '{}'::jsonb,
+                      criado_em timestamptz not null default now(),
+                      constraint envios_externos_cota_provider_unique unique (provider_message_id)
+                    )
+                  """)
+                  cur.execute("create index if not exists idx_envios_externos_cota_sent_at on mei_email.envios_externos_cota (sent_at)")
+                  cur.execute("create index if not exists idx_envios_externos_cota_email_normalizado on mei_email.envios_externos_cota (lower(btrim(email::text)))")
+                  cur.executemany("""
+                    insert into mei_email.envios_externos_cota
+                      (email, subject, sent_at, source, provider_message_id, metadata)
+                    values (%s, %s, %s::timestamptz, 'outlook_reconciliation', %s, '{"reason":"outlook_sent_items_backfill_2026-08-17"}'::jsonb)
+                    on conflict (provider_message_id) do nothing
+                  """, events)
+                  cur.execute("select count(*), max(sent_at) from mei_email.envios_externos_cota where sent_at >= now() - interval '24 hours'")
+                  print('external_quota_24h=' + repr(cur.fetchall()), flush=True)
+                  cur.execute("select count(*) from mei_email.envios_externos_cota")
+                  print('external_ledger_total=' + repr(cur.fetchall()), flush=True)
           PY
+          echo '=== RESTART_WORKER ==='
+          sudo systemctl restart mei-mg-email-worker.service
+          sleep 3
+          echo 'worker_active='$(systemctl is-active mei-mg-email-worker.service || true)
+          echo 'worker_enabled='$(systemctl is-enabled mei-mg-email-worker.service || true)
+          test -f /var/lib/mei-mg-email/sender_blocked.pause && echo sentinel_present=true || echo sentinel_present=false
+          echo '=== VERIFY_COUNT_FUNCTION ==='
+          timeout 60s "$PY" -u - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
+          import psycopg
+          from app.config import settings
+          import worker.worker_queue_first as wq
+          with psycopg.connect(settings.database_url, connect_timeout=8) as conn:
+              print('worker_quota_24h=' + str(wq._obter_envios_ultimas_24h_indexado(conn)), flush=True)
+          PY
+          echo '=== END ==='
           EOF
       - name: Cleanup
         if: always()

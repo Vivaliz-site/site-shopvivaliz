@@ -56,6 +56,16 @@ GOOGLE_SEARCH_CONSOLE_SITE_URL=sc-domain:shopvivaliz.com.br
 
 ou o URL-prefix exato cadastrado no Search Console, incluindo a `/` final.
 
+### Limpeza do sitemap legado
+
+O Search Console deve manter apenas o sitemap canônico `https://shopvivaliz.com.br/sitemap.xml`. O antigo `https://www.shopvivaliz.com.br/sitemap.xml` pertence ao host legado e hoje não é uma fonte válida de URLs.
+
+```bash
+php scripts/google-search-console-sitemap-cleanup.php
+```
+
+Esse comando é mutável, mas possui allow-list fixa e é idempotente: ele só pode remover exatamente o sitemap `www`, exige que o sitemap canônico esteja registrado antes de qualquer exclusão e verifica o estado final após o DELETE. Nunca transforme esse utilitário em um "delete sitemap" genérico sem revisão explícita.
+
 ## 3. Prioridade de correção do relatório
 
 Ordem sugerida:
@@ -71,7 +81,7 @@ Não altere canonical/redirect em massa apenas pelo nome do erro. Compare `url`,
 
 ## 4. Execução automática
 
-O workflow `.github/workflows/google-search-console-audit.yml` executa o auditor diariamente e permite execução manual com `max_urls` e `offset`. O relatório JSON fica disponível como artifact por 30 dias.
+O workflow `.github/workflows/google-search-console-audit.yml` executa o auditor diariamente e permite execução manual com `max_urls` e `offset`. Antes da auditoria ele executa a limpeza allow-listed do sitemap legado `www`. O relatório JSON fica disponível como artifact por 30 dias.
 
 ## 5. Arquivos compartilhados
 
@@ -80,4 +90,5 @@ O workflow `.github/workflows/google-search-console-audit.yml` executa o auditor
 - Python OAuth: `scripts/lib/google_oauth.py`
 - Health check: `scripts/google-api-health.php`
 - Auditor Search Console: `scripts/google-search-console-audit.php`
+- Limpeza allow-listed de sitemap: `scripts/google-search-console-sitemap-cleanup.php`
 - Guia completo: `docs/GOOGLE-APIS-OAUTH-INTEGRATION.md`

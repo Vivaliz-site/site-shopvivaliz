@@ -8,6 +8,7 @@ on:
       - '.github/workflows/google-search-console-audit.yml'
       - 'scripts/google-cloud-service-enable.php'
       - 'scripts/google-search-console-audit.php'
+      - 'scripts/google-search-console-sitemap-cleanup.php'
       - 'scripts/google-api-health.php'
       - 'scripts/lib/google_oauth.py'
       - 'src/Google/OAuthTokenProvider.php'
@@ -18,11 +19,11 @@ on:
   workflow_dispatch:
     inputs:
       max_urls:
-        description: Maximum sitemap URLs to inspect (1-1900)
+        description: Maximum URLs to inspect in this batch (1-1900)
         required: false
-        default: '100'
+        default: '25'
       offset:
-        description: Sitemap offset for paged audits
+        description: URL offset for paged audits
         required: false
         default: '0'
 
@@ -68,13 +69,19 @@ jobs:
           set -euo pipefail
           php scripts/google-cloud-service-enable.php searchconsole.googleapis.com
 
+      - name: Remove legacy www sitemap
+        shell: bash
+        run: |
+          set -euo pipefail
+          php scripts/google-search-console-sitemap-cleanup.php
+
       - name: Audit Search Console URLs
         id: audit
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p reports
-          max_urls='${{ github.event.inputs.max_urls || '100' }}'
+          max_urls='${{ github.event.inputs.max_urls || '25' }}'
           offset='${{ github.event.inputs.offset || '0' }}'
           php scripts/google-search-console-audit.php \
             --max-urls="${max_urls}" \
