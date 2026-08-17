@@ -1,7 +1,7 @@
 # ShopVivaliz — recuperação de conversão
 
 Data: 17/08/2026
-Versão: 9.2.105 (`conversion-recovery`)
+Versão: 9.2.106 (`catalog-help-clarity`)
 
 ## Diagnóstico de partida
 
@@ -41,6 +41,7 @@ Versão: 9.2.105 (`conversion-recovery`)
 - CTA alterado para “Ir para pagamento” e textos explicam a revalidação no servidor.
 - Formulário de contato funcional criado com validação, honeypot, mesma origem, limite por IP e envio SMTP ao atendimento.
 - Catálogo deixa de refazer a primeira renderização via JavaScript, reduzindo uma chamada à API e eliminando o salto de layout causado por skeletons transitórios.
+- Catálogo passa a exibir um seletor de categoria evidente e sincronizado com chips, URL, histórico e navegação móvel.
 - Condições fixas de Pix e parcelamento foram removidas do catálogo, carrinho, produto, checkout e e-mails; o gateway confirma as condições antes do pagamento.
 
 ### Confiança e conteúdo institucional
@@ -51,6 +52,7 @@ Versão: 9.2.105 (`conversion-recovery`)
 - Avaliações exigem e-mail e pedido; o selo “Compra verificada” só é aplicado após correspondência do pedido e confirmação do pagamento.
 - Referência do pedido e metadados internos deixam de ser expostos na API pública de avaliações.
 - O endpoint legado da Liz passou a usar somente o catálogo canônico ativo, deixou de compartilhar histórico entre visitantes e não promete preço, cupom, frete grátis ou parcelamento sem fonte.
+- A imagem da mascote Liz permanece como botão flutuante no canto inferior direito, com a etiqueta “Dúvidas? Fale com a Liz”.
 - Um script legado de WhatsApp sem qualquer referência ativa foi removido; ele continha respostas comerciais fixas e registro local de mensagens.
 
 ## Validação
@@ -60,6 +62,7 @@ Versão: 9.2.105 (`conversion-recovery`)
 - Testes cobrem compra verificada, privacidade das avaliações, frete expirado e ausência de purchase/Ads antes do pagamento.
 - O quality gate executa os novos testes com PHP 8.3 e faz lint de todos os arquivos PHP.
 - A auditoria isolada de imagens agora cria uma fonte canônica efêmera no runner, sem alterar a regra fail-closed de produção.
+- O health gate registra o score e os checks reprovados para tornar falhas pós-deploy diagnosticáveis sem expor segredos.
 
 ## Dependência operacional externa
 

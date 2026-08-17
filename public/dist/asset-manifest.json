@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-17T01:01:09.376Z",
+  "generated_at": "2026-08-17T01:24:40.205Z",
   "assets": {
     "/js/admin-automation.js": {
       "file": "/public/dist/js/admin-automation.ba2700ea3a.min.js",
@@ -32,9 +32,9 @@
       "source_bytes": 5974
     },
     "/js/catalog-conversion-v4.js": {
-      "file": "/public/dist/js/catalog-conversion-v4.cd0d1f9b42.min.js",
-      "bytes": 5006,
-      "source_bytes": 5416
+      "file": "/public/dist/js/catalog-conversion-v4.afbe238e98.min.js",
+      "bytes": 5229,
+      "source_bytes": 5689
     },
     "/js/catalog-image-integrity-v62.js": {
       "file": "/public/dist/js/catalog-image-integrity-v62.0de571ed7f.min.js",
@@ -52,9 +52,9 @@
       "source_bytes": 550
     },
     "/js/catalog.js": {
-      "file": "/public/dist/js/catalog.1fa9d6621a.min.js",
-      "bytes": 15561,
-      "source_bytes": 18076
+      "file": "/public/dist/js/catalog.eefcff7ba4.min.js",
+      "bytes": 16025,
+      "source_bytes": 18587
     },
     "/js/category-real-images-v52.js": {
       "file": "/public/dist/js/category-real-images-v52.2a917c4e2d.min.js",
@@ -205,6 +205,11 @@
       "file": "/public/dist/css/cart-integrity-v94.daea79b102.min.css",
       "bytes": 664,
       "source_bytes": 664
+    },
+    "/css/catalog-category-select-v1.css": {
+      "file": "/public/dist/css/catalog-category-select-v1.860c5c60c2.min.css",
+      "bytes": 1087,
+      "source_bytes": 1354
     },
     "/css/catalog-conversion-v4.css": {
       "file": "/public/dist/css/catalog-conversion-v4.5f8587a906.min.css",
@@ -392,14 +397,14 @@
       "source_bytes": 4426
     },
     "/public/assets/liz-assistant/liz-assistant-corrections-v1.css": {
-      "file": "/public/dist/assets/liz-assistant/liz-assistant-corrections-v1.2fc8317da1.min.css",
-      "bytes": 1571,
-      "source_bytes": 2124
+      "file": "/public/dist/assets/liz-assistant/liz-assistant-corrections-v1.5ca9fe3f67.min.css",
+      "bytes": 2044,
+      "source_bytes": 2592
     },
     "/public/assets/liz-assistant/liz-assistant-corrections-v1.js": {
-      "file": "/public/dist/assets/liz-assistant/liz-assistant-corrections-v1.adc100e961.min.js",
-      "bytes": 1567,
-      "source_bytes": 1788
+      "file": "/public/dist/assets/liz-assistant/liz-assistant-corrections-v1.df8f09c0c8.min.js",
+      "bytes": 2512,
+      "source_bytes": 2843
     },
     "/public/assets/liz-assistant/liz-assistant.css": {
       "file": "/public/dist/assets/liz-assistant/liz-assistant.53814eba66.min.css",
@@ -407,9 +412,9 @@
       "source_bytes": 10993
     },
     "/public/assets/liz-assistant/liz-assistant.js": {
-      "file": "/public/dist/assets/liz-assistant/liz-assistant.1b71c704aa.min.js",
-      "bytes": 9899,
-      "source_bytes": 11756
+      "file": "/public/dist/assets/liz-assistant/liz-assistant.f529a05ddb.min.js",
+      "bytes": 10028,
+      "source_bytes": 11893
     },
     "/public/assets/liz-assistant/liz-config.js": {
       "file": "/public/dist/assets/liz-assistant/liz-config.9495d4ac97.min.js",

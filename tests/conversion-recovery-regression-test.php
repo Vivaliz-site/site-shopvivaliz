@@ -101,12 +101,17 @@ sv_conversion_assert(!str_contains($home, '4.9 / 5.0'), 'home não pode inventar
 $catalog = (string)file_get_contents($root . '/catalogo.php');
 sv_conversion_assert(!str_contains($catalog, 'no PIX (5% OFF)'), 'catálogo não pode inventar desconto no Pix');
 sv_conversion_assert(!str_contains($catalog, 'sem juros'), 'catálogo não pode inventar parcelamento sem juros');
+sv_conversion_assert(str_contains($catalog, 'id="catalog-category-select"'), 'catálogo deve oferecer seletor explícito de categoria');
 
 $catalogJs = (string)file_get_contents($root . '/js/catalog.js');
 sv_conversion_assert(
     str_contains($catalogJs, "if (initialSort !== 'relevance')"),
     'catálogo não deve trocar a primeira renderização por skeletons e nova chamada à API'
 );
+sv_conversion_assert(str_contains($catalogJs, 'categorySelect.addEventListener'), 'seletor de categoria deve atualizar o catálogo');
+
+$lizLauncher = (string)file_get_contents($root . '/public/assets/liz-assistant/liz-assistant.js');
+sv_conversion_assert(str_contains($lizLauncher, 'Dúvidas? Fale com a Liz'), 'mascote Liz deve explicar que oferece atendimento');
 
 $legacyLiz = (string)file_get_contents($root . '/api/agent/squad-chat.php');
 sv_conversion_assert(!str_contains($legacyLiz, 'VOLTEI5'), 'endpoint legado da Liz não pode prometer cupom fixo');
