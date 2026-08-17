@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 return array(
-    'version' => '9.2.105',
-    'version_code' => 902105,
+    'version' => '9.2.106',
+    'version_code' => 902106,
     'channel' => 'stable',
-    'codename' => 'conversion-recovery',
+    'codename' => 'catalog-help-clarity',
     'release_type' => 'cumulative',
     'generated_at' => '2026-08-17T00:00:00+00:00',
     'requires_update_php_sync' => true,
@@ -47,5 +47,8 @@ return array(
         'Reduz CLS e chamada duplicada da primeira renderizacao do catalogo.',
         'Remove promessas fixas de desconto, frete e parcelamento das superficies publicas e da Liz legada.',
         'Remove integracao WhatsApp sem uso que continha respostas comerciais estaticas e logging local.',
+        'Adiciona seletor explicito de categoria com sincronizacao de URL, chips e navegacao movel.',
+        'Fixa a mascote Liz no canto inferior direito com etiqueta clara de atendimento.',
+        'Inclui os checks reprovados no diagnostico do health gate de sincronizacao.',
     ),
 );

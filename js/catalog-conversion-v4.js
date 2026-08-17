@@ -16,6 +16,7 @@
   window.addEventListener('resize',syncCatalogTop,{passive:true});
 
   var searchInput=document.getElementById('catalog-search');
+  var categorySelect=document.getElementById('catalog-category-select');
   if(searchInput&&!searchInput.getAttribute('placeholder')){
     searchInput.setAttribute('placeholder','Busque por produto, categoria ou SKU');
   }
@@ -108,9 +109,14 @@
         searchInput.scrollIntoView({behavior:'smooth',block:'center'});
         setTimeout(function(){searchInput.focus();},300);
       }
-      if(button.dataset.action==='filter'&&toggle){
-        toggle.click();
-        tools.scrollIntoView({behavior:'smooth',block:'start'});
+      if(button.dataset.action==='filter'){
+        if(categorySelect){
+          categorySelect.scrollIntoView({behavior:'smooth',block:'center'});
+          setTimeout(function(){categorySelect.focus();},300);
+        }else if(toggle){
+          toggle.click();
+          tools.scrollIntoView({behavior:'smooth',block:'start'});
+        }
       }
     });
   }
