@@ -60,5 +60,5 @@ jobs:
         with:
           name: google-search-console-audit-${{ github.run_id }}
           path: reports/google-search-console-audit.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
