@@ -56,14 +56,20 @@ AddCharset UTF-8 .html .txt .php .json
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Atalho direto da categoria legada no host www para o catalogo novo.
+    # Host legado da VNDA: toda leitura publica converge para o novo catalogo.
+    # QSD remove query strings antigas para nao carregar filtros/parametros da loja cancelada.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
     RewriteCond %{HTTP_HOST} ^www\.shopvivaliz\.com\.br$ [NC]
-    RewriteRule ^ferramentas/?$ https://shopvivaliz.com.br/catalogo?categoria=Ferramentas [R=301,L,NE]
+    RewriteRule ^ https://shopvivaliz.com.br/catalogo [R=301,L,NE,QSD]
 
-    # Canonical host migration: apex/no-www is the production domain.
+    # Nunca encaminhar operacoes de escrita pelo host legado.
+    RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
+    RewriteCond %{HTTP_HOST} ^www\.shopvivaliz\.com\.br$ [NC]
+    RewriteRule ^ - [F,L]
+
+    # O host de desenvolvimento continua canonizado para producao preservando a rota.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
-    RewriteCond %{HTTP_HOST} ^(?:www\.shopvivaliz\.com\.br|dev\.shopvivaliz\.com\.br)$ [NC]
+    RewriteCond %{HTTP_HOST} ^dev\.shopvivaliz\.com\.br$ [NC]
     RewriteRule ^ https://shopvivaliz.com.br%{REQUEST_URI} [R=301,L,NE]
 
     # Consolidar paginas antigas antes da regra que preserva arquivos reais.
@@ -103,10 +109,9 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
     RewriteRule ^admin/(?:menu-completo|menu-dashboard|dashboard|admin-back)\.php$ - [F,L,NC]
 
-    # URLs publicas da vitrine legada/VNDA.
-    RewriteRule ^ferramentas/?$ /catalogo?categoria=Ferramentas [R=301,L,NE]
-    RewriteRule ^arte-papelaria-e-armarinho/?$ /catalogo?categoria=Arte%2C%20Papelaria%20e%20Armarinho [R=301,L,NE]
-    RewriteRule ^produtos/([^/]+)/?$ /produto/$1 [R=301,L,NE]
+    # URLs publicas remanescentes da vitrine legada/VNDA no dominio canonico.
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^(?:ferramentas|arte-papelaria-e-armarinho|produtos)(?:/.*)?$ /catalogo [R=301,L,NE,QSD,NC]
 
     # Nunca expor arquivos internos de configuracao e operacao
     RewriteRule ^config/ - [F,L]
