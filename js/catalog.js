@@ -9,6 +9,7 @@
   const params = new URLSearchParams(window.location.search);
   const tools = document.querySelector('.catalog-tools');
   const filterNav = tools ? tools.querySelector('.category-filters') : null;
+  const categorySelect = tools ? tools.querySelector('#catalog-category-select') : null;
   const preservePath = Boolean(
     document.body &&
     document.body.dataset &&
@@ -75,6 +76,7 @@
   }
 
   function setActiveFilter(category) {
+    if (categorySelect) categorySelect.value = String(category || '').trim();
     if (!filterNav) return;
     filterNav.querySelectorAll('.cat-filter').forEach(function (link) {
       const linkCategory = String(link.getAttribute('data-category') || '').trim();
@@ -96,16 +98,18 @@
       toolbar.className = 'sv-catalog-toolbar';
       toolbar.innerHTML = '<div class="sv-catalog-toolbar-left"></div><label class="sv-sort-wrap"><span>Ordenar por</span><select aria-label="Ordenar produtos"><option value="relevance">Relevância</option><option value="price-asc">Menor preço</option><option value="price-desc">Maior preço</option><option value="name">Nome A–Z</option></select></label>';
       tools.insertBefore(toolbar, tools.firstChild);
-      const select = toolbar.querySelector('select');
-      if (select) {
+    }
+    const select = toolbar.querySelector('.sv-sort-wrap select');
+    if (select) {
+      select.value = activeSort;
+      if (select.dataset.svBound !== '1') {
+        select.dataset.svBound = '1';
         select.addEventListener('change', function () {
           activeSort = this.value || 'relevance';
           loadCatalog(input ? input.value.trim() : '', activeCategory, 1);
         });
       }
     }
-    const select = toolbar.querySelector('select');
-    if (select) select.value = activeSort;
     return toolbar;
   }
 
@@ -344,6 +348,14 @@
   updateCartBadge(readCart());
   bindBuyButtons(document);
   ensureToolbar();
+
+  if (categorySelect && categorySelect.dataset.svBound !== '1') {
+    categorySelect.dataset.svBound = '1';
+    categorySelect.addEventListener('change', function () {
+      activeCategory = String(this.value || '').trim();
+      loadCatalog(input ? input.value.trim() : '', activeCategory, 1);
+    });
+  }
 
   if (!catalogPage || !grid || !status) return;
 

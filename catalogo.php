@@ -517,6 +517,7 @@ $svNavCurrent = 'catalogo';
     <script type="application/ld+json"><?= json_encode($faqSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
     <?php require_once __DIR__ . '/includes/load-custom-css.php'; ?>
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
+    <link rel="stylesheet" href="/css/catalog-category-select-v1.css?v=2026-08-17-1">
 </head>
 <body>
     <?php include __DIR__ . '/includes/navbar.php'; ?>
@@ -539,7 +540,15 @@ $svNavCurrent = 'catalogo';
         <section class="container catalog-tools">
             <div class="sv-catalog-toolbar">
                 <div class="sv-catalog-toolbar-left">
-                    <button class="sv-filter-toggle" type="button" aria-expanded="false">☰ Categorias</button>
+                    <label class="sv-category-select-wrap" for="catalog-category-select">
+                        <span>Categoria</span>
+                        <select id="catalog-category-select" aria-label="Filtrar produtos por categoria">
+                            <option value=""<?= $category === '' ? ' selected' : '' ?>>Todas as categorias</option>
+                            <?php foreach ($categories as $cat => $count): ?>
+                                <option value="<?= sv_catalog_esc($cat) ?>"<?= $category === $cat ? ' selected' : '' ?>><?= sv_catalog_esc($cat) ?> (<?= $count ?>)</option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
                 </div>
                 <label class="sv-sort-wrap">
                     <span>Ordenar por</span>
