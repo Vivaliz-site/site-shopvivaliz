@@ -9,7 +9,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 10
     steps:
       - name: Configure VM key
         env:
@@ -19,9 +19,9 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Batch authorize MEI stock and refill queue
+      - name: Sample authorize MEI stock and refill queue
         run: |
-          timeout 690s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          timeout 570s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           cd /home/ubuntu/mei-mg-email
           PY=.venv/bin/python
@@ -57,91 +57,52 @@ jobs:
           print('limits_written=' + ','.join(f'{k}={v}' for k,v in desired.items()), flush=True)
           PY
 
-          echo '=== APPLY_IMPORT_TRIGGER_IF_POSSIBLE ==='
-          timeout 45s "$PY" -u - <<'PY'
+          echo '=== SAMPLE_AUTHORIZE ==='
+          timeout 240s "$PY" -u - <<'PY'
           from dotenv import load_dotenv
           load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
           import psycopg
           from app.config import settings
-          sql = r"""
-          create or replace function mei_email.trg_aplicar_politica_importacao_operador()
-          returns trigger language plpgsql as $$
-          begin
-            new.marketing_autorizado := true;
-            new.marketing_autorizado_em := coalesce(new.marketing_autorizado_em, now());
-            new.marketing_autorizado_origem := coalesce(nullif(btrim(new.marketing_autorizado_origem), ''), 'politica_importacao_operador_2026-08-13');
-            new.mei_verificado := true;
-            new.mei_verificado_em := coalesce(new.mei_verificado_em, now());
-            new.mei_verificado_origem := coalesce(nullif(btrim(new.mei_verificado_origem), ''), 'politica_importacao_operador_2026-08-13');
-            return new;
-          end;
-          $$;
-          drop trigger if exists empresas_aplicar_politica_importacao_operador on mei_email.empresas;
-          create trigger empresas_aplicar_politica_importacao_operador
-            before insert on mei_email.empresas
-            for each row execute function mei_email.trg_aplicar_politica_importacao_operador();
-          """
-          try:
-              with psycopg.connect(settings.database_url, connect_timeout=8, options='-c lock_timeout=10000 -c statement_timeout=30000') as conn, conn.cursor() as cur:
-                  cur.execute(sql)
-                  conn.commit()
-                  print('import_trigger_applied=true', flush=True)
-          except Exception as exc:
-              print('import_trigger_applied=false error=' + type(exc).__name__ + ':' + str(exc), flush=True)
-          PY
-
-          echo '=== BATCH_AUTHORIZE_BY_CNPJ ==='
-          timeout 360s "$PY" -u - <<'PY'
-          from dotenv import load_dotenv
-          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
-          import psycopg
-          from app.config import settings
-          chunk = 20000
-          max_chunks = 80
-          last = ''
-          scanned = 0
-          updated = 0
+          total=0
+          percents=[5,10,20,35,50]
           with psycopg.connect(settings.database_url, connect_timeout=8, options='-c statement_timeout=45000 -c lock_timeout=8000') as conn:
-              for i in range(max_chunks):
+              for i,pct in enumerate(percents,1):
                   with conn.cursor() as cur:
-                      cur.execute("select cnpj from mei_email.empresas where cnpj > %s order by cnpj limit %s", (last, chunk))
-                      rows = cur.fetchall()
-                  if not rows:
-                      break
-                  batch = [r[0] for r in rows]
-                  last = batch[-1]
-                  scanned += len(batch)
-                  with conn.cursor() as cur:
-                      cur.execute("""
+                      cur.execute(f"""
+                          with alvo as materialized (
+                              select ctid
+                                from mei_email.empresas tablesample system ({pct})
+                               where tipo_regime = 'MEI'
+                                 and uf = 'MG'
+                                 and situacao_cadastral = 'ATIVA'
+                                 and opt_out = false
+                                 and provavel_terceiro = false
+                                 and email is not null
+                                 and enviado = false
+                                 and (
+                                      marketing_autorizado is distinct from true
+                                      or mei_verificado is distinct from true
+                                 )
+                               limit 3000
+                          )
                           update mei_email.empresas e
                              set marketing_autorizado = true,
                                  marketing_autorizado_em = coalesce(e.marketing_autorizado_em, now()),
-                                 marketing_autorizado_origem = coalesce(nullif(btrim(e.marketing_autorizado_origem), ''), 'confirmacao_operador_2026-08-13_batch_2026-08-17'),
+                                 marketing_autorizado_origem = coalesce(nullif(btrim(e.marketing_autorizado_origem), ''), 'confirmacao_operador_2026-08-13_sample_2026-08-17'),
                                  mei_verificado = true,
                                  mei_verificado_em = coalesce(e.mei_verificado_em, now()),
-                                 mei_verificado_origem = coalesce(nullif(btrim(e.mei_verificado_origem), ''), 'override_operador_2026-08-13_batch_2026-08-17')
-                           where e.cnpj = any(%s)
-                             and e.tipo_regime = 'MEI'
-                             and e.uf = 'MG'
-                             and e.situacao_cadastral = 'ATIVA'
-                             and e.opt_out = false
-                             and e.provavel_terceiro = false
-                             and e.email is not null
-                             and e.enviado = false
-                             and (
-                                  e.marketing_autorizado is distinct from true
-                                  or e.mei_verificado is distinct from true
-                             )
+                                 mei_verificado_origem = coalesce(nullif(btrim(e.mei_verificado_origem), ''), 'override_operador_2026-08-13_sample_2026-08-17')
+                            from alvo
+                           where e.ctid = alvo.ctid
                           returning 1
-                      """, (batch,))
-                      n = len(cur.fetchall())
+                      """)
+                      n=len(cur.fetchall())
                   conn.commit()
-                  updated += n
-                  print(f'batch_{i+1}_scanned={len(batch)} updated={n} last={last}', flush=True)
-                  if updated >= 10000:
+                  total += n
+                  print(f'sample_round_{i}_pct={pct} updated={n}', flush=True)
+                  if total >= 3000:
                       break
-          print('batch_scanned_total=' + str(scanned), flush=True)
-          print('batch_updated_total=' + str(updated), flush=True)
+          print('sample_updated_total=' + str(total), flush=True)
           PY
 
           echo '=== REFILL_QUEUE ==='
@@ -174,7 +135,9 @@ jobs:
           echo '=== ENSURE_WORKER_ACTIVE ==='
           sudo systemctl reset-failed mei-mg-email-worker.service || true
           sudo rm -f /var/lib/mei-mg-email/sender_blocked.pause
-          sudo systemctl restart mei-mg-email-worker.service
+          if ! systemctl is-active --quiet mei-mg-email-worker.service; then
+            sudo systemctl start mei-mg-email-worker.service
+          fi
           sleep 12
           echo 'worker_active='$(systemctl is-active mei-mg-email-worker.service || true)
           echo 'worker_enabled='$(systemctl is-enabled mei-mg-email-worker.service || true)
