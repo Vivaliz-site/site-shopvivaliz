@@ -31,10 +31,7 @@ jobs:
           API='https://api.cloudflare.com/client/v4'
           AUTH="Authorization: Bearer $CF_TOKEN"
           ZONE='shopvivaliz.com.br'
-          WWW='www.shopvivaliz.com.br'
           PHASE='http_request_dynamic_redirect'
-          REF='shopvivaliz_www_to_catalogo'
-          TARGET_EXPR='concat("https://shopvivaliz.com.br", http.request.uri.path)'
 
           zones=$(curl -sS --fail -H "$AUTH" "$API/zones?name=$ZONE")
           zone_id=$(printf '%s' "$zones" | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d.get("result") or []; print(r[0]["id"] if d.get("success") and r else "")')
@@ -46,48 +43,11 @@ jobs:
           rule_id=$(printf '%s' "$entry" | python3 -c 'import json,sys; d=json.load(sys.stdin); rules=(d.get("result") or {}).get("rules") or []; print(next((str(r.get("id","")) for r in rules if r.get("ref")=="shopvivaliz_www_to_catalogo" or (r.get("action")=="redirect" and "www.shopvivaliz.com.br" in str(r.get("expression","")))), ""))')
           test -n "$rule_id" || { echo 'Existing www redirect rule not found' >&2; exit 1; }
 
-          payload=$(python3 - <<'PY'
-import json
-print(json.dumps({
-  "ref": "shopvivaliz_www_to_catalogo",
-  "expression": "http.host eq \"www.shopvivaliz.com.br\"",
-  "description": "Redirect legacy ShopVivaliz www host to canonical host preserving path and query",
-  "action": "redirect",
-  "action_parameters": {
-    "from_value": {
-      "target_url": {"expression": "concat(\"https://shopvivaliz.com.br\", http.request.uri.path)"},
-      "status_code": 301,
-      "preserve_query_string": True
-    }
-  },
-  "enabled": True
-}))
-PY
-          )
+          payload=$(python3 -c 'import json; print(json.dumps({"ref":"shopvivaliz_www_to_catalogo","expression":"http.host eq \"www.shopvivaliz.com.br\"","description":"Redirect legacy ShopVivaliz www host to canonical host preserving path and query","action":"redirect","action_parameters":{"from_value":{"target_url":{"expression":"concat(\"https://shopvivaliz.com.br\", http.request.uri.path)"},"status_code":301,"preserve_query_string":True}},"enabled":True}))')
 
           result=$(curl -sS --fail -X PATCH -H "$AUTH" -H 'Content-Type: application/json' \
             "$API/zones/$zone_id/rulesets/$ruleset_id/rules/$rule_id" --data "$payload")
-          printf '%s' "$result" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("success") is True'
+          printf '%s' "$result" | python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get("success") is True else 1)'
 
           verify=$(curl -sS --fail -H "$AUTH" "$API/zones/$zone_id/rulesets/phases/$PHASE/entrypoint")
-          printf '%s' "$verify" | python3 -c '
-import json,sys
-D=json.load(sys.stdin)
-rules=(D.get("result") or {}).get("rules") or []
-for r in rules:
-    if r.get("ref") != "shopvivaliz_www_to_catalogo":
-        continue
-    fv=((r.get("action_parameters") or {}).get("from_value") or {})
-    tu=(fv.get("target_url") or {})
-    ok=(
-        r.get("action")=="redirect" and
-        r.get("expression")=="http.host eq \"www.shopvivaliz.com.br\"" and
-        tu.get("expression")=="concat(\"https://shopvivaliz.com.br\", http.request.uri.path)" and
-        fv.get("status_code")==301 and
-        fv.get("preserve_query_string") is True and
-        r.get("enabled", True) is True
-    )
-    print(json.dumps({"www_redirect_preserves_path_query": ok}))
-    raise SystemExit(0 if ok else 1)
-raise SystemExit("www redirect rule missing after patch")
-'
+          printf '%s' "$verify" | python3 -c 'import json,sys; d=json.load(sys.stdin); rules=(d.get("result") or {}).get("rules") or []; wanted=[r for r in rules if r.get("ref")=="shopvivaliz_www_to_catalogo"]; r=wanted[0] if wanted else {}; fv=((r.get("action_parameters") or {}).get("from_value") or {}); tu=(fv.get("target_url") or {}); ok=(r.get("action")=="redirect" and r.get("expression")=="http.host eq \"www.shopvivaliz.com.br\"" and tu.get("expression")=="concat(\"https://shopvivaliz.com.br\", http.request.uri.path)" and fv.get("status_code")==301 and fv.get("preserve_query_string") is True and r.get("enabled", True) is True); print(json.dumps({"www_redirect_preserves_path_query":ok})); raise SystemExit(0 if ok else 1)'
