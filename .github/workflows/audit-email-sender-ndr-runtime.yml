@@ -9,7 +9,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 2
     steps:
       - name: Configure VM key
         env:
@@ -19,38 +19,50 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Keep MEI sender unblocked and worker active
+      - name: Quick diagnose MEI worker tracking divergence
         run: |
-          timeout 180s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          timeout 70s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
+          echo '=== SYSTEMD_SAFE ==='
+          systemctl show mei-mg-email-worker.service -p ActiveState -p SubState -p WorkingDirectory -p ExecStart --no-pager || true
+          echo '=== APP ==='
           cd /home/ubuntu/mei-mg-email
-
-          echo '=== UNBLOCK_SENDER ==='
-          sudo rm -f /var/lib/mei-mg-email/sender_blocked.pause
-          rm -f runtime/sender_blocked.pause
-          ln -s /var/lib/mei-mg-email/sender_blocked.pause runtime/sender_blocked.pause
-          printf 'sentinel_present='; sudo test -f /var/lib/mei-mg-email/sender_blocked.pause && echo true || echo false
-
-          echo '=== ENABLE_RUNTIME ==='
-          sudo systemctl daemon-reload
-          sudo systemctl enable --now mei-mg-email-monitor.service || true
-          sudo systemctl enable --now mei-mg-email-base-sync.timer || true
-          sudo systemctl enable --now mei-mg-email-worker.service
-
-          echo '=== RUNTIME_STATE ==='
-          printf 'worker_active='; systemctl is-active mei-mg-email-worker.service || true
-          printf 'worker_enabled='; systemctl is-enabled mei-mg-email-worker.service || true
-          printf 'monitor_active='; systemctl is-active mei-mg-email-monitor.service || true
-          printf 'base_timer_active='; systemctl is-active mei-mg-email-base-sync.timer || true
-          printf 'base_timer_enabled='; systemctl is-enabled mei-mg-email-base-sync.timer || true
-          printf 'ndr_guard_active='; systemctl is-active mei-mg-email-ndr-guard.service || true
-          printf 'ndr_guard_enabled='; systemctl is-enabled mei-mg-email-ndr-guard.service || true
-          printf 'sentinel_present='; sudo test -f /var/lib/mei-mg-email/sender_blocked.pause && echo true || echo false
-
-          echo '=== WORKER_LOG ==='
-          sudo journalctl -u mei-mg-email-worker.service -n 40 --no-pager || true
-          echo '=== MONITOR_LOG ==='
-          sudo journalctl -u mei-mg-email-monitor.service -n 20 --no-pager || true
+          git rev-parse HEAD || true
+          echo '=== DB_AND_COUNTS ==='
+          PY=.venv/bin/python
+          test -x "$PY" || PY=python3
+          timeout 45s "$PY" - <<'PY'
+          from dotenv import load_dotenv
+          from urllib.parse import urlparse
+          import hashlib
+          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
+          import psycopg
+          from app.config import settings
+          p=urlparse(settings.database_url)
+          print('database_host=' + str(p.hostname))
+          print('database_name=' + (p.path or '').lstrip('/'))
+          print('database_sha12=' + hashlib.sha256(settings.database_url.encode()).hexdigest()[:12])
+          print('provider=' + settings.email_provider)
+          with psycopg.connect(settings.database_url, connect_timeout=8) as conn, conn.cursor() as cur:
+              cur.execute("select now() at time zone 'America/Sao_Paulo'")
+              print('agora_brt=' + str(cur.fetchone()[0]))
+              for label, sql in [
+                ('envios_total', "select count(*) from mei_email.envios"),
+                ('envios_24h_enviado_em_any_status', "select count(*) from mei_email.envios where enviado_em >= now() - interval '24 hours'"),
+                ('envios_24h_submitted_enviado', "select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em >= now() - interval '24 hours'"),
+                ('envios_30d_any_status', "select count(*), max(enviado_em), max(criado_em) from mei_email.envios where coalesce(enviado_em,criado_em) >= now() - interval '30 days'"),
+                ('lotes_pendentes_processando', "select coalesce(status::text,'null'), count(*) from mei_email.lotes group by 1 order by 2 desc"),
+                ('envios_status_top', "select coalesce(status::text,'null'), count(*) from mei_email.envios group by 1 order by 2 desc limit 12"),
+                ('empresas_aptas_raw', "select count(*) from mei_email.empresas where tipo_regime='MEI' and uf='MG' and situacao_cadastral='ATIVA' and opt_out=false and provavel_terceiro=false and email is not null and enviado=false and marketing_autorizado=true and mei_verificado=true")
+              ]:
+                  cur.execute(sql)
+                  print(label + '=' + repr(cur.fetchall()))
+              cur.execute("select id,email,status::text,criado_em,enviado_em,provider_message_id,left(coalesce(erro,''),80) from mei_email.envios order by coalesce(enviado_em,criado_em) desc nulls last, id desc limit 12")
+              for row in cur.fetchall():
+                  print('recent=' + repr(row))
+          PY
+          echo '=== WORKER_LOG_TAIL ==='
+          timeout 10s sudo journalctl -u mei-mg-email-worker.service -n 80 --no-pager || true
           echo '=== END ==='
           EOF
       - name: Cleanup
