@@ -9,7 +9,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - name: Configure VM key
         env:
@@ -21,10 +21,9 @@ jobs:
           chmod 600 ~/.ssh/vmkey
       - name: Diagnose MEI email runtime on VM
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          timeout 120s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -u
           cd /home/ubuntu/mei-mg-email || exit 10
-
           echo '=== RUNTIME_DIAG_BEGIN ==='
           date -u '+UTC=%Y-%m-%dT%H:%M:%SZ'
           echo "APP_SHA=$(git rev-parse HEAD 2>/dev/null || true)"
@@ -43,27 +42,21 @@ jobs:
           else
             echo 'sentinel_present=false'
           fi
-          ls -l runtime/sender_blocked.pause /var/lib/mei-mg-email/sender_blocked.pause 2>&1 || true
 
           echo '=== NDR_STATE ==='
           sudo cat /var/lib/mei-mg-email/ndr_guard_state.json 2>/dev/null || echo 'ndr_state_missing=true'
 
-          echo '=== MONITOR_SNAPSHOT ==='
+          echo '=== MONITOR_SNAPSHOT_BOUNDED ==='
           if [ -x .venv/bin/python ]; then
-            sudo -u ubuntu .venv/bin/python scripts/monitor_operacao.py --once || true
+            timeout 25s .venv/bin/python scripts/monitor_operacao.py --once || echo "monitor_exit=$?"
           else
-            sudo -u ubuntu python3 scripts/monitor_operacao.py --once || true
+            timeout 25s python3 scripts/monitor_operacao.py --once || echo "monitor_exit=$?"
           fi
 
-          echo '=== WORKER_STATUS ==='
-          sudo systemctl status mei-mg-email-worker.service --no-pager -l || true
-
-          echo '=== WORKER_LOG_SINCE_1940_BRT ==='
-          sudo journalctl -u mei-mg-email-worker.service --since '2026-08-16 22:40:00 UTC' --no-pager -n 250 || true
-
-          echo '=== NDR_GUARD_LOG_SINCE_1930_BRT ==='
-          sudo journalctl -u mei-mg-email-ndr-guard.service --since '2026-08-16 22:30:00 UTC' --no-pager -n 200 || true
-
+          echo '=== WORKER_LOG_TAIL ==='
+          sudo journalctl -u mei-mg-email-worker.service --no-pager -n 100 || true
+          echo '=== NDR_GUARD_LOG_TAIL ==='
+          sudo journalctl -u mei-mg-email-ndr-guard.service --no-pager -n 80 || true
           echo '=== RUNTIME_DIAG_END ==='
           EOF
       - name: Cleanup
