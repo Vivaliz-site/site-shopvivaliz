@@ -26,6 +26,7 @@ jobs:
           cd /home/ubuntu/mei-mg-email || exit 10
           PY=.venv/bin/python
           test -x "$PY" || PY=python3
+          ENV_PATH=/home/ubuntu/mei-mg-email/.env
 
           echo '=== FAIL_CLOSED_CHECK ==='
           sudo systemctl stop mei-mg-email-worker.service || true
@@ -33,10 +34,10 @@ jobs:
           printf 'sentinel_present='; if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then echo true; else echo false; fi
 
           echo '=== GRAPH_TOKEN_ROLES ==='
-          "$PY" - <<'PY'
+          "$PY" - <<'PY' || true
           import base64, json
           from dotenv import load_dotenv
-          load_dotenv()
+          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
           from app.email_provider import MicrosoftGraphEmailProvider
           p = MicrosoftGraphEmailProvider()
           token = p._get_access_token()
@@ -64,39 +65,33 @@ jobs:
           printf 'azure_cache_present='; test -d "$HOME/.azure" && echo true || echo false
 
           echo '=== GRAPH_DIRECTORY_CAPABILITY ==='
-          set +e
-          timeout 60s "$PY" - <<'PY'
+          timeout 60s "$PY" - <<'PY' || true
           import json
           from urllib.error import HTTPError
           from urllib.request import Request, urlopen
           from dotenv import load_dotenv
-          load_dotenv()
+          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
           from app.email_provider import MicrosoftGraphEmailProvider
           p = MicrosoftGraphEmailProvider()
           token = p._get_access_token()
-          for label, url in [
-              ('graph_sp', "https://graph.microsoft.com/v1.0/servicePrincipals(appId='00000003-0000-0000-c000-000000000000')?$select=id,appId,displayName,appRoles"),
-          ]:
-              req = Request(url, headers={'Authorization':'Bearer '+token,'Accept':'application/json'})
-              try:
-                  with urlopen(req, timeout=30) as r:
-                      data=json.loads(r.read().decode())
-                  roles=[x for x in data.get('appRoles',[]) if x.get('value') in {'Mail.Read','Mail.Send'} and 'Application' in (x.get('allowedMemberTypes') or [])]
-                  print(label + '_read=ok')
-                  print('graph_resource_sp_id=' + str(data.get('id') or ''))
-                  for role in roles:
-                      print('graph_app_role_' + role.get('value','').replace('.','_') + '=' + str(role.get('id') or ''))
-              except HTTPError as e:
-                  print(label + '_read=http_' + str(e.code))
+          url = "https://graph.microsoft.com/v1.0/servicePrincipals(appId='00000003-0000-0000-c000-000000000000')?$select=id,appId,displayName,appRoles"
+          req = Request(url, headers={'Authorization':'Bearer '+token,'Accept':'application/json'})
+          try:
+              with urlopen(req, timeout=30) as r:
+                  data=json.loads(r.read().decode())
+              roles=[x for x in data.get('appRoles',[]) if x.get('value') in {'Mail.Read','Mail.Send'} and 'Application' in (x.get('allowedMemberTypes') or [])]
+              print('graph_sp_read=ok')
+              print('graph_resource_sp_id=' + str(data.get('id') or ''))
+              for role in roles:
+                  print('graph_app_role_' + role.get('value','').replace('.','_') + '=' + str(role.get('id') or ''))
+          except HTTPError as e:
+              print('graph_sp_read=http_' + str(e.code))
           PY
-          CAP_RC=$?
-          set -e
-          echo "GRAPH_DIRECTORY_CAPABILITY_RC=$CAP_RC"
 
           echo '=== ELIGIBLE_BEFORE_SYNC ==='
-          "$PY" - <<'PY'
+          "$PY" - <<'PY' || true
           from dotenv import load_dotenv
-          load_dotenv()
+          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
           import psycopg
           from app.config import settings
           with psycopg.connect(settings.database_url) as conn, conn.cursor() as cur:
@@ -107,16 +102,14 @@ jobs:
           PY
 
           echo '=== BASE_SYNC ==='
-          set +e
           timeout 210s "$PY" scripts/sincronizar_base_diaria.py
           SYNC_RC=$?
-          set -e
           echo "BASE_SYNC_RC=$SYNC_RC"
 
           echo '=== ELIGIBLE_AFTER_SYNC ==='
-          "$PY" - <<'PY'
+          "$PY" - <<'PY' || true
           from dotenv import load_dotenv
-          load_dotenv()
+          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
           import psycopg
           from app.config import settings
           with psycopg.connect(settings.database_url) as conn, conn.cursor() as cur:
@@ -125,8 +118,7 @@ jobs:
               cur.execute("select count(*) from mei_email.envios where status::text in ('pendente','enviando')")
               print('pendentes=' + str(cur.fetchone()[0]))
               cur.execute("select status, rows_before, rows_after, rows_added, error from mei_email.base_sync_runs order by id desc limit 1")
-              row=cur.fetchone()
-              print('last_base_sync=' + repr(row))
+              print('last_base_sync=' + repr(cur.fetchone()))
           PY
 
           echo '=== FINAL_FAIL_CLOSED_STATE ==='
