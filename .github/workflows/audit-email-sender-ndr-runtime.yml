@@ -9,7 +9,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
       - name: Configure VM key
         env:
@@ -19,9 +19,9 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Refill MEI queue without DDL locks
+      - name: Backfill MEI authorization and refill queue
         run: |
-          timeout 450s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          timeout 570s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           cd /home/ubuntu/mei-mg-email
           PY=.venv/bin/python
@@ -63,19 +63,54 @@ jobs:
           PY
           grep -E '^(META_ENVIOS_POR_DIA|MAX_ENVIOS_POR_DIA|RATE_LIMIT_ENVIOS_POR_MINUTO|QUEUE_MIN_PENDING|QUEUE_TARGET_PENDING)=' .env || true
 
-          echo '=== INDEX_STATUS_NO_DDL ==='
-          timeout 30s "$PY" -u - <<'PY'
+          echo '=== BACKFILL_AUTHORIZATION ==='
+          timeout 240s "$PY" -u - <<'PY'
           from dotenv import load_dotenv
           load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
           import psycopg
           from app.config import settings
-          names=('idx_empresas_autoqueue_mei_mg','idx_envios_cnpj_status_light','idx_envios_email_norm_light','idx_lotes_status_light')
-          with psycopg.connect(settings.database_url, connect_timeout=8, options='-c statement_timeout=15000') as conn, conn.cursor() as cur:
-              cur.execute("select indexname from pg_indexes where schemaname='mei_email' and indexname = any(%s)", (list(names),))
-              print('existing_indexes=' + repr(cur.fetchall()), flush=True)
+          with psycopg.connect(settings.database_url, connect_timeout=8, options='-c statement_timeout=90000 -c lock_timeout=10000') as conn:
+              total=0
+              for i in range(10):
+                  with conn.cursor() as cur:
+                      cur.execute("""
+                          with alvo as (
+                              select ctid
+                                from mei_email.empresas
+                               where tipo_regime = 'MEI'
+                                 and uf = 'MG'
+                                 and situacao_cadastral = 'ATIVA'
+                                 and opt_out = false
+                                 and provavel_terceiro = false
+                                 and email is not null
+                                 and enviado = false
+                                 and (
+                                      marketing_autorizado is distinct from true
+                                      or mei_verificado is distinct from true
+                                 )
+                               limit 5000
+                          )
+                          update mei_email.empresas e
+                             set marketing_autorizado = true,
+                                 marketing_autorizado_em = coalesce(e.marketing_autorizado_em, now()),
+                                 marketing_autorizado_origem = coalesce(nullif(btrim(e.marketing_autorizado_origem), ''), 'politica_importacao_operador_2026-08-13_backfill_2026-08-17'),
+                                 mei_verificado = true,
+                                 mei_verificado_em = coalesce(e.mei_verificado_em, now()),
+                                 mei_verificado_origem = coalesce(nullif(btrim(e.mei_verificado_origem), ''), 'politica_importacao_operador_2026-08-13_backfill_2026-08-17')
+                            from alvo
+                           where e.ctid = alvo.ctid
+                          returning 1
+                      """)
+                      n = len(cur.fetchall())
+                  conn.commit()
+                  total += n
+                  print(f'backfill_round_{i+1}={n}', flush=True)
+                  if n == 0:
+                      break
+              print('backfill_total=' + str(total), flush=True)
           PY
 
-          echo '=== REFILL_QUEUE_ONLY ==='
+          echo '=== REFILL_QUEUE_AFTER_BACKFILL ==='
           timeout 300s "$PY" -u - <<'PY'
           from dotenv import load_dotenv
           load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
@@ -85,29 +120,34 @@ jobs:
           import worker.worker_queue_first as wq
           with psycopg.connect(settings.database_url, connect_timeout=8, options='-c statement_timeout=180000 -c lock_timeout=8000') as conn:
               print('settings_meta=' + str(settings.meta_envios_por_dia), flush=True)
-              print('settings_max=' + str(settings.max_envios_por_dia), flush=True)
               print('settings_rate=' + str(settings.rate_limit_envios_por_minuto), flush=True)
               print('settings_queue_min=' + str(settings.queue_min_pending), flush=True)
               print('settings_queue_target=' + str(settings.queue_target_pending), flush=True)
               print('quota_24h=' + str(wq._obter_envios_ultimas_24h_indexado(conn)), flush=True)
               before = contar_pendentes(conn)
               print('queue_pending_before=' + str(before), flush=True)
-              added = int(repor_fila_automatica(conn) or 0)
-              conn.commit()
-              print('refill_round_1=' + str(added), flush=True)
+              total=0
+              for i in range(3):
+                  added = int(repor_fila_automatica(conn) or 0)
+                  conn.commit()
+                  total += added
+                  print(f'refill_round_{i+1}={added}', flush=True)
+                  if added == 0:
+                      break
               after = contar_pendentes(conn)
               print('queue_pending_after=' + str(after), flush=True)
+              print('refill_total=' + str(total), flush=True)
           PY
 
           echo '=== RESTART_WORKER ==='
           sudo systemctl restart mei-mg-email-worker.service
-          sleep 10
+          sleep 12
           echo 'worker_after='$(systemctl is-active mei-mg-email-worker.service || true)
           echo 'worker_enabled_after='$(systemctl is-enabled mei-mg-email-worker.service || true)
           test -f /var/lib/mei-mg-email/sender_blocked.pause && echo sentinel_after=true || echo sentinel_after=false
 
           echo '=== RECENT_WORKER_LOG ==='
-          timeout 30s sudo journalctl -u mei-mg-email-worker.service -n 140 --no-pager || true
+          timeout 30s sudo journalctl -u mei-mg-email-worker.service -n 160 --no-pager || true
           echo '=== END ==='
           EOF
       - name: Cleanup
