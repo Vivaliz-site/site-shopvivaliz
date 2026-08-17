@@ -9,7 +9,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
     steps:
       - name: Configure VM key
         env:
@@ -19,51 +19,76 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Quick diagnose MEI worker tracking divergence
+      - name: Repair quota index and reconcile Outlook recipients
         run: |
-          timeout 70s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          timeout 130s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
-          echo '=== SYSTEMD_SAFE ==='
-          systemctl show mei-mg-email-worker.service -p ActiveState -p SubState -p WorkingDirectory -p ExecStart --no-pager || true
-          echo '=== APP ==='
           cd /home/ubuntu/mei-mg-email
-          git rev-parse HEAD || true
-          echo '=== DB_AND_COUNTS ==='
           PY=.venv/bin/python
           test -x "$PY" || PY=python3
-          timeout 45s "$PY" - <<'PY'
-          from dotenv import load_dotenv
+          timeout 115s "$PY" -u - <<'PY'
           from urllib.parse import urlparse
-          import hashlib
-          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
+          import hashlib, sys
+          print('stage=start', flush=True)
+          data={}
+          for line in open('/home/ubuntu/mei-mg-email/.env', encoding='utf-8'):
+              line=line.strip()
+              if line and not line.startswith('#') and '=' in line:
+                  k,v=line.split('=',1); data[k.strip()]=v.strip().strip('"').strip("'")
+          dburl=data.get('DATABASE_URL') or data.get('DATABASE_DSN')
+          p=urlparse(dburl)
+          print('database_host=' + str(p.hostname), flush=True)
+          print('database_name=' + (p.path or '').lstrip('/'), flush=True)
+          print('database_sha12=' + hashlib.sha256(dburl.encode()).hexdigest()[:12], flush=True)
           import psycopg
-          from app.config import settings
-          p=urlparse(settings.database_url)
-          print('database_host=' + str(p.hostname))
-          print('database_name=' + (p.path or '').lstrip('/'))
-          print('database_sha12=' + hashlib.sha256(settings.database_url.encode()).hexdigest()[:12])
-          print('provider=' + settings.email_provider)
-          with psycopg.connect(settings.database_url, connect_timeout=8) as conn, conn.cursor() as cur:
-              cur.execute("select now() at time zone 'America/Sao_Paulo'")
-              print('agora_brt=' + str(cur.fetchone()[0]))
-              for label, sql in [
-                ('envios_total', "select count(*) from mei_email.envios"),
-                ('envios_24h_enviado_em_any_status', "select count(*) from mei_email.envios where enviado_em >= now() - interval '24 hours'"),
-                ('envios_24h_submitted_enviado', "select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em >= now() - interval '24 hours'"),
-                ('envios_30d_any_status', "select count(*), max(enviado_em), max(criado_em) from mei_email.envios where coalesce(enviado_em,criado_em) >= now() - interval '30 days'"),
-                ('lotes_pendentes_processando', "select coalesce(status::text,'null'), count(*) from mei_email.lotes group by 1 order by 2 desc"),
-                ('envios_status_top', "select coalesce(status::text,'null'), count(*) from mei_email.envios group by 1 order by 2 desc limit 12"),
-                ('empresas_aptas_raw', "select count(*) from mei_email.empresas where tipo_regime='MEI' and uf='MG' and situacao_cadastral='ATIVA' and opt_out=false and provavel_terceiro=false and email is not null and enviado=false and marketing_autorizado=true and mei_verificado=true")
-              ]:
-                  cur.execute(sql)
-                  print(label + '=' + repr(cur.fetchall()))
-              cur.execute("select id,email,status::text,criado_em,enviado_em,provider_message_id,left(coalesce(erro,''),80) from mei_email.envios order by coalesce(enviado_em,criado_em) desc nulls last, id desc limit 12")
-              for row in cur.fetchall():
-                  print('recent=' + repr(row))
+          recipients=[
+            'adlercontabil@hotmail.com',
+            'carmo.contabilidade@hotmail.com',
+            'contabilidadegbi@paxnacional.com',
+            'contabilidademariahelenasg@hotamail.com',
+            'jfccontabilidade@hotmail.com',
+            'fiscal01@agilitycontabilidade.com.br',
+            'bi@bicontabil.co',
+            'fredmourao@gmail.com',
+          ]
+          with psycopg.connect(dburl, connect_timeout=8) as conn:
+              conn.autocommit = True
+              with conn.cursor() as cur:
+                  cur.execute("set statement_timeout = '15s'")
+                  cur.execute("set lock_timeout = '3s'")
+                  print('stage=connected', flush=True)
+                  cur.execute("select now() at time zone 'America/Sao_Paulo'")
+                  print('agora_brt=' + str(cur.fetchone()[0]), flush=True)
+                  cur.execute("select indexname, indexdef from pg_indexes where schemaname='mei_email' and tablename='envios' and indexname in ('idx_envios_quota_24h','idx_envios_email_normalizado') order by indexname")
+                  print('indexes_before=' + repr(cur.fetchall()), flush=True)
+                  print('stage=create_quota_index', flush=True)
+                  cur.execute("""
+                    create index if not exists idx_envios_quota_24h
+                      on mei_email.envios (enviado_em)
+                     where enviado_em is not null
+                       and status in ('submitted', 'enviado')
+                  """)
+                  print('stage=create_email_index', flush=True)
+                  cur.execute("create index if not exists idx_envios_email_normalizado on mei_email.envios (lower(btrim(email::text)))")
+                  print('stage=analyze', flush=True)
+                  cur.execute('analyze mei_email.envios')
+                  print('stage=quota_count', flush=True)
+                  cur.execute("select count(*), max(enviado_em) from mei_email.envios where status in ('submitted','enviado') and enviado_em >= now() - interval '24 hours'")
+                  print('quota_24h=' + repr(cur.fetchall()), flush=True)
+                  print('stage=recent_submitted', flush=True)
+                  cur.execute("select id,email,status::text,criado_em,enviado_em,provider_message_id,left(coalesce(erro,''),80) from mei_email.envios where status in ('submitted','enviado') order by enviado_em desc nulls last limit 20")
+                  for row in cur.fetchall(): print('submitted_recent=' + repr(row), flush=True)
+                  print('stage=recipient_reconcile', flush=True)
+                  for email in recipients:
+                      cur.execute("select id,email,status::text,criado_em,enviado_em,provider_message_id,left(coalesce(erro,''),80) from mei_email.envios where lower(btrim(email::text))=lower(btrim(%s)) order by coalesce(enviado_em,criado_em) desc nulls last, id desc limit 5", (email,))
+                      rows=cur.fetchall()
+                      print('recipient=' + email + ' rows=' + repr(rows), flush=True)
+          print('stage=done', flush=True)
           PY
-          echo '=== WORKER_LOG_TAIL ==='
-          timeout 10s sudo journalctl -u mei-mg-email-worker.service -n 80 --no-pager || true
-          echo '=== END ==='
+          echo '=== WORKER_FAST_STATE ==='
+          systemctl is-active mei-mg-email-worker.service || true
+          systemctl is-enabled mei-mg-email-worker.service || true
+          test -f /var/lib/mei-mg-email/sender_blocked.pause && echo sentinel_present=true || echo sentinel_present=false
           EOF
       - name: Cleanup
         if: always()
