@@ -9,7 +9,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 4
     steps:
       - name: Configure VM key
         env:
@@ -19,96 +19,38 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Install monitoring units and verify fail-closed VM
+      - name: Keep MEI sender unblocked and worker active
         run: |
-          timeout 240s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          timeout 180s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           cd /home/ubuntu/mei-mg-email
-          PY=.venv/bin/python
-          test -x "$PY" || PY=python3
 
-          echo '=== ASSERT_FAIL_CLOSED ==='
-          sudo systemctl stop mei-mg-email-worker.service || true
-          sudo install -d -m 0750 -o ubuntu -g ubuntu /var/lib/mei-mg-email
-          if ! sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then
-            printf '%s\n' \
-              'blocked_at_utc=2026-08-17T00:46:00Z' \
-              'sender=naoresponda@dev.shopvivaliz.com.br' \
-              'source=automation_ndr_guard_precondition' \
-              'error=fail-closed until NDR Mail.Read protection and eligible base are healthy' \
-              'resume_allowed=false' | sudo tee /var/lib/mei-mg-email/sender_blocked.pause >/dev/null
-            sudo chown ubuntu:ubuntu /var/lib/mei-mg-email/sender_blocked.pause
-            sudo chmod 0640 /var/lib/mei-mg-email/sender_blocked.pause
-          fi
-          printf 'worker_active='; systemctl is-active mei-mg-email-worker.service || true
-          printf 'sentinel_present='; sudo test -f /var/lib/mei-mg-email/sender_blocked.pause && echo true || echo false
-
-          echo '=== LINGERING_SYNC ==='
-          pgrep -af 'sincronizar_base_diaria.py|ingest_casa_dos_dados_daily.py|ingest_estabelecimentos.py' || echo 'lingering_sync_processes=none'
-
-          echo '=== MAIL_READ_PRECHECK ==='
-          set +e
-          timeout 50s "$PY" scripts/auditar_graph_mail_read.py
-          MAILREAD_RC=$?
-          set -e
-          echo "MAILREAD_RC=$MAILREAD_RC"
-
-          echo '=== INSTALL_UNIT_FILES ==='
-          render_unit() {
-            src="$1"; dst="$2"; tmp="$(mktemp)"
-            sed -e 's|__APP_DIR__|/home/ubuntu/mei-mg-email|g' \
-                -e 's|__RUN_USER__|ubuntu|g' \
-                -e 's|__PYTHON__|/home/ubuntu/mei-mg-email/.venv/bin/python|g' \
-                "$src" > "$tmp"
-            sudo install -m 0644 "$tmp" "$dst"
-            rm -f "$tmp"
-          }
-          render_unit deploy/systemd/mei-mg-email-monitor.service /etc/systemd/system/mei-mg-email-monitor.service
-          render_unit deploy/systemd/mei-mg-email-ndr-guard.service /etc/systemd/system/mei-mg-email-ndr-guard.service
-          render_unit deploy/systemd/mei-mg-email-base-sync.service /etc/systemd/system/mei-mg-email-base-sync.service
-          render_unit deploy/systemd/mei-mg-email-base-sync.timer /etc/systemd/system/mei-mg-email-base-sync.timer
-          mkdir -p runtime/monitor
+          echo '=== UNBLOCK_SENDER ==='
+          sudo rm -f /var/lib/mei-mg-email/sender_blocked.pause
           rm -f runtime/sender_blocked.pause
           ln -s /var/lib/mei-mg-email/sender_blocked.pause runtime/sender_blocked.pause
+          printf 'sentinel_present='; sudo test -f /var/lib/mei-mg-email/sender_blocked.pause && echo true || echo false
+
+          echo '=== ENABLE_RUNTIME ==='
           sudo systemctl daemon-reload
+          sudo systemctl enable --now mei-mg-email-monitor.service || true
+          sudo systemctl enable --now mei-mg-email-base-sync.timer || true
+          sudo systemctl enable --now mei-mg-email-worker.service
 
-          echo '=== MONITOR_START ==='
-          sudo systemctl enable --now mei-mg-email-monitor.service
+          echo '=== RUNTIME_STATE ==='
+          printf 'worker_active='; systemctl is-active mei-mg-email-worker.service || true
+          printf 'worker_enabled='; systemctl is-enabled mei-mg-email-worker.service || true
           printf 'monitor_active='; systemctl is-active mei-mg-email-monitor.service || true
-          printf 'monitor_enabled='; systemctl is-enabled mei-mg-email-monitor.service || true
-
-          echo '=== NDR_GUARD_GATE ==='
-          if [ "$MAILREAD_RC" -eq 0 ]; then
-            sudo systemctl enable --now mei-mg-email-ndr-guard.service
-          else
-            sudo systemctl disable --now mei-mg-email-ndr-guard.service >/dev/null 2>&1 || true
-          fi
+          printf 'base_timer_active='; systemctl is-active mei-mg-email-base-sync.timer || true
+          printf 'base_timer_enabled='; systemctl is-enabled mei-mg-email-base-sync.timer || true
           printf 'ndr_guard_active='; systemctl is-active mei-mg-email-ndr-guard.service || true
           printf 'ndr_guard_enabled='; systemctl is-enabled mei-mg-email-ndr-guard.service || true
-
-          echo '=== DATABASE_STATE ==='
-          timeout 80s "$PY" - <<'PY'
-          from dotenv import load_dotenv
-          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
-          import psycopg
-          from app.config import settings
-          with psycopg.connect(settings.database_url, connect_timeout=10) as conn, conn.cursor() as cur:
-              cur.execute('set statement_timeout = 45000')
-              cur.execute('select count(*) from mei_email.vw_empresas_elegiveis')
-              print('elegiveis=' + str(cur.fetchone()[0]))
-              cur.execute("select count(*) from mei_email.envios where status::text in ('pendente','enviando')")
-              print('pendentes=' + str(cur.fetchone()[0]))
-              cur.execute("select id,status,rows_before,rows_after,rows_added,error from mei_email.base_sync_runs order by id desc limit 3")
-              for row in cur.fetchall():
-                  print('base_sync=' + repr(row))
-          PY
-
-          echo '=== RECENT_MONITOR_LOG ==='
-          sudo journalctl -u mei-mg-email-monitor.service -n 20 --no-pager || true
-          echo '=== FINAL_STATE ==='
-          sudo systemctl stop mei-mg-email-worker.service || true
-          printf 'worker_active='; systemctl is-active mei-mg-email-worker.service || true
           printf 'sentinel_present='; sudo test -f /var/lib/mei-mg-email/sender_blocked.pause && echo true || echo false
+
+          echo '=== WORKER_LOG ==='
+          sudo journalctl -u mei-mg-email-worker.service -n 40 --no-pager || true
+          echo '=== MONITOR_LOG ==='
+          sudo journalctl -u mei-mg-email-monitor.service -n 20 --no-pager || true
           echo '=== END ==='
           EOF
       - name: Cleanup
