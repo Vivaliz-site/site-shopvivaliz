@@ -180,9 +180,10 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
 
-    # Slugs numericos podem ser IDs legados ou parte legitima do modelo (ex: TH-05).
-    # O PHP valida o slug contra o catalogo antes de decidir se deve redirecionar.
-    RewriteRule ^produto/([a-z0-9][a-z0-9\-]*-[0-9]+)/?$ produto-numeric-route.php?slug=$1 [L,QSA]
+    # Todo slug de produto passa por um guard de canonicalizacao. O PHP so
+    # redireciona aliases quando consegue provar slug historico -> SKU -> item
+    # ativo no catalogo atual; caso contrario preserva o 404 normal.
+    RewriteRule ^produto/([^/]+)/?$ produto-slug-route.php?slug=$1 [L,QSA]
 
     # Cart API endpoints
     RewriteRule ^api/cart/add/?$ api/cart/add.php [L,QSA]
