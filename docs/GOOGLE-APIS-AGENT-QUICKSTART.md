@@ -46,6 +46,8 @@ php scripts/google-search-console-audit.php \
   --output=reports/google-search-console-audit-100.json
 ```
 
+O auditor prefere `sitemap.xml`. Se o sitemap estiver saudável para navegador/Google, mas um runner externo receber 403/5xx, o script não deve alterar WAF nem simular Googlebot. Ele registra `sitemapFetchError` e usa automaticamente páginas reais da Search Analytics dos últimos 90 dias como fallback. O campo `urlSource` do JSON indica `sitemap` ou `search-analytics-fallback`.
+
 Se houver múltiplas propriedades para o mesmo host, configure explicitamente:
 
 ```dotenv

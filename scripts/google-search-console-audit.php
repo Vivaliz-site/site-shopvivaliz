@@ -6,7 +6,8 @@ declare(strict_types=1);
  *
  * Reads OAuth credentials from the existing runtime environment, discovers the
  * Search Console property when GOOGLE_SEARCH_CONSOLE_SITE_URL is not supplied,
- * reads the public sitemap, and inspects a bounded set of URLs.
+ * prefers the public sitemap as the URL source, and falls back to Search
+ * Analytics page URLs when the sitemap cannot be fetched from the runner.
  *
  * Examples:
  *   php scripts/google-search-console-audit.php --max-urls=100
@@ -27,7 +28,6 @@ if (is_file($autoload)) {
     require_once $root . '/src/Google/GoogleApiClient.php';
 }
 
-use RuntimeException;
 use ShopVivaliz\Google\GoogleApiClient;
 use ShopVivaliz\Google\OAuthTokenProvider;
 
@@ -59,7 +59,7 @@ function gsc_http_get(string $url): string
         CURLOPT_TIMEOUT => 45,
         CURLOPT_HTTPHEADER => [
             'Accept: application/xml,text/xml;q=0.9,*/*;q=0.8',
-            'User-Agent: ShopVivaliz-SearchConsoleAudit/1.0',
+            'User-Agent: ShopVivaliz-SearchConsoleAudit/1.1',
         ],
     ]);
     $body = curl_exec($ch);
@@ -169,6 +169,63 @@ function gsc_error_message(array $response): string
     return 'HTTP ' . (int)($response['status'] ?? 0);
 }
 
+/**
+ * Use Search Analytics as a runner-safe fallback when the public sitemap is
+ * reachable by browsers/Google but blocked for GitHub-hosted runner IPs.
+ *
+ * @return array<int,string>
+ */
+function gsc_search_analytics_urls(GoogleApiClient $api, string $siteUrl, int $rowLimit): array
+{
+    $end = new DateTimeImmutable('today', new DateTimeZone('UTC'));
+    $start = $end->sub(new DateInterval('P90D'));
+    $response = $api->request(
+        'POST',
+        'https://www.googleapis.com/webmasters/v3/sites/' . rawurlencode($siteUrl) . '/searchAnalytics/query',
+        [
+            'startDate' => $start->format('Y-m-d'),
+            'endDate' => $end->format('Y-m-d'),
+            'dimensions' => ['page'],
+            'rowLimit' => max(1, min(25000, $rowLimit)),
+            'dataState' => 'final',
+        ]
+    );
+
+    if ($response['status'] < 200 || $response['status'] >= 300 || !is_array($response['body'])) {
+        throw new RuntimeException('Could not query Search Analytics pages: ' . gsc_error_message($response));
+    }
+
+    $urls = [];
+    $rows = is_array($response['body']['rows'] ?? null) ? $response['body']['rows'] : [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $keys = is_array($row['keys'] ?? null) ? $row['keys'] : [];
+        $url = trim((string)($keys[0] ?? ''));
+        if ($url !== '' && filter_var($url, FILTER_VALIDATE_URL)) {
+            $urls[$url] = true;
+        }
+    }
+
+    return array_keys($urls);
+}
+
+/** @param array<int,string> ...$groups @return array<int,string> */
+function gsc_merge_urls(array ...$groups): array
+{
+    $merged = [];
+    foreach ($groups as $group) {
+        foreach ($group as $url) {
+            $url = trim($url);
+            if ($url !== '' && filter_var($url, FILTER_VALIDATE_URL)) {
+                $merged[$url] = true;
+            }
+        }
+    }
+    return array_keys($merged);
+}
+
 try {
     $baseUrl = rtrim((string)(gsc_option($argv, 'base-url', getenv('GOOGLE_SITE_BASE_URL') ?: 'https://shopvivaliz.com.br') ?: ''), '/');
     $preferredSiteUrl = trim((string)(gsc_option($argv, 'site-url', getenv('GOOGLE_SEARCH_CONSOLE_SITE_URL') ?: '') ?: ''));
@@ -204,11 +261,43 @@ try {
             : [];
     }
 
-    $allUrls = gsc_sitemap_urls(gsc_http_get($sitemapUrl));
-    if ($allUrls === []) {
-        throw new RuntimeException('The public sitemap did not contain any valid <loc> URLs.');
+    $allUrls = [];
+    $urlSource = 'sitemap';
+    $sitemapFetchError = '';
+    try {
+        $allUrls = gsc_sitemap_urls(gsc_http_get($sitemapUrl));
+        if ($allUrls === []) {
+            $sitemapFetchError = 'The public sitemap did not contain any valid <loc> URLs.';
+        }
+    } catch (Throwable $sitemapError) {
+        $sitemapFetchError = $sitemapError->getMessage();
     }
+
+    $searchAnalyticsUrlCount = 0;
+    if ($allUrls === []) {
+        $needed = max(1000, min(25000, $offset + $maxUrls + 500));
+        $analyticsUrls = gsc_search_analytics_urls($api, $siteUrl, $needed);
+        $searchAnalyticsUrlCount = count($analyticsUrls);
+        $seedUrls = [
+            $baseUrl . '/',
+            $baseUrl . '/catalogo/',
+            $baseUrl . '/blog/',
+        ];
+        $allUrls = gsc_merge_urls($seedUrls, $analyticsUrls);
+        $urlSource = 'search-analytics-fallback';
+    }
+
+    if ($allUrls === []) {
+        throw new RuntimeException(
+            'Could not obtain audit URLs from sitemap or Search Analytics.'
+            . ($sitemapFetchError !== '' ? ' Sitemap: ' . $sitemapFetchError : '')
+        );
+    }
+
     $selectedUrls = array_slice($allUrls, $offset, $maxUrls);
+    if ($selectedUrls === []) {
+        throw new RuntimeException('No URLs remain after applying the requested offset.');
+    }
 
     $results = [];
     $issueCounts = [];
@@ -295,8 +384,12 @@ try {
     $report = [
         'generatedAt' => gmdate('c'),
         'siteUrl' => $siteUrl,
+        'urlSource' => $urlSource,
         'sitemapUrl' => $sitemapUrl,
-        'sitemapUrlCount' => count($allUrls),
+        'sitemapFetchError' => $sitemapFetchError,
+        'sitemapUrlCount' => $urlSource === 'sitemap' ? count($allUrls) : 0,
+        'searchAnalyticsUrlCount' => $searchAnalyticsUrlCount,
+        'candidateUrlCount' => count($allUrls),
         'offset' => $offset,
         'inspectedCount' => count($results),
         'cleanCount' => count(array_filter($results, static fn(array $row): bool => $row['issues'] === [])),
@@ -322,7 +415,8 @@ try {
         fwrite(STDOUT, json_encode([
             'generatedAt' => $report['generatedAt'],
             'siteUrl' => $report['siteUrl'],
-            'sitemapUrlCount' => $report['sitemapUrlCount'],
+            'urlSource' => $report['urlSource'],
+            'candidateUrlCount' => $report['candidateUrlCount'],
             'inspectedCount' => $report['inspectedCount'],
             'cleanCount' => $report['cleanCount'],
             'issueCount' => $report['issueCount'],
