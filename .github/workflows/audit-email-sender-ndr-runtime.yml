@@ -9,7 +9,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 4
     steps:
       - name: Configure VM key
         env:
@@ -19,14 +19,14 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Find MEI companies for Outlook backfill
+      - name: Add empresa email index for reconciliation
         run: |
-          timeout 70s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          timeout 210s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           cd /home/ubuntu/mei-mg-email
           PY=.venv/bin/python
           test -x "$PY" || PY=python3
-          timeout 55s "$PY" -u - <<'PY'
+          timeout 190s "$PY" -u - <<'PY'
           from urllib.parse import urlparse
           import hashlib
           data={}
@@ -41,9 +41,20 @@ jobs:
           print('database_sha12=' + hashlib.sha256(dburl.encode()).hexdigest()[:12], flush=True)
           import psycopg
           recipients=['adlercontabil@hotmail.com','carmo.contabilidade@hotmail.com','contabilidadegbi@paxnacional.com','contabilidademariahelenasg@hotamail.com','jfccontabilidade@hotmail.com','fiscal01@agilitycontabilidade.com.br','bi@bicontabil.co','fredmourao@gmail.com']
+          with psycopg.connect(dburl, connect_timeout=8) as conn:
+              conn.autocommit=True
+              with conn.cursor() as cur:
+                  cur.execute("set statement_timeout = '120s'")
+                  cur.execute("set lock_timeout = '5s'")
+                  print('stage=create_empresas_email_index_concurrently', flush=True)
+                  cur.execute("create index concurrently if not exists idx_empresas_email_normalizado on mei_email.empresas (lower(btrim(email::text)))")
+                  print('stage=analyze_empresas', flush=True)
+                  cur.execute('analyze mei_email.empresas')
           with psycopg.connect(dburl, connect_timeout=8, options='-c statement_timeout=8000 -c lock_timeout=1500') as conn, conn.cursor() as cur:
               cur.execute("select now() at time zone 'America/Sao_Paulo'")
               print('agora_brt=' + str(cur.fetchone()[0]), flush=True)
+              cur.execute("select indexname from pg_indexes where schemaname='mei_email' and tablename='empresas' and indexname='idx_empresas_email_normalizado'")
+              print('empresa_email_index=' + repr(cur.fetchall()), flush=True)
               for email in recipients:
                   cur.execute("select cnpj, razao_social, nome_fantasia, email, enviado, enviado_em, marketing_autorizado, mei_verificado from mei_email.empresas where lower(btrim(email::text))=lower(btrim(%s)) limit 10", (email,))
                   print('empresa=' + email + ' rows=' + repr(cur.fetchall()), flush=True)
