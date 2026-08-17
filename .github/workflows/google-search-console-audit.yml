@@ -8,6 +8,7 @@ on:
       - '.github/workflows/google-search-console-audit.yml'
       - 'scripts/google-cloud-service-enable.php'
       - 'scripts/google-search-console-audit.php'
+      - 'scripts/google-search-console-sitemap-cleanup.php'
       - 'scripts/google-api-health.php'
       - 'scripts/lib/google_oauth.py'
       - 'src/Google/OAuthTokenProvider.php'
@@ -67,6 +68,12 @@ jobs:
         run: |
           set -euo pipefail
           php scripts/google-cloud-service-enable.php searchconsole.googleapis.com
+
+      - name: Remove legacy www sitemap
+        shell: bash
+        run: |
+          set -euo pipefail
+          php scripts/google-search-console-sitemap-cleanup.php
 
       - name: Audit Search Console URLs
         id: audit
