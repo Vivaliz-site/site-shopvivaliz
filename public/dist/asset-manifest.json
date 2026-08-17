@@ -1,20 +1,20 @@
 {
-  "generated_at": "2026-08-10T05:24:38.587Z",
+  "generated_at": "2026-08-17T01:24:40.205Z",
   "assets": {
-    "/js/admin-dashboard.js": {
-      "file": "/public/dist/js/admin-dashboard.1af8f7e819.min.js",
-      "bytes": 4350,
-      "source_bytes": 4831
+    "/js/admin-automation.js": {
+      "file": "/public/dist/js/admin-automation.ba2700ea3a.min.js",
+      "bytes": 1614,
+      "source_bytes": 1835
     },
-    "/js/admin-hub.js": {
-      "file": "/public/dist/js/admin-hub.363f7fceb3.min.js",
-      "bytes": 1952,
-      "source_bytes": 2274
+    "/js/admin-dashboard.js": {
+      "file": "/public/dist/js/admin-dashboard.dae825130d.min.js",
+      "bytes": 4433,
+      "source_bytes": 5141
     },
     "/js/auto-image-carousel.js": {
-      "file": "/public/dist/js/auto-image-carousel.7b8fdc2cb5.min.js",
-      "bytes": 9845,
-      "source_bytes": 12155
+      "file": "/public/dist/js/auto-image-carousel.abb84f1a5f.min.js",
+      "bytes": 11450,
+      "source_bytes": 13211
     },
     "/js/cart-persistence-v23.js": {
       "file": "/public/dist/js/cart-persistence-v23.abeb4c252b.min.js",
@@ -24,122 +24,97 @@
     "/js/cart-server-validation-v92.js": {
       "file": "/public/dist/js/cart-server-validation-v92.2c79aa224d.min.js",
       "bytes": 1610,
-      "source_bytes": 1792
+      "source_bytes": 1767
     },
     "/js/cart-shipping-v7.js": {
-      "file": "/public/dist/js/cart-shipping-v7.2769f6ca6a.min.js",
-      "bytes": 5027,
-      "source_bytes": 5558
-    },
-    "/js/cart.js": {
-      "file": "/public/dist/js/cart.24e86530b4.min.js",
-      "bytes": 5857,
-      "source_bytes": 6986
+      "file": "/public/dist/js/cart-shipping-v7.306a5e85a9.min.js",
+      "bytes": 5463,
+      "source_bytes": 5974
     },
     "/js/catalog-conversion-v4.js": {
-      "file": "/public/dist/js/catalog-conversion-v4.cbf5a00563.min.js",
-      "bytes": 5035,
-      "source_bytes": 5562
+      "file": "/public/dist/js/catalog-conversion-v4.afbe238e98.min.js",
+      "bytes": 5229,
+      "source_bytes": 5689
     },
     "/js/catalog-image-integrity-v62.js": {
       "file": "/public/dist/js/catalog-image-integrity-v62.0de571ed7f.min.js",
       "bytes": 1603,
-      "source_bytes": 1871
+      "source_bytes": 1818
     },
     "/js/catalog-price-integrity-v72.js": {
       "file": "/public/dist/js/catalog-price-integrity-v72.0c3f7e6715.min.js",
       "bytes": 576,
-      "source_bytes": 654
+      "source_bytes": 637
     },
     "/js/catalog-stock-integrity-v82.js": {
       "file": "/public/dist/js/catalog-stock-integrity-v82.7b3d95e5f1.min.js",
       "bytes": 499,
-      "source_bytes": 565
+      "source_bytes": 550
     },
     "/js/catalog.js": {
-      "file": "/public/dist/js/catalog.63b6fbd457.min.js",
-      "bytes": 15490,
-      "source_bytes": 18153
-    },
-    "/js/category-real-images-v51.js": {
-      "file": "/public/dist/js/category-real-images-v51.4c7afafe65.min.js",
-      "bytes": 1999,
-      "source_bytes": 2375
+      "file": "/public/dist/js/catalog.eefcff7ba4.min.js",
+      "bytes": 16025,
+      "source_bytes": 18587
     },
     "/js/category-real-images-v52.js": {
-      "file": "/public/dist/js/category-real-images-v52.7b9b9a051c.min.js",
-      "bytes": 1651,
-      "source_bytes": 1893
+      "file": "/public/dist/js/category-real-images-v52.2a917c4e2d.min.js",
+      "bytes": 4504,
+      "source_bytes": 5152
     },
     "/js/checkout-cart-freshness-v93.js": {
       "file": "/public/dist/js/checkout-cart-freshness-v93.c9058c0fa0.min.js",
       "bytes": 976,
-      "source_bytes": 1076
-    },
-    "/js/checkout-cart-freshness-v94.js": {
-      "file": "/public/dist/js/checkout-cart-freshness-v94.49bc8ae86f.min.js",
-      "bytes": 1107,
-      "source_bytes": 1212
+      "source_bytes": 1047
     },
     "/js/checkout-conversion-v6.js": {
       "file": "/public/dist/js/checkout-conversion-v6.ad497c56a1.min.js",
       "bytes": 5238,
-      "source_bytes": 5952
+      "source_bytes": 5797
     },
     "/js/checkout-idempotency-v122.js": {
       "file": "/public/dist/js/checkout-idempotency-v122.ae3479605a.min.js",
       "bytes": 793,
-      "source_bytes": 842
+      "source_bytes": 826
     },
     "/js/checkout-payment-v2.js": {
-      "file": "/public/dist/js/checkout-payment-v2.d98e104c3f.min.js",
-      "bytes": 3113,
-      "source_bytes": 3877
+      "file": "/public/dist/js/checkout-payment-v2.044ed391b0.min.js",
+      "bytes": 3116,
+      "source_bytes": 3771
     },
     "/js/checkout-resilience-v1.js": {
       "file": "/public/dist/js/checkout-resilience-v1.ac74627798.min.js",
       "bytes": 3811,
-      "source_bytes": 4373
-    },
-    "/js/checkout-resilience-v15.js": {
-      "file": "/public/dist/js/checkout-resilience-v15.12509b7705.min.js",
-      "bytes": 1852,
-      "source_bytes": 2053
+      "source_bytes": 4255
     },
     "/js/checkout-shipping-v7.js": {
       "file": "/public/dist/js/checkout-shipping-v7.1724bbc566.min.js",
       "bytes": 4932,
-      "source_bytes": 5411
+      "source_bytes": 5327
     },
     "/js/cro-interactions.js": {
-      "file": "/public/dist/js/cro-interactions.6135b0c13b.min.js",
-      "bytes": 13536,
-      "source_bytes": 18824
-    },
-    "/js/dazzle-v1.js": {
-      "file": "/public/dist/js/dazzle-v1.7f2396f076.min.js",
-      "bytes": 3154,
-      "source_bytes": 4825
+      "file": "/public/dist/js/cro-interactions.36ffeb6074.min.js",
+      "bytes": 4148,
+      "source_bytes": 6700
     },
     "/js/first-purchase-popup-v1.js": {
-      "file": "/public/dist/js/first-purchase-popup-v1.01a7ca111b.min.js",
-      "bytes": 4001,
-      "source_bytes": 5533
+      "file": "/public/dist/js/first-purchase-popup-v1.0805dde65a.min.js",
+      "bytes": 488,
+      "source_bytes": 889
     },
-    "/js/install-prompt-v29.js": {
-      "file": "/public/dist/js/install-prompt-v29.e43cd074a7.min.js",
-      "bytes": 633,
-      "source_bytes": 633
+    "/js/mixed-cart-promo-v1.js": {
+      "file": "/public/dist/js/mixed-cart-promo-v1.5c8972508a.min.js",
+      "bytes": 5035,
+      "source_bytes": 5036
     },
     "/js/ml-events.js": {
       "file": "/public/dist/js/ml-events.073da5cf81.min.js",
       "bytes": 1373,
-      "source_bytes": 1464
+      "source_bytes": 1440
     },
     "/js/newsletter-v1.js": {
       "file": "/public/dist/js/newsletter-v1.e76065816c.min.js",
       "bytes": 7603,
-      "source_bytes": 8429
+      "source_bytes": 8296
     },
     "/js/offline-status-v22.js": {
       "file": "/public/dist/js/offline-status-v22.5d3ec9ad1b.min.js",
@@ -149,87 +124,67 @@
     "/js/performance-v12.js": {
       "file": "/public/dist/js/performance-v12.55b5dd5735.min.js",
       "bytes": 963,
-      "source_bytes": 1022
+      "source_bytes": 1006
     },
     "/js/privacy-consent-v1.js": {
       "file": "/public/dist/js/privacy-consent-v1.1d7744fda6.min.js",
       "bytes": 3439,
-      "source_bytes": 3967
+      "source_bytes": 3859
     },
     "/js/product-conversion-v5.js": {
-      "file": "/public/dist/js/product-conversion-v5.590ca0b228.min.js",
-      "bytes": 7338,
-      "source_bytes": 7340
+      "file": "/public/dist/js/product-conversion-v5.6b3121ba9c.min.js",
+      "bytes": 7304,
+      "source_bytes": 7305
     },
     "/js/product-image-integrity-v63.js": {
       "file": "/public/dist/js/product-image-integrity-v63.fe440934bb.min.js",
       "bytes": 1085,
-      "source_bytes": 1189
+      "source_bytes": 1161
     },
     "/js/product-price-integrity-v73.js": {
       "file": "/public/dist/js/product-price-integrity-v73.9ac64675b1.min.js",
       "bytes": 847,
-      "source_bytes": 914
-    },
-    "/js/product-schema-v16.js": {
-      "file": "/public/dist/js/product-schema-v16.33a4201257.min.js",
-      "bytes": 179,
-      "source_bytes": 191
+      "source_bytes": 894
     },
     "/js/product-stock-integrity-v83.js": {
       "file": "/public/dist/js/product-stock-integrity-v83.e23ffa4258.min.js",
       "bytes": 419,
-      "source_bytes": 446
+      "source_bytes": 436
     },
     "/js/public-experience-v1.js": {
-      "file": "/public/dist/js/public-experience-v1.1fe02596ac.min.js",
-      "bytes": 8007,
-      "source_bytes": 8607
-    },
-    "/js/recently-viewed-v24.js": {
-      "file": "/public/dist/js/recently-viewed-v24.4cb1b6c0ce.min.js",
-      "bytes": 831,
-      "source_bytes": 831
-    },
-    "/js/search-enhancements-v25.js": {
-      "file": "/public/dist/js/search-enhancements-v25.2c2570de4d.min.js",
-      "bytes": 692,
-      "source_bytes": 692
+      "file": "/public/dist/js/public-experience-v1.84268f3997.min.js",
+      "bytes": 15981,
+      "source_bytes": 17281
     },
     "/js/shopvivaliz-ab-testing.js": {
-      "file": "/public/dist/js/shopvivaliz-ab-testing.1a8d2be3d2.min.js",
-      "bytes": 5214,
-      "source_bytes": 9286
+      "file": "/public/dist/js/shopvivaliz-ab-testing.1b5dc84fc3.min.js",
+      "bytes": 734,
+      "source_bytes": 1459
     },
     "/js/shopvivaliz-google-events.js": {
-      "file": "/public/dist/js/shopvivaliz-google-events.bda53a2c38.min.js",
-      "bytes": 8419,
-      "source_bytes": 10400
+      "file": "/public/dist/js/shopvivaliz-google-events.ca9b288477.min.js",
+      "bytes": 11993,
+      "source_bytes": 14760
     },
     "/js/shopvivaliz-visual-v3.js": {
       "file": "/public/dist/js/shopvivaliz-visual-v3.98ab7f88b4.min.js",
       "bytes": 1680,
-      "source_bytes": 1682
+      "source_bytes": 1681
     },
     "/js/storefront-events-v26.js": {
       "file": "/public/dist/js/storefront-events-v26.cceb766d7c.min.js",
       "bytes": 988,
       "source_bytes": 988
     },
-    "/js/testimonials.js": {
-      "file": "/public/dist/js/testimonials.8993093c59.min.js",
-      "bytes": 2207,
-      "source_bytes": 2406
-    },
     "/js/visual-polish-v4.js": {
       "file": "/public/dist/js/visual-polish-v4.50d71007db.min.js",
       "bytes": 1640,
-      "source_bytes": 2345
+      "source_bytes": 2276
     },
     "/css/accessibility-hardening-v1.css": {
       "file": "/public/dist/css/accessibility-hardening-v1.b5e5d4d32c.min.css",
       "bytes": 1147,
-      "source_bytes": 2064
+      "source_bytes": 1998
     },
     "/css/accessibility-v11.css": {
       "file": "/public/dist/css/accessibility-v11.929097b251.min.css",
@@ -239,27 +194,27 @@
     "/css/admin-automation.css": {
       "file": "/public/dist/css/admin-automation.0d1b975b38.min.css",
       "bytes": 5776,
-      "source_bytes": 8313
+      "source_bytes": 7851
     },
     "/css/admin-zoom-responsive.css": {
-      "file": "/public/dist/css/admin-zoom-responsive.cfcde502d9.min.css",
-      "bytes": 2094,
-      "source_bytes": 3275
+      "file": "/public/dist/css/admin-zoom-responsive.a4a1f9124c.min.css",
+      "bytes": 10019,
+      "source_bytes": 13417
     },
     "/css/cart-integrity-v94.css": {
       "file": "/public/dist/css/cart-integrity-v94.daea79b102.min.css",
       "bytes": 664,
       "source_bytes": 664
     },
+    "/css/catalog-category-select-v1.css": {
+      "file": "/public/dist/css/catalog-category-select-v1.860c5c60c2.min.css",
+      "bytes": 1087,
+      "source_bytes": 1354
+    },
     "/css/catalog-conversion-v4.css": {
       "file": "/public/dist/css/catalog-conversion-v4.5f8587a906.min.css",
       "bytes": 7729,
       "source_bytes": 7729
-    },
-    "/css/category-images.css": {
-      "file": "/public/dist/css/category-images.e24c368fdc.min.css",
-      "bytes": 1402,
-      "source_bytes": 1566
     },
     "/css/category-real-images-v52.css": {
       "file": "/public/dist/css/category-real-images-v52.f1a699a925.min.css",
@@ -272,59 +227,59 @@
       "source_bytes": 6304
     },
     "/css/checkout.css": {
-      "file": "/public/dist/css/checkout.8cb70b110e.min.css",
-      "bytes": 5028,
-      "source_bytes": 6655
+      "file": "/public/dist/css/checkout.bb7da78093.min.css",
+      "bytes": 6140,
+      "source_bytes": 8190
     },
     "/css/cls-stability-v1.css": {
       "file": "/public/dist/css/cls-stability-v1.26c65a735f.min.css",
       "bytes": 957,
-      "source_bytes": 1658
+      "source_bytes": 1596
     },
     "/css/dazzle-v1.css": {
       "file": "/public/dist/css/dazzle-v1.591c98589d.min.css",
       "bytes": 12314,
-      "source_bytes": 19985
+      "source_bytes": 19247
     },
     "/css/first-purchase-popup-v1.css": {
       "file": "/public/dist/css/first-purchase-popup-v1.398da33e88.min.css",
       "bytes": 4187,
-      "source_bytes": 5578
+      "source_bytes": 5333
     },
     "/css/footer-pages.css": {
       "file": "/public/dist/css/footer-pages.68716e5e43.min.css",
       "bytes": 3931,
-      "source_bytes": 3994
+      "source_bytes": 3992
     },
     "/css/home-mobile-compact.css": {
       "file": "/public/dist/css/home-mobile-compact.858ba5966d.min.css",
       "bytes": 7882,
-      "source_bytes": 10196
+      "source_bytes": 9856
+    },
+    "/css/home-mobile-corrections-v1.css": {
+      "file": "/public/dist/css/home-mobile-corrections-v1.67cee5d92b.min.css",
+      "bytes": 4704,
+      "source_bytes": 5781
     },
     "/css/home-mobile-final.css": {
       "file": "/public/dist/css/home-mobile-final.c6eee734c5.min.css",
       "bytes": 6759,
-      "source_bytes": 6901
-    },
-    "/css/home-polish-v17.css": {
-      "file": "/public/dist/css/home-polish-v17.7a442e6d5c.min.css",
-      "bytes": 5049,
-      "source_bytes": 5145
+      "source_bytes": 6884
     },
     "/css/layout-polish-v1.css": {
-      "file": "/public/dist/css/layout-polish-v1.d48d333b9d.min.css",
-      "bytes": 3385,
-      "source_bytes": 9266
+      "file": "/public/dist/css/layout-polish-v1.11d0d2f47b.min.css",
+      "bytes": 3599,
+      "source_bytes": 9505
     },
     "/css/loading-states-v21.css": {
       "file": "/public/dist/css/loading-states-v21.7e3f6d7b4d.min.css",
       "bytes": 1157,
       "source_bytes": 1157
     },
-    "/css/monitor-responsive.css": {
-      "file": "/public/dist/css/monitor-responsive.e45f75bfbe.min.css",
-      "bytes": 3099,
-      "source_bytes": 5267
+    "/css/mixed-cart-promo-v1.css": {
+      "file": "/public/dist/css/mixed-cart-promo-v1.4f017cc094.min.css",
+      "bytes": 2295,
+      "source_bytes": 2825
     },
     "/css/network-status-v22.css": {
       "file": "/public/dist/css/network-status-v22.860b495039.min.css",
@@ -334,37 +289,27 @@
     "/css/premium-theme.css": {
       "file": "/public/dist/css/premium-theme.2a8a8ba3ab.min.css",
       "bytes": 6477,
-      "source_bytes": 11647
+      "source_bytes": 11199
     },
     "/css/premium-ui-framework.css": {
       "file": "/public/dist/css/premium-ui-framework.305c2fa440.min.css",
       "bytes": 7954,
-      "source_bytes": 11434
-    },
-    "/css/premium-visual-v2.css": {
-      "file": "/public/dist/css/premium-visual-v2.724bdddd5a.min.css",
-      "bytes": 15949,
-      "source_bytes": 25466
+      "source_bytes": 10858
     },
     "/css/price-integrity-v73.css": {
       "file": "/public/dist/css/price-integrity-v73.9cfaf8cbe4.min.css",
       "bytes": 592,
       "source_bytes": 592
     },
-    "/css/print-v27.css": {
-      "file": "/public/dist/css/print-v27.9464912e12.min.css",
-      "bytes": 817,
-      "source_bytes": 817
-    },
     "/css/privacy-consent-v1.css": {
-      "file": "/public/dist/css/privacy-consent-v1.33e49c33f9.min.css",
-      "bytes": 1363,
-      "source_bytes": 1663
+      "file": "/public/dist/css/privacy-consent-v1.23c5a1158c.min.css",
+      "bytes": 1799,
+      "source_bytes": 2184
     },
     "/css/product-conversion-v5.css": {
       "file": "/public/dist/css/product-conversion-v5.a096a7a497.min.css",
       "bytes": 6644,
-      "source_bytes": 6646
+      "source_bytes": 6645
     },
     "/css/product-image-integrity-v63.css": {
       "file": "/public/dist/css/product-image-integrity-v63.bf38b5c5f1.min.css",
@@ -372,14 +317,14 @@
       "source_bytes": 809
     },
     "/css/public-experience-v1.css": {
-      "file": "/public/dist/css/public-experience-v1.248e3f6987.min.css",
-      "bytes": 11782,
-      "source_bytes": 12366
+      "file": "/public/dist/css/public-experience-v1.017693c6fb.min.css",
+      "bytes": 11702,
+      "source_bytes": 12203
     },
     "/css/responsive.css": {
       "file": "/public/dist/css/responsive.701d8b0b69.min.css",
       "bytes": 10079,
-      "source_bytes": 15534
+      "source_bytes": 14705
     },
     "/css/shipping-v7.css": {
       "file": "/public/dist/css/shipping-v7.7a53d38c01.min.css",
@@ -389,27 +334,27 @@
     "/css/shopvivaliz-core-consolidated.css": {
       "file": "/public/dist/css/shopvivaliz-core-consolidated.42e789cdb4.min.css",
       "bytes": 85744,
-      "source_bytes": 128697
+      "source_bytes": 123008
     },
     "/css/shopvivaliz-inline-to-classes.css": {
       "file": "/public/dist/css/shopvivaliz-inline-to-classes.d7928645a4.min.css",
       "bytes": 3676,
-      "source_bytes": 7543
+      "source_bytes": 7215
     },
     "/css/shopvivaliz-premium-consolidated.css": {
       "file": "/public/dist/css/shopvivaliz-premium-consolidated.ea8b14378a.min.css",
       "bytes": 21585,
-      "source_bytes": 34393
+      "source_bytes": 33080
     },
     "/css/shopvivaliz-visual-v3.css": {
       "file": "/public/dist/css/shopvivaliz-visual-v3.f77a4e40fd.min.css",
       "bytes": 14484,
-      "source_bytes": 17900
+      "source_bytes": 17322
     },
     "/css/shopvivaliz-webp-optimization.css": {
       "file": "/public/dist/css/shopvivaliz-webp-optimization.bc5a1dcb8a.min.css",
       "bytes": 1566,
-      "source_bytes": 3640
+      "source_bytes": 3467
     },
     "/css/stock-integrity-v83.css": {
       "file": "/public/dist/css/stock-integrity-v83.17c3f0a137.min.css",
@@ -419,62 +364,62 @@
     "/css/style.css": {
       "file": "/public/dist/css/style.cac406fba8.min.css",
       "bytes": 22625,
-      "source_bytes": 31307
+      "source_bytes": 29746
     },
     "/css/visual-audit-v1.css": {
-      "file": "/public/dist/css/visual-audit-v1.c8e58c78ae.min.css",
-      "bytes": 10427,
-      "source_bytes": 16902
-    },
-    "/css/visual-enhancements.css": {
-      "file": "/public/dist/css/visual-enhancements.3ab3b64a66.min.css",
-      "bytes": 8451,
-      "source_bytes": 14351
-    },
-    "/css/visual-improvements-2026.css": {
-      "file": "/public/dist/css/visual-improvements-2026.e835a0b66e.min.css",
-      "bytes": 5775,
-      "source_bytes": 9283
+      "file": "/public/dist/css/visual-audit-v1.d023aa2164.min.css",
+      "bytes": 10380,
+      "source_bytes": 16183
     },
     "/css/visual-polish-v4.css": {
       "file": "/public/dist/css/visual-polish-v4.b3de7670b6.min.css",
       "bytes": 3040,
-      "source_bytes": 4280
+      "source_bytes": 4104
     },
     "/css/visual-polish-v5.css": {
       "file": "/public/dist/css/visual-polish-v5.eb331d7d98.min.css",
       "bytes": 10092,
-      "source_bytes": 14741
+      "source_bytes": 14135
     },
     "/css/visual-polish-v6-hotfix.css": {
       "file": "/public/dist/css/visual-polish-v6-hotfix.8cb3560aa6.min.css",
       "bytes": 3014,
-      "source_bytes": 4691
+      "source_bytes": 4564
     },
     "/css/visual-polish-v6.css": {
       "file": "/public/dist/css/visual-polish-v6.4b0d002d32.min.css",
       "bytes": 7240,
-      "source_bytes": 10184
+      "source_bytes": 9767
     },
     "/css/zoom-responsive.css": {
       "file": "/public/dist/css/zoom-responsive.ef7d113c03.min.css",
       "bytes": 3127,
-      "source_bytes": 4680
+      "source_bytes": 4426
+    },
+    "/public/assets/liz-assistant/liz-assistant-corrections-v1.css": {
+      "file": "/public/dist/assets/liz-assistant/liz-assistant-corrections-v1.5ca9fe3f67.min.css",
+      "bytes": 2044,
+      "source_bytes": 2592
+    },
+    "/public/assets/liz-assistant/liz-assistant-corrections-v1.js": {
+      "file": "/public/dist/assets/liz-assistant/liz-assistant-corrections-v1.df8f09c0c8.min.js",
+      "bytes": 2512,
+      "source_bytes": 2843
     },
     "/public/assets/liz-assistant/liz-assistant.css": {
       "file": "/public/dist/assets/liz-assistant/liz-assistant.53814eba66.min.css",
       "bytes": 8584,
-      "source_bytes": 11492
+      "source_bytes": 10993
     },
     "/public/assets/liz-assistant/liz-assistant.js": {
-      "file": "/public/dist/assets/liz-assistant/liz-assistant.7e7346449c.min.js",
-      "bytes": 8930,
-      "source_bytes": 10620
+      "file": "/public/dist/assets/liz-assistant/liz-assistant.f529a05ddb.min.js",
+      "bytes": 10028,
+      "source_bytes": 11893
     },
     "/public/assets/liz-assistant/liz-config.js": {
       "file": "/public/dist/assets/liz-assistant/liz-config.9495d4ac97.min.js",
       "bytes": 423,
-      "source_bytes": 446
+      "source_bytes": 438
     }
   }
 }

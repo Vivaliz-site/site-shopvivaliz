@@ -1,8 +1,13 @@
 /* Correcoes finais da Liz: mascote visivel, menos obstrucao e safe areas. */
 #sv-liz-launcher {
-  display: grid;
+  display: grid !important;
   place-items: center;
   background: #fff !important;
+  width: 64px !important;
+  height: 64px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  overflow: visible !important;
 }
 #sv-liz-launcher img {
   width: 100% !important;
@@ -14,6 +19,30 @@
   background: #fff;
   transform: scale(1.16);
   transform-origin: 50% 38%;
+}
+#sv-liz-launcher .sv-liz-launcher-label {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  max-width: min(210px, calc(100vw - 30px));
+  padding: 8px 11px;
+  border: 1px solid rgba(11, 79, 136, .16);
+  border-radius: 999px;
+  background: #fff;
+  color: #173b63;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, .18);
+  font: 800 12px/1.2 Inter, system-ui, sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+}
+#sv-liz-launcher .sv-liz-launcher-label::after {
+  content: '';
+  position: absolute;
+  right: 22px;
+  top: 100%;
+  border: 6px solid transparent;
+  border-top-color: #fff;
 }
 #sv-liz-launcher:hover img {
   transform: scale(1.22);
@@ -34,23 +63,11 @@
   transform-origin: 50% 20%;
 }
 
-/* No primeiro fold desktop, as camadas visuais antigas colocavam a Liz em
-   42vh, sobre a busca. Mantemos o mascote ao lado do titulo, acima do campo. */
+/* A Liz permanece flutuante no canto inferior direito em todo o site. */
 @media (min-width: 821px) {
   #sv-liz-launcher {
-    width: 64px;
-    height: 64px;
-  }
-  html.sv-home-top #sv-liz-launcher,
-  body.sv-home-top #sv-liz-launcher {
-    top: clamp(108px, 17vh, 150px) !important;
-    bottom: auto !important;
-  }
-  body.sv-home-top .sv-support-dock {
-    top: clamp(113px, calc(17vh + 5px), 155px) !important;
-    bottom: auto !important;
-    left: 18px !important;
-    right: auto !important;
+    width: 64px !important;
+    height: 64px !important;
   }
 }
 
@@ -59,6 +76,10 @@
     width: 54px !important;
     height: 54px !important;
     right: 12px !important;
+  }
+  #sv-liz-launcher .sv-liz-launcher-label {
+    padding: 7px 10px;
+    font-size: 11px;
   }
   #sv-liz-panel {
     top: max(4px, env(safe-area-inset-top)) !important;

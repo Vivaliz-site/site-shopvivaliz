@@ -52,7 +52,7 @@
 
     var note = document.querySelector('.payment-options-note');
     if (note) {
-      note.textContent = 'Escolha boleto para emissão direta, Mercado Pago para Pix/cartão ou InfinitePay para Pix/cartão em até 6x sem juros.';
+      note.textContent = 'Escolha boleto para emissão direta ou um dos gateways para Pix/cartão; as condições finais aparecem antes do pagamento.';
     }
   }
 

@@ -170,7 +170,7 @@ footer::before {
         <div class="footer-cols">
             <div>
                 <strong>Vivaliz</strong>
-                <p style="color: #667085;">Qualidade e entrega rápida para todo o Brasil.</p>
+                <p style="color: #667085;">Ferragens, rodízios, ferramentas e utilidades com atendimento direto.</p>
                 <div style="margin-top: 15px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
                     <?php if ($whatsapp !== ''): ?>
                         <a href="https://wa.me/<?= htmlspecialchars($whatsapp, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" title="WhatsApp" aria-label="WhatsApp" style="color: #25D366; text-decoration: none; font-weight: 700; display: inline-flex; align-items: center; gap: 4px;">

@@ -59,8 +59,9 @@
     const greeting = localGreeting();
 
     root.innerHTML = `
-      <button id="sv-liz-launcher" type="button" aria-label="Abrir assistente Liz" aria-controls="sv-liz-panel" aria-expanded="false">
-        <img src="/public/assets/liz-assistant/liz-avatar.png" alt="Liz" width="96" height="96" decoding="async">
+      <button id="sv-liz-launcher" type="button" aria-label="Abrir atendimento com a Liz" aria-controls="sv-liz-panel" aria-expanded="false">
+        <span class="sv-liz-launcher-label" aria-hidden="true">Dúvidas? Fale com a Liz</span>
+        <img src="/public/assets/liz-assistant/liz-avatar.png" alt="Liz, assistente virtual da ShopVivaliz" width="96" height="96" decoding="async">
       </button>
       <div id="sv-liz-bubble">Posso ajudar com os produtos do seu carrinho e com dúvidas sobre sua compra.</div>
       <section id="sv-liz-panel" role="dialog" aria-modal="false" aria-label="Liz - Assistente Virtual">

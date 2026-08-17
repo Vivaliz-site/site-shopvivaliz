@@ -30,11 +30,11 @@ jobs:
           from dotenv import load_dotenv
           load_dotenv('.env', override=True)
           from app.email_provider import MicrosoftGraphEmailProvider
-          subject = 'ShopVivaliz status probe 20260816-1732-BRT'
+          subject = 'ShopVivaliz status probe 20260816-1935-BRT'
           result = MicrosoftGraphEmailProvider().send(
               'fredmourao@gmail.com',
               subject,
-              'Teste controlado de entrega do remetente ShopVivaliz. Nenhuma acao e necessaria.'
+              'Teste controlado de entrega do remetente ShopVivaliz apos remocao da restricao no Microsoft Defender. Nenhuma acao e necessaria.'
           )
           print('PROBE_SUBJECT=' + subject)
           print('PROBE_SUCCESS=' + str(bool(result.success)).lower())

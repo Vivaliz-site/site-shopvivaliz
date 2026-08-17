@@ -1,0 +1,40 @@
+name: Fred-Win relay VM inspect 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/fredwin-relay-vm-inspect-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect reverse relay
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
+            echo NOW=$(date -Is)
+            echo ---LISTEN5557---
+            sudo ss -ltnp | grep ":5557" || true
+            echo ---LSOF5557---
+            sudo lsof -nP -iTCP:5557 2>/dev/null || true
+            echo ---SSHD---
+            ps -eo pid,ppid,lstart,cmd | grep "[s]shd:" || true
+            echo ---TCP22---
+            sudo ss -tnp | grep ":22" || true
+            echo ---HEALTH---
+            timeout 4 curl -sS -v http://127.0.0.1:5557/health 2>&1 || true
+          '
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

@@ -1,0 +1,62 @@
+name: MEI email cancel stale autoqueue SQL 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/mei-email-cancel-stale-autoqueue-sql-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Cancel only stale legacy autoqueue SQL
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import psycopg
+          from psycopg.rows import dict_row
+          from app.config import settings
+          conn=psycopg.connect(settings.database_url, autocommit=True, row_factory=dict_row, connect_timeout=15)
+          with conn.cursor() as cur:
+              cur.execute("set statement_timeout='15000ms'")
+              cur.execute("""
+                select pid, state, query_start,
+                       extract(epoch from (clock_timestamp()-query_start))::int as age_s,
+                       left(query,300) as query
+                  from pg_stat_activity
+                 where datname=current_database()
+                   and pid<>pg_backend_pid()
+                   and state='active'
+                   and query_start < clock_timestamp() - interval '30 seconds'
+                   and query ilike '%%with candidatas as (%%'
+                   and query not ilike '%%preselecionadas%%'
+              """)
+              rows=cur.fetchall()
+              print('STALE_LEGACY_AUTOQUEUE_COUNT='+str(len(rows)))
+              for row in rows:
+                  print('CANDIDATE', dict(row))
+                  cur.execute('select pg_cancel_backend(%s) as cancelled', (row['pid'],))
+                  print('CANCEL', row['pid'], cur.fetchone()['cancelled'])
+          conn.close()
+          PY
+          echo WORKER=$(systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo SENTINEL=present; else echo SENTINEL=absent; fi
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
