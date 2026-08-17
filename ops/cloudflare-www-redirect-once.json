@@ -1,0 +1,8 @@
+{
+  "operation": "redirect-www-to-canonical-catalog",
+  "hostname": "www.shopvivaliz.com.br",
+  "target": "https://shopvivaliz.com.br/catalogo",
+  "status_code": 301,
+  "preserve_query_string": false,
+  "requested_at": "2026-08-16"
+}
