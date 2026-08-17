@@ -1,0 +1,137 @@
+name: Cloudflare WWW Redirect Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/cloudflare-www-redirect-once.yml"
+      - "ops/cloudflare-www-redirect-once.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-www-redirect-once
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Apply and verify www redirect at Cloudflare edge
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CF_TOKEN:-}"
+
+          API='https://api.cloudflare.com/client/v4'
+          AUTH="Authorization: Bearer $CF_TOKEN"
+          ZONE='shopvivaliz.com.br'
+          WWW='www.shopvivaliz.com.br'
+          TARGET='https://shopvivaliz.com.br/catalogo'
+          PHASE='http_request_dynamic_redirect'
+          REF='shopvivaliz_www_to_catalogo'
+
+          assert_success() {
+            python3 -c 'import json,sys; d=json.load(sys.stdin); ok=bool(d.get("success")); print(json.dumps({"success":ok,"errors":d.get("errors",[])},ensure_ascii=False)); raise SystemExit(0 if ok else 1)'
+          }
+
+          zones=$(curl -sS -H "$AUTH" "$API/zones?name=$ZONE")
+          zone_id=$(printf '%s' "$zones" | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d.get("result") or []; print(r[0]["id"] if d.get("success") and r else "")')
+          test -n "$zone_id"
+          echo "ZONE_RESOLVED=$ZONE"
+
+          # Single Redirects only execute for hostnames proxied by Cloudflare.
+          # If DNS permissions are present, ensure the existing www web record is proxied
+          # without changing its type, content or TTL. If DNS read is not permitted, the
+          # redirect rule is still created and the external verification will prove reachability.
+          dns=$(curl -sS -H "$AUTH" "$API/zones/$zone_id/dns_records?name=$WWW")
+          dns_ok=$(printf '%s' "$dns" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("1" if d.get("success") else "0")')
+          if [ "$dns_ok" = 1 ]; then
+            mapfile -t dns_rows < <(printf '%s' "$dns" | python3 -c 'import json,sys; d=json.load(sys.stdin); [print("\t".join([str(r.get("id","")),str(r.get("type","")),"1" if r.get("proxied") else "0","1" if r.get("proxiable",True) else "0"])) for r in (d.get("result") or [])]')
+            for row in "${dns_rows[@]:-}"; do
+              [ -n "$row" ] || continue
+              IFS=$'\t' read -r record_id record_type proxied proxiable <<< "$row"
+              case "$record_type" in A|AAAA|CNAME) ;; *) continue ;; esac
+              if [ "$proxiable" = 1 ] && [ "$proxied" != 1 ]; then
+                echo "ENABLING_PROXY_FOR_WWW_RECORD type=$record_type"
+                patch_dns=$(curl -sS -X PATCH -H "$AUTH" -H 'Content-Type: application/json' \
+                  "$API/zones/$zone_id/dns_records/$record_id" --data '{"proxied":true}')
+                printf '%s' "$patch_dns" | assert_success
+              fi
+            done
+          else
+            echo 'DNS_READ_NOT_AVAILABLE; continuing with redirect-rule operation'
+          fi
+
+          rule_payload=$(cat <<'JSON'
+          {
+            "ref": "shopvivaliz_www_to_catalogo",
+            "expression": "http.host eq \"www.shopvivaliz.com.br\"",
+            "description": "Redirect legacy ShopVivaliz www host to canonical catalog",
+            "action": "redirect",
+            "action_parameters": {
+              "from_value": {
+                "target_url": {"value": "https://shopvivaliz.com.br/catalogo"},
+                "status_code": 301,
+                "preserve_query_string": false
+              }
+            },
+            "enabled": true
+          }
+          JSON
+          )
+
+          tmp=$(mktemp)
+          code=$(curl -sS -o "$tmp" -w '%{http_code}' -H "$AUTH" \
+            "$API/zones/$zone_id/rulesets/phases/$PHASE/entrypoint")
+
+          if [ "$code" = 200 ]; then
+            entrypoint=$(cat "$tmp")
+            ruleset_id=$(printf '%s' "$entrypoint" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("result") or {}).get("id", "") if d.get("success") else "")')
+            test -n "$ruleset_id"
+            rule_id=$(printf '%s' "$entrypoint" | python3 -c 'import json,sys; d=json.load(sys.stdin); rules=(d.get("result") or {}).get("rules") or []; wanted="www.shopvivaliz.com.br"; print(next((str(r.get("id","")) for r in rules if r.get("action")=="redirect" and wanted in str(r.get("expression",""))), ""))')
+            if [ -n "$rule_id" ]; then
+              echo 'UPDATING_EXISTING_WWW_REDIRECT'
+              result=$(curl -sS -X PATCH -H "$AUTH" -H 'Content-Type: application/json' \
+                "$API/zones/$zone_id/rulesets/$ruleset_id/rules/$rule_id" --data "$rule_payload")
+            else
+              echo 'ADDING_WWW_REDIRECT_TO_EXISTING_RULESET'
+              result=$(curl -sS -X POST -H "$AUTH" -H 'Content-Type: application/json' \
+                "$API/zones/$zone_id/rulesets/$ruleset_id/rules" --data "$rule_payload")
+            fi
+            printf '%s' "$result" | assert_success
+          elif [ "$code" = 404 ]; then
+            echo 'CREATING_REDIRECT_ENTRYPOINT_RULESET'
+            create_payload=$(python3 -c 'import json,sys; rule=json.loads(sys.argv[1]); print(json.dumps({"name":"ShopVivaliz redirect rules","kind":"zone","phase":"http_request_dynamic_redirect","rules":[rule]}))' "$rule_payload")
+            result=$(curl -sS -X POST -H "$AUTH" -H 'Content-Type: application/json' \
+              "$API/zones/$zone_id/rulesets" --data "$create_payload")
+            printf '%s' "$result" | assert_success
+          else
+            echo "ENTRYPOINT_LOOKUP_HTTP_$code"
+            cat "$tmp"
+            exit 1
+          fi
+          rm -f "$tmp"
+
+          verify=$(curl -sS -H "$AUTH" "$API/zones/$zone_id/rulesets/phases/$PHASE/entrypoint")
+          printf '%s' "$verify" | python3 -c '
+          import json,sys
+          d=json.load(sys.stdin)
+          target="https://shopvivaliz.com.br/catalogo"
+          host="www.shopvivaliz.com.br"
+          rules=(d.get("result") or {}).get("rules") or []
+          ok=False
+          for r in rules:
+              fv=((r.get("action_parameters") or {}).get("from_value") or {})
+              tu=(fv.get("target_url") or {})
+              if r.get("action")=="redirect" and host in str(r.get("expression","")) and tu.get("value")==target and fv.get("status_code")==301 and r.get("enabled",True):
+                  ok=True
+                  break
+          print("REDIRECT_RULE_VERIFIED=" + ("true" if ok else "false"))
+          raise SystemExit(0 if d.get("success") and ok else 1)
+          '
