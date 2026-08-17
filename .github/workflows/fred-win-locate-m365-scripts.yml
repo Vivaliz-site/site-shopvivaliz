@@ -42,3 +42,5 @@ jobs:
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey /tmp/body.json
+
+# rerun: 2026-08-16 Fred-Win M365 audit
