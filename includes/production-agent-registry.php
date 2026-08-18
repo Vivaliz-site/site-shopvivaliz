@@ -5,9 +5,8 @@ declare(strict_types=1);
 /**
  * Authoritative list of production agents.
  *
- * Every entry is available through the production watchdog. Mutating agents
- * are manual-only: unattended schedules are prohibited so catalog/content
- * changes cannot occur outside a deliberate maintenance run. Files ending in
+ * Every entry is available through the production watchdog. The watchdog
+ * executes one evidence-backed cycle per hour. Files ending in
  * Agent.php that are not present here are rejected by the regression gate,
  * preventing dormant, simulated or duplicate agents from being advertised as
  * production workers. The aggregate cycle embeds the complete result of every
@@ -17,8 +16,8 @@ function svpa_registry(): array
 {
     return [
         'schema_version' => 2,
-        'trigger_mode' => 'manual',
-        'schedule_minutes' => 0,
+        'trigger_mode' => 'scheduled',
+        'schedule_minutes' => 60,
         'workflow' => '.github/workflows/autonomous-watchdog.yml',
         'aggregate_evidence' => 'storage/agent-evidence/latest-agent-cycle.json',
         'agents' => [

@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -77,6 +78,22 @@ class TaskQueueLibraryTests(unittest.TestCase):
     def test_legacy_queue_schema_is_rejected(self) -> None:
         with self.assertRaises(self.lib.QueueValidationError):
             self.lib.validate_queue({"version": "1.1", "queue": []})
+
+    def test_runtime_legacy_queue_is_migrated_without_inferred_completion(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "tasks-queue.json"
+            path.write_text(
+                json.dumps({"queue": [{"task_id": "OLD-1", "status": "completed"}]}),
+                encoding="utf-8",
+            )
+            with patch.dict("os.environ", {"SHOPVIVALIZ_RUNTIME_QUEUE_FILE": str(path)}):
+                loaded = self.lib.load_queue(path)
+
+            self.assertEqual(loaded["tasks"][0]["status"], "failed")
+            self.assertFalse(loaded["tasks"][0]["last_result"]["success"])
+            persisted = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(persisted["metadata"]["schema_version"], 2)
+            self.assertNotIn("queue", persisted)
 
     def test_unverified_completed_state_is_rejected(self) -> None:
         payload = canonical_queue()

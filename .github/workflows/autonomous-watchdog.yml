@@ -1,9 +1,11 @@
 name: Autonomous Real Work Watchdog
 
-# Safety policy: this workflow executes mutating production agents. It must not
-# run on an unattended schedule. Keep manual dispatch available for deliberate
-# maintenance after reviewing the active release and expected changes.
+# Runs the registered production agents once an hour. Every run is real and
+# must persist evidence from the active immutable release; no dry-run path is
+# accepted by the validation below.
 on:
+  schedule:
+    - cron: '19 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -78,7 +80,7 @@ jobs:
               'execution_completed': True,
               'execution_accepted': True,
               'active_agent_count': 5,
-              'schedule_minutes': 0,
+              'schedule_minutes': 60,
           }
           for key, expected in required.items():
               if response.get(key) != expected:
