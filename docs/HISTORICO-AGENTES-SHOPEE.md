@@ -1100,3 +1100,32 @@ artefato novo com erro diferente, execução de `shopee-production-seo.yml` com 
 bem-sucedido) ocorreu. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos
 19–29: regenerar client OAuth2 na Tiny e recriar `fetch-shopee-listings.yml`/
 `optimize-shopee-listings.yml` (ver seção 🔴 de `docs/AGENTS.md`).
+
+### 9.26 Atualização — ciclo de 2026-08-18 (~19h UTC), 31º ciclo — estado idêntico ao ciclo 30
+
+Checagem completa via `git fetch origin main` (HEAD local estava 55 commits atrás, sincronizado
+para `db949b9`; `git log 09e166d..db949b9 -- '*shopee*' '*Shopee*'` não retorna nenhum commit —
+os 55 commits novos desde o ciclo 30 são todos de outras rotinas) e `mcp__github__actions_list`
+por `list_workflow_jobs`/`list_workflow_runs`; `env | grep -iE "SHOPEE|TINY|OLIST"` continua vazio
+neste sandbox, como esperado. `listings/` continua parado em `shopee-listings-20260726-080756.json`
+— **24 dias** sem extração de catálogo pela via Tiny. `.github/workflows/` segue só com
+`shopee-optimizer-safety.yml`/`shopee-production-seo.yml`/`shopee-runtime-health.yml` sob Shopee;
+`fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` seguem ausentes. `docs/AGENTS.md`
+linha 149 e a seção 🔴 de `KNOWN_ISSUES.md` (última atualização 2026-07-27) permanecem sem
+atualização, confirmando que o bloqueio de OAuth2 do Tiny segue sem resolução manual.
+
+`shopee-production-seo.yml` segue com as mesmas 5 execuções de 2026-07-30 (mesmos IDs dos ciclos
+anteriores: `30585266165`, `30571531668`, `30571478470`, `30571242284`, `30570700034`), todas
+`conclusion: failure`, sem execução nova (esperado — exige `workflow_dispatch` manual com frase de
+confirmação `APPLY_ALL_SHOPEE_PRODUCTS`). `shopee-runtime-health.yml` seguiu rodando via
+`schedule`/`workflow_run`; a execução mais recente (`32173802105`, 2026-08-18T18:56:23Z,
+`conclusion: success`, job "Verify canonical VM credentials and catalog read", todos os 6 steps
+`success`) confirma leitura real da API Shopee na VM de produção, mesmo estado dos ciclos 26-30.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. Nenhuma notificação
+push enviada neste ciclo — nenhum dos critérios de aviso definidos (workflows Tiny recriados,
+artefato novo com erro diferente, execução de `shopee-production-seo.yml` com apply real
+bem-sucedido) ocorreu. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos
+19–30: regenerar client OAuth2 na Tiny e recriar `fetch-shopee-listings.yml`/
+`optimize-shopee-listings.yml` (ver seção 🔴 de `docs/AGENTS.md`).
