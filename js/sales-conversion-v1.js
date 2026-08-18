@@ -16,5 +16,25 @@
     note.textContent='Você revisa frete e total antes de ir para o pagamento.';
     checkout.insertAdjacentElement('afterend',note);
   }
-  onReady(installCartOffer);
+  function installProductOffer(){
+    var path=(location.pathname||'').replace(/\/$/,'');
+    if(path!=='/produto' && path.indexOf('/produto/')!==0) return;
+    var buy=document.getElementById('buy-now');
+    if(!buy || document.getElementById('sv-product-sales-offer')) return;
+    var ctx=window.ShopVivalizProductContext||{};
+    var price=Number(ctx.price||0);
+    var offer=document.createElement('div');
+    offer.id='sv-product-sales-offer';
+    offer.className='sv-sales-offer';
+    var message=price>=100
+      ? 'Este item já atinge o mínimo do cupom <code>VIVALIZ10</code>: 10% OFF no checkout.'
+      : 'Use <code>VIVALIZ10</code> para 10% OFF quando o carrinho passar de R$ 100.';
+    offer.innerHTML='<strong>Oferta disponível para sua compra</strong><span>'+message+'</span>';
+    buy.parentNode.insertBefore(offer,buy);
+    var note=document.createElement('div');
+    note.className='sv-sales-assurance';
+    note.textContent='“Comprar agora” adiciona o item ao carrinho; você ainda calcula o frete e revisa tudo antes do pagamento.';
+    buy.insertAdjacentElement('afterend',note);
+  }
+  onReady(function(){ installCartOffer(); installProductOffer(); });
 })();
