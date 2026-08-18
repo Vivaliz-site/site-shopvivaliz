@@ -32,9 +32,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          timeout 180s sudo apt-get update
-          timeout 180s sudo apt-get install --yes shellcheck yamllint
-          timeout 180s go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          timeout -k 15s 180s sudo apt-get update
+          timeout -k 15s 180s sudo apt-get install --yes shellcheck yamllint
+          timeout -k 15s 180s go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Install verified Gitleaks CLI
