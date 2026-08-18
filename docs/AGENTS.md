@@ -155,6 +155,53 @@ sempre em produção via Apache/PHP-FPM puro.
 
 ---
 
+## 🟢 Resolvido na Rodada 2 (2026-08-18) — catálogo sem imagem, deploy-webhook, rate limit de login
+
+**Catálogo público sem imagem de produto (o item de maior impacto do backlog):** causa raiz era
+uma única linha em `catalogo.php:208` (`sv_catalog_products()`), que preenchia `image_url` com o
+logotipo da loja *antes* dos enriquecedores (`svp_enrich_products()`, `svcie_enrich_images()`)
+rodarem. Como esses dois enriquecedores só preenchem campos que estão **vazios**, o pré-preenchimento
+com o logo os neutralizava silenciosamente — o card renderizava o logo primeiro e as fotos reais
+(que ficavam em `images`, não em `image_url`) depois. Corrigido removendo o default nessa linha; o
+fallback correto para o logo já existe no momento do render (linha ~613), depois do enriquecimento.
+Isso também destravou `sitemap.xml` (que descartava os 176 produtos porque exigia `image_url` não
+vazio) e o JSON-LD do catálogo (lia o mesmo campo envenenado). **Padrão a vigiar em outros lugares:**
+qualquer função que aplica um default "de apresentação" antes de um passo de enriquecimento que só
+preenche campos vazios vai quebrar esse enriquecimento — o default precisa vir depois, não antes.
+
+**`deploy-webhook.php`:** estava inerte em produção (falhava fechado com 503 por falta de
+`DEPLOY_SECRET` no `.env`, confirmado ao vivo antes da remoção), mas o risco latente era sério — se
+alguém configurasse `DEPLOY_SECRET` um dia, o script faria `git pull` via `exec()` com
+`GITHUB_TOKEN` embutido na URL do remote (vazando pro `git config` e pro log), ou copiaria arquivo
+por arquivo por cima do webroot dentro do release imutável, quebrando o modelo de releases do
+`deploy-production.sh`. Removido (neutralizado com 410) — o único caminho de deploy é
+`/usr/local/lib/shopvivaliz/deploy-production.sh` (cron 2min na VM Oracle). Não criar webhooks de
+deploy no webroot.
+
+**Rate limit de login era burlável:** `includes/rate-limiter.php::RateLimiter::isAllowed()` guardava
+o contador em `$_SESSION`, mas a chave normalmente incluía o IP — um cliente que não enviasse o
+cookie `PHPSESSID` recebia sessão nova a cada request e o contador reiniciava sempre. Ou seja, não
+havia proteção real contra força bruta em `auth/login.php`, `auth/register.php` nem
+`api/cart/add.php`. Reescrito como wrapper fino sobre `svorl_allow()`
+(`includes/order-rate-limit.php`), que já é baseado em arquivo com `flock`, chaveado por
+`hash(IP+User-Agent)` (não depende de cookie) e falha fechado sem armazenamento confiável. Assinatura
+pública mantida — nenhum call-site precisou mudar.
+
+**Vazio de implementação de frete grátis (registrado, não corrigido):** cupons do tipo `shipping`
+não zeram frete em lugar nenhum do código (`api/orders/process-validated.php` soma `shippingTotal`
+sempre), mas `sv_active_coupon_offer_text()` anunciava "FRETE GRÁTIS" na navbar para esse tipo.
+`/api/settings/free-shipping.php` também retorna `enabled:false` sempre — não há nenhum código que
+aplique o threshold de frete grátis à cotação. Protegido preventivamente (cupom `shipping` agora é
+recusado com `coupon_unsupported_type`, e não é mais anunciado), mas a feature de verdade (frete
+grátis real) precisa de decisão de negócio do Fred antes de qualquer implementação — mexe no
+fingerprint HMAC da cotação de frete.
+
+**Ver também:** relatório completo da Rodada 2 (achados B1–B10, itens estruturais #1–#12, E1–E3) —
+gerado nesta sessão, não commitado como arquivo separado no repo; resumo acima cobre o essencial
+para futuros agentes.
+
+---
+
 ## 📚 Memória Compartilhada por Sistema
 
 ### Tiny ERP API v3
@@ -262,6 +309,6 @@ sempre em produção via Apache/PHP-FPM puro.
 
 ---
 
-**Última consolidação:** 2026-07-26
+**Última consolidação:** 2026-07-26 (entrada da Rodada 2 de melhoria contínua adicionada em 2026-08-18)
 **Consolidado por:** Claude Code
 **Próxima revisão:** Quando houver novo achado não-óbvio

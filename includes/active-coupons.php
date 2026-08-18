@@ -32,12 +32,18 @@ function sv_active_coupons(int $limit = 6): array
 
             try {
             $pdo = sv_pdo();
+            // Rodada 2 (2026-08-18): 'shipping' excluido explicitamente -- nao
+            // ha implementacao real de frete gratis (svcp_validate() agora
+            // recusa esse tipo, ver includes/coupons.php), entao nao devemos
+            // anunciar uma oferta que o checkout nao cumpre. Ver B8 no
+            // relatorio da Rodada 2.
             $stmt = $pdo->query(
                 'SELECT code, description, discount_type, discount_value,
                         starts_at, ends_at, expires_at, max_uses, used_count
                  FROM coupons
                  WHERE is_active = 1
                    AND display_in_popup = 1
+                   AND discount_type <> "shipping"
                    AND (starts_at IS NULL OR starts_at <= NOW())
                    AND (COALESCE(expires_at, ends_at) IS NULL OR COALESCE(expires_at, ends_at) >= NOW())
                    AND (max_uses IS NULL OR max_uses = 0 OR used_count < max_uses)

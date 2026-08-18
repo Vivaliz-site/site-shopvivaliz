@@ -453,14 +453,23 @@ class OrderNotificationService
                 $mail->SMTPSecure = 'tls';
             }
 
-            // Disable peer verification errors for local testing if needed
-            $mail->SMTPOptions = [
-                'ssl' => [
-                    'verify_peer' => false,
-                    'verify_peer_name' => false,
-                    'allow_self_signed' => true
-                ]
-            ];
+            // Rodada 2 (2026-08-18): antes disto rodava incondicional em producao,
+            // apesar do comentario dizer "for local testing if needed" -- com
+            // SMTPAuth=true e a senha do e-mail transacional sendo enviada, isso
+            // aceitava qualquer certificado (inclusive de um MITM) no canal onde a
+            // senha trafega. Agora so desliga a verificacao de peer quando estamos
+            // genuinamente em sandbox/dev/staging; em producao o PHPMailer usa o
+            // verify_peer padrao (true).
+            $appEnv = (string)(getenv('APP_ENV') ?: '');
+            if ($this->isSandboxMode() || in_array($appEnv, ['dev', 'local', 'staging'], true)) {
+                $mail->SMTPOptions = [
+                    'ssl' => [
+                        'verify_peer' => false,
+                        'verify_peer_name' => false,
+                        'allow_self_signed' => true
+                    ]
+                ];
+            }
 
             $mail->setFrom($fromEmail, $fromName);
             $mail->addAddress($to);

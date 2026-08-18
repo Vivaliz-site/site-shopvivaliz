@@ -131,7 +131,16 @@ function svcp_validate(string $rawCode, float $itemsSubtotal, string $customerEm
     } elseif ($type === 'fixed') {
         $amount = round(min($value, $itemsSubtotal), 2);
     } elseif ($type === 'shipping') {
-        $amount = 0.0;
+        // Rodada 2 (2026-08-18): nenhum código deste motor zera o frete de
+        // fato -- o total do pedido em api/orders/process-validated.php soma
+        // shippingTotal independente do cupom, e sv_active_coupon_offer_text()
+        // (includes/active-coupons.php) anunciava "FRETE GRÁTIS" na navbar
+        // para este tipo mesmo assim. Hoje não há cupom shipping ativo, então
+        // isto é uma proteção preventiva: recusar explicitamente em vez de
+        // aceitar com desconto zero, até que a feature de frete grátis seja
+        // implementada de verdade (decisão de negócio pendente com o Fred —
+        // ver B8 no relatório da Rodada 2).
+        return ['ok'=>false,'code'=>$code,'percent'=>0.0,'amount'=>0.0,'label'=>'','type'=>$type,'error'=>'coupon_unsupported_type'];
     } else {
         return ['ok'=>false,'code'=>$code,'percent'=>0.0,'amount'=>0.0,'label'=>'','type'=>$type,'error'=>'coupon_unsupported_type'];
     }

@@ -4,6 +4,12 @@
  * Baseado na documentação: https://api-docs.erp.olist.com/
  */
 
+// Rodada 2 (2026-08-18): expõe client_id do app OAuth hardcoded. Script de
+// diagnostico pra linha de comando; guarda em codigo como defesa em
+// profundidade alem do olist/.htaccess (que e default-allow). Ver B7 no
+// relatorio da Rodada 2.
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
+
 // Configurações do Aplicativo DEV do painel ERP
 $clientId = "tiny-api-d4eb7c80a2e7e8abebad641a446a2f69d9e98289-1782127553";
 $redirectUri = getenv('OLIST_REDIRECT_URI') ?: getenv('URL_REDIRCT_OLIST') ?: getenv('TINY_REDIRECT_URI') ?: "https://shopvivaliz.com.br/olist/callback.php";

