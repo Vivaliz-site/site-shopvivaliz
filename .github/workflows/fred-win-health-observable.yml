@@ -1,0 +1,99 @@
+name: Fred-Win Health Observable
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ops/fredwin-observe-request.json"
+
+permissions:
+  contents: write
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          test -n "$VM_KEY" || { echo "SHOPVIVALIZ_VM_SSH_KEY missing"; exit 2; }
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Check Fred-Win health through private relay
+        id: health
+        shell: bash
+        run: |
+          set +e
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health' \
+            > /tmp/fredwin-health-output.txt 2>&1
+          code=$?
+          set -e
+          echo "$code" > /tmp/fredwin-health-exit.txt
+          cat /tmp/fredwin-health-output.txt
+          exit "$code"
+
+      - name: Record observable result
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess, datetime, pathlib
+          request_path = pathlib.Path('ops/fredwin-observe-request.json')
+          request = {}
+          if request_path.exists():
+              try:
+                  request = json.loads(request_path.read_text(encoding='utf-8'))
+              except Exception as exc:
+                  request = {'parse_error': str(exc)}
+          out_path = pathlib.Path('/tmp/fredwin-health-output.txt')
+          code_path = pathlib.Path('/tmp/fredwin-health-exit.txt')
+          output = out_path.read_text(encoding='utf-8', errors='replace') if out_path.exists() else ''
+          exit_code = None
+          if code_path.exists():
+              try:
+                  exit_code = int(code_path.read_text(encoding='utf-8').strip())
+              except Exception:
+                  exit_code = code_path.read_text(encoding='utf-8', errors='replace').strip()
+          payload = {
+              'recorded_at': datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z'),
+              'request': request,
+              'repository': os.environ.get('GITHUB_REPOSITORY'),
+              'workflow': os.environ.get('GITHUB_WORKFLOW'),
+              'run_id': os.environ.get('GITHUB_RUN_ID'),
+              'run_attempt': os.environ.get('GITHUB_RUN_ATTEMPT'),
+              'run_url': f"{os.environ.get('GITHUB_SERVER_URL')}/{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/{os.environ.get('GITHUB_RUN_ID')}",
+              'trigger_sha': os.environ.get('GITHUB_SHA'),
+              'private_relay': {
+                  'architecture': 'GitHub Actions -> Oracle VM 137.131.156.17 via SSH -> VM 127.0.0.1:5557 -> reverse SSH tunnel -> Fred-Win 127.0.0.1:5557 -> MCP',
+                  'endpoint_checked_from_vm': 'http://127.0.0.1:5557/health',
+                  'cloudflare_endpoint_used': False,
+                  'ssh_target': 'ubuntu@137.131.156.17',
+              },
+              'health': {
+                  'exit_code': exit_code,
+                  'ok': exit_code == 0,
+                  'raw_output': output[-4000:],
+              },
+          }
+          pathlib.Path('ops').mkdir(exist_ok=True)
+          pathlib.Path('ops/fredwin-last-result.json').write_text(json.dumps(payload, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main || true
+          git add ops/fredwin-last-result.json
+          git commit -m "ops: record Fred-Win health observable result [skip ci]" || exit 0
+          git push origin HEAD:main
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/fredwin-health-output.txt /tmp/fredwin-health-exit.txt
