@@ -25,7 +25,7 @@ jobs:
           set -euo pipefail
           mkdir -p reports
           set +e
-          ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF' > reports/automation-exchange-state-20260818-1032.txt 2>&1
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=60 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF' > reports/automation-exchange-state-20260818-1032.txt 2>&1
           set -euo pipefail
           echo "CHECK_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           cd /home/ubuntu/mei-mg-email
@@ -45,6 +45,7 @@ jobs:
             exit 0
           fi
           echo "PWSH=$(command -v pwsh)"
+          echo "PWSH_VERSION=$(pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()')"
           set +e
           out="$(timeout 600s pwsh -NoProfile -File ./scripts/desbloquear_exchange_app_cert.ps1 2>&1)"
           rc=$?
@@ -56,7 +57,7 @@ jobs:
             echo 'RESTRICTION_RESULT=blocked'
           else
             echo "RESTRICTION_RESULT=uncertain rc=$rc"
-            printf '%s\n' "$out" | tail -n 30 | sed -E 's/(Bearer )[A-Za-z0-9._-]+/\1[redacted]/g'
+            printf '%s\n' "$out" | tail -n 40 | sed -E 's/(Bearer )[A-Za-z0-9._-]+/\1[redacted]/g'
           fi
           EOF
           rc=$?
@@ -74,3 +75,4 @@ jobs:
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey
+# retry after pwsh package attempt
