@@ -9,32 +9,37 @@
     "locations": ["Brasil"],
     "bidding": {
       "strategy": "MANUAL_CPC",
-      "max_cpc_brl": 0.40
+      "max_cpc_brl": 0.90
     }
   },
   "selection_rationale": {
-    "source": "ShopVivaliz live catalog/search routes and Google Ads production API readiness on 2026-08-15",
+    "source": "ShopVivaliz live catalog/search routes and Google Ads production API readiness on 2026-08-18",
     "rules": [
       "target only Antique and Decore purchase-intent searches",
       "use exact and phrase match only while purchase signal is limited",
       "send traffic to live catalog searches so stock changes do not strand paid clicks on one SKU",
       "Google Search only; no Display or Search Partners initially",
       "do not claim unverified discounts, free shipping, installments or coupons in ad copy",
-      "never exceed R$10/day total campaign budget"
+      "never exceed R$10/day total campaign budget",
+      "allow a higher CPC ceiling while the campaign has zero delivery, without increasing the daily budget"
     ]
   },
   "ad_groups": [
     {
       "name": "Vasos Antique Japi",
       "sku": "LINHA-ANTIQUE",
-      "default_cpc_brl": 0.38,
+      "default_cpc_brl": 0.90,
       "tracking_content": "vasos_antique_japi",
       "keywords": [
-        {"text": "vaso antique japi", "match_type": "EXACT", "cpc_brl": 0.40},
-        {"text": "vaso antique comprar", "match_type": "EXACT", "cpc_brl": 0.40},
-        {"text": "vaso japi antique", "match_type": "EXACT", "cpc_brl": 0.38},
-        {"text": "vaso decorativo antique", "match_type": "PHRASE", "cpc_brl": 0.36},
-        {"text": "comprar vaso antique japi", "match_type": "PHRASE", "cpc_brl": 0.38}
+        {"text": "vaso antique japi", "match_type": "EXACT", "cpc_brl": 0.90},
+        {"text": "vaso antique comprar", "match_type": "EXACT", "cpc_brl": 0.90},
+        {"text": "vaso japi antique", "match_type": "EXACT", "cpc_brl": 0.90},
+        {"text": "vaso decorativo antique", "match_type": "PHRASE", "cpc_brl": 0.90},
+        {"text": "comprar vaso antique japi", "match_type": "PHRASE", "cpc_brl": 0.90},
+        {"text": "vaso antique", "match_type": "PHRASE", "cpc_brl": 0.90},
+        {"text": "vaso antique japi", "match_type": "PHRASE", "cpc_brl": 0.90},
+        {"text": "comprar vaso antique", "match_type": "PHRASE", "cpc_brl": 0.90},
+        {"text": "vaso decorativo antique japi", "match_type": "PHRASE", "cpc_brl": 0.90}
       ],
       "negative_keywords": ["decore", "usado", "olx", "gratis", "como fazer", "diy", "molde", "pdf"],
       "responsive_search_ad": {
@@ -66,14 +71,18 @@
     {
       "name": "Vasos Decore Japi",
       "sku": "LINHA-DECORE",
-      "default_cpc_brl": 0.38,
+      "default_cpc_brl": 0.90,
       "tracking_content": "vasos_decore_japi",
       "keywords": [
-        {"text": "vaso decore japi", "match_type": "EXACT", "cpc_brl": 0.40},
-        {"text": "vaso decore comprar", "match_type": "EXACT", "cpc_brl": 0.40},
-        {"text": "vaso japi decore", "match_type": "EXACT", "cpc_brl": 0.38},
-        {"text": "vaso decorativo decore", "match_type": "PHRASE", "cpc_brl": 0.36},
-        {"text": "comprar vaso decore japi", "match_type": "PHRASE", "cpc_brl": 0.38}
+        {"text": "vaso decore japi", "match_type": "EXACT", "cpc_brl": 0.90},
+        {"text": "vaso decore comprar", "match_type": "EXACT", "cpc_brl": 0.90},
+        {"text": "vaso japi decore", "match_type": "EXACT", "cpc_brl": 0.90},
+        {"text": "vaso decorativo decore", "match_type": "PHRASE", "cpc_brl": 0.90},
+        {"text": "comprar vaso decore japi", "match_type": "PHRASE", "cpc_brl": 0.90},
+        {"text": "vaso decore", "match_type": "PHRASE", "cpc_brl": 0.90},
+        {"text": "vaso decore japi", "match_type": "PHRASE", "cpc_brl": 0.90},
+        {"text": "comprar vaso decore", "match_type": "PHRASE", "cpc_brl": 0.90},
+        {"text": "vaso decorativo decore japi", "match_type": "PHRASE", "cpc_brl": 0.90}
       ],
       "negative_keywords": ["antique", "usado", "olx", "gratis", "como fazer", "diy", "molde", "pdf"],
       "responsive_search_ad": {
@@ -120,7 +129,7 @@
     "no_broad_match": true,
     "create_paused_first": true,
     "max_daily_budget_brl": 10.0,
-    "max_cpc_brl": 0.40,
+    "max_cpc_brl": 0.90,
     "pause_if_spend_without_conversion_brl": 12.0,
     "pause_keyword_after_clicks_without_conversion": 20,
     "do_not_scale_budget_until_purchase_tracking_is_verified": true,
