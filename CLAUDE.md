@@ -65,11 +65,18 @@ assumir qual diretório está em jogo.
 `workflow_dispatch` manual, não em push. O comentário no próprio `deploy.yml` confirma: "a producao
 real e a VM Oracle... nao o HostGator".
 
-✅ **Consolidação concluída (2026-07-26):** Workflows reduzidos de 99 → 10 (90% de redução).
-- **Mantidos:** `shopvivaliz-qa.yml`, `deploy.yml`, `ai-autonomous-executor.yml`, `olist-sync.yml`, 
-  `sync-products-auto.yml`, `git-auto-sync-validate.yml`, `hourly-summary.yml`, 
-  `auto-validation-and-fix.yml`, `incident-response-automation.yml`, `master-production-pipeline.yml`
-- **Removidos:** 89 workflows redundantes / low-priority / duplicate names
+⚠️ **Consolidação de 2026-07-26 revertida na prática (achado da Rodada 1 de melhoria contínua,
+2026-08-18):** este documento afirmava "99 → 10 workflows" desde 07-26, mas `docs/MEMORIA-AGENTES.md`
+já registrava "99 workflows ativos" numa entrada de 08-06 — ou seja, a contagem real já divergia do
+que este arquivo dizia há pelo menos 12 dias, sem ninguém corrigir o texto. Contagem real em
+2026-08-18: **249 arquivos `.yml` ativos** em `.github/workflows/` (+22 `.disabled`), **22 deles
+agendados** (`schedule:`), incluindo execuções a cada 5–15 minutos. Múltiplos agentes autônomos
+(Claude, GPT, Gemini — ver `docs/MEMORIA-AGENTES.md`) criam workflows novos continuamente, o que é
+intencional (confirmado pelo Fred), mas significa que **este número muda com frequência e não deve
+ser tratado como fixo**. Antes de assumir "só existem N workflows", rode
+`ls .github/workflows/*.yml | wc -l` para conferir a contagem atual. A decisão de arquivar famílias
+específicas de workflows (`tmp-*`, `fredwin-*`, `mei-email-*`, `audit-*` etc.) é estrutural e aguarda
+aprovação explícita do Fred — não é algo pra um agente decidir sozinho.
 
 Scripts também consolidados: 31 → 2 mestres (`olist-sync-master.py`, `git-auto-sync-master.py`)
 
