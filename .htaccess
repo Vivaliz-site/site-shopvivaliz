@@ -94,10 +94,16 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^carrinho-legacy/?$ - [F,L]
 
     # Bloquear superficies legadas que ainda existem como diretorio/arquivo real.
+    # Rodada 2 (2026-08-18): a regra so cobria o caminho "nu" (^checkout-v2/?$),
+    # e nem esse na pratica, porque o redirect de diretorio do Apache resolvia
+    # antes (por isso o 301 observado). checkout-v2/index.php continuava
+    # servivel com 200 -- uma pagina de checkout de 1000+ linhas, publica, sem
+    # noindex, cujo botao de finalizar pedido sempre falhava com 403 (posta em
+    # api/orders/create-v2.php, que ja esta bloqueado). Agora cobre o diretorio
+    # inteiro, no mesmo padrao ja usado em ^api/autonomous/.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
     RewriteRule ^checkout-v2/?$ /checkout [R=301,L,NE,QSD]
-    RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
-    RewriteRule ^checkout-v2/?$ - [F,L]
+    RewriteRule ^checkout-v2(?:/.*)?$ - [F,L,NC]
     RewriteRule ^api/orders/create-v2\.php$ - [F,L,NC]
 
     RewriteRule ^p/termos-e-condicoes/?$ /termos [R=301,L,NE,QSD]
@@ -129,6 +135,21 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^(?:api/sandbox/|admin/(?:mercadopago-sandbox\.php|webhook-test\.php|test-auto-sync\.sh)|olist/produtos-198\.php|claude/api/get-produtos-198\.php)$ - [F,L,NC]
     RewriteRule ^(?:debug|test|teste|check|gen-token)(?:[-_.][^/]*)?$ - [F,L,NC]
     RewriteRule ^(?:setup-webhooks|update-fallback-prices)\.php$ - [F,L,NC]
+    # Rodada 2 (2026-08-18): deploy-webhook.php ja foi neutralizado (410) no
+    # codigo, mas esta regra cobre a copia que ainda esta no release imutavel
+    # em producao ate o proximo deploy trocar o symlink `current`. Ver o
+    # relatorio da Rodada 2 pro raciocinio completo (git pull via exec() com
+    # GITHUB_TOKEN embutido na URL, ou copia arquivo-por-arquivo por cima do
+    # webroot, se DEPLOY_SECRET for configurado um dia).
+    RewriteRule ^deploy-webhook\.php$ - [F,L,NC]
+    # api/coupons/validate.php: endpoint legado sem rate limit que resolvia
+    # cupons hardcoded no codigo (FRETEGRATIS, PRIMEIRA10 etc) que nao existem
+    # no banco -- prometia desconto na UI mas o motor oficial (svcp_validate,
+    # usado em orders/create-validated.php) recusava no checkout de verdade.
+    # Nenhum consumidor interno usa este endpoint (so api/coupons/active.php
+    # e consumido, por includes/popup-cupons.php). Ver B3 no relatorio da
+    # Rodada 2.
+    RewriteRule ^api/coupons/validate\.php$ - [F,L,NC]
     RewriteRule ^sync(?:[-a-z0-9]*)?\.php$ - [F,L,NC]
     RewriteRule ^(?:discover-db|do-sync-[a-z0-9-]+|find-db-host|fix-database|full-sync|get_ext_dir|get_php_info|shop-catalog-export)\.php$ - [F,L,NC]
     RewriteRule ^C.*shopee-sync\.php$ - [F,L,NC]

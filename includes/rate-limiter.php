@@ -6,6 +6,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/order-rate-limit.php';
+
 class RateLimiter
 {
     private static string $redisKey = 'rate_limit:';
@@ -14,6 +16,19 @@ class RateLimiter
 
     /**
      * Check if request is allowed
+     *
+     * Rodada 2 (2026-08-18): a implementacao anterior guardava o contador
+     * dentro de $_SESSION, chaveado por um identifier que normalmente inclui
+     * o IP (ex: 'login_' . $ip em auth/login.php). O ARMAZENAMENTO, porem,
+     * era a sessao do proprio requisitante -- um cliente que simplesmente nao
+     * envie o cookie PHPSESSID recebe sessao nova a cada request e o contador
+     * reinicia sempre, ou seja, nao havia protecao real contra forca bruta em
+     * auth/login.php nem em auth/register.php nem em api/cart/add.php.
+     * Agora e um wrapper fino sobre svorl_allow() (includes/order-rate-limit.php),
+     * que ja e baseado em arquivo com flock, chaveado por hash(IP+User-Agent) --
+     * nao depende de cookie -- e falha fechado quando nao ha armazenamento
+     * confiavel. Assinatura publica mantida intacta; nenhum call-site precisou
+     * mudar.
      *
      * @param string $identifier Unique identifier (IP, user_id, email)
      * @param int $maxRequests Max requests allowed
@@ -25,44 +40,7 @@ class RateLimiter
         int $maxRequests = self::defaultLimit,
         int $windowSeconds = self::defaultWindow
     ): bool {
-        $key = self::$redisKey . $identifier;
-        $now = time();
-        $window = $now - $windowSeconds;
-
-        // Use session/file cache if Redis unavailable
-        if (!isset($_SESSION['rate_limit'])) {
-            $_SESSION['rate_limit'] = [];
-        }
-
-        if (!isset($_SESSION['rate_limit'][$identifier])) {
-            $_SESSION['rate_limit'][$identifier] = [
-                'requests' => [],
-                'blocked_until' => 0
-            ];
-        }
-
-        $record = &$_SESSION['rate_limit'][$identifier];
-
-        // Check if blocked
-        if ($record['blocked_until'] > $now) {
-            return false;
-        }
-
-        // Remove old requests outside window
-        $record['requests'] = array_filter(
-            $record['requests'],
-            fn($t) => $t > $window
-        );
-
-        // Check if limit exceeded
-        if (count($record['requests']) >= $maxRequests) {
-            $record['blocked_until'] = $now + $windowSeconds;
-            return false;
-        }
-
-        // Record this request
-        $record['requests'][] = $now;
-        return true;
+        return svorl_allow($maxRequests, $windowSeconds, 'legacy-' . $identifier);
     }
 
     /**

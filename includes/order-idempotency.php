@@ -18,7 +18,15 @@ function svoi_key(array $body, array $items): string {
 }
 
 function svoi_dir(): string {
-    $dir = dirname(__DIR__) . '/storage/order-idempotency';
+    // Rodada 2 (2026-08-18): dirname(__DIR__) resolve para dentro do release
+    // imutavel (releases/<timestamp>-<sha>/), trocado por symlink a cada
+    // deploy. Zerar idempotencia de pedido numa janela de deploy pode
+    // permitir pedido duplicado -- mais serio que o mesmo problema no rate
+    // limit, porque aqui e dinheiro. SHOPVIVALIZ_RUNTIME_DIR aponta para um
+    // caminho compartilhado fora do release; sem a variavel, comportamento
+    // identico ao anterior. Ver E2 no relatorio da Rodada 2.
+    $runtimeBase = rtrim((string)(getenv('SHOPVIVALIZ_RUNTIME_DIR') ?: ''), '/\\');
+    $dir = ($runtimeBase !== '' ? $runtimeBase : dirname(__DIR__)) . '/storage/order-idempotency';
     if ((is_dir($dir) || @mkdir($dir, 0755, true)) && is_writable($dir)) return $dir;
     $fallback = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'shopvivaliz-order-idempotency';
     if ((is_dir($fallback) || @mkdir($fallback, 0755, true)) && is_writable($fallback)) return $fallback;

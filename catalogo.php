@@ -205,7 +205,13 @@ function sv_catalog_products(int $limit, string $query, string $category = '', i
         $products[] = [
             'sku'              => $sku !== '' ? $sku : (string)($row['id'] ?? 'sem-sku'),
             'name'             => $name !== '' ? $name : 'Produto Vivaliz',
-            'image_url'        => trim((string)($row['image_url'] ?? sv_catalog_default_image())) ?: sv_catalog_default_image(),
+            // Rodada 2 (2026-08-18): NAO aplicar o default do logo aqui. svp_enrich_products()
+            // (chamado no return desta funcao) e svcie_enrich_images() so preenchem image_url
+            // quando ele esta vazio -- com o logo ja preenchido aqui, os enriquecedores nunca
+            // disparavam e o catalogo publico mostrava o logotipo no lugar da foto do produto
+            // (as fotos reais ficavam em 'images', renderizadas depois do logo). O fallback pro
+            // logo correto ja existe no momento do render (linha ~613, apos o enriquecimento).
+            'image_url'        => trim((string)($row['image_url'] ?? '')),
             'images'           => array_slice(array_filter($images), 0, 10),
             'price'            => (float)($row['price'] ?? 0),
             'stock'            => (int)($row['stock'] ?? 0),

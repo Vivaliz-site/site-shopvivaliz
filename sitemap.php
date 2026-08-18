@@ -6,6 +6,7 @@ header('Cache-Control: public, max-age=900, stale-while-revalidate=3600');
 
 require_once __DIR__ . '/includes/catalog-runtime.php';
 require_once __DIR__ . '/includes/blog-article-repository.php';
+require_once __DIR__ . '/includes/catalog-image-enrich.php';
 
 $official = __DIR__ . '/config/official-site.php';
 $officialData = is_file($official) ? (@include $official) : [];
@@ -15,7 +16,11 @@ $base = is_array($officialData) && trim((string)($officialData['base_url'] ?? ''
 $catalog = __DIR__ . '/storage/products-cache-ativos.json';
 $catalogMTime = is_file($catalog) ? (int)@filemtime($catalog) : time();
 $today = date('Y-m-d', $catalogMTime > 0 ? $catalogMTime : time());
-$products = svcr_products();
+// Rodada 2 (2026-08-18): svcr_products() sozinho nao enriquece image_url --
+// isso descartava os 176 produtos do sitemap (ver 'continue' abaixo, que exige
+// imagem). O enriquecimento reaproveita o mesmo mapa SKU->imagem ja usado no
+// catalogo publico, sem tocar em price/stock/description.
+$products = svcie_enrich_images(svcr_products());
 $blogRepository = BlogArticleRepository::fromApplicationDatabase();
 
 function sx(string $value): string
@@ -122,7 +127,11 @@ foreach ($products as $product) {
     if (!is_array($product)) continue;
     $slug = trim((string)($product['slug'] ?? ''));
     $name = trim((string)($product['name'] ?? ''));
-    $image = sitemap_absolute_image($base, (string)($product['image_url'] ?? ''));
+    $imageSrc = trim((string)($product['image_url'] ?? ''));
+    if ($imageSrc === '' && !empty($product['images'][0])) {
+        $imageSrc = (string)$product['images'][0];
+    }
+    $image = sitemap_absolute_image($base, $imageSrc);
     $price = (float)($product['price'] ?? 0);
     if ($slug === '' || $name === '' || $price <= 0 || $image === '') continue;
 

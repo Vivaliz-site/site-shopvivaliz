@@ -4,6 +4,11 @@
  * Não apenas "Status 403", mas a RAZÃO real do erro
  */
 
+// Rodada 2 (2026-08-18): script de diagnostico pra linha de comando, le
+// segredos do .env. Guarda em codigo como defesa em profundidade alem do
+// olist/.htaccess (que e default-allow). Ver B7 no relatorio da Rodada 2.
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
+
 // Carregar .env
 if (is_file(dirname(__DIR__) . '/.env')) {
     foreach (file(dirname(__DIR__) . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {

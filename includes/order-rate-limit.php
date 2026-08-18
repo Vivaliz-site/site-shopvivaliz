@@ -35,7 +35,15 @@ function svorl_allow(int $limit = 10, int $window = 300, string $scope = 'orders
     $window = max(1, $window);
     $scope = svorl_scope($scope);
 
-    $dir = dirname(__DIR__) . '/storage/rate-limit/' . $scope;
+    // Rodada 2 (2026-08-18): dirname(__DIR__) resolve para dentro de
+    // releases/<timestamp>-<sha>/ (release imutavel trocado por symlink a
+    // cada deploy -- ver CLAUDE.md). Isso zera todos os contadores de rate
+    // limit a cada novo release. SHOPVIVALIZ_RUNTIME_DIR permite apontar para
+    // um caminho compartilhado fora do release (ex: shopvivaliz-deploy/shared/
+    // na VM); sem essa variavel configurada, o comportamento e identico ao de
+    // antes (fallback preservado). Ver E2 no relatorio da Rodada 2.
+    $runtimeBase = rtrim((string)(getenv('SHOPVIVALIZ_RUNTIME_DIR') ?: ''), '/\\');
+    $dir = ($runtimeBase !== '' ? $runtimeBase : dirname(__DIR__)) . '/storage/rate-limit/' . $scope;
     if ((!is_dir($dir) && !@mkdir($dir, 0755, true)) || !is_writable($dir)) {
         $dir = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
             . DIRECTORY_SEPARATOR . 'shopvivaliz-rate-limit'

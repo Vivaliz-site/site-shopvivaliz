@@ -3,6 +3,15 @@
  * Teste de Token - Debug do OAuth
  */
 
+// Rodada 2 (2026-08-18): este script le e imprime o refresh token do arquivo.
+// Hoje ja responde 403 na web via olist/.htaccess, mas essa protecao e
+// default-allow (so nega 3 nomes especificos) e depende inteiramente do
+// .htaccess nao se perder num deploy. Como e um script de diagnostico feito
+// pra linha de comando, adicionar a guarda no proprio codigo remove o segredo
+// exposto da equacao mesmo se o .htaccess falhar. Ver B7 no relatorio da
+// Rodada 2.
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
+
 header('Content-Type: application/json; charset=utf-8');
 
 $result = [
