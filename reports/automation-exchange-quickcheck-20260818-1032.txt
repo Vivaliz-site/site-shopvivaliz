@@ -1,0 +1,42 @@
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+Warning: Permanently added '137.131.156.17' (ED25519) to the list of known hosts.
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Tue Aug 18 10:16:43 -03 2026
+
+  System load:  1.3                Processes:             170
+  Usage of /:   85.3% of 44.96GB   Users logged in:       0
+  Memory usage: 42%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   50%
+
+  => / is using 85.3% of 44.96GB
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+64 updates can be applied immediately.
+8 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+16 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+116 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+
+CHECK_UTC=2026-08-18T13:57:24Z
+WORKER=inactive
+SENTINEL=present
+PWSH=/usr/bin/pwsh
+EXO_MODULE=missing
+RESTRICTION_RESULT=uncertain reason=exo_module_missing
+SSH_RC=0
