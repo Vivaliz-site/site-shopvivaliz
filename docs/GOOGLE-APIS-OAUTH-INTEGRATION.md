@@ -37,6 +37,8 @@ GOOGLE_GTM_CONTAINER_ID=
 GOOGLE_MERCHANT_ACCOUNT_ID=
 ```
 
+> ⚠️ **Segurança:** Nunca comite tokens ou segredos reais em arquivos versionados. O repositório utiliza o diretório `.tokens/` (ignorado no `.gitignore`) para persistência de tokens locais em runtime.
+
 ### Nunca fazer
 
 - Nunca versionar client secret, refresh token ou access token.
@@ -96,6 +98,19 @@ Ao receber 401 em um cliente Python, faça no máximo uma nova tentativa com:
 ```python
 access_token = tokens.get_access_token(force_refresh=True)
 ```
+
+### Ferramenta local de gestão de tokens
+
+O repositório inclui o script utilitário `scripts/google_oauth_token_helper.py` para testes locais e geração/troca inicial de tokens:
+
+* **Iniciar servidor de autorização interativo:**
+  ```bash
+  python scripts/google_oauth_token_helper.py
+  ```
+* **Trocar código de autorização manual por tokens:**
+  ```bash
+  python scripts/google_oauth_token_helper.py --exchange-code "<CODIGO_DE_AUTORIZACAO>" --redirect-uri "https://developers.google.com/oauthplayground"
+  ```
 
 ## 3. Escopos autorizados
 
