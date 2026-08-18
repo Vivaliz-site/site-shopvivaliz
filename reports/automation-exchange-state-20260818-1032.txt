@@ -22,8 +22,8 @@ Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
 
 Expanded Security Maintenance for Applications is not enabled.
 
-65 updates can be applied immediately.
-6 of these updates are standard security updates.
+64 updates can be applied immediately.
+8 of these updates are standard security updates.
 To see these additional updates run: apt list --upgradable
 
 16 additional security updates can be applied with ESM Apps.
@@ -33,7 +33,7 @@ Learn more about enabling ESM Apps service at https://ubuntu.com/esm
 116 updates could not be installed automatically. For more details,
 see /var/log/unattended-upgrades/unattended-upgrades.log
 
-CHECK_UTC=2026-08-18T13:34:22Z
+CHECK_UTC=2026-08-18T13:48:46Z
 WORKER=inactive
 SENTINEL=present
 PWSH=missing
