@@ -26,7 +26,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${CF_TOKEN:-}" || { echo 'CLOUDFLARE_API_TOKEN missing' >&2; exit 1; }
+          if [ -z "${CF_TOKEN:-}" ]; then
+            echo 'CLOUDFLARE_API_TOKEN missing' >&2
+            exit 1
+          fi
 
           API='https://api.cloudflare.com/client/v4'
           AUTH="Authorization: Bearer $CF_TOKEN"

@@ -39,9 +39,10 @@ jobs:
           ids="$(docker ps -aq --filter name=mei-mg-email-flyway 2>/dev/null || true)"
           if [ -n "$ids" ]; then docker rm -f $ids >/dev/null 2>&1 || true; fi
 
-          cd /home/ubuntu/mei-mg-email
-          git fetch origin main
-          git reset --hard origin/main
+            cd /home/ubuntu/mei-mg-email
+            git fetch origin main
+            test -z "$(git status --porcelain)"
+            git merge --ff-only origin/main
           test -s db/migrations/V025__purge_operational_records_and_block_reimport.sql
           latest="$(ls -1t /home/ubuntu/mei-backups/mei_email_before_retention_*.dump | head -n1)"
           test -s "$latest"

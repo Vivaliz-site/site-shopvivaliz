@@ -242,7 +242,7 @@ class SanitizedHistorySyncTests(unittest.TestCase):
         )
         self.assertEqual(self.status()["action"], "blocked-wrong-branch")
 
-    def test_health_gate_blocks_before_sync(self) -> None:
+    def test_degraded_health_is_recorded_without_blocking_recovery_sync(self) -> None:
         SYNC.check_local_health = lambda: {
             "ok": False,
             "error": "test runtime unavailable",
@@ -250,14 +250,13 @@ class SanitizedHistorySyncTests(unittest.TestCase):
 
         result = SYNC.main()
 
-        self.assertEqual(result, 5)
-        self.assertEqual(git(self.local, "rev-parse", "HEAD").stdout.strip(), self.old_sha)
+        self.assertEqual(result, 0)
+        self.assertEqual(git(self.local, "rev-parse", "HEAD").stdout.strip(), self.remote_tip)
         report = self.status()
-        self.assertFalse(report["ok"])
-        self.assertEqual(report["action"], "blocked-unhealthy-local-runtime")
-        self.assertEqual(report["health"]["status"], "failed")
+        self.assertTrue(report["ok"])
+        self.assertEqual(report["health"]["status"], "degraded")
 
-    def test_health_gate_blocks_legacy_recovery_before_branch_switch(self) -> None:
+    def test_degraded_health_does_not_block_safe_legacy_recovery(self) -> None:
         self.clone_remote_into_local()
         legacy_branch = "patch/agente-shopvivaliz-"
         git(self.local, "switch", "-c", legacy_branch, self.clean_root)
@@ -268,9 +267,9 @@ class SanitizedHistorySyncTests(unittest.TestCase):
 
         result = SYNC.main()
 
-        self.assertEqual(result, 5)
-        self.assertEqual(git(self.local, "branch", "--show-current").stdout.strip(), legacy_branch)
-        self.assertEqual(self.status()["action"], "blocked-unhealthy-local-runtime")
+        self.assertEqual(result, 0)
+        self.assertEqual(git(self.local, "branch", "--show-current").stdout.strip(), "main")
+        self.assertEqual(self.status()["health"]["status"], "degraded")
 
     def test_oracle_wrapper_does_not_stage_commit_or_push(self) -> None:
         text = (ROOT / "scripts" / "auto-sync-oracle.sh").read_text(encoding="utf-8")

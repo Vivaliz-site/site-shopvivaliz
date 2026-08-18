@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   reconcile:
@@ -25,15 +25,7 @@ jobs:
           php tests/commercial-policy-regression-test.php
           php -l index.php
           php -l includes/product-trust-sanitizer.php
-      - name: Commit reconciliation
+      - name: Fail closed on commercial-policy drift
         run: |
           set -euo pipefail
-          git config user.name fredmourao-ai
-          git config user.email fredmourao@gmail.com
-          git add index.php includes/product-trust-sanitizer.php tests/commercial-policy-regression-test.php
-          if git diff --cached --quiet; then
-            echo NO_CHANGES_NEEDED=true
-            exit 0
-          fi
-          git commit -m 'fix: restore approved ShopVivaliz commercial policy'
-          git push origin HEAD:main
+          git diff --exit-code -- index.php includes/product-trust-sanitizer.php tests/commercial-policy-regression-test.php

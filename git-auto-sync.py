@@ -245,29 +245,16 @@ def main() -> int:
             return 3
 
         health = check_local_health()
-        if not health.get("ok"):
-            payload.update(
-                {
-                    "action": "blocked-unhealthy-local-runtime",
-                    "health": {
-                        "status": "failed",
-                        "endpoint": HEALTH_URL,
-                        "error": str(health.get("error", "unknown error")),
-                    },
-                    "message": "runtime local nao passou no health gate; sync abortado",
-                }
-            )
-            write_status(payload)
-            log.error("%s: %s", payload["message"], health.get("error", "unknown error"))
-            return 5
-
         health_data = health.get("data") if isinstance(health.get("data"), dict) else {}
         payload["health"] = {
-            "status": "ok",
+            "status": "ok" if health.get("ok") else "degraded",
             "endpoint": HEALTH_URL,
             "score": health_data.get("health_score_percent"),
             "queue": health_data.get("queue"),
+            "error": None if health.get("ok") else str(health.get("error", "unknown error")),
         }
+        if not health.get("ok"):
+            log.warning("Runtime atual degradado; mantendo sync para permitir deploy corretivo: %s", payload["health"]["error"])
 
         run(["git", "fetch", "--prune", "--no-tags", "origin", branch], check=True)
         remote_sha = git_output(["rev-parse", f"origin/{branch}"])

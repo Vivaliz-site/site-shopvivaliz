@@ -168,7 +168,7 @@ def append_tasks(task_rows, source):
         _, created_now = upsert_task(queue, new_task)
         if created_now:
             created += 1
-    save_queue(queue)
+    save_queue(queue, runtime_actor="auto-task-generator")
     return created
 
 
@@ -188,12 +188,6 @@ def main():
 
     total_created = real_created + gemini_created + claude_created
     print(f"Total de tarefas novas: {total_created}")
-
-    try:
-        subprocess.run(["git", "add", "tasks-queue.json"], check=True)
-    except Exception as exc:
-        print(f"Git add warning: {exc}")
-
 
 if __name__ == "__main__":
     main()

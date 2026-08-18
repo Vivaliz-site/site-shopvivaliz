@@ -37,11 +37,11 @@ jobs:
           migration_applied=0
           finish() {
             rc=$?
-            if [ "$rc" -ne 0 ]; then
-              echo FAILURE_CODE=$rc
-              if [ "$migration_applied" -eq 0 ]; then
-                git reset --hard "$old_head" || true
-              fi
+              if [ "$rc" -ne 0 ]; then
+                echo FAILURE_CODE=$rc
+                if [ "$migration_applied" -eq 0 ]; then
+                 echo 'ROLLBACK_REQUIRED: automatic git rollback is forbidden; preserve evidence and recover through the reviewed release procedure.'
+                fi
               sudo systemctl daemon-reload || true
               sudo systemctl start mei-mg-email-worker.service || true
             fi
