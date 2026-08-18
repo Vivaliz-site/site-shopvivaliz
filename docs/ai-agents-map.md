@@ -13,6 +13,16 @@ Before any mutating action, every agent in this registry — including Claude, G
 
 A stale or missing receipt prevents the orchestrator from handing a mutating execution step to the agent. If a preferred tool is unavailable, the agent must investigate an approved alternative route rather than silently skipping a required validation.
 
+### Fred-Win scope
+
+Any agent that accesses, diagnoses or reports the state of Fred-Win MUST read `docs/FRED-WIN-PRIVATE-RELAY.md` and use the canonical relay:
+
+```text
+GitHub Actions -> Oracle VM 137.131.156.17 -> VM 127.0.0.1:5557 -> reverse SSH -> Fred-Win 127.0.0.1:5557 -> MCP
+```
+
+The allowlisted `health` action in `.github/workflows/fred-win-remote-action.yml` is the first required test. The deprecated `rce-shopvivaliz.trycloudflare.com` hostname and the absence of a direct desktop connector are not valid status evidence. Without the canonical health test, report `INCONCLUSIVO`, not `INATIVO`.
+
 ## Agent Registry
 
 ### Core Agents
@@ -32,6 +42,7 @@ A stale or missing receipt prevents the orchestrator from handing a mutating exe
 | SeleniumTestRunnerAgent | UI/E2E testing for Olist | Olist UI | None |
 | ConfigValidatorAgent | Validate configurations & dependencies | System health | None |
 | TriEnvironmentSyncAgent | Synchronize PC, cloud and Oracle | Repository state | None |
+| FredWinRelayValidator | Validate Fred-Win through the private relay | Read-only health and evidence | None |
 
 ### Specialized Agents
 | Agent | Purpose | Scope | Financial Impact |
@@ -46,6 +57,7 @@ A stale or missing receipt prevents the orchestrator from handing a mutating exe
 - **All agents execute through orchestrator**
 - **All agents must pass `AGENT_DOCS_PREFLIGHT_V1` before mutation**
 - **Tri-environment sync never writes to `main` directly**
+- **Fred-Win status must use `docs/FRED-WIN-PRIVATE-RELAY.md`; unavailable evidence means `INCONCLUSIVO`**
 
 ## Communication Protocol
 - Agents communicate via orchestrator only
@@ -53,3 +65,4 @@ A stale or missing receipt prevents the orchestrator from handing a mutating exe
 - All state changes logged
 - Audit trail mandatory
 - Remote MCP access, when available, is an operator-controlled channel documented in `docs/AGENT-MCP-REMOTE.md`; it does not expand repository, production, marketplace, payment, or secret permissions.
+- The Fred-Win private relay is documented in `docs/FRED-WIN-PRIVATE-RELAY.md` and must not be confused with a direct Desktop Commander connection or the historical public Cloudflare endpoint.
