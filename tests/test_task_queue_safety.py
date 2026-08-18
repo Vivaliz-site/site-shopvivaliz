@@ -95,6 +95,24 @@ class TaskQueueLibraryTests(unittest.TestCase):
             self.assertEqual(persisted["metadata"]["schema_version"], 2)
             self.assertNotIn("queue", persisted)
 
+    def test_detected_shared_runtime_queue_is_the_default_and_is_migrated(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "tasks-queue.json"
+            path.write_text(
+                json.dumps({"version": "1.1", "queue": [{"task_id": "OLD-2"}]}),
+                encoding="utf-8",
+            )
+            with patch.dict("os.environ", {}, clear=True), patch.object(
+                self.lib, "DEFAULT_RUNTIME_QUEUE_FILE", path
+            ):
+                self.assertEqual(self.lib.runtime_queue_file(), path)
+                loaded = self.lib.load_queue()
+
+            self.assertEqual(loaded["tasks"][0]["id"], "OLD-2")
+            persisted = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(persisted["metadata"]["schema_version"], 2)
+            self.assertNotIn("queue", persisted)
+
     def test_unverified_completed_state_is_rejected(self) -> None:
         payload = canonical_queue()
         payload["tasks"][0]["status"] = "completed"
@@ -154,6 +172,14 @@ class TaskQueueLibraryTests(unittest.TestCase):
 
     def test_repository_queue_matches_canonical_contract(self) -> None:
         self.lib.load_queue(REPO_ROOT / "tasks-queue.json")
+
+    def test_cycle_uses_the_canonical_running_state(self) -> None:
+        source = (REPO_ROOT / "scripts" / "autonomous-continuous-cycle.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('task.get("status") == "running"', source)
+        self.assertIn('task["status"] = "running"', source)
+        self.assertNotIn('task["status"] = "in_progress"', source)
 
 
 class TaskQueueCliTests(unittest.TestCase):
