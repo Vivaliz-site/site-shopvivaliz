@@ -18,14 +18,8 @@ svcoh_register($requestPath);
 require_once __DIR__ . '/cart-output-hardening.php';
 svco_cart_register($requestPath);
 
-// Carrega a configuracao para montar as tags publicas. O bloqueio dos segredos
-// acontece logo depois, pois bootstrap-env.php poderia repopular valores que
-// fossem removidos antes deste require.
 require_once __DIR__ . '/analytics-tracking.php';
 
-// O consentimento precisa ser visivel para o PHP. Sem o cookie explicito,
-// segredos de envio server-side sao removidos apenas desta requisicao, o que
-// impede Measurement Protocol/CAPI de criarem identificadores antes da escolha.
 $serverConsentAccepted = hash_equals(
     'accepted',
     (string)($_COOKIE['sv_privacy_consent'] ?? '')
@@ -37,8 +31,6 @@ if (!$serverConsentAccepted) {
     }
 }
 
-// Consent Mode existe antes de GTM/gtag. O cookie e a copia em localStorage
-// permanecem sincronizados pelo js/privacy-consent-v1.js.
 echo <<<'HTML'
 <script>
 (function () {
@@ -118,8 +110,6 @@ if ($requestPath === '/checkout') {
     echo '<script defer src="/js/checkout-payment-v2.js?v=' . htmlspecialchars($checkoutPaymentVersion, ENT_QUOTES, 'UTF-8') . '"></script>' . "\n";
 }
 
-// A promocao 3% para carrinhos com 2+ SKUs distintos e parte da experiencia
-// comercial publica. Carrega somente onde precisa aparecer ou atualizar total.
 if (in_array($requestPath, ['/', '/carrinho', '/checkout'], true)) {
     $mixedPromoCss = dirname(__DIR__) . '/css/mixed-cart-promo-v1.css';
     $mixedPromoJs = dirname(__DIR__) . '/js/mixed-cart-promo-v1.js';
@@ -127,6 +117,16 @@ if (in_array($requestPath, ['/', '/carrinho', '/checkout'], true)) {
     $mixedPromoJsVersion = is_file($mixedPromoJs) ? (string)filemtime($mixedPromoJs) : '1';
     echo '<link rel="stylesheet" href="/css/mixed-cart-promo-v1.css?v=' . htmlspecialchars($mixedPromoCssVersion, ENT_QUOTES, 'UTF-8') . '">' . "\n";
     echo '<script defer src="/js/mixed-cart-promo-v1.js?v=' . htmlspecialchars($mixedPromoJsVersion, ENT_QUOTES, 'UTF-8') . '"></script>' . "\n";
+}
+
+// Pequena camada comercial compartilhada para produto, carrinho e checkout.
+if ($requestPath === '/carrinho' || $requestPath === '/checkout' || $requestPath === '/produto' || str_starts_with($requestPath, '/produto/')) {
+    $salesCss = dirname(__DIR__) . '/css/sales-conversion-v1.css';
+    $salesJs = dirname(__DIR__) . '/js/sales-conversion-v1.js';
+    $salesCssVersion = is_file($salesCss) ? (string)filemtime($salesCss) : '1';
+    $salesJsVersion = is_file($salesJs) ? (string)filemtime($salesJs) : '1';
+    echo '<link rel="stylesheet" href="/css/sales-conversion-v1.css?v=' . htmlspecialchars($salesCssVersion, ENT_QUOTES, 'UTF-8') . '">' . "\n";
+    echo '<script defer src="/js/sales-conversion-v1.js?v=' . htmlspecialchars($salesJsVersion, ENT_QUOTES, 'UTF-8') . '"></script>' . "\n";
 }
 
 $company = @include dirname(__DIR__) . '/config/company-profile.php';
@@ -154,7 +154,4 @@ if ($requestPath === '/produto' || str_starts_with($requestPath, '/produto/')) {
     require_once __DIR__ . '/product-video-embed-fix.php';
 }
 
-// Pageviews sao medidos no navegador por GA4/GTM depois do consentimento.
-// Enviar o mesmo evento por cURL no shutdown atrasava cada pagina publica e
-// ainda criava duplicidade. Eventos de compra continuam server-side no webhook.
 ?>
