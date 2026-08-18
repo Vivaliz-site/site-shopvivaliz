@@ -1,6 +1,8 @@
 # Fred-Win remote access / tunnel — persistent operator context
 
-> IMPORTANT FOR FUTURE CHATGPT SESSIONS: this remote path already exists and has been validated. Do not ask the user to rediscover or recreate the tunnel before checking this document and the current workflow status.
+> **DOCUMENTO HISTÓRICO COMPLEMENTAR.** A norma operacional atual e obrigatória está em [`docs/FRED-WIN-PRIVATE-RELAY.md`](../docs/FRED-WIN-PRIVATE-RELAY.md). Antes de declarar o Fred-Win inativo, execute a ação allowlisted `health` pela rota privada canônica. Sem esse teste, o resultado é `INCONCLUSIVO`. O endpoint `rce-shopvivaliz.trycloudflare.com` nunca deve ser usado para determinar o estado atual.
+
+> IMPORTANT FOR FUTURE CHATGPT SESSIONS: this remote path already exists and has been validated. Do not ask the user to rediscover or recreate the tunnel before checking this document, `docs/FRED-WIN-PRIVATE-RELAY.md`, and the current workflow status.
 
 ## Working architecture
 
@@ -27,6 +29,7 @@ Expected health response includes `status=ok`, `environment=fred-win`, `mcp_vers
 - `scripts/mcp-server.py` — Fred-Win MCP server.
 - `.github/workflows/fred-win-remote-action.yml` — audited GitHub -> VM -> Fred-Win relay with allowlisted actions.
 - `ops/fredwin-request.json` — action request consumed by the workflow.
+- `docs/FRED-WIN-PRIVATE-RELAY.md` — canonical status and diagnostic protocol.
 - Windows logs: `C:\site-shopvivaliz\logs\fredwin-remote-bootstrap.log` and `C:\site-shopvivaliz\logs\fredwin-managed-tunnel.log`.
 
 Windows repo path: `C:\site-shopvivaliz`.
@@ -42,7 +45,7 @@ On 2026-08-07 the following was confirmed operational:
 5. Opening browser pages from the background MCP required an interactive-session launcher; the workflow was extended with Task Scheduler-based interactive actions such as `open_email_login_pair`.
 6. Exchange Admin was successfully opened on Fred-Win and the user authenticated there.
 
-Therefore, in a new chat, first inspect `.github/workflows/fred-win-remote-action.yml`, `ops/fredwin-request.json`, this document, and recent workflow runs. Treat the tunnel as an existing capability unless a health check proves it is currently down.
+Therefore, in a new chat, first inspect `docs/FRED-WIN-PRIVATE-RELAY.md`, `.github/workflows/fred-win-remote-action.yml`, `ops/fredwin-request.json`, this document, and recent workflow runs. Treat the tunnel as an existing capability unless a health check through the canonical route proves it is currently down.
 
 ## Browser/session limitation
 
@@ -53,7 +56,7 @@ A plain `Start-Process` from the MCP can run in a non-interactive Windows sessio
 - `http://100.71.51.106:5557` was a private/local path mentioned during diagnosis, but the Oracle VM could not use that Tailscale/private route directly.
 - `https://rce-shopvivaliz.trycloudflare.com` was tested historically but was abandoned as the control plane because GitHub-hosted runners could not reliably reach it and exposing MCP/RCE publicly is undesirable.
 
-Do not replace the working private relay with the public Cloudflare RCE hostname.
+Do not use the public Cloudflare RCE hostname for health, status or access. Do not replace the working private relay with it.
 
 ## GitHub authentication
 
@@ -65,11 +68,12 @@ The email project is at `C:\mei-mg-email`. Production email must use Microsoft G
 
 ## Fast diagnostic sequence for future sessions
 
-1. Read this document.
+1. Read `docs/FRED-WIN-PRIVATE-RELAY.md` and this document.
 2. Inspect recent runs of `.github/workflows/fred-win-remote-action.yml`.
 3. Run/request the allowlisted `health` action.
-4. If health passes, use the existing relay immediately; do not ask the user to recreate the tunnel.
-5. If health fails, inspect the bootstrap/tunnel logs and managed process before changing architecture.
+4. If health passes, classify `COMPROVADO / ATIVO` and use the existing relay immediately; do not ask the user to recreate the tunnel.
+5. If health cannot be executed or evidence cannot be read, classify `INCONCLUSIVO`, not `INATIVO`.
+6. If health fails, inspect the bootstrap/tunnel logs and managed processes before changing architecture or classifying `FALHOU / INATIVO`.
 
 ## Security decision
 
