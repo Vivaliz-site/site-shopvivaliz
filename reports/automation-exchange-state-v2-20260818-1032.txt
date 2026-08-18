@@ -33,9 +33,10 @@ Learn more about enabling ESM Apps service at https://ubuntu.com/esm
 116 updates could not be installed automatically. For more details,
 see /var/log/unattended-upgrades/unattended-upgrades.log
 
-CHECK_UTC=2026-08-18T13:48:46Z
-WORKER=inactive
-SENTINEL=present
-PWSH=missing
-RESTRICTION_RESULT=uncertain reason=pwsh_missing
-SSH_RC=1
+CHECK_UTC=2026-08-18T13:46:22Z
+WORKER_BEFORE=inactive
+SENTINEL_BEFORE=present
+PWSH_INSTALL=continue
+E: Could not get lock /var/lib/apt/lists/lock. It is held by process 1817784 (apt-get)
+E: Unable to lock directory /var/lib/apt/lists/
+SSH_RC=100
