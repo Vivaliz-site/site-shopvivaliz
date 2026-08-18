@@ -36,5 +36,53 @@
     note.textContent='“Comprar agora” adiciona o item ao carrinho; você ainda calcula o frete e revisa tudo antes do pagamento.';
     buy.insertAdjacentElement('afterend',note);
   }
-  onReady(function(){ installCartOffer(); installProductOffer(); });
+  function installCheckoutClarity(){
+    if((location.pathname||'').replace(/\/$/,'')!=='/checkout') return;
+    var form=document.getElementById('checkout-form');
+    if(!form || document.getElementById('sv-checkout-sales-clarity')) return;
+
+    var title=document.querySelector('#checkout-section .checkout-title');
+    if(title) title.textContent='Finalize sem cadastro';
+
+    var cpfField=document.getElementById('boleto-cpf-field');
+    if(cpfField){
+      var helper=document.createElement('small');
+      helper.id='sv-checkout-sales-clarity';
+      helper.style.display='block';
+      helper.style.marginTop='6px';
+      helper.style.color='#64748b';
+      helper.textContent='Documento necessário para validar o pedido e processar o pagamento com segurança.';
+      cpfField.appendChild(helper);
+    }
+
+    var notes=form.querySelector('textarea[name="notes"]');
+    var notesLabel=notes && notes.closest('label.form-group');
+    if(notesLabel && !notesLabel.closest('details')){
+      var details=document.createElement('details');
+      details.style.margin='10px 0 16px';
+      var summary=document.createElement('summary');
+      summary.textContent='Adicionar observação ao pedido (opcional)';
+      summary.style.cursor='pointer';
+      summary.style.fontWeight='800';
+      summary.style.color='#173b63';
+      notesLabel.parentNode.insertBefore(details,notesLabel);
+      details.appendChild(summary);
+      details.appendChild(notesLabel);
+      var span=notesLabel.querySelector('span');
+      if(span) span.textContent='Observações do pedido';
+    }
+
+    var submit=document.getElementById('submit-btn');
+    if(submit){
+      submit.textContent='Continuar para pagamento seguro';
+      if(!document.getElementById('sv-checkout-submit-note')){
+        var note=document.createElement('div');
+        note.id='sv-checkout-submit-note';
+        note.className='sv-sales-assurance';
+        note.textContent='Nenhuma cobrança acontece antes de você confirmar no gateway escolhido.';
+        submit.insertAdjacentElement('afterend',note);
+      }
+    }
+  }
+  onReady(function(){ installCartOffer(); installProductOffer(); installCheckoutClarity(); });
 })();
