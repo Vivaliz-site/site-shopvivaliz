@@ -1,0 +1,138 @@
+{
+  "recorded_at": "2026-08-18T23:06:04Z",
+  "repository": "Vivaliz-site/site-shopvivaliz",
+  "request": {
+    "workflow": "fred-win-remote-action.yml",
+    "limit": 10,
+    "requested_at": "2026-08-18T23:05:00Z",
+    "reason": "Expose GitHub Actions runs through a versioned file readable by the connector"
+  },
+  "index_workflow_run_id": "32195695598",
+  "index_workflow_run_attempt": "1",
+  "trigger_sha": "44421e66f91450c60f81fd9dd3cb3e686ef8f5c5",
+  "queried_workflow": "fred-win-remote-action.yml",
+  "queried_url": "https://api.github.com/repos/Vivaliz-site/site-shopvivaliz/actions/workflows/fred-win-remote-action.yml/runs?per_page=10&branch=main",
+  "total_count": 57,
+  "runs": [
+    {
+      "id": 32195299588,
+      "name": "Fred-Win Remote Action",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "head_branch": "main",
+      "head_sha": "60b23527082b36c69d4a8c5c867502bc5034b8c1",
+      "created_at": "2026-08-18T23:00:30Z",
+      "updated_at": "2026-08-18T23:00:59Z",
+      "html_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/32195299588"
+    },
+    {
+      "id": 32194944742,
+      "name": "Fred-Win Remote Action",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "head_branch": "main",
+      "head_sha": "6b71838caa62213331969293334d2182c3e80aae",
+      "created_at": "2026-08-18T22:55:45Z",
+      "updated_at": "2026-08-18T22:56:14Z",
+      "html_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/32194944742"
+    },
+    {
+      "id": 32128522851,
+      "name": "Fred-Win Remote Action",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "failure",
+      "head_branch": "main",
+      "head_sha": "405effe637b0ea45cc74b0e3022936bd75d9b7a6",
+      "created_at": "2026-08-18T10:47:47Z",
+      "updated_at": "2026-08-18T10:48:04Z",
+      "html_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/32128522851"
+    },
+    {
+      "id": 31984045552,
+      "name": "Fred-Win Remote Action",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "head_branch": "main",
+      "head_sha": "56b41d83b2e3b73e266f943b1fb2a242c10c1fad",
+      "created_at": "2026-08-17T01:08:09Z",
+      "updated_at": "2026-08-17T01:08:43Z",
+      "html_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31984045552"
+    },
+    {
+      "id": 31971394714,
+      "name": "Fred-Win Remote Action",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "head_branch": "main",
+      "head_sha": "a8f37a1cdd17b45a967d1fb8f38cb365997c043c",
+      "created_at": "2026-08-16T20:43:49Z",
+      "updated_at": "2026-08-16T20:44:23Z",
+      "html_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31971394714"
+    },
+    {
+      "id": 31921674901,
+      "name": "Fred-Win Remote Action",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "failure",
+      "head_branch": "main",
+      "head_sha": "7499051071fd2ca2ace44ae9f0d0939cb5df56d5",
+      "created_at": "2026-08-16T02:20:32Z",
+      "updated_at": "2026-08-16T02:20:55Z",
+      "html_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31921674901"
+    },
+    {
+      "id": 31921631641,
+      "name": "Fred-Win Remote Action",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "head_branch": "main",
+      "head_sha": "0c5d71ca3bad67bd597fd123e91c22d8102e00e9",
+      "created_at": "2026-08-16T02:19:25Z",
+      "updated_at": "2026-08-16T02:19:43Z",
+      "html_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31921631641"
+    },
+    {
+      "id": 31863062680,
+      "name": "Fred-Win Remote Action",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "failure",
+      "head_branch": "main",
+      "head_sha": "632c229a1a173e74797fbc1736516f3d69acaffb",
+      "created_at": "2026-08-15T03:54:59Z",
+      "updated_at": "2026-08-15T03:55:20Z",
+      "html_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31863062680"
+    },
+    {
+      "id": 31861318082,
+      "name": "Fred-Win Remote Action",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "failure",
+      "head_branch": "main",
+      "head_sha": "5a5da0e2a5948b63d3b4cf413ff419e9abfc8bdc",
+      "created_at": "2026-08-15T03:15:08Z",
+      "updated_at": "2026-08-15T03:15:32Z",
+      "html_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31861318082"
+    },
+    {
+      "id": 31858642185,
+      "name": "Fred-Win Remote Action",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "failure",
+      "head_branch": "main",
+      "head_sha": "b8c46ac03d9897ad24cfb6eacd2e23d66b031846",
+      "created_at": "2026-08-15T02:13:48Z",
+      "updated_at": "2026-08-15T02:14:11Z",
+      "html_url": "https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/31858642185"
+    }
+  ]
+}
