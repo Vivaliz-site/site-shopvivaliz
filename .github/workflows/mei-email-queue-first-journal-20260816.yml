@@ -1,0 +1,39 @@
+name: MEI email queue-first journal 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/mei-email-queue-first-journal-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Read worker state and journal
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
+            echo NOW=$(date -Is)
+            echo WORKER=$(systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+            echo SUBSTATE=$(systemctl show -p SubState --value mei-mg-email-worker.service 2>/dev/null || true)
+            echo PID=$(systemctl show -p MainPID --value mei-mg-email-worker.service 2>/dev/null || true)
+            if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo SENTINEL=present; else echo SENTINEL=absent; fi
+            echo ---PS---
+            pid=$(systemctl show -p MainPID --value mei-mg-email-worker.service 2>/dev/null || true)
+            [ -n "$pid" ] && ps -o pid,ppid,stat,pcpu,pmem,etime,wchan:28,cmd -p "$pid" || true
+            echo ---JOURNAL---
+            sudo journalctl -u mei-mg-email-worker.service --since "2026-08-16 19:51:00" --no-pager -n 300 || true
+          '
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

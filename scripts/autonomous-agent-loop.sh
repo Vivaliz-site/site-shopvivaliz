@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -u
+set -Eeuo pipefail
 
 PROJECT_DIR="${SHOPVIVALIZ_PROJECT_DIR:-/home/ubuntu/shopvivaliz-deploy/current}"
 LOG_FILE="${SHOPVIVALIZ_AGENT_LOG:-$PROJECT_DIR/logs/autonomous-agent.log}"
@@ -65,10 +65,10 @@ run_cycle() {
   reports_count="$(find logs -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')"
   log "Context snapshot: docs_files=${docs_count:-0} log_reports=${reports_count:-0}."
 
-  if command -v git >/dev/null 2>&1; then
-    git status --short || true
+  if [ -d "$PROJECT_DIR/.git" ] && command -v git >/dev/null 2>&1; then
+    git status --short
   else
-    log "WARNING git command not available."
+    log "Immutable release detected; Git status is checked by the deployment clone."
   fi
 
   if ! command -v python3 >/dev/null 2>&1; then
@@ -81,27 +81,29 @@ run_cycle() {
     return 1
   fi
 
-  python3 scripts/autonomous-continuous-cycle.py --advance
-  cycle_exit="$?"
-  log "Autonomous continuous cycle exit_code=$cycle_exit."
-
-  if [ -f "scripts/autonomous-executor.py" ]; then
-    python3 scripts/autonomous-executor.py --max-cycles 1 || log "WARNING autonomous executor reported issues."
-  else
-    log "WARNING scripts/autonomous-executor.py not found."
+  if ! python3 scripts/autonomous-continuous-cycle.py --advance; then
+    log "ERROR autonomous continuous cycle failed."
+    return 1
   fi
+  log "Autonomous continuous cycle completed."
 
   if [ -f "scripts/agent-operations-worker.py" ]; then
-    python3 scripts/agent-operations-worker.py || log "WARNING agent operations worker reported issues."
+    if ! python3 scripts/agent-operations-worker.py; then
+      log "ERROR agent operations worker failed."
+      return 1
+    fi
   fi
 
   if [ -f "scripts/log-health-checker.py" ]; then
-    python3 scripts/log-health-checker.py || log "WARNING log health checker reported issues."
+    if ! python3 scripts/log-health-checker.py; then
+      log "ERROR log health checker failed."
+      return 1
+    fi
   fi
 
   log "Cycle finished."
   printf '[%s] %s\n' "$(ts)" "Cycle finished." >> "$EXECUTION_LOG_FILE"
-  return "$cycle_exit"
+  return 0
 }
 
 log "ShopVivaliz autonomous agent started. project=$PROJECT_DIR interval=${INTERVAL_SECONDS}s"

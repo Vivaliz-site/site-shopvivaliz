@@ -1,0 +1,36 @@
+name: MEI email PostgreSQL process titles 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/mei-email-postgres-process-titles-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect PostgreSQL OS processes
+        run: |
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
+            echo NOW=$(date -Is)
+            echo ---HOST_POSTGRES---
+            ps -eo pid,ppid,stat,pcpu,pmem,etime,wchan:28,cmd | grep "[p]ostgres:" || true
+            echo ---WORKER---
+            pid=$(systemctl show -p MainPID --value mei-mg-email-worker.service)
+            ps -o pid,ppid,stat,pcpu,pmem,etime,wchan:28,cmd -p "$pid" || true
+            echo ---CONTAINER_TOP---
+            sudo docker top mei-mg-email-db -eo pid,ppid,stat,pcpu,pmem,etime,wchan:28,cmd || true
+          '
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

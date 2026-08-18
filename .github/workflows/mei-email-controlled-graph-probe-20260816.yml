@@ -1,0 +1,54 @@
+name: MEI email controlled Graph probe 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/mei-email-controlled-graph-probe-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Send exactly one controlled Graph message
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          sudo systemctl stop mei-mg-email-worker.service || true
+          test -f /var/lib/mei-mg-email/sender_blocked.pause
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          from app.email_provider import MicrosoftGraphEmailProvider
+          subject = 'ShopVivaliz status probe 20260818-0749-BRT'
+          result = MicrosoftGraphEmailProvider().send(
+              'fredmourao@gmail.com',
+              subject,
+              'Teste controlado de entrega do remetente ShopVivaliz apos confirmacao de 0 entidades restritas no Microsoft Defender. Nenhuma acao e necessaria.'
+          )
+          print('PROBE_SUBJECT=' + subject)
+          print('PROBE_SUCCESS=' + str(bool(result.success)).lower())
+          print('PROBE_STATUS=' + str(result.status))
+          print('PROBE_HTTP=' + str(result.status_code))
+          print('PROBE_REQUEST_ID=' + str(result.message_id or ''))
+          print('PROBE_ERROR=' + str(result.error or ''))
+          if not result.success:
+              raise SystemExit(2)
+          PY
+          echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo SENTINEL=present; else echo SENTINEL=absent; fi
+          EOF
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/vmkey

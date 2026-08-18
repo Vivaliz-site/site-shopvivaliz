@@ -1,0 +1,115 @@
+name: MEI email DB maintenance V025 v2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mei-email-db-maintenance-v025-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Maintenance window and V025
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+
+          API_WAS_ACTIVE=no
+          if sudo systemctl is-active --quiet mei-mg-email-api.service 2>/dev/null; then API_WAS_ACTIVE=yes; fi
+          echo "API_WAS_ACTIVE=$API_WAS_ACTIVE"
+
+          sudo systemctl stop mei-mg-email-worker.service || true
+          sudo systemctl stop mei-mg-email-auto-sync.timer 2>/dev/null || true
+          sudo systemctl stop mei-mg-email-auto-sync.service 2>/dev/null || true
+          if [ "$API_WAS_ACTIVE" = yes ]; then sudo systemctl stop mei-mg-email-api.service || true; fi
+
+          sudo pkill -TERM -f '[f]lyway.*target=25' || true
+          sudo pkill -TERM -f 'scripts/disparar_10000_mei_mg.py' || true
+          sleep 5
+          sudo pkill -KILL -f '[f]lyway.*target=25' || true
+          sudo pkill -KILL -f 'scripts/disparar_10000_mei_mg.py' || true
+
+            git fetch origin main
+            test -z "$(git status --porcelain)"
+            git merge --ff-only origin/main
+          test -s db/migrations/V025__purge_operational_records_and_block_reimport.sql
+          latest="$(ls -1t /home/ubuntu/mei-backups/mei_email_before_retention_*.dump | head -n1)"
+          test -s "$latest"
+          echo "BACKUP_OK=$latest"
+
+          echo 'CLIENTS_BEFORE_BEGIN'
+          timeout 30s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -P pager=off -c "
+            select pid, application_name, state, wait_event_type, wait_event,
+                   coalesce(extract(epoch from (now()-xact_start))::int,0) xact_age_s,
+                   coalesce(extract(epoch from (now()-query_start))::int,0) query_age_s,
+                   pg_blocking_pids(pid) blockers,
+                   left(query,100) query
+              from pg_stat_activity
+             where datname='mei_mg_email' and backend_type='client backend'
+             order by xact_start nulls last, query_start;"
+          echo 'CLIENTS_BEFORE_END'
+
+          timeout 30s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -Atc "
+            select 'TERMINATED='||pid||':'||pg_terminate_backend(pid)
+              from pg_stat_activity
+             where datname='mei_mg_email'
+               and backend_type='client backend'
+               and pid <> pg_backend_pid();"
+          sleep 8
+
+          timeout 25s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -Atc "select 'DB_OK='||now();"
+
+          timeout 150s sh -c "{ printf '%s\n' \"set lock_timeout='30s'; set statement_timeout='120s';\"; cat db/migrations/V025__purge_operational_records_and_block_reimport.sql; } | docker exec -i mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -1"
+          echo 'V025_SQL_APPLIED=true'
+
+          timeout 30s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -Atc "
+            select 'SCOPE_CNPJ='||count(*) from pg_constraint where conrelid='mei_email.email_suppressions'::regclass and conname='email_suppressions_scope_check';
+            select 'TRIGGER_INSERT='||count(*) from pg_trigger where tgrelid='mei_email.empresas'::regclass and tgname='zz_empresas_block_suppressed_or_rejected_insert' and not tgisinternal;
+            select 'TRIGGER_UPDATE='||count(*) from pg_trigger where tgrelid='mei_email.empresas'::regclass and tgname='zz_empresas_purge_rejected_after_update' and not tgisinternal;
+            select 'TRIGGER_ENVIO='||count(*) from pg_trigger where tgrelid='mei_email.envios'::regclass and tgname='zz_envios_archive_and_purge_pii' and not tgisinternal;
+            select 'FN_CNPJ='||count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='mei_email' and p.proname='is_cnpj_suppressed';" | tee /tmp/v025-v2-verify.txt
+
+          grep -q '^SCOPE_CNPJ=1$' /tmp/v025-v2-verify.txt
+          grep -q '^TRIGGER_INSERT=1$' /tmp/v025-v2-verify.txt
+          grep -q '^TRIGGER_UPDATE=1$' /tmp/v025-v2-verify.txt
+          grep -q '^TRIGGER_ENVIO=1$' /tmp/v025-v2-verify.txt
+          grep -q '^FN_CNPJ=1$' /tmp/v025-v2-verify.txt
+          echo 'V025_RUNTIME_VERIFIED=true'
+
+          if [ -x .venv/bin/python ]; then py=.venv/bin/python; else py=python3; fi
+          timeout 180s "$py" scripts/purgar_base_operacional.py --batch-size 200 | tee /tmp/retention-dryrun.txt
+          grep -q '^PURGE_APPLY=false$' /tmp/retention-dryrun.txt
+          echo 'DRYRUN_OK=true'
+
+          if [ "$API_WAS_ACTIVE" = yes ]; then
+            sudo systemctl reset-failed mei-mg-email-api.service || true
+            sudo systemctl start mei-mg-email-api.service
+            sleep 5
+            sudo systemctl is-active --quiet mei-mg-email-api.service
+            echo 'API_RESTORED=true'
+          fi
+
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo 'SENTINEL=present'; else echo 'SENTINEL=absent'; fi
+          echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          EOF
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/vmkey

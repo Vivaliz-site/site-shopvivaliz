@@ -1,0 +1,104 @@
+name: MEI email direct V025 start worker v1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mei-email-direct-v025-start-worker-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Apply V025 directly in one DB transaction
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          sudo systemctl stop mei-mg-email-worker.service || true
+          sudo systemctl stop mei-mg-email-auto-sync.timer 2>/dev/null || true
+          sudo systemctl stop mei-mg-email-auto-sync.service 2>/dev/null || true
+          pkill -TERM -f 'scripts/disparar_10000_mei_mg.py' || true
+          pkill -TERM -f '[f]lyway.*target=25' || true
+          sleep 5
+          pkill -KILL -f '[f]lyway.*target=25' || true
+          ids="$(docker ps -aq --filter name=mei-mg-email-flyway 2>/dev/null || true)"
+          if [ -n "$ids" ]; then docker rm -f $ids >/dev/null 2>&1 || true; fi
+
+            cd /home/ubuntu/mei-mg-email
+            git fetch origin main
+            test -z "$(git status --porcelain)"
+            git merge --ff-only origin/main
+          test -s db/migrations/V025__purge_operational_records_and_block_reimport.sql
+          latest="$(ls -1t /home/ubuntu/mei-backups/mei_email_before_retention_*.dump | head -n1)"
+          test -s "$latest"
+          echo "BACKUP_OK=$latest"
+
+          # psql has remained usable even when pg_isready/docker-run is slow.
+          timeout 25s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -Atc "select 'DB_PRECHECK='||now();"
+          timeout 120s docker exec -i mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -1 < db/migrations/V025__purge_operational_records_and_block_reimport.sql
+          echo 'V025_SQL_APPLIED=true'
+
+          timeout 30s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -Atc "
+            select 'SCOPE_CNPJ='||count(*) from pg_constraint where conrelid='mei_email.email_suppressions'::regclass and conname='email_suppressions_scope_check';
+            select 'TRIGGER_INSERT='||count(*) from pg_trigger where tgrelid='mei_email.empresas'::regclass and tgname='zz_empresas_block_suppressed_or_rejected_insert' and not tgisinternal;
+            select 'TRIGGER_UPDATE='||count(*) from pg_trigger where tgrelid='mei_email.empresas'::regclass and tgname='zz_empresas_purge_rejected_after_update' and not tgisinternal;
+            select 'TRIGGER_ENVIO='||count(*) from pg_trigger where tgrelid='mei_email.envios'::regclass and tgname='zz_envios_archive_and_purge_pii' and not tgisinternal;
+            select 'FN_CNPJ='||count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='mei_email' and p.proname='is_cnpj_suppressed';
+          " | tee /tmp/v025-direct-verify.txt
+          grep -q '^SCOPE_CNPJ=1$' /tmp/v025-direct-verify.txt
+          grep -q '^TRIGGER_INSERT=1$' /tmp/v025-direct-verify.txt
+          grep -q '^TRIGGER_UPDATE=1$' /tmp/v025-direct-verify.txt
+          grep -q '^TRIGGER_ENVIO=1$' /tmp/v025-direct-verify.txt
+          grep -q '^FN_CNPJ=1$' /tmp/v025-direct-verify.txt
+          echo 'V025_RUNTIME_VERIFIED=true'
+          EOF
+
+      - name: Retention dry run
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          if [ -x .venv/bin/python ]; then py=.venv/bin/python; else py=python3; fi
+          timeout 180s "$py" scripts/purgar_base_operacional.py --batch-size 200
+          echo 'DRYRUN_OK=true'
+          EOF
+
+      - name: Start worker with circuit breaker
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          sudo rm -f /var/lib/mei-mg-email/sender_blocked.pause
+          sudo systemctl reset-failed mei-mg-email-worker.service || true
+          sudo systemctl start mei-mg-email-worker.service
+          sleep 30
+          sudo systemctl is-active --quiet mei-mg-email-worker.service
+          echo 'WORKER_ACTIVE=true'
+          sudo journalctl -u mei-mg-email-worker.service --since '-3 minutes' --no-pager -n 180 | tail -n 180
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then
+            echo 'CIRCUIT_BREAKER_REOPENED=true'
+            sudo systemctl stop mei-mg-email-worker.service || true
+            exit 92
+          fi
+          echo 'WORKER_STABLE_30S=true'
+          EOF
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/vmkey

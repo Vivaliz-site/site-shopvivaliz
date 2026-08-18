@@ -1,5 +1,12 @@
-User-agent: *
-Allow: /
-
+# A Cloudflare (recurso "Managed Content"/AI Crawl Control) injeta seu
+# proprio bloco "User-agent: * / Allow: /" ANTES deste arquivo na resposta
+# servida ao publico. Ate 2026-08-18 este arquivo repetia um segundo bloco
+# "User-agent: *" -- pela especificacao de robots.txt, um crawler usa
+# apenas o grupo mais especifico que casa por User-agent, entao esse
+# segundo bloco era sempre ignorado (achado da Rodada 1 de melhoria
+# continua). Removido para nao ser uma armadilha caso algum Disallow seja
+# adicionado aqui no futuro sem efeito real. Ausencia de "User-agent: *"
+# aqui nao muda o comportamento pratico: tanto o bloco da Cloudflare
+# quanto a ausencia de robots.txt equivalem a "permitir tudo".
 Sitemap: https://shopvivaliz.com.br/sitemap.xml
 # Merchant feed: https://shopvivaliz.com.br/google-merchant-feed.php

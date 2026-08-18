@@ -1,0 +1,98 @@
+name: Diagnose stalled MEI email worker 20260818 1925
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-diagnose-mei-worker-stall-20260818-1925.yml']
+permissions:
+  contents: write
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Capture production diagnosis
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=30 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF' > reports/email-worker-stall-diagnostic-20260818-1925.txt 2>&1
+          set -uo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo "CHECK_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo '=== HOST ==='
+          hostname
+          uptime
+          free -h
+          df -h /
+          echo '=== SERVICE ==='
+          sudo systemctl is-active mei-mg-email-worker.service || true
+          sudo systemctl --no-pager --full status mei-mg-email-worker.service | sed -n '1,35p' || true
+          echo '=== PROCESSES ==='
+          pgrep -af 'worker_queue_first|worker\.worker|queue_worker|monitor_operacao|sincronizar_base_diaria' || true
+          echo '=== SENTINEL ==='
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then sudo cat /var/lib/mei-mg-email/sender_blocked.pause; else echo absent; fi
+          echo '=== JOURNAL SINCE 12:25 BRT ==='
+          sudo journalctl -u mei-mg-email-worker.service --since '2026-08-18 12:25:00' --no-pager | tail -n 500 || true
+          echo '=== DATABASE STATE ==='
+          timeout 180s .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import json, os, psycopg
+          from psycopg.rows import dict_row
+          lock_id=100002026
+          with psycopg.connect(os.environ['DATABASE_URL'], autocommit=True, row_factory=dict_row, connect_timeout=15) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("set statement_timeout='90s'")
+                  cur.execute('''
+                    select l.pid,a.usename,a.application_name,a.client_addr::text,a.state,
+                           a.wait_event_type,a.wait_event,a.backend_start,a.xact_start,a.query_start,
+                           now()-a.query_start as query_age,now()-a.xact_start as xact_age,
+                           left(coalesce(a.query,''),6000) as query
+                      from pg_locks l
+                      join pg_stat_activity a on a.pid=l.pid
+                     where l.locktype='advisory' and l.classid=0 and l.objid=%s and l.granted
+                  ''',(lock_id,))
+                  print('LOCK_OWNERS='+json.dumps([dict(r) for r in cur.fetchall()],default=str,ensure_ascii=False))
+                  cur.execute("select status::text,count(*) n,min(criado_em) oldest,max(criado_em) newest from mei_email.envios group by status::text order by status::text")
+                  print('ENVIOS_STATUS='+json.dumps([dict(r) for r in cur.fetchall()],default=str,ensure_ascii=False))
+                  cur.execute("select count(*) n,min(coalesce(submitted_at,enviado_em,criado_em)) oldest,max(coalesce(submitted_at,enviado_em,criado_em)) newest from mei_email.envios where status::text in ('submitted','delivered','enviado') and coalesce(submitted_at,enviado_em,criado_em)>=now()-interval '24 hours'")
+                  print('ROLLING_24H='+json.dumps(dict(cur.fetchone()),default=str,ensure_ascii=False))
+                  cur.execute("select count(*) n from mei_email.envios where status::text in ('pending','pendente','processing','enviando')")
+                  print('QUEUE_OPEN='+json.dumps(dict(cur.fetchone()),default=str,ensure_ascii=False))
+                  cur.execute("select status::text,count(*) n,min(iniciado_em) oldest_start,max(iniciado_em) newest_start from mei_email.lotes group by status::text order by status::text")
+                  print('LOTES_STATUS='+json.dumps([dict(r) for r in cur.fetchall()],default=str,ensure_ascii=False))
+                  cur.execute("select relname,n_live_tup,n_dead_tup,last_analyze,last_autoanalyze,last_vacuum,last_autovacuum from pg_stat_user_tables where schemaname='mei_email' and relname in ('empresas','envios','lotes') order by relname")
+                  print('TABLE_STATS='+json.dumps([dict(r) for r in cur.fetchall()],default=str,ensure_ascii=False))
+                  cur.execute("select tablename,indexname,indexdef from pg_indexes where schemaname='mei_email' and tablename in ('empresas','envios','lotes') order by tablename,indexname")
+                  print('INDEXES='+json.dumps([dict(r) for r in cur.fetchall()],default=str,ensure_ascii=False))
+                  cur.execute("select pid,datname,relid::regclass::text,index_relid::regclass::text,phase,lockers_total,lockers_done,blocks_total,blocks_done,tuples_total,tuples_done from pg_stat_progress_create_index")
+                  print('INDEX_PROGRESS='+json.dumps([dict(r) for r in cur.fetchall()],default=str,ensure_ascii=False))
+                  cur.execute("select pid,state,wait_event_type,wait_event,now()-query_start age,left(query,2000) query from pg_stat_activity where datname=current_database() and pid<>pg_backend_pid() order by query_start nulls last")
+                  print('DB_ACTIVITY='+json.dumps([dict(r) for r in cur.fetchall()],default=str,ensure_ascii=False))
+          PY
+          echo '=== WORKER SOURCE ==='
+          sed -n '1,360p' worker/worker_queue_first.py || true
+          echo '=== CONFIG NONSECRET ==='
+          grep -E '^(EMAIL_PROVIDER|MICROSOFT_GRAPH_AUTH_MODE|MICROSOFT_GRAPH_USER|RATE_LIMIT_ENVIOS_POR_MINUTO|META_ENVIOS_POR_DIA|MAX_ENVIOS_POR_DIA|FILA_MIN|FILA_TARGET|POLL)' .env 2>/dev/null | sed -E 's/(CLIENT_SECRET|PASSWORD|TOKEN)=.*/\1=[REDACTED]/' || true
+          EOF
+      - name: Persist report
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/email-worker-stall-diagnostic-20260818-1925.txt
+          git commit -m 'ops: record MEI email worker stall diagnostic 20260818-1925' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

@@ -91,9 +91,9 @@ header('Content-Type: text/html; charset=UTF-8');
             <div style="margin-top:16px;padding:12px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;display:grid;gap:8px">
                 <div style="font-size:12px;color:var(--ink);font-weight:700">💳 Formas de pagamento aceitas:</div>
                 <div style="font-size:12px;color:var(--muted);line-height:1.4">
-                    ⚡ <strong>PIX com 5% de desconto</strong><br>
-                    💳 <strong>Cartão de Crédito</strong> em até 6x sem juros<br>
-                    📄 <strong>Boleto Bancário</strong> com confirmação rápida
+                    ⚡ <strong>PIX disponível</strong><br>
+                    💳 <strong>Cartão de crédito</strong> com condições apresentadas pelo gateway<br>
+                    📄 <strong>Boleto bancário</strong> disponível pelo Mercado Pago
                 </div>
             </div>
             <div style="margin-top:16px;display:grid;gap:6px">

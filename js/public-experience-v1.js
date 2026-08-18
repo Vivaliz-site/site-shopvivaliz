@@ -241,7 +241,8 @@ function installTestimonials() {
       } else {
         grid.innerHTML = items.slice(0, 6).map(function (item) {
           var city = String(item.city || '').trim();
-          return '<article class="testimonial-card"><div class="testimonial-stars" aria-label="' + esc(item.rating) + ' de 5 estrelas">' + esc(stars(item.rating)) + '</div><p>“' + esc(item.message) + '”</p><div class="testimonial-author"><span class="testimonial-avatar sv-initials" aria-hidden="true">' + esc(initials(item.name)) + '</span><div><strong>' + esc(item.name) + '</strong>' + (city ? '<span>' + esc(city) + '</span>' : '') + '<small class="sv-moderated-label">✓ Avaliação moderada</small></div></div></article>';
+          var label = item.verified_purchase ? '✓ Compra verificada' : '✓ Avaliação moderada';
+          return '<article class="testimonial-card"><div class="testimonial-stars" aria-label="' + esc(item.rating) + ' de 5 estrelas">' + esc(stars(item.rating)) + '</div><p>“' + esc(item.message) + '”</p><div class="testimonial-author"><span class="testimonial-avatar sv-initials" aria-hidden="true">' + esc(initials(item.name)) + '</span><div><strong>' + esc(item.name) + '</strong>' + (city ? '<span>' + esc(city) + '</span>' : '') + '<small class="sv-moderated-label">' + label + '</small></div></div></article>';
         }).join('');
       }
       if (!section.querySelector('.sv-testimonial-actions')) {
@@ -271,23 +272,71 @@ function installSupport() {
 }
 function installMobileNav() {
   if (window.innerWidth > 820 || !isPublicPath(window.location.pathname)) return;
-  if (document.querySelector('.sv-mobile-nav-bar,.sv-mobile-bottom-nav,.sv-checkout-mobile-total,.sv-mobile-buybar')) return;
-  var nav = document.createElement('nav');
+  var nav = document.querySelector('.sv-mobile-nav-bar');
   var path = window.location.pathname || '/';
+  var cartCount = 0;
+  try {
+    var items = window.ShopVivalizCart && typeof window.ShopVivalizCart.get === 'function'
+      ? window.ShopVivalizCart.get()
+      : JSON.parse(localStorage.getItem('shopvivaliz_cart') || '[]');
+    cartCount = Array.isArray(items) ? items.reduce(function (sum, item) {
+      return sum + (Number(item && item.quantity) || 1);
+    }, 0) : 0;
+  } catch (error) {
+    cartCount = 0;
+  }
+
   var links = [
     {href:'/',label:'Início',icon:'⌂',active:isHomePath(path)},
-    {href:'/catalogo',label:'Busca',icon:'⌕',active:/^\/catalogo\b/i.test(path)},
-    {href:'/carrinho',label:'Carrinho',icon:'🛒',active:/^\/carrinho\b/i.test(path)},
-    {href:'/blog/',label:'Blog',icon:'✎',active:/^\/blog\b/i.test(path)},
-    {href:'/auth/login.php',label:'Conta',icon:'◉',active:/^\/auth\b/i.test(path)}
+    {href:'/catalogo/',label:'Categorias',icon:'▦',active:/^\/catalogo\b/i.test(path)},
+    {href:'/catalogo/',label:'Busca',icon:'⌕',active:/^\/catalogo\b/i.test(path)},
+    {href:'/carrinho',label:'Carrinho',icon:'🛒',active:/^\/carrinho\b/i.test(path),badge:cartCount},
+    {href:'/contato/',label:'Liz/Ajuda',icon:'✆',active:/^\/contato\b/i.test(path) || /sv-liz/.test(location.hash || '')}
   ];
-  nav.className = 'sv-mobile-nav-bar';
-  nav.setAttribute('aria-label', 'Navegação rápida');
-  nav.innerHTML = links.map(function (link) {
+
+  if (!nav) {
+    nav = document.createElement('nav');
+    nav.className = 'sv-mobile-nav-bar';
+    nav.setAttribute('aria-label', 'Navegação rápida');
+    document.body.appendChild(nav);
+  }
+
+  var navHtml = links.map(function (link) {
     var attrs = link.active ? ' aria-current="page" class="is-active"' : '';
-    return '<a href="' + link.href + '"' + attrs + '><span class="nav-icon" aria-hidden="true">' + link.icon + '</span><span>' + link.label + '</span></a>';
+    var badge = link.badge > 0 ? '<span class="nav-badge" aria-label="' + link.badge + ' itens no carrinho" style="position:absolute;top:2px;right:18px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:#ef4444;color:#fff;font-size:10px;line-height:16px;font-weight:900;box-shadow:0 8px 16px rgba(239,68,68,.28);">' + link.badge + '</span>' : '';
+    return '<a href="' + link.href + '" style="position:relative;"' + attrs + ' data-mobile-nav="' + link.label.toLowerCase().replace(/\s+/g, '-') + '"><span class="nav-icon" aria-hidden="true">' + link.icon + '</span><span>' + link.label + '</span>' + badge + '</a>';
   }).join('');
-  document.body.appendChild(nav);
+  var navSignature = links.map(function (link) {
+    return [link.href, link.label, link.active ? '1' : '0', String(link.badge || 0)].join('::');
+  }).join('|');
+
+  // Mobile browsers can cancel a tap if the tapped node is replaced between
+  // touchstart and click. The MutationObserver below intentionally refreshes
+  // responsive UI after DOM changes, so keep the bottom nav stable and only
+  // rewrite its HTML when route/cart state really changed. Do not compare
+  // innerHTML here: browsers normalize style spacing/attribute order, which
+  // would make the comparison true forever and recreate the tap target again.
+  if (nav.dataset.svNavSignature !== navSignature) {
+    nav.innerHTML = navHtml;
+    nav.dataset.svNavSignature = navSignature;
+  }
+
+  if (nav.dataset.svClickBound !== '1') {
+    nav.addEventListener('click', function (event) {
+      var target = event.target;
+      var link = target && typeof target.closest === 'function'
+        ? target.closest('a[data-mobile-nav]')
+        : null;
+      if (!link || !nav.contains(link)) return;
+      if (link.getAttribute('data-mobile-nav') !== 'liz/ajuda') return;
+      var launcher = document.getElementById('sv-liz-launcher');
+      if (!launcher) return;
+      event.preventDefault();
+      event.stopPropagation();
+      launcher.click();
+    }, true);
+    nav.dataset.svClickBound = '1';
+  }
 }
 function updatePageState() {
   var body = document.body;
@@ -342,6 +391,10 @@ function init() {
   installTestimonials();
   installSupport();
   scheduleResponsivePass();
+  window.addEventListener('shopvivaliz:cart-updated', scheduleResponsivePass);
+  window.addEventListener('storage', function (event) {
+    if (event && event.key === 'shopvivaliz_cart') scheduleResponsivePass();
+  });
   if (typeof MutationObserver !== 'undefined' && document.body) {
     new MutationObserver(function (mutations) {
       var relevant = mutations.some(function (mutation) { return mutation.addedNodes.length || mutation.removedNodes.length; });

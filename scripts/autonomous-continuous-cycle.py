@@ -26,7 +26,9 @@ DIRECTOR_PRIORITY_FALLBACK = ["sales_flow", "conversion_impact", "seo_gap", "cat
 CURRENT_TASK_SELECTOR = "autonomous-continuous-cycle"
 LOGS_DIR = Path("logs")
 PHASE_REPORT_JSON = LOGS_DIR / "autonomy-phase-report.json"
-HEALTH_REPORT_JSON = LOGS_DIR / "system-health-check.json"
+# `system-health-check.py` writes this canonical artifact.  Reading the old
+# logs path kept a stale historical CRITICAL result alive after a healthy run.
+HEALTH_REPORT_JSON = Path("artifacts/system-health/report.json")
 CYCLE_REPORT_JSON = LOGS_DIR / "autonomous-cycle-report.json"
 CYCLE_REPORT_MD = LOGS_DIR / "autonomous-cycle-report.md"
 EVENTS_LOG_JSONL = LOGS_DIR / "autonomous-cycle-events.jsonl"
@@ -86,7 +88,7 @@ def update_phase_report() -> dict[str, Any]:
 
 
 def maybe_generate_backlog(queue_data: dict[str, Any]) -> dict[str, Any]:
-    pending_tasks = [task for task in queue_data.get("queue", []) if task.get("status") == "pending"]
+    pending_tasks = [task for task in queue_data.get("tasks", []) if task.get("status") == "pending"]
     if len(pending_tasks) >= 3:
         return {
             "triggered": False,
@@ -98,7 +100,7 @@ def maybe_generate_backlog(queue_data: dict[str, Any]) -> dict[str, Any]:
     result = run_command([sys.executable, "scripts/auto-task-generator.py"])
     refreshed_queue = load_queue()
     pending_after = len(
-        [task for task in refreshed_queue.get("queue", []) if task.get("status") == "pending"]
+        [task for task in refreshed_queue.get("tasks", []) if task.get("status") == "pending"]
     )
     return {
         "triggered": True,
@@ -205,9 +207,9 @@ def director_dimension(task: dict[str, Any], director_priorities: list[str]) -> 
 
 
 def current_autonomous_task(queue_data: dict[str, Any]) -> dict[str, Any] | None:
-    for task in queue_data.get("queue", []):
+    for task in queue_data.get("tasks", []):
         if (
-            task.get("status") == "in_progress"
+            task.get("status") == "running"
             and task.get("selected_by") == CURRENT_TASK_SELECTOR
         ):
             return task
@@ -308,16 +310,16 @@ def select_task(
     if advance:
         selected_id = str(selected.get("id", ""))
         persisted_task: dict[str, Any] | None = None
-        for task in queue_data.get("queue", []):
+        for task in queue_data.get("tasks", []):
             if str(task.get("id", "")) != selected_id:
                 continue
-            task["status"] = "in_progress"
+            task["status"] = "running"
             task["selected_at"] = utc_now()
             task["selected_by"] = CURRENT_TASK_SELECTOR
             task["selection_reason"] = selection_reason(selected)
             persisted_task = task
             break
-        save_queue(queue_data)
+        save_queue(queue_data, runtime_actor="autonomous-continuous-cycle")
         if persisted_task is not None:
             selected = persisted_task
 
@@ -347,9 +349,9 @@ def build_report(advance: bool) -> dict[str, Any]:
     )
 
     backlog_snapshot = {
-        "pending": len([task for task in queue_data.get("queue", []) if task.get("status") == "pending"]),
-        "in_progress": len([task for task in queue_data.get("queue", []) if task.get("status") == "in_progress"]),
-        "completed": len([task for task in queue_data.get("queue", []) if task.get("status") == "completed"]),
+        "pending": len([task for task in queue_data.get("tasks", []) if task.get("status") == "pending"]),
+        "in_progress": len([task for task in queue_data.get("tasks", []) if task.get("status") == "running"]),
+        "completed_verified": len([task for task in queue_data.get("tasks", []) if task.get("status") == "completed_verified"]),
     }
 
     report = {
@@ -425,7 +427,7 @@ def write_report(report: dict[str, Any]) -> tuple[Path, Path]:
         "## Backlog Snapshot",
         f"- Pending: `{report['backlog_snapshot']['pending']}`",
         f"- In progress: `{report['backlog_snapshot']['in_progress']}`",
-        f"- Completed: `{report['backlog_snapshot']['completed']}`",
+        f"- Completed verified: `{report['backlog_snapshot']['completed_verified']}`",
         "",
         "## Trace",
         f"- Changed files: `{', '.join(report['changed_files']) if report['changed_files'] else 'nenhum'}`",
@@ -501,7 +503,7 @@ def print_report(report: dict[str, Any], json_path: Path, md_path: Path) -> int:
         "Backlog snapshot: "
         f"pending={report['backlog_snapshot']['pending']} "
         f"in_progress={report['backlog_snapshot']['in_progress']} "
-        f"completed={report['backlog_snapshot']['completed']}"
+        f"completed_verified={report['backlog_snapshot']['completed_verified']}"
     )
     print(
         f"Selection: mode={report['selection']['mode']} "
@@ -530,7 +532,7 @@ def main() -> int:
     parser.add_argument(
         "--advance",
         action="store_true",
-        help="Persist the selected safe task as in_progress.",
+        help="Persist the selected safe task as running.",
     )
     args = parser.parse_args()
 

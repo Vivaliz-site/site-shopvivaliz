@@ -1,0 +1,71 @@
+name: Repair EXO PowerShell enterprise app 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/repair-exo-powershell-enterprise-app-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Ensure Microsoft Exchange REST API Based Powershell service principal exists
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import json, urllib.request, urllib.parse, urllib.error
+          from app.email_provider import MicrosoftGraphEmailProvider
+          token=MicrosoftGraphEmailProvider()._get_access_token()
+          headers={'Authorization':'Bearer '+token,'Accept':'application/json','Content-Type':'application/json'}
+          appid='fb78d390-0c51-40cd-8e17-fdbfab77341b'
+          filt=urllib.parse.quote("appId eq '"+appid+"'")
+          url='https://graph.microsoft.com/v1.0/servicePrincipals?$filter='+filt+'&$select=id,appId,displayName,accountEnabled,appRoleAssignmentRequired'
+          def get():
+              req=urllib.request.Request(url,headers=headers)
+              with urllib.request.urlopen(req,timeout=30) as r:
+                  return json.load(r)
+          before=get()
+          vals=before.get('value',[])
+          print('BEFORE_COUNT='+str(len(vals)))
+          if not vals:
+              body=json.dumps({'appId':appid}).encode()
+              req=urllib.request.Request('https://graph.microsoft.com/v1.0/servicePrincipals',data=body,headers=headers,method='POST')
+              try:
+                  with urllib.request.urlopen(req,timeout=30) as r:
+                      created=json.load(r)
+                      print('CREATE_HTTP='+str(r.status))
+                      print('CREATED_ID='+str(created.get('id','')))
+                      print('CREATED_NAME='+str(created.get('displayName','')))
+              except urllib.error.HTTPError as e:
+                  print('CREATE_HTTP='+str(e.code))
+                  print('CREATE_ERROR='+e.read().decode('utf-8','replace')[:1500])
+                  raise
+          after=get()
+          vals=after.get('value',[])
+          print('AFTER_COUNT='+str(len(vals)))
+          for sp in vals:
+              print('SP='+json.dumps(sp,ensure_ascii=False,sort_keys=True))
+          if len(vals)!=1:
+              raise SystemExit('EXO_POWERSHELL_SP_NOT_READY')
+          if vals[0].get('accountEnabled') is False:
+              raise SystemExit('EXO_POWERSHELL_SP_DISABLED')
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

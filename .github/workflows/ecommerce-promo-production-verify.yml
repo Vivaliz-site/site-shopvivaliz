@@ -2,10 +2,6 @@ name: Ecommerce Promo Production Verify
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/ecommerce-promo-production-verify.yml"
 
 permissions:
   contents: read

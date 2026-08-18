@@ -4,6 +4,9 @@
   const page = location.pathname.replace(/\/+$/, '');
   if (page !== '/admin/ai-image-studio/admin_dashboard.php') return;
 
+  if (window.__svImageGenerationUsabilityV2Loaded) return;
+  window.__svImageGenerationUsabilityV2Loaded = true;
+
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const TYPES = { cover: 'Capa', white: 'Branco tecnico', hero: 'Hero', ambient: 'Ambientada' };
@@ -362,7 +365,7 @@
     insertResume();
     enhanceIntel();
     $('#iv-list')?.addEventListener('change', () => setTimeout(saveDraft, 0));
-    $('#iv-channel')?.addEventListener('change', () => { setTimeout(() => { initialized = false; initialize(); updateResume(); }, 500); });
+    $('#iv-channel')?.addEventListener('change', () => { setTimeout(() => { updateResume(); applyDraft(); }, 500); });
     $('#iv-provider')?.addEventListener('change', saveDraft);
     $('#iv-model')?.addEventListener('input', saveDraft);
     document.addEventListener('click', (event) => {

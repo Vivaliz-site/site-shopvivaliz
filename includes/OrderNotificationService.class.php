@@ -353,7 +353,8 @@ class OrderNotificationService
         }
 
         // WhatsApp details
-        $whatsapp = getenv('LOJA_WHATSAPP') ?: '551140415850';
+        require_once __DIR__ . '/company-contact.php';
+        $whatsapp = sv_company_whatsapp_digits();
         $whatsappFormatted = '(' . substr($whatsapp, 2, 2) . ') ' . substr($whatsapp, 4, 5) . '-' . substr($whatsapp, 9);
 
         // Generate items rows and text representation

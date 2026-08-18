@@ -1,9 +1,9 @@
 {
   "package": "shopvivaliz-production-agents",
-  "version": "11.1.0-manual-mutating-agents",
-  "updated_at": "2026-08-10",
-  "trigger_mode": "manual",
-  "schedule_minutes": 0,
+  "version": "11.2.0-scheduled-evidence-agents",
+  "updated_at": "2026-08-18",
+  "trigger_mode": "scheduled",
+  "schedule_minutes": 60,
   "workflow": ".github/workflows/autonomous-watchdog.yml",
   "execution_path": "/home/ubuntu/shopvivaliz-deploy/current",
   "runtime_endpoint": "/api/agent/real-work-orchestrator.php",

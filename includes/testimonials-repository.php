@@ -42,6 +42,8 @@ final class TestimonialsRepository
             'rating' => max(1, min(5, (int)($data['rating'] ?? 5))),
             'message' => trim(strip_tags((string)($data['message'] ?? ''))),
             'order_reference' => trim(strip_tags((string)($data['order_reference'] ?? ''))),
+            'verified_purchase' => (bool)($data['verified_purchase'] ?? false),
+            'product_sku' => trim(strip_tags((string)($data['product_sku'] ?? ''))),
             'status' => $status,
             'created_at' => gmdate('c'),
             'moderated_at' => $moderatedAt,
@@ -61,7 +63,16 @@ final class TestimonialsRepository
     {
         $rows = array_values(array_filter($this->readAll(), fn(array $r): bool => ($r['status'] ?? '') === 'approved'));
         usort($rows, fn(array $a, array $b): int => strcmp((string)($b['created_at'] ?? ''), (string)($a['created_at'] ?? '')));
-        return array_slice($rows, 0, max(1, $limit));
+        $rows = array_slice($rows, 0, max(1, $limit));
+        return array_map(static fn(array $row): array => [
+            'id' => (string)($row['id'] ?? ''),
+            'name' => (string)($row['name'] ?? 'Cliente'),
+            'city' => (string)($row['city'] ?? ''),
+            'rating' => max(1, min(5, (int)($row['rating'] ?? 5))),
+            'message' => (string)($row['message'] ?? ''),
+            'verified_purchase' => (bool)($row['verified_purchase'] ?? false),
+            'created_at' => (string)($row['created_at'] ?? ''),
+        ], $rows);
     }
 
     public function byStatus(string $status): array
@@ -74,7 +85,9 @@ final class TestimonialsRepository
     public function pendingUnmoderated(int $limit = 10): array
     {
         $rows = array_values(array_filter($this->readAll(), static function (array $row): bool {
-            return ($row['status'] ?? '') === 'pending' && empty($row['moderated_at']);
+            return ($row['status'] ?? '') === 'pending'
+                && !empty($row['verified_purchase'])
+                && empty($row['moderated_at']);
         }));
         usort($rows, fn(array $a, array $b): int => strcmp((string)($a['created_at'] ?? ''), (string)($b['created_at'] ?? '')));
         return array_slice($rows, 0, max(1, $limit));

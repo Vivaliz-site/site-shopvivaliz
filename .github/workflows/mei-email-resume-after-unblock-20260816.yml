@@ -1,0 +1,42 @@
+name: MEI email resume after unblock 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/mei-email-resume-after-unblock-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Remove sender pause and start worker
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
+            set -euo pipefail
+            echo BEFORE_WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+            if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo BEFORE_SENTINEL=present; else echo BEFORE_SENTINEL=absent; fi
+            sudo rm -f /var/lib/mei-mg-email/sender_blocked.pause
+            sudo systemctl reset-failed mei-mg-email-worker.service || true
+            sudo systemctl start mei-mg-email-worker.service
+            sleep 15
+            echo AFTER_WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+            if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo AFTER_SENTINEL=present; else echo AFTER_SENTINEL=absent; fi
+            echo ---WORKER_STATUS---
+            sudo systemctl --no-pager --full status mei-mg-email-worker.service | head -n 25 || true
+            echo ---WORKER_JOURNAL---
+            sudo journalctl -u mei-mg-email-worker.service --since "2 minutes ago" --no-pager -n 80 || true
+          '
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
