@@ -181,6 +181,13 @@ class TaskQueueLibraryTests(unittest.TestCase):
         self.assertIn('task["status"] = "running"', source)
         self.assertNotIn('task["status"] = "in_progress"', source)
 
+    def test_cycle_reads_the_canonical_health_artifact(self) -> None:
+        source = (REPO_ROOT / "scripts" / "autonomous-continuous-cycle.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('HEALTH_REPORT_JSON = Path("artifacts/system-health/report.json")', source)
+        self.assertNotIn('HEALTH_REPORT_JSON = LOGS_DIR / "system-health-check.json"', source)
+
 
 class TaskQueueCliTests(unittest.TestCase):
     def make_fixture(self) -> Path:

@@ -26,7 +26,9 @@ DIRECTOR_PRIORITY_FALLBACK = ["sales_flow", "conversion_impact", "seo_gap", "cat
 CURRENT_TASK_SELECTOR = "autonomous-continuous-cycle"
 LOGS_DIR = Path("logs")
 PHASE_REPORT_JSON = LOGS_DIR / "autonomy-phase-report.json"
-HEALTH_REPORT_JSON = LOGS_DIR / "system-health-check.json"
+# `system-health-check.py` writes this canonical artifact.  Reading the old
+# logs path kept a stale historical CRITICAL result alive after a healthy run.
+HEALTH_REPORT_JSON = Path("artifacts/system-health/report.json")
 CYCLE_REPORT_JSON = LOGS_DIR / "autonomous-cycle-report.json"
 CYCLE_REPORT_MD = LOGS_DIR / "autonomous-cycle-report.md"
 EVENTS_LOG_JSONL = LOGS_DIR / "autonomous-cycle-events.jsonl"
