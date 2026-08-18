@@ -1,10 +1,6 @@
 name: MEI email retention apply V025 v1
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/mei-email-retention-apply-v025-v1.yml'
   workflow_dispatch:
 
 permissions:

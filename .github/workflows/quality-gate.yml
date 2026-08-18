@@ -32,9 +32,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install --yes shellcheck yamllint
-          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          # azure.archive intermittently stalls on hosted runners. This affects
+          # only the ephemeral job; use Ubuntu's official mirror for the
+          # required validators and retain bounded, fail-closed installation.
+          sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/apt-mirrors.txt
+          timeout -k 15s 120s sudo apt-get -o Acquire::Retries=0 update
+          timeout -k 15s 180s sudo apt-get install --yes shellcheck yamllint
+          timeout -k 15s 180s go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Install verified Gitleaks CLI

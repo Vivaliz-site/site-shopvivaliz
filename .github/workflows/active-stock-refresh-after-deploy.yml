@@ -2,15 +2,6 @@ name: Active Stock Refresh After Deploy
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'olist/fetch-estoque-v3.php'
-      - 'olist/force-sync-cache.php'
-      - 'olist/sync-on-webhook.php'
-      - 'olist/webhook-receiver.php'
-      - 'sync-daemon-to-db.php'
-      - 'tests/authoritative-stock-refresh-contract-test.php'
 
 permissions:
   contents: read

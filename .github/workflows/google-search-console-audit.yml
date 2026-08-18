@@ -59,9 +59,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${GOOGLE_OAUTH_CLIENT_ID:-}" || { echo 'GOOGLE_OAUTH_CLIENT_ID is unavailable to this job.' >&2; exit 1; }
-          test -n "${GOOGLE_OAUTH_CLIENT_SECRET:-}" || { echo 'GOOGLE_OAUTH_CLIENT_SECRET is unavailable to this job.' >&2; exit 1; }
-          test -n "${GOOGLE_OAUTH_REFRESH_TOKEN:-}" || { echo 'GOOGLE_OAUTH_REFRESH_TOKEN is unavailable to this job. Check repository/environment secret placement.' >&2; exit 1; }
+          if [ -z "${GOOGLE_OAUTH_CLIENT_ID:-}" ]; then
+            echo 'GOOGLE_OAUTH_CLIENT_ID is unavailable to this job.' >&2
+            exit 1
+          fi
+          if [ -z "${GOOGLE_OAUTH_CLIENT_SECRET:-}" ]; then
+            echo 'GOOGLE_OAUTH_CLIENT_SECRET is unavailable to this job.' >&2
+            exit 1
+          fi
+          if [ -z "${GOOGLE_OAUTH_REFRESH_TOKEN:-}" ]; then
+            echo 'GOOGLE_OAUTH_REFRESH_TOKEN is unavailable to this job. Check repository/environment secret placement.' >&2
+            exit 1
+          fi
 
       - name: Ensure Search Console API is enabled
         shell: bash

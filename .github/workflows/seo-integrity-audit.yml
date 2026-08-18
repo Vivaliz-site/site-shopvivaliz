@@ -76,7 +76,7 @@ jobs:
           path: |
             seo-integrity-audit.json
             seo-integrity-audit.md
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
 
       - name: Enforce URL integrity after deployment

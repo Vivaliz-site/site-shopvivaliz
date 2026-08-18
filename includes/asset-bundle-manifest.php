@@ -34,6 +34,7 @@ function sv_home_css_bundle_manifest(): array
         ['path' => 'css/home-mobile-final.css', 'optional' => false],
         ['path' => 'css/visual-polish-v4.css', 'optional' => false],
         ['path' => 'css/home-mobile-corrections-v1.css', 'optional' => false],
+        ['path' => 'css/home-design-refinement-v1.css', 'optional' => false],
     ];
 }
 

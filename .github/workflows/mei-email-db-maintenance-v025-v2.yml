@@ -46,8 +46,9 @@ jobs:
           sudo pkill -KILL -f '[f]lyway.*target=25' || true
           sudo pkill -KILL -f 'scripts/disparar_10000_mei_mg.py' || true
 
-          git fetch origin main
-          git reset --hard origin/main
+            git fetch origin main
+            test -z "$(git status --porcelain)"
+            git merge --ff-only origin/main
           test -s db/migrations/V025__purge_operational_records_and_block_reimport.sql
           latest="$(ls -1t /home/ubuntu/mei-backups/mei_email_before_retention_*.dump | head -n1)"
           test -s "$latest"
