@@ -1,0 +1,22 @@
+{
+  "schema": "shopvivaliz.agent_merge_result.v1",
+  "recorded_at": "2026-08-18T23:58:00Z",
+  "agent": "chatgpt",
+  "repository": "Vivaliz-site/site-shopvivaliz",
+  "status": "DIRECT_TO_MAIN",
+  "pr": null,
+  "branch": "main",
+  "head_sha": "724493e47f7d92c7e8c98e153cde7aaf2875be48",
+  "merge_commit_sha": "724493e47f7d92c7e8c98e153cde7aaf2875be48",
+  "checks": [],
+  "pending": false,
+  "pending_reason": "",
+  "auto_fix_required": false,
+  "auto_fix_action": "none",
+  "next_agent_instruction": "No pending merge correction. Continue normal work and publish a new merge result after the next merge-related action.",
+  "evidence": {
+    "run_index_file": "ops/actions-run-index.json",
+    "logs": [],
+    "artifacts": []
+  }
+}
