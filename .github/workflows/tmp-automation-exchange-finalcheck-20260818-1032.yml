@@ -39,15 +39,15 @@ jobs:
           fi
           echo "WORKER_BEFORE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
           echo 'SENTINEL_BEFORE=present'
-          for i in $(seq 1 36); do
-            if ! pgrep -af 'apt-get|/usr/bin/dpkg' >/dev/null 2>&1; then
+          for i in $(seq 1 24); do
+            if ! pgrep -af '[a]pt-get|/usr/bin/[d]pkg' >/dev/null 2>&1; then
               echo "PKG_WAIT_DONE=$i"
               break
             fi
             echo "PKG_WAIT=$i"
             sleep 5
           done
-          if pgrep -af 'apt-get|/usr/bin/dpkg' >/dev/null 2>&1; then
+          if pgrep -af '[a]pt-get|/usr/bin/[d]pkg' >/dev/null 2>&1; then
             echo 'PKG_MANAGER_STILL_BUSY=true'
             echo 'RESTRICTION_RESULT=uncertain reason=pkg_manager_busy'
             exit 0
@@ -109,3 +109,4 @@ jobs:
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey
+# corrected package process match
