@@ -8,6 +8,7 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/config/bootstrap-env.php';
 require_once dirname(__DIR__, 2) . '/config/agent-keys.php';
+require_once dirname(__DIR__, 2) . '/includes/order-rate-limit.php';
 
 header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
@@ -18,6 +19,11 @@ if (!in_array($method, ['GET', 'POST'], true)) {
     http_response_code(405);
     header('Allow: GET, POST');
     echo json_encode(['status' => 'error', 'message' => 'Method Not Allowed']);
+    exit;
+}
+if ($method === 'POST' && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 65536) {
+    http_response_code(413);
+    echo json_encode(['status' => 'error', 'message' => 'Payload muito grande.'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -200,6 +206,12 @@ if (squad_operations_mode($payload)) {
     exit;
 }
 
+if ($method === 'POST' && !svorl_allow(20, 300, 'squad-chat-public')) {
+    http_response_code(429);
+    echo json_encode(['status' => 'error', 'message' => 'Muitas mensagens. Aguarde alguns instantes.'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 $response = [
     'status' => 'ok',
     'endpoint' => 'squad-chat',
@@ -219,21 +231,16 @@ echo json_encode($response, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 function processLizChat(string $message, string $context): string
 {
     $geminiKey = getenv('GEMINI_API_KEY') ?: '';
-    $learningFile = dirname(__DIR__, 2) . '/storage/private/liz_learning_base.json';
-    $learningData = ['learned_facts' => [], 'history' => []];
-    if (is_file($learningFile)) {
-        $learningData = json_decode((string) file_get_contents($learningFile), true) ?: $learningData;
-    } else {
-        @mkdir(dirname($learningFile), 0777, true);
-    }
-
-    $catalogFile = dirname(__DIR__, 2) . '/api/catalog/fallback-products.json';
+    $root = dirname(__DIR__, 2);
+    require_once $root . '/includes/catalog-runtime.php';
+    $products = svcr_products();
     $productsSummary = '';
-    if (is_file($catalogFile)) {
-        $products = json_decode((string) file_get_contents($catalogFile), true) ?: [];
-        foreach (array_slice($products, 0, 25) as $p) {
-            $productsSummary .= "- SKU: {$p['sku']}, Nome: {$p['name']}, Preço: R$ {$p['price']}, Categoria: {$p['category']}\n";
-        }
+    foreach (array_slice($products, 0, 25) as $product) {
+        $sku = trim((string)($product['sku'] ?? ''));
+        $name = trim((string)($product['name'] ?? ''));
+        $category = trim((string)($product['category'] ?? ''));
+        if ($sku === '' || $name === '') continue;
+        $productsSummary .= "- SKU: {$sku}; nome: {$name}; categoria: {$category}\n";
     }
 
     $normMsg = strtr(strtolower($message), [
@@ -244,25 +251,27 @@ function processLizChat(string $message, string $context): string
 
     if ($geminiKey === '') {
         if (preg_match('/(troca|devolucao|devolver|reembolso)/i', $normMsg)) {
-            return 'Você tem até 7 dias após o recebimento para solicitar a troca ou devolução do seu produto sem burocracia! Basta enviar um e-mail para atendimento@shopvivaliz.com.br ou falar no WhatsApp (37) 99937-4112 informando o número do seu pedido.';
+            return 'Você pode solicitar a devolução em até 7 dias corridos após o recebimento. Envie um e-mail para atendimento@shopvivaliz.com.br ou fale no WhatsApp (37) 99937-4112 e informe o número do pedido.';
         }
         if (preg_match('/(entrega|frete|prazo|demora|envio|chega)/i', $normMsg)) {
-            return 'Enviamos para todo o Brasil! O prazo e o frete são calculados no carrinho pelo seu CEP. Compras acima de R$ 199 possuem FRETE GRÁTIS!';
+            return 'O valor e o prazo de entrega são calculados pelo CEP no carrinho. A opção disponível depende do endereço e dos itens do pedido.';
         }
         if (preg_match('/(seguro|pagamento|boleto|cartao|pix|parcela)/i', $normMsg)) {
-            return 'Aceitamos PIX (com aprovação imediata), Boleto Bancário e Cartão de Crédito em até 12x. Todos os pagamentos são protegidos por criptografia SSL.';
+            return 'O checkout oferece Pix, boleto e cartão conforme o gateway escolhido. Parcelas, taxas e valor final são mostrados antes da confirmação do pagamento.';
         }
         if (preg_match('/(contato|email|telefone|whatsapp|atendimento|falar)/i', $normMsg)) {
             return 'Você pode falar com nosso atendimento humano pelo WhatsApp (37) 99937-4112 ou e-mail atendimento@shopvivaliz.com.br.';
         }
         if (preg_match('/(desconto|cupom|promocao|oferta)/i', $normMsg)) {
-            return 'Use o cupom VOLTEI5 na finalização da sua compra para ganhar 5% OFF imediato na sua primeira compra!';
+            return 'Cupons e promoções só são válidos quando aparecem no site e são revalidados no checkout. Não consigo prometer um desconto sem essa confirmação.';
         }
         if (preg_match('/(rodizio|rodinha|roda|silicone|gel)/i', $normMsg)) {
-            return 'Temos excelentes opções de rodízios em silicone gel e aço, como o Kit 4 Rodízios Soprano 35mm giratórios com e sem freio (R$ 45,00). Você pode conferir todos no nosso catálogo!';
+            return 'Você pode consultar as opções atuais de rodízios no catálogo. Confira medida, material, capacidade e tipo de fixação na página do produto; se precisar, informe o SKU ao atendimento.';
         }
         if (preg_match('/(produto|item|sku|codigo|catalogo|comprar)/i', $normMsg)) {
-            return 'Temos mais de 180 produtos organizados em nosso catálogo oficial (rodízios, utilidades, ferramentas, organização e jardim). Qual linha você gostaria de ver?';
+            return $products !== []
+                ? 'Consulte o catálogo atual e informe o nome, uso ou SKU do item para eu ajudar a localizar a opção correta.'
+                : 'Não consegui confirmar o catálogo agora. Tente novamente em instantes ou fale com o atendimento informando o item que procura.';
         }
         return 'Olá! Sou a Liz, assistente virtual da ShopVivaliz. Posso te ajudar com produtos, frete, cupons, trocas e devoluções. Como posso te ajudar hoje?';
     }
@@ -271,22 +280,18 @@ function processLizChat(string $message, string $context): string
     $systemPrompt .= "Atenda o cliente de forma objetiva, gentil e útil.\n\n";
     $systemPrompt .= "Dados da loja:\n";
     $systemPrompt .= "- Atendimento: atendimento@shopvivaliz.com.br / WhatsApp (37) 99937-4112\n";
-    $systemPrompt .= "- Devolução / Troca: Prazo de 7 dias sem burocracia via e-mail ou WhatsApp\n";
-    $systemPrompt .= "- Frete Grátis: Em compras acima de R$ 199 pra todo o Brasil\n";
-    $systemPrompt .= "- Cupom: VOLTEI5 (5% OFF na 1ª compra)\n";
+    $systemPrompt .= "- Devolução: solicitação em até 7 dias corridos após o recebimento, via e-mail ou WhatsApp\n";
+    $systemPrompt .= "- Frete e prazo: somente o cálculo por CEP no carrinho é autoritativo\n";
+    $systemPrompt .= "- Pagamento e promoções: nunca invente parcelas, desconto, cupom ou frete grátis; remeta às condições mostradas e revalidadas no checkout\n";
+    $systemPrompt .= "- Catálogo: use somente os itens canônicos listados abaixo; sem item correspondente, diga que não conseguiu confirmar\n";
     $systemPrompt .= "- Contexto: {$context}\n";
     if ($productsSummary !== '') {
         $systemPrompt .= "Produtos de contexto:\n{$productsSummary}\n";
     }
 
-    $contents = [];
-    foreach (array_slice($learningData['history'] ?? [], -10) as $msg) {
-        $contents[] = [
-            'role' => $msg['role'] === 'bot' ? 'model' : 'user',
-            'parts' => [['text' => $msg['content']]],
-        ];
-    }
-    $contents[] = ['role' => 'user', 'parts' => [['text' => $message]]];
+    // Este endpoint legado não possui identidade de conversa. Não misturar o
+    // histórico de um visitante com outro nem persistir mensagens públicas.
+    $contents = [['role' => 'user', 'parts' => [['text' => $message]]]];
 
     $model = getenv('SQUAD_GEMINI_MODEL') ?: 'gemini-1.5-flash';
     $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent?key=' . $geminiKey;
@@ -300,22 +305,17 @@ function processLizChat(string $message, string $context): string
     $answer = trim($chat['candidates'][0]['content']['parts'][0]['text'] ?? '');
     if ($answer === '') {
         if (preg_match('/(troca|devolucao|devolver|reembolso)/i', $normMsg)) {
-            $answer = 'Você tem até 7 dias após o recebimento para solicitar a troca ou devolução do seu produto sem burocracia! Basta enviar um e-mail para atendimento@shopvivaliz.com.br ou falar no WhatsApp (37) 99937-4112 informando o número do seu pedido.';
+            $answer = 'Você pode solicitar a devolução em até 7 dias corridos após o recebimento. Envie um e-mail para atendimento@shopvivaliz.com.br ou fale no WhatsApp (37) 99937-4112 e informe o número do pedido.';
         } elseif (preg_match('/(rodizio|rodinha|roda|silicone|gel)/i', $normMsg)) {
-            $answer = 'Temos excelentes opções de rodízios em silicone gel e aço, como o Kit 4 Rodízios Soprano 35mm giratórios com e sem freio (R$ 45,00). Você pode conferir todos no nosso catálogo!';
+            $answer = 'Consulte as opções atuais de rodízios no catálogo e confira medida, material, capacidade e tipo de fixação antes da compra.';
         } elseif (preg_match('/(produto|item|sku|codigo|comprar)/i', $normMsg)) {
-            $answer = 'Temos mais de 180 produtos organizados em nosso catálogo oficial (rodízios, utilidades, ferramentas, organização e jardim). Posso te ajudar a encontrar algum item específico?';
+            $answer = 'Informe o nome, uso ou SKU do item. Eu só confirmo produtos que estejam no catálogo atual.';
         } elseif (preg_match('/(entrega|frete|prazo|envio)/i', $normMsg)) {
-            $answer = 'Enviamos para todo o Brasil com frete grátis nas compras acima de R$ 199. Você também ganha 5% OFF na 1ª compra usando o cupom VOLTEI5!';
+            $answer = 'O valor e o prazo de entrega são calculados pelo CEP no carrinho e dependem dos itens e do endereço.';
         } else {
             $answer = 'Olá! Sou a Liz, assistente virtual da ShopVivaliz. Posso te ajudar a localizar produtos no catálogo, consultar frete, trocas ou cupom de desconto. Como posso te ajudar hoje?';
         }
     }
-
-    $learningData['history'][] = ['role' => 'user', 'content' => $message];
-    $learningData['history'][] = ['role' => 'bot', 'content' => $answer];
-    $learningData['history'] = array_slice($learningData['history'], -30);
-    file_put_contents($learningFile, json_encode($learningData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
     return $answer;
 }

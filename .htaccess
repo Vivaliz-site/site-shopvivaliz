@@ -63,9 +63,20 @@ AddCharset UTF-8 .html .txt .php .json
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Canonical host migration: apex/no-www is the production domain.
+    # O host anterior so serve como entrada de compatibilidade. As rotas
+    # legadas de vitrine abaixo convergem para o catalogo atual.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
-    RewriteCond %{HTTP_HOST} ^(?:www\.shopvivaliz\.com\.br|dev\.shopvivaliz\.com\.br)$ [NC]
+    RewriteCond %{HTTP_HOST} ^www\.shopvivaliz\.com\.br$ [NC]
+    RewriteRule ^(.*)$ https://shopvivaliz.com.br/$1 [R=301,L,NE]
+
+    # Nunca encaminhar operacoes de escrita pelo host legado.
+    RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
+    RewriteCond %{HTTP_HOST} ^www\.shopvivaliz\.com\.br$ [NC]
+    RewriteRule ^ - [F,L]
+
+    # O host de desenvolvimento continua canonizado para producao preservando a rota.
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteCond %{HTTP_HOST} ^dev\.shopvivaliz\.com\.br$ [NC]
     RewriteRule ^ https://shopvivaliz.com.br%{REQUEST_URI} [R=301,L,NE]
 
     # Consolidar paginas antigas antes da regra que preserva arquivos reais.
@@ -105,10 +116,9 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
     RewriteRule ^admin/(?:menu-completo|menu-dashboard|dashboard|admin-back)\.php$ - [F,L,NC]
 
-    # URLs publicas da vitrine legada/VNDA.
-    RewriteRule ^ferramentas/?$ /catalogo?categoria=Ferramentas [R=301,L,NE]
-    RewriteRule ^arte-papelaria-e-armarinho/?$ /catalogo?categoria=Arte%2C%20Papelaria%20e%20Armarinho [R=301,L,NE]
-    RewriteRule ^produtos/([^/]+)/?$ /produto/$1 [R=301,L,NE]
+    # URLs publicas remanescentes da vitrine anterior vao para o catalogo atual.
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^(?:ferramentas|arte-papelaria-e-armarinho|produtos)(?:/.*)?$ /catalogo [R=301,L,NE,QSD,NC]
 
     # Nunca expor arquivos internos de configuracao e operacao
     RewriteRule ^config/ - [F,L]
@@ -177,9 +187,10 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
 
-    # Slugs numericos podem ser IDs legados ou parte legitima do modelo (ex: TH-05).
-    # O PHP valida o slug contra o catalogo antes de decidir se deve redirecionar.
-    RewriteRule ^produto/([a-z0-9][a-z0-9\-]*-[0-9]+)/?$ produto-numeric-route.php?slug=$1 [L,QSA]
+    # Todo slug de produto passa por um guard de canonicalizacao. O PHP so
+    # redireciona aliases quando consegue provar slug historico -> SKU -> item
+    # ativo no catalogo atual; caso contrario preserva o 404 normal.
+    RewriteRule ^produto/([^/]+)/?$ produto-slug-route.php?slug=$1 [L,QSA]
 
     # Cart API endpoints
     RewriteRule ^api/cart/add/?$ api/cart/add.php [L,QSA]

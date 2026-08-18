@@ -456,6 +456,10 @@ function sv_catalog_faq_schema(string $category, string $query): array
 
 $query        = sv_catalog_query();
 $category     = trim((string)($_GET['categoria'] ?? ''));
+$initialSort  = trim((string)($_GET['ordem'] ?? $_GET['sort'] ?? 'relevance')) ?: 'relevance';
+if (!in_array($initialSort, ['relevance', 'price-asc', 'price-desc', 'name'], true)) {
+    $initialSort = 'relevance';
+}
 $perPage      = 20;
 $totalCount   = sv_catalog_count_matching($query, $category);
 $totalPages   = max(1, (int)ceil($totalCount / $perPage));
@@ -528,6 +532,7 @@ $svNavCurrent = 'catalogo';
     <script type="application/ld+json"><?= json_encode($faqSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
     <?php require_once __DIR__ . '/includes/load-custom-css.php'; ?>
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
+    <link rel="stylesheet" href="/css/catalog-category-select-v1.css?v=2026-08-17-1">
 </head>
 <body>
     <?php include __DIR__ . '/includes/navbar.php'; ?>
@@ -548,6 +553,28 @@ $svNavCurrent = 'catalogo';
         </section>
 
         <section class="container catalog-tools">
+            <div class="sv-catalog-toolbar">
+                <div class="sv-catalog-toolbar-left">
+                    <label class="sv-category-select-wrap" for="catalog-category-select">
+                        <span>Categoria</span>
+                        <select id="catalog-category-select" aria-label="Filtrar produtos por categoria">
+                            <option value=""<?= $category === '' ? ' selected' : '' ?>>Todas as categorias</option>
+                            <?php foreach ($categories as $cat => $count): ?>
+                                <option value="<?= sv_catalog_esc($cat) ?>"<?= $category === $cat ? ' selected' : '' ?>><?= sv_catalog_esc($cat) ?> (<?= $count ?>)</option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
+                </div>
+                <label class="sv-sort-wrap">
+                    <span>Ordenar por</span>
+                    <select aria-label="Ordenar produtos">
+                        <option value="relevance"<?= $initialSort === 'relevance' ? ' selected' : '' ?>>Relevância</option>
+                        <option value="price-asc"<?= $initialSort === 'price-asc' ? ' selected' : '' ?>>Menor preço</option>
+                        <option value="price-desc"<?= $initialSort === 'price-desc' ? ' selected' : '' ?>>Maior preço</option>
+                        <option value="name"<?= $initialSort === 'name' ? ' selected' : '' ?>>Nome A–Z</option>
+                    </select>
+                </label>
+            </div>
             <div class="category-filters" role="navigation" aria-label="Filtrar por categoria">
                 <a class="cat-filter<?= $category === '' ? ' active' : '' ?>" data-category="" href="/catalogo">Todos</a>
                 <?php foreach ($categories as $cat => $count): ?>
@@ -562,15 +589,15 @@ $svNavCurrent = 'catalogo';
             <div class="catalog-trust-strip" aria-label="Informações de confiança do catálogo" style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 15px;">
                 <div class="catalog-trust-item" style="display: flex; align-items: center; gap: 6px;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                    <span>Compra 100% segura</span>
+                    <span>Checkout protegido</span>
                 </div>
                 <div class="catalog-trust-item" style="display: flex; align-items: center; gap: 6px;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
-                    <span>Envio para todo Brasil</span>
+                    <span>Entrega calculada pelo CEP</span>
                 </div>
                 <div class="catalog-trust-item" style="display: flex; align-items: center; gap: 6px;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
-                    <span>7 dias para troca</span>
+                    <span>7 dias para solicitar devolução</span>
                 </div>
             </div>
         </section>
@@ -611,12 +638,8 @@ $svNavCurrent = 'catalogo';
                         <div class="product-price-wrap" style="display:flex; flex-direction:column; gap:2px; margin: 6px 0;">
                             <div class="product-price" style="font-size: 1.15rem; font-weight: 800; color: #0f172a;"><?= sv_catalog_esc(sv_catalog_money((float)$product['price'])) ?></div>
                             <?php if ((float)$product['price'] > 0): ?>
-                                <?php $pixCardPrice = (float)$product['price'] * 0.95; ?>
-                                <div style="font-size: 11px; font-weight: 700; color: #059669; display: flex; align-items: center; gap: 4px;">
-                                    <span>⚡ R$ <?= number_format($pixCardPrice, 2, ',', '.') ?> no PIX (5% OFF)</span>
-                                </div>
                                 <div style="font-size: 11px; color: #64748b; font-weight: 600;">
-                                    <span>ou 3x de R$ <?= number_format((float)$product['price'] / 3, 2, ',', '.') ?> sem juros</span>
+                                    <span>Opções e condições de pagamento no checkout</span>
                                 </div>
                             <?php endif; ?>
                         </div>

@@ -1,0 +1,67 @@
+name: Resume MEI email after verified controlled test 20260818 1224
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-email-resume-verified-20260818-1224.yml']
+permissions:
+  contents: write
+jobs:
+  resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Resume worker after verified gate
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=30 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF' > reports/email-resume-verified-20260818-1224.txt 2>&1
+          set -euo pipefail
+          echo "CHECK_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "WORKER_BEFORE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo SENTINEL_BEFORE=present; else echo SENTINEL_BEFORE=absent; fi
+          sudo systemctl stop mei-mg-email-worker.service || true
+          sudo rm -f /var/lib/mei-mg-email/sender_blocked.pause
+          sudo systemctl reset-failed mei-mg-email-worker.service || true
+          sudo systemctl start mei-mg-email-worker.service
+          sleep 12
+          worker="$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo "WORKER_AFTER=$worker"
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo SENTINEL_AFTER=present; else echo SENTINEL_AFTER=absent; fi
+          log="$(sudo journalctl -u mei-mg-email-worker.service --since '-5 minutes' --no-pager 2>/dev/null || true)"
+          echo "AS42004_AFTER_START=$(printf '%s\n' "$log" | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8' || true)"
+          printf '%s\n' "$log" | tail -n 80
+          if [ "$worker" != active ] || [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then
+            printf '%s\n' 'resume_validation_failed=true' | sudo tee /var/lib/mei-mg-email/sender_blocked.pause >/dev/null
+            sudo systemctl stop mei-mg-email-worker.service || true
+            exit 31
+          fi
+          if printf '%s\n' "$log" | grep -Eqi 'AS\(42004\)|bad outbound sender|5\.1\.8'; then
+            printf '%s\n' 'sender=naoresponda@dev.shopvivaliz.com.br' 'error=AS42004_after_resume' 'resume_allowed=false' | sudo tee /var/lib/mei-mg-email/sender_blocked.pause >/dev/null
+            sudo systemctl stop mei-mg-email-worker.service || true
+            echo 'ROLLBACK_FAIL_CLOSED=true'
+            exit 32
+          fi
+          echo RESUME_VERIFIED=true
+          EOF
+      - name: Persist report
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/email-resume-verified-20260818-1224.txt
+          git commit -m 'ops: record verified MEI email resume 20260818-1224' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

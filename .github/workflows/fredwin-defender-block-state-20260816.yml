@@ -1,0 +1,34 @@
+name: Fred-Win Defender block state 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/fredwin-defender-block-state-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Transfer read-only state check
+        run: |
+          set -euo pipefail
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey scripts/fredwin-defender-block-state.ps1 scripts/tmp-fredwin-run-block-state.py ubuntu@137.131.156.17:/tmp/
+      - name: Check Defender restricted entity through Fred-Win
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 /tmp/tmp-fredwin-run-block-state.py'
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
+# rerun 2026-08-18

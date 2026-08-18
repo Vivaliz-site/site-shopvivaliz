@@ -13,8 +13,16 @@
   function readShippingQuote() {
     try {
       var parsed = JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null');
-      return parsed && typeof parsed === 'object' ? parsed : null;
+      if (!parsed || typeof parsed !== 'object') return null;
+      var expiresAt = Number(parsed.expires_at || 0);
+      var now = expiresAt > 1000000000000 ? Date.now() : Math.floor(Date.now() / 1000);
+      if (!expiresAt || expiresAt <= now) {
+        localStorage.removeItem('shopvivaliz_shipping_quote');
+        return null;
+      }
+      return parsed;
     } catch (error) {
+      localStorage.removeItem('shopvivaliz_shipping_quote');
       return null;
     }
   }
@@ -187,9 +195,8 @@ function funnelClientId() {
 
   function push(eventName, params) {
     // Revenue has exactly one source of truth: the payment-approved webhook.
-    // checkout.php still contains legacy browser purchase calls for older
-    // payment flows; suppress them here so pending orders never inflate GA4
-    // purchases/ROAS. The approved purchase is emitted by Measurement Protocol.
+    // Nenhum fluxo do navegador pode transformar pedido pendente em receita.
+    // O purchase aprovado e emitido pelo webhook via Measurement Protocol.
     if (eventName === 'purchase') return;
 
     params = params || {};

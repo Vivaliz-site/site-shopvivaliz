@@ -69,11 +69,11 @@ real e a VM Oracle... nao o HostGator".
 2026-08-18):** este documento afirmava "99 → 10 workflows" desde 07-26, mas `docs/MEMORIA-AGENTES.md`
 já registrava "99 workflows ativos" numa entrada de 08-06 — ou seja, a contagem real já divergia do
 que este arquivo dizia há pelo menos 12 dias, sem ninguém corrigir o texto. Contagem real em
-2026-08-18: **249 arquivos `.yml` ativos** em `.github/workflows/` (+22 `.disabled`), **22 deles
-agendados** (`schedule:`), incluindo execuções a cada 5–15 minutos. Múltiplos agentes autônomos
-(Claude, GPT, Gemini — ver `docs/MEMORIA-AGENTES.md`) criam workflows novos continuamente, o que é
-intencional (confirmado pelo Fred), mas significa que **este número muda com frequência e não deve
-ser tratado como fixo**. Antes de assumir "só existem N workflows", rode
+2026-08-18: **249+ arquivos `.yml` ativos** em `.github/workflows/` (a contagem sobe continuamente —
+ver nota abaixo), incluindo dezenas agendados (`schedule:`), alguns a cada 5–15 minutos. Múltiplos
+agentes autônomos (Claude, GPT, Gemini — ver `docs/MEMORIA-AGENTES.md`) criam workflows novos
+continuamente, o que é intencional (confirmado pelo Fred), mas significa que **este número muda com
+frequência e não deve ser tratado como fixo**. Antes de assumir "só existem N workflows", rode
 `ls .github/workflows/*.yml | wc -l` para conferir a contagem atual. A decisão de arquivar famílias
 específicas de workflows (`tmp-*`, `fredwin-*`, `mei-email-*`, `audit-*` etc.) é estrutural e aguarda
 aprovação explícita do Fred — não é algo pra um agente decidir sozinho.

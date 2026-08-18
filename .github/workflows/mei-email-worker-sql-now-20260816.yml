@@ -1,0 +1,54 @@
+name: MEI email worker SQL now 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/mei-email-worker-sql-now-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect active PostgreSQL statements only
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo NOW=$(date -Is)
+          echo WORKER=$(systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+          echo PID=$(systemctl show -p MainPID --value mei-mg-email-worker.service)
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import psycopg
+          from psycopg.rows import dict_row
+          from app.config import settings
+          conn=psycopg.connect(settings.database_url, autocommit=True, row_factory=dict_row)
+          with conn.cursor() as cur:
+              cur.execute("set statement_timeout='4000ms'")
+              cur.execute("""
+                select pid, client_addr, client_port, state, wait_event_type, wait_event,
+                       round(extract(epoch from (clock_timestamp()-query_start))::numeric,1) query_seconds,
+                       left(regexp_replace(query,'\\s+',' ','g'),500) query
+                  from pg_stat_activity
+                 where datname=current_database() and pid<>pg_backend_pid()
+                 order by query_start nulls last
+              """)
+              for r in cur.fetchall(): print(dict(r))
+          conn.close()
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

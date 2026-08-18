@@ -96,6 +96,7 @@ function svcat_cache_signature(): string
     $paths = [
         $root . '/storage/products-cache-ativos.json',
         $root . '/storage/cache/products-cache-ativos.json',
+        $root . '/storage/products-cache.json',
         $root . '/api/catalog/fallback-products.json',
         $root . '/storage/ml/product-scores.json',
     ];

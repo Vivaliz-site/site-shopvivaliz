@@ -1,5 +1,5 @@
 {
-  "action": "open_exchange_admin",
-  "requested_at": "2026-08-16T17:44:00-03:00",
-  "reason": "Open Exchange Admin Center on Fred-Win using the authorized private relay to unblock the restricted sender"
+  "action": "health",
+  "requested_at": "2026-08-18T10:48:00Z",
+  "reason": "Verify Fred-Win private relay health before checking Microsoft Defender restricted sender state"
 }

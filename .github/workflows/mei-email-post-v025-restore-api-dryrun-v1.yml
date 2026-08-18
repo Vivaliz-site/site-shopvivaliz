@@ -52,7 +52,6 @@ jobs:
           EOF
 
       - name: Bounded retention dry run
-        continue-on-error: true
         run: |
           set -euo pipefail
           ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'

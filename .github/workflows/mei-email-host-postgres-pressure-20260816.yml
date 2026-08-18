@@ -1,0 +1,47 @@
+name: MEI email host PostgreSQL pressure 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/mei-email-host-postgres-pressure-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect resource pressure
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
+            echo NOW=$(date -Is)
+            echo ---UPTIME---
+            uptime
+            echo ---FREE---
+            free -m
+            echo ---VMSTAT---
+            vmstat 1 5
+            echo ---TOP_CPU---
+            ps -eo pid,ppid,stat,pcpu,pmem,rss,etime,cmd --sort=-pcpu | head -n 25
+            echo ---TOP_RSS---
+            ps -eo pid,ppid,stat,pcpu,pmem,rss,etime,cmd --sort=-rss | head -n 20
+            echo ---DOCKER_STATS---
+            sudo docker stats --no-stream --format "{{.Name}}|CPU={{.CPUPerc}}|MEM={{.MemUsage}}|NET={{.NetIO}}|BLOCK={{.BlockIO}}|PIDS={{.PIDs}}" || true
+            echo ---DISK---
+            df -h /
+            if command -v iostat >/dev/null 2>&1; then iostat -xz 1 3; fi
+            echo ---POSTGRES_CONTAINER---
+            sudo docker inspect -f "status={{.State.Status}} restarts={{.RestartCount}} oom={{.State.OOMKilled}} started={{.State.StartedAt}}" mei-mg-email-db 2>/dev/null || true
+          '
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

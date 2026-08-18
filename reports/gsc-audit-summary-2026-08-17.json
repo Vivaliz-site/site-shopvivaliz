@@ -1,0 +1,19 @@
+{
+  "run_id": 32076813612,
+  "inspected": 100,
+  "clean": 52,
+  "with_issues": 48,
+  "issue_counts": {
+    "INDEX_VERDICT_NEUTRAL": 42,
+    "INDEXING_NOT_ALLOWED": 17,
+    "PAGE_FETCH_NOT_FOUND": 14,
+    "CANONICAL_MISMATCH": 6,
+    "PAGE_FETCH_PAGE_FETCH_STATE_UNSPECIFIED": 3,
+    "ROBOTS_ROBOTS_TXT_STATE_UNSPECIFIED": 3
+  },
+  "sitemap": {
+    "canonical": "https://shopvivaliz.com.br/sitemap.xml",
+    "runner_fetch_error": "HTTP 403",
+    "legacy_www_submission_present": true
+  }
+}

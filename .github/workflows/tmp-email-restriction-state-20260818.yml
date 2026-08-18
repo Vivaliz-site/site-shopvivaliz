@@ -1,0 +1,48 @@
+name: Email sender restriction state 20260818
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-email-restriction-state-20260818.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Fail-closed VM state check
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          sudo systemctl stop mei-mg-email-worker.service || true
+          if [ ! -f /var/lib/mei-mg-email/sender_blocked.pause ]; then
+            echo 'restriction state uncertain - fail closed' | sudo tee /var/lib/mei-mg-email/sender_blocked.pause >/dev/null
+          fi
+          echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo SENTINEL=present; else echo SENTINEL=absent; fi
+          echo 'AUTH_FILES_BEGIN'
+          find /home/ubuntu/.shopvivaliz/m365 -maxdepth 1 -type f -printf '%f\n' 2>/dev/null | sort || true
+          echo 'AUTH_FILES_END'
+          cd /home/ubuntu/mei-mg-email
+          .venv/bin/python - <<'PY'
+          import os, json, base64
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          print('ENV_TENANT_PRESENT=' + str(bool(os.getenv('AZURE_TENANT_ID') or os.getenv('MS_TENANT_ID') or os.getenv('MICROSOFT_TENANT_ID'))).lower())
+          print('ENV_CLIENT_PRESENT=' + str(bool(os.getenv('AZURE_CLIENT_ID') or os.getenv('MS_CLIENT_ID') or os.getenv('MICROSOFT_CLIENT_ID'))).lower())
+          print('ENV_CERT_PRESENT=' + str(bool(os.getenv('MS_GRAPH_CERT_PATH') or os.getenv('AZURE_CERT_PATH') or os.getenv('MICROSOFT_CERT_PATH'))).lower())
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

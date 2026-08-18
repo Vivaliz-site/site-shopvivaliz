@@ -12,7 +12,10 @@ from pathlib import Path
 from typing import Any, Iterator
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+# The repository copy is only a reviewed template. Runtime automation must use
+# the mutable queue under the deployment shared directory when it is present.
 ROOT_QUEUE_FILE = PROJECT_ROOT / "tasks-queue.json"
+DEFAULT_RUNTIME_QUEUE_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/tasks-queue.json")
 CANONICAL_SCHEMA_VERSION = 2
 ALLOWED_STATES = frozenset({"pending", "running", "blocked", "failed", "completed_verified"})
 PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
@@ -31,6 +34,22 @@ class QueueValidationError(ValueError):
 
 class QueueMutationRetiredError(RuntimeError):
     """Raised when runtime code attempts to mutate the retired queue."""
+
+
+def runtime_queue_file() -> Path:
+    """Return the explicit or detected mutable runtime queue.
+
+    Immutable releases deliberately keep their checked-in queue separate from
+    operational state.  On the production VM the shared file therefore wins;
+    on local and CI checkouts (where it does not exist) the reviewed repository
+    file remains the safe read-only default.
+    """
+    configured_runtime = os.getenv("SHOPVIVALIZ_RUNTIME_QUEUE_FILE", "").strip()
+    if configured_runtime:
+        return Path(configured_runtime)
+    if DEFAULT_RUNTIME_QUEUE_FILE.is_file():
+        return DEFAULT_RUNTIME_QUEUE_FILE
+    return ROOT_QUEUE_FILE
 
 
 def utc_now() -> str:
@@ -127,6 +146,60 @@ def _canonical_document(data: Any) -> dict[str, Any]:
     return canonical
 
 
+def _legacy_tasks(data: Any) -> list[dict[str, Any]] | None:
+    if isinstance(data, list):
+        return data if all(isinstance(item, dict) for item in data) else None
+    if isinstance(data, dict) and isinstance(data.get("queue"), list):
+        queue = data["queue"]
+        return queue if all(isinstance(item, dict) for item in queue) else None
+    return None
+
+
+def migrate_legacy_queue(data: Any) -> dict[str, Any]:
+    """Convert the retired queue shape into schema v2 without inferring success."""
+    legacy_tasks = _legacy_tasks(data)
+    if legacy_tasks is None:
+        raise QueueValidationError("Queue is neither canonical schema v2 nor a migratable legacy queue")
+
+    migrated: list[dict[str, Any]] = []
+    for index, raw in enumerate(legacy_tasks, start=1):
+        task = deepcopy(raw)
+        task["id"] = task_identifier(task) or f"legacy-{index:03d}"
+        status = str(task.get("status", "pending")).strip().lower()
+        if status in {"done", "completed", "success", "succeeded"}:
+            status = "failed"
+            task["blocked_reason"] = "legacy completion had no independently verified evidence"
+            task["last_result"] = {"success": False, "reason": task["blocked_reason"]}
+        elif status not in ALLOWED_STATES:
+            status = "failed"
+            task["blocked_reason"] = "legacy task used an unsupported execution state"
+            task["last_result"] = {"success": False, "reason": task["blocked_reason"]}
+        task["status"] = status
+        task["priority"] = str(task.get("priority", "medium")).strip().lower()
+        if task["priority"] not in PRIORITY_ORDER:
+            task["priority"] = "medium"
+        task.setdefault("created_at", utc_now())
+        if status == "failed":
+            task.setdefault("last_result", {"success": False, "reason": "legacy migration"})
+        if status == "blocked":
+            task.setdefault("blocked_reason", "legacy task requires renewed evidence")
+        migrated.append(task)
+
+    document = {
+        "metadata": {
+            "schema_version": CANONICAL_SCHEMA_VERSION,
+            "generated_at": utc_now(),
+            "updated_at": utc_now(),
+            "status": "runtime_migrated",
+            "description": "Canonical runtime queue migrated from the legacy format with no inferred completions.",
+            "allowed_states": sorted(ALLOWED_STATES),
+            "migration": "legacy_queue_to_schema_v2",
+        },
+        "tasks": migrated,
+    }
+    return validate_queue(document)
+
+
 def validate_queue(data: Any) -> dict[str, Any]:
     """Validate and return a deep-copied canonical queue document."""
     return _canonical_document(data)
@@ -140,22 +213,43 @@ def _runtime_view(canonical: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_queue(path: Path | None = None) -> dict[str, Any]:
-    queue_path = Path(path) if path is not None else ROOT_QUEUE_FILE
+    queue_path = Path(path) if path is not None else runtime_queue_file()
     if not queue_path.is_file():
         raise QueueValidationError(f"Canonical queue file does not exist: {queue_path}")
     try:
         raw = json.loads(queue_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise QueueValidationError(f"Invalid queue JSON: {exc}") from exc
-    return _runtime_view(validate_queue(raw))
+    try:
+        return _runtime_view(validate_queue(raw))
+    except QueueValidationError:
+        migrated = migrate_legacy_queue(raw)
+        save_queue(migrated, path=queue_path, runtime_actor="legacy-queue-migration")
+        return _runtime_view(migrated)
 
 
 @contextmanager
 def _exclusive_lock(lock_path: Path) -> Iterator[None]:
     try:
         import fcntl
-    except ImportError as exc:  # pragma: no cover - production is Linux
-        raise RuntimeError("Atomic queue writes require POSIX file locking") from exc
+    except ImportError:  # pragma: no cover - exercised by the Windows workstation
+        import msvcrt
+
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a+", encoding="utf-8") as lock_handle:
+            lock_handle.seek(0)
+            if lock_handle.read(1) == "":
+                lock_handle.seek(0)
+                lock_handle.write("0")
+                lock_handle.flush()
+            lock_handle.seek(0)
+            msvcrt.locking(lock_handle.fileno(), msvcrt.LK_LOCK, 1)
+            try:
+                yield
+            finally:
+                lock_handle.seek(0)
+                msvcrt.locking(lock_handle.fileno(), msvcrt.LK_UNLCK, 1)
+        return
 
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a+", encoding="utf-8") as lock_handle:
@@ -171,13 +265,20 @@ def save_queue(
     path: Path | None = None,
     *,
     reviewed_change: bool = False,
+    runtime_actor: str | None = None,
 ) -> None:
-    """Atomically write a reviewed queue change; runtime mutation is retired by default."""
-    if reviewed_change is not True:
+    """Atomically write a reviewed change or the explicit shared runtime queue."""
+    queue_path = Path(path) if path is not None else runtime_queue_file()
+    configured_runtime = os.getenv("SHOPVIVALIZ_RUNTIME_QUEUE_FILE", "").strip()
+    allowed_runtime = Path(configured_runtime) if configured_runtime else DEFAULT_RUNTIME_QUEUE_FILE
+    try:
+        is_runtime_target = queue_path.resolve() == allowed_runtime.resolve()
+    except OSError:
+        is_runtime_target = False
+    if reviewed_change is not True and not (runtime_actor and is_runtime_target):
         raise QueueMutationRetiredError(
-            "Direct task queue mutation is retired; edit tasks-queue.json in a reviewed pull request"
+            "Queue mutation requires a reviewed change or an explicit shared runtime actor"
         )
-    queue_path = Path(path) if path is not None else ROOT_QUEUE_FILE
     canonical = validate_queue(data)
     canonical["metadata"]["updated_at"] = utc_now()
     payload = json.dumps(canonical, indent=2, ensure_ascii=False) + "\n"
@@ -200,11 +301,12 @@ def save_queue(
                 os.fsync(handle.fileno())
             os.chmod(temporary_path, mode)
             os.replace(temporary_path, queue_path)
-            directory_fd = os.open(queue_path.parent, os.O_RDONLY)
-            try:
-                os.fsync(directory_fd)
-            finally:
-                os.close(directory_fd)
+            if os.name == "posix":
+                directory_fd = os.open(queue_path.parent, os.O_RDONLY)
+                try:
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
         finally:
             temporary_path.unlink(missing_ok=True)
 

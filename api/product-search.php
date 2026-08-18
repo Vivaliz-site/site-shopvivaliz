@@ -115,16 +115,14 @@ function svcat_search_score(array $product, string $query, array $mlScores): flo
         }
     }
 
-    // O boost de ML so deve funcionar como desempate entre produtos que ja
-    // casaram com a busca por texto -- nunca como motivo isolado pra um
-    // produto aparecer. Antes disso era somado incondicionalmente, entao
-    // qualquer produto com entrada em product-scores.json aparecia mesmo
-    // sem nenhuma palavra da busca bater (ex: "zzzzqqqxyz" devolvia 58
-    // resultados). Ver Rodada 1 do diagnostico de melhoria continua.
+    // ML only reorders products that actually matched the shopper's words.
+    // It must never manufacture a result for an unrelated query.
     if ($score > 0) {
-        $mlKey = $product['sku'] ?? '';
-        if (isset($mlScores[$mlKey])) {
-            $score += $mlScores[$mlKey] * 5;
+        $rawSku = (string)($product['sku'] ?? '');
+        $mlKey = svcat_ml_key_normalize($rawSku);
+        $mlScore = $mlScores[$rawSku] ?? ($mlKey !== '' ? ($mlScores[$mlKey] ?? null) : null);
+        if ($mlScore !== null) {
+            $score += (float)$mlScore * 5;
         }
     }
 

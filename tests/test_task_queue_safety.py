@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -78,6 +79,40 @@ class TaskQueueLibraryTests(unittest.TestCase):
         with self.assertRaises(self.lib.QueueValidationError):
             self.lib.validate_queue({"version": "1.1", "queue": []})
 
+    def test_runtime_legacy_queue_is_migrated_without_inferred_completion(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "tasks-queue.json"
+            path.write_text(
+                json.dumps({"queue": [{"task_id": "OLD-1", "status": "completed"}]}),
+                encoding="utf-8",
+            )
+            with patch.dict("os.environ", {"SHOPVIVALIZ_RUNTIME_QUEUE_FILE": str(path)}):
+                loaded = self.lib.load_queue(path)
+
+            self.assertEqual(loaded["tasks"][0]["status"], "failed")
+            self.assertFalse(loaded["tasks"][0]["last_result"]["success"])
+            persisted = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(persisted["metadata"]["schema_version"], 2)
+            self.assertNotIn("queue", persisted)
+
+    def test_detected_shared_runtime_queue_is_the_default_and_is_migrated(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "tasks-queue.json"
+            path.write_text(
+                json.dumps({"version": "1.1", "queue": [{"task_id": "OLD-2"}]}),
+                encoding="utf-8",
+            )
+            with patch.dict("os.environ", {}, clear=True), patch.object(
+                self.lib, "DEFAULT_RUNTIME_QUEUE_FILE", path
+            ):
+                self.assertEqual(self.lib.runtime_queue_file(), path)
+                loaded = self.lib.load_queue()
+
+            self.assertEqual(loaded["tasks"][0]["id"], "OLD-2")
+            persisted = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(persisted["metadata"]["schema_version"], 2)
+            self.assertNotIn("queue", persisted)
+
     def test_unverified_completed_state_is_rejected(self) -> None:
         payload = canonical_queue()
         payload["tasks"][0]["status"] = "completed"
@@ -137,6 +172,21 @@ class TaskQueueLibraryTests(unittest.TestCase):
 
     def test_repository_queue_matches_canonical_contract(self) -> None:
         self.lib.load_queue(REPO_ROOT / "tasks-queue.json")
+
+    def test_cycle_uses_the_canonical_running_state(self) -> None:
+        source = (REPO_ROOT / "scripts" / "autonomous-continuous-cycle.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('task.get("status") == "running"', source)
+        self.assertIn('task["status"] = "running"', source)
+        self.assertNotIn('task["status"] = "in_progress"', source)
+
+    def test_cycle_reads_the_canonical_health_artifact(self) -> None:
+        source = (REPO_ROOT / "scripts" / "autonomous-continuous-cycle.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('HEALTH_REPORT_JSON = Path("artifacts/system-health/report.json")', source)
+        self.assertNotIn('HEALTH_REPORT_JSON = LOGS_DIR / "system-health-check.json"', source)
 
 
 class TaskQueueCliTests(unittest.TestCase):

@@ -59,7 +59,7 @@ header('Cache-Control: no-cache, must-revalidate');
             <a href="https://wa.me/<?php
                 $company = @include __DIR__ . '/config/company-profile.php';
                 $company = is_array($company) ? $company : [];
-                $whatsappRaw = (string)($company['social_media']['whatsapp'] ?? $company['phone'] ?? '551140415850');
+                $whatsappRaw = (string)($company['social_media']['whatsapp'] ?? $company['phone'] ?? '');
                 $whatsappDigits = preg_replace('/\D+/', '', $whatsappRaw);
                 echo htmlspecialchars($whatsappDigits);
             ?>?text=<?php
