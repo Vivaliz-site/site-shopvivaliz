@@ -15,6 +15,18 @@ Vivaliz-site/site-shopvivaliz
 
 Claude, Gemini e ChatGPT podem revisar arquivos pelo GitHub Actions usando GitHub Secrets.
 
+## Política obrigatória de merge
+
+A regra operacional padrão é **merge sempre que for seguro e autorizado**.
+
+Todos os agentes devem seguir [`docs/agent-merge-policy.md`](agent-merge-policy.md):
+
+- sincronizar com `main` antes de alterar arquivos;
+- preferir concluir a integração em vez de deixar branch ou PR pendente;
+- fazer merge quando checks e escopo permitirem;
+- nunca burlar branch protection, review obrigatório ou checks falhando;
+- reportar `MERGED`, `DIRECT_TO_MAIN` ou `NOT_MERGED` com evidência objetiva.
+
 ## Observabilidade obrigatória de Actions
 
 Alguns conectores de agentes não conseguem listar `workflow_runs` diretamente, mesmo quando conseguem ler arquivos, commits e jobs por `run_id` conhecido.
