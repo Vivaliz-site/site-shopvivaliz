@@ -1,0 +1,6 @@
+{
+  "workflow": "fred-win-remote-action.yml",
+  "limit": 10,
+  "requested_at": "2026-08-18T23:05:00Z",
+  "reason": "Expose GitHub Actions runs through a versioned file readable by the connector"
+}
