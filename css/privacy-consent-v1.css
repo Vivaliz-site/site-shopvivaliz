@@ -42,8 +42,8 @@
   cursor: pointer;
 }
 .sv-consent-actions .sv-consent-accept {
-  border-color: #0f8f62;
-  background: #0f8f62;
+  border-color: #0d7a54;
+  background: #0d7a54;
   color: #fff;
 }
 .sv-consent-actions button:focus-visible {

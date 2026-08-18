@@ -17,6 +17,7 @@ readonly RETENTION_COUNT=5
 readonly -a RUNTIME_SERVICES=(
   "shopvivaliz-token-renewer.service"
   "shopvivaliz-shopee-token-renewer.service"
+  "shopvivaliz-agent.service"
 )
 
 mkdir -p "$RELEASES_DIR" "$SHARED_DIR" "$LOG_DIR" "$SHARED_DIR/logs"
@@ -56,12 +57,12 @@ PY
 restart_runtime_services() {
   local service
   if ! sudo systemctl restart "${RUNTIME_SERVICES[@]}"; then
-    log ERROR "Reinicio dos servicos de integracao falhou"
+    log ERROR "Reinicio dos servicos de runtime falhou"
     return 1
   fi
   for service in "${RUNTIME_SERVICES[@]}"; do
     if ! sudo systemctl is-active --quiet "$service"; then
-      log ERROR "Servico de integracao inativo apos reinicio: $service"
+      log ERROR "Servico de runtime inativo apos reinicio: $service"
       return 1
     fi
   done

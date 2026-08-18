@@ -1,5 +1,5 @@
 {
-  "action": "open_exchange_admin",
-  "requested_at": "2026-08-13T22:17:12Z",
-  "reason": "User requested the Exchange Admin Center window be opened now on Fred-Win to complete the Microsoft-required interactive administrator authentication for AS(42004) Restricted entities recovery"
+  "action": "health",
+  "requested_at": "2026-08-18T10:48:00Z",
+  "reason": "Verify Fred-Win private relay health before checking Microsoft Defender restricted sender state"
 }

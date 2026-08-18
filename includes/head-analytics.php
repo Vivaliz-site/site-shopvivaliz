@@ -15,14 +15,11 @@ svpts_register($requestPath);
 require_once __DIR__ . '/checkout-output-hardening.php';
 svcoh_register($requestPath);
 
-// Carrega a configuracao para montar as tags publicas. O bloqueio dos segredos
-// acontece logo depois, pois bootstrap-env.php poderia repopular valores que
-// fossem removidos antes deste require.
+require_once __DIR__ . '/cart-output-hardening.php';
+svco_cart_register($requestPath);
+
 require_once __DIR__ . '/analytics-tracking.php';
 
-// O consentimento precisa ser visivel para o PHP. Sem o cookie explicito,
-// segredos de envio server-side sao removidos apenas desta requisicao, o que
-// impede Measurement Protocol/CAPI de criarem identificadores antes da escolha.
 $serverConsentAccepted = hash_equals(
     'accepted',
     (string)($_COOKIE['sv_privacy_consent'] ?? '')
@@ -34,8 +31,6 @@ if (!$serverConsentAccepted) {
     }
 }
 
-// Consent Mode existe antes de GTM/gtag. O cookie e a copia em localStorage
-// permanecem sincronizados pelo js/privacy-consent-v1.js.
 echo <<<'HTML'
 <script>
 (function () {
@@ -66,26 +61,22 @@ HTML;
 
 $trackingCode = $GLOBALS['analytics']->getTrackingCode();
 
-// O container GTM-TW4RPSQD foi verificado com a Google tag G-1H55K1TZ5D em
-// All Pages. Somente nesse container conhecido removemos o carregador direto
-// gtag.js redundante. Qualquer outro GTM preserva o caminho original como
-// fallback fail-safe, evitando perder GA4 por uma configuracao desconhecida.
-$verifiedGtmId = 'GTM-TW4RPSQD';
-$hasVerifiedGtmLoader = str_contains(
-    $trackingCode,
-    'googletagmanager.com/gtm.js?id=' . $verifiedGtmId
-);
+$verifiedGtmId = (string)(getenv('GOOGLE_TAG_MANAGER_ID') ?: (getenv('GTM_ID') ?: 'GTM-PHZ55CP3'));
+$hasVerifiedGtmLoader = $verifiedGtmId !== ''
+    && str_contains($trackingCode, 'googletagmanager.com/gtm.js')
+    && str_contains($trackingCode, $verifiedGtmId);
 $hasDirectGoogleTag = str_contains($trackingCode, 'googletagmanager.com/gtag/js?id=');
 if ($hasVerifiedGtmLoader && $hasDirectGoogleTag) {
     $trackingCode = preg_replace(
-        '~<!-- Google tag \(gtag\.js\) -->\s*<script async src="https://www\.googletagmanager\.com/gtag/js\?id=[^"]+"></script>\s*<script>.*?</script>~s',
+        '~<!-- Google tag \((?:gtag\.js|GA4/Ads)\) -->\s*<script async src="https://www\.googletagmanager\.com/gtag/js\?id=[^"]+"></script>\s*<script>.*?</script>~s',
         '',
         $trackingCode
     ) ?? $trackingCode;
 
     $trackingPublicConfig = [
         'ga4Id' => (string)(getenv('GA4_ID') ?: 'G-1H55K1TZ5D'),
-        'googleAdsId' => (string)(getenv('GOOGLE_ADS_CONVERSION_ID') ?: ''),
+        'ga4MeasurementId' => (string)(getenv('GA4_ID') ?: 'G-1H55K1TZ5D'),
+        'googleAdsId' => (string)(getenv('GOOGLE_ADS_ID') ?: (getenv('GOOGLE_ADS_CONVERSION_ID') ?: '')),
         'googleAdsLabel' => (string)(getenv('GOOGLE_ADS_CONVERSION_LABEL') ?: ''),
         'currency' => 'BRL',
         'consentMode' => true,
@@ -119,6 +110,25 @@ if ($requestPath === '/checkout') {
     echo '<script defer src="/js/checkout-payment-v2.js?v=' . htmlspecialchars($checkoutPaymentVersion, ENT_QUOTES, 'UTF-8') . '"></script>' . "\n";
 }
 
+if (in_array($requestPath, ['/', '/carrinho', '/checkout'], true)) {
+    $mixedPromoCss = dirname(__DIR__) . '/css/mixed-cart-promo-v1.css';
+    $mixedPromoJs = dirname(__DIR__) . '/js/mixed-cart-promo-v1.js';
+    $mixedPromoCssVersion = is_file($mixedPromoCss) ? (string)filemtime($mixedPromoCss) : '1';
+    $mixedPromoJsVersion = is_file($mixedPromoJs) ? (string)filemtime($mixedPromoJs) : '1';
+    echo '<link rel="stylesheet" href="/css/mixed-cart-promo-v1.css?v=' . htmlspecialchars($mixedPromoCssVersion, ENT_QUOTES, 'UTF-8') . '">' . "\n";
+    echo '<script defer src="/js/mixed-cart-promo-v1.js?v=' . htmlspecialchars($mixedPromoJsVersion, ENT_QUOTES, 'UTF-8') . '"></script>' . "\n";
+}
+
+// Pequena camada comercial compartilhada para produto, carrinho e checkout.
+if ($requestPath === '/carrinho' || $requestPath === '/checkout' || $requestPath === '/produto' || str_starts_with($requestPath, '/produto/')) {
+    $salesCss = dirname(__DIR__) . '/css/sales-conversion-v1.css';
+    $salesJs = dirname(__DIR__) . '/js/sales-conversion-v1.js';
+    $salesCssVersion = is_file($salesCss) ? (string)filemtime($salesCss) : '1';
+    $salesJsVersion = is_file($salesJs) ? (string)filemtime($salesJs) : '1';
+    echo '<link rel="stylesheet" href="/css/sales-conversion-v1.css?v=' . htmlspecialchars($salesCssVersion, ENT_QUOTES, 'UTF-8') . '">' . "\n";
+    echo '<script defer src="/js/sales-conversion-v1.js?v=' . htmlspecialchars($salesJsVersion, ENT_QUOTES, 'UTF-8') . '"></script>' . "\n";
+}
+
 $company = @include dirname(__DIR__) . '/config/company-profile.php';
 $company = is_array($company) ? $company : [];
 $whatsappRaw = (string)($company['social_media']['whatsapp'] ?? $company['phone'] ?? '');
@@ -144,9 +154,4 @@ if ($requestPath === '/produto' || str_starts_with($requestPath, '/produto/')) {
     require_once __DIR__ . '/product-video-embed-fix.php';
 }
 
-if (function_exists('track_page_view')) {
-    $title = $GLOBALS['page_title'] ?? 'Page';
-    $path = $_SERVER['REQUEST_URI'] ?? '/';
-    track_page_view($title, $path);
-}
 ?>

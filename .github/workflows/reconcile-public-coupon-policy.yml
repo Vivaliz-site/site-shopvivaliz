@@ -1,0 +1,83 @@
+name: Reconcile Public Coupon Policy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/reconcile-public-coupon-policy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Hide legacy first-purchase 10 percent coupons from public popup
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'php -d display_errors=1 -r '\''
+              require "/home/ubuntu/shopvivaliz-deploy/current/includes/pdo-database.php";
+              $pdo = sv_pdo();
+              $codes = ["VIVALIZ10", "PRIMEIRA10"];
+              $placeholders = implode(",", array_fill(0, count($codes), "?"));
+              $before = $pdo->prepare("SELECT code,is_active,display_in_popup,discount_type,discount_value,description FROM coupons WHERE code IN ($placeholders) ORDER BY code");
+              $before->execute($codes);
+              foreach ($before->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                  echo "BEFORE " . json_encode($row, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . PHP_EOL;
+              }
+              $update = $pdo->prepare("UPDATE coupons SET display_in_popup = 0 WHERE code IN ($placeholders) AND display_in_popup <> 0");
+              $update->execute($codes);
+              echo "UPDATED_ROWS=" . $update->rowCount() . PHP_EOL;
+              $after = $pdo->prepare("SELECT code,is_active,display_in_popup,discount_type,discount_value,description FROM coupons WHERE code IN ($placeholders) ORDER BY code");
+              $after->execute($codes);
+              foreach ($after->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                  echo "AFTER " . json_encode($row, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . PHP_EOL;
+              }
+            '\'''
+
+      - name: Verify public coupon endpoint from production VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          body="$(curl --fail --silent --show-error --max-time 20 https://shopvivaliz.com.br/api/coupons/active.php)"
+          printf '%s\n' "$body"
+          if printf '%s' "$body" | grep -Eq 'VIVALIZ10|PRIMEIRA10'; then
+            echo "Legacy first-purchase 10% coupon is still publicly advertised" >&2
+            exit 1
+          fi
+          echo "PUBLIC_COUPON_POLICY_OK"
+          REMOTE

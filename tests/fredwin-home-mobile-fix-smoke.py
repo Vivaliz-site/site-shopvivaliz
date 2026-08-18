@@ -93,8 +93,8 @@ def main() -> None:
             """
             () => ({
               open:document.querySelector('#sv-liz-panel')?.classList.contains('open')||false,
-              official:Boolean(document.querySelector('#sv-liz-panel .sv-liz-official-brand img[src*="logo-oficial.svg"]')),
-              oldVideo:Boolean(document.querySelector('#sv-liz-panel .sv-hero video')),
+              mascotVideo:Boolean(document.querySelector('#sv-liz-panel .sv-hero video[data-src*="liz-acenando.webm"]')),
+              legacyBrand:Boolean(document.querySelector('#sv-liz-panel .sv-liz-official-brand')),
               width:document.querySelector('#sv-liz-panel')?.getBoundingClientRect().width||0
             })
             """
@@ -117,10 +117,10 @@ def main() -> None:
             raise SystemExit("category_did_not_rotate")
         if not result["category_source_real"]:
             raise SystemExit("category_used_non_product_art")
-        if "logo-oficial.svg" not in liz["src"]:
-            raise SystemExit("liz_launcher_not_official")
-        if not dialog["open"] or not dialog["official"] or dialog["oldVideo"]:
-            raise SystemExit("liz_dialog_not_corrected")
+        if "liz-avatar.png" not in liz["src"]:
+            raise SystemExit("liz_launcher_without_mascot")
+        if not dialog["open"] or not dialog["mascotVideo"] or dialog["legacyBrand"]:
+            raise SystemExit("liz_dialog_without_mascot")
         if not result["no_horizontal_overflow"]:
             raise SystemExit("horizontal_overflow")
 

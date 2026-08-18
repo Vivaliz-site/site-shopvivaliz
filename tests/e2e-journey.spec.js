@@ -41,12 +41,12 @@ test.describe('E2E Journey - Compra Completa', () => {
   test('Busca de produtos funciona', async ({ page }) => {
     await page.goto(BASE_URL + '/');
 
-    const searchInput = page.locator('.hero-search-form input[name="busca"]');
+    const searchInput = page.locator('.hero-search-form input[name="q"], .hero-search-form input[name="busca"]');
     await expect(searchInput).toBeVisible();
     await searchInput.fill('rodizio');
     await page.keyboard.press('Enter');
     await page.waitForLoadState('domcontentloaded');
-    await expect(page).toHaveURL(/\/catalogo\/?\?busca=rodizio/);
+    await expect(page).toHaveURL(/\/catalogo\/?\?(?:q|busca)=rodizio/);
   });
 
   test('Navegação de categorias funciona', async ({ page }) => {

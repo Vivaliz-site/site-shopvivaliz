@@ -1,0 +1,55 @@
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+Warning: Permanently added '137.131.156.17' (ED25519) to the list of known hosts.
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Tue Aug 18 12:27:53 -03 2026
+
+  System load:  2.44               Processes:             169
+  Usage of /:   86.5% of 44.96GB   Users logged in:       0
+  Memory usage: 39%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   52%
+
+  => / is using 86.5% of 44.96GB
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+64 updates can be applied immediately.
+8 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+16 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+116 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+
+CHECK_UTC=2026-08-18T15:31:22Z
+SERVICE_BEFORE=inactive
+SENTINEL_BEFORE=present
+PRE_LOCK_OWNER_COUNT=1
+PRE_LOCK_OWNER={"age": "4:40:29.118969", "client_addr": "172.19.0.1/32", "pid": 759, "query": "\n            with base as materialized (\n                select e.cnpj, e.email, e.data_abertura\n                  from mei_email.empresas e\n                 where e.tipo_regime = 'MEI'\n                   and e.uf = 'MG'\n                   and e.situacao_cadastral = 'ATIVA'\n                   and e.opt_out = false\n                   and e.provavel_terceiro = false\n                   and e.email is not null\n                   and e.enviado = false\n                   and e.marketing_autorizado = t", "query_start": "2026-08-18 07:51:07.208989-03:00", "state": "active"}
+STALE_LOCK_SIGNATURE_MATCH=true
+STALE_BACKEND_TERMINATED=true
+LOCK_RELEASE_CONFIRMED=true
+SERVICE_POLL_1=active
+SERVICE_AFTER=active
+MAINPID_AFTER=1861545
+SENTINEL_AFTER=absent
+SERVICE_FINAL=active
+POST_LOCK_OWNER_COUNT=1
+POST_LOCK_OWNER={"client_addr": "172.19.0.1/32", "pid": 1057, "query": "\n            with base as materialized (\n                select e.cnpj, e.email, e.data_abertura\n                  from mei_email.empresas e\n                 where e.tipo_regime = 'MEI'\n                   and e.uf = 'MG'\n                   and e.situacao_cadastral = 'ATIVA'\n                   and e.opt_out = false\n                   and e.provavel_terceiro = false\n                   and e.email is not null\n                   and e.enviado = false\n                   and e.marketing_autorizado = t", "state": "active"}
+AS42004_AFTER_RESUME=0
+Aug 18 12:31:40 shopvivaliz-ai systemd[1]: Started mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker.
+Aug 18 12:31:44 shopvivaliz-ai python[1861545]: WARNING:mei_mg_email.email_provider:MicrosoftGraphEmailProvider APP-ONLY active sender=naoresponda@dev.shopvivaliz.com.br cert=/home/ubuntu/.shopvivaliz/m365/graph-auth.crt
+Aug 18 12:31:44 shopvivaliz-ai python[1861545]: INFO:mei_mg_email.worker:Worker queue-first iniciado. provedor=microsoft_graph rate_limit=10/min meta_24h=9950 teto_24h=10000 poll=5s fila_min=500 fila_target=2000
+RESUME_VERIFIED=true

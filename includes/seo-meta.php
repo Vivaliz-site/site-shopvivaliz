@@ -5,7 +5,14 @@ $svSeoTitle = $svSeoTitle ?? 'ShopVivaliz';
 $svSeoDescription = $svSeoDescription ?? 'Produtos selecionados com compra segura e atendimento próximo.';
 $svSeoImage = $svSeoImage ?? '/images/logo-vivaliz-square-v2.png';
 $svSeoUrl = $svSeoUrl ?? (isset($_SERVER['REQUEST_URI']) ? (string)$_SERVER['REQUEST_URI'] : '/');
-$svSeoCanonical = 'https://shopvivaliz.com.br' . ($svSeoUrl === '' ? '/' : $svSeoUrl);
+
+// Canonicals da vitrine representam a rota estável, nunca filtros/UTMs/query
+// strings. Facetas continuam navegáveis, porém convergem para a página base e
+// não criam famílias de URLs duplicadas no índice.
+$svSeoPath = parse_url($svSeoUrl, PHP_URL_PATH);
+$svSeoPath = is_string($svSeoPath) && $svSeoPath !== '' ? $svSeoPath : '/';
+$svSeoPath = '/' . ltrim($svSeoPath, '/');
+$svSeoCanonical = 'https://shopvivaliz.com.br' . $svSeoPath;
 ?>
 <meta name="description" content="<?= htmlspecialchars($svSeoDescription, ENT_QUOTES, 'UTF-8') ?>">
 <link rel="canonical" href="<?= htmlspecialchars($svSeoCanonical, ENT_QUOTES, 'UTF-8') ?>">

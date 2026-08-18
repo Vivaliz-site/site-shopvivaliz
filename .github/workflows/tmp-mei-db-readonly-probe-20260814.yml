@@ -1,0 +1,53 @@
+name: Temporary MEI DB read-only probe 20260814
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-mei-db-readonly-probe-20260814.yml']
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Read-only host and DB probe
+        run: |
+          timeout 300s ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -u
+          cd /home/ubuntu/mei-mg-email || exit 2
+          echo "PROBE_TIME=$(date -Is)"
+          echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo 'SENTINEL=true'; else echo 'SENTINEL=false'; fi
+          echo '=== LOAD ==='
+          uptime || true
+          free -m || true
+          echo '=== DOCKER SERVICE ==='
+          sudo systemctl show docker.service -p ActiveState -p SubState -p MainPID --no-pager 2>/dev/null || true
+          echo '=== PORT 5433 ==='
+          timeout 5s ss -ltnp 2>/dev/null | grep ':5433' || true
+          echo '=== RELEVANT PROCESSES ==='
+          ps -eo pid,ppid,stat,comm,%cpu,%mem,etime,args --sort=-%cpu | grep -E 'dockerd|containerd|postgres|docker|mei-mg-email' | grep -v grep | head -n 80 || true
+          echo '=== DOCKER API ==='
+          if timeout 8s docker version --format 'server={{.Server.Version}}' 2>/dev/null; then
+            echo 'DOCKER_RESPONSIVE=true'
+            timeout 8s docker inspect mei-mg-email-db --format 'DB_CONTAINER=status={{.State.Status}} running={{.State.Running}} started={{.State.StartedAt}} restarts={{.RestartCount}}' 2>/dev/null || true
+          else
+            echo 'DOCKER_RESPONSIVE=false'
+          fi
+          echo '=== DB TCP ==='
+          if timeout 4s bash -c '</dev/tcp/127.0.0.1/5433' 2>/dev/null; then echo 'DB_TCP=true'; else echo 'DB_TCP=false'; fi
+          echo '=== DOCKER JOURNAL ==='
+          timeout 12s sudo journalctl -u docker.service --since '-20 minutes' --no-pager -n 120 2>/dev/null || true
+          echo 'READ_ONLY_PROBE_DONE=true'
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

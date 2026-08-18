@@ -65,7 +65,7 @@ function svop_payment_instructions(string $method): string
         'transferencia' => 'Dados bancarios serao enviados pela equipe apos confirmacao do frete.',
         'mercado_pago' => 'Pagamento processado no ambiente seguro do Mercado Pago.',
         'infinitepay' => 'Voce sera redirecionado para o checkout seguro da InfinitePay.',
-        default => 'Pagamento via PIX com confirmacao apos validacao do pedido.',
+        default => 'PIX',
     };
 }
 
@@ -90,6 +90,8 @@ function svop_append_log(array $order): void
         'payment_method' => $order['payment_method'] ?? 'pix',
         'status' => 'pendente_atendimento',
         'source' => 'checkout_site_api',
+        'buy_together_discount' => round((float)($order['buy_together_discount'] ?? 0), 2),
+        'coupon_discount' => round((float)($order['coupon_discount'] ?? 0), 2),
         'shipping_total' => round((float)($order['shipping_total'] ?? 0), 2),
         'shipping_label' => (string)($order['shipping_label'] ?? ''),
         'tiny_order_id' => (string)($order['tiny_order_id'] ?? ''),
@@ -133,12 +135,6 @@ function svop_load_runtime_secrets(): void
     }
 }
 
-// Push pro Tiny usa a implementacao compartilhada e ja corrigida em
-// includes/tiny-order-push.php (svtop_*) -- esta era uma copia duplicada e
-// nunca corrigida do mesmo codigo, com os 3 bugs originais (situacao como
-// objeto, campos de item errados, sem idContato), causando pedidos reais
-// aprovados no site que nunca chegavam no ERP.
-
 $body = svorc_body();
 $items = svorc_items();
 $idempotencyKey = svoi_key($body, $items);
@@ -172,12 +168,15 @@ if ($paymentMethod === '') {
 $deviceId = trim((string)($body['device_id'] ?? ''));
 $funnelClientId = trim((string)($body['funnel_client_id'] ?? ''));
 $gclid = trim((string)($body['gclid'] ?? ''));
+$gbraid = trim((string)($body['gbraid'] ?? ''));
+$wbraid = trim((string)($body['wbraid'] ?? ''));
+$dclid = trim((string)($body['dclid'] ?? ''));
 $utmSource = trim((string)($body['utm_source'] ?? ''));
 $utmMedium = trim((string)($body['utm_medium'] ?? ''));
 $utmCampaign = trim((string)($body['utm_campaign'] ?? ''));
 $utmContent = trim((string)($body['utm_content'] ?? ''));
 
-if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen($address) > 300 || strlen($streetName) > 300 || strlen($streetNumber) > 30 || strlen($complement) > 120 || strlen($neighborhood) > 120 || strlen($city) > 120 || strlen($state) > 2 || strlen($notes) > 1000 || strlen($deviceId) > 255 || strlen($cpf) > 14 || strlen($companyLegalName) > 180 || strlen($companyTradeName) > 180 || strlen($customerRegistrationDate) > 60 || strlen($customerId) > 120 || strlen($funnelClientId) > 128 || strlen($gclid) > 255 || strlen($utmSource) > 255 || strlen($utmMedium) > 255 || strlen($utmCampaign) > 255 || strlen($utmContent) > 255) {
+if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen($address) > 300 || strlen($streetName) > 300 || strlen($streetNumber) > 30 || strlen($complement) > 120 || strlen($neighborhood) > 120 || strlen($city) > 120 || strlen($state) > 2 || strlen($notes) > 1000 || strlen($deviceId) > 255 || strlen($cpf) > 14 || strlen($companyLegalName) > 180 || strlen($companyTradeName) > 180 || strlen($customerRegistrationDate) > 60 || strlen($customerId) > 120 || strlen($funnelClientId) > 128 || strlen($gclid) > 255 || strlen($gbraid) > 255 || strlen($wbraid) > 255 || strlen($dclid) > 255 || strlen($utmSource) > 255 || strlen($utmMedium) > 255 || strlen($utmCampaign) > 255 || strlen($utmContent) > 255) {
     svoi_release($idempotencyKey);
     svop_json(422, ['ok' => false, 'error' => 'field_too_long']);
 }
@@ -233,13 +232,25 @@ foreach ($sourceItems as $item) {
         'olist_product_id' => (string)($item['olist_product_id'] ?? ''),
     ];
 }
+$itemsTotal = round($itemsTotal, 2);
 
-// Cupom ja revalidado com preco de servidor em create-validated.php --
-// aqui so aplica o desconto calculado la (nunca confia em valor vindo do
-// cliente). Ver includes/coupons.php.
+// A oferta foi validada em create-validated.php com os itens autoritativos.
+// O desconto é um ajuste separado para preservar o preço unitário real dos
+// produtos no ERP, histórico e conciliação. Apenas um par (uma unidade de cada
+// SKU) recebe os 3%, mesmo que o cliente tenha quantidades adicionais.
+$buyTogether = is_array($body['buy_together'] ?? null) ? $body['buy_together'] : [];
+$buyTogetherActive = ($buyTogether['active'] ?? false) === true;
+$buyTogetherDiscount = $buyTogetherActive
+    ? round(min((float)($buyTogether['amount'] ?? 0), $itemsTotal), 2)
+    : 0.0;
+$buyTogetherSkus = $buyTogetherActive && is_array($buyTogether['skus'] ?? null)
+    ? array_values(array_map('strval', $buyTogether['skus']))
+    : [];
+
 $coupon = is_array($body['coupon'] ?? null) ? $body['coupon'] : null;
 $couponCode = $coupon !== null ? (string)($coupon['code'] ?? '') : '';
-$couponDiscount = $coupon !== null ? round(min((float)($coupon['amount'] ?? 0), $itemsTotal), 2) : 0.0;
+$afterBundleSubtotal = max(0.0, round($itemsTotal - $buyTogetherDiscount, 2));
+$couponDiscount = $coupon !== null ? round(min((float)($coupon['amount'] ?? 0), $afterBundleSubtotal), 2) : 0.0;
 
 $isFirstPurchaseOnline = true;
 $lastPurchase = '';
@@ -290,14 +301,18 @@ $record = [
         'state' => $state,
     ],
     'items' => $cleanItems,
-    'items_total' => round($itemsTotal, 2),
+    'items_total' => $itemsTotal,
+    'buy_together_active' => $buyTogetherActive,
+    'buy_together_percent' => $buyTogetherActive ? 3.0 : 0.0,
+    'buy_together_skus' => $buyTogetherSkus,
+    'buy_together_discount' => $buyTogetherDiscount,
     'coupon_code' => $couponCode,
     'coupon_discount' => $couponDiscount,
     'shipping_total' => $shippingTotal,
     'shipping_label' => $shippingLabel,
     'shipping_service' => $shippingService,
     'shipping_cep' => $shippingCep,
-    'total' => round($itemsTotal - $couponDiscount + $shippingTotal, 2),
+    'total' => round($itemsTotal - $buyTogetherDiscount - $couponDiscount + $shippingTotal, 2),
     'payment_method' => $paymentMethod,
     'payment_label' => svop_payment_label($paymentMethod),
     'statement_descriptor' => 'SHOPVIVALIZ',
@@ -306,9 +321,11 @@ $record = [
     'source' => 'site_checkout_validated',
     'idempotency_key_hash' => hash('sha256', $idempotencyKey),
     'payment_session_hash' => $paymentSessionToken !== '' ? hash('sha256', $paymentSessionToken) : '',
-    // Google Ads / GA4 tracking
     'funnel_client_id' => $funnelClientId,
     'gclid' => $gclid,
+    'gbraid' => $gbraid,
+    'wbraid' => $wbraid,
+    'dclid' => $dclid,
     'utm' => [
         'source' => $utmSource,
         'medium' => $utmMedium,
@@ -329,10 +346,6 @@ if (file_put_contents($path, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESC
     svop_json(500, ['ok' => false, 'error' => 'order_write_failed']);
 }
 
-// Espelha o pedido na tabela MySQL `orders` -- e o que "Minha Conta" /
-// meus-pedidos.php le (por user_id). Sem isso, todo cliente logado que
-// comprava pelo checkout nunca via o pedido na propria conta, mesmo com
-// o pedido salvo corretamente e enviado ao ERP.
 try {
     require_once dirname(__DIR__, 2) . '/includes/pdo-database.php';
     require_once dirname(__DIR__, 2) . '/includes/account-schema.php';
@@ -359,20 +372,12 @@ try {
     error_log('[OrderValidated] MySQL orders mirror failed: ' . $e->getMessage());
 }
 
-// Pedido so vai para o Tiny ERP quando o pagamento e de fato aprovado --
-// isso acontece no webhook do Mercado Pago (api/webhook-mercadopago.php),
-// nunca aqui na criacao. Antes este endpoint empurrava TODO pedido criado
-// (mesmo "aguardando_pagamento"/pix nao pago) direto pro ERP, poluindo o
-// Tiny com pedidos que o cliente nunca chegou a pagar.
 file_put_contents($path, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
 svop_append_log($record);
 
-// Disparar email de confirmação do pedido
 try {
     $emailSent = svem_send_order_email($record, 'order_created');
     $record['confirmation_email_sent'] = $emailSent;
-
-    // Notificar atendimento sobre novo pedido
     svem_notify_admin_order_created($record);
 } catch (Throwable $e) {
     error_log('[OrderValidated] Email send error: ' . $e->getMessage());
@@ -385,10 +390,13 @@ $response = [
     'status' => 'pending_confirmation',
     'payment_method' => $paymentMethod,
     'payment_label' => $record['payment_label'],
-    'message' => 'Pedido registrado para confirmacao manual de frete e pagamento.',
+    'message' => 'Pedido registrado com preço, estoque, promoção e frete revalidados no servidor.',
     'payment_instructions' => svop_payment_instructions($paymentMethod),
     'storage' => str_contains($dir, 'shopvivaliz-orders') ? 'fallback_temp' : 'storage_orders',
-    'subtotal' => round($itemsTotal, 2),
+    'subtotal' => $itemsTotal,
+    'buy_together_active' => $buyTogetherActive,
+    'buy_together_percent' => $buyTogetherActive ? 3.0 : 0.0,
+    'buy_together_discount' => $buyTogetherDiscount,
     'coupon_code' => $couponCode,
     'coupon_discount' => $couponDiscount,
     'shipping_total' => $shippingTotal,

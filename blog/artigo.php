@@ -1,6 +1,25 @@
 <?php
 declare(strict_types=1);
 
+// Os artigos nasceram antes da consolidacao das URLs de diretorio e ainda
+// carregam links legados sem barra final (blog/catalogo/contato). Normaliza a
+// resposta inteira, inclusive URLs vindas do repositorio editorial, sem mudar
+// conteudo, comentarios ou dados comerciais.
+ob_start(static function (string $html): string {
+    $patterns = [
+        '#https://shopvivaliz\.com\.br/blog(?=(?:\?|["\']))#' => 'https://shopvivaliz.com.br/blog/',
+        '#https://shopvivaliz\.com\.br/catalogo(?=(?:\?|["\']))#' => 'https://shopvivaliz.com.br/catalogo/',
+        '#https://shopvivaliz\.com\.br/contato(?=(?:\?|["\']))#' => 'https://shopvivaliz.com.br/contato/',
+        '#(?<=["\'])/blog(?=(?:\?|["\']))#' => '/blog/',
+        '#(?<=["\'])/catalogo(?=(?:\?|["\']))#' => '/catalogo/',
+        '#(?<=["\'])/contato(?=(?:\?|["\']))#' => '/contato/',
+    ];
+    foreach ($patterns as $pattern => $replacement) {
+        $html = preg_replace($pattern, $replacement, $html) ?? $html;
+    }
+    return $html;
+});
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

@@ -93,7 +93,7 @@ function sv_settings_all(bool $forceRefresh = false): array
     }
 
     if ($apcu) {
-        apcu_store($apcuKey, $cache, 60);
+        apcu_store($apcuKey, $cache, 600);
     }
 
     return $cache;

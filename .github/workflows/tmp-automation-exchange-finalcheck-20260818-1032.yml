@@ -1,0 +1,112 @@
+name: Automation Exchange final check 20260818 1032
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-automation-exchange-finalcheck-20260818-1032.yml']
+permissions:
+  contents: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Wait for package manager and inspect Exchange restriction
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          set +e
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=90 -o TCPKeepAlive=yes -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF' > reports/automation-exchange-finalcheck-20260818-1032.txt 2>&1
+          set -euo pipefail
+          echo "CHECK_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          cd /home/ubuntu/mei-mg-email
+          sudo systemctl kill --kill-who=all --signal=SIGKILL mei-mg-email-worker.service || true
+          sudo systemctl stop mei-mg-email-worker.service || true
+          sudo install -d -m 0750 -o ubuntu -g ubuntu /var/lib/mei-mg-email
+          if [ ! -f /var/lib/mei-mg-email/sender_blocked.pause ]; then
+            printf '%s\n' 'sender=naoresponda@dev.shopvivaliz.com.br' 'source=automation_finalcheck_20260818_1032' 'resume_allowed=false' | sudo tee /var/lib/mei-mg-email/sender_blocked.pause >/dev/null
+            sudo chown ubuntu:ubuntu /var/lib/mei-mg-email/sender_blocked.pause
+            sudo chmod 0640 /var/lib/mei-mg-email/sender_blocked.pause
+          fi
+          echo "WORKER_BEFORE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo 'SENTINEL_BEFORE=present'
+          for i in $(seq 1 24); do
+            if ! pgrep -af '[a]pt-get|/usr/bin/[d]pkg' >/dev/null 2>&1; then
+              echo "PKG_WAIT_DONE=$i"
+              break
+            fi
+            echo "PKG_WAIT=$i"
+            sleep 5
+          done
+          if pgrep -af '[a]pt-get|/usr/bin/[d]pkg' >/dev/null 2>&1; then
+            echo 'PKG_MANAGER_STILL_BUSY=true'
+            echo 'RESTRICTION_RESULT=uncertain reason=pkg_manager_busy'
+            exit 0
+          fi
+          if ! command -v pwsh >/dev/null 2>&1; then
+            echo 'PWSH=missing'
+            echo 'RESTRICTION_RESULT=uncertain reason=pwsh_missing'
+            exit 0
+          fi
+          echo "PWSH=$(command -v pwsh)"
+          echo "PWSH_VERSION=$(pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()')"
+          set +e
+          module_out="$(timeout 600s pwsh -NoProfile -Command '
+            $ErrorActionPreference = "Stop"
+            if (-not (Get-Module -ListAvailable -Name ExchangeOnlineManagement)) {
+              Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+              Install-Module ExchangeOnlineManagement -Scope CurrentUser -Force -AllowClobber
+            }
+            $m = Get-Module -ListAvailable -Name ExchangeOnlineManagement | Sort-Object Version -Descending | Select-Object -First 1
+            if (-not $m) { throw "EXO_MODULE_UNAVAILABLE" }
+            Write-Host ("EXO_MODULE_VERSION=" + $m.Version)
+          ' 2>&1)"
+          module_rc=$?
+          set -e
+          printf '%s\n' "$module_out" | tail -n 30
+          if [ "$module_rc" -ne 0 ]; then
+            echo "EXO_MODULE_RC=$module_rc"
+            echo 'RESTRICTION_RESULT=uncertain reason=exo_module_setup_failed'
+            exit 0
+          fi
+          set +e
+          out="$(timeout 600s pwsh -NoProfile -File ./scripts/desbloquear_exchange_app_cert.ps1 2>&1)"
+          rc=$?
+          set -e
+          printf '%s\n' "$out" | grep -E 'EXCHANGE_(APP_ONLY_CONNECTED|SENDER_NOT_BLOCKED|SENDER_BLOCKED|UNBLOCK_NOT_EXECUTED)|WORKER_RESUME_ALLOWED' || true
+          if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q 'EXCHANGE_SENDER_NOT_BLOCKED'; then
+            echo 'RESTRICTION_RESULT=not_blocked'
+          elif [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q 'EXCHANGE_SENDER_BLOCKED'; then
+            echo 'RESTRICTION_RESULT=blocked'
+          else
+            echo "RESTRICTION_RESULT=uncertain rc=$rc"
+            printf '%s\n' "$out" | tail -n 50 | sed -E 's/(Bearer )[A-Za-z0-9._-]+/\1[redacted]/g'
+          fi
+          echo "WORKER_AFTER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo 'SENTINEL_AFTER=present'; else echo 'SENTINEL_AFTER=absent'; fi
+          EOF
+          rc=$?
+          set -e
+          echo "SSH_RC=$rc" >> reports/automation-exchange-finalcheck-20260818-1032.txt
+      - name: Persist report
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/automation-exchange-finalcheck-20260818-1032.txt
+          git commit -m 'ops: record final Exchange restriction check 20260818-1032' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
+# corrected package process match

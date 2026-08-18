@@ -155,27 +155,37 @@ function sv_account_ensure_schema(): void
         }
     }
 
+    // display_in_navbar/display_in_popup controlam se o cupom e ANUNCIADO
+    // publicamente (via includes/active-coupons.php -> promotion-output-filter.php
+    // na home). Antes desta mudanca os cupons de boas-vindas existiam e eram
+    // validos no checkout, mas nunca apareciam anunciados em lugar nenhum --
+    // ninguem sabia que existiam. PRIMEIRA10 removido por ser duplicata exata
+    // de VIVALIZ10 (mesmo desconto, mesmo proposito); mantido so o codigo
+    // oficial pra evitar dois cupons concorrentes com a mesma oferta.
     $seedCoupons = [
-        ['VOLTEI5', 'Cupom carrinho abandonado (5%)', 'percent', 5.00],
-        ['VIVALIZ10', 'Primeira compra: 10% de desconto', 'percent', 10.00],
-        ['PRIMEIRA10', 'Primeira compra: 10% de desconto', 'percent', 10.00],
+        ['VOLTEI5', 'Cupom carrinho abandonado (5%)', 'percent', 5.00, 0, 0],
+        ['VIVALIZ10', 'Primeira compra: 10% de desconto', 'percent', 10.00, 1, 1],
     ];
     $seedCouponStmt = $pdo->prepare(
-        'INSERT INTO coupons (code, description, discount_type, discount_value, min_order_value, starts_at, ends_at, expires_at, max_uses, used_count, is_active)
-         VALUES (:code, :description, :discount_type, :discount_value, 0.00, NULL, NULL, NULL, 0, 0, 1)
+        'INSERT INTO coupons (code, description, discount_type, discount_value, min_order_value, starts_at, ends_at, expires_at, max_uses, used_count, is_active, display_in_navbar, display_in_popup)
+         VALUES (:code, :description, :discount_type, :discount_value, 0.00, NULL, NULL, NULL, 0, 0, 1, :display_in_navbar, :display_in_popup)
          ON DUPLICATE KEY UPDATE
             description = VALUES(description),
             discount_type = VALUES(discount_type),
             discount_value = VALUES(discount_value),
             is_active = 1,
+            display_in_navbar = VALUES(display_in_navbar),
+            display_in_popup = VALUES(display_in_popup),
             updated_at = NOW()'
     );
-    foreach ($seedCoupons as [$code, $description, $discountType, $discountValue]) {
+    foreach ($seedCoupons as [$code, $description, $discountType, $discountValue, $displayNavbar, $displayPopup]) {
         $seedCouponStmt->execute([
             ':code' => $code,
             ':description' => $description,
             ':discount_type' => $discountType,
             ':discount_value' => $discountValue,
+            ':display_in_navbar' => $displayNavbar,
+            ':display_in_popup' => $displayPopup,
         ]);
     }
 
@@ -189,6 +199,30 @@ function sv_account_ensure_schema(): void
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_password_resets_user (user_id),
             UNIQUE INDEX idx_password_resets_token (token_hash)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+    );
+
+    // Carrinho abandonado: captura o e-mail assim que o cliente preenche o
+    // campo no checkout (antes de finalizar), pra permitir e-mail de
+    // recuperacao se ele sair sem comprar. Nao persiste dados de pagamento,
+    // so email + snapshot leve do carrinho (nome dos itens) pra personalizar
+    // o e-mail. recovered_at marca quando o mesmo e-mail concluiu um pedido
+    // depois do abandono (nao manda e-mail de recuperacao nesse caso).
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS checkout_abandonments (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            email VARCHAR(160) NOT NULL,
+            customer_name VARCHAR(120) NULL,
+            cart_snapshot TEXT NULL,
+            cart_total DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+            session_token CHAR(64) NOT NULL,
+            recovery_email_sent_at DATETIME NULL,
+            recovered_at DATETIME NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE INDEX idx_checkout_abandon_session (session_token),
+            INDEX idx_checkout_abandon_email (email),
+            INDEX idx_checkout_abandon_pending (recovery_email_sent_at, recovered_at, created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
     );
 

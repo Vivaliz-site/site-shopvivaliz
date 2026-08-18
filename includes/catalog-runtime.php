@@ -11,7 +11,12 @@ function svcr_slug(string $name, string $sku = ''): string
     $text = function_exists('mb_strtolower') ? mb_strtolower($text, 'UTF-8') : strtolower($text);
     $text = preg_replace('/[^\p{L}\p{N}\s\-]/u', '', $text);
     $text = preg_replace('/[\s\-]+/', '-', trim((string)$text));
-    return trim((string)$text, '-');
+    $slug = trim((string)$text, '-');
+    $skuPart = svcr_lower((string)(preg_replace('/[^\p{L}\p{N}]+/u', '', $sku) ?? ''));
+    if ($name !== '' && $skuPart !== '' && !str_ends_with(str_replace('-', '', $slug), $skuPart)) {
+        $slug .= '-' . $skuPart;
+    }
+    return trim($slug, '-');
 }
 
 function svcr_lower(string $value): string
@@ -169,6 +174,7 @@ function svcr_is_excluded_product(array $item): bool
 {
     $sku = trim((string)($item['sku'] ?? $item['codigo'] ?? $item['code'] ?? ''));
     if ($sku === 'Parafuso5x16') return true;
+    if (svcr_lower(trim((string)($item['name'] ?? $item['nome'] ?? $item['descricao'] ?? ''))) === 'stretch manual 500x25 c/3 kg') return true;
 
     foreach (['exclude_from_site', 'exclude_from_catalog', 'exclude_from_feeds', 'non_sellable', 'raw_material', 'materia_prima', 'materiaPrima'] as $field) {
         $value = $item[$field] ?? null;
@@ -186,12 +192,49 @@ function svcr_is_excluded_product(array $item): bool
     return false;
 }
 
+function svcr_flag_bool(mixed $value): ?bool
+{
+    if (is_bool($value)) return $value;
+    if (is_int($value) || is_float($value)) return ((int)$value) !== 0;
+    if (!is_string($value)) return null;
+    $normalized = svcr_lower(trim($value));
+    if ($normalized === '') return null;
+    if (in_array($normalized, ['1', 'true', 'yes', 'sim', 's', 'ativo', 'active', 'enabled', 'publicado', 'published'], true)) return true;
+    if (in_array($normalized, ['0', 'false', 'no', 'nao', 'não', 'n', 'inativo', 'inactive', 'disabled', 'excluido', 'excluído', 'deleted', 'removed', 'archived', 'arquivado'], true)) return false;
+    return null;
+}
+
+function svcr_is_active_product(array $item): bool
+{
+    foreach (['deleted', 'is_deleted', 'excluded', 'is_excluded', 'archived', 'is_archived', 'removed', 'is_removed'] as $field) {
+        if (!array_key_exists($field, $item)) continue;
+        if (svcr_flag_bool($item[$field]) === true) return false;
+    }
+    foreach (['deleted_at', 'excluded_at', 'archived_at', 'removed_at'] as $field) {
+        if (!array_key_exists($field, $item)) continue;
+        $value = trim((string)($item[$field] ?? ''));
+        if ($value !== '' && $value !== '0' && $value !== '0000-00-00 00:00:00') return false;
+    }
+    foreach (['active', 'is_active', 'ativo', 'enabled', 'is_enabled', 'is_published'] as $field) {
+        if (!array_key_exists($field, $item)) continue;
+        if (svcr_flag_bool($item[$field]) === false) return false;
+    }
+    $allowed = ['A', 'ATIVO', 'ACTIVE', 'ENABLED', 'PUBLICADO', 'PUBLISHED', 'DISPONIVEL', 'DISPONÍVEL', 'AVAILABLE'];
+    foreach (['situacao', 'situação', 'status', 'state', 'product_status', 'situacao_produto'] as $field) {
+        if (!array_key_exists($field, $item)) continue;
+        $value = trim((string)($item[$field] ?? ''));
+        if ($value === '') continue;
+        $normalized = function_exists('mb_strtoupper') ? mb_strtoupper($value, 'UTF-8') : strtoupper($value);
+        if (!in_array($normalized, $allowed, true)) return false;
+    }
+    return true;
+}
+
 function svcr_filter_storefront_rows(array $rows): array
 {
     return array_values(array_filter($rows, static function ($row): bool {
-        if (!is_array($row) || svcr_is_preorder($row) || svcr_is_excluded_product($row) || svcr_item_price($row) <= 0) return false;
-        $isPublished = $row['is_published'] ?? true;
-        return !($isPublished === 'false' || $isPublished === false || $isPublished === 0 || $isPublished === '0');
+        if (!is_array($row) || !svcr_is_active_product($row) || svcr_is_preorder($row) || svcr_is_excluded_product($row) || svcr_item_price($row) <= 0) return false;
+        return true;
     }));
 }
 
@@ -215,9 +258,119 @@ function svcr_has_available_product(array $products): bool
 
 function svcr_select_catalog_products(array $products, array $fallbackProducts): array
 {
-    if ($products !== [] && svcr_has_available_product($products)) return $products;
-    if (svcr_has_available_product($fallbackProducts)) return $fallbackProducts;
-    return $products !== [] ? $products : $fallbackProducts;
+    // Regra fail-closed: snapshots/fallbacks antigos nao comprovam o
+    // status atual no ERP. Somente a fonte canonica pode alimentar a
+    // vitrine, inclusive quando todos os itens ativos estao sem estoque.
+    return $products;
+}
+
+function svcr_content_key(mixed $value): string
+{
+    return svcr_lower(trim((string)$value));
+}
+
+/**
+ * Conteudo editorial indexado por SKU/ID.
+ *
+ * Estes arquivos sao snapshots historicos e, portanto, nunca podem fornecer
+ * preco, estoque, status ou qualquer outro dado comercial. Eles sao usados
+ * somente para completar o conteudo da fonte canonica de itens ativos.
+ *
+ * @return array<string, array<string, mixed>>
+ */
+function svcr_content_index(string $root): array
+{
+    static $cachedIndex = null;
+    if ($cachedIndex !== null) return $cachedIndex;
+
+    $cachedIndex = [];
+    foreach ([$root . '/storage/products-cache.json', $root . '/api/catalog/fallback-products.json'] as $path) {
+        if (!is_file($path)) continue;
+        $payload = json_decode((string)file_get_contents($path), true);
+        if (!is_array($payload)) continue;
+
+        $rows = $payload;
+        foreach (['itens', 'items', 'produtos', 'products', 'data'] as $key) {
+            if (isset($payload[$key]) && is_array($payload[$key])) {
+                $rows = $payload[$key];
+                break;
+            }
+        }
+
+        foreach ($rows as $row) {
+            if (!is_array($row)) continue;
+            foreach ([$row['sku'] ?? '', $row['id'] ?? '', $row['olist_product_id'] ?? ''] as $identity) {
+                $key = svcr_content_key($identity);
+                if ($key !== '' && !isset($cachedIndex[$key])) {
+                    $cachedIndex[$key] = $row;
+                }
+            }
+        }
+        // Os dois arquivos carregam o mesmo snapshot editorial em instalacoes
+        // normais. Evita decodificar ~600 KB duas vezes a cada request.
+        if ($cachedIndex !== []) break;
+    }
+
+    return $cachedIndex;
+}
+
+function svcr_content_for_item(array $item, array $index): array
+{
+    foreach ([$item['sku'] ?? '', $item['codigo'] ?? '', $item['code'] ?? '', $item['id'] ?? '', $item['olist_product_id'] ?? ''] as $identity) {
+        $key = svcr_content_key($identity);
+        if ($key !== '' && isset($index[$key]) && is_array($index[$key])) {
+            return $index[$key];
+        }
+    }
+    return [];
+}
+
+function svcr_is_weak_description(string $description, string $name): bool
+{
+    $description = trim(strip_tags($description));
+    $name = trim(strip_tags($name));
+    if ($description === '' || strlen($description) < 45) return true;
+    if ($name !== '' && svcr_lower($description) === svcr_lower($name)) return true;
+    return preg_match('/^(confira|compre|produto de qualidade|produto vivaliz)\b/iu', $description) === 1;
+}
+
+function svcr_infer_category(string $name, string $description = ''): string
+{
+    $haystack = svcr_lower($name . ' ' . $description);
+    $rules = [
+        'Rodízios' => ['rodízio', 'rodizio', 'roldana'],
+        'Ferramentas' => ['ferramenta', 'alicate', 'chave ', 'martelo', 'broca', 'serrote', 'trena'],
+        'Ferragens' => ['parafuso', 'porca', 'arruela', 'dobradiça', 'dobradica', 'fechadura', 'trinco', 'cadeado'],
+        'Organização' => ['organizador', 'prateleira', 'suporte', 'gancho', 'cesto'],
+        'Jardim' => ['jardim', 'mangueira', 'regador', 'vaso ', 'pulverizador'],
+        'Hidráulica' => ['torneira', 'registro', 'sifão', 'sifao', 'hidráulic', 'hidraulic', 'engate flexível', 'engate flexivel'],
+        'Elétrica' => ['tomada', 'interruptor', 'elétric', 'eletric', 'lâmpada', 'lampada', 'extensão', 'extensao'],
+        'Limpeza' => ['limpeza', 'vassoura', 'rodo', 'escova', 'pano '],
+    ];
+    foreach ($rules as $category => $terms) {
+        foreach ($terms as $term) {
+            if (str_contains($haystack, $term)) return $category;
+        }
+    }
+    return 'Casa e manutenção';
+}
+
+function svcr_first_text(array $sources): string
+{
+    foreach ($sources as $value) {
+        if (is_scalar($value) && trim((string)$value) !== '') return trim((string)$value);
+    }
+    return '';
+}
+
+function svcr_first_positive_number(array $sources): float
+{
+    foreach ($sources as $value) {
+        if (!is_numeric($value)) continue;
+        $number = (float)$value;
+        if (is_finite($number) && $number > 0) return $number;
+    }
+    return 0.0;
 }
 
 function svcr_products(): array
@@ -246,38 +399,55 @@ function svcr_products(): array
     }
 
     if ($items === []) {
-        return svcr_fallback_products($root);
-    }
+    // Sem snapshot canonico de ativos nao existe evidencia suficiente
+    // para publicar produtos. Falhar fechado evita ressuscitar itens
+    // inativos/excluidos por meio de um fallback historico.
+    return [];
+}
 
+    $contentIndex = svcr_content_index($root);
     $products = [];
     foreach ($items as $item) {
-        if (!is_array($item) || svcr_is_preorder($item) || svcr_is_excluded_product($item)) continue;
+        if (!is_array($item) || !svcr_is_active_product($item) || svcr_is_preorder($item) || svcr_is_excluded_product($item)) continue;
 
-        $isPublished = $item['is_published'] ?? true;
-        if ($isPublished === 'false' || $isPublished === false || $isPublished === 0 || $isPublished === '0') continue;
-
-        $situation = strtoupper(trim((string)($item['situacao'] ?? 'A')));
-        if (!in_array($situation, ['A', 'ATIVO', 'ACTIVE'], true)) continue;
+        $content = svcr_content_for_item($item, $contentIndex);
 
         $imagesList = svcr_collect_image_urls($item);
+        foreach (svcr_collect_image_urls($content) as $contentImage) {
+            if (!in_array($contentImage, $imagesList, true)) $imagesList[] = $contentImage;
+        }
+        $imagesList = array_slice($imagesList, 0, 12);
         $image = trim((string)($item['imagem_principal_url'] ?? $item['primary_image_url'] ?? $item['image_url'] ?? $item['imagem'] ?? ''));
-        if ($image === '') $image = $imagesList[0] ?? '';
+        if ($image === '') $image = svcr_first_text([$content['image_url'] ?? '', $content['imagem_principal_url'] ?? '', $imagesList[0] ?? '']);
 
         $stockInfo = is_array($item['estoque'] ?? null) ? $item['estoque'] : (is_array($item['stock_detail'] ?? null) ? $item['stock_detail'] : []);
         $category = is_array($item['categoria'] ?? null) ? $item['categoria'] : [];
         $dimensions = is_array($item['dimensoes'] ?? null) ? $item['dimensoes'] : (is_array($item['dimensions'] ?? null) ? $item['dimensions'] : []);
+        $contentDimensions = is_array($content['dimensions'] ?? null) ? $content['dimensions'] : [];
         $sku = trim((string)($item['sku'] ?? $item['codigo'] ?? $item['code'] ?? ''));
         if ($sku === '') continue;
 
         $name = trim((string)($item['descricao'] ?? $item['nome'] ?? $item['name'] ?? $sku));
+        $contentName = svcr_first_text([$content['name'] ?? '', $content['nome'] ?? '']);
+        if (($name === '' || svcr_lower($name) === svcr_lower($sku)) && $contentName !== '') $name = $contentName;
         $price = svcr_item_price($item);
         if ($price <= 0) continue;
 
-        $bulletPoints = svcr_string_list($item['bullet_points'] ?? $item['bullet_points_json'] ?? []);
-        $seoKeywords = svcr_string_list($item['seo_keywords'] ?? $item['seo_keywords_json'] ?? []);
-        $marketingHooks = svcr_string_list($item['marketing_hooks'] ?? $item['marketing_hooks_json'] ?? []);
-        $existingTags = svcr_string_list($item['tags'] ?? []);
-        $brandValue = $item['brand'] ?? $item['marca'] ?? '';
+        $description = svcr_first_text([$item['descricaoComplementar'] ?? '', $item['descricao_complementar'] ?? '', $item['description'] ?? '']);
+        $contentDescription = svcr_first_text([$content['description'] ?? '', $content['descricaoComplementar'] ?? '', $content['descricao_complementar'] ?? '']);
+        if (svcr_is_weak_description($description, $name) && !svcr_is_weak_description($contentDescription, $name)) {
+            $description = $contentDescription;
+        }
+
+        $categoryName = trim((string)($category['nome'] ?? $category['caminhoCompleto'] ?? $item['category'] ?? ''));
+        if ($categoryName === '') $categoryName = svcr_first_text([$content['category'] ?? '', $content['categoria'] ?? '']);
+        if ($categoryName === '') $categoryName = svcr_infer_category($name, $description);
+
+        $bulletPoints = svcr_string_list($item['bullet_points'] ?? $item['bullet_points_json'] ?? $content['bullet_points'] ?? []);
+        $seoKeywords = svcr_string_list($item['seo_keywords'] ?? $item['seo_keywords_json'] ?? $content['seo_keywords'] ?? $content['keywords'] ?? []);
+        $marketingHooks = svcr_string_list($item['marketing_hooks'] ?? $item['marketing_hooks_json'] ?? $content['marketing_hooks'] ?? []);
+        $existingTags = svcr_string_list($item['tags'] ?? $content['tags'] ?? []);
+        $brandValue = $item['brand'] ?? $item['marca'] ?? $content['brand'] ?? $content['marca'] ?? '';
         if (is_array($brandValue)) {
             $brandValue = $brandValue['nome'] ?? $brandValue['name'] ?? '';
         }
@@ -289,25 +459,29 @@ function svcr_products(): array
             'olist_product_id' => (string)($item['id'] ?? $item['olist_product_id'] ?? ''),
             'name' => $name,
             'slug' => svcr_slug($name, $sku),
-            'description' => svcr_clean_description((string)($item['descricaoComplementar'] ?? $item['descricao_complementar'] ?? $item['description'] ?? $item['descricao'] ?? '')),
+            'description' => svcr_clean_description($description),
             'price' => $price,
             'stock' => max(0, (int)($item['estoque_disponivel'] ?? $stockInfo['quantidade'] ?? $stockInfo['stock'] ?? $item['stock'] ?? 0)),
             'image_url' => $image,
             'images' => $imagesList,
             'images_count' => count($imagesList),
-            'category' => trim((string)($category['nome'] ?? $category['caminhoCompleto'] ?? $item['category'] ?? '')),
+            'category' => $categoryName,
             'brand' => $brand,
             'bullet_points' => $bulletPoints,
             'seo_keywords' => $seoKeywords,
             'marketing_hooks' => $marketingHooks,
-            'meta_title' => trim((string)($item['meta_title'] ?? '')),
-            'meta_description' => trim((string)($item['meta_description'] ?? '')),
+            'meta_title' => svcr_first_text([$item['meta_title'] ?? '', $item['seo_title'] ?? '', $content['meta_title'] ?? '', $content['seo_title'] ?? '']),
+            'meta_description' => svcr_first_text([$item['meta_description'] ?? '', $item['seo_description'] ?? '', $content['meta_description'] ?? '', $content['seo_description'] ?? '']),
             'tags' => array_slice(array_values(array_unique(array_merge($existingTags, $seoKeywords))), 0, 20),
-            'weight' => (float)($dimensions['pesoLiquido'] ?? $dimensions['peso_liquido'] ?? $dimensions['net_weight'] ?? $item['peso'] ?? $item['weight'] ?? 0),
-            'width' => (float)($dimensions['largura'] ?? $dimensions['width'] ?? $item['width'] ?? 0),
-            'height' => (float)($dimensions['altura'] ?? $dimensions['height'] ?? $item['height'] ?? 0),
-            'length' => (float)($dimensions['comprimento'] ?? $dimensions['length'] ?? $item['length'] ?? 0),
-            'video_url' => trim((string)($item['video_url'] ?? '')),
+            'gtin' => preg_replace('/\D+/', '', svcr_first_text([$item['gtin'] ?? '', $item['ean'] ?? '', $item['barcode'] ?? '', $content['gtin'] ?? '', $content['ean'] ?? ''])) ?: '',
+            'ncm' => svcr_first_text([$item['ncm'] ?? '', $content['ncm'] ?? '']),
+            'warranty' => svcr_first_text([$item['warranty'] ?? '', $item['garantia'] ?? '', $content['warranty'] ?? '', $content['garantia'] ?? '']),
+            'weight' => svcr_first_positive_number([$dimensions['pesoLiquido'] ?? null, $dimensions['peso_liquido'] ?? null, $dimensions['net_weight'] ?? null, $item['peso'] ?? null, $item['weight'] ?? null, $contentDimensions['net_weight'] ?? null]),
+            'gross_weight' => svcr_first_positive_number([$dimensions['pesoBruto'] ?? null, $dimensions['peso_bruto'] ?? null, $dimensions['gross_weight'] ?? null, $contentDimensions['gross_weight'] ?? null]),
+            'width' => svcr_first_positive_number([$dimensions['largura'] ?? null, $dimensions['width'] ?? null, $item['width'] ?? null, $contentDimensions['width'] ?? null]),
+            'height' => svcr_first_positive_number([$dimensions['altura'] ?? null, $dimensions['height'] ?? null, $item['height'] ?? null, $contentDimensions['height'] ?? null]),
+            'length' => svcr_first_positive_number([$dimensions['comprimento'] ?? null, $dimensions['length'] ?? null, $item['length'] ?? null, $contentDimensions['length'] ?? null]),
+            'video_url' => svcr_first_text([$item['video_url'] ?? '', $content['video_url'] ?? '']),
             'status' => 'active',
         ];
     }

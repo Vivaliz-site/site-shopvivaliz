@@ -1,9 +1,29 @@
 <?php
 declare(strict_types=1);
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+
+// O checkout e generico para visitantes: carrinho e formulario vivem no
+// navegador. Retoma PHP session apenas quando ja existe cookie (ex.: login),
+// evitando Set-Cookie e permitindo cache curto de borda para GET/HEAD anonimo.
+$svCheckoutMethod = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+$svCheckoutSessionName = session_name();
+$svCheckoutHasSessionCookie = $svCheckoutSessionName !== ''
+    && isset($_COOKIE[$svCheckoutSessionName])
+    && trim((string)$_COOKIE[$svCheckoutSessionName]) !== '';
+$svCheckoutPublicCache = in_array($svCheckoutMethod, ['GET', 'HEAD'], true)
+    && !$svCheckoutHasSessionCookie;
+
+if ($svCheckoutHasSessionCookie && session_status() === PHP_SESSION_NONE) {
+    @session_start();
 }
+
 header('Content-Type: text/html; charset=UTF-8');
+if ($svCheckoutPublicCache) {
+    header('Cache-Control: public, max-age=0, s-maxage=15, stale-while-revalidate=30');
+    header('Vary: Cookie');
+} else {
+    header('Cache-Control: private, no-store, max-age=0, must-revalidate');
+    header('Pragma: no-cache');
+}
 
 $runtimeSecretsFile = __DIR__ . '/config/runtime-secrets.php';
 if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
@@ -22,7 +42,10 @@ if (is_file($runtimeSecretsFile) && is_readable($runtimeSecretsFile)) {
 
 require_once __DIR__ . '/includes/mercadopago-gateway.php';
 
-$whatsapp = svmp_env('LOJA_WHATSAPP') ?: '551140415850';
+$companyProfile = @include __DIR__ . '/config/company-profile.php';
+$companyProfile = is_array($companyProfile) ? $companyProfile : [];
+$companyWhatsapp = preg_replace('/\D+/', '', (string)($companyProfile['social_media']['whatsapp'] ?? $companyProfile['phone'] ?? '')) ?: '';
+$whatsapp = preg_replace('/\D+/', '', svmp_env('LOJA_WHATSAPP')) ?: $companyWhatsapp;
 $pixKey = svmp_env('LOJA_PIX_KEY');
 $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
 ?>
@@ -45,9 +68,12 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
     <link rel="stylesheet" href="/css/layout-polish-v1.css?v=2026-07-29-1">
     <?php require_once __DIR__ . '/includes/load-custom-css.php'; ?>
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
-    <!-- Mercado Pago SDK V2 + Device ID para fraude -->
-    <script src="https://sdk.mercadopago.com/js/v2"></script>
-    <script src="https://www.mercadopago.com/v2/security.js" output="deviceId"></script>
+    <!-- Mercado Pago: baixa em paralelo sem bloquear o parser; os scripts
+         defer executam antes de DOMContentLoaded, preservando o Device ID. -->
+    <link rel="preconnect" href="https://sdk.mercadopago.com" crossorigin>
+    <link rel="preconnect" href="https://www.mercadopago.com" crossorigin>
+    <script defer src="https://sdk.mercadopago.com/js/v2"></script>
+    <script defer src="https://www.mercadopago.com/v2/security.js" output="deviceId"></script>
 </head>
 <body>
 <?php $svNavCurrent = 'checkout'; include __DIR__ . '/includes/navbar.php'; ?>
@@ -66,15 +92,6 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
     </div>
 </div>
 
-<div class="container">
-    <div class="checkout-timer-banner" style="background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:12px 18px; display:flex; align-items:center; gap:12px; margin-top:24px; font-family:'Inter',sans-serif; margin-bottom:-8px; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.05);">
-        <span style="font-size:20px;">⏱️</span>
-        <div style="flex:1; font-size:13px; color:#92400e; font-weight:700; line-height: 1.4;">
-            Garanta o seu estoque! Os produtos no seu carrinho estão reservados por <strong id="checkout-timer-display" style="color:#b45309; font-size:14px;">15:00</strong> minutos.
-        </div>
-    </div>
-</div>
-
 <main class="container checkout-layout" style="padding-top:28px;padding-bottom:56px">
 
     <!-- FORMULÁRIO -->
@@ -83,7 +100,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         <div class="checkout-reassurance" aria-label="Informações rápidas do checkout">
             <div class="reassurance-pill">Sem cadastro obrigatório</div>
             <div class="reassurance-copy">
-                Finalize o pedido em poucos passos. Se precisar de ajuda, nosso atendimento acompanha a confirmação por WhatsApp.
+                Compre como visitante. Preço, estoque, cupom e frete serão revalidados no servidor antes de criar o pedido.
             </div>
         </div>
         <form id="checkout-form" class="checkout-form" novalidate>
@@ -180,19 +197,19 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                     <span class="payment-opt-box">
                         <img src="/images/mercado-pago-logo.svg" alt="Mercado Pago - PIX, Cartão e Boleto" style="max-height:60px; margin-bottom:8px; width: auto;">
                         <strong>Mercado Pago</strong>
-                        <small>PIX, boleto e cartão em até 2x sem juros</small>
+                        <small>PIX, boleto e cartão; condições exibidas no ambiente do gateway</small>
                     </span>
                 </label>
                 <label class="payment-opt">
                     <input type="radio" name="payment_method" value="infinitepay" required>
                     <span class="payment-opt-box">
                         <strong>InfinitePay</strong>
-                        <small>PIX e cartão em até 6x sem juros</small>
+                        <small>PIX e cartão; condições exibidas no ambiente do gateway</small>
                     </span>
                 </label>
             </div>
             <div class="payment-options-note">
-                Mercado Pago aceita PIX, boleto e cartão em até 2x sem juros. InfinitePay aceita PIX e cartão em até 6x sem juros.
+                Escolha o gateway; opções, parcelas e valores finais serão confirmados antes do pagamento.
             </div>
 
             <label class="form-group">
@@ -201,7 +218,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             </label>
 
             <button class="btn btn-primary btn-checkout" type="submit" id="submit-btn">
-                Confirmar pedido
+                Ir para pagamento
             </button>
             <div class="checkout-support-inline">
                 <strong>Atendimento ágil:</strong>
@@ -246,7 +263,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         </div>
 
         <div class="trust-badges">
-            <div class="trust-item">🔒 Compra 100% segura</div>
+            <div class="trust-item">🔒 Conexão HTTPS e pagamento por parceiros especializados</div>
             <div class="trust-item">🚚 Envio para todo Brasil</div>
             <div class="trust-item">↩️ 7 dias corridos para troca/devolução</div>
         </div>
@@ -256,7 +273,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
 <footer>
     <div class="container">
         <div class="footer-cols">
-            <div><strong>Vivaliz</strong><p>Qualidade e entrega rápida para todo o Brasil.</p></div>
+            <div><strong>Vivaliz</strong><p>Ferragens, rodízios, ferramentas e utilidades com atendimento direto.</p></div>
             <div><strong>Navegação</strong><a href="/catalogo">Produtos</a><a href="/sobre">Sobre</a><a href="/contato">Contato</a></div>
             <div><strong>Atendimento</strong><a href="/contato">Fale conosco</a><a href="/faq">Dúvidas frequentes</a><a href="/politica-privacidade">Privacidade</a></div>
         </div>
@@ -326,16 +343,21 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
 (function () {
     // MercadoPago.js V2 initialization with Public Key
     var PUBLIC_KEY = <?= json_encode(svmp_env('MERCADOPAGO_PUBLIC_KEY')) ?>;
-    try {
-        if (PUBLIC_KEY && window.MercadoPago) {
-            // SDK V2 usa o construtor `new MercadoPago(...)`, nao o metodo
-            // estatico `.configure()` da API antiga (V1). O Device ID de
-            // fraude ja e coletado automaticamente pelo v2/security.js
-            // carregado no <head>, nao precisa de chamada manual.
-            new MercadoPago(PUBLIC_KEY, { locale: 'pt-BR' });
+    function svInitMercadoPagoSdk() {
+        try {
+            if (PUBLIC_KEY && window.MercadoPago) {
+                // Os SDKs sao defer: neste ponto (DOMContentLoaded) ja foram
+                // executados e o security.js teve chance de preencher deviceId.
+                new MercadoPago(PUBLIC_KEY, { locale: 'pt-BR' });
+            }
+        } catch (mpInitError) {
+            console.error('MercadoPago SDK init failed', mpInitError);
         }
-    } catch (mpInitError) {
-        console.error('MercadoPago SDK init failed', mpInitError);
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', svInitMercadoPagoSdk, { once: true });
+    } else {
+        svInitMercadoPagoSdk();
     }
 
     var PIX_KEY = <?= json_encode($pixKey) ?>;
@@ -358,7 +380,20 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         window.dispatchEvent(new CustomEvent('shopvivaliz:cart-updated', { detail: { items: items } }));
     }
     function getShippingQuote() {
-        try { return JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null'); } catch(e) { return null; }
+        try {
+            var quote = JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null');
+            if (!quote || typeof quote !== 'object') return null;
+            var expiresAt = Number(quote.expires_at || 0);
+            var now = expiresAt > 1000000000000 ? Date.now() : Math.floor(Date.now() / 1000);
+            if (!expiresAt || expiresAt <= now) {
+                localStorage.removeItem('shopvivaliz_shipping_quote');
+                return null;
+            }
+            return quote;
+        } catch(e) {
+            localStorage.removeItem('shopvivaliz_shipping_quote');
+            return null;
+        }
     }
     function getCoupon() {
         try { return JSON.parse(localStorage.getItem('shopvivaliz_coupon') || 'null'); } catch(e) { return null; }
@@ -402,6 +437,53 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
         });
     })();
+
+    /* Carrinho abandonado: registra o e-mail (fire-and-forget, nunca bloqueia
+       o checkout) quando o cliente preenche o campo e sai dele, pra permitir
+       e-mail de recuperacao depois caso nao finalize a compra. */
+    (function trackAbandonment() {
+        var TOKEN_KEY = 'shopvivaliz_checkout_session_token';
+        var form = document.getElementById('checkout-form');
+        var emailField = form && form.querySelector('[name="customer_email"]');
+        if (!form || !emailField) return;
+
+        function getToken() {
+            var token = null;
+            try { token = sessionStorage.getItem(TOKEN_KEY); } catch (e) {}
+            if (!token) {
+                token = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now().toString(16) + Math.random().toString(16).slice(2));
+                try { sessionStorage.setItem(TOKEN_KEY, token); } catch (e) {}
+            }
+            return token;
+        }
+
+        var sent = false;
+        emailField.addEventListener('blur', function () {
+            var email = (emailField.value || '').trim();
+            if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+
+            var nameField = form.querySelector('[name="customer_name"]');
+            var cart = getCart();
+            var total = 0;
+            (cart || []).forEach(function (item) {
+                total += (Number(item.price) || 0) * (Number(item.quantity) || 1);
+            });
+
+            fetch('/api/checkout/track-abandonment.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: email,
+                    name: nameField ? nameField.value : '',
+                    session_token: getToken(),
+                    cart_items: (cart || []).map(function (item) { return { name: item.name }; }),
+                    cart_total: total
+                })
+            }).catch(function () {});
+            sent = true;
+        });
+    })();
+
     function clearCart() {
         if (window.ShopVivalizCart && typeof window.ShopVivalizCart.clear === 'function') {
             window.ShopVivalizCart.clear();
@@ -760,7 +842,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             payload.device_id = deviceInput ? deviceInput.value : (window.deviceId || '');
         } catch (e) {}
         try {
-            var q = JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null');
+            var q = getShippingQuote();
             if (q) {
                 payload.shipping_total = Number(q.total) || 0;
                 payload.shipping_label = shippingLabelFromQuote(q);
@@ -781,11 +863,13 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             if (clientId && String(clientId).length > 0) payload.funnel_client_id = clientId;
         } catch (ignore) {}
 
-        // Capturar gclid (Google Click ID) da URL ou localStorage
+        // Capturar identificadores de clique Google da URL ou localStorage.
         try {
             var params = new URLSearchParams(window.location.search);
-            var gclid = params.get('gclid') || localStorage.getItem('sv_gclid') || '';
-            if (gclid) payload.gclid = gclid;
+            ['gclid', 'gbraid', 'wbraid', 'dclid'].forEach(function (key) {
+                var value = params.get(key) || localStorage.getItem('sv_' + key) || '';
+                if (value) payload[key] = value;
+            });
 
             // Capturar UTM parameters
             var utm_source = params.get('utm_source') || localStorage.getItem('sv_utm_source') || '';
@@ -834,8 +918,6 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 document.getElementById('boleto-line-group').hidden = !boleto.digitable_line;
                 document.getElementById('boleto-open-link').href = boleto.ticket_url;
                 document.getElementById('boleto-modal').hidden = false;
-                triggerGooglePurchaseEvent(order.order_number, total, items);
-                triggerGoogleAdsConversion(order.order_number, total);
             } else if (method === 'mercado_pago') {
                 btn.textContent = 'Abrindo Mercado Pago…';
                 var preference = await postJson('/api/mercadopago/create-preference.php', {
@@ -860,14 +942,10 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                     document.getElementById('pix-amount-display').textContent = total > 0 ? totalFmt : 'Confirmar com a loja';
                     document.getElementById('wpp-confirm-link').href = wppLink;
                     document.getElementById('pix-modal').hidden = false;
-                    triggerGooglePurchaseEvent(order.order_number, total, items);
-                    triggerGoogleAdsConversion(order.order_number, total);
                 } else {
                     document.getElementById('order-number-msg').textContent = 'Pedido ' + order.order_number;
                     document.getElementById('success-wpp-link').href = wppLink;
                     document.getElementById('success-modal').hidden = false;
-                    triggerGooglePurchaseEvent(order.order_number, total, items);
-                    triggerGoogleAdsConversion(order.order_number, total);
                 }
             }
         } catch (err) {
@@ -875,7 +953,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             status.className='checkout-status-msg err';
         } finally {
             btn.disabled = false;
-            btn.textContent = 'Confirmar pedido';
+            btn.textContent = 'Ir para pagamento';
         }
     });
 
@@ -899,7 +977,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
 
         // Add shipping quote details
         try {
-            var q = JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote') || 'null');
+            var q = getShippingQuote();
             if (q) {
                 payload['shipping_total'] = Number(q.total) || 0;
                 payload['shipping_label'] = shippingLabelFromQuote(q);
@@ -918,7 +996,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         .then(function(r){ return r.json(); })
         .then(function(d) {
             btn.disabled = false;
-            btn.textContent = 'Confirmar pedido';
+            btn.textContent = 'Ir para pagamento';
             if (!d.ok) { status.textContent = d.message || d.error || 'Erro ao registrar pedido.'; status.className='checkout-status-msg err'; return; }
 
             var method = fd.get('payment_method') || 'pix';
@@ -953,7 +1031,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         })
         .catch(function(err) {
             btn.disabled = false;
-            btn.textContent = 'Confirmar pedido';
+            btn.textContent = 'Ir para pagamento';
             status.textContent = 'Erro de conexão. Tente novamente.';
             status.className = 'checkout-status-msg err';
         });
@@ -973,96 +1051,9 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
 
     renderCart();
 
-    /* Timer regressivo de reserva */
-    (function() {
-        var duration = 15 * 60; // 15 minutos em segundos
-        var display = document.getElementById('checkout-timer-display');
-        if (!display) return;
-
-        var timer = duration, minutes, seconds;
-        var interval = setInterval(function () {
-            minutes = parseInt(String(timer / 60), 10);
-            seconds = parseInt(String(timer % 60), 10);
-
-            minutes = minutes < 10 ? "0" + minutes : minutes;
-            seconds = seconds < 10 ? "0" + seconds : seconds;
-
-            display.textContent = minutes + ":" + seconds;
-
-            if (--timer < 0) {
-                clearInterval(interval);
-                display.textContent = "00:00";
-                var banner = document.querySelector('.checkout-timer-banner');
-                if (banner) {
-                    banner.style.background = '#fef2f2';
-                    banner.style.borderColor = '#fee2e2';
-                    var txtDiv = banner.querySelector('div');
-                    if (txtDiv) {
-                        txtDiv.style.color = '#991b1b';
-                        txtDiv.innerHTML = '⚠️ O tempo de reserva do seu carrinho expirou, mas você ainda pode finalizar a compra!';
-                    }
-                }
-            }
-        }, 1000);
-    })();
 })();
 </script>
-<script>
-function triggerGoogleAdsConversion(orderNumber, totalValue) {
-    if (typeof gtag === 'function') {
-        const adsId = <?= json_encode(getenv('GOOGLE_ADS_ID') ?: '') ?>;
-        const label = <?= json_encode(getenv('GOOGLE_ADS_CONVERSION_LABEL') ?: '') ?>;
-        if (adsId && label) {
-            gtag('event', 'conversion', {
-                'send_to': adsId + '/' + label,
-                'value': parseFloat(totalValue) || 0,
-                'currency': 'BRL',
-                'transaction_id': orderNumber
-            });
-        }
-    }
-}
-
-function triggerGooglePurchaseEvent(orderNumber, totalValue, items) {
-    if (!orderNumber) return;
-    try {
-        var dedupeKey = 'sv_purchase_tracked_' + String(orderNumber);
-        if (window.sessionStorage && sessionStorage.getItem(dedupeKey) === '1') {
-            return;
-        }
-        var payloadItems = Array.isArray(items) ? items.map(function(item) {
-            return {
-                item_id: String(item && (item.sku || item.olist_product_id || item.item_id) || ''),
-                item_name: String(item && (item.name || item.item_name) || 'Produto Vivaliz'),
-                item_brand: 'Vivaliz',
-                price: Math.max(0, Number(item && item.price || 0)),
-                quantity: Math.max(1, parseInt(item && item.quantity || 1, 10) || 1)
-            };
-        }).filter(function(item) {
-            return item.item_id || item.item_name;
-        }) : [];
-
-        if (window.ShopVivalizGoogleEvents && typeof window.ShopVivalizGoogleEvents.push === 'function') {
-            window.ShopVivalizGoogleEvents.push('purchase', {
-                transaction_id: String(orderNumber),
-                currency: 'BRL',
-                value: Math.max(0, Number(totalValue || 0)),
-                items: payloadItems
-            });
-        } else if (typeof window.gtag === 'function') {
-            window.gtag('event', 'purchase', {
-                transaction_id: String(orderNumber),
-                currency: 'BRL',
-                value: Math.max(0, Number(totalValue || 0)),
-                items: payloadItems
-            });
-        }
-
-        if (window.sessionStorage) {
-            sessionStorage.setItem(dedupeKey, '1');
-        }
-    } catch (error) {}
-}
-</script>
+<!-- Purchase e conversao de Ads sao emitidos somente apos pagamento
+     confirmado pelo webhook, nunca na simples criacao do pedido. -->
 </body>
 </html>

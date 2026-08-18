@@ -13,7 +13,7 @@ $phone = $company['phone'] ?? '(37) 99937-4112';
 <link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/footer-pages.css?v=20260728-1"></head><body>
 <?php $svNavCurrent = 'termos'; include __DIR__ . '/includes/navbar.php'; ?>
 <main class="legal-container"><header class="legal-header"><h1>Termos e Condições</h1><p>Regras para uso do site, cadastro, compra, pagamento, entrega e atendimento.</p></header><section class="legal-body">
-<div class="legal-box"><strong><?= htmlspecialchars($legalName) ?></strong><br>CNPJ: <?= htmlspecialchars($cnpj) ?><br>E-mail: <?= htmlspecialchars($email) ?><br>Telefone/WhatsApp: <?= htmlspecialchars($phone) ?></div>
+<div class="legal-box"><strong><?= htmlspecialchars($legalName) ?></strong><br>CNPJ: <?= htmlspecialchars($cnpj) ?><br>E-mail: <!--email_off--><?= htmlspecialchars($email) ?><!--/email_off--><br>Telefone/WhatsApp: <?= htmlspecialchars($phone) ?></div>
 <h2>1. Uso do site</h2><p>Ao navegar ou comprar na <?= htmlspecialchars($fantasyName) ?>, o usuário concorda com estes termos e com as políticas publicadas no site. O serviço deve ser utilizado de forma lícita e com informações verdadeiras.</p>
 <h2>2. Cadastro e dados do pedido</h2><p>O cliente é responsável por conferir nome, documento, endereço, contato e demais dados antes de concluir a compra. Informações incorretas podem impedir faturamento, contato ou entrega.</p>
 <h2>3. Produtos, preços e estoque</h2><p>Preços, disponibilidade, imagens e descrições são apresentados na página do produto e confirmados no carrinho. Erros materiais evidentes podem ser corrigidos antes da confirmação definitiva, com comunicação ao cliente e possibilidade de cancelamento e reembolso.</p>

@@ -12,6 +12,7 @@ require_once dirname(__DIR__, 2) . '/includes/order-request-context.php';
 require_once dirname(__DIR__, 2) . '/includes/order-idempotency.php';
 require_once dirname(__DIR__, 2) . '/includes/order-rate-limit.php';
 require_once dirname(__DIR__, 2) . '/includes/coupons.php';
+require_once dirname(__DIR__, 2) . '/includes/buy-together.php';
 require_once dirname(__DIR__, 2) . '/includes/inventory-reservations.php';
 
 function svq_fail(int $status, string $error, string $message, array $extra = []): never {
@@ -76,11 +77,34 @@ $fingerprint = ['cep'=>$shippingCep,'items'=>$fingerprintItems,'service_id'=>$se
 $expected = hash_hmac('sha256', json_encode($fingerprint, JSON_UNESCAPED_SLASHES), svq_secret());
 if (!hash_equals($expected, $quoteId)) svq_fail(409,'shipping_quote_invalid','O valor do frete foi alterado ou não corresponde à cotação. Calcule novamente.');
 
-$couponCode = trim((string)($body['coupon_code'] ?? ''));
+$buyTogether = svbt_validate_offer(null, $resolved['items']);
+$body['buy_together'] = $buyTogether;
+
+$itemsSubtotal = array_reduce(
+    $resolved['items'],
+    static fn(float $sum, array $item): float => $sum + ((float)$item['price'] * (int)$item['quantity']),
+    0.0
+);
+$promotionalSubtotal = max(0.0, round($itemsSubtotal - (float)$buyTogether['amount'], 2));
+
+// Um pedido aceita exatamente zero ou um cupom. Estruturas de lista e
+// separadores usuais de múltiplos códigos são recusados de forma explícita.
+if (is_array($body['coupon_code'] ?? null)) {
+    svq_fail(422, 'multiple_coupons_not_allowed', 'É permitido aplicar apenas 1 cupom por pedido.');
+}
+$couponCode = strtoupper(trim((string)($body['coupon_code'] ?? '')));
+if ($couponCode !== '' && preg_match('/[,;\s]/', $couponCode) === 1) {
+    svq_fail(422, 'multiple_coupons_not_allowed', 'É permitido aplicar apenas 1 cupom por pedido.');
+}
 if ($couponCode !== '') {
-    $itemsSubtotal = array_reduce($resolved['items'], static fn(float $sum, array $item): float => $sum + $item['price'] * $item['quantity'], 0.0);
-    $coupon = svcp_validate($couponCode, $itemsSubtotal);
-    if (!$coupon['ok']) svq_fail(422,'coupon_invalid','Cupom inválido ou não aplicável a este carrinho.');
+    $customerEmail = strtolower(trim((string)($body['customer_email'] ?? '')));
+    $coupon = svcp_validate($couponCode, $promotionalSubtotal, $customerEmail);
+    if (!$coupon['ok']) {
+        $message = $coupon['error'] === 'coupon_customer_mismatch'
+            ? 'Este cupom é pessoal e está vinculado a outro cliente.'
+            : 'Cupom inválido ou não aplicável a este carrinho.';
+        svq_fail(422, $coupon['error'] ?: 'coupon_invalid', $message);
+    }
     $body['coupon'] = $coupon;
 }
 
@@ -89,11 +113,7 @@ if (!svoi_claim($idempotencyKey)) svq_fail(409,'duplicate_order_request','Este p
 
 $reservationKey = hash('sha256', $idempotencyKey);
 try {
-    svir_reserve(
-        $reservationKey,
-        $resolved['items'],
-        (string)($body['payment_method'] ?? 'pix')
-    );
+    svir_reserve($reservationKey, $resolved['items'], (string)($body['payment_method'] ?? 'pix'));
 } catch (SvirInsufficientStock $error) {
     svoi_release($idempotencyKey);
     svq_fail(409, 'insufficient_stock', 'O estoque mudou enquanto você finalizava. Atualize o carrinho.', [

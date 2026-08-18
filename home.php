@@ -108,6 +108,8 @@ function home_sales_rank_map(): array
 
 function home_category_images(array $products, array $terms): array
 {
+    // Uma foto de CAPA por produto diferente da categoria (rotação troca de
+    // produto, não de ângulo/foto do mesmo produto — ver CHANGELOG.md).
     $images = [];
     foreach ($products as $product) {
         $haystack = home_normalize((string)($product['name'] ?? '') . ' ' . (string)($product['category'] ?? ''));
@@ -117,13 +119,24 @@ function home_category_images(array $products, array $terms): array
                 if ($image !== '' && !in_array($image, $images, true)) {
                     $images[] = $image;
                 }
-                if (is_array($product['images'] ?? null)) {
-                    foreach ($product['images'] as $additional) {
-                        $additional = trim((string)$additional);
-                        if ($additional !== '' && !in_array($additional, $images, true)) {
-                            $images[] = $additional;
-                        }
-                    }
+                break; // já contou este produto para a categoria, não avalia os outros termos
+            }
+        }
+    }
+    // Fallback só se não houver produtos suficientes de capas distintas: completa
+    // com as fotos adicionais do(s) produto(s) já encontrado(s), sem duplicar.
+    if (count($images) < 2) {
+        foreach ($products as $product) {
+            $haystack = home_normalize((string)($product['name'] ?? '') . ' ' . (string)($product['category'] ?? ''));
+            $matches = false;
+            foreach ($terms as $term) {
+                if (str_contains($haystack, home_normalize($term))) { $matches = true; break; }
+            }
+            if (!$matches || !is_array($product['images'] ?? null)) continue;
+            foreach ($product['images'] as $additional) {
+                $additional = trim((string)$additional);
+                if ($additional !== '' && !in_array($additional, $images, true)) {
+                    $images[] = $additional;
                 }
             }
         }

@@ -1,9 +1,8 @@
 <?php
 /**
- * Webhook Receiver - Olist envia notificações de mudanças
+ * Webhook Receiver - Olist envia notificacoes de mudancas
  * POST https://shopvivaliz.com.br/olist/webhook-receiver.php
  */
-
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
@@ -42,7 +41,6 @@ function verify_webhook_signature(string $requestBody, string $signature, string
     if (!$valid) {
         error_log('[WEBHOOK] FAILED: Signature mismatch.');
     }
-
     return $valid;
 }
 
@@ -51,7 +49,7 @@ if ($signature !== '') {
     if (!verify_webhook_signature($requestBody, $signature, $root)) {
         error_log('[WEBHOOK] REJECTED: Invalid signature.');
         http_response_code(403);
-        echo json_encode(['erro' => 'Assinatura inválida'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        echo json_encode(['erro' => 'Assinatura invalida'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }
     error_log('[WEBHOOK] VERIFIED: Signature valid');
@@ -62,7 +60,7 @@ if ($signature !== '') {
 $data = json_decode($requestBody, true);
 if (!is_array($data) || $data === []) {
     http_response_code(400);
-    echo json_encode(['erro' => 'JSON inválido'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode(['erro' => 'JSON invalido'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
@@ -88,16 +86,21 @@ $shouldSync = in_array($eventType, $syncEvents, true)
     || str_contains($eventType, 'preco');
 
 if ($shouldSync) {
-    exec('php ' . escapeshellarg($root . '/olist/sync-on-webhook.php') . ' > /dev/null 2>&1 &');
-    exec('php ' . escapeshellarg($root . '/olist/fetch-estoque-v3.php') . ' > /dev/null 2>&1 &');
+    // O refresh precisa ser sequencial: primeiro recria a lista canonica de
+    // ativos, depois consulta o estoque autoritativo e so entao espelha no
+    // banco local. Rodar sync e estoque em paralelo cria corrida de cache.
+    $pipeline = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($root . '/olist/sync-on-webhook.php')
+        . ' && ' . escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($root . '/olist/fetch-estoque-v3.php')
+        . ' && ' . escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($root . '/sync-daemon-to-db.php');
+    exec('nohup sh -c ' . escapeshellarg($pipeline) . ' > /dev/null 2>&1 &');
 
     http_response_code(200);
     echo json_encode([
         'sucesso' => true,
-        'mensagem' => 'Webhook recebido e sincronização iniciada',
+        'mensagem' => 'Webhook recebido e sincronizacao sequencial iniciada',
         'event' => $eventType,
         'product_id' => $productId,
-        'steps' => ['sync-v3', 'enrich-v3'],
+        'steps' => ['active-sync-v3', 'authoritative-stock-v3', 'local-db-sync'],
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
@@ -105,6 +108,6 @@ if ($shouldSync) {
 http_response_code(200);
 echo json_encode([
     'sucesso' => true,
-    'mensagem' => 'Webhook ignorado (evento não monitorado)',
+    'mensagem' => 'Webhook ignorado (evento nao monitorado)',
     'event' => $eventType,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

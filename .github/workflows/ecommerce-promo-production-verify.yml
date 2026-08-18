@@ -1,0 +1,56 @@
+name: Ecommerce Promo Production Verify
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 10
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Verify deployed promotion logic on active release
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          current='/home/ubuntu/shopvivaliz-deploy/current'
+          test -r "$current/tests/ecommerce-excellence-regression-test.php"
+          php "$current/tests/ecommerce-excellence-regression-test.php"
+          php -r '
+            require "/home/ubuntu/shopvivaliz-deploy/current/includes/buy-together.php";
+            $r = svbt_validate_offer(null, [
+              ["sku"=>"LIVE-A","price"=>100.00,"quantity"=>1],
+              ["sku"=>"LIVE-B","price"=>50.00,"quantity"=>1]
+            ]);
+            if (empty($r["active"]) || abs((float)$r["amount"] - 4.50) > 0.001) {
+              fwrite(STDERR, "LIVE_PROMO_GUARD_FAILED\n"); exit(1);
+            }
+            echo "LIVE_PROMO_OK active=true eligible_subtotal=".$r["eligible_subtotal"]." amount=".$r["amount"]."\n";
+          '
+          REMOTE

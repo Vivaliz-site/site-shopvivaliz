@@ -1,0 +1,28 @@
+name: Fred-Win MCP health after smoke
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-fredwin-health-after-smoke-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Check MCP health only
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            'curl -fsS --connect-timeout 2 --max-time 3 http://127.0.0.1:5557/health'
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

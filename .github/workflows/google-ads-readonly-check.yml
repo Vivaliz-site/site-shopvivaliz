@@ -1,0 +1,60 @@
+name: Google Ads Read-only Check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ops/google-ads-readonly-check.json"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: Production
+    env:
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+      GOOGLE_ADS_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
+      GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
+      GOOGLE_ADS_CUSTOMER_ID: '5283091103'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirm required secrets are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          for k in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_ADS_REFRESH_TOKEN GOOGLE_ADS_DEVELOPER_TOKEN; do
+            test -n "${!k:-}" || { echo "MISSING:$k"; exit 2; }
+          done
+          echo 'GOOGLE_ADS_SECRETS_PRESENT'
+      - name: Install Google Ads SDK
+        run: python -m pip install --disable-pip-version-check -q google-ads
+      - name: Read-only campaign metrics
+        run: python scripts/google_ads_review_campaigns.py
+      - name: Read-only purchase conversion actions
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          from google.ads.googleads.client import GoogleAdsClient
+          cfg={
+            'developer_token':os.environ['GOOGLE_ADS_DEVELOPER_TOKEN'],
+            'client_id':os.environ['GOOGLE_OAUTH_CLIENT_ID'],
+            'client_secret':os.environ['GOOGLE_OAUTH_CLIENT_SECRET'],
+            'refresh_token':os.environ['GOOGLE_ADS_REFRESH_TOKEN'],
+            'use_proto_plus':True,
+          }
+          login=os.environ.get('GOOGLE_ADS_LOGIN_CUSTOMER_ID','').replace('-','').strip()
+          if login: cfg['login_customer_id']=login
+          client=GoogleAdsClient.load_from_dict(cfg)
+          svc=client.get_service('GoogleAdsService')
+          q='''SELECT conversion_action.id, conversion_action.name, conversion_action.status, conversion_action.category, conversion_action.primary_for_goal FROM conversion_action WHERE conversion_action.status != 'REMOVED' ORDER BY conversion_action.id'''
+          print('CONVERSION_ACTIONS')
+          for row in svc.search(customer_id=os.environ['GOOGLE_ADS_CUSTOMER_ID'], query=q):
+            ca=row.conversion_action
+            print(f'id={ca.id}\tname={ca.name}\tstatus={ca.status.name}\tcategory={ca.category.name}\tprimary={ca.primary_for_goal}')
+          PY

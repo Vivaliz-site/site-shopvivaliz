@@ -1,0 +1,72 @@
+name: Google Ads Keyword Position Estimates
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ops/google-ads-keyword-position-estimates.json"
+
+permissions:
+  contents: read
+
+jobs:
+  estimates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Read keyword position estimates
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
+          import json, urllib.parse, urllib.request
+          from pathlib import Path
+          env={}
+          for raw in Path('/home/ubuntu/shopvivaliz-deploy/shared/.env').read_text(encoding='utf-8',errors='ignore').splitlines():
+              line=raw.strip()
+              if line and not line.startswith('#') and '=' in line:
+                  k,v=line.split('=',1); env[k.strip()]=v.strip().strip('"\'')
+          data=urllib.parse.urlencode({'client_id':env['GOOGLE_OAUTH_CLIENT_ID'],'client_secret':env['GOOGLE_OAUTH_CLIENT_SECRET'],'refresh_token':env['GOOGLE_ADS_REFRESH_TOKEN'],'grant_type':'refresh_token'}).encode()
+          with urllib.request.urlopen(urllib.request.Request('https://oauth2.googleapis.com/token',data=data,headers={'Content-Type':'application/x-www-form-urlencoded'},method='POST'),timeout=20) as r:
+              token=json.loads(r.read().decode())['access_token']
+          cid=env['GOOGLE_ADS_CUSTOMER_ID'].replace('-','')
+          headers={'Content-Type':'application/json','Authorization':'Bearer '+token,'developer-token':env['GOOGLE_ADS_DEVELOPER_TOKEN']}
+          login=env.get('GOOGLE_ADS_LOGIN_CUSTOMER_ID','').replace('-','').strip()
+          if login: headers['login-customer-id']=login
+          query='''
+          SELECT ad_group.name, ad_group_criterion.criterion_id,
+                 ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type,
+                 ad_group_criterion.primary_status, ad_group_criterion.system_serving_status,
+                 ad_group_criterion.effective_cpc_bid_micros,
+                 ad_group_criterion.position_estimates.first_page_cpc_micros,
+                 ad_group_criterion.position_estimates.top_of_page_cpc_micros,
+                 ad_group_criterion.position_estimates.first_position_cpc_micros
+          FROM keyword_view
+          WHERE campaign.id = 24144257692
+            AND ad_group_criterion.negative = FALSE
+          ORDER BY ad_group.name, ad_group_criterion.criterion_id
+          '''
+          url=f'https://googleads.googleapis.com/v25/customers/{cid}/googleAds:searchStream'
+          req=urllib.request.Request(url,data=json.dumps({'query':query}).encode(),headers=headers,method='POST')
+          with urllib.request.urlopen(req,timeout=30) as r:
+              payload=json.loads(r.read().decode())
+          rows=[]
+          for batch in payload: rows.extend(batch.get('results') or [])
+          print('KEYWORD_POSITION_ESTIMATES_OK rows='+str(len(rows)))
+          for row in rows: print('ESTIMATE='+json.dumps(row,ensure_ascii=False,separators=(',',':')))
+          PY
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

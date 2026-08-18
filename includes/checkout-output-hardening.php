@@ -43,6 +43,15 @@ function svcoh_filter(string $html): string
         'Estoque, preço, cupom e frete serão revalidados no servidor ao confirmar o pedido.'
     );
 
+    // A pré-validacao do cupom precisa enviar o e-mail digitado no checkout.
+    // Assim cupons pessoais de primeira compra ja sao rejeitados na interface
+    // quando pertencem a outro cliente, alem da validacao autoritativa final.
+    $html = svcoh_replace_or_original(
+        $html,
+        '~JSON\.stringify\(\{\s*coupon_code:\s*code,\s*items:\s*getCart\(\)\s*\}\)~',
+        'JSON.stringify({ coupon_code: code, items: getCart(), customer_email: String((document.querySelector(\'[name="customer_email"]\') || {}).value || \'\').trim() })'
+    );
+
     // O backend devolve o total final ja revalidado. Nao recalcular a partir
     // de localStorage, pois isso ignorava descontos e contaminava PIX,
     // WhatsApp, GA4 e Google Ads.

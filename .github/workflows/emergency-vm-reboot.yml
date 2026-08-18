@@ -1,0 +1,95 @@
+name: Emergency Oracle VM Reboot
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/emergency-vm-reboot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: emergency-oracle-vm-reboot
+  cancel-in-progress: false
+
+jobs:
+  reboot:
+    name: Reboot Oracle production VM
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "${ORACLE_VM_SSH_KEY:-}"
+          test -n "${ORACLE_VM_KNOWN_HOSTS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Request reboot
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'echo "pre_reboot_uptime=$(uptime -p)"; sudo systemctl reboot' || true
+
+      - name: Wait for SSH and validate services
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh_ready=0
+          for attempt in $(seq 1 36); do
+            if ssh \
+              -o BatchMode=yes \
+              -o ConnectTimeout=5 \
+              -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+              -i "$HOME/.ssh/id_rsa" \
+              ubuntu@137.131.156.17 \
+              'echo online; uptime; sudo systemctl is-active apache2' >/tmp/ssh-check.log 2>&1; then
+              cat /tmp/ssh-check.log
+              ssh_ready=1
+              break
+            fi
+            sleep 10
+          done
+          test "$ssh_ready" = '1'
+
+          ssh \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 \
+            'set -euo pipefail; sudo systemctl is-active --quiet apache2; curl --silent --show-error --fail --connect-timeout 5 --max-time 20 -H "Host: shopvivaliz.com.br" http://127.0.0.1/api/health/version.php'
+
+      - name: Verify public storefront
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 12); do
+            code="$(curl --silent --show-error --output /tmp/storefront.html --connect-timeout 10 --max-time 25 --write-out '%{http_code}' https://shopvivaliz.com.br/ || true)"
+            echo "attempt=$attempt http_code=$code"
+            if [[ "$code" = '200' ]]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo 'Storefront still unavailable after VM reboot.' >&2
+          exit 1

@@ -1,0 +1,47 @@
+name: Google Ads Antique Decore Launch
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ops/google-ads-antique-decore-launch.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  launch:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 12
+    env:
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+      GOOGLE_ADS_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
+      GOOGLE_ADS_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
+      GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
+      ENABLE_AFTER_AUDIT: "no"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Record external landing diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          ADSBOT='AdsBot-Google (+http://www.google.com/adsbot.html)'
+          for url in \
+            'https://shopvivaliz.com.br/catalogo?q=antique' \
+            'https://shopvivaliz.com.br/catalogo?q=decore'; do
+            code=$(curl -A "$ADSBOT" -D /tmp/headers -L -sS -o /tmp/body -w '%{http_code}' --connect-timeout 10 --max-time 25 "$url" || true)
+            echo "simulated_adsbot_http=$code url=$url"
+            grep -Ei '^(HTTP/|server:|cf-ray:|cf-mitigated:|content-type:)' /tmp/headers || true
+          done
+          echo "NOTE=This is a GitHub IP with a spoofable AdsBot user-agent; it is diagnostic only and is not used as the activation decision."
+
+      - name: Install Google Ads client
+        run: python3 -m pip install --disable-pip-version-check google-ads
+
+      - name: Create audited campaign paused for real Google policy review
+        run: python3 scripts/google_ads_launch_antique_decore.py

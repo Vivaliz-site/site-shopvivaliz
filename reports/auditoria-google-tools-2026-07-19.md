@@ -485,3 +485,59 @@ Conclusao:
 - A configuracao de campanha esta pronta apenas para criacao pausada.
 - A API Ads ainda nao esta autenticada por causa do refresh token invalido.
 - Nenhuma campanha paga foi criada ou ativada.
+
+## Atualizacao 2026-08-14T23:40:00-03:00
+
+### Investigacao: tag GA4 duplicada (G-QWYPLYMZ9) e erro de MIME type no checkout
+
+**Status:** INVESTIGADO_SEM_CAUSA_RAIZ_LOCALIZADA
+
+Contexto: auditoria completa de performance/CRO via Lighthouse + Playwright (sessao 2026-08-14)
+encontrou, na home e no checkout em producao, uma segunda tag GA4 carregando junto com a oficial:
+
+```
+https://www.googletagmanager.com/gtag/js?id=G-QWYPLYMZ9&cx=c&gtm=4e68c1
+```
+
+(a oficial e `G-1H55K1TZ5D`, documentada em `includes/head-analytics.php` e confirmada em todas
+as contas verificadas). No checkout especificamente, o console do navegador mostrou:
+
+```
+Refused to execute script from 'https://shopvivaliz.com.br/0fb1/?is_td=1&v=3&t=t&pid=...'
+because its MIME type ('text/plain') is not executable, and strict MIME type checking is enabled.
+```
+
+Verificacoes feitas (browser real logado via Cloudflare SSO, acesso concedido pelo usuario):
+
+- **Cloudflare Zaraz**: `dash.cloudflare.com/<account>/shopvivaliz.com.br/zaraz` redireciona de
+  volta para o dashboard — Zaraz **nao esta ativo** nesta zona. Nao e a origem do proxy `/0fb1/`.
+- **GTM-PHZ55CP3** (contêiner real confirmado via captura de rede ao vivo, `gtm.js?id=GTM-PHZ55CP3`):
+  localizado na conta "Vivaliz" (accountId `6358444093`, containerId `254139212`), acessivel via
+  login `shopvivaliz@gmail.com`. Contem **uma unica tag**, `GA4CONFIGURACAOINICIAL` (tipo "Tag do
+  Google"), disparada em `Initialization - All Pages`, apontando para **G-1H55K1TZ5D** (a oficial).
+  Nao ha nenhuma tag configurada para G-QWYPLYMZ9 neste contêiner.
+- **Admin do contêiner** (`tagmanager.google.com/#/admin/?accountId=6358444093&containerId=254139212`):
+  "Gateway da tag do Google" aparece como **"Nao iniciado"** — ou seja, o recurso gerenciado do
+  Google (Cloud Run) para first-party mode nao foi ativado por essa via.
+- **Apache/.htaccess em producao** (`/etc/apache2/sites-enabled/`,
+  `/home/ubuntu/shopvivaliz-deploy/current/.htaccess`): `grep -rn "0fb1"` retornou vazio. Nao ha
+  rewrite rule no servidor apontando para esse path.
+- **4 propriedades GA4/Ads verificadas em 2 contas Google diferentes** (`Fredmourao@gmail.com` e
+  `shopvivaliz@gmail.com`): nenhuma delas tem G-QWYPLYMZ9 configurada. Encontrada uma propriedade
+  parecida mas **diferente** — `G-QWYPLXYMZ9` (note o X extra), nome "Msvivaliz", inativa ("Nenhum
+  dado recebido nas ultimas 48 horas") — e uma falsa pista, nao e a mesma tag que carrega ao vivo.
+
+**Hipotese mais provavel, nao confirmada**: o "modo primeira parte" (first-party mode) do GA4 e
+configuravel dentro de Analytics em si, no stream de dados oficial (`8111377243` /
+`G-1H55K1TZ5D`), em **Administrador > Fluxos de dados > www.shopvivaliz.com.br > "Definir as
+configuracoes da tag"**. O clique nesse link nao abriu o painel na sessao investigada (SPA
+instavel via automacao). Essa e a proxima coisa a verificar quem retomar isso — nao o Cloudflare,
+nao o `.htaccess`, e sim as configuracoes da propria tag dentro do Analytics.
+
+**O que NAO fazer**: nao gastar tempo de novo checando Zaraz (confirmado inativo) ou o toggle de
+"Gateway da tag" no admin do GTM (confirmado "Nao iniciado", nao e a causa).
+
+**Impacto real, para calibrar prioridade**: nao quebra funcionalidade do site (checkout continua
+funcionando). Dois efeitos: (1) ~180-190KB de JS extra carregado a toa em toda pagina; (2) dados de
+navegacao dos clientes sendo enviados a uma propriedade GA4 sem dono identificado nas contas
+verificadas — vale investigar por governanca de dados, sem ser uma emergencia tecnica.

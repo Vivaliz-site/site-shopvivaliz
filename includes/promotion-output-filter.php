@@ -73,6 +73,28 @@ function sv_promotion_filter_home_html(string $html, array|null|false $couponOve
     return $html;
 }
 
+function sv_promotion_normalize_home_links(string $html): string
+{
+    if ($html === '') {
+        return $html;
+    }
+
+    $patterns = [
+        '#https://shopvivaliz\.com\.br/catalogo(?=(?:\?|["\']))#' => 'https://shopvivaliz.com.br/catalogo/',
+        '#https://shopvivaliz\.com\.br/contato(?=(?:\?|["\']))#' => 'https://shopvivaliz.com.br/contato/',
+        '#https://shopvivaliz\.com\.br/blog(?=(?:\?|["\']))#' => 'https://shopvivaliz.com.br/blog/',
+        '#(?<=["\'])/catalogo(?=(?:\?|["\']))#' => '/catalogo/',
+        '#(?<=["\'])/contato(?=(?:\?|["\']))#' => '/contato/',
+        '#(?<=["\'])/blog(?=(?:\?|["\']))#' => '/blog/',
+    ];
+
+    foreach ($patterns as $pattern => $replacement) {
+        $html = preg_replace($pattern, $replacement, $html) ?? $html;
+    }
+
+    return $html;
+}
+
 function sv_promotion_output_filter_register(): void
 {
     static $registered = false;
@@ -91,5 +113,5 @@ function sv_promotion_output_filter_register(): void
     }
 
     $registered = true;
-    ob_start(static fn(string $html): string => sv_promotion_filter_home_html($html));
+    ob_start(static fn(string $html): string => sv_promotion_normalize_home_links(sv_promotion_filter_home_html($html)));
 }

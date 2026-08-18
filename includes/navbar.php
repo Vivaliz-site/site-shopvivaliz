@@ -1,12 +1,39 @@
 <?php
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
+// Paginas publicas nao devem criar PHPSESSID para todo visitante anonimo.
+// Retoma a sessao somente quando o cliente ja possui cookie de sessao.
+if (session_status() === PHP_SESSION_NONE && isset($_COOKIE[session_name()]) && $_COOKIE[session_name()] !== '') {
     @session_start();
 }
 
 require_once dirname(__DIR__) . '/includes/site-settings.php';
 require_once dirname(__DIR__) . '/includes/active-coupons.php';
+
+// Ponto comum das paginas publicas: remove hops 301 causados por templates
+// legados que ainda imprimem /catalogo, /contato ou /blog sem a barra final.
+// O filtro atua somente na resposta HTML de navegacao e nunca altera APIs,
+// catalogo persistido, preco ou estoque.
+if (empty($GLOBALS['sv_public_canonical_links_filter_registered']) && PHP_SAPI !== 'cli') {
+    $svCanonicalMethod = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+    if (in_array($svCanonicalMethod, ['GET', 'HEAD'], true)) {
+        $GLOBALS['sv_public_canonical_links_filter_registered'] = true;
+        ob_start(static function (string $html): string {
+            $patterns = [
+                '#https://shopvivaliz\.com\.br/catalogo(?=(?:\?|["\']))#' => 'https://shopvivaliz.com.br/catalogo/',
+                '#https://shopvivaliz\.com\.br/contato(?=(?:\?|["\']))#' => 'https://shopvivaliz.com.br/contato/',
+                '#https://shopvivaliz\.com\.br/blog(?=(?:\?|["\']))#' => 'https://shopvivaliz.com.br/blog/',
+                '#(?<=["\'])/catalogo(?=(?:\?|["\']))#' => '/catalogo/',
+                '#(?<=["\'])/contato(?=(?:\?|["\']))#' => '/contato/',
+                '#(?<=["\'])/blog(?=(?:\?|["\']))#' => '/blog/',
+            ];
+            foreach ($patterns as $pattern => $replacement) {
+                $html = preg_replace($pattern, $replacement, $html) ?? $html;
+            }
+            return $html;
+        });
+    }
+}
 
 $svNavCurrent = $svNavCurrent ?? trim((string)parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH), '/');
 $svNavCurrent = preg_replace('#^index\.php$#', '', $svNavCurrent);
@@ -14,9 +41,9 @@ $svNavCurrent = trim((string)$svNavCurrent, '/');
 
 $svNavLinks = [
     ['href' => '/', 'label' => 'Home', 'match' => ['']],
-    ['href' => '/catalogo', 'label' => 'Produtos', 'match' => ['catalogo', 'produtos', 'produto']],
-    ['href' => '/sobre', 'label' => 'Sobre', 'match' => ['sobre']],
-    ['href' => '/contato', 'label' => 'Contato', 'match' => ['contato']],
+    ['href' => '/catalogo/', 'label' => 'Produtos', 'match' => ['catalogo', 'produtos', 'produto']],
+    ['href' => '/sobre/', 'label' => 'Sobre', 'match' => ['sobre']],
+    ['href' => '/contato/', 'label' => 'Contato', 'match' => ['contato']],
     ['href' => '/carrinho', 'label' => 'Carrinho', 'match' => ['carrinho', 'checkout']],
 ];
 
@@ -32,7 +59,7 @@ $svCompanyProfile = @include dirname(__DIR__) . '/config/company-profile.php';
 $svWhatsappRaw = is_array($svCompanyProfile) ? (string)($svCompanyProfile['social_media']['whatsapp'] ?? '') : '';
 $svWhatsappDigits = preg_replace('/\D+/', '', $svWhatsappRaw);
 $svWhatsappMessage = rawurlencode('Ola! Vim pelo site da ShopVivaliz e gostaria de falar com a equipe.');
-$svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?text={$svWhatsappMessage}" : '/contato';
+$svWhatsappLink = $svWhatsappDigits !== '' ? "https://wa.me/{$svWhatsappDigits}?text={$svWhatsappMessage}" : '/contato/';
 
 $svFreeShippingConfig = sv_free_shipping_config();
 $svPrimaryCoupon = sv_primary_active_coupon();
@@ -254,7 +281,7 @@ header.sv-navbar .menu-toggle {
                 <?php $isCurrent = in_array($svNavCurrent, $link['match'], true); ?>
                 <?php
                     $linkClasses = [];
-                    if ($link['href'] === '/catalogo') {
+                    if ($link['href'] === '/catalogo/') {
                         $linkClasses[] = 'sv-nav-cta';
                     }
                     if ($link['href'] === '/carrinho') {

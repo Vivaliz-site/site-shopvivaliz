@@ -1,0 +1,85 @@
+name: MEI email priority DB recovery v1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mei-email-priority-db-recovery-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Pause nonessential load and recover DB
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          sudo systemctl stop mei-mg-email-worker.service || true
+          sudo systemctl stop mei-mg-email-auto-sync.timer 2>/dev/null || true
+          sudo systemctl stop mei-mg-email-auto-sync.service 2>/dev/null || true
+
+          echo 'PAUSE_LOAD_BEGIN'
+          # Pause ML training container(s) only if their process list contains /app/ml/train.py.
+          for cid in $(docker ps -q); do
+            if timeout 5s docker top "$cid" -eo args 2>/dev/null | grep -q '/app/ml/train.py'; then
+              name="$(docker inspect -f '{{.Name}}' "$cid" | sed 's#^/##')"
+              echo "STOP_ML_CONTAINER=$name"
+              timeout 20s docker stop "$cid" >/dev/null || true
+            fi
+          done
+          # Pause current git auto-sync process; it can be restarted later.
+          pkill -TERM -f '/home/ubuntu/shopvivaliz-deploy/repo/git-auto-sync.py' || true
+          # CUPS browsing is nonessential on a headless server and was consuming CPU.
+          sudo systemctl stop snap.cups.cups-browsed.service 2>/dev/null || true
+          pkill -TERM -f 'cups-browsed' || true
+          sleep 8
+          echo 'PAUSE_LOAD_END'
+          uptime
+          free -m
+
+          # Clear stale MEI client backends older than 20 minutes, never PostgreSQL system processes.
+          mainpid="$(docker inspect -f '{{.State.Pid}}' mei-mg-email-db)"
+          mapfile -t stale < <(ps -eo pid=,ppid=,etimes=,args= | awk -v main="$mainpid" '$2==main && $3>1200 && $0 ~ /postgres: postgres mei_mg_email/ {print $1}')
+          echo "STALE_CLIENTS=${#stale[@]}"
+          for pid in "${stale[@]}"; do sudo kill -TERM "$pid" 2>/dev/null || true; done
+          sleep 8
+          for pid in "${stale[@]}"; do if sudo kill -0 "$pid" 2>/dev/null; then sudo kill -KILL "$pid" || true; fi; done
+          sleep 8
+
+          # Kill only old Flyway helper processes/containers.
+          pkill -TERM -f '[f]lyway.*target=25' || true
+          ids="$(docker ps -aq --filter name=mei-mg-email-flyway 2>/dev/null || true)"
+          if [ -n "$ids" ]; then docker rm -f $ids >/dev/null 2>&1 || true; fi
+
+          if ! timeout 12s docker exec mei-mg-email-db pg_isready -U postgres -d mei_mg_email; then
+            echo 'DB_RESTART=true'
+            timeout 90s docker restart mei-mg-email-db >/dev/null
+            for i in $(seq 1 30); do
+              if timeout 5s docker exec mei-mg-email-db pg_isready -U postgres -d mei_mg_email >/dev/null 2>&1; then
+                break
+              fi
+              sleep 3
+            done
+          fi
+          timeout 12s docker exec mei-mg-email-db pg_isready -U postgres -d mei_mg_email
+          timeout 20s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -Atc "select 'DB_OK='||now();"
+          uptime
+          vmstat 1 3
+          EOF
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/vmkey

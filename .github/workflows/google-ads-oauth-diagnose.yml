@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "ops/google-ads-oauth-diagnose.json"
+      - ".github/workflows/google-ads-oauth-diagnose.yml"
 
 permissions:
   contents: read
@@ -13,75 +14,99 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    environment: Production
+    env:
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+      GOOGLE_ADS_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
+      GOOGLE_ADS_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
+      GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
     steps:
-      - name: Configure VM key
-        env:
-          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+      - name: Verify OAuth refresh token and Google Ads API access
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$VM_KEY"
-          mkdir -p ~/.ssh
-          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
-          chmod 600 ~/.ssh/vmkey
+          python3 - <<'PY'
+          import json, os, urllib.parse, urllib.request, urllib.error
 
-      - name: Inspect OAuth state safely
-        shell: bash
-        run: |
-          set -euo pipefail
-          ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
-          set -euo pipefail
-          job='360925a31e807fbaf8795ac3314a20c8'
-          token="/tmp/shopvivaliz-google-ads-refresh-${job}.token"
-          envfile='/home/ubuntu/shopvivaliz-deploy/shared/.env'
-          echo "token_file_exists=$([ -s "$token" ] && echo yes || echo no)"
-          if [ -f "$envfile" ]; then
-            for key in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_ADS_REFRESH_TOKEN GOOGLE_ADS_DEVELOPER_TOKEN GOOGLE_ADS_CUSTOMER_ID GOOGLE_ADS_LOGIN_CUSTOMER_ID; do
-              val="$(grep -m1 "^${key}=" "$envfile" 2>/dev/null | cut -d= -f2- || true)"
-              if [ -n "$val" ]; then echo "${key}=present"; else echo "${key}=missing"; fi
-            done
-          else
-            echo 'envfile=missing'
-          fi
-          path="/auth/google-ads-authorize.php?job=${job}"
-          probe() {
-            label="$1"; shift
-            rm -f /tmp/oauth-body /tmp/oauth-head
-            code="$(curl -ksS -o /tmp/oauth-body -D /tmp/oauth-head -w '%{http_code}' --max-time 20 "$@" || true)"
-            echo "${label}_http_status=$code"
-            server="$(awk 'BEGIN{IGNORECASE=1} /^Server:/{sub(/\r$/,"",$0); print substr($0,9); exit}' /tmp/oauth-head || true)"
-            ctype="$(awk 'BEGIN{IGNORECASE=1} /^Content-Type:/{sub(/\r$/,"",$0); print substr($0,15); exit}' /tmp/oauth-head || true)"
-            echo "${label}_server=${server:-none}"
-            echo "${label}_content_type=${ctype:-none}"
-            location="$(awk 'BEGIN{IGNORECASE=1} /^Location:/{sub(/\r$/,"",$0); print substr($0,11); exit}' /tmp/oauth-head || true)"
-            case "$location" in
-              https://accounts.google.com/*) echo "${label}_redirect=google_accounts" ;;
-              '') echo "${label}_redirect=none" ;;
-              *) echo "${label}_redirect=other" ;;
-            esac
-            if grep -qi 'Google OAuth is not configured' /tmp/oauth-body 2>/dev/null; then echo "${label}_body=oauth_not_configured"; fi
-            if grep -qi 'Invalid authorization job' /tmp/oauth-body 2>/dev/null; then echo "${label}_body=invalid_job"; fi
-            if grep -qiE 'forbidden|access denied|request blocked|cloudflare|security' /tmp/oauth-body 2>/dev/null; then echo "${label}_body=access_block_page"; fi
-            bytes="$(wc -c </tmp/oauth-body 2>/dev/null || echo 0)"
-            echo "${label}_body_bytes=$bytes"
+          required = ['GOOGLE_OAUTH_CLIENT_ID','GOOGLE_OAUTH_CLIENT_SECRET','GOOGLE_ADS_REFRESH_TOKEN','GOOGLE_ADS_DEVELOPER_TOKEN','GOOGLE_ADS_CUSTOMER_ID']
+          missing = [k for k in required if not os.getenv(k, '').strip()]
+          if missing:
+              print('GOOGLE_ADS_TOKEN_AUTHORIZED=no')
+              print('reason=missing_required_secrets')
+              print('missing=' + ','.join(missing))
+              raise SystemExit(2)
+
+          token_data = urllib.parse.urlencode({
+              'client_id': os.environ['GOOGLE_OAUTH_CLIENT_ID'],
+              'client_secret': os.environ['GOOGLE_OAUTH_CLIENT_SECRET'],
+              'refresh_token': os.environ['GOOGLE_ADS_REFRESH_TOKEN'],
+              'grant_type': 'refresh_token',
+          }).encode()
+          token_req = urllib.request.Request('https://oauth2.googleapis.com/token', data=token_data, headers={'Content-Type':'application/x-www-form-urlencoded'}, method='POST')
+          try:
+              with urllib.request.urlopen(token_req, timeout=20) as r:
+                  token_payload = json.loads(r.read().decode())
+          except urllib.error.HTTPError as e:
+              body = e.read().decode(errors='ignore')
+              try: payload = json.loads(body)
+              except Exception: payload = {}
+              print('GOOGLE_ADS_TOKEN_AUTHORIZED=no')
+              print('oauth_http=' + str(e.code))
+              print('oauth_error=' + str(payload.get('error','unknown'))[:120])
+              print('oauth_description=' + str(payload.get('error_description',''))[:300].replace('\n',' '))
+              raise SystemExit(3)
+
+          access = str(token_payload.get('access_token','')).strip()
+          if not access:
+              print('GOOGLE_ADS_TOKEN_AUTHORIZED=no')
+              print('reason=no_access_token_returned')
+              raise SystemExit(4)
+          print('OAUTH_REFRESH_TOKEN_VALID=yes')
+
+          cid = os.environ['GOOGLE_ADS_CUSTOMER_ID'].replace('-','').strip()
+          headers = {
+              'Content-Type':'application/json',
+              'Authorization':'Bearer ' + access,
+              'developer-token':os.environ['GOOGLE_ADS_DEVELOPER_TOKEN'],
           }
-          echo 'authorize_probe_begin'
-          probe public "https://shopvivaliz.com.br${path}"
-          probe local -H 'Host: shopvivaliz.com.br' "http://127.0.0.1${path}"
-          echo 'authorize_probe_end'
-          echo 'apache_vhost_begin'
-          sudo apache2ctl -S 2>/dev/null | head -n 40 || true
-          echo 'apache_vhost_end'
-          echo 'callback_log_hits_begin'
-          for f in /var/log/apache2/access.log /var/log/apache2/error.log /var/log/nginx/access.log /var/log/nginx/error.log /home/ubuntu/shopvivaliz-deploy/shared/storage/logs/app.log; do
-            if [ -r "$f" ]; then
-              grep -E 'google-callback|google-ads-authorize|Google OAuth callback failed|Google Ads autorizado' "$f" 2>/dev/null | tail -n 30 | sed -E 's/(code|state|job)=[^& ]+/\1=[REDACTED]/g' || true
-            fi
-          done
-          echo 'callback_log_hits_end'
-          rm -f /tmp/oauth-body /tmp/oauth-head
-          REMOTE
+          login = os.getenv('GOOGLE_ADS_LOGIN_CUSTOMER_ID','').replace('-','').strip()
+          if login:
+              headers['login-customer-id'] = login
+          url = f'https://googleads.googleapis.com/v25/customers/{cid}/googleAds:searchStream'
+          query = 'SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.time_zone FROM customer LIMIT 1'
+          req = urllib.request.Request(url, data=json.dumps({'query':query}).encode(), headers=headers, method='POST')
+          try:
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  payload = json.loads(r.read().decode())
+          except urllib.error.HTTPError as e:
+              body = e.read().decode(errors='ignore')
+              try: data = json.loads(body)
+              except Exception: data = {}
+              err = data.get('error',{}) if isinstance(data,dict) else {}
+              print('GOOGLE_ADS_TOKEN_AUTHORIZED=no')
+              print('GOOGLE_ADS_API_ACCESS=no')
+              print('google_ads_http=' + str(e.code))
+              print('google_ads_status=' + str(err.get('status','unknown'))[:120])
+              print('google_ads_message=' + str(err.get('message',''))[:500].replace('\n',' '))
+              raise SystemExit(5)
 
-      - name: Cleanup
-        if: always()
-        run: rm -f ~/.ssh/vmkey
+          rows = []
+          for batch in payload if isinstance(payload, list) else []:
+              if isinstance(batch, dict): rows.extend(batch.get('results') or [])
+          if not rows:
+              print('GOOGLE_ADS_TOKEN_AUTHORIZED=no')
+              print('GOOGLE_ADS_API_ACCESS=no')
+              print('reason=no_customer_row')
+              raise SystemExit(6)
+
+          customer = rows[0].get('customer') or {}
+          print('GOOGLE_ADS_TOKEN_AUTHORIZED=yes')
+          print('GOOGLE_ADS_API_ACCESS=yes')
+          print('customer_id=' + str(customer.get('id','')))
+          print('customer_name=' + str(customer.get('descriptiveName',''))[:160])
+          print('currency=' + str(customer.get('currencyCode','')))
+          print('time_zone=' + str(customer.get('timeZone','')))
+          print('NO_SECRET_VALUES_PRINTED')
+          PY

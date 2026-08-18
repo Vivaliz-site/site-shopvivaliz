@@ -58,7 +58,7 @@ def inspect_state() -> tuple[dict[str, Any], dict[str, Any], GuardianDecision]:
     report = read_json(REPORT_PATH, {})
     queue = read_json(QUEUE_PATH, {})
     generated_at = parse_dt(report.get("generated_at"))
-    backlog = report.get("backlog", {}) if isinstance(report.get("backlog", {}), dict) else {}
+    backlog = report.get("backlog_snapshot", {}) if isinstance(report.get("backlog_snapshot", {}), dict) else {}
     pending = int(backlog.get("pending", 0) or 0)
     in_progress = int(backlog.get("in_progress", 0) or 0)
     result = report.get("result", {}) if isinstance(report.get("result", {}), dict) else {}
@@ -70,7 +70,7 @@ def inspect_state() -> tuple[dict[str, Any], dict[str, Any], GuardianDecision]:
         or "nenhuma tarefa segura elegivel" in summary
         or status == "idle"
     )
-    no_pending = pending <= 1 and in_progress == 0
+    no_pending = pending < 3 and in_progress == 0
     reason_parts = []
     if stale:
         reason_parts.append("stale_cycle")
@@ -119,16 +119,6 @@ def main() -> int:
             }
         )
 
-        executor = run(["python3", "scripts/autonomous-executor.py", "--max-cycles", "1"])
-        actions.append(
-            {
-                "step": "autonomous_executor",
-                "exit_code": executor.returncode,
-                "stdout_tail": executor.stdout.strip().splitlines()[-8:],
-                "stderr_tail": executor.stderr.strip().splitlines()[-8:],
-            }
-        )
-
         report, queue, post_recovery_decision = inspect_state()
         restart_needed = (
             decision.stale
@@ -162,13 +152,17 @@ def main() -> int:
             "reason": post_recovery_decision.reason,
         },
         "report_generated_at": report.get("generated_at"),
-        "queue_size": len(queue.get("queue", [])) if isinstance(queue, dict) else 0,
+        "queue_size": len(queue.get("tasks", [])) if isinstance(queue, dict) else 0,
         "actions": actions,
     }
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     GUARDIAN_LOG.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     append_event(payload)
     print(json.dumps(payload, ensure_ascii=False, indent=2))
+    failed_steps = [step["step"] for step in actions if step.get("exit_code") != 0]
+    if failed_steps:
+        print(f"guardian_failed_steps={','.join(failed_steps)}")
+        return 1
     return 0
 
 

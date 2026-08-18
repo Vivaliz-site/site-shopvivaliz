@@ -1,0 +1,69 @@
+name: MEI email worker backend map 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/mei-email-worker-backend-map-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  map:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Map worker socket to PostgreSQL backend
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          wpid=$(systemctl show -p MainPID --value mei-mg-email-worker.service)
+          echo NOW=$(date -Is)
+          echo WORKER_PID=$wpid
+          line=$(sudo lsof -nP -a -p "$wpid" -iTCP -sTCP:ESTABLISHED 2>/dev/null | grep '127.0.0.1:.*->127.0.0.1:5433' | head -n1 || true)
+          echo SOCKET_LINE="$line"
+          port=$(printf '%s\n' "$line" | sed -nE 's/.*127\.0\.0\.1:([0-9]+)->127\.0\.0\.1:5433.*/\1/p')
+          echo CLIENT_PORT=${port:-none}
+          if [ -z "$port" ]; then exit 5; fi
+          CLIENT_PORT="$port" .venv/bin/python - <<'PY'
+          import os
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import psycopg
+          from psycopg.rows import dict_row
+          from app.config import settings
+          port=int(os.environ['CLIENT_PORT'])
+          conn=psycopg.connect(settings.database_url, autocommit=True, row_factory=dict_row, connect_timeout=15)
+          with conn.cursor() as cur:
+              cur.execute("set statement_timeout='15000ms'")
+              cur.execute("""
+                select pid, client_port, state, wait_event_type, wait_event, query_start,
+                       clock_timestamp()-query_start as age, query,
+                       pg_blocking_pids(pid) as blocking_pids
+                  from pg_stat_activity
+                 where datname=current_database() and client_port=%s
+              """, (port,))
+              row=cur.fetchone()
+              print('WORKER_BACKEND=', dict(row) if row else None)
+              if row and row['blocking_pids']:
+                  cur.execute("""
+                    select pid, client_port, state, wait_event_type, wait_event, query_start,
+                           clock_timestamp()-query_start as age, query
+                      from pg_stat_activity
+                     where pid = any(%s)
+                  """, (row['blocking_pids'],))
+                  for b in cur.fetchall(): print('BLOCKER=', dict(b))
+          conn.close()
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

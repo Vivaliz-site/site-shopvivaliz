@@ -1,0 +1,124 @@
+name: MEI email retention preflight v1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mei-email-retention-preflight-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      EXPECTED_MEI_SHA: c1f6de3537951d97140c4750e554eae724093f39
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Stop writers and assert fail-closed
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          sudo systemctl stop mei-mg-email-worker.service || true
+          sudo systemctl stop mei-mg-email-base-sync.timer || true
+          pkill -f 'scripts/disparar_10000_mei_mg.py' || true
+          sleep 2
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then
+            echo 'RETENTION_WORKER_STILL_ACTIVE=true'
+            exit 80
+          fi
+          test -f /var/lib/mei-mg-email/sender_blocked.pause
+          echo 'RETENTION_WORKER_INACTIVE=true'
+          echo 'RETENTION_SENTINEL=true'
+          echo "BASE_SYNC_TIMER=$(sudo systemctl is-active mei-mg-email-base-sync.timer 2>/dev/null || true)"
+          EOF
+
+      - name: Backup mei_email schema
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          timeout 30s docker info >/dev/null
+          db_bytes="$(timeout 30s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -Atc "select pg_database_size('mei_mg_email');")"
+          free_kb="$(df -Pk /home/ubuntu | awk 'NR==2 {print $4}')"
+          free_bytes=$((free_kb * 1024))
+          echo "RETENTION_DB_BYTES=$db_bytes"
+          echo "RETENTION_FREE_BYTES=$free_bytes"
+          required=$((db_bytes + 1073741824))
+          if [ "$free_bytes" -lt "$required" ]; then
+            echo 'RETENTION_BACKUP_SPACE_INSUFFICIENT=true'
+            exit 81
+          fi
+          mkdir -p /home/ubuntu/mei-backups
+          backup="/home/ubuntu/mei-backups/mei_email_before_retention_$(date -u +%Y%m%dT%H%M%SZ).dump"
+          timeout 900s docker exec mei-mg-email-db pg_dump -U postgres -d mei_mg_email -Fc -n mei_email > "$backup"
+          test -s "$backup"
+          chmod 600 "$backup"
+          echo "RETENTION_BACKUP_FILE=$backup"
+          echo "RETENTION_BACKUP_BYTES=$(stat -c %s "$backup")"
+          EOF
+
+      - name: Sync email repo and run retention test
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 "EXPECTED_MEI_SHA='$EXPECTED_MEI_SHA' bash -s" <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
+            git stash push -u -m "retention-preflight-$(date -u +%Y%m%dT%H%M%SZ)" >/dev/null
+            echo 'RETENTION_LOCAL_CHANGES_STASHED=true'
+          fi
+          timeout 120s git fetch origin main
+          timeout 60s git checkout -B main "$EXPECTED_MEI_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MEI_SHA"
+          echo "RETENTION_DEPLOY_SHA=$(git rev-parse HEAD)"
+          if [ -x .venv/bin/python ]; then py=.venv/bin/python; else py=python3; fi
+          "$py" -m pytest -q tests/test_retention_policy.py
+          echo 'RETENTION_TEST_OK=true'
+          EOF
+
+      - name: Apply V025 migration only
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=30 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          timeout 420s docker compose run --rm --no-deps flyway migrate
+          timeout 240s docker compose run --rm --no-deps flyway info > /tmp/retention-flyway-info.log
+          tail -n 60 /tmp/retention-flyway-info.log
+          grep -Eq '(^|[[:space:]])25([[:space:]]|\|).*Success|V025' /tmp/retention-flyway-info.log
+          echo 'RETENTION_V025_OK=true'
+          EOF
+
+      - name: Production purge dry-run
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=30 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          if [ -x .venv/bin/python ]; then py=.venv/bin/python; else py=python3; fi
+          timeout 300s "$py" scripts/purgar_base_operacional.py --batch-size 200
+          echo 'RETENTION_DRYRUN_OK=true'
+          test -f /var/lib/mei-mg-email/sender_blocked.pause
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then exit 90; fi
+          echo 'RETENTION_WORKER_REMAINS_INACTIVE=true'
+          echo 'RETENTION_SENTINEL_REMAINS=true'
+          EOF
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/vmkey

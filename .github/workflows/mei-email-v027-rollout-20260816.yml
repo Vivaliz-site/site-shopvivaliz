@@ -1,0 +1,136 @@
+name: MEI email V027 rollout 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/mei-email-v027-rollout-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rollout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Deploy V027 and guarded worker
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+            echo REFUSE_TRACKED_WORKTREE_CHANGES
+            git status --short --untracked-files=no
+            exit 20
+          fi
+
+          old_head=$(git rev-parse HEAD)
+          echo OLD_HEAD=$old_head
+          sudo systemctl stop mei-mg-email-worker.service
+          migration_applied=0
+          finish() {
+            rc=$?
+              if [ "$rc" -ne 0 ]; then
+                echo FAILURE_CODE=$rc
+                if [ "$migration_applied" -eq 0 ]; then
+                 echo 'ROLLBACK_REQUIRED: automatic git rollback is forbidden; preserve evidence and recover through the reviewed release procedure.'
+                fi
+              sudo systemctl daemon-reload || true
+              sudo systemctl start mei-mg-email-worker.service || true
+            fi
+          }
+          trap finish EXIT
+
+          git fetch origin main
+          git pull --ff-only origin main
+          new_head=$(git rev-parse HEAD)
+          echo NEW_HEAD=$new_head
+          .venv/bin/python -m py_compile worker/worker_queue_first.py worker/worker.py app/queue_manager.py
+          echo PY_COMPILE=ok
+
+          echo ---FLYWAY_MIGRATE_V027---
+          # V014/V017/V018 possuem checksum historico divergente no repositorio.
+          # Nao usamos repair: apenas desativamos validateOnMigrate nesta execucao
+          # para aplicar a migration pendente, preservando os checksums gravados.
+          timeout 420 docker compose run --rm -e FLYWAY_VALIDATE_ON_MIGRATE=false flyway
+
+          echo ---VERIFY_SCHEMA_HISTORY_27---
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import psycopg
+          from psycopg.rows import dict_row
+          from app.config import settings
+          conn=psycopg.connect(settings.database_url, autocommit=True, row_factory=dict_row, connect_timeout=20)
+          try:
+              with conn.cursor() as cur:
+                  cur.execute("set statement_timeout='30s'")
+                  cur.execute("""
+                    select installed_rank, version, description, type, checksum, success, installed_on
+                      from mei_email.flyway_schema_history
+                     where version='27'
+                     order by installed_rank desc
+                     limit 1
+                  """)
+                  row=cur.fetchone()
+                  print('V027_HISTORY='+repr(dict(row) if row else None), flush=True)
+                  if not row or not row['success']:
+                      raise SystemExit('V027_NOT_APPLIED')
+                  cur.execute("select mei_email.is_valid_email_address('valid@example.com'::citext), mei_email.is_valid_email_address('bad@example,com'::citext)")
+                  valid,bad=cur.fetchone().values()
+                  print(f'V027_FUNCTION_CHECK valid={valid} bad={bad}', flush=True)
+                  if valid is not True or bad is not False:
+                      raise SystemExit('V027_FUNCTION_CHECK_FAILED')
+          finally:
+              conn.close()
+          PY
+          migration_applied=1
+          echo V027_CONFIRMED=true
+
+          echo ---INVALID_CLEANUP---
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import psycopg, time
+          from app.config import settings
+          total = 0
+          conn = psycopg.connect(settings.database_url, autocommit=True, connect_timeout=20)
+          try:
+              with conn.cursor() as cur:
+                  cur.execute("set statement_timeout='120s'")
+                  for batch in range(1, 11):
+                      cur.execute("select mei_email.purge_invalid_operational_emails(200)")
+                      n = int(cur.fetchone()[0])
+                      total += n
+                      print(f'INVALID_PURGE_BATCH={batch} COUNT={n} TOTAL={total}', flush=True)
+                      if n == 0:
+                          break
+                      time.sleep(0.5)
+                  else:
+                      print('INVALID_PURGE_MORE_REMAIN=true', flush=True)
+              print(f'INVALID_PURGED_TOTAL={total}', flush=True)
+          finally:
+              conn.close()
+          PY
+
+          sudo systemctl daemon-reload
+          sudo systemctl start mei-mg-email-worker.service
+          sleep 20
+          echo WORKER=$(systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+          echo PID=$(systemctl show -p MainPID --value mei-mg-email-worker.service 2>/dev/null || true)
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo SENTINEL=present; else echo SENTINEL=absent; fi
+          echo ---JOURNAL---
+          sudo journalctl -u mei-mg-email-worker.service --since "3 minutes ago" --no-pager -n 140 || true
+
+          trap - EXIT
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

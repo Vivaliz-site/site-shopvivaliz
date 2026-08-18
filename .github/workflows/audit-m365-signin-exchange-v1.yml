@@ -1,0 +1,85 @@
+name: Audit M365 Exchange sign-in denial v1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/audit-m365-signin-exchange-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Read Exchange enterprise app and recent Entra sign-in failures
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import json, urllib.request, urllib.error, urllib.parse
+          from app.email_provider import MicrosoftGraphEmailProvider
+
+          token = MicrosoftGraphEmailProvider()._get_access_token()
+          headers = {'Authorization': 'Bearer ' + token, 'Accept': 'application/json'}
+
+          def get(url, label):
+              req = urllib.request.Request(url, headers=headers)
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as r:
+                      data = json.load(r)
+                  print(label + '_HTTP=' + str(r.status))
+                  return data
+              except urllib.error.HTTPError as e:
+                  body = e.read().decode('utf-8', 'replace')[:1000]
+                  print(label + '_HTTP=' + str(e.code))
+                  print(label + '_BODY=' + body)
+                  return None
+
+          # Office 365 Exchange Online service principal metadata.
+          filt = urllib.parse.quote("displayName eq 'Office 365 Exchange Online'")
+          sp = get('https://graph.microsoft.com/v1.0/servicePrincipals?$filter=' + filt + '&$select=id,appId,displayName,accountEnabled,appRoleAssignmentRequired', 'EXCHANGE_SP')
+          if sp:
+              for x in sp.get('value', []):
+                  print('EXCHANGE_SP_RESULT=' + json.dumps(x, ensure_ascii=False, sort_keys=True))
+
+          # Recent sign-in records for the sender account. This requires AuditLog.Read.All;
+          # if not granted, the 403 itself confirms this diagnostic path is unavailable.
+          user = urllib.parse.quote("naoresponda@dev.shopvivaliz.com.br")
+          signin_url = "https://graph.microsoft.com/v1.0/auditLogs/signIns?$filter=userPrincipalName%20eq%20'" + user + "'&$orderby=createdDateTime%20desc&$top=10&$select=createdDateTime,appDisplayName,resourceDisplayName,clientAppUsed,conditionalAccessStatus,status,correlationId,ipAddress"
+          data = get(signin_url, 'SIGNINS')
+          if data:
+              for s in data.get('value', []):
+                  out = {
+                      'createdDateTime': s.get('createdDateTime'),
+                      'appDisplayName': s.get('appDisplayName'),
+                      'resourceDisplayName': s.get('resourceDisplayName'),
+                      'clientAppUsed': s.get('clientAppUsed'),
+                      'conditionalAccessStatus': s.get('conditionalAccessStatus'),
+                      'status': s.get('status'),
+                      'correlationId': s.get('correlationId'),
+                      'ipAddress': s.get('ipAddress'),
+                  }
+                  print('SIGNIN=' + json.dumps(out, ensure_ascii=False, sort_keys=True))
+          PY
+          EOF
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/vmkey
