@@ -26,6 +26,7 @@ import logging
 import os
 import re
 import subprocess
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -43,6 +44,8 @@ HEALTH_URL = os.getenv(
 )
 MINIMUM_HEALTH_SCORE = float(os.getenv("SHOPVIVALIZ_SYNC_MIN_HEALTH_SCORE", "85"))
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+FETCH_REF_LOCK_MARKERS = ("cannot lock ref", "unable to update local ref")
+FETCH_ATTEMPTS = 3
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 log = logging.getLogger(__name__)
@@ -69,6 +72,33 @@ def ensure_logs_dir() -> None:
 
 def git_output(args: list[str]) -> str:
     return run(["git", *args], check=True).stdout.strip()
+
+
+def fetch_canonical_branch(branch: str) -> None:
+    """Fetch once per attempt, retrying only a known concurrent-ref race.
+
+    The deployment runner and the scheduled synchronizer can briefly overlap
+    while Git updates `refs/remotes/origin/main`.  A ref-lock failure has no
+    semantic conflict and is safe to retry; every other fetch failure remains
+    fail-closed.
+    """
+    command = ["git", "fetch", "--prune", "--no-tags", "origin", branch]
+    for attempt in range(1, FETCH_ATTEMPTS + 1):
+        result = run(command)
+        if result.returncode == 0:
+            return
+
+        detail = result.stderr.strip() or result.stdout.strip() or "command failed"
+        transient_ref_lock = any(marker in detail.lower() for marker in FETCH_REF_LOCK_MARKERS)
+        if not transient_ref_lock or attempt == FETCH_ATTEMPTS:
+            raise RuntimeError(f"{' '.join(command)}: {detail}")
+
+        log.warning(
+            "Git fetch encontrou lock transitório de ref (tentativa %s/%s); repetindo",
+            attempt,
+            FETCH_ATTEMPTS,
+        )
+        time.sleep(attempt)
 
 
 def tracked_dirty_paths() -> list[str]:
@@ -256,7 +286,7 @@ def main() -> int:
         if not health.get("ok"):
             log.warning("Runtime atual degradado; mantendo sync para permitir deploy corretivo: %s", payload["health"]["error"])
 
-        run(["git", "fetch", "--prune", "--no-tags", "origin", branch], check=True)
+        fetch_canonical_branch(branch)
         remote_sha = git_output(["rev-parse", f"origin/{branch}"])
         payload["remote_sha"] = remote_sha
 
