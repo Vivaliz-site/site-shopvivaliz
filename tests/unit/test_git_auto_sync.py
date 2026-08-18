@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 MODULE_PATH = ROOT / "git-auto-sync.py"
@@ -270,6 +271,35 @@ class SanitizedHistorySyncTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertEqual(git(self.local, "branch", "--show-current").stdout.strip(), "main")
         self.assertEqual(self.status()["health"]["status"], "degraded")
+
+    def test_fetch_retries_only_the_transient_remote_ref_lock(self) -> None:
+        command = ["git", "fetch", "--prune", "--no-tags", "origin", "main"]
+        transient = subprocess.CompletedProcess(
+            command,
+            1,
+            "",
+            "error: cannot lock ref 'refs/remotes/origin/main': is at new but expected old",
+        )
+        success = subprocess.CompletedProcess(command, 0, "", "")
+        with patch.object(SYNC, "run", side_effect=[transient, success]) as run_mock, patch.object(
+            SYNC.time, "sleep"
+        ) as sleep_mock:
+            SYNC.fetch_canonical_branch("main")
+
+        self.assertEqual(run_mock.call_count, 2)
+        sleep_mock.assert_called_once_with(1)
+
+    def test_fetch_does_not_retry_an_unknown_failure(self) -> None:
+        command = ["git", "fetch", "--prune", "--no-tags", "origin", "main"]
+        failure = subprocess.CompletedProcess(command, 1, "", "fatal: authentication failed")
+        with patch.object(SYNC, "run", return_value=failure) as run_mock, patch.object(
+            SYNC.time, "sleep"
+        ) as sleep_mock:
+            with self.assertRaisesRegex(RuntimeError, "authentication failed"):
+                SYNC.fetch_canonical_branch("main")
+
+        self.assertEqual(run_mock.call_count, 1)
+        sleep_mock.assert_not_called()
 
     def test_oracle_wrapper_does_not_stage_commit_or_push(self) -> None:
         text = (ROOT / "scripts" / "auto-sync-oracle.sh").read_text(encoding="utf-8")
