@@ -1,8 +1,5 @@
 name: MEI email deploy queue-first 20260816
 on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/mei-email-deploy-queue-first-20260816.yml']
   workflow_dispatch:
 permissions:
   contents: read

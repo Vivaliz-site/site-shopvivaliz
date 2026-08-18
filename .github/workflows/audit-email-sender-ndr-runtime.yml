@@ -23,10 +23,11 @@ jobs:
         run: |
           timeout 2640s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
-          cd /home/ubuntu/mei-mg-email
-          echo '=== UPDATE_APP_CODE ==='
-          git fetch origin main
-          git reset --hard origin/main
+            cd /home/ubuntu/mei-mg-email
+            echo '=== UPDATE_APP_CODE ==='
+            git fetch origin main
+            test -z "$(git status --porcelain)"
+            git merge --ff-only origin/main
           PY=.venv/bin/python
           test -x "$PY" || PY=python3
 

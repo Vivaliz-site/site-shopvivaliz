@@ -6,8 +6,9 @@ declare(strict_types=1);
  * Authoritative list of production agents.
  *
  * Every entry is available through the production watchdog. The watchdog
- * executes one evidence-backed cycle per hour. Files ending in
- * Agent.php that are not present here are rejected by the regression gate,
+ * executes one evidence-backed cycle per hour. Agent.php files in the
+ * versioned production package (agents/v9.2.84) that are not present here are
+ * rejected by the regression gate,
  * preventing dormant, simulated or duplicate agents from being advertised as
  * production workers. The aggregate cycle embeds the complete result of every
  * agent and is the authoritative evidence consumed by CI and the admin panel.

@@ -78,7 +78,7 @@ jobs:
 
       - name: Validate public storefront with diagnostics
         run: |
-          set +e
+          set -Eeuo pipefail
           for url in https://shopvivaliz.com.br/api/health/version.php https://shopvivaliz.com.br/; do
             echo "=== $url ==="
             curl -sS -D - -o /tmp/body --connect-timeout 10 --max-time 40 "$url"
