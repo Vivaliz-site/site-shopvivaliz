@@ -1,5 +1,5 @@
 {
-  "action": "open_shopvivaliz",
-  "requested_at": "2026-08-17T00:00:00Z",
-  "reason": "Open and validate ShopVivaliz 9.2.105 after the conversion-recovery deployment"
+  "action": "health",
+  "requested_at": "2026-08-18T10:48:00Z",
+  "reason": "Verify Fred-Win private relay health before checking Microsoft Defender restricted sender state"
 }
