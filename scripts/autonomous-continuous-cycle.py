@@ -207,7 +207,7 @@ def director_dimension(task: dict[str, Any], director_priorities: list[str]) -> 
 def current_autonomous_task(queue_data: dict[str, Any]) -> dict[str, Any] | None:
     for task in queue_data.get("tasks", []):
         if (
-            task.get("status") == "in_progress"
+            task.get("status") == "running"
             and task.get("selected_by") == CURRENT_TASK_SELECTOR
         ):
             return task
@@ -311,7 +311,7 @@ def select_task(
         for task in queue_data.get("tasks", []):
             if str(task.get("id", "")) != selected_id:
                 continue
-            task["status"] = "in_progress"
+            task["status"] = "running"
             task["selected_at"] = utc_now()
             task["selected_by"] = CURRENT_TASK_SELECTOR
             task["selection_reason"] = selection_reason(selected)
@@ -530,7 +530,7 @@ def main() -> int:
     parser.add_argument(
         "--advance",
         action="store_true",
-        help="Persist the selected safe task as in_progress.",
+        help="Persist the selected safe task as running.",
     )
     args = parser.parse_args()
 

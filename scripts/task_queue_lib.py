@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any, Iterator
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+# The repository copy is only a reviewed template. Runtime automation must use
+# the mutable queue under the deployment shared directory when it is present.
 ROOT_QUEUE_FILE = PROJECT_ROOT / "tasks-queue.json"
 DEFAULT_RUNTIME_QUEUE_FILE = Path("/home/ubuntu/shopvivaliz-deploy/shared/tasks-queue.json")
 CANONICAL_SCHEMA_VERSION = 2
@@ -32,6 +34,22 @@ class QueueValidationError(ValueError):
 
 class QueueMutationRetiredError(RuntimeError):
     """Raised when runtime code attempts to mutate the retired queue."""
+
+
+def runtime_queue_file() -> Path:
+    """Return the explicit or detected mutable runtime queue.
+
+    Immutable releases deliberately keep their checked-in queue separate from
+    operational state.  On the production VM the shared file therefore wins;
+    on local and CI checkouts (where it does not exist) the reviewed repository
+    file remains the safe read-only default.
+    """
+    configured_runtime = os.getenv("SHOPVIVALIZ_RUNTIME_QUEUE_FILE", "").strip()
+    if configured_runtime:
+        return Path(configured_runtime)
+    if DEFAULT_RUNTIME_QUEUE_FILE.is_file():
+        return DEFAULT_RUNTIME_QUEUE_FILE
+    return ROOT_QUEUE_FILE
 
 
 def utc_now() -> str:
@@ -195,7 +213,7 @@ def _runtime_view(canonical: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_queue(path: Path | None = None) -> dict[str, Any]:
-    queue_path = Path(path) if path is not None else ROOT_QUEUE_FILE
+    queue_path = Path(path) if path is not None else runtime_queue_file()
     if not queue_path.is_file():
         raise QueueValidationError(f"Canonical queue file does not exist: {queue_path}")
     try:
@@ -250,7 +268,7 @@ def save_queue(
     runtime_actor: str | None = None,
 ) -> None:
     """Atomically write a reviewed change or the explicit shared runtime queue."""
-    queue_path = Path(path) if path is not None else ROOT_QUEUE_FILE
+    queue_path = Path(path) if path is not None else runtime_queue_file()
     configured_runtime = os.getenv("SHOPVIVALIZ_RUNTIME_QUEUE_FILE", "").strip()
     allowed_runtime = Path(configured_runtime) if configured_runtime else DEFAULT_RUNTIME_QUEUE_FILE
     try:
