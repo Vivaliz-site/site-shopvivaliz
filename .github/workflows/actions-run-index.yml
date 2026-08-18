@@ -1,0 +1,92 @@
+name: Actions Run Index
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ops/actions-run-index-request.json"
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  index:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Build run index
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          TRIGGER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p ops
+          python3 - <<'PY'
+          import json, os, subprocess, urllib.request
+          repo=os.environ['REPO']
+          token=os.environ['GH_TOKEN']
+          req_path='ops/actions-run-index-request.json'
+          request={}
+          if os.path.exists(req_path):
+              request=json.load(open(req_path, encoding='utf-8'))
+          workflow=request.get('workflow', 'fred-win-remote-action.yml')
+          limit=int(request.get('limit', 10))
+          url=f'https://api.github.com/repos/{repo}/actions/workflows/{workflow}/runs?per_page={limit}&branch=main'
+          http=urllib.request.Request(url, headers={
+              'Authorization': f'Bearer {token}',
+              'Accept': 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+          })
+          with urllib.request.urlopen(http, timeout=30) as r:
+              data=json.loads(r.read().decode())
+          runs=[]
+          for run in data.get('workflow_runs', []):
+              runs.append({
+                  'id': run.get('id'),
+                  'name': run.get('name'),
+                  'event': run.get('event'),
+                  'status': run.get('status'),
+                  'conclusion': run.get('conclusion'),
+                  'head_branch': run.get('head_branch'),
+                  'head_sha': run.get('head_sha'),
+                  'created_at': run.get('created_at'),
+                  'updated_at': run.get('updated_at'),
+                  'html_url': run.get('html_url'),
+              })
+          out={
+              'recorded_at': subprocess.check_output(['date','-u','+%Y-%m-%dT%H:%M:%SZ'], text=True).strip(),
+              'repository': repo,
+              'request': request,
+              'index_workflow_run_id': os.environ['RUN_ID'],
+              'index_workflow_run_attempt': os.environ['RUN_ATTEMPT'],
+              'trigger_sha': os.environ['TRIGGER_SHA'],
+              'queried_workflow': workflow,
+              'queried_url': url,
+              'total_count': data.get('total_count'),
+              'runs': runs,
+          }
+          json.dump(out, open('ops/actions-run-index.json','w',encoding='utf-8'), ensure_ascii=False, indent=2)
+          PY
+
+      - name: Commit run index
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/actions-run-index.json
+          if git diff --cached --quiet; then
+            echo "No run index changes"
+            exit 0
+          fi
+          git commit -m "ops: update actions run index [skip ci]"
+          git push
