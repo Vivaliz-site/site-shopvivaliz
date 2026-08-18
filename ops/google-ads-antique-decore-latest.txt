@@ -1,5 +1,5 @@
-checked_at_utc=2026-08-18T00:56:33Z
+checked_at_utc=2026-08-18T00:58:52Z
 script_exit_code=0
 ACTION=PAUSED
-PAUSE_REASON=STALE_VISIBLE_PROMO_CLAIM_GUARD_FAILED url=https://shopvivaliz.com.br/catalogo?q=decore&utm_source=google&utm_medium=cpc&utm_campaign=search_vasos_antique_decore_2026_08&utm_content=vasos_decore_japi&cupom=
+PAUSE_REASON=PURCHASE_CONVERSION_GUARD_FAILED compra_count=0
 RESULT=PAUSED_GUARD_FAILED
