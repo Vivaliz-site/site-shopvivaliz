@@ -1,0 +1,137 @@
+/* Home refinement: one final, scoped layer for hierarchy and card rhythm. */
+.sv-home-page .home-section-shell {
+    position: relative;
+    padding-block: clamp(34px, 5vw, 62px);
+}
+
+.sv-home-page .home-section-shell + .home-section-shell {
+    border-top: 1px solid rgba(11, 79, 136, .08);
+}
+
+.sv-home-page .home-section-shell .section-heading {
+    align-items: end;
+    gap: 18px;
+    margin-bottom: 24px;
+}
+
+.sv-home-page .home-section-shell .section-heading h2 {
+    margin-bottom: 7px;
+    letter-spacing: -.025em;
+}
+
+.sv-home-page .home-section-shell .section-heading .muted {
+    max-width: 58ch;
+    line-height: 1.55;
+}
+
+.sv-home-page .home-scroller-track {
+    scroll-padding-inline: 12px;
+}
+
+.sv-home-page .category-slide,
+.sv-home-page .product-card {
+    border: 1px solid rgba(11, 79, 136, .11);
+    box-shadow: 0 12px 28px rgba(15, 55, 88, .09);
+}
+
+.sv-home-page .category-slide:focus-visible,
+.sv-home-page .product-card:focus-within {
+    outline: 3px solid rgba(53, 199, 89, .68);
+    outline-offset: 3px;
+    box-shadow: 0 18px 36px rgba(15, 55, 88, .16);
+}
+
+.sv-home-page .product-card .product-image {
+    display: block;
+    aspect-ratio: 1;
+    background: linear-gradient(145deg, #f7fafc, #eaf1f6);
+}
+
+.sv-home-page .product-card .product-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 10px;
+}
+
+.sv-home-page .product-card .product-info {
+    gap: 9px;
+}
+
+.sv-home-page .product-card .product-category {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.sv-home-page .product-card h2 {
+    line-height: 1.35;
+}
+
+.sv-home-page .product-card .product-price {
+    margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+}
+
+.sv-home-page .product-card .card-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.sv-home-page .product-card .card-actions .btn,
+.sv-home-page .product-card .card-actions .buy-button {
+    width: 100%;
+    min-height: 42px;
+}
+
+.sv-home-page .home-reviews-card {
+    margin-top: 18px;
+    padding: clamp(22px, 3vw, 32px);
+    border: 1px solid rgba(11, 79, 136, .12);
+    border-radius: 22px;
+    background: linear-gradient(135deg, #fff, #f4fbf8);
+    box-shadow: 0 16px 36px rgba(15, 55, 88, .07);
+}
+
+.sv-home-page .home-reviews-card h2 {
+    margin: 0 0 8px;
+    color: #07345d;
+    font-size: clamp(20px, 2vw, 25px);
+    letter-spacing: -.02em;
+}
+
+.sv-home-page .home-reviews-card p {
+    max-width: 62ch;
+    margin: 0 0 18px;
+    color: #475569;
+    line-height: 1.6;
+}
+
+@media (max-width: 720px) {
+    .sv-home-page .home-section-shell {
+        padding-block: 30px;
+    }
+
+    .sv-home-page .home-section-shell .section-heading {
+        align-items: start;
+        flex-direction: column;
+        margin-bottom: 18px;
+    }
+
+    .sv-home-page .home-section-shell .section-heading .btn {
+        width: 100%;
+    }
+
+    .sv-home-page .product-card .card-actions {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sv-home-page .category-slide,
+    .sv-home-page .product-card {
+        transition: none !important;
+    }
+}

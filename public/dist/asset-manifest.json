@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-17T01:24:40.205Z",
+  "generated_at": "2026-08-18T01:09:14.828Z",
   "assets": {
     "/js/admin-automation.js": {
       "file": "/public/dist/js/admin-automation.ba2700ea3a.min.js",
@@ -152,9 +152,9 @@
       "source_bytes": 436
     },
     "/js/public-experience-v1.js": {
-      "file": "/public/dist/js/public-experience-v1.84268f3997.min.js",
-      "bytes": 15981,
-      "source_bytes": 17281
+      "file": "/public/dist/js/public-experience-v1.9d46655a60.min.js",
+      "bytes": 17344,
+      "source_bytes": 18772
     },
     "/js/shopvivaliz-ab-testing.js": {
       "file": "/public/dist/js/shopvivaliz-ab-testing.1b5dc84fc3.min.js",
@@ -250,6 +250,11 @@
       "file": "/public/dist/css/footer-pages.68716e5e43.min.css",
       "bytes": 3931,
       "source_bytes": 3992
+    },
+    "/css/home-design-refinement-v1.css": {
+      "file": "/public/dist/css/home-design-refinement-v1.970d7cc1b8.min.css",
+      "bytes": 2515,
+      "source_bytes": 3147
     },
     "/css/home-mobile-compact.css": {
       "file": "/public/dist/css/home-mobile-compact.858ba5966d.min.css",
