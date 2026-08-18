@@ -830,27 +830,27 @@ $svNavCurrent = '';
                 </div>
                 <?php endif; ?>
                 <p class="eyebrow hero-kicker">
-                    Loja online de ferragens e utilidades
+                    Ferragens e utilidades para o dia a dia
                 </p>
-                <h1>Encontre a peça certa para <span class="gradient-word">reparar, organizar e transformar</span></h1>
-                <p>Rodízios, ferragens, ferramentas e utilidades com preço e estoque atualizados. Consulte o frete pelo CEP e tire dúvidas com a equipe antes de comprar.</p>
+                <h1>Seu projeto começa com <span class="gradient-word">a peça certa</span></h1>
+                <p>Rodízios, ferragens, ferramentas e utilidades para casa, organização e reparos. Veja preço, disponibilidade e frete por CEP antes de finalizar.</p>
 
                 <!-- Premium E-Commerce Search Bar -->
                 <div class="hero-search-container">
                     <form action="/catalogo" method="GET" class="hero-search-form">
                         <label for="hero-search-input" class="sr-only">Buscar produtos</label>
                         <span class="hero-search-icon">🔍</span>
-                        <input id="hero-search-input" type="text" name="q" placeholder="O que você está procurando hoje? Ex: rodízios, ferramentas..." required>
+                        <input id="hero-search-input" type="text" name="q" placeholder="O que você procura? Ex.: rodízios, ferramentas..." required>
                         <button type="submit">Buscar</button>
                     </form>
                 </div>
 
                 <div class="cta-buttons hero-cta hero-cta-mt-24">
                     <a href="/catalogo" class="btn btn-hero-primary">
-                        Ver produtos
+                        Ver catálogo
                     </a>
                     <a href="/contato" class="btn btn-hero-secondary">
-                        Falar com a equipe
+                        Tirar uma dúvida
                     </a>
                 </div>
             </div>
@@ -866,7 +866,7 @@ $svNavCurrent = '';
                 </span>
                 <div class="trust-bar-text">
                     <strong>Conexão protegida</strong>
-                    <span>Site em HTTPS e pagamento processado por parceiros</span>
+                    <span>Conexão protegida em todas as etapas</span>
                 </div>
             </div>
             <div class="trust-bar-item" role="listitem">
@@ -875,7 +875,7 @@ $svNavCurrent = '';
                 </span>
                 <div class="trust-bar-text">
                     <strong>Frete antes de comprar</strong>
-                    <span>Valor e prazo calculados pelo seu CEP</span>
+                    <span>Consulte valor e prazo com seu CEP</span>
                 </div>
             </div>
             <div class="trust-bar-item" role="listitem">
@@ -884,7 +884,7 @@ $svNavCurrent = '';
                 </span>
                 <div class="trust-bar-text">
                     <strong>Pagamento transparente</strong>
-                    <span>Opções disponíveis aparecem no checkout</span>
+                    <span>Escolha a forma de pagamento no checkout</span>
                 </div>
             </div>
             <div class="trust-bar-item" role="listitem">
@@ -893,7 +893,7 @@ $svNavCurrent = '';
                 </span>
                 <div class="trust-bar-text">
                     <strong>Direito de arrependimento</strong>
-                    <span>Solicitação em até 7 dias após o recebimento</span>
+                    <span>Você pode solicitar em até 7 dias após receber</span>
                 </div>
             </div>
         </div>
@@ -936,12 +936,12 @@ $svNavCurrent = '';
         </div>
     </section>
 
-    <section class="home-categories home-products">
+    <section class="home-categories home-products home-section-shell" aria-labelledby="home-categories-title">
         <div class="container">
             <div class="section-heading">
                 <div>
-                    <h2>Categorias em destaque</h2>
-                    <p class="muted">Navegue por linhas reais do catálogo com acesso rápido.</p>
+                    <h2 id="home-categories-title">Categorias em destaque</h2>
+                    <p class="muted">Encontre o item certo por ambiente, necessidade ou projeto.</p>
                 </div>
                 <a href="/catalogo" class="btn btn-secondary">Ver catálogo</a>
             </div>
@@ -968,12 +968,12 @@ $svNavCurrent = '';
     </section>
 
     <!-- Produtos em destaque -->
-    <section class="home-products">
+    <section class="home-products home-section-shell" aria-labelledby="home-products-title">
         <div class="container">
             <div class="section-heading">
                 <div>
-                    <h2>Produtos em destaque</h2>
-                    <p class="muted">Seleção com imagens reais e acesso rápido às linhas mais procuradas.</p>
+                    <h2 id="home-products-title">Produtos em destaque</h2>
+                    <p class="muted">Itens com imagens, preço e disponibilidade atualizados.</p>
                 </div>
                 <a href="/catalogo" class="btn btn-secondary">Ver todos</a>
             </div>
@@ -1020,7 +1020,7 @@ $svNavCurrent = '';
                                     <div class="card-actions">
                                         <a class="btn btn-secondary card-link" href="<?= sv_home_esc($productUrl) ?>">Ver detalhes</a>
                                         <?php if ($hasPrice): ?>
-                                            <button class="buy-button btn btn-primary card-link" type="button" data-product="<?= sv_home_esc($payload) ?>" title="Comprar">Comprar</button>
+                                            <button class="buy-button btn btn-primary card-link" type="button" data-product="<?= sv_home_esc($payload) ?>" aria-label="Adicionar <?= sv_home_esc($product['name']) ?> ao carrinho">Comprar</button>
                                         <?php elseif ($stock <= 0): ?>
                                             <button class="btn btn-disabled card-link" type="button" disabled>Esgotado</button>
                                         <?php else: ?>
@@ -1041,10 +1041,10 @@ $svNavCurrent = '';
          eram texto inventado (nomes, cidades e avaliacoes fabricados), o
          mesmo problema ja corrigido em produto.php via
          svpts_honest_reviews_section(). Reusa a mesma secao honesta aqui. -->
-    <section class="container sv-reviews-section home-section-shell home-section-soft" aria-labelledby="sv-home-reviews-title" style="margin-top:40px;padding:24px;background:#fff;border:1px solid rgba(11,79,136,.1);border-radius:20px;">
-        <h2 id="sv-home-reviews-title" style="font-size:20px;font-weight:800;color:#07345d;margin:0 0 8px;">Avaliações de clientes</h2>
-        <p style="margin:0 0 16px;color:#475569;line-height:1.6;">Avaliações reais aparecem aqui assim que enviadas por clientes e moderadas pela equipe.</p>
-        <a href="/avaliacoes.php" class="btn btn-secondary" style="display:inline-flex;text-decoration:none;">Ver e enviar avaliações</a>
+    <section class="container sv-reviews-section home-reviews-card" aria-labelledby="sv-home-reviews-title">
+        <h2 id="sv-home-reviews-title">Avaliações de clientes</h2>
+        <p>Avaliações de clientes são publicadas após moderação, com transparência para ajudar na sua escolha.</p>
+        <a href="/avaliacoes.php" class="btn btn-secondary">Ler e enviar avaliações</a>
     </section>
 
     <!-- Premium Newsletter Section -->
@@ -1053,7 +1053,7 @@ $svNavCurrent = '';
             <div class="newsletter-card">
                 <div class="newsletter-info">
                     <h2>Fique por dentro das novidades 📩</h2>
-                    <p>Receba ofertas exclusivas, cupons de desconto e dicas de organização diretamente no seu e-mail.</p>
+                    <p>Receba novidades úteis, cupons ativos e dicas de organização — sem excesso de mensagens.</p>
                 </div>
                 <form class="newsletter-form">
                     <label for="newsletter-email-input" class="sr-only">Seu endereço de e-mail</label>
