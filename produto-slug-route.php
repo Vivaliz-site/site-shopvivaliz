@@ -97,155 +97,6 @@ function sv_product_route_row_slug(?array $row): ?string
     return $slug !== '' ? $slug : null;
 }
 
-/**
- * Historical editorial snapshots are allowed only as identity maps.
- * Commercial fields in these files are deliberately ignored.
- */
-function sv_product_route_snapshot_sku(string $requestedSlug): ?string
-{
-    $requestedNorm = sv_product_route_normalize($requestedSlug);
-    if ($requestedNorm === '') {
-        return null;
-    }
-
-    foreach ([
-        __DIR__ . '/storage/products-cache.json',
-        __DIR__ . '/api/catalog/fallback-products.json',
-    ] as $path) {
-        if (!is_file($path) || !is_readable($path)) {
-            continue;
-        }
-
-        $payload = json_decode((string)file_get_contents($path), true);
-        if (!is_array($payload)) {
-            continue;
-        }
-
-        $rows = $payload;
-        foreach (['itens', 'items', 'produtos', 'products', 'data'] as $key) {
-            if (isset($payload[$key]) && is_array($payload[$key])) {
-                $rows = $payload[$key];
-                break;
-            }
-        }
-
-        foreach ($rows as $row) {
-            if (!is_array($row)) {
-                continue;
-            }
-            $sku = trim((string)($row['sku'] ?? $row['codigo'] ?? $row['code'] ?? ''));
-            if ($sku === '') {
-                continue;
-            }
-
-            $name = trim((string)($row['name'] ?? $row['nome'] ?? ''));
-            $candidates = [
-                trim((string)($row['slug'] ?? '')),
-                $name !== '' ? svcr_slug($name, '') : '',
-                $name !== '' ? svcr_slug($name, $sku) : '',
-            ];
-
-            foreach ($candidates as $candidate) {
-                if ($candidate !== '' && sv_product_route_normalize($candidate) === $requestedNorm) {
-                    return $sku;
-                }
-            }
-        }
-    }
-
-    return null;
-}
-
-/**
- * Persisted source URLs from migration are a second identity source.
- * The query is read-only and only returns SKU; live-catalog membership is
- * checked separately before a redirect is allowed.
- */
-function sv_product_route_migration_sku(string $requestedSlug): ?string
-{
-    if (!class_exists('mysqli') || !function_exists('mysqli_init')) {
-        return null;
-    }
-
-    $decodedSlug = trim(rawurldecode($requestedSlug));
-    if (
-        $decodedSlug === ''
-        || strlen($decodedSlug) > 220
-        || str_contains($decodedSlug, '/')
-        || str_contains($decodedSlug, "\0")
-    ) {
-        return null;
-    }
-
-    $constants = __DIR__ . '/config/constants.php';
-    if (!is_file($constants)) {
-        return null;
-    }
-
-    try {
-        require_once $constants;
-        if (!defined('DB_NAME') || !defined('DB_USER')) {
-            return null;
-        }
-
-        mysqli_report(MYSQLI_REPORT_OFF);
-        $db = mysqli_init();
-        if (!$db instanceof mysqli) {
-            return null;
-        }
-        if (defined('MYSQLI_OPT_CONNECT_TIMEOUT')) {
-            $db->options(MYSQLI_OPT_CONNECT_TIMEOUT, 1);
-        }
-
-        $connected = @$db->real_connect(
-            (string)(defined('DB_HOST') ? DB_HOST : 'localhost'),
-            (string)DB_USER,
-            (string)(defined('DB_PASS') ? DB_PASS : ''),
-            (string)DB_NAME,
-            (int)(defined('DB_PORT') ? DB_PORT : 3306)
-        );
-        if (!$connected) {
-            $db->close();
-            return null;
-        }
-        $db->set_charset('utf8mb4');
-
-        $patternSingular = '%/produto/' . $decodedSlug . '%';
-        $patternPlural = '%/produtos/' . $decodedSlug . '%';
-        $stmt = $db->prepare(
-            "SELECT sku
-               FROM olist_products
-              WHERE sku IS NOT NULL
-                AND sku <> ''
-                AND detail_json IS NOT NULL
-                AND (detail_json LIKE ? OR detail_json LIKE ?)
-              ORDER BY updated_at DESC, id DESC
-              LIMIT 1"
-        );
-        if (!$stmt) {
-            $db->close();
-            return null;
-        }
-
-        $stmt->bind_param('ss', $patternSingular, $patternPlural);
-        if (!$stmt->execute()) {
-            $stmt->close();
-            $db->close();
-            return null;
-        }
-
-        $result = $stmt->get_result();
-        $row = $result ? $result->fetch_assoc() : null;
-        $stmt->close();
-        $db->close();
-
-        $sku = is_array($row) ? trim((string)($row['sku'] ?? '')) : '';
-        return $sku !== '' ? $sku : null;
-    } catch (Throwable) {
-        return null;
-    }
-}
-
 function sv_product_route_redirect(string $canonicalSlug): never
 {
     $allowed = [
@@ -261,6 +112,26 @@ function sv_product_route_redirect(string $canonicalSlug): never
     }
 
     $target = '/produto/' . rawurlencode($canonicalSlug);
+    if ($query !== []) {
+        $target .= '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+    }
+
+    header('Location: ' . $target, true, 301);
+    exit;
+}
+
+function sv_product_route_catalog_redirect(): never
+{
+    $allowed = ['gclid', 'gbraid', 'wbraid', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'utm_id'];
+    $query = [];
+    foreach ($allowed as $key) {
+        $value = $_GET[$key] ?? null;
+        if (is_scalar($value) && trim((string)$value) !== '') {
+            $query[$key] = trim((string)$value);
+        }
+    }
+
+    $target = '/catalogo';
     if ($query !== []) {
         $target .= '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
     }
@@ -301,27 +172,9 @@ if ($suffixSlug !== null) {
     sv_product_route_redirect($suffixSlug);
 }
 
-// Snapshot slug -> SKU -> live catalog slug. Snapshot commercial data is not
-// trusted; the live SKU lookup is mandatory before redirecting.
-$snapshotSku = sv_product_route_snapshot_sku($requestedSlug);
-$snapshotSlug = sv_product_route_row_slug(
-    $snapshotSku !== null ? sv_product_route_catalog_row_by_sku($snapshotSku) : null
-);
-if ($snapshotSlug !== null) {
-    sv_product_route_redirect($snapshotSlug);
-}
-
-// Persisted migration source URL -> SKU -> live catalog slug.
-$migrationSku = sv_product_route_migration_sku($requestedSlug);
-$migrationSlug = sv_product_route_row_slug(
-    $migrationSku !== null ? sv_product_route_catalog_row_by_sku($migrationSku) : null
-);
-if ($migrationSlug !== null) {
-    sv_product_route_redirect($migrationSlug);
-}
-
-// Conservative compatibility for historical numeric IDs: strip a numeric tail
-// only when the remaining slug exists exactly in the live catalog.
+// Historical numeric IDs resolve only against the current catalog. When no
+// current match exists, direct the visitor to the current catalog instead of
+// consulting a retired storefront snapshot or migration record.
 $decodedSlug = rawurldecode($requestedSlug);
 if (preg_match('/^(.+)-([0-9]+)$/u', $decodedSlug, $matches) === 1) {
     $baseRow = sv_product_route_catalog_row_by_slug(trim((string)$matches[1]));
@@ -329,6 +182,7 @@ if (preg_match('/^(.+)-([0-9]+)$/u', $decodedSlug, $matches) === 1) {
     if ($baseSlug !== null) {
         sv_product_route_redirect($baseSlug);
     }
+    sv_product_route_catalog_redirect();
 }
 
 // No proven current mapping: preserve the normal product page and 404 logic.
