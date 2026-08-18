@@ -313,8 +313,10 @@ function installMobileNav() {
   // Mobile browsers can cancel a tap if the tapped node is replaced between
   // touchstart and click. The MutationObserver below intentionally refreshes
   // responsive UI after DOM changes, so keep the bottom nav stable and only
-  // rewrite its HTML when route/cart state really changed.
-  if (nav.dataset.svNavSignature !== navSignature || nav.innerHTML !== navHtml) {
+  // rewrite its HTML when route/cart state really changed. Do not compare
+  // innerHTML here: browsers normalize style spacing/attribute order, which
+  // would make the comparison true forever and recreate the tap target again.
+  if (nav.dataset.svNavSignature !== navSignature) {
     nav.innerHTML = navHtml;
     nav.dataset.svNavSignature = navSignature;
   }
