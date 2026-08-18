@@ -6,6 +6,7 @@ import os
 import re
 import urllib.request
 from datetime import datetime
+from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
@@ -20,10 +21,45 @@ NO_CONVERSION_PAUSE_THRESHOLD_BRL = 12.00
 CONFIG_PATH = Path(__file__).with_name("google_ads_campaign_live_ready.json")
 ALLOWED_HOST = "shopvivaliz.com.br"
 STALE_PROMO_RE = re.compile(
-    r"VOLTEI5|VIVALIZ10|PRIMEIRA10|10%\s*(?:OFF|DE DESCONTO).*?(?:PRIMEIRA|1.?)\s*COMPRA|"
+    r"\b(?:VOLTEI5|VIVALIZ10|PRIMEIRA10)\b|"
+    r"10%\s*(?:OFF|DE DESCONTO).*?(?:PRIMEIRA|1.?)\s*COMPRA|"
     r"5%\s*OFF\s*NA\s*1|5%\s*(?:OFF|DE DESCONTO).*?(?:PRIMEIRA|1.?)\s*COMPRA",
     re.IGNORECASE | re.DOTALL,
 )
+
+
+class VisibleTextParser(HTMLParser):
+    """Extract only browser-visible text; ignore script/style/template source."""
+
+    HIDDEN = {"script", "style", "noscript", "template", "svg"}
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.hidden_depth = 0
+        self.parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        if tag.lower() in self.HIDDEN:
+            self.hidden_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() in self.HIDDEN and self.hidden_depth > 0:
+            self.hidden_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if self.hidden_depth == 0:
+            text = data.strip()
+            if text:
+                self.parts.append(text)
+
+    def text(self) -> str:
+        return " ".join(self.parts)
+
+
+def visible_text(html: str) -> str:
+    parser = VisibleTextParser()
+    parser.feed(html)
+    return parser.text()
 
 
 def client_from_env() -> GoogleAdsClient:
@@ -88,7 +124,7 @@ def pause_everything(client, customer_id: str, campaign_rn: str, groups, ads, re
     print("RESULT=PAUSED_GUARD_FAILED")
 
 
-def enable_everything(client, customer_id: str, campaign_rn: str, groups, ads) -> bool:
+def enable_everything(client, customer_id: str, campaign_rn: str, campaign_status: str, groups, ads) -> bool:
     changed = False
     ad_rns = [r.ad_group_ad.resource_name for r in ads if r.ad_group_ad.status.name != "ENABLED"]
     group_rns = [r.ad_group.resource_name for r in groups if r.ad_group.status.name != "ENABLED"]
@@ -98,21 +134,10 @@ def enable_everything(client, customer_id: str, campaign_rn: str, groups, ads) -
     if group_rns:
         set_status(client, customer_id, "AdGroupService", "AdGroupOperation", group_rns, client.enums.AdGroupStatusEnum.ENABLED)
         changed = True
+    if campaign_status != "ENABLED":
+        set_status(client, customer_id, "CampaignService", "CampaignOperation", [campaign_rn], client.enums.CampaignStatusEnum.ENABLED)
+        changed = True
     return changed
-
-
-def ensure_campaign_enabled(client, customer_id: str, campaign_rn: str, status_name: str) -> bool:
-    if status_name == "ENABLED":
-        return False
-    set_status(
-        client,
-        customer_id,
-        "CampaignService",
-        "CampaignOperation",
-        [campaign_rn],
-        client.enums.CampaignStatusEnum.ENABLED,
-    )
-    return True
 
 
 def ensure_budget(client, customer_id: str, budget_rn: str, actual_micros: int) -> bool:
@@ -184,9 +209,10 @@ def validate_landing_pages(urls: list[str]) -> tuple[bool, str, list[tuple[str, 
         for key in ("q", "utm_source", "utm_medium", "utm_campaign", "utm_content", "cupom"):
             if final_query.get(key, "") != expected_query.get(key, ""):
                 return False, f"LANDING_PAGE_TRACKING_GUARD_FAILED url={url} key={key} final={final_url}", results
-        if STALE_PROMO_RE.search(body):
-            return False, f"STALE_PROMO_CLAIM_GUARD_FAILED url={url}", results
-        if "Produtos Vivaliz" not in body and "Vivaliz" not in body:
+        text = visible_text(body)
+        if STALE_PROMO_RE.search(text):
+            return False, f"STALE_VISIBLE_PROMO_CLAIM_GUARD_FAILED url={url}", results
+        if "Vivaliz" not in text:
             return False, f"LANDING_PAGE_CONTENT_GUARD_FAILED url={url}", results
         results.append((url, code, final_url))
     return True, "", results
@@ -206,8 +232,7 @@ def fetch_compra_action(ga, customer_id: str):
             """,
         )
     )
-    matches = [r for r in rows if r.conversion_action.name.strip().casefold() == "compra"]
-    return matches
+    return [r for r in rows if r.conversion_action.name.strip().casefold() == "compra"]
 
 
 def fetch_purchase_goal(ga, customer_id: str):
@@ -231,8 +256,7 @@ def fetch_perf_metrics(ga, customer_id: str, campaign_id: int, start_date: str, 
         ga.search(
             customer_id=customer_id,
             query=f"""
-              SELECT campaign.id, metrics.impressions, metrics.clicks,
-                     metrics.cost_micros
+              SELECT campaign.id, metrics.impressions, metrics.clicks, metrics.cost_micros
               FROM campaign
               WHERE campaign.id = {campaign_id}
                 AND segments.date BETWEEN '{start_date}' AND '{end_date}'
@@ -254,8 +278,7 @@ def fetch_compra_metrics(ga, customer_id: str, campaign_id: int, start_date: str
         ga.search(
             customer_id=customer_id,
             query=f"""
-              SELECT segments.conversion_action_name,
-                     metrics.conversions, metrics.conversions_value
+              SELECT segments.conversion_action_name, metrics.conversions, metrics.conversions_value
               FROM campaign
               WHERE campaign.id = {campaign_id}
                 AND segments.date BETWEEN '{start_date}' AND '{end_date}'
@@ -372,7 +395,6 @@ def main() -> int:
         if len(urls) != 1:
             return fail("FINAL_URL_GUARD_FAILED ad_id=" + str(row.ad_group_ad.ad.id) + " count=" + str(len(urls)))
         actual_urls.append(urls[0])
-
     if {normalized_url(u) for u in actual_urls} != {normalized_url(u) for u in expected_urls}:
         return fail("FINAL_URL_SET_GUARD_FAILED")
 
@@ -394,12 +416,7 @@ def main() -> int:
             + str(bool(compra.include_in_conversions_metric)).lower()
         )
     if compra.type.name != "GOOGLE_ANALYTICS_4_PURCHASE" or compra.category.name != "PURCHASE":
-        return fail(
-            "PRIMARY_PURCHASE_CONVERSION_GUARD_FAILED type="
-            + compra.type.name
-            + " category="
-            + compra.category.name
-        )
+        return fail("PRIMARY_PURCHASE_CONVERSION_GUARD_FAILED type=" + compra.type.name + " category=" + compra.category.name)
 
     purchase_goals = fetch_purchase_goal(ga, customer_id)
     if len(purchase_goals) != 1 or not bool(purchase_goals[0].customer_conversion_goal.biddable):
@@ -407,16 +424,14 @@ def main() -> int:
 
     for row in ads:
         ps = row.ad_group_ad.policy_summary
-        approval = ps.approval_status.name
-        review = ps.review_status.name
-        if approval != "APPROVED" or review != "REVIEWED":
+        if ps.approval_status.name != "APPROVED" or ps.review_status.name != "REVIEWED":
             return fail(
                 "AD_POLICY_GUARD_FAILED ad_id="
                 + str(row.ad_group_ad.ad.id)
                 + " approval="
-                + approval
+                + ps.approval_status.name
                 + " review="
-                + review
+                + ps.review_status.name
             )
 
     today_perf = fetch_perf_metrics(ga, customer_id, campaign_id, today, today)
@@ -481,7 +496,7 @@ def main() -> int:
             f"review={ps.review_status.name}:status={row.ad_group_ad.status.name}:final_url={list(row.ad_group_ad.ad.final_urls)[0]}"
         )
 
-    # User guardrail is STRICTLY greater than BRL 12.00, never >=.
+    # The user's guardrail is STRICTLY greater than BRL 12.00, never >=.
     if lifetime_d["cost_brl"] > NO_CONVERSION_PAUSE_THRESHOLD_BRL and lifetime_conversions <= 0:
         return fail(
             "NO_CONVERSION_SPEND_GUARD_FAILED spend_brl="
@@ -490,8 +505,7 @@ def main() -> int:
             + f"{lifetime_conversions:.4f}"
         )
 
-    changed = enable_everything(client, customer_id, c.campaign.resource_name, groups, ads)
-    changed = ensure_campaign_enabled(client, customer_id, c.campaign.resource_name, c.campaign.status.name) or changed
+    changed = enable_everything(client, customer_id, c.campaign.resource_name, c.campaign.status.name, groups, ads)
     if changed:
         print("ACTION=ENABLED_HEALTHY")
         print("campaign_status_final=ENABLED")
