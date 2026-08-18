@@ -1,7 +1,7 @@
 # Histórico de Agentes Shopee — ShopVivaliz
 
 **Repositório:** `fredmourao-ai/site-shopvivaliz`  
-**Última atualização:** 2026-08-16  
+**Última atualização:** 2026-08-18  
 **Branch de origem:** `claude/guth-portfolio-access-81jjq2`
 
 > Documento de consulta para agentes. Descreve o que foi implementado, como usar, quais secrets são necessários e quais limitações existem.
@@ -1018,3 +1018,48 @@ push enviada neste ciclo — nenhum dos critérios de aviso definidos (workflows
 artefato novo com erro diferente, execução de `shopee-production-seo.yml` com apply real
 bem-sucedido) ocorreu; as falhas do master pipeline são de outra rotina e não alteram essa
 avaliação. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos 19–27.
+
+### 9.24 Atualização — ciclo de 2026-08-18 (~07h UTC), 29º ciclo — estado idêntico ao ciclo 28; achado de processo sobre módulos CTR mortos
+
+Checagem completa via `git fetch origin main` (HEAD desta sessão confirmado idêntico a `origin/main`,
+`fdd07eb`) e `mcp__github__actions_list`/`get_job_logs`, sem depender do sandbox local para
+credenciais (`env | grep -iE "SHOPEE|TINY|OLIST"` continua vazio aqui, como esperado). `git log
+e7e5ad3..HEAD -- '*shopee*' '*Shopee*'` não retorna nenhum commit — os 10 commits novos desde o
+ciclo 28 (`aad72f5`..`fdd07eb`) são todos de outras rotinas (home, deploy, sync, admin). `listings/`
+continua parado em `shopee-listings-20260726-080756.json` — **23 dias** sem extração de catálogo
+pela via antiga (Tiny). `.github/workflows/` continua só com `shopee-optimizer-safety.yml`/
+`shopee-production-seo.yml`/`shopee-runtime-health.yml` sob Shopee; o par
+`fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` segue ausente.
+
+`shopee-production-seo.yml` segue com as mesmas 5 execuções de 2026-07-30 (mesmos IDs dos ciclos
+anteriores: `30585266165`, `30571531668`, `30571478470`, `30571242284`, `30570700034`), todas
+`conclusion: failure`, sem execução nova (esperado — exige `workflow_dispatch` manual com frase de
+confirmação). `shopee-runtime-health.yml` seguiu rodando a cada 6h via `schedule`; a execução mais
+recente (`32109701975`, 2026-08-18T07:04:11Z, `conclusion: success`, job "Verify canonical VM
+credentials and catalog read") confirma por log real o mesmo estado dos ciclos 26-28:
+`{"catalog_read": true, "detail_read": true, "status": "ok", "credential_presence":
+{"SHOPEE_ACCESS_TOKEN": true, "SHOPEE_PARTNER_ID": true, "SHOPEE_PARTNER_KEY": true,
+"SHOPEE_REFRESH_TOKEN": true, "SHOPEE_SHOP_ID": true}}`, com 5 `sample_item_ids` reais.
+
+**Achado de processo (não estrutural, não muda a avaliação):** um grep mais amplo desta rotina, em
+todo `scripts/` (não só nos arquivos `shopee_*.py` já conhecidos), encontrou
+`scripts/ia/analytics/ctr_monitor.py` (`analyze_shopee_metrics()`) e `scripts/analytics/performance_tracker.py`,
+que à primeira vista parecem implementar a análise de CTR que os ciclos 9.7+ concluíram não existir.
+Inspeção confirma que são código morto, não uma integração real: `analyze_shopee_metrics()` espera
+receber `metrics` de `ShopeeClient.get_product_metrics()`, mas esse método **não existe** em
+`scripts/utils/shopee_client.py` nem em nenhum outro arquivo do repo (`grep -r "def get_product_metrics"`
+não retorna nada); o único chamador de `ctr_monitor`/`analyze_shopee_metrics` é
+`scripts/ia_pipeline_main.py`, que por sua vez não é referenciado por nenhum workflow, crontab ou doc
+(`grep -rl ia_pipeline_main` só encontra o próprio arquivo). Ou seja: módulo aspiracional, nunca
+executado em produção, sem fonte de dados real por trás — reconfirma, não contradiz, o achado
+estrutural das seções 9.7/9.8 (nenhum endpoint de analytics do Shopee Open Platform integrado).
+Registrado aqui para que um agente futuro que encontre esses arquivos não precise repetir a
+investigação.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. Nenhuma notificação
+push enviada neste ciclo — nenhum dos critérios de aviso definidos (workflows Tiny recriados,
+artefato novo com erro diferente, execução de `shopee-production-seo.yml` com apply real
+bem-sucedido) ocorreu; o achado sobre `ctr_monitor.py` é código morto pré-existente, não uma
+mudança de estado. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos
+19–28.
