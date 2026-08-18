@@ -1,0 +1,5 @@
+{
+  "action": "health",
+  "requested_at": "2026-08-18T23:03:30Z",
+  "reason": "Observable Fred-Win private relay health check to bypass connector run-list limitation"
+}
