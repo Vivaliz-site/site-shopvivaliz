@@ -1,5 +1,8 @@
-checked_at_utc=2026-08-18T00:58:52Z
+checked_at_utc=2026-08-18T00:59:58Z
 script_exit_code=0
+conversion_candidate=www.shopvivaliz.com.br (web) purchase:id=7630829260:resource=customers/5283091103/conversionActions/7630829260:status=ENABLED:primary=true:included=true:type=GOOGLE_ANALYTICS_4_PURCHASE:origin=WEBSITE:category=PURCHASE
+conversion_candidate=Shopvivaliz (web) manual_event_PURCHASE:id=7630858749:resource=customers/5283091103/conversionActions/7630858749:status=ENABLED:primary=false:included=false:type=GOOGLE_ANALYTICS_4_CUSTOM:origin=WEBSITE:category=PURCHASE
+purchase_customer_goal=category=PURCHASE:origin=WEBSITE:biddable=true
 ACTION=PAUSED
 PAUSE_REASON=PURCHASE_CONVERSION_GUARD_FAILED compra_count=0
 RESULT=PAUSED_GUARD_FAILED
