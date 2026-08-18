@@ -301,23 +301,40 @@ function installMobileNav() {
     document.body.appendChild(nav);
   }
 
-  nav.innerHTML = links.map(function (link) {
+  var navHtml = links.map(function (link) {
     var attrs = link.active ? ' aria-current="page" class="is-active"' : '';
     var badge = link.badge > 0 ? '<span class="nav-badge" aria-label="' + link.badge + ' itens no carrinho" style="position:absolute;top:2px;right:18px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:#ef4444;color:#fff;font-size:10px;line-height:16px;font-weight:900;box-shadow:0 8px 16px rgba(239,68,68,.28);">' + link.badge + '</span>' : '';
     return '<a href="' + link.href + '" style="position:relative;"' + attrs + ' data-mobile-nav="' + link.label.toLowerCase().replace(/\s+/g, '-') + '"><span class="nav-icon" aria-hidden="true">' + link.icon + '</span><span>' + link.label + '</span>' + badge + '</a>';
   }).join('');
+  var navSignature = links.map(function (link) {
+    return [link.href, link.label, link.active ? '1' : '0', String(link.badge || 0)].join('::');
+  }).join('|');
 
-  nav.querySelectorAll('a[data-mobile-nav="liz/ajuda"]').forEach(function (link) {
-    link.addEventListener('click', function (event) {
+  // Mobile browsers can cancel a tap if the tapped node is replaced between
+  // touchstart and click. The MutationObserver below intentionally refreshes
+  // responsive UI after DOM changes, so keep the bottom nav stable and only
+  // rewrite its HTML when route/cart state really changed.
+  if (nav.dataset.svNavSignature !== navSignature || nav.innerHTML !== navHtml) {
+    nav.innerHTML = navHtml;
+    nav.dataset.svNavSignature = navSignature;
+  }
+
+  if (nav.dataset.svClickBound !== '1') {
+    nav.addEventListener('click', function (event) {
+      var target = event.target;
+      var link = target && typeof target.closest === 'function'
+        ? target.closest('a[data-mobile-nav]')
+        : null;
+      if (!link || !nav.contains(link)) return;
+      if (link.getAttribute('data-mobile-nav') !== 'liz/ajuda') return;
       var launcher = document.getElementById('sv-liz-launcher');
-      if (!launcher) {
-        return;
-      }
+      if (!launcher) return;
       event.preventDefault();
       event.stopPropagation();
       launcher.click();
-    });
-  });
+    }, true);
+    nav.dataset.svClickBound = '1';
+  }
 }
 function updatePageState() {
   var body = document.body;
