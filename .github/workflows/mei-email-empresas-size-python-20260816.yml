@@ -1,0 +1,62 @@
+name: MEI email empresas size Python 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/mei-email-empresas-size-python-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Read relation metadata
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          df -h /
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import psycopg
+          from psycopg.rows import dict_row
+          from app.config import settings
+          conn=psycopg.connect(settings.database_url, autocommit=True, row_factory=dict_row, connect_timeout=15)
+          with conn.cursor() as cur:
+              cur.execute("set statement_timeout='10000ms'")
+              cur.execute("""
+                select c.reltuples::bigint as estimated_rows,
+                       pg_relation_size(c.oid) as table_bytes,
+                       pg_indexes_size(c.oid) as indexes_bytes,
+                       pg_total_relation_size(c.oid) as total_bytes
+                  from pg_class c
+                  join pg_namespace n on n.oid=c.relnamespace
+                 where n.nspname='mei_email' and c.relname='empresas'
+              """)
+              print('RELATION',dict(cur.fetchone()))
+              cur.execute("""
+                select indexname,
+                       pg_relation_size((quote_ident(schemaname)||'.'||quote_ident(indexname))::regclass) as bytes,
+                       indexdef
+                  from pg_indexes
+                 where schemaname='mei_email' and tablename='empresas'
+                 order by bytes desc
+              """)
+              for r in cur.fetchall(): print('INDEX',dict(r))
+          conn.close()
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

@@ -1,0 +1,115 @@
+name: Automation Exchange direct module check 20260818 1059
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-automation-exchange-directmodule-20260818-1059.yml']
+permissions:
+  contents: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Install Exchange module safely and inspect restriction
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          set +e
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=60 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF' > reports/automation-exchange-directmodule-20260818-1059.txt 2>&1
+          set -u
+          echo "CHECK_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          sudo systemctl kill --kill-who=all --signal=SIGKILL mei-mg-email-worker.service >/dev/null 2>&1 || true
+          sudo systemctl stop mei-mg-email-worker.service >/dev/null 2>&1 || true
+          sudo install -d -m 0750 -o ubuntu -g ubuntu /var/lib/mei-mg-email
+          if [ ! -f /var/lib/mei-mg-email/sender_blocked.pause ]; then
+            printf '%s\n' 'sender=naoresponda@dev.shopvivaliz.com.br' 'source=automation_directmodule_20260818_1059' 'resume_allowed=false' | sudo tee /var/lib/mei-mg-email/sender_blocked.pause >/dev/null
+            sudo chown ubuntu:ubuntu /var/lib/mei-mg-email/sender_blocked.pause
+            sudo chmod 0640 /var/lib/mei-mg-email/sender_blocked.pause
+          fi
+          echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo 'SENTINEL=present'
+          echo "PWSH=$(command -v pwsh 2>/dev/null || echo missing)"
+          if ! command -v pwsh >/dev/null 2>&1; then
+            echo 'RESTRICTION_RESULT=uncertain reason=pwsh_missing'
+            exit 0
+          fi
+          stale="$(pgrep -af 'Install-Module ExchangeOnlineManagement|Install-PSResource ExchangeOnlineManagement' | awk '{print $1}' | tr '\n' ' ' || true)"
+          if [ -n "$stale" ]; then
+            echo "STALE_EXO_INSTALL_PIDS=$stale"
+            for pid in $stale; do kill -TERM "$pid" 2>/dev/null || true; done
+            sleep 2
+            for pid in $stale; do kill -KILL "$pid" 2>/dev/null || true; done
+          fi
+          mod="$(pwsh -NoProfile -Command '$m=Get-Module -ListAvailable -Name ExchangeOnlineManagement | Sort-Object Version -Descending | Select-Object -First 1; if($m){$m.Version.ToString()}else{"missing"}' 2>&1)"
+          echo "EXO_MODULE_BEFORE=$mod"
+          if [ "$mod" = "missing" ] || [ -z "$mod" ]; then
+            echo 'EXO_INSTALL_METHOD=psresource'
+            timeout 180s pwsh -NoProfile -Command '$ErrorActionPreference="Stop"; if(Get-Command Install-PSResource -ErrorAction SilentlyContinue){ Install-PSResource ExchangeOnlineManagement -Scope CurrentUser -TrustRepository -Quiet -Reinstall } else { exit 3 }' >/tmp/exo-install-psresource.log 2>&1
+            psr_rc=$?
+            echo "EXO_PSRESOURCE_RC=$psr_rc"
+            tail -n 20 /tmp/exo-install-psresource.log 2>/dev/null || true
+          fi
+          mod="$(pwsh -NoProfile -Command '$m=Get-Module -ListAvailable -Name ExchangeOnlineManagement | Sort-Object Version -Descending | Select-Object -First 1; if($m){$m.Version.ToString()}else{"missing"}' 2>&1)"
+          if [ "$mod" = "missing" ] || [ -z "$mod" ]; then
+            echo 'EXO_INSTALL_METHOD=direct_nupkg'
+            rm -rf /tmp/exo-nupkg /tmp/exo.nupkg
+            mkdir -p /tmp/exo-nupkg
+            if timeout 120s curl -fL --retry 2 --connect-timeout 15 -A 'Mozilla/5.0' https://www.powershellgallery.com/api/v2/package/ExchangeOnlineManagement -o /tmp/exo.nupkg; then
+              python3 -m zipfile -e /tmp/exo.nupkg /tmp/exo-nupkg
+              nuspec="$(find /tmp/exo-nupkg -maxdepth 1 -name '*.nuspec' | head -n1)"
+              ver="$(sed -n 's:.*<version>\([^<]*\)</version>.*:\1:p' "$nuspec" | head -n1)"
+              echo "EXO_NUPKG_VERSION=$ver"
+              dest="$HOME/.local/share/powershell/Modules/ExchangeOnlineManagement/$ver"
+              mkdir -p "$dest"
+              cp -a /tmp/exo-nupkg/. "$dest"/
+            else
+              echo 'EXO_NUPKG_DOWNLOAD_FAILED=true'
+            fi
+          fi
+          mod="$(pwsh -NoProfile -Command '$m=Get-Module -ListAvailable -Name ExchangeOnlineManagement | Sort-Object Version -Descending | Select-Object -First 1; if($m){$m.Version.ToString()}else{"missing"}' 2>&1)"
+          echo "EXO_MODULE_AFTER=$mod"
+          if [ "$mod" = "missing" ] || [ -z "$mod" ]; then
+            echo 'RESTRICTION_RESULT=uncertain reason=exo_module_missing_after_install'
+            exit 0
+          fi
+          cd /home/ubuntu/mei-mg-email
+          set +e
+          out="$(timeout 240s pwsh -NoProfile -File ./scripts/desbloquear_exchange_app_cert.ps1 2>&1)"
+          rc=$?
+          set -e
+          printf '%s\n' "$out" | grep -E 'EXCHANGE_(APP_ONLY_CONNECTED|SENDER_NOT_BLOCKED|SENDER_BLOCKED|UNBLOCK_NOT_EXECUTED)|WORKER_RESUME_ALLOWED' || true
+          if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q 'EXCHANGE_SENDER_NOT_BLOCKED'; then
+            echo 'RESTRICTION_RESULT=not_blocked'
+          elif [ "$rc" -eq 2 ] && printf '%s\n' "$out" | grep -q 'EXCHANGE_SENDER_BLOCKED'; then
+            echo 'RESTRICTION_RESULT=blocked'
+          else
+            echo "RESTRICTION_RESULT=uncertain rc=$rc"
+            printf '%s\n' "$out" | tail -n 40 | sed -E 's/(Bearer )[A-Za-z0-9._-]+/\1[redacted]/g'
+          fi
+          echo "WORKER_FINAL=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo 'SENTINEL_FINAL=present'; else echo 'SENTINEL_FINAL=absent'; fi
+          EOF
+          rc=$?
+          set -e
+          echo "SSH_RC=$rc" >> reports/automation-exchange-directmodule-20260818-1059.txt
+      - name: Persist report
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/automation-exchange-directmodule-20260818-1059.txt
+          git commit -m 'ops: record Exchange direct module check 20260818-1059' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

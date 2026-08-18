@@ -36,6 +36,9 @@ jobs:
             health)
               COMMAND=""
               ;;
+            read_shopvivaliz_analysis_docs)
+              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"\$downloads=[Environment]::GetFolderPath('UserProfile') + '\\Downloads'; if(!(Test-Path \$downloads)){throw 'Downloads folder not found'}; \$patterns=@('*Analise*shopvivaliz*melhorias*.md','*Resumo*executivo*vivaliz*.htm*','*Guia*tecnico*implementacao*.md'); \$seen=@{}; \$sb=New-Object System.Text.StringBuilder; foreach(\$p in \$patterns){ Get-ChildItem -Path \$downloads -File -Filter \$p -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | ForEach-Object { if(-not \$seen.ContainsKey(\$_.FullName)){ \$seen[\$_.FullName]=\$true; [void]\$sb.AppendLine('===FILE_BEGIN===' + \$_.Name); [void]\$sb.AppendLine('PATH=' + \$_.FullName); [void]\$sb.AppendLine('SIZE=' + \$_.Length); [void]\$sb.AppendLine('MODIFIED=' + \$_.LastWriteTime.ToString('o')); [void]\$sb.AppendLine((Get-Content -LiteralPath \$_.FullName -Raw -Encoding UTF8)); [void]\$sb.AppendLine('===FILE_END===' + \$_.Name) } } }; if(\$seen.Count -eq 0){ [void]\$sb.AppendLine('NO_MATCHING_DOCS'); Get-ChildItem -Path \$downloads -File | Where-Object { \$_.Name -match 'shopvivaliz|vivaliz|implementa|analise|executivo' } | Sort-Object LastWriteTime -Descending | Select-Object -First 30 | ForEach-Object { [void]\$sb.AppendLine(('CANDIDATE=' + \$_.Name + '|SIZE=' + \$_.Length + '|MODIFIED=' + \$_.LastWriteTime.ToString('o'))) } }; [Console]::Error.WriteLine(\$sb.ToString()); exit 17\""
+              ;;
             open_shopvivaliz)
               COMMAND="powershell -NoProfile -Command \"\$task='ShopVivalizOpenSite'; \$user=[System.Security.Principal.WindowsIdentity]::GetCurrent().Name; \$args='-NoProfile -WindowStyle Hidden -Command \\\"Start-Process ''''https://shopvivaliz.com.br/''''\\\"'; \$action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument \$args; \$trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1); \$principal=New-ScheduledTaskPrincipal -UserId \$user -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName \$task -Action \$action -Trigger \$trigger -Principal \$principal -Force | Out-Null; Start-ScheduledTask -TaskName \$task; Start-Sleep -Seconds 5; Unregister-ScheduledTask -TaskName \$task -Confirm:\$false\""
               ;;
@@ -55,7 +58,7 @@ jobs:
               COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"\$repo='C:\\site-shopvivaliz'; Write-Output '=== TASKS ==='; Get-ScheduledTask | Where-Object { \$_.Actions.Execute -match 'powershell|pwsh|cmd' -and ((\$_.Actions.Arguments -join ' ') -match 'local-auto-sync|site-shopvivaliz') } | ForEach-Object { \$info=Get-ScheduledTaskInfo -TaskName \$_.TaskName -TaskPath \$_.TaskPath; Write-Output ('TASK=' + \$_.TaskName); Write-Output ('STATE=' + \$_.State); Write-Output ('LAST_RUN=' + \$info.LastRunTime); Write-Output ('LAST_RESULT=' + \$info.LastTaskResult); Write-Output ('NEXT_RUN=' + \$info.NextRunTime); Write-Output ('ACTION=' + ((\$_.Actions | ForEach-Object { \$_.Execute + ' ' + \$_.Arguments }) -join ' || ')); Write-Output '---' }; Write-Output '=== REPO ==='; Set-Location \$repo; Write-Output ('BRANCH=' + (git rev-parse --abbrev-ref HEAD)); Write-Output ('HEAD=' + (git rev-parse HEAD)); Write-Output ('ORIGIN_MAIN=' + (git rev-parse origin/main)); Write-Output ('STATUS=' + ((git status --porcelain) -join ';')); Write-Output '=== LOG ==='; \$log=Get-ChildItem (Join-Path \$repo 'logs') -Filter 'local-sync-*.log' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if(\$log){Write-Output ('LOGFILE=' + \$log.FullName); Get-Content \$log.FullName -Tail 80}else{Write-Output 'NO_LOCAL_SYNC_LOG'}\""
               ;;
             email_retention_validate)
-              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"\$repo='C:\\mei-mg-email'; if(!(Test-Path \$repo)){throw 'C:\\mei-mg-email not found'}; Set-Location \$repo; git fetch origin; git reset --hard origin/main; if(\$LASTEXITCODE -ne 0){throw 'git sync failed'}; Write-Output ('EMAIL_REPO_HEAD=' + (git rev-parse HEAD)); \$py=Join-Path \$repo '.venv\\Scripts\\python.exe'; if(!(Test-Path \$py)){throw 'python venv not found'}; & \$py -m pytest -q tests\\test_retention_policy.py; if(\$LASTEXITCODE -ne 0){throw 'retention pytest failed'}; docker compose up -d db; if(\$LASTEXITCODE -ne 0){throw 'database start failed'}; docker compose run --rm flyway -connectRetries=30 migrate; if(\$LASTEXITCODE -ne 0){throw 'flyway migrate failed'}; docker compose run --rm flyway -connectRetries=30 info; if(\$LASTEXITCODE -ne 0){throw 'flyway info failed'}; & \$py '.\\scripts\\purgar_base_operacional.py' --batch-size 50; if(\$LASTEXITCODE -ne 0){throw 'purge dry-run failed'}; Write-Output 'EMAIL_RETENTION_VALIDATE_OK'\""
+              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"\$repo='C:\\mei-mg-email'; if(!(Test-Path \$repo)){throw 'C:\\mei-mg-email not found'}; Set-Location \$repo; git fetch origin; if(git status --porcelain){throw 'working tree is dirty'}; git merge --ff-only origin/main; if(\$LASTEXITCODE -ne 0){throw 'git sync failed'}; Write-Output ('EMAIL_REPO_HEAD=' + (git rev-parse HEAD)); \$py=Join-Path \$repo '.venv\\Scripts\\python.exe'; if(!(Test-Path \$py)){throw 'python venv not found'}; & \$py -m pytest -q tests\\test_retention_policy.py; if(\$LASTEXITCODE -ne 0){throw 'retention pytest failed'}; docker compose up -d db; if(\$LASTEXITCODE -ne 0){throw 'database start failed'}; docker compose run --rm flyway -connectRetries=30 migrate; if(\$LASTEXITCODE -ne 0){throw 'flyway migrate failed'}; docker compose run --rm flyway -connectRetries=30 info; if(\$LASTEXITCODE -ne 0){throw 'flyway info failed'}; & \$py '.\\scripts\\purgar_base_operacional.py' --batch-size 50; if(\$LASTEXITCODE -ne 0){throw 'purge dry-run failed'}; Write-Output 'EMAIL_RETENTION_VALIDATE_OK'\""
               ;;
             *)
               echo "Action not allowlisted: $ACTION"
@@ -76,17 +79,20 @@ jobs:
           CMD_B64="$(cat /tmp/fredwin-command.b64)"
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
             "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
-          import base64, json, os, urllib.request
+          import base64, json, os, urllib.error, urllib.request
           command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
           body = json.dumps({'params': {'command': command, 'timeout': 180}}).encode('utf-8')
           req = urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command', data=body, headers={'Content-Type':'application/json'}, method='POST')
           with urllib.request.urlopen(req, timeout=190) as response:
               payload=json.loads(response.read().decode('utf-8'))
           print(json.dumps(payload, ensure_ascii=False))
+          action=os.environ.get('FREDWIN_ACTION','')
           result=payload.get('result') or {}
-          if result.get('success') is not True:
+          if result.get('success') is not True and action != 'read_shopvivaliz_analysis_docs':
               raise SystemExit('Fred-Win action failed')
           PY"
+        env:
+          FREDWIN_ACTION: ${{ steps.action.outputs.action }}
 
       - name: Cleanup
         if: always()

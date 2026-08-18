@@ -64,7 +64,11 @@ $pagePath = (string)(parse_url($pagePath, PHP_URL_PATH) ?: '/');
 $pagePath = '/' . ltrim(substr($pagePath, 0, 240), '/');
 $itemCount = max(0, min(100, (int)($input['item_count'] ?? 0)));
 $clientId = trim((string)($input['client_id'] ?? ''));
-if (!preg_match('/^[a-f0-9-]{16,64}$/', $clientId)) {
+// Accepts the randomId() UUID/hex fallback used without consent, and the
+// real GA4 client_id format ("digits.digits", optionally "|session_id")
+// that funnelClientId() in js/shopvivaliz-google-events.js sends whenever
+// analytics consent was granted and a _ga cookie already exists.
+if (!preg_match('/^(?:[a-f0-9-]{16,64}|\d+\.\d+(?:\|[A-Za-z0-9._$-]{1,96})?)$/', $clientId)) {
     svfe_reply(422, ['ok' => false, 'error' => 'invalid_client_id']);
 }
 

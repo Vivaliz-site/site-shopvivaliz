@@ -1,0 +1,56 @@
+name: Cloudflare WWW Preserve Path Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cloudflare-www-preserve-path-once.yml'
+      - 'ops/cloudflare-www-preserve-path-once.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-www-preserve-path-once
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Patch and verify www redirect
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CF_TOKEN:-}" ]; then
+            echo 'CLOUDFLARE_API_TOKEN missing' >&2
+            exit 1
+          fi
+
+          API='https://api.cloudflare.com/client/v4'
+          AUTH="Authorization: Bearer $CF_TOKEN"
+          ZONE='shopvivaliz.com.br'
+          PHASE='http_request_dynamic_redirect'
+
+          zones=$(curl -sS --fail -H "$AUTH" "$API/zones?name=$ZONE")
+          zone_id=$(printf '%s' "$zones" | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d.get("result") or []; print(r[0]["id"] if d.get("success") and r else "")')
+          test -n "$zone_id"
+
+          entry=$(curl -sS --fail -H "$AUTH" "$API/zones/$zone_id/rulesets/phases/$PHASE/entrypoint")
+          ruleset_id=$(printf '%s' "$entry" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("result") or {}).get("id", ""))')
+          test -n "$ruleset_id"
+          rule_id=$(printf '%s' "$entry" | python3 -c 'import json,sys; d=json.load(sys.stdin); rules=(d.get("result") or {}).get("rules") or []; print(next((str(r.get("id","")) for r in rules if r.get("ref")=="shopvivaliz_www_to_catalogo" or (r.get("action")=="redirect" and "www.shopvivaliz.com.br" in str(r.get("expression","")))), ""))')
+          test -n "$rule_id" || { echo 'Existing www redirect rule not found' >&2; exit 1; }
+
+          payload=$(python3 -c 'import json; print(json.dumps({"ref":"shopvivaliz_www_to_catalogo","expression":"http.host eq \"www.shopvivaliz.com.br\"","description":"Redirect legacy ShopVivaliz www host to canonical host preserving path and query","action":"redirect","action_parameters":{"from_value":{"target_url":{"expression":"concat(\"https://shopvivaliz.com.br\", http.request.uri.path)"},"status_code":301,"preserve_query_string":True}},"enabled":True}))')
+
+          result=$(curl -sS --fail -X PATCH -H "$AUTH" -H 'Content-Type: application/json' \
+            "$API/zones/$zone_id/rulesets/$ruleset_id/rules/$rule_id" --data "$payload")
+          printf '%s' "$result" | python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get("success") is True else 1)'
+
+          verify=$(curl -sS --fail -H "$AUTH" "$API/zones/$zone_id/rulesets/phases/$PHASE/entrypoint")
+          printf '%s' "$verify" | python3 -c 'import json,sys; d=json.load(sys.stdin); rules=(d.get("result") or {}).get("rules") or []; wanted=[r for r in rules if r.get("ref")=="shopvivaliz_www_to_catalogo"]; r=wanted[0] if wanted else {}; fv=((r.get("action_parameters") or {}).get("from_value") or {}); tu=(fv.get("target_url") or {}); ok=(r.get("action")=="redirect" and r.get("expression")=="http.host eq \"www.shopvivaliz.com.br\"" and tu.get("expression")=="concat(\"https://shopvivaliz.com.br\", http.request.uri.path)" and fv.get("status_code")==301 and fv.get("preserve_query_string") is True and r.get("enabled", True) is True); print(json.dumps({"www_redirect_preserves_path_query":ok})); raise SystemExit(0 if ok else 1)'

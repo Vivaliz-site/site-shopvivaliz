@@ -6,10 +6,13 @@ on:
     paths:
       - "ops/google-ads-antique-decore-status.json"
       - ".github/workflows/google-ads-antique-decore-status.yml"
+      - "scripts/google_ads_antique_decore_status.py"
+      - "scripts/google_ads_antique_decore_automation.py"
+      - "scripts/google_ads_campaign_live_ready.json"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   status:
@@ -23,52 +26,41 @@ jobs:
       GOOGLE_ADS_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
       GOOGLE_ADS_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
       GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
-      ENABLE_IF_APPROVED: "yes"
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate live Antique and Decore landing pages from production VM
-        shell: bash
-        env:
-          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
-          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
-        run: |
-          set -euo pipefail
-          test -n "$ORACLE_VM_SSH_KEY"
-          test -n "$ORACLE_VM_KNOWN_HOSTS"
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-          ssh \
-            -o BatchMode=yes \
-            -o ConnectTimeout=15 \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
-          set -euo pipefail
-          tmpdir="$(mktemp -d /tmp/shopvivaliz-ads-landing.XXXXXX)"
-          trap 'rm -rf -- "$tmpdir"' EXIT
-          idx=0
-          for url in \
-            'https://shopvivaliz.com.br/catalogo?q=antique' \
-            'https://shopvivaliz.com.br/catalogo?q=decore'
-          do
-            idx=$((idx + 1))
-            body="$tmpdir/page-$idx.html"
-            code="$(curl --silent --show-error --location --max-time 20 --output "$body" --write-out '%{http_code}' "$url")"
-            test "$code" = '200' || { echo "LANDING_PAGE_GUARD_FAILED url=$url http=$code" >&2; exit 1; }
-            if grep -Eiq 'VOLTEI5|VIVALIZ10|PRIMEIRA10|10%[[:space:]]*(OFF|DE DESCONTO).*(PRIMEIRA|1.?)[[:space:]]*COMPRA|5%[[:space:]]*OFF[[:space:]]*NA[[:space:]]*1|5%[[:space:]]*(OFF|DE DESCONTO).*(PRIMEIRA|1.?)[[:space:]]*COMPRA' "$body"; then
-              echo "STALE_PROMO_CLAIM_GUARD_FAILED url=$url" >&2
-              exit 1
-            fi
-            echo "LANDING_PAGE_OK url=$url http=$code stale_promo_claims=none"
-          done
-          REMOTE
-
       - name: Install Google Ads client
         run: python3 -m pip install --disable-pip-version-check google-ads
-      - name: Check policy and enable only when fully approved
-        run: python3 scripts/google_ads_antique_decore_status.py
+
+      - name: Enforce live campaign guardrails
+        shell: bash
+        run: |
+          set +e
+          python3 scripts/google_ads_antique_decore_automation.py 2>&1 | tee /tmp/google-ads-live-watch.txt
+          code=${PIPESTATUS[0]}
+          printf '%s\n' "$code" > /tmp/google-ads-live-watch.exit
+          exit "$code"
+
+      - name: Persist latest live-watch result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(cat /tmp/google-ads-live-watch.exit 2>/dev/null || printf '1')"
+          {
+            printf 'checked_at_utc=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            printf 'script_exit_code=%s\n' "$code"
+            if [ -f /tmp/google-ads-live-watch.txt ]; then
+              cat /tmp/google-ads-live-watch.txt
+            else
+              printf 'RESULT=LIVE_WATCH_OUTPUT_MISSING\n'
+            fi
+          } > ops/google-ads-antique-decore-latest.txt
+
+          if ! git diff --quiet -- ops/google-ads-antique-decore-latest.txt; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add ops/google-ads-antique-decore-latest.txt
+            git commit -m "ops: record Google Ads Antique Decore live watch"
+            git push
+          fi

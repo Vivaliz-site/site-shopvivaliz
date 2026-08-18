@@ -38,6 +38,13 @@ AddCharset UTF-8 .html .txt .php .json
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
     Header always set Content-Security-Policy "frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
+    # CSP em modo report-only (Rodada 1 de melhoria continua, 2026-08-18): o CSP acima nao tem
+    # default-src/script-src, entao hoje nao mitiga XSS (so clickjacking/injecao de <base>). Este
+    # segundo header e so-de-observacao -- nunca bloqueia nada, mesmo se a lista estiver incompleta
+    # ou errada -- e serve pra comecar o inventario de dominios de terceiros (Google Ads/GA4, Meta,
+    # TikTok Pixel, Mercado Pago, InfinitePay, Cloudflare) antes de promover um script-src real e
+    # bloqueante (isso sim e mudanca estrutural, aguardando aprovacao -- ver relatorio da Rodada 1).
+    Header always set Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://connect.facebook.net https://analytics.tiktok.com https://sdk.mercadopago.com https://http2.mlstatic.com https://checkout.infinitepay.io https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; frame-src 'self' https://sdk.mercadopago.com https://checkout.infinitepay.io"
     Header always set Cache-Control "no-store, max-age=0" env=SVRT_SENSITIVE
     Header always set Pragma "no-cache" env=SVRT_SENSITIVE
 </IfModule>
@@ -56,9 +63,20 @@ AddCharset UTF-8 .html .txt .php .json
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Canonical host migration: apex/no-www is the production domain.
+    # O host anterior so serve como entrada de compatibilidade. As rotas
+    # legadas de vitrine abaixo convergem para o catalogo atual.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
-    RewriteCond %{HTTP_HOST} ^(?:www\.shopvivaliz\.com\.br|dev\.shopvivaliz\.com\.br)$ [NC]
+    RewriteCond %{HTTP_HOST} ^www\.shopvivaliz\.com\.br$ [NC]
+    RewriteRule ^(.*)$ https://shopvivaliz.com.br/$1 [R=301,L,NE]
+
+    # Nunca encaminhar operacoes de escrita pelo host legado.
+    RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
+    RewriteCond %{HTTP_HOST} ^www\.shopvivaliz\.com\.br$ [NC]
+    RewriteRule ^ - [F,L]
+
+    # O host de desenvolvimento continua canonizado para producao preservando a rota.
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteCond %{HTTP_HOST} ^dev\.shopvivaliz\.com\.br$ [NC]
     RewriteRule ^ https://shopvivaliz.com.br%{REQUEST_URI} [R=301,L,NE]
 
     # Consolidar paginas antigas antes da regra que preserva arquivos reais.
@@ -98,10 +116,9 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
     RewriteRule ^admin/(?:menu-completo|menu-dashboard|dashboard|admin-back)\.php$ - [F,L,NC]
 
-    # URLs publicas da vitrine legada/VNDA.
-    RewriteRule ^ferramentas/?$ /catalogo?categoria=Ferramentas [R=301,L,NE]
-    RewriteRule ^arte-papelaria-e-armarinho/?$ /catalogo?categoria=Arte%2C%20Papelaria%20e%20Armarinho [R=301,L,NE]
-    RewriteRule ^produtos/([^/]+)/?$ /produto/$1 [R=301,L,NE]
+    # URLs publicas remanescentes da vitrine anterior vao para o catalogo atual.
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^(?:ferramentas|arte-papelaria-e-armarinho|produtos)(?:/.*)?$ /catalogo [R=301,L,NE,QSD,NC]
 
     # Nunca expor arquivos internos de configuracao e operacao
     RewriteRule ^config/ - [F,L]
@@ -159,14 +176,21 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{THE_REQUEST} \s/checkout\.php[\s?]
     RewriteRule ^checkout\.php$ /checkout [R=301,L]
 
+    # Compatibilidade de landing pages legadas usadas em campanhas Google Ads.
+    # Resolve diretamente pelos IDs atuais do catalogo, preservando query strings
+    # de tracking e sem alterar preco, estoque ou cadastro dos produtos.
+    RewriteRule ^produto/vaso-antique-55-75l-macchiato-japi-brown/?$ produto.php?id=341533994 [L,QSA,NC]
+    RewriteRule ^produto/vaso-decor-plantas-cilin-decore-34-28l-aco-corten-japi-168/?$ produto.php?id=350509721 [L,QSA,NC]
+
     # Nao reescrever arquivos e diretorios reais
     RewriteCond %{REQUEST_FILENAME} -f [OR]
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
 
-    # Slugs numericos podem ser IDs legados ou parte legitima do modelo (ex: TH-05).
-    # O PHP valida o slug contra o catalogo antes de decidir se deve redirecionar.
-    RewriteRule ^produto/([a-z0-9][a-z0-9\-]*-[0-9]+)/?$ produto-numeric-route.php?slug=$1 [L,QSA]
+    # Todo slug de produto passa por um guard de canonicalizacao. O PHP so
+    # redireciona aliases quando consegue provar slug historico -> SKU -> item
+    # ativo no catalogo atual; caso contrario preserva o 404 normal.
+    RewriteRule ^produto/([^/]+)/?$ produto-slug-route.php?slug=$1 [L,QSA]
 
     # Cart API endpoints
     RewriteRule ^api/cart/add/?$ api/cart/add.php [L,QSA]

@@ -158,7 +158,9 @@ class AnalyticsTracking {
                 'events' => $payload,
             ]),
             CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-            CURLOPT_URL => "https://www.google-analytics.com/mp/collect?measurement_id={$this->ga4_id}&api_secret={$ga4Secret}"
+            CURLOPT_URL => "https://www.google-analytics.com/mp/collect?measurement_id={$this->ga4_id}&api_secret={$ga4Secret}",
+            CURLOPT_CONNECTTIMEOUT => 2,
+            CURLOPT_TIMEOUT => 4,
         ]);
 
         curl_exec($ch);
@@ -198,7 +200,9 @@ class AnalyticsTracking {
                 CURLOPT_POST => true,
                 CURLOPT_POSTFIELDS => json_encode($payload),
                 CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-                CURLOPT_URL => "https://graph.facebook.com/v17.0/{$this->facebook_pixel}/events?access_token={$accessToken}"
+                CURLOPT_URL => "https://graph.facebook.com/v17.0/{$this->facebook_pixel}/events?access_token={$accessToken}",
+                CURLOPT_CONNECTTIMEOUT => 2,
+                CURLOPT_TIMEOUT => 4,
             ]);
 
             curl_exec($ch);
@@ -241,7 +245,9 @@ class AnalyticsTracking {
                 CURLOPT_HTTPHEADER => [
                     'Content-Type: application/json',
                     "Access-Token: {$accessToken}"
-                ]
+                ],
+                CURLOPT_CONNECTTIMEOUT => 2,
+                CURLOPT_TIMEOUT => 4,
             ]);
 
             curl_exec($ch);
@@ -274,17 +280,26 @@ class AnalyticsTracking {
     }
 
     private function getClientId() {
-        if (empty($_COOKIE['_ga'])) {
-            $_COOKIE['_ga'] = bin2hex(random_bytes(8));
-            setcookie('_ga', $_COOKIE['_ga'], [
-                'expires' => time() + 63072000,
-                'path' => '/',
-                'secure' => $this->isHttps(),
-                'httponly' => false,
-                'samesite' => 'Lax',
-            ]);
+        $gaCookie = trim((string)($_COOKIE['_ga'] ?? ''));
+        if ($gaCookie !== '') {
+            // GA4/gtag normally stores _ga as GA1.1.<client>.<timestamp>.
+            // Measurement Protocol expects only the numeric client_id pair.
+            if (preg_match('/^GA\d+\.\d+\.(\d+\.\d+)$/', $gaCookie, $matches) === 1) {
+                return $matches[1];
+            }
+            if (preg_match('/^\d+\.\d+$/', $gaCookie) === 1) {
+                return $gaCookie;
+            }
         }
-        return $_COOKIE['_ga'];
+
+        // Do not emit Set-Cookie from the server on public/cacheable pages.
+        // The browser GA tag owns the real _ga cookie. Until it exists, use
+        // one request-local Measurement Protocol identifier only.
+        static $ephemeralClientId = null;
+        if ($ephemeralClientId === null) {
+            $ephemeralClientId = random_int(100000000, 2147483647) . '.' . time();
+        }
+        return $ephemeralClientId;
     }
 
     private function getSessionId() {
@@ -500,5 +515,9 @@ function track_purchase_ga4_serverside($clientId, $orderId, $orderTotal, $items 
     return AnalyticsTracking::sendPurchaseEventGA4($clientId, $orderId, $orderTotal, $items);
 }
 
-// Auto-send on shutdown
-register_shutdown_function('send_analytics');
+// O envio sincrono de eventos nao transacionais e opt-in. A vitrine usa o
+// navegador (GTM/gtag) e o purchase confirmado usa sendPurchaseEventGA4().
+// Isto evita TTFB alto e eventos duplicados em todas as paginas publicas.
+if (hash_equals('1', (string)(getenv('SHOPVIVALIZ_ENABLE_SERVER_SIDE_NONPURCHASE_EVENTS') ?: '0'))) {
+    register_shutdown_function('send_analytics');
+}

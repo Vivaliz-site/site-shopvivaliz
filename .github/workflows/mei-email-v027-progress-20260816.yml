@@ -1,0 +1,37 @@
+name: MEI email V027 progress 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/mei-email-v027-progress-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect migration process and service state
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
+            echo NOW=$(date -Is)
+            echo WORKER=$(systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+            echo ---FLYWAY_DOCKER---
+            sudo docker ps --format "{{.ID}}|{{.Names}}|{{.Status}}|{{.Command}}" | grep -Ei "flyway|mei-mg-email" || true
+            echo ---RELATED_PROCESSES---
+            ps -eo pid,ppid,etime,stat,pcpu,pmem,wchan:28,cmd | grep -E "[f]lyway|[d]ocker compose run --rm flyway|[m]ei-mg-email-worker" || true
+            echo ---POSTGRES_TITLES---
+            ps -eo pid,ppid,etime,stat,pcpu,pmem,wchan:28,cmd | grep "[p]ostgres: postgres mei_mg_email" || true
+          '
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

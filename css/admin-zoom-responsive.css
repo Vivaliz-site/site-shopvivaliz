@@ -203,7 +203,9 @@ table {
   .main-content,
   .content,
   .page-content {
+    width: 100%;
     max-width: calc(100vw - 16px);
+    margin-inline: auto;
   }
 
   .dashboard-grid,
@@ -223,6 +225,62 @@ table {
   .btn-group {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  /* Compatibilidade defensiva com layouts administrativos antigos. Algumas
+     sessoes restauradas pelo navegador ainda podem conter uma sidebar fixa de
+     desktop. Em viewport de telefone ela vira uma barra horizontal e nunca
+     pode comprimir o conteudo principal para a direita. */
+  body .sidebar,
+  body .admin-sidebar {
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+  }
+
+  body .main-content,
+  body .admin-main,
+  body .admin-content,
+  body .dashboard-content {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  body .sidebar nav,
+  body .sidebar ul,
+  body .admin-sidebar nav,
+  body .admin-sidebar ul {
+    display: flex !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important;
+    gap: 5px !important;
+    width: max-content;
+    min-width: 100%;
+    margin: 0 !important;
+    padding-block: 4px !important;
+    list-style: none !important;
+  }
+
+  body .sidebar li,
+  body .admin-sidebar li {
+    flex: 0 0 auto !important;
+  }
+
+  body .sidebar a,
+  body .admin-sidebar a {
+    display: inline-flex !important;
+    align-items: center !important;
+    min-height: 40px !important;
+    padding: 8px 10px !important;
+    white-space: nowrap !important;
   }
 
   .admin-surface > div:first-child {
@@ -339,7 +397,10 @@ table {
   }
 }
 
-@media (max-width: 390px) {
+/* Telefones atuais frequentemente reportam 393-430 CSS px. O breakpoint
+   antigo de 390 deixava dois cards apertados exatamente nos aparelhos mais
+   comuns. Ate 480 px priorizamos uma coluna legivel e alvos de toque maiores. */
+@media (max-width: 480px) {
   .admin-surface .admin-overview > div:first-child {
     grid-template-columns: 1fr !important;
   }
@@ -347,6 +408,14 @@ table {
   .admin-surface .admin-overview > div:first-child > a[href="/admin/ai-image-studio/admin_dashboard.php"],
   .admin-surface .admin-overview > div:first-child > a[href="/admin/catalog-optimization/admin_catalog.php"] {
     grid-column: auto;
+  }
+
+  .admin-surface .catalog-search {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-surface .catalog-search button {
+    width: 100%;
   }
 }
 
@@ -381,5 +450,164 @@ table {
   .cards,
   .form-grid {
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+}
+
+/* sv-admin-mobile-shell-v2 */
+/* Prevent the public storefront mobile drawer from taking over Admin navigation. */
+@media (max-width: 720px) {
+  body.admin-surface {
+    overflow-x: hidden !important;
+    padding-bottom: calc(66px + env(safe-area-inset-bottom)) !important;
+  }
+
+  body.admin-surface > div:first-child {
+    min-height: 34px !important;
+    padding: 6px 10px !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+  }
+
+  body.admin-surface > div:first-child span:first-child {
+    display: none !important;
+  }
+
+  body.admin-surface > div:first-child span:last-child {
+    display: block !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    font-size: 11px !important;
+  }
+
+  body.admin-surface .navbar {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 9998 !important;
+    padding: 5px 0 !important;
+    background: #111827 !important;
+    border-bottom: 1px solid rgba(255,255,255,.10) !important;
+    backdrop-filter: none !important;
+  }
+
+  body.admin-surface .navbar .nav-inner,
+  body.admin-surface .navbar .container {
+    display: block !important;
+    width: 100% !important;
+    max-width: calc(100vw - 12px) !important;
+    min-height: 0 !important;
+    margin-inline: auto !important;
+    padding: 0 !important;
+  }
+
+  body.admin-surface .brand-link {
+    display: none !important;
+  }
+
+  body.admin-surface .navbar-menu {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 2px 0 4px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    flex-wrap: nowrap !important;
+    gap: 5px !important;
+    overscroll-behavior-inline: contain !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none !important;
+  }
+
+  body.admin-surface .navbar-menu::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  body.admin-surface .navbar-menu a {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: max-content !important;
+    min-height: 36px !important;
+    margin: 0 !important;
+    padding: 7px 9px !important;
+    border: 1px solid rgba(255,255,255,.09) !important;
+    border-radius: 9px !important;
+    background: rgba(255,255,255,.07) !important;
+    color: #fff !important;
+    font-size: 11px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+    box-shadow: none !important;
+  }
+
+  body.admin-surface .navbar-menu a[href="/auth/logout.php"] {
+    color: #fecaca !important;
+  }
+
+  body.admin-surface .catalog-header {
+    padding: 12px 0 8px !important;
+  }
+
+  body.admin-surface .catalog-header h1 {
+    max-width: 100% !important;
+    margin: 0 0 6px !important;
+    font-size: clamp(21px, 6vw, 27px) !important;
+    line-height: 1.08 !important;
+    letter-spacing: -.025em !important;
+  }
+
+  body.admin-surface .catalog-header .muted {
+    margin: 0 !important;
+    font-size: 12px !important;
+    line-height: 1.38 !important;
+  }
+
+  body.admin-surface .admin-overview {
+    margin-top: 10px !important;
+  }
+
+  body.admin-surface .admin-overview > div:first-child {
+    gap: 6px !important;
+    margin-bottom: 10px !important;
+  }
+
+  body.admin-surface .admin-overview > div:first-child > a {
+    min-height: 48px !important;
+    padding: 9px 10px !important;
+    border-radius: 9px !important;
+    font-size: 12px !important;
+  }
+
+  body.admin-surface .sv-admin-mobile-dock {
+    left: 6px !important;
+    right: 6px !important;
+    bottom: calc(5px + env(safe-area-inset-bottom)) !important;
+    gap: 4px !important;
+    padding: 5px !important;
+    border-radius: 12px !important;
+  }
+
+  body.admin-surface .sv-admin-mobile-dock a {
+    min-height: 42px !important;
+    padding: 3px 2px !important;
+    border-radius: 8px !important;
+    font-size: 9px !important;
+  }
+
+  body.admin-surface .sv-admin-mobile-dock span {
+    font-size: 16px !important;
   }
 }

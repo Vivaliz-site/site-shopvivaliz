@@ -1,0 +1,59 @@
+name: Fred-Win relay reset 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/fredwin-relay-reset-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Reset only listener 5557 sshd session and verify reconnect
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
+            set -e
+            oldpid=$(sudo lsof -t -iTCP:5557 -sTCP:LISTEN 2>/dev/null | head -n1 || true)
+            echo OLD_PID=${oldpid:-none}
+            if [ -n "$oldpid" ]; then
+              comm=$(ps -p "$oldpid" -o comm= | tr -d " ")
+              echo OLD_COMM=$comm
+              if [ "$comm" != "sshd" ]; then
+                echo REFUSE_NON_SSHD_LISTENER
+                exit 7
+              fi
+              sudo kill "$oldpid"
+            fi
+            ok=0
+            for n in 1 2 3 4 5 6; do
+              sleep 10
+              newpid=$(sudo lsof -t -iTCP:5557 -sTCP:LISTEN 2>/dev/null | head -n1 || true)
+              echo TRY=$n NEW_PID=${newpid:-none}
+              if [ -n "$newpid" ] && [ "$newpid" != "$oldpid" ]; then
+                if timeout 4 curl -fsS http://127.0.0.1:5557/health > /tmp/fredwin-health.json 2>/dev/null; then
+                  echo HEALTH_OK
+                  cat /tmp/fredwin-health.json
+                  ok=1
+                  break
+                fi
+              fi
+            done
+            if [ "$ok" -ne 1 ]; then
+              echo RELAY_NOT_HEALTHY_AFTER_RESET
+              exit 8
+            fi
+          '
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

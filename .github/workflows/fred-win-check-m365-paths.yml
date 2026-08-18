@@ -12,7 +12,7 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 6
     steps:
       - name: Configure VM key
         env:
@@ -22,19 +22,103 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Inspect direct paths
+      - name: Inspect Fred-Win M365 admin capability without secrets
         run: |
           python3 - <<'PY' > /tmp/body.json
-          import json
-          ps=r'''powershell -NoProfile -Command "$paths=@('C:\Scripts','C:\Certs','C:\site-shopvivaliz','C:\Users\FRED\Downloads','C:\Users\FRED\Documents'); foreach($p in $paths){ Write-Output ('PATH=' + $p + ';EXISTS=' + (Test-Path $p)); if(Test-Path $p){ Get-ChildItem $p -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '(?i)(Certificate|Authentication|Send-Email|Audit-Complete|MICROSOFT365|walkthrough|task)' } | ForEach-Object { Write-Output ('FILE=' + $_.FullName) } } }; Write-Output ('CER=' + (Test-Path 'C:\Certs\ShopVivalizExchangeAuth.cer')); Get-ChildItem Cert:\CurrentUser\My -ErrorAction SilentlyContinue | Where-Object { $_.Subject -match 'ShopVivalizExchangeAuth' } | ForEach-Object { Write-Output ('CERT=' + $_.Thumbprint + ';' + $_.NotAfter.ToString('o')) }"'''
-          print(json.dumps({'params':{'command':ps,'timeout':120}}))
+          import base64, json
+          script = r'''
+          $ErrorActionPreference = 'Continue'
+          Write-Output ('RUN_AS=' + [System.Security.Principal.WindowsIdentity]::GetCurrent().Name)
+          Write-Output ('HOST=' + $env:COMPUTERNAME)
+          Write-Output ('PS=' + $PSVersionTable.PSVersion.ToString())
+
+          Write-Output '=== MODULES ==='
+          $mods = @('Microsoft.Graph.Authentication','Microsoft.Graph.Applications','Microsoft.Graph','Microsoft.Entra','AzureAD','ExchangeOnlineManagement','Az.Accounts')
+          foreach ($m in $mods) {
+            $x = Get-Module -ListAvailable $m | Sort-Object Version -Descending | Select-Object -First 1
+            if ($x) { Write-Output ('MODULE=' + $m + ';VERSION=' + $x.Version) }
+            else { Write-Output ('MODULE=' + $m + ';MISSING=true') }
+          }
+
+          Write-Output '=== ENV_KEY_NAMES_ONLY ==='
+          $envFile = 'C:\site-shopvivaliz\.env.local'
+          if (Test-Path $envFile) {
+            foreach ($line in Get-Content -LiteralPath $envFile) {
+              $t = [string]$line
+              if ($t -match '^\s*#' -or $t -notmatch '=') { continue }
+              $name = ($t -split '=',2)[0].Trim()
+              if ($name -match '(?i)(AZURE|MICROSOFT|GRAPH|ENTRA|EXCHANGE)') { Write-Output ('ENVKEY=' + $name) }
+            }
+          } else { Write-Output 'ENV_LOCAL_PRESENT=false' }
+
+          Write-Output '=== CERT ==='
+          Get-ChildItem Cert:\CurrentUser\My -ErrorAction SilentlyContinue |
+            Where-Object { $_.Subject -match 'ShopVivalizExchangeAuth' } |
+            Select-Object -First 5 |
+            ForEach-Object { Write-Output ('CERT_SUBJECT=' + $_.Subject + ';THUMBPRINT=' + $_.Thumbprint + ';NOTAFTER=' + $_.NotAfter.ToString('o') + ';HASPRIVATEKEY=' + $_.HasPrivateKey) }
+
+          Write-Output '=== LOCAL_SCRIPTS ==='
+          foreach ($root in @('C:\site-shopvivaliz','C:\Scripts','C:\mei-mg-email')) {
+            Write-Output ('ROOT=' + $root + ';EXISTS=' + (Test-Path $root))
+            if (Test-Path $root) {
+              Get-ChildItem $root -File -Recurse -Depth 4 -ErrorAction SilentlyContinue |
+                Where-Object { $_.Extension -in '.ps1','.psm1','.md' -and $_.Name -match '(?i)(graph|entra|exchange|m365|microsoft365|mail|email|auth)' } |
+                Select-Object -First 100 |
+                ForEach-Object { Write-Output ('FILE=' + $_.FullName) }
+            }
+          }
+
+          Write-Output '=== GRAPH_CONTEXT ==='
+          if (Get-Command Get-MgContext -ErrorAction SilentlyContinue) {
+            try {
+              $ctx = Get-MgContext
+              if ($ctx) {
+                Write-Output ('MG_CONTEXT=true;ACCOUNT=' + $ctx.Account + ';TENANT=' + $ctx.TenantId + ';CLIENT=' + $ctx.ClientId + ';AUTHTYPE=' + $ctx.AuthType + ';CONTEXTSCOPE=' + $ctx.ContextScope)
+                Write-Output ('MG_SCOPES=' + (($ctx.Scopes | Sort-Object) -join ','))
+                try {
+                  $uri = 'https://graph.microsoft.com/v1.0/servicePrincipals?%24filter=appId%20eq%20%27a5e400f0-969e-4fbe-be61-d390cb112517%27&%24select=id,appId,displayName'
+                  $sp = Invoke-MgGraphRequest -Method GET -Uri $uri -ErrorAction Stop
+                  Write-Output ('MG_DIRECTORY_READ=ok;COUNT=' + @($sp.value).Count)
+                } catch { Write-Output ('MG_DIRECTORY_READ=failed;TYPE=' + $_.Exception.GetType().Name) }
+              } else { Write-Output 'MG_CONTEXT=false' }
+            } catch { Write-Output ('MG_CONTEXT_ERROR=' + $_.Exception.GetType().Name) }
+          } else { Write-Output 'MG_CMDLET=false' }
+
+          Write-Output '=== AZ_PS_CONTEXT ==='
+          if (Get-Command Get-AzContext -ErrorAction SilentlyContinue) {
+            try {
+              $azctx = Get-AzContext
+              if ($azctx) { Write-Output ('AZPS_CONTEXT=true;ACCOUNT=' + $azctx.Account.Id + ';TENANT=' + $azctx.Tenant.Id + ';SUB=' + $azctx.Subscription.Id) }
+              else { Write-Output 'AZPS_CONTEXT=false' }
+            } catch { Write-Output ('AZPS_CONTEXT_ERROR=' + $_.Exception.GetType().Name) }
+          } else { Write-Output 'AZPS_CMDLET=false' }
+
+          Write-Output '=== AZ_CLI_CONTEXT ==='
+          if (Get-Command az -ErrorAction SilentlyContinue) {
+            $acct = az account show --query '{tenantId:tenantId,userType:user.type,name:name}' -o json 2>$null
+            if ($LASTEXITCODE -eq 0) { Write-Output ('AZCLI_ACCOUNT=' + (($acct -join '') -replace '\s+',' ')) }
+            else { Write-Output 'AZCLI_ACCOUNT=false' }
+          } else { Write-Output 'AZ_CLI=false' }
+
+          Write-Output '=== EXO_CONTEXT ==='
+          if (Get-Command Get-ConnectionInformation -ErrorAction SilentlyContinue) {
+            try {
+              $ci = Get-ConnectionInformation -ErrorAction Stop | Select-Object -First 3 State,UserPrincipalName,TenantID,AppID
+              if ($ci) { $ci | ForEach-Object { Write-Output ('EXO_STATE=' + $_.State + ';UPN=' + $_.UserPrincipalName + ';TENANT=' + $_.TenantID + ';APPID=' + $_.AppID) } }
+              else { Write-Output 'EXO_CONTEXT=false' }
+            } catch { Write-Output ('EXO_CONTEXT_ERROR=' + $_.Exception.GetType().Name) }
+          } else { Write-Output 'EXO_CMDLET=false' }
+          '''
+          encoded = base64.b64encode(script.encode('utf-16le')).decode('ascii')
+          command = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ' + encoded
+          print(json.dumps({'params': {'command': command, 'timeout': 180}}))
           PY
           BODY_B64="$(base64 -w0 /tmp/body.json)"
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 "BODY_B64='$BODY_B64' python3 - <<'PY'
-          import os,base64,urllib.request
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=6 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "BODY_B64='$BODY_B64' python3 - <<'PY'
+          import base64, os, urllib.request
           body=base64.b64decode(os.environ['BODY_B64'])
           req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
-          with urllib.request.urlopen(req,timeout=140) as r: print(r.read().decode())
+          with urllib.request.urlopen(req,timeout=200) as r: print(r.read().decode())
           PY"
       - name: Cleanup
         if: always()

@@ -1,5 +1,5 @@
 {
   "action": "health",
-  "requested_at": "2026-08-15T00:54:30-03:00",
-  "reason": "Validate Fred-Win tunnel before editing Google Ads API contact email"
+  "requested_at": "2026-08-18T10:48:00Z",
+  "reason": "Verify Fred-Win private relay health before checking Microsoft Defender restricted sender state"
 }

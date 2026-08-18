@@ -1,0 +1,110 @@
+name: MEI email V027 direct rollout 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/mei-email-v027-direct-rollout-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rollout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Apply only V027 and restart guarded worker
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+            echo REFUSE_TRACKED_WORKTREE_CHANGES
+            git status --short --untracked-files=no
+            exit 20
+          fi
+
+          old_head=$(git rev-parse HEAD)
+          echo OLD_HEAD=$old_head
+          echo BEFORE_WORKER=$(systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo BEFORE_SENTINEL=present; else echo BEFORE_SENTINEL=absent; fi
+
+          sudo systemctl stop mei-mg-email-worker.service
+          restart_needed=1
+          finish() {
+            rc=$?
+            if [ "$restart_needed" -eq 1 ]; then
+              echo FINISH_CODE=$rc
+              sudo systemctl start mei-mg-email-worker.service || true
+            fi
+          }
+          trap finish EXIT
+
+          git fetch origin main
+          git pull --ff-only origin main
+          new_head=$(git rev-parse HEAD)
+          echo NEW_HEAD=$new_head
+          test -f db/migrations/V027__reject_invalid_email_and_optimize_suppression.sql
+          test -f worker/worker_queue_first.py
+          .venv/bin/python -m py_compile worker/worker_queue_first.py worker/worker.py app/queue_manager.py
+          echo PY_COMPILE=ok
+
+          echo ---V027_PREFLIGHT---
+          sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -P pager=off -x -c "
+            select to_regclass('mei_email.email_suppressions') as email_suppressions,
+                   to_regprocedure('mei_email.register_operational_suppression(text,citext,text,text,text,timestamp with time zone)') as register_operational_suppression,
+                   to_regclass('mei_email.empresas') as empresas,
+                   to_regclass('mei_email.envios') as envios;
+          "
+
+          echo ---APPLY_ONLY_V027_TRANSACTION---
+          sudo docker exec -i mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -1 < db/migrations/V027__reject_invalid_email_and_optimize_suppression.sql
+          echo V027_SQL_APPLIED=true
+
+          echo ---V027_VERIFY---
+          sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -P pager=off -x -c "
+            select mei_email.is_valid_email_address('valid@example.com'::citext) as valid_should_be_true,
+                   mei_email.is_valid_email_address('bad@example,com'::citext) as invalid_should_be_false,
+                   mei_email.is_valid_email_address('nulo'::citext) as nulo_should_be_false;
+          "
+          sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -P pager=off -x -c "
+            select mei_email.operational_filter_rejection_reason(
+              'ATIVA','MG','bad@example,com'::citext,false,false,true,'MEI',true
+            ) as invalid_reason;
+          "
+
+          echo ---QUEUE_INVALID_SAMPLE---
+          sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -P pager=off -x -c "
+            select e.lote_id, count(*) as invalid_pending_in_sample
+              from mei_email.envios e
+             where e.status::text in ('pendente','pending')
+               and not mei_email.is_valid_email_address(e.email)
+             group by e.lote_id
+             order by count(*) desc
+             limit 10;
+          " || true
+
+          sudo systemctl daemon-reload
+          sudo systemctl start mei-mg-email-worker.service
+          restart_needed=0
+          trap - EXIT
+          sleep 35
+
+          echo AFTER_WORKER=$(systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+          echo AFTER_PID=$(systemctl show -p MainPID --value mei-mg-email-worker.service 2>/dev/null || true)
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo AFTER_SENTINEL=present; else echo AFTER_SENTINEL=absent; fi
+          echo ---UNIT_EXEC---
+          systemctl show -p ExecStart mei-mg-email-worker.service || true
+          echo ---JOURNAL---
+          sudo journalctl -u mei-mg-email-worker.service --since "3 minutes ago" --no-pager -n 180 || true
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

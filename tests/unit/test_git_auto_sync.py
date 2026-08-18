@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 MODULE_PATH = ROOT / "git-auto-sync.py"
@@ -242,7 +243,7 @@ class SanitizedHistorySyncTests(unittest.TestCase):
         )
         self.assertEqual(self.status()["action"], "blocked-wrong-branch")
 
-    def test_health_gate_blocks_before_sync(self) -> None:
+    def test_degraded_health_is_recorded_without_blocking_recovery_sync(self) -> None:
         SYNC.check_local_health = lambda: {
             "ok": False,
             "error": "test runtime unavailable",
@@ -250,14 +251,13 @@ class SanitizedHistorySyncTests(unittest.TestCase):
 
         result = SYNC.main()
 
-        self.assertEqual(result, 5)
-        self.assertEqual(git(self.local, "rev-parse", "HEAD").stdout.strip(), self.old_sha)
+        self.assertEqual(result, 0)
+        self.assertEqual(git(self.local, "rev-parse", "HEAD").stdout.strip(), self.remote_tip)
         report = self.status()
-        self.assertFalse(report["ok"])
-        self.assertEqual(report["action"], "blocked-unhealthy-local-runtime")
-        self.assertEqual(report["health"]["status"], "failed")
+        self.assertTrue(report["ok"])
+        self.assertEqual(report["health"]["status"], "degraded")
 
-    def test_health_gate_blocks_legacy_recovery_before_branch_switch(self) -> None:
+    def test_degraded_health_does_not_block_safe_legacy_recovery(self) -> None:
         self.clone_remote_into_local()
         legacy_branch = "patch/agente-shopvivaliz-"
         git(self.local, "switch", "-c", legacy_branch, self.clean_root)
@@ -268,9 +268,38 @@ class SanitizedHistorySyncTests(unittest.TestCase):
 
         result = SYNC.main()
 
-        self.assertEqual(result, 5)
-        self.assertEqual(git(self.local, "branch", "--show-current").stdout.strip(), legacy_branch)
-        self.assertEqual(self.status()["action"], "blocked-unhealthy-local-runtime")
+        self.assertEqual(result, 0)
+        self.assertEqual(git(self.local, "branch", "--show-current").stdout.strip(), "main")
+        self.assertEqual(self.status()["health"]["status"], "degraded")
+
+    def test_fetch_retries_only_the_transient_remote_ref_lock(self) -> None:
+        command = ["git", "fetch", "--prune", "--no-tags", "origin", "main"]
+        transient = subprocess.CompletedProcess(
+            command,
+            1,
+            "",
+            "error: cannot lock ref 'refs/remotes/origin/main': is at new but expected old",
+        )
+        success = subprocess.CompletedProcess(command, 0, "", "")
+        with patch.object(SYNC, "run", side_effect=[transient, success]) as run_mock, patch.object(
+            SYNC.time, "sleep"
+        ) as sleep_mock:
+            SYNC.fetch_canonical_branch("main")
+
+        self.assertEqual(run_mock.call_count, 2)
+        sleep_mock.assert_called_once_with(1)
+
+    def test_fetch_does_not_retry_an_unknown_failure(self) -> None:
+        command = ["git", "fetch", "--prune", "--no-tags", "origin", "main"]
+        failure = subprocess.CompletedProcess(command, 1, "", "fatal: authentication failed")
+        with patch.object(SYNC, "run", return_value=failure) as run_mock, patch.object(
+            SYNC.time, "sleep"
+        ) as sleep_mock:
+            with self.assertRaisesRegex(RuntimeError, "authentication failed"):
+                SYNC.fetch_canonical_branch("main")
+
+        self.assertEqual(run_mock.call_count, 1)
+        sleep_mock.assert_not_called()
 
     def test_oracle_wrapper_does_not_stage_commit_or_push(self) -> None:
         text = (ROOT / "scripts" / "auto-sync-oracle.sh").read_text(encoding="utf-8")

@@ -1,0 +1,40 @@
+name: Fred-Win EXO WAM probe 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/fredwin-exo-wam-probe-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Probe Fred-Win through private MCP
+        run: |
+          set -euo pipefail
+          COMMAND='powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference=\"Stop\"; Write-Output (\"USER=\" + [System.Security.Principal.WindowsIdentity]::GetCurrent().Name); Write-Output (\"SESSION=\" + (Get-Process -Id $PID).SessionId); $p7=Get-Command pwsh.exe -ErrorAction SilentlyContinue; if($p7){Write-Output (\"PWSH=\" + $p7.Source)}else{Write-Output \"PWSH=missing\"}; $m=Get-Module -ListAvailable ExchangeOnlineManagement | Sort-Object Version -Descending | Select-Object -First 1; if($m){Write-Output (\"EXO_MODULE=\" + $m.Version + \"|\" + $m.Path)}else{Write-Output \"EXO_MODULE=missing\"}; Write-Output (\"EXPLORER_COUNT=\" + @(Get-Process explorer -ErrorAction SilentlyContinue).Count); Get-Process explorer -ErrorAction SilentlyContinue | Select-Object -First 3 | ForEach-Object { Write-Output (\"EXPLORER_SESSION=\" + $_.SessionId) }"'
+          CMD_B64="$(printf '%s' "$COMMAND" | base64 -w0)"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
+          import base64,json,os,urllib.request
+          command=base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode()
+          body=json.dumps({'params':{'command':command,'timeout':90}}).encode()
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=100) as r:
+              payload=json.loads(r.read().decode())
+          print(json.dumps(payload,ensure_ascii=False))
+          result=payload.get('result') or {}
+          if result.get('success') is not True: raise SystemExit(2)
+          PY"
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

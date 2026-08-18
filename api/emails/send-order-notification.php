@@ -48,7 +48,8 @@ function svem_build_email_content(array $order, string $event, string $customerN
     $orderDate = date('d/m/Y H:i', strtotime(isset($order['created_at']) ? $order['created_at'] : 'now'));
     $total = number_format(isset($order['total']) ? $order['total'] : 0, 2, ',', '.');
     $phone = isset($order['customer']['phone']) ? $order['customer']['phone'] : '';
-    $whatsapp = getenv('LOJA_WHATSAPP') ?: '551140415850';
+    require_once dirname(__DIR__, 2) . '/includes/company-contact.php';
+    $whatsapp = sv_company_whatsapp_digits();
     $whatsappLink = "https://wa.me/" . preg_replace('/\D/', '', $whatsapp);
     $trackingCode = isset($order['tracking_code']) ? $order['tracking_code'] : 'Código de rastreio será enviado em instantes.';
     $address = isset($order['customer']['address']) ? $order['customer']['address'] : '';
@@ -115,7 +116,7 @@ function svem_build_email_content(array $order, string $event, string $customerN
     } elseif ($event === 'payment_link_generated' && $checkoutUrl !== '') {
         $gatewayTitle = $paymentMethod === 'infinitepay' ? 'Pague com InfinitePay' : 'Pague com Mercado Pago';
         $gatewayText = $paymentMethod === 'infinitepay'
-            ? 'Use o checkout seguro para pagar com Pix ou cartão em até 6x sem juros.'
+            ? 'Use o checkout seguro para pagar com Pix ou cartão e confira as condições antes de confirmar.'
             : 'Use o checkout seguro para escolher Pix, boleto ou cartão.';
         $paymentActionHtml = "
             <div style='background:#e8f5e9; border:1px solid #a5d6a7; padding:16px; border-radius:6px; margin:20px 0;'>

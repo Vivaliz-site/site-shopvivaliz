@@ -1,0 +1,41 @@
+name: MEI email autoqueue blocker inspect 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/mei-email-autoqueue-blocker-inspect-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect autoqueue process and schedulers
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
+            set -euo pipefail
+            echo NOW=$(date -Is)
+            echo ---MATCHING_PROCESSES---
+            ps -eo pid,ppid,lstart,etime,stat,pcpu,pmem,cmd | grep -E "[d]isparar_10000_mei_mg|[a]utoqueue|[r]epor_fila" || true
+            echo ---SYSTEMD_SERVICES_TIMERS---
+            systemctl list-units --all --type=service --type=timer --no-pager | grep -Ei "mei|email|queue|dispar" || true
+            echo ---USER_CRONTAB---
+            crontab -l 2>/dev/null | grep -Ei "mei|email|queue|dispar" || true
+            echo ---ROOT_CRONTAB---
+            sudo crontab -l 2>/dev/null | grep -Ei "mei|email|queue|dispar" || true
+            echo ---FLOCKS---
+            ps -eo pid,ppid,cmd | grep "[f]lock" | grep -Ei "mei|email|10000|queue" || true
+          '
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

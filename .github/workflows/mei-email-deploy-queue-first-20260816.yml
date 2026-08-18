@@ -1,0 +1,53 @@
+name: MEI email deploy queue-first 20260816
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Deploy queue-first worker safely
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
+            set -euo pipefail
+            cd /home/ubuntu/mei-mg-email
+            old_head=$(git rev-parse HEAD)
+            echo OLD_HEAD=$old_head
+            git fetch origin main
+            git pull --ff-only origin main
+            new_head=$(git rev-parse HEAD)
+            echo NEW_HEAD=$new_head
+            test -f worker/worker_queue_first.py
+            .venv/bin/python -m py_compile worker/worker_queue_first.py app/queue_manager.py worker/worker.py
+            echo PY_COMPILE=ok
+
+            sudo mkdir -p /etc/systemd/system/mei-mg-email-worker.service.d
+            if [ -f /etc/systemd/system/mei-mg-email-worker.service.d/queue-first.conf ]; then
+              sudo cp /etc/systemd/system/mei-mg-email-worker.service.d/queue-first.conf /etc/systemd/system/mei-mg-email-worker.service.d/queue-first.conf.bak
+            fi
+            printf "%s\n" "[Service]" "ExecStart=" "ExecStart=/home/ubuntu/mei-mg-email/.venv/bin/python -m worker.worker_queue_first" | sudo tee /etc/systemd/system/mei-mg-email-worker.service.d/queue-first.conf >/dev/null
+            sudo systemctl daemon-reload
+            sudo systemctl restart mei-mg-email-worker.service
+            sleep 25
+            echo WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+            echo MAINPID=$(systemctl show -p MainPID --value mei-mg-email-worker.service)
+            if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo SENTINEL=present; else echo SENTINEL=absent; fi
+            echo ---UNIT---
+            sudo systemctl cat mei-mg-email-worker.service | tail -n 30
+            echo ---JOURNAL---
+            sudo journalctl -u mei-mg-email-worker.service --since "2 minutes ago" --no-pager -n 120 || true
+          '
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
