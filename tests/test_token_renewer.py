@@ -52,7 +52,7 @@ def test_deploy_restarts_integrations_after_current_release_swap() -> None:
     assert production_switch < restart < apache_reload
     assert "shopvivaliz-token-renewer.service" in deploy
     assert "shopvivaliz-shopee-token-renewer.service" in deploy
-    assert "shopvivaliz-sync-products.service" in deploy
+    assert "shopvivaliz-agent.service" in deploy
 
 
 def test_atomic_env_update_preserves_unrelated_values(tmp_path: Path, monkeypatch) -> None:

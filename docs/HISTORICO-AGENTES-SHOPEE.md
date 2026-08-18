@@ -977,3 +977,44 @@ push enviada neste ciclo — nenhum dos critérios de aviso definidos (workflows
 artefato novo com erro diferente, execução de `shopee-production-seo.yml` com apply real
 bem-sucedido) ocorreu. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos
 19–26.
+
+### 9.23 Atualização — ciclo de 2026-08-18 (~01h UTC), 28º ciclo — gap de 2 dias sem registro; estado idêntico ao ciclo 27, sem fato novo
+
+Checagem completa via `git fetch origin main` (HEAD desta sessão confirmado idêntico a `origin/main`,
+`e7e5ad3`) e `mcp__github__actions_list`, sem depender do sandbox local para credenciais
+(`env | grep -iE "SHOPEE|TINY|OLIST"` continua vazio aqui, como esperado). `listings/` continua
+parado em `shopee-listings-20260726-080756.json` — **23 dias** sem extração de catálogo pela via
+antiga (Tiny). `.github/workflows/` continua só com `shopee-optimizer-safety.yml`/
+`shopee-production-seo.yml`/`shopee-runtime-health.yml` sob Shopee; o par
+`fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` segue ausente. `git log --since=2026-08-16
+-- '*shopee*' '*Shopee*'` não retorna nenhum commit tocando código/dados Shopee (só um commit
+`ops: apply Cloudflare www redirect`, não relacionado).
+
+`shopee-production-seo.yml` segue com as mesmas 5 execuções de 2026-07-30 (mesmos IDs dos ciclos
+anteriores), todas `conclusion: failure`, sem execução nova (esperado — exige `workflow_dispatch`
+manual com frase de confirmação). `shopee-runtime-health.yml` continua com execuções `success` reais
+via `schedule` (`32057615121`, 2026-08-17T18:56:59Z; `32033182797`, 2026-08-17T13:05:29Z;
+`32005082387`, 2026-08-17T07:16:23Z) — cadência de 6h confirmada até a véspera deste ciclo.
+
+**Nota observada, fora do escopo desta rotina:** entre 2026-08-17T22:30Z e 2026-08-18T01:08Z, o
+workflow `Master Production Pipeline 24/7` (`master-production-pipeline.yml`) apresenta várias
+execuções `conclusion: failure` encadeadas de minutos em minutos, o que faz `shopee-runtime-health.yml`
+pular (evento `workflow_run`, condição `github.event.workflow_run.conclusion == 'success'`) nessas
+janelas — mas isso não afeta a leitura real via `schedule`, que seguiu funcionando normalmente (ver
+acima). Esse padrão de falhas do master pipeline é responsabilidade de outra rotina/pipeline, não
+desta rotina de otimização Shopee; registrado aqui só para o caso de um agente futuro estranhar os
+`skipped` no histórico de `shopee-runtime-health.yml`.
+
+Releitura direta de `scripts/shopee_production_seo_apply.py`, `scripts/shopee_full_catalog_optimizer.py`,
+`scripts/shopee_title_optimizer.py`, `scripts/utils/shopee_client.py`, `scripts/shopee_runtime_exec.py`
+e `scripts/shopee_runtime_preflight.py` (grep por `analytics`/`ctr`/`conversion_rate`/`click_through`)
+confirma que nenhum endpoint de analytics do Shopee Open Platform foi adicionado desde o ciclo 27 —
+os itens 1/3/9/10 da rotina de 6h continuam tecnicamente inexequíveis. `claude/logs/shopee-sync.log`
+(citado na rotina) continua não existindo neste repo.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. Nenhuma notificação
+push enviada neste ciclo — nenhum dos critérios de aviso definidos (workflows Tiny recriados,
+artefato novo com erro diferente, execução de `shopee-production-seo.yml` com apply real
+bem-sucedido) ocorreu; as falhas do master pipeline são de outra rotina e não alteram essa
+avaliação. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos 19–27.

@@ -56,8 +56,8 @@ AddCharset UTF-8 .html .txt .php .json
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Host legado da VNDA: canoniza para o dominio principal preservando a rota.
-    # Regras abaixo continuam consolidando categorias/rotas realmente legadas.
+    # O host anterior so serve como entrada de compatibilidade. As rotas
+    # legadas de vitrine abaixo convergem para o catalogo atual.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
     RewriteCond %{HTTP_HOST} ^www\.shopvivaliz\.com\.br$ [NC]
     RewriteRule ^(.*)$ https://shopvivaliz.com.br/$1 [R=301,L,NE]
@@ -109,7 +109,7 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
     RewriteRule ^admin/(?:menu-completo|menu-dashboard|dashboard|admin-back)\.php$ - [F,L,NC]
 
-    # URLs publicas remanescentes da vitrine legada/VNDA no dominio canonico.
+    # URLs publicas remanescentes da vitrine anterior vao para o catalogo atual.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
     RewriteRule ^(?:ferramentas|arte-papelaria-e-armarinho|produtos)(?:/.*)?$ /catalogo [R=301,L,NE,QSD,NC]
 

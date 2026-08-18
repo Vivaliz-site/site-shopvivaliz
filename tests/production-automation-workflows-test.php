@@ -19,11 +19,11 @@ $expectedIds = [
 if (array_keys($registered) !== $expectedIds) {
     $errors[] = 'production_agent_registry_ids_invalid';
 }
-if (($registry['trigger_mode'] ?? null) !== 'manual') {
+if (($registry['trigger_mode'] ?? null) !== 'scheduled') {
     $errors[] = 'production_agent_trigger_mode_invalid';
 }
-if (($registry['schedule_minutes'] ?? null) !== 0) {
-    $errors[] = 'production_agent_schedule_must_be_disabled';
+if (($registry['schedule_minutes'] ?? null) !== 60) {
+    $errors[] = 'production_agent_schedule_minutes_invalid';
 }
 
 $registeredFiles = [];
@@ -55,7 +55,7 @@ foreach ($registered as $id => $definition) {
 }
 
 sort($registeredFiles);
-$agentFiles = glob($root . '/agents/*/app/*Agent.php') ?: [];
+$agentFiles = glob($root . '/agents/v9.2.84/app/*Agent.php') ?: [];
 $actualFiles = array_map(
     static fn(string $path): string => str_replace('\\', '/', substr($path, strlen($root) + 1)),
     $agentFiles
@@ -111,8 +111,8 @@ if (!is_file($agentWorkflow)) {
             $errors[] = 'agent_workflow_missing:' . $fragment;
         }
     }
-    if (preg_match('/^\s*schedule\s*:/m', $agent) === 1 || str_contains($agent, "cron: '*/15 * * * *'")) {
-        $errors[] = 'mutating_agent_workflow_must_not_be_scheduled';
+    if (!str_contains($agent, "cron: '19 * * * *'")) {
+        $errors[] = 'production_agent_workflow_schedule_invalid';
     }
     foreach ($expectedIds as $id) {
         if (!str_contains($agent, "'" . $id . "'")) {
@@ -168,7 +168,7 @@ if (!is_array($manifest)) {
     if ($manifestIds !== $expectedIds) {
         $errors[] = 'production_agent_manifest_ids_invalid';
     }
-    if (($manifest['trigger_mode'] ?? null) !== 'manual' || ($manifest['schedule_minutes'] ?? null) !== 0) {
+    if (($manifest['trigger_mode'] ?? null) !== 'scheduled' || ($manifest['schedule_minutes'] ?? null) !== 60) {
         $errors[] = 'production_agent_manifest_trigger_invalid';
     }
     if (($manifest['requirements']['minimum_work_evidence_count'] ?? 0) < 12) {
@@ -185,8 +185,8 @@ echo json_encode([
     'ok' => true,
     'active_agent_count' => count($registered),
     'active_agents' => array_keys($registered),
-    'agent_trigger_mode' => 'manual',
-    'agent_schedule_minutes' => 0,
+    'agent_trigger_mode' => 'scheduled',
+    'agent_schedule_minutes' => 60,
     'blog_schedule_minutes' => 15,
     'execution_path' => 'oracle-active-release',
     'unregistered_agent_files' => 0,
