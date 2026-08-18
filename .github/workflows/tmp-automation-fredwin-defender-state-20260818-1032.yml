@@ -1,0 +1,63 @@
+name: Automation Fred-Win Defender state 20260818 1032
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-automation-fredwin-defender-state-20260818-1032.yml']
+permissions:
+  contents: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Enforce VM fail closed
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          sudo systemctl kill --kill-who=all --signal=SIGKILL mei-mg-email-worker.service || true
+          sudo systemctl stop mei-mg-email-worker.service || true
+          sudo install -d -m 0750 -o ubuntu -g ubuntu /var/lib/mei-mg-email
+          if [ ! -f /var/lib/mei-mg-email/sender_blocked.pause ]; then
+            printf '%s\n' 'sender=naoresponda@dev.shopvivaliz.com.br' 'source=automation_fredwin_recheck_20260818_1032' 'resume_allowed=false' | sudo tee /var/lib/mei-mg-email/sender_blocked.pause >/dev/null
+            sudo chown ubuntu:ubuntu /var/lib/mei-mg-email/sender_blocked.pause
+            sudo chmod 0640 /var/lib/mei-mg-email/sender_blocked.pause
+          fi
+          echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo 'SENTINEL=present'
+          EOF
+      - name: Transfer read-only Defender state check
+        run: |
+          set -euo pipefail
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey scripts/fredwin-defender-block-state.ps1 scripts/tmp-fredwin-run-block-state.py ubuntu@137.131.156.17:/tmp/
+      - name: Check Defender through Fred-Win and persist report
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          set +e
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 /tmp/tmp-fredwin-run-block-state.py' > reports/automation-fredwin-defender-state-20260818-1032.txt 2>&1
+          rc=$?
+          set -e
+          echo "SSH_RC=$rc" >> reports/automation-fredwin-defender-state-20260818-1032.txt
+      - name: Persist state report
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/automation-fredwin-defender-state-20260818-1032.txt
+          git commit -m 'ops: record Fred-Win Defender state 20260818-1032' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
