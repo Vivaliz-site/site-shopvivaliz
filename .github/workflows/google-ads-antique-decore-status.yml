@@ -7,6 +7,7 @@ on:
       - "ops/google-ads-antique-decore-status.json"
       - ".github/workflows/google-ads-antique-decore-status.yml"
       - "scripts/google_ads_antique_decore_status.py"
+      - "scripts/google_ads_antique_decore_automation.py"
       - "scripts/google_ads_campaign_live_ready.json"
   workflow_dispatch:
 
@@ -33,7 +34,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          python3 scripts/google_ads_antique_decore_status.py > /tmp/google-ads-live-watch.txt 2>&1
+          python3 scripts/google_ads_antique_decore_automation.py > /tmp/google-ads-live-watch.txt 2>&1
           rc=$?
           cat /tmp/google-ads-live-watch.txt
           {
