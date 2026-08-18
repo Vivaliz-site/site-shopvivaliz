@@ -20,6 +20,7 @@ $storefrontResolver = $projectRoot . '/includes/storefront-image-source.php';
 if (is_file($storefrontResolver)) {
     require_once $storefrontResolver;
 }
+require_once $projectRoot . '/includes/catalog-runtime.php';
 
 /** @return list<string> */
 function ais_enqueue_image_candidates(PDO $db, array $product, string $projectRoot): array
@@ -230,6 +231,11 @@ $product = ai_studio_fetch_product($db, $productId);
 if ($product === null) {
     http_response_code(404);
     echo json_encode(['success' => false, 'error' => "Produto #{$productId} nao encontrado ou sem nome."]);
+    exit;
+}
+if (!ai_studio_product_is_canonical_active($product)) {
+    http_response_code(409);
+    echo json_encode(['success' => false, 'error' => "Produto #{$productId} esta inativo, excluido ou fora do catalogo ativo canonico."]);
     exit;
 }
 

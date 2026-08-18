@@ -34,7 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
-          set +e
+          set -Eeuo pipefail
           echo '=== time / uptime / reboot ==='
           date -Is
           uptime
@@ -101,7 +101,7 @@ jobs:
 
       - name: Runner-side public headers
         run: |
-          set +e
+          set -Eeuo pipefail
           echo '=== HTTPS home ==='
           curl -sS -D - -o /tmp/home --connect-timeout 10 --max-time 30 https://shopvivaliz.com.br/
           echo "exit=$? bytes=$(wc -c </tmp/home 2>/dev/null || echo 0)"

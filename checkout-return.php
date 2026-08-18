@@ -64,8 +64,8 @@ if ($serverApproved) {
 // return query string alone is not authoritative. When the provider redirects
 // slightly before its webhook worker finishes, retry the same safe read a few
 // times so an approved purchase is much less likely to be lost from analytics.
-$confirmCheck = min(4, max(0, (int)($_GET['confirm_check'] ?? 0)));
-$shouldRetryConfirmation = $reportedApproved && !$serverApproved && $orderNumber !== '' && $confirmCheck < 4;
+$confirmCheck = min(10, max(0, (int)($_GET['confirm_check'] ?? 0)));
+$shouldRetryConfirmation = $reportedApproved && !$serverApproved && $orderNumber !== '' && $confirmCheck < 10;
 $retryUrl = '';
 if ($shouldRetryConfirmation) {
     $retryUrl = '/checkout-return.php?' . http_build_query([

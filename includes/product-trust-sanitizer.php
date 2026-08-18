@@ -37,17 +37,18 @@ function svpts_sanitize_product_html(string $html): string
     );
     $sanitized = str_replace('>Adicionar Combo</a>', '>Ver produto complementar e ganhar 3% OFF</a>', $sanitized);
 
-    // Remove condicoes comerciais legadas que nao sao calculadas de forma
-    // autoritativa no pedido atual.
+    // Condicoes de PIX/parcelamento so podem ser exibidas quando forem
+    // autoritativas no pedido. Mantemos copy neutra no storefront para nao
+    // transformar um calculo visual em promessa comercial nao aprovada.
     $sanitized = preg_replace(
         '~<div\s+class="pix-discount-badge"[^>]*>.*?</div>~si',
-        '<div class="pix-discount-badge" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;font-weight:700;font-size:14px;"><span>⚡ PIX disponível no checkout</span></div>',
+        '<div class="pix-discount-badge" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;font-weight:700;font-size:14px;"><span>PIX disponível no checkout</span></div>',
         $sanitized,
         1
     ) ?? $sanitized;
     $sanitized = preg_replace(
         '~<div\s+class="installment-label"[^>]*>.*?</div>~si',
-        '<div class="installment-label" style="font-size:13px;color:#64748b;font-weight:600;"><span>💳 Parcelamento disponível no checkout</span></div>',
+        '<div class="installment-label" style="font-size:13px;color:#64748b;font-weight:600;"><span>Parcelamento disponível no checkout</span></div>',
         $sanitized,
         1
     ) ?? $sanitized;

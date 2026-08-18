@@ -1,0 +1,66 @@
+name: MEI email retention V025 direct v1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mei-email-retention-v025-direct-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Force fail-closed and apply only pending migrations
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=30 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          sudo systemctl stop mei-mg-email-worker.service || true
+          pkill -f 'scripts/disparar_10000_mei_mg.py' || true
+          sleep 2
+          test -f /var/lib/mei-mg-email/sender_blocked.pause
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then exit 90; fi
+          latest="$(ls -1t /home/ubuntu/mei-backups/mei_email_before_retention_*.dump | head -n1)"
+          test -s "$latest"
+          echo "RETENTION_BACKUP_FILE=$latest"
+          cd /home/ubuntu/mei-mg-email
+          timeout 600s docker compose run --rm --no-deps flyway -validateOnMigrate=false migrate
+          echo 'RETENTION_FLYWAY_COMMAND_OK=true'
+          timeout 90s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -Atc "select 'V025='||version||':'||description||':'||success from mei_email.flyway_schema_history where version='025' order by installed_rank desc limit 1" | tee /tmp/v025-history.txt
+          grep -Eq '^V025=025:.*:t$' /tmp/v025-history.txt
+          test -f /var/lib/mei-mg-email/sender_blocked.pause
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then exit 91; fi
+          echo 'RETENTION_V025_APPLIED=true'
+          EOF
+
+      - name: Dry-run purge only
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=30 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          if [ -x .venv/bin/python ]; then py=.venv/bin/python; else py=python3; fi
+          timeout 600s "$py" scripts/purgar_base_operacional.py --batch-size 200
+          test -f /var/lib/mei-mg-email/sender_blocked.pause
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then exit 92; fi
+          echo 'RETENTION_DRYRUN_OK=true'
+          EOF
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/vmkey

@@ -4,9 +4,9 @@ declare(strict_types=1);
 require_once __DIR__ . '/asset-manifest.php';
 
 /**
- * Resolve a página PHP realmente executada, inclusive quando Apache/Nginx usa
- * uma rota amigável como /produto/<slug>. PHP_SELF pode conter o slug nessas
- * rotas e não deve ser a única fonte para decidir quais assets carregar.
+ * Resolve a pagina PHP realmente executada, inclusive quando Apache/Nginx usa
+ * uma rota amigavel como /produto/<slug>. PHP_SELF pode conter o slug nessas
+ * rotas e nao deve ser a unica fonte para decidir quais assets carregar.
  */
 function sv_current_page_name(): string
 {
@@ -34,6 +34,31 @@ function sv_current_page_name(): string
     ];
 
     return $routeAliases[$route] ?? basename($path, '.php');
+}
+
+/**
+ * O loader tambem e usado por algumas superficies administrativas. Um arquivo
+ * chamado admin/index.php nao pode ser classificado como a home publica apenas
+ * porque basename(SCRIPT_NAME) == "index": isso injetava todo o polish da loja,
+ * JS da home e CSS customizado no Admin, aumentando carga e criando colisoes de
+ * layout. Detectamos /admin antes de resolver o nome da pagina publica.
+ */
+function sv_is_admin_request(): bool
+{
+    foreach (['SCRIPT_NAME', 'PHP_SELF', 'REQUEST_URI'] as $serverKey) {
+        $raw = (string)($_SERVER[$serverKey] ?? '');
+        if ($raw === '') {
+            continue;
+        }
+        $path = (string)(parse_url($raw, PHP_URL_PATH) ?? $raw);
+        $path = '/' . ltrim(str_replace('\\', '/', $path), '/');
+        if ($path === '/admin' || str_starts_with($path, '/admin/')) {
+            return true;
+        }
+    }
+
+    $filename = str_replace('\\', '/', (string)($_SERVER['SCRIPT_FILENAME'] ?? ''));
+    return $filename !== '' && preg_match('#/admin(?:/|$)#', $filename) === 1;
 }
 
 /**
@@ -79,12 +104,30 @@ function sv_public_asset_attr(string $path): string
 }
 
 /**
- * Carrega CSS versionado da aplicação e CSS customizado do admin para a página atual.
- * Inclua isto no <head> de todas as páginas públicas suportadas.
+ * Carrega CSS versionado da aplicacao e CSS customizado do admin para a pagina atual.
+ * Inclua isto no <head> de todas as paginas publicas suportadas.
  */
 function load_custom_css(): void
 {
     $root = dirname(__DIR__);
+
+    // Admin precisa ser uma superficie isolada e leve. O arquivo responsivo e
+    // emitido com filemtime para invalidar imediatamente o cache de 30 dias do
+    // Apache em celulares que ainda guardam uma versao antiga do CSS.
+    if (sv_is_admin_request()) {
+        $adminCss = $root . '/css/admin-zoom-responsive.css';
+        if (is_file($adminCss) && is_readable($adminCss)) {
+            $adminCssVersion = (string)filemtime($adminCss);
+            echo "    <link rel=\"stylesheet\" href=\"/css/admin-zoom-responsive.css?v="
+                . htmlspecialchars($adminCssVersion, ENT_QUOTES, 'UTF-8') . "\">\n";
+        }
+        // A navbar publica possui sombra por padrao. No Admin mobile ela deve
+        // permanecer uma barra operacional plana; esta regra final impede que
+        // a sombra global volte a vencer a camada responsiva por ordem de carga.
+        echo "    <style>@media (max-width:720px){body.admin-surface .navbar{box-shadow:none!important}}</style>\n";
+        return;
+    }
+
     $pageName = sv_current_page_name();
 
     if ($pageName === 'produto') {
@@ -99,18 +142,18 @@ function load_custom_css(): void
     // secoes apos o primeiro paint. O HTML canonico agora e igual em todos os
     // dispositivos; apenas CSS responsivo altera sua apresentacao.
     //
-    // Na home (index), esses dois arquivos já vêm dentro do bundle emitido em
-    // index.php (ver includes/asset-bundle-manifest.php) — não reemitir aqui
-    // para não duplicar a carga. Outras páginas não usam este bloco.
+    // Na home (index), esses dois arquivos ja vem dentro do bundle emitido em
+    // index.php (ver includes/asset-bundle-manifest.php) — nao reemitir aqui
+    // para nao duplicar a carga. Outras paginas nao usam este bloco.
     if ($pageName === 'index') {
-        // já incluído via /css/home-bundle.php
+        // ja incluido via /css/home-bundle.php
     }
 
     // Quarta rodada de polimento visual. O estado geometrico correspondente ja
     // foi definido no <html> pelo script sincrono acima, evitando layout shift.
-    // O CSS do visual-polish-v4 na home também já vem no bundle de
-    // index.php; aqui só falta o <script>, que precisa continuar separado
-    // (é comportamento, não estilo, e roda em carrinho/checkout também).
+    // O CSS do visual-polish-v4 na home tambem ja vem no bundle de
+    // index.php; aqui so falta o <script>, que precisa continuar separado
+    // (e comportamento, nao estilo, e roda em carrinho/checkout tambem).
     if (in_array($pageName, ['index', 'carrinho', 'checkout'], true)) {
         if ($pageName !== 'index') {
             echo "    <link rel=\"stylesheet\" href=\"" . sv_public_asset_attr('/css/visual-polish-v4.css') . "\">\n";
@@ -137,14 +180,14 @@ function load_custom_css(): void
         }
     }
 
-    // V5 permanece restrita às páginas-alvo originais.
+    // V5 permanece restrita as paginas-alvo originais.
     if ($loadVisualPolishV5) {
         echo "    <link rel=\"stylesheet\" href=\"" . sv_public_asset_attr('/css/visual-polish-v5.css') . "\">\n";
     }
 
-    // V6 contém somente seletores públicos e correções fail-safe de imagem/título.
-    // É emitida sempre que este loader público é incluído, eliminando dependência
-    // de variáveis de rewrite para rotas amigáveis como /produto/<slug>.
+    // V6 contem somente seletores publicos e correcoes fail-safe de imagem/titulo.
+    // E emitida sempre que este loader publico e incluido, eliminando dependencia
+    // de variaveis de rewrite para rotas amigaveis como /produto/<slug>.
     echo "    <link rel=\"stylesheet\" href=\"" . sv_public_asset_attr('/css/visual-polish-v6.css') . "\">\n";
     $visualPolishHotfixCss = $root . '/css/visual-polish-v6-hotfix.css';
     if (is_file($visualPolishHotfixCss) && is_readable($visualPolishHotfixCss)) {
@@ -153,8 +196,8 @@ function load_custom_css(): void
             . htmlspecialchars($visualPolishHotfixVersion, ENT_QUOTES, 'UTF-8') . "\">\n";
     }
 
-    // Ajustes desta auditoria carregam por último para vencer apenas conflitos
-    // visuais medidos, sem depender do CSS editável do admin.
+    // Ajustes desta auditoria carregam por ultimo para vencer apenas conflitos
+    // visuais medidos, sem depender do CSS editavel do admin.
     $visualAuditCss = $root . '/css/visual-audit-v1.css';
     if (is_file($visualAuditCss) && is_readable($visualAuditCss)) {
         $visualAuditVersion = (string) filemtime($visualAuditCss);
@@ -162,8 +205,8 @@ function load_custom_css(): void
             . htmlspecialchars($visualAuditVersion, ENT_QUOTES, 'UTF-8') . "\">\n";
     }
 
-    // Regras transversais de acessibilidade do main são preservadas antes do
-    // hotfix de geometria, que deve permanecer como a última camada visual.
+    // Regras transversais de acessibilidade do main sao preservadas antes do
+    // hotfix de geometria, que deve permanecer como a ultima camada visual.
     $accessibilityCss = $root . '/css/accessibility-hardening-v1.css';
     if (is_file($accessibilityCss) && is_readable($accessibilityCss)) {
         $accessibilityVersion = (string) filemtime($accessibilityCss);

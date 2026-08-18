@@ -26,6 +26,7 @@ import logging
 import os
 import re
 import subprocess
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -43,6 +44,8 @@ HEALTH_URL = os.getenv(
 )
 MINIMUM_HEALTH_SCORE = float(os.getenv("SHOPVIVALIZ_SYNC_MIN_HEALTH_SCORE", "85"))
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+FETCH_REF_LOCK_MARKERS = ("cannot lock ref", "unable to update local ref")
+FETCH_ATTEMPTS = 3
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 log = logging.getLogger(__name__)
@@ -69,6 +72,33 @@ def ensure_logs_dir() -> None:
 
 def git_output(args: list[str]) -> str:
     return run(["git", *args], check=True).stdout.strip()
+
+
+def fetch_canonical_branch(branch: str) -> None:
+    """Fetch once per attempt, retrying only a known concurrent-ref race.
+
+    The deployment runner and the scheduled synchronizer can briefly overlap
+    while Git updates `refs/remotes/origin/main`.  A ref-lock failure has no
+    semantic conflict and is safe to retry; every other fetch failure remains
+    fail-closed.
+    """
+    command = ["git", "fetch", "--prune", "--no-tags", "origin", branch]
+    for attempt in range(1, FETCH_ATTEMPTS + 1):
+        result = run(command)
+        if result.returncode == 0:
+            return
+
+        detail = result.stderr.strip() or result.stdout.strip() or "command failed"
+        transient_ref_lock = any(marker in detail.lower() for marker in FETCH_REF_LOCK_MARKERS)
+        if not transient_ref_lock or attempt == FETCH_ATTEMPTS:
+            raise RuntimeError(f"{' '.join(command)}: {detail}")
+
+        log.warning(
+            "Git fetch encontrou lock transitório de ref (tentativa %s/%s); repetindo",
+            attempt,
+            FETCH_ATTEMPTS,
+        )
+        time.sleep(attempt)
 
 
 def tracked_dirty_paths() -> list[str]:
@@ -106,7 +136,18 @@ def check_local_health() -> dict[str, Any]:
             if response.status not in (200, 207):
                 raise RuntimeError(f"Health endpoint returned HTTP {response.status}")
             if not isinstance(data, dict) or not data.get("ok", False):
-                raise RuntimeError("Health endpoint reported unhealthy state")
+                checks = data.get("checks") if isinstance(data, dict) else None
+                failed_checks = [
+                    str(name)
+                    for name, passed in (checks.items() if isinstance(checks, dict) else [])
+                    if passed is not True
+                ]
+                detail = ", ".join(failed_checks[:8]) or "sem detalhe de checks"
+                score = data.get("health_score_percent") if isinstance(data, dict) else None
+                raise RuntimeError(
+                    f"Health endpoint reported unhealthy state; score={score}; "
+                    f"failed_checks={detail}"
+                )
             score = float(data.get("health_score_percent", 0))
             if score < MINIMUM_HEALTH_SCORE:
                 raise RuntimeError(
@@ -234,31 +275,18 @@ def main() -> int:
             return 3
 
         health = check_local_health()
-        if not health.get("ok"):
-            payload.update(
-                {
-                    "action": "blocked-unhealthy-local-runtime",
-                    "health": {
-                        "status": "failed",
-                        "endpoint": HEALTH_URL,
-                        "error": str(health.get("error", "unknown error")),
-                    },
-                    "message": "runtime local nao passou no health gate; sync abortado",
-                }
-            )
-            write_status(payload)
-            log.error("%s: %s", payload["message"], health.get("error", "unknown error"))
-            return 5
-
         health_data = health.get("data") if isinstance(health.get("data"), dict) else {}
         payload["health"] = {
-            "status": "ok",
+            "status": "ok" if health.get("ok") else "degraded",
             "endpoint": HEALTH_URL,
             "score": health_data.get("health_score_percent"),
             "queue": health_data.get("queue"),
+            "error": None if health.get("ok") else str(health.get("error", "unknown error")),
         }
+        if not health.get("ok"):
+            log.warning("Runtime atual degradado; mantendo sync para permitir deploy corretivo: %s", payload["health"]["error"])
 
-        run(["git", "fetch", "--prune", "--no-tags", "origin", branch], check=True)
+        fetch_canonical_branch(branch)
         remote_sha = git_output(["rev-parse", f"origin/{branch}"])
         payload["remote_sha"] = remote_sha
 

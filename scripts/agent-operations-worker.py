@@ -218,7 +218,7 @@ def assign_pending_tasks(runtime_state: dict[str, Any]) -> list[dict[str, Any]]:
         )
         changed = True
     if changed:
-        save_queue(queue)
+        save_queue(queue, runtime_actor="agent-operations-worker")
     return assigned
 
 
@@ -291,7 +291,7 @@ def write_heartbeats(queue: dict[str, Any], runtime_state: dict[str, Any]) -> No
             "timestamp": utc_now(),
             "unix_timestamp": int(datetime.now(timezone.utc).timestamp()),
             "status": "alive",
-            "tasks_processed": len([task for task in tasks if task.get("status") in ("completed", "done")]),
+            "tasks_processed": len([task for task in tasks if task.get("status") == "completed_verified"]),
             "current_focus": current_focus,
             "assigned_count": len(tasks),
             "passos_execucao": passos_execucao[-MAX_STEPS_PER_AGENT:],

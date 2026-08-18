@@ -1,0 +1,51 @@
+name: Automation apt pwsh diagnostic 20260818 1032
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-automation-apt-pwsh-diag-20260818-1032.yml']
+permissions:
+  contents: write
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect VM package state
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=30 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF' > reports/automation-apt-pwsh-diag-20260818-1032.txt 2>&1
+          set -u
+          echo "CHECK_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo SENTINEL=present; else echo SENTINEL=absent; fi
+          echo "PWSH=$(command -v pwsh 2>/dev/null || echo missing)"
+          echo 'APT_PROCESSES_BEGIN'
+          pgrep -af 'apt-get|apt |dpkg' || true
+          echo 'APT_PROCESSES_END'
+          echo 'LOCKS_BEGIN'
+          sudo fuser -v /var/lib/apt/lists/lock /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock 2>&1 || true
+          echo 'LOCKS_END'
+          dpkg-query -W -f='POWERSHELL_PKG=${Status} ${Version}\n' powershell 2>/dev/null || echo POWERSHELL_PKG=not_installed
+          EOF
+      - name: Persist report
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/automation-apt-pwsh-diag-20260818-1032.txt
+          git commit -m 'ops: record apt pwsh diagnostic 20260818-1032' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

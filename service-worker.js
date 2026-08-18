@@ -1,5 +1,5 @@
-const CACHE='shopvivaliz-shell-v20';
-const SHELL=['/','/catalogo','/css/shopvivaliz-visual-v3.css','/images/logo-vivaliz-square-v2.png'];
+const CACHE='shopvivaliz-shell-v21';
+const SHELL=['/','/catalogo/','/css/style.css','/css/public-experience-v1.css','/js/public-experience-v1.js','/manifest.webmanifest','/images/logo-vivaliz-square-v2.png'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).catch(()=>null));self.skipWaiting();});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))));self.clients.claim();});
 self.addEventListener('fetch',event=>{

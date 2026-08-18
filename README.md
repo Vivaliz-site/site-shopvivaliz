@@ -76,8 +76,9 @@ Há um backend headless MedusaJS + storefront Next.js em `claude/medusa/apps/`, 
 
 Leia [`claude/medusa/README.md`](claude/medusa/README.md) e [`claude/medusa/DEPLOY-CHECKLIST.md`](claude/medusa/DEPLOY-CHECKLIST.md).
 
-## Knowledge Base
+## 🧠 Knowledge Base
 
-A documentação do sistema está em [`docs/knowledge/`](docs/knowledge/). Comece por [`docs/knowledge/README.md`](docs/knowledge/README.md).
+A documentação completa do sistema está em:
+/docs/knowledge/
 
-O checklist de aquisição, SEO, performance, conversão, retenção e infraestrutura de dados está em [`docs/knowledge/traffic-visibility-checklist.md`](docs/knowledge/traffic-visibility-checklist.md).
+Utilizada por agentes IA e desenvolvedores para diagnóstico e operação.

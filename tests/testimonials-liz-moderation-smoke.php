@@ -42,6 +42,7 @@ try {
         'rating' => 5,
         'message' => 'Chegou rápido, produto bom. Recomendo a loja e compraria novamente.',
         'order_reference' => '12345',
+        'verified_purchase' => true,
     ], $safe);
     if (($saved['status'] ?? '') !== 'approved' || ($saved['moderated_by'] ?? '') !== 'liz') {
         fwrite(STDERR, "Decisão da Liz não foi persistida.\n");
@@ -53,6 +54,7 @@ try {
         'city' => 'São Paulo - SP',
         'rating' => 4,
         'message' => 'Atendimento bom e entrega dentro do prazo informado no pedido.',
+        'verified_purchase' => true,
     ]);
     $pending = $repo->pendingUnmoderated(10);
     if (count($pending) !== 1 || ($pending[0]['id'] ?? '') !== ($legacy['id'] ?? '')) {
@@ -71,6 +73,25 @@ try {
     );
     if (!$ok || count($repo->approved(10)) !== 2) {
         fwrite(STDERR, "Backfill da fila pendente não publicou a avaliação legítima.\n");
+        exit(1);
+    }
+
+    foreach ($repo->approved(10) as $publicRow) {
+        if (array_key_exists('order_reference', $publicRow) || array_key_exists('moderation_reason', $publicRow)) {
+            fwrite(STDERR, "API pública não deve expor referência do pedido nem metadados internos.\n");
+            exit(1);
+        }
+    }
+
+    $unverified = $repo->submit([
+        'name' => 'Visitante sem confirmação',
+        'rating' => 5,
+        'message' => 'Comentário válido, mas sem uma compra que o servidor tenha confirmado.',
+        'verified_purchase' => false,
+    ]);
+    $pending = $repo->pendingUnmoderated(10);
+    if (in_array((string)($unverified['id'] ?? ''), array_column($pending, 'id'), true)) {
+        fwrite(STDERR, "Avaliação sem compra confirmada não pode entrar no auto-approve.\n");
         exit(1);
     }
 } finally {

@@ -45,7 +45,6 @@ End-to-end catalog, storefront, checkout, security, deployment and developer-too
 
 - Two active ERP products have no real product image and use the storefront fallback; therefore image coverage is 98.92%, not 100%.
 - The Windows PHP installation lacks curl and mysqli. Production runtime verification is required and recorded separately after deployment.
-- The separate commercial VNDA/Olist storefront at `www.shopvivaliz.com.br` is not served by this repository/VM. Its homepage crawl found 58 category-navigation links returning 404 (9 links returned 200). Correcting that menu requires authenticated VNDA/Olist storefront administration, which was not available in this workspace and was not guessed or mutated.
 - Shopee Media Space bulk repair remains intentionally gated because `mapeamento_olist_ambientadas.xlsx` and `imagens_ambientadas/` are absent. The scheduled preflight reports this as an expected warning and performs no simulated or real upload.
 - VS Code must reload its window or start a new Codex task to consume the merged MCP bridge file; the underlying required server was independently proven healthy after the fix.
 - Database migrations: none; release 9.2.103 is file, service, workflow and web-server configuration only and is idempotent.

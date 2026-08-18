@@ -1,0 +1,28 @@
+name: MEI email failclosed state 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/mei-email-failclosed-state-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Read fail-closed state
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 'echo WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true); if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo SENTINEL=present; else echo SENTINEL=absent; fi'
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

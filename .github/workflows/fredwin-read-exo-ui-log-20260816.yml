@@ -1,0 +1,33 @@
+name: Fred-Win read EXO UI log 20260816
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/fredwin-read-exo-ui-log-20260816.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Read Fred-Win EXO UI log
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 - <<'"'"'PY'"'"'
+          import json, urllib.request
+          body=json.dumps({"params":{"path":"logs/fredwin-exo-ui-expand.log"}}).encode()
+          req=urllib.request.Request("http://127.0.0.1:5557/mcp/tool/read_file",data=body,headers={"Content-Type":"application/json"},method="POST")
+          with urllib.request.urlopen(req,timeout=20) as r:
+              print(r.read().decode())
+          PY'
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

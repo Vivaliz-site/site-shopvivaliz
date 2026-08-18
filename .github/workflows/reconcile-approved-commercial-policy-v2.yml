@@ -1,0 +1,31 @@
+name: Reconcile approved commercial policy v2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/reconcile-approved-commercial-policy-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reconcile files
+        run: python3 scripts/reconcile_commercial_policy.py
+      - name: Validate policy
+        run: |
+          php tests/commercial-policy-regression-test.php
+          php -l index.php
+          php -l includes/product-trust-sanitizer.php
+      - name: Fail closed on commercial-policy drift
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- index.php includes/product-trust-sanitizer.php tests/commercial-policy-regression-test.php

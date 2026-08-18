@@ -1,0 +1,74 @@
+name: MEI email Flyway history audit v1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mei-email-flyway-history-audit-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Find historical migration blobs matching production checksums
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          git fetch --all --tags --prune
+          python3 - <<'PY'
+          import subprocess, zlib
+          targets = {
+              'db/migrations/V014__cnpj_alphanumeric_and_submission_guard.sql': 2116743560,
+              'db/migrations/V017__optimize_submission_trigger.sql': 1690705898,
+              'db/migrations/V018__index_envios_enviado_em.sql': -410986482,
+          }
+          def checksum(data):
+              text=data.decode('utf-8-sig')
+              crc=0
+              for line in text.splitlines():
+                  crc=zlib.crc32(line.encode('utf-8'), crc)
+              return crc if crc < 2**31 else crc - 2**32
+          for path,target in targets.items():
+              commits=subprocess.check_output(['git','rev-list','--all','--',path], text=True).splitlines()
+              found=[]
+              seen=set()
+              for c in commits:
+                  try:
+                      data=subprocess.check_output(['git','show',f'{c}:{path}'], stderr=subprocess.DEVNULL)
+                  except subprocess.CalledProcessError:
+                      continue
+                  sha=subprocess.check_output(['git','hash-object','--stdin'], input=data).decode().strip()
+                  if sha in seen: continue
+                  seen.add(sha)
+                  cs=checksum(data)
+                  if cs==target:
+                      found.append((c,sha))
+              print(f'PATH={path}')
+              print(f'TARGET={target}')
+              if found:
+                  for c,sha in found[:10]: print(f'MATCH_COMMIT={c};BLOB={sha}')
+              else:
+                  print('MATCH=NONE')
+          PY
+          EOF
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/vmkey

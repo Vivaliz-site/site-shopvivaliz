@@ -10,6 +10,8 @@ SHARED_LOG_DIR="$SHARED_ROOT/logs"
 SHARED_LOCK_DIR="$SHARED_ROOT/locks"
 SHARED_STATUS="$SHARED_LOG_DIR/tri-environment-sync.json"
 SHARED_LEGACY_STATUS="$SHARED_LOG_DIR/autonomous-sync.json"
+CURRENT_ROOT="${CURRENT_ROOT:-/home/ubuntu/shopvivaliz-deploy/current}"
+DEPLOY_RUNNER="$ROOT/scripts/deploy-production.sh"
 SYNC_LOCK="$SHARED_LOCK_DIR/repo-sync.lock"
 INDEX_LOCK="$ROOT/.git/index.lock"
 TMP_OUTPUT="$(mktemp)"
@@ -74,4 +76,21 @@ if [ -f "$REPO_STATUS" ]; then
   cp -f -- "$REPO_STATUS" "$SHARED_LEGACY_STATUS"
 fi
 
-exit "$exit_code"
+if [ "$exit_code" -ne 0 ]; then
+  exit "$exit_code"
+fi
+
+repo_sha="$(git -C "$ROOT" rev-parse HEAD)"
+active_sha="$(cat "$CURRENT_ROOT/.release-sha" 2>/dev/null || true)"
+if [ "$repo_sha" = "$active_sha" ]; then
+  echo "Release ativa ja corresponde ao clone sincronizado: $repo_sha"
+  exit 0
+fi
+
+if [ ! -x "$DEPLOY_RUNNER" ]; then
+  echo "Runner de deploy ausente ou nao executavel: $DEPLOY_RUNNER" >&2
+  exit 8
+fi
+
+echo "Clone sincronizado em $repo_sha; publicando release imutavel correspondente"
+exec "$DEPLOY_RUNNER" main

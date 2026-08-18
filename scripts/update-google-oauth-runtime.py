@@ -38,7 +38,9 @@ def main() -> int:
         "GOOGLE_OAUTH_CLIENT_SECRET": values[1].strip(),
     }
     if len(values) == 3:
-        updates["GOOGLE_ADS_REFRESH_TOKEN"] = values[2].strip()
+        refresh_token = values[2].strip()
+        updates["GOOGLE_OAUTH_REFRESH_TOKEN"] = refresh_token
+        updates["GOOGLE_ADS_REFRESH_TOKEN"] = refresh_token
 
     stat = path.stat()
     lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()

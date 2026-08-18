@@ -1,0 +1,16 @@
+{
+  "campaign_id": "24144257692",
+  "budget_daily_brl": 10,
+  "mode": "validate_then_apply",
+  "match_type": "PHRASE",
+  "keywords": {
+    "Vasos Antique Japi": ["vaso antique", "vaso japi antique"],
+    "Vasos Decore Japi": ["vaso decore", "vaso japi decore"]
+  },
+  "constraints": {
+    "do_not_change_budget": true,
+    "do_not_change_bids": true,
+    "do_not_change_product_prices": true,
+    "preserve_cross_theme_negatives": true
+  }
+}

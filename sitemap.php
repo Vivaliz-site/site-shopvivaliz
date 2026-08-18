@@ -75,17 +75,21 @@ function sitemap_emit(
 echo '<?xml version="1.0" encoding="UTF-8"?>' . PHP_EOL;
 echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">' . PHP_EOL;
 
+// Physical public directories are canonicalized by Apache DirectorySlash.
+// Emit their trailing-slash form directly so crawlers never spend budget on
+// 301 hops and every sitemap URL is the final 200 destination.
 $pages = [
     ['loc' => '/', 'priority' => '1.0', 'freq' => 'daily'],
-    ['loc' => '/catalogo', 'priority' => '0.9', 'freq' => 'daily'],
-    ['loc' => '/sobre', 'priority' => '0.5', 'freq' => 'monthly'],
-    ['loc' => '/contato', 'priority' => '0.5', 'freq' => 'monthly'],
-    ['loc' => '/faq', 'priority' => '0.5', 'freq' => 'monthly'],
+    ['loc' => '/catalogo/', 'priority' => '0.9', 'freq' => 'daily'],
+    ['loc' => '/sobre/', 'priority' => '0.5', 'freq' => 'monthly'],
+    ['loc' => '/contato/', 'priority' => '0.5', 'freq' => 'monthly'],
+    ['loc' => '/faq/', 'priority' => '0.5', 'freq' => 'monthly'],
+    ['loc' => '/avaliacoes.php', 'priority' => '0.4', 'freq' => 'weekly'],
     ['loc' => '/termos', 'priority' => '0.3', 'freq' => 'yearly'],
-    ['loc' => '/politica-privacidade', 'priority' => '0.3', 'freq' => 'yearly'],
+    ['loc' => '/politica-privacidade/', 'priority' => '0.3', 'freq' => 'yearly'],
     ['loc' => '/politica-devolucoes', 'priority' => '0.3', 'freq' => 'yearly'],
     ['loc' => '/politica-entrega', 'priority' => '0.3', 'freq' => 'yearly'],
-    ['loc' => '/blog', 'priority' => '0.7', 'freq' => 'weekly'],
+    ['loc' => '/blog/', 'priority' => '0.7', 'freq' => 'weekly'],
 ];
 
 foreach ($pages as $page) {

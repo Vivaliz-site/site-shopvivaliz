@@ -1,7 +1,7 @@
 # Histórico de Agentes Shopee — ShopVivaliz
 
 **Repositório:** `fredmourao-ai/site-shopvivaliz`  
-**Última atualização:** 2026-08-14  
+**Última atualização:** 2026-08-18 (ciclo 30)  
 **Branch de origem:** `claude/guth-portfolio-access-81jjq2`
 
 > Documento de consulta para agentes. Descreve o que foi implementado, como usar, quais secrets são necessários e quais limitações existem.
@@ -904,3 +904,228 @@ critério de aviso definido nos ciclos anteriores. Recomendação para quando o 
 permanece a mesma: (1) renovar OAuth2 do Tiny e recriar os workflows dedicados, e/ou (2) decidir
 se vale integrar a API de analytics do Shopee Open Platform para viabilizar os itens 1/3/9/10, e/ou
 (3) reduzir o escopo desta rotina de 6h para apenas o que o código hoje sustenta.
+
+### 9.21 Atualização — ciclo de 2026-08-15 (~13h UTC), 26º ciclo — `Shopee Runtime Health` nunca tinha sido checado nos ciclos anteriores; confirma `runtime_shopee_comprovado` ativo, mas não muda o bloqueio de fundo
+
+Checagem completa via `git fetch origin main` (HEAD desta sessão confirmado idêntico a `origin/main`,
+`e3183ee`) e `mcp__github__actions_list`/`get_job_logs`, sem depender do sandbox local para
+credenciais (`env | grep -iE "SHOPEE|TINY|OLIST"` continua vazio aqui, como esperado e já
+documentado). `listings/` continua parado em `shopee-listings-20260726-080756.json` — **20 dias**
+sem extração de catálogo pela via antiga (Tiny). `.github/workflows/` continua só com
+`shopee-optimizer-safety.yml`/`shopee-production-seo.yml`/`shopee-runtime-health.yml` sob Shopee;
+o par `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` segue ausente.
+
+**Achado novo (processo, não estrutural):** nenhum dos ciclos 9.1–9.20 checou o workflow
+`shopee-runtime-health.yml` (existe desde 2026-07-30, ver auditoria
+`docs/audits/shopee-runtime-credentials-2026-08-14.md`). Ele roda a cada 6h + após deploy e faz
+leitura real e não-mutante do catálogo Shopee direto na VM via `scripts/shopee_runtime_exec.py` +
+`scripts/shopee_runtime_preflight.py`. As últimas execuções (`31885974110`, 2026-08-15T12:58Z,
+`conclusion: success`) confirmam por log real (não inferência):
+`{"catalog_read": true, "detail_read": true, "status": "ok", "credential_presence": {"SHOPEE_ACCESS_TOKEN": true, "SHOPEE_PARTNER_ID": true, "SHOPEE_PARTNER_KEY": true, "SHOPEE_REFRESH_TOKEN": true, "SHOPEE_SHOP_ID": true}}`,
+com 5 `sample_item_ids` reais lidos da API. Isso corresponde ao estado `runtime_shopee_comprovado`
+definido em `docs/POLITICA-PR-AGENTES.md` — e está acontecendo de fato, de forma recorrente, desde
+antes do ciclo 19 (só não tinha sido verificado). Não é uma mudança de estado, é uma lacuna de
+verificação dos ciclos anteriores sendo fechada.
+
+Isso **não** resolve o bloqueio de fundo: `shopee-runtime-health.yml` só prova leitura de
+catálogo/detalhe, não expõe CTR/conversão/venda por SKU (nenhuma chamada a endpoint de analytics
+do Shopee Open Platform em nenhum script do repo, reconfirmado por leitura direta). `shopee-production-seo.yml`
+(o único caminho real de escrita, com confirmação humana obrigatória, backup e read-back) segue
+com as mesmas 5 execuções de 2026-07-30, todas `conclusion: failure`, nenhuma execução nova desde
+então — inclusive depois da correção documentada na auditoria de 2026-08-14 que passou a rodar o
+apply na VM; isso é esperado, já que esse workflow não tem `schedule` e exige disparo manual
+(`workflow_dispatch`) com a frase de confirmação, então não há novo dado aqui até alguém rodá-lo.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. Nenhuma notificação
+push enviada neste ciclo — o achado novo é uma confirmação de que a leitura de catálogo real
+funciona de forma consistente, o que reforça (não contradiz) a recomendação existente; nenhum dos
+critérios de aviso definidos (workflows Tiny recriados, artefato novo com erro diferente, execução
+de `shopee-production-seo.yml` com apply real bem-sucedido) ocorreu. Recomendação para quando o
+usuário tiver tempo permanece a mesma dos ciclos 19–25: (1) renovar OAuth2 do Tiny e recriar os
+workflows dedicados, e/ou (2) decidir se vale integrar a API de analytics do Shopee Open Platform
+para viabilizar os itens 1/3/9/10 da rotina de 6h, e/ou (3) reduzir o escopo desta rotina para
+apenas o que o código hoje sustenta (título/descrição determinísticos por atributo de catálogo,
+sem CTR/A-B/preço/imagem).
+
+### 9.22 Atualização — ciclo de 2026-08-16 (~07h UTC), 27º ciclo — estado idêntico ao ciclo 26, sem fato novo
+
+Checagem completa via `git fetch origin main` (HEAD desta sessão confirmado idêntico a `origin/main`,
+`2499137`) e `mcp__github__actions_list`/`get_job_logs`, sem depender do sandbox local para
+credenciais (`env | grep -iE "SHOPEE|TINY|OLIST"` continua vazio aqui, como esperado). `listings/`
+continua parado em `shopee-listings-20260726-080756.json` — **21 dias** sem extração de catálogo
+pela via antiga (Tiny). `.github/workflows/` continua só com `shopee-optimizer-safety.yml`/
+`shopee-production-seo.yml`/`shopee-runtime-health.yml` sob Shopee; o par
+`fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` segue ausente.
+
+`shopee-production-seo.yml` segue com as mesmas 5 execuções de 2026-07-30 (`id`s 30585266165,
+30571531668, 30571478470, 30571242284, 30570700034), todas `conclusion: failure`, sem execução
+nova desde então (esperado — não tem `schedule`, exige `workflow_dispatch` manual com frase de
+confirmação). `shopee-runtime-health.yml` seguiu rodando a cada 6h/após deploy e a execução mais
+recente antes deste registro (`31932750750`, 2026-08-16T06:59:24Z, `conclusion: success`) confirma
+por log real o mesmo estado do ciclo 26: `{"catalog_read": true, "detail_read": true, "status":
+"ok", "credential_presence": {"SHOPEE_ACCESS_TOKEN": true, "SHOPEE_PARTNER_ID": true,
+"SHOPEE_PARTNER_KEY": true, "SHOPEE_REFRESH_TOKEN": true, "SHOPEE_SHOP_ID": true}}`, com 5
+`sample_item_ids` reais lidos da API. Releitura direta de `scripts/shopee_runtime_exec.py` e
+`scripts/utils/shopee_client.py` (grep por `analytics`/`ctr`/`conversion_rate`) confirma que nenhum
+endpoint de analytics do Shopee Open Platform foi adicionado desde o ciclo 26 — os itens 1/3/9/10
+da rotina de 6h continuam tecnicamente inexequíveis.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. Nenhuma notificação
+push enviada neste ciclo — nenhum dos critérios de aviso definidos (workflows Tiny recriados,
+artefato novo com erro diferente, execução de `shopee-production-seo.yml` com apply real
+bem-sucedido) ocorreu. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos
+19–26.
+
+### 9.23 Atualização — ciclo de 2026-08-18 (~01h UTC), 28º ciclo — gap de 2 dias sem registro; estado idêntico ao ciclo 27, sem fato novo
+
+Checagem completa via `git fetch origin main` (HEAD desta sessão confirmado idêntico a `origin/main`,
+`e7e5ad3`) e `mcp__github__actions_list`, sem depender do sandbox local para credenciais
+(`env | grep -iE "SHOPEE|TINY|OLIST"` continua vazio aqui, como esperado). `listings/` continua
+parado em `shopee-listings-20260726-080756.json` — **23 dias** sem extração de catálogo pela via
+antiga (Tiny). `.github/workflows/` continua só com `shopee-optimizer-safety.yml`/
+`shopee-production-seo.yml`/`shopee-runtime-health.yml` sob Shopee; o par
+`fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` segue ausente. `git log --since=2026-08-16
+-- '*shopee*' '*Shopee*'` não retorna nenhum commit tocando código/dados Shopee (só um commit
+`ops: apply Cloudflare www redirect`, não relacionado).
+
+`shopee-production-seo.yml` segue com as mesmas 5 execuções de 2026-07-30 (mesmos IDs dos ciclos
+anteriores), todas `conclusion: failure`, sem execução nova (esperado — exige `workflow_dispatch`
+manual com frase de confirmação). `shopee-runtime-health.yml` continua com execuções `success` reais
+via `schedule` (`32057615121`, 2026-08-17T18:56:59Z; `32033182797`, 2026-08-17T13:05:29Z;
+`32005082387`, 2026-08-17T07:16:23Z) — cadência de 6h confirmada até a véspera deste ciclo.
+
+**Nota observada, fora do escopo desta rotina:** entre 2026-08-17T22:30Z e 2026-08-18T01:08Z, o
+workflow `Master Production Pipeline 24/7` (`master-production-pipeline.yml`) apresenta várias
+execuções `conclusion: failure` encadeadas de minutos em minutos, o que faz `shopee-runtime-health.yml`
+pular (evento `workflow_run`, condição `github.event.workflow_run.conclusion == 'success'`) nessas
+janelas — mas isso não afeta a leitura real via `schedule`, que seguiu funcionando normalmente (ver
+acima). Esse padrão de falhas do master pipeline é responsabilidade de outra rotina/pipeline, não
+desta rotina de otimização Shopee; registrado aqui só para o caso de um agente futuro estranhar os
+`skipped` no histórico de `shopee-runtime-health.yml`.
+
+Releitura direta de `scripts/shopee_production_seo_apply.py`, `scripts/shopee_full_catalog_optimizer.py`,
+`scripts/shopee_title_optimizer.py`, `scripts/utils/shopee_client.py`, `scripts/shopee_runtime_exec.py`
+e `scripts/shopee_runtime_preflight.py` (grep por `analytics`/`ctr`/`conversion_rate`/`click_through`)
+confirma que nenhum endpoint de analytics do Shopee Open Platform foi adicionado desde o ciclo 27 —
+os itens 1/3/9/10 da rotina de 6h continuam tecnicamente inexequíveis. `claude/logs/shopee-sync.log`
+(citado na rotina) continua não existindo neste repo.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. Nenhuma notificação
+push enviada neste ciclo — nenhum dos critérios de aviso definidos (workflows Tiny recriados,
+artefato novo com erro diferente, execução de `shopee-production-seo.yml` com apply real
+bem-sucedido) ocorreu; as falhas do master pipeline são de outra rotina e não alteram essa
+avaliação. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos 19–27.
+
+### 9.24 Atualização — ciclo de 2026-08-18 (~07h UTC), 29º ciclo — estado idêntico ao ciclo 28; achado de processo sobre módulos CTR mortos
+
+Checagem completa via `git fetch origin main` (HEAD desta sessão confirmado idêntico a `origin/main`,
+`fdd07eb`) e `mcp__github__actions_list`/`get_job_logs`, sem depender do sandbox local para
+credenciais (`env | grep -iE "SHOPEE|TINY|OLIST"` continua vazio aqui, como esperado). `git log
+e7e5ad3..HEAD -- '*shopee*' '*Shopee*'` não retorna nenhum commit — os 10 commits novos desde o
+ciclo 28 (`aad72f5`..`fdd07eb`) são todos de outras rotinas (home, deploy, sync, admin). `listings/`
+continua parado em `shopee-listings-20260726-080756.json` — **23 dias** sem extração de catálogo
+pela via antiga (Tiny). `.github/workflows/` continua só com `shopee-optimizer-safety.yml`/
+`shopee-production-seo.yml`/`shopee-runtime-health.yml` sob Shopee; o par
+`fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` segue ausente.
+
+`shopee-production-seo.yml` segue com as mesmas 5 execuções de 2026-07-30 (mesmos IDs dos ciclos
+anteriores: `30585266165`, `30571531668`, `30571478470`, `30571242284`, `30570700034`), todas
+`conclusion: failure`, sem execução nova (esperado — exige `workflow_dispatch` manual com frase de
+confirmação). `shopee-runtime-health.yml` seguiu rodando a cada 6h via `schedule`; a execução mais
+recente (`32109701975`, 2026-08-18T07:04:11Z, `conclusion: success`, job "Verify canonical VM
+credentials and catalog read") confirma por log real o mesmo estado dos ciclos 26-28:
+`{"catalog_read": true, "detail_read": true, "status": "ok", "credential_presence":
+{"SHOPEE_ACCESS_TOKEN": true, "SHOPEE_PARTNER_ID": true, "SHOPEE_PARTNER_KEY": true,
+"SHOPEE_REFRESH_TOKEN": true, "SHOPEE_SHOP_ID": true}}`, com 5 `sample_item_ids` reais.
+
+**Achado de processo (não estrutural, não muda a avaliação):** um grep mais amplo desta rotina, em
+todo `scripts/` (não só nos arquivos `shopee_*.py` já conhecidos), encontrou
+`scripts/ia/analytics/ctr_monitor.py` (`analyze_shopee_metrics()`) e `scripts/analytics/performance_tracker.py`,
+que à primeira vista parecem implementar a análise de CTR que os ciclos 9.7+ concluíram não existir.
+Inspeção confirma que são código morto, não uma integração real: `analyze_shopee_metrics()` espera
+receber `metrics` de `ShopeeClient.get_product_metrics()`, mas esse método **não existe** em
+`scripts/utils/shopee_client.py` nem em nenhum outro arquivo do repo (`grep -r "def get_product_metrics"`
+não retorna nada); o único chamador de `ctr_monitor`/`analyze_shopee_metrics` é
+`scripts/ia_pipeline_main.py`, que por sua vez não é referenciado por nenhum workflow, crontab ou doc
+(`grep -rl ia_pipeline_main` só encontra o próprio arquivo). Ou seja: módulo aspiracional, nunca
+executado em produção, sem fonte de dados real por trás — reconfirma, não contradiz, o achado
+estrutural das seções 9.7/9.8 (nenhum endpoint de analytics do Shopee Open Platform integrado).
+Registrado aqui para que um agente futuro que encontre esses arquivos não precise repetir a
+investigação.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. Nenhuma notificação
+push enviada neste ciclo — nenhum dos critérios de aviso definidos (workflows Tiny recriados,
+artefato novo com erro diferente, execução de `shopee-production-seo.yml` com apply real
+bem-sucedido) ocorreu; o achado sobre `ctr_monitor.py` é código morto pré-existente, não uma
+mudança de estado. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos
+19–28.
+
+### 9.25 Atualização — ciclo de 2026-08-18 (~13h UTC), 30º ciclo — estado idêntico ao ciclo 29
+
+Checagem completa via `git fetch origin main` (HEAD local estava desatualizado — 4 commits atrás,
+sem nenhum deles tocar Shopee — e foi sincronizado para `09e166d`) e
+`mcp__github__actions_list`/`get_job_logs`; `env | grep -iE "SHOPEE|TINY|OLIST"` continua vazio
+neste sandbox, como esperado. `git log fdd07eb..09e166d -- '*shopee*' '*Shopee*'` não retorna
+nenhum commit — os commits novos desde o ciclo 29 são todos de outras rotinas (sync, deploy,
+devolução, health). `listings/` continua parado em `shopee-listings-20260726-080756.json` —
+mesma marca d'água dos ciclos anteriores, sem extração nova pela via Tiny. `.github/workflows/`
+segue só com `shopee-optimizer-safety.yml`/`shopee-production-seo.yml`/`shopee-runtime-health.yml`
+sob Shopee; `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` seguem ausentes.
+`docs/AGENTS.md` seção "Shopee/Tiny OAuth2 — PARADO HÁ 3+ SEMANAS" (linha 149) permanece sem
+atualização, confirmando que o bloqueio de OAuth2 do Tiny e a ausência dos dois workflows
+removidos na consolidação de 2026-07-26 seguem sem resolução manual.
+
+`shopee-production-seo.yml` segue com as mesmas 5 execuções de 2026-07-30 (mesmos IDs dos ciclos
+anteriores: `30585266165`, `30571531668`, `30571478470`, `30571242284`, `30570700034`), todas
+`conclusion: failure`, sem execução nova (esperado — exige `workflow_dispatch` manual com frase de
+confirmação). `shopee-runtime-health.yml` seguiu rodando a cada 6h via `schedule`; a execução mais
+recente (`32140586249`, 2026-08-18T13:07:42Z, `conclusion: success`, job "Verify canonical VM
+credentials and catalog read") confirma por log real o mesmo estado dos ciclos 26-29:
+`{"catalog_read": true, "detail_read": true, "status": "ok", "credential_presence":
+{"SHOPEE_ACCESS_TOKEN": true, "SHOPEE_PARTNER_ID": true, "SHOPEE_PARTNER_KEY": true,
+"SHOPEE_REFRESH_TOKEN": true, "SHOPEE_SHOP_ID": true}}`, com 5 `sample_item_ids` reais — ou seja,
+o acesso de leitura ao catálogo via API oficial do Shopee continua funcional, mas isso não supre a
+falta de um endpoint de analytics (CTR/conversão) nem substitui o pipeline de listagens via Tiny
+que está parado. `shopee-optimizer-safety.yml` não teve execução nova neste ciclo (dispara em
+push/PR, não em schedule; última execução em 2026-08-15, de outra sessão).
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. Nenhuma notificação
+push enviada neste ciclo — nenhum dos critérios de aviso definidos (workflows Tiny recriados,
+artefato novo com erro diferente, execução de `shopee-production-seo.yml` com apply real
+bem-sucedido) ocorreu. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos
+19–29: regenerar client OAuth2 na Tiny e recriar `fetch-shopee-listings.yml`/
+`optimize-shopee-listings.yml` (ver seção 🔴 de `docs/AGENTS.md`).
+
+### 9.26 Atualização — ciclo de 2026-08-18 (~19h UTC), 31º ciclo — estado idêntico ao ciclo 30
+
+Checagem completa via `git fetch origin main` (HEAD local estava 55 commits atrás, sincronizado
+para `db949b9`; `git log 09e166d..db949b9 -- '*shopee*' '*Shopee*'` não retorna nenhum commit —
+os 55 commits novos desde o ciclo 30 são todos de outras rotinas) e `mcp__github__actions_list`
+por `list_workflow_jobs`/`list_workflow_runs`; `env | grep -iE "SHOPEE|TINY|OLIST"` continua vazio
+neste sandbox, como esperado. `listings/` continua parado em `shopee-listings-20260726-080756.json`
+— **24 dias** sem extração de catálogo pela via Tiny. `.github/workflows/` segue só com
+`shopee-optimizer-safety.yml`/`shopee-production-seo.yml`/`shopee-runtime-health.yml` sob Shopee;
+`fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` seguem ausentes. `docs/AGENTS.md`
+linha 149 e a seção 🔴 de `KNOWN_ISSUES.md` (última atualização 2026-07-27) permanecem sem
+atualização, confirmando que o bloqueio de OAuth2 do Tiny segue sem resolução manual.
+
+`shopee-production-seo.yml` segue com as mesmas 5 execuções de 2026-07-30 (mesmos IDs dos ciclos
+anteriores: `30585266165`, `30571531668`, `30571478470`, `30571242284`, `30570700034`), todas
+`conclusion: failure`, sem execução nova (esperado — exige `workflow_dispatch` manual com frase de
+confirmação `APPLY_ALL_SHOPEE_PRODUCTS`). `shopee-runtime-health.yml` seguiu rodando via
+`schedule`/`workflow_run`; a execução mais recente (`32173802105`, 2026-08-18T18:56:23Z,
+`conclusion: success`, job "Verify canonical VM credentials and catalog read", todos os 6 steps
+`success`) confirma leitura real da API Shopee na VM de produção, mesmo estado dos ciclos 26-30.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. Nenhuma notificação
+push enviada neste ciclo — nenhum dos critérios de aviso definidos (workflows Tiny recriados,
+artefato novo com erro diferente, execução de `shopee-production-seo.yml` com apply real
+bem-sucedido) ocorreu. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos
+19–30: regenerar client OAuth2 na Tiny e recriar `fetch-shopee-listings.yml`/
+`optimize-shopee-listings.yml` (ver seção 🔴 de `docs/AGENTS.md`).

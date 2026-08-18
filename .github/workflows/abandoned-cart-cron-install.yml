@@ -1,0 +1,49 @@
+name: Abandoned Cart Email Cron Install
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ops/abandoned-cart-cron-install.json"
+
+permissions:
+  contents: read
+
+jobs:
+  install-cron:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Install/confirm abandoned cart cron entry
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'SH'
+          set -euo pipefail
+          LINE='*/30 * * * * php /home/ubuntu/site-shopvivaliz/scripts/send-abandoned-cart-emails.php >> /home/ubuntu/site-shopvivaliz/logs/abandoned-cart-email.log 2>&1'
+          mkdir -p /home/ubuntu/site-shopvivaliz/logs
+          CURRENT="$(crontab -l 2>/dev/null || true)"
+          if echo "$CURRENT" | grep -qF 'send-abandoned-cart-emails.php'; then
+            echo 'ABANDONED_CART_CRON_ALREADY_PRESENT'
+          else
+            { echo "$CURRENT"; echo "$LINE"; } | grep -v '^$' | crontab -
+            echo 'ABANDONED_CART_CRON_INSTALLED'
+          fi
+          echo '--- crontab -l ---'
+          crontab -l
+          SH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

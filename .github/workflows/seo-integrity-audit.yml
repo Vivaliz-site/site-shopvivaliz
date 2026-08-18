@@ -1,0 +1,93 @@
+name: SEO Integrity Audit
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'produto.php'
+      - 'produto-numeric-route.php'
+      - 'catalogo.php'
+      - 'sitemap.php'
+      - '.htaccess'
+      - 'includes/**'
+      - 'scripts/seo-integrity-audit.py'
+      - '.github/workflows/seo-integrity-audit.yml'
+  workflow_run:
+    workflows:
+      - Master Production Pipeline 24/7
+    types:
+      - completed
+    branches:
+      - main
+  schedule:
+    - cron: '17 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seo-integrity-audit-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Audit public URL integrity
+    if: >-
+      ${{ github.event_name != 'workflow_run' ||
+          github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Run read-only public SEO audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/seo-integrity-audit.py \
+            --base https://shopvivaliz.com.br \
+            --timeout 12 \
+            --workers 6 \
+            --json seo-integrity-audit.json \
+            --markdown seo-integrity-audit.md
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -s seo-integrity-audit.md ]]; then
+            cat seo-integrity-audit.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'SEO audit did not produce a report.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: seo-integrity-audit-${{ github.run_id }}
+          path: |
+            seo-integrity-audit.json
+            seo-integrity-audit.md
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce URL integrity after deployment
+        if: ${{ github.event_name == 'workflow_run' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/seo-integrity-audit.py \
+            --base https://shopvivaliz.com.br \
+            --timeout 12 \
+            --workers 6 \
+            --json seo-integrity-audit-final.json \
+            --markdown seo-integrity-audit-final.md \
+            --fail-on-issues

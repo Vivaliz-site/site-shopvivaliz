@@ -1,0 +1,134 @@
+name: Google Ads Delivery Diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ops/google-ads-delivery-diagnostic.json"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Read-only Antique Decore preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
+          import json, urllib.parse, urllib.request, urllib.error
+          from pathlib import Path
+
+          CAMPAIGN_NAME='ShopVivaliz-Search-Vasos-Antique-Decore-2026-08'
+          EXPECTED_GROUPS={'Vasos Antique Japi','Vasos Decore Japi'}
+          EXPECTED_BUDGET=10_000_000
+
+          env={}
+          p=Path('/home/ubuntu/shopvivaliz-deploy/shared/.env')
+          for raw in p.read_text(encoding='utf-8', errors='ignore').splitlines():
+              line=raw.strip()
+              if not line or line.startswith('#') or '=' not in line:
+                  continue
+              k,v=line.split('=',1)
+              env[k.strip()]=v.strip().strip('"\'')
+
+          required=['GOOGLE_OAUTH_CLIENT_ID','GOOGLE_OAUTH_CLIENT_SECRET','GOOGLE_ADS_REFRESH_TOKEN','GOOGLE_ADS_DEVELOPER_TOKEN','GOOGLE_ADS_CUSTOMER_ID']
+          missing=[k for k in required if not env.get(k,'').strip()]
+          if missing:
+              raise SystemExit('MISSING_SECRETS=' + ','.join(missing))
+
+          token_data=urllib.parse.urlencode({
+              'client_id':env['GOOGLE_OAUTH_CLIENT_ID'],
+              'client_secret':env['GOOGLE_OAUTH_CLIENT_SECRET'],
+              'refresh_token':env['GOOGLE_ADS_REFRESH_TOKEN'],
+              'grant_type':'refresh_token',
+          }).encode()
+          req=urllib.request.Request('https://oauth2.googleapis.com/token', data=token_data, headers={'Content-Type':'application/x-www-form-urlencoded'}, method='POST')
+          with urllib.request.urlopen(req, timeout=20) as r:
+              access=json.loads(r.read().decode()).get('access_token','')
+          if not access:
+              raise SystemExit('OAUTH_REFRESH_FAILED')
+
+          cid=env['GOOGLE_ADS_CUSTOMER_ID'].replace('-','').strip()
+          base=f'https://googleads.googleapis.com/v25/customers/{cid}/googleAds:searchStream'
+          headers={'Content-Type':'application/json','Authorization':'Bearer '+access,'developer-token':env['GOOGLE_ADS_DEVELOPER_TOKEN']}
+          login=env.get('GOOGLE_ADS_LOGIN_CUSTOMER_ID','').replace('-','').strip()
+          if login:
+              headers['login-customer-id']=login
+
+          def query(gaql):
+              qreq=urllib.request.Request(base,data=json.dumps({'query':gaql}).encode(),headers=headers,method='POST')
+              with urllib.request.urlopen(qreq,timeout=30) as r:
+                  payload=json.loads(r.read().decode())
+              rows=[]
+              for batch in payload if isinstance(payload,list) else []:
+                  if isinstance(batch,dict): rows.extend(batch.get('results') or [])
+              return rows
+
+          safe=CAMPAIGN_NAME.replace("'","\\'")
+          campaigns=query(f'''SELECT campaign.id, campaign.name, campaign.status, campaign.serving_status, campaign.primary_status, campaign_budget.amount_micros FROM campaign WHERE campaign.name = '{safe}' AND campaign.status != 'REMOVED' ''')
+          print('CAMPAIGN_COUNT='+str(len(campaigns)))
+          for row in campaigns:
+              print('CAMPAIGN='+json.dumps(row,ensure_ascii=False,separators=(',',':')))
+          if len(campaigns) != 1:
+              raise SystemExit('CAMPAIGN_INVARIANT_FAILED')
+          campaign=campaigns[0]
+          campaign_id=str(campaign['campaign']['id'])
+          budget=int(campaign.get('campaignBudget',{}).get('amountMicros') or 0)
+          print('BUDGET_MICROS='+str(budget))
+          print('BUDGET_EXACT_10_BRL='+str(budget == EXPECTED_BUDGET).lower())
+
+          groups=query(f'''SELECT ad_group.id, ad_group.name, ad_group.status FROM ad_group WHERE campaign.id = {campaign_id} AND ad_group.status != 'REMOVED' ORDER BY ad_group.name''')
+          group_names=[r['adGroup']['name'] for r in groups]
+          print('AD_GROUP_COUNT='+str(len(groups)))
+          print('AD_GROUP_NAMES='+json.dumps(group_names,ensure_ascii=False,separators=(',',':')))
+          print('AD_GROUPS_EXACT='+str(len(groups)==2 and set(group_names)==EXPECTED_GROUPS).lower())
+
+          ads=query(f'''SELECT ad_group.id, ad_group.name, ad_group_ad.ad.id, ad_group_ad.status, ad_group_ad.primary_status, ad_group_ad.policy_summary.approval_status, ad_group_ad.policy_summary.review_status, ad_group_ad.policy_summary.policy_topic_entries, ad_group_ad.ad.final_urls FROM ad_group_ad WHERE campaign.id = {campaign_id} AND ad_group_ad.status != 'REMOVED' ORDER BY ad_group.name, ad_group_ad.ad.id''')
+          print('AD_COUNT='+str(len(ads)))
+          for row in ads:
+              print('AD_POLICY='+json.dumps(row,ensure_ascii=False,separators=(',',':')))
+
+          conversions=query("""SELECT conversion_action.id, conversion_action.name, conversion_action.status, conversion_action.primary_for_goal, conversion_action.type, conversion_action.origin, conversion_action.category FROM conversion_action WHERE conversion_action.status = 'ENABLED' ORDER BY conversion_action.name""")
+          purchase=[r for r in conversions if r.get('conversionAction',{}).get('category') == 'PURCHASE']
+          primary=[r for r in purchase if bool(r.get('conversionAction',{}).get('primaryForGoal'))]
+          print('PURCHASE_ENABLED_COUNT='+str(len(purchase)))
+          print('PURCHASE_PRIMARY_COUNT='+str(len(primary)))
+          for row in purchase:
+              print('PURCHASE_ACTION='+json.dumps(row,ensure_ascii=False,separators=(',',':')))
+
+          budget_ok=(budget == EXPECTED_BUDGET)
+          groups_ok=(len(groups)==2 and set(group_names)==EXPECTED_GROUPS)
+          ads_ok=(len(ads)==2)
+          conversion_ok=(len(primary)==1)
+          approvals=[r.get('adGroupAd',{}).get('policySummary',{}).get('approvalStatus','') for r in ads]
+          reviews=[r.get('adGroupAd',{}).get('policySummary',{}).get('reviewStatus','') for r in ads]
+          any_disapproved=any(x=='DISAPPROVED' for x in approvals)
+          all_approved=(len(approvals)==2 and all(x=='APPROVED' for x in approvals))
+          pending=(not any_disapproved and not all_approved)
+          print('PREFLIGHT_BUDGET_OK='+str(budget_ok).lower())
+          print('PREFLIGHT_GROUPS_OK='+str(groups_ok).lower())
+          print('PREFLIGHT_ADS_OK='+str(ads_ok).lower())
+          print('PREFLIGHT_CONVERSION_OK='+str(conversion_ok).lower())
+          print('PREFLIGHT_ANY_DISAPPROVED='+str(any_disapproved).lower())
+          print('PREFLIGHT_ALL_APPROVED='+str(all_approved).lower())
+          print('PREFLIGHT_POLICY_PENDING='+str(pending).lower())
+          PY
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

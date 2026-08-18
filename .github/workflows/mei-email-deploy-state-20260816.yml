@@ -1,0 +1,35 @@
+name: MEI email deploy state 20260816
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Inspect service state
+        run: |
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
+            echo NOW=$(date -Is)
+            cd /home/ubuntu/mei-mg-email
+            echo HEAD=$(git rev-parse HEAD 2>/dev/null || true)
+            echo ACTIVE=$(systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+            echo SUB=$(systemctl show -p SubState --value mei-mg-email-worker.service 2>/dev/null || true)
+            echo MAINPID=$(systemctl show -p MainPID --value mei-mg-email-worker.service 2>/dev/null || true)
+            systemctl show -p ExecMainStartTimestamp -p ExecMainPID -p TimeoutStopUSec mei-mg-email-worker.service || true
+            ps -eo pid,ppid,etime,stat,wchan:28,cmd | grep -E "[w]orker.worker(_queue_first)?|[w]orker.worker$" || true
+            echo ---OVERRIDE---
+            sudo cat /etc/systemd/system/mei-mg-email-worker.service.d/queue-first.conf 2>/dev/null || true
+          '
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

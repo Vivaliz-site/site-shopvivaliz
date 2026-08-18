@@ -1,0 +1,8 @@
+{
+  "operation": "redirect-www-to-canonical-host-preserving-path-query",
+  "hostname": "www.shopvivaliz.com.br",
+  "target_expression": "concat(\"https://shopvivaliz.com.br\", http.request.uri.path)",
+  "status_code": 301,
+  "preserve_query_string": true,
+  "requested_at": "2026-08-17"
+}

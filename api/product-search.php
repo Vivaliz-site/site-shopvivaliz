@@ -115,9 +115,15 @@ function svcat_search_score(array $product, string $query, array $mlScores): flo
         }
     }
 
-    $mlKey = $product['sku'] ?? '';
-    if (isset($mlScores[$mlKey])) {
-        $score += $mlScores[$mlKey] * 5;
+    // ML only reorders products that actually matched the shopper's words.
+    // It must never manufacture a result for an unrelated query.
+    if ($score > 0) {
+        $rawSku = (string)($product['sku'] ?? '');
+        $mlKey = svcat_ml_key_normalize($rawSku);
+        $mlScore = $mlScores[$rawSku] ?? ($mlKey !== '' ? ($mlScores[$mlKey] ?? null) : null);
+        if ($mlScore !== null) {
+            $score += (float)$mlScore * 5;
+        }
     }
 
     return $score;
@@ -127,7 +133,7 @@ require_once svcat_root() . '/includes/catalog-runtime.php';
 
 $limit = min(100, max(1, (int)($_GET['limit'] ?? 20)));
 $page = max(1, (int)($_GET['page'] ?? 1));
-$q = trim((string)($_GET['q'] ?? ''));
+$q = trim((string)($_GET['q'] ?? $_GET['busca'] ?? $_GET['query'] ?? ''));
 $sort = trim((string)($_GET['sort'] ?? 'relevance'));
 
 if ($q === '') {

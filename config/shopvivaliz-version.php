@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 return array(
-    'version' => '9.2.104',
-    'version_code' => 902104,
-    'channel' => 'dev',
-    'codename' => 'mercadopago-live-checkout',
+    'version' => '9.2.106',
+    'version_code' => 902106,
+    'channel' => 'stable',
+    'codename' => 'catalog-help-clarity',
     'release_type' => 'cumulative',
-    'generated_at' => '2026-07-15T12:00:00-03:00',
+    'generated_at' => '2026-08-17T00:00:00+00:00',
     'requires_update_php_sync' => true,
     'notes' => array(
         'Centraliza numero da versao para deploy, endpoints e testes pos-deploy.',
@@ -37,5 +37,18 @@ return array(
         'Ativa Checkout Pro e boleto bancario real do Mercado Pago vinculados ao pedido autoritativo.',
         'Valida webhook Mercado Pago por HMAC e consulta o recurso oficial antes de atualizar o pedido.',
         'Desativa endpoints legados que aceitavam valores arbitrarios ou configuracao TLS insegura.',
+        'Enriquece o catalogo ativo por SKU com descricoes, categorias, imagens, marca, GTIN e dimensoes sem alterar preco ou estoque.',
+        'Restaura produtos no sitemap e no feed do Google Merchant a partir da fonte canonica ativa.',
+        'Remove contagens, notas, depoimentos, combos e condicoes de pagamento sem comprovacao.',
+        'Corrige WhatsApp oficial, cotacao de frete expirada e conversoes registradas antes da aprovacao do pagamento.',
+        'Elimina pageview server-side duplicado e bloqueante, preservando purchase confirmado pelo webhook.',
+        'Reescreve Home, Sobre, Contato, FAQ e Avaliacoes e adiciona formulario real de atendimento.',
+        'Valida compra antes do selo de avaliacao verificada e protege os dados privados do pedido.',
+        'Reduz CLS e chamada duplicada da primeira renderizacao do catalogo.',
+        'Remove promessas fixas de desconto, frete e parcelamento das superficies publicas e da Liz legada.',
+        'Remove integracao WhatsApp sem uso que continha respostas comerciais estaticas e logging local.',
+        'Adiciona seletor explicito de categoria com sincronizacao de URL, chips e navegacao movel.',
+        'Fixa a mascote Liz no canto inferior direito com etiqueta clara de atendimento.',
+        'Inclui os checks reprovados no diagnostico do health gate de sincronizacao.',
     ),
 );
