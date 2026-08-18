@@ -40,8 +40,25 @@ function sv_testimonials_same_origin(): bool
 $repo = new TestimonialsRepository();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 if ($method === 'GET') {
-    // Backfill rápido das avaliações antigas: usa as mesmas regras da Liz sem depender de chamada externa.
-    sv_testimonials_moderate_pending($repo, new LizTestimonialModerator(false), 50);
+    // Ate 2026-08-18 este backfill rodava a CADA GET (ou seja, a cada
+    // visita a home, via js/public-experience-v1.js), disparando ate 50
+    // UPDATEs no banco por pageview. Agora roda no maximo 1x a cada 5
+    // minutos, usando APCu como trava global. Ver relatorio da Rodada 1 de
+    // melhoria continua.
+    $canModerate = true;
+    if (function_exists('apcu_fetch') && function_exists('apcu_store')) {
+        $flagKey = 'sv_testimonials_moderate_lock_v1';
+        $ok = false;
+        apcu_fetch($flagKey, $ok);
+        if ($ok) {
+            $canModerate = false;
+        } else {
+            apcu_store($flagKey, 1, 300);
+        }
+    }
+    if ($canModerate) {
+        sv_testimonials_moderate_pending($repo, new LizTestimonialModerator(false), 50);
+    }
     echo json_encode(['ok' => true, 'items' => $repo->approved(12)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }

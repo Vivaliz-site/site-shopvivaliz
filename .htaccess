@@ -38,6 +38,13 @@ AddCharset UTF-8 .html .txt .php .json
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
     Header always set Content-Security-Policy "frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
+    # CSP em modo report-only (Rodada 1 de melhoria continua, 2026-08-18): o CSP acima nao tem
+    # default-src/script-src, entao hoje nao mitiga XSS (so clickjacking/injecao de <base>). Este
+    # segundo header e so-de-observacao -- nunca bloqueia nada, mesmo se a lista estiver incompleta
+    # ou errada -- e serve pra comecar o inventario de dominios de terceiros (Google Ads/GA4, Meta,
+    # TikTok Pixel, Mercado Pago, InfinitePay, Cloudflare) antes de promover um script-src real e
+    # bloqueante (isso sim e mudanca estrutural, aguardando aprovacao -- ver relatorio da Rodada 1).
+    Header always set Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://connect.facebook.net https://analytics.tiktok.com https://sdk.mercadopago.com https://http2.mlstatic.com https://checkout.infinitepay.io https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; frame-src 'self' https://sdk.mercadopago.com https://checkout.infinitepay.io"
     Header always set Cache-Control "no-store, max-age=0" env=SVRT_SENSITIVE
     Header always set Pragma "no-cache" env=SVRT_SENSITIVE
 </IfModule>
