@@ -5,6 +5,15 @@ header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
+// Rodada 6 (2026-08-19): endpoint publico sem nenhuma autenticacao,
+// devolvendo o caminho absoluto da release em producao (usuario do sistema,
+// layout shopvivaliz-deploy/releases/<timestamp>-<sha>, e o SHA do commit
+// rodando agora), alem de confirmar presenca de painel admin/monitor e
+// gravabilidade de logs -- mesma familia de R3-4/R4-4, terceiro endpoint
+// dessa classe. Ver R6-6 no relatorio da Rodada 6.
+require_once dirname(__DIR__, 2) . '/config/require-agent-key.php';
+sv_require_agent_key();
+
 $root = dirname(__DIR__, 2);
 
 function sv_monitor_first_existing(array $paths): ?string
@@ -57,7 +66,13 @@ foreach ($logFiles as $name => $path) {
 }
 
 $ok = !in_array(false, $checks, true);
-http_response_code($ok ? 200 : 207);
+// Rodada 6 (2026-08-19): 207 e um codigo WebDAV que a maioria das
+// ferramentas de monitoramento nao reconhece como "atencao" -- tratam como
+// sucesso ou como resposta inesperada, entao o sinal de "attention" nunca
+// chegava a lugar nenhum. 200 com "status":"attention" no corpo e
+// interpretavel por monitoramento HTTP padrao. Ver R6-6 no relatorio da
+// Rodada 6.
+http_response_code(200);
 
 echo json_encode([
     'ok' => $ok,
