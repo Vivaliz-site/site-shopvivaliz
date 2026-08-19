@@ -52,6 +52,12 @@ jobs:
           echo "CHECKED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           echo "HOST=$(hostname)"
           echo "HEAD=$(git rev-parse HEAD)"
+          echo '=== GIT WORKTREE ==='
+          git status --short
+          echo 'QUEUE_RECOVERY_SHA256='$(sha256sum app/queue_recovery.py | awk '{print $1}')
+          echo 'QUEUE_FIRST_SHA256='$(sha256sum worker/worker_queue_first.py | awk '{print $1}')
+          git diff -- app/queue_recovery.py worker/worker_queue_first.py scripts/desbloquear_exchange_app_cert.ps1
+          sed -n '130,175p' app/queue_recovery.py
           echo '=== HOST ==='
           df -h /
           free -h
@@ -62,9 +68,9 @@ jobs:
             -p ActiveState -p SubState -p LastTriggerUSec -p NextElapseUSecRealtime --no-pager
           sudo systemctl cat mei-mg-email-worker.service --no-pager || true
           echo '=== WORKER LOG ==='
-          sudo journalctl -u mei-mg-email-worker.service --since '-4 hours' --no-pager | tail -n 260
+          sudo journalctl -u mei-mg-email-worker.service --since '-90 minutes' --no-pager | tail -n 220
           echo '=== AUTOREPAIR LOG ==='
-          sudo journalctl -u mei-mg-email-autorepair.service --since '-4 hours' --no-pager | tail -n 260
+          sudo journalctl -u mei-mg-email-autorepair.service --since '-90 minutes' --no-pager | tail -n 220
 
           echo '=== GRAPH AUTH ==='
           .venv/bin/python - <<'PY'
@@ -92,18 +98,6 @@ jobs:
             echo 'SENTINEL_LEGACY=0'
           fi
 
-          echo '=== POWERSHELL MODULES ==='
-          if command -v pwsh >/dev/null 2>&1; then
-            pwsh -NoProfile -NonInteractive -Command '$ErrorActionPreference="Continue"; Get-Module -ListAvailable ExchangeOnlineManagement,PackageManagement,PowerShellGet | Sort-Object Name,Version -Descending | Select-Object Name,Version,Path | ConvertTo-Json -Compress' || true
-            set +e
-            pwsh -NoProfile -NonInteractive -File ./scripts/desbloquear_exchange_app_cert.ps1
-            exo_rc=$?
-            set -e
-            echo "EXCHANGE_CHECK_RC=$exo_rc"
-          else
-            echo 'EXCHANGE_CHECK_RC=90'
-          fi
-
           echo '=== DATABASE ACTIVITY ==='
           .venv/bin/python - <<'PY'
           from dotenv import load_dotenv
@@ -114,7 +108,7 @@ jobs:
           def run_one(conn, name, sql):
               try:
                   with conn.cursor(row_factory=dict_row) as cur:
-                      cur.execute("set statement_timeout='12s'")
+                      cur.execute("set statement_timeout='8s'")
                       cur.execute(sql)
                       rows = cur.fetchall()
                       print(name + '=' + json.dumps(rows, default=str, sort_keys=True))
@@ -123,40 +117,45 @@ jobs:
                   conn.rollback()
                   print(name + '_ERROR=' + type(exc).__name__ + ':' + str(exc).replace('\n',' '))
 
-          with psycopg.connect(os.environ['DATABASE_URL'], connect_timeout=10) as conn:
-              run_one(conn, 'PG_ACTIVITY', """
-                select pid, usename, application_name, client_addr, state,
-                       wait_event_type, wait_event, xact_start, query_start,
-                       now()-coalesce(xact_start,query_start) as xact_age,
-                       now()-query_start as query_age,
-                       pg_blocking_pids(pid) as blockers,
-                       left(query,700) as query
-                  from pg_stat_activity
-                 where datname=current_database()
-                   and pid<>pg_backend_pid()
-                   and (state<>'idle' or wait_event is not null)
-                 order by coalesce(xact_start,query_start) nulls last
-                 limit 40
-              """)
-              run_one(conn, 'PG_ADVISORY_LOCKS', """
-                select l.pid, l.classid, l.objid, l.objsubid, l.mode, l.granted,
-                       a.usename, a.application_name, a.client_addr,
-                       a.state, a.wait_event_type, a.wait_event,
-                       a.xact_start, a.query_start,
-                       now()-coalesce(a.xact_start,a.query_start) as xact_age,
-                       now()-a.query_start as query_age,
-                       pg_blocking_pids(a.pid) as blockers,
-                       left(a.query,500) as query
-                  from pg_locks l
-                  left join pg_stat_activity a on a.pid=l.pid
-                 where l.locktype='advisory'
-                 order by l.classid,l.objid,l.pid
-              """)
-              run_one(conn, 'QUEUE_OPEN', "select status, count(*) as n from mei_email.envios where status in ('pendente','enviando','pending','processing') group by status order by status")
-              run_one(conn, 'QUEUE_SENT_24H', "select count(*) as n, max(enviado_em) as last_sent_at from mei_email.envios where status in ('submitted','enviado') and enviado_em >= now()-interval '24 hours'")
-              run_one(conn, 'QUEUE_SENT_20M', "select count(*) as n, max(enviado_em) as last_sent_at from mei_email.envios where status in ('submitted','enviado') and enviado_em >= now()-interval '20 minutes'")
-              run_one(conn, 'EXTERNAL_SENT_24H', "select count(*) as n from mei_email.envios_externos_cota where sent_at >= now()-interval '24 hours'")
-              run_one(conn, 'LAST_SENT', "select status, cnpj, email, enviado_em from mei_email.envios where status in ('submitted','enviado') order by enviado_em desc nulls last limit 5")
+          try:
+              conn = psycopg.connect(os.environ['DATABASE_URL'], connect_timeout=5)
+          except Exception as exc:
+              print('DB_CONNECT_ERROR=' + type(exc).__name__ + ':' + str(exc).replace('\n',' '))
+          else:
+              with conn:
+                  run_one(conn, 'PG_ACTIVITY', """
+                    select pid, usename, application_name, client_addr, state,
+                           wait_event_type, wait_event, xact_start, query_start,
+                           now()-coalesce(xact_start,query_start) as xact_age,
+                           now()-query_start as query_age,
+                           pg_blocking_pids(pid) as blockers,
+                           left(query,700) as query
+                      from pg_stat_activity
+                     where datname=current_database()
+                       and pid<>pg_backend_pid()
+                       and (state<>'idle' or wait_event is not null)
+                     order by coalesce(xact_start,query_start) nulls last
+                     limit 40
+                  """)
+                  run_one(conn, 'PG_ADVISORY_LOCKS', """
+                    select l.pid, l.classid, l.objid, l.objsubid, l.mode, l.granted,
+                           a.usename, a.application_name, a.client_addr,
+                           a.state, a.wait_event_type, a.wait_event,
+                           a.xact_start, a.query_start,
+                           now()-coalesce(a.xact_start,a.query_start) as xact_age,
+                           now()-a.query_start as query_age,
+                           pg_blocking_pids(a.pid) as blockers,
+                           left(a.query,500) as query
+                      from pg_locks l
+                      left join pg_stat_activity a on a.pid=l.pid
+                     where l.locktype='advisory'
+                     order by l.classid,l.objid,l.pid
+                  """)
+                  run_one(conn, 'QUEUE_OPEN', "select status, count(*) as n from mei_email.envios where status in ('pendente','enviando','pending','processing') group by status order by status")
+                  run_one(conn, 'QUEUE_SENT_24H', "select count(*) as n, max(enviado_em) as last_sent_at from mei_email.envios where status in ('submitted','enviado') and enviado_em >= now()-interval '24 hours'")
+                  run_one(conn, 'QUEUE_SENT_20M', "select count(*) as n, max(enviado_em) as last_sent_at from mei_email.envios where status in ('submitted','enviado') and enviado_em >= now()-interval '20 minutes'")
+                  run_one(conn, 'EXTERNAL_SENT_24H', "select count(*) as n from mei_email.envios_externos_cota where sent_at >= now()-interval '24 hours'")
+                  run_one(conn, 'LAST_SENT', "select status, cnpj, email, enviado_em from mei_email.envios where status in ('submitted','enviado') order by enviado_em desc nulls last limit 5")
           PY
           echo 'DIAGNOSTIC_COMPLETE=true'
           EOF
