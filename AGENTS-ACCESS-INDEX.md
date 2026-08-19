@@ -21,6 +21,23 @@ python scripts/agent-docs-gate.py verify --agent <agent-id> --task <task-id>
 
 O `verify` precisa terminar com exit code 0 **antes da primeira mutação**. Se qualquer documento obrigatório mudar, o recibo fica automaticamente inválido e o agente deve reler. Se a ferramenta preferida estiver indisponível, o agente deve investigar e usar uma rota alternativa aprovada em vez de pular a validação.
 
+### ⚠️ Fred-Win: regra de status obrigatória
+
+Para qualquer tarefa que envolva Fred-Win, Windows, MCP, porta 5557, Exchange Admin ou navegador real no computador Windows, leia primeiro **[docs/FRED-WIN-PRIVATE-RELAY.md](docs/FRED-WIN-PRIVATE-RELAY.md)**.
+
+Arquitetura canônica:
+
+```text
+GitHub Actions -> Oracle VM 137.131.156.17 via SSH -> VM 127.0.0.1:5557 -> reverse SSH -> Fred-Win 127.0.0.1:5557 -> MCP
+```
+
+- Workflow oficial: `.github/workflows/fred-win-remote-action.yml`
+- Request oficial: `ops/fredwin-request.json`
+- Primeira ação obrigatória: `health`
+- Resposta esperada: `status=ok`, `environment=fred-win`, `mcp_version=1.0.0`
+- `https://rce-shopvivaliz.trycloudflare.com` é histórico/deprecado e **não pode** ser usado para decidir o estado atual.
+- Sem teste pela rota canônica, o estado é **INCONCLUSIVO**, nunca “inativo”.
+
 ---
 
 ## 📚 DOCUMENTAÇÃO PRINCIPAL
@@ -34,10 +51,12 @@ O `verify` precisa terminar com exit code 0 **antes da primeira mutação**. Se 
 - **[AUTONOMOUS_TRIO_GUIDE.md](AUTONOMOUS_TRIO_GUIDE.md)** - Guia do Trio IA
 - **[AGENTS.md](AGENTS.md)** - Informações dos agentes
 - **[docs/AGENT-MCP-REMOTE.md](docs/AGENT-MCP-REMOTE.md)** - Uso seguro do Remote MCP por agentes
+- **[docs/FRED-WIN-PRIVATE-RELAY.md](docs/FRED-WIN-PRIVATE-RELAY.md)** - Arquitetura canônica, health e classificação ATIVO/FALHOU/INCONCLUSIVO do Fred-Win
 
 ### 🔧 Configuração & Troubleshooting
 - **[MONITOR_SETUP.md](MONITOR_SETUP.md)** - Setup do monitor web
 - **[DEPLOY-TROUBLESHOOTING.md](DEPLOY-TROUBLESHOOTING.md)** - Resolver erros de deploy
+- **[reports/fredwin-remote-access-repair-2026-08-07.md](reports/fredwin-remote-access-repair-2026-08-07.md)** - Histórico complementar do relay Fred-Win; a norma atual é `docs/FRED-WIN-PRIVATE-RELAY.md`
 
 ### 📊 Melhorias & Status
 - **[50-IMPROVEMENTS-SUMMARY.md](50-IMPROVEMENTS-SUMMARY.md)** - Todas as 50 melhorias
@@ -162,6 +181,7 @@ deploy.yml                          ⭐ Deploy para HostGator
 ai-autonomous-executor.yml          ⭐ Executor contínuo 24/7
 autonomous-watchdog.yml             - Watchdog e heartbeat do ciclo
 parallel-trio-executor.yml          - 3 agentes em paralelo
+fred-win-remote-action.yml          ⭐ Relay privado canônico para Fred-Win
 ```
 
 ### Support Workflows
@@ -233,6 +253,8 @@ python scripts/agent-docs-gate.py read --agent <agent-id> --task <task-id>
 python scripts/metrics-collector.py
 ```
 
+Para Fred-Win, não use o status genérico acima como substituto do health canônico. Use `.github/workflows/fred-win-remote-action.yml` com `ops/fredwin-request.json` definido como `{"action":"health"}`.
+
 ### 2️⃣ Executar Próxima Tarefa
 ```bash
 python scripts/continuous-executor.py
@@ -263,6 +285,8 @@ python scripts/auto-documentation.py
 - [ ] Confirmar que pode acessar GitHub Secrets
 - [ ] Testar acesso ao FTP
 - [ ] Verificar status do monitor
+- [ ] Se a tarefa envolve Fred-Win, li `docs/FRED-WIN-PRIVATE-RELAY.md` e executei o `health` canônico
+- [ ] Não usei o endpoint Cloudflare antigo para classificar Fred-Win
 - [ ] Rodar primeiro teste de QA
 - [ ] Executar primeira tarefa
 
@@ -294,7 +318,8 @@ Se agente encontrar bloqueio:
 1. **Verificar logs:** `logs/` directory
 2. **Rodar diagnóstico:** `scripts/deploy-diagnostic.py`
 3. **Consultar troubleshooting:** `DEPLOY-TROUBLESHOOTING.md`
-4. **Notificar via email:** fredmourao@gmail.com (automático)
+4. Para Fred-Win, seguir a ordem de diagnóstico de `docs/FRED-WIN-PRIVATE-RELAY.md` e ler `C:\site-shopvivaliz\logs\fredwin-remote-bootstrap.log` e `C:\site-shopvivaliz\logs\fredwin-managed-tunnel.log`
+5. **Notificar via email:** fredmourao@gmail.com (automático)
 
 ---
 
@@ -314,6 +339,7 @@ Se agente encontrar bloqueio:
 - Revisar código
 - Rodar testes
 - Validar qualidade
+- Nunca inferir que Fred-Win está inativo sem testar a rota privada canônica
 
 ---
 
@@ -329,5 +355,5 @@ Se agente encontrar bloqueio:
 
 **Sistema pronto para operação 24/7 autônoma!** 🚀
 
-*Última atualização: 2026-08-10*
+*Última atualização: 2026-08-18*  
 *Todas as alterações por agentes exigem `AGENT_DOCS_PREFLIGHT_V1` antes da primeira mutação.*
