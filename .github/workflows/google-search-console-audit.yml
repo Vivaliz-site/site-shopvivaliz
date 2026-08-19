@@ -10,6 +10,7 @@ on:
       - 'scripts/google-search-console-audit.php'
       - 'scripts/google-search-console-sitemap-cleanup.php'
       - 'scripts/google-api-health.php'
+      - 'scripts/google_oauth_token_helper.py'
       - 'scripts/lib/google_oauth.py'
       - 'src/Google/OAuthTokenProvider.php'
       - 'src/Google/GoogleApiClient.php'
@@ -54,6 +55,16 @@ jobs:
 
       - name: Verify PHP runtime
         run: php -v
+
+      - name: Validate Search Console module syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l scripts/google-cloud-service-enable.php
+          php -l scripts/google-search-console-audit.php
+          php -l scripts/google-search-console-sitemap-cleanup.php
+          php -l scripts/google-api-health.php
+          python3 -m py_compile scripts/google_oauth_token_helper.py scripts/lib/google_oauth.py
 
       - name: Verify Google OAuth secret presence
         shell: bash
