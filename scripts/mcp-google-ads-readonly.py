@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -26,6 +27,21 @@ REQUIRED_ENV = [
 ]
 MANUAL_CONVERSION_ENV = ["GOOGLE_ADS_ID", "GOOGLE_ADS_CONVERSION_LABEL"]
 GA4_IMPORT_ENV = ["GOOGLE_ANALYTICS_ID"]
+SECRET_KEY_RE = re.compile(
+    r"(?i)(client_secret|refresh_token|access_token|developer_token|api[_-]?key|authorization)\s*[:=]\s*([^\s,;]+)"
+)
+TOKEN_VALUE_RE = re.compile(
+    r"(?i)\b(ya29\.[A-Za-z0-9._~+/-]+|1//[A-Za-z0-9._~+/-]+|sk-[A-Za-z0-9_-]{16,}|AIza[0-9A-Za-z_-]{20,})\b"
+)
+BEARER_RE = re.compile(r"(?i)Bearer\s+[A-Za-z0-9._~+/-]+")
+
+
+def sanitize_text(text: str) -> str:
+    """Best-effort redaction before returning child-process output via MCP."""
+    text = SECRET_KEY_RE.sub(lambda m: f"{m.group(1)}=<redacted>", text)
+    text = BEARER_RE.sub("Bearer <redacted>", text)
+    text = TOKEN_VALUE_RE.sub("<redacted-token>", text)
+    return text
 
 
 def load_dotenv(path: Path) -> dict[str, str]:
@@ -62,8 +78,8 @@ def run_script(script: str) -> dict[str, Any]:
     return {
         "status": "COMPROVADO" if result.returncode == 0 else "FALHOU",
         "returncode": result.returncode,
-        "stdout": result.stdout.strip(),
-        "stderr": result.stderr.strip(),
+        "stdout": sanitize_text(result.stdout.strip()),
+        "stderr": sanitize_text(result.stderr.strip()),
     }
 
 
@@ -189,7 +205,7 @@ class GoogleAdsReadonlyMCP:
             return {
                 "jsonrpc": "2.0",
                 "id": request.get("id"),
-                "result": {"content": [{"type": "text", "text": str(exc)}], "isError": True},
+                "result": {"content": [{"type": "text", "text": sanitize_text(str(exc))}], "isError": True},
             }
 
     def google_ads_env_status(self) -> dict[str, Any]:
@@ -246,7 +262,7 @@ async def main() -> None:
             request = json.loads(line)
             response = await server.handle(request)
         except Exception as exc:
-            response = {"jsonrpc": "2.0", "id": None, "error": {"code": -32603, "message": str(exc)}}
+            response = {"jsonrpc": "2.0", "id": None, "error": {"code": -32603, "message": sanitize_text(str(exc))}}
         if response is not None:
             sys.stdout.write(json.dumps(response, ensure_ascii=True) + "\n")
             sys.stdout.flush()

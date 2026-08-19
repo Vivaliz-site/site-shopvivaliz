@@ -6,6 +6,17 @@ declare(strict_types=1);
  * Renova o access_token utilizando o refresh_token e atualiza o arquivo .env.
  */
 
+function google_ads_refresh_error_message(?array $tokenData, string $fallback = 'unknown'): string
+{
+    if (is_array($tokenData)) {
+        $error = trim((string)($tokenData['error'] ?? ''));
+        if ($error !== '') {
+            return preg_replace('/[^a-zA-Z0-9_.:-]/', '_', $error) ?: 'oauth_error';
+        }
+    }
+    return preg_replace('/[^a-zA-Z0-9_.:-]/', '_', $fallback) ?: 'unknown';
+}
+
 function refresh_google_ads_token(): ?string
 {
     $envFile = dirname(__DIR__) . '/.env';
@@ -66,10 +77,10 @@ function refresh_google_ads_token(): ?string
     }
 
     $tokenData = json_decode($response, true);
-    $accessToken = $tokenData['access_token'] ?? null;
+    $accessToken = is_array($tokenData) ? ($tokenData['access_token'] ?? null) : null;
 
     if (!$accessToken) {
-        error_log("[Google Ads] Erro ao renovar access token: " . ($tokenData['error_description'] ?? $response));
+        error_log("[Google Ads] Erro ao renovar access token: " . google_ads_refresh_error_message(is_array($tokenData) ? $tokenData : null));
         return null;
     }
 

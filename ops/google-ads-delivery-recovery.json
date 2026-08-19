@@ -1,0 +1,14 @@
+{
+  "campaign_id": "24144257692",
+  "objective": "restore_search_delivery_without_increasing_daily_budget",
+  "daily_budget_brl": 10.0,
+  "max_cpc_brl": 1.20,
+  "bid_rule": "raise_only_when_below_first_page_estimate",
+  "headroom_pct": 5,
+  "constraints": {
+    "do_not_change_budget": true,
+    "no_positive_broad_match": true,
+    "do_not_change_product_prices": true,
+    "do_not_change_landing_pages": true
+  }
+}

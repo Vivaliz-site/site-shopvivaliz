@@ -11,8 +11,8 @@ import tempfile
 from pathlib import Path
 
 
-# OAuth credentials are owned by the live OAuth callback and refresh paths.
-# This generic tool must never accept them, including client credentials.
+# OAuth credentials are owned by verified provider-specific exchange/update paths.
+# This generic tool must never accept them, including Google OAuth/Ads credentials.
 MANAGED_OAUTH_KEYS = {
     "OLIST_ACCESS_TOKEN",
     "OLIST_REFRESH_TOKEN",
@@ -23,6 +23,14 @@ MANAGED_OAUTH_KEYS = {
     "TINY_CLIENT_ID",
     "TINY_CLIENT_SECRET",
     "TOKEN_API_OLIST",
+    "GOOGLE_OAUTH_CLIENT_ID",
+    "GOOGLE_OAUTH_CLIENT_SECRET",
+    "GOOGLE_OAUTH_REFRESH_TOKEN",
+    "GOOGLE_ADS_REFRESH_TOKEN",
+    "GOOGLE_ADS_ACCESS_TOKEN",
+    "GOOGLE_ADS_DEVELOPER_TOKEN",
+    "GOOGLE_API_KEY",
+    "GEMINI_API_KEY",
 }
 
 ALLOWED_KEYS = {
@@ -48,9 +56,6 @@ ALLOWED_KEYS = {
     "SHOPEE_REDIRECT_URI",
     "TIKTOK_REDIRECT_URL",
     "SHOPVIVALIZ_AGENT_KEY",
-    "GOOGLE_OAUTH_CLIENT_ID",
-    "GOOGLE_OAUTH_CLIENT_SECRET",
-    "GOOGLE_OAUTH_REFRESH_TOKEN",
     "GOOGLE_ANALYTICS_ID",
     "GA4_ID",
     "GA4_SECRET",
@@ -58,11 +63,7 @@ ALLOWED_KEYS = {
     "GTM_ID",
     "GOOGLE_SITE_VERIFICATION",
     "GOOGLE_MERCHANT_ID",
-    "GOOGLE_API_KEY",
-    "GEMINI_API_KEY",
     "GOOGLE_ADS_CUSTOMER_ID",
-    "GOOGLE_ADS_DEVELOPER_TOKEN",
-    "GOOGLE_ADS_REFRESH_TOKEN",
     "GOOGLE_ADS_ID",
     "GOOGLE_ADS_CONVERSION_ID",
     "GOOGLE_ADS_CONVERSION_LABEL",
@@ -77,7 +78,7 @@ def merge_env(path: Path, incoming: dict[str, object]) -> list[str]:
     protected = sorted(set(incoming) & MANAGED_OAUTH_KEYS)
     if protected:
         raise ValueError(
-            "managed OAuth keys may only be written after a verified provider exchange: "
+            "managed OAuth/API secret keys may only be written by verified provider-specific flows: "
             + ", ".join(protected)
         )
 

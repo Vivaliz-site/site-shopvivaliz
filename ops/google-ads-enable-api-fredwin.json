@@ -1,6 +1,6 @@
 {
   "requested_at": "2026-08-15T10:18:00-03:00",
-  "project_number": "515723698609",
+  "project_number_source": "GOOGLE_CLOUD_PROJECT_NUMBER",
   "service": "googleads.googleapis.com",
   "reason": "Enable the Google Ads API required by the validated OAuth client, without changing ad spend or campaigns"
 }
