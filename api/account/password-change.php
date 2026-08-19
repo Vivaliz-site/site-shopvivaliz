@@ -58,6 +58,17 @@ try {
     $update = $pdo->prepare('UPDATE users SET password_hash = :hash, updated_at = NOW() WHERE id = :id');
     $update->execute([':hash' => $newHash, ':id' => $userId]);
 
+    // Rodada 9 (2026-08-19): regenera o ID de sessao apos troca de senha
+    // (mesma pratica que auth/login.php ja usa no login) -- reduz a janela
+    // de session fixation neste fluxo, que roda dentro de uma sessao ja
+    // autenticada. Nao resolve a invalidacao de sessoes em OUTROS
+    // dispositivos/navegadores (precisaria de coluna nova em `users` +
+    // checagem no bootstrap de sessao -- estrutural, deixado pra aprovacao
+    // do Fred). Ver R9-8 no relatorio da Rodada 9.
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_regenerate_id(true);
+    }
+
     echo json_encode(['ok' => true]);
 } catch (Throwable $e) {
     error_log('[MinhaConta] password-change failed: ' . $e->getMessage());

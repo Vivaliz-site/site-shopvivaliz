@@ -11,6 +11,7 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/pdo-database.php';
 require_once __DIR__ . '/../includes/account-schema.php';
 require_once __DIR__ . '/../includes/csrf.php';
+require_once __DIR__ . '/../includes/rate-limiter.php';
 require_once __DIR__ . '/../scripts/mailer.php';
 
 sv_account_ensure_schema();
@@ -20,6 +21,15 @@ $sent = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-forgot-password', $_POST['csrf_token'] ?? null)) {
     $error = 'Sua sessão expirou. Recarregue a página e tente novamente.';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && !RateLimiter::isAllowed('forgot-password', 3, 3600)) {
+    // Rodada 9 (2026-08-19): este era o unico fluxo publico de e-mail sem
+    // rate limit (login e register ja tinham desde a Rodada 2/7) -- sem
+    // limite, o formulario era um disparador de e-mail pra qualquer endereco
+    // cadastrado e um gerador ilimitado de tokens de reset validos
+    // simultaneos. Mesmo limite de register.php (3/hora por IP). Ver R9-5 no
+    // relatorio da Rodada 9.
+    $error = 'Muitas tentativas. Tente novamente em 1 hora.';
+    http_response_code(429);
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim((string)($_POST['email'] ?? ''));
     $cpfDigits = preg_replace('/\D/', '', (string)($_POST['cpf'] ?? ''));
@@ -58,6 +68,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-forgot-passwor
                 $tokenHash = hash('sha256', $token);
 
                 $pdo = sv_pdo();
+                // Rodada 9 (2026-08-19): invalida qualquer token de reset
+                // anterior ainda pendente pra esta conta antes de emitir um
+                // novo -- sem isso, cada POST gerava um token adicional
+                // valido por 1h, e nada expirava os anteriores (ver R9-5/R9-8
+                // no relatorio da Rodada 9).
+                $invalidate = $pdo->prepare(
+                    'UPDATE password_resets SET used_at = NOW() WHERE user_id = :uid AND used_at IS NULL'
+                );
+                $invalidate->execute([':uid' => $user['id']]);
+
                 $insert = $pdo->prepare(
                     'INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (:uid, :hash, DATE_ADD(NOW(), INTERVAL 1 HOUR))'
                 );

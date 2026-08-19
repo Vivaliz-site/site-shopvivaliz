@@ -24,11 +24,41 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 
 require_once __DIR__ . '/../../includes/pdo-database.php';
 require_once __DIR__ . '/../../includes/account-schema.php';
+require_once __DIR__ . '/../../includes/order-rate-limit.php';
+
+// Rodada 9 (2026-08-19): este endpoint aceitava POST anonimo sem rate limit,
+// sem checagem de origem e sem honeypot -- um POST direto (sem passar pelo
+// checkout de verdade) inseria uma linha por UUID gerado, e
+// scripts/send-abandoned-cart-emails.php (cron */30) enviava e-mail real do
+// dominio da loja pro endereco informado, com nome/itens controlados por
+// quem chamou o endpoint (~4.800 e-mails/dia possiveis). Os vizinhos
+// api/newsletter/subscribe.php e api/contact.php ja tinham essas defesas;
+// replicado aqui no mesmo padrao. Ver R9-4 no relatorio da Rodada 9.
+$originHeader = trim((string)($_SERVER['HTTP_ORIGIN'] ?? ''));
+if ($originHeader !== '') {
+    $originHost = strtolower((string)parse_url($originHeader, PHP_URL_HOST));
+    if (!in_array($originHost, ['shopvivaliz.com.br', 'www.shopvivaliz.com.br', 'localhost', '127.0.0.1'], true)) {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'error' => 'origin_rejected']);
+        exit;
+    }
+}
+if (!svorl_allow(5, 3600, 'abandonment')) {
+    http_response_code(429);
+    echo json_encode(['ok' => false, 'error' => 'rate_limited']);
+    exit;
+}
 
 $body = json_decode(file_get_contents('php://input') ?: '', true);
 if (!is_array($body)) {
     http_response_code(400);
     echo json_encode(['ok' => false]);
+    exit;
+}
+
+// Honeypot: campo invisivel no formulario real, preenchido apenas por bots.
+if (trim((string)($body['website'] ?? '')) !== '') {
+    echo json_encode(['ok' => true]);
     exit;
 }
 
