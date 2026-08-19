@@ -44,7 +44,7 @@ jobs:
               found="$candidate"
               break
             fi
-          done < <(sudo find /tmp /var/tmp -type f -name "shopvivaliz-google-ads-refresh-${job}.token" 2>/dev/null | head -n 20)
+          done < <(sudo find /tmp /var/tmp -type f \( -path "*/shopvivaliz-google-ads-refresh/${job}.token" -o -name "shopvivaliz-google-ads-refresh-${job}.token" \) 2>/dev/null | head -n 20)
 
           if [ -z "$found" ]; then
             echo 'PRIVATE_TMP_TOKEN_FOUND=no'
