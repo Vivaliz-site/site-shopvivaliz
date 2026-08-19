@@ -237,6 +237,47 @@ gerado nesta sessão, resumo acima cobre o essencial para futuros agentes.
 
 ---
 
+## 🟢 Resolvido na Rodada 4 (2026-08-19) — Cache-Control duplicado, endpoints sem auth, latência recaracterizada
+
+**A caracterização de latência da Rodada 3 estava errada — corrigida.** A R3 mediu p50=3,49s de
+TTFB e concluiu "overhead constante de ~3,5s entre Cloudflare e PHP em todos os endpoints". A
+Rodada 4 não reproduziu isso: 40 amostras novas deram p50=0,275s, p90=0,692s. O padrão real é
+**degradação episódica** — em janelas específicas (ex: ~01:42 UTC numa sessão) tudo fica lento ao
+mesmo tempo, inclusive `/sobre/` (sem consulta de catálogo) e um `.css` estático (sem PHP nem
+banco). Isso aponta para contenção de recurso na VM (Apache/PHP-FPM saturado, I/O do disco a
+86%+, ou um cron pesado concorrente), não para query lenta de produto. **Se investigar lentidão de
+novo, comece pela VM (SSH necessário), não pela aplicação.**
+
+**`css/home-bundle.php` (178 KB de CSS render-blocking da home) nunca era cacheado pela Cloudflare**
+porque é `.php` (Cloudflare só cacheia extensões estáticas por padrão) — toda visita nova ia à
+origem, 0,3-4,5s de TTFB medidos. Além disso o `Cache-Control` chegava malformado (dois `max-age`
+na mesma diretiva) porque o `mod_expires` do `.htaccess` (`ExpiresByType text/css`) acrescentava um
+segundo valor sobre o que o PHP já tinha definido — corrigido com um `<FilesMatch>` desligando
+`mod_expires` só para esse arquivo. **Padrão a vigiar:** qualquer CSS/JS servido via `.php` (em vez
+de arquivo estático com hash de conteúdo, como já é feito para `visual-polish-v5.*.min.css`) paga
+esse mesmo custo de cache-miss constante na borda — ainda não convertido para estático (fica para
+rodada futura, é mudança de build/deploy).
+
+**Endpoints públicos sem autenticação encontrados e corrigidos:** `api/stock-alerts/subscribe.php`
+(sem rate limit, ao contrário do `newsletter/subscribe.php` vizinho — rate limit adicionado; double
+opt-in real ainda falta, fica pendente), `api/simple-agent-chat.php` **e** seu alvo real
+`claude/api/monitor/simple-chat.php` (gravação ilimitada em disco, CORS `*` — os dois precisaram
+ser neutralizados porque `claude/` é servido publicamente por `.htaccess:210-211`, então o wrapper
+sozinho não bastava), `api/generate-test-order.php` (disparava chamadas reais à API do Mercado Pago
+sem auth) e `api/sync/full-sync.php` (só protegido por denylist do `.htaccess`; ganhou
+`sv_require_agent_key()` como segunda camada + removido `display_errors`/vazamento de `db_error`).
+
+**`/api/health.php` reduzido: payload detalhado (versão PHP, % disco, quais secrets configurados)
+agora só sai com a chave de agente válida; sem chave, resposta mínima `{ok, status, generated_at,
+health_score_percent}`.** Suficiente para monitores de uptime externos continuarem funcionando sem
+expor fingerprint de infra a qualquer visitante. `api/monitor/api.php`/`dev-status.php` têm o mesmo
+problema em escala maior (19 KB de estado interno) e ficaram pendentes para uma rodada futura.
+
+**Ver também:** relatório completo da Rodada 4 (R4-1 a R4-10, itens A4-1 a A4-4 aguardando
+aprovação) — gerado nesta sessão, resumo acima cobre o essencial para futuros agentes.
+
+---
+
 ## 📚 Memória Compartilhada por Sistema
 
 ### Tiny ERP API v3
@@ -344,6 +385,6 @@ gerado nesta sessão, resumo acima cobre o essencial para futuros agentes.
 
 ---
 
-**Última consolidação:** 2026-07-26 (entradas das Rodadas 2 e 3 de melhoria contínua adicionadas em 2026-08-18/19)
+**Última consolidação:** 2026-07-26 (entradas das Rodadas 2, 3 e 4 de melhoria contínua adicionadas em 2026-08-18/19)
 **Consolidado por:** Claude Code
 **Próxima revisão:** Quando houver novo achado não-óbvio

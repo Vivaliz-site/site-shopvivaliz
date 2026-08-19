@@ -301,3 +301,22 @@ AddCharset UTF-8 .html .txt .php .json
     ExpiresByType text/css "access plus 30 days"
     ExpiresByType application/javascript "access plus 30 days"
 </IfModule>
+
+# Rodada 4 (2026-08-19): css/home-bundle.php ja define seu proprio
+# Cache-Control (max-age=31536000, immutable + ETag/304) em PHP. A regra
+# ExpiresByType text/css acima fazia o mod_expires ACRESCENTAR um segundo
+# max-age na mesma resposta (confirmado ao vivo: "public, max-age=31536000,
+# immutable, max-age=2592000" -- dois max-age na mesma diretiva, o que e
+# invalido e pode fazer caches intermediarios descartar a resposta). Este
+# bloco desliga o mod_expires so pra esse arquivo, deixando o header do PHP
+# como unica fonte de verdade. Ver R4-1(a) no relatorio da Rodada 4.
+<IfModule mod_expires.c>
+    <FilesMatch "^home-bundle\.php$">
+        ExpiresActive Off
+    </FilesMatch>
+</IfModule>
+<IfModule mod_headers.c>
+    <FilesMatch "^home-bundle\.php$">
+        Header unset Expires
+    </FilesMatch>
+</IfModule>

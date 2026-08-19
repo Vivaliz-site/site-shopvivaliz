@@ -6,6 +6,15 @@ header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 
+// Rodada 4 (2026-08-19): este endpoint disparava uma chamada REAL a API do
+// Mercado Pago (conta de producao) sem nenhuma autenticacao -- qualquer
+// requisicao anonima consumia rate limit do gateway e sujava o historico da
+// conta (confirmado ao vivo: 422 do proprio Mercado Pago, ou seja a chamada
+// chegou la). Mesmo padrao ja usado em api/catalog/clean-deleted.php. Ver
+// R4-5 no relatorio da Rodada 4 de melhoria continua.
+require_once __DIR__ . '/../config/require-agent-key.php';
+sv_require_agent_key();
+
 $runtimeSecretsFile = __DIR__ . '/../config/runtime-secrets.php';
 if (is_file($runtimeSecretsFile)) {
     $secrets = require $runtimeSecretsFile;

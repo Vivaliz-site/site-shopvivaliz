@@ -1,10 +1,19 @@
 <?php
 declare(strict_types=1);
 
+// Rodada 4 (2026-08-19): display_errors=1 em producao pode vazar caminhos
+// absolutos e detalhes internos em qualquer erro nao tratado -- este era um
+// dos 2 unicos arquivos do projeto com essa flag ligada. A unica barreira
+// entre a internet e um INSERT...ON DUPLICATE KEY UPDATE na tabela products
+// inteira era uma linha de denylist no .htaccess (confirmado 403 ao vivo);
+// agora tambem exige a chave de agente, mesmo padrao de
+// api/catalog/clean-deleted.php. Ver R4-9 no relatorio da Rodada 4.
 error_reporting(E_ALL);
-ini_set('display_errors', '1');
 header('Content-Type: application/json; charset=utf-8');
 set_time_limit(300);
+
+require_once __DIR__ . '/../../config/require-agent-key.php';
+sv_require_agent_key();
 
 require_once __DIR__ . '/../../config/database.php';
 
@@ -55,7 +64,8 @@ try {
             updated_at = NOW()'
     );
     if (!$selectExisting || !$stmt) {
-        full_sync_json(500, ['ok' => false, 'erro' => 'Falha ao preparar statements', 'db_error' => $db->error]);
+        error_log('[full-sync] falha ao preparar statements: ' . $db->error);
+        full_sync_json(500, ['ok' => false, 'erro' => 'Falha ao preparar statements']);
     }
 
     $synced = 0;

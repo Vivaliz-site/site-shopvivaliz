@@ -46,8 +46,14 @@ function set_security_headers(array $options = []): void
         // Prevent MIME type sniffing
         'X-Content-Type-Options' => 'nosniff',
 
-        // Enable XSS protection in older browsers
-        'X-XSS-Protection' => '1; mode=block',
+        // Rodada 4 (2026-08-19): o auditor de XSS que este header ligava foi
+        // removido do Chrome desde a v78 e nunca existiu no Firefox. Onde
+        // ainda e interpretado (navegadores antigos/alguns WAFs), o filtro
+        // heuristico ja foi demonstrado como vetor de XSS por si so, ao
+        // bloquear seletivamente scripts legitimos. Recomendacao atual
+        // (OWASP/MDN) e '0' ou omitir -- o site ja tem CSP, que e a defesa
+        // real. Ver R4-10 no relatorio da Rodada 4.
+        'X-XSS-Protection' => '0',
 
         // Content Security Policy (strict)
         'Content-Security-Policy' => $csp,

@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once dirname(__DIR__, 2) . '/includes/order-rate-limit.php';
+
 header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
@@ -61,6 +63,19 @@ function svsa_normalize_sku(string $sku): string
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     svsa_json(405, ['ok' => false, 'error' => 'method_not_allowed']);
+}
+
+// Rodada 4 (2026-08-19): este endpoint nao tinha rate limit nem double
+// opt-in (ao contrario de api/newsletter/subscribe.php e api/contact.php,
+// que tem os dois). Sem limite, qualquer pessoa inscrevia o e-mail de
+// terceiros (que depois recebem e-mail transacional de "voltou ao
+// estoque") e cada POST fazia uma varredura O(n) do arquivo inteiro de
+// inscritos -- custo cresce com o numero de requisicoes de um atacante.
+// Rate limit aplicado agora como primeira camada; double opt-in real
+// (confirm_token_hash, espelhando o newsletter) fica registrado como
+// melhoria futura -- ver R4-2 no relatorio da Rodada 4.
+if (!svorl_allow(5, 3600, 'stock-alert-subscribe')) {
+    svsa_json(429, ['ok' => false, 'error' => 'rate_limited']);
 }
 
 $body = svsa_request_body();

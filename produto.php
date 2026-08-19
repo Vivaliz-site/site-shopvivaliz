@@ -479,6 +479,13 @@ if ($weight > 0) $specifications['Peso líquido cadastrado'] = rtrim(rtrim(numbe
 
 if ($notFound) {
     http_response_code(404);
+    // Rodada 4 (2026-08-19): ate aqui o 404 de produto herdava o mesmo
+    // Cache-Control da rota de sucesso (public, max-age=15, s-maxage=30,
+    // stale-while-revalidate=60), permitindo que um 404 ficasse cacheado por
+    // ate 60s extras via stale-while-revalidate -- se um produto sair e
+    // voltar ao catalogo, o 404 persistiria mais tempo do que deveria. Ver
+    // R4-8 no relatorio da Rodada 4.
+    header('Cache-Control: no-store', true);
     $name = 'Produto não encontrado';
     $description = 'O produto solicitado não foi localizado no catálogo atual da Vivaliz. Explore outras opções ou fale com a equipe comercial.';
     $seoTitle = $name;

@@ -5,6 +5,32 @@ header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
+// Rodada 4 (2026-08-19): este endpoint e publico e sem autenticacao (usado
+// por monitores de uptime externos, entao nao pode simplesmente exigir
+// SHOPVIVALIZ_AGENT_KEY e devolver 401/503 -- isso quebraria o monitoramento
+// hoje). O que era publico por padrao era o problema: versao exata do PHP,
+// software do servidor, % de disco usado, quais integracoes tem secret
+// configurado, estado de fila de tarefas. Isso da a um atacante um
+// fingerprint completo da infra sem nenhum reconhecimento ativo. Agora o
+// payload detalhado so sai com a chave de agente valida (mesmo mecanismo de
+// config/require-agent-key.php, mas sem abortar a requisicao); sem a chave,
+// a resposta e reduzida a {ok, status, generated_at, health_score_percent}
+// -- o suficiente pra qualquer monitor externo. Ver R3-4/R4-4 no relatorio
+// das Rodadas 3/4.
+require_once __DIR__ . '/../config/require-agent-key.php';
+$svHealthDetailed = PHP_SAPI === 'cli';
+if (!$svHealthDetailed) {
+    $svHealthExpectedKey = '';
+    foreach (['SHOPVIVALIZ_AGENT_KEY', 'RUNTIME_AGENT_KEY', 'AUTONOMOUS_AGENT_KEY'] as $svHealthKeyName) {
+        $svHealthKeyValue = getenv($svHealthKeyName);
+        if (is_string($svHealthKeyValue) && trim($svHealthKeyValue) !== '') {
+            $svHealthExpectedKey = trim($svHealthKeyValue);
+            break;
+        }
+    }
+    $svHealthDetailed = $svHealthExpectedKey !== '' && hash_equals($svHealthExpectedKey, sv_agent_key_from_request());
+}
+
 $root = dirname(__DIR__);
 
 function sv_health_bytes(string $value): int
@@ -186,40 +212,47 @@ $healthRatio = count($checks) > 0 ? round(($healthScore / count($checks)) * 100,
 $ok = !in_array(false, $checks, true) && $healthRatio >= 85.0;
 http_response_code($ok ? 200 : 207);
 
-echo json_encode([
+$svHealthPayload = [
     'ok' => $ok,
     'status' => $ok ? 'ok' : 'attention',
     'service' => 'shopvivaliz-admin-health',
     'generated_at' => date('c'),
     'health_score_percent' => $healthRatio,
-    'php' => [
-        'version' => PHP_VERSION,
-        'sapi' => PHP_SAPI,
-        'memory_limit' => ini_get('memory_limit'),
-        'memory_usage_bytes' => $memoryUsage,
-        'memory_limit_bytes' => $memoryLimit,
-    ],
-    'server' => [
-        'software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
-        'host' => $_SERVER['HTTP_HOST'] ?? 'unknown',
-        'https' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
-    ],
-    'disk' => [
-        'total_bytes' => $diskTotal,
-        'free_bytes' => $diskFree,
-        'used_percent' => $diskUsedPct,
-    ],
-    'paths' => [
-        'root_ready' => is_dir($root),
-        'logs_writable' => (bool)($checks['Diretorio logs gravavel'] ?? false),
-        'temp_writable' => (bool)($checks['Diretorio temporario gravavel'] ?? false),
-        'storage_writable' => (bool)($checks['Storage gravavel'] ?? false),
-    ],
-    'queue' => $queueSummary,
-    'assets' => $assetManifestHealth,
-    'secrets' => sv_health_public_secret_summary($secretHealth),
-    'checks' => $checks,
-], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+];
+
+if ($svHealthDetailed) {
+    $svHealthPayload += [
+        'php' => [
+            'version' => PHP_VERSION,
+            'sapi' => PHP_SAPI,
+            'memory_limit' => ini_get('memory_limit'),
+            'memory_usage_bytes' => $memoryUsage,
+            'memory_limit_bytes' => $memoryLimit,
+        ],
+        'server' => [
+            'software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown',
+            'host' => $_SERVER['HTTP_HOST'] ?? 'unknown',
+            'https' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+        ],
+        'disk' => [
+            'total_bytes' => $diskTotal,
+            'free_bytes' => $diskFree,
+            'used_percent' => $diskUsedPct,
+        ],
+        'paths' => [
+            'root_ready' => is_dir($root),
+            'logs_writable' => (bool)($checks['Diretorio logs gravavel'] ?? false),
+            'temp_writable' => (bool)($checks['Diretorio temporario gravavel'] ?? false),
+            'storage_writable' => (bool)($checks['Storage gravavel'] ?? false),
+        ],
+        'queue' => $queueSummary,
+        'assets' => $assetManifestHealth,
+        'secrets' => sv_health_public_secret_summary($secretHealth),
+        'checks' => $checks,
+    ];
+}
+
+echo json_encode($svHealthPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
 
 if (PHP_SAPI === 'cli' && !$ok) {
     exit(1);
