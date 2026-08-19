@@ -1,0 +1,91 @@
+name: Inventario de testes (nao bloqueante)
+
+# Rodada 7 (2026-08-19): 50 dos 119 arquivos em tests/ nunca eram invocados
+# por nenhum workflow -- incluindo TODA a suite pytest e a familia inteira
+# de guardas anti-regressao "no-*" (escritos depois de um incidente,
+# especificamente para impedir que ele volte). shopvivaliz-qa.yml cita
+# arquivos de teste um a um por nome, entao a lista diverge silenciosamente
+# conforme testes novos sao adicionados. Este workflow roda por glob (pega
+# tudo em tests/) em modo NAO-BLOQUEANTE (continue-on-error) para primeiro
+# inventariar quantos ja estao quebrados sem travar nenhum PR -- promover
+# pra bloqueante, e decidir o que fazer com os que falharem (consertar vs.
+# remover), e decisao do Fred. Ver R7-8 no relatorio da Rodada 7.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  php-tests-inventory:
+    name: Inventario de testes PHP (tests/*.php, glob)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - name: Rodar cada tests/*.php encontrado (nao bloqueante)
+        run: |
+          set +e
+          total=0
+          passed=0
+          failed=0
+          failed_list=""
+          while IFS= read -r -d '' file; do
+            total=$((total+1))
+            echo "::group::php $file"
+            php "$file"
+            status=$?
+            echo "::endgroup::"
+            if [ "$status" -eq 0 ]; then
+              passed=$((passed+1))
+            else
+              failed=$((failed+1))
+              failed_list="$failed_list\n  - $file"
+            fi
+          done < <(find tests -maxdepth 1 -name '*.php' -print0 | sort -z)
+          echo "## Inventario de testes PHP (tests/*.php)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Total: $total | Passaram: $passed | Falharam: $failed" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$failed_list" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Falharam:" >> "$GITHUB_STEP_SUMMARY"
+            printf '%b\n' "$failed_list" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "Total: $total | Passaram: $passed | Falharam: $failed"
+
+  python-tests-inventory:
+    name: Inventario da suite pytest (tests/test_*.py)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar pytest
+        run: pip install --quiet pytest
+      - name: Rodar pytest (nao bloqueante, so inventario)
+        run: |
+          set +e
+          pytest -q --continue-on-collection-errors > pytest-output.txt 2>&1
+          status=$?
+          cat pytest-output.txt
+          echo "## Inventario da suite pytest" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -n 40 pytest-output.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "pytest exit status: $status"

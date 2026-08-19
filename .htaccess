@@ -145,8 +145,30 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^storage/ - [F,L]
     RewriteRule ^(?:criar-pagamento-teste-real|criar-pagamento-producao|gerar-payment-id-agora|fazer-pagamento-real-agora|simular-pagamento-real)\.php$ - [F,L,NC]
     RewriteRule ^logs/ - [F,L]
-    RewriteRule ^(?:\.git|\.env(?:\.|$)|\.claude|\.codex|\.github|\.githooks|\.vscode|\.tmp_shopvivaliz|__pycache__|scripts|tests|test-results|deploy|docs|reports|scratch|automation|automations|autodev|core|dashboards|imports|kong|listings|medusa|migrations|planilhas|public_html|release-notes|tools|utils|CheckoutPageOptimizer|installer)(?:/|$) - [F,L,NC]
+    # Rodada 7 (2026-08-19): "claude" e "web" adicionados a esta lista.
+    # claude/ tinha 46 arquivos PHP sem NENHUMA autenticacao publicados em
+    # producao (deploy usa "git archive" da arvore inteira -- tudo que esta
+    # no git vai pro DocumentRoot, e esta lista enumerada e a unica defesa),
+    # incluindo um endpoint que roda ALTER TABLE + UPDATE em massa no banco
+    # via GET publico (claude/api/agent/olist-zero-id-repair.php, hoje falha
+    # fechado por acidente -- so falta alguem criar claude/config.php), um
+    # endpoint que dispara OAuth do Olist com credenciais reais, uma vitrine
+    # fantasma indexavel com 3 produtos/precos inventados, e um painel que
+    # expunha publicamente que o CI autonomo estava parado ha 47 dias e as
+    # chaves de IA sem credito. web/ e a mesma classe de problema (pagina
+    # placeholder da Vercel, indexavel, descrevendo arquitetura interna).
+    # Ver R7-1 a R7-6 e R7-11 no relatorio da Rodada 7.
+    RewriteRule ^(?:\.git|\.env(?:\.|$)|\.claude|\.codex|\.github|\.githooks|\.vscode|\.tmp_shopvivaliz|__pycache__|scripts|tests|test-results|deploy|docs|reports|scratch|automation|automations|autodev|core|dashboards|imports|kong|listings|medusa|migrations|planilhas|public_html|release-notes|tools|utils|CheckoutPageOptimizer|installer|claude|web)(?:/|$) - [F,L,NC]
     RewriteRule ^(?:api/sandbox/|admin/(?:mercadopago-sandbox\.php|webhook-test\.php|test-auto-sync\.sh)|olist/produtos-198\.php|claude/api/get-produtos-198\.php)$ - [F,L,NC]
+    # Rodada 7 (2026-08-19): o guard de autenticacao do admin cobre
+    # admin/*.php (redireciona pra login), mas nao os subdiretorios de
+    # implementacao dos modulos (admin/ai-image-studio/src/*.php,
+    # admin/catalog-optimization/src/*.php etc) -- esses arquivos so
+    # declaram classes hoje (corpo vazio quando acessados direto), mas
+    # qualquer echo/var_dump de debug adicionado a um deles vira vazamento
+    # publico na hora, sem passar por nenhum guard. Ver R7-12 no relatorio
+    # da Rodada 7.
+    RewriteRule ^admin/[^/]+/(?:src/.*|config[a-z_]*\.php)$ - [F,L,NC]
     RewriteRule ^(?:debug|test|teste|check|gen-token)(?:[-_.][^/]*)?$ - [F,L,NC]
     RewriteRule ^(?:setup-webhooks|update-fallback-prices)\.php$ - [F,L,NC]
     # Rodada 2 (2026-08-18): deploy-webhook.php ja foi neutralizado (410) no
@@ -221,8 +243,13 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{REQUEST_URI} !^/admin(?:/|$) [NC]
     RewriteRule ^(.*)$ /admin/$1 [R=301,L,NE]
 
-    RewriteRule ^claude/?$ claude/index.php [L]
-    RewriteRule ^claude/(.*)$ claude/$1 [L]
+    # Rodada 7 (2026-08-19): as duas regras de rewrite que existiam aqui
+    # (^claude/?$ e ^claude/(.*)$) roteavam explicitamente pra dentro de
+    # claude/ -- elas so existiam pra permitir o acesso que a Rodada 7
+    # fechou acima (linha ~148). Removidas; a regra de bloqueio roda antes
+    # e tem [F,L], entao nunca chegaria aqui de qualquer forma, mas manter
+    # rotas mortas apontando pra uma arvore bloqueada so confunde o proximo
+    # agente. Ver R7-1 no relatorio da Rodada 7.
 
     # Normaliza URLs legadas para as rotas canonicas.
     RewriteCond %{THE_REQUEST} \s/carrinho\.php[\s?]

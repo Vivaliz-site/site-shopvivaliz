@@ -1,71 +1,28 @@
 <?php
+declare(strict_types=1);
 /**
- * 🔥 Hotspot API Endpoint - Recebe tracking data
+ * Rodada 7 (2026-08-19): endpoint neutralizado.
+ *
+ * Estava 100% morto: nenhum rewrite no .htaccess leva a /api/hotspot/track
+ * ou /api/hotspot/conversion (as unicas duas rotas que este arquivo sabia
+ * tratar -- ele so age se REQUEST_URI contiver um desses dois caminhos), e
+ * public/hotspot-tracker.js (que fazia os POSTs) nunca era incluido em
+ * nenhuma pagina do site. Mesmo se o roteamento fosse corrigido, o codigo
+ * original tinha dois problemas: file_put_contents('.cart-abandonments.jsonl', ...)
+ * com caminho relativo ao CWD (dentro do release imutavel) e um
+ * read-modify-write de '.email-queue.json' sem LOCK_EX -- e nenhum
+ * consumidor de '.email-queue.json' existe no repo, entao o e-mail de
+ * recuperacao de carrinho nunca seria enviado de qualquer forma. Ou seja: a
+ * recuperacao de carrinho abandonado nao existe hoje, apesar do que estes
+ * arquivos sugerem. Ver R7-10 no relatorio da Rodada 7 -- se a feature for
+ * priorizada de verdade, tratar como trabalho novo (rota real + LOCK_EX +
+ * caminho absoluto em storage/ + consumidor de fila + rate limit), nao
+ * reaproveitar este codigo.
  */
-
-header('Content-Type: application/json');
-
-$data = json_decode(file_get_contents('php://input'), true);
-
-if (!$data) {
-    http_response_code(400);
-    echo json_encode(['error' => 'No data']);
-    exit;
-}
-
-$route = $_SERVER['REQUEST_URI'];
-
-if (strpos($route, '/api/hotspot/track') !== false) {
-    // Salvar click data
-    $logFile = '.hotspot-clicks.jsonl';
-    file_put_contents($logFile, json_encode($data) . "\n", FILE_APPEND);
-
-    // Análise de checkout abandonment
-    if (isset($data['form_data'])) {
-        analyzeFormAbandonment($data);
-    }
-
-    echo json_encode(['success' => true]);
-} elseif (strpos($route, '/api/hotspot/conversion') !== false) {
-    // Salvar conversion
-    $logFile = '.hotspot-conversions.jsonl';
-    file_put_contents($logFile, json_encode($data) . "\n", FILE_APPEND);
-
-    // Trigger cart recovery email se abandonment
-    if (isset($data['form_data']) && empty($data['completed'])) {
-        triggerCartRecoveryEmail($data);
-    }
-
-    echo json_encode(['success' => true, 'conversion_tracked' => true]);
-}
-
-function analyzeFormAbandonment($data) {
-    // Analisar quais campos causam abandonment
-    $fieldsCompleted = $data['form_data'] ?? [];
-
-    // Se menos de 50% preenchido, é alto risco de abandonment
-    $completionRate = !empty($fieldsCompleted) ? count(array_filter($fieldsCompleted, fn($f) => $f['filled'])) / count($fieldsCompleted) * 100 : 0;
-
-    if ($completionRate < 50 && $completionRate > 0) {
-        file_put_contents('.cart-abandonments.jsonl', json_encode([
-            'session_id' => $data['session_id'],
-            'completion_rate' => $completionRate,
-            'url' => $data['url'],
-            'timestamp' => $data['timestamp'],
-        ]) . "\n", FILE_APPEND);
-    }
-}
-
-function triggerCartRecoveryEmail($data) {
-    // Enviar email de recuperação de carrinho abandonado
-    $email_queue = json_decode(file_get_contents('.email-queue.json') ?: '[]', true);
-
-    $email_queue[] = [
-        'type' => 'cart_recovery',
-        'session_id' => $data['session_id'],
-        'timestamp' => date('Y-m-d H:i:s'),
-        'delay_minutes' => 60, // Enviar após 1 hora
-    ];
-
-    file_put_contents('.email-queue.json', json_encode($email_queue));
-}
+http_response_code(410);
+header('Content-Type: application/json; charset=utf-8');
+echo json_encode([
+    'ok' => false,
+    'error' => 'endpoint_removed',
+    'message' => 'Recuperação de carrinho abandonado nunca esteve conectada (rota inexistente, JS nunca incluído). Ver docs/AGENTS.md, Rodada 7, R7-10.',
+]);

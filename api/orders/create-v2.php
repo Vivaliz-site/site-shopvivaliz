@@ -19,7 +19,10 @@ if (CorsManager::handlePreflight()) {
 
 // ✅ Check rate limiting (5 pedidos por minuto por IP)
 $clientIp = $_SERVER['REMOTE_ADDR'];
-if (!RateLimiter::isAllowed('order_' . $clientIp, 5, 60)) {
+// Rodada 7 (2026-08-19): IP ja esta na chave de arquivo (hash(IP+UA) em
+// svorl_client_key()); tira-lo do identificador evita um diretorio novo por
+// IP em storage/rate-limit/. Ver R7-9 no relatorio da Rodada 7.
+if (!RateLimiter::isAllowed('order', 5, 60)) {
     svo_json(429, ['ok' => false, 'error' => 'rate_limited', 'message' => 'Muitas requisições. Tente novamente em 1 minuto.']);
 }
 

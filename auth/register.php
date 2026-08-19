@@ -82,7 +82,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !sv_csrf_valid('auth-register', $_P
     $clientIp = $_SERVER['REMOTE_ADDR'];
 
     // ✅ Rate limiting: máximo 3 tentativas por hora por IP
-    if (!RateLimiter::isAllowed('register_' . $clientIp, 3, 3600)) {
+    // Rodada 7 (2026-08-19): IP ja esta na chave de arquivo (hash(IP+UA) em
+    // svorl_client_key()); tira-lo do identificador evita um diretorio novo
+    // por IP em storage/rate-limit/. Ver R7-9 no relatorio da Rodada 7.
+    if (!RateLimiter::isAllowed('register', 3, 3600)) {
         $error = 'Muitas tentativas de registro. Tente novamente em 1 hora.';
         http_response_code(429);
     } else {

@@ -54,6 +54,22 @@ function svorl_allow(int $limit = 10, int $window = 300, string $scope = 'orders
         }
     }
 
+    // Rodada 7 (2026-08-19): storage/rate-limit/<scope>/ nunca tinha rotina
+    // de limpeza -- um arquivo novo por IP+User-Agent distinto, crescimento
+    // sem teto proporcional ao trafego (pior ainda com SHOPVIVALIZ_RUNTIME_DIR
+    // configurado, ja que os contadores deixam de zerar a cada release). GC
+    // probabilistico de baixo custo, no mesmo padrao usado pelo proprio PHP
+    // pra sessao: 1/100 das chamadas apaga arquivos mais velhos que
+    // 10x a janela do escopo. Ver R7-9 no relatorio da Rodada 7.
+    if (random_int(1, 100) === 1) {
+        $cutoff = time() - (10 * $window);
+        foreach (glob($dir . '/*.json') ?: [] as $staleFile) {
+            if ((int)@filemtime($staleFile) < $cutoff) {
+                @unlink($staleFile);
+            }
+        }
+    }
+
     $path = $dir . '/' . svorl_client_key() . '.json';
     $handle = @fopen($path, 'c+');
     if ($handle === false) {
