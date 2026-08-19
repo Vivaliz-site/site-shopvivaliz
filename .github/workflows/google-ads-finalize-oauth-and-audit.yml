@@ -45,11 +45,14 @@ jobs:
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' -- "$JOB" <<'REMOTE'
           set -euo pipefail
           job="$1"
-          token="/tmp/shopvivaliz-google-ads-refresh-${job}.token"
+          token_dir="/tmp/shopvivaliz-google-ads-refresh"
+          token="${token_dir}/${job}.token"
+          legacy_token="/tmp/shopvivaliz-google-ads-refresh-${job}.token"
           envfile='/home/ubuntu/shopvivaliz-deploy/shared/.env'
           current='/home/ubuntu/shopvivaliz-deploy/current'
           for i in $(seq 1 60); do
             if [ -s "$token" ]; then break; fi
+            if [ -s "$legacy_token" ]; then token="$legacy_token"; break; fi
             sleep 10
           done
           if [ ! -s "$token" ]; then

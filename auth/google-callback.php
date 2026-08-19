@@ -42,6 +42,42 @@ function sv_google_cloud_enable_project(string $state): ?string
     return preg_match('/^[0-9]{6,20}$/', $project) === 1 ? $project : null;
 }
 
+function sv_google_ads_pending_dir(): string
+{
+    $dir = sys_get_temp_dir() . '/shopvivaliz-google-ads-refresh';
+    if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
+        throw new RuntimeException('Não foi possível preparar armazenamento temporário do token.');
+    }
+    @chmod($dir, 0700);
+    return $dir;
+}
+
+function sv_google_ads_pending_token_path(string $job): string
+{
+    if (preg_match('/^[a-f0-9]{32}$/', $job) !== 1) {
+        throw new RuntimeException('Job de autorização inválido.');
+    }
+    return sv_google_ads_pending_dir() . '/' . $job . '.token';
+}
+
+function sv_google_ads_write_pending_refresh_token(string $job, string $refreshToken): void
+{
+    if ($refreshToken === '' || preg_match('/\s/', $refreshToken) === 1) {
+        throw new RuntimeException('Refresh token inválido.');
+    }
+    $path = sv_google_ads_pending_token_path($job);
+    $tmp = $path . '.' . bin2hex(random_bytes(8)) . '.tmp';
+    if (file_put_contents($tmp, $refreshToken . "\n", LOCK_EX) === false) {
+        throw new RuntimeException('Não foi possível armazenar o token temporário com segurança.');
+    }
+    @chmod($tmp, 0600);
+    if (!rename($tmp, $path)) {
+        @unlink($tmp);
+        throw new RuntimeException('Não foi possível publicar o token temporário com segurança.');
+    }
+    @chmod($path, 0600);
+}
+
 function sv_enable_google_service(string $accessToken, string $project, string $service): void
 {
     $url = 'https://serviceusage.googleapis.com/v1/projects/' . rawurlencode($project) . '/services/' . rawurlencode($service) . ':enable';
@@ -134,9 +170,7 @@ try {
             if ($tokenResponse['status'] >= 400 || !is_array($tokenData) || empty($tokenData['access_token'])) throw new RuntimeException('Falha ao concluir autorização do Google Ads.');
             $refreshToken = trim((string)($tokenData['refresh_token'] ?? ''));
             if ($refreshToken === '') throw new RuntimeException('Google não retornou refresh token. Reautorize com consentimento.');
-            $pendingPath = sys_get_temp_dir() . '/shopvivaliz-google-ads-refresh-' . $adsJob . '.token';
-            if (file_put_contents($pendingPath, $refreshToken, LOCK_EX) === false) throw new RuntimeException('Não foi possível armazenar o token temporário com segurança.');
-            @chmod($pendingPath, 0600);
+            sv_google_ads_write_pending_refresh_token($adsJob, $refreshToken);
             $adsOauthSuccess = true;
         } else {
             $request = sv_social_consume_request('google', $state);
