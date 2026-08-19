@@ -1,0 +1,28 @@
+[Unit]
+Description=ShopVivaliz Payment/Async Queue Worker
+Documentation=file:/home/ubuntu/shopvivaliz-deploy/current/scripts/queue-worker.php
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+# Rodada 9 (2026-08-19): WorkingDirectory precisa ser o symlink "current" --
+# NAO /home/ubuntu/site-shopvivaliz. "current" -> releases/<ts>-<sha>, e
+# "current/storage" -> ../../shared/storage (ver .htaccess/README de deploy),
+# que e o MESMO storage/queue.sqlite que os webhooks HTTP escrevem (Apache
+# serve de shopvivaliz-deploy/current). Rodar a partir do outro diretorio
+# abriria uma fila SQLite diferente e processaria zero jobs pra sempre --
+# silenciosamente. Ver R9-1 no relatorio da Rodada 9 e docs/AGENTS.md.
+WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/current
+ExecStart=/usr/bin/php /home/ubuntu/shopvivaliz-deploy/current/scripts/queue-worker.php --limit=5 --sleep=5
+Restart=always
+RestartSec=10
+KillSignal=SIGTERM
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
