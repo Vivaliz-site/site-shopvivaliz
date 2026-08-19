@@ -79,6 +79,13 @@ final class ShopvivalizConversionFunnelAgent
             $eventSummary = $this->statusCounts($pdo, 'sv_conversion_events', 'event_name', 20);
             $eventsLast24h = $this->countWhere($pdo, 'sv_conversion_events', '`created_at` >= UTC_TIMESTAMP() - INTERVAL 24 HOUR');
             $uniqueSessions24h = (int)$pdo->query("SELECT COUNT(DISTINCT session_hash) FROM sv_conversion_events WHERE created_at >= UTC_TIMESTAMP() - INTERVAL 24 HOUR")->fetchColumn();
+            $uniqueByEvent24h = $this->uniqueSessionsByEvent($pdo, 24);
+            $uniqueByEvent7d = $this->uniqueSessionsByEvent($pdo, 168);
+            $transitions24h = $this->transitionMetrics($pdo, 24);
+            $transitions7d = $this->transitionMetrics($pdo, 168);
+            $weakest24h = $this->weakestTransition($transitions24h);
+            $topPaths24h = $this->topFunnelPaths($pdo, 24);
+
             $actions[] = [
                 'action' => 'measure_client_events',
                 'status' => 'verified',
@@ -87,6 +94,13 @@ final class ShopvivalizConversionFunnelAgent
                 'events_last_24h' => $eventsLast24h,
                 'unique_sessions_last_24h' => $uniqueSessions24h,
                 'event_counts' => $eventSummary,
+                'unique_sessions_by_event_last_24h' => $uniqueByEvent24h,
+                'unique_sessions_by_event_last_7d' => $uniqueByEvent7d,
+                'session_transitions_last_24h' => $transitions24h,
+                'session_transitions_last_7d' => $transitions7d,
+                'weakest_transition_last_24h' => $weakest24h,
+                'top_funnel_paths_last_24h' => $topPaths24h,
+                'measurement_note' => 'Transition rates use distinct first-party session hashes and only count destination events occurring at or after the source event. Purchase revenue remains server-side and is not inferred from browser events.',
                 'changed_items' => 0,
             ];
 
@@ -199,6 +213,122 @@ final class ShopvivalizConversionFunnelAgent
         $out = [];
         foreach ($rows as $row) {
             $out[(string)$row['bucket']] = (int)$row['total'];
+        }
+        return $out;
+    }
+
+    private function uniqueSessionsByEvent(PDO $pdo, int $hours): array
+    {
+        $hours = max(1, min(24 * 31, $hours));
+        $sql = "SELECT event_name, COUNT(DISTINCT session_hash) AS total
+                FROM sv_conversion_events
+                WHERE created_at >= UTC_TIMESTAMP() - INTERVAL {$hours} HOUR
+                GROUP BY event_name
+                ORDER BY total DESC, event_name ASC";
+        $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(string)$row['event_name']] = (int)$row['total'];
+        }
+        return $out;
+    }
+
+    private function transitionMetrics(PDO $pdo, int $hours): array
+    {
+        $hours = max(1, min(24 * 31, $hours));
+        $pairs = [
+            ['from' => 'view_item', 'to' => 'add_to_cart'],
+            ['from' => 'add_to_cart', 'to' => 'view_cart'],
+            ['from' => 'add_to_cart', 'to' => 'begin_checkout'],
+            ['from' => 'view_cart', 'to' => 'begin_checkout'],
+            ['from' => 'begin_checkout', 'to' => 'add_shipping_info'],
+            ['from' => 'begin_checkout', 'to' => 'add_payment_info'],
+        ];
+
+        $sourceSql = "SELECT COUNT(DISTINCT session_hash)
+                      FROM sv_conversion_events
+                      WHERE event_name = ?
+                        AND created_at >= UTC_TIMESTAMP() - INTERVAL {$hours} HOUR";
+        $transitionSql = "SELECT COUNT(DISTINCT source.session_hash)
+                          FROM sv_conversion_events source
+                          WHERE source.event_name = ?
+                            AND source.created_at >= UTC_TIMESTAMP() - INTERVAL {$hours} HOUR
+                            AND EXISTS (
+                                SELECT 1
+                                FROM sv_conversion_events destination
+                                WHERE destination.session_hash = source.session_hash
+                                  AND destination.event_name = ?
+                                  AND destination.created_at >= source.created_at
+                                  AND destination.created_at >= UTC_TIMESTAMP() - INTERVAL {$hours} HOUR
+                            )";
+        $sourceStmt = $pdo->prepare($sourceSql);
+        $transitionStmt = $pdo->prepare($transitionSql);
+        $out = [];
+
+        foreach ($pairs as $pair) {
+            $sourceStmt->execute([$pair['from']]);
+            $sourceSessions = (int)$sourceStmt->fetchColumn();
+            $transitionStmt->execute([$pair['from'], $pair['to']]);
+            $continuedSessions = (int)$transitionStmt->fetchColumn();
+            $rate = $sourceSessions > 0 ? round(($continuedSessions / $sourceSessions) * 100, 2) : null;
+
+            $out[] = [
+                'from' => $pair['from'],
+                'to' => $pair['to'],
+                'source_sessions' => $sourceSessions,
+                'continued_sessions' => $continuedSessions,
+                'continuation_rate_pct' => $rate,
+                'dropoff_rate_pct' => $rate !== null ? round(100 - $rate, 2) : null,
+            ];
+        }
+
+        return $out;
+    }
+
+    private function weakestTransition(array $transitions): ?array
+    {
+        $eligible = array_values(array_filter($transitions, static function (array $transition): bool {
+            return (int)($transition['source_sessions'] ?? 0) >= 5
+                && is_numeric($transition['continuation_rate_pct'] ?? null);
+        }));
+        if ($eligible === []) return null;
+
+        usort($eligible, static function (array $a, array $b): int {
+            $rateCompare = (float)$a['continuation_rate_pct'] <=> (float)$b['continuation_rate_pct'];
+            if ($rateCompare !== 0) return $rateCompare;
+            return (int)$b['source_sessions'] <=> (int)$a['source_sessions'];
+        });
+
+        $weakest = $eligible[0];
+        return [
+            'from' => (string)$weakest['from'],
+            'to' => (string)$weakest['to'],
+            'source_sessions' => (int)$weakest['source_sessions'],
+            'continued_sessions' => (int)$weakest['continued_sessions'],
+            'continuation_rate_pct' => (float)$weakest['continuation_rate_pct'],
+            'dropoff_rate_pct' => (float)$weakest['dropoff_rate_pct'],
+        ];
+    }
+
+    private function topFunnelPaths(PDO $pdo, int $hours): array
+    {
+        $hours = max(1, min(24 * 31, $hours));
+        $sql = "SELECT event_name, page_path, COUNT(DISTINCT session_hash) AS unique_sessions
+                FROM sv_conversion_events
+                WHERE created_at >= UTC_TIMESTAMP() - INTERVAL {$hours} HOUR
+                  AND event_name IN ('view_item', 'add_to_cart', 'view_cart', 'begin_checkout', 'add_payment_info')
+                GROUP BY event_name, page_path
+                ORDER BY unique_sessions DESC, event_name ASC, page_path ASC
+                LIMIT 30";
+        $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+        $out = [];
+        foreach ($rows as $row) {
+            $event = (string)$row['event_name'];
+            $out[$event] ??= [];
+            $out[$event][] = [
+                'page_path' => (string)$row['page_path'],
+                'unique_sessions' => (int)$row['unique_sessions'],
+            ];
         }
         return $out;
     }
