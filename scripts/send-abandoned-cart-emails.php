@@ -140,7 +140,7 @@ foreach ($rows as $row) {
         continue;
     }
 
-    $restoreUrl = 'https://shopvivaliz.com.br/recuperar-carrinho#token=' . rawurlencode($restoreToken);
+    $restoreUrl = 'https://shopvivaliz.com.br/recuperar-carrinho.php#token=' . rawurlencode($restoreToken);
     $html = sac_render_email($name, $items, $restoreUrl);
     $ok = send_email($email, 'Você deixou itens no seu carrinho da Vivaliz', $html);
 
