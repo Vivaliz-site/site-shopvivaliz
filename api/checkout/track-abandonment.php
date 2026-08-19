@@ -15,6 +15,7 @@ declare(strict_types=1);
  */
 
 header('Content-Type: application/json; charset=UTF-8');
+header('Cache-Control: no-store');
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     http_response_code(405);
@@ -25,15 +26,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 require_once __DIR__ . '/../../includes/pdo-database.php';
 require_once __DIR__ . '/../../includes/account-schema.php';
 require_once __DIR__ . '/../../includes/order-rate-limit.php';
+require_once __DIR__ . '/../../includes/catalog-runtime.php';
 
-// Rodada 9 (2026-08-19): este endpoint aceitava POST anonimo sem rate limit,
-// sem checagem de origem e sem honeypot -- um POST direto (sem passar pelo
-// checkout de verdade) inseria uma linha por UUID gerado, e
-// scripts/send-abandoned-cart-emails.php (cron */30) enviava e-mail real do
-// dominio da loja pro endereco informado, com nome/itens controlados por
-// quem chamou o endpoint (~4.800 e-mails/dia possiveis). Os vizinhos
-// api/newsletter/subscribe.php e api/contact.php ja tinham essas defesas;
-// replicado aqui no mesmo padrao. Ver R9-4 no relatorio da Rodada 9.
 $originHeader = trim((string)($_SERVER['HTTP_ORIGIN'] ?? ''));
 if ($originHeader !== '') {
     $originHost = strtolower((string)parse_url($originHeader, PHP_URL_HOST));
@@ -56,7 +50,6 @@ if (!is_array($body)) {
     exit;
 }
 
-// Honeypot: campo invisivel no formulario real, preenchido apenas por bots.
 if (trim((string)($body['website'] ?? '')) !== '') {
     echo json_encode(['ok' => true]);
     exit;
@@ -79,15 +72,59 @@ if (!preg_match('/^[a-f0-9-]{16,64}$/i', $sessionToken)) {
     exit;
 }
 
-// Snapshot leve: so nome dos itens, sem preco unitario/SKU sensivel, pra
-// poder mencionar "os itens que voce deixou no carrinho" no e-mail.
-$snapshotNames = [];
-foreach (array_slice($cartItems, 0, 10) as $item) {
-    if (is_array($item) && isset($item['name'])) {
-        $snapshotNames[] = mb_substr(trim((string)$item['name']), 0, 120);
+// Resolve o conjunto de produtos contra o catalogo canonico no momento da
+// captura. O cliente atual envia apenas o nome; clientes futuros podem enviar
+// SKU + quantidade. Snapshot persistido nunca inclui preco ou estoque.
+$catalog = array_values(array_filter(svcr_products(), 'is_array'));
+$bySku = [];
+$byName = [];
+foreach ($catalog as $product) {
+    $sku = trim((string)($product['sku'] ?? ''));
+    $productName = trim((string)($product['name'] ?? ''));
+    if ($sku !== '') {
+        $bySku[strtolower($sku)] = $product;
+    }
+    if ($productName !== '') {
+        $key = function_exists('mb_strtolower') ? mb_strtolower($productName, 'UTF-8') : strtolower($productName);
+        $byName[$key][] = $product;
     }
 }
-$cartSnapshot = json_encode($snapshotNames, JSON_UNESCAPED_UNICODE);
+
+$snapshot = [];
+foreach (array_slice($cartItems, 0, 10) as $item) {
+    if (!is_array($item)) {
+        continue;
+    }
+    $sku = trim((string)($item['sku'] ?? ''));
+    $itemName = trim((string)($item['name'] ?? ''));
+    $quantity = max(1, min(20, (int)($item['quantity'] ?? 1)));
+    $resolved = null;
+
+    if ($sku !== '') {
+        $resolved = $bySku[strtolower($sku)] ?? null;
+    }
+    if (!is_array($resolved) && $itemName !== '') {
+        $nameKey = function_exists('mb_strtolower') ? mb_strtolower($itemName, 'UTF-8') : strtolower($itemName);
+        $matches = $byName[$nameKey] ?? [];
+        if (count($matches) === 1) {
+            $resolved = $matches[0];
+        }
+    }
+    if (!is_array($resolved)) {
+        continue;
+    }
+
+    $resolvedSku = trim((string)($resolved['sku'] ?? ''));
+    if ($resolvedSku === '') {
+        continue;
+    }
+    $snapshot[] = [
+        'sku' => mb_substr($resolvedSku, 0, 80),
+        'quantity' => $quantity,
+        'name' => mb_substr(trim((string)($resolved['name'] ?? $itemName)), 0, 120),
+    ];
+}
+$cartSnapshot = json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
 try {
     sv_account_ensure_schema();
@@ -101,20 +138,20 @@ try {
             customer_name = VALUES(customer_name),
             cart_snapshot = VALUES(cart_snapshot),
             cart_total = VALUES(cart_total),
+            recovery_token_hash = NULL,
+            recovery_token_expires_at = NULL,
             updated_at = NOW()'
     );
     $stmt->execute([
         ':email' => $email,
         ':name' => $name !== '' ? mb_substr($name, 0, 120) : null,
         ':snapshot' => $cartSnapshot,
-        ':total' => round($cartTotal, 2),
+        ':total' => round(max(0, $cartTotal), 2),
         ':token' => $sessionToken,
     ]);
 
     echo json_encode(['ok' => true]);
 } catch (Throwable $e) {
     error_log('[track-abandonment] failed: ' . $e->getMessage());
-    // Falha silenciosa do ponto de vista do cliente -- isso nunca deve
-    // atrapalhar o checkout em si.
     echo json_encode(['ok' => false]);
 }
