@@ -202,6 +202,41 @@ para futuros agentes.
 
 ---
 
+## 🟢 Resolvido na Rodada 3 (2026-08-19) — relay de e-mail aberto, segredo Olist exposto na raiz
+
+**Relay de e-mail aberto e não autenticado:** `api/emails/test-send.php` calculava
+`$expected_token` mas **nunca comparava** com `$_GET['token']` — qualquer visitante na internet
+conseguia disparar e-mails transacionais reais (confirmação de pedido, boleto gerado, pedido
+enviado) para qualquer destinatário, usando o SMTP e o domínio da loja. Confirmado ao vivo (HTTP
+200, envio real, sem credencial nenhuma). Risco principal: queima de reputação SPF/DKIM (e-mails de
+pedidos de clientes reais passam a cair em spam) e phishing assinado pelo domínio real. Neutralizado
+(410) + regra `.htaccess`. **Padrão a vigiar em outros lugares:** `grep` por variáveis chamadas
+`$expected_token`/`$expected_*` que nunca aparecem de novo num `hash_equals()`/`===` depois — é o
+sintoma de uma checagem de auth que foi escrita mas nunca ligada.
+
+**`SECRETS-TEMP-COLE-AQUI.txt` publicava um `OLIST_CLIENT_SECRET` em texto puro na raiz do site.**
+O `.htaccess` bloqueia `.md`/`.sh`/`.ps1`/`.bat`/`.log`/`.sql`/`.bak` na raiz, mas **`.txt` não
+estava na lista** — e a raiz do repositório é a raiz pública do site (releases imutáveis são cópias
+do repo servidas pelo Apache). Corrigido: negado `.txt` por padrão, com allow-list explícita para
+`robots.txt`/`llms.txt` (únicos `.txt` que precisam ficar públicos hoje). **Ação pendente do Fred:**
+confirmar se o client_secret do Olist/Tiny que estava neste arquivo (prefixo `pZU4...`) foi
+revogado/rotacionado — o arquivo já foi neutralizado, mas se a credencial ainda for válida ela
+precisa ser trocada. **Padrão a vigiar:** qualquer arquivo novo criado por um agente na raiz do repo
+é conteúdo público por padrão até alguém adicionar uma regra — isto reforça o item #7 (`.htaccess`
+default-deny) que segue aguardando aprovação do Fred desde a Rodada 1/2.
+
+**PHP não é o gargalo de performance desta aplicação.** Medição ao vivo (Rodada 3): o próprio
+`index.php` reporta 3-5ms de execução PHP, mas o TTFB medido de fora é de 3,5s (p50) a 4,5s (p90).
+O gargalo está entre o TLS handshake e o primeiro byte — fora do código da aplicação. Hipóteses
+prováveis: saturação de workers do Apache (mod_php/MPM prefork), contenção com o deploy a cada 2min
++ automação, disco a 86% de uso, ou invalidação de OPcache a cada release novo. **Precisa de SSH na
+VM pra diagnosticar — não tentar otimizar consultas/cache da aplicação achando que vai resolver.**
+
+**Ver também:** relatório completo da Rodada 3 (R3-1 a R3-7, itens A1-A4 aguardando aprovação) —
+gerado nesta sessão, resumo acima cobre o essencial para futuros agentes.
+
+---
+
 ## 📚 Memória Compartilhada por Sistema
 
 ### Tiny ERP API v3
@@ -309,6 +344,6 @@ para futuros agentes.
 
 ---
 
-**Última consolidação:** 2026-07-26 (entrada da Rodada 2 de melhoria contínua adicionada em 2026-08-18)
+**Última consolidação:** 2026-07-26 (entradas das Rodadas 2 e 3 de melhoria contínua adicionadas em 2026-08-18/19)
 **Consolidado por:** Claude Code
 **Próxima revisão:** Quando houver novo achado não-óbvio

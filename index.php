@@ -1296,9 +1296,17 @@ $svNavCurrent = '';
 </html>
 <?php
 $timings['total'] = microtime(true) - $t0;
-echo "\n<!-- PHP Exec Timings:\n";
-foreach ($timings as $key => $elapsed) {
-    printf("  %s: %.4fs\n", $key, $elapsed);
+// Rodada 3 (2026-08-19): este comentario era emitido pra TODO visitante em
+// producao, vazando os nomes internos das etapas de bootstrap (price_enrich,
+// ml_ranking, popup_cupons, hero_banners_load...) e alguns bytes extras em
+// cada resposta. Util como instrumentacao de dev, nao deveria estar publico
+// por padrao -- agora so aparece com SV_DEBUG_TIMINGS=1 no ambiente. Ver R3-5
+// no relatorio da Rodada 3 de melhoria continua.
+if (getenv('SV_DEBUG_TIMINGS') === '1') {
+    echo "\n<!-- PHP Exec Timings:\n";
+    foreach ($timings as $key => $elapsed) {
+        printf("  %s: %.4fs\n", $key, $elapsed);
+    }
+    echo "-->\n";
 }
-echo "-->\n";
 ?>

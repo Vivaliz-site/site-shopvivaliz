@@ -163,6 +163,25 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^uploads/olist_imagens_site_mapeamento\.csv$ - [F,L,NC]
     RewriteRule \.(?:bak|backup|old|orig|sql|sqlite|log|ini)$ - [F,L,NC]
 
+    # Rodada 3 (2026-08-19): .txt na raiz nao estava na deny-list de extensao
+    # (so .md/.sh/.ps1/.bat/.log/.sql/.bak... estavam). Isso deixou publico um
+    # arquivo chamado SECRETS-TEMP-COLE-AQUI.txt com um par client_id/secret
+    # do Olist preenchido, mais outro listando 34 nomes de secret. Allow-list
+    # explicita ANTES da regra de negacao para os .txt que precisam continuar
+    # publicos (robots.txt e llms.txt, confirmados em uso). Qualquer .txt novo
+    # criado por um agente entra bloqueado por padrao a partir de agora. Ver
+    # R3-2 no relatorio da Rodada 3 de melhoria continua.
+    RewriteRule ^(?:robots|llms)\.txt$ - [L]
+    RewriteRule \.txt$ - [F,L,NC]
+    # .git-guardian.json (config de protecao de branch) tambem estava publico
+    # sem necessidade -- e config interna, nao consumida por HTTP.
+    RewriteRule ^\.git-guardian\.json$ - [F,L,NC]
+    # api/emails/test-send.php ja foi neutralizado (410) no codigo (era um
+    # relay de e-mail aberto -- token calculado mas nunca comparado, ver R3-1),
+    # esta regra cobre a copia que ainda esta no release imutavel em producao
+    # ate o proximo deploy trocar o symlink `current`.
+    RewriteRule ^api/emails/test-send\.php$ - [F,L,NC]
+
     # SEGURANCA: api/autonomous/ e maquinaria interna dos agentes (exec() de
     # ps/df/free/mysqldump, gestao de incidentes). Nada no site consome esses
     # arquivos por HTTP -- so a CLI, via scripts/autonomous-orchestrator-loop.sh.

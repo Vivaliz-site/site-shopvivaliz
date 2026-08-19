@@ -17,6 +17,20 @@ function svcp_ensure_schema(): void
     sv_account_ensure_schema();
     $pdo = sv_pdo();
 
+    // Rodada 3 (2026-08-19): esta funcao roda a cada validacao de cupom (ate
+    // por tráfego anonimo, via api/orders/validate-coupon.php). O `static
+    // $done` acima so evita repeticao DENTRO do mesmo request; em regime
+    // normal ainda disparava SHOW COLUMNS + SHOW INDEX + ate 6 ALTER TABLE +
+    // 2 ALTER INDEX + SHOW TABLES a CADA request novo. Sentinela barata:
+    // se a coluna redeemed_at (a ultima da lista de alteracoes) ja existe,
+    // a migracao inteira (incluindo a checagem de tabela legada) ja rodou
+    // em producao alguma vez -- nao ha necessidade de tocar em ALTER/DROP
+    // de novo. Ver B5 no relatorio da Rodada 2/3 de melhoria continua.
+    $sentinel = $pdo->query("SHOW COLUMNS FROM coupons LIKE 'redeemed_at'")->fetchColumn();
+    if ($sentinel) {
+        return;
+    }
+
     $columns = [];
     foreach ($pdo->query('SHOW COLUMNS FROM coupons')->fetchAll() as $row) {
         $columns[(string)$row['Field']] = true;

@@ -324,7 +324,12 @@ function sv_catalog_product_href(array $product): string
     $sku = trim((string)($product['sku'] ?? ''));
     $name = trim((string)($product['name'] ?? ''));
     $slug = trim((string)($product['slug'] ?? '')) ?: ($sku !== '' && $name !== '' ? sv_catalog_slugify($name, $sku) : '');
-    return $slug !== '' ? '/produto/' . $slug : sv_catalog_product_url($product);
+    // Rodada 3 (2026-08-19): sitemap.php:137 ja publica o slug com
+    // rawurlencode(); esta funcao emitia UTF-8 cru (ex: ".../cachepot-...-
+    // aço-corten-japi-jfqfac57"). O navegador corrige sozinho, mas isso cria
+    // duas representacoes da mesma URL -- risco de canonical inconsistente e
+    // de crawlers menos tolerantes falharem. Ver E3 no relatorio da Rodada 3.
+    return $slug !== '' ? '/produto/' . rawurlencode($slug) : sv_catalog_product_url($product);
 }
 
 function sv_catalog_contact_url(array $product): string
