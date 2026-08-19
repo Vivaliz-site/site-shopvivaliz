@@ -1,6 +1,6 @@
 {
   "requested_at": "2026-08-08T18:37:00-03:00",
-  "project_number": "515723698609",
+  "project_number_source": "GOOGLE_CLOUD_PROJECT_NUMBER",
   "service": "googleads.googleapis.com",
   "reason": "Attempt API enable with the freshly validated OAuth access token before requesting any additional consent"
 }
