@@ -27,6 +27,7 @@ $expect(str_contains($schema, 'recovery_token_expires_at DATETIME'), 'Recovery t
 $expect(str_contains($tracker, "'sku' =>"), 'Tracker must persist SKU intent');
 $expect(str_contains($tracker, "'quantity' =>"), 'Tracker must persist bounded quantity intent');
 $expect(!str_contains($tracker, "'price' =>"), 'Tracker snapshot must not persist client-trusted price');
+$expect(str_contains($tracker, 'IF(recovery_email_sent_at IS NULL, NULL, recovery_token_hash)'), 'Tracker must preserve already-issued restore token');
 $expect(str_contains($sender, 'hash(\'sha256\', $restoreToken)'), 'Sender must store only token hash');
 $expect(str_contains($sender, 'recuperar-carrinho#token='), 'Recovery token must use URL fragment');
 $expect(!str_contains($sender, 'recuperar-carrinho?token='), 'Recovery token must not use query string');
