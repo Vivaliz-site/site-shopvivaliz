@@ -27,10 +27,16 @@ jobs:
           chmod 600 ~/.ssh/vmkey
 
       - name: Enable Google Ads API through existing OAuth
+        env:
+          VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
         shell: bash
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
+          test -n "$VM_HOST"
+          case "$VM_HOST" in
+            *[!A-Za-z0-9._-]*|.*|*..*|*-|-) echo "invalid VM host" >&2; exit 2 ;;
+          esac
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/vmkey "ubuntu@$VM_HOST" 'python3 -' <<'PY'
           import json, re, time, urllib.parse, urllib.request, urllib.error
           from pathlib import Path
 
