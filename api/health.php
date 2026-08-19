@@ -86,8 +86,16 @@ function sv_health_probe_queue(array &$checks, string $root): array
         $queueSummary = [];
     }
 
+    // Rodada 9 (2026-08-19): o check antigo somava 4 contadores nao-negativos
+    // e comparava com >= 0 -- e sempre true por construcao, nunca detectou
+    // nada. "Fila sem backlog travado" so olha 'stale' (job preso em
+    // 'running' ha >15min); se NENHUM job chega a rodar (caso do R9-1: fila
+    // sem worker consumindo), 'stale' tambem fica sempre 0. Nenhum dos dois
+    // olhava pra 'queued'. Troquei por um limiar real. Ver R9-6 no relatorio
+    // da Rodada 9 -- e a 4a/5a ocorrencia do padrao "guarda que roda e nao
+    // detecta o comportamento que interessa" (depois de R6-4, R6-5, R8-9).
     if (isset($queueSummary['total']) && (int)$queueSummary['total'] > 0) {
-        $checks['Fila total operacional'] = ((int)($queueSummary['queued'] ?? 0) + (int)($queueSummary['running'] ?? 0) + (int)($queueSummary['done'] ?? 0) + (int)($queueSummary['failed'] ?? 0)) >= 0;
+        $checks['Fila sem backlog acumulado'] = ((int)($queueSummary['queued'] ?? 0)) < 50;
     }
     if (isset($queueSummary['stale'])) {
         $checks['Fila sem backlog travado'] = ((int)$queueSummary['stale']) === 0;
