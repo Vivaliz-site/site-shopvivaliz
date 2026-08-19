@@ -2,6 +2,13 @@
 
 declare(strict_types=1);
 
+// Rodada 8 (2026-08-19): defesa em profundidade -- ver R8-3 no relatorio da
+// Rodada 8 (mesma nota em agents/v9.2.84/installer/sync-runner.php).
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('CLI only');
+}
+
 header('Content-Type: application/json; charset=utf-8');
 
 $root = dirname(__DIR__);

@@ -158,7 +158,29 @@ AddCharset UTF-8 .html .txt .php .json
     # chaves de IA sem credito. web/ e a mesma classe de problema (pagina
     # placeholder da Vercel, indexavel, descrevendo arquitetura interna).
     # Ver R7-1 a R7-6 e R7-11 no relatorio da Rodada 7.
-    RewriteRule ^(?:\.git|\.env(?:\.|$)|\.claude|\.codex|\.github|\.githooks|\.vscode|\.tmp_shopvivaliz|__pycache__|scripts|tests|test-results|deploy|docs|reports|scratch|automation|automations|autodev|core|dashboards|imports|kong|listings|medusa|migrations|planilhas|public_html|release-notes|tools|utils|CheckoutPageOptimizer|installer|claude|web)(?:/|$) - [F,L,NC]
+    #
+    # Rodada 8 (2026-08-19): varredura sistematica de TODOS os diretorios de
+    # primeiro nivel do repo contra esta lista achou mais 4 arvores expostas
+    # pelo mesmo mecanismo -- "agents" (3 entrypoints HTTP de agente, um deles
+    # um "GitHub Pull Update Agent" alimentado por $_REQUEST, hoje falhando
+    # so por faltar um arquivo de classe -- mesmo padrao do claude/ na R7),
+    # ".ai" (orquestrador de IA local: server.js, dashboard.html indexavel,
+    # filas de tarefas/resultados), "ops" (42 arquivos de requisicao
+    # operacional formando um diario publico de credenciais quebradas) e
+    # "agent-bridge" (config.example.json publicava o caminho absoluto do
+    # checkout na VM e a lista completa de comandos bloqueados -- o modelo de
+    # ameaca do proprio controle de seguranca). IMPORTANTE (ver R8-8 no
+    # relatorio da Rodada 8): esta lista enumerada NAO e a unica defesa --
+    # existe uma segunda camada de negacao no Apache do vhost da VM (fora
+    # deste repo, sem SSH pra auditar) que bloqueia diretorios como includes/
+    # e olist/ e extensoes como .md/.py/.ps1/.csv/.toml, e uma terceira
+    # camada na Cloudflare que sobrescreve alguns headers de resposta. Um 403
+    # em producao para um caminho que NAO esta nesta lista nao prova que esta
+    # lista o protege -- teste sempre um arquivo inexistente dentro do
+    # diretorio: 404 = a negacao e desta lista (regex de arquivo); 403 = vem
+    # de fora (camada de diretorio, anterior ao filesystem). Ver R7-1 a R7-6,
+    # R8-3, R8-4, R8-5, R8-7 e R8-8 no relatorio da Rodada 8.
+    RewriteRule ^(?:\.git|\.env(?:\.|$)|\.claude|\.codex|\.github|\.githooks|\.vscode|\.tmp_shopvivaliz|__pycache__|\.ai|scripts|tests|test-results|deploy|docs|reports|scratch|automation|automations|autodev|core|dashboards|imports|kong|listings|medusa|migrations|planilhas|public_html|release-notes|tools|utils|CheckoutPageOptimizer|installer|claude|web|agents|ops|agent-bridge)(?:/|$) - [F,L,NC]
     RewriteRule ^(?:api/sandbox/|admin/(?:mercadopago-sandbox\.php|webhook-test\.php|test-auto-sync\.sh)|olist/produtos-198\.php|claude/api/get-produtos-198\.php)$ - [F,L,NC]
     # Rodada 7 (2026-08-19): o guard de autenticacao do admin cobre
     # admin/*.php (redireciona pra login), mas nao os subdiretorios de

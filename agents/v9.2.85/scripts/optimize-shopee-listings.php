@@ -2,6 +2,13 @@
 
 declare(strict_types=1);
 
+// Rodada 8 (2026-08-19): defesa em profundidade -- ver R8-3 no relatorio da
+// Rodada 8 (mesma nota em fetch-shopee-listings.php).
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('CLI only');
+}
+
 require_once __DIR__ . '/../app/ShopeeListingsOptimizationAgent.php';
 
 $agent  = new ShopeeListingsOptimizationAgent();
