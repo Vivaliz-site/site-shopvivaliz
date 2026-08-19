@@ -19,7 +19,8 @@ on:
 permissions:
   contents: read
   actions: read
-  pull-requests: read
+  pull-requests: write
+  issues: write
 
 concurrency:
   group: pr-completion-enforcer
@@ -27,7 +28,7 @@ concurrency:
 
 jobs:
   enforce:
-    name: Merge every current fully-green same-repository PR
+    name: Repair failures now and merge every current fully-green PR
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -69,6 +70,20 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
+      - name: Ensure immediate-repair label exists
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if gh api "repos/${REPO}/labels/repair-required-now" >/dev/null 2>&1; then
+            echo 'repair_label=existing'
+          else
+            gh api --method POST "repos/${REPO}/labels" \
+              -f name='repair-required-now' \
+              -f color='D73A4A' \
+              -f description='Falha corrigível: reparar na mesma branch e concluir o merge agora'
+            echo 'repair_label=created'
+          fi
+
       - name: Stage trusted finalizer in Oracle temporary boundary
         id: stage
         shell: bash
@@ -82,7 +97,8 @@ jobs:
             trusted/scripts/merge_green_pr_via_vm.sh \
             "${VM_USER}@${VM_HOST}:${remote_script}"
 
-      - name: Merge fully validated PRs immediately
+      - name: Mark failures for immediate repair and merge fully validated PRs
+        id: finalize
         shell: bash
         env:
           REMOTE_SCRIPT: ${{ steps.stage.outputs.remote_script }}
@@ -105,6 +121,8 @@ jobs:
           )
           echo "open_ready_pr_count=${#prs[@]}"
           merged_count=0
+          repair_required_count=0
+          waiting_count=0
 
           for pr in "${prs[@]}"; do
             meta="$(gh api "repos/${REPO}/pulls/${pr}")"
@@ -117,16 +135,29 @@ jobs:
               continue
             fi
 
-            # A PR is never merged against stale main. A later healer sweep
-            # will synchronize it and cause every PR gate to run on a new SHA.
             relation="$(gh api "repos/${REPO}/compare/main...${head_sha}" --jq '.status')"
             if [[ "$relation" != 'ahead' && "$relation" != 'identical' ]]; then
+              marker="<!-- immediate-main-sync:${head_sha} -->"
+              comments="$(gh api "repos/${REPO}/issues/${pr}/comments?per_page=100")"
+              if ! jq -e --arg marker "$marker" '.[] | select(.body | contains($marker))' <<<"$comments" >/dev/null; then
+                gh api --method POST "repos/${REPO}/issues/${pr}/comments" \
+                  -f body="$marker
+          ## Sincronização obrigatória com main
+
+          A branch não contém a `main` atual. Isto é um erro corrigível e deve ser resolvido imediatamente na mesma branch, sem force-push. Após resolver conflitos, execute validação real no novo SHA e conclua o merge quando todos os gates estiverem verdes.
+
+          Política: `docs/PR-FAIL-FIX-MERGE-POLICY.md`."
+              fi
+              gh api --method POST "repos/${REPO}/issues/${pr}/labels" \
+                -f 'labels[]=repair-required-now' >/dev/null
+              repair_required_count=$((repair_required_count + 1))
               echo "pr_${pr}_needs_main_sync=true"
               continue
             fi
 
             runs="$(gh api "repos/${REPO}/actions/runs?head_sha=${head_sha}&per_page=100")"
             ready=1
+            pending=0
             for workflow_name in "${required[@]}"; do
               state="$(jq -r --arg name "$workflow_name" '
                 [.workflow_runs[] | select(.name == $name)]
@@ -137,33 +168,63 @@ jobs:
               echo "pr_${pr}_gate_${workflow_name// /_}=${state}"
               if [[ "$state" != 'completed:success' ]]; then
                 ready=0
+                if [[ "$state" == 'missing' || "$state" == queued:* || "$state" == in_progress:* || "$state" == requested:* || "$state" == waiting:* || "$state" == pending:* ]]; then
+                  pending=1
+                fi
               fi
             done
 
-            # Any completed failing run on this exact SHA is a known failure,
-            # even when it is outside the mandatory core workflow names.
-            failing="$(jq '[.workflow_runs[]
+            failing_json="$(jq '[.workflow_runs[]
               | select(.status == "completed")
-              | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "action_required" or .conclusion == "startup_failure")]
-              | length' <<<"$runs")"
+              | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "action_required" or .conclusion == "startup_failure")
+              | {name, conclusion, html_url, id, updated_at}]
+              | unique_by(.name, .id)
+              | sort_by(.updated_at)' <<<"$runs")"
+            failing="$(jq 'length' <<<"$failing_json")"
+
             if (( failing > 0 )); then
               ready=0
+              marker="<!-- immediate-remediation:${head_sha} -->"
+              comments="$(gh api "repos/${REPO}/issues/${pr}/comments?per_page=100")"
+              if ! jq -e --arg marker "$marker" '.[] | select(.body | contains($marker))' <<<"$comments" >/dev/null; then
+                failure_lines="$(jq -r '.[] | "- **\(.name)** — `\(.conclusion)` — \(.html_url)"' <<<"$failing_json")"
+                gh api --method POST "repos/${REPO}/issues/${pr}/comments" \
+                  -f body="$marker
+          ## Falha detectada — reparo imediato obrigatório
+
+          O SHA atual é \`${head_sha}\`. As execuções abaixo falharam e devem ser abertas, diagnosticadas e corrigidas **agora**, na mesma branch:
+
+          ${failure_lines}
+
+          Fluxo obrigatório: ler o log exato → corrigir causa raiz → atualizar a branch → executar validação real → repetir até verde → mergear imediatamente. Não encerrar a tarefa com este PR pendente.
+
+          Política: `docs/PR-FAIL-FIX-MERGE-POLICY.md`."
+              fi
+              gh api --method POST "repos/${REPO}/issues/${pr}/labels" \
+                -f 'labels[]=repair-required-now' >/dev/null
+              repair_required_count=$((repair_required_count + 1))
               echo "pr_${pr}_failing_run_count=${failing}"
+              continue
             fi
 
             if [[ "$ready" -ne 1 ]]; then
+              if [[ "$pending" -eq 1 ]]; then
+                waiting_count=$((waiting_count + 1))
+              fi
               echo "pr_${pr}_merge_ready=false"
               continue
             fi
 
-            # TOCTOU guard on the runner, followed by a second independent
-            # guard inside the Oracle finalizer immediately before mutation.
             latest_sha="$(gh api "repos/${REPO}/pulls/${pr}" --jq '.head.sha')"
             if [[ "$latest_sha" != "$head_sha" ]]; then
               echo "pr_${pr}_head_moved=true"
+              waiting_count=$((waiting_count + 1))
               continue
             fi
 
+            if gh api --method DELETE "repos/${REPO}/issues/${pr}/labels/repair-required-now" >/dev/null 2>&1; then
+              echo "pr_${pr}_repair_label_removed=true"
+            fi
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
               "${VM_USER}@${VM_HOST}" \
@@ -173,6 +234,18 @@ jobs:
           done
 
           echo "merged_pr_count=${merged_count}"
+          echo "repair_required_count=${repair_required_count}" >> "$GITHUB_OUTPUT"
+          echo "waiting_count=${waiting_count}" >> "$GITHUB_OUTPUT"
+
+      - name: Fail visibly while a corrigible PR error remains
+        if: always() && steps.finalize.outputs.repair_required_count != '0'
+        shell: bash
+        env:
+          REPAIR_REQUIRED: ${{ steps.finalize.outputs.repair_required_count }}
+        run: |
+          set -Eeuo pipefail
+          echo "::error::${REPAIR_REQUIRED} PR(s) have a corrigible error and require immediate same-branch repair before merge."
+          exit 1
 
       - name: Remove Oracle and runner temporary material
         if: always()
@@ -194,6 +267,8 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          echo 'failed_check_silently_skipped=false'
+          echo 'same_branch_repair_required=true'
           echo 'green_pr_without_current_main_merge_allowed=false'
           echo 'stale_checks_accepted=false'
           echo 'fork_pr_auto_merge_allowed=false'

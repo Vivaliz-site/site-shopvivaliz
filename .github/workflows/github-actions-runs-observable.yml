@@ -6,9 +6,10 @@ on:
     branches: [main]
     paths:
       - "ops/github-actions-runs-request.json"
+      - ".github/workflows/github-actions-runs-observable.yml"
 
 permissions:
-  contents: write
+  contents: read
   actions: read
 
 jobs:
@@ -16,8 +17,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Checkout
+      - name: Checkout request
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Query workflow runs
         env:
@@ -28,16 +31,21 @@ jobs:
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
           TRIGGER_SHA: ${{ github.sha }}
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           REQUEST_FILE="ops/github-actions-runs-request.json"
           WORKFLOW="$(jq -r '.workflow // "fred-win-health-observable.yml"' "$REQUEST_FILE")"
           BRANCH="$(jq -r '.branch // "main"' "$REQUEST_FILE")"
           LIMIT="$(jq -r '.limit // 10' "$REQUEST_FILE")"
           EVENT="$(jq -r '.event // empty' "$REQUEST_FILE")"
+          if ! [[ "$LIMIT" =~ ^[0-9]+$ ]] || (( LIMIT < 1 || LIMIT > 100 )); then
+            echo "::error::limit must be an integer between 1 and 100"
+            exit 2
+          fi
           QUERY="repos/$REPO/actions/workflows/$WORKFLOW/runs?branch=$BRANCH&per_page=$LIMIT"
-          if [ -n "$EVENT" ]; then
+          if [[ -n "$EVENT" ]]; then
             QUERY="$QUERY&event=$EVENT"
           fi
+          mkdir -p artifacts/github-actions-runs
           gh api "$QUERY" > /tmp/runs.json
           jq -n \
             --slurpfile request "$REQUEST_FILE" \
@@ -53,17 +61,14 @@ jobs:
             --arg queried_branch "$BRANCH" \
             --arg queried_event "$EVENT" \
             '{recorded_at:$recorded_at, repository:$repository, observer:{workflow:$observer_workflow, run_id:$observer_run_id, run_attempt:$observer_run_attempt, run_url:$observer_run_url, trigger_sha:$trigger_sha}, request:$request[0], query:{workflow:$queried_workflow, branch:$queried_branch, event:$queried_event}, result:$runs[0]}' \
-            > ops/github-actions-last-runs.json
+            > artifacts/github-actions-runs/github-actions-last-runs.json
+          jq '{query, run_count:(.result.workflow_runs | length)}' \
+            artifacts/github-actions-runs/github-actions-last-runs.json
 
-      - name: Commit observable result
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ops/github-actions-last-runs.json
-          if git diff --cached --quiet; then
-            echo "No observable result changes"
-            exit 0
-          fi
-          git commit -m "ops: record observable GitHub Actions runs"
-          git push
+      - name: Upload immutable observable result
+        uses: actions/upload-artifact@v4
+        with:
+          name: github-actions-runs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/github-actions-runs/github-actions-last-runs.json
+          if-no-files-found: error
+          retention-days: 30

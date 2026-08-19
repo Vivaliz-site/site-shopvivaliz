@@ -6,74 +6,123 @@ on:
     branches: [main]
     paths:
       - "ops/fredwin-observe-request.json"
+      - ".github/workflows/fred-win-health-observable.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   health:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Checkout
+      - name: Checkout request
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-      - name: Configure VM key
+      - name: Configure verified Oracle SSH
         env:
-          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
-          test -n "$VM_KEY" || { echo "SHOPVIVALIZ_VM_SSH_KEY missing"; exit 2; }
-          mkdir -p ~/.ssh
-          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
-          chmod 600 ~/.ssh/vmkey
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo "::error::Oracle SSH key missing"; exit 2; }
+          test -n "$known_hosts" || { echo "::error::Oracle known_hosts missing"; exit 2; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
 
-      - name: Check Fred-Win health through private relay
+      - name: Check Fred-Win health through canonical private relay
         id: health
         shell: bash
         run: |
-          set +e
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+          set -Eeuo pipefail
+          if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=10 -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=2 -i "$HOME/.ssh/vmkey" \
+            ubuntu@137.131.156.17 \
             'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health' \
-            > /tmp/fredwin-health-output.txt 2>&1
-          code=$?
-          set -e
-          echo "$code" > /tmp/fredwin-health-exit.txt
+            > /tmp/fredwin-health-output.txt 2>&1; then
+            code=0
+          else
+            code=$?
+          fi
+          printf '%s\n' "$code" > /tmp/fredwin-health-exit.txt
           cat /tmp/fredwin-health-output.txt
-          exit "$code"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
 
-      - name: Record observable result
+      - name: Build immutable observable result
         if: always()
         shell: bash
         run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts/fredwin-health
           python3 - <<'PY'
-          import json, os, subprocess, datetime, pathlib
+          import datetime
+          import json
+          import os
+          import pathlib
+
           request_path = pathlib.Path('ops/fredwin-observe-request.json')
           request = {}
           if request_path.exists():
               try:
                   request = json.loads(request_path.read_text(encoding='utf-8'))
-              except Exception as exc:
+              except (OSError, json.JSONDecodeError) as exc:
                   request = {'parse_error': str(exc)}
+
           out_path = pathlib.Path('/tmp/fredwin-health-output.txt')
           code_path = pathlib.Path('/tmp/fredwin-health-exit.txt')
-          output = out_path.read_text(encoding='utf-8', errors='replace') if out_path.exists() else ''
+          output = (
+              out_path.read_text(encoding='utf-8', errors='replace')
+              if out_path.exists()
+              else ''
+          )
           exit_code = None
           if code_path.exists():
+              raw_code = code_path.read_text(
+                  encoding='utf-8', errors='replace'
+              ).strip()
               try:
-                  exit_code = int(code_path.read_text(encoding='utf-8').strip())
-              except Exception:
-                  exit_code = code_path.read_text(encoding='utf-8', errors='replace').strip()
+                  exit_code = int(raw_code)
+              except ValueError:
+                  exit_code = raw_code
+
+          parsed_health = None
+          if exit_code == 0:
+              try:
+                  parsed_health = json.loads(output)
+              except json.JSONDecodeError:
+                  parsed_health = None
+
           payload = {
-              'recorded_at': datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z'),
+              'recorded_at': datetime.datetime.now(
+                  datetime.timezone.utc
+              ).isoformat().replace('+00:00', 'Z'),
               'request': request,
               'repository': os.environ.get('GITHUB_REPOSITORY'),
               'workflow': os.environ.get('GITHUB_WORKFLOW'),
               'run_id': os.environ.get('GITHUB_RUN_ID'),
               'run_attempt': os.environ.get('GITHUB_RUN_ATTEMPT'),
-              'run_url': f"{os.environ.get('GITHUB_SERVER_URL')}/{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/{os.environ.get('GITHUB_RUN_ID')}",
+              'run_url': (
+                  f"{os.environ.get('GITHUB_SERVER_URL')}/"
+                  f"{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/"
+                  f"{os.environ.get('GITHUB_RUN_ID')}"
+              ),
               'trigger_sha': os.environ.get('GITHUB_SHA'),
               'private_relay': {
-                  'architecture': 'GitHub Actions -> Oracle VM 137.131.156.17 via SSH -> VM 127.0.0.1:5557 -> reverse SSH tunnel -> Fred-Win 127.0.0.1:5557 -> MCP',
+                  'architecture': (
+                      'GitHub Actions -> Oracle VM 137.131.156.17 via SSH -> '
+                      'VM 127.0.0.1:5557 -> reverse SSH tunnel -> '
+                      'Fred-Win 127.0.0.1:5557 -> MCP'
+                  ),
                   'endpoint_checked_from_vm': 'http://127.0.0.1:5557/health',
                   'cloudflare_endpoint_used': False,
                   'ssh_target': 'ubuntu@137.131.156.17',
@@ -81,19 +130,44 @@ jobs:
               'health': {
                   'exit_code': exit_code,
                   'ok': exit_code == 0,
+                  'parsed': parsed_health,
                   'raw_output': output[-4000:],
               },
           }
-          pathlib.Path('ops').mkdir(exist_ok=True)
-          pathlib.Path('ops/fredwin-last-result.json').write_text(json.dumps(payload, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          output_file = pathlib.Path(
+              'artifacts/fredwin-health/fredwin-health-result.json'
+          )
+          output_file.write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2) + '\n',
+              encoding='utf-8',
+          )
+          print(json.dumps({
+              'ok': payload['health']['ok'],
+              'exit_code': exit_code,
+              'artifact': str(output_file),
+          }, sort_keys=True))
           PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin main || true
-          git add ops/fredwin-last-result.json
-          git commit -m "ops: record Fred-Win health observable result [skip ci]" || exit 0
-          git push origin HEAD:main
+
+      - name: Upload immutable health evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fredwin-health-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/fredwin-health/fredwin-health-result.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce canonical health result
+        if: always()
+        env:
+          HEALTH_EXIT_CODE: ${{ steps.health.outputs.exit_code }}
+        run: |
+          set -Eeuo pipefail
+          test "${HEALTH_EXIT_CODE:-missing}" = "0"
 
       - name: Cleanup
         if: always()
-        run: rm -f ~/.ssh/vmkey /tmp/fredwin-health-output.txt /tmp/fredwin-health-exit.txt
+        run: |
+          set -Eeuo pipefail
+          rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts" \
+            /tmp/fredwin-health-output.txt /tmp/fredwin-health-exit.txt

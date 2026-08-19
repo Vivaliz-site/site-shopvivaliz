@@ -9,10 +9,16 @@ on:
       - "scripts/google_ads_antique_decore_status.py"
       - "scripts/google_ads_antique_decore_automation.py"
       - "scripts/google_ads_campaign_live_ready.json"
+  schedule:
+    - cron: "17,47 * * * *"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: google-ads-antique-decore-status
+  cancel-in-progress: true
 
 jobs:
   status:
@@ -28,39 +34,30 @@ jobs:
       GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install Google Ads client
-        run: python3 -m pip install --disable-pip-version-check google-ads
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check google-ads
 
       - name: Enforce live campaign guardrails
         shell: bash
         run: |
-          set +e
-          python3 scripts/google_ads_antique_decore_automation.py 2>&1 | tee /tmp/google-ads-live-watch.txt
-          code=${PIPESTATUS[0]}
-          printf '%s\n' "$code" > /tmp/google-ads-live-watch.exit
-          exit "$code"
-
-      - name: Persist latest live-watch result
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          code="$(cat /tmp/google-ads-live-watch.exit 2>/dev/null || printf '1')"
+          set -Eeuo pipefail
+          mkdir -p artifacts/google-ads-antique-decore-status
           {
             printf 'checked_at_utc=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-            printf 'script_exit_code=%s\n' "$code"
-            if [ -f /tmp/google-ads-live-watch.txt ]; then
-              cat /tmp/google-ads-live-watch.txt
-            else
-              printf 'RESULT=LIVE_WATCH_OUTPUT_MISSING\n'
-            fi
-          } > ops/google-ads-antique-decore-latest.txt
+            python3 scripts/google_ads_antique_decore_automation.py
+          } 2>&1 | tee artifacts/google-ads-antique-decore-status/live-watch.txt
 
-          if ! git diff --quiet -- ops/google-ads-antique-decore-latest.txt; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add ops/google-ads-antique-decore-latest.txt
-            git commit -m "ops: record Google Ads Antique Decore live watch"
-            git push
-          fi
+      - name: Upload immutable live-watch evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: google-ads-antique-decore-status-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/google-ads-antique-decore-status/
+          if-no-files-found: error
+          retention-days: 30
