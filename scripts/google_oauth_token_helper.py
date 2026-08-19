@@ -1,41 +1,70 @@
 #!/usr/bin/env python3
 """
 Google OAuth 2.0 Token Generator
-Automates authorization flow for Google APIs:
-- Merchant Center (https://www.googleapis.com/auth/content)
-- Tag Manager (edit & publish)
-- Search Console (webmasters)
-- Google Analytics 4 (analytics.readonly)
-- Indexing API (indexing)
+Automates authorization flow for Google APIs without printing secrets.
+
+Search Console scope is read-only by default. Broader Google scopes should be
+requested explicitly only when the corresponding module is being configured.
 
 Usage:
-  python scripts/google_oauth_token_helper.py [--port 8080] [--exchange-code <code>]
+  python scripts/google_oauth_token_helper.py [--port 8080]
+  python scripts/google_oauth_token_helper.py --exchange-code <code>
+  python scripts/google_oauth_token_helper.py --write-token-file
 """
 
-import os
-import sys
+import argparse
 import json
+import os
+import stat
+import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
-import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 DEFAULT_SCOPES = [
-    "https://www.googleapis.com/auth/content",
-    "https://www.googleapis.com/auth/tagmanager.edit.containers",
-    "https://www.googleapis.com/auth/tagmanager.publish",
-    "https://www.googleapis.com/auth/webmasters",
-    "https://www.googleapis.com/auth/analytics.readonly",
-    "https://www.googleapis.com/auth/indexing",
+    "https://www.googleapis.com/auth/webmasters.readonly",
 ]
+OPTIONAL_SCOPE_GROUPS = {
+    "search-console-write": ["https://www.googleapis.com/auth/webmasters"],
+    "merchant": ["https://www.googleapis.com/auth/content"],
+    "tag-manager": [
+        "https://www.googleapis.com/auth/tagmanager.edit.containers",
+        "https://www.googleapis.com/auth/tagmanager.publish",
+    ],
+    "analytics": ["https://www.googleapis.com/auth/analytics.readonly"],
+    "indexing": ["https://www.googleapis.com/auth/indexing"],
+}
+SENSITIVE_TOKEN_KEYS = {"access_token", "refresh_token", "id_token"}
+
+
+def mask_value(value, keep=8):
+    value = str(value or "")
+    if not value:
+        return ""
+    if len(value) <= keep:
+        return "<redacted>"
+    return f"{value[:keep]}...<redacted>"
+
+
+def sanitized_token_summary(tokens):
+    return {
+        "has_refresh_token": bool(tokens.get("refresh_token")),
+        "has_access_token": bool(tokens.get("access_token")),
+        "token_type": tokens.get("token_type", "Bearer"),
+        "expires_in": tokens.get("expires_in", "N/A"),
+        "scope_count": len(str(tokens.get("scope", "")).split()),
+        "scopes": sorted(str(tokens.get("scope", "")).split()),
+    }
+
 
 def load_credentials():
-    # Check default download folder
-    candidates = list((Path.home() / "Downloads").glob("client_secret*.json")) + \
-                 list((Path.home() / "Desktop").glob("client_secret*.json"))
-    
+    candidates = list((Path.home() / "Downloads").glob("client_secret*.json")) + list(
+        (Path.home() / "Desktop").glob("client_secret*.json")
+    )
+
     for path in sorted(candidates, key=lambda p: p.stat().st_mtime, reverse=True):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
@@ -44,11 +73,11 @@ def load_credentials():
                 return sec["client_id"], sec["client_secret"], path
         except Exception:
             continue
-    
-    # Fallback to env
+
     cid = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
     secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "")
     return cid, secret, None
+
 
 def exchange_code_for_tokens(client_id, client_secret, code, redirect_uri):
     token_url = "https://oauth2.googleapis.com/token"
@@ -63,17 +92,17 @@ def exchange_code_for_tokens(client_id, client_secret, code, redirect_uri):
     req = urllib.request.Request(
         token_url,
         data=data,
-        headers={"Content-Type": "application/x-www-form-urlencoded"}
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             resp_data = resp.read().decode("utf-8")
             return json.loads(resp_data), None
-    except urllib.error.HTTPError as e:
-        err_msg = e.read().decode("utf-8", errors="ignore")
-        return None, f"HTTP {e.code}: {err_msg}"
-    except Exception as e:
-        return None, str(e)
+    except urllib.error.HTTPError as exc:
+        return None, f"HTTP {exc.code}"
+    except Exception as exc:
+        return None, type(exc).__name__
+
 
 class OAuthCallbackHandler(BaseHTTPRequestHandler):
     captured_code = None
@@ -94,22 +123,13 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
             html = """
             <!DOCTYPE html>
             <html>
-            <head>
-                <title>Autorizado com Sucesso - ShopVivaliz</title>
-                <style>
-                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #0f172a; color: #f8fafc; }
-                    .card { background: #1e293b; padding: 40px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align: center; max-width: 480px; border: 1px solid #334155; }
-                    h1 { color: #10b981; margin-bottom: 12px; font-size: 24px; }
-                    p { color: #94a3b8; font-size: 16px; line-height: 1.5; }
-                    .badge { display: inline-block; background: #064e3b; color: #34d399; padding: 6px 14px; border-radius: 9999px; font-size: 14px; font-weight: 600; margin-bottom: 16px; }
-                </style>
-            </head>
-            <body>
-                <div class="card">
-                    <div class="badge">&#10004; Sucesso</div>
-                    <h1>Autorização Concluída</h1>
-                    <p>O código de autorização foi capturado e os tokens estão sendo gerados. Você já pode fechar esta aba e retornar ao terminal.</p>
-                </div>
+            <head><title>Autorizado com Sucesso - ShopVivaliz</title></head>
+            <body style="font-family: system-ui; background:#0f172a; color:#f8fafc; display:flex; align-items:center; justify-content:center; min-height:100vh;">
+                <main style="background:#1e293b; padding:32px; border-radius:16px; max-width:520px; text-align:center;">
+                    <h1 style="color:#10b981;">Autorização concluída</h1>
+                    <p>O código foi capturado. Nenhum token será exibido no navegador.</p>
+                    <p>Você já pode fechar esta aba e retornar ao terminal.</p>
+                </main>
             </body>
             </html>
             """
@@ -119,19 +139,42 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
             self.send_response(400)
             self.send_header("Content-type", "text/html; charset=utf-8")
             self.end_headers()
-            self.wfile.write(f"<h1>Erro na autorização: {OAuthCallbackHandler.captured_error}</h1>".encode("utf-8"))
+            self.wfile.write(b"<h1>Erro na autorizacao OAuth.</h1>")
         else:
             self.send_response(404)
             self.end_headers()
 
-def run_local_flow(client_id, client_secret, port=8080):
+
+def build_scopes(extra_groups):
+    scopes = list(DEFAULT_SCOPES)
+    for group in extra_groups:
+        if group not in OPTIONAL_SCOPE_GROUPS:
+            raise ValueError(f"Grupo de escopo desconhecido: {group}")
+        for scope in OPTIONAL_SCOPE_GROUPS[group]:
+            if scope not in scopes:
+                scopes.append(scope)
+    return scopes
+
+
+def write_tokens_securely(tokens):
+    tokens_dir = Path(__file__).parent.parent / ".tokens"
+    tokens_dir.mkdir(parents=True, exist_ok=True)
+    os.chmod(tokens_dir, stat.S_IRWXU)
+    token_file = tokens_dir / "google-oauth-tokens.json"
+    tmp_file = token_file.with_suffix(".json.tmp")
+    tmp_file.write_text(json.dumps(tokens, indent=2), encoding="utf-8")
+    os.chmod(tmp_file, stat.S_IRUSR | stat.S_IWUSR)
+    tmp_file.replace(token_file)
+    return token_file
+
+
+def run_local_flow(client_id, client_secret, scopes, port=8080, write_token_file=False):
     redirect_uri = f"http://localhost:{port}/"
-    scopes = " ".join(DEFAULT_SCOPES)
     auth_params = {
         "client_id": client_id,
         "redirect_uri": redirect_uri,
         "response_type": "code",
-        "scope": scopes,
+        "scope": " ".join(scopes),
         "access_type": "offline",
         "prompt": "consent",
         "include_granted_scopes": "true",
@@ -141,111 +184,111 @@ def run_local_flow(client_id, client_secret, port=8080):
     print("=" * 60, flush=True)
     print("GOOGLE OAUTH 2.0 - GERADOR DE TOKENS", flush=True)
     print("=" * 60, flush=True)
-    print(f"Client ID: {client_id[:20]}...apps.googleusercontent.com", flush=True)
+    print(f"Client ID: {mask_value(client_id)}", flush=True)
     print(f"Redirect URI: {redirect_uri}", flush=True)
-    print(f"Escopos solicitados: {len(DEFAULT_SCOPES)} escopos configurados", flush=True)
+    print(f"Escopos solicitados: {len(scopes)}", flush=True)
     print("-" * 60, flush=True)
-    print(f"Iniciando servidor local na porta {port}...", flush=True)
 
     try:
         server = HTTPServer(("localhost", port), OAuthCallbackHandler)
-    except Exception as e:
-        print(f"Erro ao iniciar servidor na porta {port}: {e}", flush=True)
+    except Exception as exc:
+        print(f"Erro ao iniciar servidor na porta {port}: {type(exc).__name__}", flush=True)
         return False
 
-    server.timeout = 180  # 3 minutes timeout
+    server.timeout = 180
 
-    print(f"Abrindo navegador padrão...", flush=True)
-    print(f"Caso não abra automaticamente, acesse a URL abaixo:", flush=True)
+    print("Abrindo navegador padrão...", flush=True)
+    print("Caso não abra automaticamente, acesse a URL abaixo:", flush=True)
     print(auth_url, flush=True)
     print("-" * 60, flush=True)
     print("Aguardando autorização no navegador...", flush=True)
 
     try:
         webbrowser.open(auth_url)
-    except Exception as e:
-        print(f"Aviso ao abrir navegador: {e}")
+    except Exception as exc:
+        print(f"Aviso ao abrir navegador: {type(exc).__name__}", flush=True)
 
-    # Wait for request
     while OAuthCallbackHandler.captured_code is None and OAuthCallbackHandler.captured_error is None:
         server.handle_request()
 
     server.server_close()
 
     if OAuthCallbackHandler.captured_error:
-        print(f"\n❌ Erro durante a autorização: {OAuthCallbackHandler.captured_error}", flush=True)
+        print("\nFalha durante a autorização OAuth.", flush=True)
         return False
 
     code = OAuthCallbackHandler.captured_code
     if not code:
-        print("\n❌ Nenhum código de autorização foi recebido (timeout ou cancelado).", flush=True)
+        print("\nNenhum código de autorização foi recebido.", flush=True)
         return False
 
-    print("\n✅ Código de autorização capturado com sucesso!", flush=True)
+    print("\nCódigo de autorização capturado com sucesso.", flush=True)
     print("Trocando código por tokens junto ao Google OAuth...", flush=True)
 
     tokens, err = exchange_code_for_tokens(client_id, client_secret, code, redirect_uri)
     if err:
-        print(f"\n❌ Falha na troca de tokens: {err}", flush=True)
+        print(f"\nFalha na troca de tokens: {err}", flush=True)
         return False
 
     print("\n" + "=" * 60, flush=True)
-    print("🎉 TOKENS GERADOS COM SUCESSO!", flush=True)
+    print("TOKENS GERADOS COM SUCESSO", flush=True)
     print("=" * 60, flush=True)
-    refresh_token = tokens.get("refresh_token", "N/A (Verifique se o parâmetro prompt=consent foi utilizado)")
-    access_token = tokens.get("access_token", "N/A")
-    expires_in = tokens.get("expires_in", "N/A")
-    token_type = tokens.get("token_type", "Bearer")
-    granted_scope = tokens.get("scope", "")
+    print(json.dumps(sanitized_token_summary(tokens), indent=2, ensure_ascii=False), flush=True)
+    print("Valores de token não são impressos. Cadastre-os diretamente no cofre de segredos.", flush=True)
 
-    print(f"Refresh Token: {refresh_token}", flush=True)
-    print(f"Access Token: {access_token}", flush=True)
-    print(f"Token Type: {token_type}", flush=True)
-    print(f"Expires In: {expires_in} segundos", flush=True)
-    print("-" * 60, flush=True)
-    print(f"Granted Scopes:\n{granted_scope}", flush=True)
-    print("=" * 60, flush=True)
-
-    # Save to .tokens/google-oauth-tokens.json
-    tokens_dir = Path(__file__).parent.parent / ".tokens"
-    tokens_dir.mkdir(parents=True, exist_ok=True)
-    token_file = tokens_dir / "google-oauth-tokens.json"
-    token_file.write_text(json.dumps(tokens, indent=2), encoding="utf-8")
-    print(f"Tokens salvos com segurança em: {token_file}", flush=True)
+    if write_token_file:
+        token_file = write_tokens_securely(tokens)
+        print(f"Tokens gravados com permissão 0600 em: {token_file}", flush=True)
+    else:
+        print("Arquivo de tokens não foi criado. Use --write-token-file apenas em máquina segura.", flush=True)
 
     return True
 
+
+def parse_args(argv):
+    parser = argparse.ArgumentParser(description="Generate Google OAuth tokens without printing secrets.")
+    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--exchange-code")
+    parser.add_argument("--redirect-uri", default="https://developers.google.com/oauthplayground")
+    parser.add_argument("--write-token-file", action="store_true")
+    parser.add_argument(
+        "--scope-group",
+        action="append",
+        choices=sorted(OPTIONAL_SCOPE_GROUPS.keys()),
+        default=[],
+        help="Optional extra scope group. Default only requests Search Console read-only.",
+    )
+    return parser.parse_args(argv)
+
+
 def main():
+    args = parse_args(sys.argv[1:])
     cid, sec, path = load_credentials()
     if not cid or not sec:
-        print("❌ Credenciais não encontradas. Configure GOOGLE_OAUTH_CLIENT_ID e GOOGLE_OAUTH_CLIENT_SECRET.")
+        print("Credenciais não encontradas. Configure GOOGLE_OAUTH_CLIENT_ID e GOOGLE_OAUTH_CLIENT_SECRET.")
         return 1
 
-    if "--exchange-code" in sys.argv:
-        idx = sys.argv.index("--exchange-code")
-        if idx + 1 < len(sys.argv):
-            code = sys.argv[idx + 1]
-            redirect_uri = "https://developers.google.com/oauthplayground"
-            if "--redirect-uri" in sys.argv:
-                ridx = sys.argv.index("--redirect-uri")
-                if ridx + 1 < len(sys.argv):
-                    redirect_uri = sys.argv[ridx + 1]
-            print(f"Trocando código manual com redirect_uri: {redirect_uri}")
-            tokens, err = exchange_code_for_tokens(cid, sec, code, redirect_uri)
-            if err:
-                print(f"Erro: {err}")
-                return 1
-            print(json.dumps(tokens, indent=2))
-            return 0
+    if path:
+        print(f"Credenciais OAuth carregadas de arquivo local: {path}")
+    scopes = build_scopes(args.scope_group)
 
-    port = 8080
-    if "--port" in sys.argv:
-        idx = sys.argv.index("--port")
-        if idx + 1 < len(sys.argv):
-            port = int(sys.argv[idx + 1])
+    if args.exchange_code:
+        print(f"Trocando código manual com redirect_uri: {args.redirect_uri}")
+        tokens, err = exchange_code_for_tokens(cid, sec, args.exchange_code, args.redirect_uri)
+        if err:
+            print(f"Erro: {err}")
+            return 1
+        print(json.dumps(sanitized_token_summary(tokens), indent=2, ensure_ascii=False))
+        if args.write_token_file:
+            token_file = write_tokens_securely(tokens)
+            print(f"Tokens gravados com permissão 0600 em: {token_file}")
+        else:
+            print("Valores de token não são impressos nem gravados sem --write-token-file.")
+        return 0
 
-    success = run_local_flow(cid, sec, port=port)
+    success = run_local_flow(cid, sec, scopes, port=args.port, write_token_file=args.write_token_file)
     return 0 if success else 1
+
 
 if __name__ == "__main__":
     sys.exit(main())
