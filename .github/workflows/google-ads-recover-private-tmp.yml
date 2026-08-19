@@ -13,6 +13,8 @@ jobs:
   recover:
     runs-on: ubuntu-latest
     timeout-minutes: 8
+    env:
+      VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
     steps:
       - name: Configure VM key
         env:
@@ -21,6 +23,10 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$VM_KEY"
+          test -n "$VM_HOST"
+          case "$VM_HOST" in
+            *[!A-Za-z0-9._-]*|.*|*..*|*-|-) echo "VM_HOST=invalid" >&2; exit 2 ;;
+          esac
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
@@ -29,7 +35,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/vmkey "ubuntu@$VM_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
           job='360925a31e807fbaf8795ac3314a20c8'
           envfile='/home/ubuntu/shopvivaliz-deploy/shared/.env'
