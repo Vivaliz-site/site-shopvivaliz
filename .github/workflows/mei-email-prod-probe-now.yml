@@ -50,8 +50,12 @@ jobs:
           cd /home/ubuntu/mei-mg-email
           echo "CHECKED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           echo "HEAD=$(git rev-parse HEAD)"
-          echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || printf unknown)"
-          echo "AUTOREPAIR_TIMER=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || printf unknown)"
+          set +e
+          worker_state="$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null)"
+          timer_state="$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null)"
+          set -e
+          echo "WORKER=${worker_state:-unknown}"
+          echo "AUTOREPAIR_TIMER=${timer_state:-unknown}"
           if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
             echo "SENDER_BLOCK_SENTINEL=present"
           else
@@ -167,10 +171,12 @@ jobs:
                   out['stale_lock_waiters'] = int(cur.fetchone()['n'] or 0)
           print('METRICS=' + json.dumps(out, default=str, sort_keys=True))
           PY
+          set +e
           sudo journalctl -u mei-mg-email-worker.service --since '2 hours ago' --no-pager \
             | grep -Eai 'AS\(42004\)|bad outbound sender|5\.1\.8' \
             | tail -n 20 \
-            | sed 's/^/SENDER_BLOCK_LOG=/' || true
+            | sed 's/^/SENDER_BLOCK_LOG=/'
+          set -e
           EOF
 
       - name: Publish sanitized probe as issue
