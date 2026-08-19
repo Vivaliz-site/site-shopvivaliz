@@ -22,7 +22,9 @@ $expect = static function (bool $condition, string $message): void {
 
 $expect(str_contains($schema, 'restored_at DATETIME NULL'), 'restored_at schema missing');
 $expect(str_contains($restore, 'SET restored_at = COALESCE(restored_at, NOW())'), 'restore must mark first successful restoration idempotently');
-$expect(strpos($restore, "if ($items === [])") < strpos($restore, 'SET restored_at = COALESCE'), 'restore must not mark before validating sellable items');
+$emptyGuardPos = strpos($restore, 'if ($items === [])');
+$markPos = strpos($restore, 'SET restored_at = COALESCE');
+$expect($emptyGuardPos !== false && $markPos !== false && $emptyGuardPos < $markPos, 'restore must not mark before validating sellable items');
 $expect(str_contains($report, 'email_to_restore_rate_pct'), 'report must expose email-to-restore rate');
 $expect(str_contains($report, 'email_to_purchase_rate_pct'), 'report must expose email-to-purchase rate');
 $expect(str_contains($report, 'restore_to_purchase_rate_pct'), 'report must expose restore-to-purchase rate');
