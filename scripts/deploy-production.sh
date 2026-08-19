@@ -18,6 +18,7 @@ readonly -a RUNTIME_SERVICES=(
   "shopvivaliz-token-renewer.service"
   "shopvivaliz-shopee-token-renewer.service"
   "shopvivaliz-agent.service"
+  "shopvivaliz-queue-worker.service"
 )
 
 mkdir -p "$RELEASES_DIR" "$SHARED_DIR" "$LOG_DIR" "$SHARED_DIR/logs"

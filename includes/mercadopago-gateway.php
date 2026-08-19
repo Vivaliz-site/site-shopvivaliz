@@ -800,3 +800,57 @@ function svmp_local_status(string $providerStatus): string
         default => 'payment_pending',
     };
 }
+
+// Rodada 9 (2026-08-19) -- correcao do achado R9-1/R9-2: estas duas funcoes
+// viviam em api/webhook-mercadopago.php (definidas no topo do arquivo, fora
+// do bloco morto). Precisam ser chamadas tambem por
+// includes/webhook-job-dispatcher.php (o worker de fila), que NAO pode dar
+// require no endpoint HTTP inteiro -- isso executaria o codigo de tratamento
+// de requisicao do topo do arquivo (que le php://input, checa METHOD, etc)
+// fora de um contexto HTTP real e derrubaria o worker. Movidas pra ca, include
+// compartilhado por ambos. Ver docs/AGENTS.md, entrada da Rodada 9.
+function svmp_webhook_extract_boleto(array $payment, array $paymentDetail = []): array
+{
+    $details = is_array($payment['transaction_details'] ?? null) ? $payment['transaction_details'] : [];
+    $detailDetails = is_array($paymentDetail['transaction_details'] ?? null) ? $paymentDetail['transaction_details'] : [];
+    $merged = array_replace($details, $detailDetails);
+
+    $ticketUrl = trim((string)(
+        $merged['external_resource_url']
+        ?? $merged['ticket_url']
+        ?? $payment['external_resource_url']
+        ?? $paymentDetail['external_resource_url']
+        ?? ''
+    ));
+    $digitableLine = trim((string)(
+        $merged['digitable_line']
+        ?? $merged['line']
+        ?? $merged['payment_method_reference_id']
+        ?? $payment['barcode']['content']
+        ?? $paymentDetail['barcode']['content']
+        ?? ''
+    ));
+    $barcodeContent = trim((string)(
+        $merged['barcode_content']
+        ?? $merged['barcode']
+        ?? $payment['barcode']['content']
+        ?? $paymentDetail['barcode']['content']
+        ?? ''
+    ));
+
+    return [
+        'ticket_url' => $ticketUrl,
+        'digitable_line' => $digitableLine,
+        'barcode_content' => $barcodeContent,
+    ];
+}
+
+function svmp_webhook_send_boleto_email(array $order): bool
+{
+    try {
+        return svem_send_order_email($order, 'boleto_generated');
+    } catch (Throwable $e) {
+        error_log('[MercadoPago] boleto webhook email failure: order=' . ($order['order_number'] ?? 'N/A') . ' ' . $e->getMessage());
+        return false;
+    }
+}
