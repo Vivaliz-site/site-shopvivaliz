@@ -24,7 +24,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../config/bootstrap-env.php';
 require_once __DIR__ . '/../includes/pdo-database.php';
 require_once __DIR__ . '/../includes/account-schema.php';
-require_once __DIR__ . '/../includes/abandoned-cart-recovery.php';
+require_once __DIR__ . '/../src/Commerce/AbandonedCartRecovery.php';
 require_once __DIR__ . '/mailer.php';
 
 const MIN_AGE_MINUTES = 60;
