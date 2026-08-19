@@ -1,10 +1,10 @@
 const fs = require('fs');
-const path = require('path');
 const childProcess = require('child_process');
 
 class PolicyEngine {
   constructor() {
     this.errors = [];
+    this.changedFilesCache = null;
   }
 
   fail(msg) {
@@ -15,22 +15,44 @@ class PolicyEngine {
     if (!cond) this.fail(msg);
   }
 
-  changedFiles() {
-    const baseRef = process.env.GITHUB_BASE_REF;
-    const commands = baseRef
-      ? [['git', ['diff', '--name-only', `origin/${baseRef}...HEAD`]], ['git', ['diff', '--name-only', 'HEAD^']]]
-      : [['git', ['diff', '--name-only', 'HEAD^']]];
+  git(args) {
+    return childProcess.execFileSync('git', args, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  }
 
-    for (const [command, args] of commands) {
-      try {
-        const output = childProcess.execFileSync(command, args, { encoding: 'utf8' });
-        const files = output.split(/\r?\n/).map(file => file.trim()).filter(Boolean);
-        if (files.length > 0) return files;
-      } catch {
-        // Try the next safe diff strategy.
-      }
+  resolveChangedFiles() {
+    const baseSha = String(process.env.POLICY_BASE_SHA || '').trim();
+    const headSha = String(process.env.POLICY_HEAD_SHA || '').trim();
+    const shaPattern = /^[0-9a-f]{40}$/i;
+
+    if (!shaPattern.test(baseSha) || !shaPattern.test(headSha)) {
+      throw new Error(
+        `SHAs de política inválidos: base=${baseSha || 'ausente'} head=${headSha || 'ausente'}`,
+      );
     }
-    return [];
+
+    this.git(['cat-file', '-e', `${baseSha}^{commit}`]);
+    this.git(['cat-file', '-e', `${headSha}^{commit}`]);
+    const output = this.git([
+      'diff',
+      '--name-only',
+      '--diff-filter=ACMRTUXB',
+      `${baseSha}...${headSha}`,
+      '--',
+    ]);
+    return output
+      .split(/\r?\n/)
+      .map(file => file.trim())
+      .filter(Boolean);
+  }
+
+  changedFiles() {
+    if (this.changedFilesCache === null) {
+      throw new Error('lista de arquivos alterados não inicializada');
+    }
+    return this.changedFilesCache;
   }
 
   isVisualFile(file) {
@@ -44,9 +66,9 @@ class PolicyEngine {
 
   readJSON(file) {
     try {
-      return JSON.parse(fs.readFileSync(file));
-    } catch {
-      this.fail(`JSON inválido: ${file}`);
+      return JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (error) {
+      this.fail(`JSON inválido: ${file}: ${error.message}`);
       return null;
     }
   }
@@ -67,33 +89,39 @@ class PolicyEngine {
     if (!data) return;
 
     this.require(data.validated === true, 'validação visual inválida');
-    this.require(data.reviewer, 'reviewer ausente');
-    this.require(data.artifacts?.length > 0, 'sem screenshots');
+    this.require(Boolean(data.reviewer), 'reviewer ausente');
+    this.require(Array.isArray(data.artifacts) && data.artifacts.length > 0, 'sem screenshots');
 
-    const age = Date.now() - new Date(data.timestamp).getTime();
-    this.require(age < 3600000, 'validação visual expirada');
+    const timestamp = new Date(data.timestamp).getTime();
+    const age = Date.now() - timestamp;
+    this.require(Number.isFinite(timestamp), 'timestamp visual inválido');
+    this.require(age >= 0 && age < 3600000, 'validação visual expirada');
 
-    data.artifacts.forEach(file => {
+    for (const file of data.artifacts || []) {
       if (!this.fileExists(file)) {
         this.fail(`artifact ausente: ${file}`);
       }
-    });
+    }
   }
 
   validateSecurity() {
-    const patterns = ['git push','git add -A','|| true','exit 0'];
-    const files = this.changedFiles();
+    const rules = [
+      { label: ['git', 'push'].join(' '), pattern: /\bgit\s+push\b/ },
+      { label: ['git', 'add', '-A'].join(' '), pattern: /\bgit\s+add\s+-A\b/ },
+      { label: ['or-or', 'true'].join(' '), pattern: /\|\|\s*true\b/ },
+      { label: ['exit', 'zero'].join(' '), pattern: /\bexit\s+0\b/ },
+    ];
 
-    files.forEach(file => {
-      if (!file.match(/\.(js|sh|php|yml|yaml)$/)) return;
-      if (!fs.existsSync(file)) return;
+    for (const file of this.changedFiles()) {
+      if (!/\.(?:js|mjs|cjs|sh|php|yml|yaml)$/i.test(file)) continue;
+      if (!fs.existsSync(file)) continue;
       const content = fs.readFileSync(file, 'utf8');
-      patterns.forEach(p => {
-        if (content.includes(p)) {
-          this.fail(`padrão perigoso ${p} em ${file}`);
+      for (const rule of rules) {
+        if (rule.pattern.test(content)) {
+          this.fail(`padrão perigoso ${rule.label} em ${file}`);
         }
-      });
-    });
+      }
+    }
   }
 
   validateERP() {
@@ -104,19 +132,27 @@ class PolicyEngine {
 
     const data = this.readJSON('erp-health.json');
     if (!data) return;
-
     this.require(data.ok === true, 'ERP não saudável');
   }
 
   run() {
+    try {
+      this.changedFilesCache = this.resolveChangedFiles();
+      console.log(`policy_changed_files=${this.changedFilesCache.length}`);
+    } catch (error) {
+      this.changedFilesCache = [];
+      this.fail(`não foi possível determinar o diff verificável: ${error.message}`);
+    }
+
     this.validateVisual();
     this.validateSecurity();
     this.validateERP();
 
     if (this.errors.length > 0) {
       console.log('🚫 MERGE BLOQUEADO');
-      this.errors.forEach(e => console.log('❌ ' + e));
-      process.exit(1);
+      this.errors.forEach(error => console.log(`❌ ${error}`));
+      process.exitCode = 1;
+      return;
     }
 
     console.log('✅ MERGE PERMITIDO');
