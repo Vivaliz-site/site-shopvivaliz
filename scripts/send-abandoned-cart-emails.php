@@ -6,17 +6,17 @@ declare(strict_types=1);
  *
  * Roda via cron (sugestao: a cada 30-60 min). Varre checkout_abandonments
  * por registros onde:
- *   - o e-mail foi capturado ha mais de 1h e menos de 48h (janela: cedo
- *     demais e o cliente pode so estar preenchendo o form ainda; tarde
- *     demais e o e-mail perde relevancia/pode ser visto como spam)
- *   - ainda nao recebeu e-mail de recuperacao (recovery_email_sent_at NULL)
- *   - ainda nao completou um pedido com esse e-mail depois do abandono
- *     (checa contra orders.email + created_at)
+ *   - o e-mail foi capturado ha mais de 1h e menos de 48h;
+ *   - ainda nao recebeu e-mail de recuperacao;
+ *   - ainda nao houve pagamento aprovado (ou etapa posterior de fulfillment)
+ *     para esse e-mail depois do abandono.
+ *
+ * Pedido apenas criado/aguardando pagamento NAO encerra a recuperacao. Antes
+ * desta regra, qualquer INSERT em orders bloqueava o e-mail exatamente para
+ * clientes que abandonavam o pagamento depois de o pedido ser criado.
  *
  * A recuperacao e puramente transacional: nao oferece cupom ou desconto
- * adicional. Isso evita conflito com a politica comercial vigente, em que
- * o beneficio de 5% e pessoal e emitido somente apos a primeira compra
- * paga/aprovada.
+ * adicional. Isso evita conflito com a politica comercial vigente.
  *
  * Uso: php scripts/send-abandoned-cart-emails.php
  */
@@ -24,6 +24,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../config/bootstrap-env.php';
 require_once __DIR__ . '/../includes/pdo-database.php';
 require_once __DIR__ . '/../includes/account-schema.php';
+require_once __DIR__ . '/../includes/abandoned-cart-recovery.php';
 require_once __DIR__ . '/mailer.php';
 
 const MIN_AGE_MINUTES = 60;
@@ -58,6 +59,11 @@ if (!($pdo instanceof PDO)) {
 }
 sv_account_ensure_schema();
 
+// Autorrecupera o estado a partir do espelho canonico de pedidos. Isso faz
+// recovered_at finalmente cumprir sua finalidade e protege contra falhas
+// anteriores de webhook/marcacao.
+$reconciled = svacr_reconcile_completed_orders($pdo);
+
 $stmt = $pdo->prepare(
     'SELECT ca.id, ca.email, ca.customer_name, ca.cart_snapshot, ca.created_at
      FROM checkout_abandonments ca
@@ -65,11 +71,6 @@ $stmt = $pdo->prepare(
        AND ca.recovered_at IS NULL
        AND ca.created_at <= (NOW() - INTERVAL :minAge MINUTE)
        AND ca.created_at >= (NOW() - INTERVAL :maxAge HOUR)
-       AND NOT EXISTS (
-           SELECT 1 FROM orders o
-           WHERE o.email = ca.email
-             AND o.created_at >= ca.created_at
-       )
      ORDER BY ca.created_at ASC
      LIMIT 100'
 );
@@ -78,9 +79,27 @@ $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
 $sent = 0;
 $failed = 0;
+$skippedRecovered = 0;
+$stillPending = $pdo->prepare(
+    'SELECT 1
+     FROM checkout_abandonments
+     WHERE id = :id
+       AND recovery_email_sent_at IS NULL
+       AND recovered_at IS NULL
+     LIMIT 1'
+);
 
 foreach ($rows as $row) {
     $id = (int)$row['id'];
+
+    // Reduz a janela de corrida com um pagamento aprovado entre o SELECT
+    // inicial e o envio desta linha.
+    $stillPending->execute([':id' => $id]);
+    if (!$stillPending->fetchColumn()) {
+        $skippedRecovered++;
+        continue;
+    }
+
     $email = (string)$row['email'];
     $name = trim((string)($row['customer_name'] ?? ''));
     $items = json_decode((string)($row['cart_snapshot'] ?? '[]'), true);
@@ -90,13 +109,26 @@ foreach ($rows as $row) {
     $ok = send_email($email, 'Você deixou itens no seu carrinho da Vivaliz', $html);
 
     if ($ok) {
-        $upd = $pdo->prepare('UPDATE checkout_abandonments SET recovery_email_sent_at = NOW() WHERE id = :id');
+        $upd = $pdo->prepare(
+            'UPDATE checkout_abandonments
+             SET recovery_email_sent_at = NOW()
+             WHERE id = :id
+               AND recovery_email_sent_at IS NULL
+               AND recovered_at IS NULL'
+        );
         $upd->execute([':id' => $id]);
-        $sent++;
+        if ($upd->rowCount() === 1) {
+            $sent++;
+        } else {
+            // O e-mail saiu, mas um pagamento pode ter sido aprovado no mesmo
+            // instante. Nao conta como envio elegivel recuperavel.
+            $skippedRecovered++;
+        }
     } else {
         $failed++;
         error_log('[abandoned-cart-email] falha ao enviar para id=' . $id);
     }
 }
 
-echo "Enviados: {$sent} | Falhas: {$failed} | Candidatos: " . count($rows) . "\n";
+echo "Enviados: {$sent} | Falhas: {$failed} | Candidatos: " . count($rows)
+    . " | Marcados recuperados: {$reconciled} | Ignorados por recuperacao: {$skippedRecovered}\n";
