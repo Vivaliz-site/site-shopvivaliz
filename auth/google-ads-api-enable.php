@@ -8,10 +8,16 @@ if (!sv_social_google_is_configured()) {
     exit('Google OAuth is not configured.');
 }
 
+$project = trim((string)(getenv('GOOGLE_CLOUD_PROJECT_NUMBER') ?: getenv('GOOGLE_CLOUD_PROJECT_ID') ?: ''));
+if (!preg_match('/^[0-9]{6,20}$/', $project)) {
+    http_response_code(503);
+    exit('Google Cloud project number is not configured.');
+}
+
 $payload = [
     'v' => 1,
     'action' => 'enable_google_ads_api',
-    'project' => '515723698609',
+    'project' => $project,
     'ts' => time(),
     'nonce' => bin2hex(random_bytes(12)),
 ];
@@ -31,8 +37,13 @@ $params = [
     // The user already granted this scope in the immediately preceding flow.
     // Reuse that grant without presenting a second consent screen when Google can do so.
     'prompt' => 'none',
-    'login_hint' => 'fredmourao@gmail.com',
 ];
+
+$loginHint = trim((string)(getenv('GOOGLE_OAUTH_LOGIN_HINT') ?: ''));
+if ($loginHint !== '' && filter_var($loginHint, FILTER_VALIDATE_EMAIL)) {
+    $params['login_hint'] = $loginHint;
+}
+
 $url = 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query($params);
 header('Cache-Control: no-store, max-age=0');
 header('Pragma: no-cache');
