@@ -30,8 +30,18 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
 // ── Autenticação ──────────────────────────────────────────────────────────────
+// Rodada 6 (2026-08-19): fail-open -- se CRON_SECRET nao estivesse definido
+// no .env da release, a condicao inteira era falsa e o endpoint virava
+// publico (log_tail de logs/orchestrator.log, e com ?detail=1 a fila
+// completa de tarefas). Mesmo padrao ja registrado em R5-2 pro callback do
+// Melhor Envio. hash_equals() tambem evita comparacao suscetivel a timing.
+// Ver R6-2 no relatorio da Rodada 6 -- o require de queue.php logo acima
+// falha (arquivo nao existe no repo) e faz este endpoint devolver 500 pra
+// tudo hoje; o destino do arquivo (restaurar queue.php vs remover
+// status.php) fica pendente de decisão do Fred, mas o fail-open é uma
+// correção segura e independente disso.
 $cronSecret = (string)(getenv('CRON_SECRET') ?: '');
-if ($cronSecret !== '' && ($_GET['secret'] ?? '') !== $cronSecret) {
+if ($cronSecret === '' || !hash_equals($cronSecret, (string)($_GET['secret'] ?? ''))) {
     http_response_code(403);
     echo json_encode(['ok' => false, 'error' => 'Acesso negado.']);
     exit;

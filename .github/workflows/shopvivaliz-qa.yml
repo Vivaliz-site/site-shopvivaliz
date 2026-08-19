@@ -110,6 +110,12 @@ jobs:
         run: php tests/integration-health-credentials-test.php
       - name: Guarda do carrossel automatico de imagens
         run: php scripts/quality/validate-auto-image-carousel.php
+      - name: Referencia oficial do site (rotas de navigation ao vivo)
+        # Rodada 6 (2026-08-19): este validador existia mas nunca rodava no
+        # CI e so checava se as chaves de navigation nao estavam vazias --
+        # 3 das 4 rotas estavam devolvendo 404 em producao sem que nada
+        # acusasse. Ver R6-5 no relatorio da Rodada 6.
+        run: php scripts/quality/validate-official-site-reference.php
       - name: Politica premium de otimizacao por marketplace
         run: php tests/catalog-optimization-policy-test.php
       - name: Workflow inteligente do Admin de otimizacao

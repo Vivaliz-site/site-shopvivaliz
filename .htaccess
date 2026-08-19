@@ -47,6 +47,20 @@ AddCharset UTF-8 .html .txt .php .json
     Header always set Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://connect.facebook.net https://analytics.tiktok.com https://sdk.mercadopago.com https://http2.mlstatic.com https://checkout.infinitepay.io https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; frame-src 'self' https://sdk.mercadopago.com https://checkout.infinitepay.io"
     Header always set Cache-Control "no-store, max-age=0" env=SVRT_SENSITIVE
     Header always set Pragma "no-cache" env=SVRT_SENSITIVE
+
+    # Rodada 6 (2026-08-19): R4-10 pediu a remocao do X-XSS-Protection (header
+    # legado, removido dos navegadores modernos, e que em alguns casos antigos
+    # podia ate ser abusado como vetor). R5-8 corrigiu isso em
+    # includes/security-headers.php -- codigo morto, nunca incluido por nada
+    # no repo. Confirmado via curl -I na Rodada 6 que o header continua sendo
+    # servido em producao; nenhum arquivo ativo deste repo o define (so a
+    # dead code acima e public_html/.htaccess, que e a arvore de FTP
+    # desativada por CLAUDE.md) -- ou seja, vem de configuracao Apache da VM
+    # fora do alcance deste repo (sem SSH). "Header unset" aqui remove
+    # explicitamente qualquer valor herdado do vhost antes de chegar ao
+    # cliente, sem precisar de acesso a VM. Ver R6-8 no relatorio da Rodada 6.
+    Header always unset X-XSS-Protection
+    Header always set X-XSS-Protection "0"
 </IfModule>
 
 # Uniform session-cookie protection for every PHP entry point. Lax preserves
