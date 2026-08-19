@@ -8,9 +8,23 @@ No credential value is ever printed.
 from __future__ import annotations
 
 import os
+import stat
 import sys
 import tempfile
 from pathlib import Path
+
+
+def validate_env_target(path: Path) -> None:
+    if not path.is_file():
+        raise ValueError("env_not_found")
+    if path.is_symlink():
+        raise ValueError("env_symlink_rejected")
+    metadata = path.stat()
+    if not stat.S_ISREG(metadata.st_mode):
+        raise ValueError("env_not_regular_file")
+    mode = stat.S_IMODE(metadata.st_mode)
+    if mode & 0o077:
+        raise ValueError("env_permissions_too_open")
 
 
 def main() -> int:
@@ -18,8 +32,10 @@ def main() -> int:
         print("usage_error")
         return 2
     path = Path(sys.argv[1])
-    if not path.is_file():
-        print("env_not_found")
+    try:
+        validate_env_target(path)
+    except ValueError as exc:
+        print(str(exc))
         return 2
 
     parts = sys.stdin.buffer.read().split(b"\0")
@@ -42,7 +58,7 @@ def main() -> int:
         updates["GOOGLE_OAUTH_REFRESH_TOKEN"] = refresh_token
         updates["GOOGLE_ADS_REFRESH_TOKEN"] = refresh_token
 
-    stat = path.stat()
+    stat_info = path.stat()
     lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
     pending = dict(updates)
     output: list[str] = []
@@ -62,9 +78,9 @@ def main() -> int:
             handle.write("\n".join(output) + "\n")
             handle.flush()
             os.fsync(handle.fileno())
-        os.chmod(temp_name, stat.st_mode & 0o777)
+        os.chmod(temp_name, stat_info.st_mode & 0o777)
         if os.name != "nt":
-            os.chown(temp_name, stat.st_uid, stat.st_gid)
+            os.chown(temp_name, stat_info.st_uid, stat_info.st_gid)
         os.replace(temp_name, path)
     finally:
         if os.path.exists(temp_name):
