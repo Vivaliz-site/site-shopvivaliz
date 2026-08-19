@@ -69,7 +69,8 @@ jobs:
             tests/test_queue_replenisher.py \
             tests/test_queue_recovery_and_autorepair.py \
             tests/test_hourly_empty_queue_guard.py \
-            tests/test_autorepair_guarded_wrapper.py
+            tests/test_autorepair_guarded_wrapper.py \
+            tests/test_queue_recovery_bulk_eligibility.py
 
           sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service \
             /etc/systemd/system/mei-mg-email-autorepair.service
