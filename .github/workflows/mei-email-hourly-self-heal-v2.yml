@@ -4,10 +4,6 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '7 * * * *'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/mei-email-hourly-self-heal-v2.yml'
 
 permissions:
   contents: read
@@ -63,8 +59,8 @@ jobs:
           git fetch origin main
           git merge --ff-only origin/main
           echo "HEAD_DEPLOYED=$(git rev-parse HEAD)"
-          git merge-base --is-ancestor 8f3e2808e6f68da59847ef2a6d2d9334f7bb6cb1 HEAD
-          echo "AUTOQUEUE_PRELIMIT_FIX_DEPLOYED=true"
+          git merge-base --is-ancestor fc898f96d14c70126a670b265ab8c760da449a4f HEAD
+          echo "EXCHANGE_MODULE_ISOLATION_DEPLOYED=true"
 
           .venv/bin/python -m compileall -q app worker scripts
           .venv/bin/python -m pytest -q \
@@ -73,7 +69,8 @@ jobs:
             tests/test_queue_recovery_and_autorepair.py \
             tests/test_hourly_empty_queue_guard.py \
             tests/test_autorepair_guarded_wrapper.py \
-            tests/test_queue_recovery_bulk_eligibility.py
+            tests/test_queue_recovery_bulk_eligibility.py \
+            tests/test_exchange_module_isolation.py
 
           sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service \
             /etc/systemd/system/mei-mg-email-autorepair.service
@@ -83,21 +80,88 @@ jobs:
           sudo systemctl enable --now mei-mg-email-autorepair.timer
           sudo systemctl reset-failed mei-mg-email-autorepair.service mei-mg-email-worker.service
 
+          echo '=== QUIESCE WORKER AND CLEAR EXPIRED MEI SESSIONS ==='
+          if ! timeout 45s sudo systemctl stop mei-mg-email-worker.service; then
+            echo 'WORKER_STOP_ESCALATION=true'
+            sudo systemctl kill --kill-who=main --signal=SIGKILL mei-mg-email-worker.service
+            sleep 3
+          fi
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then
+            echo '::error::worker remained active after stop'
+            exit 41
+          fi
+
           .venv/bin/python - <<'PY'
           from dotenv import load_dotenv
           load_dotenv('.env', override=True)
           import json, os, psycopg
           from psycopg.rows import dict_row
+
           with psycopg.connect(os.environ['DATABASE_URL'], row_factory=dict_row, connect_timeout=10) as conn:
               conn.autocommit = True
               with conn.cursor() as cur:
                   cur.execute("set statement_timeout='45s'")
+
+                  def terminate(label, sql):
+                      cur.execute(sql)
+                      rows=[dict(r) for r in cur.fetchall()]
+                      print(label + '_BEFORE=' + json.dumps(rows, default=str, sort_keys=True))
+                      terminated=[]
+                      for row in rows:
+                          cur.execute('select pg_terminate_backend(%s) as terminated', (row['pid'],))
+                          terminated.append({'pid': row['pid'], 'terminated': bool(cur.fetchone()['terminated'])})
+                      print(label + '_TERMINATED=' + json.dumps(terminated, sort_keys=True))
+
+                  terminate('STALE_RECOVERY', """
+                    select pid, state, now()-coalesce(xact_start,query_start) as age, left(query,300) as query
+                      from pg_stat_activity
+                     where pid <> pg_backend_pid()
+                       and coalesce(xact_start,query_start) < now()-interval '10 minutes'
+                       and query ilike '%mei_email.envios%'
+                       and (
+                         query ilike '%recuperado: fila redundante ja suprimida/submetida%'
+                         or query ilike '%recuperado: fila aberta tornou-se inelegivel antes do envio%'
+                       )
+                  """)
+
+                  terminate('STALE_BASE_INGEST', """
+                    select pid, state, now()-xact_start as age, left(query,300) as query
+                      from pg_stat_activity
+                     where pid <> pg_backend_pid()
+                       and xact_start < now()-interval '30 minutes'
+                       and query ilike '%insert into mei_email.empresas%'
+                       and client_addr is not null
+                  """)
+
+                  terminate('STALE_BASE_SYNC_LOCK', """
+                    select distinct a.pid, a.state, now()-coalesce(a.xact_start,a.query_start) as age,
+                           left(a.query,300) as query
+                      from pg_stat_activity a
+                      join pg_locks l on l.pid=a.pid
+                     where a.pid <> pg_backend_pid()
+                       and l.locktype='advisory'
+                       and l.granted=true
+                       and l.objid=14082026
+                       and a.state='idle in transaction'
+                       and a.xact_start < now()-interval '10 minutes'
+                       and a.query ilike '%select count(*) from mei_email.empresas%'
+                  """)
+
+                  terminate('STALE_LEGACY_ELIGIBILITY_COUNT', """
+                    select pid, state, now()-query_start as age, left(query,300) as query
+                      from pg_stat_activity
+                     where pid <> pg_backend_pid()
+                       and query_start < now()-interval '2 minutes'
+                       and state='active'
+                       and query ilike '%select count(*) as elegiveis from mei_email.vw_empresas_elegiveis%'
+                  """)
+
                   cur.execute("""
                     select pid, now()-query_start as query_age, wait_event_type, wait_event
                       from pg_stat_activity
                      where pid <> pg_backend_pid()
-                       and state = 'active'
-                       and wait_event_type = 'Lock'
+                       and state='active'
+                       and wait_event_type='Lock'
                        and query_start < now()-interval '10 minutes'
                        and query ilike '%with base as materialized%'
                        and query ilike '%mei_email.empresas%'
@@ -111,13 +175,20 @@ jobs:
                   print('STALE_AUTOQUEUE_CANCELLED='+json.dumps(cancelled, sort_keys=True))
           PY
 
-          set +e
-          timeout 10m sudo systemctl start mei-mg-email-autorepair.service
-          repair_rc=$?
-          set -e
-
           if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
             echo '::error::sender-block sentinel active; keeping worker fail-closed'
+            sudo systemctl stop mei-mg-email-worker.service
+            exit 43
+          fi
+
+          if timeout 10m sudo systemctl start mei-mg-email-autorepair.service; then
+            repair_rc=0
+          else
+            repair_rc=$?
+          fi
+
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
+            echo '::error::sender-block sentinel active after repair; keeping worker fail-closed'
             sudo systemctl stop mei-mg-email-worker.service
             sudo journalctl -u mei-mg-email-autorepair.service --since '-20 minutes' --no-pager | tail -n 220
             exit 43
@@ -170,8 +241,7 @@ jobs:
                       from mei_email.lotes l
                      where l.status <> 'pendente'
                        and exists (
-                         select 1
-                           from mei_email.envios e
+                         select 1 from mei_email.envios e
                           where e.lote_id=l.id
                             and e.status in ('pendente','enviando','pending','processing')
                        )
@@ -181,19 +251,43 @@ jobs:
                     select count(*) as stale_autoqueue_locks
                       from pg_stat_activity
                      where pid <> pg_backend_pid()
-                       and state = 'active'
-                       and wait_event_type = 'Lock'
+                       and state='active'
+                       and wait_event_type='Lock'
                        and query_start < now()-interval '10 minutes'
                        and query ilike '%with base as materialized%'
                        and query ilike '%mei_email.empresas%'
                   """)
                   state['stale_autoqueue_locks']=int(cur.fetchone()['stale_autoqueue_locks'] or 0)
+                  cur.execute("""
+                    select count(*) as stale_base_sync_lock
+                      from pg_stat_activity a
+                      join pg_locks l on l.pid=a.pid
+                     where a.pid <> pg_backend_pid()
+                       and l.locktype='advisory'
+                       and l.granted=true
+                       and l.objid=14082026
+                       and a.state='idle in transaction'
+                       and a.xact_start < now()-interval '10 minutes'
+                       and a.query ilike '%select count(*) from mei_email.empresas%'
+                  """)
+                  state['stale_base_sync_lock']=int(cur.fetchone()['stale_base_sync_lock'] or 0)
+                  cur.execute("""
+                    select count(*) as stale_legacy_eligibility_count
+                      from pg_stat_activity
+                     where pid <> pg_backend_pid()
+                       and query_start < now()-interval '2 minutes'
+                       and state='active'
+                       and query ilike '%select count(*) as elegiveis from mei_email.vw_empresas_elegiveis%'
+                  """)
+                  state['stale_legacy_eligibility_count']=int(cur.fetchone()['stale_legacy_eligibility_count'] or 0)
                   state['sent_24h']=int(state['queue_sent_24h'] or 0)+state['external_sent_24h']
                   print(json.dumps(state, default=str, sort_keys=True))
                   assert state['sent_24h'] <= 10000, state
                   assert state['legacy_open'] == 0, state
                   assert state['orphan_lots'] == 0, state
                   assert state['stale_autoqueue_locks'] == 0, state
+                  assert state['stale_base_sync_lock'] == 0, state
+                  assert state['stale_legacy_eligibility_count'] == 0, state
                   if state['sent_24h'] < 9950:
                       assert int(state['queue_sent_20m'] or 0) > 0, state
           PY
