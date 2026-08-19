@@ -6,6 +6,10 @@ declare(strict_types=1);
  *
  * Provides Cross-Site Request Forgery protection through token generation and validation.
  * Tokens are stored in session and validated on form submission.
+ *
+ * CODIGO MORTO (Rodada 5, 2026-08-19): so incluido por includes/security-
+ * bootstrap.php, que por sua vez nenhum arquivo do repo inclui. Ver R5-8 no
+ * relatorio da Rodada 5.
  */
 
 if (session_status() === PHP_SESSION_NONE) {

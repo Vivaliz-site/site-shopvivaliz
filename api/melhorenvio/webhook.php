@@ -78,6 +78,12 @@ function me_is_registration_probe(array $body, string $event, array $data): bool
 // e salva em storage/private/melhorenvio-tokens.json (mesmo padrao usado
 // para o Mercado Livre em api/ml/client.php).
 if (isset($_GET['code']) && is_string($_GET['code']) && $_GET['code'] !== '') {
+    // Rodada 5 (2026-08-19): 'detail' => $result devolvia o corpo cru do erro
+    // OAuth da Melhor Envio pra qualquer requisicao anonima -- reduz a
+    // superficie de tentativa e erro de quem esta tentando forjar um
+    // exchange. O erro completo continua indo pro error_log. Ver R5-2 no
+    // relatorio da Rodada 5. A protecao real contra o sequestro de token e
+    // o fail-closed em me_validate_oauth_state() (includes/melhorenvio-oauth.php).
     $code = trim((string)$_GET['code']);
     $result = me_exchange_code($code);
     if (!empty($result['access_token'])) {
@@ -90,12 +96,12 @@ if (isset($_GET['code']) && is_string($_GET['code']) && $_GET['code'] !== '') {
         ]);
     }
 
+    error_log('[melhorenvio-oauth] token exchange failed: ' . json_encode($result, JSON_UNESCAPED_UNICODE));
     me_webhook_response(502, [
         'ok' => false,
         'provider' => 'melhorenvio',
         'event_type' => 'oauth_callback',
         'error' => 'token_exchange_failed',
-        'detail' => $result,
     ]);
 }
 

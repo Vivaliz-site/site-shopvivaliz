@@ -15,6 +15,12 @@ header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store');
 header('Access-Control-Allow-Origin: *');
 
+// Rodada 5 (2026-08-19): parte do lote de api/ml/* sem autenticacao (e o
+// modo ?debug_php=1 vazava a versao exata do PHP). Ver R5-1 no relatorio da
+// Rodada 5.
+require_once dirname(__DIR__, 2) . '/config/require-agent-key.php';
+sv_require_agent_key();
+
 if (($_GET['debug_php'] ?? '') === '1') {
     echo json_encode(['php_version' => PHP_VERSION, 'ok' => true]);
     exit;

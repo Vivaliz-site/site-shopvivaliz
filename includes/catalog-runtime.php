@@ -527,3 +527,128 @@ function svcr_collect_image_urls(array $item): array
 
     return array_slice($images, 0, 12);
 }
+
+// Rodada 5 (2026-08-19): movida de index.php para catalog-runtime.php.
+// facebook-shop-feed.php chamava sv_home_catalog_source_rows() sem nunca
+// incluir index.php (so includes/catalog-runtime.php), causando fatal error
+// "Call to undefined function" e feed do Facebook/Instagram Shop sempre
+// vazio. Guardada com function_exists() por seguranca, caso algum ponto
+// ainda inclua index.php diretamente. Ver R5-4 no relatorio da Rodada 5.
+if (!function_exists('sv_home_catalog_source_rows')) {
+function sv_home_catalog_source_rows(): array
+{
+    static $localCache = null;
+    if ($localCache !== null) {
+        return $localCache;
+    }
+
+    $apcu = function_exists('apcu_fetch') && function_exists('apcu_store');
+    $apcuKey = 'sv_home_catalog_source_rows_v1';
+    $fileCache = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'shopvivaliz-home-catalog-source-v1.json';
+    if (!$apcu && is_file($fileCache) && (time() - (int)@filemtime($fileCache)) <= 30) {
+        $cached = json_decode((string)@file_get_contents($fileCache), true);
+        if (is_array($cached) && $cached !== []) {
+            $localCache = $cached;
+            return $localCache;
+        }
+    }
+    if ($apcu) {
+        $ok = false;
+        $stored = apcu_fetch($apcuKey, $ok);
+        if ($ok && is_array($stored)) {
+            $localCache = $stored;
+            return $localCache;
+        }
+    }
+
+    $runtime = svcr_products();
+    $csvPath = dirname(__DIR__) . '/uploads/olist_imagens_site_mapeamento.csv';
+
+    // O runtime de catalogo e autoritativo para preco/estoque, mas nem sempre
+    // carrega as URLs de imagem. Enriquece os produtos ativos pelo SKU usando
+    // o mapeamento persistente de imagens, sem substituir dados comerciais.
+    if ($runtime !== [] && is_file($csvPath) && is_readable($csvPath)) {
+        $imageMap = [];
+        $handle = fopen($csvPath, 'r');
+        if ($handle) {
+            $header = fgetcsv($handle);
+            if (is_array($header)) {
+                while (($line = fgetcsv($handle)) !== false) {
+                    if (!is_array($line) || $line === []) continue;
+                    $assoc = [];
+                    foreach ($header as $i => $column) {
+                        $key = trim((string)$column);
+                        if ($key !== '') $assoc[$key] = $line[$i] ?? '';
+                    }
+                    $sku = strtoupper(trim((string)($assoc['sku'] ?? '')));
+                    if ($sku === '') continue;
+                    $url = trim((string)($assoc['site_url'] ?? ''));
+                    if ($url === '') $url = trim((string)($assoc['original_url_olist'] ?? ''));
+                    if ($url === '') continue;
+                    if (!isset($imageMap[$sku])) $imageMap[$sku] = ['primary' => '', 'images' => []];
+                    if (!in_array($url, $imageMap[$sku]['images'], true)) $imageMap[$sku]['images'][] = $url;
+                    $isPrimary = strtolower(trim((string)($assoc['is_primary'] ?? '')));
+                    if ($imageMap[$sku]['primary'] === '' && in_array($isPrimary, ['1','true','yes','sim'], true)) {
+                        $imageMap[$sku]['primary'] = $url;
+                    }
+                }
+            }
+            fclose($handle);
+        }
+
+        foreach ($runtime as &$row) {
+            if (!is_array($row)) continue;
+            $sku = strtoupper(trim((string)($row['sku'] ?? '')));
+            if ($sku === '' || !isset($imageMap[$sku])) continue;
+            $mapped = $imageMap[$sku];
+            $current = trim((string)($row['image_url'] ?? ''));
+            $isWeak = $current === '' || preg_match('/placeholder|default|no[-_ ]?image|sem[-_ ]?imagem/i', $current);
+            if ($isWeak) {
+                $row['image_url'] = $mapped['primary'] !== '' ? $mapped['primary'] : ($mapped['images'][0] ?? '');
+            }
+            $existing = is_array($row['images'] ?? null) ? $row['images'] : [];
+            $row['images'] = array_values(array_unique(array_filter(array_merge($existing, $mapped['images']))));
+        }
+        unset($row);
+
+        $localCache = $runtime;
+        if ($apcu) {
+            apcu_store($apcuKey, $localCache, 300);
+        } else {
+            $encoded = json_encode($localCache, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if (is_string($encoded)) {
+                $tmpCache = $fileCache . '.' . getmypid() . '.tmp';
+                if (@file_put_contents($tmpCache, $encoded, LOCK_EX) !== false) {
+                    @rename($tmpCache, $fileCache);
+                } else {
+                    @unlink($tmpCache);
+                }
+            }
+        }
+        return $localCache;
+    }
+
+    if ($runtime !== []) {
+        $localCache = $runtime;
+        if ($apcu) {
+            apcu_store($apcuKey, $localCache, 300);
+        } else {
+            $encoded = json_encode($localCache, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if (is_string($encoded)) {
+                $tmpCache = $fileCache . '.' . getmypid() . '.tmp';
+                if (@file_put_contents($tmpCache, $encoded, LOCK_EX) !== false) {
+                    @rename($tmpCache, $fileCache);
+                } else {
+                    @unlink($tmpCache);
+                }
+            }
+        }
+        return $localCache;
+    }
+
+    // Sem a fonte canonica de produtos ativos, a vitrine falha fechada. CSV e
+    // snapshots historicos podem enriquecer imagem/conteudo, nunca provar que
+    // um item ainda pode ser vendido.
+    return [];
+}
+}

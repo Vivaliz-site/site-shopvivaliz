@@ -6,6 +6,15 @@ header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
+// Rodada 5 (2026-08-19): este endpoint expunha o status de conexao ML
+// (user_id, has_refresh_token) publicamente, e o modo 'refresh' forcava
+// renovacao do token OAuth para QUALQUER POST anonimo. O ML rotaciona
+// refresh token a cada uso (single-use) -- um loop de POSTs anonimos era um
+// caminho plausivel pra derrubar a integracao inteira sem credencial
+// nenhuma. Ver R5-1 no relatorio da Rodada 5.
+require_once dirname(__DIR__, 2) . '/config/require-agent-key.php';
+sv_require_agent_key();
+
 $action = trim($_GET['action'] ?? '');
 $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 
@@ -20,7 +29,8 @@ if ($action === 'refresh' || $method === 'POST') {
         ], JSON_UNESCAPED_UNICODE);
     } catch (Throwable $e) {
         http_response_code(500);
-        echo json_encode(['error' => 'refresh_failed', 'details' => $e->getMessage()]);
+        error_log('[ml_token_refresh] ' . $e->getMessage());
+        echo json_encode(['error' => 'refresh_failed']);
     }
     exit;
 }
@@ -39,5 +49,6 @@ try {
     ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
     http_response_code(404);
-    echo json_encode(['connected' => false, 'error' => $e->getMessage()]);
+    error_log('[ml_token_status] ' . $e->getMessage());
+    echo json_encode(['connected' => false, 'error' => 'no_tokens']);
 }

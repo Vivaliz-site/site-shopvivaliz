@@ -123,7 +123,17 @@ function me_validate_oauth_state(): bool
     }
     $expected = (string)($_SESSION['melhorenvio_oauth_state'] ?? '');
     if ($expected === '') {
-        return true;
+        // Rodada 5 (2026-08-19): antes retornava true aqui -- ou seja,
+        // qualquer requisicao SEM sessao (exatamente o caso de um atacante
+        // que nunca passou por connect.php) era aceita como valida. Isso
+        // permitia que um terceiro com conta Melhor Envio autorizasse o
+        // proprio app, capturasse o code do redirect dele, e o replayasse
+        // em api/melhorenvio/webhook.php?code=... pra sobrescrever
+        // storage/private/melhorenvio-tokens.json com os tokens dele --
+        // efetivamente sequestrando a integracao de frete da loja. Sem
+        // state esperado na sessao, a resposta correta e recusar, nao
+        // aceitar. Ver R5-2 no relatorio da Rodada 5 de melhoria continua.
+        return false;
     }
     $createdAt = (int)($_SESSION['melhorenvio_oauth_state_created_at'] ?? 0);
     $received = (string)($_GET['state'] ?? '');

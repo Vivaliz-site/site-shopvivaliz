@@ -5,6 +5,11 @@ header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-store');
 header('Access-Control-Allow-Origin: *');
 
+// Rodada 5 (2026-08-19): parte do lote de api/ml/* sem autenticacao. Ver
+// R5-1 no relatorio da Rodada 5.
+require_once dirname(__DIR__, 2) . '/config/require-agent-key.php';
+sv_require_agent_key();
+
 function ml_status_json(string $url, int $timeout = 3): array
 {
     $ch = curl_init($url);

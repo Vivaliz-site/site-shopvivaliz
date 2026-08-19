@@ -6,6 +6,19 @@ declare(strict_types=1);
  *
  * Must be included at the very beginning of every request, before any output.
  * Sets up security headers, session configuration, and error handling.
+ *
+ * CODIGO MORTO (Rodada 5, 2026-08-19): confirmado via grep em todo o repo
+ * que nenhum arquivo PHP faz require/require_once/include deste arquivo --
+ * so referencias em documentacao (SECURITY-OPTIMIZATION-README.md,
+ * DEPLOY-COMPLETE.md, ANALYSIS-SUMMARY.md), nunca executado em producao.
+ * Isso significa que includes/security-headers.php e includes/
+ * csrf-protection.php (so incluidos a partir daqui) tambem sao codigo morto
+ * -- um edit feito em security-headers.php na Rodada 4 (X-XSS-Protection)
+ * teve zero efeito real por causa disso. Nao apagado (restricao de
+ * filesystem deste ambiente nao permite rm/unlink em C:\site-shopvivaliz).
+ * Se algum dia algum entrypoint passar a dar require aqui, o comportamento
+ * volta a valer normalmente -- este comentario e so um aviso, nao desativa
+ * nada. Ver R5-8 no relatorio da Rodada 5.
  */
 
 // Load environment variables

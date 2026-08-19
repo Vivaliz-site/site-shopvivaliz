@@ -118,6 +118,13 @@ function sv_home_pick_best_image(array $row): string
     return $candidates[0] ?? '';
 }
 
+// Rodada 5 (2026-08-19): esta funcao foi movida (copiada) para
+// includes/catalog-runtime.php, ja que facebook-shop-feed.php precisava dela
+// mas so inclui catalog-runtime.php, nao index.php (fatal error "Call to
+// undefined function"). Guardada com function_exists() aqui pra nao
+// redeclarar, ja que catalog-runtime.php e require'd antes deste ponto
+// (linha 38). Ver R5-4 no relatorio da Rodada 5.
+if (!function_exists('sv_home_catalog_source_rows')) {
 function sv_home_catalog_source_rows(): array
 {
     static $localCache = null;
@@ -233,6 +240,7 @@ function sv_home_catalog_source_rows(): array
     // snapshots historicos podem enriquecer imagem/conteudo, nunca provar que
     // um item ainda pode ser vendido.
     return [];
+}
 }
 
 function sv_home_latest_sales_rows(): array

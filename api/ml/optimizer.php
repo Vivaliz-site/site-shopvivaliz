@@ -18,6 +18,11 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
+// Rodada 5 (2026-08-19): parte do lote de api/ml/* sem autenticacao. Ver
+// R5-1 no relatorio da Rodada 5.
+require_once dirname(__DIR__, 2) . '/config/require-agent-key.php';
+sv_require_agent_key();
+
 function svmlopt_lower(string $value): string
 {
     return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);

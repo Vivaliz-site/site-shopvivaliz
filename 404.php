@@ -1,8 +1,10 @@
 <?php
 declare(strict_types=1);
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// Rodada 5 (2026-08-19): esta pagina nunca leu/escreveu $_SESSION (confirmado
+// via grep) -- so criava uma sessao vazia em disco a cada bot/scanner/crawler
+// que batesse numa URL inexistente. VM com disco em ~86% de uso (medido na
+// Rodada 4); sessao orfa e exatamente esse tipo de crescimento silencioso.
+// Ver R5-12 no relatorio da Rodada 5.
 header('Content-Type: text/html; charset=UTF-8');
 http_response_code(404);
 ?>

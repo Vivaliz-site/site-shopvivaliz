@@ -31,7 +31,10 @@ foreach ($products as $product) {
     $price = (float)($product['price'] ?? 0);
     $category = trim((string)($product['category'] ?? 'Produtos'));
     $stock = (int)($product['stock'] ?? 0);
-    $url = 'https://shopvivaliz.com.br' . (isset($product['slug']) ? '/produto/' . $product['slug'] : '/catalogo');
+    // Rodada 5 (2026-08-19): slug sem rawurlencode() quebrava a URL do
+    // produto no feed sempre que continha caractere fora de [a-z0-9-]. Ver
+    // R5-4/R5-6 no relatorio da Rodada 5.
+    $url = 'https://shopvivaliz.com.br' . (isset($product['slug']) ? '/produto/' . rawurlencode((string)$product['slug']) : '/catalogo');
 
     if (empty($sku) || empty($name) || $price <= 0 || empty($image)) {
         continue;

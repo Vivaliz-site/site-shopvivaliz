@@ -394,7 +394,13 @@ $requestedId = sv_qv('id', sv_qv('olist_product_id'));
 $resolved = $slug !== '' ? sv_product_find_slug($slug) : sv_product_find($requestedSku, $requestedId);
 $resolved = sv_product_enrich($resolved, $requestedSku, $requestedId);
 $lookupRequested = $slug !== '' || $requestedSku !== '' || $requestedId !== '';
-$notFound = $lookupRequested && $resolved === [];
+// Rodada 5 (2026-08-19): /produto.php sem nenhum parametro caia no ramo
+// "nao foi pedido lookup, entao nao e notFound" e servia um placeholder
+// fake (sku "sem-sku", price 0) com HTTP 200, cacheavel e indexavel, com
+// canonical apontando pra uma URL que da 404. Sem slug/sku/id nenhum NAO e
+// um caso valido de pagina de produto -- deve sempre cair em 404 como os
+// outros casos de produto inexistente. Ver R5-13 no relatorio da Rodada 5.
+$notFound = !$lookupRequested || $resolved === [];
 
 $sku      = trim((string)($resolved['sku']             ?? '')) ?: sv_qv('sku', 'sem-sku');
 $name     = trim((string)($resolved['name']            ?? '')) ?: sv_qv('name', 'Produto Vivaliz');
@@ -415,7 +421,10 @@ $availability = sv_product_availability($stockRaw);
 $priceLabel = $priceRaw > 0 ? 'R$ ' . number_format($priceRaw, 2, ',', '.') : 'Produto indisponível';
 $contactUrl = sv_product_contact_url($sku, $name);
 $baseUrl = sv_official_base_url();
-$canonicalUrl = $baseUrl . ($rawSlug !== '' ? '/produto/' . $rawSlug : '/produto?sku=' . rawurlencode($sku));
+// Rodada 5 (2026-08-19): rawSlug sem rawurlencode() quebrava canonical/og:url
+// (e o JSON-LD que reusa $canonicalUrl) sempre que o slug tinha caractere
+// fora de [a-z0-9-]. Ver R5-6 no relatorio da Rodada 5.
+$canonicalUrl = $baseUrl . ($rawSlug !== '' ? '/produto/' . rawurlencode($rawSlug) : '/produto?sku=' . rawurlencode($sku));
 $seoTitle = $resolved !== [] ? svseo_title($resolved, 70) : $name;
 $seoDescription = $resolved !== [] ? svseo_meta_description($resolved) : '';
 

@@ -358,6 +358,25 @@ aprovação) — gerado nesta sessão, resumo acima cobre o essencial para futur
 
 ---
 
+### 2026-08-19 — Rodada 5 de melhoria contínua (Sonnet, implementação)
+**Sistema/arquivo:** `api/ml/*` (optimizer.php, order-sync.php), `includes/melhorenvio-oauth.php`, `api/melhorenvio/webhook.php`, `admin/.htaccess`, `includes/catalog-runtime.php`, `index.php`, `facebook-shop-feed.php`, `google-shopping-feed.php`, `produto.php`, `api/checkout/endereco.php`, `includes/security-bootstrap.php`/`security-headers.php`/`csrf-protection.php`, `js/product-conversion-v5.js`, `404.php`.
+**O que descobri:**
+- `api/ml/{me,token,status,products,optimizer}.php` não exigiam nenhuma autenticação (um deles expunha CNPJ/e-mail/telefone da empresa via proxy anônimo pro `/users/me` do ML; outro deixava qualquer POST anônimo forçar rotação do refresh token, que o ML invalida por uso único — um vetor plausível pra derrubar a integração inteira). Todos os cinco ganharam o guard `sv_require_agent_key()` já usado em `api/maintenance/opcache-reset.php`. `api/ml/order-sync.php` **não** precisa do guard — é só uma biblioteca de funções incluída por `webhook.php` (chamado pelo ML) e por um script CLI de backfill; não tem nenhum código de topo que leia `$_GET`/produza saída quando acessado direto, então o item do relatório da Rodada 5 que o citava como 6º arquivo era impreciso.
+- `me_validate_oauth_state()` (Melhor Envio) tinha um bug fail-open: sessão vazia (o caso exato de quem nunca passou pelo fluxo de connect) retornava `true`. Corrigido pra `false`. O corpo de erro completo do exchange de token (que vazava pro público) agora só vai pro `error_log`.
+- 5 painéis `.html` soltos em `admin/` (monitor-*.html, squad-chat.html, trio-dashboard.html) não tinham nenhuma autenticação — o `.php` gêmeo de cada um tinha guard, o `.html` estático não. `admin/.htaccess` não existia; criado bloqueando `\.html$`.
+- **Bug real de produção, não só falta de guard:** `facebook-shop-feed.php` chamava `sv_home_catalog_source_rows()`, que só existia dentro de `index.php` — e este feed nunca inclui `index.php`, só `includes/catalog-runtime.php`. Resultado: fatal error ("Call to undefined function") toda vez que o feed do Facebook/Instagram Shop era gerado. Corrigido movendo a função pra `includes/catalog-runtime.php` (guardada com `function_exists()` nos dois lugares pra não redeclarar).
+- **Outro bug real:** `google-shopping-feed.php` usava `svcr_products()` puro, sem a chamada de enriquecimento de imagem (`svncis_enrich_direct_olist_images()`) que `google-merchant-feed.php` já fazia. Sem imagem válida, o filtro do próprio feed descartava quase todo produto — o feed publicava zero (ou quase zero) produtos no Google Shopping por tempo indeterminado, sem nenhum erro visível.
+- Canonical/`og:url` de `produto.php` emitiam o slug cru (UTF-8, sem percent-encoding) enquanto o resto do site (JSON-LD, links internos) usa `rawurlencode()`. Mesmo bug replicado em `facebook-shop-feed.php`. Corrigido nos dois.
+- `api/checkout/endereco.php` tinha um `require_once __DIR__ . '/../includes/viacep-integration.php'` que resolve pra `api/includes/...` (nunca existiu) em vez de `includes/...` (raiz do repo, dois níveis acima) — fatal error garantido em todo request. Confirmado via grep que nenhum arquivo do repo referencia esse endpoint; neutralizado (410) em vez de corrigido, já que não tem uso real conhecido.
+- **Correção da Rodada 4 (R4-10) tinha sido aplicada em código morto:** `includes/security-headers.php` só é incluído por `includes/security-bootstrap.php`, que por sua vez **nenhum arquivo do repo inclui** (confirmado via grep). O edit da Rodada 4 no header `X-XSS-Protection` teve zero efeito real em produção. Os três arquivos (`security-bootstrap.php`, `security-headers.php`, `csrf-protection.php`) agora têm comentário explícito marcando isso — não foram apagados (`rm`/`unlink` seguem bloqueados neste ambiente em `C:\site-shopvivaliz`, só `mv`/sobrescrita de conteúdo funcionam). Os headers de segurança reais em produção vêm de outro lugar (Apache/.htaccess ou outro bootstrap) — não investigado nesta rodada.
+- `js/product-conversion-v5.js` tinha `formatMoney()` sem separador de milhar (`R$ 1234,56` em vez de `R$ 1.234,56`) — únicos dos 3 arquivos citados no relatório da Rodada 5 que ainda tinham o bug; `js/cart-shipping-v7.js` e `js/mixed-cart-promo-v1.js` já estavam corrigidos no momento da implementação (provavelmente por outro agente concorrente entre o scan do Opus e esta implementação). Também corrigido no mesmo arquivo: `formatDelivery()` injetava `option.company`/`option.name` (dado de terceiro via `/api/melhorenvio/shipping-check-v2.php`) via `innerHTML` sem escape — baixo risco (não é entrada de usuário direta), mas era o único ponto do frontend público nessa situação.
+- `404.php` chamava `session_start()` sem nunca ler/escrever `$_SESSION` — toda visita de bot/scanner numa URL inexistente criava um arquivo de sessão órfão em disco (VM medida em ~86% de uso na Rodada 4). Removido.
+- `/produto.php` sem nenhum parâmetro (`?id=`/`?slug=`/`?sku=`) caía na condição `$lookupRequested = false` → `$notFound = false` → servia um placeholder fake (`sku=sem-sku`, `price:0`) com HTTP 200, cacheável e indexável, cujo próprio canonical apontava pra uma URL que dá 404. Corrigido: sem nenhum parâmetro de lookup agora também é tratado como `$notFound = true` (mesmo 404 com `Cache-Control: no-store` que já existia pra produto inexistente).
+**Por quê importa:** dois desses (facebook-shop-feed fatal error, google-shopping-feed zero produtos) são bugs de produção genuínos que vinham falhando silenciosamente — nenhum dos dois emite erro visível pro operador, só param de funcionar. O achado sobre `security-headers.php` é a segunda vez nesta série de rodadas que uma correção de rodada anterior precisa ser auditada quanto a efeito real em produção antes de ser dada como resolvida — vale manter esse hábito nas próximas rodadas.
+**Ver também:** `docs/AGENTS.md` (entradas das Rodadas 2, 3 e 4, acima), `CHANGELOG.md`
+
+---
+
 ## 🤖 Agentes Autônomos Ativos
 
 | Agente | Tipo | Commits | Status |
@@ -385,6 +404,6 @@ aprovação) — gerado nesta sessão, resumo acima cobre o essencial para futur
 
 ---
 
-**Última consolidação:** 2026-07-26 (entradas das Rodadas 2, 3 e 4 de melhoria contínua adicionadas em 2026-08-18/19)
+**Última consolidação:** 2026-07-26 (entradas das Rodadas 2, 3, 4 e 5 de melhoria contínua adicionadas em 2026-08-18/19)
 **Consolidado por:** Claude Code
 **Próxima revisão:** Quando houver novo achado não-óbvio

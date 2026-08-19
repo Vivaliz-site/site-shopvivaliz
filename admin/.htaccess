@@ -1,0 +1,14 @@
+# Rodada 5 (2026-08-19): paineis .html soltos aqui (monitor-*.html,
+# squad-chat.html, trio-dashboard.html etc) eram variantes antigas/de teste
+# sem nenhuma autenticacao, servidas publicamente por serem arquivos estaticos
+# dentro de admin/. Nao foram apagadas (restricao de filesystem deste
+# ambiente), so bloqueadas via .htaccess. Ver R5-3 no relatorio da Rodada 5.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} \.html$ [NC]
+    RewriteRule .* - [F,L]
+</IfModule>
+
+<FilesMatch "\.html$">
+    Require all denied
+</FilesMatch>

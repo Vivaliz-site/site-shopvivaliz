@@ -10,6 +10,13 @@ declare(strict_types=1);
  * - MIME type sniffing
  * - SSL stripping
  * - Third-party content risks
+ *
+ * CODIGO MORTO (Rodada 5, 2026-08-19): so incluido por includes/security-
+ * bootstrap.php, que por sua vez nenhum arquivo do repo inclui -- confirmado
+ * via grep. O edit da Rodada 4 (X-XSS-Protection: '0') teve zero efeito em
+ * producao por causa disso; os headers reais de seguranca em producao vem de
+ * outro lugar (verificar Apache/.htaccess ou outro bootstrap). Ver R5-8 no
+ * relatorio da Rodada 5.
  */
 
 /**
