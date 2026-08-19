@@ -1,4 +1,4 @@
-name: MEI Email Hourly Self-Heal V5 Safe Inactive
+name: MEI Email Hourly Self-Heal V6 Governance Safe
 
 on:
   workflow_dispatch:
@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 concurrency:
   group: mei-email-production-start
@@ -49,7 +48,7 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=8 \
             -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF' \
-            > artifacts/mei-email-hourly-self-heal-v5.txt 2>&1
+            > artifacts/mei-email-hourly-self-heal-v6.txt 2>&1
           set -Eeuo pipefail
           cd /home/ubuntu/mei-mg-email
           worker_quiesced=0
@@ -57,9 +56,12 @@ jobs:
           fail_closed() {
             rc=$?
             trap - ERR
-            set +e
             if [ "$worker_quiesced" -eq 1 ]; then
-              sudo systemctl stop mei-mg-email-worker.service
+              if sudo systemctl stop mei-mg-email-worker.service; then
+                echo 'FAIL_CLOSED_WORKER_STOP=confirmed'
+              else
+                echo 'FAIL_CLOSED_WORKER_STOP=failed'
+              fi
             fi
             echo "FAIL_CLOSED_STOP_ON_ERROR rc=$rc"
             exit "$rc"
@@ -289,42 +291,15 @@ jobs:
 
           worker_quiesced=0
           trap - ERR
-          echo 'MEI_EMAIL_HOURLY_SELF_HEAL_V5_OK=true'
+          echo 'MEI_EMAIL_HOURLY_SELF_HEAL_V6_OK=true'
           EOF
-
-      - name: Publish sanitized production status
-        if: always()
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -Eeuo pipefail
-          report=artifacts/mei-email-hourly-self-heal-v5.txt
-          body="${RUNNER_TEMP}/mei-email-status.md"
-          {
-            echo 'Sanitized MEI sender production status.'
-            echo
-            echo '```text'
-            if [ -f "$report" ]; then
-              grep -E '^(CHECKED_AT_UTC|HEAD_BEFORE|HEAD_DEPLOYED|WORKER_STOP=|WORKER_QUIESCED|TRACKED_DIRTY|DIRTY=|PRESTART_JSON=|SENDER_BLOCK_SENTINEL=|AUTOREPAIR_OK=|AUTOREPAIR_FAILED=|RESUME_AT_UTC=|FINAL_JSON=|FAIL_CLOSED_STOP_ON_ERROR|MEI_EMAIL_HOURLY_SELF_HEAL_V5_OK=)' "$report" | tail -n 140
-            else
-              echo 'REPORT_MISSING=true'
-            fi
-            echo '```'
-          } > "$body"
-          issue="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search 'MEI Email Production Status in:title' --json number,title --jq '.[] | select(.title=="MEI Email Production Status") | .number' | head -n 1)"
-          if [ -n "$issue" ]; then
-            gh issue edit "$issue" --repo "$GITHUB_REPOSITORY" --body-file "$body"
-          else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title 'MEI Email Production Status' --body-file "$body"
-          fi
 
       - name: Upload production evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mei-email-hourly-self-heal-v5-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/mei-email-hourly-self-heal-v5.txt
+          name: mei-email-hourly-self-heal-v6-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/mei-email-hourly-self-heal-v6.txt
           if-no-files-found: error
           retention-days: 90
 
