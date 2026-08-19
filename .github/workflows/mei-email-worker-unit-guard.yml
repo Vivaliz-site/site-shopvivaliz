@@ -1,0 +1,143 @@
+name: MEI Email Worker Unit Guard
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '2 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mei-email-production-start
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 12
+    env:
+      VM_HOST: 137.131.156.17
+      VM_USER: ubuntu
+    steps:
+      - name: Configure verified Oracle SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::Oracle SSH key missing'; exit 2; }
+          test -n "$known_hosts" || { echo '::error::Oracle known_hosts missing'; exit 2; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Enforce hardened queue-first worker
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 \
+            -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF' \
+            > artifacts/mei-email-worker-unit-guard.txt 2>&1
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo "CHECKED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git diff --quiet
+          git diff --cached --quiet
+          git fetch origin main
+          git merge --ff-only origin/main
+          echo "HEAD_DEPLOYED=$(git rev-parse HEAD)"
+          test -f deploy/systemd/mei-mg-email-worker.service
+          .venv/bin/python -m compileall -q app worker scripts
+
+          sudo install -m 0644 deploy/systemd/mei-mg-email-worker.service \
+            /etc/systemd/system/mei-mg-email-worker.service
+          sudo systemctl daemon-reload
+          sudo systemctl enable mei-mg-email-worker.service
+
+          exec_start="$(sudo systemctl show mei-mg-email-worker.service -p ExecStart --value)"
+          echo "WORKER_EXECSTART=$exec_start"
+          printf '%s\n' "$exec_start" | grep -Fq 'worker.worker_queue_first'
+
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
+            echo '::error::sender-block sentinel active; worker remains fail-closed'
+            sudo systemctl stop mei-mg-email-worker.service
+            exit 43
+          fi
+
+          sudo systemctl reset-failed mei-mg-email-worker.service
+          sudo systemctl restart mei-mg-email-worker.service
+          test "$(sudo systemctl is-active mei-mg-email-worker.service)" = active
+
+          sleep 90
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import json, os, psycopg
+          from psycopg.rows import dict_row
+
+          with psycopg.connect(os.environ['DATABASE_URL'], row_factory=dict_row, connect_timeout=10) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("set statement_timeout='45s'")
+                  cur.execute("""
+                    select
+                      count(*) filter(where status in ('submitted','enviado') and enviado_em >= now()-interval '24 hours') queue_sent_24h,
+                      count(*) filter(where status in ('submitted','enviado') and enviado_em >= now()-interval '20 minutes') queue_sent_20m,
+                      count(*) filter(where status in ('pendente','enviando','pending','processing')) open_queue,
+                      count(*) filter(where status in ('pending','processing')) legacy_open,
+                      max(enviado_em) filter(where status in ('submitted','enviado')) last_sent_at
+                    from mei_email.envios
+                  """)
+                  state=dict(cur.fetchone())
+                  cur.execute("select to_regclass('mei_email.envios_externos_cota')")
+                  if cur.fetchone()[0] is not None:
+                      cur.execute("select count(*) from mei_email.envios_externos_cota where sent_at >= now()-interval '24 hours'")
+                      state['external_sent_24h']=int(cur.fetchone()[0] or 0)
+                  else:
+                      state['external_sent_24h']=0
+                  cur.execute("""
+                    select count(*) orphan_lots
+                      from mei_email.lotes l
+                     where l.status <> 'pendente'
+                       and exists (
+                         select 1 from mei_email.envios e
+                          where e.lote_id=l.id
+                            and e.status in ('pendente','enviando','pending','processing')
+                       )
+                  """)
+                  state['orphan_lots']=int(cur.fetchone()['orphan_lots'] or 0)
+                  state['sent_24h']=int(state['queue_sent_24h'] or 0)+state['external_sent_24h']
+                  print(json.dumps(state, default=str, sort_keys=True))
+                  assert state['sent_24h'] <= 10000, state
+                  assert state['legacy_open'] == 0, state
+                  assert state['orphan_lots'] == 0, state
+                  if state['sent_24h'] < 9950 and int(state['open_queue'] or 0) > 0:
+                      assert int(state['queue_sent_20m'] or 0) > 0, state
+          PY
+
+          echo 'MEI_EMAIL_QUEUE_FIRST_UNIT_VERIFIED=true'
+          EOF
+
+      - name: Upload production evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mei-email-worker-unit-guard-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/mei-email-worker-unit-guard.txt
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
