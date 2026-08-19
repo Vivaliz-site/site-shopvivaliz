@@ -21,14 +21,18 @@ jobs:
       GOOGLE_ADS_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
       GOOGLE_ADS_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
       GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
+      VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
     steps:
       - name: Validate required secret presence
         shell: bash
         run: |
           set -euo pipefail
-          for key in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_ADS_DEVELOPER_TOKEN GOOGLE_ADS_CUSTOMER_ID; do
+          for key in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_ADS_DEVELOPER_TOKEN GOOGLE_ADS_CUSTOMER_ID VM_HOST; do
             test -n "${!key:-}" || { echo "$key=missing"; exit 2; }
           done
+          case "$VM_HOST" in
+            *[!A-Za-z0-9._-]*|.*|*..*|*-|-) echo "VM_HOST=invalid" >&2; exit 2 ;;
+          esac
           echo 'required_production_secrets=present'
           echo 'NO_SECRET_VALUES_PRINTED'
 
@@ -48,6 +52,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
+          SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/vmkey)
           : > /tmp/google-ads-runtime.env
           for key in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_ADS_REFRESH_TOKEN GOOGLE_ADS_DEVELOPER_TOKEN GOOGLE_ADS_CUSTOMER_ID GOOGLE_ADS_LOGIN_CUSTOMER_ID; do
             val="${!key:-}"
@@ -55,8 +60,8 @@ jobs:
               printf '%s=%s\n' "$key" "$val" >> /tmp/google-ads-runtime.env
             fi
           done
-          scp -q -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey /tmp/google-ads-runtime.env ubuntu@137.131.156.17:/tmp/google-ads-runtime.env
-          ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          scp -q "${SSH_OPTS[@]}" /tmp/google-ads-runtime.env "ubuntu@$VM_HOST:/tmp/google-ads-runtime.env"
+          ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "${SSH_OPTS[@]}" "ubuntu@$VM_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
           envfile='/home/ubuntu/shopvivaliz-deploy/shared/.env'
           incoming='/tmp/google-ads-runtime.env'
@@ -93,6 +98,8 @@ jobs:
           try:
               with os.fdopen(fd, 'w', encoding='utf-8') as f:
                   f.write('\n'.join(out) + '\n')
+                  f.flush()
+                  os.fsync(f.fileno())
               os.chmod(tmp, 0o640)
               os.replace(tmp, envfile)
           finally:
