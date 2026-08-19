@@ -15,6 +15,8 @@ require_once __DIR__ . '/includes/new-catalog-image-source.php';
 require_once __DIR__ . '/includes/site-settings.php';
 require_once __DIR__ . '/includes/google-shopping-feed-utils.php';
 
+$baseUrl = 'https://shopvivaliz.com.br';
+
 // Rodada 5 (2026-08-19): faltava o mesmo enriquecimento de imagem que
 // google-merchant-feed.php ja faz -- sem ele, quase todo produto ficava sem
 // imagem valida e era descartado pelo filtro de imagem mais abaixo, fazendo
@@ -30,7 +32,7 @@ echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
 echo '<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">' . "\n";
 echo '<channel>' . "\n";
 echo '<title>ShopVivaliz - Google Shopping Feed</title>' . "\n";
-echo '<link>https://shopvivaliz.com.br</link>' . "\n";
+echo '<link>' . svgf_xml($baseUrl) . '</link>' . "\n";
 echo '<description>Produtos ShopVivaliz para Google Shopping</description>' . "\n";
 echo '<lastBuildDate>' . date('c') . '</lastBuildDate>' . "\n";
 
@@ -39,14 +41,14 @@ foreach ($products as $product) {
 
     $sku = trim((string)($product['sku'] ?? ''));
     $name = svgf_limit((string)($product['name'] ?? ''), 150);
-    $image = trim((string)($product['image_url'] ?? ''));
+    $image = svgf_feed_absolute_url($baseUrl, (string)($product['image_url'] ?? ''));
     $price = (float)($product['price'] ?? 0);
     $category = svgf_limit((string)($product['category'] ?? 'Produtos'), 750);
     $stock = (int)($product['stock'] ?? 0);
     $slug = trim((string)($product['slug'] ?? ''));
-    $url = 'https://shopvivaliz.com.br' . ($slug !== '' ? '/produto/' . rawurlencode($slug) : '/catalogo');
+    $url = svgf_feed_absolute_url($baseUrl, $slug !== '' ? '/produto/' . rawurlencode($slug) : '/catalogo');
 
-    if ($sku === '' || $name === '' || $price <= 0 || $image === '') {
+    if ($sku === '' || $name === '' || $price <= 0 || $image === '' || $url === '') {
         continue;
     }
 
@@ -75,8 +77,8 @@ foreach ($products as $product) {
 
     $additionalImages = [];
     foreach (is_array($product['images'] ?? null) ? $product['images'] : [] as $candidate) {
-        $candidate = trim((string)$candidate);
-        if ($candidate === '' || $candidate === $image || !preg_match('~^https?://~i', $candidate)) continue;
+        $candidate = svgf_feed_absolute_url($baseUrl, (string)$candidate);
+        if ($candidate === '' || $candidate === $image) continue;
         if (!in_array($candidate, $additionalImages, true)) $additionalImages[] = $candidate;
         if (count($additionalImages) >= 10) break;
     }
