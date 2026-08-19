@@ -11,12 +11,8 @@ declare(strict_types=1);
  *   - ainda nao houve pagamento aprovado (ou etapa posterior de fulfillment)
  *     para esse e-mail depois do abandono.
  *
- * Pedido apenas criado/aguardando pagamento NAO encerra a recuperacao. Antes
- * desta regra, qualquer INSERT em orders bloqueava o e-mail exatamente para
- * clientes que abandonavam o pagamento depois de o pedido ser criado.
- *
- * A recuperacao e puramente transacional: nao oferece cupom ou desconto
- * adicional. Isso evita conflito com a politica comercial vigente.
+ * Pedido apenas criado/aguardando pagamento NAO encerra a recuperacao.
+ * A recuperacao e transacional e nao oferece cupom/desconto adicional.
  *
  * Uso: php scripts/send-abandoned-cart-emails.php
  */
@@ -29,27 +25,51 @@ require_once __DIR__ . '/mailer.php';
 
 const MIN_AGE_MINUTES = 60;
 const MAX_AGE_HOURS = 48;
+const RESTORE_TOKEN_HOURS = 72;
 
-function sac_render_email(string $name, array $items): string
+function sac_snapshot_names(array $items): array
+{
+    $names = [];
+    foreach ($items as $item) {
+        if (is_array($item)) {
+            $value = trim((string)($item['name'] ?? $item['sku'] ?? ''));
+        } else {
+            $value = trim((string)$item);
+        }
+        if ($value !== '') {
+            $names[] = $value;
+        }
+    }
+    return $names;
+}
+
+function sac_render_email(string $name, array $items, string $restoreUrl): string
 {
     $greeting = $name !== '' ? htmlspecialchars($name, ENT_QUOTES, 'UTF-8') : 'tudo bem?';
     $itemsHtml = '';
-    if ($items !== []) {
+    $names = sac_snapshot_names($items);
+    if ($names !== []) {
         $itemsHtml = '<ul style="padding-left:20px;color:#334155;">';
-        foreach (array_slice($items, 0, 5) as $item) {
-            $itemsHtml .= '<li>' . htmlspecialchars((string)$item, ENT_QUOTES, 'UTF-8') . '</li>';
+        foreach (array_slice($names, 0, 5) as $itemName) {
+            $itemsHtml .= '<li>' . htmlspecialchars($itemName, ENT_QUOTES, 'UTF-8') . '</li>';
         }
         $itemsHtml .= '</ul>';
     }
 
+    $safeRestoreUrl = htmlspecialchars($restoreUrl, ENT_QUOTES, 'UTF-8');
     return '<div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;color:#173B63;">'
         . '<h2 style="color:#173B63;">Oi, ' . $greeting . '</h2>'
         . '<p>Notamos que você deixou alguns itens no carrinho da Vivaliz:</p>'
         . $itemsHtml
-        . '<p>Seu carrinho continua disponível para você revisar itens, frete e condições antes de finalizar.</p>'
-        . '<p><a href="https://shopvivaliz.com.br/carrinho" style="display:inline-block;margin-top:14px;background:#0b4f88;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:700;">Voltar ao carrinho</a></p>'
-        . '<p style="margin-top:24px;font-size:12px;color:#64748b;">Se você já concluiu essa compra ou não reconhece este e-mail, pode ignorar esta mensagem.</p>'
+        . '<p>Você pode retomar a compra mesmo em outro celular ou computador. Preço, estoque e disponibilidade serão confirmados novamente antes de finalizar.</p>'
+        . '<p><a href="' . $safeRestoreUrl . '" style="display:inline-block;margin-top:14px;background:#0b4f88;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:700;">Restaurar meu carrinho</a></p>'
+        . '<p style="margin-top:24px;font-size:12px;color:#64748b;">O link expira automaticamente. Se você já concluiu essa compra ou não reconhece este e-mail, pode ignorar esta mensagem.</p>'
         . '</div>';
+}
+
+function sac_new_restore_token(): string
+{
+    return rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
 }
 
 $pdo = sv_pdo();
@@ -59,9 +79,6 @@ if (!($pdo instanceof PDO)) {
 }
 sv_account_ensure_schema();
 
-// Autorrecupera o estado a partir do espelho canonico de pedidos. Isso faz
-// recovered_at finalmente cumprir sua finalidade e protege contra falhas
-// anteriores de webhook/marcacao.
 $reconciled = svacr_reconcile_completed_orders($pdo);
 
 $stmt = $pdo->prepare(
@@ -88,12 +105,18 @@ $stillPending = $pdo->prepare(
        AND recovered_at IS NULL
      LIMIT 1'
 );
+$storeToken = $pdo->prepare(
+    'UPDATE checkout_abandonments
+     SET recovery_token_hash = :token_hash,
+         recovery_token_expires_at = DATE_ADD(NOW(), INTERVAL :token_hours HOUR)
+     WHERE id = :id
+       AND recovery_email_sent_at IS NULL
+       AND recovered_at IS NULL'
+);
 
 foreach ($rows as $row) {
     $id = (int)$row['id'];
 
-    // Reduz a janela de corrida com um pagamento aprovado entre o SELECT
-    // inicial e o envio desta linha.
     $stillPending->execute([':id' => $id]);
     if (!$stillPending->fetchColumn()) {
         $skippedRecovered++;
@@ -105,7 +128,22 @@ foreach ($rows as $row) {
     $items = json_decode((string)($row['cart_snapshot'] ?? '[]'), true);
     $items = is_array($items) ? $items : [];
 
-    $html = sac_render_email($name, $items);
+    // O token puro existe apenas durante este envio e no fragmento (#) do
+    // link do e-mail. O banco guarda somente SHA-256; fragmentos nao seguem
+    // em requests HTTP nem em Referer.
+    $restoreToken = sac_new_restore_token();
+    $storeToken->execute([
+        ':token_hash' => hash('sha256', $restoreToken),
+        ':token_hours' => RESTORE_TOKEN_HOURS,
+        ':id' => $id,
+    ]);
+    if ($storeToken->rowCount() !== 1) {
+        $skippedRecovered++;
+        continue;
+    }
+
+    $restoreUrl = 'https://shopvivaliz.com.br/recuperar-carrinho#token=' . rawurlencode($restoreToken);
+    $html = sac_render_email($name, $items, $restoreUrl);
     $ok = send_email($email, 'Você deixou itens no seu carrinho da Vivaliz', $html);
 
     if ($ok) {
@@ -120,8 +158,6 @@ foreach ($rows as $row) {
         if ($upd->rowCount() === 1) {
             $sent++;
         } else {
-            // O e-mail saiu, mas um pagamento pode ter sido aprovado no mesmo
-            // instante. Nao conta como envio elegivel recuperavel.
             $skippedRecovered++;
         }
     } else {
