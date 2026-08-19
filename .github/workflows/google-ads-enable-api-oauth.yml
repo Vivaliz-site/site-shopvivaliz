@@ -30,13 +30,17 @@ jobs:
         run: |
           set -euo pipefail
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
-          import json, urllib.parse, urllib.request, urllib.error
+          import json, re, urllib.parse, urllib.request, urllib.error
           from pathlib import Path
           env={}
           for raw in Path('/home/ubuntu/shopvivaliz-deploy/shared/.env').read_text(encoding='utf-8',errors='ignore').splitlines():
               line=raw.strip()
               if not line or line.startswith('#') or '=' not in line: continue
               k,v=line.split('=',1); env[k.strip()]=v.strip().strip('"\'')
+          project=(env.get('GOOGLE_CLOUD_PROJECT_NUMBER') or env.get('GOOGLE_CLOUD_PROJECT_ID') or '').strip()
+          if not re.fullmatch(r'[0-9]{6,20}', project):
+              print('GOOGLE_CLOUD_PROJECT_NUMBER_MISSING_OR_INVALID')
+              raise SystemExit(2)
           data=urllib.parse.urlencode({
               'client_id':env.get('GOOGLE_OAUTH_CLIENT_ID',''),
               'client_secret':env.get('GOOGLE_OAUTH_CLIENT_SECRET',''),
@@ -47,12 +51,12 @@ jobs:
           with urllib.request.urlopen(req,timeout=20) as r:
               access=json.loads(r.read().decode()).get('access_token','')
           print('OAUTH_REFRESH_VALID=' + ('yes' if access else 'no'))
-          if not access: raise SystemExit(2)
+          if not access: raise SystemExit(3)
           tokeninfo=urllib.request.urlopen('https://oauth2.googleapis.com/tokeninfo?access_token='+urllib.parse.quote(access),timeout=20)
           info=json.loads(tokeninfo.read().decode())
           scopes=set(str(info.get('scope','')).split())
           print('HAS_CLOUD_PLATFORM_SCOPE=' + ('yes' if 'https://www.googleapis.com/auth/cloud-platform' in scopes else 'no'))
-          url='https://serviceusage.googleapis.com/v1/projects/515723698609/services/googleads.googleapis.com:enable'
+          url=f'https://serviceusage.googleapis.com/v1/projects/{project}/services/googleads.googleapis.com:enable'
           ereq=urllib.request.Request(url,data=b'{}',headers={'Authorization':'Bearer '+access,'Content-Type':'application/json'},method='POST')
           try:
               with urllib.request.urlopen(ereq,timeout=30) as r:
@@ -68,7 +72,7 @@ jobs:
               print('http_code='+str(e.code))
               print('status='+str(err.get('status','')))
               print('message='+str(err.get('message',''))[:600].replace('\n',' '))
-              raise SystemExit(3)
+              raise SystemExit(4)
           PY
 
       - name: Cleanup
