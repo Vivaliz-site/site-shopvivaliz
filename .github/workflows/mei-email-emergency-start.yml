@@ -88,8 +88,18 @@ jobs:
 
           test "$(sudo systemctl is-active mei-mg-email-worker.service)" = active
           echo "WORKER_ACTIVE=true"
-          echo "AUTOREPAIR_TIMER_ACTIVE=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || true)"
-          echo "AUTOREPAIR_TIMER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-autorepair.timer 2>/dev/null || true)"
+          if timer_active="$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null)"; then
+            :
+          else
+            timer_active=inactive
+          fi
+          if timer_enabled="$(sudo systemctl is-enabled mei-mg-email-autorepair.timer 2>/dev/null)"; then
+            :
+          else
+            timer_enabled=disabled
+          fi
+          echo "AUTOREPAIR_TIMER_ACTIVE=$timer_active"
+          echo "AUTOREPAIR_TIMER_ENABLED=$timer_enabled"
 
           .venv/bin/python - <<'PY' > /tmp/mei-email-before.json
           from dotenv import load_dotenv
@@ -148,7 +158,11 @@ jobs:
           PY
 
           sudo journalctl -u mei-mg-email-worker.service --since '-10 minutes' --no-pager | tail -n 160
-          sudo journalctl -u mei-mg-email-autorepair.service --since '-15 minutes' --no-pager | tail -n 120 || true
+          if sudo journalctl -u mei-mg-email-autorepair.service --since '-15 minutes' --no-pager | tail -n 120; then
+            :
+          else
+            echo '::warning::autorepair journal unavailable'
+          fi
           EOF
 
       - name: Upload production evidence
