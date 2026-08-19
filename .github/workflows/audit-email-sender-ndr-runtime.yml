@@ -1,112 +1,18 @@
-name: Audit email sender and NDR runtime
+name: DEPRECATED - Audit email sender and NDR runtime
+
 on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/audit-email-sender-ndr-runtime.yml']
   workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
-  audit:
+  blocked:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
     steps:
-      - name: Configure VM key
-        env:
-          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+      - name: Refuse obsolete unsafe recovery path
+        shell: bash
         run: |
           set -euo pipefail
-          mkdir -p ~/.ssh
-          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
-          chmod 600 ~/.ssh/vmkey
-      - name: Deploy HF ingest fix and refill queue
-        run: |
-          timeout 2640s ssh -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
-          set -euo pipefail
-            cd /home/ubuntu/mei-mg-email
-            echo '=== UPDATE_APP_CODE ==='
-            git fetch origin main
-            test -z "$(git status --porcelain)"
-            git merge --ff-only origin/main
-          PY=.venv/bin/python
-          test -x "$PY" || PY=python3
-
-          echo '=== FORCE_ENV_LIMITS_NO_SECRET ==='
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('/home/ubuntu/mei-mg-email/.env')
-          desired={
-            'META_ENVIOS_POR_DIA':'9950',
-            'MAX_ENVIOS_POR_DIA':'10000',
-            'RATE_LIMIT_ENVIOS_POR_MINUTO':'10',
-            'QUEUE_MIN_PENDING':'500',
-            'QUEUE_TARGET_PENDING':'2000',
-            'CNPJ_DAILY_SOURCE':'huggingface',
-            'CNPJ_BASE_FORCE_REFRESH':'1',
-          }
-          lines=p.read_text().splitlines()
-          out=[]; seen=set()
-          for line in lines:
-              if '=' in line and not line.lstrip().startswith('#'):
-                  k=line.split('=',1)[0].strip()
-                  if k in desired:
-                      out.append(f'{k}={desired[k]}')
-                      seen.add(k)
-                  else:
-                      out.append(line)
-              else:
-                  out.append(line)
-          for k,v in desired.items():
-              if k not in seen:
-                  out.append(f'{k}={v}')
-          p.write_text('\n'.join(out)+'\n')
-          print('limits_written=' + ','.join(f'{k}={v}' for k,v in desired.items()), flush=True)
-          PY
-          grep -E '^(META_ENVIOS_POR_DIA|MAX_ENVIOS_POR_DIA|RATE_LIMIT_ENVIOS_POR_MINUTO|QUEUE_MIN_PENDING|QUEUE_TARGET_PENDING|CNPJ_DAILY_SOURCE|CNPJ_BASE_FORCE_REFRESH)=' .env || true
-
-          echo '=== RUN_HF_SYNC ==='
-          timeout 2100s "$PY" -u scripts/sincronizar_base_diaria.py
-
-          echo '=== REFILL_QUEUE ==='
-          timeout 360s "$PY" -u - <<'PY'
-          from dotenv import load_dotenv
-          load_dotenv('/home/ubuntu/mei-mg-email/.env', override=True)
-          import psycopg
-          from app.config import settings
-          from app.queue_manager import contar_pendentes, repor_fila_automatica
-          import worker.worker_queue_first as wq
-          with psycopg.connect(settings.database_url, connect_timeout=8, options='-c statement_timeout=180000 -c lock_timeout=10000') as conn:
-              print('settings_meta=' + str(settings.meta_envios_por_dia), flush=True)
-              print('settings_rate=' + str(settings.rate_limit_envios_por_minuto), flush=True)
-              print('quota_24h=' + str(wq._obter_envios_ultimas_24h_indexado(conn)), flush=True)
-              before = contar_pendentes(conn)
-              print('queue_pending_before=' + str(before), flush=True)
-              total=0
-              for i in range(5):
-                  added = int(repor_fila_automatica(conn) or 0)
-                  conn.commit()
-                  total += added
-                  print(f'refill_round_{i+1}={added}', flush=True)
-                  if added == 0:
-                      break
-              after = contar_pendentes(conn)
-              print('queue_pending_after=' + str(after), flush=True)
-              print('refill_total=' + str(total), flush=True)
-          PY
-
-          echo '=== ENSURE_WORKER_ACTIVE ==='
-          sudo systemctl reset-failed mei-mg-email-worker.service || true
-          sudo rm -f /var/lib/mei-mg-email/sender_blocked.pause
-          if ! systemctl is-active --quiet mei-mg-email-worker.service; then
-            sudo systemctl start mei-mg-email-worker.service
-          fi
-          sleep 15
-          echo 'worker_active='$(systemctl is-active mei-mg-email-worker.service || true)
-          echo 'worker_enabled='$(systemctl is-enabled mei-mg-email-worker.service || true)
-          test -f /var/lib/mei-mg-email/sender_blocked.pause && echo sentinel_present=true || echo sentinel_present=false
-          timeout 30s sudo journalctl -u mei-mg-email-worker.service -n 120 --no-pager || true
-          echo '=== END ==='
-          EOF
-      - name: Cleanup
-        if: always()
-        run: rm -f ~/.ssh/vmkey
+          echo "::error::This workflow is deprecated because it could remove sender_blocked.pause without live Exchange verification. Use the verified hourly sender recovery workflow instead."
+          exit 1
