@@ -11,6 +11,19 @@ require_once dirname(__DIR__, 2) . '/config/bootstrap-env.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
+// Rodada 8 (2026-08-19): este endpoint nao tinha NENHUMA autenticacao. O GET
+// publicava o cadastro fiscal completo da empresa (CNPJ, inscricao estadual/
+// municipal, CNAE, regime tributario -- nada disso aparece em nenhuma pagina
+// publica do site) e o POST reescrevia config/company-profile.php (consumido
+// por 20 arquivos, incluindo footer/navbar/checkout e o endereco de ORIGEM
+// da etiqueta Melhor Envio) com so 4 campos obrigatorios, todos publicos no
+// proprio GET -- confirmado com POST {} que o 400 e de validacao de campos,
+// nao de auth. O caminho legitimo e autenticado pra essa mesma operacao ja
+// existe (api/webhooks/olist-company-sync.php); este arquivo parece um
+// prototipo esquecido. Ver R8-1 no relatorio da Rodada 8.
+require_once dirname(__DIR__, 2) . '/config/require-agent-key.php';
+sv_require_agent_key();
+
 $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 
 if (!in_array($method, ['GET', 'POST'], true)) {

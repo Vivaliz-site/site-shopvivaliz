@@ -2,6 +2,17 @@
 
 declare(strict_types=1);
 
+// Rodada 8 (2026-08-19): este arquivo passa $_REQUEST direto pro
+// GitHubPullUpdateAgent (gatilho de git pull/deploy). So nao executava
+// porque app/GitHubPullUpdateAgent.php nao esta versionado -- mesmo padrao
+// de R7-2 (protecao por acidente, nao por controle). Defesa em profundidade
+// aqui + agents/ adicionado a deny-list do .htaccess na mesma rodada. Ver
+// R8-3 no relatorio da Rodada 8.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('CLI only');
+}
+
 header('Content-Type: application/json; charset=utf-8');
 
 $root = dirname(__DIR__);

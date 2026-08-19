@@ -12,14 +12,6 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
 $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
-$body = json_decode(file_get_contents('php://input'), true) ?? [];
-
-// Log do webhook
-file_put_contents(
-    dirname(__DIR__, 2) . '/logs/olist-company-sync.log',
-    '[' . date('Y-m-d H:i:s') . '] ' . $method . ' - ' . json_encode($body) . "\n",
-    FILE_APPEND
-);
 
 if ($method !== 'POST') {
     http_response_code(405);
@@ -27,15 +19,47 @@ if ($method !== 'POST') {
     exit;
 }
 
-// Verificar token de autenticação
-$olistToken = getenv('OLIST_SELLER_ID');
-$headerToken = $_SERVER['HTTP_X_OLIST_TOKEN'] ?? null;
+// Rodada 8 (2026-08-19): rate limit ANTES de ler/gravar nada -- esgotamento
+// de disco anonimo era possivel (ver abaixo). Ver R8-6 no relatorio da
+// Rodada 8.
+require_once dirname(__DIR__, 2) . '/includes/order-rate-limit.php';
+if (!svorl_allow(30, 60, 'olist-company-sync')) {
+    http_response_code(429);
+    echo json_encode(['status' => 'error', 'message' => 'rate_limited']);
+    exit;
+}
 
-if (!$olistToken || $headerToken !== hash('sha256', $olistToken)) {
+$body = json_decode(file_get_contents('php://input'), true) ?? [];
+
+// Verificar token de autenticação
+//
+// Rodada 8 (2026-08-19): duas correcoes:
+// 1. OLIST_WEBHOOK_TOKEN dedicado (padrao ja usado em
+//    api/webhooks/order-status-update.php) tem prioridade se estiver
+//    configurado; OLIST_SELLER_ID e mantido como fallback pra nao quebrar a
+//    integracao real antes do Fred rotacionar o segredo -- seller ID e um
+//    identificador de baixa entropia (nao um segredo), nao deveria ser a
+//    unica defesa.
+// 2. hash_equals() no lugar de !== (evita comparacao suscetivel a timing).
+// Ver R8-6 no relatorio da Rodada 8.
+$olistToken = (string)(getenv('OLIST_WEBHOOK_TOKEN') ?: getenv('OLIST_SELLER_ID') ?: '');
+$headerToken = (string)($_SERVER['HTTP_X_OLIST_TOKEN'] ?? '');
+
+if ($olistToken === '' || $headerToken === '' || !hash_equals(hash('sha256', $olistToken), $headerToken)) {
     http_response_code(401);
     echo json_encode(['status' => 'error', 'message' => 'Unauthorized']);
     exit;
 }
+
+// Log do webhook -- movido para DEPOIS da autenticacao (Rodada 8, 2026-08-19):
+// antes gravava o corpo cru de QUALQUER POST anonimo em disco, sem limite de
+// tamanho e sem rotacao -- vetor de esgotamento de disco. Agora so grava
+// requisicoes ja autenticadas. Ver R8-6 no relatorio da Rodada 8.
+file_put_contents(
+    dirname(__DIR__, 2) . '/logs/olist-company-sync.log',
+    '[' . date('Y-m-d H:i:s') . '] ' . $method . ' - ' . json_encode($body) . "\n",
+    FILE_APPEND
+);
 
 // Sincronizar dados da empresa
 if (!empty($body['event']) && $body['event'] === 'seller_updated') {

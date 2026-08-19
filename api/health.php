@@ -176,11 +176,15 @@ $checks = [
     'Catalogo API presente' => is_file($root . '/api/catalog/products.php'),
     'GraphQL API presente' => is_file($root . '/api/graphql.php'),
     'Gamificacao API presente' => is_file($root . '/api/gamification/status.php'),
-    'Gamificacao pagina presente' => is_file($root . '/gamificacao.php'),
-    'Admin dashboard JS presente' => is_file($root . '/js/admin-dashboard.js'),
-    'Monitor admin presente' => is_file($root . '/admin/monitor/index.php'),
     'Health da fila acessivel' => is_file($root . '/core/queue/queue.php'),
 ];
+// Rodada 8 (2026-08-19): 'Gamificacao pagina presente', 'Admin dashboard JS
+// presente' e 'Monitor admin presente' foram removidos daqui -- eram
+// is_file() puramente decorativos (so inflavam a contagem de "checks OK" sem
+// verificar nenhum comportamento real; a presenca do arquivo no repo ja e
+// garantida em tempo de deploy, nao em tempo de execucao). Os checks restantes
+// acima cobrem features de fato consumidas por outros sistemas (fila,
+// catalogo, GraphQL, gamificacao API). Ver R8-9 no relatorio da Rodada 8.
 
 $queueSummary = sv_health_probe_queue($checks, $root);
 $assetManifestHealth = sv_health_probe_asset_manifest($checks, $root);
