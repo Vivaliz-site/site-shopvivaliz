@@ -18,6 +18,7 @@ import argparse
 import json
 import os
 import shutil
+import stat
 import subprocess
 import tempfile
 import urllib.error
@@ -43,9 +44,20 @@ def load_env(path: Path) -> dict[str, str]:
     return values
 
 
+def validate_env_target(path: Path) -> None:
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    if path.is_symlink():
+        raise ValueError("env_symlink_rejected")
+    metadata = path.stat()
+    if not stat.S_ISREG(metadata.st_mode):
+        raise ValueError("env_not_regular_file")
+    if stat.S_IMODE(metadata.st_mode) & 0o077:
+        raise ValueError("env_permissions_too_open")
+
+
 def normalize_client_id(value: str) -> str:
     value = value.strip()
-    value = value.replace(".app.s.googleusercontent.com", ".apps.googleusercontent.com")
     value = value.replace(".app.s.googleusercontent.com", ".apps.googleusercontent.com")
     return value
 
@@ -87,8 +99,7 @@ def classify_token_exchange(client_id: str, client_secret: str, refresh_token: s
 
 
 def update_env_key(path: Path, key: str, value: str) -> None:
-    if not path.is_file():
-        raise FileNotFoundError(path)
+    validate_env_target(path)
     original = path.stat()
     lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
     out: list[str] = []
@@ -108,6 +119,8 @@ def update_env_key(path: Path, key: str, value: str) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.chmod(temp_name, original.st_mode & 0o777)
+        if os.name != "nt":
+            os.chown(temp_name, original.st_uid, original.st_gid)
         os.replace(temp_name, path)
     finally:
         if os.path.exists(temp_name):
@@ -183,7 +196,12 @@ def main() -> int:
         return 1
 
     if args.write_local and candidate != client_id:
-        update_env_key(ENV_PATH, "GOOGLE_OAUTH_CLIENT_ID", candidate)
+        try:
+            update_env_key(ENV_PATH, "GOOGLE_OAUTH_CLIENT_ID", candidate)
+        except (OSError, ValueError) as exc:
+            print("LOCAL_CLIENT_ID_UPDATE_FAILED")
+            print("reason=" + type(exc).__name__)
+            return 2
         print("LOCAL_CLIENT_ID_UPDATED")
 
     if args.sync_github:
