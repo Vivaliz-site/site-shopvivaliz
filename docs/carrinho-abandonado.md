@@ -12,7 +12,7 @@
 4. Pedido apenas criado, `aguardando_pagamento`, falha ou expiração de pagamento **não** encerra a recuperação.
 5. Antes de selecionar candidatos, o cron reconcilia `recovered_at` contra o espelho canônico de `orders`, usando os estados definidos em `src/Commerce/AbandonedCartRecovery.php`.
 6. Para cada envio, o cron gera um token aleatório de 256 bits. O banco guarda somente `SHA-256` em `recovery_token_hash`, com expiração em `recovery_token_expires_at`.
-7. O token puro vai somente no fragmento do link: `/recuperar-carrinho#token=...`. Fragmentos não são enviados no request HTTP nem no cabeçalho `Referer`.
+7. O token puro vai somente no fragmento do link: `/recuperar-carrinho.php#token=...`. Fragmentos não são enviados no request HTTP nem no cabeçalho `Referer`. O caminho usa o arquivo físico `.php` porque o `.htaccess` atual não possui uma rota extensionless para essa landing.
 8. `recuperar-carrinho.php` remove o fragmento da barra de endereço e envia o token via `POST` para `api/checkout/restore-abandonment.php`.
 9. A API de restauração compara o hash, exige token válido/não expirado, ignora carrinhos já recuperados por pagamento e consulta novamente `svcr_products()`. Ela devolve somente itens ainda vendáveis, com **preço, estoque, nome e imagem atuais do servidor**.
 10. A landing grava esses itens no `localStorage`, remove qualquer cotação de frete antiga e redireciona para `/carrinho`.
@@ -29,7 +29,8 @@ A recuperação cross-device foi desenhada para não transformar o e-mail em uma
 - preço e estoque capturados no navegador nunca são usados para restaurar o carrinho;
 - produtos removidos, sem preço ou sem estoque são descartados no momento da restauração;
 - a quantidade restaurada é limitada pela quantidade pedida no snapshot e pelo estoque atual;
-- o endpoint de restauração é rate-limited.
+- o endpoint de restauração é rate-limited;
+- depois que um e-mail de recuperação foi enviado, uma nova captura da mesma sessão preserva o token já emitido em vez de invalidá-lo silenciosamente.
 
 Observação: o cliente atual do checkout envia apenas o nome dos itens no evento de abandono. O endpoint resolve esse nome de forma exata e única contra o catálogo canônico; nesses registros a quantidade padrão é 1. Clientes futuros podem enviar `sku` e `quantity`, que já são aceitos pelo endpoint sem depender de preço do navegador.
 
@@ -95,7 +96,7 @@ Depois da instalação, a evidência mínima é:
 - `recovery_email_sent_at` preenchido somente quando `send_email()` retorna sucesso e a linha continua elegível;
 - `recovered_at` preenchido para abandonos associados a pedidos comprovadamente pagos/fulfillment;
 - `recovery_token_hash` preenchido sem token puro persistido;
-- link do e-mail usando fragmento `#token=` e nunca query string;
+- link do e-mail usando `/recuperar-carrinho.php#token=` e nunca query string;
 - restauração retornando apenas itens disponíveis do catálogo corrente;
 - nenhum envio duplicado para o mesmo abandono.
 
@@ -108,4 +109,4 @@ php tests/abandoned-cart-paid-state-test.php
 php tests/abandoned-cart-cross-device-test.php
 ```
 
-O segundo teste garante que o token é hasheado, não usa query string, o endpoint revalida o catálogo e a resposta não expõe e-mail.
+O segundo teste garante que o token é hasheado, não usa query string, o endpoint revalida o catálogo, a rota do e-mail existe fisicamente e a resposta não expõe e-mail.
