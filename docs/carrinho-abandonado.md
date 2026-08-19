@@ -8,8 +8,23 @@
    - informou e-mail há mais de 1 hora e menos de 48 horas;
    - ainda não recebeu e-mail de recuperação;
    - não está marcado como recuperado;
-   - não possui pedido posterior ao abandono segundo a regra atual do script.
-4. O e-mail atual é transacional e **não promete cupom nem desconto adicional**. A regra comercial vigente deve continuar sendo a fonte de verdade para qualquer benefício.
+   - ainda não possui um pedido com pagamento aprovado ou etapa posterior de fulfillment depois do abandono.
+4. Pedido apenas criado, `aguardando_pagamento`, falha ou expiração de pagamento **não** encerra a recuperação. Essa distinção evita perder exatamente o cliente que chegou ao pagamento e não concluiu.
+5. Antes de selecionar candidatos, o cron reconcilia `recovered_at` contra o espelho canônico de `orders`, usando os estados definidos em `includes/abandoned-cart-recovery.php`. Isso também autorrepara marcações perdidas por falhas anteriores de webhook.
+6. O e-mail atual é transacional e **não promete cupom nem desconto adicional**. A regra comercial vigente deve continuar sendo a fonte de verdade para qualquer benefício.
+
+## Estados que encerram a recuperação
+
+Atualmente são tratados como compra concluída/fulfillment iniciado:
+
+- `pagamento_aprovado`;
+- `nota_fiscal_enviada`;
+- `pronto_para_enviar`;
+- `enviado`;
+- `entregue`;
+- `nao_entregue`.
+
+`aguardando_pagamento` e `cancelado` não entram nessa lista, pois o backend usa `cancelado` também para falha/expiração de pagamento. Se um pedido já tiver sido aprovado antes de um cancelamento posterior, o marcador `recovered_at` previamente gravado continua preservado.
 
 ## Cron de produção
 
@@ -56,12 +71,11 @@ Esse comportamento é idempotente e também corrige automaticamente instalaçõe
 Depois da instalação, a evidência mínima é:
 
 - workflow concluído com `ABANDONED_CART_CRON_VERIFIED`;
-- log persistente em `shared/logs/abandoned-cart-email.log` com linhas `Enviados: N | Falhas: N | Candidatos: N`;
-- `recovery_email_sent_at` preenchido somente quando `send_email()` retorna sucesso;
+- log persistente em `shared/logs/abandoned-cart-email.log` com `Enviados`, `Falhas`, `Candidatos`, `Marcados recuperados` e `Ignorados por recuperacao`;
+- `recovery_email_sent_at` preenchido somente quando `send_email()` retorna sucesso e a linha continua elegível;
+- `recovered_at` preenchido para abandonos associados a pedidos comprovadamente pagos/fulfillment;
 - nenhum envio duplicado para o mesmo abandono.
 
-## Próximas melhorias
+## Próxima melhoria
 
 A recuperação atual devolve o cliente para `/carrinho`, portanto funciona melhor quando o link é aberto no mesmo navegador que ainda possui o carrinho local. Uma recuperação cross-device deve usar um token opaco de restauração e dados de carrinho mínimos validados no servidor; não deve expor e-mail, preço confiado pelo cliente ou identificadores sensíveis na URL.
-
-A regra que considera um abandono recuperado por existência de pedido posterior também deve evoluir para distinguir pedido apenas criado de pagamento efetivamente aprovado, usando o status canônico do backend de pagamentos.
