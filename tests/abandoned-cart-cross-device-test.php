@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 $root = dirname(__DIR__);
-$schema = file_get_contents($root . '/includes/account-schema.php');
+$schema = file_get_contents($root . '/src/Commerce/AbandonedCartRecoverySchema.php');
 $tracker = file_get_contents($root . '/api/checkout/track-abandonment.php');
 $sender = file_get_contents($root . '/scripts/send-abandoned-cart-emails.php');
 $restore = file_get_contents($root . '/api/checkout/restore-abandonment.php');
