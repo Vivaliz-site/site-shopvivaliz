@@ -10,7 +10,7 @@
    - não está marcado como recuperado;
    - ainda não possui um pedido com pagamento aprovado ou etapa posterior de fulfillment depois do abandono.
 4. Pedido apenas criado, `aguardando_pagamento`, falha ou expiração de pagamento **não** encerra a recuperação. Essa distinção evita perder exatamente o cliente que chegou ao pagamento e não concluiu.
-5. Antes de selecionar candidatos, o cron reconcilia `recovered_at` contra o espelho canônico de `orders`, usando os estados definidos em `includes/abandoned-cart-recovery.php`. Isso também autorrepara marcações perdidas por falhas anteriores de webhook.
+5. Antes de selecionar candidatos, o cron reconcilia `recovered_at` contra o espelho canônico de `orders`, usando os estados definidos em `src/Commerce/AbandonedCartRecovery.php`. Isso também autorrepara marcações perdidas por falhas anteriores de webhook.
 6. O e-mail atual é transacional e **não promete cupom nem desconto adicional**. A regra comercial vigente deve continuar sendo a fonte de verdade para qualquer benefício.
 
 ## Estados que encerram a recuperação
