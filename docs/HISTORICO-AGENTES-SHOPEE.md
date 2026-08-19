@@ -1,7 +1,7 @@
 # Histórico de Agentes Shopee — ShopVivaliz
 
 **Repositório:** `fredmourao-ai/site-shopvivaliz`  
-**Última atualização:** 2026-08-19 (ciclo 33)  
+**Última atualização:** 2026-08-19 (ciclo 34)  
 **Branch de origem:** `claude/guth-portfolio-access-81jjq2`
 
 > Documento de consulta para agentes. Descreve o que foi implementado, como usar, quais secrets são necessários e quais limitações existem.
@@ -1192,4 +1192,38 @@ push enviada neste ciclo — nenhum dos critérios de aviso definidos (workflows
 artefato novo com erro diferente, execução de `shopee-production-seo.yml` com apply real
 bem-sucedido) ocorreu. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos
 19–32: regenerar client OAuth2 na Tiny e recriar `fetch-shopee-listings.yml`/
+`optimize-shopee-listings.yml` (ver seção 🔴 de `docs/AGENTS.md`).
+
+### 9.29 Atualização — ciclo de 2026-08-19 (~19h UTC), 34º ciclo — estado idêntico ao ciclo 33
+
+Checagem completa via `git fetch origin main` (forced-update detectado de novo no remoto; HEAD local
+já coincidia com o novo `origin/main` em `e322f5a`, sem necessidade de reset) e `mcp__github__actions_list`
+(`list_workflow_runs` para `shopee-production-seo.yml` e `shopee-runtime-health.yml`); `env | grep
+-iE "SHOPEE|TINY|OLIST"` continua vazio neste sandbox, como esperado. `git log f0995c8..e322f5a --
+'*shopee*' '*Shopee*'` não retorna nenhum commit — os 54 commits novos desde o ciclo 33 (Rodadas 7/8
+de melhoria contínua, recovery de carrinho/pagamento, etc.) tocam `agents/v9.2.85/scripts/{fetch,
+optimize}-shopee-listings.php` e `claude/api/shopee/atualizar-completo.php` só para endurecimento de
+segurança (guardas CLI-only, neutralização de endpoint que fabricava sucesso falso — Rodadas 7/8),
+não para reativar o pipeline. `listings/` continua parado em `shopee-listings-20260726-080756.json` —
+mesma marca d'água dos ciclos anteriores, sem extração nova pela via Tiny. `.github/workflows/` segue
+só com `shopee-optimizer-safety.yml`/`shopee-production-seo.yml`/`shopee-runtime-health.yml` sob
+Shopee; `fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` seguem ausentes. `docs/AGENTS.md`
+linha 149 ("Shopee/Tiny OAuth2 — PARADO HÁ 3+ SEMANAS") permanece sem atualização.
+
+`shopee-production-seo.yml` segue com as mesmas 5 execuções de 2026-07-30 (mesmos IDs dos ciclos
+anteriores: `30585266165`, `30571531668`, `30571478470`, `30571242284`, `30570700034`), todas
+`conclusion: failure`, sem execução nova (esperado — exige `workflow_dispatch` manual com frase de
+confirmação `APPLY_ALL_SHOPEE_PRODUCTS`). `shopee-runtime-health.yml` seguiu rodando via
+`schedule`/`workflow_run`; a execução mais recente (`32289908790`, 2026-08-19T18:53:23Z,
+`conclusion: success`) confirma leitura real da API Shopee na VM de produção, mesmo estado dos
+ciclos 26-33. Nenhum endpoint de analytics do Shopee Open Platform (CTR, taxa de conversão) segue
+integrado em nenhum script de produção — a análise orientada a dado pedida por este agente de
+otimização continua tecnicamente inexequível neste ambiente.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. Nenhuma notificação
+push enviada neste ciclo — nenhum dos critérios de aviso definidos (workflows Tiny recriados,
+artefato novo com erro diferente, execução de `shopee-production-seo.yml` com apply real
+bem-sucedido) ocorreu. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos
+19–33: regenerar client OAuth2 na Tiny e recriar `fetch-shopee-listings.yml`/
 `optimize-shopee-listings.yml` (ver seção 🔴 de `docs/AGENTS.md`).
