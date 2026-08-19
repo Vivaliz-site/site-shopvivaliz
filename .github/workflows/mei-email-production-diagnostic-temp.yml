@@ -1,0 +1,182 @@
+name: MEI Email Production Diagnostic Temp
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/mei-email-production-diagnostic-temp.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mei-email-production-diagnostic-temp
+  cancel-in-progress: false
+
+jobs:
+  diagnose-and-safe-repair:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 20
+    env:
+      VM_HOST: 137.131.156.17
+      VM_USER: ubuntu
+    steps:
+      - name: Configure verified Oracle SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo 'Oracle SSH key missing'; exit 2; }
+          test -n "$known_hosts" || { echo 'Oracle known_hosts missing'; exit 2; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Diagnose and apply only fail-closed safe repair
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 \
+            -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF'
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo "CHECKED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "HOST=$(hostname)"
+          echo "HEAD_BEFORE=$(git rev-parse HEAD)"
+          echo "WORKER_BEFORE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || printf unknown)"
+          echo "TIMER_BEFORE=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || printf unknown)"
+
+          git diff --quiet
+          git diff --cached --quiet
+          git fetch origin main
+          git merge --ff-only origin/main
+          echo "HEAD_DEPLOYED=$(git rev-parse HEAD)"
+          .venv/bin/python -m compileall -q app worker scripts
+
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          from app.config import settings
+          print(f"EMAIL_PROVIDER={settings.email_provider}")
+          if settings.email_provider != 'microsoft_graph':
+              raise SystemExit('EMAIL_PROVIDER_NOT_MICROSOFT_GRAPH')
+          from app.email_provider import MicrosoftGraphEmailProvider
+          provider=MicrosoftGraphEmailProvider()
+          provider.authenticate()
+          print('GRAPH_APP_ONLY_AUTH=true')
+          print(f"GRAPH_SENDER={provider.address}")
+          PY
+
+          echo '=== EXCHANGE_RESTRICTED_ENTITY_STATUS ==='
+          if ! command -v pwsh >/dev/null 2>&1; then
+            echo 'EXCHANGE_STATUS=INCONCLUSIVE reason=pwsh_missing'
+            exo_rc=90
+          else
+            set +e
+            exo_output="$(pwsh -NoProfile -File ./scripts/desbloquear_exchange_app_cert.ps1 2>&1)"
+            exo_rc=$?
+            set -e
+            printf '%s\n' "$exo_output"
+            if [ "$exo_rc" -eq 0 ]; then
+              echo 'EXCHANGE_STATUS=NOT_BLOCKED'
+            elif [ "$exo_rc" -eq 2 ]; then
+              echo 'EXCHANGE_STATUS=BLOCKED'
+            else
+              echo "EXCHANGE_STATUS=INCONCLUSIVE rc=$exo_rc"
+            fi
+          fi
+
+          canonical=0
+          legacy=0
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then canonical=1; fi
+          if test -f runtime/sender_blocked.pause; then legacy=1; fi
+          echo "SENTINEL_CANONICAL=$canonical"
+          echo "SENTINEL_LEGACY=$legacy"
+          if [ "$canonical" -eq 1 ]; then
+            echo '=== SENTINEL ==='
+            sudo sed -n '1,20p' /var/lib/mei-mg-email/sender_blocked.pause
+          fi
+
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import json, os, psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'], row_factory=dict_row, connect_timeout=10) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("set statement_timeout='45s'")
+                  cur.execute("""
+                    with internal as (
+                      select
+                        count(*) filter(where status in ('submitted','enviado') and enviado_em >= now()-interval '24 hours') queue_sent_24h,
+                        count(*) filter(where status in ('submitted','enviado') and enviado_em >= now()-interval '20 minutes') queue_sent_20m,
+                        count(*) filter(where status in ('pendente','enviando','pending','processing')) open_queue,
+                        count(*) filter(where status in ('pending','processing')) legacy_open,
+                        max(enviado_em) filter(where status in ('submitted','enviado')) last_sent_at
+                      from mei_email.envios
+                    ), external as (
+                      select count(*) filter(where sent_at >= now()-interval '24 hours') external_sent_24h
+                      from mei_email.envios_externos_cota
+                    ), orphan as (
+                      select count(*) orphan_lots
+                      from mei_email.lotes l
+                      where l.status <> 'pendente'
+                        and exists (
+                          select 1 from mei_email.envios e
+                          where e.lote_id=l.id
+                            and e.status in ('pendente','enviando','pending','processing')
+                        )
+                    )
+                    select internal.*, external.external_sent_24h,
+                           internal.queue_sent_24h + external.external_sent_24h sent_24h,
+                           orphan.orphan_lots
+                    from internal cross join external cross join orphan
+                  """)
+                  print('DB_BEFORE=' + json.dumps(dict(cur.fetchone()), default=str, sort_keys=True))
+          PY
+
+          sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service /etc/systemd/system/mei-mg-email-autorepair.service
+          sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.timer /etc/systemd/system/mei-mg-email-autorepair.timer
+          sudo systemctl daemon-reload
+          sudo systemctl enable --now mei-mg-email-autorepair.timer
+          sudo systemctl cat mei-mg-email-autorepair.service --no-pager | grep -F 'scripts/autocorrigir_envios_hourly.py'
+          echo 'HOURLY_GUARD_INSTALLED=true'
+
+          if [ "$exo_rc" -eq 2 ] || [ "$canonical" -eq 1 ] || [ "$legacy" -eq 1 ]; then
+            sudo systemctl stop mei-mg-email-worker.service
+            echo "WORKER_AFTER_FAIL_CLOSED=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || printf inactive)"
+            echo 'SAFE_REPAIR_RESULT=FAIL_CLOSED_NO_RESUME'
+            exit 42
+          fi
+          if [ "$exo_rc" -ne 0 ]; then
+            sudo systemctl stop mei-mg-email-worker.service
+            echo 'SAFE_REPAIR_RESULT=INCONCLUSIVE_EXCHANGE_STATUS_NO_RESUME'
+            exit 43
+          fi
+
+          sudo systemctl reset-failed mei-mg-email-autorepair.service mei-mg-email-worker.service
+          timeout 10m sudo systemctl start mei-mg-email-autorepair.service
+          echo "WORKER_AFTER_REPAIR=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || printf unknown)"
+          echo "TIMER_AFTER=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || printf unknown)"
+          if sudo test -f /var/lib/mei-mg-email/autorepair-state.json; then
+            echo "AUTOREPAIR_STATE=$(sudo cat /var/lib/mei-mg-email/autorepair-state.json)"
+          fi
+          sleep 60
+          sudo journalctl -u mei-mg-email-worker.service --since '-10 minutes' --no-pager | tail -n 120
+          sudo journalctl -u mei-mg-email-autorepair.service --since '-15 minutes' --no-pager | tail -n 100
+          echo 'SAFE_REPAIR_RESULT=APPLIED_AND_OBSERVED'
+          EOF
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
