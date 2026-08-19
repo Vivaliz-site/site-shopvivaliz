@@ -136,12 +136,12 @@ try {
         'INSERT INTO checkout_abandonments (email, customer_name, cart_snapshot, cart_total, session_token, created_at, updated_at)
          VALUES (:email, :name, :snapshot, :total, :token, NOW(), NOW())
          ON DUPLICATE KEY UPDATE
-            email = VALUES(email),
-            customer_name = VALUES(customer_name),
-            cart_snapshot = VALUES(cart_snapshot),
-            cart_total = VALUES(cart_total),
-            recovery_token_hash = NULL,
-            recovery_token_expires_at = NULL,
+            email = IF(recovery_email_sent_at IS NULL, VALUES(email), email),
+            customer_name = IF(recovery_email_sent_at IS NULL, VALUES(customer_name), customer_name),
+            cart_snapshot = IF(recovery_email_sent_at IS NULL, VALUES(cart_snapshot), cart_snapshot),
+            cart_total = IF(recovery_email_sent_at IS NULL, VALUES(cart_total), cart_total),
+            recovery_token_hash = IF(recovery_email_sent_at IS NULL, NULL, recovery_token_hash),
+            recovery_token_expires_at = IF(recovery_email_sent_at IS NULL, NULL, recovery_token_expires_at),
             updated_at = NOW()'
     );
     $stmt->execute([
