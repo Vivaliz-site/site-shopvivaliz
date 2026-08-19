@@ -15,6 +15,7 @@ require_once __DIR__ . '/../../includes/pdo-database.php';
 require_once __DIR__ . '/../../includes/account-schema.php';
 require_once __DIR__ . '/../../includes/order-rate-limit.php';
 require_once __DIR__ . '/../../includes/catalog-runtime.php';
+require_once __DIR__ . '/../../src/Commerce/AbandonedCartRecoverySchema.php';
 
 if (!svorl_allow(20, 3600, 'cart-restore')) {
     http_response_code(429);
@@ -36,6 +37,7 @@ try {
     if (!($pdo instanceof PDO)) {
         throw new RuntimeException('database_unavailable');
     }
+    svacr_ensure_restore_schema($pdo);
 
     $stmt = $pdo->prepare(
         'SELECT cart_snapshot
