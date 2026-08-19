@@ -60,7 +60,7 @@ jobs:
           git fetch origin main
           git merge --ff-only origin/main
           echo "HEAD_DEPLOYED=$(git rev-parse HEAD)"
-          git merge-base --is-ancestor 15162fff62091e66a1da9f5fa65c17dc47cba5ec HEAD
+          git merge-base --is-ancestor 9e97012df8cd5e316d6563f78f310e88241ca22b HEAD
           echo 'BOUNDED_RECOVERY_AND_CONSENT_GUARDS_DEPLOYED=true'
 
           .venv/bin/python -m compileall -q app worker scripts
@@ -73,6 +73,17 @@ jobs:
             tests/test_queue_recovery_bulk_eligibility.py \
             tests/test_import_policy_explicit.py
 
+          echo '=== QUIESCE WORKER BEFORE DATABASE CLEANUP ==='
+          if ! timeout 45s sudo systemctl stop mei-mg-email-worker.service; then
+            echo 'WORKER_STOP_ESCALATION=true'
+            sudo systemctl kill --kill-who=main --signal=SIGKILL mei-mg-email-worker.service
+            sleep 3
+          fi
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then
+            echo 'worker still active after stop' >&2
+            exit 41
+          fi
+
           echo '=== TERMINATE STALE DATABASE WORK ==='
           .venv/bin/python - <<'PY'
           from dotenv import load_dotenv
@@ -84,7 +95,18 @@ jobs:
               conn.autocommit = True
               with conn.cursor() as cur:
                   cur.execute("set statement_timeout='45s'")
-                  cur.execute("""
+
+                  def terminate(label, sql):
+                      cur.execute(sql)
+                      rows=[dict(r) for r in cur.fetchall()]
+                      print(label + '_BEFORE=' + json.dumps(rows, default=str, sort_keys=True))
+                      terminated=[]
+                      for row in rows:
+                          cur.execute('select pg_terminate_backend(%s) as terminated', (row['pid'],))
+                          terminated.append({'pid': row['pid'], 'terminated': bool(cur.fetchone()['terminated'])})
+                      print(label + '_TERMINATED=' + json.dumps(terminated, sort_keys=True))
+
+                  terminate('STALE_RECOVERY', """
                     select pid, state, now()-coalesce(xact_start,query_start) as age,
                            left(query,300) as query
                       from pg_stat_activity
@@ -97,15 +119,8 @@ jobs:
                        )
                      order by coalesce(xact_start,query_start)
                   """)
-                  stale_recovery=[dict(r) for r in cur.fetchall()]
-                  print('STALE_RECOVERY_BEFORE='+json.dumps(stale_recovery, default=str, sort_keys=True))
-                  terminated=[]
-                  for row in stale_recovery:
-                      cur.execute('select pg_terminate_backend(%s) as terminated', (row['pid'],))
-                      terminated.append({'pid': row['pid'], 'terminated': bool(cur.fetchone()['terminated'])})
-                  print('STALE_RECOVERY_TERMINATED='+json.dumps(terminated, sort_keys=True))
 
-                  cur.execute("""
+                  terminate('STALE_BASE_INGEST', """
                     select a.pid, a.state, now()-a.xact_start as age, left(a.query,300) as query
                       from pg_stat_activity a
                      where a.pid <> pg_backend_pid()
@@ -113,16 +128,31 @@ jobs:
                        and a.query ilike '%insert into mei_email.empresas%'
                        and a.client_addr is not null
                   """)
-                  stale_ingest=[dict(r) for r in cur.fetchall()]
-                  print('STALE_BASE_INGEST_BEFORE='+json.dumps(stale_ingest, default=str, sort_keys=True))
-                  ingest_terminated=[]
-                  for row in stale_ingest:
-                      cur.execute('select pg_terminate_backend(%s) as terminated', (row['pid'],))
-                      ingest_terminated.append({'pid': row['pid'], 'terminated': bool(cur.fetchone()['terminated'])})
-                  print('STALE_BASE_INGEST_TERMINATED='+json.dumps(ingest_terminated, sort_keys=True))
-          PY
 
-          sudo systemctl stop mei-mg-email-worker.service
+                  terminate('STALE_BASE_SYNC_LOCK', """
+                    select distinct a.pid, a.state,
+                           now()-coalesce(a.xact_start,a.query_start) as age,
+                           left(a.query,300) as query
+                      from pg_stat_activity a
+                      join pg_locks l on l.pid=a.pid
+                     where a.pid <> pg_backend_pid()
+                       and l.locktype='advisory'
+                       and l.granted=true
+                       and l.objid=14082026
+                       and a.state='idle in transaction'
+                       and a.xact_start < now()-interval '10 minutes'
+                       and a.query ilike '%select count(*) from mei_email.empresas%'
+                  """)
+
+                  terminate('STALE_LEGACY_ELIGIBILITY_COUNT', """
+                    select a.pid, a.state, now()-a.query_start as age, left(a.query,300) as query
+                      from pg_stat_activity a
+                     where a.pid <> pg_backend_pid()
+                       and a.query_start < now()-interval '2 minutes'
+                       and a.state='active'
+                       and a.query ilike '%select count(*) as elegiveis from mei_email.vw_empresas_elegiveis%'
+                  """)
+          PY
 
           echo '=== MIGRATE CONSENT/QUEUE SAFETY ==='
           timeout 8m docker compose run --rm flyway migrate
@@ -167,6 +197,28 @@ jobs:
                   """)
                   stale_recovery=int(cur.fetchone()['stale_recovery'] or 0)
                   cur.execute("""
+                    select count(*) as stale_base_sync_lock
+                      from pg_stat_activity a
+                      join pg_locks l on l.pid=a.pid
+                     where a.pid <> pg_backend_pid()
+                       and l.locktype='advisory'
+                       and l.granted=true
+                       and l.objid=14082026
+                       and a.state='idle in transaction'
+                       and a.xact_start < now()-interval '10 minutes'
+                       and a.query ilike '%select count(*) from mei_email.empresas%'
+                  """)
+                  stale_base_sync_lock=int(cur.fetchone()['stale_base_sync_lock'] or 0)
+                  cur.execute("""
+                    select count(*) as stale_legacy_eligibility_count
+                      from pg_stat_activity a
+                     where a.pid <> pg_backend_pid()
+                       and a.query_start < now()-interval '2 minutes'
+                       and a.state='active'
+                       and a.query ilike '%select count(*) as elegiveis from mei_email.vw_empresas_elegiveis%'
+                  """)
+                  stale_legacy_eligibility_count=int(cur.fetchone()['stale_legacy_eligibility_count'] or 0)
+                  cur.execute("""
                     select
                       count(*) filter(where status in ('submitted','enviado') and enviado_em >= now()-interval '24 hours') queue_sent_24h,
                       count(*) filter(where status in ('pendente','enviando','pending','processing')) open_queue,
@@ -176,6 +228,8 @@ jobs:
                   """)
                   state=dict(cur.fetchone())
                   state['stale_recovery']=stale_recovery
+                  state['stale_base_sync_lock']=stale_base_sync_lock
+                  state['stale_legacy_eligibility_count']=stale_legacy_eligibility_count
                   cur.execute("select to_regclass('mei_email.envios_externos_cota')")
                   if cur.fetchone()[0] is not None:
                       cur.execute("select count(*) as n from mei_email.envios_externos_cota where sent_at >= now()-interval '24 hours'")
@@ -194,6 +248,8 @@ jobs:
                   assert state['sent_24h'] <= 10000, state
                   assert state['legacy_open'] == 0, state
                   assert state['stale_recovery'] == 0, state
+                  assert state['stale_base_sync_lock'] == 0, state
+                  assert state['stale_legacy_eligibility_count'] == 0, state
                   assert state['legacy_public_authorized'] == 0, state
           PY
 
