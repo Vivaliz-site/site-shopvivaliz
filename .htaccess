@@ -37,14 +37,23 @@ AddCharset UTF-8 .html .txt .php .json
     Header always set X-Frame-Options "SAMEORIGIN"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
-    Header always set Content-Security-Policy "frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
-    # CSP em modo report-only (Rodada 1 de melhoria continua, 2026-08-18): o CSP acima nao tem
-    # default-src/script-src, entao hoje nao mitiga XSS (so clickjacking/injecao de <base>). Este
-    # segundo header e so-de-observacao -- nunca bloqueia nada, mesmo se a lista estiver incompleta
-    # ou errada -- e serve pra comecar o inventario de dominios de terceiros (Google Ads/GA4, Meta,
-    # TikTok Pixel, Mercado Pago, InfinitePay, Cloudflare) antes de promover um script-src real e
-    # bloqueante (isso sim e mudanca estrutural, aguardando aprovacao -- ver relatorio da Rodada 1).
-    Header always set Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://connect.facebook.net https://analytics.tiktok.com https://sdk.mercadopago.com https://http2.mlstatic.com https://checkout.infinitepay.io https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; frame-src 'self' https://sdk.mercadopago.com https://checkout.infinitepay.io"
+    # CSP promovida de Report-Only para enforced (autorizado por Fred, 2026-08-19,
+    # pos-Rodada 10). A lista de dominios (GA4/Ads/Meta/TikTok/MP/InfinitePay/Cloudflare
+    # Insights) foi inventariada em modo report-only desde a Rodada 1 sem nenhuma
+    # violacao inesperada reportada -- ver relatorio da Rodada 1. Consolida no mesmo
+    # header o frame-ancestors/object-src/base-uri que antes viviam num header
+    # separado. NOTA IMPORTANTE (documentada tambem no relatorio entregue ao Fred):
+    # como script-src mantem 'unsafe-inline'/'unsafe-eval' (os scripts de
+    # analytics/pixels/checkout dependem disso hoje), esta CSP bloqueia script de
+    # dominio nao listado e <object>/plugins, mas NAO bloqueia script/handler inline
+    # injetado (ex: o payload do R10-1) -- essa classe continua dependendo do fix de
+    # escape (JSON_HEX_TAG) ja aplicado, nao da CSP. Remover unsafe-inline exigiria
+    # nonce em todo script inline do site, mudanca maior deixada para decisao futura.
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://connect.facebook.net https://analytics.tiktok.com https://sdk.mercadopago.com https://http2.mlstatic.com https://checkout.infinitepay.io https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; frame-src 'self' https://sdk.mercadopago.com https://checkout.infinitepay.io; frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
+    # Report-only complementar: observa o proximo passo de enrijecimento (remover
+    # unsafe-inline/unsafe-eval do script-src). Nao bloqueia nada -- so acumula
+    # relatorios de violacao pra decidir com dados se/quando migrar pra nonce.
+    Header always set Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://connect.facebook.net https://analytics.tiktok.com https://sdk.mercadopago.com https://http2.mlstatic.com https://checkout.infinitepay.io https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; frame-src 'self' https://sdk.mercadopago.com https://checkout.infinitepay.io; frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
     Header always set Cache-Control "no-store, max-age=0" env=SVRT_SENSITIVE
     Header always set Pragma "no-cache" env=SVRT_SENSITIVE
 
@@ -136,15 +145,7 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
     RewriteRule ^admin/(?:menu-completo|menu-dashboard|dashboard|admin-back)\.php$ - [F,L,NC]
 
-    # URLs antigas de produto preservam a intencao: primeiro convertem
-    # /produtos/<slug> em /produto/<slug>. O guard PHP da rota atual consegue
-    # resolver slug/SKU historico para um item ativo; se nao houver mapeamento
-    # comprovavel, ele mantem o 404 normal em vez de mascarar tudo no catalogo.
-    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
-    RewriteRule ^produtos/([^/]+)/?$ /produto/$1 [R=301,L,NE,NC]
-
-    # Demais paginas publicas remanescentes da vitrine anterior vao para o
-    # catalogo atual. Query strings antigas sem valor comercial sao descartadas.
+    # URLs publicas remanescentes da vitrine anterior vao para o catalogo atual.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
     RewriteRule ^(?:ferramentas|arte-papelaria-e-armarinho|produtos)(?:/.*)?$ /catalogo [R=301,L,NE,QSD,NC]
 

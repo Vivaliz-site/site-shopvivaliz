@@ -529,6 +529,86 @@ mesmo diretório, em vez de auditar arquivo por arquivo.
 **Ver também:** relatório completo em `outputs/rodada10-diagnostico.md`, entradas anteriores
 de 2026-08-19 sobre a fila de pagamentos (R9-1/R9-2), `docs/AGENTS.md` (Rodadas 1-9, acima).
 
+### 2026-08-19 — Rodada 10.1: itens estruturais pós-Rodada-10 (aceitos por Fred)
+
+**Sistema/arquivo:** `.htaccess` (CSP), `auth/register.php`, `.gitattributes`.
+**Contexto:** depois do relatório final da Rodada 10, Fred aceitou todos os itens
+pendentes de decisão e autorizou implementar o que fosse seguro fazer sozinho. Isto
+cobre 3 desses itens; os que ficaram de fora (com justificativa) estão listados abaixo.
+
+- **CSP promovida de Report-Only para enforced:** consolidado num único header
+  `Content-Security-Policy` (a lista de domínios de terceiros — GA4/Ads/Meta/TikTok/
+  Mercado Pago/InfinitePay/Cloudflare Insights — vinha sendo observada em modo
+  report-only desde a Rodada 1 sem nenhuma violação inesperada). Mantém
+  `'unsafe-inline'`/`'unsafe-eval'` em `script-src` porque os próprios scripts de
+  analytics/checkout dependem disso hoje — **isso significa que esta CSP não bloqueia
+  injeção de script/handler inline** (a classe do R10-1), só bloqueia script de domínio
+  não listado e `<object>`/plugins. O fix do R10-1 continua sendo o `JSON_HEX_TAG`, não
+  a CSP. Adicionado um segundo header `Report-Only` mais restrito (sem
+  unsafe-inline/unsafe-eval) só de observação, pra acumular dados sobre o próximo passo
+  (migração pra nonce) sem arriscar quebrar nada agora.
+- **`auth/register.php`:** as duas mensagens de erro que confirmavam explicitamente
+  "Este CPF/CNPJ já está cadastrado em outra conta" permitiam enumerar quais
+  documentos (dado sensível) têm conta no site testando um a um. Trocadas por uma
+  mensagem genérica que não confirma a existência do documento específico. A mensagem
+  equivalente pra e-mail (`Este email já está cadastrado`) foi deixada como está —
+  prática comum, risco bem menor que CPF/CNPJ.
+- **`.gitattributes` `export-ignore`:** adicionado pra `docs/`, `outputs/`, `reports/`,
+  `tests/` e `.claude/` — confirmei antes (busca em todo o repo) que nenhum `require`/
+  `include` de código PHP aponta pra esses diretórios, então excluí-los do `git archive`
+  usado pelo deploy real não deveria quebrar nada. Fiquei deliberadamente conservador:
+  não toquei em `scripts/`, `agents/`, `.github/` nem em qualquer diretório que possa
+  ser chamado por cron/CI/workflow via SSH — a raiz do problema (modelo opt-out do
+  `.htaccess`, apontada desde a Rodada 7) continua sem resolução completa, isso reduz
+  a superfície mas não a elimina.
+
+**Itens levantados nas Rodadas 1-9 e NÃO implementados nesta passada (com motivo):**
+- `.htaccess` allow-list → default-deny: continua exigindo acompanhamento ao vivo de
+  alguém que conhece todas as rotas legítimas — risco real de bloquear algo em
+  produção sem ninguém olhando. Fica pra quando o Fred puder acompanhar em tempo real.
+- Política do cupom `VIVALIZ10` (anunciar publicamente ou não): decisão comercial, não
+  técnica — documentado desde a Rodada 6, sem mudança de código possível sem essa
+  decisão primeiro.
+- Remoção de `catalogo-v2.php`: arquivo legado sem link interno, mas pode estar
+  indexado no Google ou linkado externamente — apagar sem saber quebra SEO/backlinks
+  silenciosamente. Fica pra decisão do Fred (posso implementar um redirect 301 pro
+  `/catalogo/` se ele confirmar que quer aposentar o arquivo).
+- `api/orchestrator/queue.php`: o arquivo já não existe mais no repo (removido em
+  algum momento entre as Rodadas 6 e 10 por outro agente) — `api/orchestrator/status.php`
+  hoje sempre falha com 500 por causa do `require` que aponta pra ele. Não é
+  explorável (falha fechado), mas é código morto. Decisão pendente do Fred: restaurar
+  `queue.php` ou remover `status.php` de vez.
+- `CRON_SECRET`: confirmado via SSH que **não está definido** no `.env` real da VM —
+  `TINY_WEBHOOK_SECRET`/`OLIST_WEBHOOK_SECRET` (o outro item pendente da Rodada 6) **já
+  estão configurados** (64 caracteres cada, confirmado sem expor o valor) e o log
+  `logs/tiny-webhook-price.log` mostra o gate funcionando de verdade em produção. Não
+  inventei um valor pra `CRON_SECRET` porque isso depende da decisão acima
+  (`orchestrator/queue.php`) — sem ela, não dá pra saber se o secret ainda serve pra
+  algo.
+- `claude/dashboard/`: decisão de uso (alguém ainda acessa isso?), não técnica.
+- Divergência de headers (`X-XSS-Protection`, `Referrer-Policy`, `Expect-CT`) entre
+  `.htaccess` do repo e o que chega em produção: continua exigindo acesso ao vhost
+  Apache da VM ou às Transform Rules do Cloudflare — nenhum dos dois está disponível
+  por SSH/código. **Fica explicitamente pro Fred confirmar manualmente**: painel da
+  Cloudflare do domínio `shopvivaliz.com.br` → Rules → Transform Rules (verificar se
+  há alguma regra reescrevendo esses 3 headers específicos).
+- `test-inventory.yml` promovido a check obrigatório: isso é uma configuração de
+  branch protection do GitHub (Settings → Branches → main → Require status checks),
+  não uma mudança de arquivo no repo — não tenho acesso a essa configuração via
+  código/SSH. **Fica pro Fred fazer manualmente** (ou autorizar explicitamente o uso
+  de um token/conector do GitHub com permissão de admin no repo).
+- `sessions_valid_after` (invalidação de sessão em outros dispositivos): exige migração
+  de schema (`ALTER TABLE users ADD COLUMN`) mais checagem em todo bootstrap de sessão
+  autenticada — toquei em código que roda em 100% dos requests logados, e não tenho
+  como testar interativamente contra o banco de produção antes de aplicar. Prefiro
+  tratar como uma rodada dedicada, não um item a mais numa lista, dado o raio de
+  impacto se algo sair errado (todo usuário logado seria afetado).
+- Modelo de acesso do leaderboard de gamificação: já está seguro (guardado com
+  agent-key desde a Rodada 8, efetivamente admin-only). A decisão que resta — tornar
+  público ou não — é de produto, não de segurança; o estado atual não corre risco.
+**Ver também:** `docs/AGENTS.md` (entradas das Rodadas 1-10, acima), relatório da
+Rodada 10 (`outputs/rodada10-diagnostico.md`), resumo entregue ao Fred no chat.
+
 ## 🤖 Agentes Autônomos Ativos
 
 | Agente | Tipo | Commits | Status |

@@ -10,3 +10,20 @@
 *.css text eol=lf
 *.js text eol=lf
 Dockerfile text eol=lf
+
+# Rodada 10.1 (2026-08-19, autorizado por Fred): export-ignore para diretorios
+# confirmados como nao-runtime (nenhum require/include do codigo PHP aponta pra
+# eles -- verificado por busca em todo o repo antes de aplicar). O deploy real
+# (scripts/deploy-production.sh) usa `git archive` pra montar cada release, entao
+# esses diretorios paravam de existir no filesystem servido pela Apache so por
+# constarem no .htaccess como deny explicito (modelo opt-out, causa raiz
+# documentada nas Rodadas 6-9: qualquer diretorio novo esquecido no .htaccess
+# vaza por padrao). Mantive a lista conservadora -- so exclui documentacao/relatorios
+# que nao tem nenhum consumidor em codigo, nao mexi em `scripts/`, `agents/`,
+# `.github/` nem em nada que possa ser chamado por cron/CI/workflow via SSH.
+docs/ export-ignore
+outputs/ export-ignore
+reports/ export-ignore
+tests/ export-ignore
+.claude/ export-ignore
+
