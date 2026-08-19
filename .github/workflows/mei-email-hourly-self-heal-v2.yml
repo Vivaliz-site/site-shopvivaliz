@@ -59,8 +59,8 @@ jobs:
           git fetch origin main
           git merge --ff-only origin/main
           echo "HEAD_DEPLOYED=$(git rev-parse HEAD)"
-          git merge-base --is-ancestor fc898f96d14c70126a670b265ab8c760da449a4f HEAD
-          echo "EXCHANGE_MODULE_ISOLATION_DEPLOYED=true"
+          git merge-base --is-ancestor a1106c0b5ea528a38a818bc849b2c2fa310899fc HEAD
+          echo "ANTI_REPLAY_V034_CODE_DEPLOYED=true"
 
           .venv/bin/python -m compileall -q app worker scripts
           .venv/bin/python -m pytest -q \
@@ -70,7 +70,13 @@ jobs:
             tests/test_hourly_empty_queue_guard.py \
             tests/test_autorepair_guarded_wrapper.py \
             tests/test_queue_recovery_bulk_eligibility.py \
-            tests/test_exchange_module_isolation.py
+            tests/test_exchange_module_isolation.py \
+            tests/test_dispatch_replay_guard.py
+
+          test -f db/migrations/V034__guard_uncertain_graph_dispatch_against_replay.sql
+          timeout 8m docker compose run --rm flyway migrate
+          timeout 2m docker compose run --rm flyway info | tail -n 80
+          echo "FLYWAY_MIGRATIONS_APPLIED=true"
 
           sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service \
             /etc/systemd/system/mei-mg-email-autorepair.service

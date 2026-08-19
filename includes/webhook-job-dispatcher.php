@@ -7,6 +7,13 @@ require_once __DIR__ . '/../api/emails/send-order-notification.php';
 require_once __DIR__ . '/ml-event-tracker.php';
 require_once __DIR__ . '/payment-notification-idempotency.php';
 require_once __DIR__ . '/webhook-queue.php';
+// Rodada 9 (2026-08-19): requires abaixo adicionados para portar os efeitos
+// que o refactor de 09/08 deixou de fora do dispatcher (ver R9-1/R9-2 no
+// relatorio da Rodada 9 e docs/AGENTS.md). scripts/mailer.php ja e
+// require-once em outros pontos, entao repetir aqui e seguro (idempotente).
+require_once __DIR__ . '/pdo-database.php';
+require_once __DIR__ . '/account-schema.php';
+require_once __DIR__ . '/../scripts/mailer.php';
 
 function sv_webhook_job_dispatch(array $job): array
 {
@@ -94,12 +101,107 @@ function sv_webhook_job_dispatch_mercadopago(array $payload): array
             $order['status'] = $localStatus;
         }
         $order['mercadopago'] = is_array($order['mercadopago'] ?? null) ? $order['mercadopago'] : [];
+        $order['mercadopago']['order_id'] = $isOrder ? (string)($resource['id'] ?? $dataId) : (string)($order['mercadopago']['order_id'] ?? '');
         $order['mercadopago']['payment_id'] = (string)($payment['id'] ?? $dataId);
         $order['mercadopago']['status'] = $providerStatus;
+        $order['mercadopago']['status_detail'] = (string)($payment['status_detail'] ?? $resource['status_detail'] ?? '');
+        $order['mercadopago']['payment_method_id'] = trim((string)($payment['payment_method_id'] ?? $payment['payment_method']['id'] ?? ''));
+        $order['mercadopago']['payment_type_id'] = trim((string)($payment['payment_type_id'] ?? $payment['payment_type']['id'] ?? ''));
+        $order['mercadopago']['card_brand'] = trim((string)($payment['card']['brand'] ?? $payment['payment_method_id'] ?? ''));
+        $order['mercadopago']['installments'] = (int)($payment['installments'] ?? 1);
+        $order['mercadopago']['authorization_code'] = trim((string)($payment['transaction_details']['authorization_code'] ?? $payment['authorization_code'] ?? ''));
+        $order['mercadopago']['transaction_amount'] = round((float)($payment['transaction_amount'] ?? $order['total'] ?? 0), 2);
         $order['mercadopago']['last_webhook_at'] = date(DATE_ATOM);
         $order['mercadopago']['last_webhook_topic'] = $isOrder ? 'order' : 'payment';
 
         $notifyAdminPayment = svpn_prepare_admin_payment_notification($order, $localStatus, $currentStatus);
+
+        // Rodada 9 (2026-08-19): daqui ate o push pro Tiny, os efeitos abaixo
+        // (captura de boleto/email, QR Pix por email, push Tiny/Olist) sao a
+        // parte do fluxo sincrono antigo que o refactor de 09/08 deixou de
+        // fora do dispatcher. Portados de api/webhook-mercadopago.php
+        // (bloco morto, linhas 155-421). Ver R9-2 no relatorio da Rodada 9.
+        $paymentMethodId = strtolower((string)$order['mercadopago']['payment_method_id']);
+        $paymentTypeId = strtolower((string)$order['mercadopago']['payment_type_id']);
+        if ($localStatus !== 'payment_approved' && $paymentTypeId === 'ticket' && empty($order['mercadopago']['boleto']['email_sent'])) {
+            try {
+                $paymentDetail = [];
+                if (!$isOrder && !empty($payment['id'])) {
+                    $paymentDetail = svmp_api_request('GET', '/v1/payments/' . rawurlencode((string)$payment['id']), $accessToken);
+                }
+                $boletoData = svmp_webhook_extract_boleto($payment, is_array($paymentDetail) ? $paymentDetail : []);
+                if ($boletoData['ticket_url'] !== '' || $boletoData['digitable_line'] !== '' || $boletoData['barcode_content'] !== '') {
+                    $order['mercadopago']['boleto'] = array_merge(
+                        is_array($order['mercadopago']['boleto'] ?? null) ? $order['mercadopago']['boleto'] : [],
+                        $boletoData,
+                        [
+                            'status' => $providerStatus,
+                            'payment_method_id' => $paymentMethodId,
+                            'source' => 'webhook',
+                        ]
+                    );
+                    $sentBoleto = svmp_webhook_send_boleto_email($order);
+                    $order['mercadopago']['boleto']['email_sent'] = $sentBoleto;
+                    $order['mercadopago']['boleto']['email_sent_at'] = date(DATE_ATOM);
+                }
+            } catch (Throwable $e) {
+                error_log('[MercadoPago] boleto webhook capture error: order=' . $externalReference . ' ' . $e->getMessage());
+            }
+        }
+
+        // O QR/codigo Pix so existe na pagina hospedada do Checkout Pro; o
+        // unico jeito de capturar e no primeiro webhook em status "pending"
+        // com point_of_interaction (metodo pix). Envia uma unica vez por pedido.
+        if ($localStatus !== 'payment_approved' && empty($order['pix_qr_email_sent'])) {
+            try {
+                $pixData = is_array($payment['point_of_interaction']['transaction_data'] ?? null)
+                    ? $payment['point_of_interaction']['transaction_data']
+                    : null;
+                if ($pixData === null && $isOrder && !empty($payment['id'])) {
+                    $paymentDetailPix = svmp_api_request('GET', '/v1/payments/' . rawurlencode((string)$payment['id']), $accessToken);
+                    $pixData = is_array($paymentDetailPix['point_of_interaction']['transaction_data'] ?? null)
+                        ? $paymentDetailPix['point_of_interaction']['transaction_data']
+                        : null;
+                }
+                $qrCode = trim((string)($pixData['qr_code'] ?? ''));
+                $qrCodeBase64 = trim((string)($pixData['qr_code_base64'] ?? ''));
+                $customerEmailPix = (string)($order['customer']['email'] ?? '');
+                if (($qrCode !== '' || $qrCodeBase64 !== '') && $customerEmailPix !== '') {
+                    $sentPix = svmp_send_pix_qr_email(
+                        $customerEmailPix,
+                        (string)($order['customer']['name'] ?? 'Cliente'),
+                        $externalReference,
+                        round((float)($order['total'] ?? 0), 2),
+                        $qrCode,
+                        $qrCodeBase64
+                    );
+                    $order['pix_qr_email_sent'] = $sentPix;
+                }
+            } catch (Throwable $e) {
+                error_log('[MercadoPago] Pix QR email error: order=' . $externalReference . ' ' . $e->getMessage());
+            }
+        }
+
+        // Push pro Tiny/Olist ERP quando o pagamento e aprovado.
+        if ($localStatus === 'payment_approved' && empty($order['tiny_order_id'])) {
+            if (svtop_tiny_credentials_configured()) {
+                try {
+                    $tinyOrderId = svtop_push_order_tiny($order);
+                    if ($tinyOrderId) {
+                        $order['tiny_order_id'] = $tinyOrderId;
+                        $order['tiny_push'] = 'ok';
+                    } else {
+                        $order['tiny_push'] = 'token_unavailable';
+                    }
+                } catch (Throwable $e) {
+                    $order['tiny_push'] = $e->getMessage();
+                    error_log('[MercadoPago] Tiny push error: order=' . $externalReference . ' ' . $e->getMessage());
+                }
+            } else {
+                $order['tiny_push'] = 'missing_credentials';
+            }
+        }
+
         if ($notifyAdminPayment) {
             $claimed = json_encode($order, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
             rewind($handle);
@@ -127,7 +229,75 @@ function sv_webhook_job_dispatch_mercadopago(array $payload): array
         fclose($handle);
     }
 
+    // Rodada 9 (2026-08-19): espelho MySQL do status (fonte de meus-pedidos.php)
+    // + disparo do pos-processador (e-mail de confirmacao + conversao GA4) +
+    // tracking de purchase por item -- todos ausentes do dispatcher desde o
+    // refactor de 09/08. Ver R9-2 no relatorio da Rodada 9.
+    try {
+        sv_account_ensure_schema();
+        $orderStatusMap = [
+            'payment_approved' => 'pagamento_aprovado',
+            'payment_pending' => 'aguardando_pagamento',
+            'payment_refunded' => 'devolvido',
+            'payment_chargeback' => 'devolvido',
+            'payment_cancelled' => 'cancelado',
+            'payment_failed' => 'cancelado',
+        ];
+        $mappedStatus = $orderStatusMap[$localStatus] ?? 'aguardando_pagamento';
+        $pdo = sv_pdo();
+        $stmt = $pdo->prepare(
+            'UPDATE orders SET order_status = :status, olist_order_id = COALESCE(:olist_order_id, olist_order_id), updated_at = NOW()
+             WHERE order_number = :order_number'
+        );
+        $stmt->execute([
+            ':status' => $mappedStatus,
+            ':olist_order_id' => $order['tiny_order_id'] ?? null,
+            ':order_number' => $externalReference,
+        ]);
+    } catch (Throwable $e) {
+        error_log('[MercadoPago] MySQL orders mirror failed: order=' . $externalReference . ' ' . $e->getMessage());
+    }
+
+    if ($localStatus === 'payment_approved') {
+        foreach (is_array($order['items'] ?? null) ? $order['items'] : [] as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $productId = (string)($item['olist_product_id'] ?? $item['sku'] ?? '');
+            if ($productId === '') {
+                continue;
+            }
+            svml_track_event('purchase', $productId, [
+                'source' => 'mercadopago_webhook',
+                'order_number' => $externalReference,
+                'payment_id' => (string)($order['mercadopago']['payment_id'] ?? ''),
+            ]);
+        }
+        sv_webhook_job_run_post_processor($externalReference, $path);
+    }
+
     return ['success' => true, 'message' => 'processed'];
+}
+
+// Rodada 9 (2026-08-19): dispara api/webhook-post-processor.php de forma
+// SINCRONA (blocking) -- ja estamos dentro de um worker de fila em segundo
+// plano, entao nao ha necessidade de duplicar o padrao "background &" que o
+// fluxo HTTP sincrono antigo usava pra nao travar a resposta ao cliente.
+// Reutiliza o script existente (ja testado, idempotente via
+// payment_confirmation_email_sent/analytics_purchase_sent) em vez de
+// duplicar a logica de e-mail de confirmacao + conversao GA4 aqui.
+function sv_webhook_job_run_post_processor(string $orderNumber, string $orderPath): void
+{
+    $cmd = 'php ' . escapeshellarg(dirname(__DIR__) . '/api/webhook-post-processor.php')
+        . ' ' . escapeshellarg($orderNumber)
+        . ' ' . escapeshellarg($orderPath)
+        . ' 2>&1';
+    $output = [];
+    $exitCode = 0;
+    exec($cmd, $output, $exitCode);
+    if ($exitCode !== 0) {
+        error_log('[webhook-job-dispatcher] post-processor falhou (exit=' . $exitCode . ') order=' . $orderNumber . ' output=' . implode(' | ', $output));
+    }
 }
 
 function sv_webhook_infinitepay_order_number(array $body): string
@@ -258,6 +428,30 @@ function sv_webhook_job_dispatch_infinitepay(array $payload): array
         $order['infinitepay']['last_webhook_request_id'] = substr(trim((string)($payload['request_id'] ?? '')), 0, 190);
 
         $notifyAdminPayment = svpn_prepare_admin_payment_notification($order, $localStatus, $currentStatus);
+
+        // Rodada 9 (2026-08-19): push pro Tiny/Olist -- o dispatcher do
+        // InfinitePay nunca teve isso, nem antes do refactor de 09/08 (este
+        // gateway sempre foi so-fila, sem caminho sincrono antigo). Mesmo
+        // padrao aplicado ao Mercado Pago. Ver R9-2 no relatorio da Rodada 9.
+        if ($localStatus === 'payment_approved' && empty($order['tiny_order_id'])) {
+            if (svtop_tiny_credentials_configured()) {
+                try {
+                    $tinyOrderId = svtop_push_order_tiny($order);
+                    if ($tinyOrderId) {
+                        $order['tiny_order_id'] = $tinyOrderId;
+                        $order['tiny_push'] = 'ok';
+                    } else {
+                        $order['tiny_push'] = 'token_unavailable';
+                    }
+                } catch (Throwable $e) {
+                    $order['tiny_push'] = $e->getMessage();
+                    error_log('[InfinitePay] Tiny push error: order=' . $orderNumber . ' ' . $e->getMessage());
+                }
+            } else {
+                $order['tiny_push'] = 'missing_credentials';
+            }
+        }
+
         if ($notifyAdminPayment) {
             $claimed = json_encode($order, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
             rewind($handle);
@@ -283,6 +477,52 @@ function sv_webhook_job_dispatch_infinitepay(array $payload): array
     } finally {
         flock($handle, LOCK_UN);
         fclose($handle);
+    }
+
+    // Rodada 9 (2026-08-19): mesmos efeitos pos-escrita do Mercado Pago
+    // (espelho MySQL, e-mail de confirmacao + GA4, tracking de purchase).
+    // Ver R9-2 no relatorio da Rodada 9.
+    try {
+        sv_account_ensure_schema();
+        $orderStatusMap = [
+            'payment_approved' => 'pagamento_aprovado',
+            'payment_pending' => 'aguardando_pagamento',
+            'payment_refunded' => 'devolvido',
+            'payment_chargeback' => 'devolvido',
+            'payment_cancelled' => 'cancelado',
+            'payment_failed' => 'cancelado',
+        ];
+        $mappedStatus = $orderStatusMap[$localStatus] ?? 'aguardando_pagamento';
+        $pdo = sv_pdo();
+        $stmt = $pdo->prepare(
+            'UPDATE orders SET order_status = :status, olist_order_id = COALESCE(:olist_order_id, olist_order_id), updated_at = NOW()
+             WHERE order_number = :order_number'
+        );
+        $stmt->execute([
+            ':status' => $mappedStatus,
+            ':olist_order_id' => $order['tiny_order_id'] ?? null,
+            ':order_number' => $orderNumber,
+        ]);
+    } catch (Throwable $e) {
+        error_log('[InfinitePay] MySQL orders mirror failed: order=' . $orderNumber . ' ' . $e->getMessage());
+    }
+
+    if ($localStatus === 'payment_approved') {
+        foreach (is_array($order['items'] ?? null) ? $order['items'] : [] as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $productId = (string)($item['olist_product_id'] ?? $item['sku'] ?? '');
+            if ($productId === '') {
+                continue;
+            }
+            svml_track_event('purchase', $productId, [
+                'source' => 'infinitepay_webhook',
+                'order_number' => $orderNumber,
+                'payment_id' => (string)($order['infinitepay']['payment_id'] ?? ''),
+            ]);
+        }
+        sv_webhook_job_run_post_processor($orderNumber, $path);
     }
 
     return ['success' => true, 'message' => 'processed', 'status' => $localStatus];
