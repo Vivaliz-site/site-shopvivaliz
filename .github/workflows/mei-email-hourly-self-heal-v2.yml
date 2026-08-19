@@ -62,6 +62,8 @@ jobs:
           git fetch origin main
           git merge --ff-only origin/main
           echo "HEAD_DEPLOYED=$(git rev-parse HEAD)"
+          git merge-base --is-ancestor 8f3e2808e6f68da59847ef2a6d2d9334f7bb6cb1 HEAD
+          echo "AUTOQUEUE_PRELIMIT_FIX_DEPLOYED=true"
 
           .venv/bin/python -m compileall -q app worker scripts
           .venv/bin/python -m pytest -q \
@@ -138,6 +140,8 @@ jobs:
                   print(json.dumps(state, default=str, sort_keys=True))
                   assert state['sent_24h'] <= 10000, state
                   assert state['legacy_open'] == 0, state
+                  if state['sent_24h'] < 9950:
+                      assert int(state['queue_sent_20m'] or 0) > 0, state
           PY
 
           sudo cat /var/lib/mei-mg-email/autorepair-state.json
