@@ -5,6 +5,11 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Rodada 9 (2026-08-19): a linha abaixo usava require_once dinamico? nao --
+// mantido igual, so garantindo que o helper de localizacao de pedido esteja
+// disponivel antes do uso mais abaixo. Ver R9-3 no relatorio da Rodada 9.
+require_once __DIR__ . '/includes/mercadopago-gateway.php';
+
 header('Content-Type: text/html; charset=UTF-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
@@ -24,8 +29,16 @@ $orderItems = [];
 $serverApproved = false;
 $serverAnalyticsSent = false;
 if ($orderNumber !== '') {
-    $orderFile = __DIR__ . '/storage/orders/' . substr($orderNumber, 2, 8) . '/' . $orderNumber . '.json';
-    if (is_file($orderFile)) {
+    // Rodada 9 (2026-08-19): o caminho antigo montava um shard por data
+    // (substr($orderNumber, 2, 8)) que NENHUM writer de pedido usa --
+    // api/orders/process-validated.php e api/orders/create-v2.php gravam
+    // plano, sem shard. Resultado: $orderFile nunca existia, $serverApproved
+    // ficava sempre false, e o cliente via looping de reload por 30s sem
+    // conversao de analytics disparar. svmp_find_order_path() ja existe,
+    // valida o formato e cobre o diretorio de fallback em /tmp -- usa o
+    // mesmo helper que o webhook usa. Ver R9-3 no relatorio da Rodada 9.
+    $orderFile = svmp_find_order_path($orderNumber);
+    if ($orderFile !== '' && is_file($orderFile)) {
         $decodedOrder = json_decode((string)file_get_contents($orderFile), true);
         if (is_array($decodedOrder) && (string)($decodedOrder['order_number'] ?? '') === $orderNumber) {
             $orderData = $decodedOrder;

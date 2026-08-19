@@ -61,11 +61,18 @@ function bc_encrypt_email(string $email): ?string
 
 function bc_rate_limit(string $ipHash): bool
 {
+    // Rodada 9 (2026-08-19): as duas saidas de erro abaixo devolviam `true`
+    // (permite) quando o diretorio/arquivo de rate limit nao podia ser
+    // aberto -- ou seja, a falha do proprio mecanismo de limite virava uma
+    // forma de burla-lo. Cada comentario aprovado dispara uma chamada de IA
+    // paga sincrona (LizBlogCommentResponder); fail-open aqui multiplica
+    // custo com trafego hostil. Trocado pra fail-closed (nega o comentario
+    // em vez de aceitar sem limite). Ver R9-9 no relatorio da Rodada 9.
     $dir = dirname(__DIR__, 2) . '/storage/blog-comment-rate-limit';
-    if (!is_dir($dir) && !mkdir($dir, 0750, true) && !is_dir($dir)) return true;
+    if (!is_dir($dir) && !mkdir($dir, 0750, true) && !is_dir($dir)) return false;
     $file = $dir . '/' . $ipHash . '.json';
     $fp = fopen($file, 'c+');
-    if ($fp === false) return true;
+    if ($fp === false) return false;
     flock($fp, LOCK_EX);
     $raw = stream_get_contents($fp);
     $data = is_string($raw) ? json_decode($raw, true) : null;

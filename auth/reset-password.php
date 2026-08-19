@@ -65,6 +65,16 @@ if ($validToken && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $markUsed = $pdo->prepare('UPDATE password_resets SET used_at = NOW() WHERE token_hash = :hash');
                 $markUsed->execute([':hash' => $tokenHash]);
 
+                // Rodada 9 (2026-08-19): invalida qualquer OUTRO token de
+                // reset pendente pra mesma conta (nao so o usado) -- sem
+                // isso, um invasor que provocou varios envios de e-mail
+                // mantinha N-1 tokens vivos mesmo depois do dono trocar a
+                // senha. Ver R9-5/R9-8 no relatorio da Rodada 9.
+                $invalidateOthers = $pdo->prepare(
+                    'UPDATE password_resets SET used_at = NOW() WHERE user_id = :uid AND used_at IS NULL'
+                );
+                $invalidateOthers->execute([':uid' => $userId]);
+
                 $success = 'Senha redefinida com sucesso! Você já pode fazer login com a nova senha.';
                 $validToken = false;
             } catch (Throwable $e) {
