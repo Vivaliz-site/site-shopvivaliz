@@ -1,0 +1,166 @@
+name: MEI Email Emergency Start
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/mei-email-emergency-start.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mei-email-production-start
+  cancel-in-progress: false
+
+jobs:
+  start-and-verify:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 20
+    env:
+      VM_HOST: 137.131.156.17
+      VM_USER: ubuntu
+    steps:
+      - name: Configure verified Oracle SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::Oracle SSH key missing'; exit 2; }
+          test -n "$known_hosts" || { echo '::error::Oracle known_hosts missing'; exit 2; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Start production sender and verify progress
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 \
+            -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF' \
+            > artifacts/mei-email-emergency-start.txt 2>&1
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo "CHECKED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "HOST=$(hostname)"
+          echo "HEAD_BEFORE=$(git rev-parse HEAD)"
+
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
+            echo '::error::sender-block sentinel is present; refusing unsafe restart'
+            exit 42
+          fi
+
+          git diff --quiet
+          git diff --cached --quiet
+          git fetch origin main
+          git merge --ff-only origin/main
+          echo "HEAD_DEPLOYED=$(git rev-parse HEAD)"
+
+          .venv/bin/python -m compileall -q app worker scripts
+          if test -f db/migrations/V032__recover_legacy_queue_and_orphan_lots.sql; then
+            timeout 8m docker compose run --rm flyway migrate
+          fi
+
+          if test -f deploy/systemd/mei-mg-email-autorepair.service && test -f deploy/systemd/mei-mg-email-autorepair.timer; then
+            sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service /etc/systemd/system/mei-mg-email-autorepair.service
+            sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.timer /etc/systemd/system/mei-mg-email-autorepair.timer
+            sudo install -d -m 0750 -o ubuntu -g ubuntu /var/lib/mei-mg-email
+            sudo systemctl daemon-reload
+            sudo systemctl enable --now mei-mg-email-autorepair.timer
+            sudo systemctl reset-failed mei-mg-email-autorepair.service mei-mg-email-worker.service
+            timeout 10m sudo systemctl start mei-mg-email-autorepair.service
+          else
+            sudo systemctl reset-failed mei-mg-email-worker.service
+            sudo systemctl start mei-mg-email-worker.service
+          fi
+
+          test "$(sudo systemctl is-active mei-mg-email-worker.service)" = active
+          echo "WORKER_ACTIVE=true"
+          echo "AUTOREPAIR_TIMER_ACTIVE=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || true)"
+          echo "AUTOREPAIR_TIMER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-autorepair.timer 2>/dev/null || true)"
+
+          .venv/bin/python - <<'PY' > /tmp/mei-email-before.json
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import json, os, psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'], row_factory=dict_row, connect_timeout=10) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("set statement_timeout='45s'")
+                  cur.execute("""
+                    select
+                      count(*) filter(where status in ('submitted','enviado') and enviado_em >= now()-interval '24 hours') sent_24h,
+                      count(*) filter(where status in ('pendente','enviando','pending','processing')) open_queue,
+                      count(*) filter(where status in ('pending','processing')) legacy_open,
+                      max(enviado_em) filter(where status in ('submitted','enviado')) last_sent_at
+                    from mei_email.envios
+                  """)
+                  print(json.dumps(dict(cur.fetchone()), default=str, sort_keys=True))
+          PY
+          echo "BEFORE=$(cat /tmp/mei-email-before.json)"
+
+          sleep 90
+
+          .venv/bin/python - <<'PY' > /tmp/mei-email-after.json
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import json, os, psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'], row_factory=dict_row, connect_timeout=10) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("set statement_timeout='45s'")
+                  cur.execute("""
+                    select
+                      count(*) filter(where status in ('submitted','enviado') and enviado_em >= now()-interval '24 hours') sent_24h,
+                      count(*) filter(where status in ('submitted','enviado') and enviado_em >= now()-interval '10 minutes') sent_10m,
+                      count(*) filter(where status in ('pendente','enviando','pending','processing')) open_queue,
+                      count(*) filter(where status in ('pending','processing')) legacy_open,
+                      max(enviado_em) filter(where status in ('submitted','enviado')) last_sent_at
+                    from mei_email.envios
+                  """)
+                  print(json.dumps(dict(cur.fetchone()), default=str, sort_keys=True))
+          PY
+          echo "AFTER=$(cat /tmp/mei-email-after.json)"
+
+          .venv/bin/python - <<'PY'
+          import json
+          before=json.load(open('/tmp/mei-email-before.json'))
+          after=json.load(open('/tmp/mei-email-after.json'))
+          assert after['sent_24h'] <= 10000, after
+          assert after['legacy_open'] == 0, after
+          if after['sent_24h'] < 9950:
+              assert after['open_queue'] > 0, after
+              assert after['sent_24h'] > before['sent_24h'], (before, after)
+          print('LIVE_PROGRESS_VERIFIED=true')
+          print(f"SENT_24H={after['sent_24h']} TARGET=9950 HARD_CAP=10000")
+          PY
+
+          sudo journalctl -u mei-mg-email-worker.service --since '-10 minutes' --no-pager | tail -n 160
+          sudo journalctl -u mei-mg-email-autorepair.service --since '-15 minutes' --no-pager | tail -n 120 || true
+          EOF
+
+      - name: Upload production evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mei-email-emergency-start-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/mei-email-emergency-start.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
