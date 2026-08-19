@@ -136,7 +136,15 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
     RewriteRule ^admin/(?:menu-completo|menu-dashboard|dashboard|admin-back)\.php$ - [F,L,NC]
 
-    # URLs publicas remanescentes da vitrine anterior vao para o catalogo atual.
+    # URLs antigas de produto preservam a intencao: primeiro convertem
+    # /produtos/<slug> em /produto/<slug>. O guard PHP da rota atual consegue
+    # resolver slug/SKU historico para um item ativo; se nao houver mapeamento
+    # comprovavel, ele mantem o 404 normal em vez de mascarar tudo no catalogo.
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^produtos/([^/]+)/?$ /produto/$1 [R=301,L,NE,NC]
+
+    # Demais paginas publicas remanescentes da vitrine anterior vao para o
+    # catalogo atual. Query strings antigas sem valor comercial sao descartadas.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
     RewriteRule ^(?:ferramentas|arte-papelaria-e-armarinho|produtos)(?:/.*)?$ /catalogo [R=301,L,NE,QSD,NC]
 
