@@ -149,3 +149,46 @@ body:has(#sv-privacy-consent) .sv-support-dock {
         -webkit-tap-highlight-color: rgba(11, 79, 136, .18);
     }
 }
+
+/* Second guard: the footer/contact area has decorative layers and legal panels
+ * close to the fixed nav. Keep the nav in its own composited layer and keep
+ * footer pseudo-elements from ever stealing taps on mobile Safari/Chrome.
+ */
+@media (max-width: 820px) {
+    footer::before,
+    footer::after,
+    .footer-legal::before,
+    .footer-legal::after {
+        pointer-events: none !important;
+    }
+
+    body .sv-mobile-nav-bar,
+    body .sv-mobile-bottom-nav {
+        position: fixed !important;
+        left: max(10px, env(safe-area-inset-left, 0px)) !important;
+        right: max(10px, env(safe-area-inset-right, 0px)) !important;
+        bottom: max(10px, env(safe-area-inset-bottom, 0px)) !important;
+        display: grid !important;
+        transform: translate3d(0, 0, 0) !important;
+        will-change: transform;
+        isolation: isolate;
+        contain: layout paint style;
+    }
+
+    body .sv-mobile-nav-bar > a,
+    body .sv-mobile-bottom-nav > a {
+        position: relative !important;
+        z-index: 1 !important;
+        min-height: 54px !important;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+
+    body .sv-mobile-nav-bar > a::before,
+    body .sv-mobile-bottom-nav > a::before {
+        content: '';
+        position: absolute;
+        inset: -6px 0;
+        z-index: -1;
+    }
+}
