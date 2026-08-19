@@ -3,23 +3,151 @@ name: Policy Engine
 on:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   enforce:
     runs-on: ubuntu-latest
+    timeout-minutes: 8
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout full PR graph
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
-      - name: Install deps
+      - name: Configure verified Oracle SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
-          npm init -y
-          npm install playwright
-          npx playwright install
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::Oracle SSH key missing'; exit 2; }
+          test -n "$known_hosts" || { echo '::error::Oracle known_hosts missing'; exit 2; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Run ERP check
-        run: node scripts/check-erp.js
+      - name: Validate real production ERP through Oracle egress
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=12 -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=3 -i "$HOME/.ssh/id_rsa" \
+            ubuntu@137.131.156.17 'python3 -' <<'PY' > erp-health.json
+          import json
+          import sys
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
 
-      - name: Run Policy Engine
+          endpoint = 'https://shopvivaliz.com.br/erp/health'
+          transient = {408, 425, 429, 500, 502, 503, 504}
+          last_error = 'unknown'
+
+          for attempt in range(1, 5):
+              query = urllib.parse.urlencode({
+                  'policy_check': f'{time.time_ns()}-{attempt}',
+                  'via': 'oracle-vm',
+              })
+              request = urllib.request.Request(
+                  f'{endpoint}?{query}',
+                  headers={
+                      'Accept': 'application/json',
+                      'Cache-Control': 'no-cache',
+                      'Connection': 'close',
+                      'User-Agent': 'ShopVivaliz-ERP-Policy-Oracle/1.0',
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=40) as response:
+                      status = int(response.status)
+                      body = response.read().decode('utf-8')
+                  payload = json.loads(body)
+                  if status != 200:
+                      raise RuntimeError(f'http_{status}')
+                  if payload.get('ok') is not True:
+                      raise RuntimeError('erp_reported_not_ok')
+                  checks = payload.get('checks') or {}
+                  for required in ('orders', 'olist'):
+                      check = checks.get(required) or {}
+                      if check.get('ok') is not True:
+                          raise RuntimeError(f'{required}_not_ok')
+                      if int(check.get('http_code', 500)) >= 500:
+                          raise RuntimeError(f'{required}_http_{check.get("http_code")}')
+                  payload['policy_evidence'] = {
+                      'route': 'GitHub Actions -> Oracle VM -> public production ERP health',
+                      'attempt': attempt,
+                      'endpoint': endpoint,
+                      'verified_at_epoch': int(time.time()),
+                  }
+                  print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+                  sys.exit(0)
+              except urllib.error.HTTPError as exc:
+                  last_error = f'http_{exc.code}'
+                  retry = exc.code in transient
+              except (
+                  urllib.error.URLError,
+                  TimeoutError,
+                  json.JSONDecodeError,
+                  RuntimeError,
+              ) as exc:
+                  last_error = f'{type(exc).__name__}:{exc}'
+                  retry = True
+
+              print(
+                  f'erp_oracle_retry=true attempt={attempt} reason={last_error}',
+                  file=sys.stderr,
+              )
+              if not retry or attempt == 4:
+                  break
+              time.sleep(5)
+
+          raise SystemExit(f'ERP health failed through Oracle: {last_error}')
+          PY
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('erp-health.json')
+          payload = json.loads(path.read_text(encoding='utf-8'))
+          assert payload.get('ok') is True, payload
+          checks = payload.get('checks') or {}
+          assert (checks.get('orders') or {}).get('ok') is True, checks
+          assert (checks.get('olist') or {}).get('ok') is True, checks
+          evidence = payload.get('policy_evidence') or {}
+          assert evidence.get('route'), evidence
+          print('erp_health_ok=true')
+          print(f"erp_checked_at={payload.get('checked_at')}")
+          print(f"erp_route={evidence.get('route')}")
+          PY
+
+      - name: Run fail-closed Policy Engine
+        env:
+          POLICY_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          POLICY_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: node agents/policy-engine/index.js
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
