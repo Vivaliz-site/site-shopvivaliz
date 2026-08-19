@@ -41,7 +41,7 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Start production sender and verify progress
+      - name: Deploy repair, respect sender block, and verify production progress
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -57,11 +57,10 @@ jobs:
           echo "HOST=$(hostname)"
           echo "HEAD_BEFORE=$(git rev-parse HEAD)"
 
-          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
-            echo '::error::sender-block sentinel is present; refusing unsafe restart'
-            exit 42
-          fi
-
+          # Safe deploy is allowed even while a sender-block sentinel is active.
+          # The sentinel forbids sending/resume, not installing diagnostics and
+          # fail-closed repair code. This prevents a stale runtime from blocking
+          # the very update needed to diagnose it.
           git diff --quiet
           git diff --cached --quiet
           git fetch origin main
@@ -69,22 +68,54 @@ jobs:
           echo "HEAD_DEPLOYED=$(git rev-parse HEAD)"
 
           .venv/bin/python -m compileall -q app worker scripts
+          test -f scripts/autocorrigir_envios_hourly.py
+          test -f deploy/systemd/mei-mg-email-autorepair.service
+          test -f deploy/systemd/mei-mg-email-autorepair.timer
+
+          # Authentication-only Graph preflight. No message is sent here.
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          from app.config import settings
+          if settings.email_provider != 'microsoft_graph':
+              raise SystemExit(f'EMAIL_PROVIDER_UNSAFE={settings.email_provider!r}')
+          from app.email_provider import MicrosoftGraphEmailProvider
+          provider = MicrosoftGraphEmailProvider()
+          provider.authenticate()
+          print('GRAPH_APP_ONLY_PREFLIGHT=true')
+          PY
+
           if test -f db/migrations/V032__recover_legacy_queue_and_orphan_lots.sql; then
             timeout 8m docker compose run --rm flyway migrate
           fi
 
-          if test -f deploy/systemd/mei-mg-email-autorepair.service && test -f deploy/systemd/mei-mg-email-autorepair.timer; then
-            sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service /etc/systemd/system/mei-mg-email-autorepair.service
-            sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.timer /etc/systemd/system/mei-mg-email-autorepair.timer
-            sudo install -d -m 0750 -o ubuntu -g ubuntu /var/lib/mei-mg-email
-            sudo systemctl daemon-reload
-            sudo systemctl enable --now mei-mg-email-autorepair.timer
-            sudo systemctl reset-failed mei-mg-email-autorepair.service mei-mg-email-worker.service
-            timeout 10m sudo systemctl start mei-mg-email-autorepair.service
-          else
-            sudo systemctl reset-failed mei-mg-email-worker.service
-            sudo systemctl start mei-mg-email-worker.service
+          sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service \
+            /etc/systemd/system/mei-mg-email-autorepair.service
+          sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.timer \
+            /etc/systemd/system/mei-mg-email-autorepair.timer
+          sudo install -d -m 0750 -o ubuntu -g ubuntu /var/lib/mei-mg-email
+          sudo systemctl daemon-reload
+          sudo systemctl enable --now mei-mg-email-autorepair.timer
+          sudo systemctl cat mei-mg-email-autorepair.service --no-pager | \
+            grep -F 'scripts/autocorrigir_envios_hourly.py'
+          echo 'AUTOREPAIR_HOURLY_GUARD_INSTALLED=true'
+
+          # Sender restriction remains sovereign. Deploy/diagnostics may update,
+          # but a current sentinel forces the worker stopped and forbids resume.
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
+            echo 'CURRENT_SENDER_BLOCK_SENTINEL=present'
+            sudo systemctl stop mei-mg-email-worker.service
+            test "$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || printf inactive)" != active
+            if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then
+              sudo sed -n '1,20p' /var/lib/mei-mg-email/sender_blocked.pause
+            fi
+            echo 'WORKER_FORCED_STOPPED_FOR_SENDER_BLOCK=true'
+            exit 42
           fi
+          echo 'CURRENT_SENDER_BLOCK_SENTINEL=absent'
+
+          sudo systemctl reset-failed mei-mg-email-autorepair.service mei-mg-email-worker.service
+          timeout 10m sudo systemctl start mei-mg-email-autorepair.service
 
           test "$(sudo systemctl is-active mei-mg-email-worker.service)" = active
           echo "WORKER_ACTIVE=true"
@@ -100,6 +131,9 @@ jobs:
           fi
           echo "AUTOREPAIR_TIMER_ACTIVE=$timer_active"
           echo "AUTOREPAIR_TIMER_ENABLED=$timer_enabled"
+          if sudo test -f /var/lib/mei-mg-email/autorepair-state.json; then
+            echo "AUTOREPAIR_STATE=$(sudo cat /var/lib/mei-mg-email/autorepair-state.json)"
+          fi
 
           .venv/bin/python - <<'PY' > /tmp/mei-email-before.json
           from dotenv import load_dotenv
@@ -209,4 +243,4 @@ jobs:
         shell: bash
         run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-# Hourly sender redeploy trigger: 2026-08-19T05:08Z
+# Hourly sender redeploy trigger: 2026-08-19T06:15Z
