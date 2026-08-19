@@ -5,8 +5,21 @@
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=UTF-8');
-header('Access-Control-Allow-Origin: *');
+// Rodada 8 (2026-08-19): Access-Control-Allow-Origin: * transformava a loja
+// num proxy ViaCEP gratuito pra qualquer site de terceiros, consumindo a
+// quota/IP da propria VM -- o unico consumidor real e o checkout do proprio
+// site. Ver R8-10 no relatorio da Rodada 8.
+header('Access-Control-Allow-Origin: https://shopvivaliz.com.br');
 header('Access-Control-Allow-Methods: GET');
+
+// Rodada 8 (2026-08-19): sem rate limit, um varredor podia enumerar o
+// espaco de CEPs validos livremente. Ver R8-10 no relatorio da Rodada 8.
+require_once __DIR__ . '/../includes/order-rate-limit.php';
+if (!svorl_allow(60, 3600, 'viacep')) {
+    http_response_code(429);
+    echo json_encode(['erro' => true, 'mensagem' => 'Muitas requisições, tente novamente em instantes.'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
 $cep = preg_replace('/\D/', '', $_GET['cep'] ?? '');
 
@@ -32,6 +45,13 @@ try {
         response TEXT NOT NULL,
         created_at INTEGER NOT NULL
     )");
+    // Rodada 8 (2026-08-19): a validade de 30 dias so decidia se o cache era
+    // USADO -- a linha antiga nunca era removida, entao a tabela crescia sem
+    // teto (mesma familia de R7-9). GC probabilistico de baixo custo. Ver
+    // R8-10 no relatorio da Rodada 8.
+    if (random_int(1, 200) === 1) {
+        $db->exec('DELETE FROM cep_cache WHERE created_at < ' . (time() - 60 * 86400));
+    }
 } catch (Throwable $e) {
     // Se o SQLite falhar, apenas prossegue sem cache para não travar a requisição
     error_log('SQLite viacep_cache initialization failed: ' . $e->getMessage());

@@ -6,6 +6,18 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
+// Rodada 8 (2026-08-19): endpoint publico sem autenticacao devolvendo nome
+// real, numero de pedidos, valor gasto e data do ultimo pedido de clientes
+// reais (dado pessoal ligado a comportamento de consumo, sem base legal pra
+// exposicao publica -- ver R8-2 no relatorio da Rodada 8) e faturamento
+// aproximado da loja (orders_count/monthly_orders_count). O unico consumidor
+// e /gamificacao.php, item de menu do admin (noindex, so linkado no admin).
+// Tambem tinha custo O(n) por requisicao sem cache real (abre todos os
+// storage/orders/*.json a cada chamada). Guardado com a mesma chave usada
+// nos outros endpoints internos desta serie de rodadas.
+require_once dirname(__DIR__, 2) . '/config/require-agent-key.php';
+sv_require_agent_key();
+
 function gms_root(): string
 {
     return dirname(__DIR__, 2);

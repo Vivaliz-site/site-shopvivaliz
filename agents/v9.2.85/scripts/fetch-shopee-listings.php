@@ -2,6 +2,16 @@
 
 declare(strict_types=1);
 
+// Rodada 8 (2026-08-19): script de CLI que estava respondendo a HTTP
+// (agents/ nao estava na deny-list do .htaccess -- corrigido na mesma
+// rodada). Defesa em profundidade: mesmo se agents/ for reaberto no futuro,
+// este script nunca deve executar via navegador/curl. Ver R8-3 no relatorio
+// da Rodada 8.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('CLI only');
+}
+
 require_once __DIR__ . '/../app/ShopeeListingsExtractorAgent.php';
 
 $agent  = new ShopeeListingsExtractorAgent();
