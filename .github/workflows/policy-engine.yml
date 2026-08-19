@@ -3,23 +3,31 @@ name: Policy Engine
 on:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   enforce:
     runs-on: ubuntu-latest
+    timeout-minutes: 8
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout full PR graph
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
-      - name: Install deps
-        run: |
-          npm init -y
-          npm install playwright
-          npx playwright install
+      - name: Run real ERP check
+        run: timeout 120s node scripts/check-erp.js
 
-      - name: Run ERP check
-        run: node scripts/check-erp.js
-
-      - name: Run Policy Engine
+      - name: Run fail-closed Policy Engine
+        env:
+          POLICY_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          POLICY_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: node agents/policy-engine/index.js
