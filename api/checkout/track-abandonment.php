@@ -27,6 +27,7 @@ require_once __DIR__ . '/../../includes/pdo-database.php';
 require_once __DIR__ . '/../../includes/account-schema.php';
 require_once __DIR__ . '/../../includes/order-rate-limit.php';
 require_once __DIR__ . '/../../includes/catalog-runtime.php';
+require_once __DIR__ . '/../../src/Commerce/AbandonedCartRecoverySchema.php';
 
 $originHeader = trim((string)($_SERVER['HTTP_ORIGIN'] ?? ''));
 if ($originHeader !== '') {
@@ -72,9 +73,6 @@ if (!preg_match('/^[a-f0-9-]{16,64}$/i', $sessionToken)) {
     exit;
 }
 
-// Resolve o conjunto de produtos contra o catalogo canonico no momento da
-// captura. O cliente atual envia apenas o nome; clientes futuros podem enviar
-// SKU + quantidade. Snapshot persistido nunca inclui preco ou estoque.
 $catalog = array_values(array_filter(svcr_products(), 'is_array'));
 $bySku = [];
 $byName = [];
@@ -129,6 +127,10 @@ $cartSnapshot = json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_S
 try {
     sv_account_ensure_schema();
     $pdo = sv_pdo();
+    if (!($pdo instanceof PDO)) {
+        throw new RuntimeException('database_unavailable');
+    }
+    svacr_ensure_restore_schema($pdo);
 
     $stmt = $pdo->prepare(
         'INSERT INTO checkout_abandonments (email, customer_name, cart_snapshot, cart_total, session_token, created_at, updated_at)
