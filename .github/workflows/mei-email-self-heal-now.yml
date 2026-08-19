@@ -1,0 +1,27 @@
+name: MEI Email Self-Heal Now
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mei-email-self-heal-now.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch-reviewed-self-heal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Dispatch reviewed hourly self-heal
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          gh workflow run mei-email-hourly-self-heal-v2.yml \
+            --repo "${GITHUB_REPOSITORY}" \
+            --ref main
+          echo 'MEI_EMAIL_SELF_HEAL_DISPATCHED=true'
