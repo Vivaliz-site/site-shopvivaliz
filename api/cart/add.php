@@ -30,7 +30,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 // ✅ Rate limiting
 $clientIp = $_SERVER['REMOTE_ADDR'];
-if (!RateLimiter::isAllowed('cart_add_' . $clientIp, 20, 60)) {
+// Rodada 7 (2026-08-19): o IP ja esta embutido na chave de arquivo
+// (hash(IP+User-Agent) em svorl_client_key()) -- colocar tambem no
+// identificador/escopo criava um diretorio novo por IP visto neste escopo,
+// crescimento sem teto em storage/rate-limit/. Ver R7-9 no relatorio da
+// Rodada 7.
+if (!RateLimiter::isAllowed('cart_add', 20, 60)) {
     http_response_code(429);
     echo json_encode(['error' => 'Too many requests']);
     exit;

@@ -32,7 +32,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && !sv_csrf_valid('auth-log
     $error = 'Sua sessão expirou. Recarregue a página e tente novamente.';
 } elseif (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     $clientIp = (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');
-    if (!RateLimiter::isAllowed('login_' . $clientIp, 5, 60)) {
+    // Rodada 7 (2026-08-19): IP ja esta na chave de arquivo (hash(IP+UA) em
+    // svorl_client_key()); tira-lo do identificador evita um diretorio novo
+    // por IP em storage/rate-limit/. Ver R7-9 no relatorio da Rodada 7.
+    if (!RateLimiter::isAllowed('login', 5, 60)) {
         $error = 'Muitas tentativas de login. Tente novamente em 1 minuto.';
         http_response_code(429);
     } else {
