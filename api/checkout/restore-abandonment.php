@@ -40,7 +40,7 @@ try {
     svacr_ensure_restore_schema($pdo);
 
     $stmt = $pdo->prepare(
-        'SELECT cart_snapshot
+        'SELECT id, cart_snapshot
          FROM checkout_abandonments
          WHERE recovery_token_hash = :token_hash
            AND recovery_token_expires_at IS NOT NULL
@@ -50,8 +50,16 @@ try {
          LIMIT 1'
     );
     $stmt->execute([':token_hash' => hash('sha256', $token)]);
-    $snapshotRaw = $stmt->fetchColumn();
-    if (!is_string($snapshotRaw) || $snapshotRaw === '') {
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!is_array($row)) {
+        http_response_code(404);
+        echo json_encode(['ok' => false, 'error' => 'expired_or_unavailable']);
+        exit;
+    }
+
+    $abandonmentId = (int)($row['id'] ?? 0);
+    $snapshotRaw = (string)($row['cart_snapshot'] ?? '');
+    if ($abandonmentId <= 0 || $snapshotRaw === '') {
         http_response_code(404);
         echo json_encode(['ok' => false, 'error' => 'expired_or_unavailable']);
         exit;
@@ -113,6 +121,16 @@ try {
         echo json_encode(['ok' => false, 'error' => 'no_available_items']);
         exit;
     }
+
+    // Marca somente depois que existe um carrinho restauravel. E idempotente:
+    // aberturas repetidas do mesmo link nao inflacionam a contagem agregada.
+    $mark = $pdo->prepare(
+        'UPDATE checkout_abandonments
+         SET restored_at = COALESCE(restored_at, NOW())
+         WHERE id = :id
+           AND recovered_at IS NULL'
+    );
+    $mark->execute([':id' => $abandonmentId]);
 
     echo json_encode([
         'ok' => true,
