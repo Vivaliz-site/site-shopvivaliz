@@ -1,0 +1,162 @@
+name: Google Ads Delivery Recovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ops/google-ads-delivery-recovery.json"
+      - ".github/workflows/google-ads-delivery-recovery.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Diagnose and repair first-page bid limits
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
+          import json, math, urllib.parse, urllib.request, urllib.error
+          from pathlib import Path
+
+          TARGET='24144257692'
+          EXPECTED_BUDGET_MICROS=10_000_000
+          MAX_CPC_MICROS=1_200_000
+          BID_HEADROOM=1.05
+
+          env={}
+          for raw in Path('/home/ubuntu/shopvivaliz-deploy/shared/.env').read_text(encoding='utf-8',errors='ignore').splitlines():
+              line=raw.strip()
+              if line and not line.startswith('#') and '=' in line:
+                  k,v=line.split('=',1); env[k.strip()]=v.strip().strip('"\'')
+
+          required=['GOOGLE_OAUTH_CLIENT_ID','GOOGLE_OAUTH_CLIENT_SECRET','GOOGLE_ADS_REFRESH_TOKEN','GOOGLE_ADS_DEVELOPER_TOKEN','GOOGLE_ADS_CUSTOMER_ID']
+          missing=[k for k in required if not env.get(k,'').strip()]
+          if missing:
+              raise SystemExit('MISSING_ENV=' + ','.join(missing))
+
+          td=urllib.parse.urlencode({
+              'client_id':env['GOOGLE_OAUTH_CLIENT_ID'],
+              'client_secret':env['GOOGLE_OAUTH_CLIENT_SECRET'],
+              'refresh_token':env['GOOGLE_ADS_REFRESH_TOKEN'],
+              'grant_type':'refresh_token'
+          }).encode()
+          with urllib.request.urlopen(urllib.request.Request('https://oauth2.googleapis.com/token',data=td,headers={'Content-Type':'application/x-www-form-urlencoded'},method='POST'),timeout=20) as r:
+              token=json.loads(r.read().decode())['access_token']
+
+          cid=env['GOOGLE_ADS_CUSTOMER_ID'].replace('-','').strip()
+          headers={'Content-Type':'application/json','Authorization':'Bearer '+token,'developer-token':env['GOOGLE_ADS_DEVELOPER_TOKEN']}
+          login=env.get('GOOGLE_ADS_LOGIN_CUSTOMER_ID','').replace('-','').strip()
+          if login: headers['login-customer-id']=login
+          search_url=f'https://googleads.googleapis.com/v25/customers/{cid}/googleAds:searchStream'
+
+          def search(gaql):
+              req=urllib.request.Request(search_url,data=json.dumps({'query':gaql}).encode(),headers=headers,method='POST')
+              with urllib.request.urlopen(req,timeout=30) as r:
+                  payload=json.loads(r.read().decode())
+              rows=[]
+              for batch in payload if isinstance(payload,list) else []:
+                  if isinstance(batch,dict): rows.extend(batch.get('results') or [])
+              return rows
+
+          campaign=search(f'''SELECT campaign.id, campaign.status, campaign.serving_status, campaign.primary_status, campaign_budget.amount_micros FROM campaign WHERE campaign.id = {TARGET}''')
+          if len(campaign)!=1:
+              raise SystemExit('GUARDRAIL_CAMPAIGN_NOT_UNIQUE')
+          c=campaign[0]
+          budget=int(c.get('campaignBudget',{}).get('amountMicros') or 0)
+          status=c.get('campaign',{}).get('status')
+          if budget != EXPECTED_BUDGET_MICROS:
+              raise SystemExit(f'GUARDRAIL_BUDGET_CHANGED={budget}')
+          if status != 'ENABLED':
+              raise SystemExit(f'GUARDRAIL_CAMPAIGN_STATUS={status}')
+          print('CAMPAIGN='+json.dumps(c,ensure_ascii=False,separators=(',',':')))
+
+          rows=search(f'''SELECT ad_group.name, ad_group_criterion.resource_name, ad_group_criterion.status, ad_group_criterion.negative, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ad_group_criterion.cpc_bid_micros, ad_group_criterion.primary_status, ad_group_criterion.primary_status_reasons, ad_group_criterion.position_estimates.first_page_cpc_micros FROM keyword_view WHERE campaign.id = {TARGET} AND ad_group_criterion.status != 'REMOVED' ORDER BY ad_group.name, ad_group_criterion.keyword.text''')
+
+          updates=[]
+          low_volume=0
+          below_first_page=0
+          eligible=0
+          for row in rows:
+              crit=row.get('adGroupCriterion',{})
+              if crit.get('negative'):
+                  continue
+              text=(crit.get('keyword',{}).get('text') or '').strip()
+              match=crit.get('keyword',{}).get('matchType') or ''
+              if match == 'BROAD':
+                  raise SystemExit('GUARDRAIL_BROAD_POSITIVE_FOUND='+text)
+              primary=crit.get('primaryStatus') or ''
+              reasons=crit.get('primaryStatusReasons') or []
+              current=int(crit.get('cpcBidMicros') or 0)
+              estimate=int((crit.get('positionEstimates') or {}).get('firstPageCpcMicros') or 0)
+              print('KEYWORD='+json.dumps({'group':row.get('adGroup',{}).get('name'),'text':text,'match':match,'primary_status':primary,'reasons':reasons,'current_cpc_micros':current,'first_page_cpc_micros':estimate},ensure_ascii=False,separators=(',',':')))
+              reason_text='|'.join(reasons)
+              if 'RARELY_SERVED' in reason_text or primary == 'NOT_ELIGIBLE':
+                  low_volume += 1
+              if primary == 'ELIGIBLE':
+                  eligible += 1
+              if 'BELOW_FIRST_PAGE_BID' in reason_text or (estimate > 0 and current > 0 and current < estimate):
+                  below_first_page += 1
+                  target=min(MAX_CPC_MICROS, int(math.ceil((estimate * BID_HEADROOM) / 10_000.0) * 10_000))
+                  if target > current:
+                      updates.append({'update':{'resourceName':crit['resourceName'],'cpcBidMicros':target},'updateMask':'cpc_bid_micros'})
+                      print(f'PROPOSED_BID_UPDATE={text}|old={current}|estimate={estimate}|new={target}')
+
+          print(f'DIAGNOSTIC eligible={eligible} low_volume_or_not_eligible={low_volume} below_first_page={below_first_page} proposed_updates={len(updates)}')
+
+          if updates:
+              mutate_url=f'https://googleads.googleapis.com/v25/customers/{cid}/adGroupCriteria:mutate'
+              def mutate(validate_only):
+                  body={'operations':updates,'partialFailure':False,'validateOnly':validate_only}
+                  req=urllib.request.Request(mutate_url,data=json.dumps(body).encode(),headers=headers,method='POST')
+                  try:
+                      with urllib.request.urlopen(req,timeout=40) as r:
+                          return json.loads(r.read().decode())
+                  except urllib.error.HTTPError as e:
+                      detail=e.read().decode(errors='ignore')
+                      print(('VALIDATE' if validate_only else 'APPLY')+'_FAILED http='+str(e.code)+' body='+detail[:3000].replace('\n',' '))
+                      raise
+              mutate(True)
+              print('VALIDATE_ONLY=PASS')
+              result=mutate(False)
+              print('APPLY=PASS results='+str(len(result.get('results') or [])))
+          else:
+              print('APPLY=NO_BID_CHANGES_NEEDED')
+
+          post_campaign=search(f'''SELECT campaign.id, campaign.status, campaign_budget.amount_micros FROM campaign WHERE campaign.id = {TARGET}''')[0]
+          post_budget=int(post_campaign.get('campaignBudget',{}).get('amountMicros') or 0)
+          if post_budget != EXPECTED_BUDGET_MICROS:
+              raise SystemExit('POST_GUARDRAIL_BUDGET_CHANGED='+str(post_budget))
+          post=search(f'''SELECT ad_group_criterion.negative, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ad_group_criterion.cpc_bid_micros FROM keyword_view WHERE campaign.id = {TARGET} AND ad_group_criterion.status != 'REMOVED' ''')
+          for row in post:
+              crit=row.get('adGroupCriterion',{})
+              if crit.get('negative'):
+                  continue
+              text=(crit.get('keyword',{}).get('text') or '').strip()
+              if (crit.get('keyword',{}).get('matchType') or '') == 'BROAD':
+                  raise SystemExit('POST_GUARDRAIL_BROAD_POSITIVE='+text)
+              bid=int(crit.get('cpcBidMicros') or 0)
+              if bid > MAX_CPC_MICROS:
+                  raise SystemExit('POST_GUARDRAIL_CPC_OVER_CAP='+text+':'+str(bid))
+          print('POST_GUARDRAILS_OK budget_micros='+str(post_budget)+' max_cpc_micros='+str(MAX_CPC_MICROS))
+          print('RESULT=DELIVERY_RECOVERY_APPLIED')
+          PY
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
