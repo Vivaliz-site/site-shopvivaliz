@@ -1,11 +1,9 @@
-name: MEI Email V034 Immediate Safe Deploy
+name: MEI Email Worker Unit Guard
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/mei-email-v034-immediate-deploy.yml'
+  schedule:
+    - cron: '2 * * * *'
 
 permissions:
   contents: read
@@ -15,10 +13,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy-v034:
+  guard:
     runs-on: ubuntu-latest
     environment: Production
-    timeout-minutes: 18
+    timeout-minutes: 12
     env:
       VM_HOST: 137.131.156.17
       VM_USER: ubuntu
@@ -41,7 +39,7 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Deploy anti-replay sender and verify production
+      - name: Enforce hardened queue-first worker
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -50,55 +48,36 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 \
             -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF' \
-            > artifacts/mei-email-v034-immediate-deploy.txt 2>&1
+            > artifacts/mei-email-worker-unit-guard.txt 2>&1
           set -Eeuo pipefail
           cd /home/ubuntu/mei-mg-email
           echo "CHECKED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "HEAD_BEFORE=$(git rev-parse HEAD)"
           git diff --quiet
           git diff --cached --quiet
           git fetch origin main
           git merge --ff-only origin/main
           echo "HEAD_DEPLOYED=$(git rev-parse HEAD)"
-          git merge-base --is-ancestor a1106c0b5ea528a38a818bc849b2c2fa310899fc HEAD
-          test -f db/migrations/V034__guard_uncertain_graph_dispatch_against_replay.sql
-
+          test -f deploy/systemd/mei-mg-email-worker.service
           .venv/bin/python -m compileall -q app worker scripts
-          .venv/bin/python -m pytest -q \
-            tests/test_worker_safety.py \
-            tests/test_queue_replenisher.py \
-            tests/test_queue_recovery_and_autorepair.py \
-            tests/test_dispatch_replay_guard.py
 
-          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
-            echo '::error::sender-block sentinel active before migration; keeping fail-closed'
-            sudo systemctl stop mei-mg-email-worker.service
-            exit 43
-          fi
-
-          timeout 8m docker compose run --rm flyway migrate
-          timeout 2m docker compose run --rm flyway info | tail -n 80
-          echo 'V034_MIGRATION_VERIFIED=true'
-
-          sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service \
-            /etc/systemd/system/mei-mg-email-autorepair.service
-          sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.timer \
-            /etc/systemd/system/mei-mg-email-autorepair.timer
+          sudo install -m 0644 deploy/systemd/mei-mg-email-worker.service \
+            /etc/systemd/system/mei-mg-email-worker.service
           sudo systemctl daemon-reload
-          sudo systemctl enable --now mei-mg-email-autorepair.timer
-          sudo systemctl reset-failed mei-mg-email-autorepair.service mei-mg-email-worker.service
-          timeout 10m sudo systemctl start mei-mg-email-autorepair.service
+          sudo systemctl enable mei-mg-email-worker.service
+
+          exec_start="$(sudo systemctl show mei-mg-email-worker.service -p ExecStart --value)"
+          echo "WORKER_EXECSTART=$exec_start"
+          printf '%s\n' "$exec_start" | grep -Fq 'worker.worker_queue_first'
 
           if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
-            echo '::error::sender-block sentinel active after repair; keeping fail-closed'
+            echo '::error::sender-block sentinel active; worker remains fail-closed'
             sudo systemctl stop mei-mg-email-worker.service
             exit 43
           fi
 
+          sudo systemctl reset-failed mei-mg-email-worker.service
           sudo systemctl restart mei-mg-email-worker.service
           test "$(sudo systemctl is-active mei-mg-email-worker.service)" = active
-          test "$(sudo systemctl is-active mei-mg-email-autorepair.timer)" = active
-          test "$(sudo systemctl is-enabled mei-mg-email-autorepair.timer)" = enabled
 
           sleep 90
           .venv/bin/python - <<'PY'
@@ -146,18 +125,15 @@ jobs:
                       assert int(state['queue_sent_20m'] or 0) > 0, state
           PY
 
-          sudo cat /var/lib/mei-mg-email/autorepair-state.json
-          sudo journalctl -u mei-mg-email-worker.service --since '-20 minutes' --no-pager | tail -n 220
-          sudo journalctl -u mei-mg-email-autorepair.service --since '-20 minutes' --no-pager | tail -n 220
-          echo 'MEI_EMAIL_V034_IMMEDIATE_DEPLOY_OK=true'
+          echo 'MEI_EMAIL_QUEUE_FIRST_UNIT_VERIFIED=true'
           EOF
 
       - name: Upload production evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mei-email-v034-immediate-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/mei-email-v034-immediate-deploy.txt
+          name: mei-email-worker-unit-guard-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/mei-email-worker-unit-guard.txt
           if-no-files-found: error
           retention-days: 90
 
