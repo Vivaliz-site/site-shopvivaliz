@@ -110,12 +110,25 @@ jobs:
               with conn.cursor() as cur:
                   cur.execute("set statement_timeout='45s'")
                   cur.execute("""
+                    with internal as (
+                      select
+                        count(*) filter(where status in ('submitted','enviado') and enviado_em >= now()-interval '24 hours') queue_sent_24h,
+                        count(*) filter(where status in ('pendente','enviando','pending','processing')) open_queue,
+                        count(*) filter(where status in ('pending','processing')) legacy_open,
+                        max(enviado_em) filter(where status in ('submitted','enviado')) last_sent_at
+                      from mei_email.envios
+                    ), external as (
+                      select count(*) filter(where sent_at >= now()-interval '24 hours') external_sent_24h
+                      from mei_email.envios_externos_cota
+                    )
                     select
-                      count(*) filter(where status in ('submitted','enviado') and enviado_em >= now()-interval '24 hours') sent_24h,
-                      count(*) filter(where status in ('pendente','enviando','pending','processing')) open_queue,
-                      count(*) filter(where status in ('pending','processing')) legacy_open,
-                      max(enviado_em) filter(where status in ('submitted','enviado')) last_sent_at
-                    from mei_email.envios
+                      internal.queue_sent_24h + external.external_sent_24h sent_24h,
+                      internal.queue_sent_24h,
+                      external.external_sent_24h,
+                      internal.open_queue,
+                      internal.legacy_open,
+                      internal.last_sent_at
+                    from internal cross join external
                   """)
                   print(json.dumps(dict(cur.fetchone()), default=str, sort_keys=True))
           PY
@@ -132,13 +145,27 @@ jobs:
               with conn.cursor() as cur:
                   cur.execute("set statement_timeout='45s'")
                   cur.execute("""
+                    with internal as (
+                      select
+                        count(*) filter(where status in ('submitted','enviado') and enviado_em >= now()-interval '24 hours') queue_sent_24h,
+                        count(*) filter(where status in ('submitted','enviado') and enviado_em >= now()-interval '10 minutes') sent_10m,
+                        count(*) filter(where status in ('pendente','enviando','pending','processing')) open_queue,
+                        count(*) filter(where status in ('pending','processing')) legacy_open,
+                        max(enviado_em) filter(where status in ('submitted','enviado')) last_sent_at
+                      from mei_email.envios
+                    ), external as (
+                      select count(*) filter(where sent_at >= now()-interval '24 hours') external_sent_24h
+                      from mei_email.envios_externos_cota
+                    )
                     select
-                      count(*) filter(where status in ('submitted','enviado') and enviado_em >= now()-interval '24 hours') sent_24h,
-                      count(*) filter(where status in ('submitted','enviado') and enviado_em >= now()-interval '10 minutes') sent_10m,
-                      count(*) filter(where status in ('pendente','enviando','pending','processing')) open_queue,
-                      count(*) filter(where status in ('pending','processing')) legacy_open,
-                      max(enviado_em) filter(where status in ('submitted','enviado')) last_sent_at
-                    from mei_email.envios
+                      internal.queue_sent_24h + external.external_sent_24h sent_24h,
+                      internal.queue_sent_24h,
+                      external.external_sent_24h,
+                      internal.sent_10m,
+                      internal.open_queue,
+                      internal.legacy_open,
+                      internal.last_sent_at
+                    from internal cross join external
                   """)
                   print(json.dumps(dict(cur.fetchone()), default=str, sort_keys=True))
           PY
@@ -152,9 +179,12 @@ jobs:
           assert after['legacy_open'] == 0, after
           if after['sent_24h'] < 9950:
               assert after['open_queue'] > 0, after
-              assert after['sent_24h'] > before['sent_24h'], (before, after)
+              assert after['queue_sent_24h'] > before['queue_sent_24h'], (before, after)
           print('LIVE_PROGRESS_VERIFIED=true')
-          print(f"SENT_24H={after['sent_24h']} TARGET=9950 HARD_CAP=10000")
+          print(
+              f"SENT_24H={after['sent_24h']} QUEUE_SENT_24H={after['queue_sent_24h']} "
+              f"EXTERNAL_SENT_24H={after['external_sent_24h']} TARGET=9950 HARD_CAP=10000"
+          )
           PY
 
           sudo journalctl -u mei-mg-email-worker.service --since '-10 minutes' --no-pager | tail -n 160
@@ -179,4 +209,4 @@ jobs:
         shell: bash
         run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-# Hourly sender redeploy trigger: 2026-08-19
+# Hourly sender redeploy trigger: 2026-08-19T05:08Z
