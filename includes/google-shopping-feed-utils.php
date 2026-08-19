@@ -207,3 +207,36 @@ function svgf_limit(string $value, int $maxLength): string
     }
     return substr($value, 0, $maxLength);
 }
+
+function svgf_allowed_feed_host(string $baseUrl = 'https://shopvivaliz.com.br'): string
+{
+    $host = strtolower((string)(parse_url($baseUrl, PHP_URL_HOST) ?: 'shopvivaliz.com.br'));
+    $host = preg_replace('/^www\./', '', $host) ?: 'shopvivaliz.com.br';
+    return $host;
+}
+
+function svgf_feed_url_is_allowed(string $url, string $baseUrl = 'https://shopvivaliz.com.br'): bool
+{
+    if (!filter_var($url, FILTER_VALIDATE_URL)) {
+        return false;
+    }
+    $scheme = strtolower((string)(parse_url($url, PHP_URL_SCHEME) ?: ''));
+    if ($scheme !== 'https') {
+        return false;
+    }
+    $host = strtolower((string)(parse_url($url, PHP_URL_HOST) ?: ''));
+    $host = preg_replace('/^www\./', '', $host) ?: '';
+    return $host === svgf_allowed_feed_host($baseUrl);
+}
+
+function svgf_feed_absolute_url(string $baseUrl, string $url): string
+{
+    $url = trim($url);
+    if ($url === '') return '';
+    if (str_starts_with($url, '//')) return '';
+    if (preg_match('~^[a-z][a-z0-9+.-]*:~i', $url)) {
+        return svgf_feed_url_is_allowed($url, $baseUrl) ? $url : '';
+    }
+    $absolute = rtrim($baseUrl, '/') . '/' . ltrim($url, '/');
+    return svgf_feed_url_is_allowed($absolute, $baseUrl) ? $absolute : '';
+}

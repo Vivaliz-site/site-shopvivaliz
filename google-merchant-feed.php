@@ -13,6 +13,9 @@ $officialData = is_file($official) ? (@include $official) : [];
 $baseUrl = is_array($officialData) && trim((string)($officialData['base_url'] ?? '')) !== ''
     ? rtrim((string)$officialData['base_url'], '/')
     : 'https://shopvivaliz.com.br';
+if (!svgf_feed_url_is_allowed($baseUrl, 'https://shopvivaliz.com.br')) {
+    $baseUrl = 'https://shopvivaliz.com.br';
+}
 
 // Prices, inventory and product status come from the current ERP snapshot.
 // Cover images come only from the reconciled Olist/Tiny catalog; no legacy
@@ -125,10 +128,7 @@ function gm_unique_id_map(array $products): array
 
 function gm_absolute_url(string $baseUrl, string $url): string
 {
-    $url = trim($url);
-    if ($url === '') return '';
-    if (str_starts_with($url, 'http://') || str_starts_with($url, 'https://')) return $url;
-    return rtrim($baseUrl, '/') . '/' . ltrim($url, '/');
+    return svgf_feed_absolute_url($baseUrl, $url);
 }
 
 function gm_optional(array $product, array $fields, int $max = 100): string
@@ -187,11 +187,12 @@ foreach ($products as $product) {
     $mpn = gm_mpn($product);
     if ($mpn === '') $mpn = svseo_trim_words((string)($catalogIdentifiers['mpn'] ?? ''), 70);
 
-    $link = $baseUrl . '/produto/' . rawurlencode($slug);
+    $link = gm_absolute_url($baseUrl, '/produto/' . rawurlencode($slug));
     $title = svseo_title($product, 150);
     $productType = svseo_product_type($product, $name);
     $googleCategory = svseo_google_product_category($product);
     $image = gm_absolute_url($baseUrl, $image);
+    if ($link === '' || $image === '') continue;
     $additionalImages = [];
     foreach (is_array($product['images'] ?? null) ? $product['images'] : [] as $candidateImage) {
         $candidateImage = gm_absolute_url($baseUrl, (string)$candidateImage);
