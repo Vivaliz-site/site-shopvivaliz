@@ -1,4 +1,4 @@
 {
-  "requested_at": "2026-08-15T11:35:00-03:00",
-  "reason": "Install the abandoned cart recovery email cron on the Oracle VM per docs/carrinho-abandonado.md, requested explicitly by the business owner"
+  "requested_at": "2026-08-19T14:53:00-03:00",
+  "reason": "Repair abandoned cart recovery cron after immutable deploy migration: replace legacy /home/ubuntu/site-shopvivaliz path with /home/ubuntu/shopvivaliz-deploy/current, verify script syntax, enforce one canonical flock-protected cron entry, and persist logs under shared/logs"
 }
