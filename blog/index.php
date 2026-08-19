@@ -89,7 +89,8 @@ $blogSchema = [
     <meta name="twitter:image" content="<?= sv_blog_escape($socialImage) ?>">
     <link rel="stylesheet" href="/css/responsive.css">
     <link rel="stylesheet" href="/public/assets/blog/blog.css?v=2026-07-31-2">
-    <script type="application/ld+json"><?= json_encode($blogSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?></script>
+    <!-- Rodada 10 (2026-08-19): JSON_HEX_TAG|JSON_HEX_AMP -- ver R10-1 em catalogo.php -->
+    <script type="application/ld+json"><?= json_encode($blogSchema, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
     <?php include __DIR__ . '/../includes/head-analytics.php'; ?>
 </head>
 <body>
