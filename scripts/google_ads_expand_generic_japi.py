@@ -4,7 +4,6 @@ from __future__ import annotations
 import os
 
 from google.ads.googleads.client import GoogleAdsClient
-from google.protobuf.field_mask_pb2 import FieldMask
 
 import google_ads_create_search_campaign as creator
 
@@ -90,7 +89,7 @@ def enable_ad_group(client: GoogleAdsClient, customer_id: str, resource_name: st
     op = client.get_type("AdGroupOperation")
     op.update.resource_name = resource_name
     op.update.status = client.enums.AdGroupStatusEnum.ENABLED
-    op.update_mask.CopyFrom(FieldMask(paths=["status"]))
+    op.update_mask.paths.append("status")
     client.get_service("AdGroupService").mutate_ad_groups(customer_id=customer_id, operations=[op])
 
 
@@ -98,7 +97,7 @@ def enable_ad(client: GoogleAdsClient, customer_id: str, resource_name: str) -> 
     op = client.get_type("AdGroupAdOperation")
     op.update.resource_name = resource_name
     op.update.status = client.enums.AdGroupAdStatusEnum.ENABLED
-    op.update_mask.CopyFrom(FieldMask(paths=["status"]))
+    op.update_mask.paths.append("status")
     client.get_service("AdGroupAdService").mutate_ad_group_ads(customer_id=customer_id, operations=[op])
 
 
