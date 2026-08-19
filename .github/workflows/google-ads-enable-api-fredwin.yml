@@ -31,10 +31,9 @@ jobs:
         run: |
           set -euo pipefail
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
-          import json, time, urllib.parse, urllib.request, urllib.error
+          import json, re, time, urllib.parse, urllib.request, urllib.error
           from pathlib import Path
 
-          project='515723698609'
           service='googleads.googleapis.com'
           env={}
           p=Path('/home/ubuntu/shopvivaliz-deploy/shared/.env')
@@ -47,6 +46,11 @@ jobs:
                   continue
               k,v=line.split('=',1)
               env[k.strip()]=v.strip().strip('"\'')
+
+          project=(env.get('GOOGLE_CLOUD_PROJECT_NUMBER') or env.get('GOOGLE_CLOUD_PROJECT_ID') or '').strip()
+          if not re.fullmatch(r'[0-9]{6,20}', project):
+              print('GOOGLE_CLOUD_PROJECT_NUMBER_MISSING_OR_INVALID')
+              raise SystemExit(2)
 
           required=['GOOGLE_OAUTH_CLIENT_ID','GOOGLE_OAUTH_CLIENT_SECRET','GOOGLE_ADS_REFRESH_TOKEN']
           missing=[k for k in required if not env.get(k,'').strip()]
