@@ -21,6 +21,7 @@ require_once __DIR__ . '/../config/bootstrap-env.php';
 require_once __DIR__ . '/../includes/pdo-database.php';
 require_once __DIR__ . '/../includes/account-schema.php';
 require_once __DIR__ . '/../src/Commerce/AbandonedCartRecovery.php';
+require_once __DIR__ . '/../src/Commerce/AbandonedCartRecoverySchema.php';
 require_once __DIR__ . '/mailer.php';
 
 const MIN_AGE_MINUTES = 60;
@@ -78,6 +79,7 @@ if (!($pdo instanceof PDO)) {
     exit(1);
 }
 sv_account_ensure_schema();
+svacr_ensure_restore_schema($pdo);
 
 $reconciled = svacr_reconcile_completed_orders($pdo);
 
@@ -108,7 +110,7 @@ $stillPending = $pdo->prepare(
 $storeToken = $pdo->prepare(
     'UPDATE checkout_abandonments
      SET recovery_token_hash = :token_hash,
-         recovery_token_expires_at = DATE_ADD(NOW(), INTERVAL :token_hours HOUR)
+         recovery_token_expires_at = DATE_ADD(NOW(), INTERVAL 72 HOUR)
      WHERE id = :id
        AND recovery_email_sent_at IS NULL
        AND recovered_at IS NULL'
@@ -128,13 +130,9 @@ foreach ($rows as $row) {
     $items = json_decode((string)($row['cart_snapshot'] ?? '[]'), true);
     $items = is_array($items) ? $items : [];
 
-    // O token puro existe apenas durante este envio e no fragmento (#) do
-    // link do e-mail. O banco guarda somente SHA-256; fragmentos nao seguem
-    // em requests HTTP nem em Referer.
     $restoreToken = sac_new_restore_token();
     $storeToken->execute([
         ':token_hash' => hash('sha256', $restoreToken),
-        ':token_hours' => RESTORE_TOKEN_HOURS,
         ':id' => $id,
     ]);
     if ($storeToken->rowCount() !== 1) {
