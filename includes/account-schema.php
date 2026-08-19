@@ -35,11 +35,6 @@ function sv_account_ensure_schema(): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
     );
 
-    // A tabela `orders` real (usada por meus-pedidos.php e pelo webhook do ERP)
-    // nunca era criada nem populada por nenhum fluxo de checkout em producao --
-    // so existia em scripts de teste. Garantimos aqui a existencia com as
-    // colunas ja assumidas pelo restante do codigo, mais items_json/order_number
-    // para permitir recompra e listagem sem depender dos arquivos JSON soltos.
     $pdo->exec(
         'CREATE TABLE IF NOT EXISTS orders (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -68,10 +63,6 @@ function sv_account_ensure_schema(): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
     );
 
-    // A tabela `orders` de producao ja existia antes (criada por outro fluxo,
-    // com schema divergente) entao o CREATE TABLE IF NOT EXISTS acima nao fez
-    // nada. Garante aqui, coluna a coluna, tudo que o restante do codigo usa --
-    // sem presumir posicao (AFTER x) ja que nem sempre a coluna de referencia existe.
     $existing = [];
     $stmt = $pdo->query('SHOW COLUMNS FROM orders');
     foreach ($stmt->fetchAll() as $row) {
@@ -130,9 +121,6 @@ function sv_account_ensure_schema(): void
             KEY idx_active (is_active)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
     );
-    // Cupom referenciado no popup de carrinho abandonado (includes/navbar.php)
-    // e no assistente Liz -- antes disso nunca existia como registro real,
-    // entao o desconto prometido nunca era de fato aplicado.
     $couponColumns = [];
     $couponStmt = $pdo->query('SHOW COLUMNS FROM coupons');
     foreach ($couponStmt->fetchAll() as $row) {
@@ -155,13 +143,6 @@ function sv_account_ensure_schema(): void
         }
     }
 
-    // display_in_navbar/display_in_popup controlam se o cupom e ANUNCIADO
-    // publicamente (via includes/active-coupons.php -> promotion-output-filter.php
-    // na home). Antes desta mudanca os cupons de boas-vindas existiam e eram
-    // validos no checkout, mas nunca apareciam anunciados em lugar nenhum --
-    // ninguem sabia que existiam. PRIMEIRA10 removido por ser duplicata exata
-    // de VIVALIZ10 (mesmo desconto, mesmo proposito); mantido so o codigo
-    // oficial pra evitar dois cupons concorrentes com a mesma oferta.
     $seedCoupons = [
         ['VOLTEI5', 'Cupom carrinho abandonado (5%)', 'percent', 5.00, 0, 0],
         ['VIVALIZ10', 'Primeira compra: 10% de desconto', 'percent', 10.00, 1, 1],
@@ -202,12 +183,10 @@ function sv_account_ensure_schema(): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
     );
 
-    // Carrinho abandonado: captura o e-mail assim que o cliente preenche o
-    // campo no checkout (antes de finalizar), pra permitir e-mail de
-    // recuperacao se ele sair sem comprar. Nao persiste dados de pagamento,
-    // so email + snapshot leve do carrinho (nome dos itens) pra personalizar
-    // o e-mail. recovered_at marca quando o mesmo e-mail concluiu um pedido
-    // depois do abandono (nao manda e-mail de recuperacao nesse caso).
+    // Carrinho abandonado. O snapshot pode conter somente SKU, quantidade e
+    // nome editorial. Preco/estoque nunca sao restaurados desse snapshot: a
+    // API de recuperacao consulta o catalogo canonico no momento do clique.
+    // O token de recuperacao e armazenado somente como SHA-256.
     $pdo->exec(
         'CREATE TABLE IF NOT EXISTS checkout_abandonments (
             id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -216,15 +195,42 @@ function sv_account_ensure_schema(): void
             cart_snapshot TEXT NULL,
             cart_total DECIMAL(12,2) NOT NULL DEFAULT 0.00,
             session_token CHAR(64) NOT NULL,
+            recovery_token_hash CHAR(64) NULL,
+            recovery_token_expires_at DATETIME NULL,
             recovery_email_sent_at DATETIME NULL,
             recovered_at DATETIME NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             UNIQUE INDEX idx_checkout_abandon_session (session_token),
             INDEX idx_checkout_abandon_email (email),
-            INDEX idx_checkout_abandon_pending (recovery_email_sent_at, recovered_at, created_at)
+            INDEX idx_checkout_abandon_pending (recovery_email_sent_at, recovered_at, created_at),
+            INDEX idx_checkout_abandon_recovery_token (recovery_token_hash)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
     );
+
+    $abandonColumns = [];
+    $abandonStmt = $pdo->query('SHOW COLUMNS FROM checkout_abandonments');
+    foreach ($abandonStmt->fetchAll() as $row) {
+        $abandonColumns[$row['Field']] = true;
+    }
+    $abandonAlterations = [
+        'recovery_token_hash' => 'ALTER TABLE checkout_abandonments ADD COLUMN recovery_token_hash CHAR(64) NULL',
+        'recovery_token_expires_at' => 'ALTER TABLE checkout_abandonments ADD COLUMN recovery_token_expires_at DATETIME NULL',
+    ];
+    foreach ($abandonAlterations as $column => $sql) {
+        if (!isset($abandonColumns[$column])) {
+            $pdo->exec($sql);
+            $abandonColumns[$column] = true;
+        }
+    }
+    $abandonIndexes = [];
+    $abandonIdxStmt = $pdo->query('SHOW INDEX FROM checkout_abandonments');
+    foreach ($abandonIdxStmt->fetchAll() as $row) {
+        $abandonIndexes[$row['Key_name']] = true;
+    }
+    if (!isset($abandonIndexes['idx_checkout_abandon_recovery_token'])) {
+        $pdo->exec('ALTER TABLE checkout_abandonments ADD INDEX idx_checkout_abandon_recovery_token (recovery_token_hash)');
+    }
 
     $existingIndexes = [];
     $idxStmt = $pdo->query('SHOW INDEX FROM orders');
