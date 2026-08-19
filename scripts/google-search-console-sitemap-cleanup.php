@@ -5,7 +5,8 @@ declare(strict_types=1);
  * Remove only the known legacy www sitemap from ShopVivaliz Search Console.
  *
  * This command is deliberately allow-listed and idempotent. It will never
- * delete the canonical https://shopvivaliz.com.br/sitemap.xml entry.
+ * delete the canonical https://shopvivaliz.com.br/sitemap.xml entry and it
+ * refuses any configured Search Console property outside the production host.
  */
 
 $root = dirname(__DIR__);
@@ -29,6 +30,21 @@ const GSC_CANONICAL_SITEMAP = 'https://shopvivaliz.com.br/sitemap.xml';
 const GSC_LEGACY_WWW_SITEMAP = 'https://www.shopvivaliz.com.br/sitemap.xml';
 const GSC_PRODUCTION_HOST = 'shopvivaliz.com.br';
 
+function sitemap_cleanup_host(string $url): string
+{
+    return preg_replace('/^www\./', '', strtolower((string)(parse_url($url, PHP_URL_HOST) ?: ''))) ?: '';
+}
+
+function sitemap_cleanup_is_production_property(string $siteUrl): bool
+{
+    $siteUrl = trim($siteUrl);
+    if ($siteUrl === 'sc-domain:' . GSC_PRODUCTION_HOST) {
+        return true;
+    }
+    $scheme = strtolower((string)(parse_url($siteUrl, PHP_URL_SCHEME) ?: ''));
+    return $scheme === 'https' && sitemap_cleanup_host($siteUrl) === GSC_PRODUCTION_HOST;
+}
+
 function sitemap_cleanup_error_message(array $response): string
 {
     $body = $response['body'] ?? null;
@@ -46,6 +62,9 @@ function sitemap_cleanup_resolve_site_url(array $entries): string
 {
     $preferred = trim((string)(getenv('GOOGLE_SEARCH_CONSOLE_SITE_URL') ?: ''));
     if ($preferred !== '') {
+        if (!sitemap_cleanup_is_production_property($preferred)) {
+            throw new RuntimeException('Configured Search Console property is outside the ShopVivaliz production host.');
+        }
         foreach ($entries as $entry) {
             if ((string)($entry['siteUrl'] ?? '') === $preferred) {
                 return $preferred;
@@ -63,11 +82,7 @@ function sitemap_cleanup_resolve_site_url(array $entries): string
 
     foreach ($entries as $entry) {
         $siteUrl = trim((string)($entry['siteUrl'] ?? ''));
-        if ($siteUrl === '') {
-            continue;
-        }
-        $host = strtolower((string)parse_url($siteUrl, PHP_URL_HOST));
-        if ($host === GSC_PRODUCTION_HOST) {
+        if (sitemap_cleanup_is_production_property($siteUrl)) {
             return $siteUrl;
         }
     }
