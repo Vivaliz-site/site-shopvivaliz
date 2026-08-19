@@ -29,8 +29,8 @@ $expect(str_contains($tracker, "'quantity' =>"), 'Tracker must persist bounded q
 $expect(!str_contains($tracker, "'price' =>"), 'Tracker snapshot must not persist client-trusted price');
 $expect(str_contains($tracker, 'IF(recovery_email_sent_at IS NULL, NULL, recovery_token_hash)'), 'Tracker must preserve already-issued restore token');
 $expect(str_contains($sender, 'hash(\'sha256\', $restoreToken)'), 'Sender must store only token hash');
-$expect(str_contains($sender, 'recuperar-carrinho#token='), 'Recovery token must use URL fragment');
-$expect(!str_contains($sender, 'recuperar-carrinho?token='), 'Recovery token must not use query string');
+$expect(str_contains($sender, 'recuperar-carrinho.php#token='), 'Recovery token must use the real PHP route plus URL fragment');
+$expect(!str_contains($sender, 'recuperar-carrinho.php?token='), 'Recovery token must not use query string');
 $expect(str_contains($restore, 'hash(\'sha256\', $token)'), 'Restore endpoint must compare token by hash');
 $expect(str_contains($restore, 'svcr_products()'), 'Restore endpoint must re-read canonical catalog');
 $expect(str_contains($restore, '$stock <= 0'), 'Restore endpoint must reject unavailable stock');
