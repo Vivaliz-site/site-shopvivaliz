@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """Automation entry point for the Antique/Decore Google Ads live watch.
 
-This adapter performs only safe account hygiene needed by the requested guardrails:
-- it does not treat unrelated storefront coupon text as a landing-page failure;
-- it normalizes the one verified primary GA4 purchase action name to ``Compra``;
-- it treats the account's biddable PURCHASE customer goal as the default purchase goal.
-All campaign budget, landing, policy, spend and conversion safety checks remain in
-the underlying fail-closed monitor.
+This adapter is read-only by default. It keeps the requested guardrails by:
+- not treating unrelated storefront coupon text as a landing-page failure;
+- treating the account's biddable PURCHASE customer goal as the default purchase goal;
+- printing conversion diagnostics without secret values.
+
+The optional conversion-action rename is a real Google Ads mutation and therefore
+requires --apply-conversion-name-fix explicitly.
 """
 
 from __future__ import annotations
 
+import argparse
 import os
 import re
 
@@ -39,7 +41,7 @@ def purchase_rows(ga, customer_id: str):
     )
 
 
-def normalize_primary_purchase_name(client, ga, customer_id: str) -> None:
+def normalize_primary_purchase_name(client, ga, customer_id: str, *, apply_fix: bool) -> None:
     rows = purchase_rows(ga, customer_id)
     exact_compra = [r for r in rows if r.conversion_action.name.strip().casefold() == "compra"]
     verified_primary = [
@@ -52,17 +54,25 @@ def normalize_primary_purchase_name(client, ga, customer_id: str) -> None:
         and r.conversion_action.category.name == "PURCHASE"
     ]
 
-    if not exact_compra and len(verified_primary) == 1:
-        action = verified_primary[0].conversion_action
-        op = client.get_type("ConversionActionOperation")
-        op.update.resource_name = action.resource_name
-        op.update.name = "Compra"
-        op.update_mask.paths.append("name")
-        client.get_service("ConversionActionService").mutate_conversion_actions(
-            customer_id=customer_id,
-            operations=[op],
-        )
-        print("ACTION=RENAMED_PRIMARY_PURCHASE_TO_COMPRA old_name=" + action.name + ":id=" + str(action.id))
+    if exact_compra or len(verified_primary) != 1:
+        return
+
+    action = verified_primary[0].conversion_action
+    if not apply_fix:
+        print("ACTION=PRIMARY_PURCHASE_RENAME_AVAILABLE")
+        print("rename_requires=--apply-conversion-name-fix")
+        print("target_conversion_id=" + str(action.id))
+        return
+
+    op = client.get_type("ConversionActionOperation")
+    op.update.resource_name = action.resource_name
+    op.update.name = "Compra"
+    op.update_mask.paths.append("name")
+    client.get_service("ConversionActionService").mutate_conversion_actions(
+        customer_id=customer_id,
+        operations=[op],
+    )
+    print("ACTION=RENAMED_PRIMARY_PURCHASE_TO_COMPRA id=" + str(action.id))
 
 
 def print_conversion_diagnostics(ga, customer_id: str) -> None:
@@ -73,7 +83,6 @@ def print_conversion_diagnostics(ga, customer_id: str) -> None:
                 "conversion_candidate="
                 + a.name
                 + ":id=" + str(a.id)
-                + ":resource=" + a.resource_name
                 + ":status=" + a.status.name
                 + ":primary=" + str(bool(a.primary_for_goal)).lower()
                 + ":included=" + str(bool(a.include_in_conversions_metric)).lower()
@@ -117,10 +126,23 @@ def fetch_default_purchase_goal(ga, customer_id: str):
     )
 
 
-client = monitor.client_from_env()
-customer_id = os.environ["GOOGLE_ADS_CUSTOMER_ID"].replace("-", "").strip()
-ga = client.get_service("GoogleAdsService")
-normalize_primary_purchase_name(client, ga, customer_id)
-print_conversion_diagnostics(ga, customer_id)
-monitor.fetch_purchase_goal = fetch_default_purchase_goal
-raise SystemExit(monitor.main())
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Antique/Decore Google Ads live watch adapter.")
+    parser.add_argument(
+        "--apply-conversion-name-fix",
+        action="store_true",
+        help="Actually rename the single verified primary GA4 purchase conversion action to Compra.",
+    )
+    args = parser.parse_args()
+
+    client = monitor.client_from_env()
+    customer_id = os.environ["GOOGLE_ADS_CUSTOMER_ID"].replace("-", "").strip()
+    ga = client.get_service("GoogleAdsService")
+    normalize_primary_purchase_name(client, ga, customer_id, apply_fix=args.apply_conversion_name_fix)
+    print_conversion_diagnostics(ga, customer_id)
+    monitor.fetch_purchase_goal = fetch_default_purchase_goal
+    return monitor.main()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
