@@ -2,6 +2,14 @@
 declare(strict_types=1);
 header('Content-Type: application/json; charset=UTF-8');
 
+// Rodada 10 (2026-08-19) - R10-3: irmao de api/generate-test-order.php (fechado na
+// Rodada 4/R4-5), mas este ficou aberto -- cria preferencia REAL de R$99,90 na conta
+// de producao do Mercado Pago + manda e-mail, a cada request anonimo. Mesma guarda do
+// irmao. Fred: se preferir desativar de vez (nenhum consumidor no site referencia este
+// arquivo), pode virar 410 -- ver R10-3 em outputs/rodada10-diagnostico.md.
+require_once __DIR__ . '/../config/require-agent-key.php';
+sv_require_agent_key();
+
 // Load .env file
 $envFile = __DIR__ . '/../.env';
 if (is_file($envFile)) {
@@ -19,7 +27,14 @@ if (is_file($envFile)) {
 require_once __DIR__ . '/../includes/mercadopago-gateway.php';
 
 $accessToken = svmp_env('MERCADOPAGO_ACCESS_TOKEN');
-$emailTo = getenv('ADMIN_EMAIL') ?: 'fredmourao@gmail.com';
+// Rodada 10 (2026-08-19): removido fallback com e-mail pessoal hardcoded (dado
+// pessoal em arquivo versionado/publico) -- agora exige ADMIN_EMAIL no .env.
+$emailTo = getenv('ADMIN_EMAIL') ?: '';
+if ($emailTo === '') {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => 'ADMIN_EMAIL não configurado no .env']);
+    exit;
+}
 
 if (!$accessToken) {
     http_response_code(400);

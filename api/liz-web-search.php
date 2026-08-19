@@ -87,11 +87,7 @@ class LizWebSearch
     }
 }
 
-// ============================================================================
-// TESTE
-// ============================================================================
-
-if ($_GET['test'] ?? false) {
-    $search = new LizWebSearch();
-    echo json_encode($search->search('ShopVivaliz loja online'), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-}
+// Rodada 10 (2026-08-19) - R10-5: bloco de teste manual removido. Este arquivo so
+// declara a classe LizWebSearch e e' consumido via require por outro codigo; o bloco
+// "?test=1" abaixo era roteavel por HTTP e disparava, sem autenticacao nem rate
+// limit, uma chamada real e paga a Google Custom Search API a cada request anonimo.

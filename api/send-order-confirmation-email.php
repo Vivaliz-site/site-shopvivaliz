@@ -7,6 +7,17 @@ declare(strict_types=1);
 
 header('Content-Type: application/json; charset=UTF-8');
 
+// Rodada 10 (2026-08-19) - R10-4: dos 3 scripts de CLI em api/, este era o unico sem
+// guarda de SAPI -- e e' o que envia e-mail. Qualquer request HTTP anonimo disparava
+// o envio com valores default; se register_argc_argv estiver On no PHP-FPM da VM
+// (a confirmar), $argv vem da query string e destinatario/conteudo ficam controlados
+// pelo atacante (relay de e-mail aberto). Mesmo padrao ja usado em
+// api/melhorenvio/generate-label-background.php e api/webhook-post-processor.php.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit;
+}
+
 // Carregar .env
 $envFile = __DIR__ . '/../.env';
 if (is_file($envFile)) {

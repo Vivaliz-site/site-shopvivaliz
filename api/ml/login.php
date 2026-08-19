@@ -1,5 +1,11 @@
 <?php
 declare(strict_types=1);
+// Rodada 10 (2026-08-19) - R10-2: este e' o endpoint que INICIA o fluxo OAuth do
+// Mercado Livre. Sem guarda, qualquer visitante anonimo podia autorizar o app com a
+// PROPRIA conta ML dele, e callback.php grava os tokens dela por cima dos da loja
+// (state/PKCE so protegem contra CSRF, nao contra "quem" inicia o fluxo). Mesmo
+// padrao ja usado em api/melhorenvio/connect.php.
+require_once __DIR__ . '/../../includes/admin-guard.php';
 require_once __DIR__ . '/client.php';
 
 $clientId   = ml_env('ML_CLIENT_ID');
