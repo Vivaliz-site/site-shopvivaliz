@@ -1,5 +1,11 @@
 <?php
 declare(strict_types=1);
+// Rodada 10 (2026-08-19) - R10-2: e' este arquivo que efetivamente GRAVA o token da
+// integracao (ml_save_tokens). Sem guarda, o callback aceitava e persistia a
+// autorizacao de qualquer visitante que tivesse passado por login.php, sobrescrevendo
+// storage/private/ml-tokens.json. Exige a mesma sessao de admin de login.php -- o
+// navegador que inicia o fluxo e' o mesmo que recebe o redirect da Mercado Livre.
+require_once __DIR__ . '/../../includes/admin-guard.php';
 require_once __DIR__ . '/client.php';
 
 header('Content-Type: text/html; charset=UTF-8');

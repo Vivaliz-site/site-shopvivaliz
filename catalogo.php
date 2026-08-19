@@ -52,7 +52,10 @@ function sv_catalog_root(): string
 function sv_catalog_query(): string
 {
     $value = $_GET['q'] ?? $_GET['busca'] ?? '';
-    return is_scalar($value) ? trim((string)$value) : '';
+    $value = is_scalar($value) ? trim((string)$value) : '';
+    // Rodada 10 (2026-08-19): defesa em profundidade p/ R10-1 -- limita o tamanho do
+    // termo refletido em titulo/meta/JSON-LD (nao havia limite nenhum antes).
+    return mb_substr($value, 0, 120);
 }
 
 function sv_catalog_search_normalize(string $value): string
@@ -538,9 +541,12 @@ $svNavCurrent = 'catalogo';
     <link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-26-1">
     <!-- Polimento de layout: precisa vir por ultimo para vencer na cascata. -->
     <link rel="stylesheet" href="/css/layout-polish-v1.css?v=2026-07-29-1">
-    <script type="application/ld+json"><?= json_encode($structuredData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
-    <script type="application/ld+json"><?= json_encode($websiteSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
-    <script type="application/ld+json"><?= json_encode($faqSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) ?></script>
+    <!-- Rodada 10 (2026-08-19): JSON_HEX_TAG|JSON_HEX_AMP em vez de JSON_UNESCAPED_SLASHES --
+         R10-1: sem HEX_TAG, um termo de busca como </script><svg onload=1> fecha a tag
+         <script> literalmente e injeta HTML ativo (XSS refletido confirmado ao vivo). -->
+    <script type="application/ld+json"><?= json_encode($structuredData, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_PRETTY_PRINT) ?></script>
+    <script type="application/ld+json"><?= json_encode($websiteSchema, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_PRETTY_PRINT) ?></script>
+    <script type="application/ld+json"><?= json_encode($faqSchema, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_PRETTY_PRINT) ?></script>
     <?php require_once __DIR__ . '/includes/load-custom-css.php'; ?>
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
     <link rel="stylesheet" href="/css/catalog-category-select-v1.css?v=2026-08-17-1">

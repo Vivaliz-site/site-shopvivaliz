@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "ops/abandoned-cart-cron-install.json"
+      - ".github/workflows/abandoned-cart-cron-install.yml"
+      - "scripts/send-abandoned-cart-emails.php"
 
 permissions:
   contents: read
@@ -25,23 +27,41 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
 
-      - name: Install/confirm abandoned cart cron entry
+      - name: Install and verify abandoned cart recovery cron
         shell: bash
         run: |
           set -euo pipefail
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'SH'
           set -euo pipefail
-          LINE='*/30 * * * * php /home/ubuntu/site-shopvivaliz/scripts/send-abandoned-cart-emails.php >> /home/ubuntu/site-shopvivaliz/logs/abandoned-cart-email.log 2>&1'
-          mkdir -p /home/ubuntu/site-shopvivaliz/logs
+
+          SCRIPT='/home/ubuntu/shopvivaliz-deploy/current/scripts/send-abandoned-cart-emails.php'
+          LOG_DIR='/home/ubuntu/shopvivaliz-deploy/shared/logs'
+          LOG_FILE="$LOG_DIR/abandoned-cart-email.log"
+          LOCK_FILE='/var/lock/shopvivaliz-abandoned-cart-email.lock'
+          LINE="*/30 * * * * flock -n $LOCK_FILE php $SCRIPT >> $LOG_FILE 2>&1"
+
+          test -f "$SCRIPT"
+          php -l "$SCRIPT"
+          mkdir -p "$LOG_DIR"
+
           CURRENT="$(crontab -l 2>/dev/null || true)"
-          if echo "$CURRENT" | grep -qF 'send-abandoned-cart-emails.php'; then
-            echo 'ABANDONED_CART_CRON_ALREADY_PRESENT'
+          MATCHES="$(printf '%s\n' "$CURRENT" | grep -Fc 'send-abandoned-cart-emails.php' || true)"
+
+          if [ "$MATCHES" = '1' ] && printf '%s\n' "$CURRENT" | grep -Fxq "$LINE"; then
+            echo 'ABANDONED_CART_CRON_ALREADY_CANONICAL'
           else
-            { echo "$CURRENT"; echo "$LINE"; } | grep -v '^$' | crontab -
-            echo 'ABANDONED_CART_CRON_INSTALLED'
+            CLEANED="$(printf '%s\n' "$CURRENT" | grep -vF 'send-abandoned-cart-emails.php' || true)"
+            {
+              printf '%s\n' "$CLEANED"
+              printf '%s\n' "$LINE"
+            } | sed '/^[[:space:]]*$/d' | crontab -
+            echo 'ABANDONED_CART_CRON_INSTALLED_OR_REPAIRED'
           fi
-          echo '--- crontab -l ---'
-          crontab -l
+
+          INSTALLED="$(crontab -l 2>/dev/null || true)"
+          test "$(printf '%s\n' "$INSTALLED" | grep -Fc 'send-abandoned-cart-emails.php' || true)" = '1'
+          printf '%s\n' "$INSTALLED" | grep -Fx "$LINE"
+          echo 'ABANDONED_CART_CRON_VERIFIED'
           SH
 
       - name: Cleanup

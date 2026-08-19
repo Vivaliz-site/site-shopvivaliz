@@ -448,6 +448,87 @@ aprovação) — gerado nesta sessão, resumo acima cobre o essencial para futur
 **Por quê importa:** fecha o único gap de infraestrutura que impedia pedidos futuros de completar o fluxo pós-pagamento. Igualmente importante: a investigação mostrou que o risco financeiro imediato era menor do que a Rodada 9 sinalizou — vale registrar isso pra não reabrir a mesma investigação de reconciliação à toa numa rodada futura.
 **Ver também:** `docs/AGENTS.md` (entrada da Rodada 9, acima, com o achado original R9-1/R9-2), relatório de reconciliação entregue ao Fred no chat (não versionado — dados de pagamento não devem ir pro repo).
 
+### 2026-08-19 — Validação ao vivo final: worker da fila de pagamentos confirmado estável (Sonnet)
+
+**Sistema/arquivo:** `shopvivaliz-queue-worker.service` (systemd, VM produção).
+**O que confirmei:** depois do fix de permissões (usuário `www-data` em vez de `ubuntu` no
+systemd unit, ver entrada anterior), reinstalei a unit atualizada, reiniciei o serviço e
+confirmei `active (running)` com o processo PHP de fato rodando como `www-data` (`ps -o
+user,cmd`). Rodei `api/webhook-post-processor.php` diretamente como `www-data` contra um
+pedido seguro (`payment_pending`, não aprovado — não dispara e-mail/GA4 real) e confirmou
+que o erro `Permission denied ... Order lock unavailable` que existia antes do fix não
+ocorre mais. `journalctl` mostra os 3 jobs de teste (sandbox MP) sendo processados e
+corretamente rejeitados por `auth_not_validated` (comportamento esperado — são jobs
+anteriores ao marcador de autenticação), sem crash-loop desde então. Fila sem backlog
+pendente (`queue_jobs` só tem os 3 `failed` de teste).
+**Por quê importa:** fecha o ciclo de validação do R9-1/R9-2 — o worker não só existe, como
+está de fato escrevendo nos arquivos de pedido corretamente, o que era o segundo bug (além
+da ausência de worker) que impedia o fluxo pós-pagamento de completar.
+**Ver também:** entradas anteriores de 2026-08-19 sobre a fila de pagamentos.
+
+### 2026-08-19 — Rodada 10 (final): XSS refletido em JSON-LD + guardas de autenticação faltantes (Opus + Sonnet)
+
+**Sistema/arquivo:** `catalogo.php`, `produto.php`, `blog/index.php`, `blog/artigo.php`,
+`faq/index.php`, `api/ml/login.php`, `api/ml/callback.php`,
+`api/generate-boleto-email.php`, `api/send-order-confirmation-email.php`,
+`api/liz-web-search.php`, `api/cnpj-proxy.php`, `CLAUDE.md`.
+**O que descobri e corrigi (relatório completo em `outputs/rodada10-diagnostico.md`):**
+- **R10-1 (CRÍTICO) — XSS refletido em `/catalogo` via JSON-LD:** `json_encode(...,
+  JSON_UNESCAPED_SLASHES)` sem `JSON_HEX_TAG` nos blocos `<script type="application/ld+json">`
+  permitia que o termo de busca (`?q=`) fechasse a tag `</script>` literalmente e injetasse
+  HTML ativo — confirmado ao vivo em produção com payload inerte (`<svg onload=1>`), sem
+  qualquer WAF/CSP bloqueando (a CSP real só tem `frame-ancestors`/`object-src`/`base-uri`; a
+  `script-src` está só em modo Report-Only, não bloqueia nada). Trocado para
+  `JSON_HEX_TAG | JSON_HEX_AMP` nos 5 arquivos que montam JSON-LD a partir de input do
+  usuário (catálogo, produto, blog, FAQ), e adicionado limite de 120 caracteres no termo de
+  busca como defesa em profundidade.
+- **R10-2 (ALTO) — OAuth do Mercado Livre sem guarda:** a Rodada 5 fechou
+  `api/ml/{me,status,token}.php` com `sv_require_agent_key()`, mas `api/ml/login.php` e
+  `api/ml/callback.php` — os dois que efetivamente **iniciam e gravam** a credencial —
+  ficaram abertos. Qualquer visitante anônimo podia autorizar o app com a própria conta ML
+  e o callback sobrescrevia `ml-tokens.json` com os tokens dele. Adicionado `admin-guard`
+  (mesmo padrão de `api/melhorenvio/connect.php`) nos dois arquivos. **Não** implementei a
+  verificação de `user_id` esperado sugerida no relatório — fica pra decisão do Fred.
+- **R10-3 (ALTO) — `api/generate-boleto-email.php` sem autenticação:** irmão do
+  `api/generate-test-order.php` (fechado na Rodada 4), cria preferência real de R$99,90 na
+  conta de produção do Mercado Pago + manda e-mail a cada request anônimo, sem ter recebido
+  o mesmo tratamento. Adicionada a mesma guarda (`sv_require_agent_key()`). Também removi o
+  fallback de e-mail pessoal hardcoded (`fredmourao@gmail.com`) — agora exige `ADMIN_EMAIL`
+  no `.env`.
+- **R10-4 (MÉDIO-ALTO) — `api/send-order-confirmation-email.php` sem guarda de CLI:** dos 3
+  scripts de CLI em `api/`, era o único sem `PHP_SAPI !== 'cli'` — e é o que envia e-mail.
+  Adicionada a guarda (mesmo padrão de `api/webhook-post-processor.php` e
+  `api/melhorenvio/generate-label-background.php`). **Fica pra confirmação do Fred na VM:**
+  se `register_argc_argv` estiver `On` sob PHP-FPM, o endpoint era um relay de e-mail aberto
+  de fato (destinatário/corpo via query string) — a guarda de CLI resolve isso independente
+  do resultado da verificação.
+- **R10-5 (MÉDIO-BAIXO) — `api/liz-web-search.php`:** bloco `?test=1` roteável por HTTP
+  disparava chamada paga à Google Custom Search sem autenticação. Bloco removido.
+- **R10-6 (BAIXO) — `CLAUDE.md` desatualizado:** cabeçalho da seção de workflows dizia "59
+  arquivos"; são 316 (e o número muda continuamente). Trocado por instrução de sempre rodar
+  `ls .github/workflows/*.yml | wc -l` em vez de citar um número fixo.
+- **R10-7 (BAIXO) — `api/cnpj-proxy.php`:** `Access-Control-Allow-Origin: *` sem rate limit
+  (sem SSRF — validação de entrada já era correta). Removido o CORS aberto e adicionado rate
+  limit (`svorl_allow`, mesmo padrão de `api/stock-alerts/subscribe.php`).
+- **Não implementado, fica para o Fred** (ver `outputs/rodada10-diagnostico.md`, seção
+  "Precisa de aprovação"): confirmar `register_argc_argv` na VM (R10-4); decidir sobre
+  promover a CSP `script-src` de Report-Only para enforced (risco real de quebrar
+  conversão/checkout, não é decisão pra agente); decidir o destino final de
+  `api/generate-boleto-email.php` (manter com guarda vs. 410); confirmar no painel do
+  Mercado Livre qual `user_id` está vinculado hoje, já que o endpoint esteve aberto (R10-2).
+  **Não** adicionei entradas em `.htaccess` (sugestão de defesa em profundidade do
+  relatório) — nesta rodada outro agente já tinha alterado esse arquivo concorrentemente;
+  as guardas em código já são a correção primária e cobrem o release publicado
+  independente do `.htaccess`.
+**Por quê importa:** R10-1 é o primeiro XSS de execução real encontrado no ciclo inteiro,
+numa página de tráfego orgânico/pago compartilhável por URL. R10-2/R10-3/R10-4 seguem o
+mesmo padrão já mapeado nas rodadas anteriores — correção aplicada num arquivo e não no
+irmão idêntico — o que sugere que vale, numa rodada futura, grepar por padrões de guarda
+(`admin-guard`, `require-agent-key`, `PHP_SAPI`) e comparar contra todos os arquivos do
+mesmo diretório, em vez de auditar arquivo por arquivo.
+**Ver também:** relatório completo em `outputs/rodada10-diagnostico.md`, entradas anteriores
+de 2026-08-19 sobre a fila de pagamentos (R9-1/R9-2), `docs/AGENTS.md` (Rodadas 1-9, acima).
+
 ## 🤖 Agentes Autônomos Ativos
 
 | Agente | Tipo | Commits | Status |

@@ -181,7 +181,7 @@ Todos configurados em `Settings > Secrets and variables > Actions`:
 
 ---
 
-## ⚙️ Workflows Principais (não é a lista completa — são 59 arquivos)
+## ⚙️ Workflows Principais (amostra — a contagem real muda continuamente, rode `ls .github/workflows/*.yml | wc -l` antes de assumir qualquer número; ver Rodada 10, R10-6)
 
 ### 1️⃣ `shopvivaliz-qa.yml` - Validação na Admissão
 - **Triggers:** Push para main, pull_request, workflow_dispatch

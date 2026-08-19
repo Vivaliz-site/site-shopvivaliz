@@ -1,14 +1,27 @@
 <?php
 declare(strict_types=1);
 
+// Rodada 10 (2026-08-19) - R10-7: sem SSRF (o CNPJ e' validado como 14 digitos antes
+// de compor a URL), mas com Access-Control-Allow-Origin:* + sem rate limit, qualquer
+// site de terceiros podia embutir consultas que saiam do IP da ShopVivaliz contra a
+// BrasilAPI -- o bloqueio por abuso recairia sobre o proprio formulario de cadastro
+// PJ do site, nao sobre quem abusou. Restrito a mesma origem + rate limit (fail-closed,
+// mesmo padrao de api/stock-alerts/subscribe.php).
+require_once __DIR__ . '/../includes/order-rate-limit.php';
+
 header('Content-Type: application/json; charset=UTF-8');
-header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 header('Cache-Control: no-store');
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
     http_response_code(204);
+    exit;
+}
+
+if (!svorl_allow(20, 3600, 'cnpj-proxy')) {
+    http_response_code(429);
+    echo json_encode(['erro' => true, 'mensagem' => 'Muitas requisições. Tente novamente em instantes.']);
     exit;
 }
 
