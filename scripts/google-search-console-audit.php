@@ -9,6 +9,11 @@ declare(strict_types=1);
  * prefers the public sitemap as the URL source, and falls back to Search
  * Analytics page URLs when the sitemap cannot be fetched from the runner.
  *
+ * Security boundaries:
+ * - sitemap and inspected URLs must belong to the configured production host;
+ * - reports may only be written below the repository reports/ directory;
+ * - OAuth/API errors are sanitized and no token or raw response body is printed.
+ *
  * Examples:
  *   php scripts/google-search-console-audit.php --max-urls=100
  *   php scripts/google-search-console-audit.php --max-urls=200 --offset=200 --output=reports/gsc-audit.json
@@ -42,6 +47,60 @@ function gsc_option(array $argv, string $name, ?string $default = null): ?string
     return $default;
 }
 
+function gsc_url_host(string $url): string
+{
+    return strtolower((string)(parse_url($url, PHP_URL_HOST) ?: ''));
+}
+
+function gsc_base_host(string $baseUrl): string
+{
+    $host = gsc_url_host($baseUrl);
+    if ($host === '') {
+        throw new RuntimeException('Invalid --base-url / GOOGLE_SITE_BASE_URL host.');
+    }
+    return preg_replace('/^www\./', '', $host) ?: $host;
+}
+
+function gsc_is_shopvivaliz_url(string $url, string $baseHost): bool
+{
+    if (!filter_var($url, FILTER_VALIDATE_URL)) {
+        return false;
+    }
+    $scheme = strtolower((string)(parse_url($url, PHP_URL_SCHEME) ?: ''));
+    if ($scheme !== 'https') {
+        return false;
+    }
+    $host = preg_replace('/^www\./', '', gsc_url_host($url)) ?: '';
+    return $host === $baseHost;
+}
+
+function gsc_validate_sitemap_url(string $sitemapUrl, string $baseHost): void
+{
+    if (!gsc_is_shopvivaliz_url($sitemapUrl, $baseHost)) {
+        throw new RuntimeException('Sitemap URL must be an HTTPS URL under the configured production host.');
+    }
+}
+
+function gsc_safe_report_path(string $root, string $output): string
+{
+    $output = trim($output);
+    if ($output === '') {
+        return '';
+    }
+    if (preg_match('~^[A-Za-z]:[\\/]~', $output) || str_starts_with($output, '/') || str_contains($output, "\0")) {
+        throw new RuntimeException('Output path must be relative to the repository reports/ directory.');
+    }
+    $normalized = str_replace('\\', '/', $output);
+    $parts = array_values(array_filter(explode('/', $normalized), static fn(string $part): bool => $part !== ''));
+    if ($parts === [] || $parts[0] !== 'reports' || in_array('..', $parts, true)) {
+        throw new RuntimeException('Output path must be inside reports/.');
+    }
+    if (!str_ends_with($normalized, '.json')) {
+        throw new RuntimeException('Output report must use a .json extension.');
+    }
+    return $root . '/' . implode('/', $parts);
+}
+
 function gsc_http_get(string $url): string
 {
     if (!function_exists('curl_init')) {
@@ -54,12 +113,14 @@ function gsc_http_get(string $url): string
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_MAXREDIRS => 5,
+        CURLOPT_MAXREDIRS => 3,
+        CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
+        CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTPS,
         CURLOPT_CONNECTTIMEOUT => 10,
         CURLOPT_TIMEOUT => 45,
         CURLOPT_HTTPHEADER => [
             'Accept: application/xml,text/xml;q=0.9,*/*;q=0.8',
-            'User-Agent: ShopVivaliz-SearchConsoleAudit/1.1',
+            'User-Agent: ShopVivaliz-SearchConsoleAudit/1.2',
         ],
     ]);
     $body = curl_exec($ch);
@@ -76,7 +137,7 @@ function gsc_http_get(string $url): string
 }
 
 /** @return array<int,string> */
-function gsc_sitemap_urls(string $xml): array
+function gsc_sitemap_urls(string $xml, string $baseHost): array
 {
     if (!preg_match_all('~<loc>\s*(.*?)\s*</loc>~is', $xml, $matches)) {
         return [];
@@ -84,7 +145,7 @@ function gsc_sitemap_urls(string $xml): array
     $urls = [];
     foreach ($matches[1] as $raw) {
         $url = trim(html_entity_decode(strip_tags((string)$raw), ENT_QUOTES | ENT_XML1, 'UTF-8'));
-        if ($url !== '' && filter_var($url, FILTER_VALIDATE_URL)) {
+        if (gsc_is_shopvivaliz_url($url, $baseHost)) {
             $urls[$url] = true;
         }
     }
@@ -94,16 +155,24 @@ function gsc_sitemap_urls(string $xml): array
 /** @param array<int,array<string,mixed>> $entries */
 function gsc_resolve_site_url(array $entries, string $preferred, string $baseUrl): string
 {
+    $baseHost = gsc_base_host($baseUrl);
     if ($preferred !== '') {
         foreach ($entries as $entry) {
             if ((string)($entry['siteUrl'] ?? '') === $preferred) {
+                if (strpos($preferred, 'sc-domain:') === 0) {
+                    $domain = preg_replace('/^www\./', '', strtolower(substr($preferred, strlen('sc-domain:'))));
+                    if ($domain !== $baseHost) {
+                        throw new RuntimeException('GOOGLE_SEARCH_CONSOLE_SITE_URL does not match the configured production host.');
+                    }
+                } elseif (!gsc_is_shopvivaliz_url($preferred, $baseHost)) {
+                    throw new RuntimeException('GOOGLE_SEARCH_CONSOLE_SITE_URL must be an HTTPS URL-prefix under the production host.');
+                }
                 return $preferred;
             }
         }
         throw new RuntimeException('GOOGLE_SEARCH_CONSOLE_SITE_URL is not available to this OAuth user.');
     }
 
-    $host = strtolower((string)parse_url($baseUrl, PHP_URL_HOST));
     $urlPrefixCandidates = [];
     $domainCandidate = '';
     foreach ($entries as $entry) {
@@ -112,13 +181,13 @@ function gsc_resolve_site_url(array $entries, string $preferred, string $baseUrl
             continue;
         }
         if (strpos($siteUrl, 'sc-domain:') === 0) {
-            if (strtolower(substr($siteUrl, strlen('sc-domain:'))) === $host) {
+            $domain = preg_replace('/^www\./', '', strtolower(substr($siteUrl, strlen('sc-domain:'))));
+            if ($domain === $baseHost) {
                 $domainCandidate = $siteUrl;
             }
             continue;
         }
-        $entryHost = strtolower((string)parse_url($siteUrl, PHP_URL_HOST));
-        if ($entryHost === $host) {
+        if (gsc_is_shopvivaliz_url($siteUrl, $baseHost)) {
             $urlPrefixCandidates[] = $siteUrl;
         }
     }
@@ -175,7 +244,7 @@ function gsc_error_message(array $response): string
  *
  * @return array<int,string>
  */
-function gsc_search_analytics_urls(GoogleApiClient $api, string $siteUrl, int $rowLimit): array
+function gsc_search_analytics_urls(GoogleApiClient $api, string $siteUrl, int $rowLimit, string $baseHost): array
 {
     $end = new DateTimeImmutable('today', new DateTimeZone('UTC'));
     $start = $end->sub(new DateInterval('P90D'));
@@ -203,7 +272,7 @@ function gsc_search_analytics_urls(GoogleApiClient $api, string $siteUrl, int $r
         }
         $keys = is_array($row['keys'] ?? null) ? $row['keys'] : [];
         $url = trim((string)($keys[0] ?? ''));
-        if ($url !== '' && filter_var($url, FILTER_VALIDATE_URL)) {
+        if (gsc_is_shopvivaliz_url($url, $baseHost)) {
             $urls[$url] = true;
         }
     }
@@ -212,13 +281,13 @@ function gsc_search_analytics_urls(GoogleApiClient $api, string $siteUrl, int $r
 }
 
 /** @param array<int,string> ...$groups @return array<int,string> */
-function gsc_merge_urls(array ...$groups): array
+function gsc_merge_urls(string $baseHost, array ...$groups): array
 {
     $merged = [];
     foreach ($groups as $group) {
         foreach ($group as $url) {
             $url = trim($url);
-            if ($url !== '' && filter_var($url, FILTER_VALIDATE_URL)) {
+            if (gsc_is_shopvivaliz_url($url, $baseHost)) {
                 $merged[$url] = true;
             }
         }
@@ -228,18 +297,21 @@ function gsc_merge_urls(array ...$groups): array
 
 try {
     $baseUrl = rtrim((string)(gsc_option($argv, 'base-url', getenv('GOOGLE_SITE_BASE_URL') ?: 'https://shopvivaliz.com.br') ?: ''), '/');
+    $baseHost = gsc_base_host($baseUrl);
     $preferredSiteUrl = trim((string)(gsc_option($argv, 'site-url', getenv('GOOGLE_SEARCH_CONSOLE_SITE_URL') ?: '') ?: ''));
     $sitemapUrl = trim((string)(gsc_option($argv, 'sitemap', getenv('GOOGLE_SEARCH_CONSOLE_SITEMAP_URL') ?: ($baseUrl . '/sitemap.xml')) ?: ''));
     $maxUrls = max(1, min(1900, (int)(gsc_option($argv, 'max-urls', getenv('GOOGLE_SEARCH_CONSOLE_AUDIT_MAX_URLS') ?: '100') ?: '100')));
     $offset = max(0, (int)(gsc_option($argv, 'offset', '0') ?: '0'));
     $output = trim((string)(gsc_option($argv, 'output', '') ?: ''));
+    $safeOutput = gsc_safe_report_path($root, $output);
 
-    if ($baseUrl === '' || !filter_var($baseUrl, FILTER_VALIDATE_URL)) {
+    if ($baseUrl === '' || !filter_var($baseUrl, FILTER_VALIDATE_URL) || !gsc_is_shopvivaliz_url($baseUrl, $baseHost)) {
         throw new RuntimeException('Invalid --base-url / GOOGLE_SITE_BASE_URL.');
     }
     if ($sitemapUrl === '' || !filter_var($sitemapUrl, FILTER_VALIDATE_URL)) {
         throw new RuntimeException('Invalid --sitemap / GOOGLE_SEARCH_CONSOLE_SITEMAP_URL.');
     }
+    gsc_validate_sitemap_url($sitemapUrl, $baseHost);
 
     $api = new GoogleApiClient(OAuthTokenProvider::fromEnvironment());
 
@@ -265,9 +337,9 @@ try {
     $urlSource = 'sitemap';
     $sitemapFetchError = '';
     try {
-        $allUrls = gsc_sitemap_urls(gsc_http_get($sitemapUrl));
+        $allUrls = gsc_sitemap_urls(gsc_http_get($sitemapUrl), $baseHost);
         if ($allUrls === []) {
-            $sitemapFetchError = 'The public sitemap did not contain any valid <loc> URLs.';
+            $sitemapFetchError = 'The public sitemap did not contain any valid production HTTPS <loc> URLs.';
         }
     } catch (Throwable $sitemapError) {
         $sitemapFetchError = $sitemapError->getMessage();
@@ -276,14 +348,14 @@ try {
     $searchAnalyticsUrlCount = 0;
     if ($allUrls === []) {
         $needed = max(1000, min(25000, $offset + $maxUrls + 500));
-        $analyticsUrls = gsc_search_analytics_urls($api, $siteUrl, $needed);
+        $analyticsUrls = gsc_search_analytics_urls($api, $siteUrl, $needed, $baseHost);
         $searchAnalyticsUrlCount = count($analyticsUrls);
         $seedUrls = [
             $baseUrl . '/',
             $baseUrl . '/catalogo/',
             $baseUrl . '/blog/',
         ];
-        $allUrls = gsc_merge_urls($seedUrls, $analyticsUrls);
+        $allUrls = gsc_merge_urls($baseHost, $seedUrls, $analyticsUrls);
         $urlSource = 'search-analytics-fallback';
     }
 
@@ -302,6 +374,9 @@ try {
     $results = [];
     $issueCounts = [];
     foreach ($selectedUrls as $url) {
+        if (!gsc_is_shopvivaliz_url($url, $baseHost)) {
+            continue;
+        }
         $response = $api->request(
             'POST',
             'https://searchconsole.googleapis.com/v1/urlInspection/index:inspect',
@@ -404,13 +479,13 @@ try {
         throw new RuntimeException('Could not encode Search Console audit report.');
     }
 
-    if ($output !== '') {
-        $directory = dirname($output);
+    if ($safeOutput !== '') {
+        $directory = dirname($safeOutput);
         if ($directory !== '.' && !is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
-            throw new RuntimeException('Could not create output directory: ' . $directory);
+            throw new RuntimeException('Could not create output directory: ' . str_replace($root . '/', '', $directory));
         }
-        if (file_put_contents($output, $json . PHP_EOL) === false) {
-            throw new RuntimeException('Could not write audit report: ' . $output);
+        if (file_put_contents($safeOutput, $json . PHP_EOL) === false) {
+            throw new RuntimeException('Could not write audit report.');
         }
         fwrite(STDOUT, json_encode([
             'generatedAt' => $report['generatedAt'],
@@ -421,7 +496,7 @@ try {
             'cleanCount' => $report['cleanCount'],
             'issueCount' => $report['issueCount'],
             'issueCounts' => $report['issueCounts'],
-            'output' => $output,
+            'output' => str_replace($root . '/', '', $safeOutput),
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL);
     } else {
         fwrite(STDOUT, $json . PHP_EOL);
