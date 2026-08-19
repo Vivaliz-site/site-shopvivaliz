@@ -57,6 +57,7 @@ jobs:
           cd /home/ubuntu/mei-mg-email
           echo "CHECKED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           echo "HEAD_BEFORE=$(git rev-parse HEAD)"
+          df -h /
           git diff --quiet
           git diff --cached --quiet
           git fetch origin main
@@ -81,6 +82,34 @@ jobs:
           sudo systemctl daemon-reload
           sudo systemctl enable --now mei-mg-email-autorepair.timer
           sudo systemctl reset-failed mei-mg-email-autorepair.service mei-mg-email-worker.service
+
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import json, os, psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'], row_factory=dict_row, connect_timeout=10) as conn:
+              conn.autocommit = True
+              with conn.cursor() as cur:
+                  cur.execute("set statement_timeout='45s'")
+                  cur.execute("""
+                    select pid, now()-query_start as query_age, wait_event_type, wait_event
+                      from pg_stat_activity
+                     where pid <> pg_backend_pid()
+                       and state = 'active'
+                       and wait_event_type = 'Lock'
+                       and query_start < now()-interval '10 minutes'
+                       and query ilike '%with base as materialized%'
+                       and query ilike '%mei_email.empresas%'
+                  """)
+                  stale=[dict(r) for r in cur.fetchall()]
+                  print('STALE_AUTOQUEUE_LOCKS_BEFORE='+json.dumps(stale, default=str, sort_keys=True))
+                  cancelled=[]
+                  for row in stale:
+                      cur.execute('select pg_cancel_backend(%s) as cancelled', (row['pid'],))
+                      cancelled.append({'pid': row['pid'], 'cancelled': bool(cur.fetchone()['cancelled'])})
+                  print('STALE_AUTOQUEUE_CANCELLED='+json.dumps(cancelled, sort_keys=True))
+          PY
 
           set +e
           timeout 10m sudo systemctl start mei-mg-email-autorepair.service
@@ -136,10 +165,35 @@ jobs:
                       state['external_sent_24h']=int(cur.fetchone()[0] or 0)
                   else:
                       state['external_sent_24h']=0
+                  cur.execute("""
+                    select count(*) as orphan_lots
+                      from mei_email.lotes l
+                     where l.status <> 'pendente'
+                       and exists (
+                         select 1
+                           from mei_email.envios e
+                          where e.lote_id=l.id
+                            and e.status in ('pendente','enviando','pending','processing')
+                       )
+                  """)
+                  state['orphan_lots']=int(cur.fetchone()['orphan_lots'] or 0)
+                  cur.execute("""
+                    select count(*) as stale_autoqueue_locks
+                      from pg_stat_activity
+                     where pid <> pg_backend_pid()
+                       and state = 'active'
+                       and wait_event_type = 'Lock'
+                       and query_start < now()-interval '10 minutes'
+                       and query ilike '%with base as materialized%'
+                       and query ilike '%mei_email.empresas%'
+                  """)
+                  state['stale_autoqueue_locks']=int(cur.fetchone()['stale_autoqueue_locks'] or 0)
                   state['sent_24h']=int(state['queue_sent_24h'] or 0)+state['external_sent_24h']
                   print(json.dumps(state, default=str, sort_keys=True))
                   assert state['sent_24h'] <= 10000, state
                   assert state['legacy_open'] == 0, state
+                  assert state['orphan_lots'] == 0, state
+                  assert state['stale_autoqueue_locks'] == 0, state
                   if state['sent_24h'] < 9950:
                       assert int(state['queue_sent_20m'] or 0) > 0, state
           PY
