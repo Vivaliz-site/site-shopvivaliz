@@ -6,8 +6,16 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=ubuntu
-Group=ubuntu
+# Rodada 9 (2026-08-19): User/Group = www-data (NAO ubuntu) -- descoberto na
+# validacao ao vivo: todo arquivo em storage/orders/*.json e storage/*.sqlite
+# e criado pelo Apache/PHP-FPM como www-data:www-data, modo 644 (sem write
+# de grupo). Rodando como "ubuntu" (mesmo sendo membro do grupo www-data), o
+# worker conseguia LER os pedidos mas falhava com "Permission denied" ao
+# tentar reabrir em r+ pra gravar o status apos o webhook -- silencioso ate
+# a primeira tentativa real de escrita. www-data como dono resolve de raiz,
+# sem depender de chmod retroativo em arquivos novos.
+User=www-data
+Group=www-data
 # Rodada 9 (2026-08-19): WorkingDirectory precisa ser o symlink "current" --
 # NAO /home/ubuntu/site-shopvivaliz. "current" -> releases/<ts>-<sha>, e
 # "current/storage" -> ../../shared/storage (ver .htaccess/README de deploy),
