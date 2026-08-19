@@ -1,5 +1,5 @@
-const CACHE='shopvivaliz-shell-v21';
-const SHELL=['/','/catalogo/','/css/style.css','/css/public-experience-v1.css','/js/public-experience-v1.js','/manifest.webmanifest','/images/logo-vivaliz-square-v2.png'];
+const CACHE='shopvivaliz-shell-v22';
+const SHELL=['/','/catalogo/','/css/style.css','/css/public-experience-v1.css','/css/visual-polish-v6-hotfix.css','/js/public-experience-v1.js','/manifest.webmanifest','/images/logo-vivaliz-square-v2.png'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).catch(()=>null));self.skipWaiting();});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))));self.clients.claim();});
 self.addEventListener('fetch',event=>{
@@ -8,7 +8,7 @@ self.addEventListener('fetch',event=>{
   const url=new URL(request.url);
   if(url.origin!==location.origin)return;
   if(url.pathname.startsWith('/api/')||url.pathname.startsWith('/admin/')||url.pathname.startsWith('/checkout'))return;
-  event.respondWith(fetch(request).then(response=>{
+  event.respondWith(fetch(request,{cache:'no-store'}).then(response=>{
     const copy=response.clone();
     if(response.ok&&['style','script','image','font'].includes(request.destination))caches.open(CACHE).then(cache=>cache.put(request,copy));
     return response;
