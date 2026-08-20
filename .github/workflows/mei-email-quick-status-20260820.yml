@@ -47,3 +47,5 @@ jobs:
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
+
+# recheck after batched runtime guard deploy 2026-08-20T04:31Z
