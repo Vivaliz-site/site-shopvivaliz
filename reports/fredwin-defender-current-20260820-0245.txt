@@ -1,0 +1,5 @@
+CHECKED_AT_UTC=2026-08-20T02:44:39Z
+{"tool": "write_file", "result": {"success": true, "message": "Arquivo escrito: C:\\site-shopvivaliz\\scripts\\fredwin-defender-block-state.ps1"}}
+{"tool": "execute_command", "result": {"success": false, "output": "STATE=DEFENDER_TAB_NOT_FOUND\n", "error": ""}}
+
+REMOTE_RC=0
