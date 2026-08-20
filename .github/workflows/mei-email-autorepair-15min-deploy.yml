@@ -83,7 +83,22 @@ jobs:
             echo 'CURRENT_SENDER_BLOCK_SENTINEL=absent'
             sudo systemctl reset-failed mei-mg-email-worker.service || true
             sudo systemctl restart mei-mg-email-worker.service
-            test "$(sudo systemctl is-active mei-mg-email-worker.service)" = active
+            worker_active=false
+            for attempt in $(seq 1 60); do
+              state="$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+              echo "WORKER_WAIT_${attempt}=${state}"
+              if [ "$state" = active ]; then
+                worker_active=true
+                break
+              fi
+              if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
+                echo 'CURRENT_SENDER_BLOCK_SENTINEL=present_during_start'
+                sudo systemctl stop mei-mg-email-worker.service || true
+                exit 42
+              fi
+              sleep 5
+            done
+            test "$worker_active" = true
             test "$(sudo systemctl is-enabled mei-mg-email-worker.service)" = enabled
             echo "WORKER_ACTIVE=true"
             echo "WORKER_ENABLED=true"
@@ -106,3 +121,5 @@ jobs:
         if: always()
         shell: bash
         run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+# redeploy batched runtime sender guard 2026-08-20T04:30Z
