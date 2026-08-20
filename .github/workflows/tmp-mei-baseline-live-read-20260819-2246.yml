@@ -1,0 +1,69 @@
+name: Read live state of MEI baseline reconciliation
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-mei-baseline-live-read-20260819-2246.yml']
+permissions:
+  contents: write
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 4
+    env:
+      VM_HOST: 137.131.156.17
+      VM_USER: ubuntu
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"; known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" && test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"; printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"; printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"; chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+      - name: Read only live state
+        run: |
+          set -Eeuo pipefail
+          mkdir -p reports
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF' > reports/mei-baseline-live-read-20260819-2246.txt 2>&1
+          set -e
+          cd /home/ubuntu/mei-mg-email
+          echo "CHECK_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)"
+          echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo "AUTOREPAIR=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || true)"
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ] || [ -f runtime/sender_blocked.pause ]; then echo SENTINEL=present; else echo SENTINEL=absent; fi
+          echo DOCKER_BEGIN
+          sudo docker ps -a --format '{{.Image}}|{{.Names}}|{{.Status}}|{{.Command}}' | grep -Ei 'flyway|baseline|scratch|mei-mg-email' || true
+          echo DOCKER_END
+          .venv/bin/python - <<'PY'
+          import json,psycopg
+          from app.config import settings
+          with psycopg.connect(settings.database_url,connect_timeout=10) as conn:
+            with conn.cursor() as cur:
+              cur.execute("select version::text,description,script,checksum,success from mei_email.flyway_schema_history where version::int between 14 and 39 order by version::int")
+              print('HISTORY_14_39='+json.dumps(cur.fetchall(),default=str))
+              cur.execute("select count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=now()-interval '10 minutes'), count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=now()-interval '2 minutes'), max(enviado_em) filter(where status::text in ('submitted','enviado')), count(*) filter(where status::text in ('pendente','enviando','pending','processing')) from mei_email.envios")
+              r=cur.fetchone(); print('SEND_STATE='+json.dumps({'sent10m':r[0],'sent2m':r[1],'last':str(r[2]),'open':r[3]}))
+              cur.execute("select pid,application_name,state,now()-query_start,wait_event_type,wait_event,left(coalesce(query,''),600) from pg_stat_activity where pid<>pg_backend_pid() and state<>'idle' and query_start<now()-interval '20 seconds' order by query_start")
+              print('DB_ACTIVE_GT20S='+json.dumps(cur.fetchall(),default=str))
+          PY
+          EOF
+      - name: Persist
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/mei-baseline-live-read-20260819-2246.txt
+          git commit -m 'ops: record live state of MEI baseline reconciliation' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
