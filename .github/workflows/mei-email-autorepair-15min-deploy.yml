@@ -41,7 +41,7 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Install 15min autorepair timer
+      - name: Install 15min autorepair timer and runtime sender guard
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -59,24 +59,38 @@ jobs:
           git fetch origin main
           git merge --ff-only origin/main
           echo "HEAD_DEPLOYED=$(git rev-parse HEAD)"
+          test -f scripts/runtime_sender_guard.py
+          .venv/bin/python -m py_compile scripts/runtime_sender_guard.py
           grep -q '^OnUnitActiveSec=15min$' deploy/systemd/mei-mg-email-autorepair.timer
+          grep -q '^StartLimitIntervalSec=0$' deploy/systemd/mei-mg-email-worker.service
+          grep -q '^Restart=always$' deploy/systemd/mei-mg-email-worker.service
+          grep -q '^RestartSec=5$' deploy/systemd/mei-mg-email-worker.service
+          grep -q '^ExecStartPre=.*/scripts/runtime_sender_guard.py$' deploy/systemd/mei-mg-email-worker.service
+          sudo install -m 0644 deploy/systemd/mei-mg-email-worker.service /etc/systemd/system/mei-mg-email-worker.service
           sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service /etc/systemd/system/mei-mg-email-autorepair.service
           sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.timer /etc/systemd/system/mei-mg-email-autorepair.timer
           sudo systemctl daemon-reload
           sudo systemctl enable --now mei-mg-email-autorepair.timer
+          sudo systemctl enable mei-mg-email-worker.service
           echo "AUTOREPAIR_TIMER_ACTIVE=$(sudo systemctl is-active mei-mg-email-autorepair.timer)"
           echo "AUTOREPAIR_TIMER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-autorepair.timer)"
           sudo systemctl cat mei-mg-email-autorepair.timer --no-pager
           sudo systemctl list-timers mei-mg-email-autorepair.timer --all --no-pager
           if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
             echo 'CURRENT_SENDER_BLOCK_SENTINEL=present'
+            sudo systemctl stop mei-mg-email-worker.service || true
           else
             echo 'CURRENT_SENDER_BLOCK_SENTINEL=absent'
             sudo systemctl reset-failed mei-mg-email-worker.service || true
-            sudo systemctl start mei-mg-email-worker.service
-            echo "WORKER_ACTIVE=$(sudo systemctl is-active mei-mg-email-worker.service)"
+            sudo systemctl restart mei-mg-email-worker.service
+            test "$(sudo systemctl is-active mei-mg-email-worker.service)" = active
+            test "$(sudo systemctl is-enabled mei-mg-email-worker.service)" = enabled
+            echo "WORKER_ACTIVE=true"
+            echo "WORKER_ENABLED=true"
+            sudo systemctl cat mei-mg-email-worker.service --no-pager
+            sudo systemctl status mei-mg-email-worker.service --no-pager -n 30
           fi
-          echo 'AUTOREPAIR_15MIN_INSTALLED=true'
+          echo 'AUTOREPAIR_15MIN_AND_RUNTIME_GUARD_INSTALLED=true'
           EOF
 
       - name: Upload evidence
