@@ -1,0 +1,79 @@
+name: MEI Watchdog Consent Fast Probe 20260820
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-mei-watchdog-consent-fast-20260820.yml']
+permissions:
+  contents: read
+  issues: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 8
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          KEY1: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          KEY2: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          HOSTS1: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          HOSTS2: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${KEY1:-${KEY2:-}}"; hosts="${HOSTS1:-${HOSTS2:-}}"
+          test -n "$key" && test -n "$hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+      - name: Collect indexed consent evidence
+        id: collect
+        continue-on-error: true
+        shell: bash
+        run: |
+          : > /tmp/out.txt
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=12 -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 <<'EOF' >> /tmp/out.txt 2>&1
+          set -u
+          cd /home/ubuntu/mei-mg-email || exit 2
+          echo "CHECKED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import json, os, psycopg
+          from psycopg.rows import dict_row
+          emails=['fabirosi@yahoo.com.br','mirantedaspedras@gmail.com','carlosdibengenheirocivil@gmail.com','manoelalemos.sme@araxa.mg.gov.br','berna.gui@hotmail.com']
+          with psycopg.connect(os.environ['DATABASE_URL'], row_factory=dict_row, connect_timeout=10) as conn:
+              for email in emails:
+                  try:
+                      with conn.cursor() as cur:
+                          cur.execute("set statement_timeout='45s'")
+                          cur.execute("select cnpj,email,marketing_autorizado,marketing_autorizado_origem,mei_verificado,mei_verificado_origem,opt_out,provavel_terceiro,situacao_cadastral,uf,tipo_regime from mei_email.empresas where email=%s order by cnpj",(email,))
+                          print('EMPRESA '+email+'='+json.dumps([dict(r) for r in cur.fetchall()],default=str,sort_keys=True))
+                      conn.commit()
+                  except Exception as exc:
+                      conn.rollback(); print('EMPRESA_ERROR '+email+'='+type(exc).__name__+':'+str(exc)[:160].replace('\n',' '))
+                  try:
+                      with conn.cursor() as cur:
+                          cur.execute("set statement_timeout='45s'")
+                          cur.execute("select email,status::text status,enviado_em,criado_em,cnpj,campanha_id from mei_email.envios where email=%s order by coalesce(enviado_em,criado_em) desc nulls last limit 10",(email,))
+                          print('ENVIO '+email+'='+json.dumps([dict(r) for r in cur.fetchall()],default=str,sort_keys=True))
+                      conn.commit()
+                  except Exception as exc:
+                      conn.rollback(); print('ENVIO_ERROR '+email+'='+type(exc).__name__+':'+str(exc)[:160].replace('\n',' '))
+          PY
+          EOF
+          rc=$?; echo "SSH_COLLECT_EXIT=$rc" >> /tmp/out.txt; exit "$rc"
+      - name: Publish evidence
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUTCOME: ${{ steps.collect.outcome }}
+        run: |
+          set -Eeuo pipefail
+          { echo "COLLECT_OUTCOME=${OUTCOME}"; echo '```text'; cat /tmp/out.txt; echo '```'; } > /tmp/body.md
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "MEI WATCHDOG CONSENT FAST ${GITHUB_RUN_ID}" --body-file /tmp/body.md
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
