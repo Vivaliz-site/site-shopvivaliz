@@ -1,0 +1,94 @@
+name: MEI Email Autorepair 15min Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/mei-email-autorepair-15min-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mei-email-autorepair-15min-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-autorepair-15min:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 15
+    env:
+      VM_HOST: 137.131.156.17
+      VM_USER: ubuntu
+    steps:
+      - name: Configure verified Oracle SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::Oracle SSH key missing'; exit 2; }
+          test -n "$known_hosts" || { echo '::error::Oracle known_hosts missing'; exit 2; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Install 15min autorepair timer
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 \
+            -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF' \
+            > artifacts/mei-email-autorepair-15min-deploy.txt 2>&1
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo "CHECKED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git diff --quiet
+          git diff --cached --quiet
+          git fetch origin main
+          git merge --ff-only origin/main
+          echo "HEAD_DEPLOYED=$(git rev-parse HEAD)"
+          grep -q '^OnUnitActiveSec=15min$' deploy/systemd/mei-mg-email-autorepair.timer
+          sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service /etc/systemd/system/mei-mg-email-autorepair.service
+          sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.timer /etc/systemd/system/mei-mg-email-autorepair.timer
+          sudo systemctl daemon-reload
+          sudo systemctl enable --now mei-mg-email-autorepair.timer
+          echo "AUTOREPAIR_TIMER_ACTIVE=$(sudo systemctl is-active mei-mg-email-autorepair.timer)"
+          echo "AUTOREPAIR_TIMER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-autorepair.timer)"
+          sudo systemctl cat mei-mg-email-autorepair.timer --no-pager
+          sudo systemctl list-timers mei-mg-email-autorepair.timer --all --no-pager
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
+            echo 'CURRENT_SENDER_BLOCK_SENTINEL=present'
+          else
+            echo 'CURRENT_SENDER_BLOCK_SENTINEL=absent'
+            sudo systemctl reset-failed mei-mg-email-worker.service || true
+            sudo systemctl start mei-mg-email-worker.service
+            echo "WORKER_ACTIVE=$(sudo systemctl is-active mei-mg-email-worker.service)"
+          fi
+          echo 'AUTOREPAIR_15MIN_INSTALLED=true'
+          EOF
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mei-email-autorepair-15min-deploy-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/mei-email-autorepair-15min-deploy.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
