@@ -1,0 +1,3 @@
+TERMINAL_READY=NO
+TUNNEL=ERROR
+ERROR=Validation did not produce a sanitized report
