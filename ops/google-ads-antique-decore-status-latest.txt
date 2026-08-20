@@ -1,10 +1,10 @@
 workflow=Google Ads Antique Decore Status
-run_id=32360795379
+run_id=32365309211
 run_attempt=1
-published_at_utc=2026-08-20T10:50:03Z
-commit_sha=0ab87033d294013cec121a6d735281496a8d8875
+published_at_utc=2026-08-20T11:45:19Z
+commit_sha=3454860ca21bb64fbcecd4c79e4caa0b6f1a9387
 --- live-watch ---
-checked_at_utc=2026-08-20T10:49:56Z
+checked_at_utc=2026-08-20T11:45:11Z
 conversion_candidate=Compra:id=7630829260:status=ENABLED:primary=true:included=true:type=GOOGLE_ANALYTICS_4_PURCHASE:origin=WEBSITE:category=PURCHASE
 conversion_candidate=Shopvivaliz (web) manual_event_PURCHASE:id=7630858749:status=ENABLED:primary=false:included=false:type=GOOGLE_ANALYTICS_4_CUSTOM:origin=WEBSITE:category=PURCHASE
 purchase_customer_goal=category=PURCHASE:origin=WEBSITE:biddable=true
