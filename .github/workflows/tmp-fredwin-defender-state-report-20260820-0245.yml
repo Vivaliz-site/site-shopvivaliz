@@ -1,0 +1,76 @@
+name: One-shot current Defender restricted-entities proof 20260820-0245
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tmp-fredwin-defender-state-report-20260820-0245.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mei-email-production-start
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 6
+    env:
+      VM_HOST: 137.131.156.17
+      VM_USER: ubuntu
+      REPORT: reports/fredwin-defender-current-20260820-0245.txt
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure verified SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key"; test -n "$hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+      - name: Capture Defender restricted-entities state through authorized Fred-Win session
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p reports
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=12 \
+            -i "$HOME/.ssh/id_rsa" \
+            scripts/fredwin-defender-block-state.ps1 scripts/tmp-fredwin-run-block-state.py \
+            "${VM_USER}@${VM_HOST}:/tmp/"
+          set +e
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=12 \
+            -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" \
+            'printf "CHECKED_AT_UTC=%s\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"; python3 /tmp/tmp-fredwin-run-block-state.py' \
+            > "$REPORT" 2>&1
+          rc=$?
+          set -e
+          printf '\nREMOTE_RC=%s\n' "$rc" >> "$REPORT"
+      - name: Commit sanitized report
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'sender-recovery-watchdog'
+          git config user.email 'actions@users.noreply.github.com'
+          git add "$REPORT"
+          git commit -m 'ops: publish current Defender restricted-entities proof'
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
