@@ -8,7 +8,7 @@ permissions:
 jobs:
   quick:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 3
     steps:
       - name: Configure SSH
         shell: bash
@@ -34,6 +34,7 @@ jobs:
           cd /home/ubuntu/mei-mg-email
           echo "QUICK_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           echo "GIT_SHA=$(git rev-parse HEAD)"
+          echo "ORIGIN_MAIN=$(git rev-parse origin/main 2>/dev/null || true)"
           echo "WORKER_ACTIVE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
           echo "WORKER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)"
           sudo systemctl show mei-mg-email-worker.service -p ActiveState -p SubState -p MainPID -p ExecStartPre -p ExecStart -p Restart -p RestartUSec -p StartLimitIntervalUSec --no-pager || true
@@ -43,22 +44,13 @@ jobs:
           if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then echo SENDER_BLOCK_SENTINEL=present; else echo SENDER_BLOCK_SENTINEL=absent; fi
           echo "AUTOREPAIR_ACTIVE=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || true)"
           echo "NDR_GUARD_ACTIVE=$(sudo systemctl is-active mei-mg-email-ndr-guard.service 2>/dev/null || true)"
-          echo 'DOCKER_PS_BEGIN'
-          docker compose ps -a || true
-          echo 'DOCKER_PS_END'
-          echo 'DB_INSPECT_BEGIN'
-          docker inspect mei-mg-email-db --format 'status={{.State.Status}} running={{.State.Running}} restarting={{.State.Restarting}} oom={{.State.OOMKilled}} exit={{.State.ExitCode}} started={{.State.StartedAt}} finished={{.State.FinishedAt}} restart_count={{.RestartCount}}' || true
-          echo 'DB_INSPECT_END'
-          echo 'DISK_BEGIN'
-          df -h / /var/lib/docker || true
-          docker system df || true
-          echo 'DISK_END'
+          docker inspect mei-mg-email-db --format 'DB_RUNNING={{.State.Running}} DB_RESTARTING={{.State.Restarting}} DB_OOM={{.State.OOMKilled}} DB_EXIT={{.State.ExitCode}} DB_RESTART_COUNT={{.RestartCount}}' || true
           echo 'WORKER_JOURNAL_BEGIN'
-          sudo journalctl -u mei-mg-email-worker.service --since '-8 minutes' --no-pager | tail -n 180 || true
+          sudo journalctl -u mei-mg-email-worker.service --since '-5 minutes' --no-pager | tail -n 100 || true
           echo 'WORKER_JOURNAL_END'
           EOF
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
 
-# verify legacy queue-first drop-in removal 2026-08-20T10:27Z
+# lightweight live verification after legacy drop-in retirement 2026-08-20T10:30Z
