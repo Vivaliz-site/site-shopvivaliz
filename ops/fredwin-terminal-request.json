@@ -3,6 +3,6 @@
   "shell": "powershell",
   "timeout": 90,
   "command": "$ErrorActionPreference='Stop'; $log=Join-Path $env:TEMP 'desktop-commander-remote.log'; $existing=Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'desktop-commander.*remote' }; if(-not $existing){ $args='-NoProfile -WindowStyle Minimized -Command \"npx --yes @wonderwhy-er/desktop-commander@latest remote *>> ''$log''\"'; Start-Process -FilePath 'powershell.exe' -ArgumentList $args -WindowStyle Minimized; Start-Sleep -Seconds 8 }; $running=Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'desktop-commander.*remote' }; Write-Output ('REMOTE_AGENT_RUNNING=' + [bool]$running); if(Test-Path $log){ $tail=Get-Content $log -Tail 20 -ErrorAction SilentlyContinue; $needsAuth=[bool]($tail -match 'verify|pair|code|sign in|device'); Write-Output ('PAIRING_MAY_BE_REQUIRED=' + $needsAuth) } else { Write-Output 'PAIRING_MAY_BE_REQUIRED=UNKNOWN' }; exit 0",
-  "requested_at": "2026-08-20T16:53:00Z",
-  "reason": "Start the Remote Desktop Commander device agent on Fred-Win through the existing private tunnel without exposing pairing codes or credentials"
+  "requested_at": "2026-08-20T16:56:00Z",
+  "reason": "Retry starting the Remote Desktop Commander device agent after clearing stale serialized relay runs"
 }
