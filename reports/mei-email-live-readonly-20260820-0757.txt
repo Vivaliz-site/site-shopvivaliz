@@ -35,13 +35,52 @@ Learn more about enabling ESM Apps service at https://ubuntu.com/esm
 see /var/log/unattended-upgrades/unattended-upgrades.log
 
 *** System restart required ***
-BRT=2026-08-20T08:22:31-0300
-WORKER=inactive
+BRT=2026-08-20T08:34:28-0300
+HEAD=9d11da54935e920d0ea90fd1f4baaa1c40874b32
+ORIGIN_MAIN=9d11da54935e920d0ea90fd1f4baaa1c40874b32
+WORKER=activating
 WORKER_ENABLED=enabled
+NDR_GUARD=active
+NDR_GUARD_ENABLED=enabled
 SENTINEL=absent
-SEND_STATE={"sent24": 0, "sent10m": 0, "sent2m": 0, "open_queue": 0, "last_sent_at": "2026-08-14 18:00:06.742016-03:00"}
-ELIGIBLE=0
-AS42004_LAST15M=0
+SYSTEMD_BEGIN
+Restart=always
+RestartUSec=5s
+ExecStartPre={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubuntu/mei-mg-email/.venv/bin/python /home/ubuntu/mei-mg-email/scripts/runtime_sender_preflight.py ; ignore_errors=no ; start_time=[Thu 2026-08-20 08:32:07 -03] ; stop_time=[n/a] ; pid=2830997 ; code=(null) ; status=0/0 }
+ExecStart={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubuntu/mei-mg-email/.venv/bin/python -m worker.safe_entrypoint_v2 ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }
+ActiveState=activating
+SubState=start-pre
+UnitFileState=enabled
+StartLimitIntervalUSec=0
+SYSTEMD_END
+NETWORK_BEGIN
+40.126.45.28    STREAM www.tm.prd.ags.akadns.net
+40.126.45.28    DGRAM  
+GRAPH_HTTP=200 CONNECT=0.005252 TOTAL=1.106469
+NETWORK_END
+ELIGIBLE={"eligible": 0}
+ANY_OPEN_QUEUE={"any_open": false}
+DB_PROBE_ERROR="QueryCanceled: canceling statement due to statement timeout"
+AS42004_LAST30M=0
+GRAPH_APPONLY_LAST30M=0
+KEYERROR_LAST30M=0
+DB_CONNECT_TIMEOUT_LAST30M=1
 JOURNAL_TAIL_BEGIN
--- No entries --
+Aug 20 08:32:07 shopvivaliz-ai systemd[1]: Starting mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker...
+Aug 20 08:32:38 shopvivaliz-ai python[2830997]: Traceback (most recent call last):
+Aug 20 08:32:38 shopvivaliz-ai python[2830997]:   File "/home/ubuntu/mei-mg-email/scripts/runtime_sender_preflight.py", line 89, in <module>
+Aug 20 08:32:39 shopvivaliz-ai python[2830997]:     raise SystemExit(main())
+Aug 20 08:32:39 shopvivaliz-ai python[2830997]:                      ^^^^^^
+Aug 20 08:32:39 shopvivaliz-ai python[2830997]:   File "/home/ubuntu/mei-mg-email/scripts/runtime_sender_preflight.py", line 42, in main
+Aug 20 08:32:39 shopvivaliz-ai python[2830997]:     with psycopg.connect(database_url, connect_timeout=5) as conn:
+Aug 20 08:32:39 shopvivaliz-ai python[2830997]:          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 20 08:32:39 shopvivaliz-ai python[2830997]:   File "/home/ubuntu/mei-mg-email/.venv/lib/python3.12/site-packages/psycopg/connection.py", line 119, in connect
+Aug 20 08:32:39 shopvivaliz-ai python[2830997]:     raise last_ex.with_traceback(None)
+Aug 20 08:32:39 shopvivaliz-ai python[2830997]: psycopg.errors.ConnectionTimeout: connection timeout expired
+Aug 20 08:35:09 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Control process exited, code=exited, status=1/FAILURE
+Aug 20 08:35:09 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Failed with result 'exit-code'.
+Aug 20 08:35:09 shopvivaliz-ai systemd[1]: Failed to start mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker.
+Aug 20 08:35:09 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Consumed 4.144s CPU time, 23.1M memory peak, 17.1M memory swap peak.
+Aug 20 08:35:19 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Scheduled restart job, restart counter is at 1.
+Aug 20 08:35:21 shopvivaliz-ai systemd[1]: Starting mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker...
 JOURNAL_TAIL_END
