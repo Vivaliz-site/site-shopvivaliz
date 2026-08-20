@@ -1,0 +1,8 @@
+{
+  "action": "terminal",
+  "shell": "powershell",
+  "timeout": 120,
+  "command": "Write-Output 'FREDWIN_TERMINAL_TEMPLATE'",
+  "requested_at": "2026-08-20T12:39:00Z",
+  "reason": "Enable audited terminal execution through the canonical Fred-Win private relay"
+}
