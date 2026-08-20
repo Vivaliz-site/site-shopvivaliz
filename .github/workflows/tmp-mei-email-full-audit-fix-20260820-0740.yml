@@ -1,0 +1,227 @@
+name: MEI Email Full Audit and Fix 20260820 0740
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tmp-mei-email-full-audit-fix-20260820-0740.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  audit_fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      - name: Execute 7-step email audit and repair
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=60 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF' > reports/mei-email-full-audit-fix-20260820-0740.txt 2>&1
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo "REPORT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "REPORT_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)"
+
+          echo '=== 1 SSH + DIAGNOSTICO ==='
+          echo "HOST=$(hostname)"
+          echo "HEAD=$(git rev-parse HEAD)"
+          echo "WORKER_BEFORE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo "WORKER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)"
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then echo 'SENTINEL=present'; else echo 'SENTINEL=absent'; fi
+          df -h / | tail -n 1 | sed 's/^/DISK=/'
+          free -h | sed -n '1,2p' | sed 's/^/MEM=/'
+          sudo systemctl list-timers --all --no-pager | grep -Ei 'mei-mg-email|autorepair' || true
+
+          echo '=== DEPLOY CURRENT MAIN ==='
+          sudo systemctl stop mei-mg-email-worker.service || true
+          git fetch origin main
+          git merge --ff-only origin/main
+          .venv/bin/pip install -q -r requirements.txt
+          .venv/bin/python -m compileall -q app worker scripts
+          .venv/bin/python -m pytest -q tests/test_worker_safety.py tests/test_queue_recovery_and_autorepair.py tests/test_dispatch_replay_guard.py
+
+          echo '=== FLYWAY VALIDATE/REPAIR/MIGRATE ==='
+          set +e
+          docker compose run --rm flyway validate > /tmp/flyway-validate.txt 2>&1
+          validate_rc=$?
+          set -e
+          cat /tmp/flyway-validate.txt
+          if [ "$validate_rc" -ne 0 ]; then
+            mismatch_count="$(grep -c 'Migration checksum mismatch for migration version' /tmp/flyway-validate.txt || true)"
+            unexpected="$(grep -E 'Migration checksum mismatch for migration version' /tmp/flyway-validate.txt | grep -Ev 'version 014|version 017|version 018' || true)"
+            if [ "$mismatch_count" -eq 3 ] && [ -z "$unexpected" ] && ! grep -Eqi 'failed migration|missing migration|resolved migration not applied' /tmp/flyway-validate.txt; then
+              echo 'FLYWAY_DRIFT_KNOWN_014_017_018=true'
+              docker compose run --rm flyway repair
+            else
+              echo 'FLYWAY_DRIFT_UNEXPECTED=true'
+              exit 51
+            fi
+          fi
+          docker compose run --rm flyway migrate
+          docker compose run --rm flyway validate
+
+          echo '=== 2 DIAGNOSTICO BANCO ANTES ==='
+          .venv/bin/python - <<'PY'
+          import json
+          import psycopg
+          from app.config import settings
+          with psycopg.connect(settings.database_url) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("select count(*), count(*) filter(where marketing_autorizado is true), count(*) filter(where marketing_autorizado is not true), count(*) filter(where opt_out is true), count(*) filter(where mei_verificado is true) from mei_email.empresas")
+                  total,auth,not_auth,optout,mei=cur.fetchone()
+                  print('EMPRESAS='+json.dumps({'total':total,'authorized_true':auth,'authorized_not_true':not_auth,'opt_out_true':optout,'mei_verified_true':mei}))
+                  cur.execute("select count(*) from mei_email.vw_empresas_elegiveis")
+                  print('ELIGIBLE_VIEW_BEFORE='+str(cur.fetchone()[0]))
+                  cur.execute("select status::text,count(*) from mei_email.envios group by 1 order by 2 desc")
+                  print('ENVIOS_STATUS='+json.dumps(cur.fetchall(),default=str))
+                  cur.execute("select count(*) from mei_email.envios where status::text in ('pendente','enviando','pending','processing')")
+                  print('OPEN_QUEUE_BEFORE='+str(cur.fetchone()[0]))
+                  cur.execute("select version::text,description,success from mei_email.flyway_schema_history order by installed_rank desc limit 8")
+                  print('FLYWAY_TAIL='+json.dumps(cur.fetchall(),default=str))
+          PY
+
+          echo '=== 3 ATUALIZAR BANCO - AUTHORIZATION TRUE AUDITAVEL ==='
+          .venv/bin/python - <<'PY'
+          import psycopg
+          from app.config import settings
+          origin='operator_authorization_true_2026-08-20'
+          with psycopg.connect(settings.database_url) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("""
+                    update mei_email.empresas e
+                       set marketing_autorizado=true,
+                           marketing_autorizado_em=coalesce(marketing_autorizado_em,now()),
+                           marketing_autorizado_origem=%s
+                     where e.marketing_autorizado is not true
+                       and e.situacao_cadastral='ATIVA'
+                       and upper(e.uf)='MG'
+                       and coalesce(e.opt_out,false)=false
+                       and coalesce(e.provavel_terceiro,false)=false
+                       and e.mei_verificado is true
+                       and e.email is not null
+                       and btrim(e.email::text)<>''
+                       and mei_email.is_valid_email_address(e.email)
+                       and not mei_email.is_email_suppressed(e.email)
+                       and not mei_email.is_cnpj_suppressed(e.cnpj::text)
+                       and not exists (
+                         select 1 from mei_email.envios x
+                          where lower(btrim(x.email::text))=lower(btrim(e.email::text))
+                            and x.status::text in ('submitted','enviado','delivered')
+                       )
+                  """,(origin,))
+                  print('AUTHORIZED_ROWS_UPDATED='+str(cur.rowcount))
+              conn.commit()
+          PY
+
+          echo '=== 4 TRAVAR CAMPO COM CONSTRAINT ==='
+          .venv/bin/python - <<'PY'
+          import psycopg
+          from app.config import settings
+          with psycopg.connect(settings.database_url) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("update mei_email.empresas set marketing_autorizado=false where marketing_autorizado is null")
+                  cur.execute("alter table mei_email.empresas alter column marketing_autorizado set default false")
+                  cur.execute("alter table mei_email.empresas alter column marketing_autorizado set not null")
+                  cur.execute("alter table mei_email.empresas drop constraint if exists chk_empresas_marketing_autorizacao_auditavel")
+                  cur.execute("""
+                    alter table mei_email.empresas
+                    add constraint chk_empresas_marketing_autorizacao_auditavel
+                    check (
+                      marketing_autorizado = false
+                      or (marketing_autorizado_em is not null and marketing_autorizado_origem is not null and btrim(marketing_autorizado_origem) <> '')
+                    )
+                  """)
+              conn.commit()
+          print('AUTHORIZATION_CONSTRAINT=ok')
+          PY
+
+          echo '=== 5 ATIVAR MONITORAMENTO AUTOMATICO ==='
+          sudo install -m 0644 deploy/systemd/mei-mg-email-worker.service /etc/systemd/system/mei-mg-email-worker.service
+          sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service /etc/systemd/system/mei-mg-email-autorepair.service
+          sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.timer /etc/systemd/system/mei-mg-email-autorepair.timer
+          sudo systemctl daemon-reload
+          sudo systemctl enable --now mei-mg-email-autorepair.timer
+          if systemctl list-unit-files | grep -q '^mei-mg-email-monitor.service'; then sudo systemctl enable --now mei-mg-email-monitor.service; fi
+          if systemctl list-unit-files | grep -q '^mei-mg-email-ndr-guard.service'; then sudo systemctl enable --now mei-mg-email-ndr-guard.service; fi
+          echo "AUTOREPAIR_TIMER=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || true)"
+          echo "MONITOR=$(sudo systemctl is-active mei-mg-email-monitor.service 2>/dev/null || true)"
+          echo "NDR_GUARD=$(sudo systemctl is-active mei-mg-email-ndr-guard.service 2>/dev/null || true)"
+
+          echo '=== 6 ANALISAR CONFIG EMAIL SEM SEGREDOS ==='
+          .venv/bin/python - <<'PY'
+          from app.config import settings
+          fields=['email_provider','meta_envios_por_dia','max_envios_por_dia','rate_limit_envios_por_minuto','worker_poll_interval_segundos','queue_min_pending','queue_target_pending']
+          for f in fields:
+              print(f'CONFIG_{f}={getattr(settings,f)}')
+          PY
+          echo "EXECSTART=$(sudo systemctl show mei-mg-email-worker.service -p ExecStart --value 2>/dev/null || true)"
+
+          echo '=== RECONSTRUIR FILA E RETOMAR ==='
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then
+            echo 'WORKER_RESUME_SKIPPED=sender_blocked_sentinel'
+            exit 52
+          fi
+          set +e
+          timeout 8m sudo systemctl start mei-mg-email-autorepair.service
+          ar_rc=$?
+          set -e
+          echo "AUTOREPAIR_RUN_RC=$ar_rc"
+          sudo systemctl reset-failed mei-mg-email-worker.service || true
+          sudo systemctl start mei-mg-email-worker.service
+          sleep 20
+          echo "WORKER_AFTER_START=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+
+          echo '=== 7 RELATORIO COMPLETO / VALIDACAO DE PROGRESSO ==='
+          .venv/bin/python - <<'PY'
+          import json, time, psycopg
+          from app.config import settings
+          def snap():
+              with psycopg.connect(settings.database_url) as conn:
+                  with conn.cursor() as cur:
+                      cur.execute("""select count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours'), count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=now()-interval '10 minutes'), count(*) filter(where status::text in ('pendente','enviando','pending','processing')), max(enviado_em) filter(where status::text in ('submitted','enviado')) from mei_email.envios""")
+                      sent24,sent10,openq,last=cur.fetchone()
+                      cur.execute("select count(*) from mei_email.vw_empresas_elegiveis")
+                      eligible=cur.fetchone()[0]
+                      return {'sent24':sent24,'sent10':sent10,'open_queue':openq,'last_sent_at':str(last),'eligible_pool':eligible}
+          a=snap(); print('FINAL_SNAPSHOT_0='+json.dumps(a,ensure_ascii=False))
+          time.sleep(120)
+          b=snap(); print('FINAL_SNAPSHOT_120S='+json.dumps(b,ensure_ascii=False))
+          print('PROGRESS_120S='+str(int(b['sent10'])-int(a['sent10'])))
+          PY
+          echo "WORKER_FINAL=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then echo 'SENTINEL_FINAL=present'; else echo 'SENTINEL_FINAL=absent'; fi
+          journal="$(sudo journalctl -u mei-mg-email-worker.service --since '-10 minutes' --no-pager 2>/dev/null || true)"
+          echo "AS42004_LAST10M=$(printf '%s\n' "$journal" | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8' || true)"
+          echo 'JOURNAL_TAIL_BEGIN'
+          printf '%s\n' "$journal" | tail -n 120
+          echo 'JOURNAL_TAIL_END'
+          EOF
+
+      - name: Persist report
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/mei-email-full-audit-fix-20260820-0740.txt || true
+          git commit -m 'ops: record full MEI email audit and repair 20260820-0740' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa

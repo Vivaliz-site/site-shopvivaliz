@@ -1,0 +1,51 @@
+name: Capture MEI Email Full Audit 20260820 0744
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tmp-capture-mei-email-full-audit-20260820-0744.yml'
+permissions:
+  actions: read
+  contents: write
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for audit run and capture report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p reports /tmp/audit-artifacts
+          target='MEI Email Full Audit and Fix 20260820 0740'
+          run_id=''
+          for i in $(seq 1 60); do
+            run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow tmp-mei-email-full-audit-fix-20260820-0740.yml --limit 1 --json databaseId --jq '.[0].databaseId // empty' 2>/dev/null || true)"
+            [ -n "$run_id" ] && break
+            sleep 5
+          done
+          echo "AUDIT_RUN_ID=$run_id" > reports/mei-email-full-audit-capture-20260820-0744.txt
+          if [ -z "$run_id" ]; then exit 2; fi
+          set +e
+          gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status >> reports/mei-email-full-audit-capture-20260820-0744.txt 2>&1
+          rc=$?
+          set -e
+          echo "AUDIT_WATCH_RC=$rc" >> reports/mei-email-full-audit-capture-20260820-0744.txt
+          gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status,conclusion,url,createdAt,updatedAt >> reports/mei-email-full-audit-capture-20260820-0744.txt 2>&1 || true
+          sleep 10
+          git pull --rebase origin main || true
+          if [ -f reports/mei-email-full-audit-fix-20260820-0740.txt ]; then
+            echo '=== AUDIT_REPORT ===' >> reports/mei-email-full-audit-capture-20260820-0744.txt
+            cat reports/mei-email-full-audit-fix-20260820-0740.txt >> reports/mei-email-full-audit-capture-20260820-0744.txt
+          fi
+      - name: Persist capture
+        if: always()
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/mei-email-full-audit-capture-20260820-0744.txt || true
+          git commit -m 'ops: capture full MEI email audit result 20260820-0744' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
