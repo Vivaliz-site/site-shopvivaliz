@@ -191,3 +191,4 @@ jobs:
 # deploy presend lot-progress safety fix 2026-08-20T15:59Z
 # harden deploy governance: manual-only trigger and explicit failure handling 2026-08-20T16:21Z
 # watchdog redeploy strict sender after broken-pipe 2026-08-20T16:24-0300
+# watchdog redeploy strict sender after failed restart 2026-08-20T17:18-0300
