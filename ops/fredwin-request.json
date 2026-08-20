@@ -1,5 +1,5 @@
 {
   "action": "health",
-  "requested_at": "2026-08-20T14:47:00Z",
-  "reason": "Recheck canonical Fred-Win private reverse SSH relay after transient health timeout"
+  "requested_at": "2026-08-20T17:04:00Z",
+  "reason": "Recheck canonical Fred-Win private reverse SSH relay after terminal relay contention"
 }
