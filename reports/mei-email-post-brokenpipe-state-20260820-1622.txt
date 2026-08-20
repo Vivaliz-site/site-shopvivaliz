@@ -1,8 +1,10 @@
-CHECK_BRT=2026-08-20T19:24:39-0300
+CHECK_BRT=2026-08-20T20:22:49-0300
 WORKER_BEFORE=active
 WORKER_ENABLED_BEFORE=enabled
 SENTINEL=absent
 AS42004_LAST30M=0
+NDR_GUARD=active
+NDR_GUARD_ENABLED=enabled
 Restart=always
 RestartUSec=5s
 ExecStartPre={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubuntu/mei-mg-email/.venv/bin/python /home/ubuntu/mei-mg-email/scripts/runtime_sender_preflight.py ; ignore_errors=no ; start_time=[Thu 2026-08-20 17:46:24 -03] ; stop_time=[Thu 2026-08-20 17:46:29 -03] ; pid=3106162 ; code=exited ; status=0 }
@@ -10,20 +12,146 @@ ExecStart={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubunt
 StartLimitIntervalUSec=0
 DB_CONTAINER=running
 DB_READY=/var/run/postgresql:5432 - accepting connections
-DNS_GRAPH=40.126.45.26
+DNS_GRAPH=40.126.17.43
 HTTPS_GRAPH=200
-Traceback (most recent call last):
-  File "<string>", line 1, in <module>
-  File "/home/ubuntu/mei-mg-email/app/email_provider.py", line 104, in __init__
-    raise RuntimeError("Microsoft Graph app-only missing configuration: " + ", ".join(missing))
-RuntimeError: Microsoft Graph app-only missing configuration: MICROSOFT_GRAPH_TENANT_ID, MICROSOFT_GRAPH_CLIENT_ID, MICROSOFT_GRAPH_USER
+MicrosoftGraphEmailProvider APP-ONLY active sender=naoresponda@dev.shopvivaliz.com.br cert=/home/ubuntu/.shopvivaliz/m365/graph-auth.crt
+GRAPH_AUTH=ok
+GRAPH_SENDER=naoresponda@dev.shopvivaliz.com.br
 SENT24=266
 SENT10=0
 LAST_SENT=2026-08-20 15:02:28.80715-03
 OPEN_TOTAL=0
-STRICT_ELIGIBLE=QUERY_ERROR
+STRICT_ELIGIBLE=SET QUERY_ERROR
 OPEN_REPLAY=0
 ORPHAN_ENVIOS=0
 ADVISORY_LOCKS=2
 LOCK_WAITERS=0
 LONG_ACTIVE=0
+LEGACY_COPY=0
+GUARD_TRIGGERS=2
+FLYWAY_LEDGER_MAX=20
+FLYWAY_LEDGER_37_38=0
+SYNTH_AUTH_TRUE=1
+HARD_BOUNCE_ACTIVE=0
+SAFE_RESTART=NOT_NEEDED
+WORKER_AFTER=active
+WORKER_ENABLED_AFTER=enabled
+SYSTEMD_STATUS_BEGIN
+● mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker
+     Loaded: loaded (/etc/systemd/system/mei-mg-email-worker.service; enabled; preset: enabled)
+    Drop-In: /etc/systemd/system/mei-mg-email-worker.service.d
+             └─timeout-start.conf
+     Active: active (running) since Thu 2026-08-20 17:46:29 -03; 2h 40min ago
+    Process: 3106162 ExecStartPre=/home/ubuntu/mei-mg-email/.venv/bin/python /home/ubuntu/mei-mg-email/scripts/runtime_sender_preflight.py (code=exited, status=0/SUCCESS)
+   Main PID: 3106175 (python)
+      Tasks: 1 (limit: 1070)
+     Memory: 664.0K (peak: 35.0M swap: 21.6M swap peak: 21.6M)
+        CPU: 27.395s
+     CGroup: /system.slice/mei-mg-email-worker.service
+             └─3106175 /home/ubuntu/mei-mg-email/.venv/bin/python -m worker.safe_entrypoint_v2
+
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]:     cur.executemany(
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 128, in executemany
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]:     raise ex.with_traceback(None)
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]: psycopg.errors.UndefinedObject: type "status_envio" does not exist
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]: LINE 1: new.status := 'bloqueado'::status_envio
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]:                                    ^
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]: QUERY:  new.status := 'bloqueado'::status_envio
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]: CONTEXT:  PL/pgSQL function mei_email.enforce_envio_live_eligibility() line 61 at assignment
+Aug 20 20:23:27 shopvivaliz-ai python[3106175]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 20 20:25:43 shopvivaliz-ai python[3106175]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+SYSTEMD_STATUS_END
+JOURNAL_BEGIN
+Aug 20 20:09:01 shopvivaliz-ai python[3106175]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 20 20:11:11 shopvivaliz-ai python[3106175]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 20 20:13:20 shopvivaliz-ai python[3106175]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 20 20:14:07 shopvivaliz-ai python[3106175]: ERROR:mei_mg_email.worker:Erro no ciclo do worker; conexao sera recuperada
+Aug 20 20:14:07 shopvivaliz-ai python[3106175]: Traceback (most recent call last):
+Aug 20 20:14:07 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/worker/worker_queue_first.py", line 486, in run
+Aug 20 20:14:07 shopvivaliz-ai python[3106175]:     adicionados = repor_fila_automatica_isolada()
+Aug 20 20:14:07 shopvivaliz-ai python[3106175]:                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 20 20:14:07 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/app/queue_recovery.py", line 379, in repor_fila_automatica_isolada
+Aug 20 20:14:07 shopvivaliz-ai python[3106175]:     return repor_fila_automatica(conn)
+Aug 20 20:14:07 shopvivaliz-ai python[3106175]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 20 20:14:07 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/app/queue_manager.py", line 261, in repor_fila_automatica
+Aug 20 20:14:07 shopvivaliz-ai python[3106175]:     cur.executemany(
+Aug 20 20:14:07 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 128, in executemany
+Aug 20 20:14:07 shopvivaliz-ai python[3106175]:     raise ex.with_traceback(None)
+Aug 20 20:14:07 shopvivaliz-ai python[3106175]: psycopg.errors.UndefinedObject: type "status_envio" does not exist
+Aug 20 20:14:07 shopvivaliz-ai python[3106175]: LINE 1: new.status := 'bloqueado'::status_envio
+Aug 20 20:14:07 shopvivaliz-ai python[3106175]:                                    ^
+Aug 20 20:14:07 shopvivaliz-ai python[3106175]: QUERY:  new.status := 'bloqueado'::status_envio
+Aug 20 20:14:07 shopvivaliz-ai python[3106175]: CONTEXT:  PL/pgSQL function mei_email.enforce_envio_live_eligibility() line 61 at assignment
+Aug 20 20:14:48 shopvivaliz-ai python[3106175]: ERROR:mei_mg_email.worker:Erro no ciclo do worker; conexao sera recuperada
+Aug 20 20:14:48 shopvivaliz-ai python[3106175]: Traceback (most recent call last):
+Aug 20 20:14:48 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/worker/worker_queue_first.py", line 486, in run
+Aug 20 20:14:48 shopvivaliz-ai python[3106175]:     adicionados = repor_fila_automatica_isolada()
+Aug 20 20:14:48 shopvivaliz-ai python[3106175]:                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 20 20:14:48 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/app/queue_recovery.py", line 379, in repor_fila_automatica_isolada
+Aug 20 20:14:48 shopvivaliz-ai python[3106175]:     return repor_fila_automatica(conn)
+Aug 20 20:14:48 shopvivaliz-ai python[3106175]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 20 20:14:48 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/app/queue_manager.py", line 261, in repor_fila_automatica
+Aug 20 20:14:48 shopvivaliz-ai python[3106175]:     cur.executemany(
+Aug 20 20:14:48 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 128, in executemany
+Aug 20 20:14:48 shopvivaliz-ai python[3106175]:     raise ex.with_traceback(None)
+Aug 20 20:14:48 shopvivaliz-ai python[3106175]: psycopg.errors.UndefinedObject: type "status_envio" does not exist
+Aug 20 20:14:48 shopvivaliz-ai python[3106175]: LINE 1: new.status := 'bloqueado'::status_envio
+Aug 20 20:14:48 shopvivaliz-ai python[3106175]:                                    ^
+Aug 20 20:14:48 shopvivaliz-ai python[3106175]: QUERY:  new.status := 'bloqueado'::status_envio
+Aug 20 20:14:48 shopvivaliz-ai python[3106175]: CONTEXT:  PL/pgSQL function mei_email.enforce_envio_live_eligibility() line 61 at assignment
+Aug 20 20:16:27 shopvivaliz-ai python[3106175]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 20 20:17:30 shopvivaliz-ai python[3106175]: ERROR:mei_mg_email.worker:Erro no ciclo do worker; conexao sera recuperada
+Aug 20 20:17:30 shopvivaliz-ai python[3106175]: Traceback (most recent call last):
+Aug 20 20:17:30 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/worker/worker_queue_first.py", line 486, in run
+Aug 20 20:17:30 shopvivaliz-ai python[3106175]:     adicionados = repor_fila_automatica_isolada()
+Aug 20 20:17:30 shopvivaliz-ai python[3106175]:                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 20 20:17:30 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/app/queue_recovery.py", line 379, in repor_fila_automatica_isolada
+Aug 20 20:17:30 shopvivaliz-ai python[3106175]:     return repor_fila_automatica(conn)
+Aug 20 20:17:30 shopvivaliz-ai python[3106175]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 20 20:17:30 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/app/queue_manager.py", line 261, in repor_fila_automatica
+Aug 20 20:17:30 shopvivaliz-ai python[3106175]:     cur.executemany(
+Aug 20 20:17:30 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 128, in executemany
+Aug 20 20:17:30 shopvivaliz-ai python[3106175]:     raise ex.with_traceback(None)
+Aug 20 20:17:30 shopvivaliz-ai python[3106175]: psycopg.errors.UndefinedObject: type "status_envio" does not exist
+Aug 20 20:17:30 shopvivaliz-ai python[3106175]: LINE 1: new.status := 'bloqueado'::status_envio
+Aug 20 20:17:30 shopvivaliz-ai python[3106175]:                                    ^
+Aug 20 20:17:30 shopvivaliz-ai python[3106175]: QUERY:  new.status := 'bloqueado'::status_envio
+Aug 20 20:17:30 shopvivaliz-ai python[3106175]: CONTEXT:  PL/pgSQL function mei_email.enforce_envio_live_eligibility() line 61 at assignment
+Aug 20 20:18:08 shopvivaliz-ai python[3106175]: ERROR:mei_mg_email.worker:Erro no ciclo do worker; conexao sera recuperada
+Aug 20 20:18:08 shopvivaliz-ai python[3106175]: Traceback (most recent call last):
+Aug 20 20:18:08 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/worker/worker_queue_first.py", line 486, in run
+Aug 20 20:18:08 shopvivaliz-ai python[3106175]:     adicionados = repor_fila_automatica_isolada()
+Aug 20 20:18:08 shopvivaliz-ai python[3106175]:                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 20 20:18:08 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/app/queue_recovery.py", line 379, in repor_fila_automatica_isolada
+Aug 20 20:18:08 shopvivaliz-ai python[3106175]:     return repor_fila_automatica(conn)
+Aug 20 20:18:08 shopvivaliz-ai python[3106175]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 20 20:18:08 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/app/queue_manager.py", line 261, in repor_fila_automatica
+Aug 20 20:18:08 shopvivaliz-ai python[3106175]:     cur.executemany(
+Aug 20 20:18:08 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 128, in executemany
+Aug 20 20:18:08 shopvivaliz-ai python[3106175]:     raise ex.with_traceback(None)
+Aug 20 20:18:08 shopvivaliz-ai python[3106175]: psycopg.errors.UndefinedObject: type "status_envio" does not exist
+Aug 20 20:18:08 shopvivaliz-ai python[3106175]: LINE 1: new.status := 'bloqueado'::status_envio
+Aug 20 20:18:08 shopvivaliz-ai python[3106175]:                                    ^
+Aug 20 20:18:08 shopvivaliz-ai python[3106175]: QUERY:  new.status := 'bloqueado'::status_envio
+Aug 20 20:18:08 shopvivaliz-ai python[3106175]: CONTEXT:  PL/pgSQL function mei_email.enforce_envio_live_eligibility() line 61 at assignment
+Aug 20 20:19:49 shopvivaliz-ai python[3106175]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]: ERROR:mei_mg_email.worker:Erro no ciclo do worker; conexao sera recuperada
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]: Traceback (most recent call last):
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/worker/worker_queue_first.py", line 486, in run
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]:     adicionados = repor_fila_automatica_isolada()
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]:                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/app/queue_recovery.py", line 379, in repor_fila_automatica_isolada
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]:     return repor_fila_automatica(conn)
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/app/queue_manager.py", line 261, in repor_fila_automatica
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]:     cur.executemany(
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]:   File "/home/ubuntu/mei-mg-email/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 128, in executemany
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]:     raise ex.with_traceback(None)
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]: psycopg.errors.UndefinedObject: type "status_envio" does not exist
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]: LINE 1: new.status := 'bloqueado'::status_envio
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]:                                    ^
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]: QUERY:  new.status := 'bloqueado'::status_envio
+Aug 20 20:21:34 shopvivaliz-ai python[3106175]: CONTEXT:  PL/pgSQL function mei_email.enforce_envio_live_eligibility() line 61 at assignment
+Aug 20 20:23:27 shopvivaliz-ai python[3106175]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 20 20:25:43 shopvivaliz-ai python[3106175]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+JOURNAL_END
