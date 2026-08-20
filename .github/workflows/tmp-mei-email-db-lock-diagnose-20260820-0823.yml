@@ -1,0 +1,47 @@
+name: MEI Email DB Lock Diagnose 20260820 0823
+on:
+  push:
+    paths:
+      - '.github/workflows/tmp-mei-email-db-lock-diagnose-20260820-0823.yml'
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+      - name: Diagnose DB locks
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo "BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)"
+          echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then echo 'SENTINEL=present'; else echo 'SENTINEL=absent'; fi
+          .venv/bin/python - <<'PY'
+          import psycopg
+          from app.config import settings
+          with psycopg.connect(settings.database_url) as conn:
+              with conn.cursor() as c:
+                  c.execute("set statement_timeout='5s'")
+                  c.execute("""select pid,usename,state,wait_event_type,wait_event,now()-xact_start as xact_age,now()-query_start as query_age,left(query,220) from pg_stat_activity where datname=current_database() and pid<>pg_backend_pid() order by coalesce(xact_start,query_start) nulls last""")
+                  print('ACTIVITY')
+                  for r in c.fetchall(): print(r)
+                  c.execute("""select a.pid,pg_blocking_pids(a.pid),a.wait_event_type,a.wait_event,left(a.query,180) from pg_stat_activity a where cardinality(pg_blocking_pids(a.pid))>0""")
+                  print('BLOCKED')
+                  for r in c.fetchall(): print(r)
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa

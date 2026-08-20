@@ -89,6 +89,7 @@ jobs:
           grep -q '^ExecStartPre=.*/scripts/runtime_sender_preflight.py$' deploy/systemd/mei-mg-email-worker.service
           grep -q '^ExecStart=.*/python -m worker.safe_entrypoint_v2$' deploy/systemd/mei-mg-email-worker.service
           grep -q '^ExecStart=.*/scripts/nonstop_supervisor_15m.py$' deploy/systemd/mei-mg-email-autorepair.service
+          grep -q 'user_explicit_authorization_2026-08-20' worker/safe_entrypoint.py
 
           sudo install -m 0644 deploy/systemd/mei-mg-email-worker.service /etc/systemd/system/mei-mg-email-worker.service
           sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service /etc/systemd/system/mei-mg-email-autorepair.service
@@ -142,6 +143,7 @@ jobs:
           echo "WORKER_ENABLED=true"
           echo "WORKER_SAFE_ENTRYPOINT_V2=true"
           echo "AUTOQUEUE_TUPLE_LOCK_FIX=true"
+          echo "SYNTHESIZED_AUTH_GUARD=true"
           sudo systemctl show mei-mg-email-worker.service \
             -p ActiveState -p SubState -p MainPID -p ExecStart -p ExecStartPre \
             -p Restart -p RestartUSec -p StartLimitIntervalUSec --no-pager
@@ -170,3 +172,4 @@ jobs:
 # deploy strict operator-origin consent guard 2026-08-20T11:00Z
 # deploy autoqueue dict-row advisory-lock fix 2026-08-20
 # deploy autoqueue dedicated tuple-cursor lock fix 2026-08-20
+# deploy queue lock and synthesized-authorization guard 2026-08-20T11:25Z
