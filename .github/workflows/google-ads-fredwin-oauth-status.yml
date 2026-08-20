@@ -24,9 +24,14 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
       - name: Inspect scoped browser status on Fred-Win
+        env:
+          VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
         shell: bash
         run: |
           set -euo pipefail
+          test -n "${VM_HOST:-}" || { echo 'SHOPVIVALIZ_VM_HOST missing'; exit 2; }
+          [[ "$VM_HOST" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'SHOPVIVALIZ_VM_HOST invalid'; exit 2; }
+          SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/vmkey)
           cat >/tmp/status.ps1 <<'PS1'
           $ErrorActionPreference='SilentlyContinue'
           Write-Output 'OAUTH_BROWSER_STATUS_BEGIN'
@@ -38,7 +43,7 @@ jobs:
           B64="$(iconv -f UTF-8 -t UTF-16LE /tmp/status.ps1 | base64 -w0)"
           CMD="powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand $B64"
           C64="$(printf '%s' "$CMD" | base64 -w0)"
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "FREDWIN_CMD_B64='$C64' python3 - <<'PY'
+          ssh "${SSH_OPTS[@]}" "ubuntu@${VM_HOST}" "FREDWIN_CMD_B64='$C64' python3 - <<'PY'
           import base64,json,os,urllib.request
           cmd=base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode()
           body=json.dumps({'params':{'command':cmd,'timeout':30}}).encode()
