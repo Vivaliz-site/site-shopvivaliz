@@ -1,0 +1,50 @@
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Tue Aug 18 22:39:46 -03 2026
+
+  System load:  2.3                Processes:             183
+  Usage of /:   86.4% of 44.96GB   Users logged in:       0
+  Memory usage: 45%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   51%
+
+  => / is using 86.4% of 44.96GB
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+63 updates can be applied immediately.
+6 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+16 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+116 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+
+*** System restart required ***
+START_UTC=2026-08-20T01:08:27Z
+START_BRT=2026-08-19T22:08:27-0300
+=== QUIESCE PRODUCTION ===
+WORKER_QUIESCED=failed
+SENTINEL=absent
+From https://github.com/fredmourao-ai/mei-mg-email
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+HEAD=efc096694da470f67de493227bb13b483d88df44
+=== REMOVE ORPHAN FLYWAY RUNTIME AND STALE DB CLIENTS ===
+-bash: line 27: 2608033 Killed                  sudo pkill -KILL -f 'org.flywaydb.commandline.Main'
+-bash: line 28: 2608085 Killed                  sudo pkill -KILL -f '/flyway/flyway'
+STALE_CLIENTS=[[4273, "postgres", "", "active", "2026-08-19 22:09:08.910200-03:00", "0:01:19.304463", "IO", "DataFileRead", "172.19.0.1/32", "select count(*) as elegiveis from mei_email.vw_empresas_elegiveis"]]
+TERMINATED_4273=true
+=== BUILD AUTHORITATIVE SCRATCH HISTORY ===
