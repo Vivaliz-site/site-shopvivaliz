@@ -1,0 +1,67 @@
+name: Quick MEI email throughput state 20260819 2120
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-mei-email-quick-state-20260819-2120.yml']
+permissions:
+  contents: write
+jobs:
+  quick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Snapshot state
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF' > reports/mei-email-quick-state-20260819-2120.txt 2>&1
+          set -e
+          cd /home/ubuntu/mei-mg-email
+          echo "CHECK_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)"
+          echo "SERVICE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo SENTINEL=present; else echo SENTINEL=absent; fi
+          .venv/bin/python - <<'PY'
+          import json, psycopg
+          from app.config import settings
+          from worker.worker import WORKER_ADVISORY_LOCK_ID
+          print('CONFIG='+json.dumps({'meta':settings.meta_envios_por_dia,'max':settings.max_envios_por_dia,'rate':settings.rate_limit_envios_por_minuto,'queue_min':settings.queue_min_pending,'queue_target':settings.queue_target_pending,'poll':settings.worker_poll_interval_segundos},sort_keys=True))
+          with psycopg.connect(settings.database_url) as conn:
+            with conn.cursor() as cur:
+              cur.execute("""select count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=date_trunc('day', now() at time zone 'America/Sao_Paulo') at time zone 'America/Sao_Paulo'), count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours'), count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=now()-interval '60 minutes'), count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=now()-interval '20 minutes'), max(enviado_em) filter(where status::text in ('submitted','enviado')), count(*) filter(where status::text in ('pendente','enviando','pending','processing')) from mei_email.envios""")
+              r=cur.fetchone(); print('QUEUE_STATS='+json.dumps({'today_brt':r[0],'sent24':r[1],'sent60':r[2],'sent20':r[3],'last':str(r[4]),'open':r[5]}))
+              cur.execute("select to_regclass('mei_email.envios_externos_cota')")
+              if cur.fetchone()[0] is not None:
+                cur.execute("select count(*) filter(where sent_at>=now()-interval '24 hours'), count(*) filter(where sent_at>=date_trunc('day', now() at time zone 'America/Sao_Paulo') at time zone 'America/Sao_Paulo') from mei_email.envios_externos_cota")
+                e=cur.fetchone(); print('EXTERNAL_LEDGER='+json.dumps({'sent24':e[0],'today_brt':e[1]}))
+              cur.execute("select status::text,count(*) from mei_email.envios where criado_em>=now()-interval '24 hours' group by 1 order by 2 desc")
+              print('STATUS_24H='+json.dumps(cur.fetchall(),default=str))
+              cur.execute("select count(*) from mei_email.lotes where status='pendente'"); print('PENDING_LOTS='+str(cur.fetchone()[0]))
+              cur.execute("select l.pid,a.state,now()-a.query_start,coalesce(a.client_addr::text,'local'),left(coalesce(a.query,''),350) from pg_locks l join pg_stat_activity a on a.pid=l.pid where l.locktype='advisory' and l.classid=0 and l.objid=%s and l.granted",(WORKER_ADVISORY_LOCK_ID,)); print('WORKER_LOCK='+json.dumps(cur.fetchall(),default=str))
+          PY
+          echo JOURNAL_TAIL_BEGIN
+          sudo journalctl -u mei-mg-email-worker.service --since '-90 minutes' --no-pager | tail -n 120 || true
+          echo JOURNAL_TAIL_END
+          EOF
+      - name: Persist report
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/mei-email-quick-state-20260819-2120.txt
+          git commit -m 'ops: record MEI email quick state 20260819-2120' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

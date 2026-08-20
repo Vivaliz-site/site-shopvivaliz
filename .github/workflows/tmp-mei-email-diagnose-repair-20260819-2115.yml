@@ -1,0 +1,147 @@
+name: Diagnose and safely repair MEI email throughput 20260819 2115
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-mei-email-diagnose-repair-20260819-2115.yml']
+permissions:
+  contents: write
+jobs:
+  diagnose_repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Diagnose and safe autorepair
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=60 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF' > reports/mei-email-throughput-diagnose-repair-20260819-2115.txt 2>&1
+          set -u
+          cd /home/ubuntu/mei-mg-email
+          echo "CHECK_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)"
+          echo "SERVICE_ACTIVE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo "SERVICE_ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)"
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo SENTINEL=present; else echo SENTINEL=absent; fi
+          echo AUTOREPAIR_TIMERS_BEGIN
+          sudo systemctl list-timers --all --no-pager | grep -Ei 'mei|email|autorepair' || true
+          echo AUTOREPAIR_TIMERS_END
+          echo UNITS_BEGIN
+          sudo systemctl list-unit-files --no-pager | grep -Ei 'mei-mg-email|autorepair' || true
+          echo UNITS_END
+          echo CONFIG_BEGIN
+          .venv/bin/python - <<'PY'
+          from app.config import settings
+          print('email_provider='+str(settings.email_provider))
+          print('meta_envios_por_dia='+str(settings.meta_envios_por_dia))
+          print('max_envios_por_dia='+str(settings.max_envios_por_dia))
+          print('rate_limit_envios_por_minuto='+str(settings.rate_limit_envios_por_minuto))
+          print('worker_poll_interval_segundos='+str(settings.worker_poll_interval_segundos))
+          print('queue_min_pending='+str(settings.queue_min_pending))
+          print('queue_target_pending='+str(settings.queue_target_pending))
+          PY
+          echo CONFIG_END
+          echo BEFORE_DB_BEGIN
+          .venv/bin/python - <<'PY'
+          import json
+          from datetime import datetime
+          import psycopg
+          from app.config import settings
+          from worker.worker import WORKER_ADVISORY_LOCK_ID
+          q='''
+          select
+            count(*) filter (where status::text in ('submitted','enviado') and enviado_em >= date_trunc('day', now() at time zone 'America/Sao_Paulo') at time zone 'America/Sao_Paulo') as sent_today_brt,
+            count(*) filter (where status::text in ('submitted','enviado') and enviado_em >= now()-interval '24 hours') as sent_24h_queue,
+            count(*) filter (where status::text in ('submitted','enviado') and enviado_em >= now()-interval '60 minutes') as sent_60m,
+            count(*) filter (where status::text in ('submitted','enviado') and enviado_em >= now()-interval '20 minutes') as sent_20m,
+            max(enviado_em) filter (where status::text in ('submitted','enviado')) as last_sent_at,
+            count(*) filter (where status::text in ('pendente','enviando','pending','processing')) as open_queue,
+            count(*) filter (where status::text='sender_blocked' and criado_em >= now()-interval '24 hours') as sender_blocked_24h,
+            count(*) filter (where status::text='erro' and criado_em >= now()-interval '24 hours') as errors_24h
+          from mei_email.envios
+          '''
+          with psycopg.connect(settings.database_url) as conn:
+            with conn.cursor() as cur:
+              cur.execute(q); row=cur.fetchone(); cols=[d.name for d in cur.description]
+              data=dict(zip(cols,row))
+              cur.execute("select to_regclass('mei_email.envios_externos_cota')")
+              ext_exists=cur.fetchone()[0] is not None
+              ext24=exttoday=0
+              if ext_exists:
+                cur.execute("select count(*) filter (where sent_at>=now()-interval '24 hours'), count(*) filter (where sent_at >= date_trunc('day', now() at time zone 'America/Sao_Paulo') at time zone 'America/Sao_Paulo') from mei_email.envios_externos_cota")
+                ext24, exttoday=cur.fetchone()
+              data['external_sent_24h']=int(ext24 or 0); data['external_sent_today_brt']=int(exttoday or 0)
+              data['effective_sent_24h']=int(data['sent_24h_queue'] or 0)+int(ext24 or 0)
+              data['effective_sent_today_brt']=int(data['sent_today_brt'] or 0)+int(exttoday or 0)
+              for k,v in list(data.items()):
+                if hasattr(v,'isoformat'): data[k]=v.isoformat()
+              print('DB_STATS='+json.dumps(data,ensure_ascii=False,sort_keys=True,default=str))
+              cur.execute("select status::text, count(*) from mei_email.envios where criado_em>=now()-interval '24 hours' group by 1 order by 2 desc")
+              print('STATUS_24H='+json.dumps(cur.fetchall(),ensure_ascii=False,default=str))
+              cur.execute("select count(*) from mei_email.lotes where status='pendente'")
+              print('PENDING_LOTS='+str(cur.fetchone()[0]))
+              cur.execute("select l.pid,a.state,a.query_start,now()-a.query_start,coalesce(a.client_addr::text,'local'),left(coalesce(a.query,''),400) from pg_locks l join pg_stat_activity a on a.pid=l.pid where l.locktype='advisory' and l.classid=0 and l.objid=%s and l.granted",(WORKER_ADVISORY_LOCK_ID,))
+              print('WORKER_LOCK='+json.dumps(cur.fetchall(),ensure_ascii=False,default=str))
+              cur.execute("select pid,state,now()-query_start,wait_event_type,wait_event,left(query,500) from pg_stat_activity where datname=current_database() and state<>'idle' and query_start<now()-interval '5 minutes' order by query_start")
+              print('LONG_DB_ACTIVITY='+json.dumps(cur.fetchall(),ensure_ascii=False,default=str))
+          PY
+          echo BEFORE_DB_END
+          echo JOURNAL_BEFORE_BEGIN
+          sudo journalctl -u mei-mg-email-worker.service --since '-6 hours' --no-pager | tail -n 250 || true
+          echo JOURNAL_BEFORE_END
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then
+            echo AUTOREPAIR_SKIPPED=sentinel_present
+          else
+            echo AUTOREPAIR_BEGIN
+            set +e
+            timeout 240 .venv/bin/python scripts/autocorrigir_envios_2h.py --apply
+            rc=$?
+            set -e
+            echo AUTOREPAIR_RC=$rc
+            echo AUTOREPAIR_END
+          fi
+          echo WAITING_FOR_PROGRESS=90s
+          sleep 90
+          echo AFTER_DB_BEGIN
+          .venv/bin/python - <<'PY'
+          import json
+          import psycopg
+          from app.config import settings
+          from worker.worker import WORKER_ADVISORY_LOCK_ID
+          with psycopg.connect(settings.database_url) as conn:
+            with conn.cursor() as cur:
+              cur.execute("select count(*) filter (where status::text in ('submitted','enviado') and enviado_em>=now()-interval '90 seconds'), count(*) filter (where status::text in ('submitted','enviado') and enviado_em>=now()-interval '20 minutes'), max(enviado_em) filter (where status::text in ('submitted','enviado')), count(*) filter (where status::text in ('pendente','enviando','pending','processing')) from mei_email.envios")
+              r=cur.fetchone(); print('PROGRESS_90S='+str(r[0])); print('SENT_20M='+str(r[1])); print('LAST_SENT_AT='+str(r[2])); print('OPEN_QUEUE='+str(r[3]))
+              cur.execute("select l.pid,a.state,a.query_start,now()-a.query_start,coalesce(a.client_addr::text,'local'),left(coalesce(a.query,''),400) from pg_locks l join pg_stat_activity a on a.pid=l.pid where l.locktype='advisory' and l.classid=0 and l.objid=%s and l.granted",(WORKER_ADVISORY_LOCK_ID,))
+              print('WORKER_LOCK_AFTER='+json.dumps(cur.fetchall(),ensure_ascii=False,default=str))
+          PY
+          echo AFTER_DB_END
+          echo "SERVICE_AFTER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          if [ -f /var/lib/mei-mg-email/sender_blocked.pause ]; then echo SENTINEL_AFTER=present; else echo SENTINEL_AFTER=absent; fi
+          echo JOURNAL_AFTER_BEGIN
+          sudo journalctl -u mei-mg-email-worker.service --since '-10 minutes' --no-pager | tail -n 250 || true
+          echo JOURNAL_AFTER_END
+          log="$(sudo journalctl -u mei-mg-email-worker.service --since '-10 minutes' --no-pager 2>/dev/null || true)"
+          echo "AS42004_LAST10M=$(printf '%s\n' "$log" | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8' || true)"
+          EOF
+      - name: Persist report
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/mei-email-throughput-diagnose-repair-20260819-2115.txt
+          git commit -m 'ops: record MEI email throughput diagnosis and safe repair 20260819-2115' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
