@@ -1,0 +1,81 @@
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+Warning: Permanently added '137.131.156.17' (ED25519) to the list of known hosts.
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Thu Aug 20 09:47:21 -03 2026
+
+  System load:  0.9                Processes:             183
+  Usage of /:   85.7% of 44.96GB   Users logged in:       0
+  Memory usage: 44%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   46%
+
+  => / is using 85.7% of 44.96GB
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+62 updates can be applied immediately.
+6 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+16 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+116 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+
+*** System restart required ***
+CHECK_BRT=2026-08-20T11:07:46-0300
+SENTINEL=absent
+From https://github.com/fredmourao-ai/mei-mg-email
+ * branch            main       -> FETCH_HEAD
+   59077fd..39f5503  main       -> origin/main
+ORIGIN_MAIN=39f5503ac89d96b34d75cfcd4005f502200e5078
+DEPLOYED_QUEUE_MANAGER=true
+DEPLOYED_PRESEND_GUARD=true
+SENT24_BEFORE=58
+PENDING_BEFORE=500
+SEED_SKIPPED=pending_above_500
+WORKER=active
+WORKER_ENABLED=enabled
+AUTOREPAIR_TIMER=active
+AUTOREPAIR_ENABLED=enabled
+SENTINEL_AFTER=absent
+SENT15=8
+SENT24_AFTER=58
+PENDING_AFTER=500
+LATEST=2026-08-20 11:05:21.803449-03
+AS42004_LAST15M=0
+NEXT                            LEFT LAST                           PASSED UNIT                          ACTIVATES
+Thu 2026-08-20 11:14:37 -03 4min 51s Thu 2026-08-20 10:59:36 -03 10min ago mei-mg-email-autorepair.timer mei-mg-email-autorepair.service
+
+1 timers listed.
+Pass --all to see loaded but inactive timers, too.
+Aug 20 11:07:15 shopvivaliz-ai python[2891128]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 20 11:07:26 shopvivaliz-ai python[2891128]: INFO:mei_mg_email.worker:Lote 0 (campanha e894a7b8-b142-4e31-854a-44007d641527) concluido: 0 submitted, 0 falhas
+Aug 20 11:07:27 shopvivaliz-ai python[2891128]: INFO:mei_mg_email.worker:Lote 1 (campanha e894a7b8-b142-4e31-854a-44007d641527) concluido: 0 submitted, 0 falhas
+Aug 20 11:07:27 shopvivaliz-ai python[2891128]: INFO:mei_mg_email.worker:Lote 2 (campanha e894a7b8-b142-4e31-854a-44007d641527) concluido: 0 submitted, 0 falhas
+Aug 20 11:07:27 shopvivaliz-ai python[2891128]: INFO:mei_mg_email.worker:Lote 3 (campanha e894a7b8-b142-4e31-854a-44007d641527) concluido: 0 submitted, 0 falhas
+Aug 20 11:07:27 shopvivaliz-ai python[2891128]: INFO:mei_mg_email.worker:Lote 4 (campanha e894a7b8-b142-4e31-854a-44007d641527) concluido: 0 submitted, 0 falhas
+Aug 20 11:08:38 shopvivaliz-ai systemd[1]: Stopping mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker...
+Aug 20 11:08:39 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Deactivated successfully.
+Aug 20 11:08:39 shopvivaliz-ai systemd[1]: Stopped mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker.
+Aug 20 11:08:39 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Consumed 8.481s CPU time, 25.7M memory peak, 19.0M memory swap peak.
+Aug 20 11:08:39 shopvivaliz-ai systemd[1]: Starting mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker...
+Aug 20 11:08:50 shopvivaliz-ai python[2906099]: {"campanhas": true, "email_suppressions": true, "email_validator": true, "envios": true, "runtime_sender_preflight": "ok"}
+Aug 20 11:08:51 shopvivaliz-ai systemd[1]: Started mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker.
+Aug 20 11:08:52 shopvivaliz-ai python[2906222]: WARNING:mei_mg_email.email_provider:MicrosoftGraphEmailProvider APP-ONLY active sender=naoresponda@dev.shopvivaliz.com.br cert=/home/ubuntu/.shopvivaliz/m365/graph-auth.crt
+Aug 20 11:08:52 shopvivaliz-ai python[2906222]: INFO:mei_mg_email.worker:Worker queue-first iniciado. provedor=microsoft_graph rate_limit=10/min meta_24h=9950 teto_24h=10000 poll=5s fila_min=500 fila_target=2000
+Aug 20 11:08:53 shopvivaliz-ai python[2906222]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 11:08:58 shopvivaliz-ai python[2906222]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+CONTINUOUS_SEND_GATE=PASS
+SSH_RC=0
