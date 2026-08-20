@@ -42,7 +42,9 @@ function sitemap_absolute_image(string $base, string $image): string
 {
     $image = trim($image);
     if ($image === '') return '';
-    if (str_starts_with($image, 'https://') || str_starts_with($image, 'http://')) return $image;
+    if (str_starts_with($image, 'https://')) return $image;
+    if (str_starts_with($image, 'http://')) return '';
+    if (str_starts_with($image, '//')) return '';
     return $base . '/' . ltrim($image, '/');
 }
 
@@ -133,7 +135,13 @@ foreach ($products as $product) {
     }
     $image = sitemap_absolute_image($base, $imageSrc);
     $price = (float)($product['price'] ?? 0);
-    if ($slug === '' || $name === '' || $price <= 0 || $image === '') continue;
+    $stock = (int)($product['stock'] ?? 0);
+    // Search Console was accumulating stale product URLs. The sitemap must
+    // advertise only pages that are indexable purchase/detail destinations:
+    // current slug, name, positive price, positive stock and a safe HTTPS image.
+    // Out-of-stock or incomplete rows remain reachable from internal flows when
+    // needed, but they should not be submitted for indexing.
+    if ($slug === '' || $name === '' || $price <= 0 || $stock <= 0 || $image === '') continue;
 
     $lastmod = sitemap_date(
         $product['updated_at']
