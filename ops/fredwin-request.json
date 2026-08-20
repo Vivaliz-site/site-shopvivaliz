@@ -1,5 +1,5 @@
 {
   "action": "health",
-  "requested_at": "2026-08-20T23:20:00Z",
-  "reason": "User confirmed Fred-Win tunnel operational; revalidate canonical private relay before production email recovery"
+  "requested_at": "2026-08-20T23:37:00Z",
+  "reason": "Confirm canonical Fred-Win private relay after safe reverse-tunnel recovery returned HEALTH_AFTER=OK"
 }
