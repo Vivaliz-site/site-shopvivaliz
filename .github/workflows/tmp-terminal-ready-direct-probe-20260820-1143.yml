@@ -3,11 +3,16 @@ on:
   push:
     branches: [main]
     paths: ['.github/workflows/tmp-terminal-ready-direct-probe-20260820-1143.yml']
+permissions:
+  contents: write
 jobs:
   probe:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Configure SSH
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
@@ -19,7 +24,8 @@ jobs:
       - name: Probe production metadata
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'EOF'
+          mkdir -p reports
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'EOF' | tee reports/terminal-ready-direct-probe-20260820-1143.txt
           set -euo pipefail
           p=/home/ubuntu/shopvivaliz-deploy/current
           echo REMOTE_HOSTNAME=$(hostname)
@@ -49,6 +55,17 @@ jobs:
             echo HTTP\|$u\|$out
           done
           EOF
+      - name: Persist sanitized report
+        run: |
+          set -euo pipefail
+          git config user.name 'shopvivaliz-ops-bot'
+          git config user.email 'ops@shopvivaliz.local'
+          git add reports/terminal-ready-direct-probe-20260820-1143.txt
+          if ! git diff --cached --quiet; then
+            git commit -m 'ops: record sanitized terminal readiness probe'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey
