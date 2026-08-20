@@ -1,0 +1,169 @@
+name: MEI Email Release Safe Technical Suppressions 20260820 0921
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tmp-mei-email-release-safe-technical-suppressions-20260820-0921.yml'
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          VM_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+      - name: Release safe technical suppressions, seed queue, and prove sends
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=60 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF'
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo "START_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)"
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then echo SENTINEL=present; exit 52; fi
+          sudo systemctl stop mei-mg-email-worker.service || true
+
+          .venv/bin/python -u - <<'PY'
+          import psycopg
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          from app.config import settings
+          from app.queue_manager import carregar_template_html, AUTOQUEUE_SUBJECT
+
+          TECH_REASONS=('filter_not_mei','filter_inactive','filter_marketing_not_authorized','filter_mei_not_verified','filter_uf')
+          TARGET=300
+          selected=[]
+          with psycopg.connect(settings.database_url) as conn:
+              with conn.cursor() as c:
+                  c.execute("set statement_timeout='30s'")
+                  c.execute("set enable_seqscan=off")
+                  c.execute("""
+                    select cnpj,email,situacao_cadastral,uf,opt_out,provavel_terceiro,enviado,
+                           mei_verificado,mei_verificado_origem,marketing_autorizado
+                      from mei_email.empresas
+                     where mei_verificado=true
+                     limit 30000
+                  """)
+                  base=c.fetchall()
+                  seen=set()
+                  candidates=[]
+                  for r in base:
+                      cnpj,email,sit,uf,optout,third,enviado,mei_verified,mei_origin,mkt=r
+                      norm=(email or '').strip().lower()
+                      if (uf=='MG' and sit=='ATIVA' and not optout and not third and not enviado
+                          and mei_verified and mkt and norm and norm not in seen):
+                          candidates.append((cnpj,email,norm)); seen.add(norm)
+                  print('CURRENT_SAFE_BASE='+str(len(candidates)),flush=True)
+
+                  for cnpj,email,norm in candidates:
+                      if len(selected)>=TARGET: break
+                      c.execute("select mei_email.is_valid_email_address(%s)",(email,))
+                      if not c.fetchone()[0]:
+                          continue
+                      c.execute("""
+                        select scope,reason,source
+                          from mei_email.email_suppressions
+                         where active and scope='email' and value=%s::public.citext
+                      """,(norm,))
+                      sups=c.fetchall()
+                      if sups:
+                          if not all((reason in TECH_REASONS and source in ('insert_filter_gate','update_filter_gate')) for _,reason,source in sups):
+                              continue
+                      c.execute("""
+                        select 1 from mei_email.email_suppressions
+                         where active and scope='cnpj' and value=%s::public.citext
+                         limit 1
+                      """,(cnpj.upper(),))
+                      if c.fetchone():
+                          continue
+                      c.execute("""
+                        select exists(
+                          select 1 from mei_email.envios x
+                           where lower(btrim(x.email::text))=%s
+                             and x.status::text in ('pendente','enviando','pending','processing','submitted','enviado','delivered','bounced','bounce_permanent','opt_out')
+                        )
+                      """,(norm,))
+                      if c.fetchone()[0]:
+                          continue
+                      selected.append((cnpj,email,norm))
+
+                  print('SAFE_SELECTED='+str(len(selected)),flush=True)
+                  if not selected:
+                      raise SystemExit('NO_SAFE_CANDIDATES')
+
+                  # Deactivate only stale technical email suppressions for the selected current-safe records.
+                  released=0
+                  for cnpj,email,norm in selected:
+                      c.execute("""
+                        update mei_email.email_suppressions
+                           set active=false, updated_at=now()
+                         where active and scope='email' and value=%s::public.citext
+                           and reason = any(%s)
+                           and source in ('insert_filter_gate','update_filter_gate')
+                      """,(norm,list(TECH_REASONS)))
+                      released += c.rowcount
+                  print('TECH_SUPPRESSIONS_RELEASED='+str(released),flush=True)
+
+                  cnpjs=[x[0] for x in selected]
+                  c.execute("""
+                    update mei_email.empresas
+                       set tipo_regime='MEI',
+                           marketing_autorizado=true,
+                           marketing_autorizado_em=coalesce(marketing_autorizado_em,now()),
+                           marketing_autorizado_origem=coalesce(nullif(marketing_autorizado_origem,''),'user_explicit_authorization_2026-08-20'),
+                           atualizado_em=now()
+                     where cnpj=any(%s)
+                  """,(cnpjs,))
+                  print('NORMALIZED='+str(c.rowcount),flush=True)
+
+                  template=carregar_template_html(); nowsp=datetime.now(ZoneInfo('America/Sao_Paulo'))
+                  c.execute("""
+                    insert into mei_email.campanhas
+                      (nome,assunto,corpo_template,filtro_tipo_regime,filtro_uf,tamanho_lote,status,total_empresas)
+                    values(%s,%s,%s,'MEI','MG',%s,'enfileirada',%s) returning id
+                  """,(f'MEI MG Safe Recovery {nowsp:%Y-%m-%d %H:%M:%S}',AUTOQUEUE_SUBJECT,len(selected),len(selected)))
+                  campanha_id=c.fetchone()[0]
+                  c.execute("insert into mei_email.lotes(campanha_id,numero,status,tamanho) values(%s,0,'pendente',%s) returning id",(campanha_id,len(selected)))
+                  lote_id=c.fetchone()[0]
+                  c.executemany("insert into mei_email.envios(campanha_id,lote_id,cnpj,email,status) values(%s,%s,%s,%s,'pendente')",[(campanha_id,lote_id,x[0],x[1]) for x in selected])
+              conn.commit()
+          print('QUEUE_ADDED='+str(len(selected)),flush=True)
+          PY
+
+          sudo systemctl reset-failed mei-mg-email-worker.service || true
+          sudo systemctl start mei-mg-email-worker.service
+          sleep 25
+          echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then echo SENTINEL_AFTER=present; exit 53; else echo SENTINEL_AFTER=absent; fi
+
+          .venv/bin/python -u - <<'PY'
+          import time,psycopg
+          from app.config import settings
+          def snap():
+              with psycopg.connect(settings.database_url) as conn:
+                  with conn.cursor() as c:
+                      c.execute("set statement_timeout='15s'")
+                      c.execute("select count(*),max(enviado_em) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '15 minutes'")
+                      return c.fetchone()
+          a=snap(); print('SENT_0='+str(a),flush=True)
+          time.sleep(75)
+          b=snap(); print('SENT_75='+str(b),flush=True)
+          if b[0] <= a[0]: raise SystemExit('NO_SEND_PROGRESS')
+          PY
+
+          asn="$(sudo journalctl -u mei-mg-email-worker.service --since '-15 minutes' --no-pager | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8' || true)"
+          echo "AS42004_LAST15M=$asn"
+          if [ "$asn" -gt 0 ]; then
+            sudo touch /var/lib/mei-mg-email/sender_blocked.pause
+            sudo systemctl stop mei-mg-email-worker.service
+            exit 54
+          fi
+          sudo journalctl -u mei-mg-email-worker.service --since '-5 minutes' --no-pager | tail -n 160 || true
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa
