@@ -35,13 +35,58 @@ Learn more about enabling ESM Apps service at https://ubuntu.com/esm
 see /var/log/unattended-upgrades/unattended-upgrades.log
 
 *** System restart required ***
-BRT=2026-08-20T08:22:31-0300
+BRT=2026-08-20T08:27:31-0300
+HEAD=b57f1154cd01105d472baa73dbe1ad35f16b5c8b
+ORIGIN_MAIN=b57f1154cd01105d472baa73dbe1ad35f16b5c8b
 WORKER=inactive
 WORKER_ENABLED=enabled
+NDR_GUARD=active
+NDR_GUARD_ENABLED=enabled
 SENTINEL=absent
-SEND_STATE={"sent24": 0, "sent10m": 0, "sent2m": 0, "open_queue": 0, "last_sent_at": "2026-08-14 18:00:06.742016-03:00"}
-ELIGIBLE=0
-AS42004_LAST15M=0
+SYSTEMD_BEGIN
+Restart=always
+RestartUSec=5s
+ExecStartPre={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubuntu/mei-mg-email/.venv/bin/python /home/ubuntu/mei-mg-email/scripts/runtime_sender_preflight.py ; ignore_errors=no ; start_time=[Thu 2026-08-20 08:09:23 -03] ; stop_time=[Thu 2026-08-20 08:09:28 -03] ; pid=2817660 ; code=killed ; status=15/TERM }
+ExecStart={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubuntu/mei-mg-email/.venv/bin/python -m worker.safe_entrypoint_v2 ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }
+ActiveState=inactive
+SubState=dead
+UnitFileState=enabled
+StartLimitIntervalUSec=0
+SYSTEMD_END
+NETWORK_BEGIN
+40.126.45.29    STREAM www.tm.prd.ags.akadns.net
+40.126.45.29    DGRAM  
+40.126.45.29    RAW    
+GRAPH_HTTP=200 CONNECT=0.083927 TOTAL=0.798854
+NETWORK_END
+SEND_STATE_ERROR="QueryCanceled: canceling statement due to statement timeout"
+ELIGIBLE={"eligible": 0}
+FLYWAY_TABLE={"table_name": null}
+FLYWAY_37_40_ERROR="UndefinedTable: relation \"public.flyway_schema_history\" does not exist\nLINE 3:         from public.flyway_schema_history\n                     ^"
+LEGACY_COPY_ERROR="ProgrammingError: only '%s', '%b', '%t' are allowed as placeholders, got '%''"
+OPEN_INVALID_EMAIL_ERROR="QueryCanceled: canceling statement due to statement timeout"
+OPEN_SUPPRESSED_ERROR="QueryCanceled: canceling statement due to statement timeout"
+OPEN_REPLAY_RISK_ERROR="QueryCanceled: canceling statement due to statement timeout"
+OPEN_DUPLICATE_EMAIL_ERROR="QueryCanceled: canceling statement due to statement timeout"
+STALE_SENDING_ERROR="QueryCanceled: canceling statement due to statement timeout"
+ORPHAN_ENVIOS_ERROR="QueryCanceled: canceling statement due to statement timeout"
+BLOCKED_SESSIONS_ERROR="QueryCanceled: canceling statement due to statement timeout"
+BLOCKERS_SAMPLE=[]
+AUTH_ORIGINS_ERROR="QueryCanceled: canceling statement due to statement timeout"
+EXTERNAL_LEDGER_TABLE={"table_name": "mei_email.envios_externos_cota"}
+EXTERNAL_LEDGER_ERROR="UndefinedColumn: column \"enviado_em\" does not exist\nLINE 3: ...                   count(*) filter(where coalesce(enviado_em...\n                                                             ^\nHINT:  Perhaps you meant to reference the column \"envios_externos_cota.criado_em\"."
+AS42004_LAST30M=0
+GRAPH_APPONLY_LAST30M=1
 JOURNAL_TAIL_BEGIN
--- No entries --
+Aug 20 08:32:07 shopvivaliz-ai systemd[1]: Starting mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker...
+Aug 20 08:32:38 shopvivaliz-ai python[2830997]: Traceback (most recent call last):
+Aug 20 08:32:38 shopvivaliz-ai python[2830997]:   File "/home/ubuntu/mei-mg-email/scripts/runtime_sender_preflight.py", line 89, in <module>
+Aug 20 08:32:39 shopvivaliz-ai python[2830997]:     raise SystemExit(main())
+Aug 20 08:32:39 shopvivaliz-ai python[2830997]:                      ^^^^^^
+Aug 20 08:32:39 shopvivaliz-ai python[2830997]:   File "/home/ubuntu/mei-mg-email/scripts/runtime_sender_preflight.py", line 42, in main
+Aug 20 08:32:39 shopvivaliz-ai python[2830997]:     with psycopg.connect(database_url, connect_timeout=5) as conn:
+Aug 20 08:32:39 shopvivaliz-ai python[2830997]:          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 20 08:32:39 shopvivaliz-ai python[2830997]:   File "/home/ubuntu/mei-mg-email/.venv/lib/python3.12/site-packages/psycopg/connection.py", line 119, in connect
+Aug 20 08:32:39 shopvivaliz-ai python[2830997]:     raise last_ex.with_traceback(None)
+Aug 20 08:32:39 shopvivaliz-ai python[2830997]: psycopg.errors.ConnectionTimeout: connection timeout expired
 JOURNAL_TAIL_END
