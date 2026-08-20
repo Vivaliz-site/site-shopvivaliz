@@ -144,4 +144,4 @@ jobs:
         shell: bash
         run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-# deploy non-disruptive 15min supervisor 2026-08-20T05:01Z
+# redeploy latest reviewed sender runtime after live drift proof 2026-08-20T10:17Z
