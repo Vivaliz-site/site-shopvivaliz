@@ -101,10 +101,12 @@ jobs:
                       raise SystemExit('legacy queue states remain after migrations')
           PY
 
+          sudo install -m 0644 deploy/systemd/mei-mg-email-worker.service /etc/systemd/system/mei-mg-email-worker.service
           sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service /etc/systemd/system/mei-mg-email-autorepair.service
           sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.timer /etc/systemd/system/mei-mg-email-autorepair.timer
           sudo install -d -m 0750 -o ubuntu -g ubuntu /var/lib/mei-mg-email
           sudo systemctl daemon-reload
+          sudo systemctl enable --now mei-mg-email-worker.service
           sudo systemctl enable --now mei-mg-email-autorepair.timer
 
           if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
@@ -141,6 +143,7 @@ jobs:
           echo "WORKER_ACTIVE=true"
           echo "AUTOREPAIR_TIMER_ACTIVE=$(sudo systemctl is-active mei-mg-email-autorepair.timer)"
           echo "AUTOREPAIR_TIMER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-autorepair.timer)"
+          sudo systemctl cat mei-mg-email-worker.service --no-pager
           sleep 120
           .venv/bin/python - <<'PY' > "$after"
           from dotenv import load_dotenv
@@ -192,4 +195,4 @@ jobs:
         shell: bash
         run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-# forced rerun: 2026-08-19T22:20:00-03:00
+# forced rerun: 2026-08-20T00:34:00-03:00
