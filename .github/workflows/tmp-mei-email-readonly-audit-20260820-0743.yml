@@ -1,3 +1,4 @@
+# read-only audit trigger retry
 name: MEI Email Readonly Audit 20260820 0743
 on:
   push:
@@ -59,27 +60,19 @@ jobs:
           PY
           echo '=== DATABASE READ ONLY ==='
           .venv/bin/python - <<'PY'
-          import json, re
+          import json
           import psycopg
           from app.config import settings
           def one(cur, label, sql, params=()):
               try:
-                  cur.execute(sql, params)
-                  row=cur.fetchone()
-                  print(label+'='+json.dumps(row, default=str, ensure_ascii=False))
+                  cur.execute(sql, params); print(label+'='+json.dumps(cur.fetchone(), default=str, ensure_ascii=False))
               except Exception as exc:
-                  print(label+'_ERROR='+type(exc).__name__+':'+str(exc).replace('\n',' ')[:300])
-                  cur.connection.rollback()
-                  cur.execute('set transaction read only')
+                  print(label+'_ERROR='+type(exc).__name__+':'+str(exc).replace('\n',' ')[:300]); cur.connection.rollback(); cur.execute('set transaction read only')
           def many(cur, label, sql, params=()):
               try:
-                  cur.execute(sql, params)
-                  rows=cur.fetchall()
-                  print(label+'='+json.dumps(rows, default=str, ensure_ascii=False))
+                  cur.execute(sql, params); print(label+'='+json.dumps(cur.fetchall(), default=str, ensure_ascii=False))
               except Exception as exc:
-                  print(label+'_ERROR='+type(exc).__name__+':'+str(exc).replace('\n',' ')[:300])
-                  cur.connection.rollback()
-                  cur.execute('set transaction read only')
+                  print(label+'_ERROR='+type(exc).__name__+':'+str(exc).replace('\n',' ')[:300]); cur.connection.rollback(); cur.execute('set transaction read only')
           with psycopg.connect(settings.database_url) as conn:
               with conn.cursor() as cur:
                   cur.execute('set transaction read only')
@@ -94,17 +87,6 @@ jobs:
                   many(cur,'AUTH_ORIGINS_TOP20',"select coalesce(marketing_autorizado_origem,'<null>'),count(*) from mei_email.empresas where marketing_autorizado is true group by 1 order by 2 desc limit 20")
                   one(cur,'OPT_OUT_AUTH_CONFLICT',"select count(*) from mei_email.empresas where marketing_autorizado is true and coalesce(opt_out,false)=true")
                   one(cur,'WAITING_LOCKS',"select count(*) from pg_stat_activity where datname=current_database() and pid<>pg_backend_pid() and wait_event_type='Lock'")
-                  try:
-                      cur.execute("select column_name from information_schema.columns where table_schema='mei_email' and table_name='envios'")
-                      cols={r[0] for r in cur.fetchall()}
-                      ts=next((c for c in ('updated_at','atualizado_em','criado_em','created_at') if c in cols),None)
-                      if ts:
-                          cur.execute(f"select count(*) from mei_email.envios where status::text in ('enviando','processing') and {ts}<now()-interval '15 minutes'")
-                          print('ORPHAN_SENDING='+json.dumps(cur.fetchone(),default=str))
-                      else:
-                          print('ORPHAN_SENDING=unknown_no_timestamp_column')
-                  except Exception as exc:
-                      print('ORPHAN_SENDING_ERROR='+type(exc).__name__+':'+str(exc).replace('\n',' ')[:300])
           PY
           echo '=== NETWORK ==='
           getent ahostsv4 graph.microsoft.com | head -n 3 || true
