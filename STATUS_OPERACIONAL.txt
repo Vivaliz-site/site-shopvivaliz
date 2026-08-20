@@ -1,195 +1,64 @@
-SHOPVIVALIZ - STATUS OPERACIONAL
+SHOPVIVALIZ - STATUS OPERACIONAL ATUAL
 
-DATA: 2026-07-19 11:12:38 UTC
-RESPONSÁVEL: Claude Code Autonomous
-REPOSITÓRIO: github.com/Vivaliz-site/site-shopvivaliz
-DOMÍNIO: shopvivaliz.com.br
-REVISAO CODEX: 2026-07-19
-STATUS GOOGLE ADS: PARCIAL_TOKEN_TESTE / READINESS COMPROVADO
+ATUALIZADO: 2026-08-20
+REPOSITORIO: github.com/Vivaliz-site/site-shopvivaliz
+DOMINIO: shopvivaliz.com.br
 
-═══════════════════════════════════════════════════════════════════════════
+IMPORTANTE - CORRECAO DE ESTADO GOOGLE ADS
 
-✅ SISTEMA OPERACIONAL
+O texto anterior deste arquivo era um snapshot historico de 2026-07-19 e nao deve ser usado como fonte atual para credenciais Google Ads.
 
-  • Domínio: ACTIVE (Cloudflare DNS)
-  • SSL/TLS: A+ (válido até 2027-07-19)
-  • VM Oracle: 137.131.156.17 (Ubuntu)
-  • Git Sync: A cada 30 minutos
-  • Uptime: 99.9% monitorado
-  • Backup: Diário automático
+O registro antigo de GOOGLE_ADS_REFRESH_TOKEN com erro invalid_grant descrevia uma credencial antiga/local da VM naquele momento. Ele NAO representa o estado atual do secret do ambiente GitHub Actions Production.
 
-═══════════════════════════════════════════════════════════════════════════
+Fonte de verdade atual:
+  1. GitHub Actions Environment: Production
+  2. Workflow: .github/workflows/google-ads-antique-decore-status.yml
+  3. Evidencia redigida: ops/google-ads-antique-decore-status-latest.txt
+  4. Sincronizacao para VM: .github/workflows/google-ads-sync-production-runtime.yml
 
-✅ FUNCIONALIDADES IMPLEMENTADAS
+ESTADO GOOGLE ADS COMPROVADO EM 2026-08-20
 
-  [1] IA Inteligente Barata
-      • Claude: Haiku 4.5 (R$ 5/mês) + Opus 4.8 (R$ 15/mês)
-      • Codex: GPT-4o-mini (R$ 3/mês) + GPT-4-turbo (R$ 10/mês)
-      • Economia: 68% mensal
-      • Aliases: cc, cf, gx, gf
+  • Conta: Shopvivaliz Ltda
+  • Campanha: ShopVivaliz-Search-Vasos-Antique-Decore-2026-08
+  • Status da campanha: ENABLED
+  • Orcamento diario: BRL 10.00
+  • Conversao Compra: ENABLED, primary=true, incluida em conversoes
+  • Meta PURCHASE: biddable=true
+  • Anuncio Decore: APPROVED / REVIEWED / ENABLED
+  • Anuncio Antique: APPROVED / REVIEWED / ENABLED
+  • Landing Decore: HTTP 200, tracking preservado
+  • Landing Antique: HTTP 200, tracking preservado
+  • Resultado do live watch: HEALTHY_NO_CHANGE
 
-  [2] Carrossel Automático de Imagens
-      • Alternância: 3 segundos
-      • Páginas: 4 (produto, home, catalogo v1, catalogo v2)
-      • Controle: Manual pause 10s + resume automático
-      • Responsivo: Mobile + Desktop ready
+CREDENCIAIS E SEGURANCA
 
-  [3] Campanha Google Ads Autônoma
-      • Status: PARCIAL_TOKEN_TESTE
-      • Budget: R$ 15/dia (R$ 450/mês)
-      • Keywords: 6 (PHRASE match)
-      • ROI Target: >10x
-      • Scripts: Python prontos; readiness passou local/VM; acesso basico pendente no Google
+  • Os valores dos secrets nao sao gravados neste arquivo.
+  • O refresh token que funciona no GitHub Actions Production nao deve ser copiado para documentacao, chat ou logs.
+  • A VM deve receber as credenciais somente pelo workflow seguro de sincronizacao.
+  • O workflow de sincronizacao agora exige GOOGLE_ADS_REFRESH_TOKEN explicitamente e valida, na propria VM, se o refresh token consegue obter um access token do Google sem imprimir nenhum segredo.
+  • Se a validacao da VM retornar invalid_grant, a sincronizacao deve falhar; nao deve mais registrar sucesso silencioso.
 
-  [4] GitHub Secrets Configurados
-      • GOOGLE_OAUTH_CLIENT_ID: documentado
-      • GOOGLE_OAUTH_CLIENT_SECRET: deve ser rotacionado; valor antigo foi exposto
-      • GOOGLE_ADS_CUSTOMER_ID: configurado
-      • GOOGLE_ADS_DEVELOPER_TOKEN: configurado (Conta de teste)
-      • GOOGLE_ADS_REFRESH_TOKEN: presente, mas regenerador falha invalid_grant
-      • GOOGLE_ADS_CONVERSION_SOURCE: GA4_IMPORT
-      • GOOGLE_ANALYTICS_ID: configurado
+DISTINCAO DE AMBIENTES
 
-  [5] Monitoramento 24/7
-      • Health check: A cada hora
-      • Email alertas: SMTP configurado
-      • Dashboard: admin/monitor/
-      • Logs: /logs/ (rotacionados diariamente)
+  GitHub Actions Production:
+    - Credencial atual comprovadamente funcional pela execucao do Google Ads live watch.
 
-═══════════════════════════════════════════════════════════════════════════
+  VM de producao:
+    - O snapshot historico encontrado localmente pode conter estado antigo invalid_grant.
+    - Uma nova sincronizacao segura foi solicitada em 2026-08-20 para substituir esse estado pela credencial atual do ambiente Production e validar o refresh token apos a gravacao.
 
-✅ MÉTRICAS
+NAO USAR COMO ESTADO ATUAL
 
-  Produtos Sincronizados:     188
-  Imagens Otimizadas:         100%
-  Carrossel Ativo:            4 páginas
-  Taxa de Cache:              89%
-  Erro 404:                   0.2%
-  Tempo Resposta Médio:       145ms
-  Conversion Rate:            2.3%
-  Bounce Rate:                32%
+  • Relatorios de julho/2026 que afirmem "Google Ads bloqueado por credenciais".
+  • Mensagens historicas de invalid_grant sem data e sem indicar se se referem a VM local ou ao GitHub Actions Production.
+  • Valores locais antigos de GOOGLE_ADS_REFRESH_TOKEN.
 
-═══════════════════════════════════════════════════════════════════════════
+REGRA OPERACIONAL
 
-INTEGRAÇÕES GOOGLE
+Qualquer diagnostico futuro deve informar separadamente:
+  - github_actions_refresh_token_status
+  - vm_refresh_token_status
+  - google_ads_api_status
+  - checked_at
 
-  Google Analytics 4:         PARCIAL (codigo/fallback; conta externa nao verificada)
-  Google Merchant Center:     PARCIAL (feed local e merchant id; submissao externa nao verificada)
-  Google Ads API:             PARCIAL token em Conta de teste
-  Conversao Ads:              PARCIAL via GA4_IMPORT
-  Mercado Pago:               Webhook OK (CORRIGIDO 2026-07-19)
-  Tiny ERP:                   Sync 30min
-  Olist:                      Connected (tokens refresh auto)
-  Melhor Envio:               Integrado
-  WhatsApp Business:          Ativo
-
-═══════════════════════════════════════════════════════════════════════════
-
-✅ SEGURANÇA
-
-  • SSL/TLS: A+ Grade
-  • HTTPS: Obrigatório
-  • CSP Headers: Configurados
-  • X-Frame-Options: SAMEORIGIN
-  • Referrer Policy: strict-origin-when-cross-origin
-  • Backup Encryption: AES-256
-  • Database: utf8mb4 (unicode)
-
-═══════════════════════════════════════════════════════════════════════════
-
-✅ PERFORMANCE
-
-  • Cloudflare CDN: 187 localidades
-  • Cache Strategy: Browser (7d) + Cloudflare (24h)
-  • Image Optimization: WebP + Compression
-  • Database Query: <100ms (95%)
-  • JavaScript: Minificado + Defer
-  • CSS: Critical inline + Defer non-critical
-
-═══════════════════════════════════════════════════════════════════════════
-
-✅ AUTOMAÇÃO
-
-  A cada 30 minutos:
-    • git fetch + merge --ff-only origin/main
-    • Validação de catálogo
-    • Cache invalidation
-    • Email de pedidos
-
-  A cada hora:
-    • Relatório de tráfego
-    • Monitoramento uptime
-    • Sync Tiny ERP
-    • Health check completo
-
-  Diariamente:
-    • Backup completo (encrypted)
-    • Otimização de imagens
-    • Relatório de vendas
-    • Log rotation
-
-═══════════════════════════════════════════════════════════════════════════
-
-✅ DOCUMENTAÇÃO
-
-  • DEPLOYMENT_COMPLETE.md     → Guia de implementação
-  • MIGRACAO_FINALIZADO.md     → Status da migração
-  • SETUP-INSTRUCOES.md        → Instruções IA barata
-  • CLAUDE.md                  → Diretrizes do projeto
-  • MEMORIA-AGENTES.md         → Conhecimento acumulado
-
-═══════════════════════════════════════════════════════════════════════════
-
-🚀 PRÓXIMAS AÇÕES
-
-  1. [IMEDIATO] Corrigir credenciais Google Ads
-     → Rotacionar GOOGLE_OAUTH_CLIENT_SECRET
-     → Solicitar Acesso basico na Central de API
-     → Verificar marca/OAuth no Google Cloud se exigido
-     → Reemitir GOOGLE_ADS_REFRESH_TOKEN para corrigir invalid_grant
-     → Manter campanha pausada ate aprovacao do Google
-
-  2. [HOJE] Verificar Carrossel Automático
-     → Abrir: https://shopvivaliz.com.br/produto
-     → Observar: Imagens alternam a cada 3 segundos
-     → Testar: Clicar em thumbnail (pausa auto-play)
-
-  3. [CONTÍNUO] Usar IA em Modo Barato
-     → Terminal: cc "sua pergunta" (Claude Haiku)
-     → Terminal: gx "sua pergunta" (Codex GPT-4o-mini)
-
-  4. [OPCIONAL] Otimizações Futuras
-     → A/B testing de headlines
-     → Teste de cores no checkout
-     → Expansão de categorias
-     → Integração com redes sociais
-
-═══════════════════════════════════════════════════════════════════════════
-
-📊 SUMÁRIO FINAL
-
-  ✅ Infraestrutura:       100% Operacional
-  ✅ Funcionalidades:       100% Implementadas
-  ⚠️ Integrações Google:    PARCIAL / BLOQUEADAS POR CREDENCIAIS
-  ✅ Automação:             100% Ativa
-  ✅ Segurança:             100% Configurada
-  ✅ Performance:           100% Otimizada
-  ✅ Monitoramento:         100% Ativo
-  ✅ Documentação:          100% Completa
-
-  RESULTADO GOOGLE ADS: NAO COMPROVADO
-
-═══════════════════════════════════════════════════════════════════════════
-
-SUPORTE: claude@shopvivaliz.com.br
-REPOSITÓRIO: github.com/Vivaliz-site/site-shopvivaliz
-LIVE SITE: https://shopvivaliz.com.br
-
-═══════════════════════════════════════════════════════════════════════════
-
-Sistema autônomo, monitorado e documentado.
-Pronto para escala e crescimento.
-
-🚀 READY FOR PRODUCTION 🚀
-
-═══════════════════════════════════════════════════════════════════════════
+Nunca concluir "nao ha token valido" apenas porque a VM possui um registro historico invalid_grant quando o GitHub Actions Production esta autenticando com sucesso.
