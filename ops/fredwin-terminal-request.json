@@ -2,7 +2,7 @@
   "action": "terminal",
   "shell": "powershell",
   "timeout": 120,
-  "command": "Write-Output 'FREDWIN_TERMINAL_TEMPLATE'",
-  "requested_at": "2026-08-20T12:39:00Z",
-  "reason": "Enable audited terminal execution through the canonical Fred-Win private relay"
+  "command": "Write-Output ('USER=' + [System.Security.Principal.WindowsIdentity]::GetCurrent().Name); Write-Output ('HOST=' + $env:COMPUTERNAME); Write-Output ('PWD=' + (Get-Location).Path); Write-Output ('TIME=' + (Get-Date).ToString('o')); Write-Output ('PS=' + $PSVersionTable.PSVersion.ToString())",
+  "requested_at": "2026-08-20T12:50:30Z",
+  "reason": "Verify interactive-equivalent PowerShell terminal execution through the canonical Fred-Win private relay"
 }
