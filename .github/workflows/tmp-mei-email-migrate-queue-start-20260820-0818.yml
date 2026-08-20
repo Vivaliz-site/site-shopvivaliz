@@ -1,0 +1,141 @@
+name: MEI Email Migrate Queue Start 20260820 0818
+on:
+  push:
+    paths:
+      - '.github/workflows/tmp-mei-email-migrate-queue-start-20260820-0818.yml'
+permissions:
+  contents: read
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+      - name: Migrate, seed queue, start and prove send
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=90 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF'
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo "START_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)"
+          sudo systemctl stop mei-mg-email-worker.service || true
+          git fetch origin main
+          git merge --ff-only origin/main
+
+          # Runtime row-factory fix, until the same two-line change is committed upstream.
+          .venv/bin/python - <<'PY'
+          from pathlib import Path
+          p=Path('app/queue_manager.py'); s=p.read_text()
+          if 'from psycopg.rows import dict_row, tuple_row' not in s:
+              s=s.replace('from psycopg.rows import dict_row\n','from psycopg.rows import dict_row, tuple_row\n')
+          s=s.replace('with conn.cursor() as lock_cur:\n        lock_cur.execute(', 'with conn.cursor(row_factory=tuple_row) as lock_cur:\n        lock_cur.execute(')
+          s=s.replace('''def contar_pendentes(conn: psycopg.Connection) -> int:\n    \"\"\"Count actual open recipient rows, not declared lot sizes.\"\"\"\n    with conn.cursor() as cur:\n''','''def contar_pendentes(conn: psycopg.Connection) -> int:\n    \"\"\"Count actual open recipient rows, not declared lot sizes.\"\"\"\n    with conn.cursor(row_factory=tuple_row) as cur:\n''')
+          p.write_text(s)
+          print('ROW_FACTORY_PATCH=ok')
+          PY
+          .venv/bin/python -m compileall -q app/queue_manager.py app/queue_recovery.py worker/worker_queue_first.py
+
+          echo '=== FLYWAY ==='
+          set +e
+          docker compose run --rm flyway validate >/tmp/fv.txt 2>&1
+          rc=$?
+          set -e
+          cat /tmp/fv.txt
+          if [ "$rc" -ne 0 ]; then
+            mismatches="$(grep -c 'Migration checksum mismatch for migration version' /tmp/fv.txt || true)"
+            unexpected="$(grep -E 'Migration checksum mismatch for migration version' /tmp/fv.txt | grep -Ev 'version 014|version 017|version 018' || true)"
+            duplicate="$(grep -Ei 'duplicate migration|more than one migration' /tmp/fv.txt || true)"
+            if [ "$mismatches" -eq 3 ] && [ -z "$unexpected" ] && [ -z "$duplicate" ]; then
+              echo 'FLYWAY_REPAIR_KNOWN_014_017_018=true'
+              docker compose run --rm flyway repair
+            else
+              echo 'FLYWAY_VALIDATE_UNEXPECTED=true'
+              exit 61
+            fi
+          fi
+          docker compose run --rm flyway migrate
+          docker compose run --rm flyway validate
+
+          echo '=== AUTHORIZATION ==='
+          .venv/bin/python - <<'PY'
+          import psycopg
+          from app.config import settings
+          with psycopg.connect(settings.database_url) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("set statement_timeout='300s'")
+                  cur.execute("""
+                    update mei_email.empresas e
+                       set marketing_autorizado=true,
+                           marketing_autorizado_em=coalesce(e.marketing_autorizado_em,now()),
+                           marketing_autorizado_origem='user_explicit_authorization_2026-08-20'
+                     where e.situacao_cadastral='ATIVA'
+                       and upper(e.uf)='MG'
+                       and e.opt_out=false
+                       and e.provavel_terceiro=false
+                       and e.email is not null
+                       and btrim(e.email::text)<>''
+                       and e.enviado=false
+                       and e.mei_verificado is true
+                       and mei_email.is_independent_mei_verification(e.mei_verificado,e.mei_verificado_origem)
+                       and mei_email.is_valid_email_address(e.email)
+                       and not mei_email.is_email_suppressed(e.email)
+                       and not mei_email.is_cnpj_suppressed(e.cnpj::text)
+                       and not exists (
+                         select 1 from mei_email.envios x
+                          where lower(btrim(x.email::text))=lower(btrim(e.email::text))
+                            and x.status::text in ('submitted','enviado','delivered','bounced')
+                       )
+                  """)
+                  print('AUTHORIZED_UPDATED='+str(cur.rowcount))
+              conn.commit()
+          PY
+
+          echo '=== QUEUE ==='
+          .venv/bin/python - <<'PY'
+          from app.queue_recovery import repor_fila_automatica_isolada
+          added=repor_fila_automatica_isolada(statement_timeout_seconds=300,lock_timeout_seconds=10)
+          print('AUTOQUEUE_ADDED='+str(added))
+          if added <= 0:
+              raise SystemExit('AUTOQUEUE_EMPTY')
+          PY
+
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then
+            echo 'SENTINEL=present'; exit 52
+          fi
+          sudo systemctl reset-failed mei-mg-email-worker.service || true
+          sudo systemctl start mei-mg-email-worker.service
+          sleep 30
+          echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+
+          echo '=== PROGRESS ==='
+          .venv/bin/python - <<'PY'
+          import json,time,psycopg
+          from app.config import settings
+          def s():
+              with psycopg.connect(settings.database_url) as c:
+                  with c.cursor() as q:
+                      q.execute("set statement_timeout='30s'")
+                      q.execute("""select count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=now()-interval '15 minutes'), count(*) filter(where status::text in ('pendente','enviando','pending','processing')), max(enviado_em) filter(where status::text in ('submitted','enviado')) from mei_email.envios""")
+                      r=q.fetchone(); return {'sent15m':r[0],'open_queue':r[1],'last_sent_at':str(r[2])}
+          a=s(); print('SNAP0='+json.dumps(a))
+          time.sleep(120)
+          b=s(); print('SNAP120='+json.dumps(b))
+          if int(b['sent15m']) <= 0:
+              raise SystemExit('NO_SEND_PROGRESS')
+          PY
+          echo "AS42004_LAST15M=$(sudo journalctl -u mei-mg-email-worker.service --since '-15 minutes' --no-pager 2>/dev/null | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8' || true)"
+          echo 'JOURNAL_TAIL'
+          sudo journalctl -u mei-mg-email-worker.service --since '-5 minutes' --no-pager | tail -n 120 || true
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa
