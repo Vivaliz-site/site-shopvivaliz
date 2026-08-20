@@ -1,8 +1,8 @@
 {
   "action": "terminal",
   "shell": "powershell",
-  "timeout": 180,
-  "command": "$ErrorActionPreference='Continue'; $s=(Get-Command ssh -ErrorAction Stop).Source; $a='shopvivaliz-vm'; $m=& $s -o BatchMode=yes -o ConnectTimeout=15 $a \"cd /home/ubuntu/shopvivaliz-deploy/current 2>/dev/null || exit 2; echo DEPLOY_OK; printf 'GIT='; git --version | head -n1; printf 'SHA='; git rev-parse HEAD; printf 'PHP='; php -r 'echo PHP_VERSION;' 2>/dev/null || echo unavailable\" 2>$null; $m | ForEach-Object {Write-Output $_}; $urls=@('https://shopvivaliz.com.br/','https://shopvivaliz.com.br/catalogo','https://shopvivaliz.com.br/catalogo?q=antique','https://shopvivaliz.com.br/catalogo?q=decore'); foreach($u in $urls){$r=& $s -o BatchMode=yes -o ConnectTimeout=15 $a \"curl -L -sS -o /dev/null --connect-timeout 10 --max-time 30 -w '%{http_code}|%{url_effective}|%{time_total}' '$u'\" 2>$null; if($LASTEXITCODE -eq 0){Write-Output ('HTTP|'+$u+'|'+($r|Select-Object -Last 1))}else{Write-Output ('HTTP|'+$u+'|ERROR||')}}",
-  "requested_at": "2026-08-20T14:37:00Z",
-  "reason": "Validate production deploy path, Git SHA, PHP and VM-origin HTTP using the confirmed existing SSH alias without exposing secrets"
+  "timeout": 120,
+  "command": "$ErrorActionPreference='Stop'; $s=(Get-Command ssh -ErrorAction Stop).Source; $a='shopvivaliz-vm'; $cmd=@'\nset -e\np=/home/ubuntu/shopvivaliz-deploy/current\nr=$(readlink -f \"$p\")\necho REALPATH=$r\nsha=\"\"\nif git -C \"$p\" rev-parse HEAD >/dev/null 2>&1; then sha=$(git -C \"$p\" rev-parse HEAD); fi\nif [ -z \"$sha\" ]; then\n  for f in \"$p/.deploy-sha\" \"$p/DEPLOY_SHA\" \"$p/REVISION\" \"$p/revision.txt\" \"$r/.deploy-sha\" \"$r/DEPLOY_SHA\" \"$r/REVISION\" \"$r/revision.txt\"; do\n    if [ -f \"$f\" ]; then sha=$(head -n1 \"$f\" | tr -cd '0-9a-fA-F' | cut -c1-40); [ -n \"$sha\" ] && break; fi\n  done\nfi\nif [ -z \"$sha\" ]; then\n  b=$(basename \"$r\"); c=$(printf '%s' \"$b\" | grep -Eo '[0-9a-fA-F]{7,40}' | head -n1 || true); [ -n \"$c\" ] && sha=$c\nfi\n[ -n \"$sha\" ] || sha=UNKNOWN\necho DEPLOY_SHA=$sha\n'@; $o=& $s -o BatchMode=yes -o ConnectTimeout=15 $a $cmd 2>$null; if($LASTEXITCODE -ne 0){throw 'SSH deploy metadata probe failed'}; $o | ForEach-Object {Write-Output $_}",
+  "requested_at": "2026-08-20T14:43:00Z",
+  "reason": "Resolve production deploy SHA safely from existing release metadata or symlink target without exposing secrets or changing production"
 }
