@@ -1,0 +1,54 @@
+name: MEI Email DB Ultraquick 20260820
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/mei-email-db-ultraquick-20260820.yml'
+permissions:
+  contents: read
+jobs:
+  db:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          KEY1: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          KEY2: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          HOSTS1: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          HOSTS2: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${KEY1:-${KEY2:-}}"; hosts="${HOSTS1:-${HOSTS2:-}}"
+          test -n "$key"; test -n "$hosts"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$key" > ~/.ssh/id_rsa
+          printf '%s\n' "$hosts" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_rsa ~/.ssh/known_hosts
+      - name: Read DB health
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=12 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF'
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo "AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "HEAD=$(git rev-parse HEAD)"
+          echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then echo SENTINEL=present; else echo SENTINEL=absent; fi
+          docker ps -a --filter name=mei-mg-email-db --format 'db={{.Status}} image={{.Image}}'
+          docker inspect mei-mg-email-db --format 'running={{.State.Running}} restarting={{.State.Restarting}} oom={{.State.OOMKilled}} exit={{.State.ExitCode}} restart_count={{.RestartCount}} started={{.State.StartedAt}}' || true
+          echo 'DB_LAST_LOGS_BEGIN'
+          timeout 10s docker logs --tail 60 mei-mg-email-db 2>&1 || true
+          echo 'DB_LAST_LOGS_END'
+          echo 'COMPOSE_DIFF_BEGIN'
+          git diff -- docker-compose.yml || true
+          echo 'COMPOSE_DIFF_END'
+          echo 'MEM_DISK_BEGIN'
+          free -h || true
+          df -h / || true
+          echo 'MEM_DISK_END'
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
