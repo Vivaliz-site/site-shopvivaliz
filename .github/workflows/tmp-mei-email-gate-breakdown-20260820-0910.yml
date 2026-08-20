@@ -1,0 +1,47 @@
+name: MEI Email Gate Breakdown 20260820 0910
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tmp-mei-email-gate-breakdown-20260820-0910.yml'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+      - name: Breakdown gates
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          .venv/bin/python -u - <<'PY'
+          import collections, psycopg
+          from app.config import settings
+          with psycopg.connect(settings.database_url) as conn:
+              with conn.cursor() as c:
+                  c.execute("set statement_timeout='20s'")
+                  c.execute("set enable_seqscan=off")
+                  c.execute("select tipo_regime,situacao_cadastral,uf,opt_out,provavel_terceiro,enviado,mei_verificado_origem,marketing_autorizado,marketing_autorizado_origem,email is not null from mei_email.empresas where mei_verificado=true limit 5000")
+                  rows=c.fetchall()
+          print('ROWS='+str(len(rows)))
+          names=['tipo_regime','situacao','uf','opt_out','terceiro','enviado','mei_origem','mkt_auth','mkt_origem','email_not_null']
+          for i,n in enumerate(names):
+              ctr=collections.Counter(r[i] for r in rows)
+              print(n.upper()+'='+repr(ctr.most_common(20)))
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa

@@ -1,0 +1,48 @@
+name: MEI Email Simple Candidates 20260820 0908
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tmp-mei-email-simple-candidates-20260820-0908.yml'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+      - name: Fetch simple candidates
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          .venv/bin/python -u - <<'PY'
+          import time,psycopg
+          from app.config import settings
+          with psycopg.connect(settings.database_url) as conn:
+              with conn.cursor() as c:
+                  c.execute("set statement_timeout='20s'")
+                  c.execute("set enable_seqscan=off")
+                  t=time.time()
+                  c.execute("select cnpj,email,tipo_regime,situacao_cadastral,uf,opt_out,provavel_terceiro,enviado,mei_verificado_origem from mei_email.empresas where mei_verificado=true limit 2000")
+                  rows=c.fetchall()
+                  print('ROWS='+str(len(rows)),flush=True)
+                  print('SECONDS='+str(round(time.time()-t,3)),flush=True)
+                  valid=[r for r in rows if r[2]=='MEI' and r[3]=='ATIVA' and r[4]=='MG' and not r[5] and not r[6] and not r[7] and r[1] and r[8] and r[8] not in ('override_operador_2026-08-13','politica_importacao_operador_2026-08-13')]
+                  print('LOCAL_BASIC_VALID='+str(len(valid)),flush=True)
+                  for r in valid[:3]: print('SAMPLE_CNPJ='+str(r[0]),flush=True)
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa
