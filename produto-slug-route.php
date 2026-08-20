@@ -9,8 +9,7 @@ declare(strict_types=1);
  * - redirect proven historical aliases to the current live SKU slug;
  * - never revive products from snapshots or use snapshot price/stock/status;
  * - preserve attribution parameters on safe canonical redirects;
- * - fall through to produto.php (including its 404 behavior) when no mapping
- *   can be proven.
+ * - never serve stale product slugs as 200 pages with a different canonical.
  */
 
 require_once __DIR__ . '/includes/catalog-runtime.php';
@@ -61,6 +60,59 @@ function sv_product_route_catalog_row_by_sku(string $sku): ?array
     }
 
     return null;
+}
+
+function sv_product_route_slugify(string $name, string $sku): string
+{
+    $accents = ['á'=>'a','à'=>'a','ã'=>'a','â'=>'a','ä'=>'a','é'=>'e','è'=>'e','ê'=>'e','ë'=>'e','í'=>'i','ì'=>'i','î'=>'i','ï'=>'i','ó'=>'o','ò'=>'o','õ'=>'o','ô'=>'o','ö'=>'o','ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u','ç'=>'c','ñ'=>'n'];
+    $lower = function_exists('mb_strtolower') ? mb_strtolower($name, 'UTF-8') : strtolower($name);
+    $base = strtr($lower, $accents);
+    $base = preg_replace('/[^a-z0-9]+/', '-', $base);
+    $base = trim((string)$base, '-');
+    $base = function_exists('mb_substr') ? mb_substr($base, 0, 60) : substr($base, 0, 60);
+    $skuPart = strtolower((string)preg_replace('/[^a-zA-Z0-9]+/', '', $sku));
+    return trim($base . '-' . $skuPart, '-') ?: $skuPart;
+}
+
+function sv_product_route_catalog_row_by_alias_slug(string $requestedSlug): ?array
+{
+    $requestedNorm = sv_product_route_normalize($requestedSlug);
+    if ($requestedNorm === '') {
+        return null;
+    }
+
+    $match = null;
+    foreach (svcr_products() as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+
+        $canonicalSlug = trim((string)($row['slug'] ?? ''));
+        $sku = trim((string)($row['sku'] ?? ''));
+        $name = trim((string)($row['name'] ?? ''));
+        $aliases = [];
+        if ($name !== '' && $sku !== '') {
+            $aliases[] = sv_product_route_slugify($name, $sku);
+        }
+        if ($name !== '' && function_exists('svcr_slug')) {
+            $aliases[] = svcr_slug($name, '');
+        }
+
+        foreach (array_unique(array_filter($aliases)) as $alias) {
+            if ($canonicalSlug !== '' && sv_product_route_normalize($canonicalSlug) === sv_product_route_normalize((string)$alias)) {
+                continue;
+            }
+            if (sv_product_route_normalize((string)$alias) === $requestedNorm) {
+                if ($match !== null) {
+                    // Ambiguous aliases must not canonicalize to an arbitrary product.
+                    return null;
+                }
+                $match = $row;
+            }
+        }
+    }
+
+    return $match;
 }
 
 function sv_product_route_catalog_row_by_sku_suffix(string $requestedSlug): ?array
@@ -131,7 +183,7 @@ function sv_product_route_catalog_redirect(): never
         }
     }
 
-    $target = '/catalogo';
+    $target = '/catalogo/';
     if ($query !== []) {
         $target .= '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
     }
@@ -140,12 +192,18 @@ function sv_product_route_catalog_redirect(): never
     exit;
 }
 
+function sv_product_route_not_found(): never
+{
+    http_response_code(404);
+    header('Cache-Control: no-store', true);
+    require __DIR__ . '/404.php';
+    exit;
+}
+
 $rawSlug = $_GET['slug'] ?? '';
 $requestedSlug = is_scalar($rawSlug) ? trim((string)$rawSlug) : '';
 if ($requestedSlug === '') {
-    http_response_code(404);
-    require __DIR__ . '/404.php';
-    exit;
+    sv_product_route_not_found();
 }
 
 // Direct requests to this internal controller are consolidated back to the
@@ -172,6 +230,15 @@ if ($suffixSlug !== null) {
     sv_product_route_redirect($suffixSlug);
 }
 
+// Historical name-only/generated aliases that still resolve to one current
+// catalog product should redirect instead of serving 200 with a different
+// canonical. That is the Search Console "alternate/canonical mismatch" class.
+$aliasRow = sv_product_route_catalog_row_by_alias_slug($requestedSlug);
+$aliasSlug = sv_product_route_row_slug($aliasRow);
+if ($aliasSlug !== null) {
+    sv_product_route_redirect($aliasSlug);
+}
+
 // Historical numeric IDs resolve only against the current catalog. When no
 // current match exists, direct the visitor to the current catalog instead of
 // consulting a retired storefront snapshot or migration record.
@@ -185,6 +252,6 @@ if (preg_match('/^(.+)-([0-9]+)$/u', $decodedSlug, $matches) === 1) {
     sv_product_route_catalog_redirect();
 }
 
-// No proven current mapping: preserve the normal product page and 404 logic.
-$_GET['slug'] = $decodedSlug;
-require __DIR__ . '/produto.php';
+// No proven current mapping: do not let produto.php revive legacy slugs as
+// 200 pages. Return the actual missing-state so Google can clear stale URLs.
+sv_product_route_not_found();
