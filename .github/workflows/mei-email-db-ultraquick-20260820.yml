@@ -37,12 +37,36 @@ jobs:
           echo "ORIGIN_MAIN=$(git rev-parse origin/main 2>/dev/null || true)"
           echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
           echo "WORKER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)"
-          sudo systemctl show mei-mg-email-worker.service -p ExecStart -p ExecStartPre -p Restart -p RestartUSec -p StartLimitIntervalUSec -p ActiveState -p SubState --no-pager || true
+          sudo systemctl show mei-mg-email-worker.service -p ExecStart -p ExecStartPre -p MainPID -p Restart -p RestartUSec -p StartLimitIntervalUSec -p ActiveState -p SubState --no-pager || true
+          ps -eo pid=,etime=,stat=,cmd= | grep -E 'worker\.(worker_queue_first|safe_entrypoint)' | grep -v grep || true
           if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then echo SENTINEL=present; else echo SENTINEL=absent; fi
           docker ps -a --filter name=mei-mg-email-db --format 'db={{.Status}} image={{.Image}}'
           docker inspect mei-mg-email-db --format 'running={{.State.Running}} restarting={{.State.Restarting}} oom={{.State.OOMKilled}} exit={{.State.ExitCode}} restart_count={{.RestartCount}} started={{.State.StartedAt}}' || true
+          echo 'PG_ACTIVITY_BEGIN'
+          timeout 12s .venv/bin/python - <<'PY' || true
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import os, psycopg
+          from psycopg.rows import dict_row
+          with psycopg.connect(os.environ['DATABASE_URL'], row_factory=dict_row, connect_timeout=5) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("set statement_timeout='3s'")
+                  cur.execute("""
+                    select pid, application_name, state, wait_event_type, wait_event,
+                           now()-query_start as age,
+                           left(regexp_replace(query, E'[\\n\\r\\t]+', ' ', 'g'), 220) query
+                      from pg_stat_activity
+                     where datname=current_database()
+                       and pid <> pg_backend_pid()
+                     order by query_start nulls last
+                     limit 30
+                  """)
+                  for row in cur.fetchall():
+                      print(dict(row))
+          PY
+          echo 'PG_ACTIVITY_END'
           echo 'WORKER_LOG_BEGIN'
-          sudo journalctl -u mei-mg-email-worker.service --since '-5 minutes' --no-pager | tail -n 100 || true
+          sudo journalctl -u mei-mg-email-worker.service --since '-4 minutes' --no-pager | tail -n 120 || true
           echo 'WORKER_LOG_END'
           echo 'MEM_DISK_BEGIN'
           free -h || true
@@ -53,4 +77,4 @@ jobs:
         if: always()
         run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
 
-# post-deploy safe-entrypoint recheck 2026-08-20T04:57Z
+# live worker wait-state recheck 2026-08-20T05:00Z
