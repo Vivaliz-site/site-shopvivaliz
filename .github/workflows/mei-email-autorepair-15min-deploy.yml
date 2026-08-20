@@ -182,3 +182,4 @@ jobs:
 # deploy final dict-row ledger and migration-version fixes 2026-08-20T11:30Z
 # deploy restored full presend contract after regression 2026-08-20T13:24Z
 # watchdog redeploy current strict sender main 2026-08-20T13:42Z
+# watchdog deploy sender main 6c14e388b0001ae0a5caf241722920eb80e841d5 strict-consent restore 2026-08-20T14:12Z
