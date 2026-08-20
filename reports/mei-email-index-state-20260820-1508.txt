@@ -1,0 +1,26 @@
+CHECK_BRT=2026-08-20T15:07:50-0300
+WORKER=active
+SENTINEL=absent
+SENT24=266
+SENT5=0
+OPEN=555
+AS42004_LAST10M=0
+INDEXES_BEGIN
+empresas_pkey|CREATE UNIQUE INDEX empresas_pkey ON mei_email.empresas USING btree (cnpj)
+idx_empresas_autoqueue_mei_mg|CREATE INDEX idx_empresas_autoqueue_mei_mg ON mei_email.empresas USING btree (cnpj) INCLUDE (email, data_abertura) WHERE (((tipo_regime)::text = 'MEI'::text) AND (uf = 'MG'::bpchar) AND (situacao_cadastral = 'ATIVA'::text) AND (opt_out = false) AND (provavel_terceiro = false) AND (email IS NOT NULL) AND (enviado = false) AND (marketing_autorizado = true) AND (mei_verificado = true))
+idx_empresas_backfill_auth_mei_mg_20260817|CREATE INDEX idx_empresas_backfill_auth_mei_mg_20260817 ON mei_email.empresas USING btree (cnpj) WHERE (((tipo_regime)::text = 'MEI'::text) AND (uf = 'MG'::bpchar) AND (situacao_cadastral = 'ATIVA'::text) AND (opt_out = false) AND (provavel_terceiro = false) AND (email IS NOT NULL) AND (enviado = false) AND ((marketing_autorizado IS DISTINCT FROM true) OR (mei_verificado IS DISTINCT FROM true)))
+idx_empresas_elegiveis|CREATE INDEX idx_empresas_elegiveis ON mei_email.empresas USING btree (uf, opt_out, provavel_terceiro) WHERE (email IS NOT NULL)
+idx_empresas_elegiveis_regime_uf|CREATE INDEX idx_empresas_elegiveis_regime_uf ON mei_email.empresas USING btree (tipo_regime, uf, data_abertura DESC) WHERE ((opt_out = false) AND (provavel_terceiro = false) AND (email IS NOT NULL) AND (email <> ''::citext))
+idx_empresas_elegiveis_v3_upper_uf|CREATE INDEX idx_empresas_elegiveis_v3_upper_uf ON mei_email.empresas USING btree (cnpj) INCLUDE (email, data_abertura) WHERE ((upper((uf)::text) = 'MG'::text) AND (situacao_cadastral = 'ATIVA'::text) AND (opt_out = false) AND (provavel_terceiro = false) AND (email IS NOT NULL) AND (marketing_autorizado = true) AND (enviado = false) AND ((tipo_regime)::text = 'MEI'::text) AND (mei_verificado = true))
+idx_empresas_email|CREATE INDEX idx_empresas_email ON mei_email.empresas USING btree (email)
+idx_empresas_email_enviado|CREATE INDEX idx_empresas_email_enviado ON mei_email.empresas USING btree (email) WHERE ((enviado = true) AND (email IS NOT NULL))
+idx_empresas_email_normalizado|CREATE INDEX idx_empresas_email_normalizado ON mei_email.empresas USING btree (lower(btrim((email)::text))) WHERE (email IS NOT NULL)
+idx_empresas_enviado|CREATE INDEX idx_empresas_enviado ON mei_email.empresas USING btree (enviado) WHERE (enviado = false)
+idx_empresas_lower_email|CREATE INDEX idx_empresas_lower_email ON mei_email.empresas USING btree (lower(btrim((email)::text)))
+idx_empresas_marketing_autorizado|CREATE INDEX idx_empresas_marketing_autorizado ON mei_email.empresas USING btree (marketing_autorizado) WHERE (marketing_autorizado = true)
+idx_empresas_mei_cand_mg_temp|CREATE INDEX idx_empresas_mei_cand_mg_temp ON mei_email.empresas USING btree (cnpj) WHERE ((uf = 'MG'::bpchar) AND ((tipo_regime)::text = 'MEI_CANDIDATO'::text) AND (situacao_cadastral = 'ATIVA'::text) AND (opt_out = false) AND (provavel_terceiro = false) AND (email IS NOT NULL) AND (btrim((email)::text) <> ''::text))
+idx_empresas_mei_verificado|CREATE INDEX idx_empresas_mei_verificado ON mei_email.empresas USING btree (mei_verificado) WHERE (mei_verificado = true)
+idx_empresas_mei_verified_pending_cnpj|CREATE INDEX idx_empresas_mei_verified_pending_cnpj ON mei_email.empresas USING btree (cnpj) WHERE ((situacao_cadastral = 'ATIVA'::text) AND (uf = 'MG'::bpchar) AND (opt_out = false) AND (provavel_terceiro = false) AND (mei_verificado = true) AND (enviado = false) AND (email IS NOT NULL))
+idx_empresas_razao_social_trgm|CREATE INDEX idx_empresas_razao_social_trgm ON mei_email.empresas USING gin (razao_social gin_trgm_ops)
+idx_empresas_uf_situacao|CREATE INDEX idx_empresas_uf_situacao ON mei_email.empresas USING btree (uf, situacao_cadastral)
+INDEXES_END
