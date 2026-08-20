@@ -1,0 +1,84 @@
+name: MEI Email Fallback Diagnostic V3 20260820 1550
+on:
+  push:
+    paths:
+      - '.github/workflows/tmp-mei-email-fallback-diagnostic-v3-20260820-1550.yml'
+permissions:
+  contents: write
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Diagnose exact seed error
+        run: |
+          set -Eeuo pipefail
+          mkdir -p reports
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' 2>&1 <<'REMOTE' | tee reports/mei-email-fallback-diagnostic-v3-20260820-1550.txt
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)
+          echo WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+          echo SENTINEL=$(sudo test -f /var/lib/mei-mg-email/sender_blocked.pause && echo present || echo absent)
+          echo AS42004=$(sudo journalctl -u mei-mg-email-worker.service --since '-20 minutes' --no-pager | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8' || true)
+          sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 <<'SQL'
+          set statement_timeout='20s';
+          set enable_seqscan=off;
+          \echo PROBE_OUTROS_BEGIN
+          explain (costs off)
+          select cnpj,email,data_abertura,tipo_regime
+            from mei_email.empresas
+           where tipo_regime='OUTROS'
+             and uf='MG'
+             and situacao_cadastral='ATIVA'
+             and opt_out=false
+             and provavel_terceiro=false
+             and email is not null
+             and email<>''
+             and enviado=false
+           order by data_abertura desc nulls last
+           limit 100;
+          \echo PROBE_OUTROS_ROWS
+          select count(*) from (
+            select cnpj
+              from mei_email.empresas
+             where tipo_regime='OUTROS'
+               and uf='MG'
+               and situacao_cadastral='ATIVA'
+               and opt_out=false
+               and provavel_terceiro=false
+               and email is not null
+               and email<>''
+               and enviado=false
+             order by data_abertura desc nulls last
+             limit 100
+          ) q;
+          \echo PROBE_OUTROS_END
+          SQL
+          REMOTE
+      - name: Persist report
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          git config user.name shopvivaliz-ops-bot
+          git config user.email ops@shopvivaliz.local
+          git add reports/mei-email-fallback-diagnostic-v3-20260820-1550.txt 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -m 'ops: record fallback seed diagnostic v3'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

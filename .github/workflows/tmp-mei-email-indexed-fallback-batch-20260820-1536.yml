@@ -1,17 +1,13 @@
-name: MEI Email General Fallback Live 20260820
-
+name: MEI Email Indexed Fallback Batch 20260820 1536
 on:
   push:
-    branches: [main]
     paths:
-      - ".github/workflows/tmp-mei-email-general-fallback-live-20260820-1458.yml"
-
+      - '.github/workflows/tmp-mei-email-indexed-fallback-batch-20260820-1536.yml'
 permissions:
   contents: write
-
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
+  batch:
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
@@ -25,11 +21,11 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Deploy policy and refill authorized fallback
+      - name: Queue indexed fallback batch and prove progress
         run: |
           set -Eeuo pipefail
           mkdir -p reports
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'REMOTE' | tee reports/mei-email-general-fallback-live-20260820.txt
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'REMOTE' | tee reports/mei-email-indexed-fallback-batch-20260820-1536.txt
           set -Eeuo pipefail
           cd /home/ubuntu/mei-mg-email
           echo CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)
@@ -50,20 +46,13 @@ jobs:
           echo SENT24_BEFORE=$before
           echo OPEN_BEFORE=$open0
           sudo systemctl stop mei-mg-email-worker.service
-          echo WORKER_QUIESCED=YES
           restart_worker() {
             if ! sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then
               sudo systemctl restart mei-mg-email-worker.service >/dev/null 2>&1 || true
             fi
           }
           trap restart_worker EXIT
-          git fetch origin main >/dev/null 2>&1
-          git checkout origin/main -- db/migrations/V043__general_authorized_marketing_fallback.sql worker/safe_entrypoint_v2.py
-          .venv/bin/python -m py_compile worker/safe_entrypoint_v2.py
-          echo SOURCE_DEPLOYED=YES
-          cat db/migrations/V043__general_authorized_marketing_fallback.sql | sudo docker exec -i mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -1 >/tmp/v043.out
-          echo V043_APPLIED=YES
-          timeout 300s .venv/bin/python -u - <<'PY'
+          timeout 360s .venv/bin/python -u - <<'PY'
           import math
           from datetime import datetime
           from pathlib import Path
@@ -73,62 +62,81 @@ jobs:
           from app.config import settings
 
           AUTH='user_campaign_authorization_2026-08-20'
-          TECH=['filter_not_mei','filter_mei_not_verified','filter_marketing_not_authorized','filter_inactive','filter_uf']
-          META=9950
+          TECH=('filter_not_mei','filter_mei_not_verified','filter_marketing_not_authorized','filter_inactive','filter_uf')
+          TARGET_BATCH=2000
+          CANDIDATE_WINDOW=12000
           template=Path('templates/mei-contabilidade-melo.html').read_text(encoding='utf-8')
 
           with psycopg.connect(settings.database_url, row_factory=dict_row) as conn:
               with conn.cursor() as cur:
-                  cur.execute("set local statement_timeout='180s'")
+                  cur.execute("set local statement_timeout='90s'")
                   cur.execute("""
-                    create temporary table tmp_current_intended on commit drop as
-                    with multiplicity as materialized (
-                      select lower(btrim(email::text)) norm_email
-                        from mei_email.empresas
-                       where email is not null and btrim(email::text)<>''
-                       group by lower(btrim(email::text))
-                      having count(distinct cnpj) <= 2
-                    )
-                    select e.cnpj, lower(btrim(e.email::text)) norm_email
+                    create temporary table tmp_seed on commit drop as
+                    select e.cnpj,e.email,e.data_abertura,e.tipo_regime
                       from mei_email.empresas e
-                      join multiplicity m on m.norm_email=lower(btrim(e.email::text))
-                     where e.situacao_cadastral='ATIVA'
-                       and upper(e.uf)='MG'
+                     where e.uf='MG'
+                       and e.situacao_cadastral='ATIVA'
                        and e.opt_out=false
                        and e.provavel_terceiro=false
                        and e.email is not null
                        and btrim(e.email::text)<>''
-                       and mei_email.is_valid_email_address(e.email)
+                       and e.enviado=false
                        and position('contabil' in lower(btrim(e.email::text)))=0
-                       and not exists (
-                         select 1 from mei_email.email_suppressions s
-                          where s.active
-                            and (
-                              (s.scope='email' and lower(btrim(s.value::text))=lower(btrim(e.email::text)))
-                              or (s.scope='domain' and lower(btrim(s.value::text))=split_part(lower(btrim(e.email::text)),'@',2))
-                              or (s.scope='cnpj' and regexp_replace(s.value::text,'[^0-9]','','g')=e.cnpj)
-                            )
-                            and coalesce(s.reason,'') <> all(%s)
-                       )
-                  """,(TECH,))
-                  cur.execute("select count(*) as n from tmp_current_intended")
-                  intended=int(cur.fetchone()['n'])
-                  print(f'CURRENT_INTENDED={intended}', flush=True)
+                       and mei_email.is_valid_email_address(e.email)
+                     order by e.cnpj
+                     limit %s
+                  """, (CANDIDATE_WINDOW,))
+                  cur.execute("create index on tmp_seed(cnpj)")
+                  cur.execute("create index on tmp_seed(lower(btrim(email::text)))")
+                  cur.execute("select count(*) as n from tmp_seed")
+                  print(f'SEED_WINDOW={int(cur.fetchone()["n"])}', flush=True)
 
                   cur.execute("""
-                    update mei_email.email_suppressions s
-                       set active=false, updated_at=now()
-                     where s.active
-                       and coalesce(s.reason,'')=any(%s)
-                       and (
-                         (s.scope='email' and exists(
-                           select 1 from tmp_current_intended t where t.norm_email=lower(btrim(s.value::text))
-                         ))
-                         or (s.scope='cnpj' and exists(
-                           select 1 from tmp_current_intended t where regexp_replace(s.value::text,'[^0-9]','','g')=t.cnpj
-                         ))
+                    create temporary table tmp_selected on commit drop as
+                    select s.cnpj,s.email,s.data_abertura,s.tipo_regime
+                      from tmp_seed s
+                     where (select count(*) from (
+                               select 1
+                                 from mei_email.empresas c2
+                                where lower(btrim(c2.email::text))=lower(btrim(s.email::text))
+                                group by c2.cnpj
+                                limit 3
+                           ) q) <= 2
+                       and not exists (
+                         select 1 from mei_email.email_suppressions x
+                          where x.active
+                            and coalesce(x.reason,'') <> all(%s)
+                            and (
+                              (x.scope='email' and x.value=lower(btrim(s.email::text))::public.citext)
+                              or (x.scope='domain' and x.value=split_part(lower(btrim(s.email::text)),'@',2)::public.citext)
+                              or (x.scope='cnpj' and regexp_replace(x.value::text,'[^0-9]','','g')=s.cnpj)
+                            )
                        )
-                  """,(TECH,))
+                       and not exists (
+                         select 1 from mei_email.envios e
+                          where (e.cnpj=s.cnpj or lower(btrim(e.email::text))=lower(btrim(s.email::text)))
+                            and e.status::text in ('pendente','pending','enviando','processing','submitted','enviado','delivered','bounced','bounce_permanent')
+                       )
+                     order by case when upper(coalesce(s.tipo_regime,''))='MEI' then 0 else 1 end,
+                              s.data_abertura desc nulls last,s.cnpj
+                     limit %s
+                  """, (list(TECH), TARGET_BATCH))
+                  cur.execute("select count(*) as n from tmp_selected")
+                  selected=int(cur.fetchone()['n'])
+                  print(f'SAFE_SELECTED={selected}', flush=True)
+                  if selected == 0:
+                      conn.commit(); raise SystemExit(0)
+
+                  cur.execute("""
+                    update mei_email.email_suppressions x
+                       set active=false,updated_at=now()
+                     where x.active
+                       and coalesce(x.reason,'')=any(%s)
+                       and (
+                         (x.scope='email' and exists(select 1 from tmp_selected t where lower(btrim(t.email::text))=lower(btrim(x.value::text))))
+                         or (x.scope='cnpj' and exists(select 1 from tmp_selected t where t.cnpj=regexp_replace(x.value::text,'[^0-9]','','g')))
+                       )
+                  """, (list(TECH),))
                   print(f'STALE_TECH_RELEASED={max(cur.rowcount,0)}', flush=True)
 
                   cur.execute("""
@@ -136,51 +144,21 @@ jobs:
                        set marketing_autorizado=true,
                            marketing_autorizado_em=now(),
                            marketing_autorizado_origem=%s
-                      from tmp_current_intended t
+                      from tmp_selected t
                      where e.cnpj=t.cnpj
-                       and (
-                         e.marketing_autorizado is distinct from true
-                         or btrim(coalesce(e.marketing_autorizado_origem,''))<>%s
-                       )
-                  """,(AUTH,AUTH))
+                  """, (AUTH,))
                   print(f'AUTHORIZED_UPDATED={max(cur.rowcount,0)}', flush=True)
 
-                  cur.execute("select count(*) as n from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours'")
-                  sent24=int(cur.fetchone()['n'])
-                  cur.execute("select count(*) as n from mei_email.envios where status::text in ('pendente','pending','enviando','processing')")
-                  open_now=int(cur.fetchone()['n'])
-                  need=max(META-sent24-open_now,0)
-                  print(f'SENT24_AT_QUEUE={sent24}', flush=True)
-                  print(f'OPEN_AT_QUEUE={open_now}', flush=True)
-                  print(f'FALLBACK_NEED={need}', flush=True)
-                  if need <= 0:
-                      conn.commit(); raise SystemExit(0)
-
-                  cur.execute("select to_regclass('mei_email.envios_externos_cota') is not null as ok")
-                  has_ledger=bool(cur.fetchone()['ok'])
-                  ledger = "and not exists (select 1 from mei_email.envios_externos_cota z where lower(btrim(z.email::text))=lower(btrim(v.email::text)))" if has_ledger else ""
-                  sql=f"""
-                    with ranked as materialized (
-                      select v.cnpj,v.email,v.data_abertura,
-                             row_number() over(
-                               partition by lower(btrim(v.email::text))
-                               order by v.data_abertura desc nulls last,v.cnpj
-                             ) rn
-                        from mei_email.vw_empresas_elegiveis v
-                       where not (
-                         upper(coalesce(v.tipo_regime,''))='MEI'
-                         and mei_email.is_independent_mei_verification(v.mei_verificado,v.mei_verificado_origem)
-                       )
-                         {ledger}
-                    )
-                    select cnpj,email from ranked where rn=1
-                    order by data_abertura desc nulls last,cnpj
-                    limit %s
-                  """
-                  cur.execute(sql,(need,))
-                  rows=cur.fetchall()
-                  print(f'FALLBACK_SELECTED={len(rows)}', flush=True)
-                  if not rows:
+                  cur.execute("""
+                    delete from tmp_selected t
+                     where not exists (
+                       select 1 from mei_email.vw_empresas_elegiveis v where v.cnpj=t.cnpj
+                     )
+                  """)
+                  cur.execute("select count(*) as n from tmp_selected")
+                  ready=int(cur.fetchone()['n'])
+                  print(f'READY_AFTER_GATE={ready}', flush=True)
+                  if ready == 0:
                       conn.commit(); raise SystemExit(0)
 
                   now=datetime.now(ZoneInfo('America/Sao_Paulo'))
@@ -189,8 +167,11 @@ jobs:
                       (nome,assunto,corpo_template,filtro_tipo_regime,filtro_uf,tamanho_lote,status,total_empresas)
                     values(%s,%s,%s,null,'MG',100,'enfileirada',%s)
                     returning id
-                  """,(f'MG Authorized Fallback {now:%Y-%m-%d %H:%M:%S}','Contabilidade Melo: plano mensal e suporte fiscal',template,len(rows)))
+                  """, (f'MG Authorized Fallback {now:%Y-%m-%d %H:%M:%S}',
+                          'Contabilidade Melo: plano mensal e suporte fiscal',template,ready))
                   campaign=cur.fetchone()['id']
+                  cur.execute("select cnpj,email from tmp_selected order by cnpj")
+                  rows=cur.fetchall()
                   for n in range(math.ceil(len(rows)/100)):
                       part=rows[n*100:(n+1)*100]
                       cur.execute("insert into mei_email.lotes(campanha_id,numero,status,tamanho) values(%s,%s,'pendente',%s) returning id",(campaign,n,len(part)))
@@ -198,15 +179,13 @@ jobs:
                       cur.executemany("insert into mei_email.envios(campanha_id,lote_id,cnpj,email,status) values(%s,%s,%s,%s,'pendente')",[(campaign,lot,r['cnpj'],r['email']) for r in part])
                   conn.commit()
                   print(f'FALLBACK_QUEUED={len(rows)}', flush=True)
-                  cur.execute("select count(*) as n from mei_email.envios where status::text in ('pendente','pending','enviando','processing')")
-                  print(f'OPEN_AFTER_QUEUE={int(cur.fetchone()["n"])}', flush=True)
           PY
           trap - EXIT
           sudo systemctl reset-failed mei-mg-email-worker.service || true
           sudo systemctl restart mei-mg-email-worker.service
           sudo systemctl enable mei-mg-email-worker.service >/dev/null 2>&1 || true
           echo WORKER_RESTARTED=YES
-          sleep 90
+          sleep 120
           worker=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
           after=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours';")
           sent5=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '5 minutes';")
@@ -226,7 +205,7 @@ jobs:
           if [ "$worker" != active ]; then echo SEND_PROGRESS=WORKER_INACTIVE; exit 55; fi
           if [ "$after" -le "$before" ]; then
             echo SEND_PROGRESS=NO
-            sudo journalctl -u mei-mg-email-worker.service -n 100 --no-pager | grep -E 'PRESEND_REJECT|ERROR|CRITICAL|Graph|submitted|V043' | tail -n 40 || true
+            sudo journalctl -u mei-mg-email-worker.service -n 120 --no-pager | grep -E 'PRESEND_REJECT|ERROR|CRITICAL|Graph|submitted|V043' | tail -n 50 || true
             exit 56
           fi
           echo SEND_PROGRESS=YES
@@ -237,9 +216,9 @@ jobs:
           set -Eeuo pipefail
           git config user.name shopvivaliz-ops-bot
           git config user.email ops@shopvivaliz.local
-          git add reports/mei-email-general-fallback-live-20260820.txt 2>/dev/null || true
+          git add reports/mei-email-indexed-fallback-batch-20260820-1536.txt 2>/dev/null || true
           if ! git diff --cached --quiet; then
-            git commit -m 'ops: record general authorized email fallback rollout'
+            git commit -m 'ops: record indexed authorized fallback batch'
             git pull --rebase origin main
             git push origin HEAD:main
           fi
