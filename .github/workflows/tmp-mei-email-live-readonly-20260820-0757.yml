@@ -1,4 +1,4 @@
-# refresh 20260820-0822 BRT
+# refresh 20260820-0828 BRT
 name: MEI Email Live Readonly 20260820 0757
 on:
   push:
@@ -9,6 +9,7 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Configure SSH
@@ -25,26 +26,166 @@ jobs:
           set -euo pipefail
           mkdir -p reports
           ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF' > reports/mei-email-live-readonly-20260820-0757.txt 2>&1
-          set -euo pipefail
+          set -u
           cd /home/ubuntu/mei-mg-email
           echo "BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)"
+          echo "HEAD=$(git rev-parse HEAD 2>/dev/null || true)"
+          echo "ORIGIN_MAIN=$(git rev-parse origin/main 2>/dev/null || true)"
           echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
           echo "WORKER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)"
-          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then echo 'SENTINEL=present'; else echo 'SENTINEL=absent'; fi
+          echo "NDR_GUARD=$(sudo systemctl is-active mei-mg-email-ndr-guard.service 2>/dev/null || true)"
+          echo "NDR_GUARD_ENABLED=$(sudo systemctl is-enabled mei-mg-email-ndr-guard.service 2>/dev/null || true)"
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then echo 'SENTINEL=present'; else echo 'SENTINEL=absent'; fi
+          echo 'SYSTEMD_BEGIN'
+          sudo systemctl show mei-mg-email-worker.service -p ActiveState -p SubState -p UnitFileState -p Restart -p RestartUSec -p StartLimitIntervalUSec -p ExecStart -p ExecStartPre --no-pager 2>/dev/null || true
+          echo 'SYSTEMD_END'
+          echo 'NETWORK_BEGIN'
+          getent ahostsv4 graph.microsoft.com 2>/dev/null | head -n 3 || true
+          curl -sS -o /dev/null --max-time 8 -w 'GRAPH_HTTP=%{http_code} CONNECT=%{time_connect} TOTAL=%{time_total}\n' https://graph.microsoft.com/v1.0/ || true
+          echo 'NETWORK_END'
           .venv/bin/python - <<'PY'
           import json, psycopg
+          from psycopg.rows import dict_row
           from app.config import settings
-          with psycopg.connect(settings.database_url) as conn:
-              with conn.cursor() as cur:
-                  cur.execute("""select count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours'), count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=now()-interval '10 minutes'), count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=now()-interval '2 minutes'), count(*) filter(where status::text in ('pendente','enviando','pending','processing')), max(enviado_em) filter(where status::text in ('submitted','enviado')) from mei_email.envios""")
-                  a=cur.fetchone()
-                  print('SEND_STATE='+json.dumps({'sent24':a[0],'sent10m':a[1],'sent2m':a[2],'open_queue':a[3],'last_sent_at':str(a[4])}))
-                  cur.execute("select count(*) from mei_email.vw_empresas_elegiveis")
-                  print('ELIGIBLE='+str(cur.fetchone()[0]))
+
+          def emit(name, value):
+              print(name + '=' + json.dumps(value, default=str, sort_keys=True))
+
+          with psycopg.connect(settings.database_url, autocommit=True, row_factory=dict_row, connect_timeout=10) as conn:
+              def one(name, sql, params=()):
+                  try:
+                      with conn.cursor() as cur:
+                          cur.execute("set statement_timeout='8s'")
+                          cur.execute(sql, params)
+                          row = cur.fetchone()
+                          emit(name, dict(row) if row is not None else None)
+                  except Exception as exc:
+                      emit(name + '_ERROR', type(exc).__name__ + ': ' + str(exc))
+
+              def many(name, sql, params=()):
+                  try:
+                      with conn.cursor() as cur:
+                          cur.execute("set statement_timeout='8s'")
+                          cur.execute(sql, params)
+                          emit(name, [dict(r) for r in cur.fetchall()])
+                  except Exception as exc:
+                      emit(name + '_ERROR', type(exc).__name__ + ': ' + str(exc))
+
+              one('SEND_STATE', """
+                  select
+                    count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours') as sent24,
+                    count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=now()-interval '10 minutes') as sent10m,
+                    count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=now()-interval '2 minutes') as sent2m,
+                    count(*) filter(where status::text in ('pendente','enviando','pending','processing')) as open_queue,
+                    max(enviado_em) filter(where status::text in ('submitted','enviado')) as last_sent_at
+                  from mei_email.envios
+              """)
+              one('ELIGIBLE', "select count(*) as eligible from mei_email.vw_empresas_elegiveis")
+              one('FLYWAY_TABLE', "select to_regclass('public.flyway_schema_history')::text as table_name")
+              many('FLYWAY_37_40', """
+                  select installed_rank, version, description, success, installed_on
+                  from public.flyway_schema_history
+                  where version in ('37','38','39','40')
+                  order by installed_rank
+              """)
+              one('LEGACY_COPY', """
+                  select count(*) as campaigns
+                  from mei_email.campanhas
+                  where corpo_template ilike '%base pública de CNPJ%'
+                     or corpo_template ilike '%base publica de CNPJ%'
+              """)
+              one('OPEN_INVALID_EMAIL', """
+                  select count(*) as rows
+                  from mei_email.envios e
+                  where e.status::text in ('pendente','enviando','pending','processing')
+                    and not mei_email.is_valid_email_address(e.email)
+              """)
+              one('OPEN_SUPPRESSED', """
+                  select count(*) as rows
+                  from mei_email.envios e
+                  where e.status::text in ('pendente','enviando','pending','processing')
+                    and (
+                      mei_email.is_email_suppressed(e.email)
+                      or mei_email.is_cnpj_suppressed(e.cnpj::text)
+                    )
+              """)
+              one('OPEN_REPLAY_RISK', """
+                  select count(*) as rows
+                  from mei_email.envios e
+                  where e.status::text in ('pendente','enviando','pending','processing')
+                    and exists (
+                      select 1 from mei_email.envios h
+                      where h.id<>e.id
+                        and h.status::text in ('submitted','enviado','delivered','bounced','bounce_permanent')
+                        and (
+                          h.cnpj=e.cnpj or lower(btrim(h.email::text))=lower(btrim(e.email::text))
+                        )
+                    )
+              """)
+              one('OPEN_DUPLICATE_EMAIL', """
+                  select coalesce(sum(n-1),0) as extra_rows
+                  from (
+                    select lower(btrim(email::text)) as email_norm, count(*) as n
+                    from mei_email.envios
+                    where status::text in ('pendente','enviando','pending','processing')
+                    group by 1 having count(*)>1
+                  ) d
+              """)
+              one('STALE_SENDING', """
+                  select count(*) as rows
+                  from mei_email.envios e
+                  join mei_email.lotes l on l.id=e.lote_id
+                  where e.status::text='enviando'
+                    and l.status::text='processando'
+                    and l.iniciado_em < now()-interval '15 minutes'
+              """)
+              one('ORPHAN_ENVIOS', """
+                  select count(*) as rows
+                  from mei_email.envios e
+                  left join mei_email.lotes l on l.id=e.lote_id
+                  where e.lote_id is not null and l.id is null
+              """)
+              one('BLOCKED_SESSIONS', """
+                  select count(*) as blocked,
+                         count(*) filter(where now()-coalesce(xact_start,query_start)>interval '5 minutes') as older_5m
+                  from pg_stat_activity
+                  where datname=current_database()
+                    and cardinality(pg_blocking_pids(pid))>0
+              """)
+              many('BLOCKERS_SAMPLE', """
+                  select pid, pg_blocking_pids(pid) as blockers, wait_event_type, wait_event,
+                         now()-coalesce(xact_start,query_start) as age,
+                         left(query,160) as query
+                  from pg_stat_activity
+                  where datname=current_database()
+                    and cardinality(pg_blocking_pids(pid))>0
+                  order by age desc
+                  limit 10
+              """)
+              many('AUTH_ORIGINS', """
+                  select coalesce(marketing_autorizado_origem,'<null>') as origin, count(*) as n
+                  from mei_email.empresas
+                  where marketing_autorizado is true
+                  group by 1 order by n desc limit 15
+              """)
+              one('EXTERNAL_LEDGER_TABLE', "select to_regclass('mei_email.envios_externos_cota')::text as table_name")
+              try:
+                  with conn.cursor() as cur:
+                      cur.execute("select to_regclass('mei_email.envios_externos_cota') is not null as exists")
+                      exists = bool(cur.fetchone()['exists'])
+                  if exists:
+                      one('EXTERNAL_LEDGER', """
+                          select count(*) as rows,
+                                 count(*) filter(where coalesce(enviado_em,criado_em)>=now()-interval '24 hours') as rows24
+                          from mei_email.envios_externos_cota
+                      """)
+              except Exception as exc:
+                  emit('EXTERNAL_LEDGER_ERROR', type(exc).__name__ + ': ' + str(exc))
           PY
-          echo "AS42004_LAST15M=$(sudo journalctl -u mei-mg-email-worker.service --since '-15 minutes' --no-pager 2>/dev/null | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8' || true)"
+          echo "AS42004_LAST30M=$(sudo journalctl -u mei-mg-email-worker.service --since '-30 minutes' --no-pager 2>/dev/null | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8' || true)"
+          echo "GRAPH_APPONLY_LAST30M=$(sudo journalctl -u mei-mg-email-worker.service --since '-30 minutes' --no-pager 2>/dev/null | grep -Eic 'MicrosoftGraphEmailProvider APP-ONLY active' || true)"
           echo 'JOURNAL_TAIL_BEGIN'
-          sudo journalctl -u mei-mg-email-worker.service --since '-5 minutes' --no-pager 2>/dev/null | tail -n 80 || true
+          sudo journalctl -u mei-mg-email-worker.service --since '-10 minutes' --no-pager 2>/dev/null | tail -n 160 || true
           echo 'JOURNAL_TAIL_END'
           EOF
       - name: Persist report
