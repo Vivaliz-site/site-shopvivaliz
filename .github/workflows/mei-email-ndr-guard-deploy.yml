@@ -1,0 +1,97 @@
+name: MEI Email NDR Guard Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/mei-email-ndr-guard-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mei-email-ndr-guard-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 10
+    env:
+      VM_HOST: 137.131.156.17
+      VM_USER: ubuntu
+    steps:
+      - name: Configure verified Oracle SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::Oracle SSH key missing'; exit 2; }
+          test -n "$known_hosts" || { echo '::error::Oracle known_hosts missing'; exit 2; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Deploy mailbox-wide NDR guard only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=4 \
+            -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF'
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          git fetch origin main
+          echo "ORIGIN_MAIN=$(git rev-parse origin/main)"
+          git checkout origin/main -- \
+            scripts/ndr_guard.py \
+            scripts/ndr_guard_v2.py \
+            deploy/systemd/mei-mg-email-ndr-guard.service
+          .venv/bin/python -m py_compile scripts/ndr_guard.py scripts/ndr_guard_v2.py
+          grep -q '/messages?{params}' scripts/ndr_guard.py
+          if grep -q '/mailFolders/inbox/messages?' scripts/ndr_guard.py; then
+            echo '::error::NDR guard still polls Inbox only'
+            exit 3
+          fi
+          run_user="$(stat -c '%U' /home/ubuntu/mei-mg-email)"
+          python_bin=/home/ubuntu/mei-mg-email/.venv/bin/python
+          tmp="$(mktemp)"
+          sed \
+            -e "s|__APP_DIR__|/home/ubuntu/mei-mg-email|g" \
+            -e "s|__RUN_USER__|$run_user|g" \
+            -e "s|__PYTHON__|$python_bin|g" \
+            deploy/systemd/mei-mg-email-ndr-guard.service > "$tmp"
+          sudo install -m 0644 "$tmp" /etc/systemd/system/mei-mg-email-ndr-guard.service
+          rm -f "$tmp"
+          sudo install -d -m 0750 -o "$run_user" -g "$(id -gn "$run_user")" /var/lib/mei-mg-email
+          sudo systemctl daemon-reload
+          sudo systemctl enable mei-mg-email-ndr-guard.service
+          sudo systemctl restart mei-mg-email-ndr-guard.service
+          sleep 5
+          test "$(sudo systemctl is-active mei-mg-email-ndr-guard.service)" = active
+          test "$(sudo systemctl is-enabled mei-mg-email-ndr-guard.service)" = enabled
+          echo "NDR_GUARD_ACTIVE=true"
+          echo "WORKER_ACTIVE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo "WORKER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)"
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
+            echo 'CURRENT_SENDER_BLOCK_SENTINEL=present'
+          else
+            echo 'CURRENT_SENDER_BLOCK_SENTINEL=absent'
+          fi
+          sudo journalctl -u mei-mg-email-ndr-guard.service --since '-5 minutes' --no-pager | tail -n 120 || true
+          EOF
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
