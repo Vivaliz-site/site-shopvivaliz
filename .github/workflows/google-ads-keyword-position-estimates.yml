@@ -14,6 +14,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate request
+        id: req
+        shell: bash
+        run: |
+          set -euo pipefail
+          campaign_id="$(jq -r '.campaign_id // ""' ops/google-ads-keyword-position-estimates.json)"
+          [[ "$campaign_id" =~ ^[0-9]{6,20}$ ]] || { echo 'invalid campaign_id'; exit 2; }
+          echo "campaign_id=$campaign_id" >> "$GITHUB_OUTPUT"
+
       - name: Configure VM key
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
@@ -26,12 +38,20 @@ jobs:
           chmod 600 ~/.ssh/vmkey
 
       - name: Read keyword position estimates
+        env:
+          VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
+          TARGET_CAMPAIGN_ID: ${{ steps.req.outputs.campaign_id }}
         shell: bash
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
-          import json, urllib.parse, urllib.request
+          test -n "${VM_HOST:-}" || { echo 'SHOPVIVALIZ_VM_HOST missing'; exit 2; }
+          [[ "$VM_HOST" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'SHOPVIVALIZ_VM_HOST invalid'; exit 2; }
+          [[ "$TARGET_CAMPAIGN_ID" =~ ^[0-9]{6,20}$ ]] || { echo 'invalid target campaign'; exit 2; }
+          SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/vmkey)
+          ssh "${SSH_OPTS[@]}" "ubuntu@${VM_HOST}" 'python3 -' "$TARGET_CAMPAIGN_ID" <<'PY'
+          import json, sys, urllib.parse, urllib.request
           from pathlib import Path
+          target = sys.argv[1]
           env={}
           for raw in Path('/home/ubuntu/shopvivaliz-deploy/shared/.env').read_text(encoding='utf-8',errors='ignore').splitlines():
               line=raw.strip()
@@ -44,7 +64,7 @@ jobs:
           headers={'Content-Type':'application/json','Authorization':'Bearer '+token,'developer-token':env['GOOGLE_ADS_DEVELOPER_TOKEN']}
           login=env.get('GOOGLE_ADS_LOGIN_CUSTOMER_ID','').replace('-','').strip()
           if login: headers['login-customer-id']=login
-          query='''
+          query=f'''
           SELECT ad_group.name, ad_group_criterion.criterion_id,
                  ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type,
                  ad_group_criterion.primary_status, ad_group_criterion.system_serving_status,
@@ -53,7 +73,7 @@ jobs:
                  ad_group_criterion.position_estimates.top_of_page_cpc_micros,
                  ad_group_criterion.position_estimates.first_position_cpc_micros
           FROM keyword_view
-          WHERE campaign.id = 24144257692
+          WHERE campaign.id = {target}
             AND ad_group_criterion.negative = FALSE
           ORDER BY ad_group.name, ad_group_criterion.criterion_id
           '''
