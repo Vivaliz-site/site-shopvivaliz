@@ -1,0 +1,58 @@
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+Warning: Permanently added '137.131.156.17' (ED25519) to the list of known hosts.
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Thu Aug 20 07:35:56 -03 2026
+
+  System load:  0.83               Processes:             171
+  Usage of /:   85.7% of 44.96GB   Users logged in:       0
+  Memory usage: 41%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   43%
+
+  => / is using 85.7% of 44.96GB
+  => There is 1 zombie process.
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+62 updates can be applied immediately.
+6 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+16 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+116 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+
+*** System restart required ***
+REPORT_UTC=2026-08-20T10:47:02Z
+REPORT_BRT=2026-08-20T07:47:02-0300
+HOST=shopvivaliz-ai
+HEAD=6edd67a5ab2fa7edaf3184b97d92b56f874343a5
+WORKER_ACTIVE=inactive
+WORKER_ENABLED=enabled
+Restart=always
+RestartUSec=5s
+ExecStartPre={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubuntu/mei-mg-email/.venv/bin/python /home/ubuntu/mei-mg-email/scripts/runtime_sender_preflight.py ; ignore_errors=no ; start_time=[Thu 2026-08-20 07:41:03 -03] ; stop_time=[Thu 2026-08-20 07:41:16 -03] ; pid=2800796 ; code=exited ; status=0 }
+ExecStart={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubuntu/mei-mg-email/.venv/bin/python -m worker.safe_entrypoint_v2 ; ignore_errors=no ; start_time=[Thu 2026-08-20 07:41:16 -03] ; stop_time=[Thu 2026-08-20 07:42:56 -03] ; pid=2801039 ; code=killed ; status=15/TERM }
+StartLimitIntervalUSec=0
+AUTOREPAIR_TIMER_ACTIVE=active
+AUTOREPAIR_TIMER_ENABLED=enabled
+NDR_GUARD_ACTIVE=active
+NDR_GUARD_ENABLED=enabled
+SENTINEL=absent
+=== GRAPH AUTH ===
+MicrosoftGraphEmailProvider APP-ONLY active sender=naoresponda@dev.shopvivaliz.com.br cert=/home/ubuntu/.shopvivaliz/m365/graph-auth.crt
+GRAPH_AUTH=ok
+=== DATABASE READ ONLY ===
+client_loop: send disconnect: Broken pipe
