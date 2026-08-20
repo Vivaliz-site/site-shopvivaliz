@@ -1,0 +1,58 @@
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Thu Aug 20 12:38:39 -03 2026
+
+  System load:  1.99               Processes:             172
+  Usage of /:   85.7% of 44.96GB   Users logged in:       0
+  Memory usage: 38%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   43%
+
+  => / is using 85.7% of 44.96GB
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+62 updates can be applied immediately.
+6 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+16 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+116 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+
+*** System restart required ***
+CHECK_BRT=2026-08-20T12:38:49-0300
+WORKER=active
+WORKER_ENABLED=enabled
+NDR_GUARD=active
+AUTOREPAIR=active
+SENTINEL=absent
+OPEN_TOTAL=500
+OPEN_BY_STATUS=pendente:500
+OPEN_SYNTH=0
+OPEN_REPLAY=0
+ELIGIBLE_POOL=0
+SENT24=58
+LATEST=2026-08-20 11:05:21.803449-03
+SUPPRESSIONS_ACTIVE=3765079
+HARD_BOUNCE_ACTIVE=0
+FLYWAY_MAX=20
+FLYWAY_37_38=0
+GUARD_TRIGGERS=0
+ADVISORY_LOCKS=2
+ADVISORY_HOLDERS=3507:idle:,3789:active:
+LONG_ACTIVE=0
+GRAPH_AUTH=ok
+DNS_GRAPH=ok
+AS42004_LAST30M=0
