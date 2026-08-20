@@ -1,3 +1,13 @@
 TERMINAL_READY=NO
-TUNNEL=ERROR
-ERROR=Validation did not produce a sanitized report
+SSH_HOST_ALIAS=
+REMOTE_HOSTNAME=
+REMOTE_USER=
+DEPLOY_PATH=/home/ubuntu/shopvivaliz-deploy/current
+DEPLOY_SHA=
+PHP=
+HOME_HTTP=
+CATALOGO_HTTP=
+ANTIQUE_HTTP=
+DECORE_HTTP=
+TUNNEL=READY
+ERROR=Fred-Win command returned no sanitized readiness output
