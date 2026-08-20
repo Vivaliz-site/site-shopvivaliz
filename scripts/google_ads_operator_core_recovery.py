@@ -6,7 +6,8 @@ import os
 import google_ads_antique_decore_status_v2 as monitor
 
 EXPECTED_CAMPAIGN_ID = int(os.getenv("EXPECTED_CAMPAIGN_ID", "24144257692"))
-CORE_MAX_CPC_MICROS = 400_000
+# Mirrors scripts/google_ads_campaign_live_ready.json guardrails.max_cpc_brl = 0.90.
+CORE_MAX_CPC_MICROS = 900_000
 
 
 def fail(message: str) -> None:
