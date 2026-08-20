@@ -107,13 +107,28 @@ jobs:
               raise SystemExit('MISSING_ENV=' + ','.join(missing))
           os.environ.update(loaded)
 
-          expected = os.environ['EXPECTED_CAMPAIGN_ID']
-          actual = loaded['GOOGLE_ADS_CUSTOMER_ID'].replace('-', '').strip()
-          if not actual.isdigit():
+          customer_id = loaded['GOOGLE_ADS_CUSTOMER_ID'].replace('-', '').strip()
+          if not customer_id.isdigit():
               raise SystemExit('GOOGLE_ADS_CUSTOMER_ID_INVALID')
 
           sys.path.insert(0, str(workdir))
           import google_ads_antique_decore_status_v3 as monitor
+
+          legacy = monitor.monitor.legacy
+          client = legacy.client_from_env()
+          ga = client.get_service('GoogleAdsService')
+          safe_name = legacy.CAMPAIGN_NAME.replace("'", "\\'")
+          rows = list(ga.search(customer_id=customer_id, query=f"""
+            SELECT campaign.id, campaign.name, campaign.status, campaign_budget.amount_micros
+            FROM campaign
+            WHERE campaign.name = '{safe_name}' AND campaign.status != 'REMOVED'
+          """))
+          expected_id = int(os.environ['EXPECTED_CAMPAIGN_ID'])
+          if len(rows) != 1 or int(rows[0].campaign.id) != expected_id:
+              raise SystemExit('GUARDRAIL_TARGET_CAMPAIGN_MISMATCH')
+          if int(rows[0].campaign_budget.amount_micros) != 10_000_000:
+              raise SystemExit('GUARDRAIL_BUDGET_CHANGED')
+          print('TARGET_CAMPAIGN_GUARD=PASS')
           raise SystemExit(monitor.main())
           PY
           REMOTE
