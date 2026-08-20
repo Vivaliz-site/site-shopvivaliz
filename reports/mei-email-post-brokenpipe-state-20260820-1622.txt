@@ -1,0 +1,7 @@
+Warning: Permanently added '137.131.156.17' (ED25519) to the list of known hosts.
+CHECK_BRT=2026-08-20T16:58:49-0300
+WORKER_BEFORE=inactive
+SENTINEL=absent
+AS42004_LAST20M=0
+Job for mei-mg-email-worker.service failed because the control process exited with error code.
+See "systemctl status mei-mg-email-worker.service" and "journalctl -xeu mei-mg-email-worker.service" for details.

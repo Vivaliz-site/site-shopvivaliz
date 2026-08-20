@@ -5,9 +5,11 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/tmp-fredwin-2222-bootstrap-20260820-1450.yml"
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  actions: read
 
 jobs:
   recover:
@@ -16,7 +18,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Configure VM key
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
@@ -25,6 +29,7 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
+
       - name: Diagnose and recover through 2222 if available
         run: |
           set -Eeuo pipefail
@@ -39,8 +44,8 @@ jobs:
                 echo WINDOWS_SSH=OK
                 echo BOOTSTRAP=EXECUTED
               else
-                echo WINDOWS_SSH=FAILED
                 code=$?
+                echo WINDOWS_SSH=FAILED
                 echo WINDOWS_SSH_EXIT=$code
               fi
             else
@@ -49,28 +54,26 @@ jobs:
             if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5557/health' >/tmp/fred-health.json 2>/dev/null; then
               echo MCP_HEALTH=OK
               python3 - <<'PY'
-import json
-p=json.load(open('/tmp/fred-health.json'))
-print('HEALTH_STATUS='+str(p.get('status','')))
-print('ENVIRONMENT='+str(p.get('environment','')))
-print('MCP_VERSION='+str(p.get('mcp_version','')))
-PY
+              import json
+              p = json.load(open('/tmp/fred-health.json'))
+              print('HEALTH_STATUS=' + str(p.get('status', '')))
+              print('ENVIRONMENT=' + str(p.get('environment', '')))
+              print('MCP_VERSION=' + str(p.get('mcp_version', '')))
+              PY
             else
               echo MCP_HEALTH=FAILED
             fi
           } | tee reports/fredwin-2222-bootstrap-20260820.txt
-      - name: Persist report
+
+      - name: Upload immutable diagnostic evidence
         if: always()
-        run: |
-          set -Eeuo pipefail
-          git config user.name shopvivaliz-ops-bot
-          git config user.email ops@shopvivaliz.local
-          git add reports/fredwin-2222-bootstrap-20260820.txt 2>/dev/null || true
-          if ! git diff --cached --quiet; then
-            git commit -m 'ops: record Fred-Win 2222 bootstrap recovery'
-            git pull --rebase origin main
-            git push origin HEAD:main
-          fi
+        uses: actions/upload-artifact@v4
+        with:
+          name: fredwin-2222-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}
+          path: reports/fredwin-2222-bootstrap-20260820.txt
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Cleanup
         if: always()
         run: |
