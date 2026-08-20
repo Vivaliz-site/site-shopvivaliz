@@ -1,0 +1,102 @@
+name: MEI Email Live Progress 20260820 1448
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tmp-mei-email-live-progress-20260820-1448.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Check and safely nudge worker
+        run: |
+          set -Eeuo pipefail
+          mkdir -p reports
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'REMOTE' | tee reports/mei-email-live-progress-20260820-1448.txt
+          set -Eeuo pipefail
+          echo CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)
+          sentinel=absent
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then sentinel=present; fi
+          echo SENTINEL=$sentinel
+          worker=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+          echo WORKER_BEFORE=$worker
+          sent24=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours';")
+          sent15=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '15 minutes';")
+          pending=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select count(*) from mei_email.envios where status::text in ('pendente','pending','enviando','processing');")
+          latest=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select coalesce(max(enviado_em)::text,'none') from mei_email.envios where status::text in ('submitted','enviado');")
+          asn=$(sudo journalctl -u mei-mg-email-worker.service --since '-20 minutes' --no-pager | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8' || true)
+          echo SENT24_BEFORE=$sent24
+          echo SENT15_BEFORE=$sent15
+          echo PENDING_BEFORE=$pending
+          echo LATEST_BEFORE=$latest
+          echo AS42004_LAST20M=$asn
+          if [ "$asn" -gt 0 ] || [ "$sentinel" = present ]; then
+            sudo touch /var/lib/mei-mg-email/sender_blocked.pause
+            sudo systemctl stop mei-mg-email-worker.service || true
+            echo ACTION=FAIL_CLOSED
+            exit 52
+          fi
+          if [ "$worker" != active ] || [ "$sent15" -eq 0 ]; then
+            sudo systemctl reset-failed mei-mg-email-worker.service || true
+            sudo systemctl restart mei-mg-email-worker.service
+            echo ACTION=WORKER_RESTARTED
+          else
+            echo ACTION=NO_RESTART_NEEDED
+          fi
+          sleep 75
+          worker2=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+          sent24b=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours';")
+          sent5=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '5 minutes';")
+          pending2=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select count(*) from mei_email.envios where status::text in ('pendente','pending','enviando','processing');")
+          latest2=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select coalesce(max(enviado_em)::text,'none') from mei_email.envios where status::text in ('submitted','enviado');")
+          asn2=$(sudo journalctl -u mei-mg-email-worker.service --since '-5 minutes' --no-pager | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8' || true)
+          echo WORKER_AFTER=$worker2
+          echo SENT24_AFTER=$sent24b
+          echo SENT5_AFTER=$sent5
+          echo PENDING_AFTER=$pending2
+          echo LATEST_AFTER=$latest2
+          echo AS42004_LAST5M=$asn2
+          if [ "$asn2" -gt 0 ]; then
+            sudo touch /var/lib/mei-mg-email/sender_blocked.pause
+            sudo systemctl stop mei-mg-email-worker.service || true
+            echo SEND_PROGRESS=FAIL_CLOSED_AS42004
+            exit 53
+          fi
+          if [ "$worker2" != active ]; then echo SEND_PROGRESS=WORKER_INACTIVE; exit 54; fi
+          if [ "$sent24b" -gt "$sent24" ]; then echo SEND_PROGRESS=YES; exit 0; fi
+          echo SEND_PROGRESS=NO
+          sudo journalctl -u mei-mg-email-worker.service -n 80 --no-pager | grep -E 'PRESEND_REJECT|AUTOQUEUE|ERROR|CRITICAL|submitted|Graph|QUEUE' | tail -n 35 || true
+          exit 55
+          REMOTE
+      - name: Persist report
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          git config user.name shopvivaliz-ops-bot
+          git config user.email ops@shopvivaliz.local
+          git add reports/mei-email-live-progress-20260820-1448.txt 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -m 'ops: record live MEI sender progress 20260820 1448'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
