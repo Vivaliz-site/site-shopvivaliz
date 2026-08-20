@@ -16,7 +16,7 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-      - name: Deploy latest sender and prove send progress
+      - name: Recover tracked files and prove send progress
         run: |
           ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF'
           set -Eeuo pipefail
@@ -24,7 +24,8 @@ jobs:
           if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then echo SENTINEL=present; exit 52; fi
           sudo systemctl stop mei-mg-email-worker.service || true
           git fetch origin main
-          git pull --ff-only origin main
+          git merge --abort 2>/dev/null || true
+          git reset --hard origin/main
           echo EMAIL_HEAD=$(git rev-parse HEAD)
           .venv/bin/python -m py_compile worker/safe_entrypoint.py worker/safe_entrypoint_v2.py worker/worker_queue_first.py
           sudo systemctl reset-failed mei-mg-email-worker.service || true
