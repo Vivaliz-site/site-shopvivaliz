@@ -8,7 +8,7 @@ permissions:
 jobs:
   quick:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 4
     steps:
       - name: Configure SSH
         shell: bash
@@ -25,7 +25,7 @@ jobs:
           printf '%s\n' "$key" > ~/.ssh/id_rsa
           printf '%s\n' "$hosts" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/id_rsa ~/.ssh/known_hosts
-      - name: Quick live status
+      - name: Quick live status and bounded authorization metrics
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -33,24 +33,106 @@ jobs:
           set -Eeuo pipefail
           cd /home/ubuntu/mei-mg-email
           echo "QUICK_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "GIT_SHA=$(git rev-parse HEAD)"
-          echo "ORIGIN_MAIN=$(git rev-parse origin/main 2>/dev/null || true)"
           echo "WORKER_ACTIVE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
           echo "WORKER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)"
-          sudo systemctl show mei-mg-email-worker.service -p ActiveState -p SubState -p MainPID -p ExecStartPre -p ExecStart -p Restart -p RestartUSec -p StartLimitIntervalUSec --no-pager || true
-          echo 'UNIT_CAT_BEGIN'
-          sudo systemctl cat mei-mg-email-worker.service --no-pager || true
-          echo 'UNIT_CAT_END'
+          sudo systemctl show mei-mg-email-worker.service -p ActiveState -p SubState -p MainPID -p ExecStart -p Restart -p RestartUSec -p StartLimitIntervalUSec --no-pager || true
           if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then echo SENDER_BLOCK_SENTINEL=present; else echo SENDER_BLOCK_SENTINEL=absent; fi
           echo "AUTOREPAIR_ACTIVE=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || true)"
           echo "NDR_GUARD_ACTIVE=$(sudo systemctl is-active mei-mg-email-ndr-guard.service 2>/dev/null || true)"
-          docker inspect mei-mg-email-db --format 'DB_RUNNING={{.State.Running}} DB_RESTARTING={{.State.Restarting}} DB_OOM={{.State.OOMKilled}} DB_EXIT={{.State.ExitCode}} DB_RESTART_COUNT={{.RestartCount}}' || true
-          echo 'WORKER_JOURNAL_BEGIN'
-          sudo journalctl -u mei-mg-email-worker.service --since '-5 minutes' --no-pager | tail -n 100 || true
-          echo 'WORKER_JOURNAL_END'
+          echo 'AUTH_METRICS_BEGIN'
+          .venv/bin/python - <<'PY'
+          import psycopg
+          from app.config import settings
+
+          LEGACY_MARKETING=(
+            'confirmacao_operador_2026-08-12',
+            'confirmacao_operador_2026-08-13',
+            'politica_importacao_operador_2026-08-13',
+          )
+          LEGACY_MEI=(
+            'override_operador_2026-08-13',
+            'politica_importacao_operador_2026-08-13',
+          )
+
+          def scalar(label, query, params=(), timeout='15s'):
+            try:
+              with psycopg.connect(settings.database_url) as conn:
+                with conn.transaction():
+                  with conn.cursor() as cur:
+                    cur.execute('set transaction read only')
+                    cur.execute(f"set local statement_timeout='{timeout}'")
+                    cur.execute("set local lock_timeout='2s'")
+                    cur.execute(query, params)
+                    print(f'{label}={cur.fetchone()[0]}')
+            except Exception as exc:
+              print(f'{label}=ERROR:{type(exc).__name__}:{str(exc).splitlines()[0][:180]}')
+
+          independent = """
+            e.marketing_autorizado=true
+            and nullif(btrim(e.marketing_autorizado_origem),'') is not null
+            and e.marketing_autorizado_origem <> all(%s)
+            and e.mei_verificado=true
+            and nullif(btrim(e.mei_verificado_origem),'') is not null
+            and e.mei_verificado_origem <> all(%s)
+            and e.tipo_regime='MEI' and e.uf='MG' and e.situacao_cadastral='ATIVA'
+            and e.opt_out=false and e.provavel_terceiro=false
+            and e.email is not null and btrim(e.email::text)<>''
+            and mei_email.is_valid_email_address(e.email)
+          """
+          params=(list(LEGACY_MARKETING), list(LEGACY_MEI))
+          scalar('AUTHORIZED_BASE', 'select count(*) from mei_email.empresas e where '+independent, params, '20s')
+
+          suppressed = """
+            exists(select 1 from mei_email.email_suppressions s where s.active and (
+              (s.scope='email' and s.value=lower(btrim(e.email::text))::public.citext) or
+              (s.scope='domain' and s.value=split_part(lower(btrim(e.email::text)),'@',2)::public.citext) or
+              (s.scope='cnpj' and s.value=upper(btrim(e.cnpj::text))::public.citext)
+            ))
+          """
+          terminal = """
+            exists(select 1 from mei_email.envios x where
+              (x.cnpj=e.cnpj or lower(btrim(x.email::text))=lower(btrim(e.email::text)))
+              and x.status::text in ('submitted','enviado','delivered','bounced','bounce_permanent'))
+          """
+          openhist = """
+            exists(select 1 from mei_email.envios x where
+              (x.cnpj=e.cnpj or lower(btrim(x.email::text))=lower(btrim(e.email::text)))
+              and x.status::text in ('pendente','enviando','pending','processing'))
+          """
+          scalar('AUTHORIZED_NOT_SUPPRESSED_NOT_TERMINAL',
+                 'select count(*) from mei_email.empresas e where '+independent+' and not '+suppressed+' and not '+terminal,
+                 params,'20s')
+          scalar('STRICT_UNQUEUED_AUTHORIZED_POOL',
+                 'select count(*) from mei_email.empresas e where '+independent+' and not '+suppressed+' and not '+terminal+' and not '+openhist,
+                 params,'20s')
+          scalar('AUTHORIZED_OPEN_QUEUE',
+                 """select count(*) from mei_email.envios q join mei_email.empresas e on e.cnpj=q.cnpj
+                    where q.status::text in ('pendente','enviando','pending','processing') and """+independent+' and not '+suppressed+' and not '+terminal,
+                 params,'20s')
+          scalar('OPEN_QUEUE_MISSING_MARKETING_ORIGIN',
+                 """select count(*) from mei_email.envios q join mei_email.empresas e on e.cnpj=q.cnpj
+                    where q.status::text in ('pendente','enviando','pending','processing')
+                      and nullif(btrim(e.marketing_autorizado_origem),'') is null""")
+          scalar('OPEN_QUEUE_LEGACY_MARKETING_ORIGIN',
+                 """select count(*) from mei_email.envios q join mei_email.empresas e on e.cnpj=q.cnpj
+                    where q.status::text in ('pendente','enviando','pending','processing')
+                      and e.marketing_autorizado_origem = any(%s)""", (list(LEGACY_MARKETING),))
+          scalar('OPEN_QUEUE_TOTAL', "select count(*) from mei_email.envios where status::text in ('pendente','enviando','pending','processing')")
+          scalar('SENT24_INTERNAL', "select count(*) from mei_email.envios where status::text in ('submitted','enviado','delivered') and enviado_em>=now()-interval '24 hours'")
+          scalar('SENT24_EXTERNAL', "select case when to_regclass('mei_email.envios_externos_cota') is null then 0 else (select count(*) from mei_email.envios_externos_cota where sent_at>=now()-interval '24 hours') end")
+          scalar('SUPPRESS_FABIO', "select count(*) from mei_email.email_suppressions where active and scope='email' and value=%s::public.citext", ('fabio@prengenharia.com.br',))
+          scalar('SUPPRESS_AGALLYS', "select count(*) from mei_email.email_suppressions where active and scope='email' and value=%s::public.citext", ('agallys@hotmail.com',))
+          PY
+          echo 'AUTH_METRICS_END'
+          echo 'NDR_LOG_BEGIN'
+          sudo journalctl -u mei-mg-email-ndr-guard.service --since '-15 minutes' --no-pager | tail -n 100 || true
+          echo 'NDR_LOG_END'
+          echo 'WORKER_LOG_BEGIN'
+          sudo journalctl -u mei-mg-email-worker.service --since '-3 minutes' --no-pager | tail -n 80 || true
+          echo 'WORKER_LOG_END'
           EOF
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
 
-# lightweight live verification after legacy drop-in retirement 2026-08-20T10:30Z
+# raw independent-authorization and rolling-quota metrics 2026-08-20T10:33Z
