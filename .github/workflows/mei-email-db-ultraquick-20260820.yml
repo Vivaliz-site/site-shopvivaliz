@@ -34,16 +34,16 @@ jobs:
           cd /home/ubuntu/mei-mg-email
           echo "AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           echo "HEAD=$(git rev-parse HEAD)"
+          echo "ORIGIN_MAIN=$(git rev-parse origin/main 2>/dev/null || true)"
           echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo "WORKER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)"
+          sudo systemctl show mei-mg-email-worker.service -p ExecStart -p ExecStartPre -p Restart -p RestartUSec -p StartLimitIntervalUSec -p ActiveState -p SubState --no-pager || true
           if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then echo SENTINEL=present; else echo SENTINEL=absent; fi
           docker ps -a --filter name=mei-mg-email-db --format 'db={{.Status}} image={{.Image}}'
           docker inspect mei-mg-email-db --format 'running={{.State.Running}} restarting={{.State.Restarting}} oom={{.State.OOMKilled}} exit={{.State.ExitCode}} restart_count={{.RestartCount}} started={{.State.StartedAt}}' || true
-          echo 'DB_LAST_LOGS_BEGIN'
-          timeout 10s docker logs --tail 60 mei-mg-email-db 2>&1 || true
-          echo 'DB_LAST_LOGS_END'
-          echo 'COMPOSE_DIFF_BEGIN'
-          git diff -- docker-compose.yml || true
-          echo 'COMPOSE_DIFF_END'
+          echo 'WORKER_LOG_BEGIN'
+          sudo journalctl -u mei-mg-email-worker.service --since '-5 minutes' --no-pager | tail -n 100 || true
+          echo 'WORKER_LOG_END'
           echo 'MEM_DISK_BEGIN'
           free -h || true
           df -h / || true
@@ -52,3 +52,5 @@ jobs:
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
+
+# post-deploy safe-entrypoint recheck 2026-08-20T04:57Z
