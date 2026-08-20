@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   actions: read
 
 concurrency:
@@ -61,36 +61,3 @@ jobs:
           path: artifacts/google-ads-antique-decore-status/
           if-no-files-found: error
           retention-days: 30
-
-      - name: Publish latest redacted live-watch status
-        if: always()
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          mkdir -p ops
-          out="ops/google-ads-antique-decore-status-latest.txt"
-          {
-            printf 'workflow=Google Ads Antique Decore Status\n'
-            printf 'run_id=%s\n' "${GITHUB_RUN_ID}"
-            printf 'run_attempt=%s\n' "${GITHUB_RUN_ATTEMPT}"
-            printf 'published_at_utc=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-            printf 'commit_sha=%s\n' "${GITHUB_SHA}"
-            printf -- '--- live-watch ---\n'
-            if [ -f artifacts/google-ads-antique-decore-status/live-watch.txt ]; then
-              sed -E \
-                -e 's/(refresh_token|client_secret|developer_token|access_token|Authorization: Bearer)[^[:space:]]+/\1=REDACTED/Ig' \
-                -e 's/([A-Za-z0-9_]*TOKEN[A-Za-z0-9_]*=).*/\1REDACTED/Ig' \
-                artifacts/google-ads-antique-decore-status/live-watch.txt
-            else
-              printf 'live_watch_file_missing=true\n'
-            fi
-          } > "$out"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$out"
-          if git diff --cached --quiet; then
-            echo "No latest status changes to publish."
-          else
-            git commit -m "ops: publish latest Google Ads Antique Decore status"
-            git push
-          fi
