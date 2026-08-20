@@ -38,6 +38,8 @@ jobs:
           echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
           echo "WORKER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)"
           sudo systemctl show mei-mg-email-worker.service -p ExecStart -p ExecStartPre -p MainPID -p Restart -p RestartUSec -p StartLimitIntervalUSec -p ActiveState -p SubState --no-pager || true
+          echo "AUTOREPAIR_TIMER=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || true)"
+          sudo systemctl show mei-mg-email-autorepair.service -p ExecStart -p ActiveState -p SubState --no-pager || true
           ps -eo pid=,etime=,stat=,cmd= | grep -E 'worker\.(worker_queue_first|safe_entrypoint)' | grep -v grep || true
           if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then echo SENTINEL=present; else echo SENTINEL=absent; fi
           docker ps -a --filter name=mei-mg-email-db --format 'db={{.Status}} image={{.Image}}'
@@ -66,15 +68,14 @@ jobs:
           PY
           echo 'PG_ACTIVITY_END'
           echo 'WORKER_LOG_BEGIN'
-          sudo journalctl -u mei-mg-email-worker.service --since '-4 minutes' --no-pager | tail -n 120 || true
+          sudo journalctl -u mei-mg-email-worker.service --since '-4 minutes' --no-pager | tail -n 140 || true
           echo 'WORKER_LOG_END'
-          echo 'MEM_DISK_BEGIN'
-          free -h || true
-          df -h / || true
-          echo 'MEM_DISK_END'
+          echo 'AUTOREPAIR_LOG_BEGIN'
+          sudo journalctl -u mei-mg-email-autorepair.service --since '-10 minutes' --no-pager | tail -n 80 || true
+          echo 'AUTOREPAIR_LOG_END'
           EOF
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
 
-# live worker wait-state recheck 2026-08-20T05:00Z
+# verify safe-entrypoint + nonstop supervisor deployment 2026-08-20T05:03Z
