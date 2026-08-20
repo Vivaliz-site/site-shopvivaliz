@@ -1,0 +1,87 @@
+name: Fred-Win Relay Health Repair
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tmp-fredwin-relay-health-repair-20260820.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Diagnose and repair relay
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p reports
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'REMOTE' | tee reports/fredwin-relay-health-repair.txt
+          set -Eeuo pipefail
+          echo CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)
+          if curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:5557/health >/tmp/fred-health-before.json 2>/dev/null; then
+            echo HEALTH_BEFORE=OK
+          else
+            echo HEALTH_BEFORE=FAILED
+          fi
+          port_pid=$(sudo ss -ltnp 2>/dev/null | awk '/127.0.0.1:5557|0.0.0.0:5557|\[::\]:5557/ {match($0,/pid=[0-9]+/); if(RSTART){print substr($0,RSTART+4,RLENGTH-4); exit}}')
+          echo LISTENER_PRESENT=$([ -n "${port_pid:-}" ] && echo YES || echo NO)
+          unit=''
+          for u in fred-win-mcp.service fredwin-mcp.service fred-win-relay.service fredwin-relay.service; do
+            if systemctl list-unit-files "$u" --no-legend 2>/dev/null | grep -q "^$u"; then unit="$u"; break; fi
+          done
+          if [ -z "$unit" ] && [ -n "${port_pid:-}" ]; then
+            cg=$(cat /proc/$port_pid/cgroup 2>/dev/null || true)
+            unit=$(printf '%s\n' "$cg" | sed -n 's#.*system.slice/\([^/]*\.service\).*#\1#p' | head -n1)
+          fi
+          echo RELAY_UNIT=${unit:-UNKNOWN}
+          if ! curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:5557/health >/dev/null 2>&1; then
+            if [ -n "$unit" ]; then
+              sudo systemctl restart "$unit"
+              sleep 4
+              echo RELAY_RESTARTED=YES
+            else
+              echo RELAY_RESTARTED=NO_UNIT
+            fi
+          else
+            echo RELAY_RESTARTED=NOT_NEEDED
+          fi
+          if curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:5557/health >/dev/null 2>&1; then
+            echo HEALTH_AFTER=OK
+          else
+            echo HEALTH_AFTER=FAILED
+            exit 20
+          fi
+          REMOTE
+      - name: Persist result
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name shopvivaliz-ops-bot
+          git config user.email ops@shopvivaliz.local
+          git add reports/fredwin-relay-health-repair.txt 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -m 'ops: record Fred-Win relay health repair'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey
