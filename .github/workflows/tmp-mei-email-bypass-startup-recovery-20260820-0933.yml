@@ -16,7 +16,7 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-      - name: Recover tracked files and prove send progress
+      - name: Reopen pending lots and prove send progress
         run: |
           ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF'
           set -Eeuo pipefail
@@ -28,6 +28,8 @@ jobs:
           git reset --hard origin/main
           echo EMAIL_HEAD=$(git rev-parse HEAD)
           .venv/bin/python -m py_compile worker/safe_entrypoint.py worker/safe_entrypoint_v2.py worker/worker_queue_first.py
+          reopened=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "with u as (update mei_email.lotes l set status='pendente', iniciado_em=null, concluido_em=null, erro='reaberto: possui destinatarios pendentes' where exists (select 1 from mei_email.envios e where e.lote_id=l.id and e.status::text in ('pendente','pending')) and l.status::text not in ('pendente','processando') returning 1) select count(*) from u;")
+          echo LOTS_REOPENED=$reopened
           sudo systemctl reset-failed mei-mg-email-worker.service || true
           sudo systemctl start mei-mg-email-worker.service
           sleep 12
