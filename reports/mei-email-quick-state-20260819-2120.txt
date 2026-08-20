@@ -1,0 +1,168 @@
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+Warning: Permanently added '137.131.156.17' (ED25519) to the list of known hosts.
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Tue Aug 18 22:39:46 -03 2026
+
+  System load:  2.3                Processes:             183
+  Usage of /:   86.4% of 44.96GB   Users logged in:       0
+  Memory usage: 45%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   51%
+
+  => / is using 86.4% of 44.96GB
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+64 updates can be applied immediately.
+8 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+16 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+116 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+
+*** System restart required ***
+CHECK_UTC=2026-08-20T00:15:53Z
+CHECK_BRT=2026-08-19T21:15:53-0300
+SERVICE=active
+SENTINEL=absent
+CONFIG={"max": 10000, "meta": 9950, "poll": 5, "queue_min": 500, "queue_target": 2000, "rate": 10}
+QUEUE_STATS={"today_brt": 0, "sent24": 0, "sent60": 0, "sent20": 0, "last": "2026-08-14 18:00:06.742016-03:00", "open": 17283}
+EXTERNAL_LEDGER={"sent24": 0, "today_brt": 0}
+STATUS_24H=[]
+PENDING_LOTS=351
+WORKER_LOCK=[]
+JOURNAL_TAIL_BEGIN
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:     data = self._mime_payload(to, subject, body, unsubscribe_url)
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:   File "/home/ubuntu/mei-mg-email/app/email_provider.py", line 187, in _mime_payload
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:     msg["From"] = formataddr((self.from_name, self.address))
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:     ~~~^^^^^^^^
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:   File "/usr/lib/python3.12/email/message.py", line 437, in __setitem__
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:     self._headers.append(self.policy.header_store_parse(name, val))
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:   File "/usr/lib/python3.12/email/policy.py", line 148, in header_store_parse
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:     return (name, self.header_factory(name, value))
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:   File "/usr/lib/python3.12/email/headerregistry.py", line 604, in __call__
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:     return self[name](name, value)
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:            ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:   File "/usr/lib/python3.12/email/headerregistry.py", line 192, in __new__
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:     cls.parse(value, kwds)
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:   File "/usr/lib/python3.12/email/headerregistry.py", line 342, in parse
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:     kwds['parse_tree'] = address_list = cls.value_parser(value)
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:                                         ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:   File "/usr/lib/python3.12/email/headerregistry.py", line 333, in value_parser
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:     address_list, value = parser.get_address_list(value)
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:   File "/usr/lib/python3.12/email/_header_value_parser.py", line 1998, in get_address_list
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:     token, value = get_address(value)
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:                    ^^^^^^^^^^^^^^^^^^
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:   File "/usr/lib/python3.12/email/_header_value_parser.py", line 1975, in get_address
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:     token, value = get_group(value)
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:                    ^^^^^^^^^^^^^^^^
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:   File "/usr/lib/python3.12/email/_header_value_parser.py", line 1930, in get_group
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:     group = Group()
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:             ^^^^^^^
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:   File "/usr/lib/python3.12/email/_header_value_parser.py", line 129, in __init__
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]:     def __init__(self, *args, **kw):
+Aug 19 21:01:21 shopvivaliz-ai python[2565501]: KeyboardInterrupt
+Aug 19 21:01:33 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Deactivated successfully.
+Aug 19 21:01:33 shopvivaliz-ai systemd[1]: Stopped mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker.
+Aug 19 21:01:33 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Consumed 2.598s CPU time.
+Aug 19 21:02:51 shopvivaliz-ai systemd[1]: Started mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker.
+Aug 19 21:02:57 shopvivaliz-ai python[2566498]: WARNING:mei_mg_email.email_provider:MicrosoftGraphEmailProvider APP-ONLY active sender=naoresponda@dev.shopvivaliz.com.br cert=/home/ubuntu/.shopvivaliz/m365/graph-auth.crt
+Aug 19 21:02:57 shopvivaliz-ai python[2566498]: INFO:mei_mg_email.worker:Worker queue-first iniciado. provedor=microsoft_graph rate_limit=10/min meta_24h=9950 teto_24h=10000 poll=5s fila_min=500 fila_target=2000
+Aug 19 21:03:31 shopvivaliz-ai python[2566498]: WARNING:mei_mg_email.queue_recovery:QUEUE_RECOVERY_DEFERRED label=discard_ineligible reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 19 21:04:02 shopvivaliz-ai python[2566498]: WARNING:mei_mg_email.queue_recovery:QUEUE_RECOVERY_DEFERRED label=discard_suppressed_or_sent reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 19 21:04:02 shopvivaliz-ai python[2566498]: CONTEXT:  SQL function "is_email_suppressed" statement 1
+Aug 19 21:06:19 shopvivaliz-ai systemd[1]: Stopping mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker...
+Aug 19 21:06:21 shopvivaliz-ai python[2566498]: Traceback (most recent call last):
+Aug 19 21:06:22 shopvivaliz-ai python[2566498]:   File "<frozen runpy>", line 198, in _run_module_as_main
+Aug 19 21:06:22 shopvivaliz-ai python[2566498]:   File "<frozen runpy>", line 88, in _run_code
+Aug 19 21:06:22 shopvivaliz-ai python[2566498]:   File "/home/ubuntu/mei-mg-email/worker/worker_queue_first.py", line 496, in <module>
+Aug 19 21:06:22 shopvivaliz-ai python[2566498]:     run()
+Aug 19 21:06:22 shopvivaliz-ai python[2566498]:   File "/home/ubuntu/mei-mg-email/worker/worker_queue_first.py", line 473, in run
+Aug 19 21:06:22 shopvivaliz-ai python[2566498]:     if _processar_se_disponivel(conn, provider):
+Aug 19 21:06:22 shopvivaliz-ai python[2566498]:        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 19 21:06:22 shopvivaliz-ai python[2566498]:   File "/home/ubuntu/mei-mg-email/worker/worker_queue_first.py", line 410, in _processar_se_disponivel
+Aug 19 21:06:22 shopvivaliz-ai python[2566498]:     processar_lote(conn, lote, provider)
+Aug 19 21:06:22 shopvivaliz-ai python[2566498]:   File "/home/ubuntu/mei-mg-email/worker/worker_queue_first.py", line 321, in processar_lote
+Aug 19 21:06:22 shopvivaliz-ai python[2566498]:     base_worker._atualizar_envio(
+Aug 19 21:06:22 shopvivaliz-ai python[2566498]:   File "/home/ubuntu/mei-mg-email/worker/worker.py", line 308, in _atualizar_envio
+Aug 19 21:06:22 shopvivaliz-ai python[2566498]:     cur.execute(
+Aug 19 21:06:22 shopvivaliz-ai python[2566498]:   File "/home/ubuntu/mei-mg-email/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 97, in execute
+Aug 19 21:06:22 shopvivaliz-ai python[2566498]:     raise ex.with_traceback(None)
+Aug 19 21:06:22 shopvivaliz-ai python[2566498]: KeyboardInterrupt
+Aug 19 21:06:39 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Deactivated successfully.
+Aug 19 21:06:39 shopvivaliz-ai systemd[1]: Stopped mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker.
+Aug 19 21:06:39 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Consumed 3.520s CPU time.
+Aug 19 21:08:05 shopvivaliz-ai systemd[1]: Started mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker.
+Aug 19 21:08:11 shopvivaliz-ai python[2567509]: WARNING:mei_mg_email.email_provider:MicrosoftGraphEmailProvider APP-ONLY active sender=naoresponda@dev.shopvivaliz.com.br cert=/home/ubuntu/.shopvivaliz/m365/graph-auth.crt
+Aug 19 21:08:11 shopvivaliz-ai python[2567509]: INFO:mei_mg_email.worker:Worker queue-first iniciado. provedor=microsoft_graph rate_limit=10/min meta_24h=9950 teto_24h=10000 poll=5s fila_min=500 fila_target=2000
+Aug 19 21:08:44 shopvivaliz-ai python[2567509]: WARNING:mei_mg_email.queue_recovery:QUEUE_RECOVERY_DEFERRED label=discard_ineligible reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 19 21:09:15 shopvivaliz-ai python[2567509]: WARNING:mei_mg_email.queue_recovery:QUEUE_RECOVERY_DEFERRED label=discard_suppressed_or_sent reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 19 21:09:15 shopvivaliz-ai python[2567509]: CONTEXT:  SQL function "is_email_suppressed" statement 1
+Aug 19 21:11:28 shopvivaliz-ai systemd[1]: Stopping mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker...
+Aug 19 21:11:29 shopvivaliz-ai python[2567509]: Traceback (most recent call last):
+Aug 19 21:11:29 shopvivaliz-ai python[2567509]:   File "<frozen runpy>", line 198, in _run_module_as_main
+Aug 19 21:11:29 shopvivaliz-ai python[2567509]:   File "<frozen runpy>", line 88, in _run_code
+Aug 19 21:11:29 shopvivaliz-ai python[2567509]:   File "/home/ubuntu/mei-mg-email/worker/worker_queue_first.py", line 496, in <module>
+Aug 19 21:11:29 shopvivaliz-ai python[2567509]:     run()
+Aug 19 21:11:29 shopvivaliz-ai python[2567509]:   File "/home/ubuntu/mei-mg-email/worker/worker_queue_first.py", line 473, in run
+Aug 19 21:11:29 shopvivaliz-ai python[2567509]:     if _processar_se_disponivel(conn, provider):
+Aug 19 21:11:29 shopvivaliz-ai python[2567509]:        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 19 21:11:29 shopvivaliz-ai python[2567509]:   File "/home/ubuntu/mei-mg-email/worker/worker_queue_first.py", line 410, in _processar_se_disponivel
+Aug 19 21:11:29 shopvivaliz-ai python[2567509]:     processar_lote(conn, lote, provider)
+Aug 19 21:11:29 shopvivaliz-ai python[2567509]:   File "/home/ubuntu/mei-mg-email/worker/worker_queue_first.py", line 321, in processar_lote
+Aug 19 21:11:29 shopvivaliz-ai python[2567509]:     base_worker._atualizar_envio(
+Aug 19 21:11:29 shopvivaliz-ai python[2567509]:   File "/home/ubuntu/mei-mg-email/worker/worker.py", line 308, in _atualizar_envio
+Aug 19 21:11:29 shopvivaliz-ai python[2567509]:     cur.execute(
+Aug 19 21:11:29 shopvivaliz-ai python[2567509]:   File "/home/ubuntu/mei-mg-email/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 97, in execute
+Aug 19 21:11:29 shopvivaliz-ai python[2567509]:     raise ex.with_traceback(None)
+Aug 19 21:11:29 shopvivaliz-ai python[2567509]: KeyboardInterrupt
+Aug 19 21:11:44 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Deactivated successfully.
+Aug 19 21:11:44 shopvivaliz-ai systemd[1]: Stopped mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker.
+Aug 19 21:11:44 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Consumed 3.570s CPU time.
+Aug 19 21:13:33 shopvivaliz-ai systemd[1]: Started mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker.
+Aug 19 21:13:39 shopvivaliz-ai python[2568591]: WARNING:mei_mg_email.email_provider:MicrosoftGraphEmailProvider APP-ONLY active sender=naoresponda@dev.shopvivaliz.com.br cert=/home/ubuntu/.shopvivaliz/m365/graph-auth.crt
+Aug 19 21:13:39 shopvivaliz-ai python[2568591]: INFO:mei_mg_email.worker:Worker queue-first iniciado. provedor=microsoft_graph rate_limit=10/min meta_24h=9950 teto_24h=10000 poll=5s fila_min=500 fila_target=2000
+Aug 19 21:14:12 shopvivaliz-ai python[2568591]: WARNING:mei_mg_email.queue_recovery:QUEUE_RECOVERY_DEFERRED label=discard_ineligible reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 19 21:14:44 shopvivaliz-ai python[2568591]: WARNING:mei_mg_email.queue_recovery:QUEUE_RECOVERY_DEFERRED label=discard_suppressed_or_sent reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 19 21:14:44 shopvivaliz-ai python[2568591]: CONTEXT:  SQL function "is_email_suppressed" statement 1
+Aug 19 21:15:24 shopvivaliz-ai python[2568591]: WARNING:mei_mg_email.queue_recovery:QUEUE_RECOVERY_DEFERRED label=discard_open_duplicates reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 19 21:16:42 shopvivaliz-ai systemd[1]: Stopping mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker...
+Aug 19 21:16:45 shopvivaliz-ai python[2568591]: Traceback (most recent call last):
+Aug 19 21:16:45 shopvivaliz-ai python[2568591]:   File "<frozen runpy>", line 198, in _run_module_as_main
+Aug 19 21:16:45 shopvivaliz-ai python[2568591]:   File "<frozen runpy>", line 88, in _run_code
+Aug 19 21:16:45 shopvivaliz-ai python[2568591]:   File "/home/ubuntu/mei-mg-email/worker/worker_queue_first.py", line 496, in <module>
+Aug 19 21:16:46 shopvivaliz-ai python[2568591]:     run()
+Aug 19 21:16:46 shopvivaliz-ai python[2568591]:   File "/home/ubuntu/mei-mg-email/worker/worker_queue_first.py", line 473, in run
+Aug 19 21:16:46 shopvivaliz-ai python[2568591]:     if _processar_se_disponivel(conn, provider):
+Aug 19 21:16:46 shopvivaliz-ai python[2568591]:        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 19 21:16:46 shopvivaliz-ai python[2568591]:   File "/home/ubuntu/mei-mg-email/worker/worker_queue_first.py", line 410, in _processar_se_disponivel
+Aug 19 21:16:46 shopvivaliz-ai python[2568591]:     processar_lote(conn, lote, provider)
+Aug 19 21:16:46 shopvivaliz-ai python[2568591]:   File "/home/ubuntu/mei-mg-email/worker/worker_queue_first.py", line 296, in processar_lote
+Aug 19 21:16:46 shopvivaliz-ai python[2568591]:     if _ja_submetido_ou_entregue_indexado(
+Aug 19 21:16:46 shopvivaliz-ai python[2568591]:        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 19 21:16:46 shopvivaliz-ai python[2568591]:   File "/home/ubuntu/mei-mg-email/worker/worker_queue_first.py", line 93, in _ja_submetido_ou_entregue_indexado
+Aug 19 21:16:46 shopvivaliz-ai python[2568591]:     cur.execute(
+Aug 19 21:16:46 shopvivaliz-ai python[2568591]:   File "/home/ubuntu/mei-mg-email/.venv/lib/python3.12/site-packages/psycopg/cursor.py", line 97, in execute
+Aug 19 21:16:46 shopvivaliz-ai python[2568591]:     raise ex.with_traceback(None)
+Aug 19 21:16:46 shopvivaliz-ai python[2568591]: KeyboardInterrupt
+Aug 19 21:17:08 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Deactivated successfully.
+Aug 19 21:17:08 shopvivaliz-ai systemd[1]: Stopped mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker.
+Aug 19 21:17:08 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Consumed 3.144s CPU time.
+JOURNAL_TAIL_END
