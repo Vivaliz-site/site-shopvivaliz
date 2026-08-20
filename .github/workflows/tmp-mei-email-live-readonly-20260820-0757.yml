@@ -1,0 +1,59 @@
+name: MEI Email Live Readonly 20260820 0757
+on:
+  push:
+    paths:
+      - '.github/workflows/tmp-mei-email-live-readonly-20260820-0757.yml'
+permissions:
+  contents: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          VM_KEY: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+      - name: Read live production state
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF' > reports/mei-email-live-readonly-20260820-0757.txt 2>&1
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo "BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)"
+          echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo "WORKER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)"
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then echo 'SENTINEL=present'; else echo 'SENTINEL=absent'; fi
+          .venv/bin/python - <<'PY'
+          import json, psycopg
+          from app.config import settings
+          with psycopg.connect(settings.database_url) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("""select count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours'), count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=now()-interval '10 minutes'), count(*) filter(where status::text in ('submitted','enviado') and enviado_em>=now()-interval '2 minutes'), count(*) filter(where status::text in ('pendente','enviando','pending','processing')), max(enviado_em) filter(where status::text in ('submitted','enviado')) from mei_email.envios""")
+                  a=cur.fetchone()
+                  print('SEND_STATE='+json.dumps({'sent24':a[0],'sent10m':a[1],'sent2m':a[2],'open_queue':a[3],'last_sent_at':str(a[4])}))
+                  cur.execute("select count(*) from mei_email.vw_empresas_elegiveis")
+                  print('ELIGIBLE='+str(cur.fetchone()[0]))
+          PY
+          echo "AS42004_LAST15M=$(sudo journalctl -u mei-mg-email-worker.service --since '-15 minutes' --no-pager 2>/dev/null | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8' || true)"
+          echo 'JOURNAL_TAIL_BEGIN'
+          sudo journalctl -u mei-mg-email-worker.service --since '-5 minutes' --no-pager 2>/dev/null | tail -n 80 || true
+          echo 'JOURNAL_TAIL_END'
+          EOF
+      - name: Persist report
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/mei-email-live-readonly-20260820-0757.txt
+          git commit -m 'ops: capture MEI live readonly state 20260820-0757' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa
