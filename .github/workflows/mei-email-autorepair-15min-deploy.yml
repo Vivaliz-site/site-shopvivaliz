@@ -81,6 +81,8 @@ jobs:
           grep -q 'with conn.cursor() as lock_cur:' app/queue_manager.py
           grep -q 'lock_row = lock_cur.fetchone()' app/queue_manager.py
           grep -q 'lock_row\[0\]' app/queue_manager.py
+          grep -q 'user_explicit_authorization_2026-08-20' app/queue_manager.py
+          grep -q 'operator_authorization_true' app/queue_manager.py
           grep -q '^OnUnitActiveSec=15min$' deploy/systemd/mei-mg-email-autorepair.timer
           grep -q '^StartLimitIntervalSec=0$' deploy/systemd/mei-mg-email-worker.service
           grep -q '^Restart=always$' deploy/systemd/mei-mg-email-worker.service
@@ -147,6 +149,7 @@ jobs:
           echo "WORKER_ENABLED=true"
           echo "WORKER_SAFE_ENTRYPOINT_V2=true"
           echo "AUTOQUEUE_TUPLE_LOCK_FIX=true"
+          echo "AUTOQUEUE_RAW_ORIGIN_GUARD=true"
           echo "SYNTHESIZED_AUTH_GUARD=true"
           echo "PRESEND_FULL_CONTRACT_GUARD=true"
           echo "PRESEND_DICT_ROW_LEDGER_FIX=true"
@@ -182,3 +185,4 @@ jobs:
 # deploy final dict-row ledger and migration-version fixes 2026-08-20T11:30Z
 # deploy restored full presend contract after regression 2026-08-20T13:24Z
 # watchdog redeploy current strict sender main 2026-08-20T13:42Z
+# deploy autoqueue raw-origin drift guard after sender PR 66 2026-08-20T13:47Z
