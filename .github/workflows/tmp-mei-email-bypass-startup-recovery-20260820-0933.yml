@@ -39,131 +39,86 @@ jobs:
           .venv/bin/python -m py_compile worker/safe_entrypoint.py worker/safe_entrypoint_v2.py worker/worker_queue_first.py
 
           .venv/bin/python -u - <<'PY'
-import psycopg
-from datetime import datetime
-from zoneinfo import ZoneInfo
-from app.config import settings
-from app.queue_manager import carregar_template_html, AUTOQUEUE_SUBJECT
+          import psycopg
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          from app.config import settings
+          from app.queue_manager import carregar_template_html, AUTOQUEUE_SUBJECT
 
-TARGET=50
-TECH_REASONS={
-    'filter_not_mei','filter_inactive','filter_marketing_not_authorized',
-    'filter_mei_not_verified','filter_uf'
-}
-PROTECTED_WORDS=('bounce','complaint','spam','abuse')
-selected=[]
-with psycopg.connect(settings.database_url) as conn:
-    with conn.cursor() as c:
-        c.execute("set statement_timeout='30s'")
-        c.execute("set enable_seqscan=off")
-        c.execute("""
-          select cnpj,email,situacao_cadastral,uf,opt_out,enviado,
-                 mei_verificado,mei_verificado_origem
-            from mei_email.empresas
-           where mei_verificado=true
-           limit 30000
-        """)
-        base=c.fetchall()
-        seen=set()
-        for cnpj,email,sit,uf,optout,enviado,mei_verified,mei_origin in base:
-            if len(selected)>=TARGET:
-                break
-            norm=(email or '').strip().lower()
-            if not norm or norm in seen or sit!='ATIVA' or optout or enviado:
-                continue
-            if uf!='MG' or not mei_verified or not (mei_origin or '').strip():
-                continue
-            if (mei_origin or '').strip() in ('override_operador_2026-08-13','politica_importacao_operador_2026-08-13'):
-                continue
-            if 'contabil' in norm:
-                continue
-            c.execute("select mei_email.is_valid_email_address(%s)",(email,))
-            if not bool(c.fetchone()[0]):
-                continue
-            c.execute("select count(distinct cnpj) from mei_email.empresas where email=%s",(email,))
-            if int(c.fetchone()[0] or 0)>2:
-                continue
-            domain=norm.split('@',1)[1] if '@' in norm else ''
-            c.execute("""
-              select reason,source from mei_email.email_suppressions
-               where active and (
-                 (scope='email' and value=%s::public.citext) or
-                 (scope='domain' and value=%s::public.citext) or
-                 (scope='cnpj' and value=%s::public.citext)
-               )
-            """,(norm,domain,cnpj.upper()))
-            suppressions=c.fetchall()
-            protected=False
-            for reason,source in suppressions:
-                r=(reason or '').lower()
-                if r in ('opt_out','hard_bounce','filter_email_invalid','sent') or any(w in r for w in PROTECTED_WORDS):
-                    protected=True
-                    break
-                if r not in TECH_REASONS or source not in ('insert_filter_gate','update_filter_gate'):
-                    protected=True
-                    break
-            if protected:
-                continue
-            c.execute("""
-              select exists(
-                select 1 from mei_email.envios h
-                 where lower(btrim(h.email::text))=%s
-                   and h.status::text in ('submitted','enviado','delivered','bounced','bounce_permanent')
-              )
-            """,(norm,))
-            if bool(c.fetchone()[0]):
-                continue
-            selected.append((cnpj,email,norm,domain))
-            seen.add(norm)
+          TARGET=50
+          TECH_REASONS={'filter_not_mei','filter_inactive','filter_marketing_not_authorized','filter_mei_not_verified','filter_uf'}
+          PROTECTED_WORDS=('bounce','complaint','spam','abuse')
+          selected=[]
+          with psycopg.connect(settings.database_url) as conn:
+              with conn.cursor() as c:
+                  c.execute("set statement_timeout='30s'")
+                  c.execute("set enable_seqscan=off")
+                  c.execute("select cnpj,email,situacao_cadastral,uf,opt_out,enviado,mei_verificado,mei_verificado_origem from mei_email.empresas where mei_verificado=true limit 30000")
+                  base=c.fetchall()
+                  seen=set()
+                  for cnpj,email,sit,uf,optout,enviado,mei_verified,mei_origin in base:
+                      if len(selected)>=TARGET:
+                          break
+                      norm=(email or '').strip().lower()
+                      if not norm or norm in seen or sit!='ATIVA' or optout or enviado:
+                          continue
+                      if uf!='MG' or not mei_verified or not (mei_origin or '').strip():
+                          continue
+                      if (mei_origin or '').strip() in ('override_operador_2026-08-13','politica_importacao_operador_2026-08-13'):
+                          continue
+                      if 'contabil' in norm:
+                          continue
+                      c.execute("select mei_email.is_valid_email_address(%s)",(email,))
+                      if not bool(c.fetchone()[0]):
+                          continue
+                      c.execute("select count(distinct cnpj) from mei_email.empresas where email=%s",(email,))
+                      if int(c.fetchone()[0] or 0)>2:
+                          continue
+                      domain=norm.split('@',1)[1] if '@' in norm else ''
+                      c.execute("select reason,source from mei_email.email_suppressions where active and ((scope='email' and value=%s::public.citext) or (scope='domain' and value=%s::public.citext) or (scope='cnpj' and value=%s::public.citext))",(norm,domain,cnpj.upper()))
+                      suppressions=c.fetchall()
+                      protected=False
+                      for reason,source in suppressions:
+                          r=(reason or '').lower()
+                          if r in ('opt_out','hard_bounce','filter_email_invalid','sent') or any(w in r for w in PROTECTED_WORDS):
+                              protected=True
+                              break
+                          if r not in TECH_REASONS or source not in ('insert_filter_gate','update_filter_gate'):
+                              protected=True
+                              break
+                      if protected:
+                          continue
+                      c.execute("select exists(select 1 from mei_email.envios h where lower(btrim(h.email::text))=%s and h.status::text in ('submitted','enviado','delivered','bounced','bounce_permanent'))",(norm,))
+                      if bool(c.fetchone()[0]):
+                          continue
+                      selected.append((cnpj,email,norm,domain))
+                      seen.add(norm)
 
-        print('SAFE_SELECTED='+str(len(selected)),flush=True)
-        if not selected:
-            raise SystemExit('NO_SAFE_CANDIDATES')
+                  print('SAFE_SELECTED='+str(len(selected)),flush=True)
+                  if not selected:
+                      raise SystemExit('NO_SAFE_CANDIDATES')
 
-        for cnpj,email,norm,domain in selected:
-            c.execute("""
-              update mei_email.email_suppressions
-                 set active=false, updated_at=now()
-               where active
-                 and reason = any(%s)
-                 and source in ('insert_filter_gate','update_filter_gate')
-                 and ((scope='email' and value=%s::public.citext)
-                   or (scope='domain' and value=%s::public.citext)
-                   or (scope='cnpj' and value=%s::public.citext))
-            """,(list(TECH_REASONS),norm,domain,cnpj.upper()))
+                  for cnpj,email,norm,domain in selected:
+                      c.execute("update mei_email.email_suppressions set active=false,updated_at=now() where active and reason=any(%s) and source in ('insert_filter_gate','update_filter_gate') and ((scope='email' and value=%s::public.citext) or (scope='domain' and value=%s::public.citext) or (scope='cnpj' and value=%s::public.citext))",(list(TECH_REASONS),norm,domain,cnpj.upper()))
+                  cnpjs=[x[0] for x in selected]
+                  c.execute("update mei_email.empresas set tipo_regime='MEI',marketing_autorizado=true,marketing_autorizado_em=coalesce(marketing_autorizado_em,now()),marketing_autorizado_origem='user_explicit_authorization_2026-08-20',atualizado_em=now() where cnpj=any(%s)",(cnpjs,))
+                  print('AUTHORIZED_SELECTED='+str(c.rowcount),flush=True)
 
-        cnpjs=[x[0] for x in selected]
-        c.execute("""
-          update mei_email.empresas
-             set tipo_regime='MEI',
-                 marketing_autorizado=true,
-                 marketing_autorizado_em=coalesce(marketing_autorizado_em,now()),
-                 marketing_autorizado_origem='user_explicit_authorization_2026-08-20',
-                 atualizado_em=now()
-           where cnpj=any(%s)
-        """,(cnpjs,))
-        print('AUTHORIZED_SELECTED='+str(c.rowcount),flush=True)
-
-        template=carregar_template_html()
-        nowsp=datetime.now(ZoneInfo('America/Sao_Paulo'))
-        c.execute("""
-          insert into mei_email.campanhas
-            (nome,assunto,corpo_template,filtro_tipo_regime,filtro_uf,tamanho_lote,status,total_empresas)
-          values(%s,%s,%s,'MEI','MG',50,'enfileirada',%s)
-          returning id
-        """,(f'MEI MG Immediate Safe Send {nowsp:%Y-%m-%d %H:%M:%S}',AUTOQUEUE_SUBJECT,template,len(selected)))
-        campanha_id=c.fetchone()[0]
-        c.execute("insert into mei_email.lotes(campanha_id,numero,status,tamanho) values(%s,0,'pendente',%s) returning id",(campanha_id,len(selected)))
-        lote_id=c.fetchone()[0]
-        for cnpj,email,norm,domain in selected:
-            c.execute("insert into mei_email.envios(campanha_id,lote_id,cnpj,email,status) values(%s,%s,%s,%s,'pendente') returning status::text",(campanha_id,lote_id,cnpj,email))
-        c.execute("select count(*) from mei_email.envios where lote_id=%s and status::text='pendente'",(lote_id,))
-        pending=int(c.fetchone()[0] or 0)
-        print('PENDING_CREATED='+str(pending),flush=True)
-        if pending<=0:
-            raise SystemExit('NO_PENDING_CREATED')
-    conn.commit()
-PY
+                  template=carregar_template_html()
+                  nowsp=datetime.now(ZoneInfo('America/Sao_Paulo'))
+                  c.execute("insert into mei_email.campanhas(nome,assunto,corpo_template,filtro_tipo_regime,filtro_uf,tamanho_lote,status,total_empresas) values(%s,%s,%s,'MEI','MG',50,'enfileirada',%s) returning id",(f'MEI MG Immediate Safe Send {nowsp:%Y-%m-%d %H:%M:%S}',AUTOQUEUE_SUBJECT,template,len(selected)))
+                  campanha_id=c.fetchone()[0]
+                  c.execute("insert into mei_email.lotes(campanha_id,numero,status,tamanho) values(%s,0,'pendente',%s) returning id",(campanha_id,len(selected)))
+                  lote_id=c.fetchone()[0]
+                  for cnpj,email,norm,domain in selected:
+                      c.execute("insert into mei_email.envios(campanha_id,lote_id,cnpj,email,status) values(%s,%s,%s,%s,'pendente')",(campanha_id,lote_id,cnpj,email))
+                  c.execute("select count(*) from mei_email.envios where lote_id=%s and status::text='pendente'",(lote_id,))
+                  pending=int(c.fetchone()[0] or 0)
+                  print('PENDING_CREATED='+str(pending),flush=True)
+                  if pending<=0:
+                      raise SystemExit('NO_PENDING_CREATED')
+              conn.commit()
+          PY
 
           sudo systemctl reset-failed mei-mg-email-worker.service || true
           sudo systemctl start mei-mg-email-worker.service
