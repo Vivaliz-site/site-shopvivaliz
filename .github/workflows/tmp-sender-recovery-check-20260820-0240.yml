@@ -1,0 +1,220 @@
+name: One-shot fail-closed sender restriction check 20260820-0240
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tmp-sender-recovery-check-20260820-0240.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mei-email-production-start
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 12
+    env:
+      VM_HOST: 137.131.156.17
+      VM_USER: ubuntu
+      REPORT: reports/sender-recovery-check-20260820-0240.txt
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure verified Oracle SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key"
+          test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Check Exchange and, only if unrestricted, send one controlled probe
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p reports
+          set +e
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 \
+            -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF' > "$REPORT" 2>&1
+          set -Eeuo pipefail
+          APP=/home/ubuntu/mei-mg-email
+          SENTINEL=/var/lib/mei-mg-email/sender_blocked.pause
+          cd "$APP"
+          echo "CHECKED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          sudo systemctl stop mei-mg-email-worker.service || true
+          sudo systemctl stop mei-mg-email-autorepair.timer mei-mg-email-autorepair.service || true
+          sudo systemctl disable mei-mg-email-autorepair.timer || true
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then
+            echo 'WORKER_FROZEN=false'
+            exit 20
+          fi
+          echo 'WORKER_FROZEN=true'
+
+          if ! sudo test -f "$SENTINEL"; then
+            printf 'blocked_at_utc=%s\nsender=naoresponda@dev.shopvivaliz.com.br\nsource=authorized_recovery_gate\nerror=fail-closed during live restriction verification\nresume_allowed=false\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" | sudo tee "$SENTINEL" >/dev/null
+          fi
+          echo "SENTINEL_PRESENT=$(sudo test -f "$SENTINEL" && echo true || echo false)"
+          echo "WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+
+          set +e
+          EXCHANGE_OUT=$(pwsh -NoProfile -File "$APP/scripts/desbloquear_exchange_app_cert.ps1" 2>&1)
+          EXCHANGE_RC=$?
+          set -e
+          printf '%s\n' "$EXCHANGE_OUT"
+          echo "EXCHANGE_RC=$EXCHANGE_RC"
+
+          if grep -q 'EXCHANGE_SENDER_BLOCKED' <<<"$EXCHANGE_OUT"; then
+            echo 'RESULT=restricted_fail_closed'
+            exit 0
+          fi
+          if ! grep -q 'EXCHANGE_SENDER_NOT_BLOCKED' <<<"$EXCHANGE_OUT"; then
+            echo 'RESULT=restriction_uncertain_fail_closed'
+            exit 0
+          fi
+
+          SUBJECT='SHOPVIVALIZ CONTROLLED SENDER RECOVERY 20260820T0240Z'
+          export SUBJECT
+          .venv/bin/python - <<'PY'
+          from datetime import datetime, timezone
+          import json
+          import psycopg
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          from app.config import settings
+          from app.email_provider import ALLOWED_SENDER, MicrosoftGraphEmailProvider
+          import os
+
+          subject = os.environ['SUBJECT']
+          recipient = 'fredmourao@gmail.com'
+          provider = MicrosoftGraphEmailProvider()
+          provider.authenticate()
+          if provider.address.casefold() != ALLOWED_SENDER.casefold():
+              raise SystemExit('PROBE_ABORTED=sender_mismatch')
+          with psycopg.connect(settings.database_url, connect_timeout=10) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("select to_regclass('mei_email.envios_externos_cota')")
+                  if cur.fetchone()[0] is None:
+                      raise SystemExit('PROBE_ABORTED=external_quota_ledger_missing')
+                  cur.execute("select count(*) from mei_email.envios_externos_cota where subject=%s", (subject,))
+                  if int(cur.fetchone()[0] or 0):
+                      raise SystemExit('PROBE_ABORTED=duplicate_subject_guard')
+                  cur.execute("""
+                      select
+                        (select count(*) from mei_email.envios where status in ('submitted','enviado') and enviado_em >= now() - interval '24 hours')
+                        +
+                        (select count(*) from mei_email.envios_externos_cota where sent_at >= now() - interval '24 hours')
+                  """)
+                  total = int(cur.fetchone()[0] or 0)
+                  if total >= settings.max_envios_por_dia:
+                      raise SystemExit(f'PROBE_ABORTED=quota_cap sent24={total}')
+
+              sent_at = datetime.now(timezone.utc)
+              result = provider.send(
+                  to=recipient,
+                  subject=subject,
+                  body='Teste controlado e unico para validar a recuperacao segura do remetente ShopVivaliz.'
+              )
+              if not result.success or result.status != 'submitted':
+                  raise SystemExit(f'PROBE_FAILED status={result.status} error={result.error}')
+              with conn.cursor() as cur:
+                  cur.execute("""
+                      insert into mei_email.envios_externos_cota
+                          (email, subject, sent_at, source, provider_message_id, metadata)
+                      values (%s, %s, %s, 'authorized_sender_recovery_probe', %s, %s::jsonb)
+                  """, (
+                      recipient,
+                      subject,
+                      sent_at,
+                      result.message_id,
+                      json.dumps({'purpose':'authorized_sender_recovery','recipient_confirmation_required':True}),
+                  ))
+              conn.commit()
+
+          print('PROBE_SUBMITTED=true')
+          print('PROBE_RECIPIENT='+recipient)
+          print('PROBE_SUBJECT='+subject)
+          print('PROBE_SENT_AT_UTC='+sent_at.isoformat())
+          print('PROBE_PROVIDER_MESSAGE_ID='+str(result.message_id or ''))
+          with open('/tmp/mei_sender_probe_sent_at','w',encoding='utf-8') as f:
+              f.write(sent_at.isoformat())
+          PY
+
+          sleep 150
+
+          .venv/bin/python - <<'PY'
+          from datetime import datetime, timezone
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          from app.email_provider import MicrosoftGraphEmailProvider
+          from scripts import ndr_guard
+
+          sent_at = datetime.fromisoformat(open('/tmp/mei_sender_probe_sent_at', encoding='utf-8').read().strip())
+          provider = MicrosoftGraphEmailProvider()
+          messages = ndr_guard._recent_messages(provider)
+          blocked = []
+          for message in messages:
+              raw_dt = str(message.get('receivedDateTime') or '')
+              if not raw_dt:
+                  continue
+              received = datetime.fromisoformat(raw_dt.replace('Z','+00:00')).astimezone(timezone.utc)
+              if received < sent_at.astimezone(timezone.utc):
+                  continue
+              subject = str(message.get('subject') or '')
+              preview = str(message.get('bodyPreview') or '')
+              if not ndr_guard.looks_like_ndr(subject, preview):
+                  continue
+              text = ndr_guard._full_message_text(provider, str(message.get('id') or ''))
+              if ndr_guard.contains_sender_blocked_marker(text):
+                  blocked.append((str(message.get('id') or ''), raw_dt, subject))
+          print('NEW_AS42004_NDR='+str(bool(blocked)).lower())
+          print('NEW_AS42004_NDR_COUNT='+str(len(blocked)))
+          for mid, received, subject in blocked:
+              print('NEW_AS42004_NDR_ITEM='+json.dumps({'id':mid,'receivedDateTime':received,'subject':subject}, ensure_ascii=False))
+          PY
+
+          echo "SENTINEL_PRESENT_AFTER=$(sudo test -f "$SENTINEL" && echo true || echo false)"
+          echo "WORKER_STATE_AFTER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo 'RESULT=probe_sent_worker_still_fail_closed'
+          EOF
+          remote_rc=$?
+          set -e
+          printf '\nREMOTE_RC=%s\n' "$remote_rc" >> "$REPORT"
+          sed -E -i \
+            -e 's#(postgres(ql)?://)[^[:space:]]+#\1[REDACTED]#g' \
+            -e 's#(Bearer )[A-Za-z0-9._-]+#\1[REDACTED]#g' \
+            "$REPORT"
+
+      - name: Commit sanitized report
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'sender-recovery-watchdog'
+          git config user.email 'actions@users.noreply.github.com'
+          git add "$REPORT"
+          git commit -m 'ops: publish sender recovery restriction check'
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Cleanup SSH material
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
