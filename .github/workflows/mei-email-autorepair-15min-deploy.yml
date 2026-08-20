@@ -78,8 +78,9 @@ jobs:
             scripts/nonstop_supervisor_15m.py \
             worker/safe_entrypoint.py \
             worker/safe_entrypoint_v2.py
-          grep -q 'pg_try_advisory_xact_lock(%s) as acquired' app/queue_manager.py
-          grep -q 'cur.fetchone()\["acquired"\]' app/queue_manager.py
+          grep -q 'with conn.cursor() as lock_cur:' app/queue_manager.py
+          grep -q 'lock_row = lock_cur.fetchone()' app/queue_manager.py
+          grep -q 'lock_row\[0\]' app/queue_manager.py
           grep -q '^OnUnitActiveSec=15min$' deploy/systemd/mei-mg-email-autorepair.timer
           grep -q '^StartLimitIntervalSec=0$' deploy/systemd/mei-mg-email-worker.service
           grep -q '^Restart=always$' deploy/systemd/mei-mg-email-worker.service
@@ -140,7 +141,7 @@ jobs:
           echo "WORKER_ACTIVE=true"
           echo "WORKER_ENABLED=true"
           echo "WORKER_SAFE_ENTRYPOINT_V2=true"
-          echo "AUTOQUEUE_DICT_ROW_FIX=true"
+          echo "AUTOQUEUE_TUPLE_LOCK_FIX=true"
           sudo systemctl show mei-mg-email-worker.service \
             -p ActiveState -p SubState -p MainPID -p ExecStart -p ExecStartPre \
             -p Restart -p RestartUSec -p StartLimitIntervalUSec --no-pager
@@ -168,3 +169,4 @@ jobs:
 # deploy operator-origin consent guard 2026-08-20T10:52Z
 # deploy strict operator-origin consent guard 2026-08-20T11:00Z
 # deploy autoqueue dict-row advisory-lock fix 2026-08-20
+# deploy autoqueue dedicated tuple-cursor lock fix 2026-08-20
