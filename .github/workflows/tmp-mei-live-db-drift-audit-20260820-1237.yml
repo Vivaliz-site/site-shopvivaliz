@@ -1,0 +1,71 @@
+name: MEI live DB drift audit 20260820 1237
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-mei-live-db-drift-audit-20260820-1237.yml']
+permissions:
+  contents: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Read-only drift audit
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=12 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF' > reports/mei-live-db-drift-20260820-1237.txt
+          set -u
+          cd /home/ubuntu/mei-mg-email || exit 2
+          echo CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)
+          q(){ sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -v ON_ERROR_STOP=1 -c "$1"; }
+          echo WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+          echo WORKER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then echo SENTINEL=present; else echo SENTINEL=absent; fi
+          echo RUNTIME_QUEUE_SHA=$(git hash-object app/queue_manager.py)
+          echo ORIGIN_QUEUE_SHA=$(git show origin/main:app/queue_manager.py | git hash-object --stdin)
+          echo RUNTIME_PRESEND_SHA=$(git hash-object worker/safe_entrypoint_v2.py)
+          echo ORIGIN_PRESEND_SHA=$(git show origin/main:worker/safe_entrypoint_v2.py | git hash-object --stdin)
+          grep -q 'user_explicit_authorization_2026-08-20' app/queue_manager.py && echo QUEUE_SYNTH_GUARD=yes || echo QUEUE_SYNTH_GUARD=no
+          grep -q 'user_explicit_authorization_2026-08-20' worker/safe_entrypoint.py && echo PRESEND_SYNTH_GUARD=yes || echo PRESEND_SYNTH_GUARD=no
+          grep -q 'mei_verificado_origem' worker/safe_entrypoint_v2.py && echo PRESEND_MEI_SOURCE_GUARD=yes || echo PRESEND_MEI_SOURCE_GUARD=no
+          echo FLYWAY_RECENT=$(q "select coalesce(string_agg(version||':'||success::text,',' order by installed_rank),'none') from (select version,success,installed_rank from mei_email.flyway_schema_history order by installed_rank desc limit 25) x;")
+          echo FLYWAY_MAX_RANK=$(q "select coalesce(max(installed_rank),0) from mei_email.flyway_schema_history;")
+          echo FLYWAY_37=$(q "select count(*) from mei_email.flyway_schema_history where version='37' and success;")
+          echo FLYWAY_38=$(q "select count(*) from mei_email.flyway_schema_history where version='38' and success;")
+          echo TRIGGER_COPY=$(q "select count(*) from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where not t.tgisinternal and n.nspname='mei_email' and t.tgname ilike '%copy%';")
+          echo TRIGGER_ELIGIBILITY=$(q "select count(*) from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where not t.tgisinternal and n.nspname='mei_email' and (t.tgname ilike '%eligib%' or t.tgname ilike '%replay%');")
+          echo LEGACY_COPY_CAMPAIGNS=$(q "select count(*) from mei_email.campanhas where lower(coalesce(corpo_template,'')) like '%base pública de cnpj%' or lower(coalesce(corpo_template,'')) like '%base publica de cnpj%';")
+          echo OPEN_INELIGIBLE=$(q "select count(*) from mei_email.envios x join mei_email.empresas e on e.cnpj=x.cnpj where x.status::text in ('pendente','pending','enviando','processing') and not (e.marketing_autorizado is true and nullif(btrim(coalesce(e.marketing_autorizado_origem,'')),'') is not null and btrim(e.marketing_autorizado_origem) not in ('confirmacao_operador_2026-08-12','confirmacao_operador_2026-08-13','politica_importacao_operador_2026-08-13','user_explicit_authorization_2026-08-20') and lower(btrim(e.marketing_autorizado_origem)) not like '%operator_authorization_true%' and e.mei_verificado is true and nullif(btrim(coalesce(e.mei_verificado_origem,'')),'') is not null and btrim(e.mei_verificado_origem) not in ('override_operador_2026-08-13','politica_importacao_operador_2026-08-13') and e.opt_out=false and e.situacao_cadastral='ATIVA' and upper(e.uf)='MG' and upper(e.tipo_regime)='MEI' and e.provavel_terceiro=false and e.email is not null and mei_email.is_valid_email_address(e.email));")
+          echo OPEN_SUPPRESSED=$(q "select count(*) from mei_email.envios x where x.status::text in ('pendente','pending','enviando','processing') and exists(select 1 from mei_email.email_suppressions s where s.active and ((s.scope='email' and lower(btrim(s.value::text))=lower(btrim(x.email::text))) or (s.scope='cnpj' and regexp_replace(s.value::text,'[^0-9]','','g')=x.cnpj));")
+          echo ELIGIBLE_AUTH_POOL=$(q "select count(*) from mei_email.empresas e where e.marketing_autorizado is true and nullif(btrim(coalesce(e.marketing_autorizado_origem,'')),'') is not null and btrim(e.marketing_autorizado_origem) not in ('confirmacao_operador_2026-08-12','confirmacao_operador_2026-08-13','politica_importacao_operador_2026-08-13','user_explicit_authorization_2026-08-20') and lower(btrim(e.marketing_autorizado_origem)) not like '%operator_authorization_true%' and e.mei_verificado is true and nullif(btrim(coalesce(e.mei_verificado_origem,'')),'') is not null and btrim(e.mei_verificado_origem) not in ('override_operador_2026-08-13','politica_importacao_operador_2026-08-13') and e.opt_out=false and e.situacao_cadastral='ATIVA' and upper(e.uf)='MG' and upper(e.tipo_regime)='MEI' and e.provavel_terceiro=false and e.email is not null and mei_email.is_valid_email_address(e.email) and not exists(select 1 from mei_email.email_suppressions s where s.active and ((s.scope='email' and lower(btrim(s.value::text))=lower(btrim(e.email::text))) or (s.scope='cnpj' and regexp_replace(s.value::text,'[^0-9]','','g')=e.cnpj)) and not exists(select 1 from mei_email.envios h where h.cnpj=e.cnpj or lower(btrim(h.email::text))=lower(btrim(e.email::text))); ")
+          echo OPEN_ORIGINS=$(q "select coalesce(string_agg(coalesce(marketing_autorizado_origem,'NULL')||':'||n::text,',' order by n desc),'none') from (select e.marketing_autorizado_origem,count(*) n from mei_email.envios x join mei_email.empresas e on e.cnpj=x.cnpj where x.status::text in ('pendente','pending','enviando','processing') group by e.marketing_autorizado_origem order by n desc limit 12) z;")
+          echo ADVISORY_LOCK_DETAIL=$(q "select coalesce(string_agg(pid::text||':'||coalesce(mode,'')||':'||granted::text,',' order by pid),'none') from pg_locks where locktype='advisory';")
+          echo ACTIVE_DB_QUERIES=$(q "select count(*) from pg_stat_activity where pid<>pg_backend_pid() and state<>'idle';")
+          echo GRAPH_AUTH=$(timeout 20 .venv/bin/python -c "from app.email_provider import MicrosoftGraphEmailProvider as P; P()._get_access_token(); print('ok')" 2>/dev/null | tail -1 || echo failed)
+          echo NDR_GUARD=$(sudo systemctl is-active mei-mg-email-ndr-guard.service 2>/dev/null || true)
+          echo NDR_MAILBOX_WIDE=$(grep -c 'graph.microsoft.com/v1.0/users/{quote(provider.address)}/messages?' scripts/ndr_guard.py 2>/dev/null || true)
+          EOF
+      - name: Persist audit
+        run: |
+          set -euo pipefail
+          git config user.name shopvivaliz-ops-bot
+          git config user.email ops@shopvivaliz.local
+          git add reports/mei-live-db-drift-20260820-1237.txt
+          git commit -m 'ops: record MEI live DB drift audit 20260820 1237'
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
