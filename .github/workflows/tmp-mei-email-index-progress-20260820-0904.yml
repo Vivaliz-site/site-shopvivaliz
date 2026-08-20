@@ -1,0 +1,48 @@
+name: MEI Email Index Progress 20260820 0904
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tmp-mei-email-index-progress-20260820-0904.yml'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+      - name: Inspect index progress
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          .venv/bin/python - <<'PY'
+          import psycopg
+          from app.config import settings
+          with psycopg.connect(settings.database_url) as conn:
+              with conn.cursor() as c:
+                  c.execute("set statement_timeout='5s'")
+                  c.execute("""select pid,phase,blocks_total,blocks_done,tuples_total,tuples_done,partitions_total,partitions_done from pg_stat_progress_create_index where relid='mei_email.empresas'::regclass""")
+                  print('INDEX_PROGRESS')
+                  for r in c.fetchall(): print(r)
+                  c.execute("""select indexrelid::regclass::text,indisvalid,indisready,indislive from pg_index where indexrelid::regclass::text like '%idx_empresas_mei_verified_pending_cnpj%' or indexrelid::regclass::text like '%idx_empresas_mei_verificado%'""")
+                  print('INDEX_STATE')
+                  for r in c.fetchall(): print(r)
+                  c.execute("select pid,state,wait_event_type,wait_event,now()-query_start,left(query,180) from pg_stat_activity where query ilike '%create index concurrently%' and pid<>pg_backend_pid()")
+                  print('INDEX_ACTIVITY')
+                  for r in c.fetchall(): print(r)
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa
