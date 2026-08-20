@@ -78,7 +78,7 @@ jobs:
             scripts/nonstop_supervisor_15m.py \
             worker/safe_entrypoint.py \
             worker/safe_entrypoint_v2.py
-          grep -q 'with conn.cursor() as lock_cur:' app/queue_manager.py
+          grep -q 'with conn.cursor(row_factory=tuple_row) as lock_cur:' app/queue_manager.py
           grep -q 'lock_row = lock_cur.fetchone()' app/queue_manager.py
           grep -q 'lock_row\[0\]' app/queue_manager.py
           grep -q 'user_explicit_authorization_2026-08-20' app/queue_manager.py
@@ -129,7 +129,7 @@ jobs:
           sudo systemctl restart mei-mg-email-worker.service
           worker_active=false
           for attempt in $(seq 1 36); do
-            state="$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+            state="$(sudo systemctl is-active mei-mg-email-worker.service 2>/devnull || true)"
             echo "WORKER_WAIT_${attempt}=${state}"
             if [ "$state" = active ]; then
               worker_active=true
@@ -186,3 +186,4 @@ jobs:
 # deploy restored full presend contract after regression 2026-08-20T13:24Z
 # watchdog redeploy current strict sender main 2026-08-20T13:42Z
 # deploy autoqueue raw-origin drift guard after sender PR 66 2026-08-20T13:47Z
+# deploy strict authorized sender main 2026-08-20T15:35Z

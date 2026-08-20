@@ -1,0 +1,61 @@
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Thu Aug 20 12:33:45 -03 2026
+
+  System load:  2.01               Processes:             177
+  Usage of /:   85.7% of 44.96GB   Users logged in:       0
+  Memory usage: 36%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   43%
+
+  => / is using 85.7% of 44.96GB
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+62 updates can be applied immediately.
+6 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+16 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+116 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+
+*** System restart required ***
+CHECK_BRT=2026-08-20T12:36:45-0300
+WORKER=active
+WORKER_ENABLED=enabled
+SENTINEL=absent
+RUNTIME_QUEUE_SHA=c1a20f3862b11372e4d3991dd00c10c2d16631dd
+ORIGIN_QUEUE_SHA=c1a20f3862b11372e4d3991dd00c10c2d16631dd
+RUNTIME_PRESEND_SHA=ca25953f560332c1cfd17cbe48607943878adb3f
+ORIGIN_PRESEND_SHA=ca25953f560332c1cfd17cbe48607943878adb3f
+QUEUE_SYNTH_GUARD=yes
+PRESEND_SYNTH_GUARD=yes
+PRESEND_MEI_SOURCE_GUARD=yes
+FLYWAY_RECENT=001:true,002:true,003:true,004:true,005:true,006:true,007:true,008:true,009:true,010:true,011:true,012:true,013:true,014:true,015:true,016:true,017:true,018:true,019:true,020:true
+FLYWAY_MAX_RANK=20
+FLYWAY_37=0
+FLYWAY_38=0
+TRIGGER_COPY=0
+TRIGGER_ELIGIBILITY=0
+LEGACY_COPY_CAMPAIGNS=0
+OPEN_INELIGIBLE=0
+OPEN_SUPPRESSED=
+ELIGIBLE_AUTH_POOL=
+OPEN_ORIGINS=none
+ADVISORY_LOCK_DETAIL=3507:ExclusiveLock:true,3625:ExclusiveLock:true
+ACTIVE_DB_QUERIES=1
+GRAPH_AUTH=
+NDR_GUARD=active
+NDR_MAILBOX_WIDE=1
