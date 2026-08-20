@@ -39,10 +39,9 @@ jobs:
           printf '%s' "$curl_health" | python3 -c "import json,sys; p=json.load(sys.stdin); assert p.get('status')=='ok' and p.get('environment')=='fred-win'"
 
           cat > /tmp/fredwin-check.ps1 <<'PS1'
-          $ErrorActionPreference = 'Stop'
+          $ErrorActionPreference = 'Continue'
           $deployPath = '/home/ubuntu/shopvivaliz-deploy/current'
           $knownVm = '137.131.156.17'
-          $errorText = ''
           $terminalReady = 'NO'
           $alias = ''
           $remoteHostname = ''
@@ -53,74 +52,75 @@ jobs:
           $catalogStatus = ''
           $antiqueStatus = ''
           $decoreStatus = ''
+          $errorText = ''
 
           try {
-            $null = Get-Command ssh -ErrorAction Stop
-            $null = (ssh -V 2>&1 | Out-String)
+            $sshCmd = Get-Command ssh -ErrorAction Stop
+            $sshPath = $sshCmd.Source
+            $null = cmd /c ('"' + $sshPath + '" -V 2>&1')
+
             $agent = Get-Service ssh-agent -ErrorAction SilentlyContinue
-            if ($agent -and $agent.Status -ne 'Running' -and $agent.StartType -ne 'Disabled') {
+            if ($agent -and $agent.Status -eq 'Stopped' -and $agent.StartType -ne 'Disabled') {
               try { Start-Service ssh-agent -ErrorAction Stop } catch { }
             }
 
-            $sshDir = Join-Path $HOME '.ssh'
-            if (Test-Path $sshDir) { $null = Get-ChildItem $sshDir -Force -ErrorAction SilentlyContinue }
-            $cfg = Join-Path $sshDir 'config'
+            $cfg = Join-Path $HOME '.ssh\config'
             $entries = @()
             if (Test-Path $cfg) {
-              $null = Get-Content $cfg
-              $current = $null
-              foreach ($line in (Get-Content $cfg)) {
-                $t = $line.Trim()
+              foreach ($raw in Get-Content $cfg) {
+                $t = $raw.Trim()
+                if (-not $t -or $t.StartsWith('#')) { continue }
                 if ($t -match '^Host\s+(.+)$') {
-                  $a = $Matches[1].Trim()
-                  if ($a -notmatch '[*?!]') {
-                    $current = [ordered]@{ Alias=$a; HostName=''; User='' }
-                    $entries += [pscustomobject]$current
-                  } else { $current = $null }
-                } elseif ($current -and $t -match '^HostName\s+(.+)$') {
+                  $h = $Matches[1].Trim()
+                  if ($h -notmatch '[*?!]' -and $h -notmatch '\s') {
+                    $entries += [pscustomobject]@{ Alias=$h; HostName=''; User='' }
+                  }
+                } elseif ($entries.Count -gt 0 -and $t -match '^HostName\s+(.+)$') {
                   $entries[-1].HostName = $Matches[1].Trim()
-                } elseif ($current -and $t -match '^User\s+(.+)$') {
+                } elseif ($entries.Count -gt 0 -and $t -match '^User\s+(.+)$') {
                   $entries[-1].User = $Matches[1].Trim()
                 }
               }
             }
 
             $entry = $entries | Where-Object { $_.HostName -eq $knownVm } | Select-Object -First 1
-            if (-not $entry) {
-              $entry = $entries | Where-Object { $_.Alias -match '(?i)shopvivaliz|oracle|prod|vivaliz' } | Select-Object -First 1
-            }
-            if (-not $entry) { throw 'ShopVivaliz SSH alias not found in existing config' }
+            if (-not $entry) { $entry = $entries | Where-Object { $_.Alias -match '(?i)shopvivaliz|vivaliz|oracle|prod' } | Select-Object -First 1 }
+            if (-not $entry) { throw 'No matching existing SSH alias found' }
             $alias = $entry.Alias
 
-            $probe = @(ssh -o BatchMode=yes -o ConnectTimeout=15 $alias 'hostname; whoami; pwd' 2>&1)
-            if ($LASTEXITCODE -ne 0 -or $probe.Count -lt 3) { throw 'SSH probe failed using existing alias' }
+            $probe = @(& $sshPath -o BatchMode=yes -o ConnectTimeout=15 $alias 'hostname; whoami; pwd' 2>$null)
+            if ($LASTEXITCODE -ne 0 -or $probe.Count -lt 3) { throw 'SSH alias connection failed' }
             $remoteHostname = [string]$probe[0]
             $remoteUser = [string]$probe[1]
 
-            $deployCheck = (ssh -o BatchMode=yes -o ConnectTimeout=15 $alias "test -d $deployPath && echo DEPLOY_OK || echo DEPLOY_NOT_FOUND" 2>&1 | Out-String).Trim()
-            if ($LASTEXITCODE -ne 0 -or $deployCheck -ne 'DEPLOY_OK') { throw 'Production deploy path not found' }
+            $deployCheck = @(& $sshPath -o BatchMode=yes -o ConnectTimeout=15 $alias "test -d $deployPath && echo DEPLOY_OK || echo DEPLOY_NOT_FOUND" 2>$null)
+            if ($LASTEXITCODE -ne 0 -or -not ($deployCheck -contains 'DEPLOY_OK')) { throw 'Production deploy path not found' }
 
-            $gitVersion = (ssh -o BatchMode=yes -o ConnectTimeout=15 $alias 'git --version' 2>&1 | Out-String).Trim()
-            if ($LASTEXITCODE -ne 0 -or -not $gitVersion) { throw 'Git unavailable on production VM' }
-            $deploySha = (ssh -o BatchMode=yes -o ConnectTimeout=15 $alias "git -C $deployPath rev-parse HEAD" 2>&1 | Out-String).Trim()
+            $deploySha = ((& $sshPath -o BatchMode=yes -o ConnectTimeout=15 $alias "git -C $deployPath rev-parse HEAD" 2>$null) | Select-Object -Last 1).Trim()
             if ($LASTEXITCODE -ne 0 -or -not $deploySha) { throw 'Unable to read deploy SHA' }
-            $phpVersion = (ssh -o BatchMode=yes -o ConnectTimeout=15 $alias "php -r 'echo PHP_VERSION;'" 2>&1 | Out-String).Trim()
+            $phpVersion = ((& $sshPath -o BatchMode=yes -o ConnectTimeout=15 $alias "php -r 'echo PHP_VERSION;'" 2>$null) | Select-Object -Last 1).Trim()
             if ($LASTEXITCODE -ne 0 -or -not $phpVersion) { throw 'PHP unavailable on production VM' }
 
-            function Test-RemoteHttp([string]$url) {
-              $cmd = "curl -L -sS -o /dev/null -w 'HTTP=%{http_code}|FINAL=%{url_effective}|TIME=%{time_total}' '$url'"
-              $result = (ssh -o BatchMode=yes -o ConnectTimeout=15 $alias $cmd 2>&1 | Out-String).Trim()
-              if ($LASTEXITCODE -ne 0) { throw ('HTTP probe failed for ' + $url) }
-              Write-Output ('HTTP_DETAIL=' + $url + '|' + $result)
-              if ($result -match 'HTTP=([0-9]{3})') { return $Matches[1] }
-              throw ('HTTP status unavailable for ' + $url)
+            function HttpProbe([string]$url) {
+              $fmt = '%{http_code}|%{url_effective}|%{time_total}'
+              $r = ((& $sshPath -o BatchMode=yes -o ConnectTimeout=15 $alias "curl -L -sS -o /dev/null --connect-timeout 10 --max-time 30 -w '$fmt' '$url'" 2>$null) | Select-Object -Last 1).Trim()
+              if ($LASTEXITCODE -ne 0 -or -not $r) { return @{Status='ERROR';Final='';Time=''} }
+              $p = $r.Split('|')
+              if ($p.Count -lt 3) { return @{Status='ERROR';Final='';Time=''} }
+              Write-Output ('HTTP_DETAIL=' + $url + '|HTTP=' + $p[0] + '|FINAL=' + $p[1] + '|TIME=' + $p[2])
+              return @{Status=$p[0];Final=$p[1];Time=$p[2]}
             }
 
-            $homeStatus = Test-RemoteHttp 'https://shopvivaliz.com.br/'
-            $catalogStatus = Test-RemoteHttp 'https://shopvivaliz.com.br/catalogo'
-            $antiqueStatus = Test-RemoteHttp 'https://shopvivaliz.com.br/catalogo?q=antique'
-            $decoreStatus = Test-RemoteHttp 'https://shopvivaliz.com.br/catalogo?q=decore'
-            $terminalReady = 'YES'
+            $home = HttpProbe 'https://shopvivaliz.com.br/'
+            $cat = HttpProbe 'https://shopvivaliz.com.br/catalogo'
+            $ant = HttpProbe 'https://shopvivaliz.com.br/catalogo?q=antique'
+            $dec = HttpProbe 'https://shopvivaliz.com.br/catalogo?q=decore'
+            $homeStatus = $home.Status
+            $catalogStatus = $cat.Status
+            $antiqueStatus = $ant.Status
+            $decoreStatus = $dec.Status
+            if ($homeStatus -eq '200' -and $catalogStatus -eq '200' -and $antiqueStatus -eq '200' -and $decoreStatus -eq '200') { $terminalReady = 'YES' }
+            else { $errorText = 'One or more production HTTP probes did not return 200' }
           } catch {
             $errorText = $_.Exception.Message
           }
@@ -138,57 +138,54 @@ jobs:
           Write-Output ('DECORE_HTTP=' + $decoreStatus)
           Write-Output 'TUNNEL=READY'
           Write-Output ('ERROR=' + $errorText)
-          if ($terminalReady -ne 'YES') { exit 1 }
           PS1
 
           ENCODED="$(iconv -f UTF-8 -t UTF-16LE /tmp/fredwin-check.ps1 | base64 -w0)"
           COMMAND="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $ENCODED"
           CMD_B64="$(printf '%s' "$COMMAND" | base64 -w0)"
+          OUTFILE=/tmp/fredwin-output.txt
 
-          OUTFILE=/tmp/fredwin-response.json
           ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
             "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
-          import base64, json, os, urllib.request
+          import base64,json,os,urllib.request
           command=base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
           body=json.dumps({'params':{'command':command,'timeout':240}}).encode()
           req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
           with urllib.request.urlopen(req,timeout=250) as r:
               payload=json.loads(r.read().decode())
           result=payload.get('result') or {}
-          output=result.get('output') or ''
-          print(output,end='')
-          if result.get('success') is not True:
-              raise SystemExit(1)
+          print(result.get('output') or '',end='')
           PY" > "$OUTFILE"
 
-          python3 - <<'PY' "$OUTFILE" > reports/fredwin-terminal-ready-20260820.txt
-          import re,sys
+          python3 - "$OUTFILE" > reports/fredwin-terminal-ready-20260820.txt <<'PY'
+          import sys
           text=open(sys.argv[1],encoding='utf-8',errors='replace').read()
           allowed=('HTTP_DETAIL=','TERMINAL_READY=','SSH_HOST_ALIAS=','REMOTE_HOSTNAME=','REMOTE_USER=','DEPLOY_PATH=','DEPLOY_SHA=','PHP=','HOME_HTTP=','CATALOGO_HTTP=','ANTIQUE_HTTP=','DECORE_HTTP=','TUNNEL=','ERROR=')
-          for raw in text.splitlines():
-              line=raw.strip()
-              if line.startswith(allowed):
-                  print(line)
+          lines=[raw.strip() for raw in text.splitlines() if raw.strip().startswith(allowed)]
+          if not any(x.startswith('TERMINAL_READY=') for x in lines):
+              lines=['TERMINAL_READY=NO','SSH_HOST_ALIAS=','REMOTE_HOSTNAME=','REMOTE_USER=','DEPLOY_PATH=/home/ubuntu/shopvivaliz-deploy/current','DEPLOY_SHA=','PHP=','HOME_HTTP=','CATALOGO_HTTP=','ANTIQUE_HTTP=','DECORE_HTTP=','TUNNEL=READY','ERROR=Fred-Win command returned no sanitized readiness output']
+          print('\n'.join(lines))
           PY
 
+          cat reports/fredwin-terminal-ready-20260820.txt
           grep -q '^TERMINAL_READY=YES$' reports/fredwin-terminal-ready-20260820.txt
-          grep -q '^TUNNEL=READY$' reports/fredwin-terminal-ready-20260820.txt
 
       - name: Persist sanitized report
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          test -f reports/fredwin-terminal-ready-20260820.txt || printf '%s\n' 'TERMINAL_READY=NO' 'TUNNEL=ERROR' 'ERROR=Validation did not produce a sanitized report' > reports/fredwin-terminal-ready-20260820.txt
+          test -f reports/fredwin-terminal-ready-20260820.txt || printf '%s\n' 'TERMINAL_READY=NO' 'SSH_HOST_ALIAS=' 'REMOTE_HOSTNAME=' 'REMOTE_USER=' 'DEPLOY_PATH=/home/ubuntu/shopvivaliz-deploy/current' 'DEPLOY_SHA=' 'PHP=' 'HOME_HTTP=' 'CATALOGO_HTTP=' 'ANTIQUE_HTTP=' 'DECORE_HTTP=' 'TUNNEL=ERROR' 'ERROR=Validation did not produce a sanitized report' > reports/fredwin-terminal-ready-20260820.txt
           git config user.name 'shopvivaliz-ops-bot'
           git config user.email 'ops@shopvivaliz.local'
           git add reports/fredwin-terminal-ready-20260820.txt
           if ! git diff --cached --quiet; then
             git commit -m 'ops: record Fred-Win terminal readiness 20260820'
+            git pull --rebase origin main
             git push origin HEAD:main
           fi
 
       - name: Cleanup
         if: always()
         shell: bash
-        run: rm -f ~/.ssh/vmkey /tmp/fredwin-check.ps1 /tmp/fredwin-response.json
+        run: rm -f ~/.ssh/vmkey /tmp/fredwin-check.ps1 /tmp/fredwin-output.txt
