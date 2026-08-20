@@ -1,0 +1,4 @@
+FREDWIN_SUCCESS=true
+shopvivaliz-ai
+ubuntu
+
