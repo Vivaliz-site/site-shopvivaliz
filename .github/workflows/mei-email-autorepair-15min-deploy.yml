@@ -122,4 +122,4 @@ jobs:
         shell: bash
         run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-# redeploy batched runtime sender guard 2026-08-20T04:30Z
+# redeploy trigger-free stale queue cleanup 2026-08-20T04:40Z
