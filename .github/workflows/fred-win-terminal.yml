@@ -56,10 +56,6 @@ jobs:
             echo "command exceeds 8000 characters"
             exit 9
           fi
-          if grep -q $'\0' ops/fredwin-terminal-request.json; then
-            echo "NUL byte is not allowed"
-            exit 10
-          fi
           ENCODED="$(python3 - <<'PY'
 import base64, json
 from pathlib import Path
