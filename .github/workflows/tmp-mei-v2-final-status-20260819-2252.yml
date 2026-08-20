@@ -1,0 +1,32 @@
+name: Snapshot strict-scope MEI repair run status
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-mei-v2-final-status-20260819-2252.yml']
+permissions:
+  actions: read
+  contents: write
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          out=reports/mei-v2-final-status-20260819-2252.txt
+          echo "CHECK_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$out"
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow tmp-mei-baseline-reconcile-resume-v2-20260819-2250.yml --branch main --limit 2 --json databaseId,status,conclusion,createdAt,updatedAt,url --jq '.' >> "$out"
+      - name: Persist
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/mei-v2-final-status-20260819-2252.txt
+          git commit -m 'ops: snapshot strict-scope MEI repair run status' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main

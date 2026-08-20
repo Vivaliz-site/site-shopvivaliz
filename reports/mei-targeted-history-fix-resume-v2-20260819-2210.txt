@@ -1,0 +1,57 @@
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Tue Aug 18 22:39:46 -03 2026
+
+  System load:  2.3                Processes:             183
+  Usage of /:   86.4% of 44.96GB   Users logged in:       0
+  Memory usage: 45%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   51%
+
+  => / is using 86.4% of 44.96GB
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+64 updates can be applied immediately.
+8 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+16 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+116 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+
+*** System restart required ***
+START_UTC=2026-08-20T00:53:38Z
+START_BRT=2026-08-19T21:53:38-0300
+=== QUIESCE ALL COMPETING WORK ===
+-bash: line 19: 2596830 Killed                  sudo pkill -KILL -f 'ingest_from_huggingface.py'
+-bash: line 20: 2596832 Killed                  sudo pkill -KILL -f '/flyway/flyway'
+WORKER_QUIESCED=inactive
+SENDER_BLOCK_SENTINEL=absent
+From https://github.com/fredmourao-ai/mei-mg-email
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+HEAD=efc096694da470f67de493227bb13b483d88df44
+=== CLEAR STALE DATABASE CLIENTS ===
+STALE_CLIENTS=[[4127, "active", "2026-08-19 21:53:19.014368-03:00", "0:01:34.398816", "172.19.0.1/32", "select count(*) as elegiveis from mei_email.vw_empresas_elegiveis"]]
+TERMINATED_4127=true
+=== COMPLETE PARTIAL FLYWAY REPAIR METADATA ===
+FAILED_MIGRATIONS=0
+HISTORY_BEFORE=[["014", "cnpj alphanumeric and submission guard", "V014__cnpj_alphanumeric_and_submission_guard.sql", -1937083762, true], ["017", "optimize submission trigger", "V017__complete_email_status_enum.sql", 1230001533, true], ["018", "index envios enviado em", "V018__email_delivery_model_and_suppression.sql", 492443262, true]]
+HISTORY_AFTER=[["014", "cnpj alphanumeric and submission guard", "V014__cnpj_alphanumeric_and_submission_guard.sql", -1937083762, true], ["017", "optimize submission trigger", "V017__optimize_submission_trigger.sql", 1230001533, true], ["018", "index envios enviado em", "V018__index_envios_enviado_em.sql", 492443262, true]]
+HISTORY_RECONCILIATION_COMMITTED=true
+=== FLYWAY VALIDATE CURRENT TREE ===
+ Container mei-mg-email-db  Running
+

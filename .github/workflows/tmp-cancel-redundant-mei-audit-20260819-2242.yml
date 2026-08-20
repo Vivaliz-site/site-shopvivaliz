@@ -1,0 +1,16 @@
+name: Cancel redundant MEI baseline audit
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-cancel-redundant-mei-audit-20260819-2242.yml']
+permissions:
+  actions: write
+  contents: read
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel redundant audit run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel 32319614364 --repo "$GITHUB_REPOSITORY" || true

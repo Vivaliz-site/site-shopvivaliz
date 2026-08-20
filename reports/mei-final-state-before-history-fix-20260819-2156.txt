@@ -1,0 +1,54 @@
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Tue Aug 18 22:39:46 -03 2026
+
+  System load:  2.3                Processes:             183
+  Usage of /:   86.4% of 44.96GB   Users logged in:       0
+  Memory usage: 45%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   51%
+
+  => / is using 86.4% of 44.96GB
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+64 updates can be applied immediately.
+8 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+16 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+116 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+
+*** System restart required ***
+CHECK_UTC=2026-08-20T00:48:56Z
+CHECK_BRT=2026-08-19T21:48:56-0300
+HEAD=efc096694da470f67de493227bb13b483d88df44
+WORKER=inactive
+AUTOREPAIR_TIMER=inactive
+EMAIL_BASE_SYNC_TIMER=inactive
+LEGACY_BASE_SYNC_TIMER=inactive
+SENTINEL=absent
+PROCESSES_BEGIN
+2590490     213 S    timeout 10m docker compose run --rm flyway migrate
+2590491     213 Sl   docker compose run --rm flyway migrate
+2590566     209 Sl   /usr/libexec/docker/cli-plugins/docker-compose compose run --rm flyway migrate
+2591113     165 Ss   bash /flyway/flyway migrate
+2591216     159 Sl   /opt/java/openjdk/bin/java -Djava.security.egd=file:/dev/../dev/urandom -cp :/flyway/lib/*:/flyway/lib/aad/*:/flyway/lib/plugins/*:/flyway/lib/oracle_wallet/*:/flyway/lib/flyway/*:/flyway/drivers/*:/flyway/drivers/gcp/*:/flyway/drivers/cassandra/*:/flyway/drivers/mongo/* org.flywaydb.commandline.Main migrate
+PROCESSES_END
+HISTORY_TARGET=[[14, "014", "cnpj alphanumeric and submission guard", "V014__cnpj_alphanumeric_and_submission_guard.sql", -1937083762, true], [17, "017", "optimize submission trigger", "V017__complete_email_status_enum.sql", 1230001533, true], [18, "018", "index envios enviado em", "V018__email_delivery_model_and_suppression.sql", 492443262, true]]
+FAILED_MIGRATIONS=0
+QUEUE_STATS={"sent24": 0, "sent10m": 0, "last": "2026-08-14 18:00:06.742016-03:00", "open": 17283}
+ACTIVE_DB_GT60S=[[4102, "active", "0:08:33.703655", "IO", "DataFileRead", "172.19.0.1/32", "select count(*) as elegiveis from mei_email.vw_empresas_elegiveis"], [2783, "active", "0:02:13.296010", "IO", "DataFileRead", "172.19.0.1/32", "\n                insert into mei_email.empresas\n                    (cnpj, razao_social, nome_fantasia, situacao_cadastral,\n                     uf, email, ddd_1, telefone_1, data_abertura, tipo_regime,\n                     provavel_terceiro, marketing_autorizado,\n                     marketing_autorizado_em, marketing_autorizado_origem,\n                     mei_verificado, mei_verificado_em, mei_verificado_origem)\n                values\n                    ($1, $2, $3,\n                     $4, "], [2412, "active", "0:02:13.004655", null, null, "172.19.0.1/32", "\n                insert into mei_email.empresas\n                    (cnpj, razao_social, nome_fantasia, situacao_cadastral,\n                     uf, email, ddd_1, telefone_1, data_abertura, tipo_regime,\n                     provavel_terceiro, marketing_autorizado,\n                     marketing_autorizado_em, marketing_autorizado_origem,\n                     mei_verificado, mei_verificado_em, mei_verificado_origem)\n                values\n                    ($1, $2, $3,\n                     $4, "]]

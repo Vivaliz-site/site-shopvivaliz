@@ -1,0 +1,32 @@
+name: Snapshot targeted MEI repair status 20260819 2203
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-targeted-repair-status-20260819-2203.yml']
+permissions:
+  actions: read
+  contents: write
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          out=reports/mei-targeted-repair-status-20260819-2203.txt
+          echo "CHECK_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$out"
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow tmp-mei-targeted-history-fix-resume-20260819-2200.yml --branch main --limit 3 --json databaseId,status,conclusion,createdAt,updatedAt,url --jq '.' >> "$out"
+      - name: Persist
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/mei-targeted-repair-status-20260819-2203.txt
+          git commit -m 'ops: snapshot targeted MEI repair status 20260819-2203' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
