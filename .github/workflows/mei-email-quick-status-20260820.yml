@@ -51,4 +51,4 @@ jobs:
         if: always()
         run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
 
-# recheck after trigger-free queue cleanup deploy 2026-08-20T04:39Z
+# final convergence recheck 2026-08-20T04:41Z
