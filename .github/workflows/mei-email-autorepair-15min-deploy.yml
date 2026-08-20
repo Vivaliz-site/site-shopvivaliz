@@ -41,7 +41,7 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Install 15min autorepair timer and runtime sender guard
+      - name: Install bounded nonstop worker and 15min autorepair timer
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -54,18 +54,35 @@ jobs:
           set -Eeuo pipefail
           cd /home/ubuntu/mei-mg-email
           echo "CHECKED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          git diff --quiet
-          git diff --cached --quiet
+          echo 'VM_DIRTY_BEGIN'
+          git status --porcelain=v1 || true
+          echo 'VM_DIRTY_END'
           git fetch origin main
-          git merge --ff-only origin/main
-          echo "HEAD_DEPLOYED=$(git rev-parse HEAD)"
-          test -f scripts/runtime_sender_guard.py
-          .venv/bin/python -m py_compile scripts/runtime_sender_guard.py
+          echo "ORIGIN_MAIN=$(git rev-parse origin/main)"
+
+          # Production has an intentional local docker-compose shm_size drift.
+          # Do not overwrite unrelated VM state just to deploy sender runtime files.
+          # Copy only the reviewed, tested runtime/unit files from origin/main.
+          git checkout origin/main -- \
+            deploy/systemd/mei-mg-email-worker.service \
+            deploy/systemd/mei-mg-email-autorepair.service \
+            deploy/systemd/mei-mg-email-autorepair.timer \
+            scripts/runtime_sender_preflight.py \
+            worker/safe_entrypoint.py \
+            worker/safe_entrypoint_v2.py
+
+          .venv/bin/python -m py_compile \
+            scripts/runtime_sender_preflight.py \
+            worker/safe_entrypoint.py \
+            worker/safe_entrypoint_v2.py
           grep -q '^OnUnitActiveSec=15min$' deploy/systemd/mei-mg-email-autorepair.timer
           grep -q '^StartLimitIntervalSec=0$' deploy/systemd/mei-mg-email-worker.service
           grep -q '^Restart=always$' deploy/systemd/mei-mg-email-worker.service
           grep -q '^RestartSec=5$' deploy/systemd/mei-mg-email-worker.service
-          grep -q '^ExecStartPre=.*/scripts/runtime_sender_guard.py$' deploy/systemd/mei-mg-email-worker.service
+          grep -q '^TimeoutStartSec=30$' deploy/systemd/mei-mg-email-worker.service
+          grep -q '^ExecStartPre=.*/scripts/runtime_sender_preflight.py$' deploy/systemd/mei-mg-email-worker.service
+          grep -q '^ExecStart=.*/python -m worker.safe_entrypoint_v2$' deploy/systemd/mei-mg-email-worker.service
+
           sudo install -m 0644 deploy/systemd/mei-mg-email-worker.service /etc/systemd/system/mei-mg-email-worker.service
           sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service /etc/systemd/system/mei-mg-email-autorepair.service
           sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.timer /etc/systemd/system/mei-mg-email-autorepair.timer
@@ -74,38 +91,40 @@ jobs:
           sudo systemctl enable mei-mg-email-worker.service
           echo "AUTOREPAIR_TIMER_ACTIVE=$(sudo systemctl is-active mei-mg-email-autorepair.timer)"
           echo "AUTOREPAIR_TIMER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-autorepair.timer)"
-          sudo systemctl cat mei-mg-email-autorepair.timer --no-pager
-          sudo systemctl list-timers mei-mg-email-autorepair.timer --all --no-pager
+
           if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
             echo 'CURRENT_SENDER_BLOCK_SENTINEL=present'
             sudo systemctl stop mei-mg-email-worker.service || true
-          else
-            echo 'CURRENT_SENDER_BLOCK_SENTINEL=absent'
-            sudo systemctl reset-failed mei-mg-email-worker.service || true
-            sudo systemctl restart mei-mg-email-worker.service
-            worker_active=false
-            for attempt in $(seq 1 60); do
-              state="$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
-              echo "WORKER_WAIT_${attempt}=${state}"
-              if [ "$state" = active ]; then
-                worker_active=true
-                break
-              fi
-              if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
-                echo 'CURRENT_SENDER_BLOCK_SENTINEL=present_during_start'
-                sudo systemctl stop mei-mg-email-worker.service || true
-                exit 42
-              fi
-              sleep 5
-            done
-            test "$worker_active" = true
-            test "$(sudo systemctl is-enabled mei-mg-email-worker.service)" = enabled
-            echo "WORKER_ACTIVE=true"
-            echo "WORKER_ENABLED=true"
-            sudo systemctl cat mei-mg-email-worker.service --no-pager
-            sudo systemctl status mei-mg-email-worker.service --no-pager -n 30
+            exit 42
           fi
-          echo 'AUTOREPAIR_15MIN_AND_RUNTIME_GUARD_INSTALLED=true'
+
+          echo 'CURRENT_SENDER_BLOCK_SENTINEL=absent'
+          sudo systemctl reset-failed mei-mg-email-worker.service || true
+          sudo systemctl restart mei-mg-email-worker.service
+          worker_active=false
+          for attempt in $(seq 1 36); do
+            state="$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+            echo "WORKER_WAIT_${attempt}=${state}"
+            if [ "$state" = active ]; then
+              worker_active=true
+              break
+            fi
+            if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
+              echo 'CURRENT_SENDER_BLOCK_SENTINEL=present_during_start'
+              sudo systemctl stop mei-mg-email-worker.service || true
+              exit 42
+            fi
+            sleep 5
+          done
+          test "$worker_active" = true
+          test "$(sudo systemctl is-enabled mei-mg-email-worker.service)" = enabled
+          echo "WORKER_ACTIVE=true"
+          echo "WORKER_ENABLED=true"
+          sudo systemctl show mei-mg-email-worker.service \
+            -p ActiveState -p SubState -p MainPID -p ExecStart -p ExecStartPre \
+            -p Restart -p RestartUSec -p StartLimitIntervalUSec --no-pager
+          sudo journalctl -u mei-mg-email-worker.service --since '-5 minutes' --no-pager | tail -n 120 || true
+          echo 'NONSTOP_SAFE_ENTRYPOINT_INSTALLED=true'
           EOF
 
       - name: Upload evidence
@@ -122,4 +141,4 @@ jobs:
         shell: bash
         run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-# redeploy trigger-free stale queue cleanup 2026-08-20T04:40Z
+# deploy bounded safe entrypoint 2026-08-20T04:56Z
