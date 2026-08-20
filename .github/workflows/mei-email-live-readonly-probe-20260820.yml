@@ -1,0 +1,150 @@
+name: MEI Email Live Readonly Probe 20260820
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/mei-email-live-readonly-probe-20260820.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure verified Oracle SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key"
+          test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Read live sender state
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=4 \
+            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 <<'EOF'
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo "PROBE_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "GIT_SHA=$(git rev-parse HEAD)"
+          echo "GIT_DIRTY=$(git status --porcelain=v1 | wc -l | tr -d ' ')"
+          echo "WORKER_ACTIVE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo "WORKER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)"
+          sudo systemctl show mei-mg-email-worker.service \
+            -p ExecStart -p ExecStartPre -p Restart -p RestartUSec \
+            -p StartLimitIntervalUSec -p ActiveState -p SubState --no-pager || true
+          echo "AUTOREPAIR_ACTIVE=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || true)"
+          echo "AUTOREPAIR_ENABLED=$(sudo systemctl is-enabled mei-mg-email-autorepair.timer 2>/dev/null || true)"
+          sudo systemctl cat mei-mg-email-autorepair.timer --no-pager || true
+          echo "NDR_GUARD_ACTIVE=$(sudo systemctl is-active mei-mg-email-ndr-guard.service 2>/dev/null || true)"
+          echo "NDR_GUARD_ENABLED=$(sudo systemctl is-enabled mei-mg-email-ndr-guard.service 2>/dev/null || true)"
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
+            echo 'SENDER_BLOCK_SENTINEL=present'
+          else
+            echo 'SENDER_BLOCK_SENTINEL=absent'
+          fi
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          import json, os, psycopg
+          from psycopg.rows import dict_row
+
+          out = {}
+          with psycopg.connect(os.environ['DATABASE_URL'], row_factory=dict_row, connect_timeout=10) as conn:
+              with conn.cursor() as cur:
+                  cur.execute("set statement_timeout='45s'")
+                  cur.execute("select to_regclass('mei_email.flyway_schema_history') is not null as exists")
+                  out['flyway_history_exists'] = bool(cur.fetchone()['exists'])
+                  if out['flyway_history_exists']:
+                      cur.execute("""
+                        select coalesce(max(version::int),0) max_version,
+                               count(*) filter(where version in ('037','038','039','040') and success) safety_versions_ok,
+                               count(*) filter(where not success) failed
+                          from mei_email.flyway_schema_history
+                      """)
+                      out.update(dict(cur.fetchone()))
+                  cur.execute("""
+                    select
+                      count(*) filter(where status::text in ('pendente','enviando','pending','processing')) open_queue,
+                      count(*) filter(where status::text in ('pending','processing')) legacy_open,
+                      count(*) filter(where status::text in ('submitted','enviado') and enviado_em >= now()-interval '24 hours') queue_sent_24h,
+                      count(*) filter(where status::text in ('submitted','enviado') and enviado_em >= now()-interval '10 minutes') queue_sent_10m,
+                      max(enviado_em) filter(where status::text in ('submitted','enviado')) last_queue_sent_at
+                    from mei_email.envios
+                  """)
+                  out.update(dict(cur.fetchone()))
+                  cur.execute("""
+                    select count(*) legacy_copy_campaigns
+                      from mei_email.campanhas
+                     where corpo_template ilike '%base pública de CNPJ%'
+                        or corpo_template ilike '%base publica de CNPJ%'
+                  """)
+                  out.update(dict(cur.fetchone()))
+                  cur.execute("""
+                    select count(*) orphan_lots
+                      from mei_email.lotes l
+                     where l.status::text not in ('pendente','concluido','falhou')
+                       and exists (
+                         select 1 from mei_email.envios e
+                          where e.lote_id=l.id
+                            and e.status::text in ('pendente','enviando','pending','processing')
+                       )
+                  """)
+                  out.update(dict(cur.fetchone()))
+                  cur.execute("""
+                    select count(*) replay_open
+                      from mei_email.envios e
+                     where e.status::text in ('pendente','enviando','pending','processing')
+                       and exists (
+                         select 1 from mei_email.envios p
+                          where p.id<>e.id
+                            and lower(btrim(p.email::text))=lower(btrim(e.email::text))
+                            and p.status::text in ('submitted','enviado','delivered')
+                       )
+                  """)
+                  out.update(dict(cur.fetchone()))
+                  cur.execute("select to_regclass('mei_email.envios_externos_cota') is not null as exists")
+                  if bool(cur.fetchone()['exists']):
+                      cur.execute("select count(*) n from mei_email.envios_externos_cota where sent_at >= now()-interval '24 hours'")
+                      out['external_sent_24h'] = int(cur.fetchone()['n'] or 0)
+                  else:
+                      out['external_sent_24h'] = 0
+                  out['sent_24h'] = int(out.get('queue_sent_24h') or 0) + int(out['external_sent_24h'])
+                  cur.execute("""
+                    select count(*) waiting_locks
+                      from pg_stat_activity
+                     where datname=current_database()
+                       and wait_event_type='Lock'
+                  """)
+                  out.update(dict(cur.fetchone()))
+                  cur.execute("select to_regclass('mei_email.vw_empresas_elegiveis') is not null as exists")
+                  if bool(cur.fetchone()['exists']):
+                      cur.execute("select count(*) eligible_authorized_pool from mei_email.vw_empresas_elegiveis")
+                      out.update(dict(cur.fetchone()))
+                  else:
+                      out['eligible_authorized_pool'] = None
+          print('DB_STATE=' + json.dumps(out, default=str, sort_keys=True))
+          PY
+          echo 'PROBE_DONE=true'
+          EOF
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
