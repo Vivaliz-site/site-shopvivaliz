@@ -1,0 +1,44 @@
+workflow=Google Ads Antique Decore Status
+run_id=32322218120
+run_attempt=1
+published_at_utc=2026-08-20T01:47:41Z
+commit_sha=3d88f685d792a6d67670a9a92cd412bd1762cda9
+--- live-watch ---
+checked_at_utc=2026-08-20T01:46:40Z
+conversion_candidate=Compra:id=7630829260:status=ENABLED:primary=true:included=true:type=GOOGLE_ANALYTICS_4_PURCHASE:origin=WEBSITE:category=PURCHASE
+conversion_candidate=Shopvivaliz (web) manual_event_PURCHASE:id=7630858749:status=ENABLED:primary=false:included=false:type=GOOGLE_ANALYTICS_4_CUSTOM:origin=WEBSITE:category=PURCHASE
+purchase_customer_goal=category=PURCHASE:origin=WEBSITE:biddable=true
+account_name=Shopvivaliz Ltda
+account_currency=BRL
+account_timezone=America/Sao_Paulo
+campaign_id=24144257692
+campaign_status_before=ENABLED
+daily_budget_brl=10.00
+budget_corrected=false
+today=2026-08-19
+impressions_today=0
+clicks_today=0
+ctr_pct_today=0.0000
+avg_cpc_brl_today=0.0000
+cost_brl_today=0.00
+purchase_conversions_today=0.0000
+purchase_value_brl_today=0.00
+cpa_brl_today=NA
+roas_today=NA
+impressions_lifetime=0
+clicks_lifetime=0
+ctr_pct_lifetime=0.0000
+avg_cpc_brl_lifetime=0.0000
+cost_brl_lifetime=0.00
+purchase_conversions_lifetime=0.0000
+purchase_value_brl_lifetime=0.00
+cpa_brl_lifetime=NA
+roas_lifetime=NA
+no_conversion_pause_threshold_brl=12.00
+purchase_conversion=Compra:id=7630829260:status=ENABLED:primary=true:included=true:type=GOOGLE_ANALYTICS_4_PURCHASE:origin=WEBSITE:category=PURCHASE:default_goal_biddable=true
+landing_page=https://shopvivaliz.com.br/catalogo?q=antique&utm_source=google&utm_medium=cpc&utm_campaign=search_vasos_antique_decore_2026_08&utm_content=vasos_antique_japi&cupom=:http=200:healthy=true:final_url=https://shopvivaliz.com.br/catalogo/?q=antique&utm_source=google&utm_medium=cpc&utm_campaign=search_vasos_antique_decore_2026_08&utm_content=vasos_antique_japi&cupom=
+landing_page=https://shopvivaliz.com.br/catalogo?q=decore&utm_source=google&utm_medium=cpc&utm_campaign=search_vasos_antique_decore_2026_08&utm_content=vasos_decore_japi&cupom=:http=200:healthy=true:final_url=https://shopvivaliz.com.br/catalogo/?q=decore&utm_source=google&utm_medium=cpc&utm_campaign=search_vasos_antique_decore_2026_08&utm_content=vasos_decore_japi&cupom=
+ad_policy=820988025784:approval=APPROVED:review=REVIEWED:status=ENABLED:final_url=https://shopvivaliz.com.br/catalogo?q=antique&utm_source=google&utm_medium=cpc&utm_campaign=search_vasos_antique_decore_2026_08&utm_content=vasos_antique_japi&cupom=
+ad_policy=820988021911:approval=APPROVED:review=REVIEWED:status=ENABLED:final_url=https://shopvivaliz.com.br/catalogo?q=decore&utm_source=google&utm_medium=cpc&utm_campaign=search_vasos_antique_decore_2026_08&utm_content=vasos_decore_japi&cupom=
+campaign_status_final=ENABLED
+RESULT=HEALTHY_NO_CHANGE
