@@ -1,0 +1,63 @@
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Thu Aug 20 12:33:45 -03 2026
+
+  System load:  2.01               Processes:             177
+  Usage of /:   85.7% of 44.96GB   Users logged in:       0
+  Memory usage: 36%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   43%
+
+  => / is using 85.7% of 44.96GB
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+62 updates can be applied immediately.
+6 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+16 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+116 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+
+*** System restart required ***
+CHECK_BRT=2026-08-20T12:35:08-0300
+RUNTIME_HEAD=f13516cf35eefc88aa7dc2c6aff8e71a1eff3d72
+ORIGIN_MAIN=13ab8110df899aba3849e19ff1c6e88650c7e537
+WORKER=active
+WORKER_ENABLED=enabled
+NDR_GUARD=active
+NDR_GUARD_ENABLED=enabled
+AUTOREPAIR=active
+SYSTEMD_Restart=always
+SYSTEMD_RestartUSec=5s
+SYSTEMD_ExecStart={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubuntu/mei-mg-email/.venv/bin/python -m worker.safe_entrypoint_v2 ; ignore_errors=no ; start_time=[Thu 2026-08-20 12:34:36 -03] ; stop_time=[n/a] ; pid=2957752 ; code=(null) ; status=0/0 }
+SYSTEMD_StartLimitIntervalUSec=0
+SENTINEL=absent
+DB_READY=1
+SENT24_QUEUE=58
+SENT24_EXTERNAL=0
+PENDING=500
+SYNTH_OPEN=0
+REPLAY_OPEN=0
+DUP_TERMINAL_EMAILS=0
+LONG_DB_SESSIONS=0
+ADVISORY_LOCKS=2
+FLYWAY_SCHEMA=mei_email
+FLYWAY_37_42=none
+FLYWAY_FAILED=0
+LATEST=2026-08-20 11:05:21.803449-03
+AS42004_LAST30M=0
+DNS_GRAPH=ok
+NDR_MAILBOX_WIDE=yes
