@@ -1,0 +1,5 @@
+{
+  "campaign_id": "24144257692",
+  "action": "validate-and-recover-core",
+  "reason": "recover core only after production-egress landing validation"
+}
