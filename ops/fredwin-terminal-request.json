@@ -2,7 +2,7 @@
   "action": "terminal",
   "shell": "powershell",
   "timeout": 120,
-  "command": "Write-Output ('USER=' + [System.Security.Principal.WindowsIdentity]::GetCurrent().Name); Write-Output ('HOST=' + $env:COMPUTERNAME); Write-Output ('PWD=' + (Get-Location).Path); Write-Output ('TIME=' + (Get-Date).ToString('o')); Write-Output ('PS=' + $PSVersionTable.PSVersion.ToString())",
-  "requested_at": "2026-08-20T12:50:30Z",
-  "reason": "Verify interactive-equivalent PowerShell terminal execution through the canonical Fred-Win private relay"
+  "command": "$ErrorActionPreference='Stop'; $s=(Get-Command ssh -ErrorAction Stop).Source; $a='shopvivaliz-vm'; $cmd=@'\nset -e\np=/home/ubuntu/shopvivaliz-deploy/current\nr=$(readlink -f \"$p\")\necho REALPATH=$r\nsha=\"\"\nif git -C \"$p\" rev-parse HEAD >/dev/null 2>&1; then sha=$(git -C \"$p\" rev-parse HEAD); fi\nif [ -z \"$sha\" ]; then\n  for f in \"$p/.deploy-sha\" \"$p/DEPLOY_SHA\" \"$p/REVISION\" \"$p/revision.txt\" \"$r/.deploy-sha\" \"$r/DEPLOY_SHA\" \"$r/REVISION\" \"$r/revision.txt\"; do\n    if [ -f \"$f\" ]; then sha=$(head -n1 \"$f\" | tr -cd '0-9a-fA-F' | cut -c1-40); [ -n \"$sha\" ] && break; fi\n  done\nfi\nif [ -z \"$sha\" ]; then\n  b=$(basename \"$r\"); c=$(printf '%s' \"$b\" | grep -Eo '[0-9a-fA-F]{7,40}' | head -n1 || true); [ -n \"$c\" ] && sha=$c\nfi\n[ -n \"$sha\" ] || sha=UNKNOWN\necho DEPLOY_SHA=$sha\n'@; $o=& $s -o BatchMode=yes -o ConnectTimeout=15 $a $cmd 2>$null; if($LASTEXITCODE -ne 0){throw 'SSH deploy metadata probe failed'}; $o | ForEach-Object {Write-Output $_}",
+  "requested_at": "2026-08-20T14:43:00Z",
+  "reason": "Resolve production deploy SHA safely from existing release metadata or symlink target without exposing secrets or changing production"
 }

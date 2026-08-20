@@ -1,0 +1,4 @@
+SSH_HOST_ALIAS=shopvivaliz-vm
+REMOTE_HOSTNAME=shopvivaliz-ai
+REMOTE_USER=ubuntu
+SSH_PROBE=OK
