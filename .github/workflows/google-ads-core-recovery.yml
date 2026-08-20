@@ -6,10 +6,11 @@ on:
     paths:
       - "ops/google-ads-core-recovery.json"
       - ".github/workflows/google-ads-core-recovery.yml"
+      - "scripts/google_ads_operator_core_recovery.py"
       - "scripts/google_ads_antique_decore_status.py"
       - "scripts/google_ads_antique_decore_status_v2.py"
-      - "scripts/google_ads_antique_decore_status_v3.py"
       - "scripts/google_ads_campaign_live_ready.json"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -21,7 +22,14 @@ jobs:
   recover:
     runs-on: ubuntu-latest
     environment: Production
-    timeout-minutes: 12
+    timeout-minutes: 10
+    env:
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+      GOOGLE_ADS_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
+      GOOGLE_ADS_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
+      GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
     steps:
       - name: Checkout reviewed code
         uses: actions/checkout@v4
@@ -35,105 +43,14 @@ jobs:
           [[ "$campaign_id" == "$EXPECTED_CAMPAIGN_ID" ]] || { echo 'unexpected campaign_id'; exit 2; }
           [[ "$action" == "validate-and-recover-core" ]] || { echo 'unexpected action'; exit 2; }
 
-      - name: Configure pinned production VM SSH
-        env:
-          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
-          VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
-          VM_USER: ${{ secrets.SHOPVIVALIZ_VM_USER }}
-          VM_KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+      - name: Install Google Ads client
         shell: bash
         run: |
-          set -euo pipefail
-          test -n "$VM_KEY"
-          test -n "$VM_KNOWN_HOSTS"
-          [[ "$VM_HOST" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'SHOPVIVALIZ_VM_HOST invalid'; exit 2; }
-          if [ -z "${VM_USER:-}" ]; then VM_USER=ubuntu; fi
-          [[ "$VM_USER" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'SHOPVIVALIZ_VM_USER invalid'; exit 2; }
-          mkdir -p ~/.ssh
-          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
-          printf '%s\n' "$VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
-          echo "vm_host=$VM_HOST" >> "$GITHUB_ENV"
-          echo "vm_user=$VM_USER" >> "$GITHUB_ENV"
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check google-ads
 
-      - name: Run reviewed campaign guardrails from production egress
+      - name: Recover approved Antique and Decore core only
         shell: bash
         run: |
-          set -euo pipefail
-          SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -i "$HOME/.ssh/vmkey")
-          WORKDIR="/tmp/shopvivaliz-google-ads-core-recovery-${GITHUB_RUN_ID}"
-          tar -czf - \
-            scripts/google_ads_antique_decore_status.py \
-            scripts/google_ads_antique_decore_status_v2.py \
-            scripts/google_ads_antique_decore_status_v3.py \
-            scripts/google_ads_campaign_live_ready.json \
-          | ssh "${SSH_OPTS[@]}" "${vm_user}@${vm_host}" "mkdir -p '$WORKDIR' && tar -xzf - -C '$WORKDIR'"
-
-          ssh "${SSH_OPTS[@]}" "${vm_user}@${vm_host}" "WORKDIR='$WORKDIR' EXPECTED_CAMPAIGN_ID='$EXPECTED_CAMPAIGN_ID' bash -s" <<'REMOTE'
-          set -euo pipefail
-          trap 'rm -rf "$WORKDIR" /tmp/shopvivaliz-google-ads-core-recovery-venv' EXIT
-          python3 -m venv /tmp/shopvivaliz-google-ads-core-recovery-venv
-          /tmp/shopvivaliz-google-ads-core-recovery-venv/bin/pip install --disable-pip-version-check --quiet google-ads
-          /tmp/shopvivaliz-google-ads-core-recovery-venv/bin/python - <<'PY'
-          import os
-          import sys
-          from pathlib import Path
-
-          workdir = Path(os.environ['WORKDIR']) / 'scripts'
-          envfile = Path('/home/ubuntu/shopvivaliz-deploy/shared/.env')
-          if not envfile.is_file():
-              raise SystemExit('VM_ENVFILE_MISSING')
-
-          allowed = {
-              'GOOGLE_OAUTH_CLIENT_ID',
-              'GOOGLE_OAUTH_CLIENT_SECRET',
-              'GOOGLE_ADS_REFRESH_TOKEN',
-              'GOOGLE_ADS_DEVELOPER_TOKEN',
-              'GOOGLE_ADS_CUSTOMER_ID',
-              'GOOGLE_ADS_LOGIN_CUSTOMER_ID',
-          }
-          loaded = {}
-          for raw in envfile.read_text(encoding='utf-8', errors='ignore').splitlines():
-              line = raw.strip()
-              if not line or line.startswith('#') or '=' not in line:
-                  continue
-              key, value = line.split('=', 1)
-              key = key.strip()
-              if key in allowed:
-                  loaded[key] = value.strip().strip('"\'')
-          required = allowed - {'GOOGLE_ADS_LOGIN_CUSTOMER_ID'}
-          missing = sorted(key for key in required if not loaded.get(key, '').strip())
-          if missing:
-              raise SystemExit('MISSING_ENV=' + ','.join(missing))
-          os.environ.update(loaded)
-
-          customer_id = loaded['GOOGLE_ADS_CUSTOMER_ID'].replace('-', '').strip()
-          if not customer_id.isdigit():
-              raise SystemExit('GOOGLE_ADS_CUSTOMER_ID_INVALID')
-
-          sys.path.insert(0, str(workdir))
-          import google_ads_antique_decore_status_v3 as monitor
-
-          legacy = monitor.monitor.legacy
-          client = legacy.client_from_env()
-          ga = client.get_service('GoogleAdsService')
-          safe_name = legacy.CAMPAIGN_NAME.replace("'", "\\'")
-          rows = list(ga.search(customer_id=customer_id, query=f"""
-            SELECT campaign.id, campaign.name, campaign.status, campaign_budget.amount_micros
-            FROM campaign
-            WHERE campaign.name = '{safe_name}' AND campaign.status != 'REMOVED'
-          """))
-          expected_id = int(os.environ['EXPECTED_CAMPAIGN_ID'])
-          if len(rows) != 1 or int(rows[0].campaign.id) != expected_id:
-              raise SystemExit('GUARDRAIL_TARGET_CAMPAIGN_MISMATCH')
-          if int(rows[0].campaign_budget.amount_micros) != 10_000_000:
-              raise SystemExit('GUARDRAIL_BUDGET_CHANGED')
-          print('TARGET_CAMPAIGN_GUARD=PASS')
-          raise SystemExit(monitor.main())
-          PY
-          REMOTE
-
-      - name: Cleanup SSH material
-        if: always()
-        shell: bash
-        run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts
+          set -Eeuo pipefail
+          python3 scripts/google_ads_operator_core_recovery.py
