@@ -1,0 +1,201 @@
+name: Fred-Win Terminal Two Stage 20260820
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tmp-fredwin-terminal-two-stage-20260820.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Stage 1 identify existing Windows SSH alias
+        id: stage1
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p reports
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health' >/tmp/fredwin-health.json
+          python3 -c "import json; p=json.load(open('/tmp/fredwin-health.json')); assert p.get('status')=='ok' and p.get('environment')=='fred-win'"
+
+          cat >/tmp/stage1.ps1 <<'PS1'
+          $ErrorActionPreference='Continue'
+          $alias=''
+          $cfg=Join-Path $HOME '.ssh\config'
+          if(Test-Path $cfg){
+            $cur=''
+            foreach($raw in Get-Content $cfg){
+              $t=$raw.Trim()
+              if(!$t -or $t.StartsWith('#')){continue}
+              if($t -match '^Host\s+(.+)$'){
+                $cur=$Matches[1].Trim()
+                if($cur -match '[*?!\s]'){$cur=''}
+              } elseif($cur -and $t -match '^HostName\s+(.+)$'){
+                if($Matches[1].Trim() -eq '137.131.156.17'){$alias=$cur;break}
+              }
+            }
+            if(!$alias){
+              foreach($raw in Get-Content $cfg){
+                $t=$raw.Trim()
+                if($t -match '^Host\s+(.+)$'){
+                  $h=$Matches[1].Trim()
+                  if($h -notmatch '[*?!\s]' -and $h -match '(?i)shopvivaliz|vivaliz|oracle|prod'){$alias=$h;break}
+                }
+              }
+            }
+          }
+          Write-Output ('SSH_HOST_ALIAS=' + $alias)
+          if($alias){
+            $p=@(& ssh -o BatchMode=yes -o ConnectTimeout=15 $alias 'hostname; whoami; pwd' 2>$null)
+            if($LASTEXITCODE -eq 0 -and $p.Count -ge 3){
+              Write-Output ('REMOTE_HOSTNAME=' + $p[0])
+              Write-Output ('REMOTE_USER=' + $p[1])
+              Write-Output 'SSH_PROBE=OK'
+            } else { Write-Output 'SSH_PROBE=ERROR' }
+          } else { Write-Output 'SSH_PROBE=NO_ALIAS' }
+          PS1
+
+          ENC="$(iconv -f UTF-8 -t UTF-16LE /tmp/stage1.ps1 | base64 -w0)"
+          CMD="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $ENC"
+          B64="$(printf '%s' "$CMD" | base64 -w0)"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            "FREDWIN_CMD_B64='$B64' python3 - <<'PY'
+          import base64,json,os,urllib.request
+          cmd=base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode()
+          body=json.dumps({'params':{'command':cmd,'timeout':90}}).encode()
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=100) as r:
+              p=json.loads(r.read().decode())
+          res=p.get('result') or {}
+          print(res.get('output') or '',end='')
+          PY" >/tmp/stage1.out
+
+          grep -E '^(SSH_HOST_ALIAS|REMOTE_HOSTNAME|REMOTE_USER|SSH_PROBE)=' /tmp/stage1.out > reports/fredwin-terminal-stage1.txt || true
+          cat reports/fredwin-terminal-stage1.txt
+          alias="$(sed -n 's/^SSH_HOST_ALIAS=//p' reports/fredwin-terminal-stage1.txt | head -n1)"
+          printf '%s' "$alias" | grep -Eq '^[A-Za-z0-9._-]+$'
+          grep -q '^SSH_PROBE=OK$' reports/fredwin-terminal-stage1.txt
+          echo "alias=$alias" >> "$GITHUB_OUTPUT"
+
+      - name: Stage 2 validate deploy and HTTP through existing alias
+        shell: bash
+        env:
+          SSH_ALIAS: ${{ steps.stage1.outputs.alias }}
+        run: |
+          set -Eeuo pipefail
+          alias="$SSH_ALIAS"
+          printf '%s' "$alias" | grep -Eq '^[A-Za-z0-9._-]+$'
+          cat >/tmp/stage2.ps1 <<PS1
+          \$ErrorActionPreference='Continue'
+          \$alias='$alias'
+          \$deploy='/home/ubuntu/shopvivaliz-deploy/current'
+          \$deployOk=@(& ssh -o BatchMode=yes -o ConnectTimeout=15 \$alias "test -d \$deploy && echo DEPLOY_OK || echo DEPLOY_NOT_FOUND" 2>\$null)
+          \$sha=''; \$php=''
+          if(\$deployOk -contains 'DEPLOY_OK'){
+            \$sha=(( & ssh -o BatchMode=yes -o ConnectTimeout=15 \$alias "git -C \$deploy rev-parse HEAD" 2>\$null) | Select-Object -Last 1).Trim()
+            \$php=(( & ssh -o BatchMode=yes -o ConnectTimeout=15 \$alias "php -r 'echo PHP_VERSION;'" 2>\$null) | Select-Object -Last 1).Trim()
+          }
+          function Probe([string]\$u,[string]\$label){
+            \$fmt='%{http_code}|%{url_effective}|%{time_total}'
+            \$r=(( & ssh -o BatchMode=yes -o ConnectTimeout=15 \$alias "curl -L -sS -o /dev/null --connect-timeout 10 --max-time 30 -w '\$fmt' '\$u'" 2>\$null) | Select-Object -Last 1).Trim()
+            if(\$LASTEXITCODE -ne 0 -or !\$r){ Write-Output (\$label + '_HTTP=ERROR'); return }
+            \$p=\$r.Split('|')
+            Write-Output (\$label + '_HTTP=' + \$p[0])
+            Write-Output ('HTTP_DETAIL=' + \$u + '|HTTP=' + \$p[0] + '|FINAL=' + \$p[1] + '|TIME=' + \$p[2])
+          }
+          Write-Output 'DEPLOY_PATH=/home/ubuntu/shopvivaliz-deploy/current'
+          Write-Output ('DEPLOY_SHA=' + \$sha)
+          Write-Output ('PHP=' + \$php)
+          Probe 'https://shopvivaliz.com.br/' 'HOME'
+          Probe 'https://shopvivaliz.com.br/catalogo' 'CATALOGO'
+          Probe 'https://shopvivaliz.com.br/catalogo?q=antique' 'ANTIQUE'
+          Probe 'https://shopvivaliz.com.br/catalogo?q=decore' 'DECORE'
+          PS1
+
+          ENC="$(iconv -f UTF-8 -t UTF-16LE /tmp/stage2.ps1 | base64 -w0)"
+          CMD="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $ENC"
+          B64="$(printf '%s' "$CMD" | base64 -w0)"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            "FREDWIN_CMD_B64='$B64' python3 - <<'PY'
+          import base64,json,os,urllib.request
+          cmd=base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode()
+          body=json.dumps({'params':{'command':cmd,'timeout':180}}).encode()
+          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=190) as r:
+              p=json.loads(r.read().decode())
+          res=p.get('result') or {}
+          print(res.get('output') or '',end='')
+          PY" >/tmp/stage2.out
+
+          grep -E '^(DEPLOY_PATH|DEPLOY_SHA|PHP|HOME_HTTP|CATALOGO_HTTP|ANTIQUE_HTTP|DECORE_HTTP|HTTP_DETAIL)=' /tmp/stage2.out > reports/fredwin-terminal-stage2.txt || true
+          cat reports/fredwin-terminal-stage2.txt
+
+          alias_line="SSH_HOST_ALIAS=$alias"
+          remote_host="$(sed -n 's/^REMOTE_HOSTNAME=//p' reports/fredwin-terminal-stage1.txt | head -n1)"
+          remote_user="$(sed -n 's/^REMOTE_USER=//p' reports/fredwin-terminal-stage1.txt | head -n1)"
+          deploy_sha="$(sed -n 's/^DEPLOY_SHA=//p' reports/fredwin-terminal-stage2.txt | head -n1)"
+          php="$(sed -n 's/^PHP=//p' reports/fredwin-terminal-stage2.txt | head -n1)"
+          home="$(sed -n 's/^HOME_HTTP=//p' reports/fredwin-terminal-stage2.txt | head -n1)"
+          catst="$(sed -n 's/^CATALOGO_HTTP=//p' reports/fredwin-terminal-stage2.txt | head -n1)"
+          ant="$(sed -n 's/^ANTIQUE_HTTP=//p' reports/fredwin-terminal-stage2.txt | head -n1)"
+          dec="$(sed -n 's/^DECORE_HTTP=//p' reports/fredwin-terminal-stage2.txt | head -n1)"
+          ready=NO
+          err='Validation incomplete'
+          if [ -n "$deploy_sha" ] && [ -n "$php" ] && [ "$home" = 200 ] && [ "$catst" = 200 ] && [ "$ant" = 200 ] && [ "$dec" = 200 ]; then ready=YES; err=''; fi
+          {
+            echo "TERMINAL_READY=$ready"
+            echo "$alias_line"
+            echo "REMOTE_HOSTNAME=$remote_host"
+            echo "REMOTE_USER=$remote_user"
+            echo 'DEPLOY_PATH=/home/ubuntu/shopvivaliz-deploy/current'
+            echo "DEPLOY_SHA=$deploy_sha"
+            echo "PHP=$php"
+            echo "HOME_HTTP=$home"
+            echo "CATALOGO_HTTP=$catst"
+            echo "ANTIQUE_HTTP=$ant"
+            echo "DECORE_HTTP=$dec"
+            echo 'TUNNEL=READY'
+            echo "ERROR=$err"
+          } > reports/fredwin-terminal-ready-20260820.txt
+          cat reports/fredwin-terminal-ready-20260820.txt
+          test "$ready" = YES
+
+      - name: Persist sanitized reports
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f reports/fredwin-terminal-ready-20260820.txt || printf '%s\n' 'TERMINAL_READY=NO' 'SSH_HOST_ALIAS=' 'REMOTE_HOSTNAME=' 'REMOTE_USER=' 'DEPLOY_PATH=/home/ubuntu/shopvivaliz-deploy/current' 'DEPLOY_SHA=' 'PHP=' 'HOME_HTTP=' 'CATALOGO_HTTP=' 'ANTIQUE_HTTP=' 'DECORE_HTTP=' 'TUNNEL=READY' 'ERROR=Two-stage validation did not complete' > reports/fredwin-terminal-ready-20260820.txt
+          git config user.name 'shopvivaliz-ops-bot'
+          git config user.email 'ops@shopvivaliz.local'
+          git add reports/fredwin-terminal-ready-20260820.txt reports/fredwin-terminal-stage1.txt reports/fredwin-terminal-stage2.txt 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -m 'ops: record two-stage Fred-Win terminal readiness 20260820'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/fredwin-health.json /tmp/stage1.ps1 /tmp/stage1.out /tmp/stage2.ps1 /tmp/stage2.out
