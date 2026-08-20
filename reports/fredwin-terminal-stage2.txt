@@ -1,7 +1,3 @@
-TERMINAL_READY=NO
-SSH_HOST_ALIAS=shopvivaliz-vm
-REMOTE_HOSTNAME=shopvivaliz-ai
-REMOTE_USER=ubuntu
 DEPLOY_PATH=/home/ubuntu/shopvivaliz-deploy/current
 DEPLOY_SHA=
 PHP=8.3.6
@@ -9,5 +5,3 @@ HOME_HTTP=ERROR
 CATALOGO_HTTP=ERROR
 ANTIQUE_HTTP=ERROR
 DECORE_HTTP=ERROR
-TUNNEL=READY
-ERROR=Validation incomplete
