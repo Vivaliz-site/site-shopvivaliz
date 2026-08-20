@@ -186,3 +186,4 @@ jobs:
 # watchdog redeploy current strict sender main 2026-08-20T13:42Z
 # deploy strict authorized sender main 2026-08-20T15:35Z
 # deploy presend lot-progress safety fix 2026-08-20T15:59Z
+# watchdog redeploy strict sender after broken-pipe 2026-08-20T16:24-0300
