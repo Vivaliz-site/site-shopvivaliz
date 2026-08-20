@@ -40,15 +40,28 @@ jobs:
           if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then echo SENDER_BLOCK_SENTINEL=present; else echo SENDER_BLOCK_SENTINEL=absent; fi
           echo "AUTOREPAIR_ACTIVE=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || true)"
           echo "NDR_GUARD_ACTIVE=$(sudo systemctl is-active mei-mg-email-ndr-guard.service 2>/dev/null || true)"
-          echo 'GUARD_PS_BEGIN'
-          ps -eo pid=,etime=,args= | grep -F runtime_sender_guard.py | grep -v grep || true
-          echo 'GUARD_PS_END'
+          echo 'DOCKER_PS_BEGIN'
+          docker compose ps -a || true
+          echo 'DOCKER_PS_END'
+          echo 'DB_INSPECT_BEGIN'
+          docker inspect mei-mg-email-db --format 'status={{.State.Status}} running={{.State.Running}} restarting={{.State.Restarting}} oom={{.State.OOMKilled}} exit={{.State.ExitCode}} started={{.State.StartedAt}} finished={{.State.FinishedAt}} restart_count={{.RestartCount}}' || true
+          echo 'DB_INSPECT_END'
+          echo 'DB_LOG_BEGIN'
+          docker logs --since 15m --tail 160 mei-mg-email-db 2>&1 || true
+          echo 'DB_LOG_END'
+          echo 'DISK_BEGIN'
+          df -h / /var/lib/docker || true
+          docker system df || true
+          echo 'DISK_END'
+          echo 'KERNEL_OOM_BEGIN'
+          sudo journalctl -k --since '-30 minutes' --no-pager | grep -Ei 'oom|out of memory|killed process|I/O error|ext4|xfs|nvme' | tail -n 80 || true
+          echo 'KERNEL_OOM_END'
           echo 'WORKER_JOURNAL_BEGIN'
-          sudo journalctl -u mei-mg-email-worker.service --since '-6 minutes' --no-pager | tail -n 140 || true
+          sudo journalctl -u mei-mg-email-worker.service --since '-8 minutes' --no-pager | tail -n 180 || true
           echo 'WORKER_JOURNAL_END'
           EOF
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
 
-# final convergence recheck 2026-08-20T04:41Z
+# postgres recovery diagnostic 2026-08-20T04:46Z
