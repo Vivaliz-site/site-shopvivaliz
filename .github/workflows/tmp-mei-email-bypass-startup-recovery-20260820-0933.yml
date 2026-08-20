@@ -24,7 +24,9 @@ jobs:
           if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then echo SENTINEL=present; exit 52; fi
           test "$(sudo systemctl is-active mei-mg-email-worker.service)" = active
           sent24=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours';")
+          pending_before=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select count(*) from mei_email.envios where status::text in ('pendente','pending','enviando','processing');")
           echo SENT24_BEFORE=$sent24
+          echo PENDING_BEFORE=$pending_before
           test "$sent24" -lt 9950
 
           .venv/bin/python -u - <<'PY'
@@ -41,20 +43,18 @@ jobs:
           selected=[]
           with psycopg.connect(settings.database_url) as conn:
               with conn.cursor() as c:
-                  c.execute("set statement_timeout='30s'")
-                  c.execute("set enable_seqscan=off")
-                  c.execute("select cnpj,email,situacao_cadastral,uf,opt_out,enviado,mei_verificado,mei_verificado_origem from mei_email.empresas where mei_verificado=true limit 60000")
+                  c.execute("set statement_timeout='90s'")
+                  c.execute("select cnpj,email,mei_verificado_origem from mei_email.empresas where mei_verificado=true and situacao_cadastral='ATIVA' and uf='MG' and opt_out=false and enviado=false and email is not null order by cnpj limit 8000")
                   base=c.fetchall()
+                  print('BASE_SCANNED='+str(len(base)),flush=True)
                   seen=set()
-                  for cnpj,email,sit,uf,optout,enviado,mei_verified,mei_origin in base:
+                  for cnpj,email,mei_origin in base:
                       if len(selected)>=TARGET:
                           break
                       norm=(email or '').strip().lower()
-                      if not norm or norm in seen or sit!='ATIVA' or optout or enviado:
+                      if not norm or norm in seen:
                           continue
-                      if uf!='MG' or not mei_verified or not (mei_origin or '').strip():
-                          continue
-                      if (mei_origin or '').strip() in ('override_operador_2026-08-13','politica_importacao_operador_2026-08-13'):
+                      if not (mei_origin or '').strip() or (mei_origin or '').strip() in ('override_operador_2026-08-13','politica_importacao_operador_2026-08-13'):
                           continue
                       if 'contabil' in norm:
                           continue
@@ -108,12 +108,21 @@ jobs:
           PY
 
           sleep 20
-          echo WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
-          echo SENTINEL_AFTER=$(sudo test -f /var/lib/mei-mg-email/sender_blocked.pause && echo present || echo absent)
-          sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select 'sent15='||count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '15 minutes'; select 'pending='||count(*) from mei_email.envios where status::text in ('pendente','pending','enviando','processing');"
+          worker=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+          sentinel=$(sudo test -f /var/lib/mei-mg-email/sender_blocked.pause && echo present || echo absent)
+          sent15=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '15 minutes';")
+          pending_after=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select count(*) from mei_email.envios where status::text in ('pendente','pending','enviando','processing');")
           asn=$(sudo journalctl -u mei-mg-email-worker.service --since '-15 minutes' --no-pager | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8' || true)
+          echo WORKER=$worker
+          echo SENTINEL_AFTER=$sentinel
+          echo SENT15=$sent15
+          echo PENDING_AFTER=$pending_after
           echo AS42004_LAST15M=$asn
+          test "$worker" = active
+          test "$sentinel" = absent
+          test "$pending_after" -gt 100
           test "$asn" -eq 0
+          echo REPLENISH_GATE=PASS
           EOF
       - name: Cleanup
         if: always()
