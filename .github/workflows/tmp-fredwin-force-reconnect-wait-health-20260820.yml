@@ -70,3 +70,5 @@ jobs:
         if: always()
         shell: bash
         run: rm -f ~/.ssh/vmkey
+
+# retry after canonical health failure 2026-08-20T23:31:00Z

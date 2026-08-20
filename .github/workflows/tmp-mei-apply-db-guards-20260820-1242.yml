@@ -56,7 +56,11 @@ jobs:
             echo GLOBAL_STOP=MICROSOFT_SENDER_BLOCK
             exit 52
           fi
-          run_sql(){ sudo docker exec -i -e PGOPTIONS='-c lock_timeout=5s -c statement_timeout=120s' mei-mg-email-db psql -X -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -1 -f - < "$1"; }
+          # V038 needs a relation-level lock to install its trigger. With the queue-first
+          # worker alive, a 5s lock_timeout repeatedly lost to bounded autoqueue reads.
+          # Wait up to 30s for the current read transaction to finish; do not stop the
+          # worker and do not cancel/terminate any backend.
+          run_sql(){ sudo docker exec -i -e PGOPTIONS='-c lock_timeout=30s -c statement_timeout=180s' mei-mg-email-db psql -X -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -1 -f - < "$1"; }
           echo APPLY_V037_BEGIN
           run_sql db/migrations/V037__fail_closed_open_queue_and_legacy_copy.sql
           echo APPLY_V037_OK=true
@@ -116,3 +120,4 @@ jobs:
         run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 # watchdog retry after V038 lock timeout 2026-08-20T17:24-0300
 # watchdog retry after V038 lock timeout 2026-08-20T19:26-0300
+# watchdog bounded lock wait 2026-08-20T20:25-0300

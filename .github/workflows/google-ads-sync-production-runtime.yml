@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "ops/google-ads-sync-production-runtime.json"
+      - ".github/workflows/google-ads-sync-production-runtime.yml"
 
 permissions:
   contents: read
@@ -27,13 +28,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for key in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_ADS_DEVELOPER_TOKEN GOOGLE_ADS_CUSTOMER_ID VM_HOST; do
+          for key in GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_ADS_REFRESH_TOKEN GOOGLE_ADS_DEVELOPER_TOKEN GOOGLE_ADS_CUSTOMER_ID VM_HOST; do
             test -n "${!key:-}" || { echo "$key=missing"; exit 2; }
           done
           case "$VM_HOST" in
             *[!A-Za-z0-9._-]*|.*|*..*|*-|-) echo "VM_HOST=invalid" >&2; exit 2 ;;
           esac
           echo 'required_production_secrets=present'
+          echo 'refresh_token_secret=present'
           echo 'NO_SECRET_VALUES_PRINTED'
 
       - name: Configure VM key
@@ -79,6 +81,16 @@ jobs:
                       continue
                   k, v = line.split('=', 1)
                   updates[k] = v
+          required = {
+              'GOOGLE_OAUTH_CLIENT_ID',
+              'GOOGLE_OAUTH_CLIENT_SECRET',
+              'GOOGLE_ADS_REFRESH_TOKEN',
+              'GOOGLE_ADS_DEVELOPER_TOKEN',
+              'GOOGLE_ADS_CUSTOMER_ID',
+          }
+          missing = sorted(k for k in required if not updates.get(k, '').strip())
+          if missing:
+              raise SystemExit('incoming_required_google_ads_secrets_missing=' + ','.join(missing))
           with open(envfile, encoding='utf-8', errors='ignore') as f:
               lines = f.read().splitlines()
           out = []
@@ -114,6 +126,59 @@ jobs:
           echo 'shared_env_mode=640'
           echo 'NO_SECRET_VALUES_PRINTED'
           REMOTE
+
+      - name: Validate refresh token from production VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/vmkey)
+          ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "${SSH_OPTS[@]}" "ubuntu@$VM_HOST" 'python3 -' <<'PY'
+          import json
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          envfile = Path('/home/ubuntu/shopvivaliz-deploy/shared/.env')
+          values = {}
+          for raw in envfile.read_text(encoding='utf-8', errors='ignore').splitlines():
+              line = raw.strip()
+              if not line or line.startswith('#') or '=' not in line:
+                  continue
+              k, v = line.split('=', 1)
+              values[k.strip()] = v.strip()
+
+          required = ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'GOOGLE_ADS_REFRESH_TOKEN']
+          missing = [k for k in required if not values.get(k)]
+          if missing:
+              raise SystemExit('vm_google_ads_oauth_missing=' + ','.join(missing))
+
+          payload = urllib.parse.urlencode({
+              'client_id': values['GOOGLE_OAUTH_CLIENT_ID'],
+              'client_secret': values['GOOGLE_OAUTH_CLIENT_SECRET'],
+              'refresh_token': values['GOOGLE_ADS_REFRESH_TOKEN'],
+              'grant_type': 'refresh_token',
+          }).encode('utf-8')
+          req = urllib.request.Request(
+              'https://oauth2.googleapis.com/token',
+              data=payload,
+              headers={'Content-Type': 'application/x-www-form-urlencoded'},
+              method='POST',
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=20) as resp:
+                  data = json.loads(resp.read().decode('utf-8'))
+          except Exception as exc:
+              print('vm_google_ads_refresh_token_valid=false')
+              print('vm_google_ads_refresh_token_error=' + type(exc).__name__)
+              raise SystemExit(4)
+
+          if not data.get('access_token'):
+              print('vm_google_ads_refresh_token_valid=false')
+              raise SystemExit(5)
+          print('vm_google_ads_refresh_token_valid=true')
+          print('vm_google_ads_access_token_received=true')
+          print('NO_SECRET_VALUES_PRINTED')
+          PY
 
       - name: Verify public OAuth endpoint
         shell: bash
