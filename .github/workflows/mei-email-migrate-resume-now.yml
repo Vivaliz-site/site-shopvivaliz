@@ -68,6 +68,7 @@ jobs:
 
           test -f db/migrations/V037__fail_closed_open_queue_and_legacy_copy.sql
           test -f db/migrations/V038__enforce_campaign_copy_and_live_eligibility.sql
+          test -f db/migrations/V040__remove_legacy_public_cnpj_copy.sql
           timeout 10m docker compose run --rm flyway migrate
 
           .venv/bin/python - <<'PY'
@@ -195,4 +196,4 @@ jobs:
         shell: bash
         run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-# forced rerun: 2026-08-20T00:34:00-03:00
+# forced rerun: 2026-08-20T08:07:00-03:00 apply V040 remove legacy copy
