@@ -1,0 +1,112 @@
+TRIGGER_UTC=2026-08-20T00:18:26Z
+V6_RUN_ID=32316788555
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main MEI Email Hourly Self-Heal V6 Governance Safe · 32316788555
+Triggered via workflow_dispatch less than a minute ago
+
+JOBS
+* self-heal (ID 96270651969)
+  ✓ Set up job
+  ✓ Configure verified Oracle SSH
+  * Quiesce, migrate, validate and resume
+  * Upload production evidence
+  * Cleanup SSH material
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main MEI Email Hourly Self-Heal V6 Governance Safe · 32316788555
+Triggered via workflow_dispatch less than a minute ago
+
+JOBS
+* self-heal (ID 96270651969)
+  ✓ Set up job
+  ✓ Configure verified Oracle SSH
+  * Quiesce, migrate, validate and resume
+  * Upload production evidence
+  * Cleanup SSH material
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main MEI Email Hourly Self-Heal V6 Governance Safe · 32316788555
+Triggered via workflow_dispatch less than a minute ago
+
+JOBS
+* self-heal (ID 96270651969)
+  ✓ Set up job
+  ✓ Configure verified Oracle SSH
+  * Quiesce, migrate, validate and resume
+  * Upload production evidence
+  * Cleanup SSH material
+X main MEI Email Hourly Self-Heal V6 Governance Safe · 32316788555
+Triggered via workflow_dispatch less than a minute ago
+
+JOBS
+X self-heal in 33s (ID 96270651969)
+  ✓ Set up job
+  ✓ Configure verified Oracle SSH
+  X Quiesce, migrate, validate and resume
+  ✓ Upload production evidence
+  ✓ Cleanup SSH material
+  ✓ Complete job
+
+ANNOTATIONS
+! Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+self-heal: .github#2
+
+X Process completed with exit code 1.
+self-heal: .github#258
+
+V6_WATCH_RC=1
+{"conclusion":"failure","createdAt":"2026-08-20T00:18:27Z","status":"completed","updatedAt":"2026-08-20T00:19:06Z","url":"https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/32316788555"}
+ARTIFACT_DOWNLOADED=mei-email-hourly-self-heal-v6-32316788555-1
+=== V6_ARTIFACT_BEGIN ===
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Tue Aug 18 22:39:46 -03 2026
+
+  System load:  2.3                Processes:             183
+  Usage of /:   86.4% of 44.96GB   Users logged in:       0
+  Memory usage: 45%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   51%
+
+  => / is using 86.4% of 44.96GB
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+64 updates can be applied immediately.
+8 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+16 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+116 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+
+*** System restart required ***
+CHECKED_AT_UTC=2026-08-20T00:18:45Z
+HEAD_BEFORE=8f55b4332042c8eab7d34c7dfa63250008a4b99b
+=== QUIESCE BEFORE DEPLOY/MIGRATION ===
+WORKER_STOP=graceful
+WORKER_QUIESCED=true
+TRACKED_DIRTY=false
+From https://github.com/fredmourao-ai/mei-mg-email
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+HEAD_DEPLOYED=8f55b4332042c8eab7d34c7dfa63250008a4b99b
+/home/ubuntu/mei-mg-email/.venv/bin/python: No module named pytest
+FAIL_CLOSED_WORKER_STOP=confirmed
+FAIL_CLOSED_STOP_ON_ERROR rc=1
+main: line 58: pop_var_context: head of shell_variables not a function context
+=== V6_ARTIFACT_END ===
+CAPTURE_DONE_UTC=2026-08-20T00:19:10Z
