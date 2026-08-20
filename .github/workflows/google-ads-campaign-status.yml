@@ -14,6 +14,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate request
+        id: req
+        shell: bash
+        run: |
+          set -euo pipefail
+          campaign_id="$(jq -r '.campaign_id // ""' ops/google-ads-campaign-status.json)"
+          [[ "$campaign_id" =~ ^[0-9]{6,20}$ ]] || { echo 'invalid campaign_id'; exit 2; }
+          echo "campaign_id=$campaign_id" >> "$GITHUB_OUTPUT"
+
       - name: Configure VM key
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
@@ -26,12 +38,20 @@ jobs:
           chmod 600 ~/.ssh/vmkey
 
       - name: Read target campaign status
+        env:
+          VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
+          TARGET_CAMPAIGN_ID: ${{ steps.req.outputs.campaign_id }}
         shell: bash
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
-          import json, urllib.parse, urllib.request
+          test -n "${VM_HOST:-}" || { echo 'SHOPVIVALIZ_VM_HOST missing'; exit 2; }
+          [[ "$VM_HOST" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'SHOPVIVALIZ_VM_HOST invalid'; exit 2; }
+          [[ "$TARGET_CAMPAIGN_ID" =~ ^[0-9]{6,20}$ ]] || { echo 'invalid target campaign'; exit 2; }
+          SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/vmkey)
+          ssh "${SSH_OPTS[@]}" "ubuntu@${VM_HOST}" 'python3 -' "$TARGET_CAMPAIGN_ID" <<'PY'
+          import json, sys, urllib.parse, urllib.request
           from pathlib import Path
+          target = sys.argv[1]
           env={}
           for raw in Path('/home/ubuntu/shopvivaliz-deploy/shared/.env').read_text(encoding='utf-8',errors='ignore').splitlines():
               line=raw.strip()
@@ -44,7 +64,7 @@ jobs:
           headers={'Content-Type':'application/json','Authorization':'Bearer '+token,'developer-token':env['GOOGLE_ADS_DEVELOPER_TOKEN']}
           login=env.get('GOOGLE_ADS_LOGIN_CUSTOMER_ID','').replace('-','').strip()
           if login: headers['login-customer-id']=login
-          query='''SELECT campaign.id, campaign.name, campaign.status, campaign.serving_status, campaign.primary_status, campaign.primary_status_reasons, campaign.bidding_strategy_type, campaign_budget.amount_micros FROM campaign WHERE campaign.id = 24144257692'''
+          query=f'''SELECT campaign.id, campaign.status, campaign.serving_status, campaign.primary_status, campaign.primary_status_reasons, campaign.bidding_strategy_type, campaign_budget.amount_micros FROM campaign WHERE campaign.id = {target}'''
           url=f'https://googleads.googleapis.com/v25/customers/{cid}/googleAds:searchStream'
           req=urllib.request.Request(url,data=json.dumps({'query':query}).encode(),headers=headers,method='POST')
           with urllib.request.urlopen(req,timeout=30) as r:
@@ -54,7 +74,18 @@ jobs:
               rows.extend(batch.get('results') or [])
           print('TARGET_CAMPAIGN_STATUS_OK rows='+str(len(rows)))
           for row in rows:
-              print('CAMPAIGN='+json.dumps(row,ensure_ascii=False,separators=(',',':')))
+              campaign = row.get('campaign', {})
+              budget = row.get('campaignBudget', {})
+              summary = {
+                  'id': campaign.get('id'),
+                  'status': campaign.get('status'),
+                  'servingStatus': campaign.get('servingStatus'),
+                  'primaryStatus': campaign.get('primaryStatus'),
+                  'primaryStatusReasons': campaign.get('primaryStatusReasons'),
+                  'biddingStrategyType': campaign.get('biddingStrategyType'),
+                  'budgetAmountMicros': budget.get('amountMicros'),
+              }
+              print('CAMPAIGN_STATUS=' + json.dumps(summary,ensure_ascii=False,separators=(',',':')))
           PY
 
       - name: Cleanup

@@ -14,6 +14,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate request
+        id: req
+        shell: bash
+        run: |
+          set -euo pipefail
+          campaign_id="$(jq -r '.campaign_id // ""' ops/google-ads-targeting-diagnostic.json)"
+          [[ "$campaign_id" =~ ^[0-9]{6,20}$ ]] || { echo 'invalid campaign_id'; exit 2; }
+          echo "campaign_id=$campaign_id" >> "$GITHUB_OUTPUT"
+
       - name: Configure VM key
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
@@ -26,13 +38,20 @@ jobs:
           chmod 600 ~/.ssh/vmkey
 
       - name: Read targeting and network settings
+        env:
+          VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
+          TARGET_CAMPAIGN_ID: ${{ steps.req.outputs.campaign_id }}
         shell: bash
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
-          import json, urllib.parse, urllib.request, urllib.error
+          test -n "${VM_HOST:-}" || { echo 'SHOPVIVALIZ_VM_HOST missing'; exit 2; }
+          [[ "$VM_HOST" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'SHOPVIVALIZ_VM_HOST invalid'; exit 2; }
+          [[ "$TARGET_CAMPAIGN_ID" =~ ^[0-9]{6,20}$ ]] || { echo 'invalid target campaign'; exit 2; }
+          SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/vmkey)
+          ssh "${SSH_OPTS[@]}" "ubuntu@${VM_HOST}" 'python3 -' "$TARGET_CAMPAIGN_ID" <<'PY'
+          import json, sys, urllib.parse, urllib.request, urllib.error
           from pathlib import Path
-          TARGET='24144257692'
+          target = sys.argv[1]
           env={}
           for raw in Path('/home/ubuntu/shopvivaliz-deploy/shared/.env').read_text(encoding='utf-8',errors='ignore').splitlines():
               line=raw.strip()
@@ -51,15 +70,16 @@ jobs:
               try:
                   with urllib.request.urlopen(req,timeout=30) as r: payload=json.loads(r.read().decode())
               except urllib.error.HTTPError as e:
-                  print(label+'_FAILED='+e.read().decode(errors='ignore')[:1600].replace('\n',' ')); return []
+                  print(label+'_FAILED_HTTP='+str(e.code)); return []
               rows=[]
               for batch in payload if isinstance(payload,list) else []: rows.extend(batch.get('results') or [])
               print(label+'_ROWS='+str(len(rows)))
-              for row in rows: print(label+'='+json.dumps(row,ensure_ascii=False,separators=(',',':')))
+              for row in rows:
+                  print(label+'='+json.dumps(row,ensure_ascii=False,separators=(',',':')))
               return rows
 
-          q('CAMPAIGN_SETTINGS',f'''SELECT campaign.id, campaign.name, campaign.status, campaign.serving_status, campaign.primary_status, campaign.advertising_channel_type, campaign.network_settings.target_google_search, campaign.network_settings.target_search_network, campaign.network_settings.target_content_network, campaign.network_settings.target_partner_search_network, campaign.geo_target_type_setting.positive_geo_target_type, campaign.geo_target_type_setting.negative_geo_target_type FROM campaign WHERE campaign.id = {TARGET}''')
-          q('CAMPAIGN_CRITERIA',f'''SELECT campaign_criterion.criterion_id, campaign_criterion.type, campaign_criterion.negative, campaign_criterion.status, campaign_criterion.location.geo_target_constant, campaign_criterion.language.language_constant, campaign_criterion.ad_schedule.day_of_week, campaign_criterion.ad_schedule.start_hour, campaign_criterion.ad_schedule.start_minute, campaign_criterion.ad_schedule.end_hour, campaign_criterion.ad_schedule.end_minute FROM campaign_criterion WHERE campaign.id = {TARGET} AND campaign_criterion.status != 'REMOVED' ORDER BY campaign_criterion.type, campaign_criterion.criterion_id''')
+          q('CAMPAIGN_SETTINGS',f'''SELECT campaign.id, campaign.status, campaign.serving_status, campaign.primary_status, campaign.advertising_channel_type, campaign.network_settings.target_google_search, campaign.network_settings.target_search_network, campaign.network_settings.target_content_network, campaign.network_settings.target_partner_search_network, campaign.geo_target_type_setting.positive_geo_target_type, campaign.geo_target_type_setting.negative_geo_target_type FROM campaign WHERE campaign.id = {target}''')
+          q('CAMPAIGN_CRITERIA',f'''SELECT campaign_criterion.criterion_id, campaign_criterion.type, campaign_criterion.negative, campaign_criterion.status, campaign_criterion.location.geo_target_constant, campaign_criterion.language.language_constant, campaign_criterion.ad_schedule.day_of_week, campaign_criterion.ad_schedule.start_hour, campaign_criterion.ad_schedule.start_minute, campaign_criterion.ad_schedule.end_hour, campaign_criterion.ad_schedule.end_minute FROM campaign_criterion WHERE campaign.id = {target} AND campaign_criterion.status != 'REMOVED' ORDER BY campaign_criterion.type, campaign_criterion.criterion_id''')
           print('TARGETING_DIAGNOSTIC_COMPLETE')
           PY
 
