@@ -2,6 +2,7 @@ DEPLOY_PATH=/home/ubuntu/shopvivaliz-deploy/current
 DEPLOY_SHA=
 PHP=8.3.6
 HOME_HTTP=ERROR
-CATALOGO_HTTP=ERROR
+CATALOGO_HTTP=200
+HTTP_DETAIL=https://shopvivaliz.com.br/catalogo|HTTP=200|FINAL=https://shopvivaliz.com.br/catalogo/|TIME=11.203460
 ANTIQUE_HTTP=ERROR
 DECORE_HTTP=ERROR

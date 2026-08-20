@@ -35,22 +35,14 @@ see /var/log/unattended-upgrades/unattended-upgrades.log
 *** System restart required ***
 From https://github.com/fredmourao-ai/mei-mg-email
  * branch            main       -> FETCH_HEAD
-CHECK_BRT=2026-08-20T20:26:13-0300
+   9c4053a..5005bee  main       -> origin/main
+CHECK_BRT=2026-08-20T20:40:41-0300
 SENTINEL_BEFORE=absent
 AS42004_LAST30M=0
-APPLY_V037_BEGIN
+APPLY_V045_HOTFIX_BEGIN
 SET
-UPDATE 0
-UPDATE 0
-UPDATE 0
-APPLY_V037_OK=true
-APPLY_V038_BEGIN
-SET
-UPDATE 0
-DO
 CREATE FUNCTION
-DROP TRIGGER
-CREATE TRIGGER
-UPDATE 0
-CREATE FUNCTION
-psql:<stdin>:131: ERROR:  canceling statement due to lock timeout
+COMMENT
+APPLY_V045_HOTFIX_OK=true
+Job for mei-mg-email-worker.service failed because the control process exited with error code.
+See "systemctl status mei-mg-email-worker.service" and "journalctl -xeu mei-mg-email-worker.service" for details.
