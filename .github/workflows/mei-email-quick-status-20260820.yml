@@ -43,9 +43,12 @@ jobs:
           echo 'GUARD_PS_BEGIN'
           ps -eo pid=,etime=,args= | grep -F runtime_sender_guard.py | grep -v grep || true
           echo 'GUARD_PS_END'
+          echo 'WORKER_JOURNAL_BEGIN'
+          sudo journalctl -u mei-mg-email-worker.service --since '-6 minutes' --no-pager | tail -n 140 || true
+          echo 'WORKER_JOURNAL_END'
           EOF
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
 
-# recheck after batched runtime guard deploy 2026-08-20T04:33Z
+# inspect worker guard restart loop 2026-08-20T04:34Z
