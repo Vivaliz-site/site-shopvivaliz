@@ -8,6 +8,7 @@ on:
       - ".github/workflows/google-ads-antique-decore-status.yml"
       - "scripts/google_ads_antique_decore_status.py"
       - "scripts/google_ads_antique_decore_status_v2.py"
+      - "scripts/google_ads_antique_decore_status_v3.py"
       - "scripts/google_ads_antique_decore_automation.py"
       - "scripts/google_ads_campaign_live_ready.json"
   schedule:
@@ -43,14 +44,14 @@ jobs:
           set -Eeuo pipefail
           python3 -m pip install --disable-pip-version-check google-ads
 
-      - name: Enforce expansion-aware live campaign guardrails
+      - name: Enforce retry-safe expansion-aware live campaign guardrails
         shell: bash
         run: |
           set -Eeuo pipefail
           mkdir -p artifacts/google-ads-antique-decore-status
           {
             printf 'checked_at_utc=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-            python3 scripts/google_ads_antique_decore_status_v2.py
+            python3 scripts/google_ads_antique_decore_status_v3.py
           } 2>&1 | tee artifacts/google-ads-antique-decore-status/live-watch.txt
 
       - name: Upload immutable live-watch evidence
