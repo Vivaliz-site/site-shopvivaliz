@@ -1,0 +1,103 @@
+name: Terminal Final Readonly 20260820 1149
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tmp-terminal-final-readonly-20260820-1149.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Read-only production validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          R=reports/terminal-final-readonly-20260820-1149.txt
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'REMOTE' > "$R"
+          set -u
+          echo REMOTE_HOSTNAME=$(hostname)
+          echo REMOTE_USER=$(whoami)
+          P=/home/ubuntu/shopvivaliz-deploy/current
+          if [ -d "$P" ]; then echo DEPLOY_OK=YES; else echo DEPLOY_OK=NO; fi
+          echo DEPLOY_PATH=$P
+          sha=""
+          status=/home/ubuntu/shopvivaliz-deploy/shared/logs/deploy-status.json
+          if [ -r "$status" ]; then
+            sha=$(python3 - "$status" <<'PY'
+import json,sys
+try:
+    with open(sys.argv[1], encoding='utf-8') as f:
+        d=json.load(f)
+    v=str(d.get('release_sha') or '').strip()
+    print(v if v and v.lower()!='null' else '')
+except Exception:
+    print('')
+PY
+)
+          fi
+          if [ -z "$sha" ]; then
+            target=$(readlink -f "$P" 2>/dev/null || true)
+            base=$(basename "$target" 2>/dev/null || true)
+            case "$base" in
+              [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]*) sha="$base" ;;
+            esac
+          fi
+          if [ -z "$sha" ] && [ -d /home/ubuntu/shopvivaliz-deploy/repo/.git ]; then
+            sha=$(git -C /home/ubuntu/shopvivaliz-deploy/repo rev-parse HEAD 2>/dev/null || true)
+          fi
+          echo DEPLOY_SHA=$sha
+          phpv=$(php -r 'echo PHP_VERSION;' 2>/dev/null || true)
+          echo PHP=$phpv
+          gitv=$(git --version 2>/dev/null || true)
+          echo GIT=$gitv
+          probe(){
+            u="$1"
+            curl -L -sS -o /dev/null --connect-timeout 10 --max-time 30 -w "HTTP|$u|%{http_code}|%{url_effective}|%{time_total}\n" "$u" 2>/dev/null || echo "HTTP|$u|ERROR||"
+          }
+          probe 'https://shopvivaliz.com.br/'
+          probe 'https://shopvivaliz.com.br/catalogo'
+          probe 'https://shopvivaliz.com.br/catalogo?q=antique'
+          probe 'https://shopvivaliz.com.br/catalogo?q=decore'
+          h=$(curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5557/health 2>/dev/null || true)
+          if printf '%s' "$h" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"' && printf '%s' "$h" | grep -q '"environment"[[:space:]]*:[[:space:]]*"fred-win"'; then
+            echo TUNNEL=READY
+          else
+            echo TUNNEL=ERROR
+          fi
+          REMOTE
+          cat "$R"
+      - name: Persist sanitized report
+        if: always()
+        run: |
+          set -euo pipefail
+          R=reports/terminal-final-readonly-20260820-1149.txt
+          test -f "$R" || printf '%s\n' 'VALIDATION_ERROR=workflow ended before report' > "$R"
+          git config user.name shopvivaliz-ops-bot
+          git config user.email ops@shopvivaliz.local
+          git add "$R"
+          if ! git diff --cached --quiet; then
+            git commit -m 'ops: record final sanitized terminal validation'
+            git push origin HEAD:main
+          fi
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

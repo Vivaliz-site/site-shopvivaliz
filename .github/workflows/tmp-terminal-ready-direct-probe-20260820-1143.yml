@@ -8,7 +8,7 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 7
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,28 +22,31 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
       - name: Probe production metadata
+        shell: bash
         run: |
-          set -euo pipefail
+          set -o pipefail
           mkdir -p reports
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'EOF' | tee reports/terminal-ready-direct-probe-20260820-1143.txt
-          set -euo pipefail
+          REPORT=reports/terminal-ready-direct-probe-20260820-1143.txt
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'EOF' | tee "$REPORT"
+          set -u
           p=/home/ubuntu/shopvivaliz-deploy/current
           echo REMOTE_HOSTNAME=$(hostname)
           echo REMOTE_USER=$(whoami)
-          if [ -d "$p" ]; then echo DEPLOY_OK; else echo DEPLOY_NOT_FOUND; exit 2; fi
-          r=$(readlink -f "$p")
+          if [ -d "$p" ]; then echo DEPLOY_OK; else echo DEPLOY_NOT_FOUND; fi
+          r=$(readlink -f "$p" 2>/dev/null || true)
           echo REALPATH=$r
-          echo GIT=$(git --version | head -n1)
+          echo GIT=$(git --version 2>/dev/null | head -n1 || true)
           sha=''
-          if git -C "$p" rev-parse HEAD >/dev/null 2>&1; then sha=$(git -C "$p" rev-parse HEAD); fi
+          if git -C "$p" rev-parse HEAD >/dev/null 2>&1; then sha=$(git -C "$p" rev-parse HEAD 2>/dev/null || true); fi
           if [ -z "$sha" ]; then
             for f in "$p/.deploy-sha" "$p/DEPLOY_SHA" "$p/REVISION" "$p/revision.txt" "$r/.deploy-sha" "$r/DEPLOY_SHA" "$r/REVISION" "$r/revision.txt"; do
               if [ -f "$f" ]; then sha=$(head -n1 "$f" | tr -cd '0-9a-fA-F' | cut -c1-40); [ -n "$sha" ] && break; fi
             done
           fi
-          if [ -z "$sha" ]; then
+          if [ -z "$sha" ] && [ -n "$r" ]; then
             b=$(basename "$r")
-            sha=$(printf '%s' "$b" | grep -Eo '[0-9a-fA-F]{7,40}' | head -n1 || true)
+            candidate=$(printf '%s' "$b" | cut -d- -f3-)
+            if printf '%s' "$candidate" | grep -Eq '^[0-9a-fA-F]{7,40}$'; then sha=$candidate; fi
           fi
           [ -n "$sha" ] || sha=UNKNOWN
           echo DEPLOY_SHA=$sha
@@ -51,13 +54,18 @@ jobs:
           [ -n "$phpv" ] || phpv=unavailable
           echo PHP=$phpv
           for u in 'https://shopvivaliz.com.br/' 'https://shopvivaliz.com.br/catalogo' 'https://shopvivaliz.com.br/catalogo?q=antique' 'https://shopvivaliz.com.br/catalogo?q=decore'; do
-            out=$(curl -L -sS -o /dev/null --connect-timeout 10 --max-time 30 -w '%{http_code}|%{url_effective}|%{time_total}' "$u")
+            out=$(curl --http1.1 -L -sS -o /dev/null --retry 2 --retry-delay 1 --connect-timeout 10 --max-time 35 -w '%{http_code}|%{url_effective}|%{time_total}' "$u" 2>/dev/null || true)
+            [ -n "$out" ] || out='ERROR||'
             echo HTTP\|$u\|$out
           done
           EOF
+          true
       - name: Persist sanitized report
+        if: always()
         run: |
           set -euo pipefail
+          mkdir -p reports
+          test -f reports/terminal-ready-direct-probe-20260820-1143.txt || printf '%s\n' 'REMOTE_HOSTNAME=' 'REMOTE_USER=' 'DEPLOY_NOT_FOUND' 'DEPLOY_SHA=UNKNOWN' 'PHP=unavailable' > reports/terminal-ready-direct-probe-20260820-1143.txt
           git config user.name 'shopvivaliz-ops-bot'
           git config user.email 'ops@shopvivaliz.local'
           git add reports/terminal-ready-direct-probe-20260820-1143.txt
