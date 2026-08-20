@@ -1,0 +1,37 @@
+name: MEI Email Worker Block Diagnose 20260820 0931
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-mei-email-worker-block-diagnose-20260820-0931.yml']
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH
+        env:
+          VM_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+      - name: Read worker and queue state
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+          echo PID=$(sudo systemctl show -p MainPID --value mei-mg-email-worker.service 2>/dev/null || true)
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then echo SENTINEL=present; else echo SENTINEL=absent; fi
+          echo '---QUEUE---'
+          sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -P pager=off -c "select status::text,count(*) from mei_email.envios group by 1 order by 1;"
+          echo '---LATEST LOTS---'
+          sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -P pager=off -c "select id,campanha_id,numero,status,tamanho,erro from mei_email.lotes order by id desc limit 8;"
+          echo '---LATEST CAMPAIGNS---'
+          sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -P pager=off -c "select id,nome,status,total_empresas,total_enviados,total_falhas from mei_email.campanhas order by id desc limit 5;"
+          echo '---JOURNAL---'
+          sudo journalctl -u mei-mg-email-worker.service --since '-12 minutes' --no-pager -n 220 || true
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa
