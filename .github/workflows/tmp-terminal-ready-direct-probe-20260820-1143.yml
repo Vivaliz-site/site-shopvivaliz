@@ -43,9 +43,10 @@ jobs:
               if [ -f "$f" ]; then sha=$(head -n1 "$f" | tr -cd '0-9a-fA-F' | cut -c1-40); [ -n "$sha" ] && break; fi
             done
           fi
-          if [ -z "$sha" ]; then
-            b=$(basename "$r" 2>/dev/null || true)
-            sha=$(printf '%s' "$b" | grep -Eo '[0-9a-fA-F]{7,40}' | head -n1 || true)
+          if [ -z "$sha" ] && [ -n "$r" ]; then
+            b=$(basename "$r")
+            candidate=$(printf '%s' "$b" | cut -d- -f3-)
+            if printf '%s' "$candidate" | grep -Eq '^[0-9a-fA-F]{7,40}$'; then sha=$candidate; fi
           fi
           [ -n "$sha" ] || sha=UNKNOWN
           echo DEPLOY_SHA=$sha
