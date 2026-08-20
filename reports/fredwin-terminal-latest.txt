@@ -1,2 +1,10 @@
-FREDWIN_SUCCESS=false
+FREDWIN_SUCCESS=true
+FREDWIN_HOST=LAPTOP-NIG4IFUU
+SSH_PATH=C:\Windows\System32\OpenSSH\ssh.exe
+REMOTE_HOST=shopvivaliz-ai
+REMOTE_USER=ubuntu
+DEPLOY=OK
+RELEASE=/home/ubuntu/shopvivaliz-deploy/releases/20260819-181211-738de687
+PHP=8.3.6
+SSH_RC=0
 
