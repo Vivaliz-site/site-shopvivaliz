@@ -16,27 +16,44 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-      - name: Verify sending without interrupting worker
+      - name: Assert live sending and 15min supervision
         run: |
           ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF'
           set -euo pipefail
           cd /home/ubuntu/mei-mg-email
-          echo CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)
-          echo WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
-          echo WORKER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)
-          echo PID=$(sudo systemctl show -p MainPID --value mei-mg-email-worker.service 2>/dev/null || true)
-          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then echo SENTINEL=present; else echo SENTINEL=absent; fi
-          echo AUTOREPAIR_TIMER=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || true)
-          echo AUTOREPAIR_ENABLED=$(sudo systemctl is-enabled mei-mg-email-autorepair.timer 2>/dev/null || true)
-          echo AUTOREPAIR_SERVICE=$(sudo systemctl is-active mei-mg-email-autorepair.service 2>/dev/null || true)
-          sudo systemctl list-timers mei-mg-email-autorepair.timer --no-pager || true
-          echo '---THROUGHPUT---'
-          sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select 'sent15='||count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '15 minutes'; select 'sent24='||count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours'; select 'pending='||count(*) from mei_email.envios where status::text in ('pendente','pending','enviando','processing'); select 'latest='||coalesce(max(enviado_em)::text,'none') from mei_email.envios where status::text in ('submitted','enviado');"
-          echo '---MICROSOFT_BLOCK---'
+          worker=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+          enabled=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)
+          timer=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || true)
+          timer_enabled=$(sudo systemctl is-enabled mei-mg-email-autorepair.timer 2>/dev/null || true)
+          sentinel=absent
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then sentinel=present; fi
+          sent15=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '15 minutes';")
+          sent24=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours';")
+          pending=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select count(*) from mei_email.envios where status::text in ('pendente','pending','enviando','processing');")
+          latest=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select coalesce(max(enviado_em)::text,'none') from mei_email.envios where status::text in ('submitted','enviado');")
           asn=$(sudo journalctl -u mei-mg-email-worker.service --since '-15 minutes' --no-pager | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8' || true)
+          echo CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)
+          echo WORKER=$worker
+          echo WORKER_ENABLED=$enabled
+          echo AUTOREPAIR_TIMER=$timer
+          echo AUTOREPAIR_ENABLED=$timer_enabled
+          echo SENTINEL=$sentinel
+          echo SENT15=$sent15
+          echo SENT24=$sent24
+          echo PENDING=$pending
+          echo LATEST=$latest
           echo AS42004_LAST15M=$asn
-          echo '---JOURNAL_TAIL---'
-          sudo journalctl -u mei-mg-email-worker.service --since '-5 minutes' --no-pager -n 80 || true
+          sudo systemctl list-timers mei-mg-email-autorepair.timer --no-pager || true
+          test "$worker" = active
+          test "$enabled" = enabled
+          test "$timer" = active
+          test "$timer_enabled" = enabled
+          test "$sentinel" = absent
+          test "$sent15" -gt 0
+          test "$pending" -gt 0
+          test "$sent24" -lt 10000
+          test "$asn" -eq 0
+          echo LIVE_SEND_GATE=PASS
           EOF
       - name: Cleanup
         if: always()
