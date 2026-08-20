@@ -6,7 +6,7 @@ on:
 jobs:
   hotfix:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 8
     steps:
       - name: Configure SSH
         env:
@@ -16,7 +16,7 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-      - name: Reopen all lots with pending recipients and prove progress
+      - name: Purge prohibited pending rows and prove dispatch
         run: |
           ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF'
           set -Eeuo pipefail
@@ -28,8 +28,55 @@ jobs:
           git reset --hard origin/main
           echo EMAIL_HEAD=$(git rev-parse HEAD)
           .venv/bin/python -m py_compile worker/safe_entrypoint.py worker/safe_entrypoint_v2.py worker/worker_queue_first.py
-          reopened=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "with u as (update mei_email.lotes l set status='pendente', iniciado_em=null, concluido_em=null, erro='reaberto: possui destinatarios pendentes' where exists (select 1 from mei_email.envios e where e.lote_id=l.id and e.status::text in ('pendente','pending')) returning 1) select count(*) from u;")
+
+          blocked=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -v ON_ERROR_STOP=1 -c "
+            with bad as (
+              select e.id,
+                     case
+                       when emp.situacao_cadastral <> 'ATIVA' then 'empresa inativa'
+                       when emp.opt_out then 'opt-out ativo'
+                       when not emp.marketing_autorizado or nullif(btrim(coalesce(emp.marketing_autorizado_origem,'')),'') is null then 'marketing sem autorizacao auditavel'
+                       when not mei_email.is_valid_email_address(e.email) then 'email invalido'
+                       when position('contabil' in lower(btrim(e.email::text))) > 0 then 'email contem palavra contabil'
+                       when (select count(distinct c2.cnpj) from mei_email.empresas c2 where c2.email=e.email) > 2 then 'email vinculado a mais de 2 cadastros'
+                       when exists (
+                         select 1 from mei_email.email_suppressions s
+                          where s.active
+                            and ((s.scope='email' and s.value=lower(btrim(e.email::text))::public.citext)
+                              or (s.scope='domain' and s.value=split_part(lower(btrim(e.email::text)),'@',2)::public.citext)
+                              or (s.scope='cnpj' and s.value=upper(btrim(e.cnpj::text))::public.citext))
+                            and (lower(coalesce(s.reason,'')) in ('opt_out','hard_bounce','filter_email_invalid','sent')
+                              or lower(coalesce(s.reason,'')) like '%bounce%'
+                              or lower(coalesce(s.reason,'')) like '%complaint%'
+                              or lower(coalesce(s.reason,'')) like '%spam%'
+                              or lower(coalesce(s.reason,'')) like '%abuse%')
+                       ) then 'bounce/reclamacao/opt-out/supressao protegida'
+                       when exists (
+                         select 1 from mei_email.envios h
+                          where h.id<>e.id
+                            and lower(btrim(h.email::text))=lower(btrim(e.email::text))
+                            and h.status::text in ('submitted','enviado','delivered','bounced','bounce_permanent')
+                       ) then 'destinatario ja submetido/entregue'
+                       else null
+                     end as motivo
+                from mei_email.envios e
+                join mei_email.empresas emp on emp.cnpj=e.cnpj
+               where e.status::text in ('pendente','pending')
+            ), u as (
+              update mei_email.envios e
+                 set status='bloqueado', erro='pre-send bulk guard: '||bad.motivo
+                from bad
+               where e.id=bad.id and bad.motivo is not null
+              returning 1
+            ) select count(*) from u;")
+          echo BLOCKED_PROHIBITED=$blocked
+
+          reopened=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -v ON_ERROR_STOP=1 -c "with u as (update mei_email.lotes l set status='pendente', iniciado_em=null, concluido_em=null, erro='reaberto: possui destinatarios elegiveis pendentes' where exists (select 1 from mei_email.envios e where e.lote_id=l.id and e.status::text in ('pendente','pending')) returning 1) select count(*) from u;")
+          remaining=$(sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select count(*) from mei_email.envios where status::text in ('pendente','pending');")
           echo LOTS_REOPENED=$reopened
+          echo PENDING_SAFE_REMAINING=$remaining
+          if [ "$remaining" -le 0 ]; then echo NO_SAFE_PENDING_RECIPIENTS; exit 56; fi
+
           sudo systemctl reset-failed mei-mg-email-worker.service || true
           sudo systemctl start mei-mg-email-worker.service
           sleep 12
