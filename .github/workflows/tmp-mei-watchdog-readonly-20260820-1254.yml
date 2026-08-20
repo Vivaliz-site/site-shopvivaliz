@@ -1,0 +1,86 @@
+name: MEI Watchdog Readonly 20260820 1254
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-mei-watchdog-readonly-20260820-1254.yml']
+permissions:
+  contents: read
+  issues: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Configure verified SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY" && test -n "$VM_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+      - name: Read only
+        id: collect
+        continue-on-error: true
+        run: |
+          set -u
+          : >/tmp/mei-watchdog-1254.txt
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=12 -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 <<'EOF' >>/tmp/mei-watchdog-1254.txt 2>&1
+          cd /home/ubuntu/mei-mg-email || exit 2
+          echo CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)
+          echo WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+          echo ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)
+          echo NDR=$(sudo systemctl is-active mei-mg-email-ndr-guard.service 2>/dev/null || true)
+          echo AUTOREPAIR=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || true)
+          sudo systemctl show mei-mg-email-worker.service -p Restart -p RestartUSec -p StartLimitIntervalUSec -p ExecStart --no-pager | sed 's/^/SYSTEMD_/'
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then echo SENTINEL=present; else echo SENTINEL=absent; fi
+          echo DNS_GRAPH=$(getent hosts graph.microsoft.com >/dev/null 2>&1 && echo ok || echo failed)
+          set -a; . ./.env >/dev/null 2>&1 || true; set +a
+          timeout 30 .venv/bin/python - <<'PY'
+from app.email_provider import MicrosoftGraphEmailProvider
+try:
+    p=MicrosoftGraphEmailProvider(); p.authenticate(); print('GRAPH_AUTH=ok')
+except Exception as e:
+    print('GRAPH_AUTH=failed:'+type(e).__name__)
+PY
+          q(){ sudo docker exec mei-mg-email-db psql -X -U postgres -d mei_mg_email -At -v ON_ERROR_STOP=1 -c "set statement_timeout='20s'; $1"; }
+          echo DB_READY=$(sudo docker exec mei-mg-email-db pg_isready -U postgres -d mei_mg_email 2>/dev/null | grep -c 'accepting connections' || true)
+          echo OPEN=$(q "select count(*) from mei_email.envios where status::text in ('pendente','pending','enviando','processing');" 2>/dev/null || echo error)
+          echo OPEN_PENDING_LOT=$(q "select count(*) from mei_email.envios e join mei_email.lotes l on l.id=e.lote_id where e.status::text in ('pendente','pending') and l.status::text in ('pendente','pending');" 2>/dev/null || echo error)
+          echo OPEN_NONPENDING_LOT=$(q "select count(*) from mei_email.envios e join mei_email.lotes l on l.id=e.lote_id where e.status::text in ('pendente','pending') and l.status::text not in ('pendente','pending');" 2>/dev/null || echo error)
+          echo OPEN_REPLAY=$(q "select count(*) from mei_email.envios x where x.status::text in ('pendente','pending','enviando','processing') and exists(select 1 from mei_email.envios h where h.id<>x.id and lower(btrim(h.email::text))=lower(btrim(x.email::text)) and h.status::text in ('submitted','enviado','delivered','bounced','bounce_permanent'));" 2>/dev/null || echo error)
+          echo OPEN_SYNTH=$(q "select count(*) from mei_email.envios x join mei_email.empresas e on e.cnpj=x.cnpj where x.status::text in ('pendente','pending','enviando','processing') and (btrim(coalesce(e.marketing_autorizado_origem,''))='user_explicit_authorization_2026-08-20' or lower(btrim(coalesce(e.marketing_autorizado_origem,''))) like '%operator_authorization_true%');" 2>/dev/null || echo error)
+          echo OPEN_SUPPRESSED=$(q "select count(*) from mei_email.envios x where x.status::text in ('pendente','pending','enviando','processing') and mei_email.is_email_suppressed(x.email);" 2>/dev/null || echo error)
+          echo ELIGIBLE_UNQUEUED=$(q "select count(*) from mei_email.vw_empresas_elegiveis;" 2>/dev/null || echo error)
+          echo SENT24=$(q "select count(*) from mei_email.envios where status::text in ('submitted','enviado','delivered') and enviado_em>=now()-interval '24 hours';" 2>/dev/null || echo error)
+          echo LATEST=$(q "select coalesce(max(enviado_em)::text,'none') from mei_email.envios where status::text in ('submitted','enviado','delivered');" 2>/dev/null || echo error)
+          echo ORPHAN_ENVIOS=$(q "select count(*) from mei_email.envios e left join mei_email.lotes l on l.id=e.lote_id left join mei_email.campanhas c on c.id=e.campanha_id where l.id is null or c.id is null;" 2>/dev/null || echo error)
+          echo ORPHAN_LOTS=$(q "select count(*) from mei_email.lotes l where l.status::text in ('processando','processing') and not exists(select 1 from mei_email.envios e where e.lote_id=l.id and e.status::text in ('pendente','enviando','pending','processing'));" 2>/dev/null || echo error)
+          echo STALE_LOCK_WAITERS=$(q "select count(*) from pg_stat_activity where pid<>pg_backend_pid() and wait_event_type='Lock' and state='active' and now()-query_start>interval '5 minutes';" 2>/dev/null || echo error)
+          echo LONG_TX=$(q "select count(*) from pg_stat_activity where pid<>pg_backend_pid() and xact_start is not null and now()-xact_start>interval '10 minutes' and coalesce(query,'') ilike '%mei_email%';" 2>/dev/null || echo error)
+          echo ADVISORY_LOCKS=$(q "select count(*) from pg_locks where locktype='advisory';" 2>/dev/null || echo error)
+          echo FLYWAY_MAX=$(q "select coalesce(max(installed_rank),0) from mei_email.flyway_schema_history;" 2>/dev/null || echo error)
+          echo FLYWAY_37_38=$(q "select count(*) from mei_email.flyway_schema_history where version in ('37','38') and success;" 2>/dev/null || echo error)
+          echo FLYWAY_FAILED=$(q "select count(*) from mei_email.flyway_schema_history where success=false;" 2>/dev/null || echo error)
+          echo GUARD_TRIGGERS=$(q "select count(*) from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where not t.tgisinternal and n.nspname='mei_email' and t.tgname in ('trg_campaign_copy_policy','trg_envio_live_eligibility');" 2>/dev/null || echo error)
+          echo LEGACY_COPY=$(q "select count(*) from mei_email.campanhas where lower(coalesce(corpo_template,'')) like '%base pública de cnpj%' or lower(coalesce(corpo_template,'')) like '%base publica de cnpj%';" 2>/dev/null || echo error)
+          echo AS42004=$(sudo journalctl -u mei-mg-email-worker.service --since '-30 minutes' --no-pager | grep -Eic 'AS\(42004\)|bad outbound sender|restricted sender|5\.1\.8' || true)
+          echo JOURNAL_BEGIN
+          sudo journalctl -u mei-mg-email-worker.service --since '-15 minutes' --no-pager | grep -Eai 'PRESEND_REJECT|AUTOQUEUE|timeout|429|throttl|quota|AS\(42004\)|bad outbound sender|5\.1\.8|ERROR|CRITICAL' | tail -n 80 || true
+          echo JOURNAL_END
+          EOF
+          rc=$?; echo SSH_EXIT=$rc >>/tmp/mei-watchdog-1254.txt; exit "$rc"
+      - name: Publish
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUTCOME: ${{ steps.collect.outcome }}
+        run: |
+          test -s /tmp/mei-watchdog-1254.txt || echo PROBE_OUTPUT=missing >/tmp/mei-watchdog-1254.txt
+          { echo "OUTCOME=$OUTCOME"; echo '```text'; cat /tmp/mei-watchdog-1254.txt; echo '```'; } >/tmp/body.md
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "MEI WATCHDOG READONLY 1254 ${GITHUB_RUN_ID}" --body-file /tmp/body.md
+      - if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
