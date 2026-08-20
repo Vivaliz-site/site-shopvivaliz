@@ -1,0 +1,11 @@
+REMOTE_HOSTNAME=shopvivaliz-ai
+REMOTE_USER=ubuntu
+DEPLOY_OK
+REALPATH=/home/ubuntu/shopvivaliz-deploy/releases/20260819-181211-738de687
+GIT=git version 2.43.0
+DEPLOY_SHA=20260819
+PHP=8.3.6
+HTTP|https://shopvivaliz.com.br/|000|https://shopvivaliz.com.br/|35.002430
+HTTP|https://shopvivaliz.com.br/catalogo|000|https://shopvivaliz.com.br/catalogo|35.093511
+HTTP|https://shopvivaliz.com.br/catalogo?q=antique|000|https://shopvivaliz.com.br/catalogo?q=antique|35.074162
+HTTP|https://shopvivaliz.com.br/catalogo?q=decore|200|https://shopvivaliz.com.br/catalogo/?q=decore|5.272546
