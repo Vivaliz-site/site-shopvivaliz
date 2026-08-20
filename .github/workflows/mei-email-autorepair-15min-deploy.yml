@@ -41,7 +41,7 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Install bounded nonstop worker and 15min autorepair timer
+      - name: Install bounded nonstop worker and non-disruptive 15min supervisor
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -60,19 +60,20 @@ jobs:
           git fetch origin main
           echo "ORIGIN_MAIN=$(git rev-parse origin/main)"
 
-          # Production has an intentional local docker-compose shm_size drift.
-          # Do not overwrite unrelated VM state just to deploy sender runtime files.
-          # Copy only the reviewed, tested runtime/unit files from origin/main.
+          # Preserve unrelated local VM drift such as docker-compose shm_size.
+          # Deploy only reviewed runtime and systemd files from sender main.
           git checkout origin/main -- \
             deploy/systemd/mei-mg-email-worker.service \
             deploy/systemd/mei-mg-email-autorepair.service \
             deploy/systemd/mei-mg-email-autorepair.timer \
             scripts/runtime_sender_preflight.py \
+            scripts/nonstop_supervisor_15m.py \
             worker/safe_entrypoint.py \
             worker/safe_entrypoint_v2.py
 
           .venv/bin/python -m py_compile \
             scripts/runtime_sender_preflight.py \
+            scripts/nonstop_supervisor_15m.py \
             worker/safe_entrypoint.py \
             worker/safe_entrypoint_v2.py
           grep -q '^OnUnitActiveSec=15min$' deploy/systemd/mei-mg-email-autorepair.timer
@@ -82,6 +83,7 @@ jobs:
           grep -q '^TimeoutStartSec=30$' deploy/systemd/mei-mg-email-worker.service
           grep -q '^ExecStartPre=.*/scripts/runtime_sender_preflight.py$' deploy/systemd/mei-mg-email-worker.service
           grep -q '^ExecStart=.*/python -m worker.safe_entrypoint_v2$' deploy/systemd/mei-mg-email-worker.service
+          grep -q '^ExecStart=.*/scripts/nonstop_supervisor_15m.py$' deploy/systemd/mei-mg-email-autorepair.service
 
           sudo install -m 0644 deploy/systemd/mei-mg-email-worker.service /etc/systemd/system/mei-mg-email-worker.service
           sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service /etc/systemd/system/mei-mg-email-autorepair.service
@@ -123,8 +125,9 @@ jobs:
           sudo systemctl show mei-mg-email-worker.service \
             -p ActiveState -p SubState -p MainPID -p ExecStart -p ExecStartPre \
             -p Restart -p RestartUSec -p StartLimitIntervalUSec --no-pager
+          sudo systemctl cat mei-mg-email-autorepair.service --no-pager
           sudo journalctl -u mei-mg-email-worker.service --since '-5 minutes' --no-pager | tail -n 120 || true
-          echo 'NONSTOP_SAFE_ENTRYPOINT_INSTALLED=true'
+          echo 'NONSTOP_SAFE_ENTRYPOINT_AND_SUPERVISOR_INSTALLED=true'
           EOF
 
       - name: Upload evidence
@@ -141,4 +144,4 @@ jobs:
         shell: bash
         run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-# deploy bounded safe entrypoint 2026-08-20T04:56Z
+# deploy non-disruptive 15min supervisor 2026-08-20T05:01Z
