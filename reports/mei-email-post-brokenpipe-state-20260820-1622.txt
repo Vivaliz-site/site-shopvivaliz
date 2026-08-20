@@ -1,16 +1,16 @@
-CHECK_BRT=2026-08-20T17:21:53-0300
+CHECK_BRT=2026-08-20T19:24:39-0300
 WORKER_BEFORE=active
 WORKER_ENABLED_BEFORE=enabled
 SENTINEL=absent
 AS42004_LAST30M=0
 Restart=always
 RestartUSec=5s
-ExecStartPre={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubuntu/mei-mg-email/.venv/bin/python /home/ubuntu/mei-mg-email/scripts/runtime_sender_preflight.py ; ignore_errors=no ; start_time=[Thu 2026-08-20 17:19:31 -03] ; stop_time=[Thu 2026-08-20 17:19:39 -03] ; pid=3091005 ; code=exited ; status=0 }
-ExecStart={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubuntu/mei-mg-email/.venv/bin/python -m worker.safe_entrypoint_v2 ; ignore_errors=no ; start_time=[Thu 2026-08-20 17:19:39 -03] ; stop_time=[n/a] ; pid=3091202 ; code=(null) ; status=0/0 }
+ExecStartPre={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubuntu/mei-mg-email/.venv/bin/python /home/ubuntu/mei-mg-email/scripts/runtime_sender_preflight.py ; ignore_errors=no ; start_time=[Thu 2026-08-20 17:46:24 -03] ; stop_time=[Thu 2026-08-20 17:46:29 -03] ; pid=3106162 ; code=exited ; status=0 }
+ExecStart={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubuntu/mei-mg-email/.venv/bin/python -m worker.safe_entrypoint_v2 ; ignore_errors=no ; start_time=[Thu 2026-08-20 17:46:29 -03] ; stop_time=[n/a] ; pid=3106175 ; code=(null) ; status=0/0 }
 StartLimitIntervalUSec=0
 DB_CONTAINER=running
-DB_READY=/var/run/postgresql:5432 - no response
-DNS_GRAPH=40.126.17.43
+DB_READY=/var/run/postgresql:5432 - accepting connections
+DNS_GRAPH=40.126.45.26
 HTTPS_GRAPH=200
 Traceback (most recent call last):
   File "<string>", line 1, in <module>
@@ -21,3 +21,9 @@ SENT24=266
 SENT10=0
 LAST_SENT=2026-08-20 15:02:28.80715-03
 OPEN_TOTAL=0
+STRICT_ELIGIBLE=QUERY_ERROR
+OPEN_REPLAY=0
+ORPHAN_ENVIOS=0
+ADVISORY_LOCKS=2
+LOCK_WAITERS=0
+LONG_ACTIVE=0
