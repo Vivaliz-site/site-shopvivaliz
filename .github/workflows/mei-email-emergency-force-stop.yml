@@ -73,3 +73,4 @@ jobs:
         run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
 # freeze reason: Flyway history divergence could replay legacy authorization migrations
+# retrigger freeze: 2026-08-20T01:45Z
