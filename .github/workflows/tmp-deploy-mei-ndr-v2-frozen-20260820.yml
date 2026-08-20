@@ -1,0 +1,105 @@
+name: Deploy MEI NDR Guard V2 While Sender Frozen
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tmp-deploy-mei-ndr-v2-frozen-20260820.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mei-email-production-start
+  cancel-in-progress: false
+
+jobs:
+  deploy-ndr-v2:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 10
+    env:
+      VM_HOST: 137.131.156.17
+      VM_USER: ubuntu
+    steps:
+      - name: Configure verified Oracle SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::Oracle SSH key missing'; exit 2; }
+          test -n "$known_hosts" || { echo '::error::Oracle known_hosts missing'; exit 2; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Keep sender frozen and deploy retention-aware NDR guard only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 \
+            -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF'
+          set -Eeuo pipefail
+          APP_DIR=/home/ubuntu/mei-mg-email
+          cd "$APP_DIR"
+
+          sudo systemctl stop mei-mg-email-autorepair.timer mei-mg-email-autorepair.service
+          sudo systemctl disable mei-mg-email-autorepair.timer
+          sudo systemctl stop mei-mg-email-worker.service
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then
+            echo '::error::bulk worker unexpectedly active'
+            exit 20
+          fi
+
+          git diff --quiet
+          git diff --cached --quiet
+          git fetch origin main
+          git merge --ff-only origin/main
+
+          test -f scripts/ndr_guard_v2.py
+          grep -Fq 'envios_externos_cota' scripts/ndr_guard_v2.py
+          grep -Fq 'worker_send_success' scripts/ndr_guard_v2.py
+          grep -Fq 'ExecStart=__PYTHON__ scripts/ndr_guard_v2.py' deploy/systemd/mei-mg-email-ndr-guard.service
+          .venv/bin/python -m pytest -q tests/test_ndr_guard.py
+
+          tmp=$(mktemp)
+          sed \
+            -e "s|__APP_DIR__|$APP_DIR|g" \
+            -e 's|__RUN_USER__|ubuntu|g' \
+            -e "s|__PYTHON__|$APP_DIR/.venv/bin/python|g" \
+            deploy/systemd/mei-mg-email-ndr-guard.service > "$tmp"
+          sudo install -m 0644 "$tmp" /etc/systemd/system/mei-mg-email-ndr-guard.service
+          rm -f "$tmp"
+          sudo systemctl daemon-reload
+          sudo systemctl enable --now mei-mg-email-ndr-guard.service
+          sudo systemctl restart mei-mg-email-ndr-guard.service
+          sleep 5
+          test "$(sudo systemctl is-active mei-mg-email-ndr-guard.service)" = active
+          sudo systemctl show mei-mg-email-ndr-guard.service -p ExecStart --value | grep -Fq 'ndr_guard_v2.py'
+
+          if sudo systemctl is-active --quiet mei-mg-email-worker.service; then
+            echo '::error::bulk worker was restarted during NDR-only deploy'
+            exit 21
+          fi
+          if sudo systemctl is-enabled --quiet mei-mg-email-autorepair.timer; then
+            echo '::error::autorepair timer was unexpectedly re-enabled'
+            exit 22
+          fi
+          echo "NDR_GUARD_DEPLOYED_HEAD=$(git rev-parse HEAD)"
+          echo 'NDR_GUARD_V2_ACTIVE=true'
+          echo 'BULK_SENDER_FROZEN=true'
+          EOF
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
