@@ -1,5 +1,5 @@
 {
   "campaign_id": "24144257692",
   "action": "validate-and-recover-core",
-  "reason": "recover core only after production-egress landing validation"
+  "reason": "operator recovery after browser validation of antique and decore landings; keep Japi isolated until approved RSA; 2026-08-20T19:33:00Z"
 }
