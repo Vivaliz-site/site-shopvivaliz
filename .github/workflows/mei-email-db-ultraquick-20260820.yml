@@ -53,6 +53,7 @@ jobs:
               'SENT_24H': "select count(*) from mei_email.envios where status::text in ('submitted','enviado','delivered') and enviado_em >= now() - interval '24 hours'",
               'LEGACY_COPY_CAMPAIGNS': "select count(*) from mei_email.campanhas where corpo_template ilike '%base pública de CNPJ%'",
               'DUPLICATE_OPEN_EMAILS': "select count(*) from (select lower(btrim(email::text)) from mei_email.envios where status::text in ('pendente','enviando','pending','processing') group by 1 having count(*) > 1) d",
+              'TERMINAL_DUPLICATE_EMAILS': "select count(*) from (select lower(btrim(email::text)) from mei_email.envios where status::text in ('submitted','enviado','delivered') group by 1 having count(*) > 1) d",
               'OPEN_WITH_TERMINAL_HISTORY': "select count(*) from mei_email.envios p where p.status::text in ('pendente','enviando','pending','processing') and exists (select 1 from mei_email.envios h where h.id<>p.id and lower(btrim(h.email::text))=lower(btrim(p.email::text)) and h.status::text in ('submitted','enviado','delivered','bounced','bounce_permanent'))",
               'STUCK_LOTS_15M': "select count(*) from mei_email.lotes where status::text in ('processando','processing') and iniciado_em < now() - interval '15 minutes'",
               'ORPHAN_ENVIOS': "select count(*) from mei_email.envios e left join mei_email.campanhas c on c.id=e.campanha_id left join mei_email.lotes l on l.id=e.lote_id where c.id is null or l.id is null",
@@ -60,17 +61,21 @@ jobs:
               'WAITING_DB_SESSIONS': "select count(*) from pg_stat_activity where datname=current_database() and wait_event is not null and pid<>pg_backend_pid()",
               'IDLE_IN_TX': "select count(*) from pg_stat_activity where datname=current_database() and state='idle in transaction' and pid<>pg_backend_pid()",
               'UNGRANTED_LOCKS': "select count(*) from pg_locks where not granted and pid<>pg_backend_pid()",
+              'HARD_BOUNCE_SUPPRESSIONS': "select count(*) from mei_email.email_suppressions where active and reason='hard_bounce'",
+              'NDR_GUARD_SUPPRESSIONS': "select count(*) from mei_email.email_suppressions where active and reason='hard_bounce' and source='async_ndr_graph_guard'",
               'INVALID_OPEN_QUEUE': """select count(*) from mei_email.envios e join mei_email.empresas emp on emp.cnpj=e.cnpj where e.status::text in ('pendente','enviando','pending','processing') and (not mei_email.is_independent_marketing_authorization(emp.marketing_autorizado, emp.marketing_autorizado_origem) or not mei_email.is_independent_mei_verification(emp.mei_verificado, emp.mei_verificado_origem) or emp.opt_out is true or emp.situacao_cadastral<>'ATIVA' or emp.provavel_terceiro is true or emp.email is null or btrim(emp.email::text)='' or not mei_email.is_valid_email_address(emp.email) or mei_email.is_email_suppressed(emp.email) or mei_email.is_cnpj_suppressed(emp.cnpj::text))""",
               'STRICT_AUTHORIZED_POOL': """select count(*) from mei_email.empresas e where e.tipo_regime='MEI' and e.uf='MG' and e.situacao_cadastral='ATIVA' and e.opt_out=false and e.provavel_terceiro=false and e.email is not null and e.enviado=false and mei_email.is_independent_marketing_authorization(e.marketing_autorizado,e.marketing_autorizado_origem) and mei_email.is_independent_mei_verification(e.mei_verificado,e.mei_verificado_origem) and btrim(e.email::text)<>'' and mei_email.is_valid_email_address(e.email) and not mei_email.is_email_suppressed(e.email) and not mei_email.is_cnpj_suppressed(e.cnpj::text) and not exists (select 1 from mei_email.envios x where x.cnpj=e.cnpj and x.status::text in ('pendente','enviando','pending','processing','submitted','enviado','delivered','bounced','bounce_permanent')) and not exists (select 1 from mei_email.envios x where lower(btrim(x.email::text))=lower(btrim(e.email::text)) and x.status::text in ('pendente','enviando','pending','processing','submitted','enviado','delivered','bounced','bounce_permanent'))""",
           }
 
-          def run_one(name, query, timeout='15s'):
+          def run_one(name, query, timeout='12s'):
+              if timeout not in {'12s','20s'}:
+                  raise ValueError(timeout)
               try:
                   with psycopg.connect(settings.database_url) as conn:
                       with conn.transaction():
                           with conn.cursor() as cur:
                               cur.execute('set transaction read only')
-                              cur.execute("set local statement_timeout = %s", (timeout,))
+                              cur.execute(f"set local statement_timeout = '{timeout}'")
                               cur.execute("set local lock_timeout = '2s'")
                               cur.execute(query)
                               row = cur.fetchone()
@@ -86,19 +91,41 @@ jobs:
                   with conn.transaction():
                       with conn.cursor() as cur:
                           cur.execute('set transaction read only')
-                          cur.execute("set local statement_timeout='8s'")
+                          cur.execute("set local statement_timeout='10s'")
                           cur.execute("select to_regclass('public.flyway_schema_history')::text, to_regclass('mei_email.flyway_schema_history')::text")
                           pub, mei = cur.fetchone()
                           hist = mei or pub
                           print(f'FLYWAY_TABLE={hist or "absent"}')
                           if hist:
                               schema, table = hist.split('.',1) if '.' in hist else ('public',hist)
-                              q = sql.SQL("select version, description, success from {}.{} where version in ('37','38','39','40') order by installed_rank").format(sql.Identifier(schema),sql.Identifier(table))
-                              cur.execute(q)
+                              ident = sql.SQL('{}.{}').format(sql.Identifier(schema),sql.Identifier(table))
+                              cur.execute(sql.SQL('select count(*), max(installed_rank), max(version) filter (where success) from {}').format(ident))
+                              print('FLYWAY_SUMMARY=' + '|'.join(str(v) for v in cur.fetchone()))
+                              cur.execute(sql.SQL("select version, description, success from {} where version in ('37','38','39','40') order by installed_rank").format(ident))
                               rows = cur.fetchall()
                               print('FLYWAY_SAFETY=' + ';'.join(f'{r[0]}:{r[1]}:{r[2]}' for r in rows))
+                              cur.execute(sql.SQL('select version, description, success from {} order by installed_rank desc limit 8').format(ident))
+                              rows = cur.fetchall()
+                              print('FLYWAY_LATEST=' + ';'.join(f'{r[0]}:{r[1]}:{r[2]}' for r in rows))
           except Exception as exc:
               print(f'FLYWAY_SAFETY=ERROR:{type(exc).__name__}:{str(exc).splitlines()[0][:180]}')
+
+          try:
+              with psycopg.connect(settings.database_url) as conn:
+                  with conn.transaction():
+                      with conn.cursor() as cur:
+                          cur.execute('set transaction read only')
+                          cur.execute("set local statement_timeout='8s'")
+                          cur.execute("""select
+                            to_regprocedure('mei_email.enforce_campaign_copy_policy()') is not null,
+                            to_regprocedure('mei_email.enforce_envio_live_eligibility()') is not null,
+                            exists(select 1 from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='mei_email' and c.relname='campanhas' and t.tgname='trg_campaign_copy_policy' and not t.tgisinternal),
+                            exists(select 1 from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='mei_email' and c.relname='envios' and t.tgname='trg_envio_live_eligibility' and not t.tgisinternal)
+                          """)
+                          vals=cur.fetchone()
+                          print('V038_OBJECTS=' + '|'.join('true' if v else 'false' for v in vals))
+          except Exception as exc:
+              print(f'V038_OBJECTS=ERROR:{type(exc).__name__}:{str(exc).splitlines()[0][:180]}')
           PY
           echo 'READONLY_DB_AUDIT_END'
           docker ps -a --filter name=mei-mg-email-db --format 'db={{.Status}} image={{.Image}}'
@@ -106,12 +133,9 @@ jobs:
           echo 'WORKER_LOG_BEGIN'
           sudo journalctl -u mei-mg-email-worker.service --since '-5 minutes' --no-pager | tail -n 120 || true
           echo 'WORKER_LOG_END'
-          echo 'AUTOREPAIR_LOG_BEGIN'
-          sudo journalctl -u mei-mg-email-autorepair.service --since '-10 minutes' --no-pager | tail -n 80 || true
-          echo 'AUTOREPAIR_LOG_END'
           EOF
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
 
-# bounded read-only DB invariants after governed runtime redeploy 2026-08-20T10:23Z
+# corrected bounded read-only DB invariants 2026-08-20T10:28Z
