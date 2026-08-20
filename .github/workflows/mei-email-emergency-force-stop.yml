@@ -10,26 +10,48 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: mei-email-production-start
+  cancel-in-progress: false
+
 jobs:
   force-stop:
     runs-on: ubuntu-latest
+    environment: Production
     timeout-minutes: 10
+    env:
+      VM_HOST: 137.131.156.17
+      VM_USER: ubuntu
     steps:
-      - name: Configure VM SSH key
+      - name: Configure verified Oracle SSH
+        shell: bash
         env:
-          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
-          set -euo pipefail
-          test -n "$VM_KEY"
-          mkdir -p ~/.ssh
-          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
-          chmod 600 ~/.ssh/vmkey
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::Oracle SSH key missing'; exit 2; }
+          test -n "$known_hosts" || { echo '::error::Oracle known_hosts missing'; exit 2; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Force-stop bulk worker
+      - name: Freeze sender until migration history is reconciled
+        shell: bash
         run: |
-          set -euo pipefail
-          ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
-          set -euo pipefail
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 \
+            -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF'
+          set -Eeuo pipefail
+          sudo systemctl stop mei-mg-email-autorepair.timer mei-mg-email-autorepair.service || true
+          sudo systemctl disable mei-mg-email-autorepair.timer || true
           sudo systemctl kill --kill-who=all --signal=SIGKILL mei-mg-email-worker.service || true
           sleep 2
           sudo systemctl stop mei-mg-email-worker.service || true
@@ -39,9 +61,15 @@ jobs:
             exit 20
           fi
           echo 'FORCE_STOP_CONFIRMED=true'
+          echo "WORKER_STATE=$(sudo systemctl is-active mei-mg-email-worker.service || true)"
+          echo "AUTOREPAIR_TIMER_STATE=$(sudo systemctl is-active mei-mg-email-autorepair.timer || true)"
+          echo "AUTOREPAIR_TIMER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-autorepair.timer || true)"
           echo 'WORKER_RESUME_ALLOWED=false'
           EOF
 
-      - name: Cleanup SSH key
+      - name: Cleanup SSH material
         if: always()
-        run: rm -f ~/.ssh/vmkey
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+# freeze reason: Flyway history divergence could replay legacy authorization migrations
