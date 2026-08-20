@@ -1,5 +1,5 @@
 {
   "action": "health",
-  "requested_at": "2026-08-18T22:59:30Z",
-  "reason": "Re-run Fred-Win private reverse SSH relay health via GitHub Actions path filter"
+  "requested_at": "2026-08-20T11:39:00Z",
+  "reason": "Verify Fred-Win private reverse SSH relay health via GitHub Actions path filter after email worker recovery"
 }
