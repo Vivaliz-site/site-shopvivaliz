@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "ops/google-ads-finalize-oauth.json"
+      - ".github/workflows/google-ads-finalize-oauth-and-audit.yml"
 
 permissions:
   contents: read
@@ -25,16 +26,20 @@ jobs:
           [[ "$JOB" =~ ^[a-f0-9]{32}$ ]] || exit 2
           echo "job=$JOB" >> "$GITHUB_OUTPUT"
 
-      - name: Configure VM key
+      - name: Configure VM key and host
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
         shell: bash
         run: |
           set -euo pipefail
           test -n "$VM_KEY"
+          [[ "$VM_HOST" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'SHOPVIVALIZ_VM_HOST invalid'; exit 2; }
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
+          echo "vm_host=$VM_HOST" >> "$GITHUB_ENV"
+          echo "ssh_opts=-o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/vmkey" >> "$GITHUB_ENV"
 
       - name: Wait for callback, install token, and run read-only audit
         env:
@@ -42,7 +47,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' -- "$JOB" <<'REMOTE'
+          ssh $ssh_opts ubuntu@"$vm_host" 'bash -s' -- "$JOB" <<'REMOTE'
           set -euo pipefail
           job="$1"
           token_dir="/tmp/shopvivaliz-google-ads-refresh"
