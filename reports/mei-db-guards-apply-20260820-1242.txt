@@ -35,7 +35,7 @@ see /var/log/unattended-upgrades/unattended-upgrades.log
 *** System restart required ***
 From https://github.com/fredmourao-ai/mei-mg-email
  * branch            main       -> FETCH_HEAD
-CHECK_BRT=2026-08-20T19:26:34-0300
+CHECK_BRT=2026-08-20T20:26:13-0300
 SENTINEL_BEFORE=absent
 AS42004_LAST30M=0
 APPLY_V037_BEGIN
