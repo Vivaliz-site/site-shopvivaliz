@@ -1,0 +1,64 @@
+name: Fred-Win Remote Desktop Commander Start V2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tmp-fredwin-remote-dc-start-v2-20260820.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Start Remote Desktop Commander agent
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p reports
+          PS_ENC='JABFAHIAcgBvAHIAQQBjAHQAaQBvAG4AUAByAGUAZgBlAHIAZQBuAGMAZQA9ACcAUwB0AG8AcAAnAAoAJABsAG8AZwA9AEoAbwBpAG4ALQBQAGEAdABoACAAJABlAG4AdgA6AFQARQBNAFAAIAAnAGQAZQBzAGsAdABvAHAALQBjAG8AbQBtAGEAbgBkAGUAcgAtAHIAZQBtAG8AdABlAC4AbABvAGcAJwAKACQAZQB4AGkAcwB0AGkAbgBnAD0ARwBlAHQALQBDAGkAbQBJAG4AcwB0AGEAbgBjAGUAIABXAGkAbgAzADIAXwBQAHIAbwBjAGUAcwBzACAALQBGAGkAbAB0AGUAcgAgACIATgBhAG0AZQA9ACcAbgBvAGQAZQAuAGUAeABlACcAIgAgAC0ARQByAHIAbwByAEEAYwB0AGkAbwBuACAAUwBpAGwAZQBuAHQAbAB5AEMAbwBuAHQAaQBuAHUAZQAgAHwAIABXAGgAZQByAGUALQBPAGIAagBlAGMAdAAgAHsAIAAkAF8ALgBDAG8AbQBtAGEAbgBkAEwAaQBuAGUAIAAtAG0AYQB0AGMAaAAgACcAZABlAHMAawB0AG8AcAAtAGMAbwBtAG0AYQBuAGQAZQByAC4AKgByAGUAbQBvAHQAZQAnACAAfQAKAGkAZgAoAC0AbgBvAHQAIAAkAGUAeABpAHMAdABpAG4AZwApAHsACgAgACAAJABjAG0AZAA9ACIAbgBwAHgAIAAtAC0AeQBlAHMAIABAAHcAbwBuAGQAZQByAHcAaAB5AC0AZQByAC8AZABlAHMAawB0AG8AcAAtAGMAbwBtAG0AYQBuAGQAZQByAEAAbABhAHQAZQBzAHQAIAByAGUAbQBvAHQAZQAgACoAPgA+ACAAJwAkAGwAbwBnACcAIgAKACAAIABTAHQAYQByAHQALQBQAHIAbwBjAGUAcwBzACAALQBGAGkAbABlAFAAYQB0AGgAIAAnAHAAbwB3AGUAcgBzAGgAZQBsAGwALgBlAHgAZQAnACAALQBBAHIAZwB1AG0AZQBuAHQATABpAHMAdAAgAEAAKAAnAC0ATgBvAFAAcgBvAGYAaQBsAGUAJwAsACcALQBXAGkAbgBkAG8AdwBTAHQAeQBsAGUAJwAsACcATQBpAG4AaQBtAGkAegBlAGQAJwAsACcALQBDAG8AbQBtAGEAbgBkACcALAAkAGMAbQBkACkAIAAtAFcAaQBuAGQAbwB3AFMAdAB5AGwAZQAgAE0AaQBuAGkAbQBpAHoAZQBkAAoAIAAgAFMAdABhAHIAdAAtAFMAbABlAGUAcAAgAC0AUwBlAGMAbwBuAGQAcwAgADEAMAAKAH0ACgAkAHIAdQBuAG4AaQBuAGcAPQBHAGUAdAAtAEMAaQBtAEkAbgBzAHQAYQBuAGMAZQAgAFcAaQBuADMAMgBfAFAAcgBvAGMAZQBzAHMAIAAtAEYAaQBsAHQAZQByACAAIgBOAGEAbQBlAD0AJwBuAG8AZABlAC4AZQB4AGUAJwAiACAALQBFAHIAcgBvAHIAQQBjAHQAaQBvAG4AIABTAGkAbABlAG4AdABsAHkAQwBvAG4AdABpAG4AdQBlACAAfAAgAFcAaABlAHIAZQAtAE8AYgBqAGUAYwB0ACAAewAgACQAXwAuAEMAbwBtAG0AYQBuAGQATABpAG4AZQAgAC0AbQBhAHQAYwBoACAAJwBkAGUAcwBrAHQAbwBwAC0AYwBvAG0AbQBhAG4AZABlAHIALgAqAHIAZQBtAG8AdABlACcAIAB9AAoAVwByAGkAdABlAC0ATwB1AHQAcAB1AHQAIAAoACcAUgBFAE0ATwBUAEUAXwBBAEcARQBOAFQAXwBSAFUATgBOAEkATgBHAD0AJwAgACsAIABbAGIAbwBvAGwAXQAkAHIAdQBuAG4AaQBuAGcAKQAKAGkAZgAoAFQAZQBzAHQALQBQAGEAdABoACAAJABsAG8AZwApAHsACgAgACAAJAB0AGEAaQBsAD0ARwBlAHQALQBDAG8AbgB0AGUAbgB0ACAAJABsAG8AZwAgAC0AVABhAGkAbAAgADMAMAAgAC0ARQByAHIAbwByAEEAYwB0AGkAbwBuACAAUwBpAGwAZQBuAHQAbAB5AEMAbwBuAHQAaQBuAHUAZQAKACAAIAAkAG4AZQBlAGQAcwA9AFsAYgBvAG8AbABdACgAJAB0AGEAaQBsACAALQBtAGEAdABjAGgAIAAnAHYAZQByAGkAZgB5AHwAcABhAGkAcgB8AHMAaQBnAG4AIABpAG4AfABkAGUAdgBpAGMAZQAnACkACgAgACAAVwByAGkAdABlAC0ATwB1AHQAcAB1AHQAIAAoACcAUABBAEkAUgBJAE4ARwBfAE0AQQBZAF8AQgBFAF8AUgBFAFEAVQBJAFIARQBEAD0AJwAgACsAIAAkAG4AZQBlAGQAcwApAAoAfQBlAGwAcwBlAHsACgAgACAAVwByAGkAdABlAC0ATwB1AHQAcAB1AHQAIAAnAFAAQQBJAFIASQBOAEcAXwBNAEEAWQBfAEIARQBfAFIARQBRAFUASQBSAEUARAA9AFUATgBLAE4ATwBXAE4AJwAKAH0ACgBlAHgAaQB0ACAAMAAKAA=='
+          CMD="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $PS_ENC"
+          CMD_B64="$(printf '%s' "$CMD" | base64 -w0)"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
+          import base64, json, os, urllib.request
+          command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
+          body = json.dumps({'params': {'command': command, 'timeout': 60}}).encode('utf-8')
+          req = urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command', data=body, headers={'Content-Type':'application/json'}, method='POST')
+          with urllib.request.urlopen(req, timeout=75) as r:
+              payload = json.loads(r.read().decode('utf-8'))
+          result = payload.get('result') or {}
+          print('FREDWIN_SUCCESS=' + str(result.get('success') is True).lower())
+          print(str(result.get('output') or ''))
+          PY" | tee reports/fredwin-remote-dc-start-v2.txt
+      - name: Persist sanitized result
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name shopvivaliz-ops-bot
+          git config user.email ops@shopvivaliz.local
+          git add reports/fredwin-remote-dc-start-v2.txt
+          if ! git diff --cached --quiet; then
+            git commit -m 'ops: record Remote Desktop Commander startup state v2'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey
