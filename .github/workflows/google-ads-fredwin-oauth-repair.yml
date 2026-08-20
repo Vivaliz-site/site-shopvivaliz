@@ -20,14 +20,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure VM key
+      - name: Configure VM key and host
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
         run: |
+          set -euo pipefail
           test -n "$VM_KEY" || { echo "SHOPVIVALIZ_VM_SSH_KEY missing"; exit 2; }
+          [[ "$VM_HOST" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'SHOPVIVALIZ_VM_HOST invalid'; exit 2; }
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
+          echo "vm_host=$VM_HOST" >> "$GITHUB_ENV"
+          echo "ssh_opts=-o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/vmkey" >> "$GITHUB_ENV"
 
       - name: Wait for Fred-Win MCP
         shell: bash
@@ -35,7 +40,7 @@ jobs:
           set -euo pipefail
           ok=0
           for i in $(seq 1 90); do
-            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            if ssh $ssh_opts ubuntu@"$vm_host" \
               'curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:5557/health' >/tmp/fredwin-health.json 2>/dev/null; then
               cat /tmp/fredwin-health.json
               ok=1
@@ -53,7 +58,7 @@ jobs:
           COMMAND='powershell -NoProfile -ExecutionPolicy Bypass -Command "$u=''https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/google_ads_oauth_candidate_repair.py''; $p=Join-Path $env:TEMP ''google_ads_oauth_candidate_repair.py''; Invoke-WebRequest -UseBasicParsing -Uri $u -OutFile $p; Set-Location ''C:\site-shopvivaliz''; python $p --write-local --sync-github; $code=$LASTEXITCODE; Remove-Item $p -Force -ErrorAction SilentlyContinue; exit $code"'
           printf '%s' "$COMMAND" | base64 -w0 >/tmp/fredwin-command.b64
           CMD_B64="$(cat /tmp/fredwin-command.b64)"
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+          ssh $ssh_opts ubuntu@"$vm_host" \
             "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
           import base64, json, os, urllib.request
           command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
