@@ -1,2 +1,4 @@
-FREDWIN_SUCCESS=false
+FREDWIN_SUCCESS=true
+shopvivaliz-ai
+ubuntu
 
