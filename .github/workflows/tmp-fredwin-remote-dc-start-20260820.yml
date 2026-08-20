@@ -1,0 +1,69 @@
+name: Fred-Win Remote Desktop Commander Start
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tmp-fredwin-remote-dc-start-20260820.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  start-remote-dc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Start remote agent through Fred-Win relay
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p reports
+          PS_CMD='$ErrorActionPreference="Stop"; $log=Join-Path $env:TEMP "desktop-commander-remote.log"; $existing=Get-CimInstance Win32_Process -Filter "Name=''node.exe''" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "desktop-commander.*remote" }; if(-not $existing){ $args="-NoProfile -WindowStyle Minimized -Command `"npx --yes @wonderwhy-er/desktop-commander@latest remote *>> ''$log''`""; Start-Process -FilePath "powershell.exe" -ArgumentList $args -WindowStyle Minimized; Start-Sleep -Seconds 10 }; $running=Get-CimInstance Win32_Process -Filter "Name=''node.exe''" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match "desktop-commander.*remote" }; Write-Output ("REMOTE_AGENT_RUNNING=" + [bool]$running); if(Test-Path $log){ $tail=Get-Content $log -Tail 30 -ErrorAction SilentlyContinue; $needs=[bool]($tail -match "verify|pair|sign in|device"); Write-Output ("PAIRING_MAY_BE_REQUIRED=" + $needs) } else { Write-Output "PAIRING_MAY_BE_REQUIRED=UNKNOWN" }'
+          ENC="$(printf '%s' "$PS_CMD" | iconv -f UTF-8 -t UTF-16LE | base64 -w0)"
+          CMD="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $ENC"
+          CMD_B64="$(printf '%s' "$CMD" | base64 -w0)"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
+          import base64, json, os, urllib.request
+          command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
+          body = json.dumps({'params': {'command': command, 'timeout': 60}}).encode('utf-8')
+          req = urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command', data=body, headers={'Content-Type':'application/json'}, method='POST')
+          with urllib.request.urlopen(req, timeout=75) as r:
+              payload = json.loads(r.read().decode('utf-8'))
+          result = payload.get('result') or {}
+          print('FREDWIN_SUCCESS=' + str(result.get('success') is True).lower())
+          print(str(result.get('output') or ''))
+          PY" | tee reports/fredwin-remote-dc-start.txt
+
+      - name: Persist sanitized result
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name shopvivaliz-ops-bot
+          git config user.email ops@shopvivaliz.local
+          git add reports/fredwin-remote-dc-start.txt
+          if ! git diff --cached --quiet; then
+            git commit -m 'ops: record Remote Desktop Commander startup state'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey
