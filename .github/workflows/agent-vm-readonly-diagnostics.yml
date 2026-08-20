@@ -1,0 +1,136 @@
+name: Agent VM readonly diagnostics
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Read-only diagnostic mode
+        required: true
+        type: choice
+        options:
+          - health
+          - docker
+          - git-status
+          - mei-baseline
+        default: health
+
+permissions:
+  contents: read
+
+jobs:
+  readonly-diagnostics:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 5
+    env:
+      VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
+      VM_USER: ${{ secrets.SHOPVIVALIZ_VM_USER || 'ubuntu' }}
+      MODE: ${{ inputs.mode }}
+    steps:
+      - name: Validate inputs and secrets
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_HOST"
+          test -n "$VM_USER"
+          case "$VM_HOST" in *[!A-Za-z0-9_.:-]*|'') echo "Invalid VM host" >&2; exit 1;; esac
+          case "$VM_USER" in *[!A-Za-z0-9_.-]*|'') echo "Invalid VM user" >&2; exit 1;; esac
+          case "$MODE" in health|docker|git-status|mei-baseline) ;; *) echo "Invalid mode" >&2; exit 1;; esac
+
+      - name: Configure SSH
+        env:
+          VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_SSH_KEY"
+          test -n "$VM_KNOWN_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Run read-only diagnostic
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(
+            -o BatchMode=yes
+            -o ConnectTimeout=10
+            -o ServerAliveInterval=15
+            -o ServerAliveCountMax=2
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -i "$HOME/.ssh/id_rsa"
+          )
+          remote_script=$(mktemp)
+          cat > "$remote_script" <<'REMOTE'
+          set -Eeuo pipefail
+          mode="$1"
+          redact() {
+            sed -E \
+              -e 's#(postgres|mysql|mariadb)://[^[:space:]]+#<REDACTED_DB_URL>#g' \
+              -e 's#(password|passwd|pwd|token|secret|key)=([^[:space:]]+)#\1=<REDACTED>#Ig' \
+              -e 's#Bearer[[:space:]]+[A-Za-z0-9._~+/-]+=*#Bearer <REDACTED>#g'
+          }
+          case "$mode" in
+            health)
+              {
+                echo "MODE=health"
+                echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                uptime || true
+                df -h / || true
+                free -h || true
+                systemctl --no-pager --plain --type=service --state=running,failed | grep -E 'shopvivaliz|mei|nginx|apache|php|mysql|postgres|docker' || true
+              } | redact
+              ;;
+            docker)
+              {
+                echo "MODE=docker"
+                if command -v docker >/dev/null 2>&1; then
+                  sudo docker ps -a --format '{{.Image}}|{{.Names}}|{{.Status}}' || true
+                else
+                  echo "docker=unavailable"
+                fi
+              } | redact
+              ;;
+            git-status)
+              {
+                echo "MODE=git-status"
+                for dir in /var/www/shopvivaliz /home/ubuntu/shopvivaliz /home/ubuntu/mei-mg-email; do
+                  if [ -d "$dir/.git" ]; then
+                    echo "repo=$dir"
+                    git -C "$dir" rev-parse --short HEAD || true
+                    git -C "$dir" status --porcelain=v1 | sed -E 's#^#status=#' || true
+                  fi
+                done
+              } | redact
+              ;;
+            mei-baseline)
+              {
+                echo "MODE=mei-baseline"
+                systemctl is-active mei-mg-email-worker.service 2>/dev/null | sed 's/^/worker=/' || true
+                systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null | sed 's/^/autorepair=/' || true
+                if [ -d /home/ubuntu/mei-mg-email/.git ]; then
+                  git -C /home/ubuntu/mei-mg-email rev-parse --short HEAD | sed 's/^/git_head=/' || true
+                  git -C /home/ubuntu/mei-mg-email status --porcelain=v1 | wc -l | sed 's/^/dirty_count=/' || true
+                fi
+              } | redact
+              ;;
+          esac
+          REMOTE
+          output=$(ssh "${ssh_opts[@]}" "$VM_USER@$VM_HOST" 'bash -s -- "$1"' _ "$MODE" < "$remote_script")
+          {
+            echo "## Agent VM readonly diagnostics"
+            echo
+            echo "Mode: \`$MODE\`"
+            echo
+            echo '```text'
+            printf '%s\n' "$output"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "$output"
+
+      - name: Cleanup SSH material
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"

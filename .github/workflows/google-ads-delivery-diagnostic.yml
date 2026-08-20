@@ -26,10 +26,15 @@ jobs:
           chmod 600 ~/.ssh/vmkey
 
       - name: Read-only Antique Decore preflight
+        env:
+          VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
         shell: bash
         run: |
           set -euo pipefail
-          ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
+          test -n "${VM_HOST:-}" || { echo 'SHOPVIVALIZ_VM_HOST missing'; exit 2; }
+          [[ "$VM_HOST" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'SHOPVIVALIZ_VM_HOST invalid'; exit 2; }
+          SSH_OPTS=(-o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/vmkey)
+          ssh "${SSH_OPTS[@]}" "ubuntu@${VM_HOST}" 'python3 -' <<'PY'
           import json, urllib.parse, urllib.request, urllib.error
           from pathlib import Path
 
@@ -116,7 +121,6 @@ jobs:
           ads_ok=(len(ads)==2)
           conversion_ok=(len(primary)==1)
           approvals=[r.get('adGroupAd',{}).get('policySummary',{}).get('approvalStatus','') for r in ads]
-          reviews=[r.get('adGroupAd',{}).get('policySummary',{}).get('reviewStatus','') for r in ads]
           any_disapproved=any(x=='DISAPPROVED' for x in approvals)
           all_approved=(len(approvals)==2 and all(x=='APPROVED' for x in approvals))
           pending=(not any_disapproved and not all_approved)

@@ -14,6 +14,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate request
+        id: req
+        shell: bash
+        run: |
+          set -euo pipefail
+          campaign_id="$(jq -r '.campaign_id // ""' ops/google-ads-negative-keywords-audit.json)"
+          [[ "$campaign_id" =~ ^[0-9]{6,20}$ ]] || { echo 'invalid campaign_id'; exit 2; }
+          echo "campaign_id=$campaign_id" >> "$GITHUB_OUTPUT"
+
       - name: Configure VM key
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
@@ -26,13 +38,20 @@ jobs:
           chmod 600 ~/.ssh/vmkey
 
       - name: Read campaign negative keywords
+        env:
+          VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
+          TARGET_CAMPAIGN_ID: ${{ steps.req.outputs.campaign_id }}
         shell: bash
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
-          import json, urllib.parse, urllib.request
+          test -n "${VM_HOST:-}" || { echo 'SHOPVIVALIZ_VM_HOST missing'; exit 2; }
+          [[ "$VM_HOST" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'SHOPVIVALIZ_VM_HOST invalid'; exit 2; }
+          [[ "$TARGET_CAMPAIGN_ID" =~ ^[0-9]{6,20}$ ]] || { echo 'invalid target campaign'; exit 2; }
+          SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/vmkey)
+          ssh "${SSH_OPTS[@]}" "ubuntu@${VM_HOST}" 'python3 -' "$TARGET_CAMPAIGN_ID" <<'PY'
+          import json, sys, urllib.parse, urllib.request
           from pathlib import Path
-          TARGET='24144257692'
+          target = sys.argv[1]
           env={}
           for raw in Path('/home/ubuntu/shopvivaliz-deploy/shared/.env').read_text(encoding='utf-8',errors='ignore').splitlines():
               line=raw.strip()
@@ -45,7 +64,7 @@ jobs:
           login=env.get('GOOGLE_ADS_LOGIN_CUSTOMER_ID','').replace('-','').strip()
           if login: headers['login-customer-id']=login
           url=f'https://googleads.googleapis.com/v25/customers/{cid}/googleAds:searchStream'
-          gaql=f'''SELECT campaign_criterion.criterion_id, campaign_criterion.status, campaign_criterion.negative, campaign_criterion.keyword.text, campaign_criterion.keyword.match_type FROM campaign_criterion WHERE campaign.id = {TARGET} AND campaign_criterion.type = 'KEYWORD' AND campaign_criterion.negative = TRUE AND campaign_criterion.status != 'REMOVED' ORDER BY campaign_criterion.criterion_id'''
+          gaql=f'''SELECT campaign_criterion.criterion_id, campaign_criterion.status, campaign_criterion.negative, campaign_criterion.keyword.text, campaign_criterion.keyword.match_type FROM campaign_criterion WHERE campaign.id = {target} AND campaign_criterion.type = 'KEYWORD' AND campaign_criterion.negative = TRUE AND campaign_criterion.status != 'REMOVED' ORDER BY campaign_criterion.criterion_id'''
           req=urllib.request.Request(url,data=json.dumps({'query':gaql}).encode(),headers=headers,method='POST')
           with urllib.request.urlopen(req,timeout=30) as r: payload=json.loads(r.read().decode())
           rows=[]

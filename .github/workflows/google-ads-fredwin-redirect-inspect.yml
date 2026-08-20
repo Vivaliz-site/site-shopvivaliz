@@ -17,19 +17,24 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Configure VM key
+      - name: Configure VM key and host
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
         run: |
+          set -euo pipefail
           test -n "$VM_KEY" || exit 2
+          [[ "$VM_HOST" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'SHOPVIVALIZ_VM_HOST invalid'; exit 2; }
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
+          echo "vm_host=$VM_HOST" >> "$GITHUB_ENV"
+          echo "ssh_opts=-o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8 -i ~/.ssh/vmkey" >> "$GITHUB_ENV"
       - name: Wait for Fred-Win MCP
         shell: bash
         run: |
           for i in $(seq 1 30); do
-            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=8 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:5557/health' >/tmp/health 2>/dev/null; then cat /tmp/health; exit 0; fi
+            if ssh $ssh_opts ubuntu@"$vm_host" 'curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:5557/health' >/tmp/health 2>/dev/null; then cat /tmp/health; exit 0; fi
             sleep 5
           done
           exit 4
@@ -62,7 +67,7 @@ jobs:
           B64="$(iconv -f UTF-8 -t UTF-16LE /tmp/inspect.ps1 | base64 -w0)"
           CMD="powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand $B64"
           C64="$(printf '%s' "$CMD" | base64 -w0)"
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=8 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "FREDWIN_CMD_B64='$C64' python3 - <<'PY'
+          ssh $ssh_opts ubuntu@"$vm_host" "FREDWIN_CMD_B64='$C64' python3 - <<'PY'
           import base64,json,os,urllib.request
           command=base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode()
           body=json.dumps({'params':{'command':command,'timeout':30}}).encode()

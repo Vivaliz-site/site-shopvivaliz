@@ -1,0 +1,51 @@
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Tue Aug 18 22:39:46 -03 2026
+
+  System load:  2.3                Processes:             183
+  Usage of /:   86.4% of 44.96GB   Users logged in:       0
+  Memory usage: 45%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   51%
+
+  => / is using 86.4% of 44.96GB
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+64 updates can be applied immediately.
+8 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+16 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+116 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+
+*** System restart required ***
+START_UTC=2026-08-20T00:26:44Z
+START_BRT=2026-08-19T21:26:44-0300
+SENDER_BLOCK_SENTINEL=absent
+From https://github.com/fredmourao-ai/mei-mg-email
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+HEAD=efc096694da470f67de493227bb13b483d88df44
+pytest 8.3.3
+=== FLYWAY HISTORY / OBJECT SAFETY PRECHECK ===
+DRIFT_HISTORY=[["014", "cnpj alphanumeric and submission guard", 2116743560, true, "2026-08-09 01:33:04.809263"], ["017", "complete email status enum", 1690705898, true, "2026-08-09 01:33:57.419716"], ["018", "email delivery model and suppression", -410986482, true, "2026-08-09 01:33:57.686346"]]
+FAILED_MIGRATIONS=0
+CNPJ_CONSTRAINT_COUNT=1
+SUBMISSION_TRIGGER_COUNT=1
+SUBMISSION_FUNCTION_COUNT=1
+V018_INDEX_COUNT=1
+=== CONFIRM VALIDATION FAILURE IS CHECKSUM DRIFT ===

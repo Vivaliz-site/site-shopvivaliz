@@ -1,0 +1,1137 @@
+RUN_ID=32317314134
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push less than a minute ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push less than a minute ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push less than a minute ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push less than a minute ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 1 minute ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 1 minute ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 1 minute ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 1 minute ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 1 minute ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 2 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 2 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 2 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 2 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 2 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 2 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 3 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 3 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 3 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 3 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 3 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 3 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 4 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 4 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 4 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 4 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 4 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 5 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 5 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 5 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 5 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 5 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 5 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 6 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 6 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 6 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 6 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 6 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 7 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 7 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 7 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 7 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 7 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 7 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 8 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 8 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 8 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 8 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 8 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 9 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 9 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 9 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 9 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 9 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 9 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 10 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 10 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 10 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 10 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 10 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 10 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 11 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 11 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  * Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+Refreshing run status every 10 seconds. Press Ctrl+C to quit.
+
+* main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 11 minutes ago
+
+JOBS
+* repair (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  X Validate drift, repair, authorize eligible stock and resume
+  * Persist report
+  * Cleanup
+  * Post Run actions/checkout@v4
+X main Repair Flyway drift and restore MEI sender 20260819 2140 · 32317314134
+Triggered via push about 11 minutes ago
+
+JOBS
+X repair in 11m30s (ID 96272246612)
+  ✓ Set up job
+  ✓ Run actions/checkout@v4
+  ✓ Configure verified Oracle SSH
+  X Validate drift, repair, authorize eligible stock and resume
+  ✓ Persist report
+  ✓ Cleanup
+  ✓ Post Run actions/checkout@v4
+  ✓ Complete job
+
+ANNOTATIONS
+! Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+repair: .github#2
+
+X Process completed with exit code 1.
+repair: .github#229
+
+WATCH_RC=1
+{"conclusion":"failure","createdAt":"2026-08-20T00:26:27Z","status":"completed","updatedAt":"2026-08-20T00:38:02Z","url":"https://github.com/Vivaliz-site/site-shopvivaliz/actions/runs/32317314134"}
+=== LOG_FAILED_BEGIN ===
+repair	Validate drift, repair, authorize eligible stock and resume	﻿2026-08-20T00:26:38.0995804Z ##[group]Run set -Eeuo pipefail
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.0997257Z ^[[36;1mset -Eeuo pipefail^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.0997713Z ^[[36;1mmkdir -p reports^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.0999003Z ^[[36;1mssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=50 -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF' > reports/mei-email-drift-auth-repair-20260819-2140.txt 2>&1^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1000315Z ^[[36;1mset -Eeuo pipefail^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1000772Z ^[[36;1mcd /home/ubuntu/mei-mg-email^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1001303Z ^[[36;1mecho "START_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1001952Z ^[[36;1mecho "START_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)"^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1002890Z ^[[36;1msudo systemctl stop mei-mg-email-autorepair.timer || true^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1003567Z ^[[36;1msudo systemctl stop mei-mg-email-autorepair.service || true^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1004267Z ^[[36;1mtimeout 45s sudo systemctl stop mei-mg-email-worker.service || {^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1005081Z ^[[36;1m  sudo systemctl kill --kill-who=main --signal=SIGKILL mei-mg-email-worker.service || true^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1005753Z ^[[36;1m  sleep 3^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1006146Z ^[[36;1m}^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1006750Z ^[[36;1mtest "$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)" != active^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1007668Z ^[[36;1mif sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1008393Z ^[[36;1m  echo SENDER_BLOCK_SENTINEL=present^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1008884Z ^[[36;1m  exit 42^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1009289Z ^[[36;1mfi^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1009702Z ^[[36;1mecho SENDER_BLOCK_SENTINEL=absent^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1010181Z ^[[36;1m^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1010572Z ^[[36;1mgit fetch origin main^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1011044Z ^[[36;1mgit merge --ff-only origin/main^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1011545Z ^[[36;1mecho "HEAD=$(git rev-parse HEAD)"^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1012556Z ^[[36;1mtimeout 4m .venv/bin/pip install -r requirements.txt >/tmp/mei-pip-install.log 2>&1 || { tail -n 80 /tmp/mei-pip-install.log; exit 43; }^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1013417Z ^[[36;1m.venv/bin/python -m pytest --version^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1013893Z ^[[36;1m^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1014357Z ^[[36;1mecho '=== FLYWAY HISTORY / OBJECT SAFETY PRECHECK ==='^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1014913Z ^[[36;1m.venv/bin/python - <<'PY'^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1015363Z ^[[36;1mimport json^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1015790Z ^[[36;1mimport psycopg^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1016230Z ^[[36;1mfrom app.config import settings^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1016798Z ^[[36;1mwith psycopg.connect(settings.database_url) as conn:^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1017345Z ^[[36;1m  with conn.cursor() as cur:^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1018342Z ^[[36;1m    cur.execute("select version::text,description,checksum,success,installed_on from mei_email.flyway_schema_history where ltrim(version::text,'0') in ('14','17','18') order by installed_rank")^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1019704Z ^[[36;1m    rows=cur.fetchall(); print('DRIFT_HISTORY='+json.dumps(rows,default=str))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1020539Z ^[[36;1m    if len(rows)!=3 or not all(r[3] for r in rows): raise SystemExit('ABORT_DRIFT_HISTORY_NOT_THREE_SUCCESSFUL')^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1021414Z ^[[36;1m    cur.execute("select count(*) from mei_email.flyway_schema_history where success is false")^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1022395Z ^[[36;1m    failed=int(cur.fetchone()[0]); print('FAILED_MIGRATIONS='+str(failed))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1023093Z ^[[36;1m    if failed: raise SystemExit('ABORT_FAILED_MIGRATION_PRESENT')^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1023982Z ^[[36;1m    cur.execute("select count(*) from pg_constraint where connamespace='mei_email'::regnamespace and conname='empresas_cnpj_check'")^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1024850Z ^[[36;1m    print('CNPJ_CONSTRAINT_COUNT='+str(cur.fetchone()[0]))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1025734Z ^[[36;1m    cur.execute("select count(*) from pg_trigger where tgname='envios_marcar_empresa_submetida' and not tgisinternal")^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1026792Z ^[[36;1m    trig=int(cur.fetchone()[0]); print('SUBMISSION_TRIGGER_COUNT='+str(trig))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1027497Z ^[[36;1m    if trig!=1: raise SystemExit('ABORT_SUBMISSION_TRIGGER_MISSING')^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1028485Z ^[[36;1m    cur.execute("select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='mei_email' and p.proname='trg_marcar_empresa_submetida'")^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1029462Z ^[[36;1m    fn=int(cur.fetchone()[0]); print('SUBMISSION_FUNCTION_COUNT='+str(fn))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1030142Z ^[[36;1m    if fn<1: raise SystemExit('ABORT_SUBMISSION_FUNCTION_MISSING')^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1030975Z ^[[36;1m    cur.execute("select count(*) from pg_indexes where schemaname='mei_email' and indexname='idx_envios_enviado_em_v2'")^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1031826Z ^[[36;1m    idx=int(cur.fetchone()[0]); print('V018_INDEX_COUNT='+str(idx))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1032588Z ^[[36;1mPY^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1032972Z ^[[36;1m^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1033464Z ^[[36;1mecho '=== CONFIRM VALIDATION FAILURE IS CHECKSUM DRIFT ==='^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1034006Z ^[[36;1mset +e^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1034551Z ^[[36;1mdocker compose run --rm flyway validate >/tmp/flyway-validate.txt 2>&1^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1035144Z ^[[36;1mvrc=$?^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1035534Z ^[[36;1mset -e^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1035952Z ^[[36;1mcat /tmp/flyway-validate.txt^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1036453Z ^[[36;1mecho "FLYWAY_VALIDATE_RC_BEFORE=$vrc"^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1036965Z ^[[36;1mtest "$vrc" -ne 0^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1037602Z ^[[36;1mgrep -Fq 'Migration checksum mismatch for migration version 014' /tmp/flyway-validate.txt^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1038433Z ^[[36;1mgrep -Fq 'Migration checksum mismatch for migration version 017' /tmp/flyway-validate.txt^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1039246Z ^[[36;1mgrep -Fq 'Migration checksum mismatch for migration version 018' /tmp/flyway-validate.txt^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1040179Z ^[[36;1mmismatch_count="$(grep -Fc 'Migration checksum mismatch for migration version' /tmp/flyway-validate.txt || true)"^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1040952Z ^[[36;1mecho "CHECKSUM_MISMATCH_COUNT=$mismatch_count"^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1041487Z ^[[36;1mtest "$mismatch_count" -eq 3^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1042480Z ^[[36;1mif grep -Eqi 'failed migration|Detected failed|out of order|resolved migration not applied' /tmp/flyway-validate.txt; then^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1043313Z ^[[36;1m  echo ABORT_UNEXPECTED_FLYWAY_VALIDATION_ERROR=true^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1043848Z ^[[36;1m  exit 44^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1044242Z ^[[36;1mfi^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1044628Z ^[[36;1m^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1045065Z ^[[36;1mecho '=== STANDARD FLYWAY CHECKSUM REPAIR ==='^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1045639Z ^[[36;1mtimeout 5m docker compose run --rm flyway repair^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1046225Z ^[[36;1mtimeout 5m docker compose run --rm flyway validate^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1046953Z ^[[36;1mtimeout 8m docker compose run --rm flyway migrate^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1047527Z ^[[36;1mtimeout 5m docker compose run --rm flyway validate^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1048031Z ^[[36;1m^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1048603Z ^[[36;1mecho '=== POST-MIGRATION SAFETY + AUTHORIZATION TRUE FOR CURRENT ELIGIBLE STOCK ==='^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1049259Z ^[[36;1m.venv/bin/python - <<'PY'^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1049721Z ^[[36;1mimport json,time^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1050154Z ^[[36;1mimport psycopg^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1050592Z ^[[36;1mfrom app.config import settings^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1051179Z ^[[36;1morigin='confirmacao_operador_authorization_true_2026-08-19'^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1051820Z ^[[36;1mwith psycopg.connect(settings.database_url) as conn:^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1052565Z ^[[36;1m  with conn.cursor() as cur:^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1053426Z ^[[36;1m    cur.execute("select version::text,success from mei_email.flyway_schema_history where ltrim(version::text,'0') in ('37','38','39') order by installed_rank")^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1054608Z ^[[36;1m    mig=cur.fetchall(); print('MIGRATIONS_37_39='+json.dumps(mig,default=str))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1055252Z ^[[36;1m    ok={str(v).lstrip('0') for v,s in mig if s}^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1055936Z ^[[36;1m    if not {'37','38','39'}.issubset(ok): raise SystemExit('ABORT_REQUIRED_MIGRATIONS_MISSING')^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1057127Z ^[[36;1m    cur.execute("select count(*) from pg_indexes where schemaname='mei_email' and tablename='email_suppressions' and indexname in ('idx_email_suppressions_lookup','uq_email_suppressions_active_scope_value')")^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1058245Z ^[[36;1m    idx=int(cur.fetchone()[0]); print('SUPPRESSION_INDEX_COUNT='+str(idx))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1058930Z ^[[36;1m    if idx<2: raise SystemExit('ABORT_SUPPRESSION_INDEX_MISSING')^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1059855Z ^[[36;1m    t=time.monotonic(); cur.execute("select mei_email.is_email_suppressed('probe-not-present-20260819@example.invalid'::citext)"); cur.fetchone()^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1060780Z ^[[36;1m    print('SUPPRESSION_PROBE_SECONDS=%.6f'%(time.monotonic()-t))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1061342Z ^[[36;1m^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1061737Z ^[[36;1m    cur.execute("""^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1062414Z ^[[36;1m      select marketing_autorizado_origem,count(*)^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1062957Z ^[[36;1m      from mei_email.empresas^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1063559Z ^[[36;1m      where tipo_regime='MEI' and upper(uf)='MG' and situacao_cadastral='ATIVA'^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1064273Z ^[[36;1m        and opt_out=false and provavel_terceiro=false and enviado=false^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1064991Z ^[[36;1m        and mei_verificado=true and email is not null and btrim(email::text)<>''^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1065639Z ^[[36;1m        and mei_email.is_valid_email_address(email)^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1066166Z ^[[36;1m      group by 1 order by 2 desc^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1066622Z ^[[36;1m    """)^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1067147Z ^[[36;1m    print('AUTH_ORIGINS_BEFORE='+json.dumps(cur.fetchall(),default=str))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1067750Z ^[[36;1m^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1068143Z ^[[36;1m    cur.execute("""^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1068596Z ^[[36;1m      update mei_email.empresas emp^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1069098Z ^[[36;1m         set marketing_autorizado=true,^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1069725Z ^[[36;1m             marketing_autorizado_em=coalesce(emp.marketing_autorizado_em,now()),^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1070354Z ^[[36;1m             marketing_autorizado_origem=%s^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1070912Z ^[[36;1m       where emp.marketing_autorizado is false^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1071447Z ^[[36;1m         and emp.tipo_regime='MEI'^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1071939Z ^[[36;1m         and upper(emp.uf)='MG'^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1072640Z ^[[36;1m         and emp.situacao_cadastral='ATIVA'^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1073145Z ^[[36;1m         and emp.opt_out=false^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1073645Z ^[[36;1m         and emp.provavel_terceiro=false^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1074300Z ^[[36;1m         and emp.enviado=false^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1074781Z ^[[36;1m         and emp.mei_verificado=true^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1075361Z ^[[36;1m         and emp.email is not null and btrim(emp.email::text)<>''^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1075988Z ^[[36;1m         and mei_email.is_valid_email_address(emp.email)^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1076584Z ^[[36;1m         and not mei_email.is_email_suppressed(emp.email)^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1077199Z ^[[36;1m         and not mei_email.is_cnpj_suppressed(emp.cnpj::text)^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1077752Z ^[[36;1m         and not exists (^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1078235Z ^[[36;1m           select 1 from mei_email.envios h^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1078840Z ^[[36;1m           where lower(btrim(h.email::text))=lower(btrim(emp.email::text))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1079515Z ^[[36;1m             and h.status::text in ('submitted','enviado','delivered')^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1080068Z ^[[36;1m         )^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1080474Z ^[[36;1m    """,(origin,))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1080933Z ^[[36;1m    updated=cur.rowcount^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1081454Z ^[[36;1m    print('AUTHORIZATION_TRUE_UPDATED='+str(updated))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1082295Z ^[[36;1m  conn.commit()^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1082718Z ^[[36;1mPY^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1083099Z ^[[36;1m^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1083610Z ^[[36;1mecho '=== TERMINATE ANY REMAINING PROVEN STALE RECOVERY BACKENDS ==='^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1084198Z ^[[36;1m.venv/bin/python - <<'PY'^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1084654Z ^[[36;1mimport json^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1085068Z ^[[36;1mimport psycopg^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1085506Z ^[[36;1mfrom app.config import settings^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1086059Z ^[[36;1mwith psycopg.connect(settings.database_url) as conn:^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1086604Z ^[[36;1m  conn.autocommit=True^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1087061Z ^[[36;1m  with conn.cursor() as cur:^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1087532Z ^[[36;1m    cur.execute("""^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1088111Z ^[[36;1m      select pid,state,query_start,now()-query_start,left(coalesce(query,''),900)^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1088753Z ^[[36;1m      from pg_stat_activity^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1089351Z ^[[36;1m      where pid<>pg_backend_pid() and query_start<now()-interval '10 minutes'^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1089997Z ^[[36;1m        and state in ('active','idle in transaction')^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1090559Z ^[[36;1m        and query ilike '%update mei_email.envios%'^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1091195Z ^[[36;1m        and query ilike '%recuperado: fila redundante ja suprimida/submetida%'^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1091780Z ^[[36;1m    """)^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1092519Z ^[[36;1m    rows=cur.fetchall(); print('STALE_RECOVERY_REMAINING='+json.dumps(rows,default=str))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1093169Z ^[[36;1m    for r in rows:^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1093887Z ^[[36;1m      cur.execute('select pg_terminate_backend(%s)',(r[0],)); print('TERMINATED_'+str(r[0])+'='+str(bool(cur.fetchone()[0])).lower())^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1094609Z ^[[36;1mPY^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1094995Z ^[[36;1m^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1095441Z ^[[36;1mecho '=== ANALYZE HOT TABLES ==='^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1095942Z ^[[36;1m.venv/bin/python - <<'PY'^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1096417Z ^[[36;1mimport psycopg^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1096853Z ^[[36;1mfrom app.config import settings^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1097401Z ^[[36;1mwith psycopg.connect(settings.database_url) as conn:^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1097944Z ^[[36;1m  conn.autocommit=True^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1098414Z ^[[36;1m  with conn.cursor() as cur:^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1099112Z ^[[36;1m    for t in ('mei_email.email_suppressions','mei_email.envios','mei_email.empresas','mei_email.lotes'):^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1099836Z ^[[36;1m      print('ANALYZE='+t); cur.execute('analyze '+t)^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1100338Z ^[[36;1mPY^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1100709Z ^[[36;1m^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1101128Z ^[[36;1mecho '=== INSTALL CURRENT SYSTEMD UNITS ==='^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1101909Z ^[[36;1msudo install -m 0644 deploy/systemd/mei-mg-email-worker.service /etc/systemd/system/mei-mg-email-worker.service^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1103305Z ^[[36;1msudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service /etc/systemd/system/mei-mg-email-autorepair.service^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1104358Z ^[[36;1msudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.timer /etc/systemd/system/mei-mg-email-autorepair.timer^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1105128Z ^[[36;1msudo systemctl daemon-reload^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1105839Z ^[[36;1msudo systemctl reset-failed mei-mg-email-worker.service mei-mg-email-autorepair.service || true^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1106602Z ^[[36;1msudo systemctl enable mei-mg-email-autorepair.timer^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1107214Z ^[[36;1msudo systemctl restart mei-mg-email-autorepair.timer^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1107907Z ^[[36;1mgrep -Fq 'OnUnitActiveSec=1h' deploy/systemd/mei-mg-email-autorepair.timer^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1108506Z ^[[36;1m^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1108905Z ^[[36;1mecho '=== START WORKER ==='^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1109407Z ^[[36;1mresume_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1109987Z ^[[36;1msudo systemctl start mei-mg-email-worker.service^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1110773Z ^[[36;1mtest "$(sudo systemctl is-active mei-mg-email-worker.service)" = active^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1111381Z ^[[36;1mecho "RESUME_AT_UTC=$resume_at"^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1112211Z ^[[36;1mecho "MAINPID=$(sudo systemctl show mei-mg-email-worker.service -p MainPID --value)"^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1112868Z ^[[36;1msleep 300^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1113272Z ^[[36;1m^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1113673Z ^[[36;1mecho '=== FINAL MEASURE ==='^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1114195Z ^[[36;1mRESUME_AT="$resume_at" .venv/bin/python - <<'PY'^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1114728Z ^[[36;1mimport json,os^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1115149Z ^[[36;1mimport psycopg^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1136877Z ^[[36;1mfrom app.config import settings^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1137784Z ^[[36;1mfrom worker.worker import WORKER_ADVISORY_LOCK_ID^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1138668Z ^[[36;1mwith psycopg.connect(settings.database_url) as conn:^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1139522Z ^[[36;1m  with conn.cursor() as cur:^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1140212Z ^[[36;1m    cur.execute("""^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1141252Z ^[[36;1m      select count(*) filter(where status::text in ('submitted','enviado') and enviado_em >= %s::timestamptz),^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1143025Z ^[[36;1m             count(*) filter(where status::text in ('submitted','enviado') and enviado_em >= now()-interval '5 minutes'),^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1144618Z ^[[36;1m             count(*) filter(where status::text in ('submitted','enviado') and enviado_em >= now()-interval '24 hours'),^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1145980Z ^[[36;1m             max(enviado_em) filter(where status::text in ('submitted','enviado')),^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1147296Z ^[[36;1m             count(*) filter(where status::text in ('pendente','enviando','pending','processing'))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1148350Z ^[[36;1m      from mei_email.envios^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1149086Z ^[[36;1m    """,(os.environ['RESUME_AT'],))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1150599Z ^[[36;1m    r=cur.fetchone(); print('SENT_SINCE_RESUME='+str(r[0])); print('SENT_LAST5M='+str(r[1])); print('SENT_24H_QUEUE='+str(r[2])); print('LAST_SENT_AT='+str(r[3])); print('OPEN_QUEUE='+str(r[4]))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1151971Z ^[[36;1m    cur.execute("select count(*) from mei_email.envios_externos_cota where sent_at>=now()-interval '24 hours'")^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1153174Z ^[[36;1m    ext=int(cur.fetchone()[0]); print('EXTERNAL_SENT_24H='+str(ext)); print('EFFECTIVE_SENT_24H='+str(int(r[2])+ext))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1154695Z ^[[36;1m    cur.execute("select l.pid,a.state,now()-a.query_start,coalesce(a.client_addr::text,'local'),left(coalesce(a.query,''),300) from pg_locks l join pg_stat_activity a on a.pid=l.pid where l.locktype='advisory' and l.classid=0 and l.objid=%s and l.granted",(WORKER_ADVISORY_LOCK_ID,))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1156091Z ^[[36;1m    locks=cur.fetchall(); print('WORKER_LOCKS='+json.dumps(locks,default=str));^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1156796Z ^[[36;1m    if len(locks)!=1: raise SystemExit('ABORT_WORKER_LOCK_COUNT')^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1158090Z ^[[36;1m    cur.execute("select count(*) from pg_stat_activity where pid<>pg_backend_pid() and query_start<now()-interval '10 minutes' and state in ('active','idle in transaction') and query ilike '%mei_email%'")^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1159131Z ^[[36;1m    print('LONG_MEI_DB_ACTIVITY='+str(cur.fetchone()[0]))^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1159782Z ^[[36;1m    if int(r[0]) < 10: raise SystemExit('ABORT_INSUFFICIENT_SEND_PROGRESS')^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1160348Z ^[[36;1mPY^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1160959Z ^[[36;1mecho "SERVICE_FINAL=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1161829Z ^[[36;1mecho "TIMER_FINAL=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || true)"^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1163201Z ^[[36;1mif sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then echo SENTINEL_FINAL=present; exit 53; else echo SENTINEL_FINAL=absent; fi^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1164394Z ^[[36;1mlog="$(sudo journalctl -u mei-mg-email-worker.service --since "$resume_at" --no-pager 2>/dev/null || true)"^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1165471Z ^[[36;1mecho "AS42004_SINCE_RESUME=$(printf '%s\n' "$log" | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8' || true)"^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1166319Z ^[[36;1mif printf '%s\n' "$log" | grep -Eqi 'AS\(42004\)|bad outbound sender|5\.1\.8'; then exit 54; fi^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1166974Z ^[[36;1mecho JOURNAL_FINAL_BEGIN^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1167443Z ^[[36;1mprintf '%s\n' "$log" | tail -n 220^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1167936Z ^[[36;1mecho JOURNAL_FINAL_END^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1168511Z ^[[36;1mtest "$(sudo systemctl is-active mei-mg-email-worker.service)" = active^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1169231Z ^[[36;1mtest "$(sudo systemctl is-active mei-mg-email-autorepair.timer)" = active^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1169835Z ^[[36;1mecho REPAIR_VERIFIED=true^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1170277Z ^[[36;1mEOF^[[0m
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1210839Z shell: /usr/bin/bash -e {0}
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1211319Z env:
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1211713Z   VM_HOST: 137.131.156.17
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1212335Z   VM_USER: ubuntu
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:26:38.1212732Z ##[endgroup]
+repair	Validate drift, repair, authorize eligible stock and resume	2026-08-20T00:37:56.4773557Z ##[error]Process completed with exit code 1.
+=== LOG_FAILED_END ===

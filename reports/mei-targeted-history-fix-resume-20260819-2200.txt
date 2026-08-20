@@ -1,0 +1,57 @@
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Tue Aug 18 22:39:46 -03 2026
+
+  System load:  2.3                Processes:             183
+  Usage of /:   86.4% of 44.96GB   Users logged in:       0
+  Memory usage: 45%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   51%
+
+  => / is using 86.4% of 44.96GB
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+64 updates can be applied immediately.
+8 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+16 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+116 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+
+*** System restart required ***
+START_UTC=2026-08-20T00:50:28Z
+START_BRT=2026-08-19T21:50:28-0300
+=== QUIESCE ===
+Removed "/etc/systemd/system/timers.target.wants/mei-mg-base-sync.timer".
+pkill: killing pid 2591113 failed: Operation not permitted
+pkill: killing pid 2591113 failed: Operation not permitted
+WORKER_QUIESCED=inactive
+SENDER_BLOCK_SENTINEL=absent
+From https://github.com/fredmourao-ai/mei-mg-email
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+HEAD=efc096694da470f67de493227bb13b483d88df44
+pytest 8.3.3
+=== TERMINATE STALE DB CLIENTS FROM RETIRED JOBS ===
+STALE_CLIENTS=[[4102, "active", "2026-08-19 21:40:36.003042-03:00", "0:11:13.302517", "172.19.0.1/32", "select count(*) as elegiveis from mei_email.vw_empresas_elegiveis"], [2412, "active", "2026-08-19 21:49:54.320209-03:00", "0:01:54.985350", "172.19.0.1/32", "\n                insert into mei_email.empresas\n                    (cnpj, razao_social, nome_fantasia, situacao_cadastral,\n                     uf, email, ddd_1, telefone_1, data_abertura, tipo_regime,\n                     provavel_terceiro, marketing_autorizado,\n                     marketing_autorizado_em, marketing_autorizado_origem,\n                     mei_verificado, mei_verificado_em, mei_verificado_origem)\n                values\n                    ($1, $2, $3,\n                     $4, $5, $6, $7,\n                     $8, $9, $10,\n                     $11, $12,\n                     case when $12 then now() else null end,\n                     $13,\n                     $14,\n                     case when $14 then now() else null end,\n                     $15)\n                on conflict (cnpj) do update set\n                    situacao_cadastral = excluded.situacao_cadastral,\n    "], [2783, "active", "2026-08-19 21:49:55.417606-03:00", "0:01:53.887953", "172.19.0.1/32", "\n                insert into mei_email.empresas\n                    (cnpj, razao_social, nome_fantasia, situacao_cadastral,\n                     uf, email, ddd_1, telefone_1, data_abertura, tipo_regime,\n                     provavel_terceiro, marketing_autorizado,\n                     marketing_autorizado_em, marketing_autorizado_origem,\n                     mei_verificado, mei_verificado_em, mei_verificado_origem)\n                values\n                    ($1, $2, $3,\n                     $4, $5, $6, $7,\n                     $8, $9, $10,\n                     $11, $12,\n                     case when $12 then now() else null end,\n                     $13,\n                     $14,\n                     case when $14 then now() else null end,\n                     $15)\n                on conflict (cnpj) do update set\n                    situacao_cadastral = excluded.situacao_cadastral,\n    "]]
+TERMINATED_4102=true
+TERMINATED_2412=true
+TERMINATED_2783=true
+=== TARGETED FLYWAY HISTORY FIX ===
+FAILED_MIGRATIONS_BEFORE=0
+HISTORY_BEFORE=[["014", "cnpj alphanumeric and submission guard", "V014__cnpj_alphanumeric_and_submission_guard.sql", -1937083762, true], ["017", "optimize submission trigger", "V017__complete_email_status_enum.sql", 1230001533, true], ["018", "index envios enviado em", "V018__email_delivery_model_and_suppression.sql", 492443262, true]]
+ABORT_UNEXPECTED_HISTORY_STATE_014

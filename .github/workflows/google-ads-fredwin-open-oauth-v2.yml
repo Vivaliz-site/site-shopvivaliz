@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "ops/google-ads-open-oauth.json"
       - ".github/workflows/google-ads-fredwin-open-oauth-v2.yml"
   workflow_dispatch:
 
@@ -15,28 +16,47 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Configure VM key
-        env:
-          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
-        run: |
-          set -euo pipefail
-          test -n "$VM_KEY"
-          mkdir -p ~/.ssh
-          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
-          chmod 600 ~/.ssh/vmkey
+      - uses: actions/checkout@v4
 
-      - name: Check Fred-Win tunnel
-        run: |
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
-            'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health'
-
-      - name: Schedule OAuth page in interactive Windows session
+      - name: Validate request
+        id: req
         shell: bash
         run: |
           set -euo pipefail
+          JOB="$(jq -r '.job // ""' ops/google-ads-open-oauth.json)"
+          [[ "$JOB" =~ ^[a-f0-9]{32}$ ]] || { echo 'invalid job'; exit 2; }
+          echo "job=$JOB" >> "$GITHUB_OUTPUT"
+
+      - name: Configure VM key and host
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          [[ "$VM_HOST" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'SHOPVIVALIZ_VM_HOST invalid'; exit 2; }
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+          echo "vm_host=$VM_HOST" >> "$GITHUB_ENV"
+          echo "ssh_opts=-o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/vmkey" >> "$GITHUB_ENV"
+
+      - name: Check Fred-Win tunnel
+        run: |
+          ssh $ssh_opts ubuntu@"$vm_host" \
+            'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health'
+
+      - name: Schedule OAuth page in interactive Windows session
+        env:
+          JOB: ${{ steps.req.outputs.job }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://shopvivaliz.com.br/auth/google-ads-authorize.php?job=$JOB"
+          URL_B64="$(printf '%s' "$URL" | base64 -w0)"
           cat >/tmp/open.ps1 <<'PS1'
           $ErrorActionPreference='Stop'
-          $url='https://shopvivaliz.com.br/auth/google-ads-authorize.php?job=360925a31e807fbaf8795ac3314a20c8'
+          $url=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:OAUTH_URL_B64))
           $task='ShopVivalizGoogleAdsOAuth'
           $user=(Get-CimInstance Win32_ComputerSystem).UserName
           if(-not $user){ throw 'NO_INTERACTIVE_USER' }
@@ -49,9 +69,9 @@ jobs:
           Write-Output 'GOOGLE_ADS_OAUTH_SCHEDULED_ON_FREDWIN'
           PS1
           PS_B64="$(iconv -f UTF-8 -t UTF-16LE /tmp/open.ps1 | base64 -w0)"
-          CMD="powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand $PS_B64"
+          CMD="set OAUTH_URL_B64=$URL_B64&& powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand $PS_B64"
           CMD_B64="$(printf '%s' "$CMD" | base64 -w0)"
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+          ssh $ssh_opts ubuntu@"$vm_host" \
             "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
           import base64, json, os, urllib.request
           command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')

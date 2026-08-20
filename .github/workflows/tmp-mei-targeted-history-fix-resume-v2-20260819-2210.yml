@@ -1,0 +1,278 @@
+name: Complete Flyway history reconciliation and restore MEI sender V2
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-mei-targeted-history-fix-resume-v2-20260819-2210.yml']
+permissions:
+  contents: write
+concurrency:
+  group: mei-email-production-start
+  cancel-in-progress: false
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 25
+    env:
+      VM_HOST: 137.131.156.17
+      VM_USER: ubuntu
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure verified SSH
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"; known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" && test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+      - name: Reconcile, migrate, authorize and verify throughput
+        run: |
+          set -Eeuo pipefail
+          mkdir -p reports
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=70 -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF' > reports/mei-targeted-history-fix-resume-v2-20260819-2210.txt 2>&1
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo "START_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "START_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)"
+
+          echo '=== QUIESCE ALL COMPETING WORK ==='
+          sudo systemctl stop mei-mg-email-worker.service || true
+          sudo systemctl stop mei-mg-email-autorepair.timer || true
+          sudo systemctl stop mei-mg-email-autorepair.service || true
+          sudo systemctl stop mei-mg-email-base-sync.timer || true
+          sudo systemctl stop mei-mg-email-base-sync.service || true
+          sudo systemctl disable --now mei-mg-base-sync.timer || true
+          sudo systemctl stop mei-mg-base-sync.service || true
+          sudo pkill -TERM -f 'ingest_from_huggingface.py' || true
+          sudo pkill -TERM -f 'sincronizar_base_diaria.py' || true
+          sudo pkill -TERM -f '/flyway/flyway' || true
+          sudo pkill -TERM -f 'docker compose run --rm flyway' || true
+          sleep 8
+          sudo pkill -KILL -f 'ingest_from_huggingface.py' || true
+          sudo pkill -KILL -f '/flyway/flyway' || true
+          echo "WORKER_QUIESCED=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
+            echo SENDER_BLOCK_SENTINEL=present
+            exit 42
+          fi
+          echo SENDER_BLOCK_SENTINEL=absent
+
+          git fetch origin main
+          git merge --ff-only origin/main
+          echo "HEAD=$(git rev-parse HEAD)"
+          timeout 4m .venv/bin/pip install -r requirements.txt >/tmp/mei-v2-pip.log 2>&1 || { tail -n 80 /tmp/mei-v2-pip.log; exit 43; }
+
+          echo '=== CLEAR STALE DATABASE CLIENTS ==='
+          .venv/bin/python - <<'PY'
+          import json,psycopg
+          from app.config import settings
+          with psycopg.connect(settings.database_url,connect_timeout=10) as conn:
+            conn.autocommit=True
+            with conn.cursor() as cur:
+              cur.execute("""
+                select pid,state,query_start,now()-query_start,coalesce(client_addr::text,'local'),left(coalesce(query,''),900)
+                from pg_stat_activity
+                where pid<>pg_backend_pid() and state<>'idle' and query_start<now()-interval '30 seconds'
+                  and (
+                    query ilike '%flyway_schema_history%'
+                    or query ilike '%mei_email.vw_empresas_elegiveis%'
+                    or query ilike '%insert into mei_email.empresas%'
+                    or (query ilike '%update mei_email.envios%' and query ilike '%recuperado:%')
+                  )
+                order by query_start
+              """)
+              rows=cur.fetchall(); print('STALE_CLIENTS='+json.dumps(rows,default=str))
+              for row in rows:
+                cur.execute('select pg_terminate_backend(%s)',(row[0],)); print('TERMINATED_'+str(row[0])+'='+str(bool(cur.fetchone()[0])).lower())
+          PY
+
+          echo '=== COMPLETE PARTIAL FLYWAY REPAIR METADATA ==='
+          .venv/bin/python - <<'PY'
+          import json,psycopg
+          from app.config import settings
+          with psycopg.connect(settings.database_url,connect_timeout=10) as conn:
+            with conn.cursor() as cur:
+              cur.execute("set lock_timeout='5s'; set statement_timeout='30s'")
+              cur.execute("select count(*) from mei_email.flyway_schema_history where success is false")
+              failed=int(cur.fetchone()[0]); print('FAILED_MIGRATIONS='+str(failed))
+              if failed: raise SystemExit('ABORT_FAILED_MIGRATION_PRESENT')
+              cur.execute("select version::text,description,script,checksum,success from mei_email.flyway_schema_history where ltrim(version::text,'0') in ('14','17','18') order by installed_rank for update")
+              rows=cur.fetchall(); print('HISTORY_BEFORE='+json.dumps(rows,default=str))
+              expected={
+                '014':('cnpj alphanumeric and submission guard','V014__cnpj_alphanumeric_and_submission_guard.sql',-1937083762),
+                '017':('optimize submission trigger','V017__complete_email_status_enum.sql',1230001533),
+                '018':('index envios enviado em','V018__email_delivery_model_and_suppression.sql',492443262),
+              }
+              if len(rows)!=3: raise SystemExit('ABORT_HISTORY_ROW_COUNT')
+              for version,desc,script,checksum,success in rows:
+                key=str(version).zfill(3)
+                if not success or (desc,script,checksum)!=expected[key]: raise SystemExit('ABORT_UNEXPECTED_PARTIAL_REPAIR_'+key)
+              # Verify the current intended effects are physically present before aligning script metadata.
+              cur.execute("select count(*) from pg_constraint where connamespace='mei_email'::regnamespace and conname='empresas_cnpj_check'")
+              if int(cur.fetchone()[0])!=1: raise SystemExit('ABORT_V014_CONSTRAINT_MISSING')
+              cur.execute("select count(*) from pg_trigger where tgname='envios_marcar_empresa_submetida' and not tgisinternal")
+              if int(cur.fetchone()[0])!=1: raise SystemExit('ABORT_V014_TRIGGER_MISSING')
+              cur.execute("select count(*) from pg_indexes where schemaname='mei_email' and indexname='idx_envios_enviado_em_v2'")
+              if int(cur.fetchone()[0])!=1: raise SystemExit('ABORT_V018_INDEX_MISSING')
+              cur.execute("update mei_email.flyway_schema_history set script='V017__optimize_submission_trigger.sql' where ltrim(version::text,'0')='17' and script='V017__complete_email_status_enum.sql' and checksum=1230001533 and success is true")
+              if cur.rowcount!=1: raise SystemExit('ABORT_V017_SCRIPT_ALIGN')
+              cur.execute("update mei_email.flyway_schema_history set script='V018__index_envios_enviado_em.sql' where ltrim(version::text,'0')='18' and script='V018__email_delivery_model_and_suppression.sql' and checksum=492443262 and success is true")
+              if cur.rowcount!=1: raise SystemExit('ABORT_V018_SCRIPT_ALIGN')
+              cur.execute("select version::text,description,script,checksum,success from mei_email.flyway_schema_history where ltrim(version::text,'0') in ('14','17','18') order by installed_rank")
+              print('HISTORY_AFTER='+json.dumps(cur.fetchall(),default=str))
+            conn.commit()
+          print('HISTORY_RECONCILIATION_COMMITTED=true')
+          PY
+
+          echo '=== FLYWAY VALIDATE CURRENT TREE ==='
+          timeout 90s docker compose run --rm flyway validate
+
+          echo '=== AUTHORIZATION TRUE: CURRENT QUALIFIED MEI/MG STOCK ==='
+          .venv/bin/python - <<'PY'
+          import json,psycopg
+          from app.config import settings
+          origin='confirmacao_operador_authorization_true_2026-08-19'
+          with psycopg.connect(settings.database_url,connect_timeout=10) as conn:
+            with conn.cursor() as cur:
+              cur.execute("set lock_timeout='5s'; set statement_timeout='120s'")
+              cur.execute("""
+                select
+                  count(*) as qualifying,
+                  count(*) filter(where marketing_autorizado is true) as already_authorized,
+                  count(*) filter(where marketing_autorizado is false) as to_authorize,
+                  count(*) filter(where mei_verificado is true) as mei_verified
+                from mei_email.empresas
+                where tipo_regime='MEI' and upper(uf)='MG' and situacao_cadastral='ATIVA'
+                  and opt_out=false and provavel_terceiro=false and enviado=false
+                  and email is not null and btrim(email::text)<>'' and mei_email.is_valid_email_address(email)
+              """)
+              r=cur.fetchone(); print('AUTH_SCOPE='+json.dumps({'qualifying':r[0],'already_authorized':r[1],'to_authorize':r[2],'mei_verified':r[3]}))
+              cur.execute("""
+                update mei_email.empresas emp
+                   set marketing_autorizado=true,
+                       marketing_autorizado_em=coalesce(emp.marketing_autorizado_em,now()),
+                       marketing_autorizado_origem=%s
+                 where emp.marketing_autorizado is false
+                   and emp.tipo_regime='MEI' and upper(emp.uf)='MG'
+                   and emp.situacao_cadastral='ATIVA' and emp.opt_out=false and emp.provavel_terceiro=false
+                   and emp.enviado=false and emp.mei_verificado=true
+                   and emp.email is not null and btrim(emp.email::text)<>'' and mei_email.is_valid_email_address(emp.email)
+                   and not exists (
+                     select 1 from mei_email.envios h
+                     where lower(btrim(h.email::text))=lower(btrim(emp.email::text))
+                       and h.status::text in ('submitted','enviado','delivered')
+                   )
+              """,(origin,))
+              print('AUTHORIZATION_TRUE_UPDATED='+str(cur.rowcount))
+            conn.commit()
+          PY
+
+          echo '=== MIGRATE FORWARD V037-V039 ==='
+          timeout 8m docker compose run --rm flyway migrate
+          timeout 90s docker compose run --rm flyway validate
+
+          echo '=== VERIFY DB POST-MIGRATION ==='
+          .venv/bin/python - <<'PY'
+          import json,time,psycopg
+          from app.config import settings
+          with psycopg.connect(settings.database_url,connect_timeout=10) as conn:
+            with conn.cursor() as cur:
+              cur.execute("set statement_timeout='120s'")
+              cur.execute("select version::text,description,checksum,success from mei_email.flyway_schema_history where ltrim(version::text,'0') in ('37','38','39') order by installed_rank")
+              rows=cur.fetchall(); print('MIGRATIONS_37_39='+json.dumps(rows,default=str))
+              ok={str(v).lstrip('0') for v,d,c,s in rows if s}
+              if not {'37','38','39'}.issubset(ok): raise SystemExit('ABORT_MIGRATIONS_37_39_MISSING')
+              cur.execute("select count(*) from pg_indexes where schemaname='mei_email' and tablename='email_suppressions' and indexname in ('idx_email_suppressions_lookup','uq_email_suppressions_active_scope_value')")
+              n=int(cur.fetchone()[0]); print('SUPPRESSION_INDEX_COUNT='+str(n))
+              if n<2: raise SystemExit('ABORT_SUPPRESSION_INDEX_MISSING')
+              t=time.monotonic(); cur.execute("select mei_email.is_email_suppressed('probe-not-present-20260819@example.invalid'::citext)"); cur.fetchone(); print('SUPPRESSION_PROBE_SECONDS=%.6f'%(time.monotonic()-t))
+              cur.execute("select count(*) from mei_email.envios e join mei_email.empresas emp on emp.cnpj=e.cnpj where e.status::text in ('pendente','enviando','pending','processing') and emp.marketing_autorizado=true and emp.mei_verificado=true and emp.opt_out=false and emp.situacao_cadastral='ATIVA' and emp.provavel_terceiro=false and mei_email.is_valid_email_address(e.email) and not mei_email.is_email_suppressed(e.email) and not mei_email.is_cnpj_suppressed(emp.cnpj::text)")
+              print('OPEN_ELIGIBLE_QUEUE='+str(cur.fetchone()[0]))
+          with psycopg.connect(settings.database_url,connect_timeout=10) as conn:
+            conn.autocommit=True
+            with conn.cursor() as cur:
+              for table in ('mei_email.email_suppressions','mei_email.envios','mei_email.empresas','mei_email.lotes'):
+                print('ANALYZE='+table); cur.execute('analyze '+table)
+          PY
+
+          echo '=== INSTALL SENDER + AUTOREPAIR UNITS ==='
+          sudo install -m 0644 deploy/systemd/mei-mg-email-worker.service /etc/systemd/system/mei-mg-email-worker.service
+          sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service /etc/systemd/system/mei-mg-email-autorepair.service
+          sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.timer /etc/systemd/system/mei-mg-email-autorepair.timer
+          sudo systemctl daemon-reload
+          sudo systemctl reset-failed mei-mg-email-worker.service mei-mg-email-autorepair.service || true
+          grep -Fq 'worker.worker_queue_first' deploy/systemd/mei-mg-email-worker.service
+          grep -Fq 'OnUnitActiveSec=1h' deploy/systemd/mei-mg-email-autorepair.timer
+
+          echo '=== START WORKER, REQUIRE REAL SENDS ==='
+          resume_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          sudo systemctl start mei-mg-email-worker.service
+          test "$(sudo systemctl is-active mei-mg-email-worker.service)" = active
+          echo "RESUME_AT_UTC=$resume_at"
+          progress=0
+          for i in $(seq 1 14); do
+            sleep 30
+            progress="$(RESUME_AT="$resume_at" .venv/bin/python - <<'PY'
+          import os,psycopg
+          from app.config import settings
+          with psycopg.connect(settings.database_url) as conn:
+            with conn.cursor() as cur:
+              cur.execute("select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em >= %s::timestamptz",(os.environ['RESUME_AT'],)); print(cur.fetchone()[0])
+          PY
+          )"
+            echo "SEND_PROGRESS_${i}=$progress"
+            if [ "$progress" -ge 10 ]; then break; fi
+            test "$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)" = active
+            if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then echo SENTINEL_DURING_SEND=present; exit 53; fi
+          done
+
+          echo '=== FINAL PROOF ==='
+          RESUME_AT="$resume_at" .venv/bin/python - <<'PY'
+          import json,os,psycopg
+          from app.config import settings
+          from worker.worker import WORKER_ADVISORY_LOCK_ID
+          with psycopg.connect(settings.database_url,connect_timeout=10) as conn:
+            with conn.cursor() as cur:
+              cur.execute("""select count(*) filter(where status::text in ('submitted','enviado') and enviado_em >= %s::timestamptz), count(*) filter(where status::text in ('submitted','enviado') and enviado_em >= now()-interval '2 minutes'), count(*) filter(where status::text in ('submitted','enviado') and enviado_em >= now()-interval '24 hours'), max(enviado_em) filter(where status::text in ('submitted','enviado')), count(*) filter(where status::text in ('pendente','enviando','pending','processing')) from mei_email.envios""",(os.environ['RESUME_AT'],))
+              r=cur.fetchone(); print('FINAL_QUEUE='+json.dumps({'sent_since_resume':r[0],'sent_last2m':r[1],'sent24_queue':r[2],'last_sent_at':str(r[3]),'open_queue':r[4]}))
+              cur.execute("select count(*) from mei_email.envios_externos_cota where sent_at>=now()-interval '24 hours'"); ext=int(cur.fetchone()[0]); print('EXTERNAL_SENT_24H='+str(ext)); print('EFFECTIVE_SENT_24H='+str(int(r[2])+ext))
+              cur.execute("select l.pid,a.state,now()-a.query_start,coalesce(a.client_addr::text,'local'),left(coalesce(a.query,''),300) from pg_locks l join pg_stat_activity a on a.pid=l.pid where l.locktype='advisory' and l.classid=0 and l.objid=%s and l.granted",(WORKER_ADVISORY_LOCK_ID,)); locks=cur.fetchall(); print('WORKER_LOCKS='+json.dumps(locks,default=str))
+              if len(locks)!=1: raise SystemExit('ABORT_WORKER_LOCK_COUNT')
+              if int(r[0])<10 or int(r[1])<1: raise SystemExit('ABORT_REAL_SEND_PROGRESS')
+          PY
+          service="$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"; echo "SERVICE_FINAL=$service"; test "$service" = active
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then echo SENTINEL_FINAL=present; exit 53; else echo SENTINEL_FINAL=absent; fi
+          log="$(sudo journalctl -u mei-mg-email-worker.service --since "$resume_at" --no-pager 2>/dev/null || true)"
+          echo "AS42004_SINCE_RESUME=$(printf '%s\n' "$log" | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8' || true)"
+          if printf '%s\n' "$log" | grep -Eqi 'AS\(42004\)|bad outbound sender|5\.1\.8'; then exit 54; fi
+          echo JOURNAL_FINAL_BEGIN; printf '%s\n' "$log" | tail -n 180; echo JOURNAL_FINAL_END
+
+          echo '=== RESTORE TIMERS ONLY AFTER SEND PROOF ==='
+          sudo systemctl enable --now mei-mg-email-autorepair.timer
+          sudo systemctl enable --now mei-mg-email-base-sync.timer || true
+          sudo systemctl disable mei-mg-base-sync.timer || true
+          echo "AUTOREPAIR_TIMER_FINAL=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || true)"
+          echo "BASE_SYNC_TIMER_FINAL=$(sudo systemctl is-active mei-mg-email-base-sync.timer 2>/dev/null || true)"
+          echo "LEGACY_BASE_SYNC_TIMER_ENABLED=$(sudo systemctl is-enabled mei-mg-base-sync.timer 2>/dev/null || true)"
+          echo COMPLETE_REPAIR_VERIFIED=true
+          EOF
+      - name: Persist report
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/mei-targeted-history-fix-resume-v2-20260819-2210.txt
+          git commit -m 'ops: record complete Flyway reconciliation and MEI sender restore v2' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"

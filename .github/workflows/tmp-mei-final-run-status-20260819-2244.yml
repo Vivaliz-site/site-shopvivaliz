@@ -1,0 +1,37 @@
+name: Snapshot final MEI baseline repair status
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-mei-final-run-status-20260819-2244.yml']
+permissions:
+  actions: read
+  contents: write
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          out=reports/mei-final-run-status-20260819-2244.txt
+          echo "CHECK_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$out"
+          echo 'AUDIT=' >> "$out"
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow tmp-mei-baseline-audit-scratch-20260819-2225.yml --branch main --limit 2 --json databaseId,status,conclusion,createdAt,updatedAt,url --jq '.' >> "$out"
+          echo 'FINAL=' >> "$out"
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow tmp-mei-baseline-reconcile-resume-20260819-2240.yml --branch main --limit 2 --json databaseId,status,conclusion,createdAt,updatedAt,url --jq '.' >> "$out"
+          echo 'CANCEL=' >> "$out"
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow tmp-cancel-redundant-mei-audit-20260819-2242.yml --branch main --limit 2 --json databaseId,status,conclusion,createdAt,updatedAt,url --jq '.' >> "$out"
+      - name: Persist
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/mei-final-run-status-20260819-2244.txt
+          git commit -m 'ops: snapshot final MEI baseline repair status' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main

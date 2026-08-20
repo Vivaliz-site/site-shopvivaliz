@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "ops/google-ads-vm-live-validate.json"
+      - ".github/workflows/google-ads-vm-live-validate.yml"
 
 permissions:
   contents: read
@@ -17,22 +18,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure VM key
+      - name: Configure VM key and host
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
         shell: bash
         run: |
           set -euo pipefail
           test -n "$VM_KEY"
+          [[ "$VM_HOST" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'SHOPVIVALIZ_VM_HOST invalid'; exit 2; }
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
+          echo "vm_host=$VM_HOST" >> "$GITHUB_ENV"
+          echo "ssh_opts=-o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/vmkey" >> "$GITHUB_ENV"
 
       - name: Validate OAuth and Google Ads read-only
         shell: bash
         run: |
           set -euo pipefail
-          ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          ssh $ssh_opts ubuntu@"$vm_host" 'bash -s' <<'REMOTE'
           set -euo pipefail
           VENV='/tmp/shopvivaliz-google-ads-venv'
           rm -rf "$VENV"

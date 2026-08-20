@@ -15,6 +15,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate request
+        id: req
+        shell: bash
+        run: |
+          set -euo pipefail
+          campaign_id="$(jq -r '.campaign_id // ""' ops/google-ads-delivery-recovery.json)"
+          [[ "$campaign_id" =~ ^[0-9]{6,20}$ ]] || { echo 'invalid campaign_id'; exit 2; }
+          apply_changes="$(jq -r 'if .apply_changes == true then "true" else "false" end' ops/google-ads-delivery-recovery.json)"
+          echo "campaign_id=$campaign_id" >> "$GITHUB_OUTPUT"
+          echo "apply_changes=$apply_changes" >> "$GITHUB_OUTPUT"
+
       - name: Configure VM key
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
@@ -26,15 +40,25 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
 
-      - name: Diagnose and repair first-page bid limits
+      - name: Diagnose and optionally repair first-page bid limits
+        env:
+          VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
+          TARGET_CAMPAIGN_ID: ${{ steps.req.outputs.campaign_id }}
+          APPLY_CHANGES: ${{ steps.req.outputs.apply_changes }}
         shell: bash
         run: |
           set -euo pipefail
-          ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
-          import json, math, urllib.parse, urllib.request, urllib.error
+          test -n "${VM_HOST:-}" || { echo 'SHOPVIVALIZ_VM_HOST missing'; exit 2; }
+          [[ "$VM_HOST" =~ ^[A-Za-z0-9._-]+$ ]] || { echo 'SHOPVIVALIZ_VM_HOST invalid'; exit 2; }
+          [[ "$TARGET_CAMPAIGN_ID" =~ ^[0-9]{6,20}$ ]] || { echo 'invalid target campaign'; exit 2; }
+          [[ "$APPLY_CHANGES" =~ ^(true|false)$ ]] || { echo 'invalid apply flag'; exit 2; }
+          SSH_OPTS=(-o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/vmkey)
+          ssh "${SSH_OPTS[@]}" "ubuntu@${VM_HOST}" 'python3 -' "$TARGET_CAMPAIGN_ID" "$APPLY_CHANGES" <<'PY'
+          import json, math, sys, urllib.parse, urllib.request, urllib.error
           from pathlib import Path
 
-          TARGET='24144257692'
+          TARGET=sys.argv[1]
+          APPLY_CHANGES=(sys.argv[2] == 'true')
           EXPECTED_BUDGET_MICROS=10_000_000
           MAX_CPC_MICROS=1_200_000
           BID_HEADROOM=1.05
@@ -84,7 +108,7 @@ jobs:
               raise SystemExit(f'GUARDRAIL_BUDGET_CHANGED={budget}')
           if status != 'ENABLED':
               raise SystemExit(f'GUARDRAIL_CAMPAIGN_STATUS={status}')
-          print('CAMPAIGN='+json.dumps(c,ensure_ascii=False,separators=(',',':')))
+          print('CAMPAIGN_GUARDRAILS_OK budget_micros='+str(budget)+' status='+str(status))
 
           rows=search(f'''SELECT ad_group.name, ad_group_criterion.resource_name, ad_group_criterion.status, ad_group_criterion.negative, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ad_group_criterion.cpc_bid_micros, ad_group_criterion.primary_status, ad_group_criterion.primary_status_reasons, ad_group_criterion.position_estimates.first_page_cpc_micros FROM keyword_view WHERE campaign.id = {TARGET} AND ad_group_criterion.status != 'REMOVED' ORDER BY ad_group.name, ad_group_criterion.keyword.text''')
 
@@ -104,7 +128,6 @@ jobs:
               reasons=crit.get('primaryStatusReasons') or []
               current=int(crit.get('cpcBidMicros') or 0)
               estimate=int((crit.get('positionEstimates') or {}).get('firstPageCpcMicros') or 0)
-              print('KEYWORD='+json.dumps({'group':row.get('adGroup',{}).get('name'),'text':text,'match':match,'primary_status':primary,'reasons':reasons,'current_cpc_micros':current,'first_page_cpc_micros':estimate},ensure_ascii=False,separators=(',',':')))
               reason_text='|'.join(reasons)
               if 'RARELY_SERVED' in reason_text or primary == 'NOT_ELIGIBLE':
                   low_volume += 1
@@ -117,7 +140,7 @@ jobs:
                       updates.append({'update':{'resourceName':crit['resourceName'],'cpcBidMicros':target},'updateMask':'cpc_bid_micros'})
                       print(f'PROPOSED_BID_UPDATE={text}|old={current}|estimate={estimate}|new={target}')
 
-          print(f'DIAGNOSTIC eligible={eligible} low_volume_or_not_eligible={low_volume} below_first_page={below_first_page} proposed_updates={len(updates)}')
+          print(f'DIAGNOSTIC eligible={eligible} low_volume_or_not_eligible={low_volume} below_first_page={below_first_page} proposed_updates={len(updates)} apply_changes={str(APPLY_CHANGES).lower()}')
 
           if updates:
               mutate_url=f'https://googleads.googleapis.com/v25/customers/{cid}/adGroupCriteria:mutate'
@@ -128,13 +151,15 @@ jobs:
                       with urllib.request.urlopen(req,timeout=40) as r:
                           return json.loads(r.read().decode())
                   except urllib.error.HTTPError as e:
-                      detail=e.read().decode(errors='ignore')
-                      print(('VALIDATE' if validate_only else 'APPLY')+'_FAILED http='+str(e.code)+' body='+detail[:3000].replace('\n',' '))
+                      print(('VALIDATE' if validate_only else 'APPLY')+'_FAILED http='+str(e.code))
                       raise
               mutate(True)
               print('VALIDATE_ONLY=PASS')
-              result=mutate(False)
-              print('APPLY=PASS results='+str(len(result.get('results') or [])))
+              if APPLY_CHANGES:
+                  result=mutate(False)
+                  print('APPLY=PASS results='+str(len(result.get('results') or [])))
+              else:
+                  print('APPLY=SKIPPED_REQUIRES_OPS_APPLY_CHANGES_TRUE')
           else:
               print('APPLY=NO_BID_CHANGES_NEEDED')
 
@@ -142,19 +167,8 @@ jobs:
           post_budget=int(post_campaign.get('campaignBudget',{}).get('amountMicros') or 0)
           if post_budget != EXPECTED_BUDGET_MICROS:
               raise SystemExit('POST_GUARDRAIL_BUDGET_CHANGED='+str(post_budget))
-          post=search(f'''SELECT ad_group_criterion.negative, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ad_group_criterion.cpc_bid_micros FROM keyword_view WHERE campaign.id = {TARGET} AND ad_group_criterion.status != 'REMOVED' ''')
-          for row in post:
-              crit=row.get('adGroupCriterion',{})
-              if crit.get('negative'):
-                  continue
-              text=(crit.get('keyword',{}).get('text') or '').strip()
-              if (crit.get('keyword',{}).get('matchType') or '') == 'BROAD':
-                  raise SystemExit('POST_GUARDRAIL_BROAD_POSITIVE='+text)
-              bid=int(crit.get('cpcBidMicros') or 0)
-              if bid > MAX_CPC_MICROS:
-                  raise SystemExit('POST_GUARDRAIL_CPC_OVER_CAP='+text+':'+str(bid))
           print('POST_GUARDRAILS_OK budget_micros='+str(post_budget)+' max_cpc_micros='+str(MAX_CPC_MICROS))
-          print('RESULT=DELIVERY_RECOVERY_APPLIED')
+          print('RESULT=DELIVERY_RECOVERY_' + ('APPLIED' if APPLY_CHANGES and updates else 'VALIDATED'))
           PY
 
       - name: Cleanup

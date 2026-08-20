@@ -1,0 +1,80 @@
+name: Derive current MEI Flyway history in isolated scratch only
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-mei-scratch-history-only-20260819-2233.yml']
+permissions:
+  contents: write
+jobs:
+  scratch:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 12
+    env:
+      VM_HOST: 137.131.156.17
+      VM_USER: ubuntu
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure verified SSH
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"; known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" && test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+      - name: Build scratch history only
+        run: |
+          set -Eeuo pipefail
+          mkdir -p reports
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=12 -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF' > reports/mei-scratch-history-only-20260819-2233.txt 2>&1
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo "CHECK_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "HEAD=$(git rev-parse HEAD)"
+          net=mei-flyway-checksum-net-2233
+          db=mei-flyway-checksum-db-2233
+          cleanup() { sudo docker rm -f "$db" >/dev/null 2>&1 || true; sudo docker network rm "$net" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          cleanup
+          sudo docker network create "$net" >/dev/null
+          pw="$(openssl rand -hex 24)"
+          sudo docker run -d --name "$db" --network "$net" -e POSTGRES_DB=mei_scratch -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD="$pw" postgres:16-alpine >/dev/null
+          for i in $(seq 1 40); do sudo docker exec "$db" pg_isready -U postgres -d mei_scratch >/dev/null 2>&1 && break; sleep 1; done
+          sudo docker exec "$db" pg_isready -U postgres -d mei_scratch >/dev/null
+          echo SCRATCH_MIGRATE_BEGIN
+          timeout 7m sudo docker run --rm --network "$net" \
+            -e FLYWAY_URL="jdbc:postgresql://${db}:5432/mei_scratch" \
+            -e FLYWAY_USER=postgres -e FLYWAY_PASSWORD="$pw" \
+            -e FLYWAY_SCHEMAS=mei_email -e FLYWAY_DEFAULT_SCHEMA=mei_email \
+            -v "$PWD/db/migrations:/flyway/sql:ro" flyway/flyway:10-alpine migrate
+          echo SCRATCH_MIGRATE_END
+          echo HISTORY_019_039_BEGIN
+          sudo docker exec -e PGPASSWORD="$pw" "$db" psql -U postgres -d mei_scratch -At -F '|' -c "select version,description,type,script,checksum,success from mei_email.flyway_schema_history where version::int between 19 and 39 order by version::int"
+          echo HISTORY_019_039_END
+          echo FULL_HISTORY_BEGIN
+          sudo docker exec -e PGPASSWORD="$pw" "$db" psql -U postgres -d mei_scratch -At -F '|' -c "select installed_rank,version,description,type,script,checksum,success from mei_email.flyway_schema_history where version is not null order by installed_rank"
+          echo FULL_HISTORY_END
+          cleanup
+          trap - EXIT
+          echo SCRATCH_HISTORY_COMPLETE=true
+          EOF
+      - name: Persist report
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/mei-scratch-history-only-20260819-2233.txt
+          git commit -m 'ops: record isolated scratch Flyway history for MEI' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"

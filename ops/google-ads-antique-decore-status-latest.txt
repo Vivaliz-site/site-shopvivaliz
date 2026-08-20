@@ -1,0 +1,13 @@
+workflow=Google Ads Antique Decore Status
+run_id=32322625584
+run_attempt=1
+published_at_utc=2026-08-20T01:54:00Z
+commit_sha=570ee0a1b38cb78bcd1988d4a9a51fc1db748676
+--- live-watch ---
+checked_at_utc=2026-08-20T01:53:30Z
+conversion_candidate=Compra:id=7630829260:status=ENABLED:primary=true:included=true:type=GOOGLE_ANALYTICS_4_PURCHASE:origin=WEBSITE:category=PURCHASE
+conversion_candidate=Shopvivaliz (web) manual_event_PURCHASE:id=7630858749:status=ENABLED:primary=false:included=false:type=GOOGLE_ANALYTICS_4_CUSTOM:origin=WEBSITE:category=PURCHASE
+purchase_customer_goal=category=PURCHASE:origin=WEBSITE:biddable=true
+ACTION=PAUSED
+PAUSE_REASON=LANDING_PAGE_GUARD_FAILED url=https://shopvivaliz.com.br/catalogo?q=decore&utm_source=google&utm_medium=cpc&utm_campaign=search_vasos_antique_decore_2026_08&utm_content=vasos_decore_japi&cupom= error=TimeoutError:The read operation timed out
+RESULT=PAUSED_GUARD_FAILED

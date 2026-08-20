@@ -1,0 +1,45 @@
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Tue Aug 18 22:39:46 -03 2026
+
+  System load:  2.3                Processes:             183
+  Usage of /:   86.4% of 44.96GB   Users logged in:       0
+  Memory usage: 45%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   51%
+
+  => / is using 86.4% of 44.96GB
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+64 updates can be applied immediately.
+8 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+16 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+116 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+
+*** System restart required ***
+CHECK_UTC=2026-08-20T00:52:30Z
+WORKER=inactive
+SENTINEL=absent
+PS_BEGIN
+2591113     379 Ss   bash /flyway/flyway migrate
+2591216     373 Sl   /opt/java/openjdk/bin/java -Djava.security.egd=file:/dev/../dev/urandom -cp :/flyway/lib/*:/flyway/lib/aad/*:/flyway/lib/plugins/*:/flyway/lib/oracle_wallet/*:/flyway/lib/flyway/*:/flyway/drivers/*:/flyway/drivers/gcp/*:/flyway/drivers/cassandra/*:/flyway/drivers/mongo/* org.flywaydb.commandline.Main migrate
+PS_END
+HISTORY=[["014", "cnpj alphanumeric and submission guard", "V014__cnpj_alphanumeric_and_submission_guard.sql", -1937083762, true], ["017", "optimize submission trigger", "V017__complete_email_status_enum.sql", 1230001533, true], ["018", "index envios enviado em", "V018__email_delivery_model_and_suppression.sql", 492443262, true]]
+DB_ACTIVE=[[4115, "idle in transaction", "0:03:09.715898", "Client", "ClientRead", "SELECT COUNT(*) FROM pg_namespace WHERE nspname=$1"], [4117, "active", "0:00:33.614439", "IO", "DataFileRead", "update empresas\n   set marketing_autorizado = true,\n       marketing_autorizado_em = coalesce(marketing_autorizado_em, now()),\n       marketing_autorizado_origem = coalesce(\n           nullif(btrim(marketing_autorizado_origem), ''),\n           'confirmacao_operador_2026-08-12'\n       )"], [4127, "active", "0:00:31.018451", null, null, "\n            select\n              count(*) filter (where status::text in ('pendente','enviando')) as fila,\n              count(*) filter (where status::text = 'pendente') as pendentes,\n              count(*) filter (where status::text = 'enviando') as enviando,\n              count(*) filter (\n                where status::text in ('submitted','enviado')\n                  and enviado_em >= now() - interval '24 hours'\n              ) as enviados_24h,\n              count(*) filter (\n               "], [4128, "active", "0:00:31.018451", null, null, "\n            select\n              count(*) filter (where status::text in ('pendente','enviando')) as fila,\n              count(*) filter (where status::text = 'pendente') as pendentes,\n              count(*) filter (where status::text = 'enviando') as enviando,\n              count(*) filter (\n                where status::text in ('submitted','enviado')\n                  and enviado_em >= now() - interval '24 hours'\n              ) as enviados_24h,\n              count(*) filter (\n               "]]
+SENT10M=0

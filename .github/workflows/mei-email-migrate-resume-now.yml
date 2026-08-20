@@ -18,7 +18,7 @@ jobs:
   migrate-and-resume:
     runs-on: ubuntu-latest
     environment: Production
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       VM_HOST: 137.131.156.17
       VM_USER: ubuntu
@@ -41,7 +41,7 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Apply migrations before resume
+      - name: Apply migrations and resume safely
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -55,15 +55,16 @@ jobs:
           cd /home/ubuntu/mei-mg-email
           echo "CHECKED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           echo "HEAD_BEFORE=$(git rev-parse HEAD)"
+
+          sudo systemctl stop mei-mg-email-autorepair.service mei-mg-email-worker.service || true
+          sudo systemctl reset-failed mei-mg-email-autorepair.service mei-mg-email-worker.service || true
+
           git diff --quiet
           git diff --cached --quiet
           git fetch origin main
           git merge --ff-only origin/main
           echo "HEAD_DEPLOYED=$(git rev-parse HEAD)"
           .venv/bin/python -m compileall -q app worker scripts
-
-          sudo systemctl stop mei-mg-email-autorepair.service mei-mg-email-worker.service || true
-          sudo systemctl reset-failed mei-mg-email-autorepair.service mei-mg-email-worker.service || true
 
           test -f db/migrations/V037__fail_closed_open_queue_and_legacy_copy.sql
           test -f db/migrations/V038__enforce_campaign_copy_and_live_eligibility.sql
@@ -72,29 +73,30 @@ jobs:
           .venv/bin/python - <<'PY'
           from dotenv import load_dotenv
           load_dotenv('.env', override=True)
-          import os, psycopg
+          import json, os, psycopg
           from psycopg.rows import dict_row
           with psycopg.connect(os.environ['DATABASE_URL'], row_factory=dict_row, connect_timeout=10) as conn:
               with conn.cursor() as cur:
                   cur.execute("set statement_timeout='45s'")
                   cur.execute("""
                     select
-                      count(*) filter (
-                        where (status in ('ativa','pausada') or ativo is true)
-                          and (corpo_template ilike '%base pública de CNPJ%'
-                               or corpo_template ilike '%base publica de CNPJ%')
-                      ) as legacy_public_cnpj_campaigns,
-                      count(*) filter(where status in ('pending','processing')) as legacy_open,
-                      count(*) filter(where status in ('pendente','enviando','pending','processing')) as open_queue,
-                      count(*) filter(where status in ('submitted','enviado') and enviado_em >= now()-interval '24 hours') as sent_24h,
-                      max(enviado_em) filter(where status in ('submitted','enviado')) as last_sent_at
-                    from mei_email.campanhas c
-                    cross join mei_email.envios e
+                      (select count(*) from mei_email.campanhas
+                        where (corpo_template ilike '%base pública de CNPJ%'
+                           or corpo_template ilike '%base publica de CNPJ%')) as legacy_public_cnpj_campaigns,
+                      (select count(*) from mei_email.envios
+                        where status in ('pending','processing')) as legacy_open,
+                      (select count(*) from mei_email.envios
+                        where status in ('pendente','enviando','pending','processing')) as open_queue,
+                      (select count(*) from mei_email.envios
+                        where status in ('submitted','enviado')
+                          and enviado_em >= now()-interval '24 hours') as sent_24h,
+                      (select max(enviado_em) from mei_email.envios
+                        where status in ('submitted','enviado')) as last_sent_at
                   """)
-                  row=dict(cur.fetchone())
-                  print(row)
+                  row = dict(cur.fetchone())
+                  print('POST_MIGRATE_STATE=' + json.dumps(row, default=str, sort_keys=True))
                   if int(row['legacy_public_cnpj_campaigns'] or 0) > 0:
-                      raise SystemExit('legacy public-CNPJ campaign copy still active after migrations')
+                      raise SystemExit('legacy public-CNPJ copy still present after migrations')
                   if int(row['legacy_open'] or 0) > 0:
                       raise SystemExit('legacy queue states remain after migrations')
           PY
@@ -189,3 +191,5 @@ jobs:
         if: always()
         shell: bash
         run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+# forced rerun: 2026-08-19T22:20:00-03:00

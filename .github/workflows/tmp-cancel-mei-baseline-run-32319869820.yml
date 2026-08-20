@@ -1,0 +1,16 @@
+name: Cancel MEI baseline run before authorization mutation
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-cancel-mei-baseline-run-32319869820.yml']
+permissions:
+  actions: write
+  contents: read
+jobs:
+  cancel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel current baseline run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel 32319869820 --repo "$GITHUB_REPOSITORY" || true
