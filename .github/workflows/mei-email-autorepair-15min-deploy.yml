@@ -63,6 +63,7 @@ jobs:
           # Preserve unrelated local VM drift such as docker-compose shm_size.
           # Deploy only reviewed runtime and systemd files from sender main.
           git checkout origin/main -- \
+            app/queue_manager.py \
             deploy/systemd/mei-mg-email-worker.service \
             deploy/systemd/mei-mg-email-autorepair.service \
             deploy/systemd/mei-mg-email-autorepair.timer \
@@ -72,10 +73,13 @@ jobs:
             worker/safe_entrypoint_v2.py
 
           .venv/bin/python -m py_compile \
+            app/queue_manager.py \
             scripts/runtime_sender_preflight.py \
             scripts/nonstop_supervisor_15m.py \
             worker/safe_entrypoint.py \
             worker/safe_entrypoint_v2.py
+          grep -q 'pg_try_advisory_xact_lock(%s) as acquired' app/queue_manager.py
+          grep -q 'cur.fetchone()\["acquired"\]' app/queue_manager.py
           grep -q '^OnUnitActiveSec=15min$' deploy/systemd/mei-mg-email-autorepair.timer
           grep -q '^StartLimitIntervalSec=0$' deploy/systemd/mei-mg-email-worker.service
           grep -q '^Restart=always$' deploy/systemd/mei-mg-email-worker.service
@@ -136,6 +140,7 @@ jobs:
           echo "WORKER_ACTIVE=true"
           echo "WORKER_ENABLED=true"
           echo "WORKER_SAFE_ENTRYPOINT_V2=true"
+          echo "AUTOQUEUE_DICT_ROW_FIX=true"
           sudo systemctl show mei-mg-email-worker.service \
             -p ActiveState -p SubState -p MainPID -p ExecStart -p ExecStartPre \
             -p Restart -p RestartUSec -p StartLimitIntervalUSec --no-pager
@@ -161,3 +166,5 @@ jobs:
 
 # remove legacy queue-first systemd override and verify effective safe entrypoint 2026-08-20T10:25Z
 # deploy operator-origin consent guard 2026-08-20T10:52Z
+# deploy strict operator-origin consent guard 2026-08-20T11:00Z
+# deploy autoqueue dict-row advisory-lock fix 2026-08-20
