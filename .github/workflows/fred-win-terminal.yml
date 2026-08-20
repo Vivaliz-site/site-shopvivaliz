@@ -1,0 +1,111 @@
+name: Fred-Win Terminal Relay
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ops/fredwin-terminal-request.json"
+      - ".github/workflows/fred-win-terminal.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fred-win-terminal-relay
+  cancel-in-progress: false
+
+jobs:
+  terminal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY" || { echo "SHOPVIVALIZ_VM_SSH_KEY missing"; exit 2; }
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+
+      - name: Validate terminal request
+        id: request
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -f ops/fredwin-terminal-request.json || { echo "terminal request missing"; exit 3; }
+          ACTION="$(jq -r '.action // ""' ops/fredwin-terminal-request.json)"
+          test "$ACTION" = "terminal" || { echo "action must be terminal"; exit 4; }
+          SHELL_NAME="$(jq -r '.shell // "powershell"' ops/fredwin-terminal-request.json)"
+          test "$SHELL_NAME" = "powershell" || { echo "only powershell is supported"; exit 5; }
+          TIMEOUT="$(jq -r '.timeout // 120' ops/fredwin-terminal-request.json)"
+          [[ "$TIMEOUT" =~ ^[0-9]+$ ]] || { echo "timeout must be an integer"; exit 6; }
+          if (( TIMEOUT < 5 || TIMEOUT > 300 )); then
+            echo "timeout must be between 5 and 300 seconds"
+            exit 7
+          fi
+          COMMAND="$(jq -r '.command // ""' ops/fredwin-terminal-request.json)"
+          test -n "$COMMAND" || { echo "command is required"; exit 8; }
+          if (( ${#COMMAND} > 8000 )); then
+            echo "command exceeds 8000 characters"
+            exit 9
+          fi
+          if grep -q $'\0' ops/fredwin-terminal-request.json; then
+            echo "NUL byte is not allowed"
+            exit 10
+          fi
+          ENCODED="$(python3 - <<'PY'
+import base64, json
+from pathlib import Path
+payload=json.loads(Path('ops/fredwin-terminal-request.json').read_text(encoding='utf-8'))
+command=payload.get('command','')
+print(base64.b64encode(command.encode('utf-16le')).decode('ascii'))
+PY
+)"
+          printf '%s' "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $ENCODED" | base64 -w0 > /tmp/fredwin-terminal-command.b64
+          echo "timeout=$TIMEOUT" >> "$GITHUB_OUTPUT"
+
+      - name: Check canonical private relay health
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health'
+
+      - name: Execute terminal command through Fred-Win MCP
+        shell: bash
+        env:
+          FREDWIN_TIMEOUT: ${{ steps.request.outputs.timeout }}
+        run: |
+          set -Eeuo pipefail
+          CMD_B64="$(cat /tmp/fredwin-terminal-command.b64)"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            "FREDWIN_CMD_B64='$CMD_B64' FREDWIN_TIMEOUT='$FREDWIN_TIMEOUT' python3 - <<'PY'
+          import base64, json, os, urllib.request
+          command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
+          timeout = max(5, min(300, int(os.environ['FREDWIN_TIMEOUT'])))
+          body = json.dumps({'params': {'command': command, 'timeout': timeout}}).encode('utf-8')
+          req = urllib.request.Request(
+              'http://127.0.0.1:5557/mcp/tool/execute_command',
+              data=body,
+              headers={'Content-Type':'application/json'},
+              method='POST',
+          )
+          with urllib.request.urlopen(req, timeout=timeout + 10) as response:
+              payload = json.loads(response.read().decode('utf-8'))
+          print(json.dumps(payload, ensure_ascii=False))
+          result = payload.get('result') or {}
+          if result.get('success') is not True:
+              raise SystemExit('Fred-Win terminal command failed')
+          PY"
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/vmkey /tmp/fredwin-terminal-command.b64
