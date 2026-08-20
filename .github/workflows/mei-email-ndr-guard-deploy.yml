@@ -95,3 +95,5 @@ jobs:
         if: always()
         shell: bash
         run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+# watchdog redeploy mailbox-wide NDR guard 2026-08-20T17:26-0300
