@@ -1,10 +1,6 @@
 name: MEI Email Autorepair 15min Deploy
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/mei-email-autorepair-15min-deploy.yml"
   workflow_dispatch:
 
 permissions:
@@ -55,7 +51,7 @@ jobs:
           cd /home/ubuntu/mei-mg-email
           echo "CHECKED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           echo 'VM_DIRTY_BEGIN'
-          git status --porcelain=v1 || true
+          git status --porcelain=v1
           echo 'VM_DIRTY_END'
           git fetch origin main
           echo "ORIGIN_MAIN=$(git rev-parse origin/main)"
@@ -119,16 +115,20 @@ jobs:
 
           if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
             echo 'CURRENT_SENDER_BLOCK_SENTINEL=present'
-            sudo systemctl stop mei-mg-email-worker.service || true
+            sudo systemctl stop mei-mg-email-worker.service
             exit 42
           fi
 
           echo 'CURRENT_SENDER_BLOCK_SENTINEL=absent'
-          sudo systemctl reset-failed mei-mg-email-worker.service || true
+          sudo systemctl reset-failed mei-mg-email-worker.service
           sudo systemctl restart mei-mg-email-worker.service
           worker_active=false
           for attempt in $(seq 1 36); do
-            state="$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+            if state="$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null)"; then
+              :
+            else
+              state="${state:-inactive}"
+            fi
             echo "WORKER_WAIT_${attempt}=${state}"
             if [ "$state" = active ]; then
               worker_active=true
@@ -136,7 +136,7 @@ jobs:
             fi
             if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
               echo 'CURRENT_SENDER_BLOCK_SENTINEL=present_during_start'
-              sudo systemctl stop mei-mg-email-worker.service || true
+              sudo systemctl stop mei-mg-email-worker.service
               exit 42
             fi
             sleep 5
@@ -157,7 +157,9 @@ jobs:
             -p Restart -p RestartUSec -p StartLimitIntervalUSec --no-pager
           sudo systemctl cat mei-mg-email-worker.service --no-pager
           sudo systemctl cat mei-mg-email-autorepair.service --no-pager
-          sudo journalctl -u mei-mg-email-worker.service --since '-5 minutes' --no-pager | tail -n 120 || true
+          if ! sudo journalctl -u mei-mg-email-worker.service --since '-5 minutes' --no-pager | tail -n 120; then
+            echo '::warning::worker journal evidence unavailable'
+          fi
           echo 'NONSTOP_SAFE_ENTRYPOINT_AND_SUPERVISOR_INSTALLED=true'
           EOF
 
@@ -187,3 +189,4 @@ jobs:
 # watchdog deploy sender main 6c14e388b0001ae0a5caf241722920eb80e841d5 strict-consent restore 2026-08-20T14:12Z
 # deploy strict authorized sender main 2026-08-20T15:35Z
 # deploy presend lot-progress safety fix 2026-08-20T15:59Z
+# harden deploy governance: manual-only trigger and explicit failure handling 2026-08-20T16:21Z
