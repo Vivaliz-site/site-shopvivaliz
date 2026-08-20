@@ -32,27 +32,89 @@ Learn more about enabling ESM Apps service at https://ubuntu.com/esm
 see /var/log/unattended-upgrades/unattended-upgrades.log
 
 *** System restart required ***
-CHECK_BRT=2026-08-20T12:38:49-0300
+CHECK_BRT=2026-08-20T13:01:26-0300
+HEAD=f13516cf35eefc88aa7dc2c6aff8e71a1eff3d72
+ORIGIN_MAIN=5dc1c2a1cfbb7150ca5e84a6fbb1b3cd062f9469
 WORKER=active
 WORKER_ENABLED=enabled
 NDR_GUARD=active
+NDR_GUARD_ENABLED=enabled
 AUTOREPAIR=active
 SENTINEL=absent
-OPEN_TOTAL=500
-OPEN_BY_STATUS=pendente:500
-OPEN_SYNTH=0
-OPEN_REPLAY=0
-ELIGIBLE_POOL=0
-SENT24=58
-LATEST=2026-08-20 11:05:21.803449-03
-SUPPRESSIONS_ACTIVE=3765079
-HARD_BOUNCE_ACTIVE=0
-FLYWAY_MAX=20
-FLYWAY_37_38=0
-GUARD_TRIGGERS=0
-ADVISORY_LOCKS=2
-ADVISORY_HOLDERS=3507:idle:,3789:active:
-LONG_ACTIVE=0
+SYSTEMD_Restart=always
+SYSTEMD_RestartUSec=5s
+SYSTEMD_ExecStart={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubuntu/mei-mg-email/.venv/bin/python -m worker.safe_entrypoint_v2 ; ignore_errors=no ; start_time=[Thu 2026-08-20 12:59:44 -03] ; stop_time=[n/a] ; pid=2972398 ; code=(null) ; status=0/0 }
+SYSTEMD_StartLimitIntervalUSec=0
+OPEN_TOTAL=SET 500
+OPEN_BY_STATUS=SET pendente:500
+OPEN_PENDING_LOT=SET 0
+OPEN_PROCESSING_LOT=SET 0
+OPEN_OTHER_LOT=SET 500
+OPEN_SYNTH=SET 0
+OPEN_REPLAY=SET 0
+OPEN_SUPPRESSED=SET 500
+ELIGIBLE_POOL=SET error
+SENT24=SET 58
+LATEST=SET 2026-08-20 11:05:21.803449-03
+SUPPRESSIONS_ACTIVE=SET 3765079
+HARD_BOUNCE_ACTIVE=SET 0
+ORPHAN_ENVIOS=SET 0
+ORPHAN_LOTS=SET 0
+FLYWAY_MAX=SET 20
+FLYWAY_37_38=SET 0
+FLYWAY_FAILED=SET 0
+GUARD_TRIGGERS=SET 2
+LEGACY_COPY=SET 0
+ADVISORY_LOCKS=SET 2
+ADVISORY_HOLDERS=SET 4005:idle:,4096:active:
+STALE_LOCK_WAITERS=SET 0
+LONG_ACTIVE=SET 0
 GRAPH_AUTH=ok
 DNS_GRAPH=ok
 AS42004_LAST30M=0
+JOURNAL_BEGIN
+Aug 20 12:34:10 shopvivaliz-ai python[2949462]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=d3dbd45b-8272-446c-9aef-29c72c729ddc antes=500 adicionados=1 depois=501 target=2000
+Aug 20 12:34:10 shopvivaliz-ai python[2949462]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 12:34:10 shopvivaliz-ai python[2949462]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=a05309fe-6053-473b-841a-8cb04dba30cb reason=email contem palavra contabil
+Aug 20 12:34:10 shopvivaliz-ai python[2949462]: ERROR:mei_mg_email.worker:Erro no ciclo do worker; conexao sera recuperada
+Aug 20 12:34:10 shopvivaliz-ai python[2949462]:     raise RuntimeError(f"pre-send eligibility rejected {envio_id}: {reason}")
+Aug 20 12:34:10 shopvivaliz-ai python[2949462]: RuntimeError: pre-send eligibility rejected a05309fe-6053-473b-841a-8cb04dba30cb: email contem palavra contabil
+Aug 20 12:34:41 shopvivaliz-ai python[2957752]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 12:34:50 shopvivaliz-ai python[2957752]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 12:34:55 shopvivaliz-ai python[2957752]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 12:35:00 shopvivaliz-ai python[2957752]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 12:35:05 shopvivaliz-ai python[2957752]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 12:35:10 shopvivaliz-ai python[2957752]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 12:35:15 shopvivaliz-ai python[2957752]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 12:35:21 shopvivaliz-ai python[2957752]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 12:35:26 shopvivaliz-ai python[2957752]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 12:35:31 shopvivaliz-ai python[2957752]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 12:35:36 shopvivaliz-ai python[2957752]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 12:35:44 shopvivaliz-ai python[2957752]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 12:36:37 shopvivaliz-ai python[2957752]: WARNING:mei_mg_email.queue:Autoqueue sem candidatos elegiveis. pendentes=500 min=500 target=2000
+Aug 20 12:38:00 shopvivaliz-ai python[2957752]: WARNING:mei_mg_email.queue:Autoqueue sem candidatos elegiveis. pendentes=500 min=500 target=2000
+Aug 20 12:38:51 shopvivaliz-ai python[2957752]: WARNING:mei_mg_email.queue:Autoqueue sem candidatos elegiveis. pendentes=500 min=500 target=2000
+Aug 20 12:39:38 shopvivaliz-ai python[2957752]: WARNING:mei_mg_email.queue:Autoqueue sem candidatos elegiveis. pendentes=500 min=500 target=2000
+Aug 20 12:41:34 shopvivaliz-ai python[2957752]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 20 12:42:18 shopvivaliz-ai python[2957752]: WARNING:mei_mg_email.queue:Autoqueue sem candidatos elegiveis. pendentes=500 min=500 target=2000
+Aug 20 12:43:55 shopvivaliz-ai python[2957752]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 20 12:45:42 shopvivaliz-ai python[2957752]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 20 12:47:23 shopvivaliz-ai python[2957752]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 20 12:48:47 shopvivaliz-ai python[2957752]: WARNING:mei_mg_email.queue:Autoqueue sem candidatos elegiveis. pendentes=500 min=500 target=2000
+Aug 20 12:49:17 shopvivaliz-ai python[2957752]: WARNING:mei_mg_email.queue:Autoqueue sem candidatos elegiveis. pendentes=500 min=500 target=2000
+Aug 20 12:51:06 shopvivaliz-ai python[2957752]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 20 12:53:11 shopvivaliz-ai python[2957752]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 20 12:55:08 shopvivaliz-ai python[2957752]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 20 12:57:11 shopvivaliz-ai python[2957752]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 20 12:59:07 shopvivaliz-ai python[2957752]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 20 13:00:02 shopvivaliz-ai python[2972398]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 13:00:07 shopvivaliz-ai python[2972398]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 13:00:13 shopvivaliz-ai python[2972398]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 13:00:18 shopvivaliz-ai python[2972398]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 13:00:23 shopvivaliz-ai python[2972398]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 13:00:28 shopvivaliz-ai python[2972398]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 13:00:33 shopvivaliz-ai python[2972398]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 13:00:38 shopvivaliz-ai python[2972398]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 13:00:44 shopvivaliz-ai python[2972398]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 20 13:02:26 shopvivaliz-ai python[2972398]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+JOURNAL_END

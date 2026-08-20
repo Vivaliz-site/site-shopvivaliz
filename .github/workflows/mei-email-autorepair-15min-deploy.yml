@@ -94,6 +94,7 @@ jobs:
           grep -q 'mei_verificado_origem' worker/safe_entrypoint_v2.py
           grep -q 'has_external_ledger' worker/safe_entrypoint.py
           grep -q 'already_external' worker/safe_entrypoint_v2.py
+          grep -q 'base.worker.processar_lote = base._safe_processar_lote' worker/safe_entrypoint_v2.py
 
           sudo install -m 0644 deploy/systemd/mei-mg-email-worker.service /etc/systemd/system/mei-mg-email-worker.service
           sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service /etc/systemd/system/mei-mg-email-autorepair.service
@@ -150,6 +151,7 @@ jobs:
           echo "SYNTHESIZED_AUTH_GUARD=true"
           echo "PRESEND_FULL_CONTRACT_GUARD=true"
           echo "PRESEND_DICT_ROW_LEDGER_FIX=true"
+          echo "PRESEND_LOT_PROGRESS_FIX=true"
           sudo systemctl show mei-mg-email-worker.service \
             -p ActiveState -p SubState -p MainPID -p ExecStart -p ExecStartPre \
             -p Restart -p RestartUSec -p StartLimitIntervalUSec --no-pager
@@ -184,3 +186,4 @@ jobs:
 # watchdog redeploy current strict sender main 2026-08-20T13:42Z
 # watchdog deploy sender main 6c14e388b0001ae0a5caf241722920eb80e841d5 strict-consent restore 2026-08-20T14:12Z
 # deploy strict authorized sender main 2026-08-20T15:35Z
+# deploy presend lot-progress safety fix 2026-08-20T15:59Z
