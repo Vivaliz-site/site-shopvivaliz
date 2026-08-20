@@ -1,0 +1,7 @@
+Warning: Permanently added '137.131.156.17' (ED25519) to the list of known hosts.
+CHECK_BRT=2026-08-20T16:57:05-0300
+AS42004_LAST20M=0
+SENT24_BEFORE=266
+OPEN_BEFORE=0
+SOURCE_STRICT_DEPLOYED=YES
+client_loop: send disconnect: Broken pipe
