@@ -161,3 +161,4 @@ jobs:
 
 # remove legacy queue-first systemd override and verify effective safe entrypoint 2026-08-20T10:25Z
 # deploy operator-origin consent guard 2026-08-20T10:52Z
+# deploy strict operator-origin consent guard 2026-08-20T11:00Z
