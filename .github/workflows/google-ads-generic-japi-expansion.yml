@@ -6,7 +6,8 @@ on:
     paths:
       - "ops/google-ads-generic-japi-expansion.json"
       - ".github/workflows/google-ads-generic-japi-expansion.yml"
-      - "scripts/google_ads_expand_generic_japi.py"
+      - "scripts/google_ads_stage_generic_japi_safe.py"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -26,19 +27,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify landing supports generic Japi demand
+      - name: Verify reviewed storefront route exists
         shell: bash
         run: |
           set -euo pipefail
           test -f catalogo.php
-          grep -Fq 'VIVALIZ10' catalogo.php || true
           echo 'LANDING=https://shopvivaliz.com.br/catalogo/?q=japi'
+          echo 'PROMOTION_CLAIM=none'
 
       - name: Install Google Ads client
         run: python3 -m pip install --disable-pip-version-check google-ads
 
       - name: Validate Python syntax
-        run: python3 -m py_compile scripts/google_ads_expand_generic_japi.py
+        run: python3 -m py_compile scripts/google_ads_stage_generic_japi_safe.py
 
-      - name: Create or reconcile generic Japi ad group
-        run: python3 scripts/google_ads_expand_generic_japi.py
+      - name: Stage or activate review-approved Japi RSA
+        run: python3 scripts/google_ads_stage_generic_japi_safe.py
