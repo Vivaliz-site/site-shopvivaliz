@@ -1,0 +1,46 @@
+name: Wait MEI Email Full Audit 20260820 0746
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tmp-wait-mei-email-full-audit-20260820-0746.yml'
+permissions:
+  actions: read
+  contents: write
+jobs:
+  wait:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait and fetch final report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow tmp-mei-email-full-audit-fix-20260820-0740.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
+          echo "RUN_ID=$run_id" > reports/mei-email-full-audit-final-status-20260820-0746.txt
+          set +e
+          gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status >> reports/mei-email-full-audit-final-status-20260820-0746.txt 2>&1
+          rc=$?
+          set -e
+          echo "WATCH_RC=$rc" >> reports/mei-email-full-audit-final-status-20260820-0746.txt
+          gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status,conclusion,url,createdAt,updatedAt >> reports/mei-email-full-audit-final-status-20260820-0746.txt 2>&1 || true
+          for i in $(seq 1 20); do
+            git pull --rebase origin main >/dev/null 2>&1 || true
+            [ -f reports/mei-email-full-audit-fix-20260820-0740.txt ] && break
+            sleep 5
+          done
+          if [ -f reports/mei-email-full-audit-fix-20260820-0740.txt ]; then
+            echo '=== FINAL_REPORT ===' >> reports/mei-email-full-audit-final-status-20260820-0746.txt
+            cat reports/mei-email-full-audit-fix-20260820-0740.txt >> reports/mei-email-full-audit-final-status-20260820-0746.txt
+          fi
+      - name: Persist
+        if: always()
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/mei-email-full-audit-final-status-20260820-0746.txt || true
+          git commit -m 'ops: persist MEI email audit final status 20260820-0746' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main

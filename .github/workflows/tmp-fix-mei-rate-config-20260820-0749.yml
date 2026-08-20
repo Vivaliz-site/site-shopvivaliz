@@ -1,0 +1,71 @@
+name: Fix MEI Rate Config 20260820 0749
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tmp-fix-mei-rate-config-20260820-0749.yml'
+permissions:
+  contents: write
+jobs:
+  fix_rate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+      - name: Align configured rate and restore worker
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF' > reports/mei-email-rate-config-20260820-0749.txt 2>&1
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          cp .env .env.backup-rate-20260820-0749
+          .venv/bin/python - <<'PY'
+          from pathlib import Path
+          p=Path('.env')
+          lines=p.read_text().splitlines()
+          out=[]; seen=False
+          for line in lines:
+              if line.startswith('RATE_LIMIT_ENVIOS_POR_MINUTO='):
+                  out.append('RATE_LIMIT_ENVIOS_POR_MINUTO=30'); seen=True
+              else:
+                  out.append(line)
+          if not seen: out.append('RATE_LIMIT_ENVIOS_POR_MINUTO=30')
+          p.write_text('\n'.join(out)+'\n')
+          PY
+          .venv/bin/python - <<'PY'
+          from dotenv import load_dotenv
+          load_dotenv('.env',override=True)
+          from app.config import settings
+          print('CONFIGURED_RATE='+str(settings.configured_rate_envios_por_minuto))
+          print('DELIVERABILITY_CAP='+str(settings.deliverability_max_envios_por_minuto))
+          print('EFFECTIVE_RATE='+str(settings.rate_limit_envios_por_minuto))
+          assert settings.configured_rate_envios_por_minuto == 30
+          assert settings.rate_limit_envios_por_minuto <= 10
+          PY
+          if ! sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then
+            sudo systemctl reset-failed mei-mg-email-worker.service || true
+            sudo systemctl start mei-mg-email-worker.service || true
+          fi
+          echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then echo 'SENTINEL=present'; else echo 'SENTINEL=absent'; fi
+          EOF
+      - name: Persist report
+        if: always()
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/mei-email-rate-config-20260820-0749.txt || true
+          git commit -m 'ops: record MEI rate config alignment 20260820-0749' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa
