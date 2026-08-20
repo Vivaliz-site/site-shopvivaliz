@@ -1,0 +1,38 @@
+name: Google Merchant Sync Returns
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "politica-devolucoes.php"
+      - "scripts/google_merchant_sync_returns.py"
+      - ".github/workflows/google-merchant-sync-returns.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: Production
+    env:
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate return-policy contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/google_merchant_sync_returns.py
+          grep -q '7 dias corridos' politica-devolucoes.php
+          grep -q 'não paga o frete de devolução' politica-devolucoes.php
+          grep -q 'NUMBER_OF_DAYS_AFTER_DELIVERY' scripts/google_merchant_sync_returns.py
+          grep -q 'MERCHANT_RETURN_SHIPPING_COST=0 BRL' scripts/google_merchant_sync_returns.py
+
+      - name: Sync Merchant Center return cost and window
+        run: python3 scripts/google_merchant_sync_returns.py
