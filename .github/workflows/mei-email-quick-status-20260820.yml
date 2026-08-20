@@ -1,0 +1,49 @@
+name: MEI Email Quick Status 20260820
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/mei-email-quick-status-20260820.yml'
+permissions:
+  contents: read
+jobs:
+  quick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          KEY1: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          KEY2: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          HOSTS1: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          HOSTS2: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${KEY1:-${KEY2:-}}"; hosts="${HOSTS1:-${HOSTS2:-}}"
+          test -n "$key"; test -n "$hosts"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$key" > ~/.ssh/id_rsa
+          printf '%s\n' "$hosts" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_rsa ~/.ssh/known_hosts
+      - name: Quick live status
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=12 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF'
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo "QUICK_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "GIT_SHA=$(git rev-parse HEAD)"
+          echo "WORKER_ACTIVE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo "WORKER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)"
+          sudo systemctl show mei-mg-email-worker.service -p ActiveState -p SubState -p MainPID -p ExecStartPre --no-pager || true
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then echo SENDER_BLOCK_SENTINEL=present; else echo SENDER_BLOCK_SENTINEL=absent; fi
+          echo "AUTOREPAIR_ACTIVE=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || true)"
+          echo "NDR_GUARD_ACTIVE=$(sudo systemctl is-active mei-mg-email-ndr-guard.service 2>/dev/null || true)"
+          echo 'GUARD_PS_BEGIN'
+          ps -eo pid=,etime=,args= | grep -F runtime_sender_guard.py | grep -v grep || true
+          echo 'GUARD_PS_END'
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa ~/.ssh/known_hosts
