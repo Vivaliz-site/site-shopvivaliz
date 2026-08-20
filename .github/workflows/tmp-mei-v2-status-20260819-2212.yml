@@ -1,0 +1,32 @@
+name: Snapshot MEI repair V2 status
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-mei-v2-status-20260819-2212.yml']
+permissions:
+  actions: read
+  contents: write
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          out=reports/mei-v2-status-20260819-2212.txt
+          echo "CHECK_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$out"
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow tmp-mei-targeted-history-fix-resume-v2-20260819-2210.yml --branch main --limit 3 --json databaseId,status,conclusion,createdAt,updatedAt,url --jq '.' >> "$out"
+      - name: Persist
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/mei-v2-status-20260819-2212.txt
+          git commit -m 'ops: snapshot MEI repair V2 status' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
