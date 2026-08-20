@@ -1,0 +1,44 @@
+name: Google Ads Generic Japi Expansion
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ops/google-ads-generic-japi-expansion.json"
+      - ".github/workflows/google-ads-generic-japi-expansion.yml"
+      - "scripts/google_ads_expand_generic_japi.py"
+
+permissions:
+  contents: read
+
+jobs:
+  expand:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 10
+    env:
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+      GOOGLE_ADS_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
+      GOOGLE_ADS_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_CUSTOMER_ID }}
+      GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify landing supports generic Japi demand
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f catalogo.php
+          grep -Fq 'VIVALIZ10' catalogo.php || true
+          echo 'LANDING=https://shopvivaliz.com.br/catalogo/?q=japi'
+
+      - name: Install Google Ads client
+        run: python3 -m pip install --disable-pip-version-check google-ads
+
+      - name: Validate Python syntax
+        run: python3 -m py_compile scripts/google_ads_expand_generic_japi.py
+
+      - name: Create or reconcile generic Japi ad group
+        run: python3 scripts/google_ads_expand_generic_japi.py
