@@ -1,0 +1,58 @@
+name: Trigger and capture MEI Self-Heal V6 20260819 2125
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-trigger-and-capture-mei-v6-20260819-2125.yml']
+permissions:
+  actions: write
+  contents: write
+jobs:
+  trigger_capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dispatch, wait and capture canonical V6
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          mkdir -p reports capture
+          report=reports/mei-email-self-heal-v6-capture-20260819-2125.txt
+          : > "$report"
+          echo "TRIGGER_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$report"
+          gh workflow run mei-email-hourly-self-heal-v6.yml --repo "$GITHUB_REPOSITORY" --ref main
+          sleep 8
+          run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow mei-email-hourly-self-heal-v6.yml --event workflow_dispatch --branch main --limit 1 --json databaseId --jq '.[0].databaseId')"
+          echo "V6_RUN_ID=$run_id" >> "$report"
+          if [ -z "$run_id" ] || [ "$run_id" = null ]; then
+            echo 'V6_RUN_DISCOVERY_FAILED=true' >> "$report"
+            exit 0
+          fi
+          set +e
+          gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --interval 10 --exit-status >> "$report" 2>&1
+          watch_rc=$?
+          set -e
+          echo "V6_WATCH_RC=$watch_rc" >> "$report"
+          gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status,conclusion,createdAt,updatedAt,url --jq '.' >> "$report" 2>&1 || true
+          artifact="mei-email-hourly-self-heal-v6-${run_id}-1"
+          if gh run download "$run_id" --repo "$GITHUB_REPOSITORY" -n "$artifact" -D capture >> "$report" 2>&1; then
+            echo "ARTIFACT_DOWNLOADED=$artifact" >> "$report"
+            echo '=== V6_ARTIFACT_BEGIN ===' >> "$report"
+            cat capture/mei-email-hourly-self-heal-v6.txt >> "$report" 2>&1 || true
+            echo '=== V6_ARTIFACT_END ===' >> "$report"
+          else
+            echo "ARTIFACT_DOWNLOAD_FAILED=$artifact" >> "$report"
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed >> "$report" 2>&1 || true
+          fi
+          echo "CAPTURE_DONE_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$report"
+      - name: Persist evidence
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add reports/mei-email-self-heal-v6-capture-20260819-2125.txt
+          git commit -m 'ops: capture canonical MEI self-heal V6 20260819-2125' || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
