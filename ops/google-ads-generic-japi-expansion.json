@@ -1,0 +1,11 @@
+{
+  "campaign_id": "24144257692",
+  "group_name": "Vasos Japi",
+  "landing": "https://shopvivaliz.com.br/catalogo/?q=japi",
+  "daily_budget_brl": 10.0,
+  "initial_cpc_brl": 1.0,
+  "max_cpc_brl": 1.2,
+  "positive_match_types": ["EXACT", "PHRASE"],
+  "routing_negatives": ["antique", "decore"],
+  "reason": "10 of 20 current keywords are rarely served; expand generic Japi demand while preserving specialized Antique/Decore routing"
+}
