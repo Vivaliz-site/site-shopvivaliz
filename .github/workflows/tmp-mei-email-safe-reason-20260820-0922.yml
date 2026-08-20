@@ -1,0 +1,70 @@
+name: MEI Email Safe Reason 20260820 0922
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tmp-mei-email-safe-reason-20260820-0922.yml'
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+      - name: Breakdown rejection reasons
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF'
+          set -euo pipefail
+          cd /home/ubuntu/mei-mg-email
+          .venv/bin/python -u - <<'PY'
+          import collections, psycopg
+          from app.config import settings
+          cnt=collections.Counter()
+          samples={}
+          with psycopg.connect(settings.database_url) as conn:
+              with conn.cursor() as c:
+                  c.execute("set statement_timeout='20s'")
+                  c.execute("set enable_seqscan=off")
+                  c.execute("select cnpj,email,situacao_cadastral,uf,opt_out,provavel_terceiro,enviado,mei_verificado_origem,marketing_autorizado from mei_email.empresas where mei_verificado=true limit 20000")
+                  base=c.fetchall()
+                  basic=[]; seen=set()
+                  for r in base:
+                      cnpj,email,sit,uf,optout,third,enviado,mei_origin,mkt=r
+                      norm=(email or '').strip().lower()
+                      if uf=='MG' and sit=='ATIVA' and not optout and not third and not enviado and norm and mei_origin and mkt and norm not in seen:
+                          basic.append((cnpj,email,norm)); seen.add(norm)
+                  print('BASIC='+str(len(basic)),flush=True)
+                  for cnpj,email,norm in basic[:300]:
+                      try:
+                          c.execute("set local statement_timeout='3s'")
+                          c.execute("select mei_email.is_valid_email_address(%s), mei_email.is_email_suppressed(%s), mei_email.is_cnpj_suppressed(%s)",(email,email,cnpj))
+                          valid,esup,csup=c.fetchone()
+                          c.execute("select count(*), array_agg(distinct status::text) from mei_email.envios x where lower(btrim(x.email::text))=%s",(norm,))
+                          hcount,statuses=c.fetchone()
+                          if not valid: reason='invalid'
+                          elif esup: reason='email_suppressed'
+                          elif csup: reason='cnpj_suppressed'
+                          elif hcount: reason='history'
+                          else: reason='safe'
+                          cnt[reason]+=1
+                          if reason not in samples: samples[reason]=(cnpj,statuses)
+                      except Exception as e:
+                          cnt['error_'+type(e).__name__]+=1
+                          conn.rollback()
+                  print('COUNTS='+repr(cnt),flush=True)
+                  print('SAMPLES='+repr(samples),flush=True)
+          PY
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa
