@@ -1,0 +1,161 @@
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+Warning: Permanently added '137.131.156.17' (ED25519) to the list of known hosts.
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Thu Aug 20 12:38:39 -03 2026
+
+  System load:  1.99               Processes:             172
+  Usage of /:   85.7% of 44.96GB   Users logged in:       0
+  Memory usage: 38%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   43%
+
+  => / is using 85.7% of 44.96GB
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+62 updates can be applied immediately.
+6 of these updates are standard security updates.
+To see these additional updates run: apt list --upgradable
+
+16 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+116 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+
+*** System restart required ***
+CHECK_BRT=2026-08-20T13:36:46-0300
+SENTINEL=absent
+From https://github.com/fredmourao-ai/mei-mg-email
+ * branch            main       -> FETCH_HEAD
+SENT24_BEFORE=58
+PENDING_BEFORE=500
+LAST_REJECTIONS_BEGIN
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=c02fdb5b-3cff-4933-9a19-ce949da0580d antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=66333170-be8b-4359-896e-f0019fd7286d reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=d0c24d4f-41e1-4c1c-8073-fd0145885756 antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=6598bb9a-ddd2-422a-bf8d-3cdd47e859b1 reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:10 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=6e3a0357-1044-4cf4-9716-8df6cb82c448 antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:10 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:10 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=82f2418a-bb9b-45ac-9622-b1f88bb9b397 reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:10 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=511406e7-6e91-4f55-a7fc-82d865e507b7 antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:10 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:10 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=fa70eb46-dcec-4bad-8b21-b97e303ab19b reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:11 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=1841c89d-0e23-4798-94a5-fc6dd5488429 antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:11 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:11 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=b3d88e73-c5c8-41a7-b557-dcd7e115d2c5 reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:12 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=cd638c96-0d90-4f77-aa9c-e756c5af909d antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:12 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:12 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=f6b865df-a94d-4a02-9a7d-0c7392dcada4 reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:13 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=4f17ab91-1f20-457a-9f33-3dd59fc8ae6a antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:13 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:13 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=d5a0b6ed-bc5d-4466-a96f-e4054ffc2a26 reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:14 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=393494c3-3d87-4f0f-807e-030cae09c906 antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:14 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:14 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=609c9d90-66b6-4080-b435-4050a452e4d0 reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:15 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=c5e9b60f-2021-4351-89f7-63af937b33b5 antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:15 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:15 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=99832f30-5147-4769-b918-bf56db148417 reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:16 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=41ba6640-bc33-4c42-ae3e-1cd6e7c45ace antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:16 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:16 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=1a7db570-13f4-4ea7-ad42-26be087d1969 reason=origem de autorizacao legada/inferida por operador
+LAST_REJECTIONS_END
+WORKER=active
+SENT24_AFTER=58
+SENT15=0
+PENDING_AFTER=500
+LATEST=2026-08-20 11:05:21.803449-03
+AS42004_LAST15M=0
+Aug 20 13:37:08 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_LOT_PRUNE lote=5e58f646-2ac7-47af-9cb4-c355da4f4a2f removed=1
+Aug 20 13:37:08 shopvivaliz-ai python[2981967]: INFO:mei_mg_email.worker:Lote 0 (campanha e15ccc26-4a26-4d7c-b058-717414f83b3c) concluido: 0 submitted, 0 falhas
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=af817602-3018-4a64-b96a-c0e9030831c8 antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=f953f863-e768-4030-a434-2b356582b8b5 reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_LOT_PRUNE lote=5ad61917-8aff-448e-bb86-11d234b83a66 removed=1
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: INFO:mei_mg_email.worker:Lote 0 (campanha af817602-3018-4a64-b96a-c0e9030831c8) concluido: 0 submitted, 0 falhas
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=c02fdb5b-3cff-4933-9a19-ce949da0580d antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=66333170-be8b-4359-896e-f0019fd7286d reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_LOT_PRUNE lote=0a12b2f3-ed16-4f43-a504-be0077eace41 removed=1
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: INFO:mei_mg_email.worker:Lote 0 (campanha c02fdb5b-3cff-4933-9a19-ce949da0580d) concluido: 0 submitted, 0 falhas
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=d0c24d4f-41e1-4c1c-8073-fd0145885756 antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=6598bb9a-ddd2-422a-bf8d-3cdd47e859b1 reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_LOT_PRUNE lote=1cc8d2f0-e4d3-42d8-9782-27b3d44d96b9 removed=1
+Aug 20 13:37:09 shopvivaliz-ai python[2981967]: INFO:mei_mg_email.worker:Lote 0 (campanha d0c24d4f-41e1-4c1c-8073-fd0145885756) concluido: 0 submitted, 0 falhas
+Aug 20 13:37:10 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=6e3a0357-1044-4cf4-9716-8df6cb82c448 antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:10 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:10 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=82f2418a-bb9b-45ac-9622-b1f88bb9b397 reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:10 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_LOT_PRUNE lote=94f1319c-2496-49f0-a549-70158ae7518d removed=1
+Aug 20 13:37:10 shopvivaliz-ai python[2981967]: INFO:mei_mg_email.worker:Lote 0 (campanha 6e3a0357-1044-4cf4-9716-8df6cb82c448) concluido: 0 submitted, 0 falhas
+Aug 20 13:37:10 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=511406e7-6e91-4f55-a7fc-82d865e507b7 antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:10 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:10 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=fa70eb46-dcec-4bad-8b21-b97e303ab19b reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:10 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_LOT_PRUNE lote=4c52371a-019c-4339-8166-a2a3ce331ef6 removed=1
+Aug 20 13:37:10 shopvivaliz-ai python[2981967]: INFO:mei_mg_email.worker:Lote 0 (campanha 511406e7-6e91-4f55-a7fc-82d865e507b7) concluido: 0 submitted, 0 falhas
+Aug 20 13:37:11 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=1841c89d-0e23-4798-94a5-fc6dd5488429 antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:11 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:11 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=b3d88e73-c5c8-41a7-b557-dcd7e115d2c5 reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:11 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_LOT_PRUNE lote=4b889026-c904-4b52-b2c6-d71bf977bcf4 removed=1
+Aug 20 13:37:11 shopvivaliz-ai python[2981967]: INFO:mei_mg_email.worker:Lote 0 (campanha 1841c89d-0e23-4798-94a5-fc6dd5488429) concluido: 0 submitted, 0 falhas
+Aug 20 13:37:12 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=cd638c96-0d90-4f77-aa9c-e756c5af909d antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:12 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:12 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=f6b865df-a94d-4a02-9a7d-0c7392dcada4 reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:12 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_LOT_PRUNE lote=76b1ad94-0a88-498e-9b98-b611bf4c2bb8 removed=1
+Aug 20 13:37:12 shopvivaliz-ai python[2981967]: INFO:mei_mg_email.worker:Lote 0 (campanha cd638c96-0d90-4f77-aa9c-e756c5af909d) concluido: 0 submitted, 0 falhas
+Aug 20 13:37:13 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=4f17ab91-1f20-457a-9f33-3dd59fc8ae6a antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:13 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:13 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=d5a0b6ed-bc5d-4466-a96f-e4054ffc2a26 reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:13 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_LOT_PRUNE lote=9a2b91f9-6ffb-4245-bd79-f9022b7e5699 removed=1
+Aug 20 13:37:13 shopvivaliz-ai python[2981967]: INFO:mei_mg_email.worker:Lote 0 (campanha 4f17ab91-1f20-457a-9f33-3dd59fc8ae6a) concluido: 0 submitted, 0 falhas
+Aug 20 13:37:14 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=393494c3-3d87-4f0f-807e-030cae09c906 antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:14 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:14 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=609c9d90-66b6-4080-b435-4050a452e4d0 reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:14 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_LOT_PRUNE lote=d1bf8f6c-62b0-4c1b-9547-5051ad03d9e8 removed=1
+Aug 20 13:37:14 shopvivaliz-ai python[2981967]: INFO:mei_mg_email.worker:Lote 0 (campanha 393494c3-3d87-4f0f-807e-030cae09c906) concluido: 0 submitted, 0 falhas
+Aug 20 13:37:15 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=c5e9b60f-2021-4351-89f7-63af937b33b5 antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:15 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:15 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=99832f30-5147-4769-b918-bf56db148417 reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:15 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_LOT_PRUNE lote=75ed65fd-e9f9-4834-afcb-6dbce6c3736c removed=1
+Aug 20 13:37:15 shopvivaliz-ai python[2981967]: INFO:mei_mg_email.worker:Lote 0 (campanha c5e9b60f-2021-4351-89f7-63af937b33b5) concluido: 0 submitted, 0 falhas
+Aug 20 13:37:16 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=41ba6640-bc33-4c42-ae3e-1cd6e7c45ace antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:16 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:16 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=1a7db570-13f4-4ea7-ad42-26be087d1969 reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:16 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_LOT_PRUNE lote=aba004f4-427f-47a6-bec9-520d9b1ad7dc removed=1
+Aug 20 13:37:17 shopvivaliz-ai python[2981967]: INFO:mei_mg_email.worker:Lote 0 (campanha 41ba6640-bc33-4c42-ae3e-1cd6e7c45ace) concluido: 0 submitted, 0 falhas
+Aug 20 13:37:20 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=90715000-eb74-4b2d-8b66-75fb863ebbcd antes=500 adicionados=1 depois=501 target=2000
+Aug 20 13:37:20 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=1; retomando consumo.
+Aug 20 13:37:20 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_REJECT envio=5127cfbd-1ac5-444a-991f-e25c5244a1dc reason=origem de autorizacao legada/inferida por operador
+Aug 20 13:37:20 shopvivaliz-ai python[2981967]: WARNING:mei_mg_email.safe_entrypoint:PRESEND_LOT_PRUNE lote=5b20f823-f889-40f3-9da8-c94b6e2512d4 removed=1
+Aug 20 13:37:20 shopvivaliz-ai systemd[1]: Stopping mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker...
+Aug 20 13:37:21 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Deactivated successfully.
+Aug 20 13:37:21 shopvivaliz-ai systemd[1]: Stopped mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker.
+Aug 20 13:37:21 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Consumed 11.996s CPU time, 29.2M memory peak, 21.0M memory swap peak.
+Aug 20 13:37:21 shopvivaliz-ai systemd[1]: Starting mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker...
+Aug 20 13:37:27 shopvivaliz-ai python[2989116]: {"campanhas": true, "email_suppressions": true, "email_validator": true, "envios": true, "runtime_sender_preflight": "ok"}
+Aug 20 13:37:27 shopvivaliz-ai systemd[1]: Started mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker.
+Aug 20 13:37:31 shopvivaliz-ai python[2989128]: WARNING:mei_mg_email.email_provider:MicrosoftGraphEmailProvider APP-ONLY active sender=naoresponda@dev.shopvivaliz.com.br cert=/home/ubuntu/.shopvivaliz/m365/graph-auth.crt
+Aug 20 13:37:31 shopvivaliz-ai python[2989128]: INFO:mei_mg_email.worker:Worker queue-first iniciado. provedor=microsoft_graph rate_limit=10/min meta_24h=9950 teto_24h=10000 poll=5s fila_min=500 fila_target=2000
+Aug 20 13:37:52 shopvivaliz-ai systemd[1]: Stopping mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker...
+Aug 20 13:37:52 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Deactivated successfully.
+Aug 20 13:37:52 shopvivaliz-ai systemd[1]: Stopped mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker.
+Aug 20 13:37:52 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Consumed 3.531s CPU time, 28.9M memory peak, 0B memory swap peak.
+Aug 20 13:37:52 shopvivaliz-ai systemd[1]: Starting mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker...
+Aug 20 13:37:54 shopvivaliz-ai python[2989352]: {"campanhas": true, "email_suppressions": true, "email_validator": true, "envios": true, "runtime_sender_preflight": "ok"}
+Aug 20 13:37:54 shopvivaliz-ai systemd[1]: Started mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker.
+Aug 20 13:37:55 shopvivaliz-ai python[2989362]: WARNING:mei_mg_email.email_provider:MicrosoftGraphEmailProvider APP-ONLY active sender=naoresponda@dev.shopvivaliz.com.br cert=/home/ubuntu/.shopvivaliz/m365/graph-auth.crt
+Aug 20 13:37:55 shopvivaliz-ai python[2989362]: INFO:mei_mg_email.worker:Worker queue-first iniciado. provedor=microsoft_graph rate_limit=10/min meta_24h=9950 teto_24h=10000 poll=5s fila_min=500 fila_target=2000
+Aug 20 13:37:55 shopvivaliz-ai python[2989362]: INFO:mei_mg_email.worker:Lote 0 (campanha 90715000-eb74-4b2d-8b66-75fb863ebbcd) concluido: 0 submitted, 0 falhas
+SSH_RC=1
