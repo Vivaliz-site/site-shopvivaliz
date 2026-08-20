@@ -1,0 +1,51 @@
+name: MEI Email Worker Block Report 20260820 0932
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-mei-email-worker-block-report-20260820-0932.yml']
+permissions:
+  contents: write
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          VM_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+      - name: Capture state
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF' | tee /tmp/email-worker-block-report.txt
+          set -euo pipefail
+          echo CHECK_UTC=$(date -u +%FT%TZ)
+          echo WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+          echo PID=$(sudo systemctl show -p MainPID --value mei-mg-email-worker.service 2>/dev/null || true)
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then echo SENTINEL=present; else echo SENTINEL=absent; fi
+          echo ---ENVIO_STATUS---
+          sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -F '|' -c "select status::text,count(*) from mei_email.envios group by 1 order by 1;"
+          echo ---LATEST_LOTS---
+          sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -F '|' -c "select id,campanha_id,numero,status,tamanho,coalesce(erro,'') from mei_email.lotes order by id desc limit 8;"
+          echo ---LATEST_CAMPAIGNS---
+          sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -F '|' -c "select id,nome,status,total_empresas,total_enviados,total_falhas from mei_email.campanhas order by id desc limit 5;"
+          echo ---ADVISORY_LOCK---
+          sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -F '|' -c "select pid,objid,granted from pg_locks where locktype='advisory' and objid=100002026;"
+          echo ---JOURNAL---
+          sudo journalctl -u mei-mg-email-worker.service --since '-12 minutes' --no-pager -n 180 || true
+          EOF
+          mkdir -p reports
+          cp /tmp/email-worker-block-report.txt reports/email-worker-block-report-20260820-0932.txt
+      - name: Commit report
+        run: |
+          git config user.name shopvivaliz-ops
+          git config user.email actions@users.noreply.github.com
+          git add reports/email-worker-block-report-20260820-0932.txt
+          git commit -m 'ops: capture blocked email worker state' || exit 0
+          git push origin HEAD:main
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/id_rsa
