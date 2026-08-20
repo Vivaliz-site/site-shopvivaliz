@@ -78,7 +78,7 @@ jobs:
             scripts/nonstop_supervisor_15m.py \
             worker/safe_entrypoint.py \
             worker/safe_entrypoint_v2.py
-          grep -q 'with conn.cursor() as lock_cur:' app/queue_manager.py
+          grep -q 'with conn.cursor(row_factory=tuple_row) as lock_cur:' app/queue_manager.py
           grep -q 'lock_row = lock_cur.fetchone()' app/queue_manager.py
           grep -q 'lock_row\[0\]' app/queue_manager.py
           grep -q '^OnUnitActiveSec=15min$' deploy/systemd/mei-mg-email-autorepair.timer
@@ -182,3 +182,4 @@ jobs:
 # deploy final dict-row ledger and migration-version fixes 2026-08-20T11:30Z
 # deploy restored full presend contract after regression 2026-08-20T13:24Z
 # watchdog redeploy current strict sender main 2026-08-20T13:42Z
+# deploy strict authorized sender main 2026-08-20T15:35Z
