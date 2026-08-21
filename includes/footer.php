@@ -165,6 +165,23 @@ footer::before {
     }
 }
 </style>
+
+<style id="sv-footer-polish-20260821">
+footer{background:#0e3153!important;color:#dbeafe!important;margin-top:56px!important;padding:44px 0 0!important;text-align:left!important;}
+footer .container{max-width:1180px!important;margin:0 auto!important;padding-left:24px!important;padding-right:24px!important;}
+footer .footer-cols{display:grid!important;grid-template-columns:1.35fr 1fr 1fr 1fr!important;gap:30px!important;align-items:start!important;text-align:left!important;}
+footer .footer-cols>div{display:grid!important;gap:10px!important;align-content:start!important;justify-items:start!important;}
+footer strong{color:#fff!important;font-weight:800!important;}
+footer p{color:#b8ccde!important;line-height:1.55!important;margin:8px 0 0!important;}
+footer a{color:#eaf6ff!important;text-decoration:none!important;font-weight:650!important;}
+footer a:hover{text-decoration:underline!important;}
+footer .footer-legal{background:#f8fbff!important;color:#253f5f!important;border-radius:22px 22px 0 0!important;margin-top:28px!important;margin-left:0!important;margin-right:0!important;padding:22px!important;border-top:0!important;}
+footer .footer-legal-card{border-radius:18px!important;box-shadow:0 12px 28px rgba(9,31,56,.08)!important;}
+footer .footer-legal-meta,footer .footer-legal-panels{gap:18px!important;}
+footer .footer-legal a{color:#17324f!important;}
+@media(max-width:900px){footer .footer-cols,footer .footer-legal-meta,footer .footer-legal-panels{grid-template-columns:1fr 1fr!important;}}
+@media(max-width:640px){footer .footer-cols,footer .footer-legal-meta,footer .footer-legal-panels{grid-template-columns:1fr!important;}footer{padding-top:32px!important;}footer .container{padding-left:18px!important;padding-right:18px!important;}}
+</style>
 <footer>
     <div class="container">
         <div class="footer-cols">
@@ -188,11 +205,11 @@ footer::before {
             </div>
 
             <div>
-                <strong>Termos e Condicoes</strong>
-                <a href="/termos">Termos e Condicoes</a>
-                <a href="/politica-privacidade/">Politica de Privacidade</a>
-                <a href="/politica-devolucoes">Politica de Trocas e Devolucoes</a>
-                <a href="/politica-entrega">Politica de Frete</a>
+                <strong>Termos e condições</strong>
+                <a href="/termos">Termos e condições</a>
+                <a href="/politica-privacidade/">Privacidade e LGPD</a>
+                <a href="/politica-devolucoes">Trocas e devoluções</a>
+                <a href="/politica-entrega">Frete e entrega</a>
             </div>
 
             <div>
@@ -204,7 +221,7 @@ footer::before {
 
             <div>
                 <strong>Ajuda</strong>
-                <a href="/faq/">Duvidas Frequentes</a>
+                <a href="/faq/">Dúvidas frequentes</a>
                 <a href="/contato/">Fale Conosco</a>
             </div>
         </div>
