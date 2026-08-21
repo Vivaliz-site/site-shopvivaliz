@@ -61,8 +61,6 @@ jobs:
             exit 52
           fi
 
-          # Repair the runtime trigger function first. V045 is forward-only and
-          # uses CREATE OR REPLACE FUNCTION, so it does not need trigger/table DDL.
           run_hotfix(){ sudo docker exec -i -e PGOPTIONS='-c lock_timeout=20s -c statement_timeout=90s' mei-mg-email-db psql -X -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -1 -f - < "$1"; }
           run_guard(){ sudo docker exec -i -e PGOPTIONS='-c lock_timeout=150s -c statement_timeout=240s' mei-mg-email-db psql -X -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -1 -f - < "$1"; }
 
@@ -70,8 +68,6 @@ jobs:
           run_hotfix db/migrations/V045__qualify_live_eligibility_enum.sql
           echo APPLY_V045_HOTFIX_OK=true
 
-          # Load the already-reviewed autoqueue partial-index fix. This is a
-          # technical recovery, not a global stop: sentinel/AS42004 were absent.
           sudo systemctl enable mei-mg-email-worker.service >/dev/null
           sudo systemctl reset-failed mei-mg-email-worker.service || true
           sudo systemctl restart mei-mg-email-worker.service
@@ -90,8 +86,6 @@ jobs:
           echo APPLY_V044_BEGIN
           run_guard db/migrations/V044__restore_strict_mei_campaign_after_general_fallback.sql
           echo APPLY_V044_OK=true
-          # V044 historically recreates the function with an unqualified enum;
-          # reapply canonical V045 last so runtime search_path is durable.
           echo APPLY_V045_FINAL_BEGIN
           run_hotfix db/migrations/V045__qualify_live_eligibility_enum.sql
           echo APPLY_V045_FINAL_OK=true
@@ -148,3 +142,4 @@ jobs:
         if: always()
         run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 # watchdog V045 hotfix + bounded V038 recovery 2026-08-20T20:39-0300
+# watchdog strict V037-V045 audit and recovery 2026-08-20T21:00-0300
