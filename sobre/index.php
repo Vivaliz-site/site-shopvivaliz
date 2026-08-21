@@ -1,87 +1,54 @@
 <?php
 declare(strict_types=1);
-$company = @include(dirname(__DIR__) . '/config/company-profile.php') ?: [];
-$legalName = $company['legal_name'] ?? 'SHOPVIVALIZ LTDA';
-$fantasyName = $company['fantasy_name'] ?? 'ShopVivaliz';
-$cnpj = $company['cnpj'] ?? '49.903.300/0001-70';
-$pageTitle = 'Sobre a ShopVivaliz | Ferragens, ferramentas e utilidades';
-$pageDescription = 'Conheça a ShopVivaliz, loja online de ferragens, rodízios, ferramentas e utilidades para casa, organização e manutenção.';
-$pageUrl = 'https://shopvivaliz.com.br/sobre/';
-$socialImage = 'https://shopvivaliz.com.br/images/logo-vivaliz.png';
+header('Content-Type: text/html; charset=UTF-8');
+$svNavCurrent = 'sobre';
+$company = @include __DIR__ . '/../config/company-profile.php';
+$fantasyName = is_array($company) ? (string)($company['fantasy_name'] ?? 'ShopVivaliz') : 'ShopVivaliz';
+$email = is_array($company) ? (string)($company['email'] ?? 'atendimento@shopvivaliz.com.br') : 'atendimento@shopvivaliz.com.br';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="<?= htmlspecialchars($pageDescription, ENT_QUOTES, 'UTF-8') ?>">
-<title><?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?></title>
-<link rel="canonical" href="<?= htmlspecialchars($pageUrl, ENT_QUOTES, 'UTF-8') ?>">
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="ShopVivaliz">
-<meta property="og:locale" content="pt_BR">
-<meta property="og:title" content="<?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?>">
-<meta property="og:description" content="<?= htmlspecialchars($pageDescription, ENT_QUOTES, 'UTF-8') ?>">
-<meta property="og:url" content="<?= htmlspecialchars($pageUrl, ENT_QUOTES, 'UTF-8') ?>">
-<meta property="og:image" content="<?= htmlspecialchars($socialImage, ENT_QUOTES, 'UTF-8') ?>">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="<?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?>">
-<meta name="twitter:description" content="<?= htmlspecialchars($pageDescription, ENT_QUOTES, 'UTF-8') ?>">
-<meta name="twitter:image" content="<?= htmlspecialchars($socialImage, ENT_QUOTES, 'UTF-8') ?>">
-<link rel="stylesheet" href="/css/responsive.css">
-<link rel="stylesheet" href="/css/footer-pages.css?v=20260728-1">
-<script type="application/ld+json">
-<?php
-// sameAs de marketplaces (Amazon/Mercado Livre/Shopee/TikTok Shop) fica de fora
-// ate termos os links reais dos perfis oficiais de cada canal -- ver
-// docs/admin-test-user.md e CHANGELOG.md 2026-07-09 sobre por que nao
-// inventamos URLs de redes sociais/perfis "provaveis".
-$aboutSchema = [
-    '@context' => 'https://schema.org',
-    '@type' => 'Organization',
-    '@id' => 'https://shopvivaliz.com.br/#organization',
-    'name' => $fantasyName,
-    'legalName' => $legalName,
-    'url' => 'https://shopvivaliz.com.br/',
-    'logo' => 'https://shopvivaliz.com.br/images/logo-vivaliz.png',
-    'address' => [
-        '@type' => 'PostalAddress',
-        'addressLocality' => 'Divinópolis',
-        'addressRegion' => 'MG',
-        'addressCountry' => 'BR',
-    ],
-    'contactPoint' => [
-        '@type' => 'ContactPoint',
-        'telephone' => '+55-37-99937-4112',
-        'contactType' => 'customer service',
-    ],
-    // sameAs: perfis confirmados. Redes sociais confirmadas ao vivo no rodape
-    // do site (footer.php), nao em config/company-profile.php (que fica null
-    // por padrao). Amazon confirmada diretamente pelo Fred em 2026-08-15
-    // (merchant ID A3L8A2E1VS90Y2). Mercado Livre/Shopee/TikTok Shop ficam de
-    // fora -- buscas (nome, CNPJ 49.903.300/0001-70, variacoes "Vivaliz
-    // Store"/"Shop Vivaliz") nao retornaram nenhum resultado com confianca
-    // real; ShopVivaliz aparenta usar Mercado Shops (loja propria via
-    // Mercado Pago) em vez de uma vitrine classica no marketplace Mercado
-    // Livre, entao nao ha URL publica equivalente pra adicionar. Ver
-    // CHANGELOG.md 2026-07-09 sobre por que nao inventamos URLs "provaveis".
-    'sameAs' => [
-        'https://www.facebook.com/shopvivaliz/',
-        'https://www.instagram.com/shopvivaliz/',
-        'https://www.tiktok.com/@shop_vivaliz',
-        'https://www.amazon.com.br/s?i=merchant-items&me=A3L8A2E1VS90Y2',
-    ],
-];
-echo json_encode($aboutSchema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
-?>
-</script>
-<?php include dirname(__DIR__) . '/includes/head-analytics.php'; ?>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Conheça a ShopVivaliz: loja online de utilidades, decoração, ferramentas e soluções para casa, com atendimento direto e compra segura.">
+    <link rel="canonical" href="https://shopvivaliz.com.br/sobre/">
+    <title>Quem somos | <?= htmlspecialchars($fantasyName, ENT_QUOTES, 'UTF-8') ?></title>
+    <link rel="stylesheet" href="/css/responsive.css">
+    <style>
+      .sv-about{background:linear-gradient(180deg,#f5fbff 0,#fff 60%);padding:56px 0 0;color:#17324f}.sv-about .container{max-width:1120px}.sv-about-hero{display:grid;grid-template-columns:1.05fr .95fr;gap:34px;align-items:center}.sv-about-card{background:#fff;border:1px solid #dbe8f3;border-radius:24px;padding:34px;box-shadow:0 18px 42px rgba(14,49,83,.10)}.sv-about-eyebrow{display:inline-flex;background:#e7f8ee;color:#087443;border-radius:999px;padding:8px 12px;font-weight:800;margin-bottom:14px}.sv-about h1{font-size:clamp(34px,5vw,56px);line-height:1.02;margin:0 0 18px;color:#0e3153}.sv-about p{font-size:17px;line-height:1.7;color:#52697d}.sv-about-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}.sv-about-actions a{display:inline-flex;border-radius:999px;padding:13px 18px;font-weight:800;text-decoration:none}.sv-about-primary{background:#24c95a;color:#fff}.sv-about-secondary{background:#eef5fb;color:#17324f}.sv-about-logo{background:#0e3153;border-radius:30px;min-height:310px;display:flex;align-items:center;justify-content:center;padding:36px;box-shadow:0 20px 46px rgba(14,49,83,.18)}.sv-about-logo img{background:#fff;border-radius:26px;padding:20px 28px;width:330px;max-width:100%;height:auto}.sv-about-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:34px}.sv-about-grid article{background:#fff;border:1px solid #dbe8f3;border-radius:20px;padding:24px}.sv-about-grid h2{font-size:20px;margin:0 0 10px;color:#0e3153}.sv-about-strip{margin-top:34px;background:#0e3153;color:#fff;border-radius:24px;padding:26px;display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center}.sv-about-strip p{margin:0;color:#dbeafe}.sv-about-strip a{background:#fff;color:#0e3153;border-radius:999px;padding:12px 18px;font-weight:800;text-decoration:none}@media(max-width:820px){.sv-about-hero,.sv-about-grid,.sv-about-strip{grid-template-columns:1fr}.sv-about{padding-top:34px}.sv-about-card{padding:24px}}
+    </style>
 </head>
 <body>
-<?php $svNavCurrent = 'sobre'; include __DIR__ . '/../includes/navbar.php'; ?>
-<main class="brand-page"><section class="brand-hero"><div class="container"><div class="brand-hero-card"><span class="brand-eyebrow">Sobre a ShopVivaliz</span><h1>Produtos práticos, informação objetiva e atendimento antes e depois da compra.</h1><p>A <?= htmlspecialchars($fantasyName) ?> é uma loja online de Divinópolis, Minas Gerais, voltada a ferragens, rodízios, ferramentas e utilidades para reparar, organizar e cuidar da casa.</p><div class="brand-hero-actions"><a class="brand-btn" href="/catalogo">Explorar o catálogo</a><a class="brand-btn-secondary" href="/contato">Tirar uma dúvida</a></div></div></div></section>
-<div class="container"><section class="brand-section"><div class="brand-grid brand-grid-3">
-<article class="brand-card"><h2>Empresa identificada</h2><p>O site é operado por <strong><?= htmlspecialchars($legalName) ?></strong>, CNPJ <?= htmlspecialchars($cnpj) ?>, com sede empresarial em Divinópolis/MG. Os dados de contato e as políticas ficam acessíveis no rodapé.</p></article>
-<article class="brand-card"><h2>Catálogo para resolver</h2><p>Reunimos itens para manutenção, mobilidade de móveis, fixação, organização e uso doméstico. Cada produto apresenta SKU, preço, disponibilidade, imagens e as especificações que constam no cadastro.</p></article>
-<article class="brand-card"><h2>Compra sem surpresa</h2><p>O frete é calculado pelo CEP antes do pagamento. As opções de pagamento válidas aparecem no checkout, e preço e estoque são confirmados novamente ao finalizar o pedido.</p></article>
-</div></section><section class="brand-section"><div class="brand-grid"><article class="brand-card"><h2>Antes de comprar</h2><p>Confira medidas, aplicação e compatibilidade na página do produto. Se algo não estiver claro, fale com a equipe e informe o SKU; preferimos esclarecer a dúvida antes do pedido.</p></article><article class="brand-card"><h2>Depois da compra</h2><p>Use o mesmo e-mail do pedido e informe o número da compra para tratar de pagamento, rastreamento, troca ou devolução. Avaliações podem ser positivas ou negativas e só recebem selo de compra verificada após conferência.</p></article></div></section></div></main><?php include __DIR__ . '/../includes/footer.php'; ?></body></html>
+<?php include __DIR__ . '/../includes/navbar.php'; ?>
+<main class="sv-about">
+  <div class="container">
+    <section class="sv-about-hero">
+      <div class="sv-about-card">
+        <span class="sv-about-eyebrow">Quem somos</span>
+        <h1>Uma loja online para comprar com clareza, segurança e atendimento humano.</h1>
+        <p>A ShopVivaliz reúne utilidades para casa, decoração, ferramentas, ferragens e soluções práticas para o dia a dia. Nosso foco é facilitar a escolha do produto certo, com catálogo organizado, preço visível, estoque atualizado e canais de atendimento próximos.</p>
+        <p>Estamos melhorando continuamente a experiência da loja para que você encontre produtos com informação objetiva, calcule o frete antes de comprar e finalize o pedido em um ambiente protegido.</p>
+        <div class="sv-about-actions">
+          <a class="sv-about-primary" href="/catalogo/">Ver produtos</a>
+          <a class="sv-about-secondary" href="/contato/">Falar com a equipe</a>
+        </div>
+      </div>
+      <div class="sv-about-logo" aria-label="Marca ShopVivaliz">
+        <img src="/images/logo-vivaliz.png" alt="ShopVivaliz" onerror="this.src='/images/logo-vivaliz-square.png'">
+      </div>
+    </section>
+    <section class="sv-about-grid" aria-label="Diferenciais da ShopVivaliz">
+      <article><h2>Curadoria de catálogo</h2><p>Priorizamos produtos com descrição clara, imagens úteis, preço e disponibilidade para reduzir dúvidas antes da compra.</p></article>
+      <article><h2>Compra transparente</h2><p>O cliente pode consultar frete, revisar o carrinho e escolher a forma de pagamento antes de confirmar o pedido.</p></article>
+      <article><h2>Atendimento direto</h2><p>Quando houver dúvida sobre produto, entrega ou pedido, a equipe pode ser acionada pelos canais oficiais da loja.</p></article>
+    </section>
+    <section class="sv-about-strip">
+      <div><strong>Precisa de ajuda para escolher?</strong><p>Envie sua dúvida com o nome do produto ou SKU. Nosso atendimento responde com orientação objetiva, sem pressão.</p></div>
+      <a href="mailto:<?= htmlspecialchars($email, ENT_QUOTES, 'UTF-8') ?>">Enviar e-mail</a>
+    </section>
+  </div>
+</main>
+<?php include __DIR__ . '/../includes/footer.php'; ?>
+</body>
+</html>
