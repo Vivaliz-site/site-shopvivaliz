@@ -1,0 +1,86 @@
+name: MEI rolling quota readonly 20260821 0640
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tmp-mei-quota-readonly-20260821-0640.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure verified Oracle SSH
+        env:
+          K1: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          K2: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          H1: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          H2: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          key="${K1:-${K2:-}}"; hosts="${H1:-${H2:-}}"
+          test -n "$key"; test -n "$hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+      - name: Read rolling quota ledgers
+        id: probe
+        shell: bash
+        run: |
+          set +e
+          mkdir -p reports
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=12 -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 <<'EOF' > reports/mei-quota-readonly-20260821-0640.txt 2>&1
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email || exit 2
+          PSQL="sudo docker exec mei-mg-email-db psql -X -U postgres -d mei_mg_email -At -v ON_ERROR_STOP=1"
+          echo "CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)"
+          main24=$(eval "$PSQL -c \"select count(*) from mei_email.envios where status::text in ('submitted','enviado','delivered') and enviado_em>=now()-interval '24 hours';\"")
+          main10=$(eval "$PSQL -c \"select count(*) from mei_email.envios where status::text in ('submitted','enviado','delivered') and enviado_em>=now()-interval '10 minutes';\"")
+          has=$(eval "$PSQL -c \"select case when to_regclass('mei_email.envios_externos_cota') is null then 'no' else 'yes' end;\"")
+          ext24=0; ext10=0
+          if [ "$has" = yes ]; then
+            ext24=$(eval "$PSQL -c \"select count(*) from mei_email.envios_externos_cota where sent_at>=now()-interval '24 hours';\"")
+            ext10=$(eval "$PSQL -c \"select count(*) from mei_email.envios_externos_cota where sent_at>=now()-interval '10 minutes';\"")
+          fi
+          echo "MAIN24=$main24"
+          echo "MAIN10=$main10"
+          echo "EXTERNAL_TABLE=$has"
+          echo "EXTERNAL24=$ext24"
+          echo "EXTERNAL10=$ext10"
+          echo "UNION24=$((main24+ext24))"
+          echo "UNION10=$((main10+ext10))"
+          EOF
+          rc=$?
+          echo "probe_rc=$rc" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Persist evidence
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name shopvivaliz-ops-bot
+          git config user.email ops@shopvivaliz.local
+          git add reports/mei-quota-readonly-20260821-0640.txt 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -m 'ops: record MEI rolling quota evidence'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+      - name: Enforce transport
+        if: always()
+        shell: bash
+        run: test "${{ steps.probe.outputs.probe_rc }}" = "0"
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
