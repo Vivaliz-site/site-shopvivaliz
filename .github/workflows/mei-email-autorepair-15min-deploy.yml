@@ -210,3 +210,4 @@ jobs:
 # watchdog deploy current sender main with DB restart-first recovery 2026-08-21T00:17-0300
 # deploy PR75+PR76 public/operator-prefix presend, autoqueue, and legacy numeric branch MEI safety guards 2026-08-21T04:42-0300
 # deploy PR77 official Receita/Simples MEI verification allowlist 2026-08-21T05:30-0300
+# watchdog redeploy after live Banco do Brasil branch sends 2026-08-21T11:18-0300

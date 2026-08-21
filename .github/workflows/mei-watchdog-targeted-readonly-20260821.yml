@@ -1,0 +1,77 @@
+name: MEI Watchdog Targeted Readonly 20260821
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/mei-watchdog-targeted-readonly-20260821.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure verified Oracle SSH
+        env:
+          KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$KEY"; test -n "$HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$KEY" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+      - name: Collect targeted read-only evidence
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p reports
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=12 -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 <<'EOF' > reports/mei-watchdog-targeted-20260821.txt 2>&1
+          set -u
+          cd /home/ubuntu/mei-mg-email || exit 2
+          echo "CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)"
+          echo "HEAD=$(git rev-parse HEAD 2>/dev/null || true)"
+          git fetch origin main -q 2>/dev/null || true
+          echo "ORIGIN_MAIN=$(git rev-parse origin/main 2>/dev/null || true)"
+          sha256sum worker/safe_entrypoint_v2.py app/queue_manager.py 2>/dev/null || true
+          grep -n "OFFICIAL_MEI_VERIFICATION_ORIGINS\|_legacy_numeric_branch_cnpj\|receita_simples_opcao_mei" worker/safe_entrypoint_v2.py app/queue_manager.py | head -n 40 || true
+          echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo "WORKER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)"
+          echo "SENTINEL=$(sudo test -f /var/lib/mei-mg-email/sender_blocked.pause && echo present || echo absent)"
+          echo "AS42004_30M=$(sudo journalctl -u mei-mg-email-worker.service --since '-30 minutes' --no-pager 2>/dev/null | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8|restricted sender' || true)"
+          echo "NDR403_30M=$(sudo journalctl -u mei-mg-email-ndr-guard.service --since '-30 minutes' --no-pager 2>/dev/null | grep -Eic '403|ErrorAccessDenied' || true)"
+          sudo docker exec -i mei-mg-email-db psql -X -U postgres -d mei_mg_email -At -v ON_ERROR_STOP=1 <<'SQL'
+          set statement_timeout='30s';
+          select 'TARGET|'||cnpj||'|'||coalesce(email,'')||'|'||coalesce(tipo_regime,'')||'|'||coalesce(uf,'')||'|'||coalesce(situacao_cadastral,'')||'|'||marketing_autorizado||'|'||coalesce(marketing_autorizado_origem,'')||'|'||mei_verificado||'|'||coalesce(mei_verificado_origem,'')||'|'||enviado from mei_email.empresas where cnpj in ('00000000084190','00000000106186','00000000108804') or lower(trim(email::text)) in ('age1243@bb.com.br','age0933@bb.com.br','age0974@bb.com.br');
+          select 'TARGET_ENVIO|'||id||'|'||cnpj||'|'||email||'|'||status::text||'|'||coalesce(enviado_em::text,'') from mei_email.envios where cnpj in ('00000000084190','00000000106186','00000000108804') or lower(trim(email::text)) in ('age1243@bb.com.br','age0933@bb.com.br','age0974@bb.com.br') order by id desc limit 20;
+          select 'RECENT|'||q.cnpj||'|'||q.email||'|'||q.status::text||'|'||coalesce(q.enviado_em::text,'')||'|'||coalesce(e.marketing_autorizado_origem,'')||'|'||coalesce(e.mei_verificado_origem,'') from mei_email.envios q left join mei_email.empresas e on e.cnpj=q.cnpj where q.status::text in ('submitted','enviado','delivered') order by q.id desc limit 20;
+          select 'OPEN_BRANCH='||count(*) from mei_email.envios q join mei_email.empresas e on e.cnpj=q.cnpj where q.status::text in ('pendente','enviando','pending','processing') and length(regexp_replace(e.cnpj::text,'\D','','g'))=14 and substring(regexp_replace(e.cnpj::text,'\D','','g') from 9 for 4)<>'0001';
+          select 'OPEN_WRONG_MEI_SOURCE='||count(*) from mei_email.envios q join mei_email.empresas e on e.cnpj=q.cnpj where q.status::text in ('pendente','enviando','pending','processing') and lower(btrim(coalesce(e.mei_verificado_origem,'')))<>'receita_simples_opcao_mei';
+          select 'FLYWAY_37_38='||count(*) from mei_email.flyway_schema_history where version in ('37','38') and success;
+          select 'GUARD_TRIGGERS='||count(*) from pg_trigger where not tgisinternal and tgname in ('trg_campaign_copy_policy','trg_envio_live_eligibility');
+          select 'HARD_BOUNCE_ACTIVE='||count(*) from mei_email.email_suppressions where active and reason='hard_bounce';
+          SQL
+          EOF
+      - name: Persist targeted evidence
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name shopvivaliz-ops-bot
+          git config user.email ops@shopvivaliz.local
+          git add reports/mei-watchdog-targeted-20260821.txt
+          git commit -m 'ops: record targeted MEI watchdog evidence'
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
