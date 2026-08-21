@@ -38,6 +38,9 @@ $withPrice = 0;
 $withStock = 0;
 $withOlistId = 0;
 $allowedSources = ['tiny_v3', 'tiny_v2', 'tiny', 'olist', 'olist_tiny'];
+$publicCatalogExcludedSkus = [
+    'PARAFUSO5X16' => 'Materia-prima/insumo interno; nao deve aparecer no storefront',
+];
 $seenSources = [];
 
 foreach ($catalog as $index => $product) {
@@ -72,6 +75,9 @@ foreach ($catalog as $index => $product) {
         $errors[] = "linha {$line}: SKU ausente";
     } else {
         $key = strtoupper($sku);
+        if (isset($publicCatalogExcludedSkus[$key])) {
+            $errors[] = "linha {$line}: SKU de materia-prima publicado {$sku}";
+        }
         if (isset($seenSku[$key])) {
             $errors[] = "linha {$line}: SKU duplicado {$sku}";
         }

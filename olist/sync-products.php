@@ -422,6 +422,19 @@ function svs_slugify(string $name, string $sku): string {
 }
 
 /* ── Espelho: a lista final deve ser a lista ativa retornada pela Tiny/Olist ── */
+function svs_catalog_excluded_skus(): array {
+    // SKUs do ERP que representam materia-prima/insumo interno, nao item de venda.
+    // Mantemos no ERP/Olist, mas nunca publicamos no catalogo do storefront.
+    return [
+        'PARAFUSO5X16' => 'Materia-prima usada em kits/produtos compostos',
+    ];
+}
+
+function svs_is_catalog_excluded(array $product): bool {
+    $sku = strtoupper(trim((string)($product['sku'] ?? '')));
+    return $sku !== '' && isset(svs_catalog_excluded_skus()[$sku]);
+}
+
 function svs_catalog_key(array $product): string {
     $id = trim((string)($product['olist_product_id'] ?? $product['id'] ?? ''));
     if ($id !== '') return 'id:' . $id;
@@ -456,6 +469,10 @@ function svs_mirror_catalog(array $fetched, string $catalogPath): array {
     $indexBySku = [];
     foreach ($fetched as $new) {
         if (!is_array($new)) continue;
+        if (svs_is_catalog_excluded($new)) {
+            svs_log('SKU excluido do catalogo publico: ' . (string)($new['sku'] ?? ''));
+            continue;
+        }
         $key = svs_catalog_key($new);
         if ($key === '') continue;
 
@@ -514,7 +531,46 @@ function svs_mirror_catalog(array $fetched, string $catalogPath): array {
         }
     }
 
-    return $mirrored;
+    // Trava final: nunca persistir contadores derivados antigos nem SKUs duplicados.
+    $final = [];
+    $finalBySku = [];
+    foreach ($mirrored as $row) {
+        if (!is_array($row)) continue;
+        if (svs_is_catalog_excluded($row)) {
+            svs_log('SKU excluido na trava final do catalogo publico: ' . (string)($row['sku'] ?? ''));
+            continue;
+        }
+        $images = [];
+        foreach ((is_array($row['images'] ?? null) ? $row['images'] : []) as $image) {
+            if (is_scalar($image)) {
+                $url = trim((string)$image);
+                if ($url !== '' && preg_match('~^https?://~i', $url)) $images[] = $url;
+            }
+        }
+        $row['images'] = $images;
+        $row['images_count'] = count($images);
+        if ($images !== []) $row['image_url'] = $images[0];
+
+        $skuKey = strtoupper(trim((string)($row['sku'] ?? '')));
+        if ($skuKey === '') continue;
+        $score = [
+            $images !== [] ? 1 : 0,
+            ((float)($row['stock'] ?? 0)) > 0 ? 1 : 0,
+            (string)($row['synced_at'] ?? ''),
+            (string)($row['olist_product_id'] ?? $row['id'] ?? ''),
+        ];
+        if (!isset($finalBySku[$skuKey])) {
+            $finalBySku[$skuKey] = count($final);
+            $final[] = ['score' => $score, 'row' => $row];
+            continue;
+        }
+        $idx = $finalBySku[$skuKey];
+        if ($score > $final[$idx]['score']) {
+            $final[$idx] = ['score' => $score, 'row' => $row];
+        }
+    }
+
+    return array_map(static fn(array $entry): array => $entry['row'], $final);
 }
 
 function svs_removed_products(array $mirrored, string $catalogPath): array {
