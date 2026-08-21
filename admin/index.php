@@ -126,7 +126,6 @@ $codename = (string)($version['codename'] ?? '');
                 </ul>
                 <div class="admin-link-list">
                     <a class="btn btn-secondary" href="/olist/connect.php" target="_blank" rel="noreferrer">Reconectar OAuth</a>
-                    <a class="btn btn-secondary" href="/olist/sync-products.php?dry_run=1&expected=200&limit=50" target="_blank" rel="noreferrer">Testar sync</a>
                     <a class="btn btn-secondary" href="/api/catalog/products.php?limit=200" target="_blank" rel="noreferrer">Ver catálogo JSON</a>
                 </div>
             </article>
