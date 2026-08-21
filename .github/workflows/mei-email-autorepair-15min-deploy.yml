@@ -186,3 +186,4 @@ jobs:
 # watchdog redeploy strict sender after failed restart 2026-08-20T17:18-0300
 # watchdog deploy sender main 5005bee indexed-autoqueue-v045 runtime 2026-08-20T20:54-0300
 # watchdog reassert nonstop sender after unsafe recovery workflow removal 2026-08-20T21:04-0300
+# watchdog deploy current sender main with DB restart-first recovery 2026-08-21T00:17-0300
