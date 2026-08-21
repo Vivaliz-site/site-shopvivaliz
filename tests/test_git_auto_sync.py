@@ -48,4 +48,4 @@ def test_production_services_follow_main_and_run_detail_sync() -> None:
     token_sync = (root / "deploy/systemd/shopvivaliz-token-renewer.service").read_text(
         encoding="utf-8"
     )
-    assert "daemon-token-renewer.py --interval 7200 --retry-interval 900" in token_sync
+    assert "daemon-token-renewer.py --interval 300 --retry-interval 300" in token_sync
