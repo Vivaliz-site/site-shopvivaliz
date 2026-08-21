@@ -1,5 +1,5 @@
-{
-  "36": {
+[
+  {
     "id": "342715215",
     "sku": "ARM-08",
     "name": "Armário Ferramentas Duas Portas ARM-08 Fercar",
@@ -7,7 +7,7 @@
     "price": 584.29,
     "stock": 5,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/005a24fb86c436134c27a15a1f6d9c71.png",
-    "images_count": 0,
+    "images_count": 4,
     "category": "Caixas de Ferramentas",
     "status": "A",
     "olist_product_id": "342715215",
@@ -74,7 +74,7 @@
     },
     "kit_items": []
   },
-  "58": {
+  {
     "id": "342909579",
     "sku": "08R",
     "name": "Caixa Ferramentas Sanfonada 5 Gavetas Reforç 50x20x21cm 08R Fercar",
@@ -82,7 +82,7 @@
     "price": 269.79,
     "stock": 1,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/7e4e48e34aee6640663aedd7ea28d01e.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "342909579",
@@ -150,7 +150,7 @@
     },
     "kit_items": []
   },
-  "175": {
+  {
     "olist_product_id": "362838496",
     "sku": "350x8c",
     "name": "Camara ar 3,5 X 8 Colson",
@@ -218,9 +218,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 4
   },
-  "129": {
+  {
     "olist_product_id": "353727541",
     "sku": "VUNA16",
     "name": "Vaso Plantas Unique 16 Azul - Japi",
@@ -291,9 +292,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "28": {
+  {
     "id": "342355202",
     "sku": "TE-C08",
     "name": "Tesoura Costura Profissional Aço Inox 8 Polegadas Aquatools",
@@ -301,7 +303,7 @@
     "price": 99.99,
     "stock": 4,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/ba82135ba157168810f22b5da9edf819.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "342355202",
@@ -369,7 +371,7 @@
     },
     "kit_items": []
   },
-  "47": {
+  {
     "id": "342902688",
     "sku": "1C7Q-LKUT-YLKI",
     "name": "Rodízio Transparente 035mm Sem Freio Chapa Giratória Soprano",
@@ -377,7 +379,7 @@
     "price": 19.9,
     "stock": 296,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/fca5312c9f775715ef616d0331a7605c.jpg",
-    "images_count": 0,
+    "images_count": 5,
     "category": "Rodízios",
     "status": "A",
     "olist_product_id": "342902688",
@@ -443,7 +445,7 @@
     },
     "kit_items": []
   },
-  "147": {
+  {
     "olist_product_id": "353736291",
     "sku": "C08VM",
     "name": "Carrinho Fechado Ferramentas C08 6 Gavetas Vermelh Cza Fercar",
@@ -513,9 +515,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 4
   },
-  "74": {
+  {
     "id": "351041822",
     "sku": "Parafuso5x16",
     "name": "Parafuso 5x16",
@@ -582,7 +585,7 @@
     },
     "kit_items": []
   },
-  "84": {
+  {
     "id": "352336104",
     "sku": "JFUBCQ10",
     "name": "Cachepot Floreira Flat Vaso Urbe 100 (119L) Cimento Queimado Japi",
@@ -590,7 +593,7 @@
     "price": 749.48,
     "stock": 4,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/3bb0b8d15ac7f5a8b94d6480e71613c1.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "352336104",
@@ -659,7 +662,7 @@
     },
     "kit_items": []
   },
-  "98": {
+  {
     "id": "353693202",
     "sku": "C06VM",
     "name": "Carrinho Fechado Ferramentas C06 3 Gavetas Vermelh Cza Fercar",
@@ -667,7 +670,7 @@
     "price": 1391.6,
     "stock": 10,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/65769d42b7a9dc8507de5f7e18b46b5e.jpg",
-    "images_count": 0,
+    "images_count": 5,
     "category": "Carrinhos Fercar",
     "status": "A",
     "olist_product_id": "353693202",
@@ -734,7 +737,7 @@
     },
     "kit_items": []
   },
-  "67": {
+  {
     "id": "344671209",
     "sku": "03080.2050.10",
     "name": "Rodizio Transparente 50MM COM Freio Chapa Giratorio Niquel Soprano",
@@ -742,7 +745,7 @@
     "price": 18,
     "stock": 1022,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/0a79f705c2bad2c50e326bab83014f8c.jpg",
-    "images_count": 0,
+    "images_count": 5,
     "category": "Rodízios",
     "status": "A",
     "olist_product_id": "344671209",
@@ -809,7 +812,7 @@
     },
     "kit_items": []
   },
-  "113": {
+  {
     "olist_product_id": "353698620",
     "sku": "JFQFAC77",
     "name": "Cachepot Floreira Flat Vaso 77(32l) 29x77cm Aco Corten Japi",
@@ -879,9 +882,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 4
   },
-  "10": {
+  {
     "id": "341533994",
     "sku": "JVAQMA55",
     "name": "Vaso Antique 55 75L Macchiato Japi Brown",
@@ -889,7 +893,7 @@
     "price": 576.6,
     "stock": 12,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/f2bf40acdbddc2a587fde9b806d2e40a.jpg",
-    "images_count": 0,
+    "images_count": 5,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "341533994",
@@ -956,7 +960,7 @@
     },
     "kit_items": []
   },
-  "22": {
+  {
     "id": "341718082",
     "sku": "ESTOPAPOLIMENTO1KG",
     "name": "Estopa Polimento Automotivo Algodão 1kg Aquatools Branco",
@@ -964,7 +968,7 @@
     "price": 42.75,
     "stock": 2,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/ea7cbc44cb21ec1b33aa6421c06436e9.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "341718082",
@@ -1032,7 +1036,7 @@
     },
     "kit_items": []
   },
-  "104": {
+  {
     "olist_product_id": "353697737",
     "sku": "Jatobadba",
     "name": "Massa F12 para Calafetar Madeira 400g Jatoba Viapol",
@@ -1103,9 +1107,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "150": {
+  {
     "olist_product_id": "354887867",
     "sku": "PCT-500",
     "name": "Pote Plástico 500ml Totalplast 24 Unidade Microondas Freezer",
@@ -1174,9 +1179,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "4": {
+  {
     "id": "341441223",
     "sku": "KITROD12",
     "name": "Kit 12 Rodízios Gel 50mm Freio Soprano",
@@ -1184,7 +1190,7 @@
     "price": 129,
     "stock": 76,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/d54e22e6d808c7d8716759a09f91ef7e.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Rodízios",
     "status": "A",
     "olist_product_id": "341441223",
@@ -1260,7 +1266,7 @@
       }
     ]
   },
-  "107": {
+  {
     "olist_product_id": "353698023",
     "sku": "V0217760",
     "name": "Massa Paramadeira F-12 400G/0,225L Angelim - Viapol",
@@ -1331,9 +1337,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "56": {
+  {
     "id": "342907554",
     "sku": "1C7Q-LKVM-XFLJ",
     "name": "Trena Profissional Emborrachada 7,5mx25mm Team-75 Aquatools",
@@ -1341,7 +1348,7 @@
     "price": 34.9,
     "stock": 1,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/d1130aa7a34fa219a10d18d498ab5bd4.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Medição",
     "status": "A",
     "olist_product_id": "342907554",
@@ -1409,7 +1416,7 @@
     },
     "kit_items": []
   },
-  "125": {
+  {
     "olist_product_id": "353704474",
     "sku": "kit-70",
     "name": "Kit 2 Rodo Vedante Borracha Friso Porta Aluminio 70cm",
@@ -1485,9 +1492,10 @@
       }
     ],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "164": {
+  {
     "olist_product_id": "360493000",
     "sku": "13705E",
     "name": "Irrigador Giratório Jardim 1/2 6 Jatos com Suporte Garden",
@@ -1558,9 +1566,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "101": {
+  {
     "olist_product_id": "353696981",
     "sku": "COM4",
     "name": "Comedouro Aves Pássaros com Fruteira COM4 Fercar",
@@ -1630,9 +1639,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 4
   },
-  "90": {
+  {
     "id": "353692194",
     "sku": "7",
     "name": "Caixa Ferramentas Fercar 07 Metal 20x50x21cm Azul Fercar",
@@ -1640,7 +1650,7 @@
     "price": 169,
     "stock": 2,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/f10d7a6d63f81fd9f25de5c83904ebf4.jpeg",
-    "images_count": 0,
+    "images_count": 3,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "353692194",
@@ -1704,7 +1714,7 @@
     },
     "kit_items": []
   },
-  "79": {
+  {
     "id": "352312595",
     "sku": "JVCDCQ33",
     "name": "Vaso Decor Plantas Cilin Decore 33 (16l) Cimento Queim Japi",
@@ -1712,7 +1722,7 @@
     "price": 429,
     "stock": 4,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/610b80d8ec1416c55f60a52bb53be1b2.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "352312595",
@@ -1779,7 +1789,7 @@
     },
     "kit_items": []
   },
-  "13": {
+  {
     "id": "341679379",
     "sku": "N09R",
     "name": "Caixa Ferramentas Sanfonada 7 Gavetas Refor 50x20x25cm 09R Fercar",
@@ -1787,7 +1797,7 @@
     "price": 329,
     "stock": 0,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/4a47339654b6b3c2fc95672082ed51b6.png",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "341679379",
@@ -1855,7 +1865,7 @@
     },
     "kit_items": []
   },
-  "24": {
+  {
     "id": "341725351",
     "sku": "22959",
     "name": "Jogo Cinta Catraca Amarração 28mm X 4,6m 1500kg Aquatools",
@@ -1863,7 +1873,7 @@
     "price": 51.3,
     "stock": 2,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/fc1909c9cbeda2a519a899281058494f.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "341725351",
@@ -1931,7 +1941,7 @@
     },
     "kit_items": []
   },
-  "71": {
+  {
     "id": "350554366",
     "sku": "9040101",
     "name": "Ultra Decantador Liquido Finalizador Piscinas 1l Ultraclor",
@@ -1939,7 +1949,7 @@
     "price": 37.04,
     "stock": 1,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/422d8518ac1352ca110ceb99a1a133e6.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Acessórios para Piscina",
     "status": "A",
     "olist_product_id": "350554366",
@@ -2006,7 +2016,7 @@
     },
     "kit_items": []
   },
-  "11": {
+  {
     "id": "341533998",
     "sku": "JVAQCQ44",
     "name": "Vaso Antique 44 70L Cimento Queimado Japi",
@@ -2014,7 +2024,7 @@
     "price": 574.9,
     "stock": 4,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/3a7e0f820484a90f66ae3ba0ec84fbdf.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "341533998",
@@ -2082,7 +2092,7 @@
     },
     "kit_items": []
   },
-  "162": {
+  {
     "olist_product_id": "360492094",
     "sku": "JVAQCQ55",
     "name": "Vaso Decorativo Plantas Antique 55 (75l) Cimento Queim Japi",
@@ -2154,9 +2164,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "8": {
+  {
     "id": "341484398",
     "sku": "TAJ/AS*BR1-NOVO",
     "name": "Assento Sanitário Almofadado Slim Branco Astra",
@@ -2164,7 +2175,7 @@
     "price": 78.99,
     "stock": 0,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/3dcf875ab7b0608ee41dca1667661a8e.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Banheiro",
     "status": "A",
     "olist_product_id": "341484398",
@@ -2231,7 +2242,7 @@
     },
     "kit_items": []
   },
-  "132": {
+  {
     "olist_product_id": "353731878",
     "sku": "ved-80-nh",
     "name": "Rodo Vedante Borracha Friso Porta Aluminio 80cm Vivaliz",
@@ -2302,9 +2313,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "174": {
+  {
     "olist_product_id": "362838492",
     "sku": "C06BR",
     "name": "Carrinho Fechado Ferramentas C06 3 Gavetas Branco Fercar",
@@ -2372,9 +2384,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 5
   },
-  "160": {
+  {
     "olist_product_id": "360491873",
     "sku": "JVAQAC56",
     "name": "Vaso Decorativo Plantas Antique 56 (46l) Aco Corten Japi",
@@ -2446,9 +2459,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "165": {
+  {
     "olist_product_id": "360493393",
     "sku": "341481451",
     "name": "Alicate Universal 8\" Gedore Robust Profissional",
@@ -2516,9 +2530,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 2
   },
-  "148": {
+  {
     "olist_product_id": "353736360",
     "sku": "C08PT",
     "name": "Carrinho Fechado Ferramentas C08 6 Gavetas Preto Cinza Fercar",
@@ -2588,9 +2603,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 4
   },
-  "29": {
+  {
     "id": "342356475",
     "sku": "KIT-6-CADEADO-PAPAIZ-50MM",
     "name": "Kit 6 Cadeado Papaiz 50mm Armário Portão",
@@ -2598,7 +2614,7 @@
     "price": 390.15,
     "stock": 0,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/25144bb2712f40ef561b681cd26ccd2a.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "342356475",
@@ -2670,7 +2686,7 @@
       }
     ]
   },
-  "159": {
+  {
     "olist_product_id": "360491751",
     "sku": "JVAQCQ56",
     "name": "Vaso Decorativo Plantas Antique 56 (46l) Cimento Queim Japi",
@@ -2742,9 +2758,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "135": {
+  {
     "olist_product_id": "353732774",
     "sku": "178970678530",
     "name": "Cofrinho Infantil Segredo Senha Moedas Cédulas Fercar",
@@ -2815,9 +2832,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 4
   },
-  "46": {
+  {
     "id": "342902653",
     "sku": "1C7Q-LKUU-0BA3",
     "name": "Rodízio Transparente 035mm Freio Chapa Giratória Soprano",
@@ -2825,7 +2843,7 @@
     "price": 19.9,
     "stock": 481,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/fe23ff5211669916f42c5b6153b770bc.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Rodízios",
     "status": "A",
     "olist_product_id": "342902653",
@@ -2892,7 +2910,7 @@
     },
     "kit_items": []
   },
-  "69": {
+  {
     "id": "348942357",
     "sku": "348942357",
     "name": "Machadinha Profissional Cabo Fibra 600g Aquatools",
@@ -2900,7 +2918,7 @@
     "price": 118.14,
     "stock": 1,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/5df2f5b99cf4174d0746aeecd5c33db5.jpg",
-    "images_count": 0,
+    "images_count": 4,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "348942357",
@@ -2965,7 +2983,7 @@
     },
     "kit_items": []
   },
-  "149": {
+  {
     "olist_product_id": "354887824",
     "sku": "PCT-250",
     "name": "Marmita Descartável 250ml Totalplast Freezer Microonda 24un",
@@ -3032,9 +3050,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 4
   },
-  "37": {
+  {
     "id": "342716133",
     "sku": "CHB-40025",
     "name": "Cabo para Chupeta Bateria 2,5 Metros 400a Enxerto Carro Aquatools",
@@ -3042,7 +3061,7 @@
     "price": 78.31,
     "stock": 2,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/24aa443fcd3247e59ee11b07d5387e5c.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Brinquedos",
     "status": "A",
     "olist_product_id": "342716133",
@@ -3112,7 +3131,7 @@
     },
     "kit_items": []
   },
-  "156": {
+  {
     "olist_product_id": "360491374",
     "sku": "SKU-343577002",
     "name": "Chave Teste 140MM 100/500V",
@@ -3181,9 +3200,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 4
   },
-  "109": {
+  {
     "olist_product_id": "353698195",
     "sku": "V0210685",
     "name": "Massa para Calafetar Madeira F12 Ipe 400g Viapol",
@@ -3254,9 +3274,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "23": {
+  {
     "id": "341723607",
     "sku": "23050",
     "name": "Jogo Cinta Catraca Amarração 25mm X 4,6m 800kg Aquatools",
@@ -3264,7 +3285,7 @@
     "price": 46.55,
     "stock": 1,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/e3da85a991c1b7d8f3165dede330a06c.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "341723607",
@@ -3332,7 +3353,7 @@
     },
     "kit_items": []
   },
-  "141": {
+  {
     "olist_product_id": "353734363",
     "sku": "JFQFAC67",
     "name": "Cachepot Floreira Flat Vaso 67(17l) 22x67cm Aco Corten Japi",
@@ -3344,7 +3365,7 @@
       "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/e2d628614eb63a81dcbebf6973572efb.jpg",
       "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/50c0a6d012d88ed14e61236755e34c99.jpg"
     ],
-    "description": "Cachepot floreira modelo Flat Vaso 67 da Japi em aÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ§o corten. Capacidade 17 litros, dimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 22x67 cm. Ideal para plantas maiores. ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Material aÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ§o cortenÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Capacidade 17 litrosÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Design industrialÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 DimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 22x67 cm",
+    "description": "Cachepot floreira modelo Flat Vaso 67 da Japi em aÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ§o corten. Capacidade 17 litros, dimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 22x67 cm. Ideal para plantas maiores. ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Material aÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ§o cortenÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Capacidade 17 litrosÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Design industrialÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ DimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 22x67 cm",
     "category": "Vasos Decorativos",
     "slug": "cachepot-floreira-vaso-67-aco-corten-17l-japi",
     "seo_title": "Cachepot Vaso 67 Aço Corten 17L - Japi | Vivaliz",
@@ -3401,9 +3422,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 3
   },
-  "25": {
+  {
     "id": "341728727",
     "sku": "JOGOALICATES3PECAS",
     "name": "Jogo de Alicates com 3 Peças - Aquatools",
@@ -3411,7 +3433,7 @@
     "price": 130.64,
     "stock": 2,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/d9135e72d0da9c2a7b0b3c0deba87502.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Alicates",
     "status": "A",
     "olist_product_id": "341728727",
@@ -3479,7 +3501,7 @@
     },
     "kit_items": []
   },
-  "35": {
+  {
     "id": "342710723",
     "sku": "15",
     "name": "Caixa Ferramentas Bau Reto N15 37x70x28cm Bandeja Fercar",
@@ -3487,7 +3509,7 @@
     "price": 436.03,
     "stock": 6,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/43a63f79cdcd77bc74c25bfa1aed5804.jpg",
-    "images_count": 0,
+    "images_count": 5,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "342710723",
@@ -3554,7 +3576,7 @@
     },
     "kit_items": []
   },
-  "12": {
+  {
     "id": "341534002",
     "sku": "JVAQMA56",
     "name": "Vaso Decorativo Plantas Antique 56 (46l) Macchiato Japi",
@@ -3562,7 +3584,7 @@
     "price": 471.19,
     "stock": 1,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/aa81acb4cedba991a908d08bf73cdee2.jpeg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "341534002",
@@ -3630,7 +3652,7 @@
     },
     "kit_items": []
   },
-  "55": {
+  {
     "id": "342906794",
     "sku": "07VM",
     "name": "Caixa Ferramentas Sanfonada 5 Gavetas Vermelha 50x20x21cm N07 Fercar",
@@ -3638,7 +3660,7 @@
     "price": 329,
     "stock": 1,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/4c6611de7c45275b1b687d6ba3cef2b3.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "342906794",
@@ -3705,7 +3727,7 @@
     },
     "kit_items": []
   },
-  "30": {
+  {
     "id": "342364207",
     "sku": "21049",
     "name": "Resistencia 3 Temperaturas 127v 5400w Enerducha Plus Up Pratimix",
@@ -3713,7 +3735,7 @@
     "price": 33.24,
     "stock": 0,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/faf086b3dfe0bec0b08e0699c2c5cb11.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "342364207",
@@ -3780,7 +3802,7 @@
     },
     "kit_items": []
   },
-  "145": {
+  {
     "olist_product_id": "353735815",
     "sku": "C08BR",
     "name": "Carrinho Fechado Ferramentas C08 6 Gavetas Branco Fercar",
@@ -3850,9 +3872,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 5
   },
-  "83": {
+  {
     "id": "352335653",
     "sku": "4",
     "name": "Caixa Ferramentas Sanfonada 3 Gavetas 40x20x17 Cm N04 Fercar",
@@ -3860,7 +3883,7 @@
     "price": 149,
     "stock": 2,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/2f0183eda9fce8e49950a63d9c6967f7.jpg",
-    "images_count": 0,
+    "images_count": 3,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "352335653",
@@ -3924,7 +3947,7 @@
     },
     "kit_items": []
   },
-  "166": {
+  {
     "olist_product_id": "360493566",
     "sku": "JV-8HKB-IBHR",
     "name": "Aquatools Torneira Esfera Zincada, 1/2 X 3/4, Uso Geral",
@@ -3991,9 +4014,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 3
   },
-  "64": {
+  {
     "id": "343571958",
     "sku": "1C7Q-LKW4-F5R7",
     "name": "VASO Unique ROSA N12 Japi",
@@ -4001,7 +4025,7 @@
     "price": 20.41,
     "stock": 5,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/514c07ecef3bf8835120087e67a89ca1.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "343571958",
@@ -4068,7 +4092,7 @@
     },
     "kit_items": []
   },
-  "120": {
+  {
     "olist_product_id": "353702017",
     "sku": "JFQFPA57",
     "name": "Cachepot Floreira Flat Vaso 57(6l) 15x57cm Preto Ardosi Japi",
@@ -4082,7 +4106,7 @@
       "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/8d26ea4b6d4f3bf4016760b952487de3.jpg",
       "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/e581d57a1da10799eaed2c82c4c0af45.jpg"
     ],
-    "description": "Cachepot floreira modelo Flat Vaso 57 da Japi em preto ardÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ³sia. Capacidade 6 litros, dimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 15x57 cm. Estilo contemporÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢neo. ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Cor preto ardÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ³siaÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Capacidade 6 litrosÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Design contemporÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢neoÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 DimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 15x57 cm",
+    "description": "Cachepot floreira modelo Flat Vaso 57 da Japi em preto ardÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ³sia. Capacidade 6 litros, dimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 15x57 cm. Estilo contemporÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢neo. ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Cor preto ardÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ³siaÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Capacidade 6 litrosÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Design contemporÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢neoÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ DimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 15x57 cm",
     "category": "Vasos Decorativos",
     "slug": "cachepot-floreira-vaso-57-preto-ardosia-6l-japi",
     "seo_title": "Cachepot Vaso 57 Preto Ardósia 6L - Japi | Vivaliz",
@@ -4140,9 +4164,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 5
   },
-  "21": {
+  {
     "id": "341689566",
     "sku": "CD02",
     "name": "Carrinho Ferramentas CD02 1 Gaveta Azul Fercar",
@@ -4150,7 +4175,7 @@
     "price": 721.05,
     "stock": 1,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/3092012ada4ea315b6634cbcdb7a3bae.jpg",
-    "images_count": 0,
+    "images_count": 4,
     "category": "Carrinhos Fercar",
     "status": "A",
     "olist_product_id": "341689566",
@@ -4216,7 +4241,7 @@
     },
     "kit_items": []
   },
-  "38": {
+  {
     "id": "342716910",
     "sku": "TPJ/AS*BR1",
     "name": "Assento Sanitário Oval Universal Soft Branco Astra",
@@ -4224,7 +4249,7 @@
     "price": 44.1,
     "stock": 167,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/ee19ff5b3db206a3c25d5b779bacd30a.jpg",
-    "images_count": 0,
+    "images_count": 5,
     "category": "Banheiro",
     "status": "A",
     "olist_product_id": "342716910",
@@ -4291,7 +4316,7 @@
     },
     "kit_items": []
   },
-  "127": {
+  {
     "olist_product_id": "353711479",
     "sku": "V0210636",
     "name": "Massa F12 para Calafetar Madeira 400g Imbuia Viapol",
@@ -4362,9 +4387,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "88": {
+  {
     "id": "353681086",
     "sku": "3x19",
     "name": "Trena Profissional Emborrachada Aquatools - 3 Metros X 16mm",
@@ -4372,7 +4398,7 @@
     "price": 19.9,
     "stock": 4,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/ddea64957287bf78298288b94eaa4388.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Medição",
     "status": "A",
     "olist_product_id": "353681086",
@@ -4439,7 +4465,7 @@
     },
     "kit_items": []
   },
-  "17": {
+  {
     "id": "341682112",
     "sku": "6",
     "name": "Caixa Ferramentas Sanfonada 5 Gavetas 40x20x21 Cm N06 Fercar",
@@ -4447,7 +4473,7 @@
     "price": 213.19,
     "stock": 3,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/6ba4a566ea3afc8ee6763d9349758593.jpg",
-    "images_count": 0,
+    "images_count": 3,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "341682112",
@@ -4512,7 +4538,7 @@
     },
     "kit_items": []
   },
-  "44": {
+  {
     "id": "342902497",
     "sku": "1C7Q-LKVS-MQQN",
     "name": "Rodizio de Gel Giratório Sem Freio 75mm Rolamento Soprano",
@@ -4520,7 +4546,7 @@
     "price": 34.9,
     "stock": 9,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/fa6f9663269162049533f344fc291784.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Rodízios",
     "status": "A",
     "olist_product_id": "342902497",
@@ -4587,7 +4613,7 @@
     },
     "kit_items": []
   },
-  "108": {
+  {
     "olist_product_id": "353698103",
     "sku": "V0210680",
     "name": "Massa Paramadeira F-12 400G/0,225L Sucupira - Viapol",
@@ -4658,9 +4684,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "118": {
+  {
     "olist_product_id": "353701726",
     "sku": "JFQFE57",
     "name": "Cachepot Floreira Flat Vaso 57(6l) 15x57cm Chumbo Japi",
@@ -4674,7 +4701,7 @@
       "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/aa1a1f47692f5aca514075e23e963a6c.jpg",
       "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/580a3ed6ed39a17cab95e466ed90dcc6.jpg"
     ],
-    "description": "Cachepot floreira modelo Flat Vaso 57 da Japi na cor chumbo. Capacidade 6 litros, dimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 15x57 cm. ElegÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ncia e sofisticaÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ§ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ£o. ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Cor chumbo sofisticadaÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Capacidade 6 litrosÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Design modernoÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 DimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 15x57 cm",
+    "description": "Cachepot floreira modelo Flat Vaso 57 da Japi na cor chumbo. Capacidade 6 litros, dimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 15x57 cm. ElegÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ncia e sofisticaÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ§ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ£o. ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Cor chumbo sofisticadaÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Capacidade 6 litrosÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Design modernoÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ DimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 15x57 cm",
     "category": "Vasos Decorativos",
     "slug": "cachepot-floreira-vaso-57-chumbo-6l-japi",
     "seo_title": "Cachepot Vaso 57 Chumbo 6L - Japi | Vivaliz",
@@ -4733,9 +4760,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 5
   },
-  "146": {
+  {
     "olist_product_id": "353736231",
     "sku": "C08TPT",
     "name": "Carrinho Fechado Ferramentas C08 6 Gavetas Todo Preto Fercar",
@@ -4806,9 +4834,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 5
   },
-  "87": {
+  {
     "id": "353681080",
     "sku": "75x25",
     "name": "Trena profissional emborrachada Aquatools - 7,5 metrosx25mm",
@@ -4816,7 +4845,7 @@
     "price": 29.9,
     "stock": 1,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/d2ee5e127dbde64c01472d6380f57092.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Medição",
     "status": "A",
     "olist_product_id": "353681080",
@@ -4884,7 +4913,7 @@
     },
     "kit_items": []
   },
-  "142": {
+  {
     "olist_product_id": "353734704",
     "sku": "JFQFE67",
     "name": "Cachepot Floreira Flat Vaso 67(17l) 22x67cm Chumbo Japi",
@@ -4898,7 +4927,7 @@
       "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/3c8ec4a999a7e91e6a5352a1316f2699.jpg",
       "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/b96346e5bbfd622201a474a743ff1fab.jpg"
     ],
-    "description": "Cachepot floreira modelo Flat Vaso 67 da Japi na cor chumbo. Capacidade 17 litros, dimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 22x67 cm. SofisticaÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ§ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ£o para decoraÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ§ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ£o. ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Cor chumbo eleganteÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Capacidade 17 litrosÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Design modernoÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 DimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 22x67 cm",
+    "description": "Cachepot floreira modelo Flat Vaso 67 da Japi na cor chumbo. Capacidade 17 litros, dimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 22x67 cm. SofisticaÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ§ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ£o para decoraÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ§ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ£o. ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Cor chumbo eleganteÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Capacidade 17 litrosÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Design modernoÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ DimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 22x67 cm",
     "category": "Vasos Decorativos",
     "slug": "cachepot-floreira-vaso-67-chumbo-17l-japi",
     "seo_title": "Cachepot Vaso 67 Chumbo 17L - Japi | Vivaliz",
@@ -4955,9 +4984,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 5
   },
-  "40": {
+  {
     "id": "342849584",
     "sku": "A41*BR",
     "name": "Armário Banheiro Versátil Branco com Espelho A41 Astra",
@@ -4965,7 +4995,7 @@
     "price": 129,
     "stock": 6,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/2f8c49c91c5443574d8795439859c7ec.png",
-    "images_count": 0,
+    "images_count": 4,
     "category": "Banheiro",
     "status": "A",
     "olist_product_id": "342849584",
@@ -5031,7 +5061,7 @@
     },
     "kit_items": []
   },
-  "86": {
+  {
     "id": "353676753",
     "sku": "JVCDB34",
     "name": "Vaso Decor Plantas Cilin Decore 34 (28l) Off White Japi",
@@ -5039,7 +5069,7 @@
     "price": 473.7,
     "stock": 17,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/58f7967dfbcf634d1aeaaaada1b7073c.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "353676753",
@@ -5107,7 +5137,7 @@
     },
     "kit_items": []
   },
-  "143": {
+  {
     "olist_product_id": "353735022",
     "sku": "C08TVM",
     "name": "Carrinho Fechado Ferramentas C08 6 Gavetas Td Vermelho Fercar",
@@ -5177,9 +5207,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 4
   },
-  "134": {
+  {
     "olist_product_id": "353732318",
     "sku": "ved-70",
     "name": "Rodo Vedante Borracha Friso Porta Aluminio 70cm Vivaliz",
@@ -5250,9 +5281,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "7": {
+  {
     "id": "341481165",
     "sku": "6323",
     "name": "Gancho Armador Rede Embutir Colonial 6323 Aliança",
@@ -5260,7 +5292,7 @@
     "price": 118.87,
     "stock": 0,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/ecc5818927a94b50e44935af285e3dd8.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Banheiro",
     "status": "A",
     "olist_product_id": "341481165",
@@ -5327,7 +5359,7 @@
     },
     "kit_items": []
   },
-  "62": {
+  {
     "id": "343571949",
     "sku": "1C7Q-LKW4-FI2Y",
     "name": "VASO Unique ROSA N16 Japi",
@@ -5335,7 +5367,7 @@
     "price": 21.49,
     "stock": 4,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/3023acaebd5317c9b72a2725e54726a1.jpg",
-    "images_count": 0,
+    "images_count": 5,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "343571949",
@@ -5401,7 +5433,7 @@
     },
     "kit_items": []
   },
-  "153": {
+  {
     "olist_product_id": "360421105",
     "sku": "9C-M51D-ITZ7",
     "name": "Maçarico portátil culinário a gás MELFI",
@@ -5470,9 +5502,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "106": {
+  {
     "olist_product_id": "353697897",
     "sku": "V0210691",
     "name": "Massa F12 para Calafetar Madeira 400g Mogno Viapol",
@@ -5543,9 +5576,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "157": {
+  {
     "olist_product_id": "360491489",
     "sku": "JVAQMA44",
     "name": "Vaso Decorativo Plantas Antique 44 (70l) Macchiato Japi",
@@ -5617,9 +5651,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "114": {
+  {
     "olist_product_id": "353698710",
     "sku": "JFQFCQ77",
     "name": "Cachepot Floreira Flat Vaso 77(32l) 29x77cm Cimento Queimado Japi",
@@ -5691,9 +5726,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "97": {
+  {
     "id": "353693135",
     "sku": "C06TVM",
     "name": "Carrinho Fechado Ferramentas C06 3 Gavetas Td Vermelho Fercar",
@@ -5701,7 +5737,7 @@
     "price": 1399,
     "stock": 0,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/3ab9d81f14ff77f5df08c3f016028b1b.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Carrinhos Fercar",
     "status": "A",
     "olist_product_id": "353693135",
@@ -5769,7 +5805,7 @@
     },
     "kit_items": []
   },
-  "122": {
+  {
     "olist_product_id": "353703884",
     "sku": "KIT2RODOALUMINIOBORRACHA",
     "name": "Kit 2 Rodo Vedante Borracha Friso Porta Aluminio 80cm",
@@ -5845,9 +5881,10 @@
       }
     ],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "177": {
+  {
     "olist_product_id": "365911533",
     "sku": "kit4rod35freio",
     "name": "Kit 4 Rodízio Giratório Gel Silicone Rodinha 35mm Com Trava",
@@ -5927,9 +5964,10 @@
       }
     ],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 12
   },
-  "82": {
+  {
     "id": "352330640",
     "sku": "JVNTI55",
     "name": "Vaso Decorativo Plantas Nativa 55 (75l) Iron JVNTI55 Japi",
@@ -5937,7 +5975,7 @@
     "price": 640.3,
     "stock": 0,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/73bd2b5c9c994afe1ee31ddf5d87cda0.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "352330640",
@@ -6005,7 +6043,7 @@
     },
     "kit_items": []
   },
-  "19": {
+  {
     "id": "341682899",
     "sku": "CS-11",
     "name": "Caixa Ferramentas Sanfonada 7 Gavetas Roda 50x20x25cm CS-11 Fercar",
@@ -6013,7 +6051,7 @@
     "price": 299.25,
     "stock": 1,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/42157cfb6b672bc02cd8ea3e1b28ed16.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "341682899",
@@ -6081,7 +6119,7 @@
     },
     "kit_items": []
   },
-  "42": {
+  {
     "id": "342850165",
     "sku": "RG50-4",
     "name": "Kit 4 rodízios 50mm em gel 2 com trava e 2 sem trava",
@@ -6089,7 +6127,7 @@
     "price": 45,
     "stock": 229,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/bbcf14d7188c3ad7cc8f197ceb1d8a19.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Rodízios",
     "status": "A",
     "olist_product_id": "342850165",
@@ -6165,7 +6203,7 @@
       }
     ]
   },
-  "115": {
+  {
     "olist_product_id": "353698781",
     "sku": "JFQFE77",
     "name": "Cachepot Floreira Flat Vaso 77(32l) 29x77cm Chumbo Japi",
@@ -6237,9 +6275,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "158": {
+  {
     "olist_product_id": "360491615",
     "sku": "JVAQAC44",
     "name": "Vaso Decorativo Plantas Antique 44 (70l) Aco Corten Japi",
@@ -6311,9 +6350,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "15": {
+  {
     "id": "341679995",
     "sku": "16",
     "name": "Caixa Ferramentas Bau Reto N16 80x34x45cm C/ Bandeja Fercar",
@@ -6321,7 +6361,7 @@
     "price": 709.85,
     "stock": 11,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/2efcf39b893ece81d227373aa5cff930.jpg",
-    "images_count": 0,
+    "images_count": 5,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "341679995",
@@ -6388,7 +6428,7 @@
     },
     "kit_items": []
   },
-  "112": {
+  {
     "olist_product_id": "353698435",
     "sku": "V0210675",
     "name": "Massa F12 para Calafetar Madeira 400g Cerejeira Viapol",
@@ -6459,9 +6499,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "100": {
+  {
     "olist_product_id": "353696687",
     "sku": "CSD830FBA",
     "name": "Chave Liga/desliga/liga Margirius Csd-830 30a por Alavanca",
@@ -6532,9 +6573,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 4
   },
-  "94": {
+  {
     "id": "353692684",
     "sku": "C06AZ",
     "name": "Carrinho Fechado Ferramentas C06 3 Gavetas Azul Cinza Fercar",
@@ -6542,7 +6584,7 @@
     "price": 1409.76,
     "stock": 4,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/64f0e107130f91be87209cee854e9ed1.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Carrinhos Fercar",
     "status": "A",
     "olist_product_id": "353692684",
@@ -6610,7 +6652,7 @@
     },
     "kit_items": []
   },
-  "48": {
+  {
     "id": "342902707",
     "sku": "1C7Q-LKV1-WBFF",
     "name": "Kit com 5 Rodizios Gel 35mm Giratoria Silicone trava Soprano",
@@ -6618,7 +6660,7 @@
     "price": 42.98,
     "stock": 96,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/df8d72efc230f81614a3608ab2119796.jpg",
-    "images_count": 0,
+    "images_count": 5,
     "category": "Rodízios",
     "status": "A",
     "olist_product_id": "342902707",
@@ -6689,7 +6731,7 @@
       }
     ]
   },
-  "176": {
+  {
     "olist_product_id": "362847505",
     "sku": "FITAPERFAFBA",
     "name": "Abraçadeira Fita Perfurada 19mm x 10 Metros Aço Galvanizado",
@@ -6762,9 +6804,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "152": {
+  {
     "olist_product_id": "359360637",
     "sku": "16-52ZG-AKB9",
     "name": "Disjuntor Bipolar 100A Ul Soprano",
@@ -6833,9 +6876,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "2": {
+  {
     "id": "341440908",
     "sku": "KIT-RODIZIOS-35MM-TRAVA",
     "name": "Kit 4 Rodízio Giratório Gel Silicone 35mm Com Trava Soprano",
@@ -6843,7 +6887,7 @@
     "price": 45,
     "stock": 120,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/149f3f291532c2da9956fdaa9ae620dc.jpg",
-    "images_count": 0,
+    "images_count": 5,
     "category": "Rodízios",
     "status": "A",
     "olist_product_id": "341440908",
@@ -6921,7 +6965,7 @@
       }
     ]
   },
-  "136": {
+  {
     "olist_product_id": "353733531",
     "sku": "Sabatini",
     "name": "Assento Sanitário Almofadado Sabatini Astra",
@@ -6990,9 +7034,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 4
   },
-  "6": {
+  {
     "id": "341456124",
     "sku": "JVCDPA34",
     "name": "Vaso Cilíndrico Decore 34 28L Preto Ardósia Japi",
@@ -7000,7 +7045,7 @@
     "price": 397.72,
     "stock": 6,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/b475e3f78ca19b04fe64ae96bf9bba6a.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "341456124",
@@ -7068,7 +7113,7 @@
     },
     "kit_items": []
   },
-  "93": {
+  {
     "id": "353692529",
     "sku": "N05",
     "name": "Caixa Ferramentas Sanfonada 3 Gavetas Vermelha 50x20x17cm N05 Fercar",
@@ -7076,7 +7121,7 @@
     "price": 149,
     "stock": 0,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/b2d930059b729b3eed999651946d502f.jpg",
-    "images_count": 0,
+    "images_count": 4,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "353692529",
@@ -7141,7 +7186,7 @@
     },
     "kit_items": []
   },
-  "123": {
+  {
     "olist_product_id": "353704049",
     "sku": "KIT2RODOVEDADORALUMINIO",
     "name": "Kit 2 Rodo Vedante Borracha Friso Porta Aluminio 100cm",
@@ -7217,9 +7262,10 @@
       }
     ],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "139": {
+  {
     "olist_product_id": "353733990",
     "sku": "COM3",
     "name": "Comedouro Automatico Regulavel Caes Gatos 10 Kg Fercar",
@@ -7289,9 +7335,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 4
   },
-  "20": {
+  {
     "id": "341683965",
     "sku": "00",
     "name": "Caixa Ferramentas Bau Reto N00 30x13x10 C/ Bandeja Fercar",
@@ -7299,7 +7346,7 @@
     "price": 75,
     "stock": 192,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/52a70204d19a7c8c866e67b759d56b1f.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "341683965",
@@ -7368,7 +7415,7 @@
     },
     "kit_items": []
   },
-  "121": {
+  {
     "olist_product_id": "353702856",
     "sku": "JVTBPA32",
     "name": "Vaso Decorativo Planta Tribo Japi 43x32cm 32 Preto Ardósia",
@@ -7439,9 +7486,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 5
   },
-  "45": {
+  {
     "id": "342902508",
     "sku": "1C7Q-LKVS-MDOC",
     "name": "Rodizio de Gel Giratório com Freio 75mm Rolamento Soprano",
@@ -7449,7 +7497,7 @@
     "price": 38.9,
     "stock": 15,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/2f5b3e37a4fc5183a4857738c3cb57d1.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Rodízios",
     "status": "A",
     "olist_product_id": "342902508",
@@ -7516,7 +7564,7 @@
     },
     "kit_items": []
   },
-  "9": {
+  {
     "id": "341486833",
     "sku": "KIT-CADEADO-PAPAIZ-50MM-5UN",
     "name": "Kit 5 Cadeados 50mm Papaiz Latão Segredos Diferentes",
@@ -7524,7 +7572,7 @@
     "price": 339.15,
     "stock": 0,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/9d63cadce3bfd01999bac11fd62e904b.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "341486833",
@@ -7596,7 +7644,7 @@
       }
     ]
   },
-  "167": {
+  {
     "olist_product_id": "360774093",
     "sku": "TTH-K*BCO-01",
     "name": "Assento Sanitário Almofadado Thema/Hawaii/Arezzon/Valentina Branco Astra",
@@ -7666,9 +7714,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 4
   },
-  "131": {
+  {
     "olist_product_id": "353731662",
     "sku": "VED90UN",
     "name": "Rodo Vedante Borracha Friso Porta Aluminio 90 Cm Vivaliz",
@@ -7739,9 +7788,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "102": {
+  {
     "olist_product_id": "353697603",
     "sku": "KIT-RODIZIOS-50MM-GEL",
     "name": "Kit 4 rodízios parafusos 50mm gel 2 trava e 2 trava Soprano",
@@ -7822,9 +7872,10 @@
       }
     ],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "173": {
+  {
     "olist_product_id": "362838488",
     "sku": "C06CZ",
     "name": "Carrinho Fechado Ferramentas C06 3 Gavetas Cinza Fercar",
@@ -7893,9 +7944,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "26": {
+  {
     "id": "341844041",
     "sku": "VASOPLANTASJAPI",
     "name": "Vaso Plantas Decorativo Japi Unique 16 14x16cm Preto",
@@ -7903,7 +7955,7 @@
     "price": 20.8,
     "stock": 9,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/06991463bb831c589d77cd7602ba5c4f.jpg",
-    "images_count": 0,
+    "images_count": 5,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "341844041",
@@ -7970,7 +8022,7 @@
     },
     "kit_items": []
   },
-  "105": {
+  {
     "olist_product_id": "353697814",
     "sku": "Marfimdba",
     "name": "Massa F12 para Calafetar Madeira 400g Marfim Viapol",
@@ -8041,9 +8093,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "77": {
+  {
     "id": "352312377",
     "sku": "JVCDB33",
     "name": "Vaso Decor Plantas Cilin Decore 33 (16l) Off White Japi",
@@ -8051,7 +8104,7 @@
     "price": 399,
     "stock": 8,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/f0cce5846215cdd837a07e55976248e3.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "352312377",
@@ -8119,7 +8172,7 @@
     },
     "kit_items": []
   },
-  "80": {
+  {
     "id": "352312700",
     "sku": "JVCDE34",
     "name": "Vaso Decor Plantas Cilin Decore 34 (28l) Chumbo Japi",
@@ -8127,7 +8180,7 @@
     "price": 459,
     "stock": 6,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/903683eebb2dbd0365a41326c0001337.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "352312700",
@@ -8195,7 +8248,7 @@
     },
     "kit_items": []
   },
-  "33": {
+  {
     "id": "342374752",
     "sku": "ASTRAPET-CASINHA-CACHORRO-AZUL",
     "name": "Casinha Cachorro 52x41x40 Astra Pet Azul",
@@ -8203,7 +8256,7 @@
     "price": 215.1,
     "stock": 1,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/7bb86ede1789efb329bdf5496d816f80.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Brinquedos",
     "status": "A",
     "olist_product_id": "342374752",
@@ -8272,7 +8325,7 @@
     },
     "kit_items": []
   },
-  "76": {
+  {
     "id": "352312277",
     "sku": "JVCDPA33",
     "name": "Vaso Decor Planta Cilin Decore 33 (16l) Preto Ardósia Japi",
@@ -8280,7 +8333,7 @@
     "price": 429,
     "stock": 10,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/3da911415343f11dad6f71828a7eb933.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "352312277",
@@ -8348,7 +8401,7 @@
     },
     "kit_items": []
   },
-  "59": {
+  {
     "id": "342910138",
     "sku": "CS-10",
     "name": "Caixa Ferramentas Sanfonada 5 Gavetas Roda 50x20x21cm CS-10 Fercar",
@@ -8356,7 +8409,7 @@
     "price": 349,
     "stock": 1,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/fb89d32ced800398c33308c7ff116fb3.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "342910138",
@@ -8424,7 +8477,7 @@
     },
     "kit_items": []
   },
-  "110": {
+  {
     "olist_product_id": "353698283",
     "sku": "V0210681",
     "name": "Massa para Madeira F12 400g Branca Viapol",
@@ -8495,9 +8548,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "172": {
+  {
     "olist_product_id": "362724709",
     "sku": "REGUA5TOMADA",
     "name": "Tomada Barra Multipla Régua extensão 20A Quintupla CINZA",
@@ -8564,9 +8618,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 2
   },
-  "61": {
+  {
     "id": "343571944",
     "sku": "1C7Q-LKWA-VQGQ",
     "name": "VASO Unique Chumbo N12 Japi",
@@ -8574,7 +8629,7 @@
     "price": 19.11,
     "stock": 5,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/f4312633dc2cf6d8ba3d9aa777a155d8.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "343571944",
@@ -8641,7 +8696,7 @@
     },
     "kit_items": []
   },
-  "78": {
+  {
     "id": "352312491",
     "sku": "JVCDAC33",
     "name": "Vaso Decorativo Planta Cilin Decore 33 (16l) Aco Corten Japi",
@@ -8649,7 +8704,7 @@
     "price": 429,
     "stock": 8,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/041fa0d86f6b24e18924d9c2a2119362.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "352312491",
@@ -8717,7 +8772,7 @@
     },
     "kit_items": []
   },
-  "151": {
+  {
     "olist_product_id": "359360602",
     "sku": "AH-2UC1-6SIO",
     "name": "Sifão Multissifão Tubo Extensível - Krona",
@@ -8786,9 +8841,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "85": {
+  {
     "id": "353469544",
     "sku": "T12-AGL",
     "name": "Fechadura Digital T12 Bluetooth Chave Senha Preto Agl",
@@ -8796,7 +8852,7 @@
     "price": 1599,
     "stock": 0,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/d8391e2a9e2db36ae3b6c1a7adfe5c06.jpg",
-    "images_count": 0,
+    "images_count": 3,
     "category": "Chaves e Soquetes",
     "status": "A",
     "olist_product_id": "353469544",
@@ -8858,7 +8914,7 @@
     },
     "kit_items": []
   },
-  "92": {
+  {
     "id": "353692377",
     "sku": "5",
     "name": "Caixa Ferramentas Sanfonada 3 Gavetas 50x20x17 Cm N05 Fercar",
@@ -8866,7 +8922,7 @@
     "price": 179,
     "stock": 25,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/4e32b8b6d0df5db459b638628c627447.jpg",
-    "images_count": 0,
+    "images_count": 4,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "353692377",
@@ -8932,7 +8988,7 @@
     },
     "kit_items": []
   },
-  "161": {
+  {
     "olist_product_id": "360491974",
     "sku": "JCMCCQ35",
     "name": "Vaso Match 35 16L Prato Cimento Queimado Japi",
@@ -9003,9 +9059,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 5
   },
-  "39": {
+  {
     "id": "342849443",
     "sku": "A21",
     "name": "Armário Banheiro A21 28.4x40.8x9.5cm Branco Porta Correr Astra",
@@ -9013,7 +9070,7 @@
     "price": 78.99,
     "stock": 20,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/ae2d5f6bbe31a370cf379653bbc52f10.png",
-    "images_count": 0,
+    "images_count": 4,
     "category": "Banheiro",
     "status": "A",
     "olist_product_id": "342849443",
@@ -9079,7 +9136,7 @@
     },
     "kit_items": []
   },
-  "81": {
+  {
     "id": "352326295",
     "sku": "JVAQAC55",
     "name": "Vaso Decorativo Plantas Antique 55 (75l) Aço Corten Japi",
@@ -9087,7 +9144,7 @@
     "price": 572.28,
     "stock": 0,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/18525e83101275f861ee7b80896247a0.jpeg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "352326295",
@@ -9155,7 +9212,7 @@
     },
     "kit_items": []
   },
-  "119": {
+  {
     "olist_product_id": "353701891",
     "sku": "JFQFCQ57",
     "name": "Cachepot Floreira Flat Vaso 57 (6l)15x57cm Cimento Quei Japi",
@@ -9170,7 +9227,7 @@
       "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/8dde22a2ebb8b4c6e3fa5c4de685869d.jpg",
       "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/0b97f218365038e57630fe3c4216afc3.jpg"
     ],
-    "description": "Cachepot floreira modelo Flat Vaso 57 da Japi em cimento queimado. Capacidade 6 litros, dimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 15x57 cm. Ideal para plantas e decoraÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ§ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ£o. ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Material cimento queimadoÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Capacidade 6 litrosÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Design modernoÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 DimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 15x57 cm",
+    "description": "Cachepot floreira modelo Flat Vaso 57 da Japi em cimento queimado. Capacidade 6 litros, dimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 15x57 cm. Ideal para plantas e decoraÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ§ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ£o. ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Material cimento queimadoÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Capacidade 6 litrosÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Design modernoÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ DimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 15x57 cm",
     "category": "Vasos Decorativos",
     "slug": "cachepot-floreira-vaso-57-cimento-queimado-6l-japi",
     "seo_title": "Cachepot Floreira Vaso 57 Cimento Queimado 6L | Vivaliz",
@@ -9228,9 +9285,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "155": {
+  {
     "olist_product_id": "360491230",
     "sku": "Potr250",
     "name": "Pote Marmita Fit Retangular C Tampa 250ml Cx144un Totalplast",
@@ -9304,9 +9362,10 @@
       }
     ],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "163": {
+  {
     "olist_product_id": "360492424",
     "sku": "KIT-DISCO",
     "name": "Kit 10 Disco Corte Inox Esmerilhadeira 4.1/2 1.0mm Aquatools",
@@ -9377,9 +9436,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "75": {
+  {
     "id": "352292111",
     "sku": "JVCDCQ34",
     "name": "Vaso Decor Plantas Cilin Decore 34 (28l) Cimento Queim Japi",
@@ -9387,7 +9447,7 @@
     "price": 459,
     "stock": 9,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/bab236a7830b9ab34637ba091e2aec45.jpeg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "352292111",
@@ -9455,7 +9515,7 @@
     },
     "kit_items": []
   },
-  "16": {
+  {
     "id": "341681699",
     "sku": "03S",
     "name": "Caixa Ferramentas Sanfonada 3 Gavetas 20x30x17cm N03S Fercar",
@@ -9463,7 +9523,7 @@
     "price": 119,
     "stock": 1,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/83e8f2c950b1f963a6d57262d604f124.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "341681699",
@@ -9531,7 +9591,7 @@
     },
     "kit_items": []
   },
-  "89": {
+  {
     "id": "353691872",
     "sku": "CAD-3050-FBACD",
     "name": "Cadeado Haste Longa Latão- Papaiz 30/50",
@@ -9539,7 +9599,7 @@
     "price": 59,
     "stock": 22,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/2bc8a34e6af54647f9092a914dc0b279.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "353691872",
@@ -9607,7 +9667,7 @@
     },
     "kit_items": []
   },
-  "103": {
+  {
     "olist_product_id": "353697660",
     "sku": "Castanhodba",
     "name": "Massa F12 para Calafetar Madeira 400g Castanho Viapol",
@@ -9678,9 +9738,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "138": {
+  {
     "olist_product_id": "353733903",
     "sku": "COM2",
     "name": "Comedouro Automatico Regulavel Caes Gatosv5 Kg Fercar",
@@ -9752,9 +9813,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "116": {
+  {
     "olist_product_id": "353698890",
     "sku": "JFQFPA77",
     "name": "Cachepot Floreira Flat Vaso 77(32l) 29x77cm Preto Ardósia Japi",
@@ -9826,9 +9888,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "50": {
+  {
     "id": "342904162",
     "sku": "1C7Q-LKVY-UH7N",
     "name": "Chave Soquete Tipo T 10mm Hexagonal 25cm Aquatools",
@@ -9836,7 +9899,7 @@
     "price": 37.7,
     "stock": 2,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/a179557acd5de17b1348aa4cef5ec8f1.jpg",
-    "images_count": 0,
+    "images_count": 4,
     "category": "Chaves e Soquetes",
     "status": "A",
     "olist_product_id": "342904162",
@@ -9901,7 +9964,7 @@
     },
     "kit_items": []
   },
-  "41": {
+  {
     "id": "342849898",
     "sku": "RGCT50-6",
     "name": "Rodizio em Gel C/Trava Cristal 50mm 6 UN Soprano",
@@ -9909,7 +9972,7 @@
     "price": 54.5,
     "stock": 170,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/3d81b5a40dc3f5b69ace0318ef2e1ee9.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Rodízios",
     "status": "A",
     "olist_product_id": "342849898",
@@ -9981,7 +10044,7 @@
       }
     ]
   },
-  "126": {
+  {
     "olist_product_id": "353711354",
     "sku": "JFQFCQ67",
     "name": "Cachepot Floreira Flat Vaso 67(17l) 22x67cm Cimento Queimado Japi",
@@ -9996,7 +10059,7 @@
       "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/5152767372124729396dd1b6e2c93889.jpg",
       "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/67e44e798fa3dc504a5117a73e56c84e.jpg"
     ],
-    "description": "Cachepot floreira modelo Flat Vaso 67 da Japi em cimento queimado. Capacidade 17 litros, dimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 22x67 cm. Estilo natural e moderno. ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Material cimento queimadoÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Capacidade 17 litrosÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Design naturalÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 DimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 22x67 cm",
+    "description": "Cachepot floreira modelo Flat Vaso 67 da Japi em cimento queimado. Capacidade 17 litros, dimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 22x67 cm. Estilo natural e moderno. ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Material cimento queimadoÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Capacidade 17 litrosÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Design naturalÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ DimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 22x67 cm",
     "category": "Vasos Decorativos",
     "slug": "cachepot-floreira-vaso-67-cimento-queimado-17l-japi",
     "seo_title": "Cachepot Vaso 67 Cimento Queimado 17L - Japi | Vivaliz",
@@ -10053,9 +10116,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "34": {
+  {
     "id": "342377420",
     "sku": "PL8PRATEADO",
     "name": "Ducha em Alumínio 8 Polegadas - Pro Lazer Prateado",
@@ -10063,7 +10127,7 @@
     "price": 140.04,
     "stock": 1,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/7941550532041f020007c4f89af5823e.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "342377420",
@@ -10130,7 +10194,7 @@
     },
     "kit_items": []
   },
-  "32": {
+  {
     "id": "342371996",
     "sku": "KIT10RODOVEDADOR90CM",
     "name": "Kit 10 Rodo Vedante Borracha Friso Porta Aluminio 90 Cm",
@@ -10138,7 +10202,7 @@
     "price": 45,
     "stock": 146,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/7dc8a17ac8dbbb42d4d2eb32bd1ae0f7.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "342371996",
@@ -10211,7 +10275,7 @@
       }
     ]
   },
-  "43": {
+  {
     "id": "342902474",
     "sku": "SKU-342902474",
     "name": "Soprano, Kit 4 Rodízios Móveis Gel, 2 Freio e 2 sem 75mm",
@@ -10219,7 +10283,7 @@
     "price": 78,
     "stock": 4,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/23130748ff302d23fb019cb080212e07.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Rodízios",
     "status": "A",
     "olist_product_id": "342902474",
@@ -10295,7 +10359,7 @@
       }
     ]
   },
-  "53": {
+  {
     "id": "342906351",
     "sku": "PAPELEIRA-ADESIVA-ASTRA-BRANCA",
     "name": "Papeleira com Adesivo Branca Astra",
@@ -10303,7 +10367,7 @@
     "price": 55,
     "stock": 2,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/2adc67b1651e5e79be6469c55c52d0aa.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "342906351",
@@ -10370,7 +10434,7 @@
     },
     "kit_items": []
   },
-  "124": {
+  {
     "olist_product_id": "353704246",
     "sku": "KIT2VEDANTEPORTA90CM",
     "name": "Kit 2 Rodo Vedante Borracha Friso Porta Aluminio 90 Cm",
@@ -10446,9 +10510,10 @@
       }
     ],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "3": {
+  {
     "id": "341441027",
     "sku": "RODIZIO-75MM",
     "name": "4x Rodízio Gel 75mm Freio 220kg Total",
@@ -10456,7 +10521,7 @@
     "price": 76.02,
     "stock": 3,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/d5977ed411f13406a4f7c7e8491fa150.jpg",
-    "images_count": 0,
+    "images_count": 5,
     "category": "Rodízios",
     "status": "A",
     "olist_product_id": "341441027",
@@ -10529,7 +10594,7 @@
       }
     ]
   },
-  "49": {
+  {
     "id": "342902731",
     "sku": "CONJ-10-RODIZIOS-35MM-GEL",
     "name": "10x Rodízio 35mm Giratório com Freio Gel Anti-Risco Soprano",
@@ -10537,7 +10602,7 @@
     "price": 77.98,
     "stock": 48,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/b74b04304e8bce6070372363aa868b21.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Rodízios",
     "status": "A",
     "olist_product_id": "342902731",
@@ -10611,7 +10676,7 @@
       }
     ]
   },
-  "117": {
+  {
     "olist_product_id": "353701556",
     "sku": "JFQFAC57",
     "name": "Cachepot Floreira Flat Vaso 57(6l) 15x57cm Aço Corten Japi",
@@ -10625,7 +10690,7 @@
       "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/8dfa64d61cb431b16fd93df95619564d.jpg",
       "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/2aa7b7534f7474c446d6c51c3d8cb6e7.jpg"
     ],
-    "description": "Cachepot floreira modelo Flat Vaso 57 da Japi em aÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ§o corten. Capacidade 6 litros, dimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 15x57 cm. Toque industrial e moderno. ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Material aÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ§o cortenÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Capacidade 6 litrosÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 Design industrialÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ\u0085 DimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 15x57 cm",
+    "description": "Cachepot floreira modelo Flat Vaso 57 da Japi em aÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ§o corten. Capacidade 6 litros, dimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 15x57 cm. Toque industrial e moderno. ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Material aÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ§o cortenÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Capacidade 6 litrosÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ Design industrialÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ¢ÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂ DimensÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂÃÂµes 15x57 cm",
     "category": "Vasos Decorativos",
     "slug": "cachepot-floreira-vaso-57-aco-corten-6l-japi",
     "seo_title": "Cachepot Vaso 57 Aço Corten 6L - Japi | Vivaliz",
@@ -10683,9 +10748,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 5
   },
-  "54": {
+  {
     "id": "342906622",
     "sku": "C17S",
     "name": "Caixa Descarga Branca Elevada Regulável 9L Astra",
@@ -10693,7 +10759,7 @@
     "price": 69,
     "stock": 48,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/5a7061e1d322b349658732132326da41.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "342906622",
@@ -10761,7 +10827,7 @@
     },
     "kit_items": []
   },
-  "168": {
+  {
     "olist_product_id": "361408120",
     "sku": "TVT/K-NOVO-02",
     "name": "Assento Sanitário Almofadado Avant/Fit/Versato/Angra Branco Astra",
@@ -10833,9 +10899,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "72": {
+  {
     "id": "350563587",
     "sku": "JVCDE33",
     "name": "Vaso Decor Plantas Cilin Decore 33 (16l) Chumbo Japi",
@@ -10843,7 +10910,7 @@
     "price": 429,
     "stock": 2,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/7acfed5c624efeb677f01a1da2635098.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "350563587",
@@ -10911,7 +10978,7 @@
     },
     "kit_items": []
   },
-  "91": {
+  {
     "id": "353692294",
     "sku": "9",
     "name": "Caixa Ferramentas Sanfonada 7 Gavetas 50x20x25 Cm N09 Fercar",
@@ -10919,7 +10986,7 @@
     "price": 303,
     "stock": 5,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/c68007d899443704580a6457e465ee78.jpg",
-    "images_count": 0,
+    "images_count": 5,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "353692294",
@@ -10986,7 +11053,7 @@
     },
     "kit_items": []
   },
-  "63": {
+  {
     "id": "343571954",
     "sku": "1C7Q-LKW4-FC3O",
     "name": "VASO Unique AZUL N12 Japi",
@@ -10994,7 +11061,7 @@
     "price": 19.4,
     "stock": 5,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/aee0d25db6ae5200518446b54c558600.jpg",
-    "images_count": 0,
+    "images_count": 5,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "343571954",
@@ -11060,7 +11127,7 @@
     },
     "kit_items": []
   },
-  "5": {
+  {
     "id": "341443735",
     "sku": "FLOREIRA-FLAT77",
     "name": "Floreira Flat 77cm Parede Cimento Queimado",
@@ -11068,7 +11135,7 @@
     "price": 798.91,
     "stock": 5,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/f5d114dbeb06f758e5b36ebe7c2097f1.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "341443735",
@@ -11141,87 +11208,7 @@
       }
     ]
   },
-  "1": {
-    "id": "341440887",
-    "sku": "KITROD12",
-    "name": "Kit 12 Rodízios Gel 50mm Freio Soprano",
-    "description": "Kit com 12 rodízios de silicone gel 35 mm com freio.",
-    "price": 119,
-    "stock": 40,
-    "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/0db73baf065044cb426eb384807e2d00.jpg",
-    "images_count": 0,
-    "category": "Rodízios",
-    "status": "A",
-    "olist_product_id": "341440887",
-    "images": [
-      "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/0db73baf065044cb426eb384807e2d00.jpg",
-      "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/a7fa7880fd1ff047c58908cd5da0ae31.jpg",
-      "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/bf99e06baf80d6dffbd04fa880739e06.jpg",
-      "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/6df9ebb6532393ff2e1f792474d4e5e0.jpg",
-      "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/f8de6b4ba0eb9eaa70e53199f2960179.jpg"
-    ],
-    "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00",
-    "slug": "kit-12-rodizios-silicone-gel-35mm-com-freio-soprano",
-    "seo_title": "12x Rodízio 35mm Silicone Gel com Freio Soprano",
-    "seo_description": "Adquira kit 12 rodízios 35mm em silicone gel com freio Soprano. Silenciosos, anti-risco e perfeitos para móveis de escritório e residência.",
-    "keywords": [
-      "rodízio 35mm",
-      "rodízio gel",
-      "rodízio com freio",
-      "rodízio soprano"
-    ],
-    "brand": "Soprano",
-    "gtin": "",
-    "ncm": "8302.20.00",
-    "unit": "UN",
-    "attributes": [],
-    "type": "K",
-    "variation_type": "N",
-    "unit_per_box": "",
-    "origin": "2",
-    "warranty": "3 meses",
-    "notes": "",
-    "parent_product": null,
-    "prices": {
-      "price": 119,
-      "promotional_price": 0,
-      "cost_price": 36.12,
-      "avg_cost_price": 43.2
-    },
-    "stock_detail": {
-      "controlled": true,
-      "made_to_order": false,
-      "prep_days": 0,
-      "location": "",
-      "min": 2,
-      "max": 0
-    },
-    "dimensions": {
-      "width": 10,
-      "height": 10,
-      "length": 10,
-      "diameter": 0,
-      "net_weight": 5.52,
-      "gross_weight": 5.52,
-      "volumes": 1
-    },
-    "suppliers": [
-      "SOPRANO INDUSTRIA ELETROMETALURGICA LTDA"
-    ],
-    "taxation": {
-      "gtin_packaging": "",
-      "ipi_fixed_value": 0,
-      "ipi_class": ""
-    },
-    "kit_items": [
-      {
-        "sku": "1C7Q-LKUU-0BA3",
-        "quantity": 12
-      }
-    ]
-  },
-  "14": {
+  {
     "id": "341679483",
     "sku": "13",
     "name": "Caixa Ferramentas Bau Reto N13 50x25x22 C/ Bandeja Fercar",
@@ -11229,7 +11216,7 @@
     "price": 198.31,
     "stock": 3,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/5e493ccfa50e660ba9de7d3c96e28058.jpg",
-    "images_count": 0,
+    "images_count": 3,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "341679483",
@@ -11294,7 +11281,7 @@
     },
     "kit_items": []
   },
-  "137": {
+  {
     "olist_product_id": "353733822",
     "sku": "COM1",
     "name": "Comedouro Automatico Regulavel Caes Gatos 2,5 Kg Fercar",
@@ -11367,9 +11354,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "111": {
+  {
     "olist_product_id": "353698363",
     "sku": "V0210643",
     "name": "Massa para Madeira F12 400g Cumaru Viapol",
@@ -11440,9 +11428,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "154": {
+  {
     "olist_product_id": "360490989",
     "sku": "Pote500",
     "name": "Pote Marmita Fit Retangular Com Tampa 500ml 144un Totalplast",
@@ -11516,9 +11505,10 @@
       }
     ],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "27": {
+  {
     "id": "341844061",
     "sku": "7323",
     "name": "Gancho/armador Rede de Embutir Inox Cromado 7323 Aliança",
@@ -11526,7 +11516,7 @@
     "price": 78.41,
     "stock": 0,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/f3fdefc50d383bd416d5c4efe724d0db.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Banheiro",
     "status": "A",
     "olist_product_id": "341844061",
@@ -11593,7 +11583,7 @@
     },
     "kit_items": []
   },
-  "96": {
+  {
     "id": "353693038",
     "sku": "C06TPT",
     "name": "Carrinho Fechado Ferramentas C06 3 Gavetas Todo Preto Fercar",
@@ -11601,7 +11591,7 @@
     "price": 1414.52,
     "stock": 4,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/ab9208d240ad6213a96635a883407268.jpg",
-    "images_count": 0,
+    "images_count": 5,
     "category": "Carrinhos Fercar",
     "status": "A",
     "olist_product_id": "353693038",
@@ -11668,7 +11658,7 @@
     },
     "kit_items": []
   },
-  "60": {
+  {
     "id": "342910745",
     "sku": "1C7Q-LKVM-XZ7J",
     "name": "Enerbras Resistência Enerducha UP 5500W 127V",
@@ -11676,7 +11666,7 @@
     "price": 35.9,
     "stock": 1,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/8fcce71faa75370fb02cfa480ab32226.jpg",
-    "images_count": 0,
+    "images_count": 4,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "342910745",
@@ -11741,7 +11731,7 @@
     },
     "kit_items": []
   },
-  "144": {
+  {
     "olist_product_id": "353735611",
     "sku": "C08AZ",
     "name": "Carrinho Fechado Ferramentas C08 6 Gavetas Azul Cinza Fercar",
@@ -11812,9 +11802,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 5
   },
-  "130": {
+  {
     "olist_product_id": "353727693",
     "sku": "TH-05",
     "name": "Trena 5mx19mm Halten Th-05",
@@ -11884,9 +11875,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 5
   },
-  "170": {
+  {
     "olist_product_id": "361408689",
     "sku": "ADSABBR",
     "name": "Saboneteira Comadesivo Astra Branco Fixação Rapida - Branco",
@@ -11958,9 +11950,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "65": {
+  {
     "id": "343577587",
     "sku": "KIT-RODIZIOS-SOPRANO-50MM-FREIO",
     "name": "Soprano, Kit 4 Rodízios Móveis Freio Rodas de Silicone 50mm",
@@ -11968,7 +11961,7 @@
     "price": 66.9,
     "stock": 229,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/a4e8b44f81b0cd1107740034248ce07e.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Rodízios",
     "status": "A",
     "olist_product_id": "343577587",
@@ -12044,7 +12037,7 @@
       }
     ]
   },
-  "52": {
+  {
     "id": "342906294",
     "sku": "Sulfatoonsite",
     "name": "Sulfato de Alumínio Ultraclor 2kg",
@@ -12052,7 +12045,7 @@
     "price": 24.9,
     "stock": 10,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/48f6c0163615d928df50099e20f43e08.jpg",
-    "images_count": 0,
+    "images_count": 5,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "342906294",
@@ -12118,7 +12111,7 @@
     },
     "kit_items": []
   },
-  "31": {
+  {
     "id": "342364870",
     "sku": "RESISTENCIAENERDUCHA",
     "name": "Resistencia 3 Temperaturas 220v 5400w Enerducha Plus Pratimix",
@@ -12126,7 +12119,7 @@
     "price": 36.67,
     "stock": 7,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/7b49596142919a61252600aea85ce34d.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "342364870",
@@ -12193,7 +12186,7 @@
     },
     "kit_items": []
   },
-  "0": {
+  {
     "id": "341440872",
     "sku": "KIT4R-SOPRÃO",
     "name": "KIT4R-SOPRÃO",
@@ -12201,7 +12194,7 @@
     "price": 45,
     "stock": 148,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/6419d510e16dabf3fe5eedf0b00e2579.jpg",
-    "images_count": 0,
+    "images_count": 5,
     "category": "Rodízios",
     "status": "A",
     "olist_product_id": "341440872",
@@ -12276,7 +12269,7 @@
       }
     ]
   },
-  "128": {
+  {
     "olist_product_id": "353711631",
     "sku": "COR5",
     "name": "Caixa Correio Vertical Trava para Grade/embutir COR5 Fercar",
@@ -12349,9 +12342,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 5
   },
-  "18": {
+  {
     "id": "341682319",
     "sku": "14",
     "name": "Caixa Ferramentas Bau Reto N14 60x30x25cm C/ Bandeja Fercar",
@@ -12359,7 +12353,7 @@
     "price": 327.37,
     "stock": 4,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/1a091a74982bba7161eb27752b841e1e.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Ferramentas Manuais",
     "status": "A",
     "olist_product_id": "341682319",
@@ -12427,7 +12421,7 @@
     },
     "kit_items": []
   },
-  "133": {
+  {
     "olist_product_id": "353732039",
     "sku": "RODOVED100",
     "name": "Rodo Vedante Borracha Friso Porta Aluminio 100cm Vivaliz",
@@ -12498,9 +12492,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "68": {
+  {
     "id": "347410379",
     "sku": "JFFLE77",
     "name": "Cachepot Floreira Flat Vaso Atenas 77(32L) Chumbo Japi",
@@ -12508,7 +12503,7 @@
     "price": 319,
     "stock": 2,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/5b718aef8c2a673040cbced5bf6a4322.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "347410379",
@@ -12576,7 +12571,7 @@
     },
     "kit_items": []
   },
-  "171": {
+  {
     "olist_product_id": "361408826",
     "sku": "ADPS*BR",
     "name": "Prateleira Shampoo Adesivo Banheiro Astra Branco",
@@ -12647,9 +12642,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "95": {
+  {
     "id": "353692956",
     "sku": "C06PT",
     "name": "Carrinho Fechado Ferramentas C06 3 Gavetas Preto Cinza Fercar",
@@ -12657,7 +12653,7 @@
     "price": 1399,
     "stock": 18,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/0f133adf9156f35b977fb224b1d6ec6f.jpg",
-    "images_count": 0,
+    "images_count": 5,
     "category": "Carrinhos Fercar",
     "status": "A",
     "olist_product_id": "353692956",
@@ -12723,7 +12719,7 @@
     },
     "kit_items": []
   },
-  "70": {
+  {
     "id": "350509721",
     "sku": "JVCDAC34",
     "name": "Vaso Decor Plantas Cilin Decore 34 (28l) Aço Corten Japi",
@@ -12731,7 +12727,7 @@
     "price": 477.26,
     "stock": 2,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/f5388a6fb5bce079b59dd5e71a8216cb.jpg",
-    "images_count": 0,
+    "images_count": 4,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "350509721",
@@ -12796,7 +12792,7 @@
     },
     "kit_items": []
   },
-  "73": {
+  {
     "id": "350621042",
     "sku": "VCRAC2",
     "name": "Vaso Concept Redondo N2 Aço Corten Japi",
@@ -12804,7 +12800,7 @@
     "price": 93.94,
     "stock": 2,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/151471f3747fa5bedc1a22843d066115.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Vasos Decorativos",
     "status": "A",
     "olist_product_id": "350621042",
@@ -12872,7 +12868,7 @@
     },
     "kit_items": []
   },
-  "66": {
+  {
     "id": "344670767",
     "sku": "03080.3050.10",
     "name": "Rodizio Transparente 50MM SEM Freio Chapa Giratorio Niquel Soprano",
@@ -12880,7 +12876,7 @@
     "price": 15.45,
     "stock": 458,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/f5142628812bc6e608e81ad3a8d5c793.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Rodízios",
     "status": "A",
     "olist_product_id": "344670767",
@@ -12948,7 +12944,7 @@
     },
     "kit_items": []
   },
-  "99": {
+  {
     "id": "353694002",
     "sku": "C08CZ",
     "name": "Carrinho Fechado Ferramenta C08 6 Gavetas Cinza Fercar Fercar",
@@ -12956,7 +12952,7 @@
     "price": 1499,
     "stock": 1,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/57b6b1cf722679dfe33fedde72bb4985.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Carrinhos Fercar",
     "status": "A",
     "olist_product_id": "353694002",
@@ -13024,7 +13020,7 @@
     },
     "kit_items": []
   },
-  "140": {
+  {
     "olist_product_id": "353734276",
     "sku": "JFQFPA67",
     "name": "Cachepot Floreira Flat Vaso 67(17l) 22x67cm Preto Ardósia Japi",
@@ -13096,9 +13092,10 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 6
   },
-  "51": {
+  {
     "id": "342904166",
     "sku": "1C7Q-LKVY-TGBG",
     "name": "Chave Soquete Tipo T 13mm Aquatools",
@@ -13106,7 +13103,7 @@
     "price": 35,
     "stock": 3,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/6c0a3e3e63e9cd365ac8405611eba821.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Chaves e Soquetes",
     "status": "A",
     "olist_product_id": "342904166",
@@ -13173,7 +13170,7 @@
     },
     "kit_items": []
   },
-  "57": {
+  {
     "id": "342908280",
     "sku": "KIT-4-RODIZIOS-GEL-35MM-SOPRANO",
     "name": "Kit 4 Rodízios Gel Giratório Sem Freio 1,3/8 35 mm Soprano",
@@ -13181,7 +13178,7 @@
     "price": 49,
     "stock": 74,
     "image_url": "https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/d9a7a34d95ba62048f3661726385d58c.jpg",
-    "images_count": 0,
+    "images_count": 6,
     "category": "Rodízios",
     "status": "A",
     "olist_product_id": "342908280",
@@ -13253,7 +13250,7 @@
       }
     ]
   },
-  "169": {
+  {
     "olist_product_id": "361408226",
     "sku": "ADGANBR",
     "name": "Gancho Adesivo Multiuso Banheiro Cozinha Astra",
@@ -13323,7 +13320,7 @@
     },
     "kit_items": [],
     "sync_source": "tiny_v3",
-    "synced_at": "2026-07-19T20:06:53-03:00"
-  },
-  "status": "active"
-}
+    "synced_at": "2026-07-19T20:06:53-03:00",
+    "images_count": 5
+  }
+]
