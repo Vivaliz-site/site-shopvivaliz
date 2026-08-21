@@ -21,11 +21,11 @@ Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
 
 Expanded Security Maintenance for Applications is not enabled.
 
-62 updates can be applied immediately.
+63 updates can be applied immediately.
 6 of these updates are standard security updates.
 To see these additional updates run: apt list --upgradable
 
-16 additional security updates can be applied with ESM Apps.
+13 additional security updates can be applied with ESM Apps.
 Learn more about enabling ESM Apps service at https://ubuntu.com/esm
 
 
@@ -33,16 +33,10 @@ Learn more about enabling ESM Apps service at https://ubuntu.com/esm
 see /var/log/unattended-upgrades/unattended-upgrades.log
 
 *** System restart required ***
+CHECK_BRT=2026-08-20T21:03:20-0300
 From https://github.com/fredmourao-ai/mei-mg-email
  * branch            main       -> FETCH_HEAD
-   9c4053a..5005bee  main       -> origin/main
-CHECK_BRT=2026-08-20T20:40:41-0300
+ORIGIN_MAIN=5005bee36b360f4493da0e360013697ecfe1ea42
 SENTINEL_BEFORE=absent
 AS42004_LAST30M=0
-APPLY_V045_HOTFIX_BEGIN
-SET
-CREATE FUNCTION
-COMMENT
-APPLY_V045_HOTFIX_OK=true
-Job for mei-mg-email-worker.service failed because the control process exited with error code.
-See "systemctl status mei-mg-email-worker.service" and "journalctl -xeu mei-mg-email-worker.service" for details.
+-bash: line 52: syntax error near unexpected token `('
