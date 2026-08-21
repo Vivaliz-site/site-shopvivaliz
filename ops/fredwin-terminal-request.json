@@ -1,8 +1,8 @@
 {
   "action": "terminal",
   "shell": "powershell",
-  "timeout": 120,
-  "command": "$ErrorActionPreference='Stop'; Write-Output ('FREDWIN_HOST=' + $env:COMPUTERNAME); & ssh -o BatchMode=yes -o ConnectTimeout=15 shopvivaliz-vm \"cd /home/ubuntu/mei-mg-email && echo BEFORE && sudo docker compose ps -a && echo START_DB && sudo docker compose up -d db && echo WAIT_DB && for i in `$(seq 1 20); do sudo docker exec mei-mg-email-db pg_isready -U postgres -d mei_mg_email >/dev/null 2>&1 && { echo DB_READY=true; break; }; sleep 2; done; echo AFTER && sudo docker compose ps -a\"; $rc=$LASTEXITCODE; Write-Output ('SSH_RC=' + $rc); exit $rc",
-  "requested_at": "2026-08-21T00:14:00Z",
-  "reason": "Restore stopped MEI PostgreSQL directly via authorized Fred-Win SSH path"
+  "timeout": 180,
+  "command": "$ErrorActionPreference='Stop'; Write-Output ('FREDWIN_HOST=' + $env:COMPUTERNAME); & ssh -o BatchMode=yes -o ConnectTimeout=15 shopvivaliz-vm \"cd /home/ubuntu/mei-mg-email && echo DB && sudo docker compose ps -a && echo WORKER_BEFORE && sudo systemctl is-active mei-mg-email-worker.service || true; echo SUPERVISOR_RUN && .venv/bin/python scripts/nonstop_supervisor_15m.py || true; echo SUPERVISOR_STATE && sudo cat /var/lib/mei-mg-email/throughput-supervisor-state.json 2>/dev/null || true; echo WORKER_AFTER && sudo systemctl is-active mei-mg-email-worker.service || true; echo JOURNAL && sudo journalctl -u mei-mg-email-worker.service --since '-10 minutes' --no-pager -n 120 || true\"; $rc=$LASTEXITCODE; Write-Output ('SSH_RC=' + $rc); exit 0",
+  "requested_at": "2026-08-21T00:17:00Z",
+  "reason": "Run official throughput-aware supervisor after database recovery and capture live queue/send state"
 }
