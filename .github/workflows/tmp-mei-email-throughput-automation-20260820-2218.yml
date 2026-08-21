@@ -1,0 +1,50 @@
+name: MEI Email Throughput Automation 20260820 2218
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Read production throughput
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          K=$(mktemp)
+          printf '%s\n' "$VM_KEY" > "$K"
+          chmod 600 "$K"
+          trap 'rm -f "$K"' EXIT
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new -i "$K" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set +e
+          echo "CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)"
+          echo "WORKER=$(systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo "SENTINEL=$([ -e /home/ubuntu/mei-mg-email/STOP_SENDING ] || [ -e /var/lib/mei-mg-email/sender_blocked.pause ] && echo present || echo absent)"
+          DB=$(docker ps --format '{{.Names}}|{{.Image}}' 2>/dev/null | awk -F'|' 'tolower($2) ~ /postgres/ {print $1; exit}')
+          echo "DB=$DB"
+          [ -n "$DB" ] || exit 0
+          docker exec -i "$DB" sh -lc 'psql -U "$POSTGRES_USER" -d "${POSTGRES_DB:-postgres}" -At -v ON_ERROR_STOP=0' <<'SQL'
+          set statement_timeout='8s';
+          select 'SENT24='||count(*) from mei_email.envios where status::text in ('submitted','enviado','delivered') and enviado_em >= now()-interval '24 hours';
+          select 'SENT10='||count(*) from mei_email.envios where status::text in ('submitted','enviado','delivered') and enviado_em >= now()-interval '10 minutes';
+          select 'SENT5='||count(*) from mei_email.envios where status::text in ('submitted','enviado','delivered') and enviado_em >= now()-interval '5 minutes';
+          select 'LAST_SENT='||coalesce(max(enviado_em)::text,'<null>') from mei_email.envios where status::text in ('submitted','enviado','delivered');
+          select 'OPEN_TOTAL='||count(*) from mei_email.envios where status::text in ('pendente','enviando','pending','processing');
+          select 'ACTIVE_CAMPAIGN='||exists(select 1 from mei_email.campanhas where status::text in ('enfileirada','em_andamento','ativa','active'));
+          select 'AS42004_30M='||count(*) from mei_email.envios where (coalesce(erro,'') like '%42004%' or coalesce(last_error,'') like '%42004%') and coalesce(failed_at,submitted_at,enviado_em,criado_em) >= now()-interval '30 minutes';
+          select 'LOCK_WAITERS='||count(*) from pg_stat_activity where wait_event_type='Lock';
+          select 'BLOCKED='||count(*) from pg_locks where not granted;
+          select 'LONG_ACTIVE='||count(*) from pg_stat_activity where state='active' and pid<>pg_backend_pid() and query_start<now()-interval '30 seconds';
+          select 'V038_PRESENT='||count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='mei_email' and proname='enforce_envio_live_eligibility';
+          select 'GUARD_FUNCS='||count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='mei_email' and proname in ('is_independent_marketing_authorization','is_independent_mei_verification','is_email_suppressed','is_cnpj_suppressed','enforce_envio_live_eligibility');
+          select 'STRICT_ELIGIBLE_EXISTS='||exists(select 1 from mei_email.vw_empresas_elegiveis limit 1);
+          select 'STRICT_ELIGIBLE_CAPPED='||count(*) from (select cnpj from mei_email.vw_empresas_elegiveis limit 200) s;
+          SQL
+          echo "JOURNAL_BEGIN"
+          journalctl -u mei-mg-email-worker.service --since '15 minutes ago' --no-pager -n 180 2>/dev/null | grep -E '42004|lock timeout|QUERY_ERROR|ERROR|Traceback|concluido:|submitted|elegib|queue|fila' | tail -60 || true
+          echo "JOURNAL_END"
+          REMOTE
