@@ -33,7 +33,7 @@ jobs:
           printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
           printf '%s\n' "$hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
-      - name: Persist only confirmed recipient hard bounces
+      - name: Persist only cross-verified permanent recipient failures
         id: apply
         shell: bash
         run: |
@@ -45,25 +45,50 @@ jobs:
           echo "CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)"
           sudo docker exec -i mei-mg-email-db psql -X -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 <<'SQL'
           begin;
-          do $$
-          declare n integer;
-          begin
-            select count(*) into n from mei_email.envios where lower(btrim(email::text))='mesquita.william@bol.com.br' and status::text in ('submitted','enviado','delivered','bounced');
-            if n < 1 then raise exception 'No terminal send evidence for mesquita.william@bol.com.br'; end if;
-            perform mei_email.register_operational_suppression(null,'mesquita.william@bol.com.br'::public.citext,'hard_bounce','watchdog_outlook_ndr_reconciliation','AAMkADE0YWVlNTJkLWRmMGMtNGU3My04MjQ4LWMwZjQ0MWI1NWFkNwBGAAAAAABSphB7npI9QreIGh2HXM7dBwAzVDvofzn6SJ8D3gQyH-6KAAAAAAEMAAAzVDvofzn6SJ8D3gQyH-6KAAALcgoNAAA=','2026-08-21T06:49:51Z'::timestamptz);
-
-            select count(*) into n from mei_email.envios where lower(btrim(email::text))='noroesteagricola@uol.com.br' and status::text in ('submitted','enviado','delivered','bounced');
-            if n < 1 then raise exception 'No terminal send evidence for noroesteagricola@uol.com.br'; end if;
-            perform mei_email.register_operational_suppression(null,'noroesteagricola@uol.com.br'::public.citext,'hard_bounce','watchdog_outlook_ndr_reconciliation','AAMkADE0YWVlNTJkLWRmMGMtNGU3My04MjQ4LWMwZjQ0MWI1NWFkNwBGAAAAAABSphB7npI9QreIGh2HXM7dBwAzVDvofzn6SJ8D3gQyH-6KAAAAAAEMAAAzVDvofzn6SJ8D3gQyH-6KAAALcgoXAAA=','2026-08-21T07:36:36Z'::timestamptz);
-
-            select count(*) into n from mei_email.envios where lower(btrim(email::text))='centauro765@bol.com.br' and status::text in ('submitted','enviado','delivered','bounced');
-            if n < 1 then raise exception 'No terminal send evidence for centauro765@bol.com.br'; end if;
-            perform mei_email.register_operational_suppression(null,'centauro765@bol.com.br'::public.citext,'hard_bounce','watchdog_outlook_ndr_reconciliation','AAMkADE0YWVlNTJkLWRmMGMtNGU3My04MjQ4LWMwZjQ0MWI1NWFkNwBGAAAAAABSphB7npI9QreIGh2HXM7dBwAzVDvofzn6SJ8D3gQyH-6KAAAAAAEMAAAzVDvofzn6SJ8D3gQyH-6KAAALcgoVAAA=','2026-08-21T07:27:15Z'::timestamptz);
-          end $$;
+          select mei_email.register_operational_suppression(
+            null,
+            'mesquita.william@bol.com.br'::public.citext,
+            'hard_bounce',
+            'watchdog_outlook_ndr_reconciliation',
+            'ndr=AAMkADE0YWVlNTJkLWRmMGMtNGU3My04MjQ4LWMwZjQ0MWI1NWFkNwBGAAAAAABSphB7npI9QreIGh2HXM7dBwAzVDvofzn6SJ8D3gQyH-6KAAAAAAEMAAAzVDvofzn6SJ8D3gQyH-6KAAALcgoNAAA=;sent=AAMkADE0YWVlNTJkLWRmMGMtNGU3My04MjQ4LWMwZjQ0MWI1NWFkNwBGAAAAAABSphB7npI9QreIGh2HXM7dBwAzVDvofzn6SJ8D3gQyH-6KAAAAAAEJAAAzVDvofzn6SJ8D3gQyH-6KAAALc5eyAAA=',
+            '2026-08-21T06:49:51Z'::timestamptz
+          );
+          select mei_email.register_operational_suppression(
+            null,
+            'noroesteagricola@uol.com.br'::public.citext,
+            'hard_bounce',
+            'watchdog_outlook_ndr_reconciliation',
+            'ndr=AAMkADE0YWVlNTJkLWRmMGMtNGU3My04MjQ4LWMwZjQ0MWI1NWFkNwBGAAAAAABSphB7npI9QreIGh2HXM7dBwAzVDvofzn6SJ8D3gQyH-6KAAAAAAEMAAAzVDvofzn6SJ8D3gQyH-6KAAALcgoXAAA=;sent=AAMkADE0YWVlNTJkLWRmMGMtNGU3My04MjQ4LWMwZjQ0MWI1NWFkNwBGAAAAAABSphB7npI9QreIGh2HXM7dBwAzVDvofzn6SJ8D3gQyH-6KAAAAAAEJAAAzVDvofzn6SJ8D3gQyH-6KAAALc5lsAAA=',
+            '2026-08-21T07:36:36Z'::timestamptz
+          );
+          select mei_email.register_operational_suppression(
+            null,
+            'centauro765@bol.com.br'::public.citext,
+            'hard_bounce',
+            'watchdog_outlook_ndr_reconciliation',
+            'ndr=AAMkADE0YWVlNTJkLWRmMGMtNGU3My04MjQ4LWMwZjQ0MWI1NWFkNwBGAAAAAABSphB7npI9QreIGh2HXM7dBwAzVDvofzn6SJ8D3gQyH-6KAAAAAAEMAAAzVDvofzn6SJ8D3gQyH-6KAAALcgoVAAA=;sent=AAMkADE0YWVlNTJkLWRmMGMtNGU3My04MjQ4LWMwZjQ0MWI1NWFkNwBGAAAAAABSphB7npI9QreIGh2HXM7dBwAzVDvofzn6SJ8D3gQyH-6KAAAAAAEJAAAzVDvofzn6SJ8D3gQyH-6KAAALc5kVAAA=',
+            '2026-08-21T07:27:15Z'::timestamptz
+          );
           commit;
-          select 'CONFIRMED_ACTIVE='||count(*) from mei_email.email_suppressions where active and reason='hard_bounce' and lower(btrim(value::text)) in ('mesquita.william@bol.com.br','noroesteagricola@uol.com.br','centauro765@bol.com.br');
-          select 'HARD_BOUNCE_ACTIVE='||count(*) from mei_email.email_suppressions where active and reason='hard_bounce';
-          select 'OPEN_FOR_CONFIRMED='||count(*) from mei_email.envios where status::text in ('pendente','enviando','pending','processing') and lower(btrim(email::text)) in ('mesquita.william@bol.com.br','noroesteagricola@uol.com.br','centauro765@bol.com.br');
+          select 'CONFIRMED_ACTIVE='||count(*)
+          from mei_email.email_suppressions
+          where active and reason='hard_bounce'
+            and lower(btrim(value::text)) in (
+              'mesquita.william@bol.com.br',
+              'noroesteagricola@uol.com.br',
+              'centauro765@bol.com.br'
+            );
+          select 'HARD_BOUNCE_ACTIVE='||count(*)
+          from mei_email.email_suppressions
+          where active and reason='hard_bounce';
+          select 'OPEN_FOR_CONFIRMED='||count(*)
+          from mei_email.envios
+          where status::text in ('pendente','enviando','pending','processing')
+            and lower(btrim(email::text)) in (
+              'mesquita.william@bol.com.br',
+              'noroesteagricola@uol.com.br',
+              'centauro765@bol.com.br'
+            );
           SQL
           EOF
           rc=$?
