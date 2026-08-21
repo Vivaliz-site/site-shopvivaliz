@@ -1,0 +1,94 @@
+name: MEI Email Apply V049 Official MEI Guard 20260821
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/mei-email-apply-v049-20260821.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mei-email-apply-v049-20260821
+  cancel-in-progress: false
+
+jobs:
+  apply-v049:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure verified Oracle SSH
+        env:
+          KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$KEY"; test -n "$HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$KEY" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+      - name: Apply reviewed V049 without stopping sender
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p reports
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 <<'EOF' > reports/mei-email-v049-apply-20260821.txt 2>&1
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo "CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)"
+          echo "WORKER_BEFORE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo "WORKER_ENABLED_BEFORE=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)"
+          sentinel=absent
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then sentinel=present; fi
+          echo "SENTINEL=$sentinel"
+          echo "AS42004_30M=$(sudo journalctl -u mei-mg-email-worker.service --since '-30 minutes' --no-pager 2>/dev/null | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8|restricted sender' || true)"
+
+          git fetch origin main
+          echo "SENDER_ORIGIN_MAIN=$(git rev-parse origin/main)"
+          git checkout origin/main -- db/migrations/V049__enforce_official_mei_source_and_no_numeric_branch.sql
+          grep -q "receita_simples_opcao_mei" db/migrations/V049__enforce_official_mei_source_and_no_numeric_branch.sql
+          grep -q "is_legacy_numeric_branch_cnpj" db/migrations/V049__enforce_official_mei_source_and_no_numeric_branch.sql
+
+          sudo docker exec -i -e PGOPTIONS='-c lock_timeout=20s -c statement_timeout=180s' mei-mg-email-db \
+            psql -X -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -1 -f - \
+            < db/migrations/V049__enforce_official_mei_source_and_no_numeric_branch.sql
+          echo 'APPLY_V049_OK=true'
+
+          sudo docker exec -i mei-mg-email-db psql -X -U postgres -d mei_mg_email -At -v ON_ERROR_STOP=1 <<'SQL'
+          set statement_timeout='30s';
+          select 'OPEN_TOTAL='||count(*) from mei_email.envios where status::text in ('pendente','enviando','pending','processing');
+          select 'OPEN_NUMERIC_BRANCH='||count(*) from mei_email.envios q join mei_email.empresas e on e.cnpj=q.cnpj where q.status::text in ('pendente','enviando','pending','processing') and mei_email.is_legacy_numeric_branch_cnpj(e.cnpj::text);
+          select 'OPEN_WRONG_MEI_SOURCE='||count(*) from mei_email.envios q join mei_email.empresas e on e.cnpj=q.cnpj where q.status::text in ('pendente','enviando','pending','processing') and not mei_email.is_independent_mei_verification(e.mei_verificado,e.mei_verificado_origem);
+          select 'OPEN_REPLAY_EMAIL='||count(*) from mei_email.envios q where q.status::text in ('pendente','enviando','pending','processing') and exists(select 1 from mei_email.envios h where h.id<>q.id and lower(btrim(h.email::text))=lower(btrim(q.email::text)) and h.status::text in ('submitted','enviado','delivered','bounced','bounce_permanent'));
+          select 'GUARD_QUALIFIED='||case when pg_get_functiondef('mei_email.enforce_envio_live_eligibility()'::regprocedure) ilike '%receita_simples_opcao_mei%' and pg_get_functiondef('mei_email.enforce_envio_live_eligibility()'::regprocedure) ilike '%is_legacy_numeric_branch_cnpj%' and pg_get_functiondef('mei_email.enforce_envio_live_eligibility()'::regprocedure) ilike '%mei_email.status_envio%' then 'YES' else 'NO' end;
+          select 'LEGACY_COPY='||count(*) from mei_email.campanhas where lower(coalesce(corpo_template,'')) like '%base pública de cnpj%' or lower(coalesce(corpo_template,'')) like '%base publica de cnpj%';
+          select 'FLYWAY_37_38='||count(*) from mei_email.flyway_schema_history where version in ('37','38') and success;
+          select 'LOCK_WAITERS='||count(*) from pg_stat_activity where wait_event_type='Lock' and pid<>pg_backend_pid();
+          select 'ORPHAN_ENVIOS='||count(*) from mei_email.envios e left join mei_email.lotes l on l.id=e.lote_id left join mei_email.campanhas c on c.id=e.campanha_id where l.id is null or c.id is null;
+          select 'HARD_BOUNCE_ACTIVE='||count(*) from mei_email.email_suppressions where active and reason='hard_bounce';
+          SQL
+          echo "WORKER_AFTER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo "WORKER_ENABLED_AFTER=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)"
+          sudo systemctl show mei-mg-email-worker.service -p Restart -p RestartUSec -p StartLimitIntervalUSec -p ExecStart --no-pager || true
+          EOF
+      - name: Persist V049 evidence
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name shopvivaliz-ops-bot
+          git config user.email ops@shopvivaliz.local
+          git add reports/mei-email-v049-apply-20260821.txt
+          git commit -m 'ops: record V049 official MEI guard application'
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
