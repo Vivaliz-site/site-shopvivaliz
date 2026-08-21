@@ -77,6 +77,10 @@ jobs:
           grep -q 'with conn.cursor(row_factory=tuple_row) as lock_cur:' app/queue_manager.py
           grep -q 'lock_row = lock_cur.fetchone()' app/queue_manager.py
           grep -q 'lock_row\[0\]' app/queue_manager.py
+          grep -q "not like 'politica_importacao_operador%%'" app/queue_manager.py
+          grep -q "not like 'base_publica%%'" app/queue_manager.py
+          grep -q "not like 'nao_verificado%%'" app/queue_manager.py
+          grep -q "not like 'legacy_operator_verification_rejected%%'" app/queue_manager.py
           grep -q '^OnUnitActiveSec=15min$' deploy/systemd/mei-mg-email-autorepair.timer
           grep -q '^StartLimitIntervalSec=0$' deploy/systemd/mei-mg-email-worker.service
           grep -q '^Restart=always$' deploy/systemd/mei-mg-email-worker.service
@@ -91,6 +95,9 @@ jobs:
           grep -q 'has_external_ledger' worker/safe_entrypoint.py
           grep -q 'already_external' worker/safe_entrypoint_v2.py
           grep -q 'base.worker.processar_lote = base._safe_processar_lote' worker/safe_entrypoint_v2.py
+          grep -q 'lowered.startswith("politica_importacao_operador")' worker/safe_entrypoint_v2.py
+          grep -q 'lowered.startswith("base_publica")' worker/safe_entrypoint_v2.py
+          grep -q '_legacy_numeric_branch_cnpj' worker/safe_entrypoint_v2.py
 
           sudo install -m 0644 deploy/systemd/mei-mg-email-worker.service /etc/systemd/system/mei-mg-email-worker.service
           sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service /etc/systemd/system/mei-mg-email-autorepair.service
@@ -116,14 +123,17 @@ jobs:
           fi
 
           echo 'CURRENT_SENDER_BLOCK_SENTINEL=absent'
-          sudo systemctl reset-failed mei-mg-email-worker.service
+          if ! sudo systemctl reset-failed mei-mg-email-worker.service; then
+            echo '::error::failed to reset worker failed state'
+            exit 4
+          fi
           sudo systemctl restart mei-mg-email-worker.service
           worker_active=false
           for attempt in $(seq 1 36); do
             if state="$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null)"; then
               :
             else
-              state="${state:-inactive}"
+              state="${state:-unknown}"
             fi
             echo "WORKER_WAIT_${attempt}=${state}"
             if [ "$state" = active ]; then
@@ -144,10 +154,13 @@ jobs:
           echo "WORKER_ENABLED=true"
           echo "WORKER_SAFE_ENTRYPOINT_V2=true"
           echo "AUTOQUEUE_TUPLE_LOCK_FIX=true"
+          echo "AUTOQUEUE_PUBLIC_OPERATOR_PREFIX_GUARD=true"
           echo "SYNTHESIZED_AUTH_GUARD=true"
           echo "PRESEND_FULL_CONTRACT_GUARD=true"
           echo "PRESEND_DICT_ROW_LEDGER_FIX=true"
           echo "PRESEND_LOT_PROGRESS_FIX=true"
+          echo "PUBLIC_OPERATOR_PREFIX_PRESEND_GUARD=true"
+          echo "LEGACY_NUMERIC_BRANCH_MEI_GUARD=true"
           sudo systemctl show mei-mg-email-worker.service \
             -p ActiveState -p SubState -p MainPID -p ExecStart -p ExecStartPre \
             -p Restart -p RestartUSec -p StartLimitIntervalUSec --no-pager
@@ -191,3 +204,4 @@ jobs:
 # watchdog deploy sender main 5005bee indexed-autoqueue-v045 runtime 2026-08-20T20:54-0300
 # watchdog reassert nonstop sender after unsafe recovery workflow removal 2026-08-20T21:04-0300
 # watchdog deploy current sender main with DB restart-first recovery 2026-08-21T00:17-0300
+# deploy PR75+PR76 public/operator-prefix presend, autoqueue, and legacy numeric branch MEI safety guards 2026-08-21T04:42-0300
