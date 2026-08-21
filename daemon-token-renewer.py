@@ -159,18 +159,16 @@ def oauth_client_candidates(config: dict[str, str]) -> list[tuple[str, str, str]
 def oauth_refresh_candidates(config: dict[str, str]) -> list[tuple[str, str]]:
     candidates: list[tuple[str, str]] = []
     seen: set[str] = set()
-    sources: tuple[dict[str, Any], ...] = (read_token_store(), config, _read_env())
-    for source in sources:
-        for alias, key in (
-            ("olist", "OLIST_REFRESH_TOKEN"),
-            ("tiny", "TINY_REFRESH_TOKEN"),
-        ):
-            value = source.get(key)
-            token = value.strip() if isinstance(value, str) else ""
-            if not token or token in seen:
-                continue
-            seen.add(token)
-            candidates.append((alias, token))
+    for alias, key in (
+        ("olist", "OLIST_REFRESH_TOKEN"),
+        ("tiny", "TINY_REFRESH_TOKEN"),
+    ):
+        value = config.get(key)
+        token = value.strip() if isinstance(value, str) else ""
+        if not token or token in seen:
+            continue
+        seen.add(token)
+        candidates.append((alias, token))
     return candidates
 
 
