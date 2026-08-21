@@ -55,33 +55,39 @@ jobs:
             > reports/mei-readonly-diagnostic-20260821.txt 2>&1
           set -u
           cd /home/ubuntu/mei-mg-email || exit 2
-          q(){ sudo docker exec mei-mg-email-db psql -X -U postgres -d mei_mg_email -At -v ON_ERROR_STOP=1 -c "$1" 2>&1; }
           qsoft(){ sudo docker exec mei-mg-email-db psql -X -U postgres -d mei_mg_email -At -v ON_ERROR_STOP=1 -c "$1" 2>/dev/null || echo QUERY_ERROR; }
-          echo "CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)"
-          echo "HEAD=$(git rev-parse HEAD 2>/dev/null || true)"
-          echo "ORIGIN_MAIN=$(git rev-parse origin/main 2>/dev/null || true)"
-          echo "WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
-          echo "WORKER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)"
-          echo "AUTOREPAIR_TIMER=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || true)"
-          echo "AUTOREPAIR_TIMER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-autorepair.timer 2>/dev/null || true)"
-          echo "SENTINEL=$(sudo test -f /var/lib/mei-mg-email/sender_blocked.pause && echo present || echo absent)"
-          echo "AS42004_30M=$(sudo journalctl -u mei-mg-email-worker.service --since '-30 minutes' --no-pager | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8' || true)"
-          echo "SENT24=$(qsoft \"select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours';\")"
-          echo "SENT10=$(qsoft \"select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '10 minutes';\")"
-          echo "OPEN_TOTAL=$(qsoft \"select count(*) from mei_email.envios where status::text in ('pendente','pending','enviando','processing');\")"
-          echo "LAST_SENT=$(qsoft \"select coalesce(max(enviado_em)::text,'') from mei_email.envios where status::text in ('submitted','enviado');\")"
-          echo "ACTIVE_CAMPAIGNS=$(qsoft \"select count(*) from mei_email.campanhas where status::text in ('enfileirada','em_andamento');\")"
-          echo "AUTOQUEUE_INDEX=$(qsoft \"select case when to_regclass('mei_email.idx_empresas_autoqueue_mei_mg') is null then 'MISSING' else 'PRESENT' end;\")"
-          echo "V045_FUNCTION=$(qsoft \"select case when pg_get_functiondef('mei_email.enforce_envio_live_eligibility()'::regprocedure) ilike '%mei_email.status_envio%' and pg_get_functiondef('mei_email.enforce_envio_live_eligibility()'::regprocedure) ilike '%search_path = mei_email, public%' then 'QUALIFIED' else 'UNQUALIFIED' end;\")"
-          echo "GUARD_TRIGGERS=$(qsoft \"select count(*) from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where not t.tgisinternal and n.nspname='mei_email' and t.tgname in ('trg_campaign_copy_policy','trg_envio_live_eligibility');\")"
-          echo "STRICT_ELIGIBLE_EXISTS=$(qsoft \"set statement_timeout='20s'; select exists(select 1 from mei_email.vw_empresas_elegiveis limit 1);\")"
-          echo "AUTOQUEUE_FAST_EXISTS=$(qsoft \"set statement_timeout='20s'; select exists(select 1 from mei_email.empresas e where e.tipo_regime='MEI' and e.uf='MG' and e.situacao_cadastral='ATIVA' and e.opt_out=false and e.provavel_terceiro=false and e.email is not null and e.enviado=false and e.marketing_autorizado=true and e.mei_verificado=true and mei_email.is_independent_marketing_authorization(e.marketing_autorizado,e.marketing_autorizado_origem) and btrim(coalesce(e.marketing_autorizado_origem,'')) not in ('confirmacao_operador_2026-08-12','confirmacao_operador_2026-08-13','politica_importacao_operador_2026-08-13','user_explicit_authorization_2026-08-20','user_campaign_authorization_2026-08-20') and lower(btrim(coalesce(e.marketing_autorizado_origem,''))) not like '%operator_authorization_true%' and mei_email.is_independent_mei_verification(e.mei_verificado,e.mei_verificado_origem) and btrim(coalesce(e.mei_verificado_origem,'')) not in ('override_operador_2026-08-13','politica_importacao_operador_2026-08-13') limit 1);\")"
-          echo "LOCK_WAITERS=$(qsoft \"select count(*) from pg_stat_activity where wait_event_type='Lock' and pid<>pg_backend_pid();\")"
-          echo "ADVISORY_LOCKS=$(qsoft \"select count(*) from pg_locks where locktype='advisory' and granted;\")"
-          echo "LONG_TX=$(qsoft \"select count(*) from pg_stat_activity where xact_start is not null and pid<>pg_backend_pid() and now()-xact_start>interval '2 minutes';\")"
-          echo "FLYWAY_FAILED=$(qsoft \"select coalesce(string_agg(coalesce(version,'')||':'||coalesce(description,'')||':'||success::text, ','),'none') from mei_email.flyway_schema_history where not success;\")"
-          echo "FLYWAY_038=$(qsoft \"select coalesce(string_agg(installed_rank::text||':'||success::text, ','),'missing') from mei_email.flyway_schema_history where version in ('38','038');\")"
-          echo "FLYWAY_045=$(qsoft \"select coalesce(string_agg(installed_rank::text||':'||success::text, ','),'missing') from mei_email.flyway_schema_history where version in ('45','045');\")"
+
+          checked=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)
+          head_sha=$(git rev-parse HEAD 2>/dev/null || true)
+          origin_sha=$(git rev-parse origin/main 2>/dev/null || true)
+          worker=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
+          worker_enabled=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)
+          timer=$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null || true)
+          timer_enabled=$(sudo systemctl is-enabled mei-mg-email-autorepair.timer 2>/dev/null || true)
+          sentinel=$(sudo test -f /var/lib/mei-mg-email/sender_blocked.pause && echo present || echo absent)
+          as42004=$(sudo journalctl -u mei-mg-email-worker.service --since '-30 minutes' --no-pager | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8' || true)
+
+          sent24=$(qsoft "select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '24 hours';")
+          sent10=$(qsoft "select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '10 minutes';")
+          open_total=$(qsoft "select count(*) from mei_email.envios where status::text in ('pendente','pending','enviando','processing');")
+          last_sent=$(qsoft "select coalesce(max(enviado_em)::text,'') from mei_email.envios where status::text in ('submitted','enviado');")
+          active_campaigns=$(qsoft "select count(*) from mei_email.campanhas where status::text in ('enfileirada','em_andamento');")
+          autoqueue_index=$(qsoft "select case when to_regclass('mei_email.idx_empresas_autoqueue_mei_mg') is null then 'MISSING' else 'PRESENT' end;")
+          v045=$(qsoft "select case when pg_get_functiondef('mei_email.enforce_envio_live_eligibility()'::regprocedure) ilike '%mei_email.status_envio%' and pg_get_functiondef('mei_email.enforce_envio_live_eligibility()'::regprocedure) ilike '%search_path = mei_email, public%' then 'QUALIFIED' else 'UNQUALIFIED' end;")
+          guard_triggers=$(qsoft "select count(*) from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where not t.tgisinternal and n.nspname='mei_email' and t.tgname in ('trg_campaign_copy_policy','trg_envio_live_eligibility');")
+          strict_exists=$(qsoft "set statement_timeout='20s'; select exists(select 1 from mei_email.vw_empresas_elegiveis limit 1);")
+          autoqueue_fast=$(qsoft "set statement_timeout='20s'; select exists(select 1 from mei_email.empresas e where e.tipo_regime='MEI' and e.uf='MG' and e.situacao_cadastral='ATIVA' and e.opt_out=false and e.provavel_terceiro=false and e.email is not null and e.enviado=false and e.marketing_autorizado=true and e.mei_verificado=true and mei_email.is_independent_marketing_authorization(e.marketing_autorizado,e.marketing_autorizado_origem) and btrim(coalesce(e.marketing_autorizado_origem,'')) not in ('confirmacao_operador_2026-08-12','confirmacao_operador_2026-08-13','politica_importacao_operador_2026-08-13','user_explicit_authorization_2026-08-20','user_campaign_authorization_2026-08-20') and lower(btrim(coalesce(e.marketing_autorizado_origem,''))) not like '%operator_authorization_true%' and mei_email.is_independent_mei_verification(e.mei_verificado,e.mei_verificado_origem) and btrim(coalesce(e.mei_verificado_origem,'')) not in ('override_operador_2026-08-13','politica_importacao_operador_2026-08-13') limit 1);")
+          lock_waiters=$(qsoft "select count(*) from pg_stat_activity where wait_event_type='Lock' and pid<>pg_backend_pid();")
+          advisory=$(qsoft "select count(*) from pg_locks where locktype='advisory' and granted;")
+          long_tx=$(qsoft "select count(*) from pg_stat_activity where xact_start is not null and pid<>pg_backend_pid() and now()-xact_start>interval '2 minutes';")
+          flyway_failed=$(qsoft "select coalesce(string_agg(coalesce(version,'')||':'||coalesce(description,'')||':'||success::text, ','),'none') from mei_email.flyway_schema_history where not success;")
+          flyway_038=$(qsoft "select coalesce(string_agg(installed_rank::text||':'||success::text, ','),'missing') from mei_email.flyway_schema_history where version in ('38','038');")
+          flyway_045=$(qsoft "select coalesce(string_agg(installed_rank::text||':'||success::text, ','),'missing') from mei_email.flyway_schema_history where version in ('45','045');")
+
+          printf 'CHECK_BRT=%s\nHEAD=%s\nORIGIN_MAIN=%s\nWORKER=%s\nWORKER_ENABLED=%s\nAUTOREPAIR_TIMER=%s\nAUTOREPAIR_TIMER_ENABLED=%s\nSENTINEL=%s\nAS42004_30M=%s\n' "$checked" "$head_sha" "$origin_sha" "$worker" "$worker_enabled" "$timer" "$timer_enabled" "$sentinel" "$as42004"
+          printf 'SENT24=%s\nSENT10=%s\nOPEN_TOTAL=%s\nLAST_SENT=%s\nACTIVE_CAMPAIGNS=%s\nAUTOQUEUE_INDEX=%s\nV045_FUNCTION=%s\nGUARD_TRIGGERS=%s\n' "$sent24" "$sent10" "$open_total" "$last_sent" "$active_campaigns" "$autoqueue_index" "$v045" "$guard_triggers"
+          printf 'STRICT_ELIGIBLE_EXISTS=%s\nAUTOQUEUE_FAST_EXISTS=%s\nLOCK_WAITERS=%s\nADVISORY_LOCKS=%s\nLONG_TX=%s\nFLYWAY_FAILED=%s\nFLYWAY_038=%s\nFLYWAY_045=%s\n' "$strict_exists" "$autoqueue_fast" "$lock_waiters" "$advisory" "$long_tx" "$flyway_failed" "$flyway_038" "$flyway_045"
+
           echo '=== WORKER UNIT ==='
           sudo systemctl show mei-mg-email-worker.service -p ActiveState -p SubState -p MainPID -p ExecStart -p ExecStartPre -p Restart -p RestartUSec -p StartLimitIntervalUSec --no-pager || true
           echo '=== WORKER STATUS ==='
