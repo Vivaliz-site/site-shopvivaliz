@@ -78,7 +78,7 @@ def merge_env(path: Path, incoming: dict[str, object]) -> list[str]:
     protected = sorted(set(incoming) & MANAGED_OAUTH_KEYS)
     if protected:
         raise ValueError(
-            "managed OAuth/API secret keys may only be written by verified provider-specific flows: "
+            "managed OAuth keys / API secret keys may only be written by verified provider-specific flows: "
             + ", ".join(protected)
         )
 
