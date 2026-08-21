@@ -1,4 +1,4 @@
 {
-  "requested_at": "2026-08-08T18:20:00-03:00",
-  "reason": "Repair production PHP access to Google OAuth credentials, sync required Google Ads runtime variables securely, and validate public OAuth redirect"
+  "requested_at": "2026-08-20T20:28:00-03:00",
+  "reason": "Resync the currently working Google Ads Production secrets from GitHub Actions to the production VM after stale local invalid_grant state was reported; do not expose secret values; validate runtime file permissions and public OAuth redirect"
 }

@@ -199,3 +199,5 @@ jobs:
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey /tmp/fredwin-health.json /tmp/stage1.ps1 /tmp/stage1.out /tmp/stage2.ps1 /tmp/stage2.out
+
+# rerun after canonical relay recovery 2026-08-20T23:39:00Z

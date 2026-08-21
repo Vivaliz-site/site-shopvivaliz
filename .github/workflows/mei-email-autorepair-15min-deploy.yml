@@ -96,10 +96,6 @@ jobs:
           sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service /etc/systemd/system/mei-mg-email-autorepair.service
           sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.timer /etc/systemd/system/mei-mg-email-autorepair.timer
 
-          # A 2026-08-16 compatibility workflow created this drop-in to force the
-          # legacy worker_queue_first entrypoint. It overrides the reviewed base
-          # unit, so a normal deploy cannot switch to safe_entrypoint_v2 until it
-          # is removed. Retire it deterministically before daemon-reload.
           sudo rm -f /etc/systemd/system/mei-mg-email-worker.service.d/queue-first.conf
           sudo systemctl daemon-reload
           if sudo systemctl cat mei-mg-email-worker.service | grep -q 'ExecStart=.*/worker.worker_queue_first'; then
@@ -192,3 +188,5 @@ jobs:
 # harden deploy governance: manual-only trigger and explicit failure handling 2026-08-20T16:21Z
 # watchdog redeploy strict sender after broken-pipe 2026-08-20T16:24-0300
 # watchdog redeploy strict sender after failed restart 2026-08-20T17:18-0300
+# watchdog deploy sender main 5005bee indexed-autoqueue-v045 runtime 2026-08-20T20:54-0300
+# watchdog reassert nonstop sender after unsafe recovery workflow removal 2026-08-20T21:04-0300

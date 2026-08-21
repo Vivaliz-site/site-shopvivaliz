@@ -1,10 +1,15 @@
 FREDWIN_SUCCESS=true
 FREDWIN_HOST=LAPTOP-NIG4IFUU
-SSH_PATH=C:\Windows\System32\OpenSSH\ssh.exe
-REMOTE_HOST=shopvivaliz-ai
-REMOTE_USER=ubuntu
-DEPLOY=OK
-RELEASE=/home/ubuntu/shopvivaliz-deploy/releases/20260819-181211-738de687
-PHP=8.3.6
+CHECK_BRT=2026-08-20T21:24:34-0300
+WORKER=active
+ENABLED=enabled
+NDR_GUARD=active
+NDR_ENABLED=enabled
+AUTOREPAIR=active
+SENTINEL=absent
+Restart=always
+RestartUSec=5s
+StartLimitIntervalUSec=0
+/var/run/postgresql:5432 - accepting connections
 SSH_RC=0
 
