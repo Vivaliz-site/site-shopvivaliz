@@ -1,0 +1,105 @@
+name: MEI watchdog strict pool 20260821 0631
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tmp-mei-watchdog-pool-20260821-0631.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure verified Oracle SSH
+        env:
+          K1: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          K2: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          H1: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          H2: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          key="${K1:-${K2:-}}"; hosts="${H1:-${H2:-}}"
+          test -n "$key"; test -n "$hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+      - name: Read strict pool and queue invariants
+        id: probe
+        shell: bash
+        run: |
+          set +e
+          mkdir -p reports
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=12 -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 <<'EOF' > reports/mei-watchdog-pool-20260821-0631.txt 2>&1
+          cd /home/ubuntu/mei-mg-email || exit 2
+          echo "CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)"
+          sudo docker exec -i mei-mg-email-db psql -X -U postgres -d mei_mg_email -At -v ON_ERROR_STOP=1 <<'SQL'
+          set statement_timeout='30s';
+          select 'STRICT_ELIGIBLE='||count(*)
+          from mei_email.empresas e
+          where e.tipo_regime='MEI' and e.uf='MG' and e.situacao_cadastral='ATIVA'
+            and e.opt_out=false and e.provavel_terceiro=false and e.email is not null and e.enviado=false
+            and e.marketing_autorizado=true and e.mei_verificado=true
+            and lower(btrim(coalesce(e.mei_verificado_origem,'')))='receita_simples_opcao_mei'
+            and mei_email.is_independent_marketing_authorization(e.marketing_autorizado,e.marketing_autorizado_origem)
+            and lower(btrim(coalesce(e.marketing_autorizado_origem,''))) not like 'politica_importacao_operador%'
+            and lower(btrim(coalesce(e.marketing_autorizado_origem,''))) not like 'base_publica%'
+            and lower(btrim(coalesce(e.marketing_autorizado_origem,''))) not like '%operator_authorization_true%'
+            and mei_email.is_valid_email_address(e.email)
+            and not mei_email.is_email_suppressed(e.email)
+            and not mei_email.is_cnpj_suppressed(e.cnpj::text)
+            and not exists (
+              select 1 from mei_email.envios h
+              where (h.cnpj=e.cnpj or lower(btrim(h.email::text))=lower(btrim(e.email::text)))
+                and h.status::text in ('pendente','enviando','pending','processing','submitted','enviado','delivered','bounced','bounce_permanent')
+            );
+          select 'OPEN_INELIGIBLE='||count(*)
+          from mei_email.envios x join mei_email.empresas e on e.cnpj=x.cnpj
+          where x.status::text in ('pendente','enviando','pending','processing') and (
+            e.marketing_autorizado is not true or e.mei_verificado is not true
+            or lower(btrim(coalesce(e.mei_verificado_origem,'')))<>'receita_simples_opcao_mei'
+            or e.opt_out is true or e.situacao_cadastral<>'ATIVA' or e.uf<>'MG' or e.tipo_regime<>'MEI'
+            or e.provavel_terceiro is true or mei_email.is_email_suppressed(x.email) or mei_email.is_cnpj_suppressed(x.cnpj::text)
+          );
+          select 'OPEN_REPLAY_EMAIL='||count(*) from mei_email.envios e where e.status::text in ('pendente','enviando','pending','processing') and exists(select 1 from mei_email.envios h where h.id<>e.id and lower(btrim(h.email::text))=lower(btrim(e.email::text)) and h.status::text in ('submitted','enviado','delivered'));
+          select 'OPEN_REPLAY_CNPJ='||count(*) from mei_email.envios e where e.status::text in ('pendente','enviando','pending','processing') and exists(select 1 from mei_email.envios h where h.id<>e.id and h.cnpj=e.cnpj and h.status::text in ('submitted','enviado','delivered'));
+          select 'ORPHAN_LOTS='||count(*) from mei_email.lotes l where l.status::text not in ('pendente','concluido') and exists(select 1 from mei_email.envios e where e.lote_id=l.id and e.status::text in ('pendente','enviando','pending','processing'));
+          select 'LOCK_WAITERS='||count(*) from pg_locks where not granted;
+          select 'ADVISORY_LOCKS='||count(*) from pg_locks where locktype='advisory' and granted;
+          select 'LONG_ACTIVE='||count(*) from pg_stat_activity where state='active' and pid<>pg_backend_pid() and query_start<now()-interval '30 seconds';
+          select 'FLYWAY_37_38='||count(*) from mei_email.flyway_schema_history where version in ('37','38') and success;
+          SQL
+          EOF
+          rc=$?
+          echo "probe_rc=$rc" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Persist read-only evidence
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name shopvivaliz-ops-bot
+          git config user.email ops@shopvivaliz.local
+          git add reports/mei-watchdog-pool-20260821-0631.txt 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -m 'ops: record strict MEI pool evidence'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+      - name: Enforce transport
+        if: always()
+        shell: bash
+        run: test "${{ steps.probe.outputs.probe_rc }}" = "0"
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
