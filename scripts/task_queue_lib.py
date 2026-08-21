@@ -47,7 +47,12 @@ def runtime_queue_file() -> Path:
     configured_runtime = os.getenv("SHOPVIVALIZ_RUNTIME_QUEUE_FILE", "").strip()
     if configured_runtime:
         return Path(configured_runtime)
-    if DEFAULT_RUNTIME_QUEUE_FILE.is_file():
+    deployment_root = Path("/home/ubuntu/shopvivaliz-deploy")
+    try:
+        in_production_checkout = PROJECT_ROOT.resolve().is_relative_to(deployment_root.resolve())
+    except OSError:
+        in_production_checkout = False
+    if in_production_checkout and DEFAULT_RUNTIME_QUEUE_FILE.is_file():
         return DEFAULT_RUNTIME_QUEUE_FILE
     return ROOT_QUEUE_FILE
 
