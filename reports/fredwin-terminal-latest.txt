@@ -1,5 +1,13 @@
 FREDWIN_SUCCESS=true
 FREDWIN_HOST=LAPTOP-NIG4IFUU
-REMOTE_AGENT_RUNNING=True
-PAIRING_MAY_BE_REQUIRED=False
+BEFORE
+NAME              IMAGE                COMMAND                  SERVICE   CREATED              STATUS              PORTS
+mei-mg-email-db   postgres:16-alpine   "docker-entrypoint.sâ€¦"   db        About a minute ago   Up About a minute   127.0.0.1:5433->5432/tcp
+START_DB
+WAIT_DB
+DB_READY=true
+AFTER
+NAME              IMAGE                COMMAND                  SERVICE   CREATED              STATUS              PORTS
+mei-mg-email-db   postgres:16-alpine   "docker-entrypoint.sâ€¦"   db        About a minute ago   Up About a minute   127.0.0.1:5433->5432/tcp
+SSH_RC=0
 
