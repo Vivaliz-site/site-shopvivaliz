@@ -514,7 +514,42 @@ function svs_mirror_catalog(array $fetched, string $catalogPath): array {
         }
     }
 
-    return $mirrored;
+    // Trava final: nunca persistir contadores derivados antigos nem SKUs duplicados.
+    $final = [];
+    $finalBySku = [];
+    foreach ($mirrored as $row) {
+        if (!is_array($row)) continue;
+        $images = [];
+        foreach ((is_array($row['images'] ?? null) ? $row['images'] : []) as $image) {
+            if (is_scalar($image)) {
+                $url = trim((string)$image);
+                if ($url !== '' && preg_match('~^https?://~i', $url)) $images[] = $url;
+            }
+        }
+        $row['images'] = $images;
+        $row['images_count'] = count($images);
+        if ($images !== []) $row['image_url'] = $images[0];
+
+        $skuKey = strtoupper(trim((string)($row['sku'] ?? '')));
+        if ($skuKey === '') continue;
+        $score = [
+            $images !== [] ? 1 : 0,
+            ((float)($row['stock'] ?? 0)) > 0 ? 1 : 0,
+            (string)($row['synced_at'] ?? ''),
+            (string)($row['olist_product_id'] ?? $row['id'] ?? ''),
+        ];
+        if (!isset($finalBySku[$skuKey])) {
+            $finalBySku[$skuKey] = count($final);
+            $final[] = ['score' => $score, 'row' => $row];
+            continue;
+        }
+        $idx = $finalBySku[$skuKey];
+        if ($score > $final[$idx]['score']) {
+            $final[$idx] = ['score' => $score, 'row' => $row];
+        }
+    }
+
+    return array_map(static fn(array $entry): array => $entry['row'], $final);
 }
 
 function svs_removed_products(array $mirrored, string $catalogPath): array {
