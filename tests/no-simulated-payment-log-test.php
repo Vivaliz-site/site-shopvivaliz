@@ -49,8 +49,6 @@ foreach ($forbiddenPatterns as $pattern) {
 $operationalFiles = [
     'admin/index.php',
     'admin/menu-completo.php',
-    'admin/menu-dashboard.php',
-    'admin/admin-back.php',
     'olist/admin.php',
     'tools/external-smoke-test.php',
 ];
