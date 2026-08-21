@@ -16,8 +16,16 @@ try {
     exit(1);
 }
 
-if (!is_array($catalog) || !array_is_list($catalog) || $catalog === []) {
+if (!is_array($catalog) || $catalog === []) {
     fwrite(STDERR, "Catalogo invalido ou vazio.\n");
+    exit(1);
+}
+
+if (!array_is_list($catalog)) {
+    $catalog = array_values(array_filter($catalog, 'is_array'));
+}
+if ($catalog === []) {
+    fwrite(STDERR, "Catalogo sem produtos validos.\n");
     exit(1);
 }
 
@@ -28,6 +36,9 @@ $seenId = [];
 $withImages = 0;
 $withPrice = 0;
 $withStock = 0;
+$withOlistId = 0;
+$allowedSources = ['tiny_v3', 'tiny_v2', 'tiny', 'olist', 'olist_tiny'];
+$seenSources = [];
 
 foreach ($catalog as $index => $product) {
     $line = $index + 1;
@@ -39,6 +50,23 @@ foreach ($catalog as $index => $product) {
     $sku = trim((string)($product['sku'] ?? ''));
     $id = trim((string)($product['olist_product_id'] ?? $product['id'] ?? ''));
     $name = trim((string)($product['name'] ?? ''));
+    $source = strtolower(trim((string)($product['sync_source'] ?? '')));
+
+    if ($id === '') {
+        $errors[] = "linha {$line}: olist_product_id ausente ({$sku})";
+    } else {
+        $withOlistId++;
+    }
+    if ($source === '') {
+        $errors[] = "linha {$line}: sync_source ausente ({$sku})";
+    } else {
+        $seenSources[$source] = true;
+        if (str_contains($source, 'vnda')) {
+            $errors[] = "linha {$line}: fonte VNDA proibida ({$sku})";
+        } elseif (!in_array($source, $allowedSources, true)) {
+            $errors[] = "linha {$line}: sync_source nao permitida {$source} ({$sku})";
+        }
+    }
 
     if ($sku === '') {
         $errors[] = "linha {$line}: SKU ausente";
@@ -123,12 +151,16 @@ foreach ($catalog as $index => $product) {
 $total = count($catalog);
 $imageRatio = $withImages / $total;
 $priceRatio = $withPrice / $total;
+$olistIdRatio = $withOlistId / $total;
 
 if ($imageRatio < 0.50) {
     $errors[] = sprintf('cobertura de imagens abaixo de 50%%: %.1f%%', $imageRatio * 100);
 }
 if ($priceRatio < 0.50) {
     $errors[] = sprintf('cobertura de precos abaixo de 50%%: %.1f%%', $priceRatio * 100);
+}
+if ($olistIdRatio < 1.0) {
+    $errors[] = sprintf('cobertura de IDs Olist abaixo de 100%%: %.1f%%', $olistIdRatio * 100);
 }
 
 $result = [
@@ -137,6 +169,9 @@ $result = [
     'with_images' => $withImages,
     'with_price' => $withPrice,
     'with_stock' => $withStock,
+    'with_olist_id' => $withOlistId,
+    'olist_id_coverage' => round($olistIdRatio * 100, 2),
+    'sync_sources' => array_keys($seenSources),
     'image_coverage' => round($imageRatio * 100, 2),
     'price_coverage' => round($priceRatio * 100, 2),
     'errors' => array_slice($errors, 0, 100),
