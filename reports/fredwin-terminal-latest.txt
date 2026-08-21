@@ -1,2 +1,15 @@
-FREDWIN_SUCCESS=false
+FREDWIN_SUCCESS=true
+FREDWIN_HOST=LAPTOP-NIG4IFUU
+CHECK_BRT=2026-08-20T21:24:34-0300
+WORKER=active
+ENABLED=enabled
+NDR_GUARD=active
+NDR_ENABLED=enabled
+AUTOREPAIR=active
+SENTINEL=absent
+Restart=always
+RestartUSec=5s
+StartLimitIntervalUSec=0
+/var/run/postgresql:5432 - accepting connections
+SSH_RC=0
 
