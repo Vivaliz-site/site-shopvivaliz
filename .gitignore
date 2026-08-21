@@ -169,3 +169,7 @@ tokens/
 
 # Relatorios locais com material sensivel
 GITHUB_SECRETS.md
+
+/test-all-shopv506.php
+/.venv-homologacao/
+/storage/rate-limit/
