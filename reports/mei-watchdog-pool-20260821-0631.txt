@@ -1,0 +1,43 @@
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.17.0-1020-oracle x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Fri Aug 21 06:26:20 -03 2026
+
+  System load:  1.52               Processes:             183
+  Usage of /:   87.2% of 44.96GB   Users logged in:       0
+  Memory usage: 44%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   46%
+
+  => / is using 87.2% of 44.96GB
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+0 updates can be applied immediately.
+
+9 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+116 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+
+CHECK_BRT=2026-08-21T06:27:03-0300
+SET
+STRICT_ELIGIBLE=0
+OPEN_INELIGIBLE=0
+OPEN_REPLAY_EMAIL=0
+OPEN_REPLAY_CNPJ=0
+ORPHAN_LOTS=0
+LOCK_WAITERS=0
+ADVISORY_LOCKS=1
+LONG_ACTIVE=0
+FLYWAY_37_38=0
