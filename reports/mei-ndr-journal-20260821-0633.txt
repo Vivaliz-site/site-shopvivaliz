@@ -1,0 +1,543 @@
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.17.0-1020-oracle x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Fri Aug 21 06:29:51 -03 2026
+
+  System load:  0.39               Processes:             175
+  Usage of /:   87.2% of 44.96GB   Users logged in:       0
+  Memory usage: 45%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   46%
+
+  => / is using 87.2% of 44.96GB
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+0 updates can be applied immediately.
+
+9 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+116 updates could not be installed automatically. For more details,
+see /var/log/unattended-upgrades/unattended-upgrades.log
+
+CHECK_BRT=2026-08-21T06:30:34-0300
+=== UNIT ===
+Restart=always
+RestartUSec=10s
+MainPID=106920
+ExecStart={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubuntu/mei-mg-email/.venv/bin/python scripts/ndr_guard_v2.py ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }
+ActiveState=active
+SubState=running
+=== JOURNAL 6H ===
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:          ^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:     return opener.open(url, data, timeout)
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:     response = meth(req, response)
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:     response = self.parent.error(
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:     return self._call_chain(*args)
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:     result = func(*args)
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:              ^^^^^^^^^^^
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:     raise HTTPError(req.full_url, code, msg, hdrs, fp)
+Aug 21 06:17:16 shopvivaliz-ai python[106920]: urllib.error.HTTPError: HTTP Error 403: Forbidden
+Aug 21 06:17:16 shopvivaliz-ai python[106920]: The above exception was the direct cause of the following exception:
+Aug 21 06:17:16 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 349, in main
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:     check_once(provider)
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 285, in check_once
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:     messages = _recent_messages(provider)
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 171, in _recent_messages
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:     payload = _graph_json(token, url)
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:               ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 150, in _graph_json
+Aug 21 06:17:16 shopvivaliz-ai python[106920]:     raise RuntimeError(f"NDR_GUARD_GRAPH_HTTP_{exc.code}: {detail}") from exc
+Aug 21 06:17:16 shopvivaliz-ai python[106920]: RuntimeError: NDR_GUARD_GRAPH_HTTP_403: {"error":{"code":"ErrorAccessDenied","message":"Access is denied. Check credentials and try again."}}
+Aug 21 06:18:16 shopvivaliz-ai python[106920]: 2026-08-21 06:18:16,892 ERROR NDR_GUARD_CHECK_FAILED
+Aug 21 06:18:16 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 146, in _graph_json
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:     with urlopen(req, timeout=30) as response:
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:          ^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:     return opener.open(url, data, timeout)
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:     response = meth(req, response)
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:     response = self.parent.error(
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:     return self._call_chain(*args)
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:     result = func(*args)
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:              ^^^^^^^^^^^
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:     raise HTTPError(req.full_url, code, msg, hdrs, fp)
+Aug 21 06:18:16 shopvivaliz-ai python[106920]: urllib.error.HTTPError: HTTP Error 403: Forbidden
+Aug 21 06:18:16 shopvivaliz-ai python[106920]: The above exception was the direct cause of the following exception:
+Aug 21 06:18:16 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 349, in main
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:     check_once(provider)
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 285, in check_once
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:     messages = _recent_messages(provider)
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 171, in _recent_messages
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:     payload = _graph_json(token, url)
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:               ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 150, in _graph_json
+Aug 21 06:18:16 shopvivaliz-ai python[106920]:     raise RuntimeError(f"NDR_GUARD_GRAPH_HTTP_{exc.code}: {detail}") from exc
+Aug 21 06:18:16 shopvivaliz-ai python[106920]: RuntimeError: NDR_GUARD_GRAPH_HTTP_403: {"error":{"code":"ErrorAccessDenied","message":"Access is denied. Check credentials and try again."}}
+Aug 21 06:19:16 shopvivaliz-ai python[106920]: 2026-08-21 06:19:16,948 ERROR NDR_GUARD_CHECK_FAILED
+Aug 21 06:19:16 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 146, in _graph_json
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:     with urlopen(req, timeout=30) as response:
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:          ^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:     return opener.open(url, data, timeout)
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:     response = meth(req, response)
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:     response = self.parent.error(
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:     return self._call_chain(*args)
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:     result = func(*args)
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:              ^^^^^^^^^^^
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:     raise HTTPError(req.full_url, code, msg, hdrs, fp)
+Aug 21 06:19:16 shopvivaliz-ai python[106920]: urllib.error.HTTPError: HTTP Error 403: Forbidden
+Aug 21 06:19:16 shopvivaliz-ai python[106920]: The above exception was the direct cause of the following exception:
+Aug 21 06:19:16 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 349, in main
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:     check_once(provider)
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 285, in check_once
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:     messages = _recent_messages(provider)
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 171, in _recent_messages
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:     payload = _graph_json(token, url)
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:               ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 150, in _graph_json
+Aug 21 06:19:16 shopvivaliz-ai python[106920]:     raise RuntimeError(f"NDR_GUARD_GRAPH_HTTP_{exc.code}: {detail}") from exc
+Aug 21 06:19:16 shopvivaliz-ai python[106920]: RuntimeError: NDR_GUARD_GRAPH_HTTP_403: {"error":{"code":"ErrorAccessDenied","message":"Access is denied. Check credentials and try again."}}
+Aug 21 06:20:16 shopvivaliz-ai python[106920]: 2026-08-21 06:20:16,994 ERROR NDR_GUARD_CHECK_FAILED
+Aug 21 06:20:16 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 146, in _graph_json
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:     with urlopen(req, timeout=30) as response:
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:          ^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:     return opener.open(url, data, timeout)
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:     response = meth(req, response)
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:     response = self.parent.error(
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:     return self._call_chain(*args)
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:     result = func(*args)
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:              ^^^^^^^^^^^
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:     raise HTTPError(req.full_url, code, msg, hdrs, fp)
+Aug 21 06:20:16 shopvivaliz-ai python[106920]: urllib.error.HTTPError: HTTP Error 403: Forbidden
+Aug 21 06:20:16 shopvivaliz-ai python[106920]: The above exception was the direct cause of the following exception:
+Aug 21 06:20:16 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 349, in main
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:     check_once(provider)
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 285, in check_once
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:     messages = _recent_messages(provider)
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 171, in _recent_messages
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:     payload = _graph_json(token, url)
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:               ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 150, in _graph_json
+Aug 21 06:20:16 shopvivaliz-ai python[106920]:     raise RuntimeError(f"NDR_GUARD_GRAPH_HTTP_{exc.code}: {detail}") from exc
+Aug 21 06:20:16 shopvivaliz-ai python[106920]: RuntimeError: NDR_GUARD_GRAPH_HTTP_403: {"error":{"code":"ErrorAccessDenied","message":"Access is denied. Check credentials and try again."}}
+Aug 21 06:21:17 shopvivaliz-ai python[106920]: 2026-08-21 06:21:17,050 ERROR NDR_GUARD_CHECK_FAILED
+Aug 21 06:21:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 146, in _graph_json
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:     with urlopen(req, timeout=30) as response:
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:          ^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:     return opener.open(url, data, timeout)
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:     response = meth(req, response)
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:     response = self.parent.error(
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:     return self._call_chain(*args)
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:     result = func(*args)
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:              ^^^^^^^^^^^
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:     raise HTTPError(req.full_url, code, msg, hdrs, fp)
+Aug 21 06:21:17 shopvivaliz-ai python[106920]: urllib.error.HTTPError: HTTP Error 403: Forbidden
+Aug 21 06:21:17 shopvivaliz-ai python[106920]: The above exception was the direct cause of the following exception:
+Aug 21 06:21:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 349, in main
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:     check_once(provider)
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 285, in check_once
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:     messages = _recent_messages(provider)
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 171, in _recent_messages
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:     payload = _graph_json(token, url)
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:               ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 150, in _graph_json
+Aug 21 06:21:17 shopvivaliz-ai python[106920]:     raise RuntimeError(f"NDR_GUARD_GRAPH_HTTP_{exc.code}: {detail}") from exc
+Aug 21 06:21:17 shopvivaliz-ai python[106920]: RuntimeError: NDR_GUARD_GRAPH_HTTP_403: {"error":{"code":"ErrorAccessDenied","message":"Access is denied. Check credentials and try again."}}
+Aug 21 06:22:17 shopvivaliz-ai python[106920]: 2026-08-21 06:22:17,091 ERROR NDR_GUARD_CHECK_FAILED
+Aug 21 06:22:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 146, in _graph_json
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:     with urlopen(req, timeout=30) as response:
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:          ^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:     return opener.open(url, data, timeout)
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:     response = meth(req, response)
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:     response = self.parent.error(
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:     return self._call_chain(*args)
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:     result = func(*args)
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:              ^^^^^^^^^^^
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:     raise HTTPError(req.full_url, code, msg, hdrs, fp)
+Aug 21 06:22:17 shopvivaliz-ai python[106920]: urllib.error.HTTPError: HTTP Error 403: Forbidden
+Aug 21 06:22:17 shopvivaliz-ai python[106920]: The above exception was the direct cause of the following exception:
+Aug 21 06:22:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 349, in main
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:     check_once(provider)
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 285, in check_once
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:     messages = _recent_messages(provider)
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 171, in _recent_messages
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:     payload = _graph_json(token, url)
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:               ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 150, in _graph_json
+Aug 21 06:22:17 shopvivaliz-ai python[106920]:     raise RuntimeError(f"NDR_GUARD_GRAPH_HTTP_{exc.code}: {detail}") from exc
+Aug 21 06:22:17 shopvivaliz-ai python[106920]: RuntimeError: NDR_GUARD_GRAPH_HTTP_403: {"error":{"code":"ErrorAccessDenied","message":"Access is denied. Check credentials and try again."}}
+Aug 21 06:23:17 shopvivaliz-ai python[106920]: 2026-08-21 06:23:17,133 ERROR NDR_GUARD_CHECK_FAILED
+Aug 21 06:23:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 146, in _graph_json
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:     with urlopen(req, timeout=30) as response:
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:          ^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:     return opener.open(url, data, timeout)
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:     response = meth(req, response)
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:     response = self.parent.error(
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:     return self._call_chain(*args)
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:     result = func(*args)
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:              ^^^^^^^^^^^
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:     raise HTTPError(req.full_url, code, msg, hdrs, fp)
+Aug 21 06:23:17 shopvivaliz-ai python[106920]: urllib.error.HTTPError: HTTP Error 403: Forbidden
+Aug 21 06:23:17 shopvivaliz-ai python[106920]: The above exception was the direct cause of the following exception:
+Aug 21 06:23:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 349, in main
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:     check_once(provider)
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 285, in check_once
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:     messages = _recent_messages(provider)
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 171, in _recent_messages
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:     payload = _graph_json(token, url)
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:               ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 150, in _graph_json
+Aug 21 06:23:17 shopvivaliz-ai python[106920]:     raise RuntimeError(f"NDR_GUARD_GRAPH_HTTP_{exc.code}: {detail}") from exc
+Aug 21 06:23:17 shopvivaliz-ai python[106920]: RuntimeError: NDR_GUARD_GRAPH_HTTP_403: {"error":{"code":"ErrorAccessDenied","message":"Access is denied. Check credentials and try again."}}
+Aug 21 06:24:17 shopvivaliz-ai python[106920]: 2026-08-21 06:24:17,328 ERROR NDR_GUARD_CHECK_FAILED
+Aug 21 06:24:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 146, in _graph_json
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:     with urlopen(req, timeout=30) as response:
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:          ^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:     return opener.open(url, data, timeout)
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:     response = meth(req, response)
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:     response = self.parent.error(
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:     return self._call_chain(*args)
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:     result = func(*args)
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:              ^^^^^^^^^^^
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:     raise HTTPError(req.full_url, code, msg, hdrs, fp)
+Aug 21 06:24:17 shopvivaliz-ai python[106920]: urllib.error.HTTPError: HTTP Error 403: Forbidden
+Aug 21 06:24:17 shopvivaliz-ai python[106920]: The above exception was the direct cause of the following exception:
+Aug 21 06:24:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 349, in main
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:     check_once(provider)
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 285, in check_once
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:     messages = _recent_messages(provider)
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 171, in _recent_messages
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:     payload = _graph_json(token, url)
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:               ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 150, in _graph_json
+Aug 21 06:24:17 shopvivaliz-ai python[106920]:     raise RuntimeError(f"NDR_GUARD_GRAPH_HTTP_{exc.code}: {detail}") from exc
+Aug 21 06:24:17 shopvivaliz-ai python[106920]: RuntimeError: NDR_GUARD_GRAPH_HTTP_403: {"error":{"code":"ErrorAccessDenied","message":"Access is denied. Check credentials and try again."}}
+Aug 21 06:25:17 shopvivaliz-ai python[106920]: 2026-08-21 06:25:17,493 ERROR NDR_GUARD_CHECK_FAILED
+Aug 21 06:25:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 146, in _graph_json
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:     with urlopen(req, timeout=30) as response:
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:          ^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:     return opener.open(url, data, timeout)
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:     response = meth(req, response)
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:     response = self.parent.error(
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:     return self._call_chain(*args)
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:     result = func(*args)
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:              ^^^^^^^^^^^
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:     raise HTTPError(req.full_url, code, msg, hdrs, fp)
+Aug 21 06:25:17 shopvivaliz-ai python[106920]: urllib.error.HTTPError: HTTP Error 403: Forbidden
+Aug 21 06:25:17 shopvivaliz-ai python[106920]: The above exception was the direct cause of the following exception:
+Aug 21 06:25:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 349, in main
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:     check_once(provider)
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 285, in check_once
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:     messages = _recent_messages(provider)
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 171, in _recent_messages
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:     payload = _graph_json(token, url)
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:               ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 150, in _graph_json
+Aug 21 06:25:17 shopvivaliz-ai python[106920]:     raise RuntimeError(f"NDR_GUARD_GRAPH_HTTP_{exc.code}: {detail}") from exc
+Aug 21 06:25:17 shopvivaliz-ai python[106920]: RuntimeError: NDR_GUARD_GRAPH_HTTP_403: {"error":{"code":"ErrorAccessDenied","message":"Access is denied. Check credentials and try again."}}
+Aug 21 06:26:17 shopvivaliz-ai python[106920]: 2026-08-21 06:26:17,560 ERROR NDR_GUARD_CHECK_FAILED
+Aug 21 06:26:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 146, in _graph_json
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:     with urlopen(req, timeout=30) as response:
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:          ^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:     return opener.open(url, data, timeout)
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:     response = meth(req, response)
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:     response = self.parent.error(
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:     return self._call_chain(*args)
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:     result = func(*args)
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:              ^^^^^^^^^^^
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:     raise HTTPError(req.full_url, code, msg, hdrs, fp)
+Aug 21 06:26:17 shopvivaliz-ai python[106920]: urllib.error.HTTPError: HTTP Error 403: Forbidden
+Aug 21 06:26:17 shopvivaliz-ai python[106920]: The above exception was the direct cause of the following exception:
+Aug 21 06:26:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 349, in main
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:     check_once(provider)
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 285, in check_once
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:     messages = _recent_messages(provider)
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 171, in _recent_messages
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:     payload = _graph_json(token, url)
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:               ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 150, in _graph_json
+Aug 21 06:26:17 shopvivaliz-ai python[106920]:     raise RuntimeError(f"NDR_GUARD_GRAPH_HTTP_{exc.code}: {detail}") from exc
+Aug 21 06:26:17 shopvivaliz-ai python[106920]: RuntimeError: NDR_GUARD_GRAPH_HTTP_403: {"error":{"code":"ErrorAccessDenied","message":"Access is denied. Check credentials and try again."}}
+Aug 21 06:27:17 shopvivaliz-ai python[106920]: 2026-08-21 06:27:17,611 ERROR NDR_GUARD_CHECK_FAILED
+Aug 21 06:27:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 146, in _graph_json
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:     with urlopen(req, timeout=30) as response:
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:          ^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:     return opener.open(url, data, timeout)
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:     response = meth(req, response)
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:     response = self.parent.error(
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:     return self._call_chain(*args)
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:     result = func(*args)
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:              ^^^^^^^^^^^
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:     raise HTTPError(req.full_url, code, msg, hdrs, fp)
+Aug 21 06:27:17 shopvivaliz-ai python[106920]: urllib.error.HTTPError: HTTP Error 403: Forbidden
+Aug 21 06:27:17 shopvivaliz-ai python[106920]: The above exception was the direct cause of the following exception:
+Aug 21 06:27:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 349, in main
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:     check_once(provider)
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 285, in check_once
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:     messages = _recent_messages(provider)
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 171, in _recent_messages
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:     payload = _graph_json(token, url)
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:               ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 150, in _graph_json
+Aug 21 06:27:17 shopvivaliz-ai python[106920]:     raise RuntimeError(f"NDR_GUARD_GRAPH_HTTP_{exc.code}: {detail}") from exc
+Aug 21 06:27:17 shopvivaliz-ai python[106920]: RuntimeError: NDR_GUARD_GRAPH_HTTP_403: {"error":{"code":"ErrorAccessDenied","message":"Access is denied. Check credentials and try again."}}
+Aug 21 06:28:17 shopvivaliz-ai python[106920]: 2026-08-21 06:28:17,654 ERROR NDR_GUARD_CHECK_FAILED
+Aug 21 06:28:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 146, in _graph_json
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:     with urlopen(req, timeout=30) as response:
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:          ^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:     return opener.open(url, data, timeout)
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:     response = meth(req, response)
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:     response = self.parent.error(
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:     return self._call_chain(*args)
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:     result = func(*args)
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:              ^^^^^^^^^^^
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:     raise HTTPError(req.full_url, code, msg, hdrs, fp)
+Aug 21 06:28:17 shopvivaliz-ai python[106920]: urllib.error.HTTPError: HTTP Error 403: Forbidden
+Aug 21 06:28:17 shopvivaliz-ai python[106920]: The above exception was the direct cause of the following exception:
+Aug 21 06:28:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 349, in main
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:     check_once(provider)
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 285, in check_once
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:     messages = _recent_messages(provider)
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 171, in _recent_messages
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:     payload = _graph_json(token, url)
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:               ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 150, in _graph_json
+Aug 21 06:28:17 shopvivaliz-ai python[106920]:     raise RuntimeError(f"NDR_GUARD_GRAPH_HTTP_{exc.code}: {detail}") from exc
+Aug 21 06:28:17 shopvivaliz-ai python[106920]: RuntimeError: NDR_GUARD_GRAPH_HTTP_403: {"error":{"code":"ErrorAccessDenied","message":"Access is denied. Check credentials and try again."}}
+Aug 21 06:29:17 shopvivaliz-ai python[106920]: 2026-08-21 06:29:17,701 ERROR NDR_GUARD_CHECK_FAILED
+Aug 21 06:29:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 146, in _graph_json
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:     with urlopen(req, timeout=30) as response:
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:          ^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:     return opener.open(url, data, timeout)
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:     response = meth(req, response)
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:     response = self.parent.error(
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:     return self._call_chain(*args)
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:     result = func(*args)
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:              ^^^^^^^^^^^
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:     raise HTTPError(req.full_url, code, msg, hdrs, fp)
+Aug 21 06:29:17 shopvivaliz-ai python[106920]: urllib.error.HTTPError: HTTP Error 403: Forbidden
+Aug 21 06:29:17 shopvivaliz-ai python[106920]: The above exception was the direct cause of the following exception:
+Aug 21 06:29:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 349, in main
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:     check_once(provider)
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 285, in check_once
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:     messages = _recent_messages(provider)
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 171, in _recent_messages
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:     payload = _graph_json(token, url)
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:               ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 150, in _graph_json
+Aug 21 06:29:17 shopvivaliz-ai python[106920]:     raise RuntimeError(f"NDR_GUARD_GRAPH_HTTP_{exc.code}: {detail}") from exc
+Aug 21 06:29:17 shopvivaliz-ai python[106920]: RuntimeError: NDR_GUARD_GRAPH_HTTP_403: {"error":{"code":"ErrorAccessDenied","message":"Access is denied. Check credentials and try again."}}
+Aug 21 06:30:17 shopvivaliz-ai python[106920]: 2026-08-21 06:30:17,748 ERROR NDR_GUARD_CHECK_FAILED
+Aug 21 06:30:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 146, in _graph_json
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:     with urlopen(req, timeout=30) as response:
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:          ^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:     return opener.open(url, data, timeout)
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:     response = meth(req, response)
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:     response = self.parent.error(
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:     return self._call_chain(*args)
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:            ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:     result = func(*args)
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:              ^^^^^^^^^^^
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:   File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:     raise HTTPError(req.full_url, code, msg, hdrs, fp)
+Aug 21 06:30:17 shopvivaliz-ai python[106920]: urllib.error.HTTPError: HTTP Error 403: Forbidden
+Aug 21 06:30:17 shopvivaliz-ai python[106920]: The above exception was the direct cause of the following exception:
+Aug 21 06:30:17 shopvivaliz-ai python[106920]: Traceback (most recent call last):
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 349, in main
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:     check_once(provider)
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 285, in check_once
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:     messages = _recent_messages(provider)
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 171, in _recent_messages
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:     payload = _graph_json(token, url)
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:               ^^^^^^^^^^^^^^^^^^^^^^^
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:   File "/home/ubuntu/mei-mg-email/scripts/ndr_guard.py", line 150, in _graph_json
+Aug 21 06:30:17 shopvivaliz-ai python[106920]:     raise RuntimeError(f"NDR_GUARD_GRAPH_HTTP_{exc.code}: {detail}") from exc
+Aug 21 06:30:17 shopvivaliz-ai python[106920]: RuntimeError: NDR_GUARD_GRAPH_HTTP_403: {"error":{"code":"ErrorAccessDenied","message":"Access is denied. Check credentials and try again."}}
+=== STATE ===
+NO_STATE
