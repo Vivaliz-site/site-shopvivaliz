@@ -33,8 +33,10 @@ jobs:
             exit 0
           fi
           echo "DB=$DB"
-          SQL="docker exec -i $DB psql -U mei_email -d mei_email -At -v ON_ERROR_STOP=0"
-          $SQL <<'SQL'
+          echo "DB_USER=$(docker exec "$DB" sh -lc 'printf "%s" "$POSTGRES_USER"' 2>/dev/null)"
+          echo "DB_NAME=$(docker exec "$DB" sh -lc 'printf "%s" "${POSTGRES_DB:-postgres}"' 2>/dev/null)"
+          dbsql() { docker exec -i "$DB" sh -lc 'psql -U "$POSTGRES_USER" -d "${POSTGRES_DB:-postgres}" -At -v ON_ERROR_STOP=0'; }
+          dbsql <<'SQL'
           set statement_timeout='15s';
           select 'SENT24='||count(*) from mei_email.envios where status::text in ('submitted','enviado','delivered') and coalesce(enviado_em, atualizado_em, criado_em) >= now()-interval '24 hours';
           select 'SENT10='||count(*) from mei_email.envios where status::text in ('submitted','enviado','delivered') and coalesce(enviado_em, atualizado_em, criado_em) >= now()-interval '10 minutes';
@@ -50,6 +52,6 @@ jobs:
           select 'GUARD_FUNCS='||count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='mei_email' and proname in ('is_independent_marketing_authorization','is_independent_mei_verification','is_email_suppressed','is_cnpj_suppressed','enforce_envio_live_eligibility');
           SQL
           echo "RECENT_ERRORS_BEGIN"
-          journalctl -u mei-mg-email-worker.service --since '20 minutes ago' --no-pager -n 120 2>/dev/null | grep -E '42004|lock timeout|QUERY_ERROR|ERROR|Traceback|eligib|queue|fila|sent|submitted' | tail -40 || true
+          journalctl -u mei-mg-email-worker.service --since '20 minutes ago' --no-pager -n 160 2>/dev/null | grep -E '42004|lock timeout|QUERY_ERROR|ERROR|Traceback|eligib|queue|fila|sent|submitted|Lote' | tail -60 || true
           echo "RECENT_ERRORS_END"
           REMOTE
