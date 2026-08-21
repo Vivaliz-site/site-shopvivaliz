@@ -3,6 +3,6 @@
   "shell": "powershell",
   "timeout": 180,
   "command": "$ErrorActionPreference='Stop'; Write-Output ('FREDWIN_HOST=' + $env:COMPUTERNAME); $cmd='cd /home/ubuntu/mei-mg-email || exit 2; echo CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z); if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then echo SENTINEL=present; echo SUPERVISOR_SKIPPED=current_sender_block; exit 0; fi; echo SENTINEL=absent; .venv/bin/python scripts/nonstop_supervisor_15m.py; echo SUPERVISOR_RC=$?; printf WORKER_AFTER=; sudo systemctl is-active mei-mg-email-worker.service || true; printf ENABLED_AFTER=; sudo systemctl is-enabled mei-mg-email-worker.service || true; sudo cat /var/lib/mei-mg-email/throughput-supervisor-state.json 2>/dev/null || true; exit 0'; & ssh -o BatchMode=yes -o ConnectTimeout=15 shopvivaliz-vm $cmd; $rc=$LASTEXITCODE; Write-Output ('SSH_RC=' + $rc); exit 0",
-  "requested_at": "2026-08-21T02:37:00Z",
-  "reason": "Restore the reviewed bounded nonstop recovery request after the compact read-only probe transport failed. It respects the Microsoft sender-block sentinel, never grants consent, never relaxes suppressions, never reopens terminal sends and never sends directly."
+  "requested_at": "2026-08-21T02:42:00Z",
+  "reason": "Restore canonical bounded nonstop recovery after the auxiliary read-only pool probe returned SSH rc=2. This path respects the current Microsoft sender-block sentinel and never grants consent, relaxes suppressions, reopens terminal sends or sends directly."
 }
