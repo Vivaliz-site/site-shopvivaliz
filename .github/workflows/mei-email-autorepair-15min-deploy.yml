@@ -95,6 +95,9 @@ jobs:
           grep -q 'has_external_ledger' worker/safe_entrypoint.py
           grep -q 'already_external' worker/safe_entrypoint_v2.py
           grep -q 'base.worker.processar_lote = base._safe_processar_lote' worker/safe_entrypoint_v2.py
+          grep -q 'lowered.startswith("politica_importacao_operador")' worker/safe_entrypoint_v2.py
+          grep -q 'lowered.startswith("base_publica")' worker/safe_entrypoint_v2.py
+          grep -q '_legacy_numeric_branch_cnpj' worker/safe_entrypoint_v2.py
 
           sudo install -m 0644 deploy/systemd/mei-mg-email-worker.service /etc/systemd/system/mei-mg-email-worker.service
           sudo install -m 0644 deploy/systemd/mei-mg-email-autorepair.service /etc/systemd/system/mei-mg-email-autorepair.service
@@ -148,6 +151,8 @@ jobs:
           echo "PRESEND_FULL_CONTRACT_GUARD=true"
           echo "PRESEND_DICT_ROW_LEDGER_FIX=true"
           echo "PRESEND_LOT_PROGRESS_FIX=true"
+          echo "PUBLIC_OPERATOR_PREFIX_PRESEND_GUARD=true"
+          echo "LEGACY_NUMERIC_BRANCH_MEI_GUARD=true"
           sudo systemctl show mei-mg-email-worker.service \
             -p ActiveState -p SubState -p MainPID -p ExecStart -p ExecStartPre \
             -p Restart -p RestartUSec -p StartLimitIntervalUSec --no-pager
@@ -187,3 +192,4 @@ jobs:
 # watchdog deploy sender main 5005bee indexed-autoqueue-v045 runtime 2026-08-20T20:54-0300
 # watchdog reassert nonstop sender after unsafe recovery workflow removal 2026-08-20T21:04-0300
 # watchdog deploy current sender main with DB restart-first recovery 2026-08-21T00:17-0300
+# deploy PR75 public/operator-prefix presend and legacy numeric branch MEI safety guards 2026-08-21T04:37-0300
