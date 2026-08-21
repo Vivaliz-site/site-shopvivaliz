@@ -1,2 +1,16 @@
-FREDWIN_SUCCESS=false
+FREDWIN_SUCCESS=true
+Fri Aug 21 08:18:31 -03 2026
+HEAD
+f13516cf35eefc88aa7dc2c6aff8e71a1eff3d72
+ORIGIN_MAIN
+3b49814230ee244d89b6b4ebcadd213e918cd076
+RUNTIME_OFFICIAL_MEI_GUARD=true
+AUTOQUEUE_OFFICIAL_MEI_GUARD=true
+active
+enabled
+Restart=always
+RestartUSec=5s
+ExecStart={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubuntu/mei-mg-email/.venv/bin/python -m worker.safe_entrypoint_v2 ; ignore_errors=no ; start_time=[Fri 2026-08-21 07:09:26 -03] ; stop_time=[n/a] ; pid=182310 ; code=(null) ; status=0/0 }
+StartLimitIntervalUSec=0
+SENTINEL=absent
 
