@@ -1,4 +1,4 @@
-# watchdog refresh 2026-08-20 19:20 BRT
+# watchdog refresh 2026-08-20 20:20 BRT
 name: MEI Email Post Broken Pipe State 20260820 1622
 on:
   push:
@@ -44,11 +44,14 @@ jobs:
           enabled=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)
           sentinel=absent
           sudo test -f /var/lib/mei-mg-email/sender_blocked.pause && sentinel=present || true
+          sudo test -f /home/ubuntu/mei-mg-email/runtime/sender_blocked.pause && sentinel=present || true
           asn=$(sudo journalctl -u mei-mg-email-worker.service --since '-30 minutes' --no-pager | grep -Eic 'AS\(42004\)|bad outbound sender|5\.1\.8' || true)
           echo WORKER_BEFORE=$worker
           echo WORKER_ENABLED_BEFORE=$enabled
           echo SENTINEL=$sentinel
           echo AS42004_LAST30M=$asn
+          echo NDR_GUARD=$(sudo systemctl is-active mei-mg-email-ndr-guard.service 2>/dev/null || true)
+          echo NDR_GUARD_ENABLED=$(sudo systemctl is-enabled mei-mg-email-ndr-guard.service 2>/dev/null || true)
           sudo systemctl show mei-mg-email-worker.service -p Restart -p RestartUSec -p StartLimitIntervalUSec -p ExecStart -p ExecStartPre --no-pager || true
           echo DB_CONTAINER=$(sudo docker inspect -f '{{.State.Status}}' mei-mg-email-db 2>/dev/null || echo missing)
           echo DB_READY=$(sudo docker exec mei-mg-email-db pg_isready -U postgres -d mei_mg_email 2>/dev/null || true)
@@ -56,7 +59,7 @@ jobs:
           echo HTTPS_GRAPH=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 https://graph.microsoft.com/v1.0/ 2>/dev/null || echo error)
           cd /home/ubuntu/mei-mg-email 2>/dev/null || true
           if [ -x .venv/bin/python ]; then
-            .venv/bin/python -c "from app.email_provider import MicrosoftGraphEmailProvider; p=MicrosoftGraphEmailProvider(); t=p._get_access_token(); print('GRAPH_AUTH='+('ok' if t else 'empty')); print('GRAPH_SENDER='+p.address)" 2>&1 || true
+            .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv('.env', override=True); from app.email_provider import MicrosoftGraphEmailProvider; p=MicrosoftGraphEmailProvider(); t=p._get_access_token(); print('GRAPH_AUTH='+('ok' if t else 'empty')); print('GRAPH_SENDER='+p.address)" 2>&1 || true
           else
             echo GRAPH_AUTH=python_missing
           fi
@@ -65,7 +68,7 @@ jobs:
           echo SENT10=$(q "select count(*) from mei_email.envios where status::text in ('submitted','enviado') and enviado_em>=now()-interval '10 minutes';")
           echo LAST_SENT=$(q "select coalesce(max(enviado_em)::text,'') from mei_email.envios where status::text in ('submitted','enviado');")
           echo OPEN_TOTAL=$(q "select count(*) from mei_email.envios where status::text in ('pendente','pending','enviando','processing');")
-          echo STRICT_ELIGIBLE=$(q "select case when to_regclass('mei_email.vw_empresas_elegiveis') is null then -1 else (select count(*) from mei_email.vw_empresas_elegiveis) end;")
+          echo STRICT_ELIGIBLE=$(q "set statement_timeout='20s'; select case when to_regclass('mei_email.vw_empresas_elegiveis') is null then -1 else (select count(*) from mei_email.vw_empresas_elegiveis) end;")
           echo OPEN_REPLAY=$(q "select count(*) from mei_email.envios x where x.status::text in ('pendente','pending','enviando','processing') and exists(select 1 from mei_email.envios h where h.id<>x.id and (h.cnpj=x.cnpj or lower(btrim(h.email::text))=lower(btrim(x.email::text))) and h.status::text in ('submitted','enviado','delivered','bounced','bounce_permanent'));")
           echo ORPHAN_ENVIOS=$(q "select count(*) from mei_email.envios e left join mei_email.lotes l on l.id=e.lote_id left join mei_email.campanhas c on c.id=e.campanha_id where l.id is null or c.id is null;")
           echo ADVISORY_LOCKS=$(q "select count(*) from pg_locks where locktype='advisory' and granted;")
@@ -79,7 +82,7 @@ jobs:
           echo HARD_BOUNCE_ACTIVE=$(q "select count(*) from mei_email.email_suppressions where active and reason='hard_bounce';")
           restart_rc=0
           if [ "$sentinel" = present ] || [ "$asn" -gt 0 ]; then
-            echo SAFE_RESTART=NO_MICROSOFT_BLOCK
+            echo SAFE_RESTART=BLOCKED_BY_MICROSOFT
           elif [ "$worker" != active ]; then
             sudo systemctl reset-failed mei-mg-email-worker.service || true
             sudo systemctl restart mei-mg-email-worker.service || restart_rc=$?
