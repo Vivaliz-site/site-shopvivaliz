@@ -1,12 +1,16 @@
 FREDWIN_SUCCESS=true
-BRT=2026-08-21T06:22:19-0300
-SENTINEL=absent
-WORKER=active
-ENABLED=enabled
-Restart=always
-RestartUSec=5s
-ExecStart={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubuntu/mei-mg-email/.venv/bin/python -m worker.safe_entrypoint_v2 ; ignore_errors=no ; start_time=[Fri 2026-08-21 05:31:50 -03] ; stop_time=[n/a] ; pid=146776 ; code=(null) ; status=0/0 }
-StartLimitIntervalUSec=0
-NDR=active
+BRT=2026-08-21T06:24:14-0300
+DB=/var/run/postgresql:5432 - accepting connections
+SENT24=1066
+SENT10=0
+LAST=2026-08-21 05:09:42.055928-03
+OPEN=0
+LEGACY_COPY=0
+TRG_COPY=1
+TRG_ELIG=1
+FLYWAY37_38=0
+HARD_BOUNCE=0
+WAITERS=0
+REPLAY=0
 SSH_RC=0
 
