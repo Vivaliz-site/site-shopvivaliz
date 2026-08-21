@@ -1,4 +1,14 @@
 FREDWIN_SUCCESS=true
-BRT=2026-08-21T06:31:24-0300
+BRT=2026-08-21T06:38:34-0300
+SENTINEL=absent
+WORKER=active
+ENABLED=enabled
+NDR=active
+AUTOREPAIR=active
+AS42004_30M=0
+Restart=always
+RestartUSec=5s
+ExecStart={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubuntu/mei-mg-email/.venv/bin/python -m worker.safe_entrypoint_v2 ; ignore_errors=no ; start_time=[Fri 2026-08-21 05:31:50 -03] ; stop_time=[n/a] ; pid=146776 ; code=(null) ; status=0/0 }
+StartLimitIntervalUSec=0
 SSH_RC=0
 
