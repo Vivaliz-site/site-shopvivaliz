@@ -1,8 +1,8 @@
 {
   "action": "terminal",
   "shell": "powershell",
-  "timeout": 60,
-  "command": "$ErrorActionPreference='Stop'; $remote='cd /home/ubuntu/mei-mg-email || exit 2; date; git fetch -q origin main; echo HEAD; git rev-parse HEAD; echo ORIGIN_MAIN; git rev-parse origin/main; grep -q receita_simples_opcao_mei worker/safe_entrypoint_v2.py && echo RUNTIME_OFFICIAL_MEI_GUARD=true || echo RUNTIME_OFFICIAL_MEI_GUARD=false; grep -q receita_simples_opcao_mei app/queue_manager.py && echo AUTOQUEUE_OFFICIAL_MEI_GUARD=true || echo AUTOQUEUE_OFFICIAL_MEI_GUARD=false; sudo systemctl is-active mei-mg-email-worker.service; sudo systemctl is-enabled mei-mg-email-worker.service; sudo systemctl show mei-mg-email-worker.service -p Restart -p RestartUSec -p StartLimitIntervalUSec -p ExecStart --no-pager; if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then echo SENTINEL=present; else echo SENTINEL=absent; fi'; & ssh -o BatchMode=yes -o ConnectTimeout=15 shopvivaliz-vm $remote; exit $LASTEXITCODE",
-  "requested_at": "2026-08-21T11:18:30Z",
-  "reason": "Minimal MEI runtime verification after compact diagnostic failed; no database or campaign mutation."
+  "timeout": 30,
+  "command": "$ErrorActionPreference='Stop'; Write-Output 'FREDWIN_MCP_OK'; Write-Output (Get-Date -Format o); exit 0",
+  "requested_at": "2026-08-21T11:21:00Z",
+  "reason": "Isolate Fred-Win MCP execution after VM relay command returned success=false. No remote mutation."
 }
