@@ -33,38 +33,9 @@ Learn more about enabling ESM Apps service at https://ubuntu.com/esm
 see /var/log/unattended-upgrades/unattended-upgrades.log
 
 *** System restart required ***
-From https://github.com/fredmourao-ai/mei-mg-email
- * branch            main       -> FETCH_HEAD
-CHECK_BRT=2026-08-20T21:00:12-0300
-SENTINEL_BEFORE=absent
-AS42004_LAST30M=0
-APPLY_V045_HOTFIX_BEGIN
-SET
-CREATE FUNCTION
-COMMENT
-APPLY_V045_HOTFIX_OK=true
-WORKER_AFTER_HOTFIX=active
-WORKER_ENABLED_AFTER_HOTFIX=enabled
-APPLY_V037_BEGIN
-SET
-UPDATE 0
-UPDATE 0
-UPDATE 0
-APPLY_V037_OK=true
-APPLY_V038_BEGIN
-SET
-UPDATE 0
-DO
-CREATE FUNCTION
-DROP TRIGGER
-CREATE TRIGGER
-UPDATE 0
-CREATE FUNCTION
-DROP TRIGGER
-CREATE TRIGGER
-UPDATE 0
-APPLY_V038_OK=true
-APPLY_V042_BEGIN
-SET
-psql:<stdin>:26: ERROR:  cannot change name of input parameter "p_marketing_autorizado"
-HINT:  Use DROP FUNCTION is_independent_marketing_authorization(boolean,text) first.
+CHECK_BRT=2026-08-20T21:04:54-0300
+HEAD=f13516cf35eefc88aa7dc2c6aff8e71a1eff3d72
+ORIGIN_MAIN=5005bee36b360f4493da0e360013697ecfe1ea42
+WORKER=active
+WORKER_ENABLED=enabled
+AUTOREPAIR_TIMER=active

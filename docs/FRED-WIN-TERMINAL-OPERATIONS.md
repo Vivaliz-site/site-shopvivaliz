@@ -164,7 +164,7 @@ sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "select
 - bloquear empresa inativa;
 - bloquear endereço contendo `contabil`;
 - bloquear endereço associado a mais de 2 CNPJs;
-- autorização explícita `user_explicit_authorization_2026-08-20` é origem válida e não deve ser classificada como origem proibida.
+- origens como `user_explicit_authorization_2026-08-20`, `user_campaign_authorization_2026-08-20` e variantes de `operator_authorization_true` não constituem, por si só, prova independente de opt-in e devem permanecer rejeitadas pelo runtime salvo evidência auditável de consentimento individual compatível com a política vigente.
 
 ## Segurança
 
