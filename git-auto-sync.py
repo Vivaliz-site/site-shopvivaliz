@@ -101,6 +101,21 @@ def fetch_canonical_branch(branch: str) -> None:
         time.sleep(attempt)
 
 
+def unsafe_dirty_paths(paths: list[str]) -> list[str]:
+    """Normalize and preserve every dirty path; safe sync is fail-closed."""
+    normalized: list[str] = []
+    for path in paths:
+        value = str(path).strip().replace("\\", "/")
+        if value:
+            normalized.append(value)
+    return normalized
+
+
+def is_preserved_path(path: str) -> bool:
+    """Compatibility hook: no dirty path is exempt from safe-sync blocking."""
+    return False
+
+
 def tracked_dirty_paths() -> list[str]:
     result = run(["git", "status", "--porcelain"], check=True)
     paths: list[str] = []
@@ -109,8 +124,8 @@ def tracked_dirty_paths() -> list[str]:
             continue
         path = line[3:].strip()
         if path:
-            paths.append(path.replace("\\", "/"))
-    return paths
+            paths.append(path)
+    return unsafe_dirty_paths(paths)
 
 
 def local_branch_exists(branch: str) -> bool:

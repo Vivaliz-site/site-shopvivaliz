@@ -40,8 +40,8 @@ def resolve_env_write_target(path: Path) -> Path:
     info = target.stat()
     if not stat.S_ISREG(info.st_mode):
         raise RuntimeError(".env alvo do renovador Google nao e arquivo regular")
-    if os.name != "nt" and (stat.S_IMODE(info.st_mode) & 0o007):
-        raise RuntimeError(".env alvo do renovador Google possui permissao aberta para outros")
+    if os.name != "nt" and (stat.S_IMODE(info.st_mode) & 0o022):
+        raise RuntimeError(".env alvo do renovador Google possui permissao de escrita para grupo/outros")
     return target
 
 
