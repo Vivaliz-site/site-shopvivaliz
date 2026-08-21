@@ -1,18 +1,18 @@
 Pseudo-terminal will not be allocated because stdin is not a terminal.
-Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.17.0-1020-oracle x86_64)
 
  * Documentation:  https://help.ubuntu.com
  * Management:     https://landscape.canonical.com
  * Support:        https://ubuntu.com/pro
 
- System information as of Thu Aug 20 15:03:22 -03 2026
+ System information as of Fri Aug 21 11:19:02 -03 2026
 
-  System load:  2.17               Processes:             184
-  Usage of /:   86.5% of 44.96GB   Users logged in:       0
-  Memory usage: 42%                IPv4 address for ens3: 10.0.1.13
-  Swap usage:   45%
+  System load:  1.88               Processes:             182
+  Usage of /:   86.0% of 44.96GB   Users logged in:       0
+  Memory usage: 47%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   49%
 
-  => / is using 86.5% of 44.96GB
+  => / is using 86.0% of 44.96GB
 
  * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
    just raised the bar for easy, resilient and secure K8s cluster deployment.
@@ -21,21 +21,112 @@ Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.8.0-1057-oracle x86_64)
 
 Expanded Security Maintenance for Applications is not enabled.
 
-63 updates can be applied immediately.
-6 of these updates are standard security updates.
-To see these additional updates run: apt list --upgradable
+0 updates can be applied immediately.
 
-13 additional security updates can be applied with ESM Apps.
+9 additional security updates can be applied with ESM Apps.
 Learn more about enabling ESM Apps service at https://ubuntu.com/esm
 
 
-116 updates could not be installed automatically. For more details,
-see /var/log/unattended-upgrades/unattended-upgrades.log
-
-*** System restart required ***
-CHECK_BRT=2026-08-20T21:04:54-0300
+CHECK_BRT=2026-08-21T11:22:04-0300
 HEAD=f13516cf35eefc88aa7dc2c6aff8e71a1eff3d72
-ORIGIN_MAIN=5005bee36b360f4493da0e360013697ecfe1ea42
+ORIGIN_MAIN=3b49814230ee244d89b6b4ebcadd213e918cd076
 WORKER=active
 WORKER_ENABLED=enabled
-AUTOREPAIR_TIMER=active
+AUTOREPAIR_TIMER=inactive
+AUTOREPAIR_TIMER_ENABLED=enabled
+SENTINEL=absent
+AS42004_30M=0
+SENT24=1008
+SENT10=0
+OPEN_TOTAL=10151
+LAST_SENT=2026-08-21 05:09:42.055928-03
+ACTIVE_CAMPAIGNS=1553
+AUTOQUEUE_INDEX=PRESENT
+V045_FUNCTION=UNQUALIFIED
+GUARD_TRIGGERS=2
+STRICT_ELIGIBLE_EXISTS=SET
+QUERY_ERROR
+AUTOQUEUE_FAST_EXISTS=SET
+t
+LOCK_WAITERS=0
+ADVISORY_LOCKS=1
+LONG_TX=0
+FLYWAY_FAILED=none
+FLYWAY_038=missing
+FLYWAY_045=missing
+=== WORKER UNIT ===
+Restart=always
+RestartUSec=5s
+MainPID=237658
+ExecStartPre={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubuntu/mei-mg-email/.venv/bin/python /home/ubuntu/mei-mg-email/scripts/runtime_sender_preflight.py ; ignore_errors=no ; start_time=[Fri 2026-08-21 11:07:22 -03] ; stop_time=[Fri 2026-08-21 11:07:25 -03] ; pid=237651 ; code=exited ; status=0 }
+ExecStart={ path=/home/ubuntu/mei-mg-email/.venv/bin/python ; argv[]=/home/ubuntu/mei-mg-email/.venv/bin/python -m worker.safe_entrypoint_v2 ; ignore_errors=no ; start_time=[Fri 2026-08-21 11:07:25 -03] ; stop_time=[n/a] ; pid=237658 ; code=(null) ; status=0/0 }
+ActiveState=active
+SubState=running
+StartLimitIntervalUSec=0
+=== WORKER STATUS ===
+● mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker
+     Loaded: loaded (/etc/systemd/system/mei-mg-email-worker.service; enabled; preset: enabled)
+    Drop-In: /etc/systemd/system/mei-mg-email-worker.service.d
+             └─timeout-start.conf
+     Active: active (running) since Fri 2026-08-21 11:07:25 -03; 16min ago
+    Process: 237651 ExecStartPre=/home/ubuntu/mei-mg-email/.venv/bin/python /home/ubuntu/mei-mg-email/scripts/runtime_sender_preflight.py (code=exited, status=0/SUCCESS)
+   Main PID: 237658 (python)
+      Tasks: 1 (limit: 1021)
+     Memory: 9.9M (peak: 37.1M swap: 16.9M swap peak: 16.9M)
+        CPU: 12.229s
+     CGroup: /system.slice/mei-mg-email-worker.service
+             └─237658 /home/ubuntu/mei-mg-email/.venv/bin/python -m worker.safe_entrypoint_v2
+
+Aug 21 11:07:22 shopvivaliz-ai systemd[1]: Starting mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker...
+Aug 21 11:07:24 shopvivaliz-ai python[237651]: {"campanhas": true, "email_suppressions": true, "email_validator": true, "envios": true, "runtime_sender_preflight": "ok"}
+Aug 21 11:07:25 shopvivaliz-ai systemd[1]: Started mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker.
+Aug 21 11:07:27 shopvivaliz-ai python[237658]: WARNING:mei_mg_email.email_provider:MicrosoftGraphEmailProvider APP-ONLY active sender=naoresponda@dev.shopvivaliz.com.br cert=/home/ubuntu/.shopvivaliz/m365/graph-auth.crt
+Aug 21 11:07:27 shopvivaliz-ai python[237658]: INFO:mei_mg_email.worker:Worker queue-first iniciado. provedor=microsoft_graph rate_limit=10/min meta_24h=9950 teto_24h=10000 poll=5s fila_min=14800 fila_target=15000
+Aug 21 11:07:28 shopvivaliz-ai python[237658]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 21 11:07:38 shopvivaliz-ai python[237658]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=9f2702ad-2510-4b57-9fcf-04f31a821a40 antes=98 adicionados=200 depois=298 target=15000
+Aug 21 11:07:38 shopvivaliz-ai python[237658]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=200; retomando consumo.
+Aug 21 11:18:53 shopvivaliz-ai python[237658]: INFO:mei_mg_email.worker:Lote 0 (campanha 9f2702ad-2510-4b57-9fcf-04f31a821a40) concluido: 100 submitted, 0 falhas
+=== WORKER JOURNAL 20M ===
+Aug 21 11:05:57 shopvivaliz-ai python[237257]: ERROR:mei_mg_email.queue_recovery:AUTOQUEUE_DEFERRED reason=QueryCanceled detail=canceling statement due to statement timeout
+Aug 21 11:07:22 shopvivaliz-ai systemd[1]: Stopping mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker...
+Aug 21 11:07:22 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Deactivated successfully.
+Aug 21 11:07:22 shopvivaliz-ai systemd[1]: Stopped mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker.
+Aug 21 11:07:22 shopvivaliz-ai systemd[1]: mei-mg-email-worker.service: Consumed 1.619s CPU time, 29.9M memory peak, 20.7M memory swap peak.
+Aug 21 11:07:22 shopvivaliz-ai systemd[1]: Starting mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker...
+Aug 21 11:07:24 shopvivaliz-ai python[237651]: {"campanhas": true, "email_suppressions": true, "email_validator": true, "envios": true, "runtime_sender_preflight": "ok"}
+Aug 21 11:07:25 shopvivaliz-ai systemd[1]: Started mei-mg-email-worker.service - MEI MG Email Microsoft Graph App-Only Worker.
+Aug 21 11:07:27 shopvivaliz-ai python[237658]: WARNING:mei_mg_email.email_provider:MicrosoftGraphEmailProvider APP-ONLY active sender=naoresponda@dev.shopvivaliz.com.br cert=/home/ubuntu/.shopvivaliz/m365/graph-auth.crt
+Aug 21 11:07:27 shopvivaliz-ai python[237658]: INFO:mei_mg_email.worker:Worker queue-first iniciado. provedor=microsoft_graph rate_limit=10/min meta_24h=9950 teto_24h=10000 poll=5s fila_min=14800 fila_target=15000
+Aug 21 11:07:28 shopvivaliz-ai python[237658]: WARNING:mei_mg_email.queue:AUTOQUEUE_SKIPPED another replenisher owns the lock
+Aug 21 11:07:38 shopvivaliz-ai python[237658]: WARNING:mei_mg_email.queue:AUTOQUEUE_REPOSTA campanha=9f2702ad-2510-4b57-9fcf-04f31a821a40 antes=98 adicionados=200 depois=298 target=15000
+Aug 21 11:07:38 shopvivaliz-ai python[237658]: WARNING:mei_mg_email.worker:AUTOQUEUE_ISOLATED added=200; retomando consumo.
+Aug 21 11:18:53 shopvivaliz-ai python[237658]: INFO:mei_mg_email.worker:Lote 0 (campanha 9f2702ad-2510-4b57-9fcf-04f31a821a40) concluido: 100 submitted, 0 falhas
+=== AUTOREPAIR STATUS ===
+○ mei-mg-email-autorepair.timer - Verify and auto-correct MEI email sending every 15 minutes
+     Loaded: loaded (/etc/systemd/system/mei-mg-email-autorepair.timer; enabled; preset: enabled)
+     Active: inactive (dead) since Fri 2026-08-21 09:08:57 -03; 2h 15min ago
+   Duration: 2h 2min 57.509s
+    Trigger: n/a
+   Triggers: ● mei-mg-email-autorepair.service
+
+Aug 21 07:06:00 shopvivaliz-ai systemd[1]: Started mei-mg-email-autorepair.timer - Verify and auto-correct MEI email sending every 15 minutes.
+Aug 21 09:08:57 shopvivaliz-ai systemd[1]: mei-mg-email-autorepair.timer: Deactivated successfully.
+Aug 21 09:08:57 shopvivaliz-ai systemd[1]: Stopped mei-mg-email-autorepair.timer - Verify and auto-correct MEI email sending every 15 minutes.
+
+× mei-mg-email-autorepair.service - MEI email 15-minute nonstop availability supervisor
+     Loaded: loaded (/etc/systemd/system/mei-mg-email-autorepair.service; static)
+     Active: failed (Result: timeout) since Fri 2026-08-21 08:56:25 -03; 2h 28min ago
+TriggeredBy: ○ mei-mg-email-autorepair.timer
+    Process: 214075 ExecStart=/home/ubuntu/mei-mg-email/.venv/bin/python /home/ubuntu/mei-mg-email/scripts/nonstop_supervisor_15m.py (code=killed, signal=TERM)
+   Main PID: 214075 (code=killed, signal=TERM)
+        CPU: 4.337s
+
+Aug 21 08:54:55 shopvivaliz-ai systemd[1]: Starting mei-mg-email-autorepair.service - MEI email 15-minute nonstop availability supervisor...
+Aug 21 08:56:24 shopvivaliz-ai systemd[1]: mei-mg-email-autorepair.service: start operation timed out. Terminating.
+Aug 21 08:56:25 shopvivaliz-ai systemd[1]: mei-mg-email-autorepair.service: Main process exited, code=killed, status=15/TERM
+Aug 21 08:56:25 shopvivaliz-ai systemd[1]: mei-mg-email-autorepair.service: Killing process 214472 (systemctl) with signal SIGKILL.
+Aug 21 08:56:25 shopvivaliz-ai systemd[1]: mei-mg-email-autorepair.service: Failed with result 'timeout'.
+Aug 21 08:56:25 shopvivaliz-ai systemd[1]: Failed to start mei-mg-email-autorepair.service - MEI email 15-minute nonstop availability supervisor.
+Aug 21 08:56:25 shopvivaliz-ai systemd[1]: mei-mg-email-autorepair.service: Consumed 4.337s CPU time.
+=== SUPERVISOR STATE ===
+{"actions": ["throughput_stall_empty_queue_detected", {"bounded_autoqueue_refill_added": 0}], "after": {"active_campaign": true, "last_sent_at": "2026-08-21T05:09:42.055928-03:00", "open_queue": 0, "sent_10m": 0, "sent_24h": 1066}, "before": {"active_campaign": true, "last_sent_at": "2026-08-21T05:09:42.055928-03:00", "open_queue": 0, "sent_10m": 0, "sent_24h": 1066}, "checked_at": 1787312403.6023722, "db_after": {"available": true, "detail": "ok"}, "db_before": {"available": true, "detail": "ok"}, "result": "degraded_empty_queue_with_eligible_candidates", "sender_block_sentinel": false, "strict_eligibility": {"available": true, "state": "ok"}, "worker_after": "active", "worker_before": "active"}
