@@ -368,6 +368,7 @@ function svs_normalize(array $p, string $source): array {
         'stock'            => $stock,
         'image_url'        => $primaryImage,
         'images'           => $images,
+        'images_count'     => count($images),
         'description'      => $description,
         'category'         => $category,
         'slug'             => $slug,
@@ -441,6 +442,7 @@ function svs_mirror_catalog(array $fetched, string $catalogPath): array {
     $existing = svs_existing_catalog_indexes($catalogPath);
     $mirrored = [];
     $seen = [];
+    $indexBySku = [];
     foreach ($fetched as $new) {
         if (!is_array($new)) continue;
         $key = svs_catalog_key($new);
@@ -448,6 +450,7 @@ function svs_mirror_catalog(array $fetched, string $catalogPath): array {
 
         $id = trim((string)($new['olist_product_id'] ?? ''));
         $sku = trim((string)($new['sku'] ?? ''));
+        $skuKey = strtoupper($sku);
         $old = [];
         if ($id !== '' && isset($existing['by_id'][$id])) {
             $old = $existing['by_id'][$id];
@@ -458,7 +461,7 @@ function svs_mirror_catalog(array $fetched, string $catalogPath): array {
         $merged = array_merge($old, $new);
 
         // Preservar enriquecimentos locais quando a API nao traz esses campos.
-        foreach (['slug', 'quality_score', 'quality_label', 'tags', 'images_count'] as $f) {
+        foreach (['slug', 'quality_score', 'quality_label', 'tags'] as $f) {
             if (isset($old[$f]) && ($new[$f] ?? '') === '') {
                 $merged[$f] = $old[$f];
             }
@@ -480,9 +483,23 @@ function svs_mirror_catalog(array $fetched, string $catalogPath): array {
             $merged['stock'] = (int)($old['stock'] ?? 0);
         }
 
+        if ($skuKey !== '' && isset($indexBySku[$skuKey])) {
+            $index = $indexBySku[$skuKey];
+            $current = $mirrored[$index] ?? [];
+            $currentId = trim((string)($current['olist_product_id'] ?? $current['id'] ?? ''));
+            $preferredId = trim((string)($existing['by_sku'][$skuKey]['olist_product_id'] ?? $existing['by_sku'][$skuKey]['id'] ?? ''));
+            if ($preferredId !== '' && $id === $preferredId && $currentId !== $id) {
+                $mirrored[$index] = $merged;
+                svs_log("SKU duplicado {$sku}: preferido ID {$id}; substituindo {$currentId}");
+            } else {
+                svs_log("SKU duplicado {$sku}: ignorando ID {$id}; mantendo {$currentId}");
+            }
+            continue;
+        }
         if (!isset($seen[$key])) {
             $seen[$key] = true;
             $mirrored[] = $merged;
+            if ($skuKey !== '') $indexBySku[$skuKey] = count($mirrored) - 1;
         }
     }
 
