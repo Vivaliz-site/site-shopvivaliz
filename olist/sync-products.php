@@ -313,6 +313,16 @@ function svs_normalize(array $p, string $source): array {
         'cost_price' => (float)($p['precos']['precoCusto'] ?? 0),
         'avg_cost_price' => (float)($p['precos']['precoCustoMedio'] ?? 0),
     ] : null;
+    if (is_array($prices)) {
+        $basePrice = (float)($prices['price'] ?? 0);
+        $promoPrice = (float)($prices['promotional_price'] ?? 0);
+        $effectivePrice = $promoPrice > 0 && ($basePrice <= 0 || $promoPrice < $basePrice)
+            ? $promoPrice
+            : $basePrice;
+        if ($effectivePrice > 0) {
+            $price = $effectivePrice;
+        }
+    }
     $stockDetail = is_array($p['estoque'] ?? null) ? [
         'controlled' => (bool)($p['estoque']['controlar'] ?? true),
         'made_to_order' => (bool)($p['estoque']['sobEncomenda'] ?? false),
@@ -365,6 +375,7 @@ function svs_normalize(array $p, string $source): array {
         'sku'              => $sku,
         'name'             => $name,
         'price'            => $price,
+        'promotional_price'=> is_array($prices) ? (float)($prices['promotional_price'] ?? 0) : 0.0,
         'stock'            => $stock,
         'image_url'        => $primaryImage,
         'images'           => $images,
