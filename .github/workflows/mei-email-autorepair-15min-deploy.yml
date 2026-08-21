@@ -81,6 +81,7 @@ jobs:
           grep -q "not like 'base_publica%%'" app/queue_manager.py
           grep -q "not like 'nao_verificado%%'" app/queue_manager.py
           grep -q "not like 'legacy_operator_verification_rejected%%'" app/queue_manager.py
+          grep -q "= 'receita_simples_opcao_mei'" app/queue_manager.py
           grep -q '^OnUnitActiveSec=15min$' deploy/systemd/mei-mg-email-autorepair.timer
           grep -q '^StartLimitIntervalSec=0$' deploy/systemd/mei-mg-email-worker.service
           grep -q '^Restart=always$' deploy/systemd/mei-mg-email-worker.service
@@ -92,6 +93,7 @@ jobs:
           grep -q 'user_explicit_authorization_2026-08-20' worker/safe_entrypoint.py
           grep -q '_disallowed_marketing_origin' worker/safe_entrypoint_v2.py
           grep -q 'mei_verificado_origem' worker/safe_entrypoint_v2.py
+          grep -q 'OFFICIAL_MEI_VERIFICATION_ORIGINS = frozenset({"receita_simples_opcao_mei"})' worker/safe_entrypoint_v2.py
           grep -q 'has_external_ledger' worker/safe_entrypoint.py
           grep -q 'already_external' worker/safe_entrypoint_v2.py
           grep -q 'base.worker.processar_lote = base._safe_processar_lote' worker/safe_entrypoint_v2.py
@@ -155,11 +157,13 @@ jobs:
           echo "WORKER_SAFE_ENTRYPOINT_V2=true"
           echo "AUTOQUEUE_TUPLE_LOCK_FIX=true"
           echo "AUTOQUEUE_PUBLIC_OPERATOR_PREFIX_GUARD=true"
+          echo "AUTOQUEUE_OFFICIAL_MEI_SOURCE_GUARD=true"
           echo "SYNTHESIZED_AUTH_GUARD=true"
           echo "PRESEND_FULL_CONTRACT_GUARD=true"
           echo "PRESEND_DICT_ROW_LEDGER_FIX=true"
           echo "PRESEND_LOT_PROGRESS_FIX=true"
           echo "PUBLIC_OPERATOR_PREFIX_PRESEND_GUARD=true"
+          echo "OFFICIAL_MEI_SOURCE_PRESEND_GUARD=true"
           echo "LEGACY_NUMERIC_BRANCH_MEI_GUARD=true"
           sudo systemctl show mei-mg-email-worker.service \
             -p ActiveState -p SubState -p MainPID -p ExecStart -p ExecStartPre \
@@ -205,3 +209,4 @@ jobs:
 # watchdog reassert nonstop sender after unsafe recovery workflow removal 2026-08-20T21:04-0300
 # watchdog deploy current sender main with DB restart-first recovery 2026-08-21T00:17-0300
 # deploy PR75+PR76 public/operator-prefix presend, autoqueue, and legacy numeric branch MEI safety guards 2026-08-21T04:42-0300
+# deploy PR77 official Receita/Simples MEI verification allowlist 2026-08-21T05:30-0300
