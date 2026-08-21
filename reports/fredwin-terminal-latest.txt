@@ -1,10 +1,5 @@
 FREDWIN_SUCCESS=true
 FREDWIN_HOST=LAPTOP-NIG4IFUU
-CHECK_BRT=2026-08-20T23:36:41-0300
-SENTINEL=absent
-SUPERVISOR_RC=1
-WORKER_AFTER=active
-ENABLED_AFTER=enabled
-{"actions": ["throughput_stall_empty_queue_detected", {"bounded_autoqueue_refill_added": 0}], "after": {"active_campaign": true, "last_sent_at": "2026-08-20T15:02:28.807150-03:00", "open_queue": 0, "sent_10m": 0, "sent_24h": 266}, "before": {"active_campaign": true, "last_sent_at": "2026-08-20T15:02:28.807150-03:00", "open_queue": 0, "sent_10m": 0, "sent_24h": 266}, "checked_at": 1787279803.4089267, "db_after": {"available": true, "detail": "ok"}, "db_before": {"available": true, "detail": "ok"}, "db_diagnostics": {"advisory_locks": 2, "lock_waiters": 0, "long_active": 2}, "result": "degraded_eligibility_query_error", "sender_block_sentinel": false, "strict_eligibility": {"error": "QueryCanceled: canceling statement due to statement timeout", "state": "query_error"}, "worker_after": "active", "worker_before": "active"}
-SSH_RC=0
+CHECK_BRT=2026-08-20T23:39:21-0300
+SSH_RC=2
 
