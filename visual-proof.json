@@ -1,0 +1,19 @@
+{
+  "validated": true,
+  "reviewer": "Storefront Browser Audit #395",
+  "timestamp": "2026-08-22T03:57:51.413533Z",
+  "artifacts": [
+    "artifacts/visual-proof/home-css-split.png"
+  ],
+  "evidence": {
+    "workflow_run": 32550049523,
+    "head_sha": "2639af92871f97179c60555c39123fdcea04df3c",
+    "base_url": "http://127.0.0.1:8090",
+    "route": "/",
+    "status": 200,
+    "horizontal_overflow_px": 0,
+    "console_errors": 0,
+    "network_errors": 0,
+    "screenshot_source": "test-results/storefront-audit/desktop-home.png"
+  }
+}

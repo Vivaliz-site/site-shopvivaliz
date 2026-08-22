@@ -39,6 +39,19 @@ function sv_home_css_bundle_manifest(): array
 }
 
 /**
+ * Divide o bundle da home em duas respostas HTTP sem alterar a ordem da
+ * cascata. A primeira parte concentra o core consolidado; a segunda mantém
+ * todas as camadas de override subsequentes na ordem original.
+ *
+ * @return array<int, array<int, array{path:string, optional:bool}>>
+ */
+function sv_home_css_bundle_parts(): array
+{
+    $manifest = sv_home_css_bundle_manifest();
+    return [array_slice($manifest, 0, 1), array_slice($manifest, 1)];
+}
+
+/**
  * Resolve o manifesto para caminhos absolutos existentes, na ordem definida,
  * pulando entradas opcionais ausentes. Usado tanto para calcular a versão
  * (hash) quanto para efetivamente concatenar o conteúdo.
@@ -47,10 +60,15 @@ function sv_home_css_bundle_manifest(): array
  *   ['__missing__' => 'css/x.css'] para obrigatórios ausentes (não deveria
  *   acontecer em produção, mas evita fatal error se acontecer)
  */
-function sv_resolve_home_css_bundle_files(string $projectRoot): array
+function sv_resolve_home_css_bundle_files(string $projectRoot, ?int $part = null): array
 {
+    $manifest = sv_home_css_bundle_manifest();
+    if ($part === 1 || $part === 2) {
+        $manifest = sv_home_css_bundle_parts()[$part - 1];
+    }
+
     $resolved = [];
-    foreach (sv_home_css_bundle_manifest() as $entry) {
+    foreach ($manifest as $entry) {
         $absolute = $projectRoot . '/' . $entry['path'];
         if (is_file($absolute) && is_readable($absolute)) {
             $resolved[] = $absolute;

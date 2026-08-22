@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-18T01:09:14.828Z",
+  "generated_at": "2026-08-22T03:46:09.203Z",
   "assets": {
     "/js/admin-automation.js": {
       "file": "/public/dist/js/admin-automation.ba2700ea3a.min.js",
@@ -162,9 +162,9 @@
       "source_bytes": 1459
     },
     "/js/shopvivaliz-google-events.js": {
-      "file": "/public/dist/js/shopvivaliz-google-events.ca9b288477.min.js",
-      "bytes": 11993,
-      "source_bytes": 14760
+      "file": "/public/dist/js/shopvivaliz-google-events.9b17f9509a.min.js",
+      "bytes": 12004,
+      "source_bytes": 14771
     },
     "/js/shopvivaliz-visual-v3.js": {
       "file": "/public/dist/js/shopvivaliz-visual-v3.98ab7f88b4.min.js",

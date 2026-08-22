@@ -10,6 +10,7 @@ declare(strict_types=1);
 // local CSVs or legacy snapshots as product registration sources.
 
 $root = dirname(__DIR__);
+require_once $root . '/includes/catalog-authoritative-stock-carry.php';
 $env_file = $root . '/.env';
 $token = '';
 
@@ -27,7 +28,6 @@ if (!$token) {
     error_log("[webhook-sync] Token não encontrado");
     exit(1);
 }
-
 
 function svow_fetch_product_detail(string $id, string $token): ?array
 {
@@ -87,7 +87,6 @@ function svow_collect_detail_images(array $detail): array
     }
     return array_slice($images, 0, 12);
 }
-
 
 function svow_detail_video_url(array $detail): string
 {
@@ -182,9 +181,7 @@ while (true) {
     // aqui: o campo estoque.quantidade da listagem em lote (GET /produtos) nao
     // e confiavel (fica zerado/desatualizado, especialmente em kits) -- a
     // fonte correta e GET /estoque/{id} (campo disponivel), buscada depois por
-    // olist/fetch-estoque-v3.php, que só preenche quando a chave ainda não
-    // existe (ver docs/TINY-ERP-API-V3.md, secao "GET /produtos/{id} vs GET
-    // /estoque/{id}"). Se setarmos aqui, o enriquecimento nunca roda.
+    // olist/fetch-estoque-v3.php.
     foreach ($data['itens'] as $item) {
         if ($item['situacao'] === 'A') {
             $hasImage = false;
@@ -200,9 +197,6 @@ while (true) {
                     if (!empty($item['seo'][$seoVideoField])) { $hasVideo = true; break; }
                 }
             }
-            // A listagem /produtos frequentemente omite anexos/imagens e video.
-            // Quando qualquer mídia do produto estiver ausente, busca /produtos/{id},
-            // que é onde o ERP/Tiny expõe as mídias reais do cadastro.
             if (!$hasImage || !$hasVideo) {
                 $item = svow_enrich_item_with_detail($item, $token);
                 usleep(1100000);
@@ -224,13 +218,29 @@ while (true) {
 // ============================================================
 
 if ($all_products === []) {
-    // Nao sobrescreve um cache bom anterior com uma lista vazia quando a
-    // busca falhou de verdade (ex: token/rede) -- so grava se a API
-    // realmente respondeu 0 produtos ativos (situacao improvavel, mas nao
-    // impossivel, entao nao trata como erro fatal).
     error_log("[webhook-sync] Nenhum produto ativo retornado; cache anterior preservado");
     exit(1);
 }
+
+$output_file = $root . '/storage/products-cache-ativos.json';
+$previousItems = [];
+if (is_file($output_file)) {
+    $previousPayload = json_decode((string)file_get_contents($output_file), true);
+    if (is_array($previousPayload) && is_array($previousPayload['itens'] ?? null)) {
+        $previousItems = $previousPayload['itens'];
+    }
+}
+
+// Evita a janela de indisponibilidade entre a listagem ativa e o refresh de
+// GET /estoque/{id}: carrega apenas estoque previamente validado pelo endpoint
+// autoritativo, identificado por estoque_sync_at. Produtos novos ficam sem
+// estoque até o refresh seguinte, e o refresh sempre sobrescreve este carry.
+$stockIndex = svcs_authoritative_stock_index($previousItems);
+foreach ($all_products as &$product) {
+    if (!is_array($product)) continue;
+    $product = svcs_carry_forward_authoritative_stock($product, $stockIndex);
+}
+unset($product);
 
 $output = [
     'total' => count($all_products),
@@ -238,9 +248,7 @@ $output = [
     'itens' => $all_products
 ];
 
-$output_file = $root . '/storage/products-cache-ativos.json';
 @mkdir(dirname($output_file), 0755, true);
-
 file_put_contents($output_file, json_encode($output, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 
 error_log("[webhook-sync] Sincronizados " . count($all_products) . " produtos ativos");

@@ -570,19 +570,18 @@ $svNavCurrent = '';
     <title>Vivaliz | Rodízios, Ferragens e Utilidades Domésticas</title>
 
     <?php
-        // Bundle consolidado (2026-08-05): substitui 9 <link>/arquivos CSS
-        // separados (core, premium, inline-to-classes, webp-optimization,
-        // zoom-responsive, layout-polish-v1, home-mobile-compact,
-        // home-mobile-final, visual-polish-v4) por UMA única resposta HTTP,
-        // na mesma ordem de antes. Ver includes/asset-bundle-manifest.php e
-        // css/home-bundle.php.
+        // Bundle consolidado dividido em duas respostas HTTP ordenadas.
+        // Isso preserva exatamente a cascata original e mantém cada recurso
+        // CSS abaixo de 150 KB para crawlers e ferramentas de auditoria.
+        // Ver includes/asset-bundle-manifest.php e css/home-bundle.php.
         // Não inclui visual-polish-v5/v6/hotfix/audit/accessibility/cls —
         // esses continuam individuais em includes/load-custom-css.php
         // porque carregam DEPOIS do CSS customizado do admin de propósito.
         require_once __DIR__ . '/includes/asset-bundle-manifest.php';
         $svHomeBundleVersion = sv_home_css_bundle_version(__DIR__);
     ?>
-    <link rel="stylesheet" href="/css/home-bundle.php?v=<?= htmlspecialchars($svHomeBundleVersion, ENT_QUOTES, 'UTF-8') ?>">
+    <link rel="stylesheet" href="/css/home-bundle.php?part=1&amp;v=<?= htmlspecialchars($svHomeBundleVersion, ENT_QUOTES, 'UTF-8') ?>">
+    <link rel="stylesheet" href="/css/home-bundle.php?part=2&amp;v=<?= htmlspecialchars($svHomeBundleVersion, ENT_QUOTES, 'UTF-8') ?>">
     <style>
       .hero-cta .btn,
       .hero-cta .btn:visited {
