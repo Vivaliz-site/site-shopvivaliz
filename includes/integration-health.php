@@ -177,11 +177,8 @@ function svih_olist_candidates(array $stored): array
     // nome valido — se as credenciais reais estivessem gravadas sob um
     // nome (ex: CLIENT_ID_API_OLIST) e o refresh_token persistido tivesse
     // credential_family diferente (ex: 'tiny'), NENHUMA familia batia com
-    // as 3 pecas completas e o painel reportava "credenciais incompletas
-    // ou placeholders" mesmo com tudo configurado. Fallback único abaixo
-    // restaura o comportamento anterior para client_id/secret, mantendo a
-    // separação por família só para refresh/access token (que sim podem
-    // ser específicos por integração).
+    // Client id/secret podem ter nomes historicos de OAuth, mas access/refresh
+    // token de runtime sempre vem do fluxo OAuth v3/arquivo rotativo.
     $sharedClientId = svih_env('OLIST_CLIENT_ID', 'TINY_CLIENT_ID', 'CLIENT_ID_API_OLIST');
     $sharedClientSecret = svih_env('OLIST_CLIENT_SECRET', 'TINY_CLIENT_SECRET', 'CLIENT_SECRET_OLIST');
 
@@ -197,12 +194,6 @@ function svih_olist_candidates(array $stored): array
             'client_secret' => svih_env('TINY_CLIENT_SECRET') ?: $sharedClientSecret,
             'refresh_token' => svih_env('TINY_REFRESH_TOKEN'),
             'access_token' => svih_env('TINY_ACCESS_TOKEN'),
-        ],
-        'legacy' => [
-            'client_id' => svih_env('CLIENT_ID_API_OLIST') ?: $sharedClientId,
-            'client_secret' => svih_env('CLIENT_SECRET_OLIST') ?: $sharedClientSecret,
-            'refresh_token' => svih_env('OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN'),
-            'access_token' => svih_env('TOKEN_API_OLIST'),
         ],
     ];
 
@@ -245,7 +236,6 @@ function svih_olist(bool $fix): array
     (string)($stored['TINY_ACCESS_TOKEN'] ?? ''),
     svih_env('OLIST_ACCESS_TOKEN'),
     svih_env('TINY_ACCESS_TOKEN'),
-    svih_env('TOKEN_API_OLIST'),
 ] as $token) {
         $token = svih_strip_bearer((string)$token);
         if ($token !== '' && !in_array($token, $accessCandidates, true)) {

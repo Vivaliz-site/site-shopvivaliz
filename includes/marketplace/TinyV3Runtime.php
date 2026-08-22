@@ -60,7 +60,7 @@ function sv_market_tiny_access_token(): string
             return $value;
         }
     }
-    foreach (['OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN', 'TOKEN_API_OLIST'] as $key) {
+    foreach (['OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN'] as $key) {
         $value = sv_market_tiny_env($key);
         if ($value !== '') {
             return $value;

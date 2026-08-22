@@ -27,10 +27,10 @@ function svga4_order_browser_identity(array $order): array
 
     // Measurement Protocol session_id must be numeric. Normalize historical cookie values.
     if ($sessionId !== '' && preg_match('/^\d+$/', $sessionId) !== 1) {
-        if (preg_match('/^GS\d+(?:\.\d+)?\.(\d+)/', $sessionId, $legacy) === 1) {
-            $sessionId = (string)$legacy[1];
-        } elseif (preg_match('/(?:^|\$)s(\d+)(?:\$|$)/', $sessionId, $modern) === 1) {
+        if (preg_match('/(?:^|[.\$])s(\d+)(?:\$|$)/', $sessionId, $modern) === 1) {
             $sessionId = (string)$modern[1];
+        } elseif (preg_match('/^GS\d+(?:\.\d+)?\.(\d+)(?:\.|$)/', $sessionId, $legacy) === 1) {
+            $sessionId = (string)$legacy[1];
         } else {
             $sessionId = '';
         }

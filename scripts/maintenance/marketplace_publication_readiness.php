@@ -129,7 +129,7 @@ $channelChecks = [
             ['OLIST_CLIENT_ID', 'TINY_CLIENT_ID', 'CLIENT_ID_API_OLIST'],
             ['OLIST_CLIENT_SECRET', 'TINY_CLIENT_SECRET', 'CLIENT_SECRET_OLIST'],
             ['OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN'],
-            ['OLIST_API_KEY', 'TOKEN_API_OLIST'],
+            ['OLIST_API_KEY', 'OLIST_ACCESS_TOKEN'],
         ],
         'token' => null,
     ],

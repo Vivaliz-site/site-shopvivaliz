@@ -174,7 +174,8 @@ function svcr_is_excluded_product(array $item): bool
 {
     $sku = trim((string)($item['sku'] ?? $item['codigo'] ?? $item['code'] ?? ''));
     if ($sku === 'Parafuso5x16') return true;
-    if (svcr_lower(trim((string)($item['name'] ?? $item['nome'] ?? $item['descricao'] ?? ''))) === 'stretch manual 500x25 c/3 kg') return true;
+    $rawNameForExclusion = svcr_lower(trim((string)($item['name'] ?? $item['nome'] ?? $item['descricao'] ?? '')));
+    if ($rawNameForExclusion === 'stretch manual 500x25 c/3 kg' || str_starts_with($rawNameForExclusion, 'stretch manual 500x25 c/3 kg ')) return true;
 
     foreach (['exclude_from_site', 'exclude_from_catalog', 'exclude_from_feeds', 'non_sellable', 'raw_material', 'materia_prima', 'materiaPrima'] as $field) {
         $value = $item[$field] ?? null;
@@ -240,9 +241,9 @@ function svcr_filter_storefront_rows(array $rows): array
 
 function svcr_fallback_products(string $root): array
 {
-    $fallback = $root . '/api/catalog/fallback-products.json';
-    $rows = is_file($fallback) ? json_decode((string)file_get_contents($fallback), true) : [];
-    return is_array($rows) ? svcr_filter_storefront_rows($rows) : [];
+    // ERP-only cadastro rule: legacy fallback snapshots cannot publish or
+    // enrich product registrations. The function remains for compatibility.
+    return [];
 }
 
 function svcr_has_available_product(array $products): bool
@@ -280,48 +281,14 @@ function svcr_content_key(mixed $value): string
  */
 function svcr_content_index(string $root): array
 {
-    static $cachedIndex = null;
-    if ($cachedIndex !== null) return $cachedIndex;
-
-    $cachedIndex = [];
-    foreach ([$root . '/storage/products-cache.json', $root . '/api/catalog/fallback-products.json'] as $path) {
-        if (!is_file($path)) continue;
-        $payload = json_decode((string)file_get_contents($path), true);
-        if (!is_array($payload)) continue;
-
-        $rows = $payload;
-        foreach (['itens', 'items', 'produtos', 'products', 'data'] as $key) {
-            if (isset($payload[$key]) && is_array($payload[$key])) {
-                $rows = $payload[$key];
-                break;
-            }
-        }
-
-        foreach ($rows as $row) {
-            if (!is_array($row)) continue;
-            foreach ([$row['sku'] ?? '', $row['id'] ?? '', $row['olist_product_id'] ?? ''] as $identity) {
-                $key = svcr_content_key($identity);
-                if ($key !== '' && !isset($cachedIndex[$key])) {
-                    $cachedIndex[$key] = $row;
-                }
-            }
-        }
-        // Os dois arquivos carregam o mesmo snapshot editorial em instalacoes
-        // normais. Evita decodificar ~600 KB duas vezes a cada request.
-        if ($cachedIndex !== []) break;
-    }
-
-    return $cachedIndex;
+    // ERP-only cadastro rule: do not read historical product snapshots or
+    // legacy fallback snapshots to complete product name, category,
+    // description, media or SEO. These files are historical snapshots.
+    return [];
 }
 
 function svcr_content_for_item(array $item, array $index): array
 {
-    foreach ([$item['sku'] ?? '', $item['codigo'] ?? '', $item['code'] ?? '', $item['id'] ?? '', $item['olist_product_id'] ?? ''] as $identity) {
-        $key = svcr_content_key($identity);
-        if ($key !== '' && isset($index[$key]) && is_array($index[$key])) {
-            return $index[$key];
-        }
-    }
     return [];
 }
 
@@ -413,12 +380,9 @@ function svcr_products(): array
         $content = svcr_content_for_item($item, $contentIndex);
 
         $imagesList = svcr_collect_image_urls($item);
-        foreach (svcr_collect_image_urls($content) as $contentImage) {
-            if (!in_array($contentImage, $imagesList, true)) $imagesList[] = $contentImage;
-        }
         $imagesList = array_slice($imagesList, 0, 12);
         $image = trim((string)($item['imagem_principal_url'] ?? $item['primary_image_url'] ?? $item['image_url'] ?? $item['imagem'] ?? ''));
-        if ($image === '') $image = svcr_first_text([$content['image_url'] ?? '', $content['imagem_principal_url'] ?? '', $imagesList[0] ?? '']);
+        if ($image === '') $image = svcr_first_text([$imagesList[0] ?? '']);
 
         $stockInfo = is_array($item['estoque'] ?? null) ? $item['estoque'] : (is_array($item['stock_detail'] ?? null) ? $item['stock_detail'] : []);
         $category = is_array($item['categoria'] ?? null) ? $item['categoria'] : [];
@@ -481,7 +445,7 @@ function svcr_products(): array
             'width' => svcr_first_positive_number([$dimensions['largura'] ?? null, $dimensions['width'] ?? null, $item['width'] ?? null, $contentDimensions['width'] ?? null]),
             'height' => svcr_first_positive_number([$dimensions['altura'] ?? null, $dimensions['height'] ?? null, $item['height'] ?? null, $contentDimensions['height'] ?? null]),
             'length' => svcr_first_positive_number([$dimensions['comprimento'] ?? null, $dimensions['length'] ?? null, $item['length'] ?? null, $contentDimensions['length'] ?? null]),
-            'video_url' => svcr_first_text([$item['video_url'] ?? '', $content['video_url'] ?? '']),
+            'video_url' => svcr_first_text([$item['video_url'] ?? '', $item['linkVideo'] ?? '', is_array($item['seo'] ?? null) ? ($item['seo']['linkVideo'] ?? '') : '', is_array($item['seo'] ?? null) ? ($item['seo']['urlVideo'] ?? '') : '', $content['video_url'] ?? '']),
             'status' => 'active',
         ];
     }
@@ -562,71 +526,7 @@ function sv_home_catalog_source_rows(): array
     }
 
     $runtime = svcr_products();
-    $csvPath = dirname(__DIR__) . '/uploads/olist_imagens_site_mapeamento.csv';
 
-    // O runtime de catalogo e autoritativo para preco/estoque, mas nem sempre
-    // carrega as URLs de imagem. Enriquece os produtos ativos pelo SKU usando
-    // o mapeamento persistente de imagens, sem substituir dados comerciais.
-    if ($runtime !== [] && is_file($csvPath) && is_readable($csvPath)) {
-        $imageMap = [];
-        $handle = fopen($csvPath, 'r');
-        if ($handle) {
-            $header = fgetcsv($handle);
-            if (is_array($header)) {
-                while (($line = fgetcsv($handle)) !== false) {
-                    if (!is_array($line) || $line === []) continue;
-                    $assoc = [];
-                    foreach ($header as $i => $column) {
-                        $key = trim((string)$column);
-                        if ($key !== '') $assoc[$key] = $line[$i] ?? '';
-                    }
-                    $sku = strtoupper(trim((string)($assoc['sku'] ?? '')));
-                    if ($sku === '') continue;
-                    $url = trim((string)($assoc['site_url'] ?? ''));
-                    if ($url === '') $url = trim((string)($assoc['original_url_olist'] ?? ''));
-                    if ($url === '') continue;
-                    if (!isset($imageMap[$sku])) $imageMap[$sku] = ['primary' => '', 'images' => []];
-                    if (!in_array($url, $imageMap[$sku]['images'], true)) $imageMap[$sku]['images'][] = $url;
-                    $isPrimary = strtolower(trim((string)($assoc['is_primary'] ?? '')));
-                    if ($imageMap[$sku]['primary'] === '' && in_array($isPrimary, ['1','true','yes','sim'], true)) {
-                        $imageMap[$sku]['primary'] = $url;
-                    }
-                }
-            }
-            fclose($handle);
-        }
-
-        foreach ($runtime as &$row) {
-            if (!is_array($row)) continue;
-            $sku = strtoupper(trim((string)($row['sku'] ?? '')));
-            if ($sku === '' || !isset($imageMap[$sku])) continue;
-            $mapped = $imageMap[$sku];
-            $current = trim((string)($row['image_url'] ?? ''));
-            $isWeak = $current === '' || preg_match('/placeholder|default|no[-_ ]?image|sem[-_ ]?imagem/i', $current);
-            if ($isWeak) {
-                $row['image_url'] = $mapped['primary'] !== '' ? $mapped['primary'] : ($mapped['images'][0] ?? '');
-            }
-            $existing = is_array($row['images'] ?? null) ? $row['images'] : [];
-            $row['images'] = array_values(array_unique(array_filter(array_merge($existing, $mapped['images']))));
-        }
-        unset($row);
-
-        $localCache = $runtime;
-        if ($apcu) {
-            apcu_store($apcuKey, $localCache, 300);
-        } else {
-            $encoded = json_encode($localCache, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            if (is_string($encoded)) {
-                $tmpCache = $fileCache . '.' . getmypid() . '.tmp';
-                if (@file_put_contents($tmpCache, $encoded, LOCK_EX) !== false) {
-                    @rename($tmpCache, $fileCache);
-                } else {
-                    @unlink($tmpCache);
-                }
-            }
-        }
-        return $localCache;
-    }
 
     if ($runtime !== []) {
         $localCache = $runtime;

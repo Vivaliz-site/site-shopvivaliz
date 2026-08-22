@@ -152,71 +152,8 @@ function sv_home_catalog_source_rows(): array
     }
 
     $runtime = svcr_products();
-    $csvPath = __DIR__ . '/uploads/olist_imagens_site_mapeamento.csv';
+    // ERP/Tiny API v3 is the only product registration and media source.
 
-    // O runtime de catalogo e autoritativo para preco/estoque, mas nem sempre
-    // carrega as URLs de imagem. Enriquece os produtos ativos pelo SKU usando
-    // o mapeamento persistente de imagens, sem substituir dados comerciais.
-    if ($runtime !== [] && is_file($csvPath) && is_readable($csvPath)) {
-        $imageMap = [];
-        $handle = fopen($csvPath, 'r');
-        if ($handle) {
-            $header = fgetcsv($handle);
-            if (is_array($header)) {
-                while (($line = fgetcsv($handle)) !== false) {
-                    if (!is_array($line) || $line === []) continue;
-                    $assoc = [];
-                    foreach ($header as $i => $column) {
-                        $key = trim((string)$column);
-                        if ($key !== '') $assoc[$key] = $line[$i] ?? '';
-                    }
-                    $sku = strtoupper(trim((string)($assoc['sku'] ?? '')));
-                    if ($sku === '') continue;
-                    $url = trim((string)($assoc['site_url'] ?? ''));
-                    if ($url === '') $url = trim((string)($assoc['original_url_olist'] ?? ''));
-                    if ($url === '') continue;
-                    if (!isset($imageMap[$sku])) $imageMap[$sku] = ['primary' => '', 'images' => []];
-                    if (!in_array($url, $imageMap[$sku]['images'], true)) $imageMap[$sku]['images'][] = $url;
-                    $isPrimary = strtolower(trim((string)($assoc['is_primary'] ?? '')));
-                    if ($imageMap[$sku]['primary'] === '' && in_array($isPrimary, ['1','true','yes','sim'], true)) {
-                        $imageMap[$sku]['primary'] = $url;
-                    }
-                }
-            }
-            fclose($handle);
-        }
-
-        foreach ($runtime as &$row) {
-            if (!is_array($row)) continue;
-            $sku = strtoupper(trim((string)($row['sku'] ?? '')));
-            if ($sku === '' || !isset($imageMap[$sku])) continue;
-            $mapped = $imageMap[$sku];
-            $current = trim((string)($row['image_url'] ?? ''));
-            $isWeak = $current === '' || preg_match('/placeholder|default|no[-_ ]?image|sem[-_ ]?imagem/i', $current);
-            if ($isWeak) {
-                $row['image_url'] = $mapped['primary'] !== '' ? $mapped['primary'] : ($mapped['images'][0] ?? '');
-            }
-            $existing = is_array($row['images'] ?? null) ? $row['images'] : [];
-            $row['images'] = array_values(array_unique(array_filter(array_merge($existing, $mapped['images']))));
-        }
-        unset($row);
-        
-        $localCache = $runtime;
-        if ($apcu) {
-            apcu_store($apcuKey, $localCache, 300);
-        } else {
-            $encoded = json_encode($localCache, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            if (is_string($encoded)) {
-                $tmpCache = $fileCache . '.' . getmypid() . '.tmp';
-                if (@file_put_contents($tmpCache, $encoded, LOCK_EX) !== false) {
-                    @rename($tmpCache, $fileCache);
-                } else {
-                    @unlink($tmpCache);
-                }
-            }
-        }
-        return $localCache;
-    }
 
     if ($runtime !== []) {
         $localCache = $runtime;
@@ -618,12 +555,6 @@ $svNavCurrent = '';
     <meta property="og:site_name" content="ShopVivaliz">
     <meta property="og:image:alt" content="ShopVivaliz - Loja online">
     <meta property="og:locale" content="pt_BR">
-    <!-- Rodada 4 (2026-08-19): preconnect/dns-prefetch para s3.amazonaws.com
-         removido -- confirmado ao vivo que nenhum <img>/<script>/<link> ou
-         URL do JSON-LD da home aponta para esse host (as imagens vem de
-         /uploads/olist/... no proprio dominio). O navegador abria DNS+TCP+TLS
-         pra um host nunca usado, competindo por conexao com o preconnect
-         legitimo do fonts.gstatic.com. Ver R4-7 no relatorio da Rodada 4. -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Vivaliz | Rodízios, Ferragens e Utilidades Domésticas">
     <meta name="twitter:description" content="Rodízios, ferragens, ferramentas e utilidades com preço e estoque atualizados e frete calculado por CEP.">
@@ -639,19 +570,18 @@ $svNavCurrent = '';
     <title>Vivaliz | Rodízios, Ferragens e Utilidades Domésticas</title>
 
     <?php
-        // Bundle consolidado (2026-08-05): substitui 9 <link>/arquivos CSS
-        // separados (core, premium, inline-to-classes, webp-optimization,
-        // zoom-responsive, layout-polish-v1, home-mobile-compact,
-        // home-mobile-final, visual-polish-v4) por UMA única resposta HTTP,
-        // na mesma ordem de antes. Ver includes/asset-bundle-manifest.php e
-        // css/home-bundle.php.
+        // Bundle consolidado dividido em duas respostas HTTP ordenadas.
+        // Isso preserva exatamente a cascata original e mantém cada recurso
+        // CSS abaixo de 150 KB para crawlers e ferramentas de auditoria.
+        // Ver includes/asset-bundle-manifest.php e css/home-bundle.php.
         // Não inclui visual-polish-v5/v6/hotfix/audit/accessibility/cls —
         // esses continuam individuais em includes/load-custom-css.php
         // porque carregam DEPOIS do CSS customizado do admin de propósito.
         require_once __DIR__ . '/includes/asset-bundle-manifest.php';
         $svHomeBundleVersion = sv_home_css_bundle_version(__DIR__);
     ?>
-    <link rel="stylesheet" href="/css/home-bundle.php?v=<?= htmlspecialchars($svHomeBundleVersion, ENT_QUOTES, 'UTF-8') ?>">
+    <link rel="stylesheet" href="/css/home-bundle.php?part=1&amp;v=<?= htmlspecialchars($svHomeBundleVersion, ENT_QUOTES, 'UTF-8') ?>">
+    <link rel="stylesheet" href="/css/home-bundle.php?part=2&amp;v=<?= htmlspecialchars($svHomeBundleVersion, ENT_QUOTES, 'UTF-8') ?>">
     <style>
       .hero-cta .btn,
       .hero-cta .btn:visited {

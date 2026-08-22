@@ -112,7 +112,7 @@ $htmlBody = <<<HTML
             <h3>💳 Próximos Passos</h3>
             <ol>
                 <li>Confirme o pagamento via Mercado Pago</li>
-                <li>Nossa equipe comercial fará contato para confirmar frete</li>
+                <li>O frete informado no checkout foi registrado e será acompanhado junto ao pedido</li>
                 <li>Você receberá atualizações sobre o status do seu pedido</li>
             </ol>
 
@@ -149,7 +149,7 @@ Total: R$ " . number_format((float)$total, 2, ',', '.') . "
 
 Próximos passos:
 1. Confirme o pagamento via Mercado Pago
-2. Nossa equipe comercial fará contato para confirmar frete
+2. O frete informado no checkout foi registrado no pedido
 3. Você receberá atualizações sobre o status do seu pedido
 
 Obrigado por comprar na ShopVivaliz!

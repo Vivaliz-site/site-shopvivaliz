@@ -8,9 +8,9 @@ function sv_market_catalog_endpoint_registry(): array
     return [
         'site' => [
             'label' => 'ShopVivaliz',
-            'text' => ['UPDATE products', 'UPDATE product_channel_content', 'UPDATE storage/products-cache-ativos.json'],
-            'images' => ['INSERT/UPDATE product_images', 'UPDATE products.image_url', 'UPDATE storefront cache'],
-            'readback' => ['SELECT products', 'SELECT product_channel_content', 'read-back do cache JSON'],
+            'text' => ['PUT /public-api/v3/produtos/{id}', 'GET /public-api/v3/produtos/{id} read-back', 'ERP v3 sync -> site'],
+            'images' => ['proposta de imagem -> endpoint oficial ERP v3 validado -> GET /public-api/v3/produtos/{id} read-back -> sync site; sem escrita local/manual'],
+            'readback' => ['GET /public-api/v3/produtos/{id}', 'ERP v3 sync runtime catalog'],
         ],
         'ml' => [
             'label' => 'Mercado Livre',
@@ -39,8 +39,8 @@ function sv_market_catalog_endpoint_registry(): array
         'erp' => [
             'label' => 'Olist / Tiny ERP',
             'text' => ['PUT /public-api/v3/produtos/{id}'],
-            'images' => ['POST /api2/produto.alterar.php (imagens_externas)'],
-            'readback' => ['GET /public-api/v3/produtos/{id}', 'POST /api2/produtos.pesquisa.php', 'POST /api2/produto.obter.php'],
+            'images' => ['GET /public-api/v3/produtos/{id} anexos/imagens; escrita somente por endpoint ERP v3 oficial habilitado'],
+            'readback' => ['GET /public-api/v3/produtos/{id}', 'GET /public-api/v3/produtos?pesquisa={sku}&situacao=A'],
         ],
     ];
 }
