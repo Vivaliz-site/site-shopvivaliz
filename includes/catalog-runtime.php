@@ -174,7 +174,8 @@ function svcr_is_excluded_product(array $item): bool
 {
     $sku = trim((string)($item['sku'] ?? $item['codigo'] ?? $item['code'] ?? ''));
     if ($sku === 'Parafuso5x16') return true;
-    if (svcr_lower(trim((string)($item['name'] ?? $item['nome'] ?? $item['descricao'] ?? ''))) === 'stretch manual 500x25 c/3 kg') return true;
+    $rawNameForExclusion = svcr_lower(trim((string)($item['name'] ?? $item['nome'] ?? $item['descricao'] ?? '')));
+    if ($rawNameForExclusion === 'stretch manual 500x25 c/3 kg' || str_starts_with($rawNameForExclusion, 'stretch manual 500x25 c/3 kg ')) return true;
 
     foreach (['exclude_from_site', 'exclude_from_catalog', 'exclude_from_feeds', 'non_sellable', 'raw_material', 'materia_prima', 'materiaPrima'] as $field) {
         $value = $item[$field] ?? null;
