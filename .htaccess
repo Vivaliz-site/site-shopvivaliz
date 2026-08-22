@@ -347,6 +347,8 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^blog/([a-z0-9][a-z0-9-]*)/?$ blog/artigo.php?slug=$1 [L,QSA]
     RewriteRule ^google-ads-api-app/?$ google-ads-api-app.php [L]
     RewriteRule ^feed-google-merchant\.xml$ google-merchant-feed.php [L]
+    RewriteRule ^google-merchant\.xml$ google-merchant-feed.php [L]
+    RewriteRule ^google-shopping\.xml$ google-shopping-feed.php [L]
     RewriteRule ^termos/?$ termos.php [L]
     RewriteRule ^p/termos/?$ termos.php [L]
     RewriteRule ^p/politica-privacidade/?$ politica-privacidade/index.php [L]
