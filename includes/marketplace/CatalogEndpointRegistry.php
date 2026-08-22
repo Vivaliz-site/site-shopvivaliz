@@ -9,7 +9,7 @@ function sv_market_catalog_endpoint_registry(): array
         'site' => [
             'label' => 'ShopVivaliz',
             'text' => ['PUT /public-api/v3/produtos/{id}', 'GET /public-api/v3/produtos/{id} read-back', 'ERP v3 sync -> site'],
-            'images' => ['INSERT/UPDATE product_images', 'UPDATE products.image_url', 'UPDATE storefront cache'],
+            'images' => ['proposta de imagem -> endpoint oficial ERP v3 validado -> GET /public-api/v3/produtos/{id} read-back -> sync site; sem escrita local/manual'],
             'readback' => ['GET /public-api/v3/produtos/{id}', 'ERP v3 sync runtime catalog'],
         ],
         'ml' => [
