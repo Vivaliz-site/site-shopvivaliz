@@ -30,7 +30,7 @@ jobs:
           set -e
           BASE="${{ github.event.pull_request.base.sha }}"
           HEAD="${{ github.event.pull_request.head.sha }}"
-          CHANGED=$(git diff --name-only "$BASE" "$HEAD" || true)
+          CHANGED=$(git diff --name-only "$BASE" "$HEAD")
 
           RISK_PATTERN='includes/tiny-order-push.php|daemon-sync-products.py|api/olist/|api/webhook-mercadopago.php|api/melhorenvio/|includes/mercadopago-gateway.php'
 
