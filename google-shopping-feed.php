@@ -11,7 +11,7 @@ header('Content-Type: application/xml; charset=utf-8');
 header('Cache-Control: public, max-age=3600');
 
 require_once __DIR__ . '/includes/catalog-runtime.php';
-require_once __DIR__ . '/includes/new-catalog-image-source.php';
+require_once __DIR__ . '/includes/catalog-image-enrich.php';
 require_once __DIR__ . '/includes/site-settings.php';
 require_once __DIR__ . '/includes/google-shopping-feed-utils.php';
 
@@ -22,7 +22,7 @@ $baseUrl = 'https://shopvivaliz.com.br';
 // imagem valida e era descartado pelo filtro de imagem mais abaixo, fazendo
 // o feed publicar zero (ou quase zero) produtos no Google Shopping. Ver R5-5
 // no relatorio da Rodada 5.
-$products = svncis_enrich_direct_olist_images(svcr_products(), __DIR__);
+$products = svcie_enrich_images(svcr_products());
 $identifierMap = svgf_catalog_identifier_map(__DIR__);
 $freeShipping = sv_free_shipping_config();
 $hasUnconditionalFreeShipping = ($freeShipping['enabled'] ?? false)

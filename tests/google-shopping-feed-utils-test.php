@@ -61,4 +61,10 @@ svgf_test_assert(($map['TEST-SKU']['mpn'] ?? '') === 'MPN-REAL-01', 'Real manufa
 
 svgf_test_assert(svgf_xml('A&B <C>') === 'A&amp;B &lt;C&gt;', 'XML escaping should be safe.');
 
+
+$erpTinyImage = svgf_feed_absolute_url('https://shopvivaliz.com.br', 'https://s3.amazonaws.com/tiny-anexos-us/erp/teste.jpg');
+svgf_test_assert($erpTinyImage === 'https://s3.amazonaws.com/tiny-anexos-us/erp/teste.jpg', 'ERP/Tiny S3 image host must be allowed for Merchant images.');
+$unsafeS3 = svgf_feed_absolute_url('https://shopvivaliz.com.br', 'https://s3.amazonaws.com/other-bucket/teste.jpg');
+svgf_test_assert($unsafeS3 === '', 'Unrelated S3 buckets must remain blocked.');
+
 fwrite(STDOUT, "PASS: Google Shopping feed utility tests.\n");

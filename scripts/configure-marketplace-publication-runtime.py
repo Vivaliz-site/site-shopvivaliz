@@ -20,7 +20,7 @@ KEYS = (
     "TIKTOK_APP_KEY", "TIKTOK_APP_SECRET", "TIKTOK_ACCESS_TOKEN", "TIKTOK_REFRESH_TOKEN", "TIKTOK_SHOP_CIPHER", "TIKTOK_SHOP_ID",
     "AMAZON_LWA_CLIENT_ID", "AMAZON_LWA_CLIENT_SECRET", "AMAZON_LWA_REFRESH_TOKEN",
     "AMAZON_SELLER_ID", "AMAZON_ACCOUNT_ID", "AMAZON_MARKETPLACE_ID", "AMAZON_SP_API_ENDPOINT", "AMAZON_SP_API_REGION",
-    "OLIST_API_KEY", "TOKEN_API_OLIST",
+    "OLIST_API_KEY", "OLIST_ACCESS_TOKEN",
 )
 
 PLACEHOLDER_MARKERS = (
@@ -51,7 +51,7 @@ def group_status(values: dict[str, str]) -> dict[str, bool]:
         "amazon": all(values.get(key) for key in (
             "AMAZON_LWA_CLIENT_ID", "AMAZON_LWA_CLIENT_SECRET", "AMAZON_LWA_REFRESH_TOKEN", "AMAZON_MARKETPLACE_ID"
         )) and bool(values.get("AMAZON_SELLER_ID") or values.get("AMAZON_ACCOUNT_ID")),
-        "tiny_images": bool(values.get("OLIST_API_KEY") or values.get("TOKEN_API_OLIST")),
+        "tiny_images": bool(values.get("OLIST_API_KEY") or values.get("OLIST_ACCESS_TOKEN")),
     }
 
 

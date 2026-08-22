@@ -106,10 +106,10 @@ def token_from_env_file(env_file: Path) -> str | None:
             line = line[7:].strip()
         key, value = line.split("=", 1)
         key = key.strip()
-        if key not in {"OLIST_ACCESS_TOKEN", "TINY_ACCESS_TOKEN", "TOKEN_API_OLIST"}:
+        if key not in {"OLIST_ACCESS_TOKEN", "TINY_ACCESS_TOKEN"}:
             continue
         values[key] = value.strip().strip('"').strip("'")
-    for key in ("OLIST_ACCESS_TOKEN", "TINY_ACCESS_TOKEN", "TOKEN_API_OLIST"):
+    for key in ("OLIST_ACCESS_TOKEN", "TINY_ACCESS_TOKEN"):
         token = values.get(key, "").strip()
         if token:
             return token.removeprefix("Bearer ").removeprefix("bearer ").strip()
@@ -123,7 +123,7 @@ def get_token() -> str | None:
     token = token_from_env_file(Path(".env"))
     if token:
         return token
-    for key in ("OLIST_ACCESS_TOKEN", "TINY_ACCESS_TOKEN", "TOKEN_API_OLIST"):
+    for key in ("OLIST_ACCESS_TOKEN", "TINY_ACCESS_TOKEN"):
         value = os.getenv(key, "").strip()
         if value:
             return value.removeprefix("Bearer ").removeprefix("bearer ").strip()

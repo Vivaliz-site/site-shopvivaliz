@@ -96,8 +96,6 @@ function svcat_cache_signature(): string
     $paths = [
         $root . '/storage/products-cache-ativos.json',
         $root . '/storage/cache/products-cache-ativos.json',
-        $root . '/storage/products-cache.json',
-        $root . '/api/catalog/fallback-products.json',
         $root . '/storage/ml/product-scores.json',
     ];
     $parts = [];
@@ -175,6 +173,7 @@ require_once svcat_root() . '/includes/catalog-runtime.php';
 require_once svcat_root() . '/includes/catalog-image-enrich.php';
 
 $limit = min(200, max(1, (int)($_GET['limit'] ?? 48)));
+$rawOffset = isset($_GET['offset']) ? max(0, (int)$_GET['offset']) : null;
 $page = max(1, (int)($_GET['page'] ?? 1));
 $q = trim((string)($_GET['q'] ?? ''));
 $sort = trim((string)($_GET['ordem'] ?? $_GET['sort'] ?? 'relevance'));
@@ -185,6 +184,7 @@ $availableOnly = ($_GET['available'] ?? '') === '1'
 $cacheKey = http_build_query([
     'limit' => $limit,
     'page' => $page,
+    'offset' => $rawOffset !== null ? (string)$rawOffset : '',
     'q' => $q,
     'sort' => $sort,
     'category' => trim((string)($_GET['categoria'] ?? $_GET['category'] ?? '')),
@@ -218,9 +218,8 @@ $allProducts = array_map(static function (array $row): array {
     ];
 }, $runtimeRows);
 
-// The ERP runtime is authoritative for commerce fields but occasionally omits
-// image URLs. Fill only missing images from the local mirror so paid/catalog
-// landings show the real product instead of a storefront-logo placeholder.
+// Product registration data is ERP-only. Image enrichment may only use ERP/Tiny
+// media tables populated from the product detail endpoint, never local/manual data.
 $allProducts = svcie_enrich_images($allProducts);
 
 $allProducts = array_values(array_filter($allProducts, static fn(array $p): bool => svcat_is_active($p['status'] ?? null)));
@@ -292,8 +291,13 @@ usort($allProducts, static function (array $a, array $b) use ($sort): int {
 
 $total = count($allProducts);
 $totalPages = max(1, (int)ceil($total / max(1, $limit)));
-$page = min($page, $totalPages);
-$offset = ($page - 1) * $limit;
+if ($rawOffset !== null) {
+    $offset = min($rawOffset, max(0, max(0, $total - 1)));
+    $page = min($totalPages, max(1, (int)floor($offset / max(1, $limit)) + 1));
+} else {
+    $page = min($page, $totalPages);
+    $offset = ($page - 1) * $limit;
+}
 $products = array_slice($allProducts, $offset, $limit);
 $categories = [];
 foreach ($allProducts as $row) {
@@ -308,6 +312,7 @@ $payload = [
     'count' => count($products),
     'total' => $total,
     'page' => $page,
+    'offset' => $offset,
     'limit' => $limit,
     'total_pages' => $totalPages,
     'sort' => $sort !== '' ? $sort : 'relevance',

@@ -66,138 +66,29 @@ function sv_product_env_load(): void
 
 function sv_product_db(): ?mysqli
 {
-    if (!class_exists('mysqli') || !function_exists('mysqli_report')) {
-        return null;
-    }
-
-    sv_product_env_load();
-    $constants = __DIR__ . '/config/constants.php';
-    if (is_file($constants)) {
-        require_once $constants;
-    }
-
-    $host = defined('DB_HOST') ? DB_HOST : (getenv('DB_HOST') ?: 'localhost');
-    $port = (int)(defined('DB_PORT') ? DB_PORT : (getenv('DB_PORT') ?: 3306));
-    $name = defined('DB_NAME') ? DB_NAME : (getenv('DB_NAME') ?: '');
-    $user = defined('DB_USER') ? DB_USER : (getenv('DB_USER') ?: '');
-    $pass = defined('DB_PASS') ? DB_PASS : (getenv('DB_PASS') ?: '');
-    if ($name === '' || $user === '') {
-        return null;
-    }
-
-    mysqli_report(MYSQLI_REPORT_OFF);
-    $db = @new mysqli((string)$host, (string)$user, (string)$pass, (string)$name, $port);
-    if ($db->connect_errno) {
-        return null;
-    }
-
-    $db->set_charset('utf8mb4');
-    return $db;
+    // ERP/Tiny API v3 is the only product registration source. The public
+    // product page must not enrich name, description, price, stock, image,
+    // category, SEO or status from local tables or legacy snapshots.
+    return null;
 }
 
 function sv_product_db_row(?mysqli $db, string $sku, string $id): array
 {
-    if (!$db instanceof mysqli || ($sku === '' && $id === '')) {
-        return [];
-    }
-
-    $sql = "SELECT
-                p.id,
-                p.sku,
-                COALESCE(op.olist_product_id, '') AS olist_product_id,
-                COALESCE(op.olist_id, '') AS olist_id,
-                COALESCE(NULLIF(p.name, ''), NULLIF(op.name, ''), '') AS name,
-                COALESCE(NULLIF(p.description, ''), '') AS description,
-                COALESCE(p.price, 0) AS price,
-                COALESCE(p.stock, 0) AS stock,
-                COALESCE(NULLIF(op.primary_image_url, ''), NULLIF(p.image_url, ''), '') AS image_url
-            FROM products p
-            LEFT JOIN olist_products op ON op.sku = p.sku
-            WHERE (? <> '' AND p.sku = ?)
-               OR (? <> '' AND (op.olist_product_id = ? OR op.olist_id = ?))
-            ORDER BY p.updated_at DESC, p.id DESC
-            LIMIT 1";
-    $stmt = $db->prepare($sql);
-    if (!$stmt) {
-        return [];
-    }
-
-    $stmt->bind_param('sssss', $sku, $sku, $id, $id, $id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result ? ($result->fetch_assoc() ?: []) : [];
-    $stmt->close();
-
-    return is_array($row) ? $row : [];
+    return [];
 }
 
 function sv_product_merge_db(array $product, array $dbRow): array
 {
-    if ($dbRow === []) {
-        return $product;
-    }
-
-    foreach (['sku', 'name', 'olist_product_id'] as $field) {
-        if (trim((string)($dbRow[$field] ?? '')) !== '') {
-            $product[$field] = (string)$dbRow[$field];
-        }
-    }
-
-    if (trim((string)($dbRow['image_url'] ?? '')) !== '') {
-        $product['image_url'] = (string)$dbRow['image_url'];
-    }
-
-    // Preco, descricao e estoque nunca vem do banco local: a tabela
-    // `products` pode ficar desatualizada em qualquer direcao (preco 100x
-    // maior/menor, descricao antiga ou com texto de teste/agente, estoque
-    // zerado ou com valor antigo maior que o real). O catalogo sincronizado
-    // (svcr_products(), direto da Tiny) e a unica fonte confiavel para esses
-    // tres campos -- sobrescrever com o banco ja mostrou preco 100x errado
-    // (ex: R$ 7.798,00 em vez de R$ 77,98) e "X unidades restantes" para
-    // produto com estoque real 0, deixando o cliente adicionar ao carrinho
-    // um item indisponivel que so falha (com mensagem confusa) na
-    // validacao do checkout.
-
     return $product;
 }
 
 function sv_product_enrich(array $product, string $requestedSku = '', string $requestedId = ''): array
 {
-    $sku = trim((string)($product['sku'] ?? '')) ?: trim($requestedSku);
-    $id = trim((string)($product['olist_product_id'] ?? $product['id'] ?? '')) ?: trim($requestedId);
-    $db = sv_product_db();
-    if (!$db instanceof mysqli) {
-        return $product;
-    }
-
-    $enriched = sv_product_merge_db($product, sv_product_db_row($db, $sku, $id));
-    $db->close();
-
-    return $enriched;
+    return $product;
 }
 
 function sv_product_enrich_many(array $products): array
 {
-    if ($products === []) {
-        return [];
-    }
-
-    $db = sv_product_db();
-    if (!$db instanceof mysqli) {
-        return $products;
-    }
-
-    foreach ($products as $index => $product) {
-        if (!is_array($product)) {
-            continue;
-        }
-
-        $sku = trim((string)($product['sku'] ?? ''));
-        $id = trim((string)($product['olist_product_id'] ?? $product['id'] ?? ''));
-        $products[$index] = sv_product_merge_db($product, sv_product_db_row($db, $sku, $id));
-    }
-
-    $db->close();
     return $products;
 }
 
