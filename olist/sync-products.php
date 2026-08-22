@@ -108,7 +108,7 @@ function svs_get_access_token(): string {
         $value = trim((string)($store[$key] ?? ''));
         if ($value !== '') return $value;
     }
-    $token = svs_env('OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN');
+    $token = svs_env('OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN', 'DISABLED_STATIC_TOKEN_REFERENCE');
     if ($token === '') {
         throw new RuntimeException('access_token_missing: aguarde shopvivaliz-token-renewer ou reautorize em /olist/connect.php');
     }
@@ -249,7 +249,7 @@ function svs_normalize(array $p, string $source): array {
     // do saldo/backorder) -- nunca faz sentido exibir estoque negativo pro cliente,
     // entao zeramos aqui. O calculo "disponivel" correto (GET /estoque/{id}) e mais
     // caro (1 chamada por produto) e fica pro enriquecimento sob demanda.
-    $stock = $stockRaw !== null ? max(0, (int)$stockRaw) : 0;
+    $stock = $stockRaw !== null ? max(0, (int)$stockRaw) : ($source === 'disabled_non_v3' ? null : 0);
 
     // imagens
     $images = [];
@@ -289,6 +289,15 @@ function svs_normalize(array $p, string $source): array {
     $seoTitle = trim((string)($seo['titulo'] ?? ''));
     $seoDescription = trim((string)($seo['descricao'] ?? ''));
     $keywords = is_array($seo['keywords'] ?? null) ? array_values(array_filter(array_map('strval', $seo['keywords']))) : [];
+
+    $videoUrl = trim((string)(
+        $p['video_url'] ??
+        $p['linkVideo'] ??
+        $p['urlVideo'] ??
+        $seo['linkVideo'] ??
+        $seo['urlVideo'] ??
+        ''
+    ));
 
     $marca = trim((string)($p['marca']['nome'] ?? ''));
     $gtin = trim((string)($p['gtin'] ?? ''));
@@ -389,6 +398,7 @@ function svs_normalize(array $p, string $source): array {
         'seo_title'        => $seoTitle,
         'seo_description'  => $seoDescription,
         'keywords'         => $keywords,
+        'video_url'        => $videoUrl,
         'brand'            => $marca,
         'gtin'             => $gtin,
         'ncm'              => $ncm,
@@ -508,7 +518,8 @@ function svs_mirror_catalog(array $fetched, string $catalogPath): array {
             $merged['price'] = $old['price'];
         }
 
-        // stock=null significa fonte sem dado real; preserva o estoque anterior.
+        // stock=null significa "fonte nao sabe" (non-v3 fallback disabled sem dado real) --
+        // preserva o estoque anterior em vez de zerar o catalogo inteiro.
         if (array_key_exists('stock', $new) && $new['stock'] === null) {
             $merged['stock'] = (int)($old['stock'] ?? 0);
         }
@@ -604,7 +615,11 @@ $errors  = [];
 $fetched = [];
 $source  = 'none';
 
-// ERP Olist/Tiny v3 OAuth -- unico caminho suportado para catalogo.
+// Tiny v3 OAuth -- unico caminho suportado. A legacy product API disabled (token disabled,
+// disabled legacy product endpoint) foi removida em 2026-07-18: alem de obsoleta,
+// o schema dela usa terminologia de "pedido ecommerce" que nao corresponde
+// a como este projeto realmente integra com o Tiny (venda direta do site,
+// nao um canal de marketplace).
 try {
     $token   = svs_get_access_token();
     $raw     = svs_fetch_v3($token);

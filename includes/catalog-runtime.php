@@ -445,7 +445,7 @@ function svcr_products(): array
             'width' => svcr_first_positive_number([$dimensions['largura'] ?? null, $dimensions['width'] ?? null, $item['width'] ?? null, $contentDimensions['width'] ?? null]),
             'height' => svcr_first_positive_number([$dimensions['altura'] ?? null, $dimensions['height'] ?? null, $item['height'] ?? null, $contentDimensions['height'] ?? null]),
             'length' => svcr_first_positive_number([$dimensions['comprimento'] ?? null, $dimensions['length'] ?? null, $item['length'] ?? null, $contentDimensions['length'] ?? null]),
-            'video_url' => svcr_first_text([$item['video_url'] ?? '', $content['video_url'] ?? '']),
+            'video_url' => svcr_first_text([$item['video_url'] ?? '', $item['linkVideo'] ?? '', is_array($item['seo'] ?? null) ? ($item['seo']['linkVideo'] ?? '') : '', is_array($item['seo'] ?? null) ? ($item['seo']['urlVideo'] ?? '') : '', $content['video_url'] ?? '']),
             'status' => 'active',
         ];
     }

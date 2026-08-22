@@ -88,6 +88,26 @@ function svow_collect_detail_images(array $detail): array
     return array_slice($images, 0, 12);
 }
 
+
+function svow_detail_video_url(array $detail): string
+{
+    $candidates = [
+        $detail['video_url'] ?? '',
+        $detail['urlVideo'] ?? '',
+        $detail['linkVideo'] ?? '',
+    ];
+    if (is_array($detail['seo'] ?? null)) {
+        $candidates[] = $detail['seo']['linkVideo'] ?? '';
+        $candidates[] = $detail['seo']['urlVideo'] ?? '';
+        $candidates[] = $detail['seo']['video_url'] ?? '';
+    }
+    foreach ($candidates as $candidate) {
+        $url = trim((string)$candidate);
+        if ($url !== '' && preg_match('~^https?://~i', $url) === 1) return $url;
+    }
+    return '';
+}
+
 function svow_enrich_item_with_detail(array $item, string $token): array
 {
     $id = trim((string)($item['id'] ?? ''));
@@ -103,6 +123,12 @@ function svow_enrich_item_with_detail(array $item, string $token): array
         $item['primary_image_url'] = $images[0];
         $item['image_url'] = $images[0];
         $item['images_count'] = count($images);
+    }
+
+    $videoUrl = svow_detail_video_url($detail);
+    if ($videoUrl !== '') {
+        $item['video_url'] = $videoUrl;
+        $item['linkVideo'] = $videoUrl;
     }
 
     // Preserve id/sku from the listing, but copy non-commercial descriptive fields

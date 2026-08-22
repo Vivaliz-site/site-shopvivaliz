@@ -9,8 +9,9 @@ Atualizado em: 2026-08-21 20:45 BRT
 
 ## Regra de fonte de dados ERP/site
 - ERP/Tiny API v3 e fonte de verdade para todo campo de cadastro que possua equivalente no ERP: SKU, nome, descricao, categoria, preco, estoque, status, imagens, video, dimensoes, marca, NCM/GTIN, SEO/slug e dados comerciais.
+- Enriquecimento e permitido, mas quando o campo enriquecido possui equivalente no ERP ele deve ser gravado no ERP via API v3 e retornar ao site pelo sync v3 antes de virar dado publico canonico.
 - O site pode manter informacoes adicionais somente quando nao houver campo equivalente no ERP, como UX, textos institucionais, selos, conteudo editorial, comentarios, avaliacoes, analytics, ranking/ordem de vitrine e regras de apresentacao.
-- Informacao adicional do site nunca pode sobrescrever, completar ou ressuscitar dado de cadastro que exista no ERP.
+- Informacao adicional do site nunca pode sobrescrever, completar ou ressuscitar dado de cadastro que exista no ERP. Se houver equivalente no ERP, tratar como proposta pendente de espelhamento, nao como cadastro publico final.
 - Espelhamento ERP -> site deve usar API v3; mudancas aplicaveis site -> ERP tambem devem usar API v3, nunca API v2, scraping, CSV local, snapshot antigo ou tabela local como fonte de verdade.
 
 ## P0 - Critico
@@ -51,3 +52,6 @@ Atualizado em: 2026-08-21 20:45 BRT
 - 2026-08-21 21:58 BRT: Regra reforcada: imagens publicas de produtos devem vir exclusivamente do produto no ERP/Tiny. Removido fallback manual/local de imagem da vitrine; cache ativo reparado via /produtos/{id}. Validacao: 175/175 imagens publicas classificadas como erp_tiny_s3; relatorio `reports/api-non-erp-images-20260821-final.csv` com 0 linhas. Evidencia/commit: pendente.
 
 - 2026-08-21 22:12 BRT: ERP authority guard criado em `scripts/quality/validate-erp-v3-authority.php`. Regra refinada: ERP/Tiny API v3 e fonte de verdade para campos com equivalente no ERP; informacoes adicionais do site sao permitidas somente quando nao houver campo ERP equivalente e sem sobrescrever cadastro.
+
+- 2026-08-21 22:16 BRT: Regra refinada: enriquecimento e permitido, mas campos com equivalente no ERP devem ser enviados ao ERP via API v3 e publicados no site a partir do retorno do sync v3. Site-only continua permitido apenas para informacoes sem campo equivalente no ERP.
+- 2026-08-21 22:14 BRT: PDP/video ERP: sync ativo e sync canonico agora importam `seo.linkVideo`/campos de video do detalhe `/produtos/{id}` para `video_url`; runtime tambem le `seo.linkVideo` como redundancia. Validacao: PHP lint OK, pagina de produto publicada com miniaturas, rotacao 3s, frete por CEP e imagens ERP-only. Evidencia/commit: pendente.
