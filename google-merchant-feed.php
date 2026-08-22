@@ -7,6 +7,8 @@ require_once __DIR__ . '/includes/catalog-runtime.php';
 require_once __DIR__ . '/includes/catalog-image-enrich.php';
 require_once __DIR__ . '/includes/product-seo.php';
 require_once __DIR__ . '/includes/google-shopping-feed-utils.php';
+require_once __DIR__ . '/includes/feed-cache.php';
+svfc_start('google-merchant', 900, array_merge(svfc_default_catalog_dependencies(), ['google-merchant-feed.php', 'includes/google-shopping-feed-utils.php', 'includes/catalog-image-enrich.php', 'includes/feed-cache.php', 'includes/product-seo.php']));
 
 $official = __DIR__ . '/config/official-site.php';
 $officialData = is_file($official) ? (@include $official) : [];
@@ -215,6 +217,7 @@ foreach ($products as $product) {
     echo '<title>' . gm_xml($title) . '</title>' . PHP_EOL;
     echo '<description>' . gm_xml($description) . '</description>' . PHP_EOL;
     echo '<link>' . gm_xml($link) . '</link>' . PHP_EOL;
+    echo '<g:link>' . gm_xml($link) . '</g:link>' . PHP_EOL;
     echo '<g:image_link>' . gm_xml($image) . '</g:image_link>' . PHP_EOL;
     foreach ($additionalImages as $additionalImage) {
         echo '<g:additional_image_link>' . gm_xml($additionalImage) . '</g:additional_image_link>' . PHP_EOL;

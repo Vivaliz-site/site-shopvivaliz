@@ -14,6 +14,8 @@ require_once __DIR__ . '/includes/catalog-runtime.php';
 require_once __DIR__ . '/includes/catalog-image-enrich.php';
 require_once __DIR__ . '/includes/site-settings.php';
 require_once __DIR__ . '/includes/google-shopping-feed-utils.php';
+require_once __DIR__ . '/includes/feed-cache.php';
+svfc_start('google-shopping', 900, array_merge(svfc_default_catalog_dependencies(), ['google-shopping-feed.php', 'includes/google-shopping-feed-utils.php', 'includes/catalog-image-enrich.php', 'includes/feed-cache.php']));
 
 $baseUrl = 'https://shopvivaliz.com.br';
 

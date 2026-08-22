@@ -10,7 +10,7 @@ $social = is_array($company['social_media'] ?? null) ? $company['social_media'] 
 $whatsapp = preg_replace('/\D+/', '', (string)($social['whatsapp'] ?? $phone));
 $whatsappLink = $whatsapp !== '' ? 'https://wa.me/' . $whatsapp . '?text=' . rawurlencode('Olá! Vim pelo site da ShopVivaliz e gostaria de atendimento.') : '';
 $pageTitle = 'Contato e atendimento | ShopVivaliz';
-$pageDescription = 'Fale com a ShopVivaliz sobre produtos, pedidos, pagamento, entrega, troca, devolução e pós-venda.';
+$pageDescription = 'Fale com a ShopVivaliz sobre produtos, pedidos, pagamento, entrega, troca, devolução e pós-venda. Envie sua dúvida e receba orientação da equipe.';
 $pageUrl = 'https://shopvivaliz.com.br/contato/';
 $socialImage = 'https://shopvivaliz.com.br/images/logo-vivaliz.png';
 ?>
