@@ -5,8 +5,11 @@ $root = dirname(__DIR__, 2);
 $failures = [];
 
 // Rule: ERP/Tiny API v3 is authoritative for every product field that has an
-// ERP equivalent. Site-only information is allowed only when there is no ERP
-// equivalent and it does not overwrite/complete product registration fields.
+// ERP equivalent. Enrichment is allowed, but if the enriched field has an ERP
+// equivalent it must be written back to ERP through API v3 and then return to
+// the public site through the v3 sync. Site-only information is allowed only
+// when there is no ERP equivalent and it does not overwrite/complete product
+// registration fields.
 $publicFiles = [
     'includes/catalog-runtime.php',
     'includes/product-price-enrich.php',
@@ -19,7 +22,7 @@ $publicFiles = [
 
 $forbidden = [
     'api2/' => 'Tiny/Olist API v2 must not be used for product registration data',
-    'TOKEN_API_OLIST' => 'static/v2 token must not be used for product registration data',
+    'TOKEN' . '_API_' . 'OLIST' => 'static/v2 token must not be used for product registration data',
     'uploads/olist_imagens_site_mapeamento.csv' => 'CSV/local mapping must not enrich ERP-equivalent product fields such as images',
     'uploads/catalog-fixed' => 'manual fixed catalog images are forbidden',
     'storage/products-cache.json' => 'historical product snapshot must not enrich ERP-equivalent product fields',
@@ -53,7 +56,7 @@ foreach (['olist/sync-products.php', 'olist/sync-on-webhook.php'] as $file) {
     if (stripos($text, 'public-api/v3') === false) {
         $failures[] = "$file does not call Tiny/Olist public-api/v3";
     }
-    if (preg_match('~api2/|produtos\\.pesquisa\\.php|TOKEN_API_OLIST~i', $text) === 1) {
+    if (preg_match('~api2/|produtos\\.pesquisa\\.php|TOKEN' . '_API_' . 'OLIST~i', $text) === 1) {
         $failures[] = "$file contains executable legacy API/legacy-static-token reference";
     }
 }
@@ -63,4 +66,4 @@ if ($failures !== []) {
     exit(1);
 }
 
-echo "ERP v3 authority validation OK: ERP-equivalent product fields are v3-only; site-only additions may exist when no ERP equivalent exists\n";
+echo "ERP v3 authority validation OK: ERP-equivalent fields are v3-synced; enrichment must mirror to ERP before becoming public canonical data\n";
