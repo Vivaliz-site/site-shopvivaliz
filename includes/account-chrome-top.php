@@ -22,7 +22,8 @@
             flex-wrap: wrap;
             gap: 10px;
         }
-        header.sv-account-header .logo { font-size: 22px; font-weight: bold; }
+        header.sv-account-header .logo { display:flex; align-items:center; gap:12px; font-size: 22px; font-weight: bold; }
+        header.sv-account-header .logo img{height:46px; width:auto; max-width:190px; background:#fff; border-radius:14px; padding:7px 12px; box-shadow:0 8px 18px rgba(0,0,0,.12);}
         header.sv-account-header .user-info { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
         header.sv-account-header .user-info a { color: white; text-decoration: none; font-size: 14px; }
         header.sv-account-header .logout-btn { background: #d32f2f; padding: 8px 15px; border-radius: 4px; font-size: 12px; }
@@ -128,7 +129,7 @@
 </head>
 <body>
     <header class="sv-account-header">
-        <div class="logo">ShopVivaliz</div>
+        <a class="logo" href="/" aria-label="Voltar para a ShopVivaliz"><img src="/images/logo-vivaliz.png" alt="ShopVivaliz" onerror="this.style.display='none';this.parentNode.appendChild(document.createTextNode('ShopVivaliz'))"></a>
         <div class="user-info">
             <div>
                 <div style="font-size: 14px;">Olá, <?php echo htmlspecialchars($svAccountUser['name'] ?: 'Cliente'); ?></div>
