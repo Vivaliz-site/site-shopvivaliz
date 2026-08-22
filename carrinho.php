@@ -65,6 +65,11 @@ header('Content-Type: text/html; charset=UTF-8');
         #cart-summary{position:sticky;top:112px;}
         #cart-summary h2{font-size:22px;margin-top:0;color:#102a43;}
         .summary-row{font-size:15px;margin:12px 0}.summary-total{font-size:22px;color:#0e3153;}
+        .cart-trust-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:18px;padding-top:18px;border-top:1px solid #e7eef5;}
+        .cart-trust-item{display:grid;grid-template-columns:38px minmax(0,1fr);gap:12px;align-items:center;padding:12px 14px;border:1px solid #e2eaf2;border-radius:14px;background:#fbfdff;}
+        .cart-trust-icon{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:#eef6ff;color:#173b63;}
+        .cart-trust-icon svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+        .cart-trust-copy{min-width:0;line-height:1.3}.cart-trust-copy strong{display:block;font-size:13px;color:#102a43;font-weight:800}.cart-trust-copy span{display:block;margin-top:2px;font-size:12px;color:#667085;font-weight:500;}
         @media(max-width:900px){.cart-layout{grid-template-columns:1fr}.cart-item{grid-template-columns:78px minmax(0,1fr);}.cart-item-price{grid-column:2;text-align:left}.cart-item img{width:78px!important;height:78px!important}#cart-summary{position:static}}
         @media(max-width:560px){.cart-page{padding-top:24px}.cart-card{padding:18px}.cart-item{grid-template-columns:70px minmax(0,1fr);gap:12px}.cart-item img{width:70px!important;height:70px!important}.cart-title{font-size:24px}.btn-remove{width:100%;margin-left:0}.cart-item-controls{align-items:center}}
     </style>
@@ -104,14 +109,19 @@ header('Content-Type: text/html; charset=UTF-8');
             <a href="/checkout" class="btn btn-primary btn-checkout" id="btn-checkout">Finalizar pedido</a>
             <div id="checkout-validate-status" style="font-size:13px;color:#b00020;margin-top:8px;line-height:1.5"></div>
             <a href="/catalogo" class="btn-continue">Continuar comprando</a>
-            <div class="sv-trust-badge">
-                <svg viewBox="0 0 24 24" style="width: 28px; height: 28px; flex-shrink: 0; fill: #35c759;"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
-                <div><strong>Compra 100% Segura</strong><br><span>Ambiente criptografado com Checkout PIX rápido.</span></div>
-            </div>
-            <div style="margin-top:16px;display:grid;gap:6px">
-                <div style="font-size:12px;color:var(--muted);font-weight:600">🔒 Compra segura e dados protegidos</div>
-                <div style="font-size:12px;color:var(--muted);font-weight:600">🚚 Envio rápido para todo Brasil</div>
-                <div style="font-size:12px;color:var(--muted);font-weight:600">↩️ 7 dias corridos para troca ou devolução</div>
+            <div class="cart-trust-grid" aria-label="Benefícios da compra">
+                <div class="cart-trust-item">
+                    <div class="cart-trust-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.7 2.9 8.2 7 10 4.1-1.8 7-5.3 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg></div>
+                    <div class="cart-trust-copy"><strong>Compra Segura</strong><span>Pagamento protegido</span></div>
+                </div>
+                <div class="cart-trust-item">
+                    <div class="cart-trust-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 6h11v10H3z"/><path d="M14 9h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></svg></div>
+                    <div class="cart-trust-copy"><strong>Envio Rápido</strong><span>Entrega para todo o Brasil</span></div>
+                </div>
+                <div class="cart-trust-item">
+                    <div class="cart-trust-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7v5h5"/><path d="M5.5 16a8 8 0 1 0 .4-8.6L4 9"/></svg></div>
+                    <div class="cart-trust-copy"><strong>Troca Facilitada</strong><span>7 dias para devolução</span></div>
+                </div>
             </div>
         </aside>
     </div>
