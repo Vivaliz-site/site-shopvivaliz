@@ -100,10 +100,10 @@ function ga4SessionIdFromCookies() {
     var pair = cookies[i].trim();
     if (pair.indexOf('_ga_') !== 0 || pair.indexOf('=') < 0) continue;
     var value = decodeURIComponent(pair.slice(pair.indexOf('=') + 1));
-    var legacy = value.match(/^GS\d+(?:\.\d+)?\.(\d+)/);
-    if (legacy) return legacy[1];
-    var modern = value.match(/(?:^|\$)s(\d+)(?:\$|$)/);
+    var modern = value.match(/(?:^|[.\$])s(\d+)(?:\$|$)/);
     if (modern) return modern[1];
+    var legacy = value.match(/^GS\d+(?:\.\d+)?\.(\d+)(?:\.|$)/);
+    if (legacy) return legacy[1];
   }
   return '';
 }

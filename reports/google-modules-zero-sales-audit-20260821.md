@@ -31,6 +31,15 @@ Evidências já registradas no repositório e painéis operacionais:
 4. **Problemas históricos de SEO/indexação**: sitemap com poucos/nenhum produto e problemas de URLs antigas/canônicas, já tratados em SEO/GSC.
 5. **UX/confiança/catálogo**: carrinho, textos, avaliações, estoque, imagens, frete, produto e área do cliente tinham falhas que foram corrigidas nas etapas P0/P1/P2.
 
+## Correção adicional de atribuição GA4/Ads em 22/08/2026
+
+- A bateria de regressão encontrou um bug no parser de sessão GA4: cookies modernos no formato `GS2.1.s<session_id>$...` podiam cair primeiro no regex legado e ser normalizados para `session_id=1`.
+- Causa-raiz: o parser legado aceitava parcialmente o prefixo `GS2.1`, e o parser moderno procurava `$s...` quando o cookie real usa `.s...`.
+- Correção: PHP e JavaScript agora reconhecem primeiro o segmento moderno `.s<session_id>$` (com suporte defensivo a `$s...$`) e só depois tentam o formato legado.
+- O evento `purchase` continua sendo emitido somente após pagamento aprovado; a correção melhora a associação do Measurement Protocol à sessão online/Ads.
+- A documentação oficial do GA4 Measurement Protocol foi verificada: `session_id` é necessário para atribuição de sessão, e desde 17/02/2026 o protocolo também aceita cookie de sessão completo, embora valores não-cookie continuem recomendados.
+- Teste de regressão: `tests/google-ads-attribution-and-cro-test.php` cobre o cookie `GS2`, exige `session_id=1700000000` e garante que o parser moderno execute antes do legado.
+
 ## Critérios de aceite cumpridos
 
 - Feeds Merchant/Shopping têm itens reais e imagens ERP/Tiny.

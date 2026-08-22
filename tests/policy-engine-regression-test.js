@@ -56,4 +56,16 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
+{
+  const root = setupRepo();
+  write(root, 'includes/catalog-authoritative-stock-carry.php', '<?php function stock_carry() { return 1; }\n');
+  const base = commitAll(root, 'base stock helper');
+  write(root, 'includes/catalog-authoritative-stock-carry.php', '<?php function stock_carry() { return 2; }\n');
+  const head = commitAll(root, 'backend stock helper change');
+  const result = policy(root, base, head);
+  assert.strictEqual(result.status, 0, `Backend catalog stock helper must not require screenshot proof:\n${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /prova visual não exigida/);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
 console.log('policy-engine-regression: ok');
