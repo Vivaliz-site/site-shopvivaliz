@@ -191,10 +191,19 @@ while (true) {
             foreach (['imagem_principal_url', 'primary_image_url', 'image_url', 'imagem', 'imagens', 'images', 'anexos'] as $imageField) {
                 if (!empty($item[$imageField])) { $hasImage = true; break; }
             }
-            // A listagem /produtos frequentemente omite anexos/imagens. Quando
-            // isso acontecer, busca /produtos/{id}, que é onde o ERP/Tiny expõe
-            // as imagens reais do cadastro.
-            if (!$hasImage) {
+            $hasVideo = false;
+            foreach (['video_url', 'linkVideo', 'urlVideo'] as $videoField) {
+                if (!empty($item[$videoField])) { $hasVideo = true; break; }
+            }
+            if (!$hasVideo && is_array($item['seo'] ?? null)) {
+                foreach (['linkVideo', 'urlVideo', 'video_url'] as $seoVideoField) {
+                    if (!empty($item['seo'][$seoVideoField])) { $hasVideo = true; break; }
+                }
+            }
+            // A listagem /produtos frequentemente omite anexos/imagens e video.
+            // Quando qualquer mídia do produto estiver ausente, busca /produtos/{id},
+            // que é onde o ERP/Tiny expõe as mídias reais do cadastro.
+            if (!$hasImage || !$hasVideo) {
                 $item = svow_enrich_item_with_detail($item, $token);
                 usleep(1100000);
             }
