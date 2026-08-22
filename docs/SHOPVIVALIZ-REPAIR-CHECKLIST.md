@@ -38,7 +38,7 @@ Atualizado em: 2026-08-21 20:45 BRT
 
 ## P2/P3 - Continuo
 - [x] COPY-01 Varredura de textos publicos para remover linguagem admin/debug. Evidencia: `tests/public-copy-quality-test.php` OK; removidas mensagens publicas de contato/comercial manual de frete em checkout e email legado. Commit: pendente.
-- [ ] SEO-01 Validar sitemap, schema Product/Offer e paridade feed/ERP/site.
+- [x] SEO-01 Validar sitemap, schema Product/Offer e paridade feed/ERP/site. Evidencia: `tests/seo-product-feed-quality-test.php` OK com 162 produtos disponiveis, sitemap canônico em `/sitemap.xml`, Product/Offer schema presente e feed publico com SKU/preco/estoque/imagem HTTPS. Commit: pendente.
 - [ ] A11Y-01 Testes mobile/desktop, teclado, contraste e Lighthouse.
 
 ## Log de execucao
