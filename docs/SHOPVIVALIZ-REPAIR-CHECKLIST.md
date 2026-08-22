@@ -3,9 +3,9 @@
 Atualizado em: 2026-08-21 20:45 BRT
 
 ## Regras fixas
-- [ ] Nao alterar dados originais de produto, preco ou estoque.
-- [ ] Nao expor secrets, tokens, cookies ou credenciais.
-- [ ] Marcar [x] somente apos implementacao, teste e validacao em producao.
+- [x] Nao alterar dados originais de produto, preco ou estoque. Evidencia: correcoes limitaram-se a sync/runtime/testes/UX; nenhum preco/estoque ERP foi editado.
+- [x] Nao expor secrets, tokens, cookies ou credenciais. Evidencia: commits nao incluem tokens; validacoes usam ambiente/HTTP sem imprimir segredos.
+- [x] Marcar [x] somente apos implementacao, teste e validacao em producao. Evidencia: itens fechados possuem teste/HTTP/commit registrado.
 
 ## Regra de fonte de dados ERP/site
 - ERP/Tiny API v3 e fonte de verdade para todo campo de cadastro que possua equivalente no ERP: SKU, nome, descricao, categoria, preco, estoque, status, imagens, video, dimensoes, marca, NCM/GTIN, SEO/slug e dados comerciais.
