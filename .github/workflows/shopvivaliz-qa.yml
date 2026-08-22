@@ -115,7 +115,9 @@ jobs:
         # CI e so checava se as chaves de navigation nao estavam vazias --
         # 3 das 4 rotas estavam devolvendo 404 em producao sem que nada
         # acusasse. Ver R6-5 no relatorio da Rodada 6.
-        run: php scripts/quality/validate-official-site-reference.php
+        run: |
+          php tests/official-site-reference-http-policy-test.php
+          php scripts/quality/validate-official-site-reference.php
       - name: Politica premium de otimizacao por marketplace
         run: php tests/catalog-optimization-policy-test.php
       - name: Workflow inteligente do Admin de otimizacao
