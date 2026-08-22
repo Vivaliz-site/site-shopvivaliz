@@ -15,8 +15,8 @@ function sv_conversion_assert(bool $condition, string $message): void
 $root = dirname(__DIR__);
 $index = svcr_content_index($root);
 $content = svcr_content_for_item(['sku' => 'KIT4R-SOPRÃO'], $index);
-sv_conversion_assert(trim((string)($content['description'] ?? '')) !== '', 'conteudo rico deve ser encontrado por SKU');
-sv_conversion_assert(trim((string)($content['category'] ?? '')) === 'Rodízios', 'categoria curada deve ser encontrada por SKU');
+sv_conversion_assert($index === [], 'snapshot editorial historico deve permanecer aposentado sob a regra ERP-only');
+sv_conversion_assert($content === [], 'conteudo de produto nao pode ser recuperado de snapshot legado');
 sv_conversion_assert(svcr_infer_category('Rodízio giratório 35 mm') === 'Rodízios', 'inferência deve cobrir item sem categoria curada');
 
 $activeCatalogPath = $root . '/storage/products-cache-ativos.json';
@@ -25,7 +25,11 @@ $activeFixture = [
     'itens' => [[
         'id' => '341440872',
         'sku' => 'KIT4R-SOPRÃO',
-        'descricao' => 'KIT4R-SOPRÃO',
+        'descricao' => 'Kit 4 rodizios giratorios 35 mm',
+        'descricaoComplementar' => 'Kit com quatro rodizios giratorios de 35 mm para moveis e equipamentos leves.',
+        'categoria' => ['nome' => 'Rodízios'],
+        'imagem_principal_url' => 'https://shopvivaliz.com.br/uploads/olist/teste-kit4r.webp',
+        'gtin' => '7904013466354',
         'preco' => 99.99,
         'estoque_disponivel' => 2,
         'situacao' => 'A',
@@ -38,10 +42,10 @@ try {
     $product = $products[0];
     sv_conversion_assert((float)$product['price'] === 99.99, 'preço deve vir somente da fonte canônica ativa');
     sv_conversion_assert((int)$product['stock'] === 2, 'estoque deve vir somente da fonte canônica ativa');
-    sv_conversion_assert(trim((string)$product['description']) !== '', 'descrição deve ser enriquecida por SKU');
-    sv_conversion_assert((string)$product['category'] === 'Rodízios', 'categoria deve ser enriquecida por SKU');
-    sv_conversion_assert(trim((string)$product['image_url']) !== '', 'imagem deve ser enriquecida por SKU');
-    sv_conversion_assert((string)$product['gtin'] === '7904013466354', 'GTIN deve ser enriquecido por SKU');
+    sv_conversion_assert(trim((string)$product['description']) !== '', 'descrição deve vir da fonte canônica ERP');
+    sv_conversion_assert((string)$product['category'] === 'Rodízios', 'categoria deve vir da fonte canônica ERP');
+    sv_conversion_assert(trim((string)$product['image_url']) !== '', 'imagem deve vir da fonte canônica ERP');
+    sv_conversion_assert((string)$product['gtin'] === '7904013466354', 'GTIN deve vir da fonte canônica ERP');
     sv_conversion_assert(str_contains((string)$product['slug'], 'kit4r'), 'slug deve carregar identidade estável do SKU');
 
     ob_start();

@@ -135,7 +135,22 @@ jobs:
 
       - name: Audit all active workflows
         if: always()
-        run: python scripts/maintenance/audit_active_workflows.py
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            status=0
+            python scripts/maintenance/audit_active_workflows.py || status=$?
+            test -s artifacts/workflow-policy/report.json
+            test -s artifacts/workflow-policy/report.md
+            if [ "$status" -ne 0 ]; then
+              echo "::warning::Repository-wide workflow debt remains on the base branch; PR blocking is enforced by the changed-automation audit above."
+            fi
+          else
+            python scripts/maintenance/audit_active_workflows.py
+          fi
 
       - name: Audit token and secret references
         if: always()
