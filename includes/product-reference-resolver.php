@@ -101,128 +101,37 @@ function svpr_reference_candidates(int|string $productReference): array
 }
 
 /**
- * Resolve uma referencia operacional do catalogo para a linha local em
- * `products`, aceitando product_id local, olist_id, olist_product_id ou SKU.
+ * Resolve uma referencia operacional usando somente o runtime derivado do
+ * ERP Olist/Tiny v3. A tabela local `products` pode existir para chaves
+ * internas de UX, mas nao e fonte de verdade para nome, descricao, imagem,
+ * preco, estoque, status ou cadastro comercial.
  *
  * @return array<string,mixed>|null
  */
 function svpr_resolve_product_row_once(PDO $db, string $reference): ?array
 {
-    if ($reference === '') {
+    unset($db);
+    $needle = strtolower(trim($reference));
+    if ($needle === '' || !function_exists('svcr_products')) {
         return null;
     }
 
-    $productColumns = svpr_table_columns($db, 'products');
-    $olistColumns = svpr_table_columns($db, 'olist_products');
-
-    $selectParts = ['p.*'];
-    if (svpr_has_column($olistColumns, 'name')) {
-        $selectParts[] = "COALESCE(NULLIF(p.name, ''), NULLIF(op.name, '')) AS name";
-    } else {
-        $selectParts[] = "COALESCE(NULLIF(p.name, ''), '') AS name";
-    }
-    $selectParts[] = "COALESCE(NULLIF(p.description, ''), '') AS description";
-    if (svpr_has_column($olistColumns, 'primary_image_url')) {
-        $selectParts[] = "COALESCE(NULLIF(p.image_url, ''), NULLIF(op.primary_image_url, '')) AS image_url";
-    } else {
-        $selectParts[] = "COALESCE(NULLIF(p.image_url, ''), '') AS image_url";
-    }
-
-    $olistIdSources = [];
-    if (svpr_has_column($productColumns, 'olist_id')) {
-        $olistIdSources[] = "NULLIF(CAST(p.olist_id AS CHAR), '')";
-    }
-    if (svpr_has_column($olistColumns, 'olist_id')) {
-        $olistIdSources[] = "NULLIF(CAST(op.olist_id AS CHAR), '')";
-    }
-    if (svpr_has_column($productColumns, 'product_id')) {
-        $olistIdSources[] = "NULLIF(CAST(p.product_id AS CHAR), '')";
-    }
-    if (svpr_has_column($olistColumns, 'olist_product_id')) {
-        $olistIdSources[] = "NULLIF(CAST(op.olist_product_id AS CHAR), '')";
-    }
-    $selectParts[] = $olistIdSources !== []
-        ? 'COALESCE(' . implode(', ', $olistIdSources) . ", '') AS olist_id"
-        : "'' AS olist_id";
-
-    $olistProductIdSources = [];
-    if (svpr_has_column($productColumns, 'product_id')) {
-        $olistProductIdSources[] = "NULLIF(CAST(p.product_id AS CHAR), '')";
-    }
-    if (svpr_has_column($productColumns, 'olist_product_id')) {
-        $olistProductIdSources[] = "NULLIF(CAST(p.olist_product_id AS CHAR), '')";
-    }
-    if (svpr_has_column($olistColumns, 'olist_product_id')) {
-        $olistProductIdSources[] = "NULLIF(CAST(op.olist_product_id AS CHAR), '')";
-    }
-    if (svpr_has_column($olistColumns, 'olist_id')) {
-        $olistProductIdSources[] = "NULLIF(CAST(op.olist_id AS CHAR), '')";
-    }
-    if (svpr_has_column($productColumns, 'olist_id')) {
-        $olistProductIdSources[] = "NULLIF(CAST(p.olist_id AS CHAR), '')";
-    }
-    $selectParts[] = $olistProductIdSources !== []
-        ? 'COALESCE(' . implode(', ', $olistProductIdSources) . ", '') AS olist_product_id"
-        : "'' AS olist_product_id";
-
-    $joinParts = [];
-    if (svpr_has_column($productColumns, 'sku') && svpr_has_column($olistColumns, 'sku')) {
-        $joinParts[] = 'op.sku = p.sku';
-    }
-    if (svpr_has_column($productColumns, 'olist_id') && svpr_has_column($olistColumns, 'olist_id')) {
-        $joinParts[] = "(TRIM(COALESCE(CAST(p.olist_id AS CHAR), '')) <> '' AND CAST(op.olist_id AS CHAR) = CAST(p.olist_id AS CHAR))";
-    }
-    if (svpr_has_column($productColumns, 'product_id') && svpr_has_column($olistColumns, 'olist_product_id')) {
-        $joinParts[] = "(TRIM(COALESCE(CAST(p.product_id AS CHAR), '')) <> '' AND CAST(op.olist_product_id AS CHAR) = CAST(p.product_id AS CHAR))";
-    }
-    if (svpr_has_column($productColumns, 'olist_product_id') && svpr_has_column($olistColumns, 'olist_product_id')) {
-        $joinParts[] = "(TRIM(COALESCE(CAST(p.olist_product_id AS CHAR), '')) <> '' AND CAST(op.olist_product_id AS CHAR) = CAST(p.olist_product_id AS CHAR))";
-    }
-    $joinSql = $joinParts !== []
-        ? 'LEFT JOIN olist_products op ON ' . implode(' OR ', $joinParts)
-        : '';
-
-    $whereParts = [
-        'p.sku = ?',
-        'CAST(p.id AS CHAR) = ?',
-    ];
-    $params = [$reference, $reference];
-
-    foreach (['product_id', 'olist_id', 'olist_product_id'] as $field) {
-        if (svpr_has_column($productColumns, $field)) {
-            $whereParts[] = "CAST(COALESCE(p.{$field}, '') AS CHAR) = ?";
-            $params[] = $reference;
+    foreach (svcr_products() as $row) {
+        if (!is_array($row)) continue;
+        foreach ([$row['id'] ?? '', $row['olist_product_id'] ?? '', $row['sku'] ?? ''] as $candidate) {
+            if (strtolower(trim((string)$candidate)) !== $needle) continue;
+            $row['erp_authoritative'] = true;
+            $row['source_of_truth'] = 'erp_olist_tiny_v3';
+            return $row;
         }
     }
 
-    if ($joinSql !== '') {
-        foreach (['olist_product_id', 'olist_id'] as $field) {
-            if (svpr_has_column($olistColumns, $field)) {
-                $whereParts[] = "CAST(COALESCE(op.{$field}, '') AS CHAR) = ?";
-                $params[] = $reference;
-            }
-        }
-    }
-
-    $orderField = svpr_has_column($productColumns, 'updated_at') ? 'p.updated_at DESC, ' : '';
-    $sql = 'SELECT ' . implode(', ', $selectParts)
-        . ' FROM products p '
-        . $joinSql
-        . ' WHERE ' . implode(' OR ', $whereParts)
-        . ' ORDER BY ' . $orderField . 'p.id DESC LIMIT 1';
-
-    $stmt = $db->prepare($sql);
-    $stmt->execute($params);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    return is_array($row) ? $row : null;
+    return null;
 }
 
 /**
- * Resolve uma referencia operacional do catalogo para a linha local em
- * `products`, aceitando product_id local, olist_id, olist_product_id ou SKU.
- * Se a referencia vier do catalogo runtime, tenta primeiro os aliases
- * equivalentes expandidos a partir do proprio runtime.
+ * Resolve uma referencia operacional do catalogo a partir dos aliases
+ * expandidos do proprio runtime ERP.
  *
  * @return array<string,mixed>|null
  */

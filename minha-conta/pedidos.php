@@ -91,6 +91,7 @@ require __DIR__ . '/../includes/account-chrome-top.php';
                         📦 Rastreio: <code><?php echo htmlspecialchars($order['tracking_number']); ?></code>
                         <?php $trackingLink = $order['tracking_url'] ?: ('https://rastreamento.correios.com.br/app/index.php?codigo=' . urlencode($order['tracking_number'])); ?>
                         <a href="<?php echo htmlspecialchars($trackingLink); ?>" target="_blank" rel="noopener" style="margin-left:8px; color:#173b63;">Rastrear entrega →</a>
+                        <a href="/api/account/tracking.php?order_id=<?php echo (int)$order['id']; ?>" target="_blank" rel="noopener" style="margin-left:8px; color:#173b63;">Atualizar do ERP</a>
                     </div>
                 <?php endif; ?>
 
@@ -115,16 +116,12 @@ require __DIR__ . '/../includes/account-chrome-top.php';
                 <?php endif; ?>
 
                 <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
-                    <?php if ($order['nf_pdf_url']): ?>
-                        <a class="sv-btn secondary" href="<?php echo htmlspecialchars($order['nf_pdf_url']); ?>" target="_blank" rel="noopener">NF-e (PDF)</a>
+                    <?php if (!empty($order['nf_id'])): ?>
+                        <a class="sv-btn secondary" href="/api/account/invoice.php?order_id=<?php echo (int)$order['id']; ?>&format=json" target="_blank" rel="noopener">Consultar NF-e</a>
+                        <a class="sv-btn secondary" href="/api/account/invoice.php?order_id=<?php echo (int)$order['id']; ?>&format=xml" target="_blank" rel="noopener">Baixar XML NF-e</a>
                     <?php else: ?>
-                        <button class="sv-btn secondary disabled" disabled title="Nota fiscal ainda não disponível para este pedido">NF-e (PDF)</button>
-                    <?php endif; ?>
-
-                    <?php if ($order['nf_xml_url']): ?>
-                        <a class="sv-btn secondary" href="<?php echo htmlspecialchars($order['nf_xml_url']); ?>" target="_blank" rel="noopener">NF-e (XML)</a>
-                    <?php else: ?>
-                        <button class="sv-btn secondary disabled" disabled title="Nota fiscal ainda não disponível para este pedido">NF-e (XML)</button>
+                        <button class="sv-btn secondary disabled" disabled title="Nota fiscal ainda não disponível para este pedido">Consultar NF-e</button>
+                        <button class="sv-btn secondary disabled" disabled title="Nota fiscal ainda não disponível para este pedido">Baixar XML NF-e</button>
                     <?php endif; ?>
 
                     <?php if (!empty($order['label_url'])): ?>

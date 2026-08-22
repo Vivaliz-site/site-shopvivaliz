@@ -92,10 +92,10 @@ $pages = [
     ['loc' => '/contato/', 'priority' => '0.5', 'freq' => 'monthly'],
     ['loc' => '/faq/', 'priority' => '0.5', 'freq' => 'monthly'],
     ['loc' => '/avaliacoes.php', 'priority' => '0.4', 'freq' => 'weekly'],
-    ['loc' => '/termos', 'priority' => '0.3', 'freq' => 'yearly'],
+    ['loc' => '/termos/', 'priority' => '0.3', 'freq' => 'yearly'],
     ['loc' => '/politica-privacidade/', 'priority' => '0.3', 'freq' => 'yearly'],
-    ['loc' => '/politica-devolucoes', 'priority' => '0.3', 'freq' => 'yearly'],
-    ['loc' => '/politica-entrega', 'priority' => '0.3', 'freq' => 'yearly'],
+    ['loc' => '/politica-devolucoes/', 'priority' => '0.3', 'freq' => 'yearly'],
+    ['loc' => '/politica-entrega/', 'priority' => '0.3', 'freq' => 'yearly'],
     ['loc' => '/blog/', 'priority' => '0.7', 'freq' => 'weekly'],
 ];
 

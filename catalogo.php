@@ -479,7 +479,7 @@ $totalCount   = sv_catalog_count_matching($query, $category);
 $totalPages   = max(1, (int)ceil($totalCount / $perPage));
 $currentPage  = max(1, min($totalPages, (int)($_GET['pagina'] ?? 1)));
 $offset       = ($currentPage - 1) * $perPage;
-$products     = svp_enrich_products(sv_catalog_products($perPage, $query, $category, $offset));
+$products     = sv_catalog_products($perPage, $query, $category, $offset);
 $categories   = sv_catalog_categories();
 $totalStr     = $totalCount . ' produto' . ($totalCount === 1 ? '' : 's');
 $statusText = $products
