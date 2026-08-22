@@ -9,7 +9,7 @@ $email = $company['email'] ?? 'atendimento@shopvivaliz.com.br';
 $phone = $company['phone'] ?? '(37) 99937-4112';
 ?>
 <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Termos de uso e compra da ShopVivaliz."><link rel="canonical" href="https://shopvivaliz.com.br/termos"><title>Termos e Condições | <?= htmlspecialchars($fantasyName) ?></title>
+<meta name="description" content="Consulte os Termos e Condições da ShopVivaliz para entender regras de compra, pagamento, entrega, uso do site, responsabilidades e atendimento."><link rel="canonical" href="https://shopvivaliz.com.br/termos/"><title>Termos e Condições | <?= htmlspecialchars($fantasyName) ?></title>
 <link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/footer-pages.css?v=20260728-1"></head><body>
 <?php $svNavCurrent = 'termos'; include __DIR__ . '/includes/navbar.php'; ?>
 <main class="legal-container"><header class="legal-header"><h1>Termos e Condições</h1><p>Regras para uso do site, cadastro, compra, pagamento, entrega e atendimento.</p></header><section class="legal-body">
