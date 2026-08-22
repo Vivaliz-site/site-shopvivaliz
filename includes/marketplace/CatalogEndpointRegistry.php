@@ -39,8 +39,8 @@ function sv_market_catalog_endpoint_registry(): array
         'erp' => [
             'label' => 'Olist / Tiny ERP',
             'text' => ['PUT /public-api/v3/produtos/{id}'],
-            'images' => ['POST /api2/produto.alterar.php (imagens_externas)'],
-            'readback' => ['GET /public-api/v3/produtos/{id}', 'POST /api2/produtos.pesquisa.php', 'POST /api2/produto.obter.php'],
+            'images' => ['GET /public-api/v3/produtos/{id} anexos/imagens; escrita somente por endpoint ERP v3 oficial habilitado'],
+            'readback' => ['GET /public-api/v3/produtos/{id}', 'GET /public-api/v3/produtos?pesquisa={sku}&situacao=A'],
         ],
     ];
 }

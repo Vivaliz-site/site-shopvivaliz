@@ -45,7 +45,6 @@ def test_merge_env_is_atomic_and_preserves_managed_tokens(tmp_path: Path) -> Non
         "TINY_REFRESH_TOKEN",
         "TINY_CLIENT_ID",
         "TINY_CLIENT_SECRET",
-        "TOKEN_API_OLIST",
     ],
 )
 def test_merge_env_rejects_every_managed_oauth_key(tmp_path: Path, key: str) -> None:
@@ -62,6 +61,17 @@ def test_merge_env_rejects_every_managed_oauth_key(tmp_path: Path, key: str) -> 
 def test_merge_env_rejects_unmanaged_keys(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="unsupported"):
         merge_env(tmp_path / ".env", {"UNAPPROVED_RUNTIME_KEY": "must-not-write"})
+
+
+def test_merge_env_rejects_legacy_static_olist_token_as_unsupported(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+    original = "OLIST_REFRESH_TOKEN=active-refresh\n"
+    env_file.write_text(original, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="unsupported environment keys"):
+        merge_env(env_file, {"TOKEN_API_OLIST": "legacy-token"})
+
+    assert env_file.read_text(encoding="utf-8") == original
 
 
 def test_merge_env_accepts_mercadopago_runtime_keys(tmp_path: Path) -> None:

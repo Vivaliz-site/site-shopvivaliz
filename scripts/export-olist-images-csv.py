@@ -87,7 +87,7 @@ def auth_context() -> dict:
     # Modo proxy: usa o servidor como intermediário (contorna bloqueio de IP)
     if PROXY_URL:
         squad_token = os.getenv("SQUAD_TOKEN", "")
-        api_token   = os.getenv("TOKEN_API_OLIST") or os.getenv("OLIST_API_TOKEN") or ""
+        api_token   = os.getenv("OLIST_ACCESS_TOKEN") or os.getenv("OLIST_API_TOKEN") or ""
         print(f"Usando proxy PHP: {PROXY_URL}")
         return {"type": "proxy", "proxy_url": PROXY_URL, "squad_token": squad_token, "olist_token": api_token}
 

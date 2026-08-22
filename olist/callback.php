@@ -140,7 +140,7 @@ if (is_string($envTarget) && $envTarget !== '' && is_file($envTarget) && is_read
         'OLIST_REFRESH_TOKEN' => $refreshToken,
         'TINY_ACCESS_TOKEN' => $accessToken,
         'TINY_REFRESH_TOKEN' => $refreshToken,
-        'TOKEN_API_OLIST' => $accessToken,
+        'OLIST_ACCESS_TOKEN' => $accessToken,
     ] as $key => $value) {
         $pattern = '/^' . preg_quote($key, '/') . '=.*/m';
         $content = preg_match($pattern, $content)
