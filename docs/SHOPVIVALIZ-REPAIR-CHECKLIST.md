@@ -55,3 +55,4 @@ Atualizado em: 2026-08-21 20:45 BRT
 
 - 2026-08-21 22:16 BRT: Regra refinada: enriquecimento e permitido, mas campos com equivalente no ERP devem ser enviados ao ERP via API v3 e publicados no site a partir do retorno do sync v3. Site-only continua permitido apenas para informacoes sem campo equivalente no ERP.
 - 2026-08-21 22:14 BRT: PDP/video ERP: sync ativo e sync canonico agora importam `seo.linkVideo`/campos de video do detalhe `/produtos/{id}` para `video_url`; runtime tambem le `seo.linkVideo` como redundancia. Validacao: PHP lint OK, pagina de produto publicada com miniaturas, rotacao 3s, frete por CEP e imagens ERP-only. Evidencia/commit: pendente.
+- 2026-08-21 22:22 BRT: Publicador de catalogo corrigido: canal site nao grava mais products/cache para campos com equivalente no ERP; ele espelha enriquecimento via Tiny/Olist API v3 com read-back e publicacao pela proxima sincronizacao v3.

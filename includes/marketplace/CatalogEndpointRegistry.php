@@ -8,9 +8,9 @@ function sv_market_catalog_endpoint_registry(): array
     return [
         'site' => [
             'label' => 'ShopVivaliz',
-            'text' => ['UPDATE products', 'UPDATE product_channel_content', 'UPDATE storage/products-cache-ativos.json'],
+            'text' => ['PUT /public-api/v3/produtos/{id}', 'GET /public-api/v3/produtos/{id} read-back', 'ERP v3 sync -> site'],
             'images' => ['INSERT/UPDATE product_images', 'UPDATE products.image_url', 'UPDATE storefront cache'],
-            'readback' => ['SELECT products', 'SELECT product_channel_content', 'read-back do cache JSON'],
+            'readback' => ['GET /public-api/v3/produtos/{id}', 'ERP v3 sync runtime catalog'],
         ],
         'ml' => [
             'label' => 'Mercado Livre',
