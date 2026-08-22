@@ -6,6 +6,9 @@
 
 declare(strict_types=1);
 
+// API v3 is mandatory for ERP/site mirroring. Do not use API v2, scraping,
+// local CSVs or legacy snapshots as product registration sources.
+
 $root = dirname(__DIR__);
 $env_file = $root . '/.env';
 $token = '';

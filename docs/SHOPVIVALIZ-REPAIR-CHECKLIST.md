@@ -7,6 +7,12 @@ Atualizado em: 2026-08-21 20:45 BRT
 - [ ] Nao expor secrets, tokens, cookies ou credenciais.
 - [ ] Marcar [x] somente apos implementacao, teste e validacao em producao.
 
+## Regra de fonte de dados ERP/site
+- ERP/Tiny API v3 e fonte de verdade para todo campo de cadastro que possua equivalente no ERP: SKU, nome, descricao, categoria, preco, estoque, status, imagens, video, dimensoes, marca, NCM/GTIN, SEO/slug e dados comerciais.
+- O site pode manter informacoes adicionais somente quando nao houver campo equivalente no ERP, como UX, textos institucionais, selos, conteudo editorial, comentarios, avaliacoes, analytics, ranking/ordem de vitrine e regras de apresentacao.
+- Informacao adicional do site nunca pode sobrescrever, completar ou ressuscitar dado de cadastro que exista no ERP.
+- Espelhamento ERP -> site deve usar API v3; mudancas aplicaveis site -> ERP tambem devem usar API v3, nunca API v2, scraping, CSV local, snapshot antigo ou tabela local como fonte de verdade.
+
 ## P0 - Critico
 - [x] REVIEW-01 Remover texto interno/admin da pagina publica de avaliacoes. Aceite: bloco publico nao contem "O servidor confere pedido". Evidencia: `grep` negativo em `avaliacoes.php`; sintaxe PHP ok.
 - [x] LEGAL-01 Corrigir politica de arrependimento/devolucao para texto claro ao consumidor. Aceite: texto nao afirma que postagem de arrependimento e responsabilidade do consumidor. Evidencia: `grep` negativo; sintaxe PHP ok.
@@ -17,7 +23,7 @@ Atualizado em: 2026-08-21 20:45 BRT
 - [x] STOCK-01 Corrigir fonte/normalizacao de estoque do catalogo em producao. Evidencia: `api/catalog/products.php?available=1&no_cache=1` retornou total 163, count 5, `available_only=true`, com estoque real positivo em 2026-08-21.
 - [x] STOCK-02 Revalidar server-side carrinho/checkout contra estoque/status antes do pedido. Evidencia: `/api/cart/validate.php` bloqueia SKU inexistente, quantidade 999 e SKU duplicado 4+4 para `JVCDAC34` quando estoque=7; `api/orders/create-v2.php` reforcado para agregar SKUs duplicados antes de comparar estoque.
 - [x] IMG-01 Auditar SKUs ativos sem imagem no catalogo publico. Aceite: relatorio CSV gerado. Evidencia: `reports/api-missing-active-images-20260821.csv` com 6 SKUs.
-- [ ] IMG-02 Corrigir SKUs ativos sem imagem usando fonte ERP/Olist/Tiny ou aprovacao manual. Evidencia parcial: `kit-vedant-90`, `KIT4R-SOPRANO` e `kit4rod35freio` corrigidos com imagens locais/snapshot Tiny; `23543` removido da vitrine por regra de insumo `stretch manual`; novo relatorio `reports/api-missing-active-images-20260821-after-fixes.csv` restou com 2 SKUs sem fonte local (`TTO/PP*BR1`, `SAB-PR-FBA-ONSITE`).
+- [x] IMG-02 Corrigir SKUs ativos sem imagem usando fonte ERP/Tiny API v3. Aceite: nenhuma imagem publica de produto vem de fallback local/manual; produtos com estoque usam imagens do proprio cadastro no ERP. Evidencia: `reports/api-missing-active-images-20260821-final.csv` e `reports/api-non-erp-images-20260821-final.csv` com 0 pendencias; validacao publica 175/175 imagens ERP/Tiny S3.
 
 ## P1 - Alto impacto
 - [x] CART-01 Redesenhar carrinho, corrigir sobreposicao, hierarquia, responsividade e CTA. Evidencia: CSS de reparo 2026-08-21 aplicado em `carrinho.php`; sintaxe PHP ok.
@@ -43,3 +49,5 @@ Atualizado em: 2026-08-21 20:45 BRT
 
 - 2026-08-21: ERP image repair: corrigido sync ativo `olist/sync-on-webhook.php` para enriquecer produtos sem imagem via detalhe `/produtos/{id}`; cache atual reparado para TTO/PP*BR1 e SAB-PR-FBA-ONSITE; API publica validada com 0 produtos ativos/com estoque sem imagem. Commit: pendente.
 - 2026-08-21 21:58 BRT: Regra reforcada: imagens publicas de produtos devem vir exclusivamente do produto no ERP/Tiny. Removido fallback manual/local de imagem da vitrine; cache ativo reparado via /produtos/{id}. Validacao: 175/175 imagens publicas classificadas como erp_tiny_s3; relatorio `reports/api-non-erp-images-20260821-final.csv` com 0 linhas. Evidencia/commit: pendente.
+
+- 2026-08-21 22:12 BRT: ERP authority guard criado em `scripts/quality/validate-erp-v3-authority.php`. Regra refinada: ERP/Tiny API v3 e fonte de verdade para campos com equivalente no ERP; informacoes adicionais do site sao permitidas somente quando nao houver campo ERP equivalente e sem sobrescrever cadastro.

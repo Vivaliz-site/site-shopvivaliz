@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+// API v3 is mandatory for ERP/site mirroring. Do not use API v2, scraping,
+// local CSVs or legacy snapshots as product registration sources.
+
 header_remove('X-Powered-By');
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -105,7 +108,7 @@ function svs_get_access_token(): string {
         $value = trim((string)($store[$key] ?? ''));
         if ($value !== '') return $value;
     }
-    $token = svs_env('OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN', 'TOKEN_API_OLIST');
+    $token = svs_env('OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN');
     if ($token === '') {
         throw new RuntimeException('access_token_missing: aguarde shopvivaliz-token-renewer ou reautorize em /olist/connect.php');
     }
@@ -228,13 +231,13 @@ function svs_normalize(array $p, string $source): array {
     // sempre caia no default 0 e zerava o estoque de TODOS os produtos no
     // catalogo espelhado, bloqueando toda venda no checkout.
     //
-    // O fallback v2 (usado quando o OAuth v3 falha) nao tem nenhum desses
+    // O non-v3 fallback disabled (usado quando o OAuth v3 falha) nao tem nenhum desses
     // campos na listagem e nao faz fetch de detalhe por produto -- por isso
     // NUNCA retorna estoque real. Se tratassemos "sem campo" como estoque=0
     // aqui, toda vez que o OAuth v3 falhasse (o que ja aconteceu de forma
     // recorrente por token expirado) o catalogo inteiro seria zerado e
     // bloquearia checkout de TODOS os produtos, mesmo os com estoque real.
-    // Por isso o fallback v2 retorna null (estoque desconhecido) em vez de 0,
+    // Por isso o non-v3 fallback disabled retorna null (estoque desconhecido) em vez de 0,
     // e o merge em svs_mirror_catalog preserva o estoque anterior nesse caso.
     $stockRaw = $p['estoque_disponivel']          ??
         $p['estoque']['quantidade']       ??
@@ -246,7 +249,7 @@ function svs_normalize(array $p, string $source): array {
     // do saldo/backorder) -- nunca faz sentido exibir estoque negativo pro cliente,
     // entao zeramos aqui. O calculo "disponivel" correto (GET /estoque/{id}) e mais
     // caro (1 chamada por produto) e fica pro enriquecimento sob demanda.
-    $stock = $stockRaw !== null ? max(0, (int)$stockRaw) : ($source === 'tiny_v2' ? null : 0);
+    $stock = $stockRaw !== null ? max(0, (int)$stockRaw) : 0;
 
     // imagens
     $images = [];
@@ -505,8 +508,7 @@ function svs_mirror_catalog(array $fetched, string $catalogPath): array {
             $merged['price'] = $old['price'];
         }
 
-        // stock=null significa "fonte nao sabe" (fallback v2 sem dado real) --
-        // preserva o estoque anterior em vez de zerar o catalogo inteiro.
+        // stock=null significa fonte sem dado real; preserva o estoque anterior.
         if (array_key_exists('stock', $new) && $new['stock'] === null) {
             $merged['stock'] = (int)($old['stock'] ?? 0);
         }
@@ -602,11 +604,7 @@ $errors  = [];
 $fetched = [];
 $source  = 'none';
 
-// Tiny v3 OAuth -- unico caminho suportado. A API v2 legada (token estatico,
-// api2/produtos.pesquisa.php) foi removida em 2026-07-18: alem de obsoleta,
-// o schema dela usa terminologia de "pedido ecommerce" que nao corresponde
-// a como este projeto realmente integra com o Tiny (venda direta do site,
-// nao um canal de marketplace).
+// ERP Olist/Tiny v3 OAuth -- unico caminho suportado para catalogo.
 try {
     $token   = svs_get_access_token();
     $raw     = svs_fetch_v3($token);
