@@ -56,9 +56,13 @@ class PolicyEngine {
   }
 
   isVisualFile(file) {
-    // Server-side SEO metadata and marketplace change-set logic do not alter
-    // rendered layout, so screenshot evidence is not meaningful for them.
-    if (file === 'includes/product-seo.php' || file.startsWith('includes/marketplace/')) {
+    // Server-side metadata, marketplace logic and stock continuity helpers do
+    // not alter rendered layout, so screenshot evidence is not meaningful.
+    if (
+      file === 'includes/product-seo.php'
+      || file === 'includes/catalog-authoritative-stock-carry.php'
+      || file.startsWith('includes/marketplace/')
+    ) {
       return false;
     }
     return /^(?:public|includes|templates|views|pages)\//.test(file)
