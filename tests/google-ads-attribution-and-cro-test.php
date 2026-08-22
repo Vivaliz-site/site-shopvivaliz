@@ -45,8 +45,8 @@ $identity = svga4_order_client_id([
 sv_test_assert(($identity['tagged'] ?? false) === true, 'A canonical GA client_id should be marked attributable.');
 sv_test_assert(($identity['client_id'] ?? '') === '123456789.1700000000', 'Approved purchase should reuse the browser client_id.');
 sv_test_assert(
-    svga4_order_session_id(['funnel_client_id' => $packedIdentity]) === $sessionCookie,
-    'Approved purchase should recover the GA4 session cookie for Measurement Protocol attribution.'
+    svga4_order_session_id(['funnel_client_id' => $packedIdentity]) === '1700000000',
+    'Approved purchase should normalize the GA4 session cookie to the numeric session_id used by Measurement Protocol.'
 );
 
 // Historical orders with only client_id must remain valid.
@@ -83,6 +83,10 @@ sv_test_assert(($rejected['gclid'] ?? '') === '', 'Rejected consent must not rea
 // treating order creation as revenue. Purchase is canonical only after payment
 // approval in the server-side webhook post-processor.
 $eventsJs = (string)file_get_contents(dirname(__DIR__) . '/js/shopvivaliz-google-events.js');
+$modernParserPos = strpos($eventsJs, 'var modern = value.match');
+$legacyParserPos = strpos($eventsJs, 'var legacy = value.match');
+sv_test_assert($modernParserPos !== false && $legacyParserPos !== false && $modernParserPos < $legacyParserPos, 'GS2 modern session cookie parser must run before legacy parser.');
+sv_test_assert(str_contains($eventsJs, '[.\\$])s(\\d+)'), 'GS2 parser must recognize the .s<session_id>$ cookie segment.');
 sv_test_assert(str_contains($eventsJs, "if (eventName === 'purchase') return;"), 'Browser purchase events must be suppressed.');
 sv_test_assert(str_contains($eventsJs, "'add_shipping_info'"), 'GA4 add_shipping_info should be instrumented.');
 sv_test_assert(str_contains($eventsJs, "'add_payment_info'"), 'GA4 add_payment_info should be instrumented.');
