@@ -17,7 +17,7 @@ function sv_blog_seo_truncate(string $value, int $max): string
         ? mb_substr($value, 0, $max, 'UTF-8')
         : substr($value, 0, $max);
     $cut = preg_replace('/\s+\S*$/u', '', $cut) ?: $cut;
-    return rtrim($cut, " \t\n\r\0\x0B,;:-");
+    return rtrim($cut, " \t\n\r\0\x0B,;:-|");
 }
 
 function sv_blog_seo_title(string $value): string

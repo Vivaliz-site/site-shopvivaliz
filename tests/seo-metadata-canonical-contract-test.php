@@ -22,9 +22,14 @@ $title = sv_blog_seo_title('Como medir espaços antes de comprar acessórios par
 $description = sv_blog_seo_description('Guia curto.', 'Aprenda a medir espaços antes de comprar acessórios para casa e evite incompatibilidades.', 'Como medir espaços antes de comprar acessórios para casa');
 
 sv_seo_assert(mb_strlen($title, 'UTF-8') <= 60, 'titulo do blog deve ter no maximo 60 caracteres');
+sv_seo_assert(!str_ends_with(trim($title), '|'), 'titulo truncado nao pode terminar em separador solto');
 sv_seo_assert(mb_strlen($description, 'UTF-8') >= 110, 'descricao do blog deve ter pelo menos 110 caracteres');
 sv_seo_assert(mb_strlen($description, 'UTF-8') <= 155, 'descricao do blog deve ter no maximo 155 caracteres');
 sv_seo_assert(sv_blog_seo_origin() === 'https://shopvivaliz.com.br', 'origem canonica do blog deve ser HTTPS oficial');
+
+$delivery = file_get_contents($root . '/politica-entrega.php') ?: '';
+preg_match('/<meta name=\"description\" content=\"([^\"]+)\"/u', $delivery, $deliveryMeta);
+sv_seo_assert(isset($deliveryMeta[1]) && mb_strlen($deliveryMeta[1], 'UTF-8') <= 160, 'descricao da politica de entrega deve ter no maximo 160 caracteres');
 
 $reviews = file_get_contents($root . '/avaliacoes.php') ?: '';
 sv_seo_assert(str_contains($reviews, 'rel="canonical"'), 'pagina de avaliacoes precisa de canonical');
