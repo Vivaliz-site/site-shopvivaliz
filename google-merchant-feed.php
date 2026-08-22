@@ -7,6 +7,8 @@ require_once __DIR__ . '/includes/catalog-runtime.php';
 require_once __DIR__ . '/includes/catalog-image-enrich.php';
 require_once __DIR__ . '/includes/product-seo.php';
 require_once __DIR__ . '/includes/google-shopping-feed-utils.php';
+require_once __DIR__ . '/includes/feed-cache.php';
+svfc_start('google-merchant', 900, svfc_default_catalog_dependencies());
 
 $official = __DIR__ . '/config/official-site.php';
 $officialData = is_file($official) ? (@include $official) : [];
