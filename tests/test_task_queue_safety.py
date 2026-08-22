@@ -95,23 +95,26 @@ class TaskQueueLibraryTests(unittest.TestCase):
             self.assertEqual(persisted["metadata"]["schema_version"], 2)
             self.assertNotIn("queue", persisted)
 
-    def test_detected_shared_runtime_queue_is_the_default_and_is_migrated(self) -> None:
+    def test_non_production_checkout_keeps_reviewed_repo_queue_as_default(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            path = Path(temporary) / "tasks-queue.json"
-            path.write_text(
+            root = Path(temporary)
+            repository_path = root / "repo-tasks-queue.json"
+            shared_candidate = root / "shared-tasks-queue.json"
+            repository_path.write_text(json.dumps(canonical_queue()), encoding="utf-8")
+            shared_candidate.write_text(
                 json.dumps({"version": "1.1", "queue": [{"task_id": "OLD-2"}]}),
                 encoding="utf-8",
             )
             with patch.dict("os.environ", {}, clear=True), patch.object(
-                self.lib, "DEFAULT_RUNTIME_QUEUE_FILE", path
-            ):
-                self.assertEqual(self.lib.runtime_queue_file(), path)
+                self.lib, "ROOT_QUEUE_FILE", repository_path
+            ), patch.object(self.lib, "DEFAULT_RUNTIME_QUEUE_FILE", shared_candidate):
+                self.assertEqual(self.lib.runtime_queue_file(), repository_path)
                 loaded = self.lib.load_queue()
 
-            self.assertEqual(loaded["tasks"][0]["id"], "OLD-2")
-            persisted = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(persisted["metadata"]["schema_version"], 2)
-            self.assertNotIn("queue", persisted)
+            self.assertEqual(loaded["tasks"][0]["task_id"], "AUDIT-001")
+            shared_payload = json.loads(shared_candidate.read_text(encoding="utf-8"))
+            self.assertEqual(shared_payload["version"], "1.1")
+            self.assertIn("queue", shared_payload)
 
     def test_unverified_completed_state_is_rejected(self) -> None:
         payload = canonical_queue()
