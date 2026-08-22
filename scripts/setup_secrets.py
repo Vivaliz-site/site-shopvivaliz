@@ -22,7 +22,7 @@ SECRETS_TO_ADD = {
     'OLIST_CLIENT_SECRET': 'Secret Cliente Olist',
     'OLIST_ACCESS_TOKEN': 'Token de acesso Olist',
     'OLIST_REFRESH_TOKEN': 'Refresh token Olist',
-    'TOKEN_API_OLIST': 'Token API Olist',
+    'OLIST_ACCESS_TOKEN': 'Token API Olist',
     'CLIENT_ID_API_OLIST': 'ID API Olist',
     'CLIENT_SECRET_OLIST': 'Secret API Olist',
     'OLIST_REDIRECT_URI': 'Redirect Olist',

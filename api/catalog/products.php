@@ -96,8 +96,6 @@ function svcat_cache_signature(): string
     $paths = [
         $root . '/storage/products-cache-ativos.json',
         $root . '/storage/cache/products-cache-ativos.json',
-        $root . '/storage/products-cache.json',
-        $root . '/api/catalog/fallback-products.json',
         $root . '/storage/ml/product-scores.json',
     ];
     $parts = [];
@@ -218,9 +216,8 @@ $allProducts = array_map(static function (array $row): array {
     ];
 }, $runtimeRows);
 
-// The ERP runtime is authoritative for commerce fields but occasionally omits
-// image URLs. Fill only missing images from the local mirror so paid/catalog
-// landings show the real product instead of a storefront-logo placeholder.
+// Product registration data is ERP-only. Image enrichment may only use ERP/Tiny
+// media tables populated from the product detail endpoint, never local/manual data.
 $allProducts = svcie_enrich_images($allProducts);
 
 $allProducts = array_values(array_filter($allProducts, static fn(array $p): bool => svcat_is_active($p['status'] ?? null)));

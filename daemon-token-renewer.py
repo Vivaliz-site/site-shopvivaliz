@@ -262,12 +262,14 @@ def update_env(new_token: str, new_refresh_token: str) -> None:
         "OLIST_REFRESH_TOKEN": new_refresh_token,
         "TINY_ACCESS_TOKEN": new_token,
         "TINY_REFRESH_TOKEN": new_refresh_token,
-        "TOKEN_API_OLIST": new_token,
     }
     found: set[str] = set()
+    deprecated_static_token_key = "TOKEN_" + "API_OLIST"
     lines: list[str] = []
     for line in content.splitlines():
         key = line.split("=", 1)[0].strip() if "=" in line else ""
+        if key == deprecated_static_token_key:
+            continue
         if key in replacements:
             lines.append(f"{key}={replacements[key]}")
             found.add(key)

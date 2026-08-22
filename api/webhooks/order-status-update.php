@@ -98,6 +98,21 @@ function svtnf_extract_tracking(array $data): string
     ]);
 }
 
+function svtnf_extract_tracking_url(array $data): string
+{
+    $dados = svtnf_extract_payload($data);
+    return svtnf_first_non_empty_string([
+        $dados['urlRastreamento'] ?? '',
+        $dados['linkRastreamento'] ?? '',
+        $dados['trackingUrl'] ?? '',
+        $dados['rastreio']['url'] ?? '',
+        $dados['rastreamento']['url'] ?? '',
+        $data['urlRastreamento'] ?? '',
+        $data['tracking_url'] ?? '',
+        $data['trackingUrl'] ?? '',
+    ]);
+}
+
 function svtnf_extract_estimated_delivery(array $data): string
 {
     $dados = svtnf_extract_payload($data);
@@ -181,6 +196,7 @@ $olist_order_id = svtnf_extract_order_reference($data);
 $status = svtnf_extract_status($data);
 $tracking = svtnf_extract_tracking($data);
 $estimated_delivery = svtnf_extract_estimated_delivery($data);
+$tracking_url = svtnf_extract_tracking_url($data);
 $invoiceId = svtnf_extract_invoice_id($data);
 $invoiceDetails = [];
 $invoiceXml = [];
@@ -226,7 +242,7 @@ try {
 
     // Buscar pedido
     $stmt = $db->prepare(
-        'SELECT p.id, p.user_id, p.email, p.order_status, p.order_number, u.email as user_email, u.name
+        'SELECT p.id, p.user_id, p.email, p.order_status, p.order_number, p.tracking_number, p.tracking_url, p.estimated_delivery, u.email as user_email, u.name
          FROM orders p
          LEFT JOIN users u ON u.id = p.user_id
          WHERE p.olist_order_id = ? OR p.order_number = ? LIMIT 1'
@@ -251,10 +267,14 @@ try {
     $orderPath = $orderNumber !== '' ? svmp_find_order_path($orderNumber) : '';
     $orderId = (int)$order['id'];
     $statusChanged = $order['order_status'] !== $normalized_status;
+    $trackingChanged = $tracking !== '' && $tracking !== (string)($order['tracking_number'] ?? '');
+    $trackingUrlChanged = $tracking_url !== '' && $tracking_url !== (string)($order['tracking_url'] ?? '');
+    $deliveryChanged = $estimated_delivery !== '' && substr($estimated_delivery, 0, 10) !== substr((string)($order['estimated_delivery'] ?? ''), 0, 10);
 
-    $shouldPersist = $order['order_status'] !== $normalized_status
-        || $tracking !== ''
-        || $estimated_delivery !== ''
+    $shouldPersist = $statusChanged
+        || $trackingChanged
+        || $trackingUrlChanged
+        || $deliveryChanged
         || $invoiceId !== '';
 
     // Atualizar status/dados se houve mudanca ou se o webhook trouxe NF/rastreio novos.
@@ -262,12 +282,14 @@ try {
         $update = $db->prepare(
             'UPDATE orders SET order_status = ?,
              tracking_number = COALESCE(NULLIF(?, ""), tracking_number),
+             tracking_url = COALESCE(NULLIF(?, ""), tracking_url),
              estimated_delivery = COALESCE(NULLIF(?, ""), estimated_delivery),
              nf_id = COALESCE(NULLIF(?, ""), nf_id),
              nf_numero = COALESCE(NULLIF(?, ""), nf_numero),
              nf_serie = COALESCE(NULLIF(?, ""), nf_serie),
              nf_chave_acesso = COALESCE(NULLIF(?, ""), nf_chave_acesso),
              nf_data_emissao = COALESCE(NULLIF(?, ""), nf_data_emissao),
+             nf_xml_url = COALESCE(NULLIF(?, ""), nf_xml_url),
              updated_at = NOW()
              WHERE id = ?'
         );
@@ -297,28 +319,32 @@ try {
             $nfNumero = (string)($invoiceDetails['numero'] ?? '');
             $nfSerie = (string)($invoiceDetails['serie'] ?? '');
             $nfChave = (string)($invoiceDetails['chaveAcesso'] ?? '');
+            $nfXmlUrl = ($nfId !== '' && $invoiceXml !== []) ? ('/api/account/invoice.php?order_id=' . $orderId . '&format=xml') : '';
 
             $update->bind_param(
-                'ssssssssi',
+                'ssssssssssi',
                 $normalized_status,
                 $tracking,
+                $tracking_url,
                 $estimated_delivery,
                 $nfId,
                 $nfNumero,
                 $nfSerie,
                 $nfChave,
                 $nfDataEmissao,
+                $nfXmlUrl,
                 $orderId
             );
             $update->execute();
 
             if ($orderPath !== '') {
-                svtnf_update_local_order_file($orderPath, $normalized_status, $tracking, $estimated_delivery, $invoiceDetails, $invoiceXml);
+                svtnf_update_local_order_file($orderPath, $normalized_status, $tracking, $tracking_url, $estimated_delivery, $invoiceDetails, $invoiceXml);
             }
 
-            // Enviar email para cliente
+            // Enviar email para cliente a cada mudanca relevante vinda do ERP:
+            // status do pedido/transporte, codigo de rastreio, link ou previsao.
             $customer_email = $order['user_email'] ?? $order['email'];
-            if ($statusChanged && $customer_email) {
+            if (($statusChanged || $trackingChanged || $trackingUrlChanged || $deliveryChanged) && $customer_email) {
                 send_order_status_email(
                     email: $customer_email,
                     name: $order['name'] ?? 'Cliente',
@@ -326,7 +352,23 @@ try {
                     olist_id: $olist_order_id,
                     status: $normalized_status,
                     tracking: $tracking,
+                    tracking_url: $tracking_url,
                     estimated_delivery: $estimated_delivery
+                );
+            }
+
+            // Quando a NF vem do ERP, enviar um aviso específico com link seguro
+            // para a área do cliente. O XML oficial continua sendo buscado do
+            // ERP/Tiny API v3 pelo endpoint autenticado /api/account/invoice.php.
+            if ($normalized_status === 'nota_fiscal_enviada' && $customer_email && $nfId !== '') {
+                send_order_invoice_email(
+                    email: $customer_email,
+                    name: $order['name'] ?? 'Cliente',
+                    order_id: $orderId,
+                    order_number: $orderNumber !== '' ? $orderNumber : (string)$orderId,
+                    nf_numero: $nfNumero,
+                    nf_serie: $nfSerie,
+                    nf_chave: $nfChave
                 );
             }
 
@@ -375,6 +417,7 @@ function send_order_status_email(
     string $olist_id,
     string $status,
     string $tracking,
+    string $tracking_url,
     string $estimated_delivery
 ): void {
     $siteBaseUrl = svtnf_site_base_url();
@@ -397,7 +440,13 @@ function send_order_status_email(
     $html .= "<p><strong>Status:</strong> $status_label</p>";
 
     if ($tracking) {
-        $html .= "<p><strong>Código de Rastreamento:</strong> <code>$tracking</code></p>";
+        $safeTracking = htmlspecialchars($tracking, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $html .= "<p><strong>Código de Rastreamento:</strong> <code>{$safeTracking}</code></p>";
+    }
+
+    if ($tracking_url) {
+        $safeTrackingUrl = htmlspecialchars($tracking_url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $html .= "<p><a href='{$safeTrackingUrl}' style='background:#173B63;color:#fff;padding:10px 20px;text-decoration:none;border-radius:5px;display:inline-block;'>Acompanhar transporte</a></p>";
     }
 
     if ($estimated_delivery) {
@@ -413,6 +462,33 @@ function send_order_status_email(
         subject: $subject,
         html: $html
     );
+}
+
+
+function send_order_invoice_email(
+    string $email,
+    string $name,
+    int $order_id,
+    string $order_number,
+    string $nf_numero,
+    string $nf_serie,
+    string $nf_chave
+): void {
+    $siteBaseUrl = svtnf_site_base_url();
+    $safeName = htmlspecialchars($name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $safeOrder = htmlspecialchars($order_number, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $safeNumero = htmlspecialchars($nf_numero, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $safeSerie = htmlspecialchars($nf_serie, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $safeChave = htmlspecialchars($nf_chave, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $invoiceUrl = $siteBaseUrl . '/minha-conta/pedidos.php';
+    $subject = "Nota fiscal disponível - Pedido {$order_number}";
+    $html = "<h2>Oi {$safeName},</h2>";
+    $html .= "<p>A nota fiscal do seu pedido <strong>#{$safeOrder}</strong> foi emitida no ERP e já está disponível na sua área do cliente.</p>";
+    if ($safeNumero !== '') $html .= "<p><strong>NF-e:</strong> {$safeNumero}" . ($safeSerie !== '' ? " / série {$safeSerie}" : "") . "</p>";
+    if ($safeChave !== '') $html .= "<p><strong>Chave de acesso:</strong><br><code>{$safeChave}</code></p>";
+    $html .= "<p><a href='{$invoiceUrl}' style='background:#173B63;color:#fff;padding:12px 18px;text-decoration:none;border-radius:6px;display:inline-block'>Consultar nota fiscal</a></p>";
+    $html .= "<p>O XML oficial é disponibilizado de forma autenticada, consultando o ERP/Tiny pela API v3.</p>";
+    send_email(to: $email, subject: $subject, html: $html);
 }
 
 function svtnf_extract_invoice_id(array $data): string
@@ -444,6 +520,7 @@ function svtnf_update_local_order_file(
     string $path,
     string $status,
     string $tracking,
+    string $trackingUrl,
     string $estimatedDelivery,
     array $invoiceDetails,
     array $invoiceXml
@@ -468,6 +545,9 @@ function svtnf_update_local_order_file(
         if ($tracking !== '') {
             $order['tracking_number'] = $tracking;
             $order['tracking'] = $tracking;
+        }
+        if ($trackingUrl !== '') {
+            $order['tracking_url'] = $trackingUrl;
         }
         if ($estimatedDelivery !== '') {
             $order['estimated_delivery'] = $estimatedDelivery;

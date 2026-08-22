@@ -19,16 +19,16 @@ function sv_catalog_channel_profiles(): array
 {
     return [
         'site' => [
-            'label' => 'Site Proprio',
-            'policy_version' => 'site-google-commerce-2026-08',
+            'label' => 'Site Proprio via ERP v3',
+            'policy_version' => 'site-erp-v3-mirrored-2026-08',
             'field_map' => [
-                'optimized_title' => ['label' => 'Titulo', 'target' => 'products.name + cache', 'mode' => 'direct'],
-                'optimized_description' => ['label' => 'Descricao', 'target' => 'products.description + cache', 'mode' => 'direct'],
-                'bullet_points' => ['label' => 'Bullet points', 'target' => 'product_channel_content + vitrine', 'mode' => 'direct'],
-                'seo_keywords' => ['label' => 'SEO keywords', 'target' => 'product_channel_content + cache', 'mode' => 'direct'],
-                'marketing_hooks' => ['label' => 'Marketing hooks', 'target' => 'descricao exibida na vitrine', 'mode' => 'embedded'],
-                'meta_title' => ['label' => 'Meta title', 'target' => 'product_channel_content + cache', 'mode' => 'direct'],
-                'meta_description' => ['label' => 'Meta description', 'target' => 'product_channel_content + cache', 'mode' => 'direct'],
+                'optimized_title' => ['label' => 'Titulo', 'target' => 'proposta -> PUT /public-api/v3/produtos/{id} -> descricao -> sync site', 'mode' => 'erp_mirrored'],
+                'optimized_description' => ['label' => 'Descricao', 'target' => 'proposta -> PUT /public-api/v3/produtos/{id} -> descricaoComplementar/observacoes -> sync site', 'mode' => 'erp_mirrored'],
+                'bullet_points' => ['label' => 'Bullet points', 'target' => 'incorporados em descricaoComplementar/observacoes no ERP -> sync site', 'mode' => 'erp_mirrored'],
+                'seo_keywords' => ['label' => 'SEO keywords', 'target' => 'PUT /public-api/v3/produtos/{id} -> seo.keywords -> sync site', 'mode' => 'erp_mirrored'],
+                'marketing_hooks' => ['label' => 'Marketing hooks', 'target' => 'incorporados em campo textual do ERP quando aprovados -> sync site', 'mode' => 'erp_mirrored'],
+                'meta_title' => ['label' => 'Meta title', 'target' => 'PUT /public-api/v3/produtos/{id} -> seo.titulo -> sync site', 'mode' => 'erp_mirrored'],
+                'meta_description' => ['label' => 'Meta description', 'target' => 'PUT /public-api/v3/produtos/{id} -> seo.descricao -> sync site', 'mode' => 'erp_mirrored'],
             ],
             'limits' => [
                 'title_max' => 70,

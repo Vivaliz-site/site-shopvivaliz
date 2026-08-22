@@ -329,7 +329,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
         <div class="modal-icon">🎉</div>
         <h2>Pedido registrado!</h2>
         <p id="order-number-msg" style="font-weight:700;color:#0f8f62;font-size:18px"></p>
-        <p>Nossa equipe comercial já seguirá com a confirmação de frete e pagamento.</p>
+        <p>Seu pedido foi registrado com frete validado. Acompanhe pagamento, nota fiscal e rastreio pela área do cliente.</p>
         <div class="modal-actions">
             <a id="success-wpp-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-wpp">
                 💬 Falar no WhatsApp
@@ -1023,7 +1023,7 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
                 if (successCopy) {
                     successCopy.textContent = method === 'boleto'
                         ? 'Nossa equipe vai emitir o boleto apos confirmar frete e estoque.'
-                        : 'Nossa equipe comercial já seguirá com a confirmação de frete e pagamento.';
+                        : 'Seu pedido foi registrado com frete validado. Acompanhe pagamento, nota fiscal e rastreio pela área do cliente.';
                 }
                 document.getElementById('success-wpp-link').href = wppLink;
                 document.getElementById('success-modal').hidden = false;
