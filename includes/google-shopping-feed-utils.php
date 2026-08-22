@@ -178,7 +178,6 @@ function svgf_catalog_identifier_map(string $root): array
     $map = [];
     foreach ([
         $root . '/storage/products-cache-ativos.json',
-        $root . '/api/catalog/fallback-products.json',
     ] as $path) {
         if (!is_file($path) || !is_readable($path)) continue;
         $payload = json_decode((string)file_get_contents($path), true);
