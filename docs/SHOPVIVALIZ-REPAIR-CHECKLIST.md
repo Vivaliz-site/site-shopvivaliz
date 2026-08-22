@@ -33,11 +33,11 @@ Atualizado em: 2026-08-21 20:45 BRT
 - [x] ACCOUNT-01 Inserir logo na area Minha Conta. Evidencia: `includes/account-chrome-top.php` usa logo em `.sv-account-header`; sintaxe PHP ok.
 - [x] ABOUT-01 Reescrever `/sobre/` com contexto institucional/comercial. Evidencia: `sobre/index.php` reescrito e sintaxe PHP ok.
 - [ ] CAT-01 Otimizar `/catalogo/` profundamente: tempo de carregamento, paginacao, filtros e cache. Evidencia parcial: removido enriquecimento duplicado; picos de lentidao estavam correlacionados a processos temporarios `shopvivaliz-pr-heal`/`git index-pack` concorrentes, encerrados em producao. Apos alivio, `/catalogo/?q=decore` mediu ~0,86s-1,38s total em 3 execucoes.
-- [x] BLOG-01 Melhorar imagens dos artigos sem repeticao indevida. Evidencia: `tests/blog-image-quality-test.php` validou 22 artigos, cada um com capa unica existente em `/public/assets/blog/{slug}.svg`. Commit: pendente.
+- [x] BLOG-01 Melhorar imagens dos artigos sem repeticao indevida. Evidencia: `tests/blog-image-quality-test.php` validou 22 artigos, cada um com capa unica existente em `/public/assets/blog/{slug}.svg`. Commit: `f8e7050a7`.
 - [ ] GOOGLE-01 Auditar Ads, GA4, GTM, Merchant, Search Console e motivo de zero vendas. Evidencia/commit: pendente.
 
 ## P2/P3 - Continuo
-- [x] COPY-01 Varredura de textos publicos para remover linguagem admin/debug. Evidencia: `tests/public-copy-quality-test.php` OK; removidas mensagens publicas de contato/comercial manual de frete em checkout e email legado. Commit: pendente.
+- [x] COPY-01 Varredura de textos publicos para remover linguagem admin/debug. Evidencia: `tests/public-copy-quality-test.php` OK; removidas mensagens publicas de contato/comercial manual de frete em checkout e email legado. Commit: `f8e7050a7`.
 - [x] SEO-01 Validar sitemap, schema Product/Offer e paridade feed/ERP/site. Evidencia: `tests/seo-product-feed-quality-test.php` OK com 162 produtos disponiveis, sitemap canônico em `/sitemap.xml`, Product/Offer schema presente e feed publico com SKU/preco/estoque/imagem HTTPS. Commit: pendente.
 - [ ] A11Y-01 Testes mobile/desktop, teclado, contraste e Lighthouse.
 
