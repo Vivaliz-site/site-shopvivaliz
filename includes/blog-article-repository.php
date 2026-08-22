@@ -224,6 +224,16 @@ final class BlogArticleRepository
 
     private function resolveImage(string $image, array $article): string
     {
+        $slug = trim((string)($article['slug'] ?? ''));
+        if ($slug !== '') {
+            foreach (['svg', 'webp', 'jpg', 'jpeg', 'png'] as $extension) {
+                $candidate = '/public/assets/blog/' . $slug . '.' . $extension;
+                if (is_file(dirname(__DIR__) . $candidate)) {
+                    return $candidate;
+                }
+            }
+        }
+
         $image = trim($image);
         if ($image !== '' && (str_starts_with($image, 'http://') || str_starts_with($image, 'https://') || str_starts_with($image, '//'))) {
             return $image;

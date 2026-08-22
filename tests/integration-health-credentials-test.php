@@ -39,7 +39,7 @@ function ihct_assert(bool $condition, string $message): void
 $envKeysToClean = [
     'OLIST_CLIENT_ID', 'OLIST_CLIENT_SECRET', 'OLIST_REFRESH_TOKEN', 'OLIST_ACCESS_TOKEN',
     'TINY_CLIENT_ID', 'TINY_CLIENT_SECRET', 'TINY_REFRESH_TOKEN', 'TINY_ACCESS_TOKEN',
-    'CLIENT_ID_API_OLIST', 'CLIENT_SECRET_OLIST', 'TOKEN_API_OLIST',
+    'CLIENT_ID_API_OLIST', 'CLIENT_SECRET_OLIST',
 ];
 
 function ihct_clear_env(array $keys): void

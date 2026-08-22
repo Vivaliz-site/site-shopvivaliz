@@ -5,33 +5,32 @@ require_once __DIR__ . '/pdo-database.php';
 
 /**
  * @param list<array<string,mixed>> $products
- * @param array<string,string> $imageBySku
+ * @param array<string,list<string>> $imagesBySku
  * @return list<array<string,mixed>>
  */
-function svcie_apply_image_map(array $products, array $imageBySku): array
+function svcie_apply_image_map(array $products, array $imagesBySku): array
 {
     foreach ($products as $index => $product) {
         $sku = trim((string)($product['sku'] ?? ''));
-        $current = trim((string)($product['image_url'] ?? ''));
-        if ($current !== '' || $sku === '' || !isset($imageBySku[$sku])) continue;
+        if ($sku === '' || !isset($imagesBySku[$sku])) continue;
 
-        $image = trim((string)$imageBySku[$sku]);
-        if ($image === '') continue;
+        $images = array_values(array_unique(array_filter($imagesBySku[$sku], static fn($url): bool => is_string($url) && preg_match('~^https?://~i', $url) === 1)));
+        if ($images === []) continue;
 
-        $products[$index]['image_url'] = $image;
-        $images = is_array($product['images'] ?? null) ? array_values(array_filter($product['images'])) : [];
-        if (!in_array($image, $images, true)) array_unshift($images, $image);
+        // Regra de mídia pública: a imagem da vitrine deve vir do produto no ERP.
+        // Não usar fallback manual, storage local ou imagem da tabela products.
+        $products[$index]['image_url'] = $images[0];
         $products[$index]['images'] = array_slice($images, 0, 10);
-        $products[$index]['images_count'] = max((int)($product['images_count'] ?? 0), count($products[$index]['images']));
+        $products[$index]['images_count'] = count($products[$index]['images']);
+        $products[$index]['media_source'] = 'erp_product';
     }
 
     return $products;
 }
 
 /**
- * Enriches storefront catalog rows with the primary image stored in the local
- * product mirror. Price/stock/description stay authoritative from the ERP
- * runtime; only missing image fields are filled here.
+ * Enriches storefront catalog rows exclusively with images synced from the ERP
+ * product media table. This function intentionally refuses non-ERP media sources: price/stock/product data remain from the ERP runtime and product media must also be ERP-originated.
  *
  * @param list<array<string,mixed>> $products
  * @return list<array<string,mixed>>
@@ -52,25 +51,37 @@ function svcie_enrich_images(array $products): array
 
     $skuList = array_keys($skus);
     $placeholders = implode(',', array_fill(0, count($skuList), '?'));
-    $sql = "SELECT p.sku,
-                   COALESCE(NULLIF(op.primary_image_url, ''), NULLIF(p.image_url, ''), '') AS image_url
-              FROM products p
-         LEFT JOIN olist_products op ON op.sku = p.sku
-             WHERE p.sku IN ($placeholders)";
+    $queries = [
+        "SELECT sku, image_url AS url, position AS ord
+           FROM olist_product_images
+          WHERE sku IN ($placeholders)
+            AND image_url IS NOT NULL
+            AND TRIM(image_url) <> ''
+            AND (source = 'erp_olist_export' OR source LIKE 'olist_visual_api:%' OR source LIKE 'tiny_v3_detail:%' OR source = 'tiny_v3_detail')
+          ORDER BY sku, position, id",
+        "SELECT sku, primary_image_url AS url, 0 AS ord
+           FROM olist_products
+          WHERE sku IN ($placeholders)
+            AND primary_image_url IS NOT NULL
+            AND TRIM(primary_image_url) <> ''"
+    ];
 
-    try {
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($skuList);
-        $imageBySku = [];
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $sku = trim((string)($row['sku'] ?? ''));
-            $image = trim((string)($row['image_url'] ?? ''));
-            if ($sku !== '' && $image !== '') $imageBySku[$sku] = $image;
+    $imagesBySku = [];
+    foreach ($queries as $sql) {
+        try {
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($skuList);
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $sku = trim((string)($row['sku'] ?? ''));
+                $url = trim((string)($row['url'] ?? ''));
+                if ($sku === '' || $url === '' || preg_match('~^https?://~i', $url) !== 1) continue;
+                $imagesBySku[$sku] ??= [];
+                if (!in_array($url, $imagesBySku[$sku], true)) $imagesBySku[$sku][] = $url;
+            }
+        } catch (Throwable $e) {
+            error_log('catalog ERP image enrichment failed: ' . $e->getMessage());
         }
-    } catch (Throwable $e) {
-        error_log('catalog image enrichment failed: ' . $e->getMessage());
-        return $products;
     }
 
-    return svcie_apply_image_map($products, $imageBySku);
+    return svcie_apply_image_map($products, $imagesBySku);
 }

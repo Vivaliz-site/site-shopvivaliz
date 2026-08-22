@@ -22,7 +22,7 @@ REQUIRED_SECRETS = {
     'Olist': [
         'OLIST_CLIENT_ID',
         'OLIST_CLIENT_SECRET',
-        'TOKEN_API_OLIST',
+        'OLIST_ACCESS_TOKEN',
         'CLIENT_ID_API_OLIST',
         'CLIENT_SECRET_OLIST',
         'OLIST_ACCESS_TOKEN',

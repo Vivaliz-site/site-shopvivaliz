@@ -77,7 +77,7 @@ $allowedKeys = [
     'TINY_REFRESH_TOKEN',
     'TINY_CLIENT_ID',
     'TINY_CLIENT_SECRET',
-    'TOKEN_API_OLIST',
+    'OLIST_ACCESS_TOKEN',
 ];
 
 $databaseKeys = [

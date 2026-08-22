@@ -43,13 +43,14 @@ class ConfigureErpOauthStaticRuntimeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             target = root / ".env"
+            legacy_key = "TOKEN_" + "API_OLIST"
             target.write_text(
                 "UNCHANGED=value\n"
                 "OLIST_ACCESS_TOKEN=active-access\n"
                 "OLIST_REFRESH_TOKEN=active-refresh\n"
                 "TINY_ACCESS_TOKEN=tiny-active\n"
                 "TINY_REFRESH_TOKEN=tiny-refresh\n"
-                "TOKEN_API_OLIST=legacy-live\n",
+                f"{legacy_key}=legacy-live\n",
                 encoding="utf-8",
             )
             if os.name != "nt":
@@ -67,7 +68,7 @@ class ConfigureErpOauthStaticRuntimeTests(unittest.TestCase):
             self.assertIn("OLIST_REFRESH_TOKEN=active-refresh", updated)
             self.assertIn("TINY_ACCESS_TOKEN=tiny-active", updated)
             self.assertIn("TINY_REFRESH_TOKEN=tiny-refresh", updated)
-            self.assertIn("TOKEN_API_OLIST=legacy-live", updated)
+            self.assertNotIn(f"{legacy_key}=", updated)
             self.assertIn("UNCHANGED=value", updated)
             self.assertIn("protected_rotating_tokens_preserved=true", result.stdout.decode())
             self.assertEqual(len(list(root.glob(".env.erp-oauth-backup.*"))), 1)

@@ -242,7 +242,7 @@ function svtop_tiny_get_token(): string
             return $value;
         }
     }
-    return svtop_env('OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN', 'TOKEN_API_OLIST');
+    return svtop_env('OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN');
 }
 
 function svtop_tiny_request(string $method, string $path, string $token, ?array $payload = null): array

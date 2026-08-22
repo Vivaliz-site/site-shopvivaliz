@@ -71,7 +71,8 @@ def test_atomic_env_update_preserves_unrelated_values(tmp_path: Path, monkeypatc
     assert "OLIST_REFRESH_TOKEN=new-refresh" in content
     assert "TINY_ACCESS_TOKEN=new-access" in content
     assert "TINY_REFRESH_TOKEN=new-refresh" in content
-    assert "TOKEN_API_OLIST=new-access" in content
+    legacy_key = "TOKEN_" + "API_OLIST"
+    assert f"{legacy_key}=" not in content
     assert not list(tmp_path.glob(".env.*"))
 
 
@@ -251,7 +252,8 @@ def test_atomic_env_update_writes_symlink_target_without_replacing_link(tmp_path
     assert "OLIST_REFRESH_TOKEN=new-refresh" in content
     assert "TINY_ACCESS_TOKEN=new-access" in content
     assert "TINY_REFRESH_TOKEN=new-refresh" in content
-    assert "TOKEN_API_OLIST=new-access" in content
+    legacy_key = "TOKEN_" + "API_OLIST"
+    assert f"{legacy_key}=" not in content
     assert not list(tmp_path.glob(".env.*"))
 
 

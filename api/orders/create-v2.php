@@ -348,19 +348,32 @@ if (!$cleanItems) {
 }
 
 // Bloqueia venda de item sem estoque suficiente (validacao no servidor).
+// Agrega SKUs duplicados antes de comparar com o estoque para impedir que
+// duas linhas do mesmo item ultrapassem o saldo real individualmente.
 $stockMap = svo_stock_map();
-$stockIssues = [];
+$requestedBySku = [];
+$itemNameBySku = [];
 foreach ($cleanItems as $ci) {
-    if (!array_key_exists($ci['sku'], $stockMap)) {
+    $skuKey = trim((string)($ci['sku'] ?? ''));
+    if ($skuKey === '') {
         continue;
     }
-    $available = $stockMap[$ci['sku']];
-    if ($available <= 0 || $ci['quantity'] > $available) {
+    $requestedBySku[$skuKey] = ($requestedBySku[$skuKey] ?? 0) + max(1, (int)($ci['quantity'] ?? 1));
+    $itemNameBySku[$skuKey] = (string)($ci['name'] ?? $skuKey);
+}
+
+$stockIssues = [];
+foreach ($requestedBySku as $sku => $requestedQty) {
+    if (!array_key_exists($sku, $stockMap)) {
+        continue;
+    }
+    $available = max(0, (int)$stockMap[$sku]);
+    if ($available <= 0 || $requestedQty > $available) {
         $stockIssues[] = [
-            'sku' => $ci['sku'],
-            'name' => $ci['name'],
-            'requested' => $ci['quantity'],
-            'available' => max(0, $available),
+            'sku' => $sku,
+            'name' => $itemNameBySku[$sku] ?? $sku,
+            'requested' => $requestedQty,
+            'available' => $available,
         ];
     }
 }

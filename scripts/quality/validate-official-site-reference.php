@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/official-site-reference-http-policy.php';
 $root=dirname(__DIR__,2);
 $errors=[];
 $configPath=$root.'/config/official-site.php';
@@ -18,10 +19,10 @@ if(count($config['top_categories']??[])<6)$errors[]='top categories incomplete';
 // 404. R6-5 encontrou 3 das 4 rotas quebradas em producao sem que este
 // validador (que existe com o nome exato desse problema) nunca acusasse
 // nada, porque tambem nunca rodava no CI. Agora faz HEAD real contra cada
-// URL de navigation e falha em status >= 400. Se a rede nao estiver
-// disponivel (ambiente de CI sem acesso externo), avisa em vez de falhar
-// duro -- nao queremos que uma falha de infraestrutura do runner vire falha
-// de qualidade de codigo. Ver R6-5 no relatorio da Rodada 6.
+// URL de navigation. 404/410 e falhas 5xx continuam bloqueantes; respostas
+// 401/403/429 de WAF/rate-limit sao inconclusivas e viram warning, assim como
+// indisponibilidade de rede. Isso evita confundir politica do edge contra o
+// runner com rota quebrada. Ver R6-5 no relatorio da Rodada 6.
 $baseUrl = rtrim((string)($config['base_url'] ?? ''), '/');
 if ($baseUrl !== '' && is_array($config['navigation'] ?? null)) {
     foreach ($config['navigation'] as $key => $path) {
@@ -31,7 +32,14 @@ if ($baseUrl !== '' && is_array($config['navigation'] ?? null)) {
         }
         $url = $baseUrl . $path;
         $context = stream_context_create([
-            'http' => ['method' => 'HEAD', 'timeout' => 8, 'ignore_errors' => true],
+            'http' => [
+                'method' => 'HEAD',
+                'timeout' => 8,
+                'ignore_errors' => true,
+                'header' => "User-Agent: Mozilla/5.0 ShopVivaliz-CI-Validator
+Accept: text/html,*/*;q=0.8
+",
+            ],
             'ssl'  => ['verify_peer' => true, 'verify_peer_name' => true],
         ]);
         $result = @file_get_contents($url, false, $context);
@@ -42,7 +50,11 @@ if ($baseUrl !== '' && is_array($config['navigation'] ?? null)) {
         }
         if (preg_match('/\s(\d{3})\s/', $statusLine, $m)) {
             $status = (int)$m[1];
-            if ($status >= 400) {
+            if (sv_official_site_http_status_is_inconclusive($status)) {
+                fwrite(STDERR, "warning: navigation.$key devolveu HTTP $status em $url; acesso do runner inconclusivo (WAF/rate-limit)\n");
+                continue;
+            }
+            if (sv_official_site_http_status_is_blocking($status)) {
                 $errors[] = "navigation.$key aponta para $url, que devolveu HTTP $status";
             }
         }

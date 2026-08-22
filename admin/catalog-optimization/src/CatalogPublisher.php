@@ -93,223 +93,24 @@ final class CatalogOptimizationPublisher
     /** @param array<string,mixed> $content @return array<string,mixed> */
     private function publishSite(int $productId, array $content): array
     {
-        $product = sv_market_product($this->db, $productId);
-        $this->db->beginTransaction();
-        try {
-            $stmt = $this->db->prepare('UPDATE products SET name = ?, description = ?, updated_at = NOW() WHERE id = ?');
-            $stmt->execute([(string)$content['title'], (string)$content['description'], $productId]);
-            if ($stmt->rowCount() < 1) {
-                $exists = $this->db->prepare('SELECT COUNT(*) FROM products WHERE id = ?');
-                $exists->execute([$productId]);
-                if ((int)$exists->fetchColumn() === 0) {
-                    throw new RuntimeException('Produto do site não encontrado.');
-                }
-            }
-            $verify = $this->db->prepare('SELECT name, description FROM products WHERE id = ? LIMIT 1');
-            $verify->execute([$productId]);
-            $read = $verify->fetch(PDO::FETCH_ASSOC);
-            if (!is_array($read) || (string)$read['name'] !== (string)$content['title'] || (string)$read['description'] !== (string)$content['description']) {
-                throw new RuntimeException('Read-back do ShopVivaliz não confirmou título e descrição.');
-            }
-            sv_market_save_channel_content($this->db, $productId, 'site', $content, true);
-            $this->updateStorefrontCache($product, $content);
-            $this->db->commit();
-        } catch (Throwable $e) {
-            if ($this->db->inTransaction()) {
-                $this->db->rollBack();
-            }
-            throw $e;
-        }
-        return [
+        // Campos de cadastro exibidos no site (titulo, descricao, SEO e
+        // bullets incorporados) possuem equivalente no ERP/Tiny. Portanto o
+        // canal site nunca grava products/cache diretamente: publica a proposta
+        // no ERP via API v3, exige read-back e deixa a vitrine receber a
+        // mudanca pelo proximo sync v3.
+        $erpResult = (new SvTinyPublisher($this->db))->publishText($productId, $content);
+        $erpFields = is_array($erpResult['fields'] ?? null) ? $erpResult['fields'] : [];
+        return array_merge($erpResult, [
             'status' => 'published',
-            'operation' => 'UPDATE products + product_channel_content + storefront cache',
-            'external_id' => (string)$productId,
-            'http_status' => 200,
-            'request_id' => '',
-            'fields' => ['title', 'description', 'bullet_points', 'seo_keywords', 'marketing_hooks', 'meta_title', 'meta_description'],
-            'response' => [
-                'readback_confirmed' => true,
-                'storefront_cache_confirmed' => true,
-                'all_approved_text_fields_exposed' => true,
-            ],
-            'verified' => true,
-        ];
-    }
-
-    /** @param array<string,mixed> $product @param array<string,mixed> $content */
-    private function updateStorefrontCache(array $product, array $content): void
-    {
-        $path = dirname(__DIR__, 3) . '/storage/products-cache-ativos.json';
-        if (!is_file($path) || !is_readable($path) || !is_writable(dirname($path))) {
-            throw new RuntimeException('Cache ativo da vitrine não está disponível para atualização real.');
-        }
-        $payload = json_decode((string)file_get_contents($path), true);
-        if (!is_array($payload)) {
-            throw new RuntimeException('Cache ativo da vitrine contém JSON inválido.');
-        }
-        $sku = trim((string)($product['sku'] ?? ''));
-        $externalId = trim((string)($product['olist_id'] ?? $product['olist_product_id'] ?? ''));
-        $displayDescription = $this->storefrontDescription($content);
-        $updated = false;
-        $apply = function (array &$item) use ($sku, $externalId, $content, $displayDescription, &$updated): void {
-            $itemSku = trim((string)($item['sku'] ?? $item['codigo'] ?? $item['code'] ?? ''));
-            $itemId = trim((string)($item['id'] ?? $item['olist_product_id'] ?? ''));
-            if (($sku !== '' && $itemSku === $sku) || ($externalId !== '' && $itemId === $externalId)) {
-                $title = (string)$content['title'];
-                $item['name'] = $title;
-                $item['nome'] = $title;
-                $item['descricao'] = $title;
-                $item['description'] = $displayDescription;
-                $item['descricaoComplementar'] = $displayDescription;
-                $item['descricao_complementar'] = $displayDescription;
-                $item['bullet_points'] = $content['bullet_points'];
-                $item['seo_keywords'] = $content['seo_keywords'];
-                $item['marketing_hooks'] = $content['marketing_hooks'];
-                $item['meta_title'] = (string)$content['meta_title'];
-                $item['meta_description'] = (string)$content['meta_description'];
-                $updated = true;
-            }
-        };
-        $walk = function (array &$node) use (&$walk, $apply): void {
-            if (array_is_list($node)) {
-                foreach ($node as &$entry) {
-                    if (is_array($entry)) $apply($entry);
-                }
-                unset($entry);
-                return;
-            }
-            foreach (['itens', 'items', 'produtos', 'products', 'data'] as $key) {
-                if (isset($node[$key]) && is_array($node[$key])) {
-                    $walk($node[$key]);
-                }
-            }
-        };
-        $walk($payload);
-        if (!$updated) {
-            $this->appendStorefrontCacheItem($payload, $product, $content, $displayDescription);
-            $updated = true;
-        }
-        $encoded = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $tmpPath = $path . '.tmp.' . getmypid() . '.' . bin2hex(random_bytes(4));
-        if (!is_string($encoded) || file_put_contents($tmpPath, $encoded . PHP_EOL, LOCK_EX) === false) {
-            throw new RuntimeException('Falha ao persistir o conteúdo otimizado no cache ativo da vitrine.');
-        }
-        if (!@rename($tmpPath, $path)) {
-            @unlink($tmpPath);
-            throw new RuntimeException('Falha ao substituir o cache ativo da vitrine.');
-        }
-        $verify = json_decode((string)file_get_contents($path), true);
-        if (!is_array($verify)) {
-            throw new RuntimeException('Read-back do cache ativo da vitrine falhou.');
-        }
-        if (!$this->cacheContainsAllFields($verify, $sku, $externalId, $content)) {
-            throw new RuntimeException('Read-back do cache não confirmou todos os campos textuais aprovados.');
-        }
-    }
-
-    /** @param array<string,mixed> $payload @param array<string,mixed> $product @param array<string,mixed> $content */
-    private function appendStorefrontCacheItem(array &$payload, array $product, array $content, string $displayDescription): void
-    {
-        $sku = trim((string)($product['sku'] ?? ''));
-        $externalId = trim((string)($product['olist_id'] ?? $product['olist_product_id'] ?? ''));
-        $imageUrl = trim((string)($product['image_url'] ?? $product['imagem_principal_url'] ?? ''));
-        $title = (string)$content['title'];
-        $entry = [
-            'id' => $externalId !== '' ? $externalId : (int)($product['id'] ?? 0),
-            'product_id' => (int)($product['id'] ?? 0),
-            'sku' => $sku,
-            'descricao' => $title,
-            'name' => $title,
-            'nome' => $title,
-            'description' => $displayDescription,
-            'descricaoComplementar' => $displayDescription,
-            'descricao_complementar' => $displayDescription,
-            'active' => true,
-            'situacao' => 'A',
-            'imagem_principal_url' => $imageUrl,
-            'image_url' => $imageUrl,
-            'anexos' => $imageUrl !== '' ? [['url' => $imageUrl]] : [],
-            'bullet_points' => $content['bullet_points'],
-            'seo_keywords' => $content['seo_keywords'],
-            'marketing_hooks' => $content['marketing_hooks'],
-            'meta_title' => (string)$content['meta_title'],
-            'meta_description' => (string)$content['meta_description'],
-        ];
-        if (isset($product['price'])) {
-            $entry['precos'] = ['preco' => (float)$product['price'], 'precoPromocional' => (float)($product['promotional_price'] ?? 0)];
-        }
-        if (isset($product['stock'])) {
-            $entry['estoque'] = ['quantidade' => (int)$product['stock']];
-            $entry['estoque_disponivel'] = (int)$product['stock'];
-        }
-
-        foreach (['itens', 'items', 'produtos', 'products', 'data'] as $key) {
-            if (isset($payload[$key]) && is_array($payload[$key])) {
-                $payload[$key][] = $entry;
-                return;
-            }
-        }
-        if (array_is_list($payload)) {
-            $payload[] = $entry;
-            return;
-        }
-        $payload['items'] = [$entry];
-    }
-
-    /** @param array<string,mixed> $content */
-    private function storefrontDescription(array $content): string
-    {
-        $html = '<p>' . nl2br(htmlspecialchars((string)$content['description'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')) . '</p>';
-        $bullets = is_array($content['bullet_points'] ?? null) ? $content['bullet_points'] : [];
-        if ($bullets !== []) {
-            $html .= '<ul>';
-            foreach ($bullets as $bullet) {
-                $html .= '<li>' . htmlspecialchars(trim((string)$bullet), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</li>';
-            }
-            $html .= '</ul>';
-        }
-        $hooks = is_array($content['marketing_hooks'] ?? null) ? $content['marketing_hooks'] : [];
-        foreach ($hooks as $hook) {
-            $text = trim((string)$hook);
-            if ($text !== '') {
-                $html .= '<p><strong>' . htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</strong></p>';
-            }
-        }
-        return $html;
-    }
-
-    /**
-     * @param array<string,mixed> $payload
-     * @param array<string,mixed> $content
-     */
-    private function cacheContainsAllFields(array $payload, string $sku, string $externalId, array $content): bool
-    {
-        $found = false;
-        $walk = function (array $node) use (&$walk, &$found, $sku, $externalId, $content): void {
-            if ($found) return;
-            if (array_is_list($node)) {
-                foreach ($node as $entry) {
-                    if (!is_array($entry)) continue;
-                    $entrySku = trim((string)($entry['sku'] ?? $entry['codigo'] ?? $entry['code'] ?? ''));
-                    $entryId = trim((string)($entry['id'] ?? $entry['olist_product_id'] ?? ''));
-                    if (($sku !== '' && $entrySku === $sku) || ($externalId !== '' && $entryId === $externalId)) {
-                        $found = (string)($entry['name'] ?? '') === (string)$content['title']
-                            && (array)($entry['bullet_points'] ?? []) === (array)$content['bullet_points']
-                            && (array)($entry['seo_keywords'] ?? []) === (array)$content['seo_keywords']
-                            && (array)($entry['marketing_hooks'] ?? []) === (array)$content['marketing_hooks']
-                            && (string)($entry['meta_title'] ?? '') === (string)$content['meta_title']
-                            && (string)($entry['meta_description'] ?? '') === (string)$content['meta_description'];
-                        if ($found) return;
-                    }
-                }
-                return;
-            }
-            foreach (['itens', 'items', 'produtos', 'products', 'data'] as $key) {
-                if (isset($node[$key]) && is_array($node[$key])) $walk($node[$key]);
-            }
-        };
-        $walk($payload);
-        return $found;
+            'operation' => 'SITE enrichment mirrored through ERP v3: ' . (string)($erpResult['operation'] ?? 'PUT /public-api/v3/produtos/{id}'),
+            'fields' => array_values(array_unique(array_merge($erpFields, ['site_channel_requires_erp_readback']))),
+            'response' => array_merge(is_array($erpResult['response'] ?? null) ? $erpResult['response'] : [], [
+                'site_cache_written_directly' => false,
+                'site_publication_source' => 'next_erp_v3_sync',
+                'erp_readback_required' => true,
+            ]),
+            'verified' => !empty($erpResult['verified']),
+        ]);
     }
 
     /** @param array<string,mixed> $row @return array<string,mixed> */
