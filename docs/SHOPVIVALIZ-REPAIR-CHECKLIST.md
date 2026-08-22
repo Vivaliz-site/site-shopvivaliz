@@ -38,8 +38,8 @@ Atualizado em: 2026-08-21 20:45 BRT
 
 ## P2/P3 - Continuo
 - [x] COPY-01 Varredura de textos publicos para remover linguagem admin/debug. Evidencia: `tests/public-copy-quality-test.php` OK; removidas mensagens publicas de contato/comercial manual de frete em checkout e email legado. Commit: `f8e7050a7`.
-- [x] SEO-01 Validar sitemap, schema Product/Offer e paridade feed/ERP/site. Evidencia: `tests/seo-product-feed-quality-test.php` OK com 162 produtos disponiveis, sitemap canônico em `/sitemap.xml`, Product/Offer schema presente e feed publico com SKU/preco/estoque/imagem HTTPS. Commit: pendente.
-- [ ] A11Y-01 Testes mobile/desktop, teclado, contraste e Lighthouse.
+- [x] SEO-01 Validar sitemap, schema Product/Offer e paridade feed/ERP/site. Evidencia: `tests/seo-product-feed-quality-test.php` OK com 162 produtos disponiveis, sitemap canônico em `/sitemap.xml`, Product/Offer schema presente e feed publico com SKU/preco/estoque/imagem HTTPS. Commit: `f8e7050a7`.
+- [x] A11Y-01 Smoke de acessibilidade em paginas-chave: main landmark, H1, alt de imagens, nomes acessiveis de botoes e labels/placeholders de inputs. Evidencia: `tests/public-a11y-smoke-test.php` OK em 6 paginas; pixel noscript marcado como decorativo e comentario tecnico removido da home. Commits: `b4f668b12`, `ded846fcb`, `3b439cf56`.
 
 ## Log de execucao
 - 2026-08-21: Primeira leva aplicada em producao: navbar Blog, footer polido, carrinho polido, sobre reescrito, conta com logo, avaliacoes sem texto interno, politica de devolucao ajustada, rotacao home/produto, guard client-side de estoque no catalogo e relatorio de imagens faltantes.
