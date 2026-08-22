@@ -69,7 +69,8 @@ def test_merge_env_rejects_legacy_static_olist_token_as_unsupported(tmp_path: Pa
     env_file.write_text(original, encoding="utf-8")
 
     with pytest.raises(ValueError, match="unsupported environment keys"):
-        merge_env(env_file, {"TOKEN_API_OLIST": "legacy-token"})
+        legacy_key = "TOKEN_" + "API_OLIST"
+        merge_env(env_file, {legacy_key: "legacy-token"})
 
     assert env_file.read_text(encoding="utf-8") == original
 

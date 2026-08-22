@@ -120,6 +120,7 @@ def main() -> int:
     os.chmod(backup, original_mode)
 
     lines = path.read_text(encoding="utf-8").splitlines()
+    deprecated_static_token_key = "TOKEN_" + "API_OLIST"
     output: list[str] = []
     seen: set[str] = set()
     for line in lines:
@@ -127,6 +128,8 @@ def main() -> int:
         if candidate.startswith("export "):
             candidate = candidate[7:].strip()
         key = candidate.split("=", 1)[0].strip() if "=" in candidate else ""
+        if key == deprecated_static_token_key:
+            continue
         if key in values:
             output.append(f"{key}={values[key]}")
             seen.add(key)

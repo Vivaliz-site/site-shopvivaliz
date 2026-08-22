@@ -10,7 +10,8 @@ $forbidden = [
     'TOKEN_API_OLIST' => 'token estatico legado nao pode alimentar runtime',
 ];
 $productionRoots = [
-    'api', 'claude', 'includes', 'olist', 'scripts',
+    '.env.example', '.github/workflows', 'api', 'claude', 'config', 'includes',
+    'olist', 'scripts', 'daemon-sync-products.py', 'daemon-token-renewer.py',
     'catalogo.php', 'produto.php', 'sync-daemon-to-db.php', 'sync-products-to-json.py',
 ];
 $ignoredPathFragments = [

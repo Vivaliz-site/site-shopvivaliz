@@ -33,6 +33,25 @@ Regra permanente: todo dado que existe na API ERP Olist/Tiny deve vir dela. O Sh
 - Publisher do ERP nao usa mais API antiga para resolver SKU; usa busca v3 por SKU ativo.
 - Escrita de imagens via caminho antigo foi removida; imagens publicas devem vir da API/cadastro ERP v3.
 
+## Decisao 2026-08-21: token estatico legado removido do runtime
+
+O alias antigo `TOKEN_API_OLIST` nao e mais aceito como fonte de runtime, nem como fallback de deploy, daemon ou workflow. A unica fonte de acesso valida para chamadas v3 e o par rotativo `OLIST_ACCESS_TOKEN`/`TINY_ACCESS_TOKEN`, preferencialmente carregado de `/shared/private/olist-tokens.json` pelo renovador OAuth.
+
+Consequencias operacionais:
+
+- `daemon-token-renewer.py` atualiza apenas `OLIST_*` e `TINY_*` e remove a linha legada se ainda existir no `.env`.
+- `daemon-sync-products.py` ignora o alias antigo e falha fechado quando nao houver token OAuth v3 valido.
+- Workflows e configuradores nao passam mais o segredo legado para a VM.
+- `tests/erp-api-source-policy-test.php` cobre `.github/workflows`, `config`, daemons, scripts e endpoints publicos para impedir regressao.
+
+## Escopo por dominio da migracao ERP v3
+
+- Catalogo/preco/estoque/imagens: implementado como cache derivado de `GET /produtos`, `GET /produtos/{id}` e `GET /estoque/{id}`.
+- Pedidos: criacao/atualizacao deve usar `POST /pedidos`, `GET /pedidos/{id}` e espelho local apenas como cache/admin/UX.
+- NF/documentos: leitura deve usar `GET /notas/{id}` e `GET /notas/{id}/xml`; o banco local guarda somente cache do ultimo retorno.
+- Rastreio/despacho: deve usar `GET /pedidos/{id}` e `PUT /pedidos/{id}/despacho` quando o contrato estiver validado.
+- Clientes/contatos: criacao/busca deve usar `GET /contatos` e `POST /contatos`; cadastro local nao pode sobrescrever ERP.
+
 ## Proximas fases obrigatorias
 
 1. Pedidos: mapear checkout -> criacao/atualizacao de pedido no ERP e espelho local somente derivado.

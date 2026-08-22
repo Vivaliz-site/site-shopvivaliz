@@ -27,20 +27,22 @@ class SecretsCanonicalizationTest(unittest.TestCase):
             finally:
                 os.chdir(previous_cwd)
 
-    def test_canonical_olist_token_has_precedence_over_legacy_alias(self):
+    def test_canonical_olist_token_does_not_read_legacy_static_alias(self):
+        legacy_key = "TOKEN_" + "API_OLIST"
         module = self.load_module(
             {
                 "OLIST_ACCESS_TOKEN": "canonical-value",
-                "TOKEN_API_OLIST": "legacy-value",
+                legacy_key: "legacy-value",
             }
         )
         self.assertEqual(module.OLIST_ACCESS_TOKEN, "canonical-value")
-        self.assertEqual(module.TOKEN_API_OLIST, "canonical-value")
+        self.assertFalse(hasattr(module, legacy_key))
 
-    def test_legacy_olist_alias_remains_compatible(self):
-        module = self.load_module({"TOKEN_API_OLIST": "legacy-only"})
-        self.assertEqual(module.OLIST_ACCESS_TOKEN, "legacy-only")
-        self.assertEqual(module.TOKEN_API_OLIST, "legacy-only")
+    def test_legacy_olist_static_alias_is_ignored(self):
+        legacy_key = "TOKEN_" + "API_OLIST"
+        module = self.load_module({legacy_key: "legacy-only"})
+        self.assertEqual(module.OLIST_ACCESS_TOKEN, "")
+        self.assertFalse(hasattr(module, legacy_key))
 
     def test_tiny_native_credentials_are_separate_from_olist(self):
         module = self.load_module(
