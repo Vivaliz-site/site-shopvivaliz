@@ -56,6 +56,11 @@ class PolicyEngine {
   }
 
   isVisualFile(file) {
+    // Server-side SEO metadata and marketplace change-set logic do not alter
+    // rendered layout, so screenshot evidence is not meaningful for them.
+    if (file === 'includes/product-seo.php' || file.startsWith('includes/marketplace/')) {
+      return false;
+    }
     return /^(?:public|includes|templates|views|pages)\//.test(file)
       && /\.(?:css|scss|js|jsx|ts|tsx|php|html)$/i.test(file);
   }

@@ -173,6 +173,7 @@ require_once svcat_root() . '/includes/catalog-runtime.php';
 require_once svcat_root() . '/includes/catalog-image-enrich.php';
 
 $limit = min(200, max(1, (int)($_GET['limit'] ?? 48)));
+$rawOffset = isset($_GET['offset']) ? max(0, (int)$_GET['offset']) : null;
 $page = max(1, (int)($_GET['page'] ?? 1));
 $q = trim((string)($_GET['q'] ?? ''));
 $sort = trim((string)($_GET['ordem'] ?? $_GET['sort'] ?? 'relevance'));
@@ -183,6 +184,7 @@ $availableOnly = ($_GET['available'] ?? '') === '1'
 $cacheKey = http_build_query([
     'limit' => $limit,
     'page' => $page,
+    'offset' => $rawOffset !== null ? (string)$rawOffset : '',
     'q' => $q,
     'sort' => $sort,
     'category' => trim((string)($_GET['categoria'] ?? $_GET['category'] ?? '')),
@@ -289,8 +291,13 @@ usort($allProducts, static function (array $a, array $b) use ($sort): int {
 
 $total = count($allProducts);
 $totalPages = max(1, (int)ceil($total / max(1, $limit)));
-$page = min($page, $totalPages);
-$offset = ($page - 1) * $limit;
+if ($rawOffset !== null) {
+    $offset = min($rawOffset, max(0, max(0, $total - 1)));
+    $page = min($totalPages, max(1, (int)floor($offset / max(1, $limit)) + 1));
+} else {
+    $page = min($page, $totalPages);
+    $offset = ($page - 1) * $limit;
+}
 $products = array_slice($allProducts, $offset, $limit);
 $categories = [];
 foreach ($allProducts as $row) {
@@ -305,6 +312,7 @@ $payload = [
     'count' => count($products),
     'total' => $total,
     'page' => $page,
+    'offset' => $offset,
     'limit' => $limit,
     'total_pages' => $totalPages,
     'sort' => $sort !== '' ? $sort : 'relevance',
