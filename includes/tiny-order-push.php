@@ -849,7 +849,7 @@ function svtop_create_contact(string $token, array $customer): ?int
 function svtop_push_order_tiny(array $order): ?string
 {
     // Ate 2026-07-18 este ponto tentava primeiro a API v2 legada do Tiny
-    // (api2/pedido.incluir.php, token estatico, schema "numero_pedido_ecommerce")
+    // (endpoint antigo, token estatico e schema legado)
     // antes mesmo de tentar a v3 -- ou seja, pedidos reais vinham sendo
     // criados por um caminho diferente do documentado em
     // docs/TINY-ERP-API-V3.md. Removido: so a v3 (OAuth2, /pedidos) e usada

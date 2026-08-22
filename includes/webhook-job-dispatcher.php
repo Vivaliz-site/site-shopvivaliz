@@ -190,15 +190,21 @@ function sv_webhook_job_dispatch_mercadopago(array $payload): array
                     if ($tinyOrderId) {
                         $order['tiny_order_id'] = $tinyOrderId;
                         $order['tiny_push'] = 'ok';
+                        $order['erp_authority'] = 'tiny_v3_canonical_after_payment_approval';
+                        $order['local_storage_role'] = 'payment_webhook_mirror';
                     } else {
                         $order['tiny_push'] = 'token_unavailable';
                     }
                 } catch (Throwable $e) {
                     $order['tiny_push'] = $e->getMessage();
+                    $order['erp_authority'] = 'tiny_v3_push_failed_retry_required';
+                    $order['local_storage_role'] = 'payment_webhook_mirror';
                     error_log('[MercadoPago] Tiny push error: order=' . $externalReference . ' ' . $e->getMessage());
                 }
             } else {
                 $order['tiny_push'] = 'missing_credentials';
+                $order['erp_authority'] = 'tiny_v3_push_pending_missing_credentials';
+                $order['local_storage_role'] = 'payment_webhook_mirror';
             }
         }
 
@@ -440,15 +446,21 @@ function sv_webhook_job_dispatch_infinitepay(array $payload): array
                     if ($tinyOrderId) {
                         $order['tiny_order_id'] = $tinyOrderId;
                         $order['tiny_push'] = 'ok';
+                        $order['erp_authority'] = 'tiny_v3_canonical_after_payment_approval';
+                        $order['local_storage_role'] = 'payment_webhook_mirror';
                     } else {
                         $order['tiny_push'] = 'token_unavailable';
                     }
                 } catch (Throwable $e) {
                     $order['tiny_push'] = $e->getMessage();
+                    $order['erp_authority'] = 'tiny_v3_push_failed_retry_required';
+                    $order['local_storage_role'] = 'payment_webhook_mirror';
                     error_log('[InfinitePay] Tiny push error: order=' . $orderNumber . ' ' . $e->getMessage());
                 }
             } else {
                 $order['tiny_push'] = 'missing_credentials';
+                $order['erp_authority'] = 'tiny_v3_push_pending_missing_credentials';
+                $order['local_storage_role'] = 'payment_webhook_mirror';
             }
         }
 

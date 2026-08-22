@@ -139,6 +139,8 @@ function svo_append_legacy_order_log(array $order): void
         'payment_method' => $order['payment_method'] ?? 'pix',
         'status' => 'pendente_atendimento',
         'source' => 'checkout_site_api',
+        'local_storage_role' => 'pre_payment_draft_mirror',
+        'erp_authority' => 'tiny_v3_after_payment_approval',
         'shipping_total' => round((float)($order['shipping_total'] ?? 0), 2),
         'shipping_label' => (string)($order['shipping_label'] ?? ''),
         'tiny_order_id' => (string)($order['tiny_order_id'] ?? ''),

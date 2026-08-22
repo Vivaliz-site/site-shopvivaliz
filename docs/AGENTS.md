@@ -639,3 +639,14 @@ Rodada 10 (`outputs/rodada10-diagnostico.md`), resumo entregue ao Fred no chat.
 **Última consolidação:** 2026-07-26 (entradas das Rodadas 2, 3, 4 e 5 de melhoria contínua adicionadas em 2026-08-18/19)
 **Consolidado por:** Claude Code
 **Próxima revisão:** Quando houver novo achado não-óbvio
+
+## Regra ERP Olist/Tiny v3 para pedidos e NF
+
+- Pedido local em `storage/orders` e na tabela `orders` é somente espelho/idempotência do checkout.
+- Antes do pagamento aprovado, o pedido local deve ficar marcado como `local_storage_role=pre_payment_draft_mirror`.
+- Pedido aprovado por Mercado Pago ou InfinitePay deve tentar `POST /public-api/v3/pedidos` via `includes/tiny-order-push.php`.
+- Quando o ERP retornar id, grave `tiny_order_id`, `tiny_push=ok`, `erp_authority=tiny_v3_canonical_after_payment_approval` e mantenha o local como `payment_webhook_mirror`.
+- NF, rastreio e etiqueta devem usar o webhook Tiny/NF e `tiny_order_id`; não recriar autoridade em JSON, MySQL ou arquivo temporário.
+- Proibido reintroduzir Tiny v2, token estático antigo ou arrays/caches locais como fonte de pedido/NF.
+- Antes de PR/deploy envolvendo pedido, pagamento, NF ou etiqueta, rode `php scripts/quality/validate-order-erp-authority.php`.
+
