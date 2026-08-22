@@ -86,7 +86,7 @@ $seoFixture = [
 ];
 $storefrontTitle = svseo_title($seoFixture, 70) . ' | Vivaliz';
 $merchantTitle = svseo_title($seoFixture, 150);
-sv_audit_expect(sv_audit_strlen($storefrontTitle) <= 65, 'Title completo de produto excede 65 caracteres.');
+sv_audit_expect(sv_audit_strlen($storefrontTitle) <= 60, 'Title completo de produto excede 60 caracteres.');
 sv_audit_expect(sv_audit_strlen($merchantTitle) > 56, 'Limite do storefront vazou para o titulo do Merchant Feed.');
 
 if ($failures !== []) {
