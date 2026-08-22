@@ -555,12 +555,6 @@ $svNavCurrent = '';
     <meta property="og:site_name" content="ShopVivaliz">
     <meta property="og:image:alt" content="ShopVivaliz - Loja online">
     <meta property="og:locale" content="pt_BR">
-    <!-- Rodada 4 (2026-08-19): preconnect/dns-prefetch para s3.amazonaws.com
-         removido -- confirmado ao vivo que nenhum <img>/<script>/<link> ou
-         URL do JSON-LD da home aponta para esse host (as imagens vem de
-         /uploads/olist/... no proprio dominio). O navegador abria DNS+TCP+TLS
-         pra um host nunca usado, competindo por conexao com o preconnect
-         legitimo do fonts.gstatic.com. Ver R4-7 no relatorio da Rodada 4. -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Vivaliz | Rodízios, Ferragens e Utilidades Domésticas">
     <meta name="twitter:description" content="Rodízios, ferragens, ferramentas e utilidades com preço e estoque atualizados e frete calculado por CEP.">
