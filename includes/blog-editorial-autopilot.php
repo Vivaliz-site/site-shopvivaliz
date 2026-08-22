@@ -103,10 +103,10 @@ function sv_blog_editorial_build_article(string $title, string $weekdayKey): arr
     $profile = sv_blog_editorial_topic_profile($title);
     $slug = sv_blog_editorial_topic_slug($title);
     $excerpt = sv_blog_editorial_excerpt($title, $profile['category'], $weekdayKey);
-    $metaTitle = sv_blog_editorial_truncate($title . ' | ShopVivaliz', 255);
+    $metaTitle = sv_blog_editorial_truncate($title . ' | ShopVivaliz', 60);
     $metaDescription = sv_blog_editorial_truncate(
         $excerpt . ' Veja critérios de escolha, uso seguro e produtos relacionados na ShopVivaliz.',
-        320
+        155
     );
 
     return [
@@ -142,6 +142,12 @@ function sv_blog_editorial_validate_article(array $article): array
     if (!is_array($content) || count($content) < 3) {
         $errors[] = 'invalid_content_sections';
     }
+
+    $metaTitleLength = function_exists('mb_strlen') ? mb_strlen((string)($article['meta_title'] ?? ''), 'UTF-8') : strlen((string)($article['meta_title'] ?? ''));
+    $metaDescriptionLength = function_exists('mb_strlen') ? mb_strlen((string)($article['meta_description'] ?? ''), 'UTF-8') : strlen((string)($article['meta_description'] ?? ''));
+    if ($metaTitleLength > 60) $errors[] = 'meta_title_too_long';
+    if ($metaDescriptionLength < 110) $errors[] = 'meta_description_too_short';
+    if ($metaDescriptionLength > 155) $errors[] = 'meta_description_too_long';
 
     $faq = $article['faq'] ?? [];
     if (!is_array($faq) || count($faq) < 2) {
