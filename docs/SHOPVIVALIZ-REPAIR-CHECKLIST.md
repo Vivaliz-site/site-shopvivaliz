@@ -25,7 +25,7 @@ Atualizado em: 2026-08-21 20:45 BRT
 - [x] NAV-01 Inserir Blog no cabecalho desktop/mobile. Evidencia: `includes/navbar.php` inclui `/blog/`; sintaxe PHP ok.
 - [x] ACCOUNT-01 Inserir logo na area Minha Conta. Evidencia: `includes/account-chrome-top.php` usa logo em `.sv-account-header`; sintaxe PHP ok.
 - [x] ABOUT-01 Reescrever `/sobre/` com contexto institucional/comercial. Evidencia: `sobre/index.php` reescrito e sintaxe PHP ok.
-- [ ] CAT-01 Otimizar `/catalogo/` profundamente: tempo de carregamento, paginacao, filtros e cache. Evidencia/commit: pendente.
+- [ ] CAT-01 Otimizar `/catalogo/` profundamente: tempo de carregamento, paginacao, filtros e cache. Evidencia parcial: removido enriquecimento duplicado; picos de lentidao estavam correlacionados a processos temporarios `shopvivaliz-pr-heal`/`git index-pack` concorrentes, encerrados em producao. Apos alivio, `/catalogo/?q=decore` mediu ~0,86s-1,38s total em 3 execucoes.
 - [ ] BLOG-01 Melhorar imagens dos artigos sem repeticao indevida. Evidencia/commit: pendente.
 - [ ] GOOGLE-01 Auditar Ads, GA4, GTM, Merchant, Search Console e motivo de zero vendas. Evidencia/commit: pendente.
 
@@ -39,3 +39,4 @@ Atualizado em: 2026-08-21 20:45 BRT
 
 - 2026-08-21: STOCK-01/STOCK-02 concluidos. Validacao de carrinho agora agrega SKUs duplicados e bloqueia excesso antes do checkout; endpoint legado create-v2 reforcado.
 - 2026-08-21: IMG-02 parcial. Corrigidas imagens publicas de 3 SKUs; removido insumo 23543 da vitrine; 2 SKUs aguardam imagem oficial.
+- 2026-08-21: CAT-01 parcial. Removida chamada duplicada de `svp_enrich_products`; parados clones temporarios `shopvivaliz-pr-heal` que estavam elevando load e causando picos de TTFB.
