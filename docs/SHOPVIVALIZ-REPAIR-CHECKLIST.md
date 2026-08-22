@@ -14,10 +14,10 @@ Atualizado em: 2026-08-21 20:45 BRT
 - [x] HOME-02 Produtos em destaque alternam imagens do item a cada 3s. Aceite: `index.php` ja envia `data-images`; `js/home-image-rotator-v1.js` alterna `.product-image img` a cada 3000 ms. Evidencia: arquivo JS criado e carregado por `index.php`.
 - [x] PDP-01 Produto com galeria, miniaturas, video seguro quando existir e rotacao de imagens a cada 3s. Aceite: `produto.php` ja tem miniaturas/video/frete; adicionada rotacao automatica de miniaturas de imagem sem alternar para video. Evidencia: sintaxe PHP ok.
 - [x] PDP-02 Produto com cotacao de frete por CEP. Aceite: `produto.php` contem calculador `p-frete-cep` usando `/api/frete/calcular.php`. Evidencia: inspecao de arquivo; mantido sem alterar precos/estoque.
-- [ ] STOCK-01 Corrigir fonte/normalizacao de estoque do catalogo. Observacao: tentativa de `available=1` foi revertida porque o endpoint retornou 0 produtos; cache atual traz `estoque.localizacao`, mas nao quantidade. Evidencia: `api/catalog/products.php?available=1` retornou total 0; pendente integrar estoque real antes de bloquear compra.
-- [ ] STOCK-02 Revalidar server-side carrinho/checkout contra estoque/status antes do pedido. Evidencia/commit: pendente.
+- [x] STOCK-01 Corrigir fonte/normalizacao de estoque do catalogo em producao. Evidencia: `api/catalog/products.php?available=1&no_cache=1` retornou total 163, count 5, `available_only=true`, com estoque real positivo em 2026-08-21.
+- [x] STOCK-02 Revalidar server-side carrinho/checkout contra estoque/status antes do pedido. Evidencia: `/api/cart/validate.php` bloqueia SKU inexistente, quantidade 999 e SKU duplicado 4+4 para `JVCDAC34` quando estoque=7; `api/orders/create-v2.php` reforcado para agregar SKUs duplicados antes de comparar estoque.
 - [x] IMG-01 Auditar SKUs ativos sem imagem no catalogo publico. Aceite: relatorio CSV gerado. Evidencia: `reports/api-missing-active-images-20260821.csv` com 6 SKUs.
-- [ ] IMG-02 Corrigir os 6 SKUs ativos sem imagem usando fonte ERP/Olist/Tiny ou aprovacao manual. Evidencia/commit: pendente.
+- [ ] IMG-02 Corrigir SKUs ativos sem imagem usando fonte ERP/Olist/Tiny ou aprovacao manual. Evidencia parcial: `kit-vedant-90`, `KIT4R-SOPRANO` e `kit4rod35freio` corrigidos com imagens locais/snapshot Tiny; `23543` removido da vitrine por regra de insumo `stretch manual`; novo relatorio `reports/api-missing-active-images-20260821-after-fixes.csv` restou com 2 SKUs sem fonte local (`TTO/PP*BR1`, `SAB-PR-FBA-ONSITE`).
 
 ## P1 - Alto impacto
 - [x] CART-01 Redesenhar carrinho, corrigir sobreposicao, hierarquia, responsividade e CTA. Evidencia: CSS de reparo 2026-08-21 aplicado em `carrinho.php`; sintaxe PHP ok.
@@ -36,3 +36,6 @@ Atualizado em: 2026-08-21 20:45 BRT
 
 ## Log de execucao
 - 2026-08-21: Primeira leva aplicada em producao: navbar Blog, footer polido, carrinho polido, sobre reescrito, conta com logo, avaliacoes sem texto interno, politica de devolucao ajustada, rotacao home/produto, guard client-side de estoque no catalogo e relatorio de imagens faltantes.
+
+- 2026-08-21: STOCK-01/STOCK-02 concluidos. Validacao de carrinho agora agrega SKUs duplicados e bloqueia excesso antes do checkout; endpoint legado create-v2 reforcado.
+- 2026-08-21: IMG-02 parcial. Corrigidas imagens publicas de 3 SKUs; removido insumo 23543 da vitrine; 2 SKUs aguardam imagem oficial.

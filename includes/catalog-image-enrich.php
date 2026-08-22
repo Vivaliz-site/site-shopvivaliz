@@ -8,19 +8,67 @@ require_once __DIR__ . '/pdo-database.php';
  * @param array<string,string> $imageBySku
  * @return list<array<string,mixed>>
  */
+function svcie_sku_key(string $sku): string
+{
+    $value = trim($sku);
+    if ($value === '') return '';
+    $converted = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
+    if (is_string($converted) && $converted !== '') $value = $converted;
+    return strtoupper((string)preg_replace('/[^A-Z0-9]+/i', '', $value));
+}
+
+/** @return array<string,list<string>> */
+function svcie_manual_image_map(): array
+{
+    return [
+        // URLs/fotos locais ja existentes no projeto ou em snapshots Olist/Tiny.
+        // Somente preenchem imagem ausente; nao alteram preco, estoque ou nome.
+        'kit-vedant-90' => ['/uploads/catalog-fixed/kit-vedant-90/1.jpg'],
+        'KIT4R-SOPRANO' => [
+            '/uploads/catalog-fixed/KIT4R-SOPRANO/1.jpg',
+            '/uploads/catalog-fixed/KIT4R-SOPRANO/2.jpg',
+            '/uploads/catalog-fixed/KIT4R-SOPRANO/3.jpg',
+            '/uploads/catalog-fixed/KIT4R-SOPRANO/4.jpg',
+        ],
+        'kit4rod35freio' => [
+            'https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/0420bfd6eb9c1867d1bf59b62b95a6e6.jpg',
+            'https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/42d034f9ed70129c457c162092c279a1.jpg',
+            'https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/ba036cc120b110fbbc3d7245fe53d112.jpg',
+            'https://s3.amazonaws.com/tiny-anexos-us/erp/MTI4NTQ1NjExNw/f393a68fb7e84c2ea16d1f7e9fb235f9.jpg',
+        ],
+    ];
+}
+
+/** @param array<string,string|list<string>> $imageBySku */
 function svcie_apply_image_map(array $products, array $imageBySku): array
 {
+    $normalizedMap = [];
+    foreach ($imageBySku as $sku => $image) {
+        $key = svcie_sku_key((string)$sku);
+        if ($key !== '') $normalizedMap[$key] = $image;
+    }
+    foreach (svcie_manual_image_map() as $sku => $images) {
+        $key = svcie_sku_key((string)$sku);
+        if ($key !== '') $normalizedMap[$key] = $images;
+    }
+
     foreach ($products as $index => $product) {
         $sku = trim((string)($product['sku'] ?? ''));
         $current = trim((string)($product['image_url'] ?? ''));
-        if ($current !== '' || $sku === '' || !isset($imageBySku[$sku])) continue;
+        $key = svcie_sku_key($sku);
+        if ($current !== '' || $sku === '' || $key === '' || !isset($normalizedMap[$key])) continue;
 
-        $image = trim((string)$imageBySku[$sku]);
-        if ($image === '') continue;
+        $mapped = $normalizedMap[$key];
+        $mappedImages = is_array($mapped) ? array_values(array_filter(array_map('strval', $mapped))) : [trim((string)$mapped)];
+        $mappedImages = array_values(array_filter($mappedImages, static fn(string $image): bool => trim($image) !== ''));
+        if ($mappedImages === []) continue;
 
+        $image = trim($mappedImages[0]);
         $products[$index]['image_url'] = $image;
         $images = is_array($product['images'] ?? null) ? array_values(array_filter($product['images'])) : [];
-        if (!in_array($image, $images, true)) array_unshift($images, $image);
+        foreach (array_reverse($mappedImages) as $mappedImage) {
+            if (!in_array($mappedImage, $images, true)) array_unshift($images, $mappedImage);
+        }
         $products[$index]['images'] = array_slice($images, 0, 10);
         $products[$index]['images_count'] = max((int)($product['images_count'] ?? 0), count($products[$index]['images']));
     }
