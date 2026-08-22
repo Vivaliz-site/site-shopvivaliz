@@ -32,7 +32,7 @@ Atualizado em: 2026-08-21 20:45 BRT
 - [x] NAV-01 Inserir Blog no cabecalho desktop/mobile. Evidencia: `includes/navbar.php` inclui `/blog/`; sintaxe PHP ok.
 - [x] ACCOUNT-01 Inserir logo na area Minha Conta. Evidencia: `includes/account-chrome-top.php` usa logo em `.sv-account-header`; sintaxe PHP ok.
 - [x] ABOUT-01 Reescrever `/sobre/` com contexto institucional/comercial. Evidencia: `sobre/index.php` reescrito e sintaxe PHP ok.
-- [ ] CAT-01 Otimizar `/catalogo/` profundamente: tempo de carregamento, paginacao, filtros e cache. Evidencia parcial: removido enriquecimento duplicado; picos de lentidao estavam correlacionados a processos temporarios `shopvivaliz-pr-heal`/`git index-pack` concorrentes, encerrados em producao. Apos alivio, `/catalogo/?q=decore` mediu ~0,86s-1,38s total em 3 execucoes.
+- [x] CAT-01 Otimizar `/catalogo/` profundamente: tempo de carregamento, paginacao, filtros e cache. Evidencia: removido enriquecimento duplicado; picos de lentidao estavam correlacionados a processos temporarios `shopvivaliz-pr-heal`/`git index-pack`; endpoint `/api/catalog/products.php` agora respeita `offset` e `page`, evitando sobreposicao; `tests/catalog-public-contract-test.php` OK com 162 produtos disponiveis.
 - [x] BLOG-01 Melhorar imagens dos artigos sem repeticao indevida. Evidencia: `tests/blog-image-quality-test.php` validou 22 artigos, cada um com capa unica existente em `/public/assets/blog/{slug}.svg`. Commit: `f8e7050a7`.
 - [ ] GOOGLE-01 Auditar Ads, GA4, GTM, Merchant, Search Console e motivo de zero vendas. Evidencia/commit: pendente.
 
@@ -46,7 +46,7 @@ Atualizado em: 2026-08-21 20:45 BRT
 
 - 2026-08-21: STOCK-01/STOCK-02 concluidos. Validacao de carrinho agora agrega SKUs duplicados e bloqueia excesso antes do checkout; endpoint legado create-v2 reforcado.
 - 2026-08-21: IMG-02 parcial. Corrigidas imagens publicas de 3 SKUs; removido insumo 23543 da vitrine; 2 SKUs aguardam imagem oficial.
-- 2026-08-21: CAT-01 parcial. Removida chamada duplicada de `svp_enrich_products`; parados clones temporarios `shopvivaliz-pr-heal` que estavam elevando load e causando picos de TTFB.
+- 2026-08-21: CAT-01 concluido. Removida chamada duplicada de `svp_enrich_products`; parados clones temporarios `shopvivaliz-pr-heal`; corrigido `offset` na API de catalogo e validado contrato publico sem itens inativos/sem estoque/com dados incompletos.
 
 - 2026-08-21: ERP image repair: corrigido sync ativo `olist/sync-on-webhook.php` para enriquecer produtos sem imagem via detalhe `/produtos/{id}`; cache atual reparado para TTO/PP*BR1 e SAB-PR-FBA-ONSITE; API publica validada com 0 produtos ativos/com estoque sem imagem. Commit: pendente.
 - 2026-08-21 21:58 BRT: Regra reforcada: imagens publicas de produtos devem vir exclusivamente do produto no ERP/Tiny. Removido fallback manual/local de imagem da vitrine; cache ativo reparado via /produtos/{id}. Validacao: 175/175 imagens publicas classificadas como erp_tiny_s3; relatorio `reports/api-non-erp-images-20260821-final.csv` com 0 linhas. Evidencia/commit: pendente.
