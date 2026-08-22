@@ -33,7 +33,7 @@ Atualizado em: 2026-08-21 20:45 BRT
 - [x] ACCOUNT-01 Inserir logo na area Minha Conta. Evidencia: `includes/account-chrome-top.php` usa logo em `.sv-account-header`; sintaxe PHP ok.
 - [x] ABOUT-01 Reescrever `/sobre/` com contexto institucional/comercial. Evidencia: `sobre/index.php` reescrito e sintaxe PHP ok.
 - [ ] CAT-01 Otimizar `/catalogo/` profundamente: tempo de carregamento, paginacao, filtros e cache. Evidencia parcial: removido enriquecimento duplicado; picos de lentidao estavam correlacionados a processos temporarios `shopvivaliz-pr-heal`/`git index-pack` concorrentes, encerrados em producao. Apos alivio, `/catalogo/?q=decore` mediu ~0,86s-1,38s total em 3 execucoes.
-- [ ] BLOG-01 Melhorar imagens dos artigos sem repeticao indevida. Evidencia/commit: pendente.
+- [x] BLOG-01 Melhorar imagens dos artigos sem repeticao indevida. Evidencia: `tests/blog-image-quality-test.php` validou 22 artigos, cada um com capa unica existente em `/public/assets/blog/{slug}.svg`. Commit: pendente.
 - [ ] GOOGLE-01 Auditar Ads, GA4, GTM, Merchant, Search Console e motivo de zero vendas. Evidencia/commit: pendente.
 
 ## P2/P3 - Continuo
