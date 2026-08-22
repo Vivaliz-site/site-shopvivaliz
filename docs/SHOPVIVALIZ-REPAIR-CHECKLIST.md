@@ -42,3 +42,4 @@ Atualizado em: 2026-08-21 20:45 BRT
 - 2026-08-21: CAT-01 parcial. Removida chamada duplicada de `svp_enrich_products`; parados clones temporarios `shopvivaliz-pr-heal` que estavam elevando load e causando picos de TTFB.
 
 - 2026-08-21: ERP image repair: corrigido sync ativo `olist/sync-on-webhook.php` para enriquecer produtos sem imagem via detalhe `/produtos/{id}`; cache atual reparado para TTO/PP*BR1 e SAB-PR-FBA-ONSITE; API publica validada com 0 produtos ativos/com estoque sem imagem. Commit: pendente.
+- 2026-08-21 21:58 BRT: Regra reforcada: imagens publicas de produtos devem vir exclusivamente do produto no ERP/Tiny. Removido fallback manual/local de imagem da vitrine; cache ativo reparado via /produtos/{id}. Validacao: 175/175 imagens publicas classificadas como erp_tiny_s3; relatorio `reports/api-non-erp-images-20260821-final.csv` com 0 linhas. Evidencia/commit: pendente.
