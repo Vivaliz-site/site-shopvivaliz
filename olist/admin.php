@@ -52,7 +52,6 @@ $GLOBALS['root'] = $root;
 $hasClientId     = oa_env('OLIST_CLIENT_ID', 'TINY_CLIENT_ID') !== '';
 $hasClientSecret = oa_env('OLIST_CLIENT_SECRET', 'TINY_CLIENT_SECRET') !== '';
 $hasRefresh      = oa_env('OLIST_REFRESH_TOKEN', 'TINY_REFRESH_TOKEN') !== '';
-$hasV2Token      = oa_env('TOKEN_API_OLIST', 'TINY_API_TOKEN') !== '';
 
 $tokensJson  = $root . '/storage/private/tokens.json';
 $tokensData  = is_file($tokensJson) ? json_decode((string)file_get_contents($tokensJson), true) : null;
@@ -147,7 +146,6 @@ pre{background:#0a0c12;padding:.8rem;border-radius:4px;overflow-x:auto;font-size
     <tr><td>OLIST_CLIENT_ID</td><td><?= oa_badge($hasClientId) ?></td></tr>
     <tr><td>OLIST_CLIENT_SECRET</td><td><?= oa_badge($hasClientSecret) ?></td></tr>
     <tr><td>OLIST_REFRESH_TOKEN</td><td><?= oa_badge($hasRefresh) ?></td></tr>
-    <tr><td>TOKEN_API_OLIST (v2 fallback)</td><td><?= oa_badge($hasV2Token) ?></td></tr>
   </table>
   <?php if ($tokensAge): ?>
   <p style="margin-top:.8rem;color:#888">Tokens renovados em: <strong style="color:#e0e0e0"><?= htmlspecialchars($tokensAge) ?></strong></p>

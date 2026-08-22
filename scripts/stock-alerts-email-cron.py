@@ -7,6 +7,7 @@ Envia notificações de email quando produtos voltam ao estoque
 import os
 import sys
 import sqlite3
+import json
 import smtplib
 from html import escape
 from datetime import datetime
@@ -64,35 +65,75 @@ def get_db_connection():
     return sqlite3.connect(str(DB_PATH))
 
 
+def load_erp_catalog_by_sku():
+    """Ler cache derivado do ERP Olist/Tiny v3, sem consultar products.stock."""
+    root = Path(__file__).parent.parent
+    candidates = [
+        root / "api" / "catalog" / "fallback-products.json",
+        root / "storage" / "products-cache-ativos.json",
+    ]
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            print(f"[AVISO] Falha ao ler catalogo ERP {path}: {exc}")
+            continue
+        rows = payload
+        if isinstance(payload, dict):
+            for key in ("itens", "items", "produtos", "products", "data"):
+                if isinstance(payload.get(key), list):
+                    rows = payload[key]
+                    break
+        if not isinstance(rows, list):
+            continue
+        indexed = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            sku = str(row.get("sku") or row.get("codigo") or "").strip()
+            if not sku:
+                continue
+            indexed[sku] = row
+        if indexed:
+            return indexed
+    return {}
+
+
 def get_back_in_stock_alerts():
-    """Obter alertas de produtos que voltaram ao estoque"""
+    """Obter alertas usando estoque/nome derivados do ERP Olist/Tiny v3."""
+    catalog = load_erp_catalog_by_sku()
+    if not catalog:
+        print("[ERRO] Catalogo ERP derivado nao encontrado; alertas nao enviados")
+        return []
+
     conn = get_db_connection()
     if not conn:
         return []
 
     try:
         cursor = conn.cursor()
-        # Buscar produtos que:
-        # 1. Têm registro em stock_alerts
-        # 2. Estão COM estoque (stock > 0)
-        # 3. Ainda não foram notificados (notified_at IS NULL)
         cursor.execute("""
-            SELECT
-                sa.email,
-                sa.sku,
-                p.name as product_name,
-                p.stock,
-                sa.unsubscribe_token
-            FROM stock_alerts sa
-            JOIN products p ON sa.sku = p.sku
-            WHERE sa.notified_at IS NULL
-              AND p.stock > 0
-            ORDER BY sa.created_at ASC
+            SELECT email, sku, unsubscribe_token
+            FROM stock_alerts
+            WHERE notified_at IS NULL
+            ORDER BY created_at ASC
             LIMIT 100
         """)
-        return cursor.fetchall()
+        alerts = []
+        for email, sku, unsubscribe_token in cursor.fetchall():
+            product = catalog.get(str(sku))
+            if not isinstance(product, dict):
+                continue
+            stock = int(float(product.get("stock") or product.get("estoque_disponivel") or 0))
+            if stock <= 0:
+                continue
+            name = str(product.get("name") or product.get("descricao") or sku)
+            alerts.append((email, sku, name, stock, unsubscribe_token))
+        return alerts
     except Exception as e:
-        print(f"[ERRO] Falha ao consultar banco: {e}")
+        print(f"[ERRO] Falha ao consultar alertas: {e}")
         return []
     finally:
         conn.close()

@@ -42,7 +42,6 @@ jobs:
       AMAZON_SP_API_ENDPOINT_VALUE: ${{ secrets.AMAZON_SP_API_ENDPOINT }}
       AMAZON_SP_API_REGION_VALUE: ${{ secrets.AMAZON_SP_API_REGION }}
       OLIST_API_KEY_VALUE: ${{ secrets.OLIST_API_KEY }}
-      TOKEN_API_OLIST_VALUE: ${{ secrets.TOKEN_API_OLIST }}
 
     steps:
       - uses: actions/checkout@v4
@@ -81,7 +80,7 @@ jobs:
                   bool(os.getenv('AMAZON_SELLER_ID_VALUE') or os.getenv('AMAZON_ACCOUNT_ID_VALUE')),
                   bool(os.getenv('AMAZON_MARKETPLACE_ID_VALUE')),
               ],
-              'tiny_images': [bool(os.getenv('OLIST_API_KEY_VALUE') or os.getenv('TOKEN_API_OLIST_VALUE'))],
+              'tiny_images': [bool(os.getenv('OLIST_API_KEY_VALUE'))],
           }
           incomplete = [channel for channel, checks in groups.items() if not all(checks)]
           for channel, checks in groups.items():
@@ -134,7 +133,7 @@ jobs:
             "$SHOPEE_PARTNER_ID_VALUE" "$SHOPEE_PARTNER_KEY_VALUE" "$SHOPEE_SHOP_ID_VALUE" "$SHOPEE_ACCESS_TOKEN_VALUE" "$SHOPEE_REFRESH_TOKEN_VALUE" \
             "$TIKTOK_APP_KEY_VALUE" "$TIKTOK_APP_SECRET_VALUE" "$TIKTOK_ACCESS_TOKEN_VALUE" "$TIKTOK_REFRESH_TOKEN_VALUE" "$TIKTOK_SHOP_CIPHER_VALUE" "$TIKTOK_SHOP_ID_VALUE" \
             "$AMAZON_LWA_CLIENT_ID_VALUE" "$AMAZON_LWA_CLIENT_SECRET_VALUE" "$AMAZON_LWA_REFRESH_TOKEN_VALUE" "$AMAZON_SELLER_ID_VALUE" "$AMAZON_ACCOUNT_ID_VALUE" "$AMAZON_MARKETPLACE_ID_VALUE" "$AMAZON_SP_API_ENDPOINT_VALUE" "$AMAZON_SP_API_REGION_VALUE" \
-            "$OLIST_API_KEY_VALUE" "$TOKEN_API_OLIST_VALUE" |
+            "$OLIST_API_KEY_VALUE" |
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
               ubuntu@137.131.156.17 \

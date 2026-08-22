@@ -13,7 +13,7 @@ function svcr_selection_assert(bool $condition, string $message): void
 
 $root = dirname(__DIR__);
 $fallback = svcr_fallback_products($root);
-svcr_selection_assert(count($fallback) >= 20, 'fallback curado pode continuar existindo como artefato historico');
+svcr_selection_assert($fallback === [], 'fallback curado historico deve permanecer aposentado sob a regra ERP-only');
 
 $healthyCache = [[
     'sku' => 'CACHE-HEALTHY',

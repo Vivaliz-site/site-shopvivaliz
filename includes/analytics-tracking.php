@@ -404,7 +404,7 @@ JS;
   fbq('init', '{$this->facebook_pixel}');
   fbq('track', 'PageView');
 </script>
-<noscript><img height="1" width="1" style="display:none"
+<noscript><img height="1" width="1" style="display:none" alt="" aria-hidden="true"
   src="https://www.facebook.com/tr?id={$this->facebook_pixel}&ev=PageView&noscript=1" /></noscript>
 JS;
         }

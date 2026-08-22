@@ -167,10 +167,10 @@ function svseo_title(array $product, int $width = 150): string
 {
     // A pagina publica de produto usa historicamente width=70 e acrescenta
     // " | Vivaliz" fora desta funcao. Reserva os 10 caracteres do sufixo
-    // e mantem o <title> completo em ate 65 caracteres. Outros consumidores,
+    // e mantem o <title> completo em ate 60 caracteres. Outros consumidores,
     // como o Merchant Feed (150), preservam seus limites proprios.
     if ($width === 70) {
-        $width = 55;
+        $width = 50;
     }
 
     $approvedMetaTitle = trim((string)($product['meta_title'] ?? ''));

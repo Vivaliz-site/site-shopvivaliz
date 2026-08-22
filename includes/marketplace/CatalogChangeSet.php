@@ -119,7 +119,7 @@ function sv_catalog_change_set(array $before, array $after, array $fieldMap): ar
     foreach (sv_catalog_change_field_keys() as $field => $contentKey) {
         $definition = is_array($fieldMap[$field] ?? null) ? $fieldMap[$field] : [];
         $mode = strtolower(trim((string)($definition['mode'] ?? 'internal')));
-        if (!in_array($mode, ['direct', 'embedded', 'internal'], true)) $mode = 'internal';
+        if (!in_array($mode, ['direct', 'embedded', 'erp_mirrored', 'internal'], true)) $mode = 'internal';
         $beforeValue = $before[$contentKey] ?? '';
         $afterValue = $after[$contentKey] ?? '';
         $changed = sv_catalog_change_value_changed($contentKey, $beforeValue, $afterValue);

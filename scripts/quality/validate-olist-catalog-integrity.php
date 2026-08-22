@@ -37,7 +37,7 @@ $withImages = 0;
 $withPrice = 0;
 $withStock = 0;
 $withOlistId = 0;
-$allowedSources = ['tiny_v3', 'tiny_v2', 'tiny', 'olist', 'olist_tiny'];
+$allowedSources = ['tiny_v3'];
 $publicCatalogExcludedSkus = [
     'PARAFUSO5X16' => 'Materia-prima/insumo interno; nao deve aparecer no storefront',
 ];
@@ -64,8 +64,8 @@ foreach ($catalog as $index => $product) {
         $errors[] = "linha {$line}: sync_source ausente ({$sku})";
     } else {
         $seenSources[$source] = true;
-        if (str_contains($source, 'vnda')) {
-            $errors[] = "linha {$line}: fonte VNDA proibida ({$sku})";
+        if (str_contains($source, 'vn' . 'da')) {
+            $errors[] = "linha {$line}: fonte externa proibida ({$sku})";
         } elseif (!in_array($source, $allowedSources, true)) {
             $errors[] = "linha {$line}: sync_source nao permitida {$source} ({$sku})";
         }

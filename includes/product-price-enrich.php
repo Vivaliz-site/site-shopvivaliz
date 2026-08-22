@@ -121,82 +121,17 @@ function svp_bulk_price_stock(?mysqli $db, array $skus): array
  */
 function svp_enrich_products(array $products): array
 {
-    static $fallbackMap = null;
-    if ($fallbackMap === null) {
-        $path = dirname(__DIR__) . '/api/catalog/fallback-products.json';
-        $fallbackMap = [];
-        if (is_file($path)) {
-            $json = json_decode((string)file_get_contents($path), true);
-            if (is_array($json)) {
-                foreach ($json as $item) {
-                    if (!is_array($item)) continue;
-                    $s = strtoupper(trim((string)($item['sku'] ?? '')));
-                    if ($s !== '') {
-                        $fallbackMap[$s] = $item;
-                    }
-                }
-            }
-        }
-    }
-
-    foreach ($products as &$p) {
-        if (!is_array($p)) continue;
-        $sku = strtoupper(trim((string)($p['sku'] ?? '')));
-        $fb = $fallbackMap[$sku] ?? null;
-        if ($fb) {
-            if (((float)($p['price'] ?? 0)) <= 0 && ((float)($fb['price'] ?? 0)) > 0) {
-                $p['price'] = (float)$fb['price'];
-            }
-            if (((int)($p['stock'] ?? 0)) <= 0 && ((int)($fb['stock'] ?? 0)) > 0) {
-                $p['stock'] = (int)$fb['stock'];
-            }
-            if (trim((string)($p['image_url'] ?? '')) === '' && !empty($fb['image_url'])) {
-                $p['image_url'] = trim((string)$fb['image_url']);
-            }
-            if (empty($p['images']) && !empty($fb['images'])) {
-                $p['images'] = $fb['images'];
-            }
-        }
-    }
-    unset($p);
-
+    // ERP-only cadastro rule (2026-08-21): do not enrich product registration
+    // fields from fallback-products.json, products table, snapshots or local
+    // files. All public product data must come from the active ERP cache
+    // generated from Tiny/Olist. Kept as compatibility no-op for older callers.
     return $products;
 }
 
 function svp_lookup_product(?mysqli $db, string $sku = '', string $productId = ''): array
 {
-    $sku = trim($sku);
-    $productId = trim($productId);
-    if (!$db instanceof mysqli || ($sku === '' && $productId === '')) {
-        return [];
-    }
-
-    $sql = "SELECT
-                p.id,
-                p.sku,
-                COALESCE(op.olist_product_id, '') AS olist_product_id,
-                COALESCE(op.olist_id, '') AS olist_id,
-                COALESCE(NULLIF(p.name, ''), NULLIF(op.name, ''), '') AS name,
-                COALESCE(NULLIF(p.description, ''), '') AS description,
-                COALESCE(p.price, 0) AS price,
-                COALESCE(p.stock, 0) AS stock,
-                COALESCE(NULLIF(op.primary_image_url, ''), NULLIF(p.image_url, ''), '') AS image_url
-            FROM products p
-            LEFT JOIN olist_products op ON op.sku = p.sku
-            WHERE (? <> '' AND p.sku = ?)
-               OR (? <> '' AND (CAST(p.id AS CHAR) = ? OR op.olist_product_id = ? OR op.olist_id = ?))
-            ORDER BY p.updated_at DESC, p.id DESC
-            LIMIT 1";
-    $stmt = $db->prepare($sql);
-    if (!$stmt) {
-        return [];
-    }
-
-    $stmt->bind_param('ssssss', $sku, $sku, $productId, $productId, $productId, $productId);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result ? ($result->fetch_assoc() ?: []) : [];
-    $stmt->close();
-
-    return is_array($row) ? $row : [];
+    // ERP/Tiny API v3 cache is the only product registration source. Do not
+    // read local products/olist_products tables as fallback for public product
+    // data. Kept as compatibility no-op for older callers.
+    return [];
 }
