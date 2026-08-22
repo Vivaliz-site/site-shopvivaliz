@@ -366,11 +366,33 @@ function svcr_products(): array
     }
 
     if ($items === []) {
-    // Sem snapshot canonico de ativos nao existe evidencia suficiente
-    // para publicar produtos. Falhar fechado evita ressuscitar itens
-    // inativos/excluidos por meio de um fallback historico.
-    return [];
-}
+        $erpSnapshot = $root . '/api/catalog/fallback-products.json';
+        $snapshotPayload = is_file($erpSnapshot) ? json_decode((string)file_get_contents($erpSnapshot), true) : [];
+        if (is_array($snapshotPayload) && array_is_list($snapshotPayload)) {
+            $allTinyV3 = true;
+            foreach ($snapshotPayload as $candidateItem) {
+                if (!is_array($candidateItem)) {
+                    $allTinyV3 = false;
+                    break;
+                }
+                $source = strtolower(trim((string)($candidateItem['sync_source'] ?? '')));
+                if ($source !== 'tiny_v3') {
+                    $allTinyV3 = false;
+                    break;
+                }
+            }
+            if ($allTinyV3) {
+                $items = $snapshotPayload;
+            }
+        }
+    }
+
+    if ($items === []) {
+        // Sem snapshot canonico de ativos nao existe evidencia suficiente
+        // para publicar produtos. Falhar fechado evita ressuscitar itens
+        // inativos/excluidos por meio de um fallback historico.
+        return [];
+    }
 
     $contentIndex = svcr_content_index($root);
     $products = [];
