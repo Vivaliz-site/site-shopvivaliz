@@ -8,11 +8,16 @@ $forbidden = [
     'api2/produtos.pesquisa' => 'Tiny API v2 nao pode ser fallback',
     'tiny_v2' => 'sync_source tiny_v2 nao pode ser permitido',
     'TOKEN_API_OLIST' => 'token estatico legado nao pode alimentar runtime',
+    'tiny_products_cache.json' => 'cache Tiny local antigo nao pode ser fonte operacional',
+    'ml_tiny_' => 'scripts ML/Tiny legados nao podem alimentar runtime operacional',
 ];
 $productionRoots = [
     '.env.example', '.github/workflows', 'api', 'claude', 'config', 'includes',
     'olist', 'scripts', 'daemon-sync-products.py', 'daemon-token-renewer.py',
     'catalogo.php', 'produto.php', 'sync-daemon-to-db.php', 'sync-products-to-json.py',
+    'ml_tiny_final_sync.py', 'ml_tiny_merger_final.py', 'ml_tiny_price_merger.py',
+    'ml_tiny_price_sync.py', 'ml_tiny_price_sync_v2.py', 'ml_tiny_sync_FINAL_CORRIGIDO.py',
+    'ml_tiny_sync_final_v3.py', 'tiny_products_cache.json',
 ];
 $ignoredPathFragments = [
     '/tests/', '/docs/', '/reports/', '/logs/', '/dist/', '/node_modules/',
