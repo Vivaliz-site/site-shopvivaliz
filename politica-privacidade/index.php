@@ -8,7 +8,7 @@ $cnpj = $company['cnpj'] ?? '49.903.300/0001-70';
 $email = $company['email'] ?? 'atendimento@shopvivaliz.com.br';
 ?>
 <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Política de Privacidade e Proteção de Dados (LGPD) da ShopVivaliz."><link rel="canonical" href="https://shopvivaliz.com.br/politica-privacidade/"><title>Privacidade e LGPD | <?= htmlspecialchars($fantasyName) ?></title>
+<meta name="description" content="Saiba como a ShopVivaliz trata dados pessoais, cookies, segurança, direitos previstos na LGPD e canais disponíveis para solicitações de privacidade."><link rel="canonical" href="https://shopvivaliz.com.br/politica-privacidade/"><title>Privacidade e LGPD | <?= htmlspecialchars($fantasyName) ?></title>
 <link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/footer-pages.css?v=20260728-2"></head><body>
 <?php $svNavCurrent = 'privacidade'; include __DIR__ . '/../includes/navbar.php'; ?>
 <main class="legal-container"><header class="legal-header"><h1>Política de Privacidade e Proteção de Dados (LGPD)</h1><p>Como coletamos, utilizamos, compartilhamos e protegemos dados pessoais.</p></header><section class="legal-body">

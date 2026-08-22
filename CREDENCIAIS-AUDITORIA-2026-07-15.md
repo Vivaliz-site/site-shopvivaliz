@@ -15,7 +15,7 @@
 ✓ OLIST_REFRESH_TOKEN          (atualizado: 2026-07-08T23:18:10Z)
 ✓ CLIENT_ID_API_OLIST          (atualizado: 2026-06-27T04:18:53Z)
 ✓ CLIENT_SECRET_OLIST          (atualizado: 2026-06-27T04:19:49Z)
-✓ TOKEN_API_OLIST              (atualizado: 2026-06-29T18:12:16Z)
+✓ OLIST_ACCESS_TOKEN_OAUTH_V3              (atualizado: 2026-06-29T18:12:16Z)
 ✓ URL_REDIRCT_OLIST            (atualizado: 2026-06-29T18:12:22Z)
 ✓ URL_TINY_OLIST               (atualizado: 2026-06-27T13:11:30Z)
 

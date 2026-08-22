@@ -75,7 +75,7 @@ OLIST_CLIENT_SECRET
 ├─ Formato: String criptografada
 └─ Prioridade: ⭐⭐⭐ ALTA
 
-TOKEN_API_OLIST
+OLIST_ACCESS_TOKEN_OAUTH_V3
 ├─ Descrição: Token API da Olist
 ├─ Como obter: Dashboard Olist > API
 ├─ Formato: Token único

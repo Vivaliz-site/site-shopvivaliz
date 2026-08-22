@@ -27,6 +27,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/content.php';
 require_once __DIR__ . '/../includes/blog-article-repository.php';
 require_once __DIR__ . '/../includes/blog-comment-repository.php';
+require_once __DIR__ . '/../includes/blog-seo.php';
 require_once __DIR__ . '/../includes/csrf.php';
 
 $slug = trim((string)($_GET['slug'] ?? ''));
@@ -47,10 +48,14 @@ try {
     error_log('Falha ao carregar comentários do blog: ' . $commentError->getMessage());
 }
 
-$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host = $_SERVER['HTTP_HOST'] ?? 'shopvivaliz.com.br';
-$origin = $scheme . '://' . $host;
+$origin = sv_blog_seo_origin();
 $canonical = $origin . '/blog/' . rawurlencode((string)$article['slug']);
+$seoTitle = sv_blog_seo_title((string)$article['meta_title']);
+$seoDescription = sv_blog_seo_description(
+    (string)$article['meta_description'],
+    (string)($article['excerpt'] ?? ''),
+    (string)($article['title'] ?? '')
+);
 $image = trim((string)($article['image'] ?? ''));
 $imageAbsolute = $image !== '' && str_starts_with($image, 'http') ? $image : $origin . '/' . ltrim($image, '/');
 
@@ -58,7 +63,7 @@ $schema = [
     '@context' => 'https://schema.org',
     '@type' => 'Article',
     'headline' => $article['title'],
-    'description' => $article['meta_description'],
+    'description' => $seoDescription,
     'image' => $imageAbsolute,
     'datePublished' => $article['published_at'],
     'dateModified' => $article['updated_at'],
@@ -117,14 +122,14 @@ if (count($related) < 3) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= sv_blog_escape((string)$article['meta_title']) ?></title>
-    <meta name="description" content="<?= sv_blog_escape((string)$article['meta_description']) ?>">
+    <title><?= sv_blog_escape($seoTitle) ?></title>
+    <meta name="description" content="<?= sv_blog_escape($seoDescription) ?>">
     <meta name="keywords" content="<?= sv_blog_escape(implode(', ', $article['keywords'])) ?>">
     <link rel="canonical" href="<?= sv_blog_escape($canonical) ?>">
     <link rel="alternate" type="application/rss+xml" title="Central de Conhecimento ShopVivaliz" href="/blog/feed.xml">
     <meta property="og:type" content="article">
     <meta property="og:title" content="<?= sv_blog_escape((string)$article['title']) ?>">
-    <meta property="og:description" content="<?= sv_blog_escape((string)$article['meta_description']) ?>">
+    <meta property="og:description" content="<?= sv_blog_escape($seoDescription) ?>">
     <meta property="og:url" content="<?= sv_blog_escape($canonical) ?>">
     <meta property="og:image" content="<?= sv_blog_escape($imageAbsolute) ?>">
     <meta property="og:locale" content="pt_BR">
