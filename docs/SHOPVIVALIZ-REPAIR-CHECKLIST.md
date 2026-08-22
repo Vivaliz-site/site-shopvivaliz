@@ -34,7 +34,7 @@ Atualizado em: 2026-08-21 20:45 BRT
 - [x] ABOUT-01 Reescrever `/sobre/` com contexto institucional/comercial. Evidencia: `sobre/index.php` reescrito e sintaxe PHP ok.
 - [x] CAT-01 Otimizar `/catalogo/` profundamente: tempo de carregamento, paginacao, filtros e cache. Evidencia: removido enriquecimento duplicado; picos de lentidao estavam correlacionados a processos temporarios `shopvivaliz-pr-heal`/`git index-pack`; endpoint `/api/catalog/products.php` agora respeita `offset` e `page`, evitando sobreposicao; `tests/catalog-public-contract-test.php` OK com 162 produtos disponiveis.
 - [x] BLOG-01 Melhorar imagens dos artigos sem repeticao indevida. Evidencia: `tests/blog-image-quality-test.php` validou 22 artigos, cada um com capa unica existente em `/public/assets/blog/{slug}.svg`. Commit: `f8e7050a7`.
-- [ ] GOOGLE-01 Auditar Ads, GA4, GTM, Merchant, Search Console e motivo de zero vendas. Evidencia/commit: pendente.
+- [x] GOOGLE-01 Auditar Ads, GA4, GTM, Merchant, Search Console e motivo de zero vendas. Evidencia: `reports/google-modules-zero-sales-audit-20260821.md`; feeds Google Shopping/Merchant corrigidos de 0 para 175 itens, aceitando somente imagens ERP/Tiny S3; testes `google-shopping-feed-utils-test.php`, `seo-product-feed-quality-test.php` e contrato de catálogo OK. Commit: pendente.
 
 ## P2/P3 - Continuo
 - [x] COPY-01 Varredura de textos publicos para remover linguagem admin/debug. Evidencia: `tests/public-copy-quality-test.php` OK; removidas mensagens publicas de contato/comercial manual de frete em checkout e email legado. Commit: `f8e7050a7`.

@@ -226,7 +226,15 @@ function svgf_feed_url_is_allowed(string $url, string $baseUrl = 'https://shopvi
     }
     $host = strtolower((string)(parse_url($url, PHP_URL_HOST) ?: ''));
     $host = preg_replace('/^www\./', '', $host) ?: '';
-    return $host === svgf_allowed_feed_host($baseUrl);
+    if ($host === svgf_allowed_feed_host($baseUrl)) {
+        return true;
+    }
+
+    // Product media is canonical only when it comes from the ERP/Tiny product
+    // detail. Tiny stores those files in its S3 bucket; allow that exact origin
+    // for Merchant image links without reintroducing local/manual image fallback.
+    $path = (string)(parse_url($url, PHP_URL_PATH) ?: '');
+    return $host === 's3.amazonaws.com' && str_starts_with($path, '/tiny-anexos-');
 }
 
 function svgf_feed_absolute_url(string $baseUrl, string $url): string

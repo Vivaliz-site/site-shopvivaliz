@@ -4,7 +4,7 @@ declare(strict_types=1);
 header('Content-Type: application/xml; charset=UTF-8');
 header('Cache-Control: public, max-age=900, stale-while-revalidate=3600');
 require_once __DIR__ . '/includes/catalog-runtime.php';
-require_once __DIR__ . '/includes/new-catalog-image-source.php';
+require_once __DIR__ . '/includes/catalog-image-enrich.php';
 require_once __DIR__ . '/includes/product-seo.php';
 require_once __DIR__ . '/includes/google-shopping-feed-utils.php';
 
@@ -20,7 +20,7 @@ if (!svgf_feed_url_is_allowed($baseUrl, 'https://shopvivaliz.com.br')) {
 // Prices, inventory and product status come from the current ERP snapshot.
 // Cover images come only from the reconciled Olist/Tiny catalog; no legacy
 // storefront image is eligible for Merchant publication.
-$products = svncis_enrich_direct_olist_images(svcr_products(), __DIR__);
+$products = svcie_enrich_images(svcr_products());
 $identifierMap = svgf_catalog_identifier_map(__DIR__);
 
 function gm_xml(string|int|float $value): string
