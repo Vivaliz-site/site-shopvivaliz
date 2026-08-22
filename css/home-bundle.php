@@ -2,8 +2,8 @@
 declare(strict_types=1);
 
 /**
- * Serve o CSS da home consolidado em UMA resposta HTTP, em vez de várias tags
- * <link>. A ordem das regras continua exatamente a do manifesto; apenas
+ * Serve o CSS da home em duas partes ordenadas, evitando uma resposta CSS
+ * individual acima de 150 KB. A ordem das regras continua a do manifesto; apenas
  * comentários não essenciais e linhas vazias são removidos da resposta para
  * reduzir bytes sem reescrever seletores, valores, calc(), strings ou URLs.
  */
@@ -11,15 +11,21 @@ declare(strict_types=1);
 $projectRoot = dirname(__DIR__);
 require_once $projectRoot . '/includes/asset-bundle-manifest.php';
 
-$files = sv_resolve_home_css_bundle_files($projectRoot);
+$part = isset($_GET['part']) ? (int) $_GET['part'] : null;
+if ($part !== 1 && $part !== 2) {
+    $part = null; // compatibilidade para URLs antigas do bundle completo
+}
+
+$files = sv_resolve_home_css_bundle_files($projectRoot, $part);
 $version = sv_home_css_bundle_version($projectRoot);
+$etag = $version . ($part !== null ? '-p' . $part : '');
 
 header('Content-Type: text/css; charset=utf-8');
 header('Cache-Control: public, max-age=31536000, immutable');
-header('ETag: "' . $version . '"');
+header('ETag: "' . $etag . '"');
 
 $ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? '';
-if ($ifNoneMatch !== '' && trim($ifNoneMatch, '"') === $version) {
+if ($ifNoneMatch !== '' && trim($ifNoneMatch, '"') === $etag) {
     http_response_code(304);
     exit;
 }
