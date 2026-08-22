@@ -58,3 +58,5 @@ Atualizado em: 2026-08-21 20:45 BRT
 - 2026-08-21 22:22 BRT: Publicador de catalogo corrigido: canal site nao grava mais products/cache para campos com equivalente no ERP; ele espelha enriquecimento via Tiny/Olist API v3 com read-back e publicacao pela proxima sincronizacao v3. Commit: `28720a172`.
 - 2026-08-21 22:32 BRT: Regra pedido/NF aplicada: pedido aprovado deve ser transmitido site -> ERP via Tiny/Olist API v3; NF segue ERP -> site via GET /notas/{idNota} e GET /notas/{idNota}/xml, com consulta autenticada na área do cliente e aviso por e-mail quando webhook de NF chegar. Commit: `8880411bd`.
 - 2026-08-21 22:40 BRT: Transporte/rastreio refinado: status, codigo, link e previsao vindos do ERP/Webhook atualizam orders, disparam email em qualquer mudanca relevante e ficam consultaveis por endpoint autenticado /api/account/tracking.php com read-through via GET /pedidos/{id}. Commit: `8880411bd`.
+
+- 2026-08-22: GOOGLE-01 concluido na parte publica/codigo. Feeds Merchant/Shopping corrigidos de vazio para 175 itens; cache de feed passa a invalidar por mudanca de codigo; zero vendas documentado com evidencias e lacunas autenticadas.
