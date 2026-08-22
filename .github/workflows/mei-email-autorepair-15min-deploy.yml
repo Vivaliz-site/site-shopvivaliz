@@ -1,10 +1,6 @@
 name: MEI Email Autorepair 15min Deploy
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/mei-email-autorepair-15min-deploy.yml"
   workflow_dispatch:
 
 permissions:
@@ -174,7 +170,9 @@ jobs:
             -p Restart -p RestartUSec -p StartLimitIntervalUSec --no-pager
           sudo systemctl cat mei-mg-email-worker.service --no-pager
           sudo systemctl cat mei-mg-email-autorepair.service --no-pager
-          sudo journalctl -u mei-mg-email-worker.service --since '-5 minutes' --no-pager | tail -n 120
+          if ! sudo journalctl -u mei-mg-email-worker.service --since '-5 minutes' --no-pager | tail -n 120; then
+            echo '::warning::worker journal evidence unavailable'
+          fi
           echo 'NONSTOP_SAFE_ENTRYPOINT_AND_SUPERVISOR_INSTALLED=true'
           EOF
 
@@ -201,8 +199,10 @@ jobs:
 # deploy final dict-row ledger and migration-version fixes 2026-08-20T11:30Z
 # deploy restored full presend contract after regression 2026-08-20T13:24Z
 # watchdog redeploy current strict sender main 2026-08-20T13:42Z
+# watchdog deploy sender main 6c14e388b0001ae0a5caf241722920eb80e841d5 strict-consent restore 2026-08-20T14:12Z
 # deploy strict authorized sender main 2026-08-20T15:35Z
 # deploy presend lot-progress safety fix 2026-08-20T15:59Z
+# harden deploy governance: manual-only trigger and explicit failure handling 2026-08-20T16:21Z
 # watchdog redeploy strict sender after broken-pipe 2026-08-20T16:24-0300
 # watchdog redeploy strict sender after failed restart 2026-08-20T17:18-0300
 # watchdog deploy sender main 5005bee indexed-autoqueue-v045 runtime 2026-08-20T20:54-0300
