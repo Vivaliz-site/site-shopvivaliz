@@ -42,6 +42,7 @@ $svNavCurrent = trim((string)$svNavCurrent, '/');
 $svNavLinks = [
     ['href' => '/', 'label' => 'Home', 'match' => ['']],
     ['href' => '/catalogo/', 'label' => 'Produtos', 'match' => ['catalogo', 'produtos', 'produto']],
+    ['href' => '/blog/', 'label' => 'Blog', 'match' => ['blog']],
     ['href' => '/sobre/', 'label' => 'Sobre', 'match' => ['sobre']],
     ['href' => '/contato/', 'label' => 'Contato', 'match' => ['contato']],
     ['href' => '/carrinho', 'label' => 'Carrinho', 'match' => ['carrinho', 'checkout']],

@@ -47,6 +47,26 @@ header('Content-Type: text/html; charset=UTF-8');
         .btn-continue { width: 100%; padding: 12px; font-size: 14px; border-radius: 10px; margin-top: 8px; background: transparent; border: 1.5px solid var(--line); color: var(--ink); font-weight: 700; cursor: pointer; text-align: center; text-decoration: none; display: block; }
         .btn-continue:hover { border-color: var(--brand); color: var(--brand); }
         @media (max-width: 700px) { .cart-layout { grid-template-columns: 1fr; } }
+
+        /* Repair 2026-08-21: carrinho mais limpo, sem sobreposicao e responsivo */
+        .cart-page{padding:44px 0 72px;background:linear-gradient(180deg,#f6fbff 0,#fff 100%);}
+        .cart-layout{grid-template-columns:minmax(0,1fr) 360px;gap:28px;align-items:start;}
+        .cart-card{border-radius:20px;border:1px solid #dbe7f2;box-shadow:0 16px 40px rgba(14,49,83,.08);}
+        .cart-title{font-size:28px;color:#102a43;margin-bottom:24px;}
+        .cart-item{grid-template-columns:92px minmax(0,1fr) 130px;gap:18px;padding:18px 0;}
+        .cart-item img{width:92px!important;height:92px!important;object-fit:contain;background:#f8fbff;border-radius:14px;align-self:start;}
+        .cart-item-info{min-width:0;}
+        .cart-item-info strong{font-size:15px;color:#102a43;line-height:1.35;word-break:normal;overflow-wrap:anywhere;}
+        .cart-item-info span{display:block;margin-top:4px;color:#667085;}
+        .cart-item-price{font-size:18px;color:#102a43;text-align:right;}
+        .cart-item-controls{gap:10px;margin-top:12px;flex-wrap:wrap;}
+        .qty-btn{width:34px;height:34px;border-radius:10px;background:#f8fbff;}
+        .btn-remove{background:#fff3f3;border:1px solid #ffd7d7;border-radius:10px;padding:8px 12px;margin-left:6px;text-decoration:none;}
+        #cart-summary{position:sticky;top:112px;}
+        #cart-summary h2{font-size:22px;margin-top:0;color:#102a43;}
+        .summary-row{font-size:15px;margin:12px 0}.summary-total{font-size:22px;color:#0e3153;}
+        @media(max-width:900px){.cart-layout{grid-template-columns:1fr}.cart-item{grid-template-columns:78px minmax(0,1fr);}.cart-item-price{grid-column:2;text-align:left}.cart-item img{width:78px!important;height:78px!important}#cart-summary{position:static}}
+        @media(max-width:560px){.cart-page{padding-top:24px}.cart-card{padding:18px}.cart-item{grid-template-columns:70px minmax(0,1fr);gap:12px}.cart-item img{width:70px!important;height:70px!important}.cart-title{font-size:24px}.btn-remove{width:100%;margin-left:0}.cart-item-controls{align-items:center}}
     </style>
     <?php require_once __DIR__ . '/includes/load-custom-css.php'; ?>
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>

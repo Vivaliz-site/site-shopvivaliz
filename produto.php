@@ -1121,6 +1121,19 @@ if ($notFound) {
             });
         });
 
+        // Repair 2026-08-21: alterna somente miniaturas de imagem a cada 3s; video permanece manual.
+        const imageThumbs = Array.prototype.slice.call(thumbs).filter(function(t){ return t.getAttribute('data-type') !== 'video'; });
+        if (imageThumbs.length > 1) {
+            let svGalleryIndex = Math.max(0, imageThumbs.findIndex(function(t){ return t.classList.contains('active'); }));
+            setInterval(function(){
+                if (document.hidden) return;
+                const video = document.getElementById('main-product-video');
+                if (video && video.style.display !== 'none') return;
+                svGalleryIndex = (svGalleryIndex + 1) % imageThumbs.length;
+                imageThumbs[svGalleryIndex].click();
+            }, 3000);
+        }
+
         // 2. Interactive Zoom Lens Logic
         const img = container ? container.querySelector('img') : null;
         
