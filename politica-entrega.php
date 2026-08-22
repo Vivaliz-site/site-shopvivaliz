@@ -10,7 +10,7 @@ $phone = $company['phone'] ?? '(37) 99937-4112';
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Consulte a política de entrega da ShopVivaliz: cálculo do frete, prazos, rastreamento, tentativas de entrega e orientações para receber seu pedido com segurança.">
+<meta name="description" content="Consulte a política de entrega da ShopVivaliz: cálculo do frete, prazos, rastreamento, tentativas de entrega e orientações para receber o pedido com segurança.">
 <link rel="canonical" href="https://shopvivaliz.com.br/politica-entrega/"><title>Política de Entrega | <?= htmlspecialchars($fantasyName) ?></title>
 <link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/footer-pages.css?v=20260728-1">
 </head><body>
