@@ -70,7 +70,7 @@ jobs:
 
           effective_meta="$(.venv/bin/python -c 'from app.config import settings; print(settings.meta_envios_por_dia)')"
           echo "EFFECTIVE_META_24H=$effective_meta"
-          test "$effective_meta" -le 9000
+          test "$effective_meta" -le 9500
           grep -q '5.1.90' scripts/ndr_guard.py
           grep -q '24 hour limit for message recipients' scripts/ndr_guard.py
           grep -q '/messages?{params}' scripts/ndr_guard.py
@@ -139,4 +139,4 @@ jobs:
         shell: bash
         run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-# deploy mailbox-wide NDR guard + Exchange 24h recipient-limit safety reserve 2026-08-23
+# deploy mailbox-wide NDR guard + Exchange target 9500/24h 2026-08-23
