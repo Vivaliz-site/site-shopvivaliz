@@ -12,24 +12,33 @@ SUPERVISOR_TARGET="$LIB_DIR/vm-desktop-commander-supervisor.sh"
 SERVICE='shopvivaliz-desktop-commander.service'
 TARGET_USER='ubuntu'
 
-id "$TARGET_USER" >/dev/null 2>&1 || { echo 'ERROR target user missing'; exit 2; }
-command -v node >/dev/null 2>&1 || { echo 'ERROR node missing'; exit 3; }
-NPX_BIN="$(sudo -u "$TARGET_USER" -H bash -lc 'command -v npx' 2>/dev/null || true)"
-[[ -n "$NPX_BIN" && -x "$NPX_BIN" ]] || { echo 'ERROR npx missing for target user'; exit 4; }
-[[ -f "$UNIT_SOURCE" ]] || { echo 'ERROR unit template missing'; exit 5; }
-[[ -f "$SUPERVISOR_SOURCE" ]] || { echo 'ERROR supervisor missing'; exit 6; }
+if ! id "$TARGET_USER" >/dev/null 2>&1; then echo 'ERROR target user missing'; exit 2; fi
+if NODE_BIN="$(sudo -u "$TARGET_USER" -H bash -lc 'command -v node' 2>/dev/null)"; then :; else NODE_BIN=''; fi
+if NPX_BIN="$(sudo -u "$TARGET_USER" -H bash -lc 'command -v npx' 2>/dev/null)"; then :; else NPX_BIN=''; fi
+if [[ -z "$NODE_BIN" || ! -x "$NODE_BIN" ]]; then echo 'ERROR node missing for target user'; exit 3; fi
+if [[ -z "$NPX_BIN" || ! -x "$NPX_BIN" ]]; then echo 'ERROR npx missing for target user'; exit 4; fi
+if [[ ! -f "$UNIT_SOURCE" ]]; then echo 'ERROR unit template missing'; exit 5; fi
+if [[ ! -f "$SUPERVISOR_SOURCE" ]]; then echo 'ERROR supervisor missing'; exit 6; fi
 
 install -d -m 0755 "$LIB_DIR"
 install -m 0755 "$SUPERVISOR_SOURCE" "$SUPERVISOR_TARGET"
 install -m 0644 "$UNIT_SOURCE" "$UNIT_TARGET"
-NODE_BIN_DIR="$(dirname "$NPX_BIN")"
-printf 'NPX_BIN=%s\nPATH=%s:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n' "$NPX_BIN" "$NODE_BIN_DIR" > "$ENV_TARGET"
+NODE_BIN_DIR="$(dirname "$NODE_BIN")"
+printf 'NODE_BIN=%s\nNPX_BIN=%s\nPATH=%s:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n' "$NODE_BIN" "$NPX_BIN" "$NODE_BIN_DIR" > "$ENV_TARGET"
 chmod 0644 "$ENV_TARGET"
 systemctl daemon-reload
-systemctl enable shopvivaliz-desktop-commander.service
-systemctl restart shopvivaliz-desktop-commander.service
+systemctl enable "$SERVICE"
+systemctl restart "$SERVICE"
 sleep 3
-printf 'SERVICE_ENABLED=%s\n' "$(systemctl is-enabled "$SERVICE" 2>/dev/null || true)"
-printf 'SERVICE_ACTIVE=%s\n' "$(systemctl is-active "$SERVICE" 2>/dev/null || true)"
-printf 'SERVICE_USER=%s\n' "$(systemctl show -p User --value "$SERVICE" 2>/dev/null || true)"
-printf 'SERVICE_MAINPID=%s\n' "$(systemctl show -p MainPID --value "$SERVICE" 2>/dev/null || true)"
+if SERVICE_ENABLED="$(systemctl is-enabled "$SERVICE" 2>/dev/null)"; then :; else SERVICE_ENABLED='unknown'; fi
+if SERVICE_ACTIVE="$(systemctl is-active "$SERVICE" 2>/dev/null)"; then :; else SERVICE_ACTIVE='unknown'; fi
+if SERVICE_USER="$(systemctl show -p User --value "$SERVICE" 2>/dev/null)"; then :; else SERVICE_USER='unknown'; fi
+if SERVICE_MAINPID="$(systemctl show -p MainPID --value "$SERVICE" 2>/dev/null)"; then :; else SERVICE_MAINPID='0'; fi
+printf 'SERVICE_ENABLED=%s\n' "$SERVICE_ENABLED"
+printf 'SERVICE_ACTIVE=%s\n' "$SERVICE_ACTIVE"
+printf 'SERVICE_USER=%s\n' "$SERVICE_USER"
+printf 'SERVICE_MAINPID=%s\n' "$SERVICE_MAINPID"
+[[ "$SERVICE_ENABLED" == 'enabled' ]]
+[[ "$SERVICE_ACTIVE" == 'active' ]]
+[[ "$SERVICE_USER" == "$TARGET_USER" ]]
+[[ "$SERVICE_MAINPID" =~ ^[0-9]+$ && "$SERVICE_MAINPID" -gt 1 ]]
