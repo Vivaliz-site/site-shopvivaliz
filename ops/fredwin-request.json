@@ -1,5 +1,5 @@
 {
-  "action": "health",
-  "requested_at": "2026-08-23T04:31:00Z",
-  "reason": "Investigate Fred-Win private relay and persistent startup without repeated Desktop Commander device verification"
+  "action": "verify_auto_sync",
+  "requested_at": "2026-08-23T04:33:00Z",
+  "reason": "Inspect Fred-Win scheduled startup and self-heal path; user expects unattended reconnect without device-code prompts"
 }
