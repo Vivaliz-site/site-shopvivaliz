@@ -1,4 +1,4 @@
 {
-  "action": "authorize",
-  "reason": "regenerate one-time persistent Desktop Commander authorization for mobile approval at 2026-08-23T21:31Z"
+  "action": "read_auth",
+  "reason": "read freshly regenerated Desktop Commander authorization details for mobile approval at 2026-08-23T21:32Z"
 }
