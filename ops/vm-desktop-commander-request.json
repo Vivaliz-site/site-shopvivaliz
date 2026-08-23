@@ -1,4 +1,4 @@
 {
-  "action": "recover_session",
-  "reason": "retry persisted Desktop Commander session recovery after workflow syntax repair"
+  "action": "authorize",
+  "reason": "start one-time persistent Desktop Commander authorization for mobile approval"
 }
