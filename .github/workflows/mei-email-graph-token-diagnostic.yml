@@ -33,58 +33,81 @@ jobs:
           set -Eeuo pipefail
           key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
           known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
-          test -n "$key"
-          test -n "$known_hosts"
+          test -n "$key"; test -n "$known_hosts"
           install -m 700 -d "$HOME/.ssh"
           printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Inspect token roles and mailbox access
+      - name: Inspect and grant Mail.Read when authorized
         shell: bash
         run: |
           set -Eeuo pipefail
           mkdir -p "$(dirname "$REPORT_PATH")"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=4 \
-            -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF' | tee "$REPORT_PATH"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF' | tee "$REPORT_PATH"
           set -Eeuo pipefail
           cd /home/ubuntu/mei-mg-email
           echo "CHECKED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           git fetch origin main
           git checkout origin/main -- app/config.py app/email_provider.py scripts/ndr_guard.py
           .venv/bin/python - <<'PY'
-          import base64, json
+          import base64, json, time
           from urllib.error import HTTPError
           from urllib.parse import quote
           from urllib.request import Request, urlopen
           from app.config import settings
           from app.email_provider import MicrosoftGraphEmailProvider
 
-          provider = MicrosoftGraphEmailProvider()
-          token = provider._get_access_token()
-          payload = token.split('.')[1]
-          payload += '=' * (-len(payload) % 4)
-          claims = json.loads(base64.urlsafe_b64decode(payload.encode()).decode())
-          roles = sorted(claims.get('roles') or [])
-          print('EFFECTIVE_META_24H=' + str(settings.meta_envios_por_dia))
-          print('TOKEN_ROLES=' + ','.join(roles))
-          print('HAS_MAIL_SEND=' + str('Mail.Send' in roles).lower())
-          print('HAS_MAIL_READ=' + str('Mail.Read' in roles).lower())
-          print('HAS_MAIL_READ_BASIC_ALL=' + str('Mail.ReadBasic.All' in roles).lower())
-          url = f"https://graph.microsoft.com/v1.0/users/{quote(provider.address)}/messages?$top=1&$select=id,subject,receivedDateTime"
-          req = Request(url, headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/json'})
-          try:
-              with urlopen(req, timeout=30) as response:
-                  print('MAILBOX_READ_HTTP=' + str(response.status))
-          except HTTPError as exc:
-              detail = exc.read().decode('utf-8', 'replace')[:500].replace('\n', ' ')
-              print('MAILBOX_READ_HTTP=' + str(exc.code))
-              print('MAILBOX_READ_ERROR=' + detail)
+          GRAPH_APP_ID='00000003-0000-0000-c000-000000000000'
+          provider=MicrosoftGraphEmailProvider(); token=provider._get_access_token()
+          def token_roles(tok):
+              payload=tok.split('.')[1]; payload += '=' * (-len(payload) % 4)
+              return sorted(json.loads(base64.urlsafe_b64decode(payload.encode()).decode()).get('roles') or [])
+          def call(method,url,body=None,tok=None):
+              data=None if body is None else json.dumps(body).encode()
+              req=Request(url,data=data,method=method,headers={'Authorization':'Bearer '+(tok or token),'Content-Type':'application/json','Accept':'application/json'})
+              try:
+                  with urlopen(req,timeout=30) as r:
+                      raw=r.read().decode() or '{}'; return r.status,json.loads(raw)
+              except HTTPError as e:
+                  detail=e.read().decode('utf-8','replace')[:1000].replace('\n',' ')
+                  return e.code,{'error_detail':detail}
+
+          roles=token_roles(token)
+          print('EFFECTIVE_META_24H='+str(settings.meta_envios_por_dia))
+          print('TOKEN_ROLES_BEFORE='+','.join(roles))
+
+          st,target_q=call('GET',"https://graph.microsoft.com/v1.0/servicePrincipals?$filter=appId%20eq%20'"+provider.client_id+"'&$select=id,appId,displayName")
+          print('TARGET_SP_QUERY_HTTP='+str(st))
+          st2,graph_q=call('GET',"https://graph.microsoft.com/v1.0/servicePrincipals?$filter=appId%20eq%20'"+GRAPH_APP_ID+"'&$select=id,appId,appRoles")
+          print('GRAPH_SP_QUERY_HTTP='+str(st2))
+          if st==200 and st2==200 and target_q.get('value') and graph_q.get('value'):
+              target=target_q['value'][0]; graph=graph_q['value'][0]
+              role=next((r for r in graph.get('appRoles',[]) if r.get('value')=='Mail.Read' and 'Application' in r.get('allowedMemberTypes',[])),None)
+              if role:
+                  st3,assigned=call('GET',f"https://graph.microsoft.com/v1.0/servicePrincipals/{target['id']}/appRoleAssignments?$select=id,appRoleId,resourceId")
+                  print('APP_ROLE_ASSIGNMENTS_QUERY_HTTP='+str(st3))
+                  existing=st3==200 and any(a.get('appRoleId')==role['id'] and a.get('resourceId')==graph['id'] for a in assigned.get('value',[]))
+                  print('MAIL_READ_ALREADY_ASSIGNED='+str(existing).lower())
+                  if not existing:
+                      st4,res=call('POST',f"https://graph.microsoft.com/v1.0/servicePrincipals/{target['id']}/appRoleAssignments",{'principalId':target['id'],'resourceId':graph['id'],'appRoleId':role['id']})
+                      print('MAIL_READ_ASSIGN_HTTP='+str(st4))
+                      if st4 not in (200,201): print('MAIL_READ_ASSIGN_ERROR='+str(res.get('error_detail','')))
+
+          time.sleep(3)
+          provider2=MicrosoftGraphEmailProvider(); token2=provider2._get_access_token(); roles2=token_roles(token2)
+          print('TOKEN_ROLES_AFTER='+','.join(roles2))
+          print('HAS_MAIL_READ='+str('Mail.Read' in roles2).lower())
+          url=f"https://graph.microsoft.com/v1.0/users/{quote(provider2.address)}/messages?$top=1&$select=id,subject,receivedDateTime"
+          stm,resm=call('GET',url,tok=token2)
+          print('MAILBOX_READ_HTTP='+str(stm))
+          if stm!=200: print('MAILBOX_READ_ERROR='+str(resm.get('error_detail','')))
           PY
+          sudo systemctl restart mei-mg-email-ndr-guard.service
+          sleep 5
           echo "WORKER_ACTIVE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
           echo "NDR_GUARD_ACTIVE=$(sudo systemctl is-active mei-mg-email-ndr-guard.service 2>/dev/null || true)"
+          sudo journalctl -u mei-mg-email-ndr-guard.service --since '-2 minutes' --no-pager | tail -n 60 || true
           EOF
 
       - name: Persist diagnostic evidence
@@ -97,7 +120,7 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add "$REPORT_PATH"
           git diff --cached --quiet && exit 0
-          git commit -m "ops: record Graph token permission diagnostic"
+          git commit -m "ops: record Graph Mail.Read admin attempt"
           git push origin HEAD:main
 
       - name: Cleanup SSH material
