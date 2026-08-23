@@ -6,11 +6,10 @@ $ErrorActionPreference = 'Stop'
 $Repo = 'C:\site-shopvivaliz'
 $TaskName = 'ShopVivaliz Desktop Commander 24h'
 $StatusScript = Join-Path $Repo 'scripts\fredwin-desktop-commander-status.ps1'
+$RunnerScript = Join-Path $Repo 'scripts\fredwin-desktop-commander-runner.ps1'
 $LogDir = Join-Path $Repo 'logs'
-$LogFile = Join-Path $LogDir 'desktop-commander-remote.log'
 $SupervisorLog = Join-Path $LogDir 'desktop-commander-supervisor.log'
 $CooldownFile = Join-Path $LogDir 'desktop-commander-auth-required.cooldown'
-$Package = '@wonderwhy-er/desktop-commander@0.2.47'
 $DeviceFile = $null
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
@@ -45,6 +44,7 @@ function Test-RecentCooldown {
 }
 function Ensure-Agent {
     Ensure-ProfileEnvironment
+    if (-not (Test-Path -LiteralPath $RunnerScript)) { throw 'sanitized runner not found' }
     if (-not (Test-Path -LiteralPath $DeviceFile)) {
         Log 'AUTH_REQUIRED device state missing; not starting interactive device flow'
         Write-Output 'AUTH_REQUIRED=true'
@@ -61,32 +61,17 @@ function Ensure-Agent {
         Write-Output 'AUTH_REQUIRED=true'
         exit 20
     }
-    $npx = (Get-Command npx.cmd -ErrorAction SilentlyContinue).Source
-    if (-not $npx) { $npx = (Get-Command npx -ErrorAction SilentlyContinue).Source }
-    if (-not $npx) { throw 'npx not found' }
-    if (Test-Path -LiteralPath $LogFile) {
-        Move-Item -LiteralPath $LogFile -Destination ($LogFile + '.previous') -Force -ErrorAction SilentlyContinue
-    }
-    $escapedLog = $LogFile.Replace("'", "''")
-    $command = "& '$npx' --yes $Package remote *>> '$escapedLog'"
-    $args = @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-Command',$command)
+    $args = @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',$RunnerScript)
     Start-Process -FilePath 'powershell.exe' -ArgumentList $args -WorkingDirectory $Repo -WindowStyle Hidden
     Start-Sleep -Seconds 10
-    $authRequired = $false
-    if (Test-Path -LiteralPath $LogFile) {
-        $tail = Get-Content -LiteralPath $LogFile -Tail 120 -ErrorAction SilentlyContinue
-        $authRequired = [bool]($tail -match 'Please complete authentication|Starting device authorization flow|device code')
-    }
-    if ($authRequired) {
+    if (Test-RecentCooldown) {
         Stop-RemoteProcesses
-        '' | Out-File -FilePath $CooldownFile -Force -Encoding ascii
-        Log 'AUTH_REQUIRED provider requested device authorization; stopped agent and activated six-hour cooldown'
+        Log 'AUTH_REQUIRED provider requested device authorization; cooldown active'
         Write-Output 'AUTH_REQUIRED=true'
         exit 20
     }
     $running = Get-RemoteProcesses
     if ($running.Count -eq 0) { throw 'Remote Desktop Commander did not stay running' }
-    if (Test-Path -LiteralPath $CooldownFile) { Remove-Item -LiteralPath $CooldownFile -Force -ErrorAction SilentlyContinue }
     Log ('Remote agent started pid=' + (($running.ProcessId | Sort-Object) -join ','))
     Write-Output 'REMOTE_AGENT_RUNNING=true'
 }
@@ -97,11 +82,11 @@ function Install-Task {
     $arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $script + '" -Mode Ensure'
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arguments -WorkingDirectory $Repo
     $startup = New-ScheduledTaskTrigger -AtStartup
-    $watchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 3650)
+    $watchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)
     $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType S4U -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
-    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($startup,$watchdog) -Principal $principal -Settings $settings -Description 'Keeps official Remote Desktop Commander online under the persistent FRED profile without interactive startup.' -Force | Out-Null
-    Log ('Scheduled task installed user=' + $user + ' logon=S4U')
+    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($startup,$watchdog) -Principal $principal -Settings $settings -Description 'Keeps official Remote Desktop Commander online under the persistent user profile without interactive startup.' -Force | Out-Null
+    Log ('Scheduled task installed user=' + $user + ' logon=S4U watchdog=1m')
     Start-ScheduledTask -TaskName $TaskName
     Write-Output 'TASK_INSTALLED=true'
 }
