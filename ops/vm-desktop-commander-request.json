@@ -1,4 +1,4 @@
 {
-  "action": "status",
-  "reason": "24h unattended VM Desktop Commander status"
+  "action": "install",
+  "reason": "activate unattended VM Desktop Commander 24h supervisor"
 }

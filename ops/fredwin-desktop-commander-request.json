@@ -1,4 +1,4 @@
 {
-  "action": "desktop_commander_status",
-  "reason": "24h unattended Desktop Commander status"
+  "action": "desktop_commander_install",
+  "reason": "activate unattended Fred-Win Desktop Commander 24h supervisor"
 }
