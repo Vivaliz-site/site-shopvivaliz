@@ -1,4 +1,4 @@
 {
   "action": "recover_session",
-  "reason": "recover any prior persisted Desktop Commander session without user intervention"
+  "reason": "retry persisted Desktop Commander session recovery after workflow syntax repair"
 }
