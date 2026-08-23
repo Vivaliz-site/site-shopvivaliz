@@ -52,6 +52,12 @@
 }
 
 @media (max-width: 760px) {
+  body:has(#sv-privacy-consent) {
+    padding-bottom: calc(var(--sv-privacy-consent-space, 0px) + 20px) !important;
+  }
+  html:has(#sv-privacy-consent) {
+    scroll-padding-bottom: calc(var(--sv-privacy-consent-space, 0px) + 20px) !important;
+  }
   #sv-privacy-consent {
     left: max(8px, env(safe-area-inset-left));
     right: max(8px, env(safe-area-inset-right));

@@ -56,9 +56,20 @@
     }
   }
 
+  function clearBannerSpace() {
+    document.documentElement.style.removeProperty('--sv-privacy-consent-space');
+  }
+
+  function syncBannerSpace(banner) {
+    if (!banner || !banner.isConnected) { clearBannerSpace(); return; }
+    var height = Math.ceil(banner.getBoundingClientRect().height);
+    document.documentElement.style.setProperty('--sv-privacy-consent-space', height + 'px');
+  }
+
   function removeBanner() {
     var banner = document.getElementById('sv-privacy-consent');
     if (banner) banner.remove();
+    clearBannerSpace();
   }
 
   function choose(value) {
@@ -85,6 +96,11 @@
       + '<button type="button" class="sv-consent-accept" data-consent="accepted">Aceitar e continuar</button>'
       + '</div>';
     document.body.appendChild(banner);
+    syncBannerSpace(banner);
+    window.addEventListener('resize', function () { syncBannerSpace(banner); }, { passive: true });
+    if (typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(function () { syncBannerSpace(banner); }).observe(banner);
+    }
     banner.addEventListener('click', function (event) {
       var button = event.target && event.target.closest ? event.target.closest('[data-consent]') : null;
       if (button) choose(button.getAttribute('data-consent') || 'essential');
