@@ -18,7 +18,7 @@ if (-not $npx) { Log 'ERROR npx not found'; exit 3 }
 
 $authRequired = $false
 $connected = $false
-& $npx --yes $Package remote 2>&1 | ForEach-Object {
+& $npx --yes $Package remote --persist-session 2>&1 | ForEach-Object {
     $line = [string]$_
     if ($line -match 'Please complete authentication|Starting device authorization flow|device code|Authorization required') {
         $authRequired = $true
