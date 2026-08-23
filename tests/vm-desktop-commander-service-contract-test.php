@@ -13,18 +13,18 @@ $requiredUnit = [
     'Environment=XDG_CONFIG_HOME=/home/ubuntu/.config',
     'Environment=XDG_CACHE_HOME=/home/ubuntu/.cache',
     'Restart=always', 'RestartSec=10',
-    'RestartPreventExitStatus=20', 'NoNewPrivileges=true', 'PrivateTmp=true',
+    'RestartPreventExitStatus=20', 'EnvironmentFile=-/etc/default/shopvivaliz-desktop-commander', 'NoNewPrivileges=true', 'PrivateTmp=true',
     'vm-desktop-commander-supervisor.sh'
 ];
 foreach ($requiredUnit as $needle) {
     if (strpos($unit, $needle) === false) { fwrite(STDERR, "FALHOU: unit sem {$needle}\n"); exit(1); }
 }
 $installer = file_get_contents($installerPath);
-foreach (['systemctl daemon-reload','systemctl enable shopvivaliz-desktop-commander.service','systemctl restart shopvivaliz-desktop-commander.service','is-enabled','is-active'] as $needle) {
+foreach (['sudo -u', 'NPX_BIN', 'systemctl daemon-reload','systemctl enable shopvivaliz-desktop-commander.service','systemctl restart shopvivaliz-desktop-commander.service','is-enabled','is-active'] as $needle) {
     if (strpos($installer, $needle) === false) { fwrite(STDERR, "FALHOU: installer sem {$needle}\n"); exit(1); }
 }
 $supervisor = file_get_contents($supervisorPath);
-foreach (['.desktop-commander-device/device.json','@wonderwhy-er/desktop-commander@0.2.47','AUTH_REQUIRED','exit 20','remote'] as $needle) {
+foreach (['.desktop-commander-device/device.json','NPX_BIN','@wonderwhy-er/desktop-commander@0.2.47','AUTH_REQUIRED','exit 20','remote'] as $needle) {
     if (strpos($supervisor, $needle) === false) { fwrite(STDERR, "FALHOU: supervisor sem {$needle}\n"); exit(1); }
 }
 $all = $unit . $installer . $supervisor;
