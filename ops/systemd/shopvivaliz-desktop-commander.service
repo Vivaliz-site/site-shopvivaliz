@@ -1,0 +1,26 @@
+[Unit]
+Description=ShopVivaliz official Remote Desktop Commander 24h agent
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu
+Environment=HOME=/home/ubuntu
+Environment=XDG_CONFIG_HOME=/home/ubuntu/.config
+Environment=XDG_CACHE_HOME=/home/ubuntu/.cache
+Environment=npm_config_cache=/home/ubuntu/.npm
+ExecStart=/usr/bin/bash /usr/local/lib/shopvivaliz/vm-desktop-commander-supervisor.sh
+Restart=always
+RestartSec=10
+RestartPreventExitStatus=20
+KillMode=control-group
+TimeoutStopSec=20
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
