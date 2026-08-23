@@ -41,7 +41,7 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Deploy mailbox-wide NDR guard only
+      - name: Deploy recipient-limit guard and bounded worker
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -54,15 +54,26 @@ jobs:
           git fetch origin main
           echo "ORIGIN_MAIN=$(git rev-parse origin/main)"
           git checkout origin/main -- \
+            app/config.py \
+            worker/worker.py \
             scripts/ndr_guard.py \
             scripts/ndr_guard_v2.py \
             deploy/systemd/mei-mg-email-ndr-guard.service
-          .venv/bin/python -m py_compile scripts/ndr_guard.py scripts/ndr_guard_v2.py
+
+          .venv/bin/python -m py_compile \
+            app/config.py worker/worker.py scripts/ndr_guard.py scripts/ndr_guard_v2.py
+
+          effective_meta="$(.venv/bin/python -c 'from app.config import settings; print(settings.meta_envios_por_dia)')"
+          echo "EFFECTIVE_META_24H=$effective_meta"
+          test "$effective_meta" -le 9000
+          grep -q '5.1.90' scripts/ndr_guard.py
+          grep -q '24 hour limit for message recipients' scripts/ndr_guard.py
           grep -q '/messages?{params}' scripts/ndr_guard.py
           if grep -q '/mailFolders/inbox/messages?' scripts/ndr_guard.py; then
             echo '::error::NDR guard still polls Inbox only'
             exit 3
           fi
+
           run_user="$(stat -c '%U' /home/ubuntu/mei-mg-email)"
           python_bin=/home/ubuntu/mei-mg-email/.venv/bin/python
           tmp="$(mktemp)"
@@ -77,18 +88,26 @@ jobs:
           sudo systemctl daemon-reload
           sudo systemctl enable mei-mg-email-ndr-guard.service
           sudo systemctl restart mei-mg-email-ndr-guard.service
-          sleep 5
+          sudo systemctl restart mei-mg-email-worker.service
+          sleep 8
+
           test "$(sudo systemctl is-active mei-mg-email-ndr-guard.service)" = active
           test "$(sudo systemctl is-enabled mei-mg-email-ndr-guard.service)" = enabled
+          test "$(sudo systemctl is-active mei-mg-email-worker.service)" = active
           echo "NDR_GUARD_ACTIVE=true"
-          echo "WORKER_ACTIVE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo "WORKER_ACTIVE=true"
           echo "WORKER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)"
+
           if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
             echo 'CURRENT_SENDER_BLOCK_SENTINEL=present'
           else
             echo 'CURRENT_SENDER_BLOCK_SENTINEL=absent'
           fi
-          sudo journalctl -u mei-mg-email-ndr-guard.service --since '-5 minutes' --no-pager | tail -n 120 || true
+
+          echo '--- NDR GUARD JOURNAL ---'
+          sudo journalctl -u mei-mg-email-ndr-guard.service --since '-10 minutes' --no-pager | tail -n 120 || true
+          echo '--- WORKER JOURNAL ---'
+          sudo journalctl -u mei-mg-email-worker.service --since '-10 minutes' --no-pager | tail -n 120 || true
           EOF
 
       - name: Cleanup SSH material
@@ -96,4 +115,4 @@ jobs:
         shell: bash
         run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-# watchdog redeploy mailbox-wide NDR guard 2026-08-21T02:24-0300
+# deploy mailbox-wide NDR guard + Exchange 24h recipient-limit safety reserve 2026-08-23
