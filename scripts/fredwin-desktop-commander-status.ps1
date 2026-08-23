@@ -11,7 +11,6 @@ if (-not $env:USERPROFILE) {
 if (-not $env:APPDATA -and $env:USERPROFILE) { $env:APPDATA = Join-Path $env:USERPROFILE 'AppData\Roaming' }
 if (-not $env:LOCALAPPDATA -and $env:USERPROFILE) { $env:LOCALAPPDATA = Join-Path $env:USERPROFILE 'AppData\Local' }
 $DeviceFile = if ($env:USERPROFILE) { Join-Path (Join-Path $env:USERPROFILE '.desktop-commander-device') 'device.json' } else { $null }
-$LogFile = 'C:\site-shopvivaliz\logs\desktop-commander-remote.log'
 $CooldownFile = 'C:\site-shopvivaliz\logs\desktop-commander-auth-required.cooldown'
 
 Write-Output ('USER=' + [System.Security.Principal.WindowsIdentity]::GetCurrent().Name)
@@ -38,8 +37,4 @@ if ($task) {
     Write-Output ('TASK_NEXT_RUN=' + $info.NextRunTime.ToUniversalTime().ToString('o'))
 }
 $authRequired = (Test-Path -LiteralPath $CooldownFile)
-if (-not $authRequired -and (Test-Path -LiteralPath $LogFile)) {
-    $tail = Get-Content -LiteralPath $LogFile -Tail 80 -ErrorAction SilentlyContinue
-    $authRequired = [bool]($tail -match 'Please complete authentication|Starting device authorization flow|device code|AUTH_REQUIRED')
-}
 Write-Output ('AUTH_REQUIRED=' + $authRequired)

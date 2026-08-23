@@ -1,4 +1,4 @@
 {
-  "action": "desktop_commander_kill_for_recovery_test",
-  "reason": "verify unattended Fred-Win Desktop Commander auto-recovery"
+  "action": "desktop_commander_install",
+  "reason": "deploy persistent-session Fred-Win Desktop Commander runner and restart it under the durable supervisor"
 }
