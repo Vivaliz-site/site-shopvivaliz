@@ -42,7 +42,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p "$(dirname "$REPORT_PATH")"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF' | tee "$REPORT_PATH"
+          { ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF'
           set -Eeuo pipefail
           cd /home/ubuntu/mei-mg-email
           .venv/bin/python - <<'PY'
@@ -104,6 +104,7 @@ jobs:
           echo "NDR_GUARD_ACTIVE=$(sudo systemctl is-active mei-mg-email-ndr-guard.service)"
           sudo journalctl -u mei-mg-email-ndr-guard.service --since '-2 minutes' --no-pager | tail -n 80
           EOF
+          } 2>&1 | tee "$REPORT_PATH"
 
       - name: Persist evidence
         if: always()
