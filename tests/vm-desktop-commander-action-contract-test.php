@@ -14,9 +14,13 @@ $required = [
 foreach ($required as $needle) {
     if (strpos($yml, $needle) === false) { fwrite(STDERR, "FALHOU: ausente {$needle}\n"); exit(1); }
 }
-$forbidden = ['cat ~/.desktop-commander-device/device.json', 'access_token', 'refresh_token', 'auth_token'];
+$forbidden = [
+    'cat ~/.desktop-commander-device/device.json',
+    'access_token', 'refresh_token', 'auth_token',
+    '|| true'
+];
 foreach ($forbidden as $needle) {
-    if (stripos($yml, $needle) !== false) { fwrite(STDERR, "FALHOU: segredo/log proibido {$needle}\n"); exit(1); }
+    if (stripos($yml, $needle) !== false) { fwrite(STDERR, "FALHOU: padrao proibido {$needle}\n"); exit(1); }
 }
 $json = json_decode(file_get_contents($requestPath), true);
 if (!is_array($json) || !isset($json['action'])) { fwrite(STDERR, "FALHOU: request invalido\n"); exit(1); }
