@@ -1,4 +1,4 @@
 {
-  "action": "desktop_commander_kill_for_recovery_test",
-  "reason": "verify unattended Fred-Win Desktop Commander auto-recovery"
+  "action": "desktop_commander_status",
+  "reason": "neutral 24h Desktop Commander health status after recovery diagnostic"
 }
