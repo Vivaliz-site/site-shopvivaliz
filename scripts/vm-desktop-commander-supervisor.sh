@@ -23,10 +23,13 @@ fi
 tmp="$(mktemp)"
 chmod 0600 "$tmp"
 trap 'rm -f "$tmp"' EXIT
-set +e
-"$NPX_BIN" --yes "$PACKAGE" remote >"$tmp" 2>&1
-rc=$?
-set -e
+
+rc=0
+if "$NPX_BIN" --yes "$PACKAGE" remote >"$tmp" 2>&1; then
+  rc=0
+else
+  rc=$?
+fi
 
 if grep -Eqi 'Please complete authentication|Starting device authorization flow|device code|Authorization required' "$tmp"; then
   mkdir -p "$(dirname "$COOLDOWN_FILE")"
