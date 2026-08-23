@@ -74,4 +74,27 @@ svpn_expect(
     'non-approved statuses must not claim a notification'
 );
 
-echo "OK: admin payment notification idempotency\n";
+$checkoutFile = dirname(__DIR__) . '/checkout.php';
+$checkout = file_get_contents($checkoutFile);
+svpn_expect(is_string($checkout) && $checkout !== '', 'checkout.php must be readable');
+svpn_expect(
+    str_contains($checkout, 'var HAS_PAYMENT_GATEWAY ='),
+    'checkout must expose a server-side gateway availability flag to JavaScript'
+);
+$renderCartPos = strpos($checkout, 'function renderCart()');
+$submitPos = strpos($checkout, "addEventListener('submit', async function");
+svpn_expect($renderCartPos !== false, 'checkout must keep renderCart function');
+svpn_expect($submitPos !== false, 'checkout must keep the async submit handler');
+$renderCartBlock = substr($checkout, (int)$renderCartPos, max(0, (int)$submitPos - (int)$renderCartPos));
+svpn_expect(
+    !str_contains($renderCartBlock, 'Pagamento online temporariamente indisponível'),
+    'gateway unavailable guard must not run inside renderCart because checkout-status is out of scope there'
+);
+$submitBlock = substr($checkout, (int)$submitPos, 1200);
+svpn_expect(
+    str_contains($submitBlock, 'HAS_PAYMENT_GATEWAY')
+        && str_contains($submitBlock, 'Pagamento online temporariamente indisponível'),
+    'async submit handler must fail closed when online payment gateways are unavailable'
+);
+
+echo "OK: admin payment notification idempotency and checkout payment fallback\n";
