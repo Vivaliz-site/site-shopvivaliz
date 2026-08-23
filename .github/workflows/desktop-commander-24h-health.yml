@@ -1,0 +1,92 @@
+name: Desktop Commander 24h Health
+
+on:
+  pull_request:
+    paths:
+      - "ops/fredwin-desktop-commander-request.json"
+      - "ops/vm-desktop-commander-request.json"
+      - ".github/workflows/desktop-commander-24h-health.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Verify VM supervisor
+        run: |
+          set -Eeuo pipefail
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
+            set -Eeuo pipefail
+            enabled=$(systemctl is-enabled shopvivaliz-desktop-commander.service)
+            active=$(systemctl is-active shopvivaliz-desktop-commander.service)
+            pid=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service)
+            test "$enabled" = enabled
+            test "$active" = active
+            test "$pid" -gt 1
+            test -f "$HOME/.desktop-commander-device/device.json"
+            echo "VM_SERVICE_ENABLED=$enabled"
+            echo "VM_SERVICE_ACTIVE=$active"
+            echo "VM_MAINPID=$pid"
+            echo "VM_DEVICE_STATE_EXISTS=true"
+          '
+      - name: Verify Fred-Win supervisor through private relay
+        run: |
+          set -Eeuo pipefail
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
+          import json
+          import urllib.request
+
+          command = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\\site-shopvivaliz\\scripts\\fredwin-desktop-commander-status.ps1"'
+          body = json.dumps({'params': {'command': command, 'timeout': 120}}).encode('utf-8')
+          req = urllib.request.Request(
+              'http://127.0.0.1:5557/mcp/tool/execute_command',
+              data=body,
+              headers={'Content-Type': 'application/json'},
+              method='POST',
+          )
+          with urllib.request.urlopen(req, timeout=130) as response:
+              payload = json.loads(response.read().decode('utf-8'))
+          result = payload.get('result') or {}
+          if result.get('success') is not True:
+              raise SystemExit('Fred-Win status command failed')
+          output = str(result.get('output') or '')
+          safe_lines = []
+          wanted = {
+              'DEVICE_STATE_EXISTS', 'REMOTE_AGENT_COUNT', 'REMOTE_AGENT_PIDS',
+              'TASK_EXISTS', 'TASK_STATE', 'TASK_LAST_RESULT', 'AUTH_REQUIRED'
+          }
+          values = {}
+          for line in output.splitlines():
+              if '=' not in line:
+                  continue
+              key, value = line.split('=', 1)
+              if key in wanted:
+                  values[key] = value.strip()
+                  safe_lines.append(f'{key}={value.strip()}')
+          print('\n'.join(safe_lines))
+          if values.get('DEVICE_STATE_EXISTS', '').lower() != 'true':
+              raise SystemExit('Fred-Win device state missing')
+          if values.get('TASK_EXISTS', '').lower() != 'true':
+              raise SystemExit('Fred-Win scheduled task missing')
+          if int(values.get('REMOTE_AGENT_COUNT', '0')) < 1:
+              raise SystemExit('Fred-Win remote agent not running')
+          if values.get('AUTH_REQUIRED', '').lower() == 'true':
+              raise SystemExit('Fred-Win provider reauthorization required')
+          PY
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
