@@ -25,7 +25,7 @@ chmod 0600 "$tmp"
 trap 'rm -f "$tmp"' EXIT
 
 rc=0
-if "$NPX_BIN" --yes "$PACKAGE" remote >"$tmp" 2>&1; then
+if "$NPX_BIN" --yes "$PACKAGE" remote --persist-session >"$tmp" 2>&1; then
   rc=0
 else
   rc=$?
