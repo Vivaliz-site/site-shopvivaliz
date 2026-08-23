@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: mei-email-ndr-guard-deploy
@@ -22,7 +22,10 @@ jobs:
     env:
       VM_HOST: 137.131.156.17
       VM_USER: ubuntu
+      REPORT_PATH: reports/mei-quota-fix-live-20260823.txt
     steps:
+      - uses: actions/checkout@v4
+
       - name: Configure verified Oracle SSH
         shell: bash
         env:
@@ -45,12 +48,14 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          mkdir -p "$(dirname "$REPORT_PATH")"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=4 \
-            -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF'
+            -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF' | tee "$REPORT_PATH"
           set -Eeuo pipefail
           cd /home/ubuntu/mei-mg-email
+          echo "CHECKED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           git fetch origin main
           echo "ORIGIN_MAIN=$(git rev-parse origin/main)"
           git checkout origin/main -- \
@@ -70,7 +75,7 @@ jobs:
           grep -q '24 hour limit for message recipients' scripts/ndr_guard.py
           grep -q '/messages?{params}' scripts/ndr_guard.py
           if grep -q '/mailFolders/inbox/messages?' scripts/ndr_guard.py; then
-            echo '::error::NDR guard still polls Inbox only'
+            echo 'ERROR=NDR_GUARD_INBOX_ONLY'
             exit 3
           fi
 
@@ -91,15 +96,20 @@ jobs:
           sudo systemctl restart mei-mg-email-worker.service
           sleep 8
 
+          echo "NDR_GUARD_ACTIVE=$(sudo systemctl is-active mei-mg-email-ndr-guard.service)"
+          echo "NDR_GUARD_ENABLED=$(sudo systemctl is-enabled mei-mg-email-ndr-guard.service)"
+          echo "WORKER_ACTIVE=$(sudo systemctl is-active mei-mg-email-worker.service)"
+          echo "WORKER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)"
           test "$(sudo systemctl is-active mei-mg-email-ndr-guard.service)" = active
           test "$(sudo systemctl is-enabled mei-mg-email-ndr-guard.service)" = enabled
           test "$(sudo systemctl is-active mei-mg-email-worker.service)" = active
-          echo "NDR_GUARD_ACTIVE=true"
-          echo "WORKER_ACTIVE=true"
-          echo "WORKER_ENABLED=$(sudo systemctl is-enabled mei-mg-email-worker.service 2>/dev/null || true)"
 
-          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
-            echo 'CURRENT_SENDER_BLOCK_SENTINEL=present'
+          if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then
+            echo 'CURRENT_SENDER_BLOCK_SENTINEL=present:/var/lib/mei-mg-email/sender_blocked.pause'
+            sudo cat /var/lib/mei-mg-email/sender_blocked.pause
+          elif test -f runtime/sender_blocked.pause; then
+            echo 'CURRENT_SENDER_BLOCK_SENTINEL=present:runtime/sender_blocked.pause'
+            cat runtime/sender_blocked.pause
           else
             echo 'CURRENT_SENDER_BLOCK_SENTINEL=absent'
           fi
@@ -108,7 +118,21 @@ jobs:
           sudo journalctl -u mei-mg-email-ndr-guard.service --since '-10 minutes' --no-pager | tail -n 120 || true
           echo '--- WORKER JOURNAL ---'
           sudo journalctl -u mei-mg-email-worker.service --since '-10 minutes' --no-pager | tail -n 120 || true
+          echo 'DEPLOY_VERIFY=PASS'
           EOF
+
+      - name: Persist live evidence
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -s "$REPORT_PATH" || exit 0
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$REPORT_PATH"
+          git diff --cached --quiet && exit 0
+          git commit -m "ops: record live Exchange quota deploy evidence"
+          git push origin HEAD:main
 
       - name: Cleanup SSH material
         if: always()
