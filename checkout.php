@@ -48,6 +48,10 @@ $companyWhatsapp = preg_replace('/\D+/', '', (string)($companyProfile['social_me
 $whatsapp = preg_replace('/\D+/', '', svmp_env('LOJA_WHATSAPP')) ?: $companyWhatsapp;
 $pixKey = svmp_env('LOJA_PIX_KEY');
 $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
+$mercadoPagoAvailable = svmp_env('MERCADOPAGO_ACCESS_TOKEN') !== '' && svmp_env('MERCADOPAGO_PUBLIC_KEY') !== '';
+$infinitePayAvailable = svmp_env('INFINITEPAY_WEBHOOK_SECRET') !== '';
+$hasPaymentGateway = $mercadoPagoAvailable || $infinitePayAvailable;
+$defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAvailable ? 'infinitepay' : '');
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -68,12 +72,14 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
     <link rel="stylesheet" href="/css/layout-polish-v1.css?v=2026-07-29-1">
     <?php require_once __DIR__ . '/includes/load-custom-css.php'; ?>
     <?php require_once __DIR__ . '/includes/head-analytics.php'; ?>
+    <?php if ($mercadoPagoAvailable): ?>
     <!-- Mercado Pago: baixa em paralelo sem bloquear o parser; os scripts
          defer executam antes de DOMContentLoaded, preservando o Device ID. -->
     <link rel="preconnect" href="https://sdk.mercadopago.com" crossorigin>
     <link rel="preconnect" href="https://www.mercadopago.com" crossorigin>
     <script defer src="https://sdk.mercadopago.com/js/v2"></script>
     <script defer src="https://www.mercadopago.com/v2/security.js" output="deviceId"></script>
+    <?php endif; ?>
 </head>
 <body>
 <?php $svNavCurrent = 'checkout'; include __DIR__ . '/includes/navbar.php'; ?>
@@ -191,34 +197,44 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
             </div>
 
             <div class="payment-select-title">Forma de pagamento *</div>
+            <?php if ($hasPaymentGateway): ?>
             <div class="payment-options">
+                <?php if ($mercadoPagoAvailable): ?>
                 <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="mercado_pago" checked required>
+                    <input type="radio" name="payment_method" value="mercado_pago" <?= $defaultPaymentMethod === 'mercado_pago' ? 'checked' : '' ?> required>
                     <span class="payment-opt-box">
                         <img src="/images/mercado-pago-logo.svg" alt="Mercado Pago - PIX, Cartão e Boleto" style="max-height:60px; margin-bottom:8px; width: auto;">
                         <strong>Mercado Pago</strong>
                         <small>PIX, boleto e cartão; condições exibidas no ambiente do gateway</small>
                     </span>
                 </label>
+                <?php endif; ?>
+                <?php if ($infinitePayAvailable): ?>
                 <label class="payment-opt">
-                    <input type="radio" name="payment_method" value="infinitepay" required>
+                    <input type="radio" name="payment_method" value="infinitepay" <?= $defaultPaymentMethod === 'infinitepay' ? 'checked' : '' ?> required>
                     <span class="payment-opt-box">
                         <strong>InfinitePay</strong>
                         <small>PIX e cartão; condições exibidas no ambiente do gateway</small>
                     </span>
                 </label>
+                <?php endif; ?>
             </div>
             <div class="payment-options-note">
                 Escolha o gateway; opções, parcelas e valores finais serão confirmados antes do pagamento.
             </div>
+            <?php else: ?>
+            <div class="payment-options-note payment-unavailable" role="alert">
+                Pagamento online temporariamente indisponível. Fale no WhatsApp para finalizar seu pedido com atendimento.
+            </div>
+            <?php endif; ?>
 
             <label class="form-group">
                 <span>Observações</span>
                 <textarea name="notes" rows="3" maxlength="1000" aria-label="Observações do pedido"></textarea>
             </label>
 
-            <button class="btn btn-primary btn-checkout" type="submit" id="submit-btn">
-                Ir para pagamento
+            <button class="btn btn-primary btn-checkout" type="submit" id="submit-btn" <?= $hasPaymentGateway ? '' : 'disabled aria-disabled="true"' ?>>
+                <?= $hasPaymentGateway ? 'Ir para pagamento' : 'Pagamento indisponível' ?>
             </button>
             <div class="checkout-support-inline">
                 <strong>Atendimento ágil:</strong>
@@ -342,7 +358,8 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
 <script>
 (function () {
     // MercadoPago.js V2 initialization with Public Key
-    var PUBLIC_KEY = <?= json_encode(svmp_env('MERCADOPAGO_PUBLIC_KEY')) ?>;
+    var PUBLIC_KEY = <?= json_encode($mercadoPagoAvailable ? svmp_env('MERCADOPAGO_PUBLIC_KEY') : '') ?>;
+    var HAS_PAYMENT_GATEWAY = <?= $hasPaymentGateway ? 'true' : 'false' ?>;
     function svInitMercadoPagoSdk() {
         try {
             if (PUBLIC_KEY && window.MercadoPago) {
@@ -529,6 +546,11 @@ $pixName = svmp_env('LOJA_PIX_NAME') ?: 'ShopVivaliz';
     /* Renderizar itens do carrinho */
     function renderCart() {
         var items = getCart();
+        if (!HAS_PAYMENT_GATEWAY) {
+            status.textContent = 'Pagamento online temporariamente indisponível. Fale no WhatsApp para finalizar seu pedido.';
+            status.className='checkout-status-msg err';
+            return;
+        }
         var el = document.getElementById('cart-items');
         var subEl = document.getElementById('cart-subtotal');
         var totEl = document.getElementById('cart-total');
