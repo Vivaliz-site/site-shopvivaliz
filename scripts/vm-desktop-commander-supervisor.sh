@@ -5,6 +5,7 @@ HOME_DIR="${HOME:-/home/ubuntu}"
 DEVICE_FILE="$HOME_DIR/.desktop-commander-device/device.json"
 COOLDOWN_FILE="$HOME_DIR/.desktop-commander-device/auth-required.cooldown"
 PACKAGE='@wonderwhy-er/desktop-commander@0.2.47'
+NPX_BIN="${NPX_BIN:-npx}"
 
 if [[ ! -f "$DEVICE_FILE" ]]; then
   echo 'AUTH_REQUIRED=true reason=device_state_missing'
@@ -22,7 +23,7 @@ fi
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
 set +e
-npx --yes "$PACKAGE" remote 2>&1 | tee "$tmp"
+"$NPX_BIN" --yes "$PACKAGE" remote 2>&1 | tee "$tmp"
 rc=${PIPESTATUS[0]}
 set -e
 
