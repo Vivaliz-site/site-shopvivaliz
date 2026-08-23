@@ -1,3 +1,4 @@
+Pseudo-terminal will not be allocated because stdin is not a terminal.
 Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.17.0-1020-oracle x86_64)
 
  * Documentation:  https://help.ubuntu.com
@@ -24,3 +25,8 @@ Expanded Security Maintenance for Applications is not enabled.
 Learn more about enabling ESM Apps service at https://ubuntu.com/esm
 
 
+Traceback (most recent call last):
+  File "<stdin>", line 8, in <module>
+  File "/home/ubuntu/mei-mg-email/app/email_provider.py", line 104, in __init__
+    raise RuntimeError("Microsoft Graph app-only missing configuration: " + ", ".join(missing))
+RuntimeError: Microsoft Graph app-only missing configuration: MICROSOFT_GRAPH_TENANT_ID, MICROSOFT_GRAPH_CLIENT_ID, MICROSOFT_GRAPH_USER
