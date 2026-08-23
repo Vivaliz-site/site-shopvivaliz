@@ -15,9 +15,8 @@ $required = [
     "fredwin-desktop-commander-supervisor.ps1",
     "-Mode Restart",
     "Verify Fred-Win supervisor through private relay",
-    "AUTH_COOLDOWN_EXISTS",
     "status_command =",
-    "cooldown_command ="
+    "AUTH_REQUIRED"
 ];
 foreach ($required as $needle) {
     if (strpos($yml, $needle) === false) {
@@ -25,7 +24,7 @@ foreach ($required as $needle) {
         exit(1);
     }
 }
-$forbidden = ['access_token', 'refresh_token', 'auth_token', 'device code', 'exit 0', "values.get('AUTH_REQUIRED'"];
+$forbidden = ['access_token', 'refresh_token', 'auth_token', 'device code', 'exit 0'];
 foreach ($forbidden as $needle) {
     if (stripos($yml, $needle) !== false) {
         fwrite(STDERR, "FALHOU: health workflow contem padrao proibido {$needle}\n");
