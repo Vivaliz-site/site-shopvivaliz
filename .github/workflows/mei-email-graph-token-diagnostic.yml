@@ -1,0 +1,106 @@
+name: MEI Email Graph Token Diagnostic
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/mei-email-graph-token-diagnostic.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 10
+    env:
+      VM_HOST: 137.131.156.17
+      VM_USER: ubuntu
+      REPORT_PATH: reports/mei-graph-token-diagnostic-20260823.txt
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure verified Oracle SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key"
+          test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Inspect token roles and mailbox access
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$(dirname "$REPORT_PATH")"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=4 \
+            -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" <<'EOF' | tee "$REPORT_PATH"
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          echo "CHECKED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git fetch origin main
+          git checkout origin/main -- app/config.py app/email_provider.py scripts/ndr_guard.py
+          .venv/bin/python - <<'PY'
+          import base64, json
+          from urllib.error import HTTPError
+          from urllib.parse import quote
+          from urllib.request import Request, urlopen
+          from app.config import settings
+          from app.email_provider import MicrosoftGraphEmailProvider
+
+          provider = MicrosoftGraphEmailProvider()
+          token = provider._get_access_token()
+          payload = token.split('.')[1]
+          payload += '=' * (-len(payload) % 4)
+          claims = json.loads(base64.urlsafe_b64decode(payload.encode()).decode())
+          roles = sorted(claims.get('roles') or [])
+          print('EFFECTIVE_META_24H=' + str(settings.meta_envios_por_dia))
+          print('TOKEN_ROLES=' + ','.join(roles))
+          print('HAS_MAIL_SEND=' + str('Mail.Send' in roles).lower())
+          print('HAS_MAIL_READ=' + str('Mail.Read' in roles).lower())
+          print('HAS_MAIL_READ_BASIC_ALL=' + str('Mail.ReadBasic.All' in roles).lower())
+          url = f"https://graph.microsoft.com/v1.0/users/{quote(provider.address)}/messages?$top=1&$select=id,subject,receivedDateTime"
+          req = Request(url, headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/json'})
+          try:
+              with urlopen(req, timeout=30) as response:
+                  print('MAILBOX_READ_HTTP=' + str(response.status))
+          except HTTPError as exc:
+              detail = exc.read().decode('utf-8', 'replace')[:500].replace('\n', ' ')
+              print('MAILBOX_READ_HTTP=' + str(exc.code))
+              print('MAILBOX_READ_ERROR=' + detail)
+          PY
+          echo "WORKER_ACTIVE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
+          echo "NDR_GUARD_ACTIVE=$(sudo systemctl is-active mei-mg-email-ndr-guard.service 2>/dev/null || true)"
+          EOF
+
+      - name: Persist diagnostic evidence
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -s "$REPORT_PATH" || exit 0
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add "$REPORT_PATH"
+          git diff --cached --quiet && exit 0
+          git commit -m "ops: record Graph token permission diagnostic"
+          git push origin HEAD:main
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
