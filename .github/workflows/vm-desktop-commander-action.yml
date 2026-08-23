@@ -1,0 +1,54 @@
+name: VM Desktop Commander 24h Action
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ops/vm-desktop-commander-request.json"
+
+permissions:
+  contents: read
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Resolve allowlisted action
+        id: action
+        shell: bash
+        run: |
+          ACTION="$(jq -r '.action // "status"' ops/vm-desktop-commander-request.json)"
+          case "$ACTION" in
+            status)
+              COMMAND='echo USER=$(whoami); echo HOME=$HOME; if command -v node >/dev/null 2>&1; then echo NODE=$(node --version); else echo NODE=missing; fi; if command -v npm >/dev/null 2>&1; then echo NPM=$(npm --version); else echo NPM=missing; fi; if command -v npx >/dev/null 2>&1; then echo NPX=$(npx --version); else echo NPX=missing; fi; if test -f "$HOME/.desktop-commander-device/device.json"; then echo DEVICE_STATE_EXISTS=true; stat -c DEVICE_STATE_MTIME=%y "$HOME/.desktop-commander-device/device.json"; else echo DEVICE_STATE_EXISTS=false; fi; if SERVICE_ENABLED=$(systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null); then :; else SERVICE_ENABLED=${SERVICE_ENABLED:-not-enabled}; fi; echo SERVICE_ENABLED=$SERVICE_ENABLED; if SERVICE_ACTIVE=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null); then :; else SERVICE_ACTIVE=${SERVICE_ACTIVE:-inactive}; fi; echo SERVICE_ACTIVE=$SERVICE_ACTIVE; SERVICE_USER=$(systemctl show -p User --value shopvivaliz-desktop-commander.service 2>/dev/null); echo SERVICE_USER=${SERVICE_USER:-unknown}; SERVICE_MAINPID=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service 2>/dev/null); echo SERVICE_MAINPID=${SERVICE_MAINPID:-0}; if PROCS=$(pgrep -af "desktop-commander.*remote"); then printf "%s\n" "$PROCS" | sed -E "s/(device|token|code)=[^ ]+/\\1=[REDACTED]/Ig"; else echo REMOTE_PROCESS_FOUND=false; fi; if JOURNAL=$(journalctl -u shopvivaliz-desktop-commander.service -n 40 --no-pager 2>/dev/null); then printf "%s\n" "$JOURNAL" | grep -E "AUTH_REQUIRED|REMOTE_AGENT_EXIT_RC" | tail -20; else echo JOURNAL_READABLE=false; fi; test "$SERVICE_ENABLED" = enabled; test "$SERVICE_ACTIVE" = active; test "${SERVICE_MAINPID:-0}" -gt 1'
+              ;;
+            install)
+              COMMAND='set -e; cd /home/ubuntu/shopvivaliz-deploy/repo; git fetch origin main; git merge --ff-only origin/main; sudo bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/install-vm-desktop-commander-service.sh'
+              ;;
+            restart)
+              COMMAND='set -e; sudo systemctl restart shopvivaliz-desktop-commander.service; sleep 3; systemctl is-active shopvivaliz-desktop-commander.service'
+              ;;
+            kill_for_recovery_test)
+              COMMAND='set -e; before=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service); test "$before" -gt 1; sudo kill -9 "$before"; sleep 15; after=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service); echo BEFORE_PID=$before; echo AFTER_PID=$after; echo SERVICE_ACTIVE=$(systemctl is-active shopvivaliz-desktop-commander.service); test "$after" -gt 1; test "$after" != "$before"'
+              ;;
+            *) echo "Action not allowlisted: $ACTION"; exit 3 ;;
+          esac
+          printf '%s' "$COMMAND" | base64 -w0 > /tmp/vm-command.b64
+      - name: Execute fixed VM action
+        run: |
+          CMD_B64="$(cat /tmp/vm-command.b64)"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "VM_CMD_B64='$CMD_B64' bash -lc 'echo \"\$VM_CMD_B64\" | base64 -d | bash'"
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/vm-command.b64

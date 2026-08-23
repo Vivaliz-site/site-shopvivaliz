@@ -1,0 +1,68 @@
+name: Fred-Win Desktop Commander 24h Action
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ops/fredwin-desktop-commander-request.json"
+
+permissions:
+  contents: read
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          test -n "$VM_KEY"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Resolve allowlisted action
+        id: action
+        shell: bash
+        run: |
+          ACTION="$(jq -r '.action // "desktop_commander_status"' ops/fredwin-desktop-commander-request.json)"
+          case "$ACTION" in
+            desktop_commander_status)
+              COMMAND='powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\site-shopvivaliz\scripts\fredwin-desktop-commander-status.ps1"'
+              ;;
+            desktop_commander_install)
+              COMMAND='powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\site-shopvivaliz\scripts\fredwin-desktop-commander-supervisor.ps1" -Mode InstallTask'
+              ;;
+            desktop_commander_restart)
+              COMMAND='powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\site-shopvivaliz\scripts\fredwin-desktop-commander-supervisor.ps1" -Mode Restart'
+              ;;
+            desktop_commander_kill_for_recovery_test)
+              COMMAND='powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\site-shopvivaliz\scripts\fredwin-desktop-commander-supervisor.ps1" -Mode KillForRecoveryTest'
+              ;;
+            *) echo "Action not allowlisted: $ACTION"; exit 3 ;;
+          esac
+          printf '%s' "$COMMAND" | base64 -w0 > /tmp/fredwin-command.b64
+      - name: Check private relay
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health'
+      - name: Execute fixed Fred-Win action
+        run: |
+          CMD_B64="$(cat /tmp/fredwin-command.b64)"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
+          import base64, json, os, urllib.request
+          command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
+          body = json.dumps({'params': {'command': command, 'timeout': 180}}).encode('utf-8')
+          req = urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command', data=body, headers={'Content-Type':'application/json'}, method='POST')
+          with urllib.request.urlopen(req, timeout=190) as response:
+              payload = json.loads(response.read().decode('utf-8'))
+          result = payload.get('result') or {}
+          print(str(result.get('output') or ''))
+          if result.get('success') is not True:
+              raise SystemExit('Fred-Win action failed')
+          PY"
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey /tmp/fredwin-command.b64
