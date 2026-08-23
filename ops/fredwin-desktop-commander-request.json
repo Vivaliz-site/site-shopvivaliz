@@ -1,4 +1,4 @@
 {
-  "action": "desktop_commander_install",
-  "reason": "retry unattended Fred-Win install after canonical ff-only repo sync"
+  "action": "desktop_commander_kill_for_recovery_test",
+  "reason": "verify unattended Fred-Win Desktop Commander auto-recovery"
 }
