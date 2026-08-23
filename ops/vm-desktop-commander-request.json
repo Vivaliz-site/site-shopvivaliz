@@ -1,4 +1,4 @@
 {
-  "action": "install",
-  "reason": "deploy persistent unattended Desktop Commander session fix"
+  "action": "status",
+  "reason": "diagnose VM Desktop Commander after persistent-session fix"
 }
