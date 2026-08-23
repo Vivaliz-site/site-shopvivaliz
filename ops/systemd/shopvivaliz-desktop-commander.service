@@ -13,6 +13,7 @@ Environment=HOME=/home/ubuntu
 Environment=XDG_CONFIG_HOME=/home/ubuntu/.config
 Environment=XDG_CACHE_HOME=/home/ubuntu/.cache
 Environment=npm_config_cache=/home/ubuntu/.npm
+EnvironmentFile=-/etc/default/shopvivaliz-desktop-commander
 ExecStart=/usr/bin/bash /usr/local/lib/shopvivaliz/vm-desktop-commander-supervisor.sh
 Restart=always
 RestartSec=10
