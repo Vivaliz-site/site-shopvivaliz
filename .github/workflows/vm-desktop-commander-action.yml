@@ -43,7 +43,10 @@ jobs:
               COMMAND='set -e; cd /home/ubuntu/shopvivaliz-deploy/repo; git fetch origin main; git merge --ff-only origin/main; sudo bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/vm-desktop-commander-recover-session.sh'
               ;;
             authorize)
-              COMMAND='set -e; sudo systemctl stop shopvivaliz-desktop-commander.service || true; rm -f /home/ubuntu/.desktop-commander-device/auth-required.cooldown /home/ubuntu/.desktop-commander-device/authorize.log; nohup timeout 600s npx --yes @wonderwhy-er/desktop-commander@0.2.47 remote --persist-session > /home/ubuntu/.desktop-commander-device/authorize.log 2>&1 < /dev/null & echo AUTH_PID=$!; sleep 8; echo AUTH_FLOW_START=true; cat /home/ubuntu/.desktop-commander-device/authorize.log; test -s /home/ubuntu/.desktop-commander-device/authorize.log'
+              COMMAND='set -e; sudo systemctl stop shopvivaliz-desktop-commander.service || true; rm -f /home/ubuntu/.desktop-commander-device/auth-required.cooldown /home/ubuntu/.desktop-commander-device/authorize.log; nohup timeout 600s npx --yes @wonderwhy-er/desktop-commander@0.2.47 remote --persist-session > /home/ubuntu/.desktop-commander-device/authorize.log 2>&1 < /dev/null & echo AUTH_PID=$!; sleep 8; echo AUTH_FLOW_START=true; cat /home/ubuntu/.desktop-commander-device/authorize.log || true'
+              ;;
+            read_auth)
+              COMMAND='set -e; sleep 3; echo AUTH_LOG_START=true; cat /home/ubuntu/.desktop-commander-device/authorize.log; echo AUTH_PROCESS=$(pgrep -af "desktop-commander.*remote.*persist-session" | head -1 || true)'
               ;;
             kill_for_recovery_test)
               COMMAND='set -e; before=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service); test "$before" -gt 1; sudo kill -9 "$before"; sleep 15; after=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service); echo BEFORE_PID=$before; echo AFTER_PID=$after; echo SERVICE_ACTIVE=$(systemctl is-active shopvivaliz-desktop-commander.service); test "$after" -gt 1; test "$after" != "$before"'
