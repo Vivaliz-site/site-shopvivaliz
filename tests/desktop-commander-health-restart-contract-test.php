@@ -10,6 +10,8 @@ $required = [
     "sleep 15",
     "Verify Fred-Win supervisor through private relay",
     "AUTH_COOLDOWN_EXISTS",
+    "status_command =",
+    "cooldown_command =",
     "print('FREDWIN_RESTART_DIAGNOSTIC=ok')\n          PY\n            sleep 15"
 ];
 foreach ($required as $needle) {
