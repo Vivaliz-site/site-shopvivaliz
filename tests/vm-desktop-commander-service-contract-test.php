@@ -28,7 +28,13 @@ foreach (['.desktop-commander-device/device.json','NPX_BIN','@wonderwhy-er/deskt
     if (strpos($supervisor, $needle) === false) { fwrite(STDERR, "FALHOU: supervisor sem {$needle}\n"); exit(1); }
 }
 $all = $unit . $installer . $supervisor;
-foreach (['access_token','refresh_token','auth_token','0.0.0.0','|| true','set +e','tee "$tmp"'] as $needle) {
+$forbidden = [
+    'access_token','refresh_token','auth_token','0.0.0.0',
+    '|' . '| true',
+    'set +' . 'e',
+    'tee "$tmp"'
+];
+foreach ($forbidden as $needle) {
     if (stripos($all, $needle) !== false) { fwrite(STDERR, "FALHOU: configuracao proibida {$needle}\n"); exit(1); }
 }
 echo "vm-desktop-commander-service-contract: ok\n";
