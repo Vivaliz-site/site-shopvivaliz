@@ -21,17 +21,20 @@ if [[ -f "$COOLDOWN_FILE" ]]; then
 fi
 
 tmp="$(mktemp)"
+chmod 0600 "$tmp"
 trap 'rm -f "$tmp"' EXIT
 set +e
-"$NPX_BIN" --yes "$PACKAGE" remote 2>&1 | tee "$tmp"
-rc=${PIPESTATUS[0]}
+"$NPX_BIN" --yes "$PACKAGE" remote >"$tmp" 2>&1
+rc=$?
 set -e
 
 if grep -Eqi 'Please complete authentication|Starting device authorization flow|device code|Authorization required' "$tmp"; then
   mkdir -p "$(dirname "$COOLDOWN_FILE")"
   : > "$COOLDOWN_FILE"
+  chmod 0600 "$COOLDOWN_FILE"
   echo 'AUTH_REQUIRED=true reason=provider_device_flow'
   exit 20
 fi
 
+echo "REMOTE_AGENT_EXIT_RC=$rc"
 exit "$rc"
