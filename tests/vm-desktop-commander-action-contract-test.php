@@ -6,7 +6,7 @@ if (!is_file($workflowPath)) { fwrite(STDERR, "FALHOU: workflow VM ausente\n"); 
 if (!is_file($requestPath)) { fwrite(STDERR, "FALHOU: request VM ausente\n"); exit(1); }
 $yml = file_get_contents($workflowPath);
 $required = [
-    'status)', 'install)', 'restart)', 'kill_for_recovery_test)',
+    'status)', 'install)', 'restart)', 'recover_session)', 'kill_for_recovery_test)',
     'Action not allowlisted', 'SHOPVIVALIZ_VM_SSH_KEY',
     'install-vm-desktop-commander-service.sh',
     'shopvivaliz-desktop-commander.service',
