@@ -1,4 +1,4 @@
 {
-  "action": "kill_for_recovery_test",
-  "reason": "verify unattended VM Desktop Commander auto-recovery"
+  "action": "install",
+  "reason": "deploy persistent unattended Desktop Commander session fix"
 }
