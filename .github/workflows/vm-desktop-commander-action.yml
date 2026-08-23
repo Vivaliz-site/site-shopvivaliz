@@ -40,15 +40,7 @@ jobs:
               COMMAND='set -e; sudo systemctl restart shopvivaliz-desktop-commander.service; sleep 3; systemctl is-active shopvivaliz-desktop-commander.service'
               ;;
             recover_session)
-              COMMAND='set -e; target=/home/ubuntu/.desktop-commander-device/device.json; sudo systemctl stop shopvivaliz-desktop-commander.service || true; candidate=$(python3 -c '"'"'import json,glob,os; target="/home/ubuntu/.desktop-commander-device/device.json"; pats=["/home/ubuntu/.desktop-commander-device/*.json*","/home/ubuntu/.desktop-commander-device*/*.json*","/home/ubuntu/.config/**/*desktop*commander*.json*"]; seen=set(); found=""; files=[]; [files.extend(glob.glob(p,recursive=True)) for p in pats];
-for p in files:
-    if p==target or p in seen or not os.path.isfile(p): continue
-    seen.add(p)
-    try:
-        d=json.load(open(p,encoding="utf-8")); s=d.get("session") if isinstance(d,dict) else None
-        if isinstance(s,dict) and len(s)>0: found=p; break
-    except Exception: pass
-print(found)'"'"'); if test -z "$candidate"; then echo SESSION_BACKUP_FOUND=false; sudo systemctl start shopvivaliz-desktop-commander.service || true; exit 21; fi; echo SESSION_BACKUP_FOUND=true; sudo install -m 0600 -o ubuntu -g ubuntu "$candidate" "$target"; rm -f /home/ubuntu/.desktop-commander-device/auth-required.cooldown; sudo systemctl start shopvivaliz-desktop-commander.service; sleep 8; test "$(systemctl is-active shopvivaliz-desktop-commander.service)" = active'
+              COMMAND='set -e; cd /home/ubuntu/shopvivaliz-deploy/repo; git fetch origin main; git merge --ff-only origin/main; sudo bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/vm-desktop-commander-recover-session.sh'
               ;;
             kill_for_recovery_test)
               COMMAND='set -e; before=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service); test "$before" -gt 1; sudo kill -9 "$before"; sleep 15; after=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service); echo BEFORE_PID=$before; echo AFTER_PID=$after; echo SERVICE_ACTIVE=$(systemctl is-active shopvivaliz-desktop-commander.service); test "$after" -gt 1; test "$after" != "$before"'
