@@ -68,9 +68,42 @@ jobs:
           .venv/bin/python -m py_compile \
             app/config.py worker/worker.py scripts/ndr_guard.py scripts/ndr_guard_v2.py
 
+          .venv/bin/python - <<'PY'
+          from pathlib import Path
+          path = Path('.env')
+          text = path.read_text(encoding='utf-8') if path.exists() else ''
+          updates = {
+              'META_ENVIOS_POR_DIA': '9500',
+              'EXCHANGE_RECIPIENT_SAFETY_RESERVE': '500',
+              'MAX_ENVIOS_POR_DIA': '10000',
+          }
+          lines = text.splitlines()
+          out = []
+          seen = set()
+          for line in lines:
+              stripped = line.strip()
+              key = stripped.split('=', 1)[0].strip() if '=' in stripped and not stripped.startswith('#') else None
+              if key in updates:
+                  if key not in seen:
+                      out.append(f'{key}={updates[key]}')
+                      seen.add(key)
+                  continue
+              out.append(line)
+          for key, value in updates.items():
+              if key not in seen:
+                  out.append(f'{key}={value}')
+          path.write_text('\n'.join(out).rstrip() + '\n', encoding='utf-8')
+          PY
+
           effective_meta="$(.venv/bin/python -c 'from app.config import settings; print(settings.meta_envios_por_dia)')"
+          configured_meta="$(grep -E '^META_ENVIOS_POR_DIA=' .env | tail -n1 | cut -d= -f2-)"
+          configured_reserve="$(grep -E '^EXCHANGE_RECIPIENT_SAFETY_RESERVE=' .env | tail -n1 | cut -d= -f2-)"
+          echo "CONFIGURED_META_24H=$configured_meta"
+          echo "CONFIGURED_RESERVE_24H=$configured_reserve"
           echo "EFFECTIVE_META_24H=$effective_meta"
-          test "$effective_meta" -le 9500
+          test "$configured_meta" = 9500
+          test "$configured_reserve" = 500
+          test "$effective_meta" = 9500
           grep -q '5.1.90' scripts/ndr_guard.py
           grep -q '24 hour limit for message recipients' scripts/ndr_guard.py
           grep -q '/messages?{params}' scripts/ndr_guard.py
@@ -139,4 +172,4 @@ jobs:
         shell: bash
         run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-# deploy mailbox-wide NDR guard + Exchange target 9500/24h 2026-08-23
+# enforce Exchange 9500 target in runtime env and verify exact effective value 2026-08-23
