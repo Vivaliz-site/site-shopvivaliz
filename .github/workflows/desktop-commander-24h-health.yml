@@ -66,8 +66,8 @@ jobs:
           output = str(result.get('output') or '')
           safe_lines = []
           wanted = {
-              'DEVICE_STATE_EXISTS', 'REMOTE_AGENT_COUNT', 'TASK_EXISTS',
-              'TASK_STATE', 'TASK_LAST_RESULT', 'AUTH_REQUIRED'
+              'DEVICE_STATE_EXISTS', 'REMOTE_AGENT_COUNT', 'REMOTE_AGENT_PIDS',
+              'TASK_EXISTS', 'TASK_STATE', 'TASK_LAST_RESULT', 'AUTH_REQUIRED'
           }
           values = {}
           for line in output.splitlines():
