@@ -1,4 +1,4 @@
 {
-  "action": "desktop_commander_status",
-  "reason": "neutral 24h Desktop Commander health status after recovery diagnostic"
+  "action": "desktop_commander_install",
+  "reason": "deploy persistent-session Fred-Win Desktop Commander runner and restart it under the durable supervisor"
 }
