@@ -9,7 +9,9 @@ $required = [
     'status)', 'install)', 'restart)', 'kill_for_recovery_test)',
     'Action not allowlisted', 'SHOPVIVALIZ_VM_SSH_KEY',
     'install-vm-desktop-commander-service.sh',
-    'shopvivaliz-desktop-commander.service'
+    'shopvivaliz-desktop-commander.service',
+    'test "$SERVICE_ENABLED" = enabled',
+    'test "$SERVICE_ACTIVE" = active'
 ];
 foreach ($required as $needle) {
     if (strpos($yml, $needle) === false) { fwrite(STDERR, "FALHOU: ausente {$needle}\n"); exit(1); }
@@ -17,7 +19,7 @@ foreach ($required as $needle) {
 $forbidden = [
     'cat ~/.desktop-commander-device/device.json',
     'access_token', 'refresh_token', 'auth_token',
-    '|| true'
+    'set +' . 'e'
 ];
 foreach ($forbidden as $needle) {
     if (stripos($yml, $needle) !== false) { fwrite(STDERR, "FALHOU: padrao proibido {$needle}\n"); exit(1); }
