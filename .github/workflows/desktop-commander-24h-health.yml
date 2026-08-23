@@ -6,6 +6,7 @@ on:
       - "ops/fredwin-desktop-commander-request.json"
       - "ops/vm-desktop-commander-request.json"
       - ".github/workflows/desktop-commander-24h-health.yml"
+      - "tests/desktop-commander-health-restart-contract-test.php"
   workflow_dispatch:
 
 permissions:
@@ -26,22 +27,42 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
-      - name: Verify VM supervisor
+      - name: Restart Fred-Win agent in normal relay context when requested
+        run: |
+          set -Eeuo pipefail
+          ACTION="$(jq -r '.action // "status"' ops/fredwin-desktop-commander-request.json)"
+          if [ "$ACTION" = "desktop_commander_restart" ]; then
+            ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
+            import json
+            import urllib.request
+
+            command = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\\site-shopvivaliz\\scripts\\fredwin-desktop-commander-supervisor.ps1" -Mode Restart'
+            body = json.dumps({'params': {'command': command, 'timeout': 180}}).encode('utf-8')
+            req = urllib.request.Request(
+                'http://127.0.0.1:5557/mcp/tool/execute_command',
+                data=body,
+                headers={'Content-Type': 'application/json'},
+                method='POST',
+            )
+            with urllib.request.urlopen(req, timeout=190) as response:
+                payload = json.loads(response.read().decode('utf-8'))
+            result = payload.get('result') or {}
+            if result.get('success') is not True:
+                raise SystemExit('Fred-Win restart diagnostic failed')
+            print('FREDWIN_RESTART_DIAGNOSTIC=ok')
+          PY
+            sleep 15
+          else
+            echo "FREDWIN_RESTART_DIAGNOSTIC=skipped"
+          fi
+      - name: Inspect sanitized VM failure state
         run: |
           set -Eeuo pipefail
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
-            set -Eeuo pipefail
-            enabled=$(systemctl is-enabled shopvivaliz-desktop-commander.service)
-            active=$(systemctl is-active shopvivaliz-desktop-commander.service)
-            pid=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service)
-            test "$enabled" = enabled
-            test "$active" = active
-            test "$pid" -gt 1
-            test -f "$HOME/.desktop-commander-device/device.json"
-            echo "VM_SERVICE_ENABLED=$enabled"
-            echo "VM_SERVICE_ACTIVE=$active"
-            echo "VM_MAINPID=$pid"
-            echo "VM_DEVICE_STATE_EXISTS=true"
+            echo "VM_RESULT=$(systemctl show -p Result --value shopvivaliz-desktop-commander.service 2>/dev/null)"
+            echo "VM_EXEC_MAIN_STATUS=$(systemctl show -p ExecMainStatus --value shopvivaliz-desktop-commander.service 2>/dev/null)"
+            echo "VM_NRESTARTS=$(systemctl show -p NRestarts --value shopvivaliz-desktop-commander.service 2>/dev/null)"
+            journalctl -u shopvivaliz-desktop-commander.service -n 80 --no-pager 2>/dev/null | grep -E "AUTH_REQUIRED|REMOTE_AGENT_EXIT_RC" | tail -20 || :
           '
       - name: Verify Fred-Win supervisor through private relay
         run: |
@@ -50,7 +71,7 @@ jobs:
           import json
           import urllib.request
 
-          command = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\\site-shopvivaliz\\scripts\\fredwin-desktop-commander-status.ps1"'
+          command = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "& ''C:\\site-shopvivaliz\\scripts\\fredwin-desktop-commander-status.ps1''; Write-Output (''AUTH_COOLDOWN_EXISTS='' + [bool](Test-Path -LiteralPath ''C:\\site-shopvivaliz\\logs\\desktop-commander-auth-required.cooldown''))"'
           body = json.dumps({'params': {'command': command, 'timeout': 120}}).encode('utf-8')
           req = urllib.request.Request(
               'http://127.0.0.1:5557/mcp/tool/execute_command',
@@ -67,7 +88,7 @@ jobs:
           safe_lines = []
           wanted = {
               'DEVICE_STATE_EXISTS', 'REMOTE_AGENT_COUNT', 'REMOTE_AGENT_PIDS',
-              'TASK_EXISTS', 'TASK_STATE', 'TASK_LAST_RESULT', 'AUTH_REQUIRED'
+              'TASK_EXISTS', 'TASK_STATE', 'TASK_LAST_RESULT', 'AUTH_COOLDOWN_EXISTS'
           }
           values = {}
           for line in output.splitlines():
@@ -84,9 +105,28 @@ jobs:
               raise SystemExit('Fred-Win scheduled task missing')
           if int(values.get('REMOTE_AGENT_COUNT', '0')) < 1:
               raise SystemExit('Fred-Win remote agent not running')
-          if values.get('AUTH_REQUIRED', '').lower() == 'true':
+          if values.get('AUTH_COOLDOWN_EXISTS', '').lower() != 'false':
               raise SystemExit('Fred-Win provider reauthorization required')
           PY
+      - name: Verify VM supervisor
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
+            enabled=$(systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null); enabled_rc=$?
+            active=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null); active_rc=$?
+            pid=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service 2>/dev/null); pid_rc=$?
+            if test -f "$HOME/.desktop-commander-device/device.json"; then device=true; else device=false; fi
+            echo "VM_SERVICE_ENABLED=${enabled:-unknown}"
+            echo "VM_SERVICE_ENABLED_RC=$enabled_rc"
+            echo "VM_SERVICE_ACTIVE=${active:-unknown}"
+            echo "VM_SERVICE_ACTIVE_RC=$active_rc"
+            echo "VM_MAINPID=${pid:-0}"
+            echo "VM_MAINPID_RC=$pid_rc"
+            echo "VM_DEVICE_STATE_EXISTS=$device"
+            test "$enabled" = enabled
+            test "$active" = active
+            test "${pid:-0}" -gt 1
+            test "$device" = true
+          '
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey
