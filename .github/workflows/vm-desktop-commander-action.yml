@@ -13,7 +13,7 @@ permissions:
 jobs:
   execute:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - name: Configure VM key
@@ -41,6 +41,9 @@ jobs:
               ;;
             recover_session)
               COMMAND='set -e; cd /home/ubuntu/shopvivaliz-deploy/repo; git fetch origin main; git merge --ff-only origin/main; sudo bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/vm-desktop-commander-recover-session.sh'
+              ;;
+            authorize)
+              COMMAND='set -e; sudo systemctl stop shopvivaliz-desktop-commander.service || true; rm -f /home/ubuntu/.desktop-commander-device/auth-required.cooldown; echo AUTH_FLOW_START=true; set +e; timeout 600s npx --yes @wonderwhy-er/desktop-commander@0.2.47 remote --persist-session; rc=$?; set -e; echo AUTH_FLOW_RC=$rc; sudo systemctl start shopvivaliz-desktop-commander.service; sleep 5; echo SERVICE_ACTIVE=$(systemctl is-active shopvivaliz-desktop-commander.service); exit $rc'
               ;;
             kill_for_recovery_test)
               COMMAND='set -e; before=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service); test "$before" -gt 1; sudo kill -9 "$before"; sleep 15; after=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service); echo BEFORE_PID=$before; echo AFTER_PID=$after; echo SERVICE_ACTIVE=$(systemctl is-active shopvivaliz-desktop-commander.service); test "$after" -gt 1; test "$after" != "$before"'
