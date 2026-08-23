@@ -1,0 +1,36 @@
+Welcome to Ubuntu 24.04.4 LTS (GNU/Linux 6.17.0-1020-oracle x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/pro
+
+ System information as of Sun Aug 23 12:29:35 -03 2026
+
+  System load:  1.35               Processes:             163
+  Usage of /:   79.7% of 44.96GB   Users logged in:       0
+  Memory usage: 41%                IPv4 address for ens3: 10.0.1.13
+  Swap usage:   49%
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+0 updates can be applied immediately.
+
+9 additional security updates can be applied with ESM Apps.
+Learn more about enabling ESM Apps service at https://ubuntu.com/esm
+
+
+CHECKED_AT_UTC=2026-08-23T15:29:59Z
+EFFECTIVE_META_24H=9000
+TOKEN_ROLES=Directory.ReadWrite.All,Mail.Send
+HAS_MAIL_SEND=true
+HAS_MAIL_READ=false
+HAS_MAIL_READ_BASIC_ALL=false
+MAILBOX_READ_HTTP=403
+MAILBOX_READ_ERROR={"error":{"code":"ErrorAccessDenied","message":"Access is denied. Check credentials and try again."}}
+WORKER_ACTIVE=active
+NDR_GUARD_ACTIVE=active
