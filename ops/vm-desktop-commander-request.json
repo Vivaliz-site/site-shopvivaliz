@@ -1,4 +1,4 @@
 {
-  "action": "install",
-  "reason": "activate unattended VM Desktop Commander 24h supervisor"
+  "action": "kill_for_recovery_test",
+  "reason": "verify unattended VM Desktop Commander auto-recovery"
 }
