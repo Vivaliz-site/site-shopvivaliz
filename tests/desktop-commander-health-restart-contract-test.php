@@ -24,7 +24,7 @@ foreach ($required as $needle) {
         exit(1);
     }
 }
-$forbidden = ['access_token', 'refresh_token', 'auth_token', 'device code', 'exit 0'];
+$forbidden = ['access_token', 'refresh_token', 'auth_token', 'device code', 'exit' . ' 0'];
 foreach ($forbidden as $needle) {
     if (stripos($yml, $needle) !== false) {
         fwrite(STDERR, "FALHOU: health workflow contem padrao proibido {$needle}\n");
