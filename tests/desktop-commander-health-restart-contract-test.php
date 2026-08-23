@@ -4,15 +4,20 @@ $workflowPath = $root . '/.github/workflows/desktop-commander-24h-health.yml';
 if (!is_file($workflowPath)) { fwrite(STDERR, "FALHOU: health workflow ausente\n"); exit(1); }
 $yml = file_get_contents($workflowPath);
 $required = [
+    "push:",
+    "branches: [main]",
+    "contract:",
+    "runtime:",
+    "if: github.event_name != 'pull_request'",
+    "php tests/desktop-commander-persist-session-contract-test.php",
+    "php tests/desktop-commander-health-restart-contract-test.php",
     "desktop_commander_restart",
     "fredwin-desktop-commander-supervisor.ps1",
     "-Mode Restart",
-    "sleep 15",
     "Verify Fred-Win supervisor through private relay",
     "AUTH_COOLDOWN_EXISTS",
     "status_command =",
-    "cooldown_command =",
-    "print('FREDWIN_RESTART_DIAGNOSTIC=ok')\n          PY\n            sleep 15"
+    "cooldown_command ="
 ];
 foreach ($required as $needle) {
     if (strpos($yml, $needle) === false) {
