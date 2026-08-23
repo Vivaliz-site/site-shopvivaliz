@@ -34,7 +34,7 @@ jobs:
               COMMAND='powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\site-shopvivaliz\scripts\fredwin-desktop-commander-status.ps1"'
               ;;
             desktop_commander_install)
-              COMMAND='powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\site-shopvivaliz\scripts\fredwin-desktop-commander-supervisor.ps1" -Mode InstallTask'
+              COMMAND="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"& { \$ErrorActionPreference='Stop'; Set-Location 'C:\site-shopvivaliz'; git fetch origin main; if (\$LASTEXITCODE -ne 0) { throw 'git fetch failed' }; git merge --ff-only origin/main; if (\$LASTEXITCODE -ne 0) { throw 'git ff-only sync failed' }; & 'C:\site-shopvivaliz\scripts\fredwin-desktop-commander-supervisor.ps1' -Mode InstallTask }\""
               ;;
             desktop_commander_restart)
               COMMAND='powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\site-shopvivaliz\scripts\fredwin-desktop-commander-supervisor.ps1" -Mode Restart'
