@@ -16,28 +16,48 @@ jobs:
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
-      - name: Configure VM key
+      - name: Configure verified VM SSH
         env:
-          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
-          test -n "$VM_KEY"
-          mkdir -p ~/.ssh
-          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
-          chmod 600 ~/.ssh/vmkey
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key"
+          test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
       - name: Resolve allowlisted action
-        id: action
         shell: bash
         run: |
-          ACTION="$(jq -r '.action // "desktop_commander_status"' ops/fredwin-desktop-commander-request.json)"
+          set -Eeuo pipefail
+          ACTION="$(jq -r '.action // "status"' ops/fredwin-desktop-commander-request.json)"
           case "$ACTION" in
+            status)
+              COMMAND='powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\site-shopvivaliz\scripts\fredwin-desktop-commander-status.ps1"'
+              ;;
             desktop_commander_status)
               COMMAND='powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\site-shopvivaliz\scripts\fredwin-desktop-commander-status.ps1"'
               ;;
+            install_or_repair)
+              COMMAND="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"& { \$ErrorActionPreference='Stop'; Set-Location 'C:\site-shopvivaliz'; git fetch origin main; if (\$LASTEXITCODE -ne 0) { throw 'git fetch failed' }; git merge --ff-only origin/main; if (\$LASTEXITCODE -ne 0) { throw 'git ff-only sync failed' }; & 'C:\site-shopvivaliz\scripts\fredwin-desktop-commander-supervisor.ps1' -Mode InstallTask; & 'C:\site-shopvivaliz\scripts\fredwin-remote-bootstrap.ps1' }\""
+              ;;
             desktop_commander_install)
-              COMMAND="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"& { \$ErrorActionPreference='Stop'; Set-Location 'C:\site-shopvivaliz'; git fetch origin main; if (\$LASTEXITCODE -ne 0) { throw 'git fetch failed' }; git merge --ff-only origin/main; if (\$LASTEXITCODE -ne 0) { throw 'git ff-only sync failed' }; & 'C:\site-shopvivaliz\scripts\fredwin-desktop-commander-supervisor.ps1' -Mode InstallTask }\""
+              COMMAND="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"& { \$ErrorActionPreference='Stop'; Set-Location 'C:\site-shopvivaliz'; git fetch origin main; if (\$LASTEXITCODE -ne 0) { throw 'git fetch failed' }; git merge --ff-only origin/main; if (\$LASTEXITCODE -ne 0) { throw 'git ff-only sync failed' }; & 'C:\site-shopvivaliz\scripts\fredwin-desktop-commander-supervisor.ps1' -Mode InstallTask; & 'C:\site-shopvivaliz\scripts\fredwin-remote-bootstrap.ps1' }\""
+              ;;
+            restart)
+              COMMAND='powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\site-shopvivaliz\scripts\fredwin-desktop-commander-supervisor.ps1" -Mode Restart'
               ;;
             desktop_commander_restart)
               COMMAND='powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\site-shopvivaliz\scripts\fredwin-desktop-commander-supervisor.ps1" -Mode Restart'
+              ;;
+            kill_for_recovery_test)
+              COMMAND='powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\site-shopvivaliz\scripts\fredwin-desktop-commander-supervisor.ps1" -Mode KillForRecoveryTest'
               ;;
             desktop_commander_kill_for_recovery_test)
               COMMAND='powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\site-shopvivaliz\scripts\fredwin-desktop-commander-supervisor.ps1" -Mode KillForRecoveryTest'
@@ -47,11 +67,12 @@ jobs:
           printf '%s' "$COMMAND" | base64 -w0 > /tmp/fredwin-command.b64
       - name: Check private relay
         run: |
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17 'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health'
       - name: Execute fixed Fred-Win action
         run: |
+          set -Eeuo pipefail
           CMD_B64="$(cat /tmp/fredwin-command.b64)"
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17 "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
           import base64, json, os, urllib.request
           command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
           body = json.dumps({'params': {'command': command, 'timeout': 180}}).encode('utf-8')
@@ -59,10 +80,12 @@ jobs:
           with urllib.request.urlopen(req, timeout=190) as response:
               payload = json.loads(response.read().decode('utf-8'))
           result = payload.get('result') or {}
-          print(str(result.get('output') or ''))
+          output = str(result.get('output') or '')
+          safe_prefixes = ('USER=','USERPROFILE=','APPDATA=','LOCALAPPDATA=','NODE=','NPX=','DEVICE_STATE_EXISTS=','DEVICE_STATE_MTIME=','REMOTE_AGENT_COUNT=','CANONICAL_AGENT_COUNT=','NONCANONICAL_AGENT_COUNT=','REMOTE_AGENT_PIDS=','TASK_EXISTS=','TASK_STATE=','TASK_LOGON_TYPE=','TASK_RUN_LEVEL=','TASK_LAST_RESULT=','TASK_LAST_RUN=','TASK_NEXT_RUN=','AUTH_REQUIRED=','REMOTE_AGENT_RUNNING=','TASK_INSTALLED=','DESKTOP_KOCEPSV_RELAY_LOCAL_HEALTH=')
+          print('\n'.join(line for line in output.splitlines() if line.startswith(safe_prefixes)))
           if result.get('success') is not True:
               raise SystemExit('Fred-Win action failed')
           PY"
       - name: Cleanup
         if: always()
-        run: rm -f ~/.ssh/vmkey /tmp/fredwin-command.b64
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts" /tmp/fredwin-command.b64
