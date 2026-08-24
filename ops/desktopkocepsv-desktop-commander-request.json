@@ -1,4 +1,4 @@
 {
-  "action": "status",
-  "reason": "initial three-host Desktop Commander control-plane status"
+  "action": "install_or_repair",
+  "reason": "bounded unattended three-host recovery"
 }
