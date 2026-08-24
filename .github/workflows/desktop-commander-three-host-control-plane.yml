@@ -133,14 +133,30 @@ jobs:
                   return dict(host=name,state='degraded',watchdog=f"task={v.get('TASK_EXISTS','unknown')},logon={v.get('TASK_LOGON_TYPE','unknown')},runlevel={v.get('TASK_RUN_LEVEL','unknown')}",canonical=v.get('CANONICAL_AGENT_COUNT','0'),auth='true',recovery='blocked_by_provider_auth')
               supervisor = f'{prefix}-desktop-commander-supervisor.ps1'
               bootstrap = 'fredwin-remote-bootstrap.ps1' if prefix == 'fredwin' else 'desktopkocepsv-remote-bootstrap.ps1'
+              tunnel = 'ssh-tunnel-service-managed.ps1' if prefix == 'fredwin' else 'desktopkocepsv-ssh-tunnel-service-managed.ps1'
+              sync_files = [
+                  f'scripts/{prefix}-desktop-commander-runner.ps1',
+                  f'scripts/{prefix}-desktop-commander-status.ps1',
+                  f'scripts/{prefix}-desktop-commander-supervisor.ps1',
+                  f'scripts/{bootstrap}',
+                  f'scripts/{tunnel}',
+              ]
+              quoted_files = ' '.join("'" + f + "'" for f in sync_files)
+              needs_install = (
+                  not truth(v.get('TASK_EXISTS')) or
+                  v.get('TASK_LOGON_TYPE','').lower() != 's4u' or
+                  v.get('TASK_RUN_LEVEL','').lower() != 'highest'
+              )
+              mode = 'InstallTask' if needs_install else 'Ensure'
               repair = (
                   'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command '
                   '"& { $ErrorActionPreference=\'Stop\'; Set-Location \'C:\\site-shopvivaliz\'; '
                   'git fetch origin main | Out-Null; if ($LASTEXITCODE -ne 0) { throw \'fetch failed\' }; '
-                  'git merge --ff-only origin/main | Out-Null; if ($LASTEXITCODE -ne 0) { throw \'sync failed\' }; '
-                  f'& \'C:\\site-shopvivaliz\\scripts\\{supervisor}\' -Mode InstallTask; '
-                  f'& \'C:\\site-shopvivaliz\\scripts\\{bootstrap}\' -Mode InstallTask }}"'
+                  f'git restore --source=origin/main -- {quoted_files}; if ($LASTEXITCODE -ne 0) {{ throw \'targeted sync failed\' }}; '
+                  f'& \'C:\\site-shopvivaliz\\scripts\\{supervisor}\' -Mode {mode}; '
+                  f'& \'C:\\site-shopvivaliz\\scripts\\{bootstrap}\' -Mode {mode} }}"'
               )
+              ensure_marker = '-Mode Ensure'
               repaired, _ = relay(port, repair, want_output=False)
               time.sleep(20)
               ok2, out2 = relay(port, status)
@@ -184,7 +200,7 @@ jobs:
                   return dict(host='shopvivaliz-ai',state='healthy',watchdog='systemd=enabled/active',canonical='1',auth='false',recovery='not_needed')
               if truth(v.get('AUTH_REQUIRED')):
                   return dict(host='shopvivaliz-ai',state='degraded',watchdog=f"systemd={v.get('SERVICE_ENABLED','unknown')}/{v.get('SERVICE_ACTIVE','unknown')}",canonical=v.get('CANONICAL_AGENT_COUNT','0'),auth='true',recovery='blocked_by_provider_auth')
-              repair = 'set -Eeuo pipefail; cd /home/ubuntu/shopvivaliz-deploy/repo; git fetch origin main >/dev/null; git merge --ff-only origin/main >/dev/null; sudo bash scripts/install-vm-desktop-commander-service.sh'
+              repair = 'set -Eeuo pipefail; cd /home/ubuntu/shopvivaliz-deploy/repo; git fetch origin main >/dev/null; git restore --source=origin/main -- scripts/vm-desktop-commander-supervisor.sh scripts/install-vm-desktop-commander-service.sh ops/systemd/shopvivaliz-desktop-commander.service; sudo bash scripts/install-vm-desktop-commander-service.sh'
               repaired,_ = ssh(repair, timeout=270)
               time.sleep(20)
               ok2,v2 = vm_status()
