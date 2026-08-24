@@ -1,6 +1,5 @@
 # ShopVivaliz managed reverse SSH tunnel (Fred-Win -> Oracle VM)
-# Keeps the maintenance MCP available only through the VM loopback relay.
-# No private key material or remote command output is persisted by this script.
+# Keeps maintenance paths private on VM loopback. No key material or command output is logged.
 
 $ErrorActionPreference = 'Continue'
 $KeyPath = 'C:\Users\FRED\Downloads\ssh-key-2026-07-04.key'
@@ -31,9 +30,10 @@ Write-TunnelLog 'Managed reverse tunnel service started'
 $attempt = 0
 while ($true) {
     $attempt++
-    Write-TunnelLog ("Connecting attempt=$attempt forward=5557->127.0.0.1:5557")
+    Write-TunnelLog ("Connecting attempt=$attempt private-forwards=2222,5557")
     try {
         & ssh -i $KeyPath `
+            -R 2222:127.0.0.1:22 `
             -R 5557:127.0.0.1:5557 `
             -o 'BatchMode=yes' `
             -o 'ServerAliveInterval=30' `
