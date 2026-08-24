@@ -37,8 +37,8 @@ function Get-NonCanonicalRemoteLaunchers {
     $noncanonical = @($all | Where-Object { $canonicalIds -notcontains $_.ProcessId })
     return @(Get-LauncherRoots $noncanonical)
 }
-$canonical = Get-CanonicalRemoteLaunchers
-$noncanonical = Get-NonCanonicalRemoteLaunchers
+$canonical = @(Get-CanonicalRemoteLaunchers)
+$noncanonical = @(Get-NonCanonicalRemoteLaunchers)
 Write-Output ('DEVICE_STATE_EXISTS=' + [bool]($DeviceFile -and (Test-Path -LiteralPath $DeviceFile)))
 Write-Output ('CANONICAL_AGENT_COUNT=' + $canonical.Count)
 Write-Output ('NONCANONICAL_AGENT_COUNT=' + $noncanonical.Count)
