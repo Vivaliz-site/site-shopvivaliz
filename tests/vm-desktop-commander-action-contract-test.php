@@ -11,16 +11,13 @@ $required = [
     'install-vm-desktop-commander-service.sh',
     'shopvivaliz-desktop-commander.service',
     'test "$SERVICE_ENABLED" = enabled',
-    'test "$SERVICE_ACTIVE" = active'
+    'test "$SERVICE_ACTIVE" = active',
+    'LEGACY_SERVICE_ENABLED=', 'CANONICAL_REMOTE_COUNT=', 'NONCANONICAL_REMOTE_COUNT='
 ];
 foreach ($required as $needle) {
     if (strpos($yml, $needle) === false) { fwrite(STDERR, "FALHOU: ausente {$needle}\n"); exit(1); }
 }
-$forbidden = [
-    'cat ~/.desktop-commander-device/device.json',
-    'access_token', 'refresh_token', 'auth_token',
-    'set +' . 'e'
-];
+$forbidden = ['cat ~/.desktop-commander-device/device.json','access_token', 'refresh_token', 'auth_token','set +' . 'e'];
 foreach ($forbidden as $needle) {
     if (stripos($yml, $needle) !== false) { fwrite(STDERR, "FALHOU: padrao proibido {$needle}\n"); exit(1); }
 }
