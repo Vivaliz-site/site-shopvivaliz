@@ -9,9 +9,16 @@ on:
       - "scripts/fredwin-desktop-commander-status.ps1"
       - "scripts/fredwin-desktop-commander-supervisor.ps1"
       - "scripts/vm-desktop-commander-supervisor.sh"
+      - "scripts/desktopkocepsv-desktop-commander-runner.ps1"
+      - "scripts/desktopkocepsv-desktop-commander-status.ps1"
+      - "scripts/desktopkocepsv-desktop-commander-supervisor.ps1"
+      - "scripts/desktopkocepsv-remote-bootstrap.ps1"
+      - "scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1"
       - ".github/workflows/desktop-commander-24h-health.yml"
       - "tests/desktop-commander-health-restart-contract-test.php"
       - "tests/desktop-commander-persist-session-contract-test.php"
+      - "tests/desktopkocepsv-desktop-commander-supervisor-contract-test.php"
+      - "tests/desktopkocepsv-private-relay-contract-test.php"
   push:
     branches: [main]
     paths:
@@ -21,6 +28,11 @@ on:
       - "scripts/fredwin-desktop-commander-status.ps1"
       - "scripts/fredwin-desktop-commander-supervisor.ps1"
       - "scripts/vm-desktop-commander-supervisor.sh"
+      - "scripts/desktopkocepsv-desktop-commander-runner.ps1"
+      - "scripts/desktopkocepsv-desktop-commander-status.ps1"
+      - "scripts/desktopkocepsv-desktop-commander-supervisor.ps1"
+      - "scripts/desktopkocepsv-remote-bootstrap.ps1"
+      - "scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1"
       - ".github/workflows/desktop-commander-24h-health.yml"
   workflow_dispatch:
 
@@ -38,6 +50,8 @@ jobs:
           set -Eeuo pipefail
           php tests/desktop-commander-persist-session-contract-test.php
           php tests/desktop-commander-health-restart-contract-test.php
+          php tests/desktopkocepsv-desktop-commander-supervisor-contract-test.php
+          php tests/desktopkocepsv-private-relay-contract-test.php
 
   runtime:
     if: github.event_name != 'pull_request'
