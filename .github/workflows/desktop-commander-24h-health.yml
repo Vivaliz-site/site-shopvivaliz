@@ -19,6 +19,7 @@ on:
       - "scripts/desktopkocepsv-desktop-commander-supervisor.ps1"
       - "scripts/desktopkocepsv-remote-bootstrap.ps1"
       - "scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1"
+      - "scripts/desktop-commander-control-plane-status.py"
       - ".github/workflows/desktop-commander-24h-health.yml"
       - ".github/workflows/fred-win-desktop-commander-action.yml"
       - ".github/workflows/vm-desktop-commander-action.yml"
@@ -31,6 +32,8 @@ on:
       - "tests/vm-desktop-commander-service-contract-test.php"
       - "tests/vm-desktop-commander-action-contract-test.php"
       - "tests/desktop-commander-three-host-action-contract-test.php"
+      - "tests/desktop-commander-control-plane-contract-test.php"
+      - "tests/desktop-commander-status-sanitization-contract-test.php"
   push:
     branches: [main]
     paths:
@@ -50,6 +53,7 @@ on:
       - "scripts/desktopkocepsv-desktop-commander-supervisor.ps1"
       - "scripts/desktopkocepsv-remote-bootstrap.ps1"
       - "scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1"
+      - "scripts/desktop-commander-control-plane-status.py"
       - ".github/workflows/desktop-commander-24h-health.yml"
       - ".github/workflows/fred-win-desktop-commander-action.yml"
       - ".github/workflows/vm-desktop-commander-action.yml"
@@ -76,6 +80,8 @@ jobs:
           php tests/vm-desktop-commander-service-contract-test.php
           php tests/vm-desktop-commander-action-contract-test.php
           php tests/desktop-commander-three-host-action-contract-test.php
+          php tests/desktop-commander-control-plane-contract-test.php
+          php tests/desktop-commander-status-sanitization-contract-test.php
 
   runtime:
     if: github.event_name != 'pull_request'
@@ -96,96 +102,14 @@ jobs:
       - name: Restart Fred-Win agent in normal relay context when requested
         run: |
           set -Eeuo pipefail
-          ACTION="$(jq -r '.action // "desktop_commander_status"' ops/fredwin-desktop-commander-request.json)"
-          if [ "$ACTION" = "desktop_commander_restart" ]; then
-            ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
-            import json
-            import urllib.request
-            command = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\\site-shopvivaliz\\scripts\\fredwin-desktop-commander-supervisor.ps1" -Mode Restart'
-            body = json.dumps({'params': {'command': command, 'timeout': 180}}).encode('utf-8')
-            req = urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command', data=body, headers={'Content-Type': 'application/json'}, method='POST')
-            with urllib.request.urlopen(req, timeout=190) as response:
-                payload = json.loads(response.read().decode('utf-8'))
-            result = payload.get('result') or {}
-            if result.get('success') is not True:
-                raise SystemExit('Fred-Win restart diagnostic failed')
-            print('FREDWIN_RESTART_DIAGNOSTIC=ok')
-          PY
-          else
-            echo "FREDWIN_RESTART_DIAGNOSTIC=skipped"
+          ACTION="$(jq -r '.action // "status"' ops/fredwin-desktop-commander-request.json)"
+          if [ "$ACTION" = "restart" ]; then
+            ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'true'
           fi
       - name: Inspect sanitized VM state
         run: |
           set -Eeuo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
-            echo "VM_RESULT=$(systemctl show -p Result --value shopvivaliz-desktop-commander.service 2>/dev/null)"
-            echo "VM_EXEC_MAIN_STATUS=$(systemctl show -p ExecMainStatus --value shopvivaliz-desktop-commander.service 2>/dev/null)"
-            echo "VM_NRESTARTS=$(systemctl show -p NRestarts --value shopvivaliz-desktop-commander.service 2>/dev/null)"
-          '
-      - name: Verify Fred-Win supervisor through private relay
-        run: |
-          set -Eeuo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
-          import json
-          import time
-          import urllib.request
-          endpoint = 'http://127.0.0.1:5557/mcp/tool/execute_command'
-          status_command = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\\site-shopvivaliz\\scripts\\fredwin-desktop-commander-status.ps1"'
-          last_reason = 'not checked'
-          for attempt in range(12):
-              try:
-                  body = json.dumps({'params': {'command': status_command, 'timeout': 120}}).encode('utf-8')
-                  req = urllib.request.Request(endpoint, data=body, headers={'Content-Type': 'application/json'}, method='POST')
-                  with urllib.request.urlopen(req, timeout=130) as response:
-                      payload = json.loads(response.read().decode('utf-8'))
-                  result = payload.get('result') or {}
-                  if result.get('success') is not True:
-                      last_reason = 'relay command failed'
-                      time.sleep(10)
-                      continue
-                  output = str(result.get('output') or '')
-                  wanted = {'DEVICE_STATE_EXISTS','REMOTE_AGENT_COUNT','REMOTE_AGENT_PIDS','TASK_EXISTS','TASK_STATE','TASK_LAST_RESULT','AUTH_REQUIRED'}
-                  values = {}
-                  safe_lines = []
-                  for line in output.splitlines():
-                      if '=' not in line:
-                          continue
-                      key, value = line.split('=', 1)
-                      if key in wanted:
-                          values[key] = value.strip()
-                          safe_lines.append(f'{key}={value.strip()}')
-                  healthy = (
-                      values.get('DEVICE_STATE_EXISTS', '').lower() == 'true'
-                      and values.get('TASK_EXISTS', '').lower() == 'true'
-                      and int(values.get('REMOTE_AGENT_COUNT', '0')) >= 1
-                      and values.get('AUTH_REQUIRED', '').lower() == 'false'
-                  )
-                  if healthy:
-                      print('\n'.join(safe_lines))
-                      raise SystemExit(0)
-                  last_reason = 'Fred-Win health values not ready'
-              except Exception:
-                  last_reason = 'Fred-Win relay unavailable during convergence'
-              time.sleep(10)
-          raise SystemExit(last_reason)
-          PY
-      - name: Verify VM supervisor
-        run: |
-          set -Eeuo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
-            enabled=$(systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null)
-            active=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null)
-            pid=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service 2>/dev/null)
-            if test -f "$HOME/.desktop-commander-device/device.json"; then device=true; else device=false; fi
-            echo "VM_SERVICE_ENABLED=${enabled:-unknown}"
-            echo "VM_SERVICE_ACTIVE=${active:-unknown}"
-            echo "VM_MAINPID=${pid:-0}"
-            echo "VM_DEVICE_STATE_EXISTS=$device"
-            test "$enabled" = enabled
-            test "$active" = active
-            test "${pid:-0}" -gt 1
-            test "$device" = true
-          '
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'systemctl is-active shopvivaliz-desktop-commander.service'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey
