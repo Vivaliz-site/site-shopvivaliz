@@ -20,7 +20,14 @@ foreach ($requiredUnit as $needle) {
     if (strpos($unit, $needle) === false) { fwrite(STDERR, "FALHOU: unit sem {$needle}\n"); exit(1); }
 }
 $installer = file_get_contents($installerPath);
-foreach (['sudo -u', 'NODE_BIN', 'NPX_BIN', 'systemctl daemon-reload','systemctl enable shopvivaliz-desktop-commander.service','systemctl restart shopvivaliz-desktop-commander.service','is-enabled','is-active'] as $needle) {
+foreach ([
+    'sudo -u', 'NODE_BIN', 'NPX_BIN', 'systemctl daemon-reload',
+    'systemctl enable "$SERVICE"', 'systemctl restart "$SERVICE"',
+    'LEGACY_SERVICE=', 'desktop-commander.service', 'disable --now',
+    'kill_tree', 'CANONICAL_REMOTE_COUNT', 'NONCANONICAL_REMOTE_COUNT',
+    '@wonderwhy-er/desktop-commander@0.2.47 remote --persist-session',
+    'is-enabled', 'is-active'
+] as $needle) {
     if (strpos($installer, $needle) === false) { fwrite(STDERR, "FALHOU: installer sem {$needle}\n"); exit(1); }
 }
 $supervisor = file_get_contents($supervisorPath);
@@ -30,9 +37,7 @@ foreach (['.desktop-commander-device/device.json','NPX_BIN','@wonderwhy-er/deskt
 $all = $unit . $installer . $supervisor;
 $forbidden = [
     'access_token','refresh_token','auth_token','0.0.0.0',
-    '|' . '| true',
-    'set +' . 'e',
-    'tee "$tmp"'
+    '|' . '| true', 'set +' . 'e', 'tee "$tmp"', 'pkill -f node'
 ];
 foreach ($forbidden as $needle) {
     if (stripos($all, $needle) !== false) { fwrite(STDERR, "FALHOU: configuracao proibida {$needle}\n"); exit(1); }
