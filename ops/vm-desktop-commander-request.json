@@ -1,4 +1,4 @@
 {
-  "action": "status",
-  "reason": "resume three-host control-plane work and recheck VM Desktop Commander at 2026-08-24T11:21Z"
+  "action": "install",
+  "reason": "restore direct VM Desktop Commander access for Search Console remediation at 2026-08-24T11:58Z"
 }
