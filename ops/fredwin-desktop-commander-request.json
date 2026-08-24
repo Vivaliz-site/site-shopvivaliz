@@ -1,4 +1,4 @@
 {
-  "action": "desktop_commander_status",
-  "reason": "resume three-host control-plane work and recheck Fred-Win Desktop Commander at 2026-08-24T11:35Z"
+  "action": "desktop_commander_restart",
+  "reason": "unattended recovery 2026-08-24"
 }
