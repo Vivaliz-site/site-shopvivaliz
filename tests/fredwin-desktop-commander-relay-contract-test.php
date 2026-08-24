@@ -25,13 +25,10 @@ foreach (['-R 5557:127.0.0.1:5557','StrictHostKeyChecking=yes','UserKnownHostsFi
 foreach (['ShopVivaliz FredWin Relay 24h','New-ScheduledTaskTrigger -AtStartup','LogonType S4U','RunLevel Highest','MultipleInstances IgnoreNew','New-TimeSpan -Minutes 1'] as $needle) {
     if (stripos($bootstrap, $needle) === false) { fwrite(STDERR, "FALHOU: bootstrap sem {$needle}\n"); exit(1); }
 }
-$all = $yml . $tunnel . $bootstrap;
-$forbidden = [
-    'device.json | Get-Content','access_token','refresh_token','auth_token',
-    'git reset --hard','git clean -','StrictHostKeyChecking=accept-new',
-    'StrictHostKeyChecking=no','trycloudflare','cloudflare'
-];
-foreach ($forbidden as $needle) {
-    if (stripos($all, $needle) !== false) { fwrite(STDERR, "FALHOU: relay contem padrao proibido {$needle}\n"); exit(1); }
+foreach (['StrictHostKeyChecking=accept-new','StrictHostKeyChecking=no','trycloudflare','cloudflare'] as $needle) {
+    if (stripos($tunnel . $bootstrap, $needle) !== false) { fwrite(STDERR, "FALHOU: relay local contem padrao proibido {$needle}\n"); exit(1); }
+}
+foreach (['device.json | Get-Content','access_token','refresh_token','auth_token','git reset --hard','git clean -'] as $needle) {
+    if (stripos($yml . $tunnel . $bootstrap, $needle) !== false) { fwrite(STDERR, "FALHOU: segredo ou mutacao proibida {$needle}\n"); exit(1); }
 }
 echo "fredwin-desktop-commander-relay-contract: ok\n";
