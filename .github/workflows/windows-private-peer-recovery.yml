@@ -1,0 +1,121 @@
+name: Windows Private Peer Desktop Commander Recovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/windows-private-peer-recovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure verified VM SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${VM_KEY:-}"
+          test -n "${VM_HOSTS:-}"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+
+      - name: Recover Windows peers through VM private network when available
+        run: |
+          set -Eeuo pipefail
+          SSH_VM=(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17)
+          cat > /tmp/peer-discover.py <<'PY'
+          import json,sys
+          try:
+              d=json.load(sys.stdin)
+          except Exception:
+              raise SystemExit(2)
+          peers=d.get('Peer') or {}
+          wanted={'LAPTOP-NIG4IFUU':'','DESKTOP-KOCEPSV':''}
+          for p in peers.values():
+              host=str(p.get('HostName') or p.get('DNSName') or '').rstrip('.').upper()
+              for name in list(wanted):
+                  if name in host:
+                      ips=p.get('TailscaleIPs') or []
+                      ip=next((x for x in ips if ':' not in x), ips[0] if ips else '')
+                      wanted[name]=ip
+          for k,v in wanted.items():
+              print(k+'='+v)
+          PY
+          if ! peer_info="$(${SSH_VM[@]} 'tailscale status --json 2>/dev/null' | python3 /tmp/peer-discover.py 2>/dev/null)"; then
+            printf 'PRIVATE_NETWORK=unavailable\nFRED_PEER=unknown\nDESKTOP_PEER=unknown\n' > /tmp/windows-peer-safe.txt
+            exit 4
+          fi
+          fred_ip="$(printf '%s\n' "$peer_info" | awk -F= '$1=="LAPTOP-NIG4IFUU"{print $2}')"
+          desk_ip="$(printf '%s\n' "$peer_info" | awk -F= '$1=="DESKTOP-KOCEPSV"{print $2}')"
+          printf 'PRIVATE_NETWORK=available\n' > /tmp/windows-peer-safe.txt
+
+          recover_peer() {
+            label="$1"; ip="$2"; user="$3"; localport="$4"; prefix="$5"; relayport="$6"
+            if [ -z "$ip" ]; then
+              printf '%s_PEER=not_found\n' "$label" >> /tmp/windows-peer-safe.txt
+              return 0
+            fi
+            printf '%s_PEER=found\n' "$label" >> /tmp/windows-peer-safe.txt
+            if ! ${SSH_VM[@]} "timeout 4 bash -c '</dev/tcp/$ip/22'" >/dev/null 2>&1; then
+              printf '%s_SSH22=unreachable\n' "$label" >> /tmp/windows-peer-safe.txt
+              return 0
+            fi
+            printf '%s_SSH22=reachable\n' "$label" >> /tmp/windows-peer-safe.txt
+            ssh -fNT -o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" -L "$localport:$ip:22" ubuntu@137.131.156.17
+            sleep 2
+            ssh-keyscan -T 5 -p "$localport" 127.0.0.1 2>/dev/null > "/tmp/${label}.hosts"
+            if [ ! -s "/tmp/${label}.hosts" ]; then
+              printf '%s_HOSTKEY=unavailable\n' "$label" >> /tmp/windows-peer-safe.txt
+              return 0
+            fi
+            chmod 600 "/tmp/${label}.hosts"
+            if [ "$prefix" = fredwin ]; then bootstrap='fredwin-remote-bootstrap.ps1'; else bootstrap='desktopkocepsv-remote-bootstrap.ps1'; fi
+            cmd="& { \$ErrorActionPreference='Stop'; Set-Location 'C:\site-shopvivaliz'; git fetch origin main | Out-Null; if (\$LASTEXITCODE -ne 0) { throw 'fetch failed' }; git merge --ff-only origin/main | Out-Null; if (\$LASTEXITCODE -ne 0) { throw 'sync failed' }; & 'C:\site-shopvivaliz\scripts\${prefix}-desktop-commander-supervisor.ps1' -Mode InstallTask; & 'C:\site-shopvivaliz\scripts\${bootstrap}' -Mode InstallTask }"
+            if ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="/tmp/${label}.hosts" -p "$localport" -i "$HOME/.ssh/vmkey" "$user@127.0.0.1" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$cmd\"" >/dev/null 2>&1; then
+              printf '%s_RECOVERY=executed\n' "$label" >> /tmp/windows-peer-safe.txt
+              sleep 15
+              if ${SSH_VM[@]} "curl -fsS --connect-timeout 4 --max-time 8 http://127.0.0.1:${relayport}/health >/dev/null" 2>/dev/null; then
+                printf '%s_RELAY=reachable\n' "$label" >> /tmp/windows-peer-safe.txt
+              else
+                printf '%s_RELAY=unreachable\n' "$label" >> /tmp/windows-peer-safe.txt
+              fi
+            else
+              printf '%s_RECOVERY=ssh_auth_or_command_failed\n' "$label" >> /tmp/windows-peer-safe.txt
+            fi
+          }
+
+          recover_peer FRED "$fred_ip" FRED 32223 fredwin 5557
+          recover_peer DESKTOP "$desk_ip" user 32224 desktopkocepsv 5558
+
+      - name: Publish sanitized private-peer recovery evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          test -f /tmp/windows-peer-safe.txt || printf 'PRIVATE_NETWORK=no_evidence\n' > /tmp/windows-peer-safe.txt
+          {
+            echo '### Windows private-peer recovery fallback'
+            echo
+            echo '```text'
+            cat /tmp/windows-peer-safe.txt
+            echo '```'
+          } > /tmp/windows-peer-comment.md
+          gh issue comment 1207 --repo "${{ github.repository }}" --body-file /tmp/windows-peer-comment.md
+
+      - name: Cleanup
+        if: always()
+        run: |
+          pkill -f '32223:' || true
+          pkill -f '32224:' || true
+          rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts" /tmp/peer-discover.py /tmp/FRED.hosts /tmp/DESKTOP.hosts /tmp/windows-peer-safe.txt /tmp/windows-peer-comment.md
