@@ -1,4 +1,4 @@
 {
-  "action": "install",
-  "reason": "unattended recovery 2026-08-24"
+  "action": "authorize",
+  "reason": "one-time provider authorization required to restore direct VM Desktop Commander for Search Console remediation"
 }
