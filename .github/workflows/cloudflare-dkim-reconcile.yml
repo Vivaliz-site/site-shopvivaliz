@@ -1,0 +1,95 @@
+name: Cloudflare M365 DKIM Reconcile
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/cloudflare-dkim-reconcile.yml"
+      - "ops/cloudflare-dkim-reconcile.json"
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      ZONE_NAME: shopvivaliz.com.br
+      DKIM1_NAME: selector1._domainkey.dev.shopvivaliz.com.br
+      DKIM1_TARGET: selector1-dev-shopvivaliz-com-br._domainkey.contabilidademelo.a-v1.dkim.mail.microsoft
+      DKIM2_NAME: selector2._domainkey.dev.shopvivaliz.com.br
+      DKIM2_TARGET: selector2-dev-shopvivaliz-com-br._domainkey.contabilidademelo.a-v1.dkim.mail.microsoft
+    steps:
+      - name: Install DNS tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq dnsutils jq >/dev/null
+
+      - name: Reconcile Cloudflare DKIM records
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CF_TOKEN:-}" || { echo 'CLOUDFLARE_API_TOKEN_MISSING'; exit 1; }
+          api='https://api.cloudflare.com/client/v4'
+          auth=(-H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json')
+
+          verify=$(curl -fsS "${auth[@]}" "$api/user/tokens/verify")
+          test "$(jq -r '.success' <<<"$verify")" = true || { echo 'TOKEN_VERIFY_FAILED'; exit 1; }
+          echo 'TOKEN_VERIFY_OK'
+
+          zones=$(curl -fsS "${auth[@]}" "$api/zones?name=$ZONE_NAME")
+          zone_id=$(jq -r '.result[0].id // empty' <<<"$zones")
+          test -n "$zone_id" || { echo 'ZONE_NOT_FOUND'; exit 1; }
+          echo 'ZONE_LOOKUP_OK'
+
+          reconcile_one() {
+            local name="$1" target="$2"
+            local q count rec_id payload resp
+            q=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/dns_records?type=CNAME&name=$name")
+            count=$(jq '.result | length' <<<"$q")
+            if [ "$count" -gt 1 ]; then
+              echo "DUPLICATE_DKIM_RECORDS:$name:$count"
+              exit 1
+            fi
+            payload=$(jq -nc --arg type CNAME --arg name "$name" --arg content "$target" '{type:$type,name:$name,content:$content,ttl:300,proxied:false}')
+            if [ "$count" -eq 0 ]; then
+              resp=$(curl -fsS -X POST "${auth[@]}" --data "$payload" "$api/zones/$zone_id/dns_records")
+              echo "CREATED:$name"
+            else
+              rec_id=$(jq -r '.result[0].id' <<<"$q")
+              resp=$(curl -fsS -X PUT "${auth[@]}" --data "$payload" "$api/zones/$zone_id/dns_records/$rec_id")
+              echo "RECONCILED:$name"
+            fi
+            test "$(jq -r '.success' <<<"$resp")" = true || { echo "UPDATE_FAILED:$name"; jq -c '{success,errors}' <<<"$resp"; exit 1; }
+          }
+
+          reconcile_one "$DKIM1_NAME" "$DKIM1_TARGET"
+          reconcile_one "$DKIM2_NAME" "$DKIM2_TARGET"
+          echo 'CLOUDFLARE_RECONCILE_OK'
+
+      - name: Verify authoritative and public DNS
+        shell: bash
+        run: |
+          set -euo pipefail
+          verify_cname() {
+            local server="$1" name="$2" expected="$3" got
+            got=$(dig +short CNAME "@$server" "$name" | sed 's/\.$//' | head -n1)
+            echo "DNS_CHECK server=$server name=$name"
+            test "$got" = "$expected" || { echo "DNS_MISMATCH server=$server name=$name got=$got expected=$expected"; exit 1; }
+          }
+          for server in ara.ns.cloudflare.com roman.ns.cloudflare.com 1.1.1.1 8.8.8.8 9.9.9.9; do
+            verify_cname "$server" "$DKIM1_NAME" "$DKIM1_TARGET"
+            verify_cname "$server" "$DKIM2_NAME" "$DKIM2_TARGET"
+          done
+          for server in 1.1.1.1 8.8.8.8 9.9.9.9; do
+            k1=$(dig +short TXT "@$server" "$DKIM1_TARGET" | tr -d '" ' | tr -d '\n')
+            k2=$(dig +short TXT "@$server" "$DKIM2_TARGET" | tr -d '" ' | tr -d '\n')
+            grep -q 'v=DKIM1' <<<"$k1" || { echo "DKIM1_KEY_MISSING server=$server"; exit 1; }
+            grep -q 'v=DKIM1' <<<"$k2" || { echo "DKIM2_KEY_MISSING server=$server"; exit 1; }
+          done
+          echo 'AUTHORITATIVE_AND_PUBLIC_DNS_OK'
+
+      - name: Final summary
+        run: |
+          echo 'M365_DKIM_RECONCILE_AND_VERIFY_COMPLETE'
+          echo 'selector1=OK selector2=OK authoritative_ns=OK public_resolvers=OK'
