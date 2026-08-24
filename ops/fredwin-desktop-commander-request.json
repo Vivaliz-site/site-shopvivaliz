@@ -1,4 +1,4 @@
 {
-  "action": "install_or_repair",
-  "reason": "bounded unattended three-host recovery"
+  "action": "recover_session",
+  "reason": "restore infra scripts, clear stale auth cooldown, and ensure DC without merging work branch"
 }
