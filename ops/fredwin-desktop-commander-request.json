@@ -1,4 +1,4 @@
 {
-  "action": "desktop_commander_install",
-  "reason": "deploy persistent-session Fred-Win Desktop Commander runner and restart it under the durable supervisor"
+  "action": "desktop_commander_status",
+  "reason": "diagnose Fred-Win Desktop Commander through the private relay before recovery at 2026-08-24T09:53Z"
 }
