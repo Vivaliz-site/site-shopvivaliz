@@ -80,8 +80,8 @@ function Ensure-Agent {
     Ensure-ProfileEnvironment
     if (-not (Test-Path -LiteralPath $RunnerScript)) { throw 'sanitized runner not found' }
     if (-not (Test-Path -LiteralPath $DeviceFile)) { Log 'AUTH_REQUIRED device state missing'; Write-Output 'AUTH_REQUIRED=true'; exit 20 }
-    $canonical = Get-CanonicalRemoteLaunchers
-    $noncanonical = Get-NonCanonicalRemoteLaunchers
+    $canonical = @(Get-CanonicalRemoteLaunchers)
+    $noncanonical = @(Get-NonCanonicalRemoteLaunchers)
     if ($canonical.Count -eq 1 -and $noncanonical.Count -eq 0) {
         Remove-LegacyStartup
         Write-Output 'REMOTE_AGENT_RUNNING=true'
@@ -94,12 +94,12 @@ function Ensure-Agent {
     for ($attempt = 0; $attempt -lt 30; $attempt++) {
         Start-Sleep -Seconds 1
         if (Test-RecentCooldown) { Stop-RemoteProcesses; Write-Output 'AUTH_REQUIRED=true'; exit 20 }
-        $canonical = Get-CanonicalRemoteLaunchers
-        $noncanonical = Get-NonCanonicalRemoteLaunchers
+        $canonical = @(Get-CanonicalRemoteLaunchers)
+        $noncanonical = @(Get-NonCanonicalRemoteLaunchers)
         if ($canonical.Count -eq 1 -and $noncanonical.Count -eq 0) { break }
     }
-    $canonical = Get-CanonicalRemoteLaunchers
-    $noncanonical = Get-NonCanonicalRemoteLaunchers
+    $canonical = @(Get-CanonicalRemoteLaunchers)
+    $noncanonical = @(Get-NonCanonicalRemoteLaunchers)
     if ($canonical.Count -ne 1 -or $noncanonical.Count -ne 0) { throw ('singleton convergence failed canonical=' + $canonical.Count + ' noncanonical=' + $noncanonical.Count) }
     Remove-LegacyStartup
     Write-Output 'REMOTE_AGENT_RUNNING=true'
