@@ -8,7 +8,7 @@ $yml = file_get_contents($workflowPath);
 foreach ([
     "cron: '*/5 * * * *'", 'issues: write', 'contents: read',
     'MAX_RECOVERY_ATTEMPTS=1', 'LAPTOP-NIG4IFUU', 'shopvivaliz-ai', 'DESKTOP-KOCEPSV',
-    '127.0.0.1:5557', '127.0.0.1:5558', 'StrictHostKeyChecking=yes', 'UserKnownHostsFile=',
+    'relay_probe(5557', 'relay_probe(5558', 'StrictHostKeyChecking=yes', 'UserKnownHostsFile=',
     'Desktop Commander 24h Control Plane Status', 'actions/github-script@v7', 'actions/upload-artifact@v4',
     'desktop-commander-control-plane-status.py'
 ] as $needle) {
