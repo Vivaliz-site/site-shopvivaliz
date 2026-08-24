@@ -36,21 +36,33 @@ function Get-DesktopCommanderRemoteLaunchers {
         ([string]$_.CommandLine) -match '@wonderwhy-er/desktop-commander@[^ ]+.*\bremote\b'
     })
 }
+function Get-LauncherRoots([object[]]$Launchers) {
+    $items = @($Launchers)
+    if ($items.Count -le 1) { return $items }
+    $ids = @($items | ForEach-Object { [int]$_.ProcessId })
+    return @($items | Where-Object { $ids -notcontains [int]$_.ParentProcessId })
+}
 function Get-CanonicalRemoteLaunchers {
-    return @(Get-DesktopCommanderRemoteLaunchers | Where-Object {
+    $matches = @(Get-DesktopCommanderRemoteLaunchers | Where-Object {
         ([string]$_.CommandLine) -match '@wonderwhy-er/desktop-commander@0\.2\.47.*\bremote\b.*--persist-session'
     })
+    return @(Get-LauncherRoots $matches)
 }
 function Get-NonCanonicalRemoteLaunchers {
-    $canonicalIds = @((Get-CanonicalRemoteLaunchers).ProcessId)
-    return @(Get-DesktopCommanderRemoteLaunchers | Where-Object { $canonicalIds -notcontains $_.ProcessId })
+    $all = @(Get-DesktopCommanderRemoteLaunchers)
+    $canonicalProcesses = @($all | Where-Object {
+        ([string]$_.CommandLine) -match '@wonderwhy-er/desktop-commander@0\.2\.47.*\bremote\b.*--persist-session'
+    })
+    $canonicalIds = @($canonicalProcesses.ProcessId)
+    $noncanonical = @($all | Where-Object { $canonicalIds -notcontains $_.ProcessId })
+    return @(Get-LauncherRoots $noncanonical)
 }
 function Stop-LauncherTree([int]$ProcessId) {
     try { & taskkill.exe /PID $ProcessId /T /F 2>$null | Out-Null; Log ('Stopped Desktop Commander launcher tree pid=' + $ProcessId) }
     catch { Log ('WARNING stop failed pid=' + $ProcessId) }
 }
 function Stop-RemoteProcesses {
-    foreach ($p in (Get-DesktopCommanderRemoteLaunchers)) { Stop-LauncherTree -ProcessId $p.ProcessId }
+    foreach ($p in (Get-LauncherRoots (Get-DesktopCommanderRemoteLaunchers))) { Stop-LauncherTree -ProcessId $p.ProcessId }
 }
 function Test-RecentCooldown {
     if (-not (Test-Path -LiteralPath $CooldownFile)) { return $false }
@@ -79,8 +91,13 @@ function Ensure-Agent {
     if (Test-RecentCooldown) { Write-Output 'AUTH_REQUIRED=true'; exit 20 }
     $args = @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',$RunnerScript)
     Start-Process -FilePath 'powershell.exe' -ArgumentList $args -WorkingDirectory $Repo -WindowStyle Hidden
-    Start-Sleep -Seconds 10
-    if (Test-RecentCooldown) { Stop-RemoteProcesses; Write-Output 'AUTH_REQUIRED=true'; exit 20 }
+    for ($attempt = 0; $attempt -lt 30; $attempt++) {
+        Start-Sleep -Seconds 1
+        if (Test-RecentCooldown) { Stop-RemoteProcesses; Write-Output 'AUTH_REQUIRED=true'; exit 20 }
+        $canonical = Get-CanonicalRemoteLaunchers
+        $noncanonical = Get-NonCanonicalRemoteLaunchers
+        if ($canonical.Count -eq 1 -and $noncanonical.Count -eq 0) { break }
+    }
     $canonical = Get-CanonicalRemoteLaunchers
     $noncanonical = Get-NonCanonicalRemoteLaunchers
     if ($canonical.Count -ne 1 -or $noncanonical.Count -ne 0) { throw ('singleton convergence failed canonical=' + $canonical.Count + ' noncanonical=' + $noncanonical.Count) }
