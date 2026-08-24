@@ -13,6 +13,20 @@ function svgr_fetch(string $url): string {
     return $raw;
 }
 
+function svgr_assert_allowed_image_hosts(string $xml, string $path, array &$errors): void {
+    if (preg_match_all('~<g:image_link>([^<]+)</g:image_link>~', $xml, $matches)) {
+        foreach ($matches[1] as $url) {
+            $host = strtolower((string)(parse_url($url, PHP_URL_HOST) ?: ''));
+            $pathPart = (string)(parse_url($url, PHP_URL_PATH) ?: '');
+            $allowedTiny = $host === 's3.amazonaws.com' && str_starts_with($pathPart, '/tiny-anexos-');
+            $allowedSite = preg_replace('/^www\./', '', $host) === 'shopvivaliz.com.br';
+            if (!$allowedTiny && !$allowedSite) {
+                $errors[] = $path . ':disallowed_image_host:' . $host;
+            }
+        }
+    }
+}
+
 function svgr_count_items(string $xml): int {
     return substr_count($xml, '<item>');
 }
@@ -27,6 +41,7 @@ foreach (['/google-shopping-feed.php', '/google-merchant-feed.php'] as $path) {
     if (!preg_match('~<g:image_link>https://s3\.amazonaws\.com/tiny-anexos-[^<]+</g:image_link>~', $xml)) {
         $errors[] = $path . ':no_erp_tiny_images';
     }
+    svgr_assert_allowed_image_hosts($xml, $path, $errors);
 }
 
 $api = json_decode(svgr_fetch(rtrim($base, '/') . '/api/catalog/products.php?limit=24&available=1&no_cache=1'), true);
