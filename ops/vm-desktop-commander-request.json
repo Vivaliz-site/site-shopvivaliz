@@ -1,4 +1,4 @@
 {
   "action": "status",
-  "reason": "diagnose current VM Desktop Commander state before recovery at 2026-08-24T09:49Z"
+  "reason": "diagnose and recover VM Desktop Commander after unexpected offline state at 2026-08-24T10:00Z"
 }
