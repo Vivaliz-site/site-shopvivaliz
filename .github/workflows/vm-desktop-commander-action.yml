@@ -8,7 +8,7 @@ on:
       - "ops/vm-desktop-commander-request.json"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   execute:
@@ -55,9 +55,32 @@ jobs:
           esac
           printf '%s' "$COMMAND" | base64 -w0 > /tmp/vm-command.b64
       - name: Execute fixed VM action
+        shell: bash
         run: |
+          set -o pipefail
           CMD_B64="$(cat /tmp/vm-command.b64)"
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "VM_CMD_B64='$CMD_B64' bash -lc 'echo \"\$VM_CMD_B64\" | base64 -d | bash'"
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "VM_CMD_B64='$CMD_B64' bash -lc 'echo \"\$VM_CMD_B64\" | base64 -d | bash'" | tee /tmp/vm-action-output.txt
+      - name: Publish sanitized VM status
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACTION="$(jq -r '.action // "status"' ops/vm-desktop-commander-request.json)"
+          if [ "$ACTION" != "status" ]; then
+            exit 0
+          fi
+          {
+            echo "captured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "action=status"
+            if [ -f /tmp/vm-action-output.txt ]; then cat /tmp/vm-action-output.txt; else echo "SSH_OUTPUT_MISSING=true"; fi
+          } > ops/vm-desktop-commander-last-status.txt
+          git config user.name "shopvivaliz-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add ops/vm-desktop-commander-last-status.txt
+          if ! git diff --cached --quiet; then
+            git commit -m "ops: record sanitized VM Desktop Commander status"
+            git push
+          fi
       - name: Cleanup
         if: always()
-        run: rm -f ~/.ssh/vmkey /tmp/vm-command.b64
+        run: rm -f ~/.ssh/vmkey /tmp/vm-command.b64 /tmp/vm-action-output.txt
