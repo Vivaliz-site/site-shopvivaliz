@@ -76,15 +76,26 @@ while read -r pid args; do
   fi
 done < <(pgrep -af 'npm exec @wonderwhy-er/desktop-commander@.* remote' 2>/dev/null || :)
 
-sleep 2
 systemctl restart "$SERVICE"
-sleep 3
-count_remote_roots
+CANONICAL_REMOTE_COUNT=0
+NONCANONICAL_REMOTE_COUNT=0
+for attempt in {1..12}; do
+  sleep 5
+  count_remote_roots
+  if [[ "$CANONICAL_REMOTE_COUNT" -eq 1 && "$NONCANONICAL_REMOTE_COUNT" -eq 0 ]]; then
+    break
+  fi
+done
+
+if SERVICE_ACTIVE="$(systemctl is-active "$SERVICE" 2>/dev/null)"; then :; else SERVICE_ACTIVE='unknown'; fi
+if SERVICE_MAINPID="$(systemctl show -p MainPID --value "$SERVICE" 2>/dev/null)"; then :; else SERVICE_MAINPID='0'; fi
 printf 'SERVICE_ENABLED=%s\n' "$SERVICE_ENABLED"
 printf 'SERVICE_ACTIVE=%s\n' "$SERVICE_ACTIVE"
 printf 'SERVICE_USER=%s\n' "$SERVICE_USER"
 printf 'SERVICE_MAINPID=%s\n' "$SERVICE_MAINPID"
 printf 'CANONICAL_REMOTE_COUNT=%s\n' "$CANONICAL_REMOTE_COUNT"
 printf 'NONCANONICAL_REMOTE_COUNT=%s\n' "$NONCANONICAL_REMOTE_COUNT"
+[[ "$SERVICE_ACTIVE" == 'active' ]]
+[[ "$SERVICE_MAINPID" =~ ^[0-9]+$ && "$SERVICE_MAINPID" -gt 1 ]]
 [[ "$CANONICAL_REMOTE_COUNT" -eq 1 ]]
 [[ "$NONCANONICAL_REMOTE_COUNT" -eq 0 ]]
