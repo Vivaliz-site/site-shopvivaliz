@@ -1,4 +1,4 @@
 {
-  "action": "status",
-  "reason": "diagnose and recover VM Desktop Commander after unexpected offline state at 2026-08-24T10:00Z"
+  "action": "install",
+  "reason": "deploy singleton VM Desktop Commander convergence and remove legacy or duplicate launchers at 2026-08-24T10:05Z"
 }
