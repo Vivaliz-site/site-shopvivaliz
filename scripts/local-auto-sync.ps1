@@ -36,23 +36,34 @@ try {
     & git fetch origin 2>&1 | ForEach-Object { Log "git fetch: $_" }
     if ($LASTEXITCODE -ne 0) { throw "git fetch failed exit=$LASTEXITCODE" }
 
+    $DirtyOutput = & git status --porcelain 2>$null
+    $WorkingTreeDirty = ($LASTEXITCODE -eq 0 -and [bool]$DirtyOutput)
+
     $Upstream = & git rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2>$null
     if ($LASTEXITCODE -eq 0 -and $Upstream) {
         $Upstream = $Upstream.ToString().Trim()
-        Log "Syncing current branch $CurrentBranch with upstream $Upstream"
-        & git merge --ff-only $Upstream 2>&1 | ForEach-Object { Log "git merge: $_" }
-        if ($LASTEXITCODE -ne 0) {
-            Log "WARNING fast-forward failed for current branch $CurrentBranch; local changes preserved"
+        if ($WorkingTreeDirty) {
+            Log "Working tree dirty; skipping fast-forward sync for $CurrentBranch; local changes preserved"
+        } else {
+            Log "Syncing current branch $CurrentBranch with upstream $Upstream"
+            & git merge --ff-only $Upstream 2>&1 | ForEach-Object { Log "git merge: $_" }
+            if ($LASTEXITCODE -ne 0) {
+                Log "WARNING fast-forward failed for current branch $CurrentBranch; local changes preserved"
+            }
         }
     } else {
         Log "No tracking branch configured for $CurrentBranch"
     }
 
     if ($CurrentBranch -ne "main") {
-        Log "Updating local main branch via fast-forward fetch"
-        & git fetch origin main:main 2>&1 | ForEach-Object { Log "git fetch main:main: $_" }
-        if ($LASTEXITCODE -ne 0) {
-            Log "WARNING fast-forward update of main failed (possibly non-fast-forward)"
+        if ($WorkingTreeDirty) {
+            Log "Working tree dirty; skipping local main fast-forward update"
+        } else {
+            Log "Updating local main branch via fast-forward fetch"
+            & git fetch origin main:main 2>&1 | ForEach-Object { Log "git fetch main:main: $_" }
+            if ($LASTEXITCODE -ne 0) {
+                Log "WARNING fast-forward update of main failed (possibly non-fast-forward)"
+            }
         }
     }
 
