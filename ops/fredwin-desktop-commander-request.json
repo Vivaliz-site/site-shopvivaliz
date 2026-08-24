@@ -1,4 +1,4 @@
 {
-  "action": "desktop_commander_restart",
-  "reason": "unattended recovery 2026-08-24"
+  "action": "install_or_repair",
+  "reason": "bounded unattended three-host recovery"
 }
