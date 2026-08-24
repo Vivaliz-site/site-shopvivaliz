@@ -18,8 +18,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Configure verified VM SSH
         env:
-          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
-          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
           set -Eeuo pipefail
           test -n "$VM_KEY"
@@ -35,16 +35,16 @@ jobs:
           ACTION="$(jq -r '.action // "status"' ops/vm-desktop-commander-request.json)"
           case "$ACTION" in
             status)
-              COMMAND='set -Eeuo pipefail; device=false; test -f "$HOME/.desktop-commander-device/device.json" && device=true; enabled=$(systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null || true); active=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true); mainpid=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service 2>/dev/null || true); user=$(systemctl show -p User --value shopvivaliz-desktop-commander.service 2>/dev/null || true); auth=false; test -f "$HOME/.desktop-commander-device/auth-required.cooldown" && auth=true; canonical=0; noncanonical=0; while IFS= read -r line; do test -z "$line" && continue; case "$line" in *"@wonderwhy-er/desktop-commander@0.2.47"*" remote "*"--persist-session"*) canonical=$((canonical+1));; *) noncanonical=$((noncanonical+1));; esac; done < <(pgrep -af "@wonderwhy-er/desktop-commander@.* remote" 2>/dev/null || true); printf "DEVICE_STATE_EXISTS=%s\nSERVICE_ENABLED=%s\nSERVICE_ACTIVE=%s\nSERVICE_USER=%s\nSERVICE_MAINPID=%s\nCANONICAL_AGENT_COUNT=%s\nNONCANONICAL_AGENT_COUNT=%s\nAUTH_REQUIRED=%s\n" "$device" "${enabled:-unknown}" "${active:-unknown}" "${user:-unknown}" "${mainpid:-0}" "$canonical" "$noncanonical" "$auth"'
+              COMMAND='set -Eeuo pipefail; device=false; test -f "$HOME/.desktop-commander-device/device.json" && device=true; enabled=$(systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null || true); active=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true); mainpid=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service 2>/dev/null || true); user=$(systemctl show -p User --value shopvivaliz-desktop-commander.service 2>/dev/null || true); auth=false; test -f "$HOME/.desktop-commander-device/auth-required.cooldown" && auth=true; connected=false; test -f "$HOME/.desktop-commander-device/provider-connected.marker" && connected=true; canonical=0; noncanonical=0; while IFS= read -r line; do test -z "$line" && continue; case "$line" in *"@wonderwhy-er/desktop-commander@0.2.47"*" remote "*"--persist-session"*) canonical=$((canonical+1));; *) noncanonical=$((noncanonical+1));; esac; done < <(pgrep -af "[n]pm exec @wonderwhy-er/desktop-commander@.* remote" 2>/dev/null || true); printf "DEVICE_STATE_EXISTS=%s\nSERVICE_ENABLED=%s\nSERVICE_ACTIVE=%s\nSERVICE_USER=%s\nSERVICE_MAINPID=%s\nCANONICAL_AGENT_COUNT=%s\nNONCANONICAL_AGENT_COUNT=%s\nAUTH_REQUIRED=%s\nPROVIDER_CONNECTED=%s\n" "$device" "${enabled:-unknown}" "${active:-unknown}" "${user:-unknown}" "${mainpid:-0}" "$canonical" "$noncanonical" "$auth" "$connected"'
               ;;
             install_or_repair)
               COMMAND='set -Eeuo pipefail; cd /home/ubuntu/shopvivaliz-deploy/repo; git fetch origin main >/dev/null; git merge --ff-only origin/main >/dev/null; sudo bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/install-vm-desktop-commander-service.sh'
               ;;
             restart)
-              COMMAND='set -Eeuo pipefail; sudo systemctl restart shopvivaliz-desktop-commander.service; sleep 5; systemctl is-active --quiet shopvivaliz-desktop-commander.service'
+              COMMAND='set -Eeuo pipefail; sudo systemctl restart shopvivaliz-desktop-commander.service; sleep 5; systemctl is-active --quiet shopvivaliz-desktop-commander.service || test -f "$HOME/.desktop-commander-device/auth-required.cooldown"'
               ;;
             kill_for_recovery_test)
-              COMMAND='set -Eeuo pipefail; before=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service); test "${before:-0}" -gt 1; sudo kill -9 "$before"; after=0; for i in $(seq 1 18); do sleep 5; after=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service 2>/dev/null || true); active=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true); if test "$active" = active && test "${after:-0}" -gt 1 && test "$after" != "$before"; then printf "RECOVERY_TEST=ok\nSERVICE_ACTIVE=active\n"; break; fi; done; test "${after:-0}" -gt 1; test "$after" != "$before"'
+              COMMAND='set -Eeuo pipefail; before=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service); test "${before:-0}" -gt 1; sudo kill -9 "$before"; after=0; for i in $(seq 1 18); do sleep 5; after=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service 2>/dev/null || true); active=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true); if test "$active" = active && test "${after:-0}" -gt 1 && test "$after" != "$before"; then printf "RECOVERY_TEST=ok\nSERVICE_ACTIVE=active\n"; break; fi; if test -f "$HOME/.desktop-commander-device/auth-required.cooldown"; then printf "RECOVERY_TEST=blocked_by_provider_auth\n"; exit 20; fi; done; test "${after:-0}" -gt 1; test "$after" != "$before"'
               ;;
             *) echo "Action not allowlisted: $ACTION"; exit 3 ;;
           esac
@@ -54,7 +54,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           CMD_B64="$(cat /tmp/vm-command.b64)"
-          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "VM_CMD_B64='$CMD_B64' bash -lc 'printf %s \"\$VM_CMD_B64\" | base64 -d | bash'"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "VM_CMD_B64='$CMD_B64' bash -lc 'printf %s \"\$VM_CMD_B64\" | base64 -d | bash'"
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts /tmp/vm-command.b64
