@@ -22,6 +22,8 @@ on:
       - "scripts/fredwin-desktop-commander-supervisor.ps1"
       - "scripts/vm-desktop-commander-supervisor.sh"
       - ".github/workflows/desktop-commander-24h-health.yml"
+      - "tests/desktop-commander-health-restart-contract-test.php"
+      - "tests/desktop-commander-persist-session-contract-test.php"
   workflow_dispatch:
 
 permissions:
@@ -55,6 +57,34 @@ jobs:
           install -m 700 -d ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           chmod 600 ~/.ssh/vmkey
+      - name: Restart VM supervisor when requested
+        run: |
+          set -Eeuo pipefail
+          ACTION="$(jq -r '.action // "desktop_commander_status"' ops/vm-desktop-commander-request.json)"
+          case "$ACTION" in
+            install|restart|desktop_commander_restart)
+              ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
+                set -Eeuo pipefail
+                test -f "$HOME/.desktop-commander-device/device.json"
+                rm -f "$HOME/.desktop-commander-device/auth-required.cooldown"
+                sudo systemctl daemon-reload
+                sudo systemctl enable shopvivaliz-desktop-commander.service
+                sudo systemctl restart shopvivaliz-desktop-commander.service
+                for i in $(seq 1 18); do
+                  if systemctl is-active --quiet shopvivaliz-desktop-commander.service; then
+                    echo VM_RESTART_DIAGNOSTIC=ok
+                    exit 0
+                  fi
+                  sleep 5
+                done
+                systemctl status shopvivaliz-desktop-commander.service --no-pager -l || true
+                exit 1
+              '
+              ;;
+            *)
+              echo "VM_RESTART_DIAGNOSTIC=skipped"
+              ;;
+          esac
       - name: Restart Fred-Win agent in normal relay context when requested
         run: |
           set -Eeuo pipefail
