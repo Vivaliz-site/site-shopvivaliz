@@ -24,14 +24,26 @@ if ($DeviceFile -and (Test-Path -LiteralPath $DeviceFile)) {
     $item = Get-Item -LiteralPath $DeviceFile
     Write-Output ('DEVICE_STATE_MTIME=' + $item.LastWriteTimeUtc.ToString('o'))
 }
-$processes = @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue | Where-Object { [string]$_.CommandLine -match 'desktop-commander.*remote' })
-Write-Output ('REMOTE_AGENT_COUNT=' + $processes.Count)
-if ($processes.Count -gt 0) { Write-Output ('REMOTE_AGENT_PIDS=' + (($processes.ProcessId | Sort-Object) -join ',')) }
+
+$launchers = @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue | Where-Object {
+    [string]$_.CommandLine -match '@wonderwhy-er[\\/]desktop-commander@[^\s]+.*\bremote\b'
+})
+$canonical = @($launchers | Where-Object {
+    [string]$_.CommandLine -match '@wonderwhy-er[\\/]desktop-commander@0\.2\.47.*\bremote\b.*--persist-session'
+})
+$noncanonical = @($launchers | Where-Object { $_.ProcessId -notin $canonical.ProcessId })
+Write-Output ('REMOTE_AGENT_COUNT=' + $launchers.Count)
+Write-Output ('CANONICAL_AGENT_COUNT=' + $canonical.Count)
+Write-Output ('NONCANONICAL_AGENT_COUNT=' + $noncanonical.Count)
+if ($launchers.Count -gt 0) { Write-Output ('REMOTE_AGENT_PIDS=' + (($launchers.ProcessId | Sort-Object) -join ',')) }
+
 $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 Write-Output ('TASK_EXISTS=' + [bool]$task)
 if ($task) {
     $info = Get-ScheduledTaskInfo -TaskName $TaskName -ErrorAction SilentlyContinue
     Write-Output ('TASK_STATE=' + $task.State)
+    Write-Output ('TASK_LOGON_TYPE=' + $task.Principal.LogonType)
+    Write-Output ('TASK_RUN_LEVEL=' + $task.Principal.RunLevel)
     Write-Output ('TASK_LAST_RESULT=' + $info.LastTaskResult)
     Write-Output ('TASK_LAST_RUN=' + $info.LastRunTime.ToUniversalTime().ToString('o'))
     Write-Output ('TASK_NEXT_RUN=' + $info.NextRunTime.ToUniversalTime().ToString('o'))
