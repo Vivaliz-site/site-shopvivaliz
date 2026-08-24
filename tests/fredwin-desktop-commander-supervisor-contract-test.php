@@ -35,7 +35,7 @@ foreach (['@wonderwhy-er/desktop-commander@0.2.47','remote','--persist-session',
     if (stripos($r, $needle) === false) { fwrite(STDERR, "FALHOU: runner sem {$needle}\n"); exit(1); }
 }
 $all = $s . $st . $r;
-$forbidden = ['access_token','refresh_token','auth_token','ConvertTo-SecureString','Password=','*>>','RedirectStandardOutput','RedirectStandardError','Get-Process node | Stop-Process'];
+$forbidden = ['access_token','refresh_token','auth_token','ConvertTo-SecureString','Password=','*>>','RedirectStandardOutput','RedirectStandardError','Get-Process node | Stop-Process','Stop-LauncherTree([int]$Pid)'];
 foreach ($forbidden as $needle) {
     if (stripos($all, $needle) !== false) { fwrite(STDERR, "FALHOU: segredo/log bruto proibido {$needle}\n"); exit(1); }
 }

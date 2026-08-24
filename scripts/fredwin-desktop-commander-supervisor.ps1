@@ -48,14 +48,14 @@ function Get-NonCanonicalRemoteLaunchers {
     $canonicalIds = @((Get-CanonicalRemoteLaunchers).ProcessId)
     return @(Get-DesktopCommanderRemoteLaunchers | Where-Object { $canonicalIds -notcontains $_.ProcessId })
 }
-function Stop-LauncherTree([int]$Pid) {
+function Stop-LauncherTree([int]$ProcessId) {
     try {
-        & taskkill.exe /PID $Pid /T /F 2>$null | Out-Null
-        Log ('Stopped Desktop Commander launcher tree pid=' + $Pid)
-    } catch { Log ('WARNING stop failed pid=' + $Pid) }
+        & taskkill.exe /PID $ProcessId /T /F 2>$null | Out-Null
+        Log ('Stopped Desktop Commander launcher tree pid=' + $ProcessId)
+    } catch { Log ('WARNING stop failed pid=' + $ProcessId) }
 }
 function Stop-RemoteProcesses {
-    foreach ($p in (Get-DesktopCommanderRemoteLaunchers)) { Stop-LauncherTree -Pid $p.ProcessId }
+    foreach ($p in (Get-DesktopCommanderRemoteLaunchers)) { Stop-LauncherTree -ProcessId $p.ProcessId }
 }
 function Remove-LegacyPersistence {
     foreach ($name in $LegacyTaskNames) {
