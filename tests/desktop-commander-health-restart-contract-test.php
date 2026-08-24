@@ -14,6 +14,9 @@ $required = [
     "desktop_commander_restart",
     "fredwin-desktop-commander-supervisor.ps1",
     "-Mode Restart",
+    "Restart VM supervisor when requested",
+    "ops/vm-desktop-commander-request.json",
+    "systemctl restart shopvivaliz-desktop-commander.service",
     "Verify Fred-Win supervisor through private relay",
     "status_command =",
     "AUTH_REQUIRED"
