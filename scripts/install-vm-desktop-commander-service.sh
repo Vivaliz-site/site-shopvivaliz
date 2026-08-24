@@ -10,7 +10,32 @@ ENV_TARGET='/etc/default/shopvivaliz-desktop-commander'
 LIB_DIR='/usr/local/lib/shopvivaliz'
 SUPERVISOR_TARGET="$LIB_DIR/vm-desktop-commander-supervisor.sh"
 SERVICE='shopvivaliz-desktop-commander.service'
+LEGACY_SERVICE='desktop-commander.service'
 TARGET_USER='ubuntu'
+CANONICAL_SIGNATURE='@wonderwhy-er/desktop-commander@0.2.47 remote --persist-session'
+
+kill_tree() {
+  local root="$1" child
+  while read -r child; do
+    [[ -n "$child" ]] && kill_tree "$child"
+  done < <(pgrep -P "$root" 2>/dev/null || :)
+  kill -TERM "$root" 2>/dev/null || :
+  sleep 0.2
+  kill -KILL "$root" 2>/dev/null || :
+}
+
+count_remote_roots() {
+  CANONICAL_REMOTE_COUNT=0
+  NONCANONICAL_REMOTE_COUNT=0
+  while read -r pid args; do
+    [[ -z "${pid:-}" ]] && continue
+    if [[ "$args" == *"$CANONICAL_SIGNATURE"* ]]; then
+      CANONICAL_REMOTE_COUNT=$((CANONICAL_REMOTE_COUNT + 1))
+    else
+      NONCANONICAL_REMOTE_COUNT=$((NONCANONICAL_REMOTE_COUNT + 1))
+    fi
+  done < <(pgrep -af 'npm exec @wonderwhy-er/desktop-commander@.* remote' 2>/dev/null || :)
+}
 
 if ! id "$TARGET_USER" >/dev/null 2>&1; then echo 'ERROR target user missing'; exit 2; fi
 if NODE_BIN="$(sudo -u "$TARGET_USER" -H bash -lc 'command -v node' 2>/dev/null)"; then :; else NODE_BIN=''; fi
@@ -30,15 +55,36 @@ systemctl daemon-reload
 systemctl enable "$SERVICE"
 systemctl restart "$SERVICE"
 sleep 3
+
 if SERVICE_ENABLED="$(systemctl is-enabled "$SERVICE" 2>/dev/null)"; then :; else SERVICE_ENABLED='unknown'; fi
 if SERVICE_ACTIVE="$(systemctl is-active "$SERVICE" 2>/dev/null)"; then :; else SERVICE_ACTIVE='unknown'; fi
 if SERVICE_USER="$(systemctl show -p User --value "$SERVICE" 2>/dev/null)"; then :; else SERVICE_USER='unknown'; fi
 if SERVICE_MAINPID="$(systemctl show -p MainPID --value "$SERVICE" 2>/dev/null)"; then :; else SERVICE_MAINPID='0'; fi
-printf 'SERVICE_ENABLED=%s\n' "$SERVICE_ENABLED"
-printf 'SERVICE_ACTIVE=%s\n' "$SERVICE_ACTIVE"
-printf 'SERVICE_USER=%s\n' "$SERVICE_USER"
-printf 'SERVICE_MAINPID=%s\n' "$SERVICE_MAINPID"
 [[ "$SERVICE_ENABLED" == 'enabled' ]]
 [[ "$SERVICE_ACTIVE" == 'active' ]]
 [[ "$SERVICE_USER" == "$TARGET_USER" ]]
 [[ "$SERVICE_MAINPID" =~ ^[0-9]+$ && "$SERVICE_MAINPID" -gt 1 ]]
+
+if systemctl cat "$LEGACY_SERVICE" >/dev/null 2>&1; then
+  systemctl disable --now "$LEGACY_SERVICE"
+fi
+
+while read -r pid args; do
+  [[ -z "${pid:-}" ]] && continue
+  if [[ "$args" != *"$CANONICAL_SIGNATURE"* ]]; then
+    kill_tree "$pid"
+  fi
+done < <(pgrep -af 'npm exec @wonderwhy-er/desktop-commander@.* remote' 2>/dev/null || :)
+
+sleep 2
+systemctl restart "$SERVICE"
+sleep 3
+count_remote_roots
+printf 'SERVICE_ENABLED=%s\n' "$SERVICE_ENABLED"
+printf 'SERVICE_ACTIVE=%s\n' "$SERVICE_ACTIVE"
+printf 'SERVICE_USER=%s\n' "$SERVICE_USER"
+printf 'SERVICE_MAINPID=%s\n' "$SERVICE_MAINPID"
+printf 'CANONICAL_REMOTE_COUNT=%s\n' "$CANONICAL_REMOTE_COUNT"
+printf 'NONCANONICAL_REMOTE_COUNT=%s\n' "$NONCANONICAL_REMOTE_COUNT"
+[[ "$CANONICAL_REMOTE_COUNT" -eq 1 ]]
+[[ "$NONCANONICAL_REMOTE_COUNT" -eq 0 ]]
