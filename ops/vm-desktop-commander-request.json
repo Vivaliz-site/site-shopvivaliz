@@ -1,4 +1,4 @@
 {
   "action": "install",
-  "reason": "deploy singleton VM Desktop Commander convergence and remove legacy or duplicate launchers at 2026-08-24T10:05Z"
+  "reason": "redeploy singleton VM Desktop Commander convergence with bounded startup wait at 2026-08-24T10:22Z"
 }
