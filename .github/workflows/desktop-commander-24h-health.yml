@@ -9,6 +9,8 @@ on:
       - "scripts/fredwin-desktop-commander-runner.ps1"
       - "scripts/fredwin-desktop-commander-status.ps1"
       - "scripts/fredwin-desktop-commander-supervisor.ps1"
+      - "scripts/fredwin-remote-bootstrap.ps1"
+      - "scripts/ssh-tunnel-service-managed.ps1"
       - "scripts/vm-desktop-commander-supervisor.sh"
       - "scripts/install-vm-desktop-commander-service.sh"
       - "scripts/desktopkocepsv-desktop-commander-runner.ps1"
@@ -20,6 +22,7 @@ on:
       - ".github/workflows/vm-desktop-commander-action.yml"
       - "tests/desktop-commander-health-restart-contract-test.php"
       - "tests/desktop-commander-persist-session-contract-test.php"
+      - "tests/fredwin-desktop-commander-relay-contract-test.php"
       - "tests/desktopkocepsv-desktop-commander-supervisor-contract-test.php"
       - "tests/desktopkocepsv-private-relay-contract-test.php"
       - "tests/vm-desktop-commander-service-contract-test.php"
@@ -33,6 +36,8 @@ on:
       - "scripts/fredwin-desktop-commander-runner.ps1"
       - "scripts/fredwin-desktop-commander-status.ps1"
       - "scripts/fredwin-desktop-commander-supervisor.ps1"
+      - "scripts/fredwin-remote-bootstrap.ps1"
+      - "scripts/ssh-tunnel-service-managed.ps1"
       - "scripts/vm-desktop-commander-supervisor.sh"
       - "scripts/install-vm-desktop-commander-service.sh"
       - "scripts/desktopkocepsv-desktop-commander-runner.ps1"
@@ -58,6 +63,7 @@ jobs:
           set -Eeuo pipefail
           php tests/desktop-commander-persist-session-contract-test.php
           php tests/desktop-commander-health-restart-contract-test.php
+          php tests/fredwin-desktop-commander-relay-contract-test.php
           php tests/desktopkocepsv-desktop-commander-supervisor-contract-test.php
           php tests/desktopkocepsv-private-relay-contract-test.php
           php tests/vm-desktop-commander-service-contract-test.php
