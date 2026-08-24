@@ -1,0 +1,81 @@
+name: VM Desktop Commander Connection Probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/vm-desktop-commander-connection-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Configure verified VM SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${VM_KEY:-}"; test -n "${VM_HOSTS:-}"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+      - name: Probe sanitized runtime connectivity
+        run: |
+          set -Eeuo pipefail
+          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17)
+          ${SSH[@]} 'python3 - <<'"'"'PY'"'"'
+          import os, pathlib, subprocess
+          svc="shopvivaliz-desktop-commander.service"
+          def sh(args):
+              return subprocess.run(args, text=True, capture_output=True).stdout.strip()
+          active=sh(["systemctl","is-active",svc])
+          enabled=sh(["systemctl","is-enabled",svc])
+          restarts=sh(["systemctl","show","-p","NRestarts","--value",svc]) or "0"
+          main=sh(["systemctl","show","-p","MainPID","--value",svc]) or "0"
+          auth=pathlib.Path(os.path.expanduser("~/.desktop-commander-device/auth-required.cooldown")).exists()
+          pids=set()
+          if main.isdigit() and int(main)>1:
+              pids.add(int(main))
+              changed=True
+              while changed:
+                  changed=False
+                  ps=subprocess.run(["ps","-eo","pid=,ppid="],text=True,capture_output=True).stdout
+                  for line in ps.splitlines():
+                      try: pid,ppid=map(int,line.split())
+                      except Exception: continue
+                      if ppid in pids and pid not in pids:
+                          pids.add(pid); changed=True
+          established=0
+          ss=subprocess.run(["ss","-Htnp","state","established"],text=True,capture_output=True).stdout
+          for line in ss.splitlines():
+              if any((f"pid={pid}," in line or f"pid={pid})" in line) for pid in pids):
+                  established+=1
+          print(f"VM_SERVICE={enabled}/{active}")
+          print(f"VM_AUTH_REQUIRED={str(auth).lower()}")
+          print(f"VM_RESTARTS={restarts}")
+          print(f"VM_PROCESS_TREE_COUNT={len(pids)}")
+          print(f"VM_ESTABLISHED_CONNECTIONS={established}")
+          PY' > /tmp/vm-connection-safe.txt
+      - name: Publish sanitized probe
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo '### shopvivaliz-ai runtime connection probe'
+            echo
+            echo '```text'
+            cat /tmp/vm-connection-safe.txt
+            echo '```'
+          } > /tmp/vm-connection-comment.md
+          gh issue comment 1207 --repo "${{ github.repository }}" --body-file /tmp/vm-connection-comment.md
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts" /tmp/vm-connection-safe.txt /tmp/vm-connection-comment.md
