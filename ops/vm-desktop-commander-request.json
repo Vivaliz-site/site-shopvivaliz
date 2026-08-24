@@ -1,4 +1,4 @@
 {
-  "action": "install",
-  "reason": "redeploy singleton VM Desktop Commander convergence with bounded startup wait at 2026-08-24T10:22Z"
+  "action": "status",
+  "reason": "verify post-convergence VM auth and service state at 2026-08-24T10:27Z"
 }
