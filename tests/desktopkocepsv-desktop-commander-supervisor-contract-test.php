@@ -24,11 +24,14 @@ foreach ([
     'desktop-commander-remote.vbs',
     'AUTH_REQUIRED',
     'CANONICAL_AGENT_COUNT',
-    'NONCANONICAL_AGENT_COUNT'
+    'NONCANONICAL_AGENT_COUNT',
+    'Register-ScheduledTask',
+    '-ErrorAction Stop',
+    'Stop-LauncherTree([int]$ProcessId)'
 ] as $needle) {
     if (stripos($all, $needle) === false) { fwrite(STDERR, "FALHOU: ausente {$needle}\n"); exit(1); }
 }
-foreach (['access_token','refresh_token','auth_token','Password=','Get-Process node | Stop-Process','StrictHostKeyChecking=no'] as $needle) {
+foreach (['access_token','refresh_token','auth_token','Password=','Get-Process node | Stop-Process','StrictHostKeyChecking=no','Stop-LauncherTree([int]$Pid)'] as $needle) {
     if (stripos($all, $needle) !== false) { fwrite(STDERR, "FALHOU: padrao proibido {$needle}\n"); exit(1); }
 }
 echo "desktopkocepsv-desktop-commander-supervisor-contract: ok\n";
