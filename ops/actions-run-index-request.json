@@ -1,6 +1,6 @@
 {
-  "workflow": "desktop-commander-24h-health.yml",
+  "workflow": "emergency-vm-reboot.yml",
   "limit": 10,
-  "requested_at": "2026-08-24T13:41:00Z",
-  "reason": "Recheck three-host Desktop Commander health control-plane after contract correction"
+  "requested_at": "2026-08-24T13:42:00Z",
+  "reason": "Verify whether the legacy Oracle known-hosts secret path is operational without executing a reboot"
 }
