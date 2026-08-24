@@ -1,6 +1,6 @@
 {
-  "workflow": "desktop-commander-three-host-control-plane.yml",
-  "limit": 10,
-  "requested_at": "2026-08-24T13:44:00Z",
-  "reason": "Inspect the verified three-host Desktop Commander recovery run"
+  "workflow": "fredwin-2222-secure-recovery.yml",
+  "limit": 5,
+  "requested_at": "2026-08-24T13:46:00Z",
+  "reason": "Inspect secure Fred-Win diagnostic recovery run"
 }
