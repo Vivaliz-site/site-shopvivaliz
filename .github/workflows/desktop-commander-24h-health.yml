@@ -5,35 +5,43 @@ on:
     paths:
       - "ops/fredwin-desktop-commander-request.json"
       - "ops/vm-desktop-commander-request.json"
+      - "ops/systemd/shopvivaliz-desktop-commander.service"
       - "scripts/fredwin-desktop-commander-runner.ps1"
       - "scripts/fredwin-desktop-commander-status.ps1"
       - "scripts/fredwin-desktop-commander-supervisor.ps1"
       - "scripts/vm-desktop-commander-supervisor.sh"
+      - "scripts/install-vm-desktop-commander-service.sh"
       - "scripts/desktopkocepsv-desktop-commander-runner.ps1"
       - "scripts/desktopkocepsv-desktop-commander-status.ps1"
       - "scripts/desktopkocepsv-desktop-commander-supervisor.ps1"
       - "scripts/desktopkocepsv-remote-bootstrap.ps1"
       - "scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1"
       - ".github/workflows/desktop-commander-24h-health.yml"
+      - ".github/workflows/vm-desktop-commander-action.yml"
       - "tests/desktop-commander-health-restart-contract-test.php"
       - "tests/desktop-commander-persist-session-contract-test.php"
       - "tests/desktopkocepsv-desktop-commander-supervisor-contract-test.php"
       - "tests/desktopkocepsv-private-relay-contract-test.php"
+      - "tests/vm-desktop-commander-service-contract-test.php"
+      - "tests/vm-desktop-commander-action-contract-test.php"
   push:
     branches: [main]
     paths:
       - "ops/fredwin-desktop-commander-request.json"
       - "ops/vm-desktop-commander-request.json"
+      - "ops/systemd/shopvivaliz-desktop-commander.service"
       - "scripts/fredwin-desktop-commander-runner.ps1"
       - "scripts/fredwin-desktop-commander-status.ps1"
       - "scripts/fredwin-desktop-commander-supervisor.ps1"
       - "scripts/vm-desktop-commander-supervisor.sh"
+      - "scripts/install-vm-desktop-commander-service.sh"
       - "scripts/desktopkocepsv-desktop-commander-runner.ps1"
       - "scripts/desktopkocepsv-desktop-commander-status.ps1"
       - "scripts/desktopkocepsv-desktop-commander-supervisor.ps1"
       - "scripts/desktopkocepsv-remote-bootstrap.ps1"
       - "scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1"
       - ".github/workflows/desktop-commander-24h-health.yml"
+      - ".github/workflows/vm-desktop-commander-action.yml"
   workflow_dispatch:
 
 permissions:
@@ -52,6 +60,8 @@ jobs:
           php tests/desktop-commander-health-restart-contract-test.php
           php tests/desktopkocepsv-desktop-commander-supervisor-contract-test.php
           php tests/desktopkocepsv-private-relay-contract-test.php
+          php tests/vm-desktop-commander-service-contract-test.php
+          php tests/vm-desktop-commander-action-contract-test.php
 
   runtime:
     if: github.event_name != 'pull_request'
@@ -77,7 +87,6 @@ jobs:
             ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
             import json
             import urllib.request
-
             command = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\\site-shopvivaliz\\scripts\\fredwin-desktop-commander-supervisor.ps1" -Mode Restart'
             body = json.dumps({'params': {'command': command, 'timeout': 180}}).encode('utf-8')
             req = urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command', data=body, headers={'Content-Type': 'application/json'}, method='POST')
@@ -106,7 +115,6 @@ jobs:
           import json
           import time
           import urllib.request
-
           endpoint = 'http://127.0.0.1:5557/mcp/tool/execute_command'
           status_command = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\\site-shopvivaliz\\scripts\\fredwin-desktop-commander-status.ps1"'
           last_reason = 'not checked'
