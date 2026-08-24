@@ -28,7 +28,7 @@ jobs:
       - name: Send one Graph app-only test to Gmail
         run: |
           set -euo pipefail
-          out=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 '/home/ubuntu/.shopvivaliz/bin/graph-app-only.py --send-test-to shopvivaliz@gmail.com')
+          out=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 '/home/ubuntu/.shopvivaliz/bin/graph-app-only.py --send-test-to fredmourao+dkim-proof-20260824@gmail.com')
           echo "$out" | jq -c '{status,mail_send,send_test:{status:.send_test.status}}'
           test "$(echo "$out" | jq -r '.status')" = success
           test "$(echo "$out" | jq -r '.mail_send')" = true
