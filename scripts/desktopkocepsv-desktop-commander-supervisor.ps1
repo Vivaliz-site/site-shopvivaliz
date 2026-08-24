@@ -45,12 +45,12 @@ function Get-NonCanonicalRemoteLaunchers {
     $canonicalIds = @((Get-CanonicalRemoteLaunchers).ProcessId)
     return @(Get-DesktopCommanderRemoteLaunchers | Where-Object { $canonicalIds -notcontains $_.ProcessId })
 }
-function Stop-LauncherTree([int]$Pid) {
-    try { & taskkill.exe /PID $Pid /T /F 2>$null | Out-Null; Log ('Stopped Desktop Commander launcher tree pid=' + $Pid) }
-    catch { Log ('WARNING stop failed pid=' + $Pid) }
+function Stop-LauncherTree([int]$ProcessId) {
+    try { & taskkill.exe /PID $ProcessId /T /F 2>$null | Out-Null; Log ('Stopped Desktop Commander launcher tree pid=' + $ProcessId) }
+    catch { Log ('WARNING stop failed pid=' + $ProcessId) }
 }
 function Stop-RemoteProcesses {
-    foreach ($p in (Get-DesktopCommanderRemoteLaunchers)) { Stop-LauncherTree -Pid $p.ProcessId }
+    foreach ($p in (Get-DesktopCommanderRemoteLaunchers)) { Stop-LauncherTree -ProcessId $p.ProcessId }
 }
 function Test-RecentCooldown {
     if (-not (Test-Path -LiteralPath $CooldownFile)) { return $false }
@@ -97,7 +97,7 @@ function Install-Task {
     $watchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)
     $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType S4U -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
-    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($startup,$watchdog) -Principal $principal -Settings $settings -Description 'Keeps DESKTOP-KOCEPSV Desktop Commander online without interactive logon.' -Force | Out-Null
+    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($startup,$watchdog) -Principal $principal -Settings $settings -Description 'Keeps DESKTOP-KOCEPSV Desktop Commander online without interactive logon.' -Force -ErrorAction Stop | Out-Null
     Write-Output 'TASK_INSTALLED=true'
 }
 
