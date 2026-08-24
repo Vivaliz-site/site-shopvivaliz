@@ -9,25 +9,18 @@ on:
         type: choice
         options:
           - health
-          - docker
-          - git-status
-          - mei-baseline
           - apply-checkout-migration
         default: health
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/agent-vm-readonly-diagnostics.yml'
-      - 'checkout.php'
-      - 'scripts/quality/validate-order-erp-authority.php'
-      - 'tests/admin-payment-notification-idempotency-test.php'
+  issues:
+    types: [opened]
 
 permissions:
   contents: write
+  issues: read
 
 jobs:
   migration-route:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.issue.title, '[run-vm-checkout-migration]')
     runs-on: ubuntu-latest
     environment: Production
     timeout-minutes: 12
@@ -47,9 +40,9 @@ jobs:
           test -n "$VM_USER"
           case "$VM_HOST" in *[!A-Za-z0-9_.:-]*|'') echo "Invalid VM host" >&2; exit 1;; esac
           case "$VM_USER" in *[!A-Za-z0-9_.-]*|'') echo "Invalid VM user" >&2; exit 1;; esac
-          case "$MODE" in health|docker|git-status|mei-baseline|apply-checkout-migration) ;; *) echo "Invalid mode" >&2; exit 1;; esac
+          case "$MODE" in health|apply-checkout-migration) ;; *) echo "Invalid mode" >&2; exit 1;; esac
 
-      - name: Patch checkout in repository when requested
+      - name: Patch checkout in repository
         if: env.MODE == 'apply-checkout-migration'
         run: |
           set -Eeuo pipefail
@@ -106,25 +99,11 @@ jobs:
       - name: Run VM route
         run: |
           set -Eeuo pipefail
-          ssh_opts=(
-            -o BatchMode=yes
-            -o ConnectTimeout=10
-            -o ServerAliveInterval=15
-            -o ServerAliveCountMax=2
-            -o StrictHostKeyChecking=yes
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
-            -i "$HOME/.ssh/id_rsa"
-          )
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=2 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa")
           remote_script=$(mktemp)
           cat > "$remote_script" <<'REMOTE'
           set -Eeuo pipefail
           mode="$1"
-          redact() {
-            sed -E \
-              -e 's#(postgres|mysql|mariadb)://[^[:space:]]+#<REDACTED_DB_URL>#g' \
-              -e 's#(password|passwd|pwd|token|secret|key)=([^[:space:]]+)#\1=<REDACTED>#Ig' \
-              -e 's#Bearer[[:space:]]+[A-Za-z0-9._~+/-]+=*#Bearer <REDACTED>#g'
-          }
           patch_checkout() {
             target="$1"
             [ -f "$target" ] || { echo "missing=$target"; return 1; }
@@ -149,40 +128,24 @@ jobs:
               raise SystemExit('guard missing in submit')
           print(s, end='')
           PY
-            if cmp -s "$target" "$tmp"; then
-              echo "unchanged=$target"
-            elif [ -w "$target" ]; then
-              cat "$tmp" > "$target"
-              echo "patched=$target"
-            else
-              sudo cp "$tmp" "$target"
-              echo "patched=$target"
-            fi
+            if cmp -s "$target" "$tmp"; then echo "unchanged=$target"; else sudo cp "$tmp" "$target"; echo "patched=$target"; fi
             rm -f "$tmp"
             php -l "$target"
           }
-          case "$mode" in
-            health)
-              { echo "MODE=health"; uptime || true; df -h / || true; free -h || true; } | redact ;;
-            docker)
-              { echo "MODE=docker"; command -v docker >/dev/null 2>&1 && sudo docker ps -a --format '{{.Image}}|{{.Names}}|{{.Status}}' || echo docker=unavailable; } | redact ;;
-            git-status)
-              { echo "MODE=git-status"; for dir in /home/ubuntu/shopvivaliz-deploy/repo /var/www/shopvivaliz /home/ubuntu/shopvivaliz; do [ -d "$dir/.git" ] && { echo "repo=$dir"; git -C "$dir" rev-parse --short HEAD; git -C "$dir" status --porcelain=v1 | sed -E 's#^#status=#'; }; done; } | redact ;;
-            mei-baseline)
-              { echo "MODE=mei-baseline"; systemctl is-active mei-mg-email-worker.service 2>/dev/null | sed 's/^/worker=/' || true; systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null | sed 's/^/autorepair=/' || true; } | redact ;;
-            apply-checkout-migration)
-              echo "MODE=apply-checkout-migration"
-              cd /home/ubuntu/shopvivaliz-deploy/repo
-              git fetch origin main
-              git reset --hard origin/main
-              patch_checkout /home/ubuntu/shopvivaliz-deploy/repo/checkout.php
-              php scripts/quality/validate-order-erp-authority.php
-              current=$(readlink -f /home/ubuntu/shopvivaliz-deploy/current)
-              patch_checkout "$current/checkout.php"
-              php /home/ubuntu/shopvivaliz-deploy/current/scripts/quality/validate-order-erp-authority.php || true
-              sudo apache2ctl configtest
-              sudo systemctl reload apache2
-              python3 - <<'PY'
+          if [ "$mode" = health ]; then
+            echo "MODE=health"; uptime; df -h /; free -h; exit 0
+          fi
+          echo "MODE=apply-checkout-migration"
+          cd /home/ubuntu/shopvivaliz-deploy/repo
+          git fetch origin main
+          git reset --hard origin/main
+          patch_checkout /home/ubuntu/shopvivaliz-deploy/repo/checkout.php
+          php scripts/quality/validate-order-erp-authority.php
+          current=$(readlink -f /home/ubuntu/shopvivaliz-deploy/current)
+          patch_checkout "$current/checkout.php"
+          sudo apache2ctl configtest
+          sudo systemctl reload apache2
+          python3 - <<'PY'
           import ssl, urllib.request
           ctx = ssl._create_unverified_context()
           for url in ['https://shopvivaliz.com.br/api/health.php', 'https://shopvivaliz.com.br/checkout.php']:
@@ -190,23 +153,11 @@ jobs:
                   data = r.read().decode('utf-8', 'ignore')
               print(url.rsplit('/',1)[-1], 'code', r.status, 'size', len(data), 'gateway_msg', 'Pagamento online temporariamente indisponível' in data)
           PY
-              ;;
-          esac
           REMOTE
           output=$(ssh "${ssh_opts[@]}" "$VM_USER@$VM_HOST" 'bash -s -- "$1"' _ "$MODE" < "$remote_script")
-          {
-            echo "## Agent VM route"
-            echo
-            echo "Mode: \`$MODE\`"
-            echo
-            echo '```text'
-            printf '%s\n' "$output"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
           printf '%s\n' "$output"
+          { echo "## Agent VM route"; echo; echo '```text'; printf '%s\n' "$output"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Cleanup SSH material
         if: always()
-        run: |
-          set -Eeuo pipefail
-          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
