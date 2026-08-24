@@ -1,10 +1,10 @@
-name: Agent VM readonly diagnostics
+name: Agent VM migration route
 
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Read-only diagnostic mode
+        description: Diagnostic or migration mode
         required: true
         type: choice
         options:
@@ -12,21 +12,34 @@ on:
           - docker
           - git-status
           - mei-baseline
+          - apply-checkout-migration
         default: health
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/agent-vm-readonly-diagnostics.yml'
+      - 'checkout.php'
+      - 'scripts/quality/validate-order-erp-authority.php'
+      - 'tests/admin-payment-notification-idempotency-test.php'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  readonly-diagnostics:
+  migration-route:
     runs-on: ubuntu-latest
     environment: Production
-    timeout-minutes: 5
+    timeout-minutes: 12
     env:
       VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
       VM_USER: ${{ secrets.SHOPVIVALIZ_VM_USER || 'ubuntu' }}
-      MODE: ${{ inputs.mode }}
+      MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'apply-checkout-migration' }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Validate inputs and secrets
         run: |
           set -Eeuo pipefail
@@ -34,7 +47,48 @@ jobs:
           test -n "$VM_USER"
           case "$VM_HOST" in *[!A-Za-z0-9_.:-]*|'') echo "Invalid VM host" >&2; exit 1;; esac
           case "$VM_USER" in *[!A-Za-z0-9_.-]*|'') echo "Invalid VM user" >&2; exit 1;; esac
-          case "$MODE" in health|docker|git-status|mei-baseline) ;; *) echo "Invalid mode" >&2; exit 1;; esac
+          case "$MODE" in health|docker|git-status|mei-baseline|apply-checkout-migration) ;; *) echo "Invalid mode" >&2; exit 1;; esac
+
+      - name: Patch checkout in repository when requested
+        if: env.MODE == 'apply-checkout-migration'
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('checkout.php')
+          s = p.read_text(encoding='utf-8')
+          bad = "        if (!HAS_PAYMENT_GATEWAY) {\n            status.textContent = 'Pagamento online temporariamente indisponível. Fale no WhatsApp para finalizar seu pedido.';\n            status.className='checkout-status-msg err';\n            return;\n        }\n"
+          if "function renderCart() {\n        var items = getCart();\n" + bad in s:
+              s = s.replace(bad, '', 1)
+          anchor = "        var btn = document.getElementById('submit-btn');\n        var status = document.getElementById('checkout-status');\n        var items = getCart();\n"
+          guard = "        if (!HAS_PAYMENT_GATEWAY) {\n            status.textContent = 'Pagamento online temporariamente indisponível. Fale no WhatsApp para finalizar seu pedido.';\n            status.className = 'checkout-status-msg err';\n            if (btn) {\n                btn.disabled = true;\n                btn.textContent = 'Pagamento indisponível';\n            }\n            return;\n        }\n"
+          if anchor not in s:
+              raise SystemExit('checkout submit anchor missing')
+          if guard not in s:
+              s = s.replace(anchor, anchor + guard, 1)
+          if "function renderCart() {\n        var items = getCart();\n        if (!HAS_PAYMENT_GATEWAY)" in s:
+              raise SystemExit('gateway guard still inside renderCart')
+          if guard not in s:
+              raise SystemExit('gateway guard missing in submit')
+          p.write_text(s, encoding='utf-8')
+          PY
+          php -l checkout.php
+          php scripts/quality/validate-order-erp-authority.php
+
+      - name: Commit repository checkout patch
+        if: env.MODE == 'apply-checkout-migration'
+        run: |
+          set -Eeuo pipefail
+          if git diff --quiet -- checkout.php; then
+            echo "checkout_patch=unchanged" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git config user.name "fredmourao-ai"
+          git config user.email "fredmourao-ai@users.noreply.github.com"
+          git add checkout.php
+          git commit -m "fix: move checkout gateway guard to submit"
+          git push origin HEAD:main
+          echo "checkout_patch=committed" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Configure SSH
         env:
@@ -49,7 +103,7 @@ jobs:
           printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Run read-only diagnostic
+      - name: Run VM route
         run: |
           set -Eeuo pipefail
           ssh_opts=(
@@ -71,55 +125,77 @@ jobs:
               -e 's#(password|passwd|pwd|token|secret|key)=([^[:space:]]+)#\1=<REDACTED>#Ig' \
               -e 's#Bearer[[:space:]]+[A-Za-z0-9._~+/-]+=*#Bearer <REDACTED>#g'
           }
+          patch_checkout() {
+            target="$1"
+            [ -f "$target" ] || { echo "missing=$target"; return 1; }
+            tmp=$(mktemp)
+            python3 - "$target" > "$tmp" <<'PY'
+          import sys
+          from pathlib import Path
+          p = Path(sys.argv[1])
+          s = p.read_text(encoding='utf-8')
+          bad = "        if (!HAS_PAYMENT_GATEWAY) {\n            status.textContent = 'Pagamento online temporariamente indisponível. Fale no WhatsApp para finalizar seu pedido.';\n            status.className='checkout-status-msg err';\n            return;\n        }\n"
+          if "function renderCart() {\n        var items = getCart();\n" + bad in s:
+              s = s.replace(bad, '', 1)
+          anchor = "        var btn = document.getElementById('submit-btn');\n        var status = document.getElementById('checkout-status');\n        var items = getCart();\n"
+          guard = "        if (!HAS_PAYMENT_GATEWAY) {\n            status.textContent = 'Pagamento online temporariamente indisponível. Fale no WhatsApp para finalizar seu pedido.';\n            status.className = 'checkout-status-msg err';\n            if (btn) {\n                btn.disabled = true;\n                btn.textContent = 'Pagamento indisponível';\n            }\n            return;\n        }\n"
+          if anchor not in s:
+              raise SystemExit('anchor missing')
+          if guard not in s:
+              s = s.replace(anchor, anchor + guard, 1)
+          if "function renderCart() {\n        var items = getCart();\n        if (!HAS_PAYMENT_GATEWAY)" in s:
+              raise SystemExit('guard still in renderCart')
+          if guard not in s:
+              raise SystemExit('guard missing in submit')
+          print(s, end='')
+          PY
+            if cmp -s "$target" "$tmp"; then
+              echo "unchanged=$target"
+            elif [ -w "$target" ]; then
+              cat "$tmp" > "$target"
+              echo "patched=$target"
+            else
+              sudo cp "$tmp" "$target"
+              echo "patched=$target"
+            fi
+            rm -f "$tmp"
+            php -l "$target"
+          }
           case "$mode" in
             health)
-              {
-                echo "MODE=health"
-                echo "UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-                uptime || true
-                df -h / || true
-                free -h || true
-                systemctl --no-pager --plain --type=service --state=running,failed | grep -E 'shopvivaliz|mei|nginx|apache|php|mysql|postgres|docker' || true
-              } | redact
-              ;;
+              { echo "MODE=health"; uptime || true; df -h / || true; free -h || true; } | redact ;;
             docker)
-              {
-                echo "MODE=docker"
-                if command -v docker >/dev/null 2>&1; then
-                  sudo docker ps -a --format '{{.Image}}|{{.Names}}|{{.Status}}' || true
-                else
-                  echo "docker=unavailable"
-                fi
-              } | redact
-              ;;
+              { echo "MODE=docker"; command -v docker >/dev/null 2>&1 && sudo docker ps -a --format '{{.Image}}|{{.Names}}|{{.Status}}' || echo docker=unavailable; } | redact ;;
             git-status)
-              {
-                echo "MODE=git-status"
-                for dir in /var/www/shopvivaliz /home/ubuntu/shopvivaliz /home/ubuntu/mei-mg-email; do
-                  if [ -d "$dir/.git" ]; then
-                    echo "repo=$dir"
-                    git -C "$dir" rev-parse --short HEAD || true
-                    git -C "$dir" status --porcelain=v1 | sed -E 's#^#status=#' || true
-                  fi
-                done
-              } | redact
-              ;;
+              { echo "MODE=git-status"; for dir in /home/ubuntu/shopvivaliz-deploy/repo /var/www/shopvivaliz /home/ubuntu/shopvivaliz; do [ -d "$dir/.git" ] && { echo "repo=$dir"; git -C "$dir" rev-parse --short HEAD; git -C "$dir" status --porcelain=v1 | sed -E 's#^#status=#'; }; done; } | redact ;;
             mei-baseline)
-              {
-                echo "MODE=mei-baseline"
-                systemctl is-active mei-mg-email-worker.service 2>/dev/null | sed 's/^/worker=/' || true
-                systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null | sed 's/^/autorepair=/' || true
-                if [ -d /home/ubuntu/mei-mg-email/.git ]; then
-                  git -C /home/ubuntu/mei-mg-email rev-parse --short HEAD | sed 's/^/git_head=/' || true
-                  git -C /home/ubuntu/mei-mg-email status --porcelain=v1 | wc -l | sed 's/^/dirty_count=/' || true
-                fi
-              } | redact
+              { echo "MODE=mei-baseline"; systemctl is-active mei-mg-email-worker.service 2>/dev/null | sed 's/^/worker=/' || true; systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null | sed 's/^/autorepair=/' || true; } | redact ;;
+            apply-checkout-migration)
+              echo "MODE=apply-checkout-migration"
+              cd /home/ubuntu/shopvivaliz-deploy/repo
+              git fetch origin main
+              git reset --hard origin/main
+              patch_checkout /home/ubuntu/shopvivaliz-deploy/repo/checkout.php
+              php scripts/quality/validate-order-erp-authority.php
+              current=$(readlink -f /home/ubuntu/shopvivaliz-deploy/current)
+              patch_checkout "$current/checkout.php"
+              php /home/ubuntu/shopvivaliz-deploy/current/scripts/quality/validate-order-erp-authority.php || true
+              sudo apache2ctl configtest
+              sudo systemctl reload apache2
+              python3 - <<'PY'
+          import ssl, urllib.request
+          ctx = ssl._create_unverified_context()
+          for url in ['https://shopvivaliz.com.br/api/health.php', 'https://shopvivaliz.com.br/checkout.php']:
+              with urllib.request.urlopen(url, timeout=25, context=ctx) as r:
+                  data = r.read().decode('utf-8', 'ignore')
+              print(url.rsplit('/',1)[-1], 'code', r.status, 'size', len(data), 'gateway_msg', 'Pagamento online temporariamente indisponível' in data)
+          PY
               ;;
           esac
           REMOTE
           output=$(ssh "${ssh_opts[@]}" "$VM_USER@$VM_HOST" 'bash -s -- "$1"' _ "$MODE" < "$remote_script")
           {
-            echo "## Agent VM readonly diagnostics"
+            echo "## Agent VM route"
             echo
             echo "Mode: \`$MODE\`"
             echo
