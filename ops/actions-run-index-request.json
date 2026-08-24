@@ -1,6 +1,6 @@
 {
-  "workflow": "emergency-vm-reboot.yml",
+  "workflow": "desktop-commander-three-host-control-plane.yml",
   "limit": 10,
-  "requested_at": "2026-08-24T13:42:00Z",
-  "reason": "Verify whether the legacy Oracle known-hosts secret path is operational without executing a reboot"
+  "requested_at": "2026-08-24T13:44:00Z",
+  "reason": "Inspect the verified three-host Desktop Commander recovery run"
 }
