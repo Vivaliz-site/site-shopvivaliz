@@ -1,4 +1,4 @@
 {
-  "action": "authorize",
-  "reason": "generate fresh mobile authorization for VM Desktop Commander 2026-08-24T10:12-03:00"
+  "action": "install_or_repair",
+  "reason": "bounded unattended three-host recovery without provider reauthorization"
 }
