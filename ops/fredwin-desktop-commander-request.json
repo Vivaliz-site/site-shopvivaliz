@@ -1,4 +1,4 @@
 {
-  "action": "desktop_commander_status",
-  "reason": "diagnose Fred-Win Desktop Commander through the private relay before recovery at 2026-08-24T09:53Z"
+  "action": "desktop_commander_restart",
+  "reason": "recover Fred-Win Desktop Commander through the private relay at 2026-08-24T09:54Z"
 }
