@@ -1,4 +1,4 @@
 {
-  "action": "desktop_commander_restart",
-  "reason": "force direct VM Desktop Commander restart for Search Console remediation at 2026-08-24T12:04Z"
+  "action": "restart",
+  "reason": "restore direct VM Desktop Commander for Search Console remediation at 2026-08-24T12:06Z"
 }
