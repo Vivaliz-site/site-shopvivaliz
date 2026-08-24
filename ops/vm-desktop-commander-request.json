@@ -1,4 +1,4 @@
 {
-  "action": "recover_session",
-  "reason": "recover persistent VM Desktop Commander session for direct Search Console remediation at 2026-08-24T12:08Z"
+  "action": "status",
+  "reason": "capture sanitized VM Desktop Commander status for direct Search Console remediation at 2026-08-24T12:12Z"
 }
