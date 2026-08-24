@@ -1,0 +1,79 @@
+name: DESKTOP-KOCEPSV Desktop Commander 24h Action
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ops/desktopkocepsv-desktop-commander-request.json"
+
+permissions:
+  contents: read
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure verified VM SSH
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key"
+          test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+      - name: Resolve allowlisted action
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ACTION="$(jq -r '.action // "status"' ops/desktopkocepsv-desktop-commander-request.json)"
+          case "$ACTION" in
+            status)
+              COMMAND='powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\site-shopvivaliz\scripts\desktopkocepsv-desktop-commander-status.ps1"'
+              ;;
+            install_or_repair)
+              COMMAND="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"& { \$ErrorActionPreference='Stop'; Set-Location 'C:\site-shopvivaliz'; git fetch origin main; if (\$LASTEXITCODE -ne 0) { throw 'git fetch failed' }; git merge --ff-only origin/main; if (\$LASTEXITCODE -ne 0) { throw 'git ff-only sync failed' }; & 'C:\site-shopvivaliz\scripts\desktopkocepsv-remote-bootstrap.ps1' -Mode InstallTask; & 'C:\site-shopvivaliz\scripts\desktopkocepsv-desktop-commander-supervisor.ps1' -Mode InstallTask }\""
+              ;;
+            restart)
+              COMMAND='powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\site-shopvivaliz\scripts\desktopkocepsv-desktop-commander-supervisor.ps1" -Mode Restart'
+              ;;
+            kill_for_recovery_test)
+              COMMAND='powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\site-shopvivaliz\scripts\desktopkocepsv-desktop-commander-supervisor.ps1" -Mode KillForRecoveryTest'
+              ;;
+            *) echo "Action not allowlisted: $ACTION"; exit 3 ;;
+          esac
+          printf '%s' "$COMMAND" | base64 -w0 > /tmp/desktopkocepsv-command.b64
+      - name: Check private relay
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17 'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5558/health'
+      - name: Execute fixed DESKTOP-KOCEPSV action
+        run: |
+          set -Eeuo pipefail
+          CMD_B64="$(cat /tmp/desktopkocepsv-command.b64)"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17 "DESKTOP_CMD_B64='$CMD_B64' python3 - <<'PY'
+          import base64, json, os, urllib.request
+          command = base64.b64decode(os.environ['DESKTOP_CMD_B64']).decode('utf-8')
+          body = json.dumps({'params': {'command': command, 'timeout': 180}}).encode('utf-8')
+          req = urllib.request.Request('http://127.0.0.1:5558/mcp/tool/execute_command', data=body, headers={'Content-Type':'application/json'}, method='POST')
+          with urllib.request.urlopen(req, timeout=190) as response:
+              payload = json.loads(response.read().decode('utf-8'))
+          result = payload.get('result') or {}
+          output = str(result.get('output') or '')
+          safe_prefixes = ('USER=','DEVICE_STATE_EXISTS=','DEVICE_STATE_MTIME=','REMOTE_AGENT_COUNT=','CANONICAL_AGENT_COUNT=','NONCANONICAL_AGENT_COUNT=','REMOTE_AGENT_PIDS=','TASK_EXISTS=','TASK_STATE=','TASK_LOGON_TYPE=','TASK_RUN_LEVEL=','TASK_LAST_RESULT=','AUTH_REQUIRED=','REMOTE_AGENT_RUNNING=','TASK_INSTALLED=','DESKTOP_KOCEPSV_RELAY_LOCAL_HEALTH=')
+          print('\n'.join(line for line in output.splitlines() if line.startswith(safe_prefixes)))
+          if result.get('success') is not True:
+              raise SystemExit('DESKTOP-KOCEPSV action failed')
+          PY"
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts" /tmp/desktopkocepsv-command.b64
