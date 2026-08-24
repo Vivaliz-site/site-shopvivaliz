@@ -37,6 +37,7 @@ function Start-FredWinMcp {
 function Get-ManagedSsh {
     return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
         $_.Name -eq 'ssh.exe' -and
+        ([string]$_.CommandLine -like '*-R*2222:127.0.0.1:22*') -and
         ([string]$_.CommandLine -like '*-R*5557:127.0.0.1:5557*') -and
         ([string]$_.CommandLine -like '*StrictHostKeyChecking=yes*') -and
         ([string]$_.CommandLine -like '*UserKnownHostsFile=*')
@@ -44,7 +45,7 @@ function Get-ManagedSsh {
 }
 function Stop-ManagedTunnel {
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-        (($_.Name -eq 'ssh.exe') -and ([string]$_.CommandLine -like '*-R*5557:127.0.0.1:5557*')) -or
+        (($_.Name -eq 'ssh.exe') -and (([string]$_.CommandLine -like '*-R*5557:127.0.0.1:5557*') -or ([string]$_.CommandLine -like '*-R*2222:127.0.0.1:22*'))) -or
         ((($_.Name -eq 'powershell.exe') -or ($_.Name -eq 'pwsh.exe')) -and ([string]$_.CommandLine -like '*ssh-tunnel-service-managed.ps1*'))
     } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop } catch { } }
     Start-Sleep -Seconds 2
@@ -71,7 +72,7 @@ function Install-Task {
     $watchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)
     $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType S4U -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
-    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($startup,$watchdog) -Principal $principal -Settings $settings -Description 'Keeps the Fred-Win loopback maintenance relay available without interactive logon.' -Force | Out-Null
+    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($startup,$watchdog) -Principal $principal -Settings $settings -Description 'Keeps the Fred-Win private loopback maintenance relay and diagnostic SSH forward available without interactive logon.' -Force | Out-Null
     Write-Output 'RELAY_TASK_INSTALLED=true'
 }
 
