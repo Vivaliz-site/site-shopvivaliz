@@ -13,11 +13,45 @@ function voea_read(string $root, string $rel, array &$failures): string {
     return (string)file_get_contents($path);
 }
 
+function voea_apply_checkout_gateway_guard(string $root, array &$failures): void {
+    $path = $root . '/checkout.php';
+    if (!is_file($path)) {
+        $failures[] = 'checkout.php missing';
+        return;
+    }
+    $text = (string)file_get_contents($path);
+    $bad = "        if (!HAS_PAYMENT_GATEWAY) {\n            status.textContent = 'Pagamento online temporariamente indisponível. Fale no WhatsApp para finalizar seu pedido.';\n            status.className='checkout-status-msg err';\n            return;\n        }\n";
+    if (str_contains($text, "function renderCart() {\n        var items = getCart();\n" . $bad)) {
+        $text = str_replace($bad, '', $text);
+    }
+    $anchor = "        var btn = document.getElementById('submit-btn');\n        var status = document.getElementById('checkout-status');\n        var items = getCart();\n";
+    $guard = "        if (!HAS_PAYMENT_GATEWAY) {\n            status.textContent = 'Pagamento online temporariamente indisponível. Fale no WhatsApp para finalizar seu pedido.';\n            status.className = 'checkout-status-msg err';\n            if (btn) {\n                btn.disabled = true;\n                btn.textContent = 'Pagamento indisponível';\n            }\n            return;\n        }\n";
+    if (!str_contains($text, $anchor)) {
+        $failures[] = 'checkout submit anchor missing for gateway guard migration';
+        return;
+    }
+    if (!str_contains($text, $guard)) {
+        $text = str_replace($anchor, $anchor . $guard, $text);
+    }
+    if (str_contains($text, "function renderCart() {\n        var items = getCart();\n        if (!HAS_PAYMENT_GATEWAY)")) {
+        $failures[] = 'checkout gateway guard still inside renderCart';
+        return;
+    }
+    if (!str_contains($text, $guard)) {
+        $failures[] = 'checkout submit gateway guard missing after migration';
+        return;
+    }
+    file_put_contents($path, $text);
+}
+
+voea_apply_checkout_gateway_guard($root, $failures);
+
 $orderPush = voea_read($root, 'includes/tiny-order-push.php', $failures);
 $dispatcher = voea_read($root, 'includes/webhook-job-dispatcher.php', $failures);
 $nfWebhook = voea_read($root, 'api/webhooks/tiny-nota-fiscal.php', $failures);
 $createV2 = voea_read($root, 'api/orders/create-v2.php', $failures);
 $processValidated = voea_read($root, 'api/orders/process-validated.php', $failures);
+$checkout = voea_read($root, 'checkout.php', $failures);
 
 foreach ([
     'includes/tiny-order-push.php' => $orderPush,
@@ -67,14 +101,16 @@ foreach (['tiny_v3_canonical_after_payment_approval', 'payment_webhook_mirror'] 
         $failures[] = "payment dispatcher must mark ERP/local authority: $needle";
     }
 }
+if (str_contains($checkout, "function renderCart() {\n        var items = getCart();\n        if (!HAS_PAYMENT_GATEWAY)")) {
+    $failures[] = 'checkout gateway guard must not run inside renderCart';
+}
+if (!str_contains($checkout, "if (!HAS_PAYMENT_GATEWAY) {\n            status.textContent = 'Pagamento online temporariamente indisponível.")) {
+    $failures[] = 'checkout submit must fail closed when no payment gateway is configured';
+}
 
 if ($failures !== []) {
-    fwrite(STDERR, "Order ERP authority validation failed:
-- " . implode("
-- ", $failures) . "
-");
+    fwrite(STDERR, "Order ERP authority validation failed:\n- " . implode("\n- ", $failures) . "\n");
     exit(1);
 }
 
-echo "order-erp-authority: ok
-";
+echo "order-erp-authority: ok\n";
