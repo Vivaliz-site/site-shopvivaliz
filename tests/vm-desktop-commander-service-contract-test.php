@@ -26,6 +26,7 @@ foreach ([
     'LEGACY_SERVICE=', 'desktop-commander.service', 'disable --now',
     'kill_tree', 'CANONICAL_REMOTE_COUNT', 'NONCANONICAL_REMOTE_COUNT',
     '@wonderwhy-er/desktop-commander@0.2.47 remote --persist-session',
+    'for attempt in {1..12}', 'sleep 5',
     'is-enabled', 'is-active'
 ] as $needle) {
     if (strpos($installer, $needle) === false) { fwrite(STDERR, "FALHOU: installer sem {$needle}\n"); exit(1); }
