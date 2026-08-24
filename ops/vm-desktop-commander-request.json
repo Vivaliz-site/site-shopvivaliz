@@ -1,4 +1,4 @@
 {
-  "action": "authorize",
-  "reason": "one-time provider authorization required to restore direct VM Desktop Commander for Search Console remediation"
+  "action": "read_auth",
+  "reason": "complete VM recovery"
 }
