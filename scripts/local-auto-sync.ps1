@@ -1,7 +1,7 @@
 # ShopVivaliz Windows local auto-sync.
 # Intended for the existing Task Scheduler entry at C:\site-shopvivaliz\scripts\local-auto-sync.ps1.
 # Updates main with fast-forward only, enforces the Graph-only email guard, and then
-# repairs the private Fred-Win remote path and canonical Desktop Commander persistence.
+# ensures the private Fred-Win remote path and canonical Desktop Commander stay healthy.
 
 $ErrorActionPreference = "Continue"
 $Repo = "C:\site-shopvivaliz"
@@ -65,8 +65,8 @@ try {
     else { Log "SMTP guard not present yet" }
 
     if (Test-Path $DesktopCommanderSupervisor) {
-        Log "Repairing canonical Fred-Win Desktop Commander task"
-        & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $DesktopCommanderSupervisor -Mode InstallTask 2>&1 |
+        Log "Ensuring canonical Fred-Win Desktop Commander remains healthy"
+        & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $DesktopCommanderSupervisor -Mode Ensure 2>&1 |
             ForEach-Object { Log "desktop-commander: $_" }
         if ($LASTEXITCODE -ne 0) { Log "WARNING Desktop Commander supervisor exit=$LASTEXITCODE" }
     }
