@@ -13,20 +13,37 @@ if (-not $env:LOCALAPPDATA -and $env:USERPROFILE) { $env:LOCALAPPDATA = Join-Pat
 $DeviceFile = if ($env:USERPROFILE) { Join-Path (Join-Path $env:USERPROFILE '.desktop-commander-device') 'device.json' } else { $null }
 $CooldownFile = 'C:\site-shopvivaliz\logs\desktop-commander-auth-required.cooldown'
 
+function Get-DesktopCommanderRemoteLaunchers {
+    return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+        $cmd = [string]$_.CommandLine
+        $cmd -match '@wonderwhy-er/desktop-commander@[^ ]+.*\bremote\b'
+    })
+}
+function Get-CanonicalRemoteLaunchers {
+    return @(Get-DesktopCommanderRemoteLaunchers | Where-Object {
+        $cmd = [string]$_.CommandLine
+        $cmd -match '@wonderwhy-er/desktop-commander@0\.2\.47.*\bremote\b.*--persist-session'
+    })
+}
+function Get-NonCanonicalRemoteLaunchers {
+    $canonicalIds = @((Get-CanonicalRemoteLaunchers).ProcessId)
+    return @(Get-DesktopCommanderRemoteLaunchers | Where-Object { $canonicalIds -notcontains $_.ProcessId })
+}
+
 Write-Output ('USER=' + [System.Security.Principal.WindowsIdentity]::GetCurrent().Name)
 Write-Output ('USERPROFILE=' + $env:USERPROFILE)
 Write-Output ('APPDATA=' + $env:APPDATA)
 Write-Output ('LOCALAPPDATA=' + $env:LOCALAPPDATA)
-Write-Output ('NODE=' + ((Get-Command node -ErrorAction SilentlyContinue).Source))
-Write-Output ('NPX=' + ((Get-Command npx -ErrorAction SilentlyContinue).Source))
 Write-Output ('DEVICE_STATE_EXISTS=' + [bool]($DeviceFile -and (Test-Path -LiteralPath $DeviceFile)))
 if ($DeviceFile -and (Test-Path -LiteralPath $DeviceFile)) {
     $item = Get-Item -LiteralPath $DeviceFile
     Write-Output ('DEVICE_STATE_MTIME=' + $item.LastWriteTimeUtc.ToString('o'))
 }
-$processes = @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue | Where-Object { [string]$_.CommandLine -match 'desktop-commander.*remote' })
-Write-Output ('REMOTE_AGENT_COUNT=' + $processes.Count)
-if ($processes.Count -gt 0) { Write-Output ('REMOTE_AGENT_PIDS=' + (($processes.ProcessId | Sort-Object) -join ',')) }
+$canonical = Get-CanonicalRemoteLaunchers
+$noncanonical = Get-NonCanonicalRemoteLaunchers
+Write-Output ('CANONICAL_AGENT_COUNT=' + $canonical.Count)
+Write-Output ('NONCANONICAL_AGENT_COUNT=' + $noncanonical.Count)
+if ($canonical.Count -gt 0) { Write-Output ('CANONICAL_AGENT_PIDS=' + (($canonical.ProcessId | Sort-Object) -join ',')) }
 $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 Write-Output ('TASK_EXISTS=' + [bool]$task)
 if ($task) {
@@ -35,6 +52,8 @@ if ($task) {
     Write-Output ('TASK_LAST_RESULT=' + $info.LastTaskResult)
     Write-Output ('TASK_LAST_RUN=' + $info.LastRunTime.ToUniversalTime().ToString('o'))
     Write-Output ('TASK_NEXT_RUN=' + $info.NextRunTime.ToUniversalTime().ToString('o'))
+    Write-Output ('TASK_LOGON_TYPE=' + $task.Principal.LogonType)
+    Write-Output ('TASK_RUN_LEVEL=' + $task.Principal.RunLevel)
 }
 $authRequired = (Test-Path -LiteralPath $CooldownFile)
 Write-Output ('AUTH_REQUIRED=' + $authRequired)
