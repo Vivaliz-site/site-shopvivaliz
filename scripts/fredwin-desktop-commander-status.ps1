@@ -19,15 +19,28 @@ function Get-DesktopCommanderRemoteLaunchers {
         $cmd -match '@wonderwhy-er/desktop-commander@[^ ]+.*\bremote\b'
     })
 }
+function Get-LauncherRoots([object[]]$Launchers) {
+    $items = @($Launchers)
+    if ($items.Count -le 1) { return $items }
+    $ids = @($items | ForEach-Object { [int]$_.ProcessId })
+    return @($items | Where-Object { $ids -notcontains [int]$_.ParentProcessId })
+}
 function Get-CanonicalRemoteLaunchers {
-    return @(Get-DesktopCommanderRemoteLaunchers | Where-Object {
+    $matches = @(Get-DesktopCommanderRemoteLaunchers | Where-Object {
         $cmd = [string]$_.CommandLine
         $cmd -match '@wonderwhy-er/desktop-commander@0\.2\.47.*\bremote\b.*--persist-session'
     })
+    return @(Get-LauncherRoots $matches)
 }
 function Get-NonCanonicalRemoteLaunchers {
-    $canonicalIds = @((Get-CanonicalRemoteLaunchers).ProcessId)
-    return @(Get-DesktopCommanderRemoteLaunchers | Where-Object { $canonicalIds -notcontains $_.ProcessId })
+    $all = @(Get-DesktopCommanderRemoteLaunchers)
+    $canonicalProcesses = @($all | Where-Object {
+        $cmd = [string]$_.CommandLine
+        $cmd -match '@wonderwhy-er/desktop-commander@0\.2\.47.*\bremote\b.*--persist-session'
+    })
+    $canonicalIds = @($canonicalProcesses.ProcessId)
+    $noncanonical = @($all | Where-Object { $canonicalIds -notcontains $_.ProcessId })
+    return @(Get-LauncherRoots $noncanonical)
 }
 
 Write-Output ('USER=' + [System.Security.Principal.WindowsIdentity]::GetCurrent().Name)
@@ -39,8 +52,8 @@ if ($DeviceFile -and (Test-Path -LiteralPath $DeviceFile)) {
     $item = Get-Item -LiteralPath $DeviceFile
     Write-Output ('DEVICE_STATE_MTIME=' + $item.LastWriteTimeUtc.ToString('o'))
 }
-$canonical = Get-CanonicalRemoteLaunchers
-$noncanonical = Get-NonCanonicalRemoteLaunchers
+$canonical = @(Get-CanonicalRemoteLaunchers)
+$noncanonical = @(Get-NonCanonicalRemoteLaunchers)
 Write-Output ('CANONICAL_AGENT_COUNT=' + $canonical.Count)
 Write-Output ('NONCANONICAL_AGENT_COUNT=' + $noncanonical.Count)
 if ($canonical.Count -gt 0) { Write-Output ('CANONICAL_AGENT_PIDS=' + (($canonical.ProcessId | Sort-Object) -join ',')) }
