@@ -1,4 +1,4 @@
 {
-  "action": "restart",
-  "reason": "2026-08-25 09:03 BRT: restart canonical Fred-Win Desktop Commander via VM relay 5557 because sanitized health reports canonical=1/auth=false while real DC transport remains offline"
+  "action": "recover_session",
+  "reason": "2026-08-25 post-reboot recovery: clear AUTH_REQUIRED cooldown and restore canonical Fred-Win Desktop Commander without touching user worktree changes"
 }
