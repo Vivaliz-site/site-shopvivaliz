@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 
+// Re-run this contract on main after canonical/indexing fixes are published.
 $root = dirname(__DIR__);
 $catalog = file_get_contents($root . '/catalogo.php');
 $product = file_get_contents($root . '/produto.php');
