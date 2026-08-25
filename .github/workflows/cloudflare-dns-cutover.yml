@@ -24,7 +24,7 @@ jobs:
     steps:
       - name: List and optionally update A records pointing to old_ip
         env:
-          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
           OLD_IP: ${{ inputs.old_ip }}
           NEW_IP: ${{ inputs.new_ip }}
           APPLY: ${{ inputs.apply }}
