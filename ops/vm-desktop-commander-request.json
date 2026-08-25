@@ -1,4 +1,5 @@
 {
-  "action": "install_or_repair",
-  "reason": "bounded unattended three-host recovery without provider reauthorization"
+  "action": "apply_checkout_migration",
+  "reason": "apply checkout payment gateway guard migration through VM SSH action without Remote Desktop Commander in chat",
+  "requested_at": "2026-08-25T01:00:30Z"
 }
