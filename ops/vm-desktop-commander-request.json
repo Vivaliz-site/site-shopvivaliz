@@ -1,4 +1,4 @@
 {
-  "action": "restart",
-  "reason": "restore direct VM Desktop Commander channel before completing GSC production verification"
+  "action": "status",
+  "reason": "confirm VM Desktop Commander state after restart attempt during GSC verification"
 }
