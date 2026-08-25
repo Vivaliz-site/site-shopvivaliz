@@ -25,6 +25,35 @@ ShopVivaliz é um **e-commerce de alto rendimento** com automação de:
 - **Agentes IA:** múltiplos agentes autônomos (Claude Code, e outros) commitam direto no repo —
   ver nota de risco abaixo
 
+### 🚧 Migração de VM em andamento (iniciada 2026-08-25)
+
+A VM Oracle original (`137.131.156.17`, shape `VM.Standard.E2.1.Micro`, 1GB RAM) hospeda
+simultaneamente shopvivaliz + outros projetos não relacionados (`mei-mg-email`,
+`solange-rolla-consultorio`) e sofreu um travamento total por memory thrashing em
+2026-08-25 (RAM+swap esgotados, sem OOM-killer, sistema parou de responder por ~12min até
+reboot manual). Duas VMs novas foram provisionadas no mesmo tenancy (`fredmourao`, Always
+Free) para separar as cargas:
+
+| VM | IP | Shape | Papel planejado | Status |
+|---|---|---|---|---|
+| `shopvivaliz-ai` (original) | `137.131.156.17` | E2.1.Micro (1GB) | Fica com mei-mg-email + solange após migração | Em produção |
+| `shopvivaliz-micro-2` | `136.248.69.116` | E2.1.Micro (1GB) | **Destino temporário da loja em produção** — "limpa", sem outros projetos | Provisionada 2026-08-25, SSH ok, DC pendente |
+| `shopvivaliz-free-a1` | *(pendente)* | A1.Flex (2 OCPU/12GB) | Destino final da loja quando a capacidade Ampere A1 liberar (retry automático em andamento) | Bloqueada por "Out of host capacity" da Oracle |
+
+Chave SSH (mesma para as 3 VMs): `ssh -i "C:\Users\FRED\Downloads\ssh-key-2026-07-04.key"
+ubuntu@<IP>`. Também sincronizada nos secrets do GitHub `ORACLE_VM_SSH_KEY` +
+`ORACLE_VM_KNOWN_HOSTS` (inclui os host keys das 3 VMs). Credenciais de API OCI (para
+provisionar/gerenciar recursos via `oci` CLI) estão em `~/.oci/config` local e nos secrets
+`OCI_CLI_USER`, `OCI_CLI_TENANCY`, `OCI_CLI_FINGERPRINT`, `OCI_CLI_REGION`,
+`OCI_CLI_KEY_CONTENT`.
+
+**Corte de DNS/produção para a `shopvivaliz-micro-2` ainda não foi feito** — pendente de
+confirmação explícita do Fred antes de qualquer mudança que afete o site ao vivo. Quando a
+migração para `shopvivaliz-micro-2` for concluída, ela é temporária: repetir para
+`shopvivaliz-free-a1` assim que essa instância for provisionada.
+
+---
+
 ### 🏗️ Arquitetura Real de Deploy
 
 **Atualizado em 2026-07-30 após auditoria — a versão anterior deste documento (cron
