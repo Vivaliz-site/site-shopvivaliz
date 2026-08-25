@@ -1,4 +1,0 @@
-URL=https://shopvivaliz.com.br/ HTTP=000 FINAL=https://shopvivaliz.com.br/ TIME=30.002944
-URL=https://shopvivaliz.com.br/catalogo HTTP=000 FINAL=https://shopvivaliz.com.br/catalogo TIME=30.001940
-URL=https://shopvivaliz.com.br/catalogo?q=antique HTTP=000 FINAL=https://shopvivaliz.com.br/catalogo?q=antique TIME=30.002420
-URL=https://shopvivaliz.com.br/catalogo?q=decore HTTP=200 FINAL=https://shopvivaliz.com.br/catalogo/?q=decore TIME=27.779568

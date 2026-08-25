@@ -1,2 +1,0 @@
-REALPATH=/home/ubuntu/shopvivaliz-deploy/releases/20260819-181211-738de687
-DEPLOY_SHA=738de687
