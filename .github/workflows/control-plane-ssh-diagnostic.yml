@@ -1,0 +1,101 @@
+name: Control Plane SSH Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/control-plane-ssh-diagnostic.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      STATUS_ISSUE: '1207'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH diagnostics
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          {
+            echo '## Control-plane SSH diagnostic'
+            echo
+            echo 'Sanitized diagnostic only. No keys, tokens, authorization codes or device-state contents are published.'
+            echo
+            echo '```text'
+            echo "VM_KEY=$([ -n "${VM_KEY:-}" ] && echo SET || echo MISSING)"
+            echo "VM_HOSTS=$([ -n "${VM_HOSTS:-}" ] && echo SET || echo MISSING)"
+          } > /tmp/control-plane-ssh-diagnostic.md
+          test -n "${VM_KEY:-}"
+          test -n "${VM_HOSTS:-}"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+
+      - name: Probe VM SSH and relay ports
+        run: |
+          set +e
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17)
+          {
+            echo
+            echo '--- ssh version ---'
+            ssh -V 2>&1
+            echo
+            echo '--- ssh probe ---'
+          } >> /tmp/control-plane-ssh-diagnostic.md
+          ssh "${ssh_opts[@]}" 'set -Eeuo pipefail; echo SSH_OK; hostname; date -u +%Y-%m-%dT%H:%M:%SZ; echo USER=$(id -un); echo PORTS; (ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null || true) | awk "NR==1 || /:5557|:5558|:22/"' > /tmp/ssh.out 2> /tmp/ssh.err
+          code=$?
+          {
+            echo "ssh_exit=$code"
+            echo
+            echo 'stdout:'
+            sed -E 's/(token|secret|key|authorization|password)=([^ ]+)/\1=REDACTED/Ig' /tmp/ssh.out | sed -n '1,120p'
+            echo
+            echo 'stderr:'
+            sed -E 's/(token|secret|key|authorization|password)=([^ ]+)/\1=REDACTED/Ig' /tmp/ssh.err | sed -n '1,120p'
+          } >> /tmp/control-plane-ssh-diagnostic.md
+          if [ "$code" -eq 0 ]; then
+            {
+              echo
+              echo '--- relay tcp probe from VM ---'
+            } >> /tmp/control-plane-ssh-diagnostic.md
+            ssh "${ssh_opts[@]}" 'python3 - <<"PY"
+import socket
+for port in (5557,5558):
+    s=socket.socket(); s.settimeout(3)
+    try:
+        s.connect(("127.0.0.1", port))
+        print(f"relay_{port}=open")
+    except Exception as e:
+        print(f"relay_{port}=closed:{type(e).__name__}")
+    finally:
+        s.close()
+PY' >> /tmp/control-plane-ssh-diagnostic.md 2>> /tmp/control-plane-ssh-diagnostic.md
+          fi
+          echo '```' >> /tmp/control-plane-ssh-diagnostic.md
+          exit 0
+
+      - name: Publish diagnostic
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          if [ ! -f /tmp/control-plane-ssh-diagnostic.md ]; then
+            printf '## Control-plane SSH diagnostic\n\nNo diagnostic output produced.\n' > /tmp/control-plane-ssh-diagnostic.md
+          fi
+          gh issue comment "$STATUS_ISSUE" --repo "${{ github.repository }}" --body-file /tmp/control-plane-ssh-diagnostic.md
+
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts" /tmp/ssh.out /tmp/ssh.err /tmp/control-plane-ssh-diagnostic.md
