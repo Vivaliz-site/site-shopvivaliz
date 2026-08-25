@@ -43,7 +43,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           SSH=(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17)
-          ${SSH[@]} 'set -Eeuo pipefail; test "$(systemctl is-enabled shopvivaliz-desktop-commander.service)" = enabled; test "$(systemctl is-active shopvivaliz-desktop-commander.service)" = active; canonical=0; noncanonical=0; while IFS= read -r line; do test -z "$line" && continue; case "$line" in *"@wonderwhy-er/desktop-commander@0.2.47"*" remote "*"--persist-session"*) canonical=$((canonical+1));; *) noncanonical=$((noncanonical+1));; esac; done < <(pgrep -af "[n]pm exec @wonderwhy-er/desktop-commander@.* remote" 2>/dev/null || true); test "$canonical" = 1; test "$noncanonical" = 0; printf "VM_CANONICAL=%s\nVM_NONCANONICAL=%s\n" "$canonical" "$noncanonical"'
+          ${SSH[@]} 'set -Eeuo pipefail; test "$(systemctl is-enabled shopvivaliz-desktop-commander.service)" = enabled; test "$(systemctl is-active shopvivaliz-desktop-commander.service)" = active; canonical=0; noncanonical=0; while IFS= read -r line; do test -z "$line" && continue; case "$line" in *"@wonderwhy-er/desktop-commander@0.2.47"*" remote "*"--persist-session"*) canonical=$((canonical+1));; *) noncanonical=$((noncanonical+1));; esac; done < <(pgrep -af "[n]pm exec @wonderwhy-er/desktop-commander@.* remote" 2>/dev/null); test "$canonical" = 1; test "$noncanonical" = 0; printf "VM_CANONICAL=%s\nVM_NONCANONICAL=%s\n" "$canonical" "$noncanonical"'
 
       - name: Cleanup credentials
         if: always()
