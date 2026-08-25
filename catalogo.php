@@ -26,7 +26,7 @@ if (!empty($_GET['busca']) && empty($_GET['q'])) {
         if (!empty($_GET['pagina'])) {
             $params['pagina'] = max(1, (int)$_GET['pagina']);
         }
-        header('Location: /catalogo?' . http_build_query($params), true, 301);
+        header('Location: /catalogo/?' . http_build_query($params), true, 301);
         exit;
     }
 }
@@ -351,7 +351,7 @@ function sv_catalog_canonical_url(string $category): string
     }
 
     $query = http_build_query($params);
-    return sv_catalog_base_url() . '/catalogo' . ($query !== '' ? '?' . $query : '');
+    return sv_catalog_base_url() . '/catalogo/' . ($query !== '' ? '?' . $query : '');
 }
 
 function sv_catalog_page_title(string $category, string $query): string
@@ -426,7 +426,7 @@ function sv_catalog_website_schema(): array
             '@type' => 'SearchAction',
             'target' => [
                 '@type' => 'EntryPoint',
-                'urlTemplate' => sv_catalog_base_url() . '/catalogo?q={search_term_string}',
+                'urlTemplate' => sv_catalog_base_url() . '/catalogo/?q={search_term_string}',
             ],
             'query-input' => 'required name=search_term_string',
         ],
@@ -493,7 +493,7 @@ function sv_catalog_page_url(int $page, string $query, string $category): string
     if ($category !== '') $params['categoria'] = $category;
     if ($page > 1) $params['pagina'] = $page;
     $qs = http_build_query($params);
-    return '/catalogo' . ($qs !== '' ? '?' . $qs : '');
+    return '/catalogo/' . ($qs !== '' ? '?' . $qs : '');
 }
 $pageTitle = sv_catalog_page_title($category, $query);
 $metaDescription = sv_catalog_meta_description($category, $query, count($products));

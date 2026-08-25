@@ -1,0 +1,50 @@
+name: VM Legacy Runtime Cleanup
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/vm-legacy-runtime-cleanup.yml'
+      - 'scripts/retire-vm-legacy-runtime.sh'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vm-legacy-runtime-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure verified VM SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${VM_KEY:-}"
+          test -n "${VM_HOSTS:-}"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+
+      - name: Retire proven legacy runtime artifacts
+        run: |
+          set -Eeuo pipefail
+          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17)
+          ${SSH[@]} 'set -Eeuo pipefail; cd /home/ubuntu/shopvivaliz-deploy/repo; git fetch origin main >/dev/null; git restore --source=origin/main -- scripts/retire-vm-legacy-runtime.sh; sudo bash scripts/retire-vm-legacy-runtime.sh'
+
+      - name: Verify canonical Desktop Commander remains healthy
+        run: |
+          set -Eeuo pipefail
+          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17)
+          ${SSH[@]} 'set -Eeuo pipefail; test "$(systemctl is-enabled shopvivaliz-desktop-commander.service)" = enabled; test "$(systemctl is-active shopvivaliz-desktop-commander.service)" = active; canonical=0; noncanonical=0; while IFS= read -r line; do test -z "$line" && continue; case "$line" in *"@wonderwhy-er/desktop-commander@0.2.47"*" remote "*"--persist-session"*) canonical=$((canonical+1));; *) noncanonical=$((noncanonical+1));; esac; done < <(pgrep -af "[n]pm exec @wonderwhy-er/desktop-commander@.* remote" 2>/dev/null); test "$canonical" = 1; test "$noncanonical" = 0; printf "VM_CANONICAL=%s\nVM_NONCANONICAL=%s\n" "$canonical" "$noncanonical"'
+
+      - name: Cleanup credentials
+        if: always()
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"

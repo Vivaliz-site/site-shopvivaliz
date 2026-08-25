@@ -1,0 +1,28 @@
+name: VM Checkout Migration Manual
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type APPLY to run the VM checkout migration"
+        required: true
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require explicit confirmation
+        run: |
+          set -Eeuo pipefail
+          test "${{ github.event.inputs.confirm }}" = "APPLY"
+      - name: Explain disabled automatic path
+        run: |
+          cat <<'TXT'
+          This workflow is manual-only to avoid recurring production writes.
+          Use the VM/Desktop Commander control plane after confirming host health.
+          TXT

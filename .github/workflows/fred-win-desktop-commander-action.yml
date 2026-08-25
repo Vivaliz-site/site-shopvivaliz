@@ -40,6 +40,9 @@ jobs:
             install_or_repair)
               COMMAND="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"& { \$ErrorActionPreference='Stop'; Set-Location 'C:\site-shopvivaliz'; git fetch origin main | Out-Null; if (\$LASTEXITCODE -ne 0) { throw 'git fetch failed' }; git merge --ff-only origin/main | Out-Null; if (\$LASTEXITCODE -ne 0) { throw 'git ff-only sync failed' }; & 'C:\site-shopvivaliz\scripts\fredwin-desktop-commander-supervisor.ps1' -Mode InstallTask; & 'C:\site-shopvivaliz\scripts\fredwin-remote-bootstrap.ps1' -Mode InstallTask }\""
               ;;
+            recover_session)
+              COMMAND="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"& { \$ErrorActionPreference='Stop'; Set-Location 'C:\site-shopvivaliz'; git fetch origin main | Out-Null; if (\$LASTEXITCODE -ne 0) { throw 'git fetch failed' }; git restore --source=origin/main -- scripts/local-auto-sync.ps1 scripts/fredwin-desktop-commander-supervisor.ps1 scripts/fredwin-desktop-commander-runner.ps1; if (\$LASTEXITCODE -ne 0) { throw 'infra script restore failed' }; Remove-Item 'C:\site-shopvivaliz\logs\desktop-commander-auth-required.cooldown' -Force -ErrorAction SilentlyContinue; & 'C:\site-shopvivaliz\scripts\fredwin-desktop-commander-supervisor.ps1' -Mode Ensure }\""
+              ;;
             restart)
               COMMAND='powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\site-shopvivaliz\scripts\fredwin-desktop-commander-supervisor.ps1" -Mode Restart'
               ;;

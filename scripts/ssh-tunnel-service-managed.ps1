@@ -2,6 +2,9 @@
 # Keeps maintenance paths private on VM loopback. No key material or command output is logged.
 
 $ErrorActionPreference = 'Continue'
+if ($env:COMPUTERNAME -ne 'LAPTOP-NIG4IFUU') {
+    exit 41
+}
 $KeyPath = 'C:\Users\FRED\Downloads\ssh-key-2026-07-04.key'
 $KnownHostsPath = 'C:\Users\FRED\.ssh\known_hosts'
 $VMHost = '137.131.156.17'

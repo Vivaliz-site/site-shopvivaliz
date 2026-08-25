@@ -11,6 +11,10 @@ if (-not $env:USERPROFILE) {
     } catch { }
 }
 $DeviceFile = if ($env:USERPROFILE) { Join-Path (Join-Path $env:USERPROFILE '.desktop-commander-device') 'device.json' } else { $null }
+function Test-DeviceStateNewerThanCooldown {
+    if (-not $DeviceFile -or -not (Test-Path -LiteralPath $DeviceFile) -or -not (Test-Path -LiteralPath $CooldownFile)) { return $false }
+    return ((Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc -gt (Get-Item -LiteralPath $CooldownFile).LastWriteTimeUtc)
+}
 function Get-DesktopCommanderRemoteLaunchers {
     return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
         ([string]$_.CommandLine) -match '@wonderwhy-er/desktop-commander@[^ ]+.*\bremote\b'
@@ -51,4 +55,5 @@ if ($task) {
     Write-Output ('TASK_LOGON_TYPE=' + $task.Principal.LogonType)
     Write-Output ('TASK_RUN_LEVEL=' + $task.Principal.RunLevel)
 }
-Write-Output ('AUTH_REQUIRED=' + (Test-Path -LiteralPath $CooldownFile))
+$authRequired = ((Test-Path -LiteralPath $CooldownFile) -and -not (Test-DeviceStateNewerThanCooldown))
+Write-Output ('AUTH_REQUIRED=' + $authRequired)

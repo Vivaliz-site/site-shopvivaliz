@@ -166,6 +166,17 @@ function sv_slugify(string $name, string $sku): string
     return trim($base . '-' . $skuPart, '-') ?: $skuPart;
 }
 
+function sv_product_canonical_slug_redirect(string $requestedSlug, string $canonicalSlug): ?string
+{
+    $requested = strtolower(trim(urldecode($requestedSlug)));
+    $canonical = strtolower(trim($canonicalSlug));
+    if ($requested === '' || $canonical === '' || $requested === $canonical) {
+        return null;
+    }
+
+    return '/produto/' . rawurlencode($canonicalSlug);
+}
+
 function sv_product_find_slug(string $slug): array
 {
     $slugNorm = strtolower(trim(urldecode($slug)));
@@ -302,6 +313,14 @@ $tags     = is_array($resolved['tags'] ?? null) ? $resolved['tags'] : [];
 $qScore   = (int)($resolved['quality_score'] ?? 0);
 $rawSlug  = trim((string)($resolved['slug'] ?? '')) ?: ($sku !== '' && $name !== '' ? sv_slugify($name, $sku) : '');
 
+if (!$notFound && $slug !== '' && $rawSlug !== '') {
+    $redirectPath = sv_product_canonical_slug_redirect($slug, $rawSlug);
+    if ($redirectPath !== null) {
+        header('Location: ' . $redirectPath, true, 301);
+        exit;
+    }
+}
+
 $priceRaw   = (float)($resolved['price'] ?? (float)sv_qv('price', '0'));
 $stockRaw   = (int)($resolved['stock'] ?? 0);
 $brandName  = sv_product_infer_brand($resolved);
@@ -398,7 +417,7 @@ if ($notFound) {
     $description = 'O produto solicitado não foi localizado no catálogo atual da Vivaliz. Explore outras opções ou fale com a equipe comercial.';
     $seoTitle = $name;
     $seoDescription = $description;
-    $canonicalUrl = $baseUrl . '/catalogo';
+    $canonicalUrl = $baseUrl . '/catalogo/';
     $priceRaw = 0.0;
     $priceLabel = 'Produto indisponível';
     $tags = [];
@@ -416,7 +435,7 @@ $breadcrumbItems = [
         '@type' => 'ListItem',
         'position' => 2,
         'name' => 'Produtos',
-        'item' => $baseUrl . '/catalogo',
+        'item' => $baseUrl . '/catalogo/',
     ],
 ];
 
@@ -425,7 +444,7 @@ if ($category !== '') {
         '@type' => 'ListItem',
         'position' => count($breadcrumbItems) + 1,
         'name' => $category,
-        'item' => $baseUrl . '/catalogo?categoria=' . rawurlencode($category),
+        'item' => $baseUrl . '/catalogo/?categoria=' . rawurlencode($category),
     ];
 }
 
@@ -586,8 +605,8 @@ if ($notFound) {
 
     <main class="container produto-layout">
         <nav class="breadcrumb" aria-label="Navegação estrutural">
-            <a href="/">Início</a> › <a href="/catalogo">Produtos</a>
-            <?php if ($category !== ''): ?> › <a href="/catalogo?categoria=<?= rawurlencode($category) ?>"><?= sv_esc($category) ?></a><?php endif; ?>
+            <a href="/">Início</a> › <a href="/catalogo/">Produtos</a>
+            <?php if ($category !== ''): ?> › <a href="/catalogo/?categoria=<?= rawurlencode($category) ?>"><?= sv_esc($category) ?></a><?php endif; ?>
             › <span><?= sv_esc(sv_product_trim($name, 40, '...')) ?></span>
         </nav>
 
@@ -596,7 +615,7 @@ if ($notFound) {
             <h1>Produto não encontrado</h1>
             <p class="product-description"><?= sv_esc($description) ?></p>
             <div class="produto-actions">
-                <a class="btn btn-primary" href="/catalogo">Explorar catálogo</a>
+                <a class="btn btn-primary" href="/catalogo/">Explorar catálogo</a>
                 <a class="btn btn-secondary" href="/contato">Falar com a equipe</a>
             </div>
         </section>

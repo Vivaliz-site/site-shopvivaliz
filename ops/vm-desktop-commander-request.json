@@ -1,4 +1,4 @@
 {
-  "action": "install_or_repair",
-  "reason": "bounded unattended three-host recovery without provider reauthorization"
+  "action": "status",
+  "reason": "confirm VM Desktop Commander state after restart attempt during GSC verification"
 }
