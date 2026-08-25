@@ -55,7 +55,7 @@ function Ensure-Relay {
     if (!(Test-Path -LiteralPath $TunnelScript)) { throw 'Tunnel script missing' }
     if (-not (Test-McpHealth)) { Stop-FredWinMcp; Start-FredWinMcp }
     if (-not (Test-McpHealth)) { throw 'MCP health failed on loopback' }
-    $ssh = Get-ManagedSsh
+    $ssh = @(Get-ManagedSsh)
     if ($ssh.Count -ne 1) {
         Stop-ManagedTunnel
         Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',$TunnelScript) -WorkingDirectory $Repo -WindowStyle Hidden
