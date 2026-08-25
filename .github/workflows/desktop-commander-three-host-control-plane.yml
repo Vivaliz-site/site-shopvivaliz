@@ -110,53 +110,8 @@ jobs:
                       values[k.strip()] = v.strip()
               return values
 
-<<<<<<< HEAD
-          def truth(v): return str(v).lower() == 'true'
-
-          def win_ok(v):
-              return (
-                  truth(v.get('DEVICE_STATE_EXISTS')) and
-                  v.get('CANONICAL_AGENT_COUNT') == '1' and
-                  v.get('NONCANONICAL_AGENT_COUNT') == '0' and
-                  truth(v.get('TASK_EXISTS')) and
-                  v.get('TASK_LOGON_TYPE','').lower() == 's4u' and
-                  v.get('TASK_RUN_LEVEL','').lower() == 'highest' and
-                  not truth(v.get('AUTH_REQUIRED'))
-              )
-
-          def win(name, port, prefix):
-              status = f'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\\site-shopvivaliz\\scripts\\{prefix}-desktop-commander-status.ps1"'
-              ok, out = relay(port, status)
-              if not ok:
-                  return dict(host=name,state='unreachable',watchdog='relay_unreachable',canonical='—',auth='unknown',recovery='no_safe_remote_path')
-              v = parse(out)
-              if win_ok(v):
-                  return dict(host=name,state='healthy',watchdog='S4U/Highest',canonical='1',auth='false',recovery='not_needed')
-              if truth(v.get('AUTH_REQUIRED')):
-                  return dict(host=name,state='degraded',watchdog=f"task={v.get('TASK_EXISTS','unknown')},logon={v.get('TASK_LOGON_TYPE','unknown')},runlevel={v.get('TASK_RUN_LEVEL','unknown')}",canonical=v.get('CANONICAL_AGENT_COUNT','0'),auth='true',recovery='blocked_by_provider_auth')
-              supervisor = f'{prefix}-desktop-commander-supervisor.ps1'
-              bootstrap = 'fredwin-remote-bootstrap.ps1' if prefix == 'fredwin' else 'desktopkocepsv-remote-bootstrap.ps1'
-              mode = 'InstallTask' if not truth(v.get('TASK_EXISTS')) else 'Ensure'
-              repair = (
-                  'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command '
-                  '"& { $ErrorActionPreference=\'Stop\'; Set-Location \'C:\\site-shopvivaliz\'; '
-                  'git fetch origin main | Out-Null; if ($LASTEXITCODE -ne 0) { throw \'fetch failed\' }; '
-                  'git merge --ff-only origin/main | Out-Null; if ($LASTEXITCODE -ne 0) { throw \'sync failed\' }; '
-                  f'& \'C:\\site-shopvivaliz\\scripts\\{supervisor}\' -Mode {mode}; '
-                  f'& \'C:\\site-shopvivaliz\\scripts\\{bootstrap}\' -Mode Ensure }}"'
-              )
-              repaired, _ = relay(port, repair, want_output=False)
-              time.sleep(20)
-              ok2, out2 = relay(port, status)
-              if ok2:
-                  v = parse(out2)
-              if win_ok(v):
-                  return dict(host=name,state='healthy',watchdog='S4U/Highest',canonical='1',auth='false',recovery='recovered')
-              return dict(host=name,state='degraded',watchdog=f"task={v.get('TASK_EXISTS','unknown')},logon={v.get('TASK_LOGON_TYPE','unknown')},runlevel={v.get('TASK_RUN_LEVEL','unknown')}",canonical=v.get('CANONICAL_AGENT_COUNT','0'),auth='true' if truth(v.get('AUTH_REQUIRED')) else 'false',recovery='repair_attempted' if repaired else 'repair_failed')
-=======
           def truth(v):
               return str(v).lower() == 'true'
->>>>>>> origin/main
 
           def vm_status():
               cmd = r'''set -Eeuo pipefail
