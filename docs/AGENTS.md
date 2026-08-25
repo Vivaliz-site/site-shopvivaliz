@@ -146,6 +146,29 @@ sempre em produção via Apache/PHP-FPM puro.
 
 ## 🔴 Crítico: Problemas Não Resolvidos
 
+### 2026-08-25 — VM Oracle original travou por memory thrashing; migração de 3 VMs em andamento
+**Sistema/arquivo:** VM Oracle (`137.131.156.17`), `CLAUDE.md` seção "🚧 Migração de VM em andamento"
+**O que descobri:** A VM original (`shopvivaliz-ai`, shape `E2.1.Micro`, só 954Mi RAM) hospeda
+shopvivaliz + `mei-mg-email` + `solange-rolla-consultorio` simultaneamente. Em 2026-08-25 ficou
+totalmente sem resposta (SSH incluído) por ~12min — journal mostra `systemd-journald: Under
+memory pressure, flushing caches` repetido e lag de 5+ min entre a app escrever um log e o
+journald recebê-lo, sem nenhum OOM-killer disparado (RAM+swap esgotados = thrashing total, pior
+que um OOM-kill porque nada morre pra liberar memória). Iniciei provisionamento de 2 VMs novas no
+mesmo tenancy Oracle (`fredmourao`, Always Free) pra separar as cargas: `shopvivaliz-micro-2`
+(`136.248.69.116`, E2.1.Micro, já no ar) como destino temporário "limpo" pra loja em produção, e
+`shopvivaliz-free-a1` (Ampere A1.Flex, 2 OCPU/12GB) como destino final quando a capacidade da
+Oracle liberar (erro "Out of host capacity" recorrente na região sa-saopaulo-1, retry automático
+em andamento).
+**Por quê importa:** Qualquer agente que vir 3 VMs Oracle ativas no mesmo tenancy não deve
+assumir que é erro/duplicação — é uma migração deliberada em andamento. **O corte de
+DNS/produção para a `shopvivaliz-micro-2` não foi feito ainda** (pendente confirmação explícita
+do Fred) — até lá, `137.131.156.17` continua sendo a produção real. Credenciais: chave SSH única
+para as 3 VMs (`ssh-key-2026-07-04.key`, mesmo caminho de sempre), API OCI configurada em
+`~/.oci/config` local e secrets `OCI_CLI_*` no GitHub para gerência via CLI.
+**Ver também:** `CLAUDE.md` (seção "🚧 Migração de VM em andamento"), [[feedback_local_autosync_bypasses_pr]] (memória de sessão — mesmo daemon de auto-sync que já causou problemas de merge continua ativo nesta VM local)
+
+---
+
 ### Shopee/Tiny OAuth2 — PARADO HÁ 3+ SEMANAS + workflows removidos (2026-07-27)
 **Status:** Requer ação manual (regenerar client OAuth2 na Tiny) **e** recriar workflows
 **Arquivos:** `.github/workflows/{fetch,optimize}-shopee-listings.yml` — **não existem mais no repo**, aparentemente removidos como colateral da consolidação "99→10 workflows" de 2026-07-26 (`CLAUDE.md`); nenhum workflow ativo restante referencia Shopee. Os agentes (`agents/v9.2.85/app/ShopeeListings*Agent.php`) continuam no repo, só falta o workflow que os chama.
