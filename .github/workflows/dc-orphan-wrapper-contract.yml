@@ -1,0 +1,23 @@
+name: DC Orphan Wrapper Contract
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/fredwin-desktop-commander-supervisor.ps1'
+      - 'tests/desktop-commander-orphan-wrapper-guard-contract-test.php'
+      - '.github/workflows/dc-orphan-wrapper-contract.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+      - name: Verify orphan wrapper guard
+        run: php tests/desktop-commander-orphan-wrapper-guard-contract-test.php
