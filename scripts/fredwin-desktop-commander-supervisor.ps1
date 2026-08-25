@@ -38,6 +38,24 @@ function Get-DesktopCommanderRemoteLaunchers {
         $cmd -match '@wonderwhy-er/desktop-commander@[^ ]+.*\bremote\b'
     })
 }
+function Get-OrphanDirectRemoteLaunchers {
+    $all = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+    $ids = @($all | ForEach-Object { [int]$_.ProcessId })
+    return @($all | Where-Object {
+        $cmd = [string]$_.CommandLine
+        $_.Name -eq 'node.exe' -and
+        $cmd -like '*npm-cache\_npx\*\node_modules\@wonderwhy-er\desktop-commander\dist\index.js*remote*--persist-session*' -and
+        $ids -notcontains [int]$_.ParentProcessId
+    })
+}
+function Stop-OrphanDirectRemoteLaunchers {
+    foreach ($p in @(Get-OrphanDirectRemoteLaunchers)) {
+        try {
+            & taskkill.exe /PID $p.ProcessId /T /F 2>$null | Out-Null
+            Log ('Stopped orphan Desktop Commander direct wrapper pid=' + $p.ProcessId)
+        } catch { Log ('WARNING orphan wrapper stop failed pid=' + $p.ProcessId) }
+    }
+}
 function Get-LauncherRoots([object[]]$Launchers) {
     $items = @($Launchers)
     if ($items.Count -le 1) { return $items }
@@ -90,6 +108,7 @@ function Ensure-Agent {
         Log 'AUTH_REQUIRED device state missing; not starting interactive device flow'
         Write-Output 'AUTH_REQUIRED=true'; exit 20
     }
+    Stop-OrphanDirectRemoteLaunchers
     $canonical = @(Get-CanonicalRemoteLaunchers)
     $noncanonical = @(Get-NonCanonicalRemoteLaunchers)
     if ($canonical.Count -eq 1 -and $noncanonical.Count -eq 0) {
