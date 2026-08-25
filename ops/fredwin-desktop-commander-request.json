@@ -1,4 +1,4 @@
 {
-  "action": "recover_session",
-  "reason": "2026-08-25 08:59 BRT: recover Fred-Win through canonical VM relay 5557 after cross-host tunnel collision cleanup; preserve unrelated local work"
+  "action": "restart",
+  "reason": "2026-08-25 09:03 BRT: restart canonical Fred-Win Desktop Commander via VM relay 5557 because sanitized health reports canonical=1/auth=false while real DC transport remains offline"
 }
