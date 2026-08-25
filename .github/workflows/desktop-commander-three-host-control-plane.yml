@@ -8,19 +8,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/desktop-commander-three-host-control-plane.yml'
-      - 'scripts/fredwin-desktop-commander-runner.ps1'
       - 'scripts/fredwin-desktop-commander-status.ps1'
-      - 'scripts/fredwin-desktop-commander-supervisor.ps1'
-      - 'scripts/fredwin-remote-bootstrap.ps1'
-      - 'scripts/ssh-tunnel-service-managed.ps1'
-      - 'scripts/desktopkocepsv-desktop-commander-runner.ps1'
       - 'scripts/desktopkocepsv-desktop-commander-status.ps1'
-      - 'scripts/desktopkocepsv-desktop-commander-supervisor.ps1'
-      - 'scripts/desktopkocepsv-remote-bootstrap.ps1'
-      - 'scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1'
-      - 'scripts/vm-desktop-commander-supervisor.sh'
-      - 'scripts/install-vm-desktop-commander-service.sh'
-      - 'ops/systemd/shopvivaliz-desktop-commander.service'
 
 permissions:
   contents: read
@@ -31,9 +20,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  recover:
+  diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 10
     env:
       STATUS_ISSUE: '1207'
     steps:
@@ -45,6 +34,19 @@ jobs:
           VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
           set -Eeuo pipefail
+          {
+            echo '## Desktop Commander 24h Control Plane Status'
+            echo
+            echo 'Sanitized diagnostic only. No credentials, authorization codes, session data or device-state contents are published.'
+            echo
+            echo '### Secret presence'
+            echo
+            echo '```text'
+            echo "VM_KEY=$([ -n "${VM_KEY:-}" ] && echo SET || echo MISSING)"
+            echo "VM_HOSTS=$([ -n "${VM_HOSTS:-}" ] && echo SET || echo MISSING)"
+            echo '```'
+            echo
+          } > /tmp/dc-status.md
           test -n "${VM_KEY:-}"
           test -n "${VM_HOSTS:-}"
           install -m 700 -d "$HOME/.ssh"
@@ -52,107 +54,70 @@ jobs:
           printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
 
-      - name: Probe and perform bounded repairs
+      - name: Read-only probe
         env:
           RUN_ID: ${{ github.run_id }}
         run: |
           set -Eeuo pipefail
-          cat > /tmp/dc-control.py <<'PY'
+          cat > /tmp/dc-readonly.py <<'PY'
           import base64
           import datetime as dt
           import json
           import os
           import pathlib
+          import re
           import subprocess
-          import time
 
           SSH = [
-              'ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10',
+              'ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15',
               '-o', 'StrictHostKeyChecking=yes',
               '-o', 'UserKnownHostsFile=' + os.path.expanduser('~/.ssh/known_hosts'),
               '-i', os.path.expanduser('~/.ssh/vmkey'),
               'ubuntu@137.131.156.17'
           ]
+
           SAFE = {
               'DEVICE_STATE_EXISTS','CANONICAL_AGENT_COUNT','NONCANONICAL_AGENT_COUNT',
               'TASK_EXISTS','TASK_STATE','TASK_LAST_RESULT','TASK_LOGON_TYPE','TASK_RUN_LEVEL',
               'AUTH_REQUIRED','SERVICE_ENABLED','SERVICE_ACTIVE','SERVICE_USER','SERVICE_MAINPID'
           }
 
+          def scrub(text):
+              text = str(text or '')
+              text = re.sub(r'(?i)(token|secret|authorization|password|private[_-]?key)=\S+', r'\1=REDACTED', text)
+              text = re.sub(r'(?i)(BEGIN [A-Z ]*PRIVATE KEY)(.*?)(END [A-Z ]*PRIVATE KEY)', r'\1 REDACTED \3', text, flags=re.S)
+              return text[:6000]
+
+          diagnostics = []
+
           def ssh(command, timeout=180, stdin=None):
               try:
                   p = subprocess.run(SSH + [command], input=stdin, text=True, capture_output=True, timeout=timeout)
+                  if p.returncode != 0:
+                      diagnostics.append({'kind':'ssh_error','returncode':p.returncode,'stderr':scrub(p.stderr),'stdout':scrub(p.stdout)})
                   return p.returncode == 0, p.stdout or ''
-              except Exception:
-                  return False, ''
-
-          def relay(port, command, want_output=True):
-              encoded = base64.b64encode(command.encode()).decode()
-              code = f'''import base64,json,urllib.request\ncmd=base64.b64decode("{encoded}").decode()\nbody=json.dumps({{"params":{{"command":cmd,"timeout":240}}}}).encode()\nreq=urllib.request.Request("http://127.0.0.1:{port}/mcp/tool/execute_command",data=body,headers={{"Content-Type":"application/json"}},method="POST")\ntry:\n  with urllib.request.urlopen(req,timeout=250) as r: payload=json.loads(r.read().decode())\n  result=payload.get("result") or {{}}\n  print(json.dumps({{"ok":result.get("success") is True,"output":str(result.get("output") or "") if {str(want_output)} else ""}}))\nexcept Exception:\n  print(json.dumps({{"ok":False,"output":""}}))\n'''
-              ok, out = ssh('python3 -', timeout=270, stdin=code)
-              if not ok:
-                  return False, ''
-              try:
-                  payload = json.loads(out.strip().splitlines()[-1])
-                  return bool(payload['ok']), str(payload.get('output') or '')
-              except Exception:
+              except Exception as e:
+                  diagnostics.append({'kind':'ssh_exception','type':type(e).__name__,'message':scrub(str(e))})
                   return False, ''
 
           def parse(text):
               values = {}
-              for line in text.splitlines():
+              for line in str(text or '').splitlines():
                   if '=' not in line:
                       continue
-                  k,v = line.split('=',1)
+                  k, v = line.split('=', 1)
                   if k.strip() in SAFE:
                       values[k.strip()] = v.strip()
               return values
 
-          def truth(v): return str(v).lower() == 'true'
-
-          def win_ok(v):
-              return (
-                  truth(v.get('DEVICE_STATE_EXISTS')) and
-                  v.get('CANONICAL_AGENT_COUNT') == '1' and
-                  v.get('NONCANONICAL_AGENT_COUNT') == '0' and
-                  truth(v.get('TASK_EXISTS')) and
-                  v.get('TASK_LOGON_TYPE','').lower() == 's4u' and
-                  v.get('TASK_RUN_LEVEL','').lower() == 'highest' and
-                  not truth(v.get('AUTH_REQUIRED'))
-              )
-
-          def win(name, port, prefix):
-              status = f'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\\site-shopvivaliz\\scripts\\{prefix}-desktop-commander-status.ps1"'
-              ok, out = relay(port, status)
-              if not ok:
-                  return dict(host=name,state='unreachable',watchdog='relay_unreachable',canonical='—',auth='unknown',recovery='no_safe_remote_path')
-              v = parse(out)
-              if win_ok(v):
-                  return dict(host=name,state='healthy',watchdog='S4U/Highest',canonical='1',auth='false',recovery='not_needed')
-              if truth(v.get('AUTH_REQUIRED')):
-                  return dict(host=name,state='degraded',watchdog=f"task={v.get('TASK_EXISTS','unknown')},logon={v.get('TASK_LOGON_TYPE','unknown')},runlevel={v.get('TASK_RUN_LEVEL','unknown')}",canonical=v.get('CANONICAL_AGENT_COUNT','0'),auth='true',recovery='blocked_by_provider_auth')
-              supervisor = f'{prefix}-desktop-commander-supervisor.ps1'
-              bootstrap = 'fredwin-remote-bootstrap.ps1' if prefix == 'fredwin' else 'desktopkocepsv-remote-bootstrap.ps1'
-              mode = 'InstallTask' if not truth(v.get('TASK_EXISTS')) else 'Ensure'
-              repair = (
-                  'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command '
-                  '"& { $ErrorActionPreference=\'Stop\'; Set-Location \'C:\\site-shopvivaliz\'; '
-                  'git fetch origin main | Out-Null; if ($LASTEXITCODE -ne 0) { throw \'fetch failed\' }; '
-                  'git merge --ff-only origin/main | Out-Null; if ($LASTEXITCODE -ne 0) { throw \'sync failed\' }; '
-                  f'& \'C:\\site-shopvivaliz\\scripts\\{supervisor}\' -Mode {mode}; '
-                  f'& \'C:\\site-shopvivaliz\\scripts\\{bootstrap}\' -Mode Ensure }}"'
-              )
-              repaired, _ = relay(port, repair, want_output=False)
-              time.sleep(20)
-              ok2, out2 = relay(port, status)
-              if ok2:
-                  v = parse(out2)
-              if win_ok(v):
-                  return dict(host=name,state='healthy',watchdog='S4U/Highest',canonical='1',auth='false',recovery='recovered')
-              return dict(host=name,state='degraded',watchdog=f"task={v.get('TASK_EXISTS','unknown')},logon={v.get('TASK_LOGON_TYPE','unknown')},runlevel={v.get('TASK_RUN_LEVEL','unknown')}",canonical=v.get('CANONICAL_AGENT_COUNT','0'),auth='true' if truth(v.get('AUTH_REQUIRED')) else 'false',recovery='repair_attempted' if repaired else 'repair_failed')
+          def truth(v):
+              return str(v).lower() == 'true'
 
           def vm_status():
               cmd = r'''set -Eeuo pipefail
+          echo SSH_OK=1
+          echo HOSTNAME=$(hostname)
+          echo CHECKED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           device=false; test -f "$HOME/.desktop-commander-device/device.json" && device=true
           enabled=$(systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null || true)
           active=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true)
@@ -165,46 +130,90 @@ jobs:
             case "$line" in *"@wonderwhy-er/desktop-commander@0.2.47"*" remote "*"--persist-session"*) canonical=$((canonical+1));; *) noncanonical=$((noncanonical+1));; esac
           done < <(pgrep -af '[n]pm exec @wonderwhy-er/desktop-commander@.* remote' 2>/dev/null || true)
           printf 'DEVICE_STATE_EXISTS=%s\nSERVICE_ENABLED=%s\nSERVICE_ACTIVE=%s\nSERVICE_USER=%s\nSERVICE_MAINPID=%s\nCANONICAL_AGENT_COUNT=%s\nNONCANONICAL_AGENT_COUNT=%s\nAUTH_REQUIRED=%s\n' "$device" "${enabled:-unknown}" "${active:-unknown}" "${user:-unknown}" "${mainpid:-0}" "$canonical" "$noncanonical" "$auth"
+          python3 - <<'PORTS'
+          import socket
+          for port in (5557, 5558):
+              s = socket.socket(); s.settimeout(2)
+              try:
+                  s.connect(('127.0.0.1', port))
+                  print(f'RELAY_{port}=open')
+              except Exception as e:
+                  print(f'RELAY_{port}=closed:{type(e).__name__}')
+              finally:
+                  s.close()
+          PORTS
           '''
-              ok,out = ssh(cmd, timeout=120)
-              return ok, parse(out)
+              ok, out = ssh(cmd, timeout=120)
+              return ok, out, parse(out)
 
-          def vm_ok(v):
+          def relay(port, command):
+              encoded = base64.b64encode(command.encode()).decode()
+              code = f'''import base64,json,urllib.request,traceback\ncmd=base64.b64decode("{encoded}").decode()\nbody=json.dumps({{"params":{{"command":cmd,"timeout":120}}}}).encode()\nreq=urllib.request.Request("http://127.0.0.1:{port}/mcp/tool/execute_command",data=body,headers={{"Content-Type":"application/json"}},method="POST")\ntry:\n  with urllib.request.urlopen(req,timeout=130) as r: payload=json.loads(r.read().decode())\n  result=payload.get("result") or {{}}\n  print(json.dumps({{"ok":result.get("success") is True,"output":str(result.get("output") or "")}}))\nexcept Exception as e:\n  print(json.dumps({{"ok":False,"error":type(e).__name__,"message":str(e)}}))\n'''
+              ok, out = ssh('python3 -', timeout=150, stdin=code)
+              if not ok:
+                  return False, '', 'ssh_failed'
+              try:
+                  payload = json.loads(out.strip().splitlines()[-1])
+              except Exception:
+                  return False, scrub(out), 'bad_json'
+              if not payload.get('ok'):
+                  return False, scrub(payload.get('message') or payload.get('output') or ''), scrub(payload.get('error') or 'relay_failed')
+              return True, str(payload.get('output') or ''), ''
+
+          def win_ok(v):
               return (
-                  truth(v.get('DEVICE_STATE_EXISTS')) and v.get('SERVICE_ENABLED') == 'enabled' and
-                  v.get('SERVICE_ACTIVE') == 'active' and v.get('SERVICE_USER') == 'ubuntu' and
-                  v.get('CANONICAL_AGENT_COUNT') == '1' and v.get('NONCANONICAL_AGENT_COUNT') == '0' and
+                  truth(v.get('DEVICE_STATE_EXISTS')) and
+                  v.get('CANONICAL_AGENT_COUNT') == '1' and
+                  v.get('NONCANONICAL_AGENT_COUNT') == '0' and
+                  truth(v.get('TASK_EXISTS')) and
+                  v.get('TASK_LOGON_TYPE','').lower() == 's4u' and
+                  v.get('TASK_RUN_LEVEL','').lower() == 'highest' and
                   not truth(v.get('AUTH_REQUIRED'))
               )
 
-          def vm():
-              ok,v = vm_status()
+          def win(name, port, prefix, ssh_available):
+              if not ssh_available:
+                  return dict(host=name,state='unreachable',watchdog='ssh_unreachable',canonical='—',auth='unknown',detail='VM SSH failed before relay')
+              status = f'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\\site-shopvivaliz\\scripts\\{prefix}-desktop-commander-status.ps1"'
+              ok, out, err = relay(port, status)
               if not ok:
-                  return dict(host='shopvivaliz-ai',state='unreachable',watchdog='ssh_unreachable',canonical='—',auth='unknown',recovery='no_safe_remote_path')
-              if vm_ok(v):
-                  return dict(host='shopvivaliz-ai',state='healthy',watchdog='systemd=enabled/active',canonical='1',auth='false',recovery='not_needed')
-              if truth(v.get('AUTH_REQUIRED')):
-                  return dict(host='shopvivaliz-ai',state='degraded',watchdog=f"systemd={v.get('SERVICE_ENABLED','unknown')}/{v.get('SERVICE_ACTIVE','unknown')}",canonical=v.get('CANONICAL_AGENT_COUNT','0'),auth='true',recovery='blocked_by_provider_auth')
-              repair = 'set -Eeuo pipefail; cd /home/ubuntu/shopvivaliz-deploy/repo; git fetch origin main >/dev/null; git merge --ff-only origin/main >/dev/null; sudo bash scripts/install-vm-desktop-commander-service.sh'
-              repaired,_ = ssh(repair, timeout=270)
-              time.sleep(20)
-              ok2,v2 = vm_status()
-              if ok2: v=v2
-              if vm_ok(v):
-                  return dict(host='shopvivaliz-ai',state='healthy',watchdog='systemd=enabled/active',canonical='1',auth='false',recovery='recovered')
-              return dict(host='shopvivaliz-ai',state='degraded',watchdog=f"systemd={v.get('SERVICE_ENABLED','unknown')}/{v.get('SERVICE_ACTIVE','unknown')}",canonical=v.get('CANONICAL_AGENT_COUNT','0'),auth='true' if truth(v.get('AUTH_REQUIRED')) else 'false',recovery='repair_attempted' if repaired else 'repair_failed')
+                  return dict(host=name,state='unreachable',watchdog='relay_unreachable',canonical='—',auth='unknown',detail=err or out or 'relay probe failed')
+              v = parse(out)
+              if win_ok(v):
+                  return dict(host=name,state='healthy',watchdog='S4U/Highest',canonical='1',auth='false',detail='not_needed')
+              return dict(host=name,state='degraded',watchdog=f"task={v.get('TASK_EXISTS','unknown')},logon={v.get('TASK_LOGON_TYPE','unknown')},runlevel={v.get('TASK_RUN_LEVEL','unknown')}",canonical=v.get('CANONICAL_AGENT_COUNT','0'),auth='true' if truth(v.get('AUTH_REQUIRED')) else 'false',detail='status_probe_returned_noncanonical')
 
-          results = [win('LAPTOP-NIG4IFUU',5557,'fredwin'), win('DESKTOP-KOCEPSV',5558,'desktopkocepsv'), vm()]
+          vm_ssh_ok, vm_out, vm_values = vm_status()
+          if vm_ssh_ok and (
+              truth(vm_values.get('DEVICE_STATE_EXISTS')) and vm_values.get('SERVICE_ENABLED') == 'enabled' and
+              vm_values.get('SERVICE_ACTIVE') == 'active' and vm_values.get('SERVICE_USER') == 'ubuntu' and
+              vm_values.get('CANONICAL_AGENT_COUNT') == '1' and vm_values.get('NONCANONICAL_AGENT_COUNT') == '0' and
+              not truth(vm_values.get('AUTH_REQUIRED'))
+          ):
+              vm_row = dict(host='shopvivaliz-ai',state='healthy',watchdog='systemd=enabled/active',canonical='1',auth='false',detail='not_needed')
+          elif vm_ssh_ok:
+              vm_row = dict(host='shopvivaliz-ai',state='degraded',watchdog=f"systemd={vm_values.get('SERVICE_ENABLED','unknown')}/{vm_values.get('SERVICE_ACTIVE','unknown')}",canonical=vm_values.get('CANONICAL_AGENT_COUNT','0'),auth='true' if truth(vm_values.get('AUTH_REQUIRED')) else 'false',detail='ssh_ok_status_not_canonical')
+          else:
+              vm_row = dict(host='shopvivaliz-ai',state='unreachable',watchdog='ssh_unreachable',canonical='—',auth='unknown',detail='ssh probe failed')
+
+          results = [win('LAPTOP-NIG4IFUU',5557,'fredwin',vm_ssh_ok), win('DESKTOP-KOCEPSV',5558,'desktopkocepsv',vm_ssh_ok), vm_row]
           now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace('+00:00','Z')
-          lines = ['# Desktop Commander 24h Control Plane Status','', 'Sanitized health only. No credentials, authorization codes, session data or device-state contents are published.','', '| Host | State | Watchdog | Canonical agents | Auth required | Last check | Recovery |','|---|---|---|---:|---|---|---|']
+          lines = pathlib.Path('/tmp/dc-status.md').read_text().splitlines()
+          lines += ['| Host | State | Watchdog | Canonical agents | Auth required | Last check | Detail |','|---|---|---|---:|---|---|---|']
           for r in results:
-              lines.append(f"| {r['host']} | {r['state']} | {r['watchdog']} | {r['canonical']} | {r['auth']} | {now} | {r['recovery']} |")
-          lines += ['', f"Source run: {os.environ.get('RUN_ID','unknown')}"]
+              lines.append(f"| {r['host']} | {r['state']} | {r['watchdog']} | {r['canonical']} | {r['auth']} | {now} | {scrub(r['detail']).replace('|','/')} |")
+          lines += ['', f"Source run: {os.environ.get('RUN_ID','unknown')}", '']
+          lines += ['### VM SSH / relay diagnostic', '', '```text', scrub(vm_out)]
+          if diagnostics:
+              lines += ['', 'Diagnostics:']
+              for d in diagnostics:
+                  lines.append(json.dumps(d, ensure_ascii=False))
+          lines += ['```']
           pathlib.Path('/tmp/dc-status.md').write_text('\n'.join(lines)+'\n')
           pathlib.Path('/tmp/dc-status.json').write_text(json.dumps(results))
           print(json.dumps({r['host']: r['state'] for r in results}, sort_keys=True))
           PY
-          python3 /tmp/dc-control.py
+          python3 /tmp/dc-readonly.py
 
       - name: Publish sanitized status
         if: always()
@@ -226,4 +235,4 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts" /tmp/dc-control.py /tmp/dc-status.md /tmp/dc-status.json
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts" /tmp/dc-readonly.py /tmp/dc-status.md /tmp/dc-status.json
