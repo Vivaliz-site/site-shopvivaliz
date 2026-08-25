@@ -82,9 +82,29 @@ Ao adicionar novo arquivo em `/includes/` que precisa ser público:
 
 ---
 
-## 🟡 Rotina de otimização inteligente Shopee (6h): credencial corrigida em 2026-08-14, mas falta integração de analytics (CTR/conversão)
+## 🟠 Rotina de otimização inteligente Shopee (6h): NOVA regressão de credencial na VM desde 2026-08-22 (13h UTC) + segue faltando integração de analytics
 
-**Última atualização:** 2026-08-15
+**Última atualização:** 2026-08-25
+
+### Atualização 2026-08-25 — `shopee-runtime-health.yml` volta a falhar; credencial da VM parece ter sumido (diferente do bloqueio de 07/2026)
+
+`shopee-runtime-health.yml` (schedule 6h) tinha sucesso consistente desde o fix de 08-15 (ex:
+runs 992/1055/1062/1089/1114, todos `conclusion: success` até 2026-08-22T06:59 UTC). A partir do
+run `32611709229` (2026-08-22T13:00:54Z) **todo** run agendado passou a falhar com
+`ERROR: required Shopee runtime credentials are incomplete` (exit code 4) — mais de 40 execuções
+seguidas até a checagem mais recente (`32851832513`, 2026-08-25T13:11:15Z). Essa checagem lê as
+credenciais direto de `shared/.env`/`shared/shopee-tokens.json` **na VM** (não do sandbox nem do
+GitHub Actions), então isso indica que a credencial real sumiu ou expirou na própria VM — não é o
+mesmo problema de "sandbox sem secret" já mapeado em `docs/audits/shopee-runtime-credentials-2026-08-14.md`.
+Nenhum commit relacionado a Shopee coincide com o início da falha; a janela tem um volume grande
+de commits `ops:` sobre instabilidade/recuperação do "Fred-Win Desktop Commander" e "VM checkout
+migration" (incluindo uma limpeza de "stale Shopee unit backups" em 2026-08-25T11:53), o que é
+suspeito mas não confirmado como causa — requer acesso SSH à VM (que este ambiente não tem) para
+confirmar se o `shopee-token-renewer` parou de rodar ou se `shared/shopee-tokens.json` foi
+sobrescrito/removido. **Ação sugerida:** Fred conferir na VM (`ssh ubuntu@137.131.156.17`) o
+status de `shopvivaliz-shopee-token-renewer.service` e o conteúdo/validade de
+`shopvivaliz-deploy/shared/shopee-tokens.json`, e comparar com o `.env` esperado antes da janela de
+instabilidade. Detalhe completo em `docs/MEMORIA-AGENTES.md`, entrada 2026-08-25.
 
 ### Atualização 2026-08-15 — bloqueador primário corrigido; premissa dos registros abaixo (2026-07-XX) estava errada
 
