@@ -19,5 +19,11 @@ jobs:
         with:
           php-version: '8.3'
           coverage: none
-      - name: Verify orphan wrapper guard
-        run: php tests/desktop-commander-orphan-wrapper-guard-contract-test.php
+      - name: Verify Desktop Commander contracts
+        run: |
+          set -euo pipefail
+          php tests/desktop-commander-orphan-wrapper-guard-contract-test.php
+          php tests/desktop-commander-auto-repair-guard-contract-test.php
+          php tests/desktop-commander-health-restart-contract-test.php
+          php tests/desktop-commander-persist-session-contract-test.php
+          php tests/desktop-commander-three-host-action-contract-test.php
