@@ -6,6 +6,7 @@ $KeyPath = 'C:\Users\FRED\Downloads\ssh-key-2026-07-04.key'
 $KnownHostsPath = 'C:\Users\FRED\.ssh\known_hosts'
 $VMHost = '137.131.156.17'
 $VMUser = 'ubuntu'
+$SshExe = 'C:\Program Files\Git\usr\bin\ssh.exe'
 $LogDir = 'C:\site-shopvivaliz\logs'
 $LogFile = Join-Path $LogDir 'fredwin-managed-tunnel.log'
 
@@ -25,14 +26,17 @@ if (!(Test-Path -LiteralPath $KnownHostsPath)) {
     Write-TunnelLog 'ERROR known_hosts missing; refusing unverified SSH'
     exit 3
 }
-
+if (!(Test-Path -LiteralPath $SshExe)) {
+    Write-TunnelLog 'ERROR Git SSH missing at managed path'
+    exit 4
+}
 Write-TunnelLog 'Managed reverse tunnel service started'
 $attempt = 0
 while ($true) {
     $attempt++
     Write-TunnelLog ("Connecting attempt=$attempt private-forwards=2222,5557")
     try {
-        & ssh -i $KeyPath `
+        & $SshExe -i $KeyPath `
             -R 2222:127.0.0.1:22 `
             -R 5557:127.0.0.1:5557 `
             -o 'BatchMode=yes' `

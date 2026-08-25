@@ -198,13 +198,14 @@ jobs:
               auth = is_true(values.get('AUTH_REQUIRED'))
               recovery = 'blocked_by_provider_auth' if auth else 'not_attempted'
               if not auth and MAX_REPAIR_ATTEMPTS == 1:
+                  repair_mode = 'InstallTask' if not is_true(values.get('TASK_EXISTS')) else 'Ensure'
                   repair = (
                       'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command '
                       '"& { $ErrorActionPreference=\'Stop\'; Set-Location \'C:\\site-shopvivaliz\'; '
                       'git fetch origin main | Out-Null; if ($LASTEXITCODE -ne 0) { throw \'git fetch failed\' }; '
                       'git merge --ff-only origin/main | Out-Null; if ($LASTEXITCODE -ne 0) { throw \'git sync failed\' }; '
-                      f'& \'C:\\site-shopvivaliz\\scripts\\{supervisor_script}\' -Mode InstallTask; '
-                      f'& \'C:\\site-shopvivaliz\\scripts\\{bootstrap_script}\' -Mode InstallTask }}"'
+                      f'& \'C:\\site-shopvivaliz\\scripts\\{supervisor_script}\' -Mode {repair_mode}; '
+                      f'& \'C:\\site-shopvivaliz\\scripts\\{bootstrap_script}\' -Mode Ensure }}"'
                   )
                   repair_ok, _ = relay_exec(port, repair, want_output=False)
                   recovery = 'repair_requested' if repair_ok else 'repair_path_restarted'

@@ -179,87 +179,8 @@ body.sv-home-page .hero-cta .btn {
     margin-bottom: 14px !important;
 }
 
-.product-detail {
-    grid-template-columns: minmax(320px, .88fr) minmax(0, 1.12fr) !important;
-    gap: 26px !important;
-}
+/* Section 4: Product Detail handled by product-conversion-v5.css */
 
-.product-detail-image {
-    top: 86px !important;
-    min-height: 340px !important;
-    max-width: 420px !important;
-    border-radius: 22px !important;
-}
-
-.product-detail-image img {
-    max-height: 260px !important;
-}
-
-.product-detail-copy {
-    padding: 24px !important;
-    border-radius: 22px !important;
-}
-
-.product-detail-copy .product-category {
-    padding: 6px 10px !important;
-}
-
-.product-detail-copy h1 {
-    margin: 12px 0 10px !important;
-    font-size: clamp(28px, 3.2vw, 40px) !important;
-    line-height: 1.08 !important;
-}
-
-.product-detail-copy .product-description {
-    font-size: 15px !important;
-    line-height: 1.6 !important;
-}
-
-.product-detail-copy .product-price-block {
-    margin: 16px 0 12px !important;
-    padding: 16px !important;
-    border-radius: 16px !important;
-}
-
-.product-detail-copy .product-price-label {
-    font-size: 32px !important;
-}
-
-.product-detail-copy .product-confidence-box {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-    gap: 8px !important;
-    margin: 14px 0 !important;
-}
-
-.product-detail-copy .confidence-item {
-    justify-content: center;
-    min-height: 44px;
-    padding: 10px 12px;
-    text-align: center;
-    font-size: 12px;
-    line-height: 1.35;
-}
-
-.product-detail-copy .sv-purchase-controls {
-    margin: 14px 0 8px !important;
-}
-
-.product-detail-copy .produto-actions {
-    margin-top: 8px !important;
-}
-
-.product-detail-copy .produto-actions .btn {
-    min-height: 50px !important;
-}
-
-.product-detail-copy .sv-freight-box {
-    margin-top: 14px !important;
-    padding: 14px !important;
-}
-
-/* ==========================================================
-   5. TABLET E MOBILE
-   ========================================================== */
 @media (max-width: 980px) {
     .product-detail {
         grid-template-columns: 1fr !important;
@@ -440,63 +361,6 @@ body.sv-home-page .hero-cta .btn {
         display: none;
     }
 
-    .product-detail-image {
-        min-height: 240px !important;
-        max-width: 520px !important;
-        border-radius: 18px !important;
-    }
-
-    .product-detail-image img {
-        max-height: 190px !important;
-    }
-
-    .product-detail-image::after {
-        left: 12px !important;
-        bottom: 12px !important;
-        padding: 6px 9px !important;
-    }
-
-    .product-detail-copy {
-        padding: 18px 16px !important;
-        border-radius: 18px !important;
-    }
-
-    .product-detail-copy h1 {
-        margin: 10px 0 8px !important;
-        font-size: clamp(23px, 7.8vw, 30px) !important;
-        line-height: 1.12 !important;
-    }
-
-    .product-detail-copy .product-price-block {
-        margin: 12px 0 10px !important;
-        padding: 14px !important;
-    }
-
-    .product-detail-copy .product-price-label {
-        font-size: 28px !important;
-    }
-
-    .product-detail-copy .product-confidence-box {
-        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-        gap: 7px !important;
-        margin: 12px 0 !important;
-    }
-
-    .product-detail-copy .confidence-item {
-        min-height: 42px;
-        padding: 9px 8px;
-        font-size: 11px;
-    }
-
-    .product-detail-copy .sv-purchase-controls {
-        grid-template-columns: 100px minmax(0, 1fr) !important;
-        gap: 8px !important;
-        margin-top: 12px !important;
-    }
-
-    .product-detail-copy .produto-actions .btn {
-        min-height: 48px !important;
-    }
 
     .sv-mobile-buybar {
         left: 8px !important;
