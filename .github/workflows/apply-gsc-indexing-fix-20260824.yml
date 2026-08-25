@@ -1,0 +1,58 @@
+name: Apply GSC indexing fix 2026-08-24
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/apply-gsc-indexing-fix-20260824.yml"
+      - "ops/gsc-indexing-fix-20260824.patch"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-gsc-indexing-fix-20260824
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply verified patch
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -f ops/gsc-indexing-fix-20260824.patch
+          git apply --check ops/gsc-indexing-fix-20260824.patch
+          git apply ops/gsc-indexing-fix-20260824.patch
+      - name: Verify PHP and SEO regressions
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php -l catalogo.php
+          php -l produto.php
+          php tests/google-indexing-canonical-regression-test.php
+          php tests/legacy-product-seo-test.php
+          php tests/ecommerce-excellence-regression-test.php
+          git diff --check
+      - name: Commit and publish
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name "shopvivaliz-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git rm ops/gsc-indexing-fix-20260824.patch
+          git add .htaccess catalogo.php produto.php tests/google-indexing-canonical-regression-test.php tests/legacy-product-seo-test.php
+          git commit -m "fix: normalize catalog canonicals and stale product redirects"
+          git pull --rebase origin main
+          php -l catalogo.php
+          php -l produto.php
+          php tests/google-indexing-canonical-regression-test.php
+          php tests/legacy-product-seo-test.php
+          php tests/ecommerce-excellence-regression-test.php
+          git diff --check
+          git push origin HEAD:main
