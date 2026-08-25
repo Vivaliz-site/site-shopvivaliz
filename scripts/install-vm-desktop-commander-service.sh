@@ -11,6 +11,7 @@ LIB_DIR='/usr/local/lib/shopvivaliz'
 SUPERVISOR_TARGET="$LIB_DIR/vm-desktop-commander-supervisor.sh"
 SERVICE='shopvivaliz-desktop-commander.service'
 LEGACY_SERVICE='desktop-commander.service'
+LEGACY_UNIT_TARGET='/etc/systemd/system/desktop-commander.service'
 TARGET_USER='ubuntu'
 CANONICAL_SIGNATURE='@wonderwhy-er/desktop-commander@0.2.47 remote --persist-session'
 
@@ -67,6 +68,12 @@ if SERVICE_MAINPID="$(systemctl show -p MainPID --value "$SERVICE" 2>/dev/null)"
 
 if systemctl cat "$LEGACY_SERVICE" >/dev/null 2>&1; then
   systemctl disable --now "$LEGACY_SERVICE"
+fi
+rm -f "$LEGACY_UNIT_TARGET"
+systemctl daemon-reload
+if systemctl cat "$LEGACY_SERVICE" >/dev/null 2>&1; then
+  echo 'ERROR legacy Desktop Commander unit still present' >&2
+  exit 7
 fi
 
 while read -r pid args; do
