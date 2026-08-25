@@ -45,38 +45,16 @@ jobs:
           echo "ZONE_ID=$zone_id"
 
           records=$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records?type=A&per_page=100")
+          echo "$records" > /tmp/records.json
 
-          echo "$records" | python3 -c "
-import json, sys, os
-d = json.load(sys.stdin)
-old_ip = os.environ['OLD_IP']
-for r in d.get('result', []):
-    if r.get('content') == old_ip:
-        print(f\"MATCH id={r['id']} name={r['name']} proxied={r['proxied']}\")
-"
+          python3 -c 'import json,os; d=json.load(open("/tmp/records.json")); old=os.environ["OLD_IP"]; [print(f"MATCH id={r[\"id\"]} name={r[\"name\"]} proxied={r[\"proxied\"]}") for r in d.get("result",[]) if r.get("content")==old]'
 
           if [ "$APPLY" != "true" ]; then
-            echo "DRY_RUN_ONLY (apply=false) — nenhuma mudanca foi feita"
+            echo "DRY_RUN_ONLY (apply=false) - nenhuma mudanca foi feita"
             exit 0
           fi
 
-          echo "$records" | python3 -c "
-import json, sys, os
-d = json.load(sys.stdin)
-old_ip = os.environ['OLD_IP']
-ids = [r['id'] for r in d.get('result', []) if r.get('content') == old_ip]
-print(json.dumps(ids))
-" > /tmp/ids.json
-
-          ids=$(cat /tmp/ids.json)
-          echo "IDS_TO_UPDATE=$ids"
-
-          echo "$ids" | python3 -c "
-import json, sys
-ids = json.load(sys.stdin)
-for i in ids:
-    print(i)
-" > /tmp/ids.txt
+          python3 -c 'import json,os; d=json.load(open("/tmp/records.json")); old=os.environ["OLD_IP"]; ids=[r["id"] for r in d.get("result",[]) if r.get("content")==old]; [print(i) for i in ids]' > /tmp/ids.txt
 
           while IFS= read -r rid; do
             [ -z "$rid" ] && continue
