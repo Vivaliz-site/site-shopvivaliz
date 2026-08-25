@@ -1,4 +1,4 @@
 {
   "action": "recover_session",
-  "reason": "restore infra scripts, clear stale auth cooldown, and ensure DC without merging work branch"
+  "reason": "recover Fred-Win DC after orphan-wrapper cleanup investigation at 2026-08-24T21:27-03:00"
 }
