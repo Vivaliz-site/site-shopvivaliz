@@ -13,6 +13,10 @@ if (-not $env:LOCALAPPDATA -and $env:USERPROFILE) { $env:LOCALAPPDATA = Join-Pat
 $DeviceFile = if ($env:USERPROFILE) { Join-Path (Join-Path $env:USERPROFILE '.desktop-commander-device') 'device.json' } else { $null }
 $CooldownFile = 'C:\site-shopvivaliz\logs\desktop-commander-auth-required.cooldown'
 
+function Test-DeviceStateNewerThanCooldown {
+    if (-not $DeviceFile -or -not (Test-Path -LiteralPath $DeviceFile) -or -not (Test-Path -LiteralPath $CooldownFile)) { return $false }
+    return ((Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc -gt (Get-Item -LiteralPath $CooldownFile).LastWriteTimeUtc)
+}
 function Get-DesktopCommanderRemoteLaunchers {
     return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
         $cmd = [string]$_.CommandLine
@@ -68,5 +72,5 @@ if ($task) {
     Write-Output ('TASK_LOGON_TYPE=' + $task.Principal.LogonType)
     Write-Output ('TASK_RUN_LEVEL=' + $task.Principal.RunLevel)
 }
-$authRequired = (Test-Path -LiteralPath $CooldownFile)
+$authRequired = ((Test-Path -LiteralPath $CooldownFile) -and -not (Test-DeviceStateNewerThanCooldown))
 Write-Output ('AUTH_REQUIRED=' + $authRequired)
