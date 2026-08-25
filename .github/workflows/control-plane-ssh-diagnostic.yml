@@ -17,6 +17,7 @@ jobs:
     timeout-minutes: 8
     env:
       STATUS_ISSUE: '1207'
+      DIAGNOSTIC_VERSION: '2'
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +35,7 @@ jobs:
             echo '```text'
             echo "VM_KEY=$([ -n "${VM_KEY:-}" ] && echo SET || echo MISSING)"
             echo "VM_HOSTS=$([ -n "${VM_HOSTS:-}" ] && echo SET || echo MISSING)"
+            echo "DIAGNOSTIC_VERSION=${DIAGNOSTIC_VERSION}"
           } > /tmp/control-plane-ssh-diagnostic.md
           test -n "${VM_KEY:-}"
           test -n "${VM_HOSTS:-}"
