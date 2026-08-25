@@ -1,4 +1,4 @@
 {
   "action": "recover_session",
-  "reason": "post-reboot recovery: clear AUTH_REQUIRED cooldown, restore canonical Fred-Win Desktop Commander session, keep dirty checkout untouched"
+  "reason": "2026-08-25 08:59 BRT: recover Fred-Win through canonical VM relay 5557 after cross-host tunnel collision cleanup; preserve unrelated local work"
 }
