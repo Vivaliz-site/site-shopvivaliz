@@ -156,7 +156,6 @@ jobs:
                   f'& \'C:\\site-shopvivaliz\\scripts\\{supervisor}\' -Mode {mode}; '
                   f'& \'C:\\site-shopvivaliz\\scripts\\{bootstrap}\' -Mode {mode} }}"'
               )
-              ensure_marker = '-Mode Ensure'
               repaired, _ = relay(port, repair, want_output=False)
               time.sleep(20)
               ok2, out2 = relay(port, status)
