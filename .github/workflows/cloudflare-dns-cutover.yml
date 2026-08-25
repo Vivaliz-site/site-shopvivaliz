@@ -47,7 +47,12 @@ jobs:
           records=$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records?type=A&per_page=100")
           echo "$records" > /tmp/records.json
 
-          python3 -c 'import json,os; d=json.load(open("/tmp/records.json")); old=os.environ["OLD_IP"]; [print(f"MATCH id={r[\"id\"]} name={r[\"name\"]} proxied={r[\"proxied\"]}") for r in d.get("result",[]) if r.get("content")==old]'
+          python3 -c 'import json,os
+d=json.load(open("/tmp/records.json"))
+old=os.environ["OLD_IP"]
+for r in d.get("result",[]):
+    if r.get("content")==old:
+        print("MATCH id=" + r["id"] + " name=" + r["name"] + " proxied=" + str(r["proxied"]))'
 
           if [ "$APPLY" != "true" ]; then
             echo "DRY_RUN_ONLY (apply=false) - nenhuma mudanca foi feita"
