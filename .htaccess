@@ -145,9 +145,14 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{REQUEST_METHOD} !^(?:GET|HEAD)$ [NC]
     RewriteRule ^admin/(?:menu-completo|menu-dashboard|dashboard|admin-back)\.php$ - [F,L,NC]
 
+    # Preservar slugs legados de produto: o resolver atual converte slugs antigos
+    # para o slug canonico e responde com o redirect definitivo quando necessario.
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^produtos/([^/]+)/?$ /produto/$1 [R=301,L,NE,NC]
+
     # URLs publicas remanescentes da vitrine anterior vao para o catalogo atual.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
-    RewriteRule ^(?:ferramentas|arte-papelaria-e-armarinho|produtos)(?:/.*)?$ /catalogo [R=301,L,NE,QSD,NC]
+    RewriteRule ^(?:ferramentas|arte-papelaria-e-armarinho|produtos)(?:/.*)?$ /catalogo/ [R=301,L,NE,QSD,NC]
 
     # Nunca expor arquivos internos de configuracao e operacao
     RewriteRule ^config/ - [F,L]

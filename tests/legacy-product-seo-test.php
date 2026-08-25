@@ -8,7 +8,7 @@ if (!is_string($htaccess) || $htaccess === '') {
 }
 
 $specific = 'RewriteRule ^produtos/([^/]+)/?$ /produto/$1 [R=301,L,NE,NC]';
-$generic = 'RewriteRule ^(?:ferramentas|arte-papelaria-e-armarinho|produtos)(?:/.*)?$ /catalogo [R=301,L,NE,QSD,NC]';
+$generic = 'RewriteRule ^(?:ferramentas|arte-papelaria-e-armarinho|produtos)(?:/.*)?$ /catalogo/ [R=301,L,NE,QSD,NC]';
 
 $specificPos = strpos($htaccess, $specific);
 $genericPos = strpos($htaccess, $generic);
