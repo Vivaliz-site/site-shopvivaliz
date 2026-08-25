@@ -40,6 +40,35 @@ jobs:
             install_or_repair)
               COMMAND='set -Eeuo pipefail; cd /home/ubuntu/shopvivaliz-deploy/repo; git fetch origin main >/dev/null; git merge --ff-only origin/main >/dev/null; sudo bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/install-vm-desktop-commander-service.sh'
               ;;
+            apply_checkout_migration)
+              COMMAND='set -Eeuo pipefail; cd /home/ubuntu/shopvivaliz-deploy/repo; git fetch origin main >/dev/null; git reset --hard origin/main >/dev/null; python3 - <<'"'"'PY'"'"'
+from pathlib import Path
+for target in [Path("/home/ubuntu/shopvivaliz-deploy/repo/checkout.php"), Path("/home/ubuntu/shopvivaliz-deploy/current/checkout.php").resolve()]:
+    s = target.read_text(encoding="utf-8")
+    bad = "        if (!HAS_PAYMENT_GATEWAY) {\n            status.textContent = 'Pagamento online temporariamente indisponível. Fale no WhatsApp para finalizar seu pedido.';\n            status.className='checkout-status-msg err';\n            return;\n        }\n"
+    s = s.replace(bad, "", 1)
+    anchor = "        var btn = document.getElementById('submit-btn');\n        var status = document.getElementById('checkout-status');\n        var items = getCart();\n"
+    guard = "        if (!HAS_PAYMENT_GATEWAY) {\n            status.textContent = 'Pagamento online temporariamente indisponível. Fale no WhatsApp para finalizar seu pedido.';\n            status.className = 'checkout-status-msg err';\n            if (btn) {\n                btn.disabled = true;\n                btn.textContent = 'Pagamento indisponível';\n            }\n            return;\n        }\n"
+    if anchor not in s:
+        raise SystemExit(f"anchor missing in {target}")
+    if guard not in s:
+        s = s.replace(anchor, anchor + guard, 1)
+    if "function renderCart() {\n        var items = getCart();\n        if (!HAS_PAYMENT_GATEWAY)" in s:
+        raise SystemExit(f"guard still in renderCart in {target}")
+    if guard not in s:
+        raise SystemExit(f"guard missing in submit in {target}")
+    target.write_text(s, encoding="utf-8")
+    print(f"patched={target}")
+PY
+php -l /home/ubuntu/shopvivaliz-deploy/repo/checkout.php; php -l /home/ubuntu/shopvivaliz-deploy/current/checkout.php; sudo apache2ctl configtest; sudo systemctl reload apache2; python3 - <<'"'"'PY'"'"'
+import ssl, urllib.request
+ctx = ssl._create_unverified_context()
+for url in ["https://shopvivaliz.com.br/api/health.php", "https://shopvivaliz.com.br/checkout.php"]:
+    with urllib.request.urlopen(url, timeout=25, context=ctx) as r:
+        data = r.read().decode("utf-8", "ignore")
+    print(url.rsplit("/", 1)[-1], "code", r.status, "size", len(data), "gateway_msg", "Pagamento online temporariamente indisponível" in data, "bad_render_guard", "function renderCart() {\n        var items = getCart();\n        if (!HAS_PAYMENT_GATEWAY)" in data)
+PY'
+              ;;
             restart)
               COMMAND='set -Eeuo pipefail; sudo systemctl restart shopvivaliz-desktop-commander.service; sleep 5; systemctl is-active --quiet shopvivaliz-desktop-commander.service || test -f "$HOME/.desktop-commander-device/auth-required.cooldown"'
               ;;
