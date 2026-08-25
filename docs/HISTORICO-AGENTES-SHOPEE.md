@@ -1227,3 +1227,67 @@ artefato novo com erro diferente, execução de `shopee-production-seo.yml` com 
 bem-sucedido) ocorreu. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos
 19–33: regenerar client OAuth2 na Tiny e recriar `fetch-shopee-listings.yml`/
 `optimize-shopee-listings.yml` (ver seção 🔴 de `docs/AGENTS.md`).
+
+### 9.30 Atualização — ciclo de 2026-08-25 (~07h UTC), 35º ciclo — **NOVO bloqueador**: `shopee-runtime-health.yml` virou `failure` desde 2026-08-22 ~13h UTC (credenciais VM "incompletas"), quebra a única prova de leitura real que restava
+
+Diferente dos ciclos 19-34 (estado idêntico entre si), este ciclo encontrou uma mudança de estado
+real. Checagem via `git fetch origin main` (HEAD local estava em `4433895`, sincronizado sem
+conflito para `3eb0810`) e `mcp__github__actions_list`/`get_job_logs` (`list_workflow_runs` para
+`shopee-production-seo.yml` e `shopee-runtime-health.yml`, com `workflow_runs_filter.event=schedule`
+para isolar as execuções agendadas e paginar até achar o ponto de virada); `env | grep -iE
+"SHOPEE|TINY|OLIST"` continua vazio neste sandbox, como esperado (ambiente de execução remoto, não
+a VM).
+
+**Achado principal:** `shopee-runtime-health.yml` (o health check que desde a correção de
+2026-08-14 confirmava leitura real do catálogo Shopee na VM a cada 6h, ver seção 9.21/entrada
+2026-08-15 de `KNOWN_ISSUES.md`) estava `conclusion: success` em todas as execuções agendadas até
+`32558400782` (run #1114, 2026-08-22T06:59:32Z) e virou `conclusion: failure` a partir de
+`32574564860` (run #1121, 2026-08-22T13:00:54Z) — **13 execuções agendadas consecutivas em
+`failure`** até a mais recente checada (`32820157818`, run #1277, 2026-08-25T07:08:34Z), cobrindo
+~2 dias e 18h sem nenhum ciclo de sucesso. O erro é idêntico em todas as execuções confirmadas
+(logs de `32611709229` e `32820157818` lidos por completo): o passo SSH conecta normalmente na VM
+(`ubuntu@137.131.156.17`, `StrictHostKeyChecking=yes`, sem erro de host/chave) e roda
+`scripts/shopee_runtime_exec.py --env-file .../shared/.env -- scripts/shopee_runtime_preflight.py`,
+mas o script termina em ~3-6s com `ERROR: required Shopee runtime credentials are incomplete`
+(exit code 4) — ou seja, o problema não é SSH/rede/deploy, é a leitura de
+`SHOPEE_PARTNER_ID`/`SHOPEE_PARTNER_KEY`/`SHOPEE_SHOP_ID`/`SHOPEE_ACCESS_TOKEN`/
+`SHOPEE_REFRESH_TOKEN` a partir de `shared/.env`/`shared/shopee-tokens.json` na própria VM — as
+mesmas credenciais que a auditoria de 2026-08-14 confirmou presentes e funcionais.
+
+`git log` no repo entre 2026-08-21 e 2026-08-23 não mostra nenhum commit tocando
+`core/config/ShopeeSecretsLoader.php`, `core/config/ShopeeConfig.php`,
+`daemon-shopee-token-renewer.py`, `scripts/shopee-token-tool.py`,
+`deploy/systemd/shopvivaliz-shopee-token-renewer.service`, `scripts/shopee_runtime_exec.py` ou
+`scripts/shopee_runtime_preflight.py`, nem nenhum commit com "token"/"credential"/"renew"/"shopee"
+na mensagem nesse intervalo — **a regressão não tem origem em código deste repositório**. A causa
+mais provável é rotação/expiração do token Shopee em si (o par access/refresh token é rotativo,
+renovado por `shopvivaliz-shopee-token-renewer.service` na VM) ou uma falha silenciosa desse
+serviço; este agente não tem acesso SSH à VM neste ambiente sandbox para confirmar via
+`journalctl -u shopvivaliz-shopee-token-renewer.service`, então a causa raiz exata fica em aberto.
+Não existe workflow de GitHub Actions dedicado à renovação do token Shopee (só o systemd na VM) —
+`.github/workflows/` só tem `audit-exchange-app-token.yml`, `refresh-olist-token-2h.yml` e
+`runtime-token-security.yml` para outras integrações, nenhum para Shopee.
+
+`shopee-production-seo.yml` permanece com as mesmas 5 execuções de 2026-07-30, todas `failure`, sem
+execução nova (esperado). Nenhum endpoint de analytics do Shopee Open Platform (CTR, conversão)
+segue integrado — a análise orientada a dado pedida por este agente de otimização permanece
+tecnicamente inexequível, e agora nem a leitura de catálogo (que sustentava pelo menos a parte
+"ler o catálogo real" do pipeline) está comprovada.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. **Notificação push
+enviada neste ciclo** — critério de aviso "artefato novo com erro diferente" (definido nos ciclos
+anteriores, seção 9) foi atingido: a prova de leitura real que existia desde 2026-08-15 parou de
+existir, silenciosamente, há quase 3 dias, sem que nenhum ciclo anterior a este tivesse detectado
+(o ciclo 34, a checagem anterior mais recente, rodou em 2026-08-19, antes da regressão começar em
+2026-08-22).
+
+**Ação sugerida para quando o usuário tiver tempo:** (1) verificar
+`systemctl status shopvivaliz-shopee-token-renewer.service` e
+`journalctl -u shopvivaliz-shopee-token-renewer.service -n 100` na VM
+(`ssh ubuntu@137.131.156.17`) para confirmar se o serviço de renovação do token Shopee está ativo
+e sem erro; (2) se o token realmente expirou, reautorizar a app Shopee Open Platform e regravar
+`shared/shopee-tokens.json`/`shared/.env`; (3) depois de corrigir, confirmar via
+`shopee-runtime-health.yml` (`workflow_dispatch` manual) que volta a `conclusion: success` antes de
+considerar resolvido. Isso é independente e não deve ser confundido com o bloqueador Tiny OAuth2
+(seção 🔴 de `docs/AGENTS.md`) — são credenciais e sistemas diferentes.

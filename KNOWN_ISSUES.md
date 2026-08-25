@@ -82,9 +82,39 @@ Ao adicionar novo arquivo em `/includes/` que precisa ser público:
 
 ---
 
-## 🟡 Rotina de otimização inteligente Shopee (6h): credencial corrigida em 2026-08-14, mas falta integração de analytics (CTR/conversão)
+## 🟡 Rotina de otimização inteligente Shopee (6h): credencial corrigida em 2026-08-14, **regrediu em 2026-08-22**, e falta integração de analytics (CTR/conversão)
 
-**Última atualização:** 2026-08-15
+**Última atualização:** 2026-08-25
+
+### Atualização 2026-08-25 — regressão: `shopee-runtime-health.yml` voltou a falhar desde 2026-08-22 ~13h UTC
+
+O health check que a correção de 2026-08-15 (abaixo) deixou rodando com sucesso a cada 6h **parou
+de funcionar**: `conclusion: success` em toda execução agendada até a run `32558400782`
+(2026-08-22T06:59:32Z), e `conclusion: failure` em todas as 13 execuções agendadas seguintes até
+`32820157818` (2026-08-25T07:08:34Z, a mais recente checada) — quase 3 dias sem nenhuma prova de
+leitura real do catálogo Shopee. O erro (idêntico em todas as execuções confirmadas) é
+`ERROR: required Shopee runtime credentials are incomplete` (exit 4), disparado por
+`scripts/shopee_runtime_exec.py` já **depois** de a conexão SSH com a VM ter sucedido — ou seja,
+não é problema de rede/deploy/chave SSH, é a leitura de `SHOPEE_PARTNER_ID`/`SHOPEE_PARTNER_KEY`/
+`SHOPEE_SHOP_ID`/`SHOPEE_ACCESS_TOKEN`/`SHOPEE_REFRESH_TOKEN` a partir de
+`shared/.env`/`shared/shopee-tokens.json` na própria VM, as mesmas credenciais que a auditoria de
+2026-08-14 tinha confirmado presentes e funcionais.
+
+Nenhum commit neste repositório entre 2026-08-21 e 2026-08-23 toca os arquivos relevantes
+(`core/config/ShopeeSecretsLoader.php`, `daemon-shopee-token-renewer.py`,
+`scripts/shopee_runtime_exec.py`, etc.) nem menciona token/credential/renew/Shopee — a causa não é
+uma regressão de código. Suspeita mais provável: expiração/rotação do token Shopee em si, ou falha
+silenciosa do `shopvivaliz-shopee-token-renewer.service` na VM. Não há como confirmar a causa exata
+a partir do sandbox de agente (sem acesso SSH); requer verificação manual na VM
+(`systemctl status shopvivaliz-shopee-token-renewer.service`,
+`journalctl -u shopvivaliz-shopee-token-renewer.service -n 100`) e, se o token expirou de fato,
+reautorização da app Shopee Open Platform.
+
+**Isso é um bloqueador diferente e mais restrito do que a lacuna de analytics registrada abaixo**
+(2026-08-15): antes disso, o pipeline pelo menos conseguia ler o catálogo real; agora nem isso está
+comprovado. Detalhe completo: `docs/HISTORICO-AGENTES-SHOPEE.md` seção 9.30.
+
+---
 
 ### Atualização 2026-08-15 — bloqueador primário corrigido; premissa dos registros abaixo (2026-07-XX) estava errada
 
