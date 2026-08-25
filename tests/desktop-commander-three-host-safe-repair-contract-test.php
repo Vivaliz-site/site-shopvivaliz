@@ -5,7 +5,8 @@ if (!is_file($path)) { fwrite(STDERR, "FALHOU: control plane ausente\n"); exit(1
 $yml = file_get_contents($path);
 foreach ([
     'git restore --source=origin/main --',
-    '-Mode Ensure',
+    "mode = 'InstallTask' if needs_install else 'Ensure'",
+    "not truth(v.get('TASK_EXISTS'))",
     'TASK_LOGON_TYPE',
     'TASK_RUN_LEVEL'
 ] as $needle) {
@@ -13,10 +14,7 @@ foreach ([
         fwrite(STDERR, "FALHOU: reparo seguro sem {$needle}\n"); exit(1);
     }
 }
-foreach ([
-    'git merge --ff-only origin/main',
-    "f'& \\'C:\\\\site-shopvivaliz\\\\scripts\\\\{supervisor}\\' -Mode InstallTask; '"
-] as $needle) {
+foreach (['git merge --ff-only origin/main'] as $needle) {
     if (strpos($yml, $needle) !== false) {
         fwrite(STDERR, "FALHOU: reparo central ainda destrutivo {$needle}\n"); exit(1);
     }
