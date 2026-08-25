@@ -1,4 +1,4 @@
 {
   "action": "recover_session",
-  "reason": "deploy merged orphan-wrapper guard b0156de78bb37dc382b96c184140213c4fa58881 to Fred-Win without merging local worktree"
+  "reason": "post-reboot recovery: clear AUTH_REQUIRED cooldown, restore canonical Fred-Win Desktop Commander session, keep dirty checkout untouched"
 }
