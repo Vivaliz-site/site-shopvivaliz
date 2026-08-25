@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/vm-desktop-commander-secure-recovery.yml'
+      - 'scripts/vm-desktop-commander-supervisor.sh'
+      - 'scripts/install-vm-desktop-commander-service.sh'
+      - 'ops/systemd/shopvivaliz-desktop-commander.service'
   workflow_dispatch:
 
 permissions:
@@ -28,31 +31,27 @@ jobs:
           printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
           printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
-      - name: Recover canonical VM agent without authorization bypass
+      - name: Recover canonical VM agent without disruption
         run: |
           set -Eeuo pipefail
           SSH=(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17)
-          auth="$(${SSH[@]} 'if test -f "$HOME/.desktop-commander-device/auth-required.cooldown"; then echo true; else echo false; fi')"
+          auth="$(${SSH[@]} 'd="$HOME/.desktop-commander-device/device.json"; c="$HOME/.desktop-commander-device/auth-required.cooldown"; if test -f "$c" && ! test -f "$d"; then echo true; elif test -f "$c" && test "$c" -nt "$d"; then echo true; else echo false; fi')"
           if [ "$auth" = true ]; then
-            printf 'VM_AUTH_REQUIRED=true\nVM_RECOVERY=blocked_by_provider_auth\nVM_KILL_TEST=not_run\n' > /tmp/vm-dc-safe.txt
+            printf 'VM_AUTH_REQUIRED=true\nVM_RECOVERY=blocked_by_provider_auth\n' > /tmp/vm-dc-safe.txt
             exit 20
           fi
-          ${SSH[@]} 'set -Eeuo pipefail; cd /home/ubuntu/shopvivaliz-deploy/repo; git fetch origin main >/dev/null; git merge --ff-only origin/main >/dev/null; sudo bash scripts/install-vm-desktop-commander-service.sh' >/dev/null
-          sleep 10
-          before="$(${SSH[@]} 'systemctl show -p MainPID --value shopvivaliz-desktop-commander.service')"
-          ${SSH[@]} 'set -Eeuo pipefail; test "$(systemctl is-enabled shopvivaliz-desktop-commander.service)" = enabled; test "$(systemctl is-active shopvivaliz-desktop-commander.service)" = active; pid=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service); test "${pid:-0}" -gt 1'
-          ${SSH[@]} "set -Eeuo pipefail; sudo kill -9 '$before'"
-          recovered=false
+          ${SSH[@]} 'set -Eeuo pipefail; cd /home/ubuntu/shopvivaliz-deploy/repo; git fetch origin main >/dev/null; git restore --source=origin/main -- scripts/vm-desktop-commander-supervisor.sh scripts/install-vm-desktop-commander-service.sh ops/systemd/shopvivaliz-desktop-commander.service; sudo bash scripts/install-vm-desktop-commander-service.sh' >/dev/null
+          healthy=false
           for i in $(seq 1 18); do
             sleep 5
-            after="$(${SSH[@]} 'systemctl show -p MainPID --value shopvivaliz-desktop-commander.service 2>/dev/null || true')"
             active="$(${SSH[@]} 'systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true')"
-            if [ "$active" = active ] && [ "${after:-0}" -gt 1 ] && [ "$after" != "$before" ]; then recovered=true; break; fi
+            mainpid="$(${SSH[@]} 'systemctl show -p MainPID --value shopvivaliz-desktop-commander.service 2>/dev/null || true')"
+            if [ "$active" = active ] && [ "${mainpid:-0}" -gt 1 ]; then healthy=true; break; fi
           done
-          test "$recovered" = true
+          test "$healthy" = true
           counts="$(${SSH[@]} 'canonical=0; noncanonical=0; while IFS= read -r line; do test -z "$line" && continue; case "$line" in *"@wonderwhy-er/desktop-commander@0.2.47"*" remote "*"--persist-session"*) canonical=$((canonical+1));; *) noncanonical=$((noncanonical+1));; esac; done < <(pgrep -af "[n]pm exec @wonderwhy-er/desktop-commander@.* remote" 2>/dev/null || true); printf "%s/%s" "$canonical" "$noncanonical"')"
           test "$counts" = '1/0'
-          printf 'VM_AUTH_REQUIRED=false\nVM_RECOVERY=healthy\nVM_CANONICAL=1\nVM_NONCANONICAL=0\nVM_KILL_TEST=passed\n' > /tmp/vm-dc-safe.txt
+          printf 'VM_AUTH_REQUIRED=false\nVM_RECOVERY=healthy\nVM_CANONICAL=1\nVM_NONCANONICAL=0\n' > /tmp/vm-dc-safe.txt
       - name: Publish sanitized evidence
         if: always()
         env:

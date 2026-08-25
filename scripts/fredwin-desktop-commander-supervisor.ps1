@@ -32,6 +32,10 @@ function Ensure-ProfileEnvironment {
     $env:HOME = $env:USERPROFILE
     $script:DeviceFile = Join-Path (Join-Path $env:USERPROFILE '.desktop-commander-device') 'device.json'
 }
+function Test-DeviceStateNewerThanCooldown {
+    if (-not $DeviceFile -or -not (Test-Path -LiteralPath $DeviceFile) -or -not (Test-Path -LiteralPath $CooldownFile)) { return $false }
+    return ((Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc -gt (Get-Item -LiteralPath $CooldownFile).LastWriteTimeUtc)
+}
 function Get-DesktopCommanderRemoteLaunchers {
     return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
         $cmd = [string]$_.CommandLine
@@ -98,6 +102,7 @@ function Remove-LegacyPersistence {
 }
 function Test-RecentCooldown {
     if (-not (Test-Path -LiteralPath $CooldownFile)) { return $false }
+    if (Test-DeviceStateNewerThanCooldown) { return $false }
     $age = (Get-Date).ToUniversalTime() - (Get-Item -LiteralPath $CooldownFile).LastWriteTimeUtc
     return ($age.TotalHours -lt 6)
 }
@@ -107,6 +112,10 @@ function Ensure-Agent {
     if (-not (Test-Path -LiteralPath $DeviceFile)) {
         Log 'AUTH_REQUIRED device state missing; not starting interactive device flow'
         Write-Output 'AUTH_REQUIRED=true'; exit 20
+    }
+    if (Test-DeviceStateNewerThanCooldown) {
+        Remove-Item -LiteralPath $CooldownFile -Force -ErrorAction SilentlyContinue
+        Log 'Cleared stale auth cooldown because device state is newer'
     }
     Stop-OrphanDirectRemoteLaunchers
     $canonical = @(Get-CanonicalRemoteLaunchers)

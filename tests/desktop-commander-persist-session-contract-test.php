@@ -17,9 +17,11 @@ foreach (['fredwin' => $fred, 'vm' => $vm] as $name => $content) {
         }
     }
 }
-if (strpos($status, '$authRequired = (Test-Path -LiteralPath $CooldownFile)') === false) {
-    fwrite(STDERR, "FALHOU: status Fred-Win nao usa cooldown atual\n");
-    exit(1);
+foreach (['Test-Path -LiteralPath $CooldownFile', 'Test-DeviceStateNewerThanCooldown'] as $needle) {
+    if (strpos($status, $needle) === false) {
+        fwrite(STDERR, "FALHOU: status Fred-Win sem cooldown stale-aware: {$needle}\n");
+        exit(1);
+    }
 }
 if (strpos($status, 'Get-Content -LiteralPath $LogFile -Tail') !== false) {
     fwrite(STDERR, "FALHOU: status Fred-Win usa AUTH_REQUIRED historico do log\n");
