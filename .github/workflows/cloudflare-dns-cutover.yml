@@ -1,0 +1,90 @@
+name: Cloudflare DNS Cutover
+
+on:
+  workflow_dispatch:
+    inputs:
+      old_ip:
+        description: "IP atual a ser substituido nos registros A"
+        required: true
+      new_ip:
+        description: "Novo IP de destino"
+        required: true
+      apply:
+        description: "true para aplicar de fato; false so lista o que mudaria"
+        required: true
+        default: "false"
+
+permissions:
+  contents: read
+
+jobs:
+  cutover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: List and optionally update A records pointing to old_ip
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          OLD_IP: ${{ inputs.old_ip }}
+          NEW_IP: ${{ inputs.new_ip }}
+          APPLY: ${{ inputs.apply }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CF_TOKEN:-}" ]; then
+            echo 'CLOUDFLARE_API_TOKEN_MISSING'
+            exit 1
+          fi
+
+          zones=$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones?name=shopvivaliz.com.br")
+          zone_id=$(echo "$zones" | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d.get("result") or []; print(r[0]["id"] if r else "")')
+          if [ -z "$zone_id" ]; then
+            echo 'ZONE_NOT_FOUND'
+            exit 1
+          fi
+          echo "ZONE_ID=$zone_id"
+
+          records=$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records?type=A&per_page=100")
+
+          echo "$records" | python3 -c "
+import json, sys, os
+d = json.load(sys.stdin)
+old_ip = os.environ['OLD_IP']
+for r in d.get('result', []):
+    if r.get('content') == old_ip:
+        print(f\"MATCH id={r['id']} name={r['name']} proxied={r['proxied']}\")
+"
+
+          if [ "$APPLY" != "true" ]; then
+            echo "DRY_RUN_ONLY (apply=false) — nenhuma mudanca foi feita"
+            exit 0
+          fi
+
+          echo "$records" | python3 -c "
+import json, sys, os
+d = json.load(sys.stdin)
+old_ip = os.environ['OLD_IP']
+ids = [r['id'] for r in d.get('result', []) if r.get('content') == old_ip]
+print(json.dumps(ids))
+" > /tmp/ids.json
+
+          ids=$(cat /tmp/ids.json)
+          echo "IDS_TO_UPDATE=$ids"
+
+          echo "$ids" | python3 -c "
+import json, sys
+ids = json.load(sys.stdin)
+for i in ids:
+    print(i)
+" > /tmp/ids.txt
+
+          while IFS= read -r rid; do
+            [ -z "$rid" ] && continue
+            resp=$(curl -sS -X PATCH "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records/$rid" \
+              -H "Authorization: Bearer $CF_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data "{\"content\":\"$NEW_IP\"}")
+            echo "UPDATED[$rid]=$resp"
+          done < /tmp/ids.txt
+
+          echo "CUTOVER_APPLIED old=$OLD_IP new=$NEW_IP"
