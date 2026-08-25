@@ -133,13 +133,14 @@ jobs:
                   return dict(host=name,state='degraded',watchdog=f"task={v.get('TASK_EXISTS','unknown')},logon={v.get('TASK_LOGON_TYPE','unknown')},runlevel={v.get('TASK_RUN_LEVEL','unknown')}",canonical=v.get('CANONICAL_AGENT_COUNT','0'),auth='true',recovery='blocked_by_provider_auth')
               supervisor = f'{prefix}-desktop-commander-supervisor.ps1'
               bootstrap = 'fredwin-remote-bootstrap.ps1' if prefix == 'fredwin' else 'desktopkocepsv-remote-bootstrap.ps1'
+              mode = 'InstallTask' if not truth(v.get('TASK_EXISTS')) else 'Ensure'
               repair = (
                   'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command '
                   '"& { $ErrorActionPreference=\'Stop\'; Set-Location \'C:\\site-shopvivaliz\'; '
                   'git fetch origin main | Out-Null; if ($LASTEXITCODE -ne 0) { throw \'fetch failed\' }; '
                   'git merge --ff-only origin/main | Out-Null; if ($LASTEXITCODE -ne 0) { throw \'sync failed\' }; '
-                  f'& \'C:\\site-shopvivaliz\\scripts\\{supervisor}\' -Mode InstallTask; '
-                  f'& \'C:\\site-shopvivaliz\\scripts\\{bootstrap}\' -Mode InstallTask }}"'
+                  f'& \'C:\\site-shopvivaliz\\scripts\\{supervisor}\' -Mode {mode}; '
+                  f'& \'C:\\site-shopvivaliz\\scripts\\{bootstrap}\' -Mode Ensure }}"'
               )
               repaired, _ = relay(port, repair, want_output=False)
               time.sleep(20)
