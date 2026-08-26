@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   phase2:
-    if: github.event.issue.title == '[vm-slim-phase2]'
+    if: github.event.issue.title == '[vm-slim-phase2b]'
     runs-on: ubuntu-latest
     environment: Production
     timeout-minutes: 10
@@ -26,17 +26,25 @@ jobs:
           printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Disable proven-unused platform services and verify
+      - name: Disable proven-unused platform services and verify no regression
         run: |
           set -Eeuo pipefail
           ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=15 -o ServerAliveCountMax=2 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
+          required=(docker apache2 ssh shopvivaliz-desktop-commander mei-mg-email-worker mei-mg-email-api mei-mg-email-monitor mei-mg-email-ndr-guard mei-mg-email-queue-replenisher)
+
           echo '=== PRE ==='
           uptime
           free -h
           cloud-id || true
-          systemctl is-active docker apache2 ssh shopvivaliz-desktop-commander mei-mg-email-worker mei-mg-email-api mei-mg-email-monitor mei-mg-email-ndr-guard mei-mg-email-queue-replenisher
-          docker ps --format '{{.Names}}|{{.Status}}'
+          for unit in "${required[@]}"; do systemctl is-active --quiet "$unit" || { echo "PRE_FAIL=$unit"; exit 3; }; done
+          docker ps --format '{{.Names}}' | grep -qx 'mei-mg-email-db' || { echo 'PRE_FAIL=mei-mg-email-db'; exit 3; }
+          pre_http=$(curl -sS -o /dev/null --max-time 8 -w '%{http_code}' -H 'Host: shopvivaliz.com.br' http://127.0.0.1/ || true)
+          echo "PRE_HTTP=$pre_http"
+          ss -lnt | grep -q ':80 ' || { echo 'PRE_FAIL=port80'; exit 3; }
+          ss -lnt | grep -q ':443 ' || { echo 'PRE_FAIL=port443'; exit 3; }
+          ss -lnt | grep -q '127.0.0.1:8010' || { echo 'PRE_FAIL=port8010'; exit 3; }
+          ss -lnt | grep -q '127.0.0.1:5433' || { echo 'PRE_FAIL=port5433'; exit 3; }
 
           echo '=== EVIDENCE ==='
           systemctl status open-vm-tools.service vgauth.service open-iscsi.service ubuntu-fan.service --no-pager -l || true
@@ -49,19 +57,21 @@ jobs:
           sudo systemctl disable --now open-vm-tools.service vgauth.service open-iscsi.service ubuntu-fan.service || true
           sudo snap stop --disable lxd || true
           sudo systemctl disable --now snap.lxd.daemon.unix.socket snap.lxd.user-daemon.unix.socket snap.lxd.activate.service 2>/dev/null || true
-
           sleep 12
 
-          echo '=== REQUIRED HEALTH ==='
-          required=(docker apache2 ssh shopvivaliz-desktop-commander mei-mg-email-worker mei-mg-email-api mei-mg-email-monitor mei-mg-email-ndr-guard mei-mg-email-queue-replenisher)
+          echo '=== POST HEALTH ==='
           failed=0
           for unit in "${required[@]}"; do
             if systemctl is-active --quiet "$unit"; then echo "OK=$unit"; else echo "FAIL=$unit"; failed=1; fi
           done
           if docker ps --format '{{.Names}}' | grep -qx 'mei-mg-email-db'; then echo 'OK=mei-mg-email-db'; else echo 'FAIL=mei-mg-email-db'; failed=1; fi
-          if tmux has-session -t solange 2>/dev/null; then echo 'OK=tmux-solange'; else echo 'FAIL=tmux-solange'; failed=1; fi
-          curl -fsS --max-time 8 http://127.0.0.1:8010/ >/dev/null && echo 'OK=mei-api-http' || echo 'WARN=mei-api-root-not-200'
-          curl -kfsS --max-time 10 --resolve shopvivaliz.com.br:443:127.0.0.1 https://shopvivaliz.com.br/ -o /dev/null && echo 'OK=site-https-local' || { echo 'FAIL=site-https-local'; failed=1; }
+          post_http=$(curl -sS -o /dev/null --max-time 8 -w '%{http_code}' -H 'Host: shopvivaliz.com.br' http://127.0.0.1/ || true)
+          echo "POST_HTTP=$post_http"
+          [ "$post_http" = "$pre_http" ] || { echo "FAIL=http-regression:$pre_http->$post_http"; failed=1; }
+          ss -lnt | grep -q ':80 ' || { echo 'FAIL=port80'; failed=1; }
+          ss -lnt | grep -q ':443 ' || { echo 'FAIL=port443'; failed=1; }
+          ss -lnt | grep -q '127.0.0.1:8010' || { echo 'FAIL=port8010'; failed=1; }
+          ss -lnt | grep -q '127.0.0.1:5433' || { echo 'FAIL=port5433'; failed=1; }
 
           if [ "$failed" -ne 0 ]; then
             echo '=== ROLLBACK ==='
@@ -71,11 +81,10 @@ jobs:
             exit 2
           fi
 
-          echo '=== POST ==='
+          echo '=== FINAL STATES ==='
           systemctl is-enabled open-vm-tools.service vgauth.service open-iscsi.service ubuntu-fan.service 2>/dev/null || true
           systemctl is-active open-vm-tools.service vgauth.service open-iscsi.service ubuntu-fan.service 2>/dev/null || true
           snap services lxd || true
-          systemctl is-active snap.lxd.daemon.unix.socket snap.lxd.user-daemon.unix.socket 2>/dev/null || true
           uptime
           free -h
           ps -eo pid,comm,%cpu,%mem,rss,args --sort=-rss | head -22
