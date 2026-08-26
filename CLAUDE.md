@@ -17,28 +17,38 @@
 ## 📊 Visão Geral do Sistema
 
 ShopVivaliz é um **e-commerce de alto rendimento** com automação de:
-- **Deploy:** VM Oracle Cloud (IP `137.131.156.17`) tem **dois diretórios de produção com papéis
-  diferentes** — ver `### 🏗️ Arquitetura Real de Deploy` abaixo antes de mexer em qualquer coisa
-  na VM, principalmente `.env`. Não é FTP/HostGator.
+- **Deploy:** produção real roda na VM Oracle `shopvivaliz-micro-2` (IP `136.248.69.116`) —
+  ver `### 🔴 VM1 vs VM2 — não confundir (corrigido 2026-08-26)` logo abaixo antes de mexer em
+  qualquer coisa em qualquer uma das VMs, principalmente `.env`. Não é FTP/HostGator.
 - **Validação:** QA lint dispara em push/PR (`shopvivaliz-qa.yml`)
 - **Execução de Tarefas:** Fila autônoma (`tasks-queue.json`), múltiplos workflows agendados
 - **Agentes IA:** múltiplos agentes autônomos (Claude Code, e outros) commitam direto no repo —
   ver nota de risco abaixo
 
-### 🚧 Migração de VM em andamento (iniciada 2026-08-25)
+### 🔴 VM1 vs VM2 — não confundir (corrigido 2026-08-26)
 
-A VM Oracle original (`137.131.156.17`, shape `VM.Standard.E2.1.Micro`, 1GB RAM) hospeda
-simultaneamente shopvivaliz + outros projetos não relacionados (`mei-mg-email`,
-`solange-rolla-consultorio`) e sofreu um travamento total por memory thrashing em
-2026-08-25 (RAM+swap esgotados, sem OOM-killer, sistema parou de responder por ~12min até
-reboot manual). Duas VMs novas foram provisionadas no mesmo tenancy (`fredmourao`, Always
-Free) para separar as cargas:
+**Confusão real que já aconteceu nesta sessão e pode se repetir:** este arquivo dizia até
+2026-08-26 que `shopvivaliz-ai` (`137.131.156.17`, a VM original) era produção e que
+`shopvivaliz-micro-2` (`136.248.69.116`) era só um destino temporário planejado. **Isso estava
+errado/desatualizado.** Fred confirmou e foi verificado ao vivo (Apache vhost, logs de acesso
+reais via Cloudflare, `Content-Security-Policy` enforced batendo com o código, worker de fila
+de pagamentos ativo) que a realidade atual é:
 
-| VM | IP | Shape | Papel planejado | Status |
-|---|---|---|---|---|
-| `shopvivaliz-ai` (original) | `137.131.156.17` | E2.1.Micro (1GB) | Fica com mei-mg-email + solange após migração | Em produção |
-| `shopvivaliz-micro-2` | `136.248.69.116` | E2.1.Micro (1GB) | **Destino temporário da loja em produção** — "limpa", sem outros projetos | Provisionada 2026-08-25, SSH ok, DC pendente |
-| `shopvivaliz-free-a1` | *(pendente)* | A1.Flex (2 OCPU/12GB) | Destino final da loja quando a capacidade Ampere A1 liberar (retry automático em andamento) | Bloqueada por "Out of host capacity" da Oracle |
+| VM | IP | Papel real | Como confirmar |
+|---|---|---|---|
+| **VM1** `shopvivaliz-ai` | `137.131.156.17` | **DEV** — usado só para envio de e-mail (mei-mg-email) e testes. `ServerName dev.shopvivaliz.com.br` no Apache. **NÃO é produção**, apesar do nome "original". | `apache2ctl -S` mostra `dev.shopvivaliz.com.br`; `shopvivaliz_access.log` não tem tráfego real do Cloudflare |
+| **VM2** `shopvivaliz-micro-2` | `136.248.69.116` | **PRODUÇÃO REAL** — é quem serve `shopvivaliz.com.br` de verdade. | `shopvivaliz_access.log` mostra hits reais de IPs Cloudflare (`104.22.x`, `172.68-71.x`) pedindo `/produto/...`, `/api/ml/webhook`; `CSP` enforced ao vivo bate com `.htaccess`; deploy atual (`readlink current`) tem os 10 commits das Rodadas 1-10 + fix da fila de pagamentos na ancestralidade (confirmado via `git merge-base --is-ancestor`) |
+| `shopvivaliz-free-a1` | *(pendente)* | Destino final planejado quando a Oracle liberar capacidade Ampere A1.Flex (2 OCPU/12GB) — ver seção de retry abaixo. Quando for provisionada, o corte deve ser feito **a partir da VM2** (produção real), não da VM1. | Bloqueada por "Out of host capacity" da Oracle |
+
+**Antes de assumir que uma correção "está em produção" só por ter validado na VM1, confirme
+sempre em qual VM o teste foi feito.** Isso já causou 10 rodadas de correções + o fix da fila
+de pagamentos serem aplicados via `main` (o que é automático pro deploy de qualquer VM que
+rode o cron), mas a *validação ao vivo* de várias dessas rodadas foi feita testando a VM1,
+achando (erroneamente) que ela era produção. A boa notícia: como o deploy de ambas as VMs
+puxa do mesmo `main` via cron, os fixes de código chegaram na VM2 (produção real) de qualquer
+forma — confirmado retroativamente em 2026-08-26 (ver `docs/AGENTS.md`, entrada do mesmo dia).
+Mas a *validação ao vivo* (curl, headers, systemd status) precisa ser refeita contra a VM2
+sempre que houver dúvida.
 
 Chave SSH (mesma para as 3 VMs): `ssh -i "C:\Users\FRED\Downloads\ssh-key-2026-07-04.key"
 ubuntu@<IP>`. Também sincronizada nos secrets do GitHub `ORACLE_VM_SSH_KEY` +
@@ -47,10 +57,10 @@ provisionar/gerenciar recursos via `oci` CLI) estão em `~/.oci/config` local e 
 `OCI_CLI_USER`, `OCI_CLI_TENANCY`, `OCI_CLI_FINGERPRINT`, `OCI_CLI_REGION`,
 `OCI_CLI_KEY_CONTENT`.
 
-**Corte de DNS/produção para a `shopvivaliz-micro-2` ainda não foi feito** — pendente de
-confirmação explícita do Fred antes de qualquer mudança que afete o site ao vivo. Quando a
-migração para `shopvivaliz-micro-2` for concluída, ela é temporária: repetir para
-`shopvivaliz-free-a1` assim que essa instância for provisionada.
+**A VM2 (`shopvivaliz-micro-2`) já é a produção real desde antes de 2026-08-26** — não há mais
+"corte de DNS pendente" pra ela (o tráfego real já está lá, confirmado por log de acesso). O
+que resta pendente é só a migração futura pra `shopvivaliz-free-a1` quando ela for provisionada
+(ver seção de retry abaixo) — esse corte, quando acontecer, deve partir da VM2 como origem.
 
 ---
 
