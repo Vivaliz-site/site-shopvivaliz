@@ -1,0 +1,98 @@
+name: Old VM slimming maintenance
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  slim-old-vm:
+    if: github.event.issue.title == '[vm-slim-maintenance]'
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 12
+    steps:
+      - name: Configure SSH
+        env:
+          VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_SSH_KEY"
+          test -n "$VM_KNOWN_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Audit and disable proven-unneeded services
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=15 -o ServerAliveCountMax=2 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          echo '=== BASELINE ==='
+          uptime
+          free -h
+          df -h /
+          ps -eo pid,comm,%cpu,%mem,rss --sort=-%cpu | head -15
+
+          echo '=== EVIDENCE ==='
+          lsblk -o NAME,TYPE,SIZE,FSTYPE,MOUNTPOINTS
+          docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' || true
+          ss -tnp 2>/dev/null | grep -E '(:11434|:5556|:5557)' || true
+          systemctl is-active docker apache2 ssh shopvivaliz-desktop-commander mei-mg-email-worker mei-mg-email-api mei-mg-email-monitor mei-mg-email-ndr-guard mei-mg-email-queue-replenisher
+
+          echo '=== DISABLE OPTIONAL SERVICES ==='
+          sudo systemctl disable --now ollama.service mcp-universal.service fwupd.service udisks2.service || true
+          sudo systemctl disable --now iscsid.service iscsid.socket multipathd.service multipathd.socket || true
+          sudo systemctl disable --now fwupd-refresh.timer 2>/dev/null || true
+          sudo snap stop --disable oracle-cloud-agent || true
+
+          sleep 20
+
+          echo '=== ESSENTIAL HEALTH ==='
+          required=(docker apache2 ssh shopvivaliz-desktop-commander mei-mg-email-worker mei-mg-email-api mei-mg-email-monitor mei-mg-email-ndr-guard mei-mg-email-queue-replenisher)
+          failed=0
+          for unit in "${required[@]}"; do
+            if ! systemctl is-active --quiet "$unit"; then
+              echo "FAILED_REQUIRED=$unit"
+              failed=1
+            else
+              echo "OK_REQUIRED=$unit"
+            fi
+          done
+          if ! docker ps --format '{{.Names}}' | grep -qx 'mei-mg-email-db'; then
+            echo 'FAILED_REQUIRED=mei-mg-email-db'
+            failed=1
+          else
+            echo 'OK_REQUIRED=mei-mg-email-db'
+          fi
+          if ! tmux has-session -t solange 2>/dev/null; then
+            echo 'FAILED_REQUIRED=tmux-solange'
+            failed=1
+          else
+            echo 'OK_REQUIRED=tmux-solange'
+          fi
+          if [ "$failed" -ne 0 ]; then
+            echo 'ROLLBACK_OPTIONAL_SERVICES=true'
+            sudo systemctl enable --now ollama.service mcp-universal.service fwupd.service udisks2.service 2>/dev/null || true
+            sudo systemctl enable --now iscsid.socket multipathd.socket 2>/dev/null || true
+            sudo snap start --enable oracle-cloud-agent 2>/dev/null || true
+            exit 2
+          fi
+
+          echo '=== POST ==='
+          uptime
+          free -h
+          ps -eo pid,comm,%cpu,%mem,rss --sort=-%cpu | head -15
+          echo '=== OPTIONAL STATES ==='
+          systemctl is-enabled ollama.service mcp-universal.service fwupd.service udisks2.service iscsid.service multipathd.service 2>/dev/null || true
+          ps -eo pid,comm,%cpu,%mem,args | grep -E 'oracle-cloud-agent|gomon|oci-wlp|ollama|mcp-server-universal' | grep -v grep || true
+          REMOTE
+
+      - name: Cleanup SSH material
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
