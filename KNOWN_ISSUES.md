@@ -84,7 +84,56 @@ Ao adicionar novo arquivo em `/includes/` que precisa ser público:
 
 ## 🟡 Rotina de otimização inteligente Shopee (6h): credencial corrigida em 2026-08-14, mas falta integração de analytics (CTR/conversão)
 
-**Última atualização:** 2026-08-15
+**Última atualização:** 2026-08-26
+
+### Atualização 2026-08-26 — regressão nova: `shopee-runtime-health.yml` voltou a falhar desde 2026-08-22, sem ninguém ter registrado
+
+O ciclo agendado desta rotina (execução autônoma de 2026-08-26 ~01h UTC) checou o estado real via
+`mcp__github__actions_list`/`get_job_logs` em vez de assumir o texto da entrada de 2026-08-15
+abaixo. Achado: `shopee-runtime-health.yml` (o health check que prova leitura real de catálogo na
+VM, criado pela correção de 2026-08-15) rodou com sucesso de 2026-08-15 a 2026-08-21 (última
+execução `success`: run `1062`, 2026-08-21 18:55 UTC), mas **falha continuamente desde 2026-08-22
+18:48 UTC** (run `1123`) até a última execução agendada disponível no momento desta checagem (run
+`1304`, 2026-08-25 18:56 UTC) — **13 execuções seguidas em falha ao longo de ~3 dias**, sem que
+nenhuma sessão anterior tenha percebido ou registrado isso (não há entrada em
+`docs/HISTORICO-AGENTES-SHOPEE.md` entre 9.29 de 2026-08-19 e esta atualização).
+
+**Erro exato** (idêntico em todas as 13 execuções, confirmado via `get_job_logs` nos runs `1123` e
+`1304`): a etapa SSH conecta normalmente na VM (`137.131.156.17`) e roda
+`scripts/shopee_runtime_exec.py --env-file .../shared/.env -- scripts/shopee_runtime_preflight.py`
+em ~4-10s, mas o script retorna `ERROR: required Shopee runtime credentials are incomplete` (exit
+code 4) antes de conseguir provar `catalog_read`/`detail_read`. Não é falha de SSH/host key — a
+conexão e a execução remota funcionam; o problema é que o `.env`/`shopee-tokens.json` compartilhado
+na VM (`/home/ubuntu/shopvivaliz-deploy/shared/`) parece ter ficado com credencial Shopee
+incompleta a partir de 2026-08-22. Isso é anterior e possivelmente independente do travamento de
+memória da VM em 2026-08-25 registrado em `CLAUDE.md` (que só começou 3 dias depois, 08-25); vale
+checar as duas causas separadamente.
+
+**Não investigado ainda** (fora do alcance deste sandbox, que não tem `SHOPEE_TOKEN`/`SHOPEE_*` nas
+envs, como esperado): se é o serviço `shopvivaliz-shopee-token-renewer` (systemd, ver
+`deploy/systemd/shopvivaliz-shopee-token-renewer.service`) que parou de renovar o token rotativo, se
+o token foi revogado no painel Shopee, ou se `shared/.env`/`shared/shopee-tokens.json` foi
+sobrescrito/corrompido por alguma das mudanças de infraestrutura da VM na mesma janela (vários
+commits de "Desktop Commander"/"VM checkout migration" entre 08-22 e 08-25).
+
+**Ação sugerida para o Fred:** `ssh ubuntu@137.131.156.17` e inspecionar
+`/home/ubuntu/shopvivaliz-deploy/shared/.env` + `shared/shopee-tokens.json` (existem? têm todos os
+campos exigidos por `scripts/shopee_runtime_preflight.py`?) e o status do serviço
+`shopvivaliz-shopee-token-renewer` (`systemctl status`, logs) — provavelmente o token rotativo
+expirou sem renovação. Isso é anterior e mais restrito que o bloqueio de analytics (CTR/conversão)
+descrito na entrada de 2026-08-15 abaixo, que segue igualmente pendente.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço foi aplicada e nenhum dado de
+CTR/conversão foi inventado neste ciclo, conforme a regra de segurança da rotina. `env | grep -iE
+"SHOPEE|TINY|OLIST"` seguiu vazio neste sandbox, como esperado.
+
+**Ver também:** `docs/HISTORICO-AGENTES-SHOPEE.md` seção 9.30 (detalhe completo desta checagem).
+
+---
+
+### Registro anterior (2026-08-15) — mantido como histórico, ver correção acima
+
+**Última atualização (registro original):** 2026-08-15
 
 ### Atualização 2026-08-15 — bloqueador primário corrigido; premissa dos registros abaixo (2026-07-XX) estava errada
 

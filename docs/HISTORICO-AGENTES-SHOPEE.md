@@ -1227,3 +1227,37 @@ artefato novo com erro diferente, execução de `shopee-production-seo.yml` com 
 bem-sucedido) ocorreu. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos
 19–33: regenerar client OAuth2 na Tiny e recriar `fetch-shopee-listings.yml`/
 `optimize-shopee-listings.yml` (ver seção 🔴 de `docs/AGENTS.md`).
+
+### 9.30 Atualização — ciclo de 2026-08-26 (~01h UTC) — regressão nova encontrada: `shopee-runtime-health.yml` falha desde 2026-08-22, gap de registro de 7 dias (nenhum ciclo 35-4x rodou ou registrou entre 08-19 e agora)
+
+Diferente dos ciclos 19-34, que só confirmavam "estado idêntico", esta checagem (via
+`mcp__github__actions_list` + `mcp__github__get_job_logs`, sem `git reset` necessário — HEAD do
+sandbox já alinhado após `git fetch origin main`) encontrou um fato novo que muda a recomendação:
+`shopee-runtime-health.yml`, que vinha com `conclusion: success` ininterrupto desde a correção de
+2026-08-15 (confirmado nos ciclos 26-34, última `success` = run `1062` em 2026-08-21 18:55 UTC),
+**passou a falhar em toda execução agendada a partir do run `1123` (2026-08-22 18:48 UTC)** e
+seguiu falhando em todas as execuções `schedule` subsequentes até a mais recente disponível no
+momento desta checagem (run `1304`, 2026-08-25 18:56 UTC) — 13 falhas seguidas cobrindo ~3 dias,
+sem que nenhuma sessão autônoma tivesse notado ou registrado isso até agora (gap de 7 dias sem
+nenhuma entrada nesta seção desde a 9.29).
+
+Logs de job (`get_job_logs`, runs `1123` e `1304`, idênticos): a etapa SSH conecta na VM
+(`137.131.156.17`) sem erro e a etapa remota (`shopee_runtime_exec.py` +
+`shopee_runtime_preflight.py`) roda em 4-10s, mas retorna `ERROR: required Shopee runtime
+credentials are incomplete` (exit code 4) antes de provar `catalog_read`/`detail_read` — ou seja,
+não é falha de conectividade SSH/host-key (o fallback `PRIMARY_HOSTS`/`LEGACY_HOSTS` funciona), é o
+`.env`/`shopee-tokens.json` compartilhado na VM (`shopvivaliz-deploy/shared/`) que aparentemente
+ficou com credencial Shopee incompleta a partir de 08-22. Isso antecede em 3 dias o travamento de
+memória da VM de 2026-08-25 registrado em `CLAUDE.md` — pode ser causa independente (ex:
+`shopvivaliz-shopee-token-renewer.service` parou de renovar o token rotativo) ou relacionada às
+várias mudanças de infraestrutura da VM ("Desktop Commander"/"VM checkout migration") nesta mesma
+janela; não investigado a fundo por não ter acesso SSH à VM neste sandbox.
+
+Nenhuma otimização aplicada, nenhum dado de CTR/conversão/venda inventado (a análise orientada a
+dado pedida por este agente segue tecnicamente inexequível, agora por dois motivos: falta de
+endpoints de analytics — ciclo 26 — e, desde 08-22, falta de credencial válida até para o catálogo
+básico). **Notificação push enviada neste ciclo** — critério de aviso atendido: "artefato novo com
+erro diferente" (13 falhas novas e não documentadas, erro distinto do bloqueio OAuth2 Tiny
+histórico). Entrada espelhada em `KNOWN_ISSUES.md`. Ação sugerida para o Fred: `ssh
+ubuntu@137.131.156.17`, inspecionar `shared/.env`/`shared/shopee-tokens.json` e o status do serviço
+`shopvivaliz-shopee-token-renewer`.
