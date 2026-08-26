@@ -10,7 +10,7 @@ import urllib.request
 
 KEY_FILE = pathlib.Path.home() / '.codex' / 'api-keys.env'
 STATE_FILE = pathlib.Path.home() / '.codex' / 'api-key-active'
-DEFAULT_MODEL = 'gpt-5.5'
+DEFAULT_MODEL = 'gpt-5.1'
 
 
 def parse_keys(path=KEY_FILE):
