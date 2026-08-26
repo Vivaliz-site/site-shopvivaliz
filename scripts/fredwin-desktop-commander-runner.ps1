@@ -1,4 +1,4 @@
-param()
+﻿param()
 $ErrorActionPreference = 'Continue'
 $Repo = 'C:\site-shopvivaliz'
 $LogDir = Join-Path $Repo 'logs'
@@ -6,7 +6,7 @@ $SupervisorLog = Join-Path $LogDir 'desktop-commander-supervisor.log'
 $CooldownFile = Join-Path $LogDir 'desktop-commander-auth-required.cooldown'
 $ConnectedMarker = Join-Path $LogDir 'desktop-commander-provider-connected.marker'
 $Package = '@wonderwhy-er/desktop-commander@0.2.47'
-$AuthPattern = 'Please complete authentication|Starting device authorization flow|device code|Authorization required'
+$AuthPattern = 'Please complete authentication|Starting device authorization flow|Authorization required'
 $ConnectedPattern = 'Device ready|Found persisted session|Connected to Remote MCP|WebSocket connected'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
@@ -41,7 +41,7 @@ try {
     while ($true) {
         $proc.Refresh()
         $text = Read-CapturedProviderText @($outFile,$errFile)
-        if ($text -match $AuthPattern) {
+        if ((-not $connected) -and ($text -match $AuthPattern)) {
             $authRequired = $true
             '' | Out-File -FilePath $CooldownFile -Force -Encoding ascii
             Log 'AUTH_REQUIRED provider requested device authorization; raw provider output discarded'
@@ -59,7 +59,7 @@ try {
     }
     $proc.Refresh()
     $text = Read-CapturedProviderText @($outFile,$errFile)
-    if ((-not $authRequired) -and ($text -match $AuthPattern)) {
+    if ((-not $connected) -and (-not $authRequired) -and ($text -match $AuthPattern)) {
         $authRequired = $true
         '' | Out-File -FilePath $CooldownFile -Force -Encoding ascii
         Log 'AUTH_REQUIRED provider requested device authorization; raw provider output discarded'
@@ -73,3 +73,4 @@ finally {
 if ($authRequired) { exit 20 }
 Log ('Remote Desktop Commander runner exited rc=' + $rc)
 exit $rc
+
