@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet('Ensure','InstallTask','Restart','KillForRecoveryTest','Status')]
     [string]$Mode = 'Ensure'
 )
@@ -73,6 +73,26 @@ function Get-CanonicalRemoteLaunchers {
     })
     return @(Get-LauncherRoots $matches)
 }
+function Test-CanonicalTransport([object[]]$Launchers) {
+    $roots = @($Launchers)
+    if ($roots.Count -ne 1) { return $false }
+    $all = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+    $desc = New-Object System.Collections.Generic.HashSet[int]
+    [void]$desc.Add([int]$roots[0].ProcessId)
+    $changed = $true
+    while ($changed) {
+        $changed = $false
+        foreach ($p in $all) {
+            if ($desc.Contains([int]$p.ParentProcessId) -and -not $desc.Contains([int]$p.ProcessId)) {
+                [void]$desc.Add([int]$p.ProcessId); $changed = $true
+            }
+        }
+    }
+    $conns = @(Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue | Where-Object {
+        $desc.Contains([int]$_.OwningProcess) -and $_.RemotePort -eq 443 -and $_.RemoteAddress -notin @('127.0.0.1','::1')
+    })
+    return ($conns.Count -gt 0)
+}
 function Get-NonCanonicalRemoteLaunchers {
     $all = @(Get-DesktopCommanderRemoteLaunchers)
     $canonicalProcesses = @($all | Where-Object {
@@ -120,10 +140,13 @@ function Ensure-Agent {
     Stop-OrphanDirectRemoteLaunchers
     $canonical = @(Get-CanonicalRemoteLaunchers)
     $noncanonical = @(Get-NonCanonicalRemoteLaunchers)
-    if ($canonical.Count -eq 1 -and $noncanonical.Count -eq 0) {
+    if ($canonical.Count -eq 1 -and $noncanonical.Count -eq 0 -and (Test-CanonicalTransport $canonical)) {
         Remove-LegacyPersistence
-        Log ('Canonical remote agent healthy pid=' + $canonical[0].ProcessId)
+        Log ('Canonical remote agent healthy transport=established pid=' + $canonical[0].ProcessId)
         Write-Output 'REMOTE_AGENT_RUNNING=true'; return
+    }
+    if ($canonical.Count -eq 1 -and $noncanonical.Count -eq 0) {
+        Log ('Canonical process exists but transport is stale; restarting pid=' + $canonical[0].ProcessId)
     }
     if ($canonical.Count -gt 0 -or $noncanonical.Count -gt 0) {
         Log ('Converging launchers canonical=' + $canonical.Count + ' noncanonical=' + $noncanonical.Count)
@@ -176,3 +199,4 @@ switch ($Mode) {
     'Status' { & $StatusScript }
     default { Ensure-Agent }
 }
+
