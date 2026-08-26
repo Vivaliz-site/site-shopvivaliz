@@ -1,4 +1,4 @@
-﻿param()
+param()
 $ErrorActionPreference = 'Continue'
 $Repo = 'C:\site-shopvivaliz'
 $LogDir = Join-Path $Repo 'logs'
@@ -22,9 +22,7 @@ function Read-CapturedProviderText([string[]]$Paths) {
         }
     }
     return ($parts -join "`n")
-}
-
-$npx = (Get-Command npx.cmd -ErrorAction SilentlyContinue).Source
+}$npx = (Get-Command npx.cmd -ErrorAction SilentlyContinue).Source
 if (-not $npx) { $npx = (Get-Command npx -ErrorAction SilentlyContinue).Source }
 if (-not $npx) { Log 'ERROR npx not found'; exit 3 }
 
@@ -41,18 +39,17 @@ try {
     while ($true) {
         $proc.Refresh()
         $text = Read-CapturedProviderText @($outFile,$errFile)
-        if ((-not $connected) -and ($text -match $AuthPattern)) {
-            $authRequired = $true
-            '' | Out-File -FilePath $CooldownFile -Force -Encoding ascii
-            Log 'AUTH_REQUIRED provider requested device authorization; raw provider output discarded'
-            try { & taskkill.exe /PID $proc.Id /T /F 2>$null | Out-Null } catch { }
-            try { $proc.WaitForExit(10000) | Out-Null } catch { }
-            break
-        }
         if ((-not $connected) -and ($text -match $ConnectedPattern)) {
             $connected = $true
             '' | Out-File -FilePath $ConnectedMarker -Force -Encoding ascii
             Log 'Remote Desktop Commander provider connection observed'
+        }
+        if ((-not $connected) -and ($text -match $AuthPattern)) {
+            $authRequired = $true
+            '' | Out-File -FilePath $CooldownFile -Force -Encoding ascii
+            Log 'AUTH_REQUIRED provider requested device authorization before connection'
+            try { & taskkill.exe /PID $proc.Id /T /F 2>$null | Out-Null } catch { }            try { $proc.WaitForExit(10000) | Out-Null } catch { }
+            break
         }
         if ($proc.HasExited) { break }
         Start-Sleep -Seconds 1
@@ -62,7 +59,7 @@ try {
     if ((-not $connected) -and (-not $authRequired) -and ($text -match $AuthPattern)) {
         $authRequired = $true
         '' | Out-File -FilePath $CooldownFile -Force -Encoding ascii
-        Log 'AUTH_REQUIRED provider requested device authorization; raw provider output discarded'
+        Log 'AUTH_REQUIRED provider requested device authorization before connection'
     }
     if ($proc.HasExited) { $rc = $proc.ExitCode }
 }
@@ -73,4 +70,3 @@ finally {
 if ($authRequired) { exit 20 }
 Log ('Remote Desktop Commander runner exited rc=' + $rc)
 exit $rc
-
