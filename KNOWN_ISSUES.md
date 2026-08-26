@@ -82,9 +82,9 @@ Ao adicionar novo arquivo em `/includes/` que precisa ser público:
 
 ---
 
-## 🟡 Rotina de otimização inteligente Shopee (6h): credencial corrigida em 2026-08-14, mas falta integração de analytics (CTR/conversão)
+## 🔴 Rotina de otimização inteligente Shopee (6h): `Shopee Runtime Health` falhando em toda execução desde 2026-08-22, além do gap de analytics (CTR/conversão)
 
-**Última atualização:** 2026-08-15
+**Última atualização:** 2026-08-26
 
 ### Atualização 2026-08-15 — bloqueador primário corrigido; premissa dos registros abaixo (2026-07-XX) estava errada
 
@@ -124,6 +124,48 @@ catálogo + apply manual pontual, já que é o que o código hoje sustenta.
 
 **Ver também:** `docs/HISTORICO-AGENTES-SHOPEE.md` seção 9.21 (detalhe completo desta correção),
 PRs `#979`/`#980`.
+
+### Atualização 2026-08-26 — nova regressão: `Shopee Runtime Health` falha em toda execução agendada desde 2026-08-22 ~13h UTC
+
+A execução agendada de hoje da rotina "Otimização Shopee 6h" verificou o histórico de
+`shopee-runtime-health.yml` (único health check que comprova leitura real do catálogo Shopee)
+via GitHub Actions API antes de tentar qualquer otimização, e encontrou uma regressão nova que
+invalida a afirmação "rodando com sucesso desde o merge" registrada em 2026-08-15 acima:
+
+- Runs agendados (`event: schedule`) consecutivos de 2026-08-22 13:00 UTC até hoje 2026-08-26
+  13:16 UTC — runs `#1121, #1123, #1127, #1131, #1136, #1146, #1173, #1176, #1216, #1250, #1276,
+  #1277, #1286, #1304, #1319, #1326, #1327` — **todos com `conclusion: failure`** (17 execuções
+  seguidas, ~4 dias).
+- Antes disso, sucesso consistente confirmado pelo menos desde 2026-08-19 07:05 UTC (run `#565`)
+  até 2026-08-22 06:59 UTC (run `#1114`). A quebra aconteceu numa janela de ~6h entre esses dois
+  runs.
+- O job falha no passo "Run read-only Shopee preflight on production VM": a conexão SSH funciona
+  e o comando remoto roda até o fim (não é falha de infraestrutura/rede — o passo leva ~2-3s), mas
+  o payload retornado por `scripts/shopee_runtime_preflight.py` reprova a checagem local (o script
+  do workflow levanta `SystemExit` porque `status != 'ok'` e/ou `catalog_read`/`detail_read` não
+  são `True`). Ver job `98191688752` do run `32973250684` (hoje, 13:16 UTC) para o log completo.
+- Não foi possível baixar o artefato `shopee-runtime-health.json` (168 bytes, contém o payload de
+  erro exato) nesta sessão — o proxy de saída bloqueou o blob storage assinado do GitHub Actions
+  (`productionresultssa13.blob.core.windows.net`, `CONNECT tunnel failed, response 403`).
+- Hipótese mais provável, ainda não confirmada: falha do `daemon-shopee-token-renewer.py` na VM
+  deixando `SHOPEE_ACCESS_TOKEN`/`SHOPEE_REFRESH_TOKEN` expirados em `shared/shopee-tokens.json`
+  — token de acesso dura só 4h e o renovador roda a cada 3h (ver `docs/MEMORIA-AGENTES.md`,
+  entrada 2026-07-17 "Shopee OAuth: refresh_token muda a cada renovação"). Confirmar exige acesso
+  SSH direto à VM ou aos logs do daemon, que esta sessão não tem.
+
+**Consequência prática:** com a leitura de catálogo comprovadamente quebrada há 4+ dias, e sem
+integração de analytics (CTR/conversão — gap de 2026-08-15 acima, ainda sem mudança confirmada
+por `git log` nos arquivos relevantes), não havia nenhum dado real disponível hoje para basear as
+otimizações pedidas pela rotina (título, descrição, imagens, preço, palavras-chave). Nenhuma
+mutação foi tentada e nenhum dado de desempenho foi inventado nesta rodada.
+
+**Ação sugerida para quando o usuário tiver tempo:** (1) checar `daemon-shopee-token-renewer.py`
+na VM (`systemctl status`, logs do serviço) e o conteúdo/validade de `shared/shopee-tokens.json`;
+(2) rodar `shopee-runtime-health.yml` manualmente via `workflow_dispatch` após corrigir, para
+confirmar recuperação; (3) os itens (1)-(3) já sugeridos na entrada de 2026-08-15 acima continuam
+pendentes.
+
+**Ver também:** runs do GitHub Actions citados acima; `docs/audits/shopee-runtime-credentials-2026-08-14.md`.
 
 ---
 
