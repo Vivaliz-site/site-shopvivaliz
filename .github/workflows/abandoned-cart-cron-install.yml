@@ -31,7 +31,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'SH'
+          # Corrigido 2026-08-27: apontava para 137.131.156.17 (VM1, shopvivaliz-ai,
+          # dev.shopvivaliz.com.br) em vez da VM2 (136.248.69.116, shopvivaliz-micro-2),
+          # que e a producao real desde antes de 2026-08-26 (ver CLAUDE.md). Resultado:
+          # o cron de recuperacao de carrinho abandonado nunca foi instalado em producao
+          # -- confirmado ao vivo via `crontab -l` na VM2, sem nenhuma entrada de
+          # send-abandoned-cart-emails.php nem log em disco.
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@136.248.69.116 'bash -s' <<'SH'
           set -euo pipefail
 
           SCRIPT='/home/ubuntu/shopvivaliz-deploy/current/scripts/send-abandoned-cart-emails.php'
@@ -44,13 +50,13 @@ jobs:
           php -l "$SCRIPT"
           mkdir -p "$LOG_DIR"
 
-          CURRENT="$(crontab -l 2>/dev/null || true)"
-          MATCHES="$(printf '%s\n' "$CURRENT" | grep -Fc 'send-abandoned-cart-emails.php' || true)"
+          CURRENT="$(crontab -l 2>/dev/null)" || CURRENT=""
+          MATCHES="$(printf '%s\n' "$CURRENT" | grep -Fc 'send-abandoned-cart-emails.php')" || MATCHES="0"
 
           if [ "$MATCHES" = '1' ] && printf '%s\n' "$CURRENT" | grep -Fxq "$LINE"; then
             echo 'ABANDONED_CART_CRON_ALREADY_CANONICAL'
           else
-            CLEANED="$(printf '%s\n' "$CURRENT" | grep -vF 'send-abandoned-cart-emails.php' || true)"
+            CLEANED="$(printf '%s\n' "$CURRENT" | grep -vF 'send-abandoned-cart-emails.php')" || CLEANED=""
             {
               printf '%s\n' "$CLEANED"
               printf '%s\n' "$LINE"
@@ -58,8 +64,9 @@ jobs:
             echo 'ABANDONED_CART_CRON_INSTALLED_OR_REPAIRED'
           fi
 
-          INSTALLED="$(crontab -l 2>/dev/null || true)"
-          test "$(printf '%s\n' "$INSTALLED" | grep -Fc 'send-abandoned-cart-emails.php' || true)" = '1'
+          INSTALLED="$(crontab -l 2>/dev/null)" || INSTALLED=""
+          INSTALLED_MATCHES="$(printf '%s\n' "$INSTALLED" | grep -Fc 'send-abandoned-cart-emails.php')" || INSTALLED_MATCHES="0"
+          test "$INSTALLED_MATCHES" = '1'
           printf '%s\n' "$INSTALLED" | grep -Fx "$LINE"
           echo 'ABANDONED_CART_CRON_VERIFIED'
           SH
