@@ -1227,3 +1227,52 @@ artefato novo com erro diferente, execução de `shopee-production-seo.yml` com 
 bem-sucedido) ocorreu. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos
 19–33: regenerar client OAuth2 na Tiny e recriar `fetch-shopee-listings.yml`/
 `optimize-shopee-listings.yml` (ver seção 🔴 de `docs/AGENTS.md`).
+
+### 9.30 Atualização — ciclo de 2026-08-27 (~07h UTC), 35º ciclo — gap de 8 dias sem registro; bloqueio de fundo idêntico, mas achado novo: `shopee-runtime-health.yml` parou de passar
+
+Gap de 8 dias sem entrada nesta seção (último registro: ciclo 34, 2026-08-19). Checagem completa via
+`git fetch origin main` (HEAD em `1bfbe14`) e `mcp__github__actions_list`/`get_job_logs` para
+`shopee-production-seo.yml` e `shopee-runtime-health.yml`; `env | grep -iE "SHOPEE|TINY|OLIST"`
+continua vazio neste sandbox, como esperado. `git log --since=2026-08-19 -- '*shopee*' '*Shopee*'`
+não mostra nenhum commit que reative o pipeline Tiny — os commits que tocam scripts Shopee no
+período (endurecimento de segurança, guardas CLI-only) não mudam o bloqueio de fundo.
+`listings/` continua parado em `shopee-listings-20260726-080756.json`. `.github/workflows/` segue só
+com `shopee-optimizer-safety.yml`/`shopee-production-seo.yml`/`shopee-runtime-health.yml` sob Shopee;
+`fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` seguem ausentes. Nenhum endpoint de
+analytics do Shopee Open Platform (CTR, taxa de conversão) foi integrado — a análise orientada a
+dado pedida por este agente de otimização continua tecnicamente inexequível neste ambiente, mesmo
+bloqueio dos ciclos 1–34.
+
+**Achado novo (motivo do desvio do padrão "sem fato novo" dos últimos ciclos):**
+`shopee-runtime-health.yml` — até aqui a única confirmação real de acesso à API Shopee (ciclos
+26–34, sempre `conclusion: success`) — está falhando em **todas** as execuções agendadas desde
+2026-08-25 (`32886726199` @ 18:56 UTC, `32920953261`, `32941349895`, `32973250684`, `33008419370`
+@ 2026-08-26 20:03 UTC — 5+ falhas seguidas em ~36h, nenhuma execução `schedule` bem-sucedida nesse
+intervalo). O job (`Verify canonical VM credentials and catalog read`) falha em ~3-4s, no próprio
+comando `ssh ... ubuntu@137.131.156.17` (antes de qualquer output do preflight Python do lado do
+Shopee) — ou seja, é uma falha de conectividade/autenticação SSH na VM, não um erro de token/API da
+Shopee. Não foi possível baixar o artefato `shopee-runtime-health.json` pra confirmar o payload
+exato (bloqueio de rede do proxy do sandbox pro blob storage do Actions, `curl` retornou
+`CONNECT tunnel failed, 403` — não uma limitação da checagem em si).
+
+Dois fatos do período reforçam essa leitura: (1) `dcd77df` (2026-08-26) confirmou que
+`137.131.156.17` (o alvo do SSH deste workflow) é a **VM1/dev**, não produção — então esta checagem
+nunca validou a API Shopee em produção real, só no ambiente dev; (2) `1bfbe14` (2026-08-27, o commit
+mais recente em `main`) instalou nessa mesma VM1 um cron persistente a cada 3 minutos
+(`scripts/oci-a1-retry.sh`) pra tentar provisionar a `shopvivaliz-free-a1` — rodando exatamente na
+janela em que a checagem começou a falhar. Não é possível confirmar causalidade sem acesso à VM (fora
+do escopo deste agente), mas a coincidência temporal é forte o bastante pra registrar como hipótese:
+o cron novo pode estar competindo por recursos/rede na VM1 ou interferindo na sessão SSH usada pelo
+health check. `shopee-production-seo.yml` segue sem execução nova (mesmas 5 falhas de 2026-07-30,
+esperado — exige `workflow_dispatch` manual).
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. **Notificação push
+enviada neste ciclo** — critério atendido: um sinal que era confiável e passava (`shopee-runtime-
+health.yml`) parou de passar de forma consistente, o que é diferente do bloqueio de fundo repetido
+(inexistência de analytics) que já não gera aviso desde o ciclo 19. Recomendação pro usuário: (1)
+verificar se `137.131.156.17` está acessível via SSH manualmente e se o cron `oci-a1-retry.sh`
+(instalado por `1bfbe14`) não está saturando a VM1; (2) considerar mover o alvo deste health check
+pra VM2 (`136.248.69.116`, produção real) já que `dcd77df` confirmou que VM1 nunca foi produção; (3)
+a recomendação de fundo dos ciclos 19-34 sobre o OAuth2 da Tiny permanece igual e independente deste
+achado.
