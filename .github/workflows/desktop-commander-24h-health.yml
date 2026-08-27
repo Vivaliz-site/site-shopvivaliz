@@ -126,7 +126,7 @@ jobs:
               'DEVICE_STATE_EXISTS', 'CANONICAL_AGENT_COUNT',
               'NONCANONICAL_AGENT_COUNT', 'TASK_EXISTS', 'TASK_STATE',
               'TASK_LAST_RESULT', 'TASK_LOGON_TYPE', 'TASK_RUN_LEVEL',
-              'AUTH_REQUIRED', 'SERVICE_ENABLED', 'SERVICE_ACTIVE',
+              'AUTH_REQUIRED', 'PROVIDER_CONNECTED', 'SERVICE_ENABLED', 'SERVICE_ACTIVE',
               'SERVICE_USER', 'SERVICE_MAINPID'
           }
 
@@ -196,8 +196,22 @@ jobs:
                       'auth': 'false', 'recovery': 'not_needed'
                   }
               auth = is_true(values.get('AUTH_REQUIRED'))
-              recovery = 'blocked_by_provider_auth' if auth else 'not_attempted'
-              if not auth and MAX_REPAIR_ATTEMPTS == 1:
+              provider_connected = is_true(values.get('PROVIDER_CONNECTED'))
+              structurally_healthy = (
+                  is_true(values.get('DEVICE_STATE_EXISTS'))
+                  and values.get('SERVICE_ENABLED') == 'enabled'
+                  and values.get('SERVICE_ACTIVE') == 'active'
+                  and values.get('SERVICE_USER') == 'ubuntu'
+                  and values.get('CANONICAL_AGENT_COUNT') == '1'
+                  and values.get('NONCANONICAL_AGENT_COUNT') == '0'
+              )
+              if auth:
+                  recovery = 'blocked_by_provider_auth'
+              elif structurally_healthy and not provider_connected:
+                  recovery = 'provider_disconnected'
+              else:
+                  recovery = 'not_attempted'
+              if not auth and not structurally_healthy and MAX_REPAIR_ATTEMPTS == 1:
                   repair_mode = 'InstallTask' if not is_true(values.get('TASK_EXISTS')) else 'Ensure'
                   repair = (
                       'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command '
@@ -244,6 +258,8 @@ jobs:
           user=$(systemctl show -p User --value shopvivaliz-desktop-commander.service 2>/dev/null || true)
           auth=false
           test -f "$HOME/.desktop-commander-device/auth-required.cooldown" && auth=true
+          provider=false
+          test -f "$HOME/.desktop-commander-device/provider-connected.marker" && provider=true
           canonical=0
           noncanonical=0
           while IFS= read -r line; do
@@ -253,7 +269,7 @@ jobs:
               *) noncanonical=$((noncanonical+1));;
             esac
           done < <(pgrep -af '[n]pm exec @wonderwhy-er/desktop-commander@.* remote' 2>/dev/null || true)
-          printf 'DEVICE_STATE_EXISTS=%s\nSERVICE_ENABLED=%s\nSERVICE_ACTIVE=%s\nSERVICE_USER=%s\nSERVICE_MAINPID=%s\nCANONICAL_AGENT_COUNT=%s\nNONCANONICAL_AGENT_COUNT=%s\nAUTH_REQUIRED=%s\n' "$device" "${enabled:-unknown}" "${active:-unknown}" "${user:-unknown}" "${mainpid:-0}" "$canonical" "$noncanonical" "$auth"
+          printf 'DEVICE_STATE_EXISTS=%s\nSERVICE_ENABLED=%s\nSERVICE_ACTIVE=%s\nSERVICE_USER=%s\nSERVICE_MAINPID=%s\nCANONICAL_AGENT_COUNT=%s\nNONCANONICAL_AGENT_COUNT=%s\nAUTH_REQUIRED=%s\nPROVIDER_CONNECTED=%s\n' "$device" "${enabled:-unknown}" "${active:-unknown}" "${user:-unknown}" "${mainpid:-0}" "$canonical" "$noncanonical" "$auth" "$provider"
           '''
               ok, out = ssh_run(command, timeout=120)
               return ok, parse_safe(out)
@@ -267,6 +283,7 @@ jobs:
                   and values.get('CANONICAL_AGENT_COUNT') == '1'
                   and values.get('NONCANONICAL_AGENT_COUNT') == '0'
                   and not is_true(values.get('AUTH_REQUIRED'))
+                  and is_true(values.get('PROVIDER_CONNECTED'))
               )
 
           def vm_probe():
@@ -284,8 +301,22 @@ jobs:
                       'auth': 'false', 'recovery': 'not_needed'
                   }
               auth = is_true(values.get('AUTH_REQUIRED'))
-              recovery = 'blocked_by_provider_auth' if auth else 'not_attempted'
-              if not auth and MAX_REPAIR_ATTEMPTS == 1:
+              provider_connected = is_true(values.get('PROVIDER_CONNECTED'))
+              structurally_healthy = (
+                  is_true(values.get('DEVICE_STATE_EXISTS'))
+                  and values.get('SERVICE_ENABLED') == 'enabled'
+                  and values.get('SERVICE_ACTIVE') == 'active'
+                  and values.get('SERVICE_USER') == 'ubuntu'
+                  and values.get('CANONICAL_AGENT_COUNT') == '1'
+                  and values.get('NONCANONICAL_AGENT_COUNT') == '0'
+              )
+              if auth:
+                  recovery = 'blocked_by_provider_auth'
+              elif structurally_healthy and not provider_connected:
+                  recovery = 'provider_disconnected'
+              else:
+                  recovery = 'not_attempted'
+              if not auth and not structurally_healthy and MAX_REPAIR_ATTEMPTS == 1:
                   repair = (
                       'set -Eeuo pipefail; cd /home/ubuntu/shopvivaliz-deploy/repo; '
                       'git fetch origin main >/dev/null; git merge --ff-only origin/main >/dev/null; '

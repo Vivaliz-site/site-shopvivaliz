@@ -30,6 +30,12 @@ foreach (['PROVIDER_CONNECTED', "is_true(values.get('PROVIDER_CONNECTED'))"] as 
         exit(1);
     }
 }
+foreach (['structurally_healthy', 'if not auth and not structurally_healthy and MAX_REPAIR_ATTEMPTS == 1:'] as $needle) {
+    if (strpos($health, $needle) === false) {
+        fwrite(STDERR, "FALHOU: health VM reinicia agente estruturalmente saudavel sem provider: {$needle}\n" );
+        exit(1);
+    }
+}
 foreach (['Test-Path -LiteralPath $CooldownFile', 'Test-DeviceStateNewerThanCooldown'] as $needle) {
     if (strpos($status, $needle) === false) {
         fwrite(STDERR, "FALHOU: status Fred-Win sem cooldown stale-aware: {$needle}\n");

@@ -5,7 +5,7 @@ HOME_DIR="${HOME:-/home/ubuntu}"
 DEVICE_DIR="$HOME_DIR/.desktop-commander-device"
 DEVICE_FILE="$DEVICE_DIR/device.json"
 SESSION_BACKUP_DIR="$DEVICE_DIR/session-backup"
-SESSION_BACKUP_FILE="$SESSION_BACKUP_DIR/device.json"
+SESSION_BACKUP_FILE="$DEVICE_DIR/session-backup/device.json"
 COOLDOWN_FILE="$DEVICE_DIR/auth-required.cooldown"
 CONNECTED_MARKER="$DEVICE_DIR/provider-connected.marker"
 LOCK_FILE="$DEVICE_DIR/remote-owner.lock"
@@ -95,8 +95,9 @@ fi
 tmp="$(mktemp)"
 chmod 0600 "$tmp"
 child=''
+connected=0
 cleanup() {
-  backup_device_state
+  if [[ "$connected" -eq 1 ]]; then backup_device_state; fi
   rm -f "$tmp"
   if [[ -n "$child" ]] && kill -0 "$child" 2>/dev/null; then
     kill -TERM -- "-$child" 2>/dev/null || kill -TERM "$child" 2>/dev/null || true
@@ -109,7 +110,6 @@ rm -f "$CONNECTED_MARKER"
 echo "REMOTE_OWNER_PID=$REMOTE_OWNER_PID REMOTE_OWNER_SESSION=$REMOTE_OWNER_SESSION"
 setsid "$NPX_BIN" --yes "$PACKAGE" remote --persist-session >"$tmp" 2>&1 &
 child=$!
-connected=0
 auth_required=0
 while kill -0 "$child" 2>/dev/null; do
   if grep -Eqi "$AUTH_REGEX" "$tmp"; then
@@ -136,7 +136,7 @@ done
 
 rc=0
 if wait "$child"; then rc=0; else rc=$?; fi
-backup_device_state
+if [[ "$connected" -eq 1 ]]; then backup_device_state; fi
 if [[ "$auth_required" -eq 0 ]] && grep -Eqi "$AUTH_REGEX" "$tmp"; then
   auth_required=1
   : > "$COOLDOWN_FILE"
