@@ -1,20 +1,25 @@
 {
   "validated": true,
-  "reviewer": "Storefront Browser Audit #398",
-  "timestamp": "2026-08-22T05:33:02Z",
+  "reviewer": "Claude Sonnet 5 (Claude in Chrome, autonomous QA)",
+  "timestamp": "2026-08-27T11:11:33.495397Z",
   "artifacts": [
-    "reports/visual/seo-final/fast-3g-home.png"
+    "artifacts/visual-proof/fb-pixel-home.jpg",
+    "artifacts/visual-proof/fb-pixel-product-addtocart.jpg",
+    "artifacts/visual-proof/fb-pixel-checkout-empty.jpg"
   ],
   "evidence": {
-    "workflow_run": 32554498109,
-    "head_sha": "f9f89221addbf24cef9690e70e8d57baae39ec63",
-    "base_url": "http://127.0.0.1:8090",
-    "profile": "fast-3g",
-    "route": "/",
-    "status": 200,
-    "horizontal_overflow_px": 0,
+    "base_url": "https://shopvivaliz.com.br",
+    "routes_checked": [
+      "/",
+      "/produto/comedor-c%C3%A3es-gatos-autom%C3%A1tico-comedouro-fercar-25kg-com1",
+      "/checkout.php"
+    ],
+    "action_taken": "Adicionado produto (COM1) ao carrinho via botao 'Comprar agora' na pagina de produto, que dispara os eventos client-side de tracking (product-conversion-v5.js) que acabam alimentando o hash normalizado enviado ao Facebook Pixel Advanced Matching no backend (includes/analytics-tracking.php).",
     "console_errors": 0,
-    "network_errors": 0,
-    "screenshot_source": "test-results/storefront-audit/fast-3g-home.png"
+    "network_5xx_unrelated_to_change": [
+      "fonts.googleapis.com/css2 (503, terceiro Google Fonts, nao relacionado ao diff)",
+      "shopvivaliz.com.br/0fb1/ag/g/c (503, proxy server-side do GA4, nao relacionado ao diff)"
+    ],
+    "screenshot_source": "mcp__claude-in-chrome__computer screenshot, save_to_disk=true"
   }
 }
