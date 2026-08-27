@@ -56,7 +56,6 @@ fi
 # ── 1. Idempotencia: a instancia ja existe? ─────────────────────────────────
 EXISTING_JSON=$(oci compute instance list \
     --compartment-id "$COMPARTMENT_ID" \
-    --compartment-id-in-subtree true \
     --display-name "$DISPLAY_NAME" \
     --all 2>>"$LOG")
 
@@ -82,7 +81,7 @@ fi
 # ── 3. Descoberta dinamica: subnet (reusa a mesma rede da shopvivaliz-micro-2) ──
 SUBNET_ID=""
 ALL_INSTANCES=$(oci compute instance list --compartment-id "$COMPARTMENT_ID" \
-    --compartment-id-in-subtree true --lifecycle-state RUNNING \
+    --lifecycle-state RUNNING \
     --query 'data[*].id' --raw-output 2>>"$LOG")
 
 for INST_ID in $(echo "$ALL_INSTANCES" | tr -d '[]" ' | tr ',' '\n' | grep '^ocid1.instance'); do
