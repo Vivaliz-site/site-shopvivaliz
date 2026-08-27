@@ -25,9 +25,9 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
-      - name: Inspect worker lot invariant read only
+      - name: Inspect inconsistent lot database state read only
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'set -Eeuo pipefail; cd /home/ubuntu/mei-mg-email; echo ===WORKER_350_445===; sed -n "350,445p" worker/worker_queue_first.py; echo ===SAFE_ENTRYPOINT===; sed -n "60,135p" worker/safe_entrypoint.py; echo ===TEST_PARTIAL_LOT===; sed -n "1,260p" tests/test_worker_partial_lot_invariant.py; echo ===DB_API===; sed -n "1,260p" app/db.py'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'set -Eeuo pipefail; cd /home/ubuntu/mei-mg-email; .venv/bin/python -c "import psycopg; from app.config import settings; lot=\"2b7c7b13-8700-4e46-9a29-a7513bf58b58\"; c=psycopg.connect(settings.database_url); q=c.cursor(); q.execute(\"select status::text,count(*) from mei_email.envios where lote_id=%s group by status::text order by 1\",(lot,)); print(\"STATUS_COUNTS\",q.fetchall()); q.execute(\"select column_name from information_schema.columns where table_schema=\047mei_email\047 and table_name=\047envios\047 order by ordinal_position\"); print(\"ENVIO_COLUMNS\",[r[0] for r in q.fetchall()]); q.execute(\"select column_name from information_schema.columns where table_schema=\047mei_email\047 and table_name=\047lotes\047 order by ordinal_position\"); print(\"LOTE_COLUMNS\",[r[0] for r in q.fetchall()]); q.execute(\"select status::text,erro,concluido_em from mei_email.lotes where id=%s\",(lot,)); print(\"LOTE_STATE\",q.fetchone()); c.close()"'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts
