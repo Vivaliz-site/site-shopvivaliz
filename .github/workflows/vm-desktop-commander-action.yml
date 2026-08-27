@@ -43,6 +43,9 @@ jobs:
             restart)
               COMMAND='set -Eeuo pipefail; active=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true); if test "$active" = active; then printf "RESTART_SKIPPED=healthy\n"; else sudo systemctl restart shopvivaliz-desktop-commander.service; sleep 5; systemctl is-active --quiet shopvivaliz-desktop-commander.service || test -f "$HOME/.desktop-commander-device/auth-required.cooldown"; fi'
               ;;
+            recover_session)
+              COMMAND='set -Eeuo pipefail; tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/baa8d1cffcae9cc667b8ea07e99de59bba1749d7/scripts/vm-desktop-commander-recover-session.sh -o "$tmp"; sudo bash "$tmp"'
+              ;;
             *) echo "Action not allowlisted: $ACTION"; exit 3 ;;
           esac
           printf '%s' "$COMMAND" | base64 -w0 > /tmp/vm-command.b64
