@@ -1,4 +1,4 @@
 {
-  "action": "recover_session",
-  "reason": "restore persisted VM1 Desktop Commander session after provider reauth failure"
+  "action": "inspect_session",
+  "reason": "inspect VM1 Desktop Commander session metadata without exposing tokens"
 }
