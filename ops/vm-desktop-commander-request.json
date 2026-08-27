@@ -1,4 +1,4 @@
 {
-  "action": "clear_cooldown_restart",
-  "reason": "refresh the canonical VM Desktop Commander authorization after rotated refresh token"
+  "action": "dc_live_summary",
+  "reason": "verify provider connection after canonical service restart"
 }
