@@ -1,4 +1,4 @@
 {
-  "action": "status",
-  "reason": "confirm VM Desktop Commander state after restart attempt during GSC verification"
+  "action": "restart",
+  "reason": "recover VM1 Desktop Commander after VM1 SSH recovery on 2026-08-27"
 }
