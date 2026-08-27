@@ -1,4 +1,4 @@
 {
-  "action": "dc_diagnose",
-  "reason": "diagnose VM Desktop Commander auto-restart before repair"
+  "action": "inspect_session",
+  "reason": "verify persisted Desktop Commander session before recovery"
 }
