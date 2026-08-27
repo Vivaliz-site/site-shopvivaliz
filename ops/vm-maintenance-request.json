@@ -1,4 +1,4 @@
 {
-  "action": "final_verify",
-  "reason": "verify VM after interrupted cleanup before any further remediation"
+  "action": "graph_grant_mail_read",
+  "reason": "grant the required Microsoft Graph application Mail.Read role and restart the NDR guard"
 }
