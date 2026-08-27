@@ -27,7 +27,7 @@ jobs:
           chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
       - name: Inspect maintenance progress read only
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'echo ===PROCESSES===; ps -eo pid,ppid,stat,etime,%cpu,%mem,comm,args | grep -E "[a]pt-get|[d]pkg|[d]ocker image prune|[j]ournalctl --vacuum|[r]m -rf /home/ubuntu/shopvivaliz-deploy" | head -80; echo ===LOCKS===; sudo fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock 2>/dev/null || true; echo ===PORTS===; ss -ltnp 2>/dev/null | grep -E ":(80|443)[[:space:]]" || true; echo ===DISK===; df -h /; echo ===LOAD===; uptime'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'echo ===PROCESSES===; ps -eo pid,ppid,stat,etime,%cpu,%mem,comm,args | grep -E "[a]pt-get|[d]pkg|[d]ocker image prune|[j]ournalctl --vacuum|[r]m -rf /home/ubuntu/shopvivaliz-deploy" | head -80; echo ===LOCKS===; sudo fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock 2>/dev/null || true; echo ===PACKAGES===; dpkg -l 2>/dev/null | grep -E "^ii[[:space:]]+(apache2|certbot|php|libapache2)" | head -40 || true; echo ===PORTS===; ss -ltnp 2>/dev/null | grep -E ":(80|443)[[:space:]]" || true; echo ===DISK===; df -h /; echo ===LOAD===; uptime'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts
