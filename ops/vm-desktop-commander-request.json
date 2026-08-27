@@ -1,4 +1,4 @@
 {
   "action": "status",
-  "reason": "verify Desktop Commander process counts and service state after restart"
+  "reason": "verify single canonical Desktop Commander after orphan removal"
 }
