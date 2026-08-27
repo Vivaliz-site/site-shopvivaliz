@@ -463,8 +463,8 @@ vierem de uma fonte oficial e identificÃ¡vel.
 ## Politica obrigatoria de PR, gate, merge e bloqueios (2026-08-27)
 
 - Toda alteracao finalizada deve terminar em PR validado e merge; nao deixar PR pronta aberta sem motivo tecnico comprovado.
-- Se qualquer check, teste, lint, gate, conflito ou Action falhar: investigar a causa raiz, corrigir, revalidar e repetir ate ficar verde. E proibido contornar falha com bypass, || true, exit 0, force merge ou desativacao de protecao.
-- Gate verde autoriza merge automatico somente para PR do proprio repositorio depois que todos os checks canônicos aplicaveis passarem.
+- Se qualquer check, teste, lint, gate, conflito ou Action falhar: investigar a causa raiz, corrigir, revalidar e repetir ate ficar verde. E proibido contornar falha com bypass, mascaramento de exit code, force merge ou desativacao de protecao.
+- Gate verde autoriza merge automatico somente para PR do proprio repositorio depois que todos os checks canonicos aplicaveis passarem.
 - Bloqueio aparentemente externo nao encerra a tarefa: procurar solucao segura por configuracao, credencial, permissao, host key, secret, servico, provider, infraestrutura ou rota alternativa antes de classificar como INCONCLUSIVO.
 - Depois do merge, verificar Actions do SHA resultante e corrigir qualquer falha regressiva antes de declarar conclusao.
 - No ShopVivaliz, Quality Gate verde em main deve acionar automaticamente o Master Production Pipeline e o deploy canonico na VM2; VM1 nao e destino de producao do site.
