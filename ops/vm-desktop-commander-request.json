@@ -1,4 +1,4 @@
 {
-  "action": "restart",
-  "reason": "recover VM1 Desktop Commander after VM1 SSH recovery on 2026-08-27"
+  "action": "status",
+  "reason": "inspect VM1 Desktop Commander after successful restart workflow"
 }
