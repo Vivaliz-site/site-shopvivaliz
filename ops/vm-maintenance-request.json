@@ -1,4 +1,4 @@
 {
-  "action": "m365_admin_audit",
-  "reason": "locate existing administrative Microsoft channel for least-privilege Mail.Read consent"
+  "action": "site_cleanup",
+  "reason": "remove legacy Apache Certbot PHP and old ShopVivaliz site residues after dependency guard"
 }
