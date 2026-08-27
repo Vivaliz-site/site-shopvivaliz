@@ -1,0 +1,92 @@
+name: VM Maintenance Action
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ops/vm-maintenance-request.json"
+
+permissions:
+  contents: read
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure verified VM SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
+      - name: Resolve allowlisted maintenance action
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ACTION="$(jq -r '.action // "health"' ops/vm-maintenance-request.json)"
+          case "$ACTION" in
+            graph_audit)
+              COMMAND='set -Eeuo pipefail; cd /home/ubuntu/mei-mg-email; ./.venv/bin/python - <<"PY"
+import base64, inspect, json, urllib.error, urllib.request
+from dotenv import load_dotenv
+load_dotenv(".env", override=True)
+from app.email_provider import MicrosoftGraphEmailProvider
+p=MicrosoftGraphEmailProvider()
+methods=[n for n in dir(p) if "token" in n.lower() and callable(getattr(p,n,None))]
+print("TOKEN_METHODS="+",".join(methods))
+token=None
+used=None
+for name in ("_get_access_token","_get_token","get_access_token","get_token"):
+    fn=getattr(p,name,None)
+    if callable(fn):
+        try:
+            token=fn(); used=name; break
+        except Exception as exc:
+            print("TOKEN_METHOD_ERROR="+name+":"+type(exc).__name__)
+if token:
+    payload=token.split(".")[1]; payload += "="*((4-len(payload)%4)%4)
+    claims=json.loads(base64.urlsafe_b64decode(payload.encode()))
+    print("TOKEN_METHOD_USED="+str(used))
+    print("TOKEN_ROLES="+",".join(sorted(claims.get("roles",[]))))
+    addr=p.address
+    tests=[("USER",f"https://graph.microsoft.com/v1.0/users/{addr}?$select=id"),("MAIL_READ",f"https://graph.microsoft.com/v1.0/users/{addr}/mailFolders/inbox/messages?$top=1&$select=id")]
+    for label,url in tests:
+        req=urllib.request.Request(url,headers={"Authorization":"Bearer "+token})
+        try:
+            with urllib.request.urlopen(req,timeout=20) as r: print(label+"_HTTP="+str(r.status))
+        except urllib.error.HTTPError as e: print(label+"_HTTP="+str(e.code))
+else:
+    print("TOKEN_OBTAINED=false")
+PY
+ echo ===SERVICES===; systemctl show mei-mg-email-worker.service mei-mg-email-ndr-guard.service -p Id -p ActiveState -p SubState -p MainPID -p NRestarts --no-pager; echo ===RECENT===; journalctl -u mei-mg-email-worker.service -u mei-mg-email-ndr-guard.service --since "10 minutes ago" --no-pager | grep -Ei "APP-ONLY active|NDR_GUARD|submitted|sent|Traceback|RuntimeError|HTTP_403|Failed with result" | tail -120 || true'
+              ;;
+            health)
+              COMMAND='set -Eeuo pipefail; echo ===SERVICES===; for s in ssh shopvivaliz-desktop-commander.service snap.oracle-cloud-agent.oracle-cloud-agent.service mei-mg-email-worker.service mei-mg-email-monitor.service mei-mg-email-ndr-guard.service mei-mg-email-queue-replenisher.service docker; do printf "%s=" "$s"; systemctl is-active "$s" 2>/dev/null || true; done; echo ===DISK===; df -h /; echo ===MEM===; free -h; echo ===LOAD===; uptime; echo ===PORTS===; ss -ltnp 2>/dev/null | grep -E ":(22|80|443|5433|8010)[[:space:]]" || true; echo ===FAILED===; systemctl --failed --no-pager --plain || true'
+              ;;
+            site_cleanup)
+              COMMAND='set -Eeuo pipefail; echo ===GUARD===; for f in /etc/systemd/system/mei-mg-email-*.service /etc/systemd/system/shopvivaliz-desktop-commander.service; do test -f "$f" || continue; if grep -Eqi "apache2|certbot|letsencrypt|/var/www|php" "$f"; then echo "ABORT_REFERENCE=$f"; exit 8; fi; done; echo GUARD_OK; sudo systemctl disable --now apache2 certbot.timer 2>/dev/null || true; sudo rm -f /etc/cron.d/shopvivaliz-blog-publish; export DEBIAN_FRONTEND=noninteractive; sudo apt-get purge -y apache2 apache2-bin apache2-data apache2-utils certbot python3-certbot python3-certbot-apache python3-certbot-dns-cloudflare libapache2-mod-php libapache2-mod-php8.3 php php-cli php-common php-apcu php-mbstring php-mysql php8.3 php8.3-apcu php8.3-cli php8.3-common php8.3-curl php8.3-mbstring php8.3-mysql php8.3-opcache php8.3-readline php8.3-sqlite3 || true; sudo apt-get autoremove --purge -y; sudo apt-get clean; sudo rm -rf /home/ubuntu/shopvivaliz-deploy /var/www /etc/apache2 /etc/letsencrypt /var/log/apache2; rm -rf "$HOME/.npm/_cacache" "$HOME/.npm/_logs" "$HOME/.cache/pip" "$HOME/.cache/uv"; sudo journalctl --vacuum-size=200M >/dev/null || true; docker image prune -a -f || true; echo ===RESULT===; dpkg -l | grep -E "apache2|certbot|libapache2-mod-php" || true; ss -ltnp 2>/dev/null | grep -E ":(80|443)[[:space:]]" || true; df -h /'
+              ;;
+            final_verify)
+              COMMAND='set -Eeuo pipefail; echo ===SERVICES===; for s in ssh shopvivaliz-desktop-commander.service snap.oracle-cloud-agent.oracle-cloud-agent.service mei-mg-email-worker.service mei-mg-email-monitor.service mei-mg-email-ndr-guard.service mei-mg-email-queue-replenisher.service docker; do printf "%s=" "$s"; systemctl is-active "$s" 2>/dev/null || true; done; echo ===ENABLED===; for s in shopvivaliz-desktop-commander.service snap.oracle-cloud-agent.oracle-cloud-agent.service mei-mg-email-worker.service mei-mg-email-monitor.service mei-mg-email-ndr-guard.service mei-mg-email-queue-replenisher.service docker; do printf "%s=" "$s"; systemctl is-enabled "$s" 2>/dev/null || true; done; echo ===WEB_ABSENT===; systemctl status apache2 --no-pager 2>/dev/null || true; command -v certbot || true; test ! -e /home/ubuntu/shopvivaliz-deploy && echo SITE_DEPLOY_ABSENT=true; test ! -e /etc/letsencrypt && echo LETSENCRYPT_ABSENT=true; echo ===PORTS===; ss -ltnp 2>/dev/null | grep -E ":(22|80|443|5433|8010)[[:space:]]" || true; echo ===DOCKER===; docker ps --format "{{.Names}} {{.Image}} {{.Status}}" 2>/dev/null || true; echo ===DC===; systemctl show shopvivaliz-desktop-commander.service -p ActiveState -p SubState -p MainPID -p NRestarts --no-pager; echo ===ORACLE===; snap services oracle-cloud-agent 2>/dev/null || true; echo ===MEI_RECENT_ERRORS===; journalctl -u mei-mg-email-worker.service -u mei-mg-email-ndr-guard.service --since "10 minutes ago" --no-pager | grep -Ei "Traceback|RuntimeError|Failed with result|HTTP_403|certificate/key not found" | tail -80 || true; echo ===RESOURCES===; free -h; df -h /; uptime; echo ===FAILED===; systemctl --failed --no-pager --plain || true'
+              ;;
+            *) echo "Action not allowlisted: $ACTION"; exit 3 ;;
+          esac
+          printf '%s' "$COMMAND" | base64 -w0 > /tmp/vm-maint-command.b64
+      - name: Execute fixed VM maintenance action
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          CMD_B64="$(cat /tmp/vm-maint-command.b64)"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "VM_CMD_B64='$CMD_B64' bash -lc 'printf %s \"\$VM_CMD_B64\" | base64 -d | bash'"
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts /tmp/vm-maint-command.b64
