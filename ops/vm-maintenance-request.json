@@ -1,4 +1,4 @@
 {
-  "action": "graph_grant_mail_read",
-  "reason": "retry least-privilege Mail.Read grant after fixing Graph filter encoding"
+  "action": "m365_admin_audit",
+  "reason": "locate existing administrative Microsoft channel for least-privilege Mail.Read consent"
 }
