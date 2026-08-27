@@ -1,4 +1,4 @@
 {
-  "action": "oracle_agent_enable",
-  "reason": "re-enable Oracle Cloud Agent after confirming it was disabled, not crashing"
+  "action": "dc_live_summary",
+  "reason": "inspect live VM1 Desktop Commander output without exposing credentials"
 }
