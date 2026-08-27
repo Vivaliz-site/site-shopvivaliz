@@ -1,4 +1,4 @@
 {
   "action": "graph_audit",
-  "reason": "verify Microsoft Graph application roles after restoring MEI MG certificate pair"
+  "reason": "rerun Graph permission audit after workflow YAML correction"
 }
