@@ -167,28 +167,6 @@ class AnalyticsTracking {
         curl_close($ch);
     }
 
-    /**
-     * Meta exige e-mail normalizado (lowercase + trim) e telefone em E.164
-     * puro (so digitos, com DDI) ANTES do sha256 -- hash sobre o valor cru
-     * nunca bate com o hash que a Meta calcula do lado dela, quebrando o
-     * Advanced Matching sem nenhum erro visivel.
-     */
-    private function buildFacebookHashedUserData(): array {
-        $email = strtolower(trim((string)($_SESSION['user_email'] ?? '')));
-
-        $phoneDigits = preg_replace('/\D+/', '', (string)($_SESSION['user_phone'] ?? '')) ?? '';
-        if ($phoneDigits !== '' && strlen($phoneDigits) <= 11) {
-            // Numero brasileiro sem DDI (DDD + numero, 10-11 digitos) -- Meta
-            // exige o codigo do pais no hash.
-            $phoneDigits = '55' . $phoneDigits;
-        }
-
-        return [
-            'em' => hash('sha256', $email),
-            'ph' => hash('sha256', $phoneDigits),
-        ];
-    }
-
     private function sendToFacebookPixel() {
         // Facebook Conversion API
         $accessToken = getenv('FACEBOOK_ACCESS_TOKEN') ?: '';
@@ -207,7 +185,10 @@ class AnalyticsTracking {
                         'event_name' => $facebookEvent,
                         'event_time' => time(),
                         'action_source' => 'website',
-                        'user_data' => $this->buildFacebookHashedUserData(),
+                        'user_data' => [
+                            'em' => hash('sha256', (string)($_SESSION['user_email'] ?? '')),
+                            'ph' => hash('sha256', (string)($_SESSION['user_phone'] ?? '')),
+                        ],
                         'custom_data' => $event['params'],
                     ]
                 ]
