@@ -1,4 +1,4 @@
 {
-  "action": "inspect_session",
-  "reason": "inspect VM1 Desktop Commander session metadata without exposing tokens"
+  "action": "clear_cooldown_restart",
+  "reason": "retry persisted VM1 Desktop Commander session after network recovery"
 }
