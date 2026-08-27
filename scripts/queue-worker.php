@@ -63,9 +63,27 @@ foreach ($argv as $arg) {
     }
 }
 
+// systemctl restart (deploy-production.sh) enviava SIGTERM direto, matando o
+// worker no meio do processamento de um job -- o job ficava travado em
+// 'running' ate o reaper de jobs antigos (ate 15 min depois). Com o handler
+// abaixo, o worker termina o job em curso e sai limpo assim que possivel.
+$shuttingDown = false;
+if (function_exists('pcntl_signal') && function_exists('pcntl_async_signals')) {
+    pcntl_async_signals(true);
+    $shutdownHandler = static function () use (&$shuttingDown): void {
+        $shuttingDown = true;
+    };
+    pcntl_signal(SIGTERM, $shutdownHandler);
+    pcntl_signal(SIGINT, $shutdownHandler);
+}
+
 queue_worker_log("starting limit={$limit} idle_sleep={$idleSleep}s once=" . ($once ? 'yes' : 'no'));
 
 while (true) {
+    if ($shuttingDown) {
+        queue_worker_log('graceful shutdown after signal (idle)');
+        exit(0);
+    }
     $jobs = sv_queue_claim($limit);
     if ($jobs === []) {
         sv_queue_reap_stale(900);
@@ -86,13 +104,18 @@ while (true) {
             sv_queue_finish((int)$job['id'], 'done');
             queue_worker_log("done {$label}");
         } catch (Throwable $e) {
-            sv_queue_finish((int)$job['id'], 'failed', $e->getMessage());
-            queue_worker_log('failed #' . (int)$job['id'] . ' ' . $e->getMessage());
+            sv_queue_retry_or_fail($job, $e->getMessage());
+            queue_worker_log('error #' . (int)$job['id'] . ' attempts=' . (int)($job['attempts'] ?? 1) . ' ' . $e->getMessage());
         }
     }
 
     if ($once) {
         queue_worker_log('completed once mode');
+        exit(0);
+    }
+
+    if ($shuttingDown) {
+        queue_worker_log('graceful shutdown after signal');
         exit(0);
     }
 }

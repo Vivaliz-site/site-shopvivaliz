@@ -5,6 +5,12 @@ require_once __DIR__ . '/../logger/logger.php';
 
 const SV_QUEUE_FILE = __DIR__ . '/../../storage/queue.json';
 
+// Antes, todo job que falhasse (erro transitorio de rede pro Mercado Pago,
+// timeout, restart do worker no meio de um deploy) virava 'failed'
+// permanente sem nenhum retry -- pedido pago ficava travado pra sempre.
+// Ver sv_queue_retry_or_fail() e sv_queue_reap_stale().
+const SV_QUEUE_MAX_ATTEMPTS = 5;
+
 function sv_queue_file_path(): string
 {
     $override = getenv('SHOPVIVALIZ_QUEUE_FILE');
@@ -196,6 +202,13 @@ function sv_queue_file_summary(): array
     return $summary;
 }
 
+/**
+ * Job travado em 'running' ha mais de $maxAgeSeconds -- normalmente porque o
+ * worker foi morto no meio do processamento (ex: `systemctl restart` de um
+ * deploy). Antes isso virava 'failed' permanente sem retry; agora respeita o
+ * mesmo limite de tentativas do caminho de erro normal (SV_QUEUE_MAX_ATTEMPTS)
+ * em vez de descartar o job na primeira vez que sobra "orfao".
+ */
 function sv_queue_reap_stale(int $maxAgeSeconds = 900): int
 {
     $count = 0;
@@ -210,9 +223,17 @@ function sv_queue_reap_stale(int $maxAgeSeconds = 900): int
             if ($startedAt <= 0 || ($now - $startedAt) <= $maxAgeSeconds) {
                 continue;
             }
-            $task['status'] = 'failed';
-            $task['finished_at'] = sv_queue_file_now();
-            $task['last_error'] = 'stale_job_reaped';
+            $attempts = (int)($task['attempts'] ?? 1);
+            if ($attempts < SV_QUEUE_MAX_ATTEMPTS) {
+                $task['status'] = 'queued';
+                $task['available_at'] = sv_queue_backoff_available_at($attempts);
+                $task['started_at'] = null;
+                $task['last_error'] = 'stale_job_reaped_requeued';
+            } else {
+                $task['status'] = 'failed';
+                $task['finished_at'] = sv_queue_file_now();
+                $task['last_error'] = 'stale_job_reaped_max_attempts';
+            }
             $count++;
         }
         if ($count > 0) {
@@ -222,9 +243,51 @@ function sv_queue_reap_stale(int $maxAgeSeconds = 900): int
     }
 
     $pdo = sv_queue_db();
-    $stmt = $pdo->prepare('UPDATE queue_jobs SET status="failed", finished_at=CURRENT_TIMESTAMP, last_error="stale_job_reaped" WHERE status="running" AND started_at IS NOT NULL AND datetime(started_at) < datetime("now", ?)');
-    $stmt->execute(['-' . max(1, $maxAgeSeconds) . ' seconds']);
-    return $stmt->rowCount();
+    $rows = $pdo->prepare('SELECT id, attempts FROM queue_jobs WHERE status="running" AND started_at IS NOT NULL AND datetime(started_at) < datetime("now", ?)');
+    $rows->execute(['-' . max(1, $maxAgeSeconds) . ' seconds']);
+    foreach ($rows->fetchAll() as $row) {
+        $id = (int)$row['id'];
+        $attempts = (int)$row['attempts'];
+        if ($attempts < SV_QUEUE_MAX_ATTEMPTS) {
+            $delaySeconds = sv_queue_backoff_seconds($attempts);
+            $stmt = $pdo->prepare('UPDATE queue_jobs SET status="queued", available_at=datetime("now", ?), started_at=NULL, last_error="stale_job_reaped_requeued" WHERE id=?');
+            $stmt->execute(['+' . $delaySeconds . ' seconds', $id]);
+        } else {
+            $stmt = $pdo->prepare('UPDATE queue_jobs SET status="failed", finished_at=CURRENT_TIMESTAMP, last_error="stale_job_reaped_max_attempts" WHERE id=?');
+            $stmt->execute([$id]);
+        }
+        $count++;
+    }
+    return $count;
+}
+
+/** Backoff exponencial (1,2,4,8,16 min...), teto de 1h. */
+function sv_queue_backoff_seconds(int $attempts): int
+{
+    return min(3600, (2 ** max(0, $attempts)) * 30);
+}
+
+function sv_queue_backoff_available_at(int $attempts): string
+{
+    return gmdate('c', time() + sv_queue_backoff_seconds($attempts));
+}
+
+/**
+ * Chamado pelo worker quando um job de webhook lanca excecao (timeout de
+ * rede pro Mercado Pago/Tiny, 5xx transitorio, etc). Antes disso o job
+ * morria como 'failed' na primeira falha, sem retry -- um pedido ja pago
+ * ficava preso para sempre em "aguardando_pagamento". Agora tenta de novo
+ * com backoff ate SV_QUEUE_MAX_ATTEMPTS vezes antes de desistir de vez.
+ */
+function sv_queue_retry_or_fail(array $job, string $error, int $maxAttempts = SV_QUEUE_MAX_ATTEMPTS): void
+{
+    $id = (int)($job['id'] ?? 0);
+    $attempts = (int)($job['attempts'] ?? 1);
+    if ($attempts < $maxAttempts) {
+        sv_queue_requeue($id, sv_queue_backoff_seconds($attempts), $error);
+        return;
+    }
+    sv_queue_finish($id, 'failed', $error);
 }
 
 if (sv_queue_uses_file_backend()) {
@@ -246,6 +309,21 @@ if (sv_queue_uses_file_backend()) {
     function sv_queue_summary(): array
     {
         return sv_queue_file_summary();
+    }
+
+    function sv_queue_requeue(int $id, int $delaySeconds, ?string $error = null): void
+    {
+        $data = sv_queue_file_bootstrap();
+        foreach ($data['tasks'] as &$task) {
+            if ((int)($task['id'] ?? 0) === $id) {
+                $task['status'] = 'queued';
+                $task['available_at'] = gmdate('c', time() + $delaySeconds);
+                $task['started_at'] = null;
+                $task['last_error'] = $error;
+                break;
+            }
+        }
+        sv_queue_file_write($data);
     }
 } else {
     function sv_queue_enqueue(string $jobType, array $payload, int $priority = 100): int
@@ -300,5 +378,12 @@ if (sv_queue_uses_file_backend()) {
         }
         $summary['total'] = array_sum($summary);
         return $summary;
+    }
+
+    function sv_queue_requeue(int $id, int $delaySeconds, ?string $error = null): void
+    {
+        $pdo = sv_queue_db();
+        $stmt = $pdo->prepare('UPDATE queue_jobs SET status="queued", available_at=datetime("now", ?), started_at=NULL, last_error=? WHERE id=?');
+        $stmt->execute(['+' . max(0, $delaySeconds) . ' seconds', $error, $id]);
     }
 }
