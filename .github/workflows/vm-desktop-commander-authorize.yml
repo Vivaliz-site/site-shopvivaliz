@@ -1,0 +1,67 @@
+name: VM Desktop Commander Authorization Recovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/vm-desktop-commander-authorize.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Configure verified VM SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${VM_KEY:-}"
+          test -n "${VM_HOSTS:-}"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+      - name: Start fresh provider authorization
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17)
+          "${SSH[@]}" 'set -Eeuo pipefail; sudo systemctl stop shopvivaliz-desktop-commander.service || true; d="$HOME/.desktop-commander-device"; mkdir -p "$d"; rm -f "$d/auth-required.cooldown" "$d/provider-connected.marker" "$d/manual-authorize.log"; nohup timeout 600s npx --yes @wonderwhy-er/desktop-commander@0.2.47 remote --persist-session >"$d/manual-authorize.log" 2>&1 < /dev/null & echo $! >"$d/manual-authorize.pid"; chmod 600 "$d/manual-authorize.log" "$d/manual-authorize.pid"'
+          found=false
+          for i in $(seq 1 30); do
+            sleep 2
+            out="$("${SSH[@]}" 'test -f "$HOME/.desktop-commander-device/manual-authorize.log" && cat "$HOME/.desktop-commander-device/manual-authorize.log" || true')"
+            code="$(printf '%s\n' "$out" | grep -Eo '[A-Z0-9]{4}-[A-Z0-9]{4}' | tail -1 || true)"
+            url="$(printf '%s\n' "$out" | grep -Eo 'https://[^ ]+verify-device[^ ]*' | tail -1 || true)"
+            if [ -n "$code" ]; then
+              echo "DEVICE_CODE=$code"
+              [ -n "$url" ] && echo "VERIFY_URL=$url"
+              found=true
+              break
+            fi
+          done
+          test "$found" = true
+      - name: Wait for authorization and persist session backup
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17)
+          ok=false
+          for i in $(seq 1 120); do
+            sleep 4
+            if "${SSH[@]}" 'jq -e ".deviceId | type == \"string\" and length > 0" "$HOME/.desktop-commander-device/device.json" >/dev/null 2>&1 && jq -e ".session.refresh_token | type == \"string\" and length > 0" "$HOME/.desktop-commander-device/device.json" >/dev/null 2>&1'; then
+              ok=true
+              break
+            fi
+          done
+          test "$ok" = true
+          "${SSH[@]}" 'set -Eeuo pipefail; d="$HOME/.desktop-commander-device"; install -d -m 700 "$d/session-backup"; install -m 600 "$d/device.json" "$d/session-backup/device.json"; if test -f "$d/manual-authorize.pid"; then pid=$(cat "$d/manual-authorize.pid" || true); test -z "$pid" || kill "$pid" 2>/dev/null || true; fi; rm -f "$d/auth-required.cooldown"; sudo systemctl start shopvivaliz-desktop-commander.service; sleep 12; systemctl is-active --quiet shopvivaliz-desktop-commander.service'
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
