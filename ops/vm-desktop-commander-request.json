@@ -1,4 +1,4 @@
 {
-  "action": "recover_session",
-  "reason": "restore last known persisted Desktop Commander session after provider disconnect"
+  "action": "dc_diagnose",
+  "reason": "diagnose VM Desktop Commander auto-restart before repair"
 }
