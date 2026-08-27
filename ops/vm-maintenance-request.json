@@ -1,4 +1,4 @@
 {
-  "action": "site_cleanup",
-  "reason": "remove legacy Apache Certbot PHP and old ShopVivaliz site residues after dependency guard"
+  "action": "final_verify",
+  "reason": "verify VM after interrupted cleanup before any further remediation"
 }
