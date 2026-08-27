@@ -459,3 +459,14 @@ vierem de uma fonte oficial e identificável.
 - Respostas da API devem declarar grounding_status, fontes utilizadas e estado conversacional.
 - Métricas não podem registrar mensagem bruta, token, senha ou dado pessoal.
 - Alterações na Liz devem incluir testes de conversa, segurança e regressão.
+
+## Oracle Cloud (OCI) — acesso obrigatório para agentes
+
+Para operações OCI, use somente a identidade dedicada `AGENTS`; nunca use como fallback o perfil pessoal `DEFAULT`. O procedimento e os caminhos por host estão em [`docs/operations/oci-agent-access.md`](docs/operations/oci-agent-access.md).
+
+- Fred-Win e VM1 usam o perfil OCI `AGENTS` local protegido.
+- VM2 usa o perfil protegido com o cliente de requisições OCI assinado documentado.
+- DESKTOP-KOCEPSV acessa OCI pelo wrapper SSH verificado para VM1; a chave privada OCI não deve ser duplicada nesse host.
+- É proibido versionar, imprimir ou transportar em logs/prompts chaves `*.pem`, security tokens, cookies de sessão ou headers de autenticação.
+- Valide acesso com uma leitura autenticada real antes de declarar OCI operacional.
+- Em caso de falha externa de autenticação, permissão, rede ou serviço, investigue e procure uma solução segura; não trate o bloqueio como encerramento automático da tarefa.
