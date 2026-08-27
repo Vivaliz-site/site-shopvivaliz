@@ -1276,3 +1276,37 @@ verificar se `137.131.156.17` está acessível via SSH manualmente e se o cron `
 pra VM2 (`136.248.69.116`, produção real) já que `dcd77df` confirmou que VM1 nunca foi produção; (3)
 a recomendação de fundo dos ciclos 19-34 sobre o OAuth2 da Tiny permanece igual e independente deste
 achado.
+
+### 9.31 Atualização — ciclo de 2026-08-27 (~13h UTC), 36º ciclo — health check parou de disparar via `schedule`, não só de falhar
+
+Checagem via `git log`/`grep` (nenhuma credencial `SHOPEE|TINY|OLIST` no ambiente sandbox, como
+esperado), `mcp__github__actions_list`/`actions_get` para `shopee-runtime-health.yml` e
+`shopee-production-seo.yml`. `listings/` continua parado em `shopee-listings-20260726-080756.json`,
+mesma marca d'água de todos os ciclos desde 26/07. `shopee-production-seo.yml` segue com as mesmas 5
+execuções de 2026-07-30 (`30585266165`/`30571531668`/`30571478470`/`30571242284`/`30570700034`),
+todas `conclusion: failure`, sem `workflow_dispatch` novo — esperado, exige confirmação humana
+digitada.
+
+**Achado novo (aprofunda, mas não substitui, o achado do ciclo 35):** `shopee-runtime-health.yml`
+segue `state: active` e o cron (`17 */6 * * *`, i.e. ~00:17/06:17/12:17/18:17 UTC) está intacto no
+YAML, mas a última execução disparada por `schedule` foi `33008419370` em 2026-08-26T20:03:21Z
+(`conclusion: failure`, mesma que o ciclo 35 já via) — nenhuma execução `schedule` nova apareceu
+desde então, apesar de pelo menos 3 horários de cron já terem passado (~00:17, ~06:17 e ~12:17 UTC
+de 08-27). O workflow segue sendo *disparado* com frequência via `workflow_run` (encadeado a
+`master-production-pipeline.yml`, que roda a cada poucos minutos), mas todas essas execuções têm
+`conclusion: skipped` — não são o health check real, só o gatilho condicional que não passa. Ou
+seja: o único caminho que de fato tenta o SSH (`schedule`) parou de disparar, não só de passar.
+Não foi possível confirmar a causa (sem acesso à VM nem ao log interno do agendador do GitHub Actions
+a partir deste sandbox) — pode ser o mesmo problema de conectividade/recursos da VM1 já hipotetizado
+no ciclo 35 (cron `oci-a1-retry.sh` de `1bfbe14`), ou simplesmente atraso do agendador do GitHub
+Actions sob a carga muito alta deste repositório (`master-production-pipeline.yml` sozinho já vai em
+`run_number` 2532, todo disparado por push/workflow_run).
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. **Nenhuma notificação
+push enviada neste ciclo** — o achado é um aprofundamento do mesmo incidente já notificado no ciclo
+35 (~6h atrás), não um fato novo e independente que mude a ação recomendada ao usuário; ver critério
+usado desde o ciclo 19 (não notificar bloqueio de fundo repetido). Recomendação: a mesma do ciclo 35
+— checar VM1 manualmente — mais um item novo: se a VM1 estiver saudável, vale considerar que o
+próprio agendamento do GitHub Actions pode estar sendo atrasado/descartado sob a carga do repo, o
+que é um problema diferente (e mais amplo) do que "SSH falhando".
