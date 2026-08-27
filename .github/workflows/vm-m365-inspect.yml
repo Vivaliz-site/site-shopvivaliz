@@ -25,9 +25,9 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
-      - name: Inspect envios constraints read only
+      - name: Inspect MEI repository state read only
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'set -Eeuo pipefail; cd /home/ubuntu/mei-mg-email; .venv/bin/python -c "import psycopg; from app.config import settings; c=psycopg.connect(settings.database_url); q=c.cursor(); q.execute(\"select conname,pg_get_constraintdef(oid) from pg_constraint where conrelid=\047mei_email.envios\047::regclass order by conname\"); [print(\"CONSTRAINT\",r[0],r[1]) for r in q.fetchall()]; q.execute(\"select proname from pg_proc where pronamespace=\047mei_email\047::regnamespace and proname in (\047enforce_envio_live_eligibility\047,\047trg_marcar_empresa_submetida\047) order by proname\"); print(\"FUNCTION_NAMES\",q.fetchall()); c.close()"'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'set -Eeuo pipefail; cd /home/ubuntu/mei-mg-email; echo ===GIT===; git status --short; git branch --show-current; git rev-parse --short HEAD; echo ===MIGRATION_DIRS===; find db -maxdepth 2 -type d -print | sort; echo ===MIGRATION_RUNNERS===; find . -maxdepth 3 -type f \( -name "*migrat*.py" -o -name "*migrat*.sh" -o -name "*bootstrap*.py" \) -not -path "./.venv/*" -not -path "./venv/*" -print | sort | head -120; echo ===V034_STATUS===; git status --short -- db/migrations_archived_post_v020_20260821/V034__guard_uncertain_graph_dispatch_against_replay.sql worker/worker_queue_first.py tests/test_worker_partial_lot_invariant.py tests/test_dispatch_replay_guard.py'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts
