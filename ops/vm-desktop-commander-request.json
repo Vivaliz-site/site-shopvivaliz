@@ -1,4 +1,4 @@
 {
-  "action": "inspect_session",
-  "reason": "verify persisted Desktop Commander session before recovery"
+  "action": "recover_session",
+  "reason": "restore persisted refreshable Desktop Commander session and restart canonical agent"
 }
