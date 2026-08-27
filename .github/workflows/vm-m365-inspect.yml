@@ -25,9 +25,9 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
-      - name: Inspect authorization logic without secrets
+      - name: Inspect maintenance progress read only
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'set -e; for f in /home/ubuntu/mei-mg-email/scripts/autorizar_microsoft_graph.py /home/ubuntu/mei-mg-email/scripts/auditar_graph_mail_read.py /home/ubuntu/mei-mg-email/scripts/get_graph_app_token.ps1 /home/ubuntu/mei-mg-email/scripts/desbloquear_exchange_app_cert.ps1 /home/ubuntu/mei-mg-email/scripts/configurar_exchange_deliverability.ps1; do echo ===$f===; test -f "$f" || continue; sed -E "/secret|password|token[[:space:]]*=|access_token|refresh_token/I s/=.*/=[redacted]/" "$f" | head -260; done'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'echo ===PROCESSES===; ps -eo pid,ppid,stat,etime,%cpu,%mem,comm,args | grep -E "[a]pt-get|[d]pkg|[d]ocker image prune|[j]ournalctl --vacuum|[r]m -rf /home/ubuntu/shopvivaliz-deploy" | head -80; echo ===LOCKS===; sudo fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock 2>/dev/null || true; echo ===PORTS===; ss -ltnp 2>/dev/null | grep -E ":(80|443)[[:space:]]" || true; echo ===DISK===; df -h /; echo ===LOAD===; uptime'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts
