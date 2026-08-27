@@ -1,4 +1,4 @@
 {
-  "action": "status",
-  "reason": "verify Desktop Commander provider state after reboot"
+  "action": "dc_diagnose",
+  "reason": "provider not connected after reboot despite healthy canonical agent"
 }
