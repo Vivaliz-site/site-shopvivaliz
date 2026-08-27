@@ -1,4 +1,4 @@
 {
-  "action": "inspect_session",
-  "reason": "check persisted session material before deciding recovery path"
+  "action": "clear_cooldown_restart",
+  "reason": "restart canonical agent with persisted access and refresh tokens after provider disconnect"
 }
