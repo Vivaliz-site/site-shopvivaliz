@@ -1,4 +1,4 @@
 {
-  "action": "clear_cooldown_restart",
-  "reason": "retry persisted VM1 Desktop Commander session after network recovery"
+  "action": "system_audit",
+  "reason": "audit VM1 after SSH recovery before cleanup and service repairs"
 }
