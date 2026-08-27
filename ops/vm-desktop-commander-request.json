@@ -1,4 +1,4 @@
 {
-  "action": "disk_audit",
-  "reason": "locate VM1 disk usage before safe cleanup"
+  "action": "system_audit",
+  "reason": "post-reboot root cause and service health audit before remediation"
 }
