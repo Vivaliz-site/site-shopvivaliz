@@ -25,9 +25,9 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
-      - name: Inspect open envio evidence read only
+      - name: Inspect replay guards read only
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'set -Eeuo pipefail; cd /home/ubuntu/mei-mg-email; .venv/bin/python -c "import psycopg; from app.config import settings; lot=\"2b7c7b13-8700-4e46-9a29-a7513bf58b58\"; c=psycopg.connect(settings.database_url); q=c.cursor(); q.execute(\"select id::text,status::text,tentativas,provider_message_id is not null as has_provider_message_id,enviado_em,submitted_at,graph_request_id is not null as has_graph_request_id,internet_message_id is not null as has_internet_message_id,erro,last_error,reconciled_at,criado_em from mei_email.envios where lote_id=%s and status::text in (\047pendente\047,\047pending\047,\047enviando\047,\047processing\047) order by criado_em\",(lot,)); rows=q.fetchall(); print(\"OPEN_ROWS\",rows); c.close()"; echo ===WORKER_RECENT===; journalctl -u mei-mg-email-worker.service -b --since "2026-08-27 18:45:00" --until "2026-08-27 18:51:30" --no-pager | grep -E "envio|lote|Graph|submitted|transit|falha" | tail -180 || true'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'set -Eeuo pipefail; cd /home/ubuntu/mei-mg-email; echo ===SAFE_ENTRYPOINT_HEAD===; sed -n "1,82p" worker/safe_entrypoint.py; echo ===WORKER_MARKING===; grep -n -B12 -A40 "def _marcar_envio_em_transito\|def _atualizar_envio\|dispatch_started" worker/worker.py worker/worker_queue_first.py | head -220; echo ===REPLAY_TEST===; sed -n "1,300p" tests/test_dispatch_replay_guard.py; echo ===RECOVERY_TEST===; sed -n "1,320p" tests/test_queue_recovery_and_autorepair.py'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts
