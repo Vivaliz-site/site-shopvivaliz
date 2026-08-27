@@ -1,0 +1,51 @@
+name: VM DC Direct Device Flow Once
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/vm-dc-direct-device-flow-once.yml'
+permissions:
+  contents: read
+jobs:
+  start-flow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Configure SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+      - name: Request fresh Desktop Commander device code
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17 'node <<'"'"'NODE'"'"'
+          const fs = require("fs");
+          const os = require("os");
+          const path = require("path");
+          const crypto = require("crypto");
+          (async () => {
+            const verifier = crypto.randomBytes(32).toString("base64url");
+            const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
+            const r = await fetch("https://mcp.desktopcommander.app/device/start", {
+              method: "POST",
+              headers: {"Content-Type":"application/json"},
+              body: JSON.stringify({client_id:"mcp-device",scope:"mcp:tools",device_name:os.hostname(),device_type:"mcp",device_id:"9478be08-f829-42ba-988d-a4b9ef0e874b",code_challenge:challenge,code_challenge_method:"S256"})
+            });
+            const data = await r.json();
+            if (!r.ok || !data.user_code || !data.device_code) throw new Error(data.error_description || data.error || `HTTP ${r.status}`);
+            const dir = path.join(os.homedir(), ".desktop-commander-device");
+            fs.mkdirSync(dir,{recursive:true,mode:0o700});
+            fs.writeFileSync(path.join(dir,"direct-device-flow.json"), JSON.stringify({device_code:data.device_code,code_verifier:verifier,expires_at:Date.now()+data.expires_in*1000,interval:data.interval||5}), {mode:0o600});
+            console.log(`DEVICE_CODE=${data.user_code}`);
+            console.log(`VERIFY_URL=${data.verification_uri}`);
+            console.log(`EXPIRES_MIN=${Math.floor(data.expires_in/60)}`);
+          })().catch(e=>{console.error(`FLOW_ERROR=${e.message}`);process.exit(1)});
+          NODE'
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
