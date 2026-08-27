@@ -1,4 +1,4 @@
 {
-  "action": "dc_diagnose",
-  "reason": "provider not connected after reboot despite healthy canonical agent"
+  "action": "inspect_session",
+  "reason": "check persisted session material before deciding recovery path"
 }
