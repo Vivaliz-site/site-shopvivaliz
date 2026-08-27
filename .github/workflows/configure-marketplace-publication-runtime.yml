@@ -115,7 +115,7 @@ jobs:
           for attempt in $(seq 1 24); do
             if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              ubuntu@137.131.156.17 \
+              ubuntu@136.248.69.116 \
               'test -r /home/ubuntu/shopvivaliz-deploy/current/scripts/configure-marketplace-publication-runtime.py'; then
               ready=1
               break
@@ -136,7 +136,7 @@ jobs:
             "$OLIST_API_KEY_VALUE" |
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              ubuntu@137.131.156.17 \
+              ubuntu@136.248.69.116 \
               'python3 /home/ubuntu/shopvivaliz-deploy/current/scripts/configure-marketplace-publication-runtime.py /home/ubuntu/shopvivaliz-deploy/shared/.env'
 
       - name: Materialize PHP runtime and verify masked readiness
@@ -145,7 +145,7 @@ jobs:
           set -Eeuo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+            ubuntu@136.248.69.116 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
           current=/home/ubuntu/shopvivaliz-deploy/current
           shared=/home/ubuntu/shopvivaliz-deploy/shared

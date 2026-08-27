@@ -55,7 +55,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 \
+            ubuntu@136.248.69.116 \
             'set -euo pipefail
              current=/home/ubuntu/shopvivaliz-deploy/current
              cache="$current/storage/products-cache-ativos.json"
@@ -89,7 +89,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 \
+            ubuntu@136.248.69.116 \
             'set -euo pipefail; test -r /home/ubuntu/shopvivaliz-deploy/current/scripts/incident-response.php; HEALTHCHECK_URL=https://shopvivaliz.com.br/api/health/version.php INCIDENT_MODE=monitor /usr/bin/php /home/ubuntu/shopvivaliz-deploy/current/scripts/incident-response.php' \
             > artifacts/incidents/detector.log 2>&1; then
             status=0

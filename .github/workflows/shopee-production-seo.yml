@@ -75,7 +75,7 @@ jobs:
           set -Eeuo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 'bash -s' > artifacts/shopee-production/preflight.json <<'REMOTE'
+            ubuntu@136.248.69.116 'bash -s' > artifacts/shopee-production/preflight.json <<'REMOTE'
           set -Eeuo pipefail
           cd /home/ubuntu/shopvivaliz-deploy/current
           test -r /home/ubuntu/shopvivaliz-deploy/shared/.env
@@ -105,7 +105,7 @@ jobs:
           remote_dir="/home/ubuntu/shopvivaliz-deploy/shared/shopee-production-runs/$GITHUB_RUN_ID"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 "bash -s -- '$CONFIRMATION' '$PRODUCT_LIMIT' '$GITHUB_RUN_ID'" <<'REMOTE'
+            ubuntu@136.248.69.116 "bash -s -- '$CONFIRMATION' '$PRODUCT_LIMIT' '$GITHUB_RUN_ID'" <<'REMOTE'
           set -Eeuo pipefail
           confirmation="$1"
           limit="$2"
@@ -138,13 +138,13 @@ jobs:
 
           scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "ubuntu@137.131.156.17:$remote_dir/execution-report.json" artifacts/shopee-production/execution-report.json
+            "ubuntu@136.248.69.116:$remote_dir/execution-report.json" artifacts/shopee-production/execution-report.json
           scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "ubuntu@137.131.156.17:$remote_dir/pre-change-backup.json" artifacts/shopee-production/pre-change-backup.json
+            "ubuntu@136.248.69.116:$remote_dir/pre-change-backup.json" artifacts/shopee-production/pre-change-backup.json
           scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "ubuntu@137.131.156.17:$remote_dir/executor-output.log" artifacts/shopee-production/executor-output.log
+            "ubuntu@136.248.69.116:$remote_dir/executor-output.log" artifacts/shopee-production/executor-output.log
 
       - name: Verify report and backup evidence
         shell: bash
