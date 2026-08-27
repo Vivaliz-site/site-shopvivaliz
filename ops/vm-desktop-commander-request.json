@@ -1,4 +1,4 @@
 {
-  "action": "oracle_agent_audit",
-  "reason": "diagnose disabled Oracle Cloud Agent on VM1"
+  "action": "oracle_agent_enable",
+  "reason": "re-enable Oracle Cloud Agent after confirming it was disabled, not crashing"
 }
