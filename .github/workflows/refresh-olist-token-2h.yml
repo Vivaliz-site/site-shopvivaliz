@@ -102,7 +102,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
           current=/home/ubuntu/shopvivaliz-deploy/current
           shared=/home/ubuntu/shopvivaliz-deploy/shared

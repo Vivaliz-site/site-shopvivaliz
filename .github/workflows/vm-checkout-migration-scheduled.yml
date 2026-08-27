@@ -1,124 +1,28 @@
-name: VM Checkout Migration Scheduled
+name: VM Checkout Migration Manual
 
 on:
-  schedule:
-    - cron: '*/5 * * * *'
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/vm-checkout-migration-scheduled.yml'
-      - 'ops/vm-desktop-commander-request.json'
+    inputs:
+      confirm:
+        description: "Type APPLY to run the VM checkout migration"
+        required: true
+        default: ""
 
 permissions:
-  contents: write
+  contents: read
   issues: write
 
 jobs:
-  apply:
+  guard:
     runs-on: ubuntu-latest
-    environment: Production
-    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Check request
-        id: request
+      - name: Require explicit confirmation
         run: |
           set -Eeuo pipefail
-          action="$(jq -r '.action // ""' ops/vm-desktop-commander-request.json)"
-          echo "action=$action" >> "$GITHUB_OUTPUT"
-          test "$action" = "apply_checkout_migration"
-      - name: Configure SSH
-        env:
-          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
-          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          test "${{ github.event.inputs.confirm }}" = "APPLY"
+      - name: Explain disabled automatic path
         run: |
-          set -Eeuo pipefail
-          test -n "$VM_KEY"
-          test -n "$VM_HOSTS"
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
-          printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
-      - name: Apply checkout migration on VM
-        run: |
-          set -Eeuo pipefail
-          ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17)
-          remote_script=$(mktemp)
-          cat > "$remote_script" <<'REMOTE'
-          set -Eeuo pipefail
-          patch_checkout() {
-            target="$1"
-            [ -f "$target" ] || { echo "missing=$target"; return 1; }
-            tmp=$(mktemp)
-            python3 - "$target" > "$tmp" <<'PY'
-          import sys
-          from pathlib import Path
-          p = Path(sys.argv[1])
-          s = p.read_text(encoding='utf-8')
-          bad = "        if (!HAS_PAYMENT_GATEWAY) {\n            status.textContent = 'Pagamento online temporariamente indisponível. Fale no WhatsApp para finalizar seu pedido.';\n            status.className='checkout-status-msg err';\n            return;\n        }\n"
-          if "function renderCart() {\n        var items = getCart();\n" + bad in s:
-              s = s.replace(bad, '', 1)
-          anchor = "        var btn = document.getElementById('submit-btn');\n        var status = document.getElementById('checkout-status');\n        var items = getCart();\n"
-          guard = "        if (!HAS_PAYMENT_GATEWAY) {\n            status.textContent = 'Pagamento online temporariamente indisponível. Fale no WhatsApp para finalizar seu pedido.';\n            status.className = 'checkout-status-msg err';\n            if (btn) {\n                btn.disabled = true;\n                btn.textContent = 'Pagamento indisponível';\n            }\n            return;\n        }\n"
-          if anchor not in s:
-              raise SystemExit('anchor missing')
-          if guard not in s:
-              s = s.replace(anchor, anchor + guard, 1)
-          if "function renderCart() {\n        var items = getCart();\n        if (!HAS_PAYMENT_GATEWAY)" in s:
-              raise SystemExit('guard still in renderCart')
-          if guard not in s:
-              raise SystemExit('guard missing in submit')
-          print(s, end='')
-          PY
-            if cmp -s "$target" "$tmp"; then
-              echo "unchanged=$target"
-            else
-              sudo cp "$tmp" "$target"
-              echo "patched=$target"
-            fi
-            rm -f "$tmp"
-            php -l "$target"
-          }
-          cd /home/ubuntu/shopvivaliz-deploy/repo
-          git fetch origin main
-          git reset --hard origin/main
-          patch_checkout /home/ubuntu/shopvivaliz-deploy/repo/checkout.php
-          php scripts/quality/validate-order-erp-authority.php
-          current=$(readlink -f /home/ubuntu/shopvivaliz-deploy/current)
-          patch_checkout "$current/checkout.php"
-          sudo apache2ctl configtest
-          sudo systemctl reload apache2
-          python3 - <<'PY'
-          import ssl, urllib.request
-          ctx = ssl._create_unverified_context()
-          for url in ['https://shopvivaliz.com.br/api/health.php', 'https://shopvivaliz.com.br/checkout.php']:
-              with urllib.request.urlopen(url, timeout=25, context=ctx) as r:
-                  data = r.read().decode('utf-8', 'ignore')
-              print(url.rsplit('/',1)[-1], 'code', r.status, 'size', len(data), 'gateway_msg', 'Pagamento online temporariamente indisponível' in data, 'submit_guard', 'Pagamento indisponível' in data)
-          PY
-          REMOTE
-          output=$(ssh "${ssh_opts[@]}" 'bash -s' < "$remote_script")
-          printf '%s\n' "$output"
-          {
-            echo "## VM checkout migration"
-            echo
-            echo '```text'
-            printf '%s\n' "$output"
-            echo '```'
-          } > /tmp/vm-checkout-migration-status.md
-      - name: Publish result
-        if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -Eeuo pipefail
-          if [ ! -f /tmp/vm-checkout-migration-status.md ]; then
-            printf '## VM checkout migration\n\nNo migration output produced.\n' > /tmp/vm-checkout-migration-status.md
-          fi
-          gh issue comment 1207 --repo Vivaliz-site/site-shopvivaliz --body-file /tmp/vm-checkout-migration-status.md
-      - name: Cleanup
-        if: always()
-        run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts /tmp/vm-checkout-migration-status.md
+          cat <<'TXT'
+          This workflow is manual-only to avoid recurring production writes.
+          Use the VM/Desktop Commander control plane after confirming host health.
+          TXT

@@ -153,16 +153,16 @@ jobs:
       - name: Configure verified SSH host
         shell: bash
         env:
-          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
-          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+          SHOPVIVALIZ_VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          SHOPVIVALIZ_VM_KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          test -n "$ORACLE_VM_SSH_KEY" || { echo "::error::ORACLE_VM_SSH_KEY is missing"; exit 1; }
-          test -n "$ORACLE_VM_KNOWN_HOSTS" || { echo "::error::ORACLE_VM_KNOWN_HOSTS is missing"; exit 1; }
+          test -n "$SHOPVIVALIZ_VM_SSH_KEY" || { echo "::error::SHOPVIVALIZ_VM_SSH_KEY is missing"; exit 1; }
+          test -n "$SHOPVIVALIZ_VM_KNOWN_HOSTS" || { echo "::error::SHOPVIVALIZ_VM_KNOWN_HOSTS is missing"; exit 1; }
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa
+          printf '%s\n' "$SHOPVIVALIZ_VM_SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$SHOPVIVALIZ_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
       - name: Deploy with reversible server backup
@@ -176,7 +176,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 \
+            ubuntu@136.248.69.116 \
             'bash -s' -- "$DEPLOY_SHA" <<'REMOTE_SCRIPT'
           set -euo pipefail
           expected_sha="$1"
@@ -371,16 +371,16 @@ jobs:
       - name: Configure verified SSH host
         shell: bash
         env:
-          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
-          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+          SHOPVIVALIZ_VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          SHOPVIVALIZ_VM_KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          test -n "$ORACLE_VM_SSH_KEY" || { echo "::error::ORACLE_VM_SSH_KEY is missing"; exit 1; }
-          test -n "$ORACLE_VM_KNOWN_HOSTS" || { echo "::error::ORACLE_VM_KNOWN_HOSTS is missing"; exit 1; }
+          test -n "$SHOPVIVALIZ_VM_SSH_KEY" || { echo "::error::SHOPVIVALIZ_VM_SSH_KEY is missing"; exit 1; }
+          test -n "$SHOPVIVALIZ_VM_KNOWN_HOSTS" || { echo "::error::SHOPVIVALIZ_VM_KNOWN_HOSTS is missing"; exit 1; }
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa
+          printf '%s\n' "$SHOPVIVALIZ_VM_SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$SHOPVIVALIZ_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
       - name: Run canonical production smoke test from Oracle VM
@@ -394,7 +394,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 \
+            ubuntu@136.248.69.116 \
             'bash -s' -- "$DEPLOY_SHA" > >(tee smoke-results.txt) 2>&1 <<'REMOTE_SCRIPT'
           set -euo pipefail
           expected_sha="$1"

@@ -173,3 +173,20 @@ GITHUB_SECRETS.md
 /test-all-shopv506.php
 /.venv-homologacao/
 /storage/rate-limit/
+
+# ============================================================================
+# RELATÓRIOS DE DIAGNÓSTICO (Temporários de sessão de agentes autônomos)
+# ============================================================================
+# reports/ acumula dumps de diagnóstico pontual (mei-email-*, automation-*,
+# fredwin-*, hourly/) gerados por agentes autônomos rodando na VM. Só os .md
+# de auditoria formal na raiz de reports/ são histórico real e ficam versionados.
+reports/hourly/
+reports/*.txt
+reports/*.csv
+reports/*.json
+reports/*.rtf
+reports/*.png
+
+# Screenshots de QA/browser-testing são temporários, nunca versionados.
+scratch/*.png
+scratch/*.jpg

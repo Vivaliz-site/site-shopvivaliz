@@ -546,11 +546,6 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
     /* Renderizar itens do carrinho */
     function renderCart() {
         var items = getCart();
-        if (!HAS_PAYMENT_GATEWAY) {
-            status.textContent = 'Pagamento online temporariamente indisponível. Fale no WhatsApp para finalizar seu pedido.';
-            status.className='checkout-status-msg err';
-            return;
-        }
         var el = document.getElementById('cart-items');
         var subEl = document.getElementById('cart-subtotal');
         var totEl = document.getElementById('cart-total');
@@ -849,6 +844,16 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
         var btn = document.getElementById('submit-btn');
         var status = document.getElementById('checkout-status');
         var items = getCart();
+        if (!HAS_PAYMENT_GATEWAY) {
+            status.textContent = 'Pagamento online temporariamente indisponível. Fale no WhatsApp para finalizar seu pedido.';
+            status.className = 'checkout-status-msg err';
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Pagamento indisponível';
+            }
+            return;
+        }
+
         if (!items.length) { status.textContent = 'Carrinho vazio.'; status.className='checkout-status-msg err'; return; }
         if (!this.checkValidity()) { this.reportValidity(); return; }
 

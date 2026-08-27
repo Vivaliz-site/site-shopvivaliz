@@ -82,9 +82,34 @@ Ao adicionar novo arquivo em `/includes/` que precisa ser público:
 
 ---
 
-## 🟡 Rotina de otimização inteligente Shopee (6h): credencial corrigida em 2026-08-14, mas falta integração de analytics (CTR/conversão)
+## 🔴 Rotina de otimização inteligente Shopee (6h): `shopee-runtime-health.yml` voltou a falhar em todo run agendado desde 2026-08-22
 
-**Última atualização:** 2026-08-15
+**Última atualização:** 2026-08-26
+
+### Atualização 2026-08-26 — regressão nova: health check volta a falhar em todo run agendado desde 2026-08-22, não detectada por 4 dias
+
+`shopee-runtime-health.yml` (schedule a cada 6h, ver atualização 2026-08-15 abaixo) tinha 3/3
+sucessos em 2026-08-15 e continuou passando até `run_number 1114` (2026-08-22 06:59 UTC). A
+partir de `run_number 1121` (2026-08-22 18:48 UTC) todo run agendado falha (`conclusion:
+failure`), confirmado até `run_number 1326` (2026-08-26 07:08 UTC) — 4 dias corridos sem
+nenhum sucesso agendado no meio. O job falha em ~3s no passo SSH que chama
+`scripts/shopee_runtime_preflight.py` na VM (`137.131.156.17`); o corpo do erro só existe no
+artifact `shopee-runtime-health-<run_id>.json` (não inspecionado ainda — baixar o artifact via
+`gh`/API com acesso à VM). Causa raiz não confirmada; hipótese mais provável é
+`daemon-shopee-token-renewer.py` (`shopvivaliz-shopee-token-renewer.service`) ter parado de
+rodar por volta de 2026-08-22, deixando o access token expirar (4h) sem renovação — checar
+`systemctl status shopvivaliz-shopee-token-renewer` na VM primeiro. Não parece ligado ao crash
+de memory thrashing de 2026-08-25 nem aos workflows `ops: vm-slim-*` (todos posteriores ao
+início desta falha). Nenhuma sessão de agente pegou isso entre 08-22 e 08-26 porque a
+reconfirmação rápida de rotina (usada desde 2026-08-06, ver `docs/MEMORIA-AGENTES.md`) só
+olhava `listings/*.json` e git log, não a run history deste workflow. Detalhe completo:
+`docs/MEMORIA-AGENTES.md` entrada 2026-08-26.
+
+**Ação sugerida para quando o usuário tiver tempo:** (1) checar `systemctl status
+shopvivaliz-shopee-token-renewer` na VM e os logs do daemon; (2) se o daemon estiver parado,
+reiniciar e confirmar que um novo `shopee-tokens.json` foi escrito; (3) disparar
+`shopee-runtime-health.yml` via `workflow_dispatch` pra confirmar recuperação antes de esperar
+o próximo schedule.
 
 ### Atualização 2026-08-15 — bloqueador primário corrigido; premissa dos registros abaixo (2026-07-XX) estava errada
 

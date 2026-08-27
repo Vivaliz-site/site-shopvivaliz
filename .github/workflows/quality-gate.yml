@@ -208,6 +208,7 @@ jobs:
           php tests/ecommerce-excellence-regression-test.php
           php tests/testimonials-liz-moderation-smoke.php
           php tests/conversion-recovery-regression-test.php
+          php tests/production-workflows-vm2-contract-test.php
 
       - name: Guard automatic product image carousel
         shell: bash

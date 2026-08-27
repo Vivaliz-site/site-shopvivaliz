@@ -1,0 +1,81 @@
+name: Cloudflare DNS Cutover
+
+on:
+  workflow_dispatch:
+    inputs:
+      old_ip:
+        description: "IP atual a ser substituido nos registros A"
+        required: true
+      new_ip:
+        description: "Novo IP de destino"
+        required: true
+      record_name:
+        description: "Nome exato do registro A a alterar (ex: shopvivaliz.com.br). So esse registro sera tocado."
+        required: true
+      apply:
+        description: "true para aplicar de fato; false so lista o que mudaria"
+        required: true
+        default: "false"
+
+permissions:
+  contents: read
+
+jobs:
+  cutover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Update a single named A record pointing to old_ip
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
+          OLD_IP: ${{ inputs.old_ip }}
+          NEW_IP: ${{ inputs.new_ip }}
+          RECORD_NAME: ${{ inputs.record_name }}
+          APPLY: ${{ inputs.apply }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CF_TOKEN:-}" ]; then
+            echo 'CLOUDFLARE_API_TOKEN_MISSING'
+            exit 1
+          fi
+
+          zones=$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones?name=shopvivaliz.com.br")
+          zone_id=$(echo "$zones" | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d.get("result") or []; print(r[0]["id"] if r else "")')
+          if [ -z "$zone_id" ]; then
+            echo 'ZONE_NOT_FOUND'
+            exit 1
+          fi
+          echo "ZONE_ID=$zone_id"
+
+          records=$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records?type=A&name=$RECORD_NAME&per_page=100")
+          echo "$records" > /tmp/records.json
+
+          python3 -c 'import json,os; d=json.load(open("/tmp/records.json")); old=os.environ["OLD_IP"]; name=os.environ["RECORD_NAME"]; [print("MATCH id=" + r["id"] + " name=" + r["name"] + " content=" + r["content"] + " proxied=" + str(r["proxied"])) for r in d.get("result",[]) if r["name"]==name]'
+
+          count=$(python3 -c 'import json,os; d=json.load(open("/tmp/records.json")); name=os.environ["RECORD_NAME"]; print(len([r for r in d.get("result",[]) if r["name"]==name]))')
+          if [ "$count" != "1" ]; then
+            echo "ABORT_UNEXPECTED_RECORD_COUNT=$count for name=$RECORD_NAME (esperado exatamente 1)"
+            exit 1
+          fi
+
+          match_old=$(python3 -c 'import json,os; d=json.load(open("/tmp/records.json")); old=os.environ["OLD_IP"]; name=os.environ["RECORD_NAME"]; r=[x for x in d.get("result",[]) if x["name"]==name][0]; print("yes" if r["content"]==old else "no")')
+          if [ "$match_old" != "yes" ]; then
+            echo "ABORT_CONTENT_MISMATCH: registro $RECORD_NAME nao aponta para old_ip=$OLD_IP atualmente"
+            exit 1
+          fi
+
+          if [ "$APPLY" != "true" ]; then
+            echo "DRY_RUN_ONLY (apply=false) - nenhuma mudanca foi feita"
+            exit 0
+          fi
+
+          rid=$(python3 -c 'import json,os; d=json.load(open("/tmp/records.json")); name=os.environ["RECORD_NAME"]; print([r["id"] for r in d.get("result",[]) if r["name"]==name][0])')
+
+          resp=$(curl -sS -X PATCH "https://api.cloudflare.com/client/v4/zones/$zone_id/dns_records/$rid" \
+            -H "Authorization: Bearer $CF_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "{\"content\":\"$NEW_IP\"}")
+          echo "UPDATED[$rid]=$resp"
+
+          echo "CUTOVER_APPLIED name=$RECORD_NAME old=$OLD_IP new=$NEW_IP"

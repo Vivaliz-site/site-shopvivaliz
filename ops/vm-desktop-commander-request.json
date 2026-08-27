@@ -1,4 +1,4 @@
 {
-  "action": "install_or_repair",
-  "reason": "converge VM to canonical systemd-owned Desktop Commander after observed manual/service split"
+  "action": "status",
+  "reason": "confirm VM Desktop Commander state after restart attempt during GSC verification"
 }

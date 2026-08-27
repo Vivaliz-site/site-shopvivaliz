@@ -25,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p reports
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'p=/home/ubuntu/shopvivaliz-deploy/current; r=$(readlink -f "$p"); b=$(basename "$r"); s=$(printf "%s" "$b" | cut -d- -f3-); printf "REALPATH=%s\nDEPLOY_SHA=%s\n" "$r" "$s"' | tee reports/deploy-realpath-sha-20260820-1150.txt
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@136.248.69.116 'p=/home/ubuntu/shopvivaliz-deploy/current; r=$(readlink -f "$p"); b=$(basename "$r"); s=$(printf "%s" "$b" | cut -d- -f3-); printf "REALPATH=%s\nDEPLOY_SHA=%s\n" "$r" "$s"' | tee reports/deploy-realpath-sha-20260820-1150.txt
       - name: Persist report
         run: |
           set -euo pipefail
