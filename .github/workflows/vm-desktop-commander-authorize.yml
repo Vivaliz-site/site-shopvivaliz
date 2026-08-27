@@ -32,7 +32,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17)
-          "${SSH[@]}" 'set -Eeuo pipefail; sudo systemctl stop shopvivaliz-desktop-commander.service || true; d="$HOME/.desktop-commander-device"; mkdir -p "$d"; rm -f "$d/auth-required.cooldown" "$d/provider-connected.marker" "$d/manual-authorize.log"; nohup timeout 600s npx --yes @wonderwhy-er/desktop-commander@0.2.47 remote --persist-session >"$d/manual-authorize.log" 2>&1 < /dev/null & echo $! >"$d/manual-authorize.pid"; chmod 600 "$d/manual-authorize.log" "$d/manual-authorize.pid"'
+          "${SSH[@]}" 'set -Eeuo pipefail; sudo systemctl stop shopvivaliz-desktop-commander.service || true; d="$HOME/.desktop-commander-device"; mkdir -p "$d"; touch "$d/manual-authorize-start.marker"; rm -f "$d/auth-required.cooldown" "$d/provider-connected.marker" "$d/manual-authorize.log"; nohup timeout 600s npx --yes @wonderwhy-er/desktop-commander@0.2.47 remote --persist-session >"$d/manual-authorize.log" 2>&1 < /dev/null & echo $! >"$d/manual-authorize.pid"; chmod 600 "$d/manual-authorize.log" "$d/manual-authorize.pid" "$d/manual-authorize-start.marker"'
           found=false
           for i in $(seq 1 30); do
             sleep 2
@@ -47,7 +47,7 @@ jobs:
             fi
           done
           test "$found" = true
-      - name: Wait for authorization and persist session backup
+      - name: Wait for fresh authorization and persist session backup
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -55,13 +55,13 @@ jobs:
           ok=false
           for i in $(seq 1 120); do
             sleep 4
-            if "${SSH[@]}" 'jq -e ".deviceId | type == \"string\" and length > 0" "$HOME/.desktop-commander-device/device.json" >/dev/null 2>&1 && jq -e ".session.refresh_token | type == \"string\" and length > 0" "$HOME/.desktop-commander-device/device.json" >/dev/null 2>&1'; then
+            if "${SSH[@]}" 'f="$HOME/.desktop-commander-device/device.json"; m="$HOME/.desktop-commander-device/manual-authorize-start.marker"; test -f "$f" && test -f "$m" && test "$f" -nt "$m" && jq -e ".deviceId | type == \"string\" and length > 0" "$f" >/dev/null 2>&1 && jq -e ".session | type == \"object\" and length > 0" "$f" >/dev/null 2>&1'; then
               ok=true
               break
             fi
           done
           test "$ok" = true
-          "${SSH[@]}" 'set -Eeuo pipefail; d="$HOME/.desktop-commander-device"; install -d -m 700 "$d/session-backup"; install -m 600 "$d/device.json" "$d/session-backup/device.json"; if test -f "$d/manual-authorize.pid"; then pid=$(cat "$d/manual-authorize.pid" || true); test -z "$pid" || kill "$pid" 2>/dev/null || true; fi; rm -f "$d/auth-required.cooldown"; sudo systemctl start shopvivaliz-desktop-commander.service; sleep 12; systemctl is-active --quiet shopvivaliz-desktop-commander.service'
+          "${SSH[@]}" 'set -Eeuo pipefail; d="$HOME/.desktop-commander-device"; install -d -m 700 "$d/session-backup"; install -m 600 "$d/device.json" "$d/session-backup/device.json"; if test -f "$d/manual-authorize.pid"; then pid=$(cat "$d/manual-authorize.pid" || true); test -z "$pid" || kill "$pid" 2>/dev/null || true; fi; rm -f "$d/auth-required.cooldown" "$d/manual-authorize-start.marker"; sudo systemctl start shopvivaliz-desktop-commander.service; sleep 12; systemctl is-active --quiet shopvivaliz-desktop-commander.service'
       - name: Cleanup
         if: always()
         run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
