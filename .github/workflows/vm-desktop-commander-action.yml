@@ -40,6 +40,9 @@ jobs:
             inspect_session)
               COMMAND='set -Eeuo pipefail; f="$HOME/.desktop-commander-device/device.json"; test -f "$f"; has_device=$(jq -e ".deviceId | type == \"string\" and length > 0" "$f" >/dev/null 2>&1 && echo true || echo false); has_access=$(jq -e ".session.access_token | type == \"string\" and length > 0" "$f" >/dev/null 2>&1 && echo true || echo false); has_refresh=$(jq -e ".session.refresh_token | type == \"string\" and length > 0" "$f" >/dev/null 2>&1 && echo true || echo false); printf "DEVICE_ID_PRESENT=%s\nACCESS_TOKEN_PRESENT=%s\nREFRESH_TOKEN_PRESENT=%s\n" "$has_device" "$has_access" "$has_refresh"'
               ;;
+            clear_cooldown_restart)
+              COMMAND='set -Eeuo pipefail; rm -f "$HOME/.desktop-commander-device/auth-required.cooldown"; sudo systemctl restart shopvivaliz-desktop-commander.service; sleep 12; active=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true); auth=false; test -f "$HOME/.desktop-commander-device/auth-required.cooldown" && auth=true; connected=false; test -f "$HOME/.desktop-commander-device/provider-connected.marker" && connected=true; canonical=0; while IFS= read -r line; do test -z "$line" && continue; case "$line" in *"@wonderwhy-er/desktop-commander@0.2.47"*" remote "*"--persist-session"*) canonical=$((canonical+1));; esac; done < <(pgrep -af "[n]pm exec @wonderwhy-er/desktop-commander@.* remote" 2>/dev/null || true); printf "SERVICE_ACTIVE=%s\nAUTH_REQUIRED=%s\nPROVIDER_CONNECTED=%s\nCANONICAL_AGENT_COUNT=%s\n" "$active" "$auth" "$connected" "$canonical"'
+              ;;
             install_or_repair)
               COMMAND='set -Eeuo pipefail; cd /home/ubuntu/shopvivaliz-deploy/repo; git fetch origin main >/dev/null; sudo bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/install-vm-desktop-commander-service.sh'
               ;;
