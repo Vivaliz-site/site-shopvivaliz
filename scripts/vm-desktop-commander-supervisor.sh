@@ -4,6 +4,8 @@ set -Eeuo pipefail
 HOME_DIR="${HOME:-/home/ubuntu}"
 DEVICE_DIR="$HOME_DIR/.desktop-commander-device"
 DEVICE_FILE="$DEVICE_DIR/device.json"
+SESSION_BACKUP_DIR="$DEVICE_DIR/session-backup"
+SESSION_BACKUP_FILE="$SESSION_BACKUP_DIR/device.json"
 COOLDOWN_FILE="$DEVICE_DIR/auth-required.cooldown"
 CONNECTED_MARKER="$DEVICE_DIR/provider-connected.marker"
 LOCK_FILE="$DEVICE_DIR/remote-owner.lock"
@@ -15,6 +17,23 @@ REMOTE_OWNER_PID="$$"
 REMOTE_OWNER_SESSION='systemd'
 
 mkdir -p "$DEVICE_DIR"
+install -d -m 700 "$SESSION_BACKUP_DIR"
+
+backup_device_state() {
+  if [[ -s "$DEVICE_FILE" ]]; then
+    install -m 600 "$DEVICE_FILE" "$SESSION_BACKUP_FILE"
+  fi
+}
+
+restore_device_state() {
+  if [[ ! -f "$DEVICE_FILE" && -s "$SESSION_BACKUP_FILE" ]]; then
+    install -m 600 "$SESSION_BACKUP_FILE" "$DEVICE_FILE"
+    echo 'SESSION_RESTORED=true reason=primary_device_state_missing'
+  fi
+}
+
+restore_device_state
+
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
   echo 'REMOTE_OWNER_CONFLICT=true reason=supervisor_lock_held'
@@ -77,6 +96,7 @@ tmp="$(mktemp)"
 chmod 0600 "$tmp"
 child=''
 cleanup() {
+  backup_device_state
   rm -f "$tmp"
   if [[ -n "$child" ]] && kill -0 "$child" 2>/dev/null; then
     kill -TERM -- "-$child" 2>/dev/null || kill -TERM "$child" 2>/dev/null || true
@@ -107,6 +127,7 @@ while kill -0 "$child" 2>/dev/null; do
   if [[ "$connected" -eq 0 ]] && grep -Eqi "$CONNECTED_REGEX" "$tmp"; then
     : > "$CONNECTED_MARKER"
     chmod 0600 "$CONNECTED_MARKER"
+    backup_device_state
     connected=1
     echo 'REMOTE_CONNECTED=true'
   fi
@@ -115,6 +136,7 @@ done
 
 rc=0
 if wait "$child"; then rc=0; else rc=$?; fi
+backup_device_state
 if [[ "$auth_required" -eq 0 ]] && grep -Eqi "$AUTH_REGEX" "$tmp"; then
   auth_required=1
   : > "$COOLDOWN_FILE"
