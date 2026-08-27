@@ -1,0 +1,33 @@
+name: VM M365 Inspect
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/vm-m365-inspect.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure verified VM SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
+      - name: Inspect authorization logic without secrets
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'set -e; for f in /home/ubuntu/mei-mg-email/scripts/autorizar_microsoft_graph.py /home/ubuntu/mei-mg-email/scripts/auditar_graph_mail_read.py /home/ubuntu/mei-mg-email/scripts/get_graph_app_token.ps1 /home/ubuntu/mei-mg-email/scripts/desbloquear_exchange_app_cert.ps1 /home/ubuntu/mei-mg-email/scripts/configurar_exchange_deliverability.ps1; do echo ===$f===; test -f "$f" || continue; sed -E "/secret|password|token[[:space:]]*=|access_token|refresh_token/I s/=.*/=[redacted]/" "$f" | head -260; done'
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts
