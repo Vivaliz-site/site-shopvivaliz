@@ -1,4 +1,4 @@
 {
-  "action": "system_audit",
-  "reason": "post-reboot root cause and service health audit before remediation"
+  "action": "status",
+  "reason": "verify Desktop Commander provider state after reboot"
 }
