@@ -1,4 +1,4 @@
 {
-  "action": "site_precheck",
-  "reason": "verify Apache and Certbot are legacy-only before removing old site stack from VM1"
+  "action": "disk_audit",
+  "reason": "locate VM1 disk usage before safe cleanup"
 }
