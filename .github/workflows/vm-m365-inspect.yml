@@ -13,7 +13,7 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 3
     steps:
       - name: Configure verified VM SSH
         env:
@@ -25,9 +25,9 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
-      - name: Audit inconsistent MEI batch read only
+      - name: Targeted MEI batch audit read only
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'set -Eeuo pipefail; cd /home/ubuntu/mei-mg-email; lot="2b7c7b13-8700-4e46-9a29-a7513bf58b58"; echo ===ERROR_LOCATION===; grep -RFn --exclude-dir=.git --exclude="*.log" "inconsistente: total_db" . 2>/dev/null | head -20 || true; echo ===LOT_REFERENCES===; grep -RFn --exclude-dir=.git "$lot" . 2>/dev/null | head -40 || true; echo ===RECENT_LOGS===; journalctl -u mei-mg-email-worker.service -b --since "45 minutes ago" --no-pager 2>/dev/null | grep -F "$lot" | tail -40 || true; echo ===PY_CONTEXT===; f=$(grep -RFl --exclude-dir=.git --exclude="*.log" "inconsistente: total_db" . 2>/dev/null | head -1 || true); if test -n "$f"; then n=$(grep -n "inconsistente: total_db" "$f" | head -1 | cut -d: -f1); a=$((n>35?n-35:1)); b=$((n+55)); echo FILE=$f LINES=$a-$b; sed -n "${a},${b}p" "$f"; fi; echo ===DB_CONTAINER===; docker ps --format "{{.Names}} {{.Status}}" | grep "mei-mg-email-db" || true; echo ===TABLE_HINTS===; grep -RFn --exclude-dir=.git -E "CREATE TABLE|class .*Envio|__tablename__|lote_id|campanha_id" app migrations alembic scripts 2>/dev/null | head -100 || true'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'set -Eeuo pipefail; cd /home/ubuntu/mei-mg-email; lot="2b7c7b13-8700-4e46-9a29-a7513bf58b58"; roots="app scripts migrations alembic"; echo ===ERROR_LOCATION===; timeout 12s grep -RFn --include="*.py" "inconsistente: total_db" $roots 2>/dev/null | head -20 || true; echo ===LOT_LOGS===; journalctl -u mei-mg-email-worker.service -b --since "90 minutes ago" --no-pager 2>/dev/null | grep -F "$lot" | tail -60 || true; echo ===FUNCTION_CONTEXT===; f=$(timeout 12s grep -RFl --include="*.py" "inconsistente: total_db" $roots 2>/dev/null | head -1 || true); if test -n "$f"; then n=$(grep -n "inconsistente: total_db" "$f" | head -1 | cut -d: -f1); a=$((n>45?n-45:1)); b=$((n+70)); echo FILE=$f LINES=$a-$b; sed -n "${a},${b}p" "$f"; fi; echo ===LOT_SCHEMA_HINTS===; timeout 12s grep -RFn --include="*.py" -E "lote_id|lote_uuid|batch_id|status.*envi|submitted|abertos" app scripts migrations alembic 2>/dev/null | head -140 || true; echo ===DB===; docker ps --format "{{.Names}} {{.Status}}" | grep "mei-mg-email-db" || true'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts
