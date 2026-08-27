@@ -66,8 +66,10 @@ jobs:
               with urllib.request.urlopen(req,timeout=30) as r: return json.loads(r.read())
           client_id=p.client_id
           graph_app='00000003-0000-0000-c000-000000000000'
-          client=get('https://graph.microsoft.com/v1.0/servicePrincipals?$filter='+urllib.parse.quote("appId eq '%s'"%client_id,safe=" ='"))['value'][0]
-          graph=get('https://graph.microsoft.com/v1.0/servicePrincipals?$filter='+urllib.parse.quote("appId eq '%s'"%graph_app,safe=" ='"))['value'][0]
+          client_filter=urllib.parse.quote("appId eq '%s'"%client_id,safe="'")
+          graph_filter=urllib.parse.quote("appId eq '%s'"%graph_app,safe="'")
+          client=get('https://graph.microsoft.com/v1.0/servicePrincipals?$filter='+client_filter)['value'][0]
+          graph=get('https://graph.microsoft.com/v1.0/servicePrincipals?$filter='+graph_filter)['value'][0]
           role=next(r for r in graph['appRoles'] if r.get('value')=='Mail.Read' and 'Application' in r.get('allowedMemberTypes',[]))
           assignments=get('https://graph.microsoft.com/v1.0/servicePrincipals/'+client['id']+'/appRoleAssignments')['value']
           existing=any(a.get('resourceId')==graph['id'] and a.get('appRoleId')==role['id'] for a in assignments)
