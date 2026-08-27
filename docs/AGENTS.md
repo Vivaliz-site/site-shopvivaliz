@@ -661,6 +661,40 @@ cobre 3 desses itens; os que ficaram de fora (com justificativa) estão listados
 **Ver também:** `docs/AGENTS.md` (entradas das Rodadas 1-10, acima), relatório da
 Rodada 10 (`outputs/rodada10-diagnostico.md`), resumo entregue ao Fred no chat.
 
+### 2026-08-27 — Policy Engine bloqueia merge de mudança server-side não-visual (Sonnet)
+
+**Sistema/arquivo:** `agents/policy-engine/index.js` (`isVisualFile()`/`validateVisual()`),
+workflow `enforce`.
+**Contexto:** PR com fix de normalização de hash (SHA256) do Facebook Pixel Advanced
+Matching em `includes/analytics-tracking.php` foi bloqueado pelo check `enforce` com
+"validação visual expirada" — mesmo a mudança sendo puramente server-side (normaliza
+email/telefone antes do hash, sem nenhum efeito em layout renderizado).
+
+- `isVisualFile()` decide por **path + extensão**, não por conteúdo do diff: qualquer
+  arquivo `.php`/`.js`/`.css`/etc sob `includes/`, `public/`, `templates/`, `views/` ou
+  `pages/` é tratado como visual, com exceções só para 2 arquivos específicos
+  (`includes/product-seo.php`, `includes/catalog-authoritative-stock-carry.php`) e
+  `includes/marketplace/*`. Isso é falso-positivo pra qualquer outra lógica puramente
+  server-side dentro de `includes/` (helpers de tracking, normalização de dados, etc).
+- Quando isso acontecer: **não** tente contornar o Policy Engine (é fail-closed de
+  propósito). Se a sessão não tem navegador conectado pra gerar `visual-proof.json`
+  (screenshot + reviewer + timestamp <1h), separe a mudança visual-flagada num PR próprio
+  e sinalize como bloqueada pendente de QA visual humana — não force merge, não edite
+  `isVisualFile()` pra adicionar exceção sem autorização do Fred (mesmo que a exceção
+  pareça óbvia — é uma decisão de política, não técnica).
+- Outro achado no mesmo PR: 3 checks (`Audit agents with evidence`, `Audit repository
+  automation`, `Resolve same-repository PR conflicts with private Oracle Gemini pool`) já
+  estavam falhando repetidamente em `main` havia horas, sem relação com o diff — confirmado
+  via `gh run list --branch main --workflow "<nome>"`. Antes de tratar uma falha de check
+  como bloqueio do seu PR, confirme se ela já falha em `main` também.
+- `gh pr edit` (gh CLI 2.45.0) falha sempre com `GraphQL: Projects (classic) is being
+  deprecated...` mesmo sem nenhum campo de projeto envolvido — bug conhecido da versão.
+  Workaround: `gh api repos/<owner>/<repo>/pulls/<n> -X PATCH -f title=... -f body=...`
+  funciona normalmente.
+- Branch protection está **desabilitada** neste repo (`gh api .../branches/main/protection`
+  → 404 "Branch protection has been disabled"). `mergeStateStatus: UNSTABLE` não bloqueia
+  merge de fato — é só informativo sobre checks não-obrigatórios pendentes/falhando.
+
 ## 🤖 Agentes Autônomos Ativos
 
 | Agente | Tipo | Commits | Status |
