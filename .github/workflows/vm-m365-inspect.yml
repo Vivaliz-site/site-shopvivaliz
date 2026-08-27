@@ -25,9 +25,9 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
-      - name: Trace MEI batch inconsistency read only
+      - name: Inspect worker lot invariant read only
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'set -Eeuo pipefail; echo ===UNIT===; systemctl cat mei-mg-email-worker.service; echo ===PROCESS===; pid=$(systemctl show -p MainPID --value mei-mg-email-worker.service); ps -o pid,ppid,lstart,stat,args -p "$pid"; echo ===TRACEBACK===; journalctl -u mei-mg-email-worker.service -b --since "2026-08-27 18:49:45" --until "2026-08-27 18:51:10" --no-pager | tail -180; echo ===TOPLEVEL_PY===; cd /home/ubuntu/mei-mg-email; find . -maxdepth 2 -type f -name "*.py" -not -path "./.venv/*" -not -path "./venv/*" -print | sort | head -180'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'set -Eeuo pipefail; cd /home/ubuntu/mei-mg-email; echo ===WORKER_350_445===; sed -n "350,445p" worker/worker_queue_first.py; echo ===SAFE_ENTRYPOINT===; sed -n "60,135p" worker/safe_entrypoint.py; echo ===TEST_PARTIAL_LOT===; sed -n "1,260p" tests/test_worker_partial_lot_invariant.py; echo ===DB_API===; sed -n "1,260p" app/db.py'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts
