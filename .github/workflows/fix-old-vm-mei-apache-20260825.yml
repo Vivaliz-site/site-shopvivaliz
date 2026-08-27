@@ -27,7 +27,7 @@ jobs:
           printf '%s\n' "$VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
           printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
-          printf 'dns_cloudflare_api_token = %s\n' "$CF_TOKEN" > "$RUNNER_TEMP/cloudflare.ini"
+          python -c 'import os,pathlib; pathlib.Path(os.environ["RUNNER_TEMP"], "cloudflare.ini").write_text("dns_cloudflare_api_token = " + os.environ["CF_TOKEN"] + "\n", encoding="utf-8")'
           chmod 600 "$RUNNER_TEMP/cloudflare.ini"
 
       - name: Repair certificate and Apache
