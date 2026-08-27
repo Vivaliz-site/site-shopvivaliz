@@ -1,4 +1,4 @@
 {
-  "action": "dc_live_summary",
-  "reason": "inspect live remote agent output after persisted-session restart"
+  "action": "disk_audit",
+  "reason": "post-freeze disk pressure audit before safe cleanup"
 }
