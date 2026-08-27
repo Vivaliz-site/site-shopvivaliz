@@ -1,4 +1,4 @@
 {
-  "action": "clear_cooldown_restart",
-  "reason": "restart canonical Desktop Commander using existing persisted refreshable session"
+  "action": "status",
+  "reason": "verify Desktop Commander process counts and service state after restart"
 }
