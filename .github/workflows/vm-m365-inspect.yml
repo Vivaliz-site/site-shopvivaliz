@@ -25,9 +25,9 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
-      - name: Read active Desktop Commander device authorization
+      - name: Read active Desktop Commander verification address
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'set -Eeuo pipefail; pid=$(pgrep -f "node .*desktop-commander.* remote --persist-session" | head -1 || true); test -n "$pid" || pid=$(pgrep -f "[n]pm exec @wonderwhy-er/desktop-commander@0.2.47 remote --persist-session" | head -1 || true); test -n "$pid"; out=$(timeout 5s cat "/proc/$pid/fd/1" 2>/dev/null || true); code=$(printf "%s\n" "$out" | grep -Eo "[A-Z0-9]{4}-[A-Z0-9]{4}" | tail -1 || true); url=$(printf "%s\n" "$out" | grep -Eo "https://[^ ]+verify-device[^ ]*" | tail -1 || true); test -n "$code"; echo "DEVICE_CODE=$code"; test -n "$url" && echo "VERIFY_URL=$url" || true; echo ===SERVICE===; systemctl show shopvivaliz-desktop-commander.service -p MainPID -p ActiveState -p SubState -p NRestarts --no-pager'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'set -Eeuo pipefail; pid=$(pgrep -f "node .*desktop-commander.* remote --persist-session" | head -1 || true); test -n "$pid" || pid=$(pgrep -f "[n]pm exec @wonderwhy-er/desktop-commander@0.2.47 remote --persist-session" | head -1 || true); test -n "$pid"; out=$(timeout 5s cat "/proc/$pid/fd/1" 2>/dev/null || true); code=$(printf "%s\n" "$out" | grep -Eo "[A-Z0-9]{4}-[A-Z0-9]{4}" | tail -1 || true); test -n "$code"; echo "DEVICE_CODE=$code"; printf "%s\n" "$out" | grep -Eo "https://[^[:space:]]+" | grep -E "remote-mcp|verify|device" | tail -3 | sed -E "s/[\"'\''),.;]+$//" || true'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts
