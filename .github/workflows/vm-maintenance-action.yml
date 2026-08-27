@@ -38,7 +38,7 @@ jobs:
               COMMAND="$(cat <<'EOF'
           set -Eeuo pipefail
           cd /home/ubuntu/mei-mg-email
-          ./.venv/bin/python -c 'import base64,json,urllib.error,urllib.request; from dotenv import load_dotenv; load_dotenv(".env",override=True); from app.email_provider import MicrosoftGraphEmailProvider; p=MicrosoftGraphEmailProvider(); fn=p._get_access_token; token=fn(); payload=token.split(".")[1]+"==="; claims=json.loads(base64.urlsafe_b64decode(payload)); print("TOKEN_ROLES="+",".join(sorted(claims.get("roles",[])))); addr=p.address; tests=[("USER",f"https://graph.microsoft.com/v1.0/users/{addr}?$select=id"),("MAIL_READ",f"https://graph.microsoft.com/v1.0/users/{addr}/mailFolders/inbox/messages?$top=1&$select=id")];
+          ./.venv/bin/python -c 'import base64,json,urllib.error,urllib.request; from dotenv import load_dotenv; load_dotenv(".env",override=True); from app.email_provider import MicrosoftGraphEmailProvider; p=MicrosoftGraphEmailProvider(); token=p._get_access_token(); payload=token.split(".")[1]+"==="; claims=json.loads(base64.urlsafe_b64decode(payload)); print("TOKEN_ROLES="+",".join(sorted(claims.get("roles",[])))); addr=p.address; tests=[("USER",f"https://graph.microsoft.com/v1.0/users/{addr}?$select=id"),("MAIL_READ",f"https://graph.microsoft.com/v1.0/users/{addr}/mailFolders/inbox/messages?$top=1&$select=id")];
           for label,url in tests:
             req=urllib.request.Request(url,headers={"Authorization":"Bearer "+token})
             try:
@@ -58,16 +58,13 @@ jobs:
           from dotenv import load_dotenv
           load_dotenv('.env', override=True)
           from app.email_provider import MicrosoftGraphEmailProvider
-          p=MicrosoftGraphEmailProvider()
-          token=p._get_access_token()
+          p=MicrosoftGraphEmailProvider(); token=p._get_access_token()
           headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'}
           def get(url):
               req=urllib.request.Request(url,headers=headers)
               with urllib.request.urlopen(req,timeout=30) as r: return json.loads(r.read())
-          client_id=p.client_id
-          graph_app='00000003-0000-0000-c000-000000000000'
-          client_filter=urllib.parse.quote("appId eq '%s'"%client_id,safe="'")
-          graph_filter=urllib.parse.quote("appId eq '%s'"%graph_app,safe="'")
+          client_filter=urllib.parse.quote("appId eq '%s'"%p.client_id,safe="'")
+          graph_filter=urllib.parse.quote("appId eq '00000003-0000-0000-c000-000000000000'",safe="'")
           client=get('https://graph.microsoft.com/v1.0/servicePrincipals?$filter='+client_filter)['value'][0]
           graph=get('https://graph.microsoft.com/v1.0/servicePrincipals?$filter='+graph_filter)['value'][0]
           role=next(r for r in graph['appRoles'] if r.get('value')=='Mail.Read' and 'Application' in r.get('allowedMemberTypes',[]))
@@ -81,14 +78,38 @@ jobs:
                   with urllib.request.urlopen(req,timeout=30) as r: print('MAIL_READ_ASSIGN_HTTP='+str(r.status))
               except urllib.error.HTTPError as e:
                   print('MAIL_READ_ASSIGN_HTTP='+str(e.code)); print('MAIL_READ_ASSIGN_FAILED=true'); raise
-          else:
-              print('MAIL_READ_ASSIGN_HTTP=existing')
+          else: print('MAIL_READ_ASSIGN_HTTP=existing')
           PY
           sudo systemctl restart mei-mg-email-ndr-guard.service
           sleep 8
-          echo ===NDR===
           systemctl show mei-mg-email-ndr-guard.service -p ActiveState -p SubState -p MainPID -p NRestarts --no-pager
           journalctl -u mei-mg-email-ndr-guard.service --since "20 seconds ago" --no-pager | grep -Ei "NDR guard iniciado|NDR_GUARD_CHECK_FAILED|HTTP_403|Traceback|APP-ONLY active" | tail -80 || true
+          EOF
+              )"
+              ;;
+            m365_admin_audit)
+              COMMAND="$(cat <<'EOF'
+          set -Eeuo pipefail
+          echo ===ENV_KEY_NAMES===
+          for f in /opt/m365/.env /opt/m365/.env.local /home/ubuntu/mei-mg-email/.env; do
+            test -f "$f" || continue
+            echo FILE=$f
+            sed -n -E 's/^([A-Za-z_][A-Za-z0-9_]*)=.*/\1/p' "$f" | grep -Ei 'tenant|client|secret|cert|graph|admin|token|azure|entra|m365|microsoft' | sort -u
+          done
+          echo ===ADMIN_RELATED_FILES===
+          find /opt/m365 /home/ubuntu/mei-mg-email/scripts -maxdepth 3 -type f 2>/dev/null | grep -Ei 'admin|graph|entra|azure|exchange|permission|role|consent|oauth|token|cert' | head -120
+          echo ===SCRIPT_CAPABILITY_REFERENCES===
+          grep -RIlE 'AppRoleAssignment|appRoleAssignments|Mail\.Read|Connect-MgGraph|Connect-AzAccount|adminconsent|Directory\.ReadWrite|Application\.ReadWrite|RoleManagement' /opt/m365 /home/ubuntu/mei-mg-email/scripts 2>/dev/null | head -120
+          echo ===TOOLS===
+          command -v az || true
+          command -v pwsh || true
+          command -v powershell || true
+          command -v oci || true
+          python3 - <<'PY'
+          import importlib.util
+          for m in ('msal','azure.identity','requests'):
+              print(m+'='+str(bool(importlib.util.find_spec(m))).lower())
+          PY
           EOF
               )"
               ;;
