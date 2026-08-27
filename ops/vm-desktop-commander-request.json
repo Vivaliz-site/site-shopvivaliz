@@ -1,4 +1,4 @@
 {
-  "action": "status",
-  "reason": "inspect VM1 Desktop Commander after successful restart workflow"
+  "action": "recover_session",
+  "reason": "restore persisted VM1 Desktop Commander session after provider reauth failure"
 }
