@@ -1,4 +1,4 @@
 {
   "action": "graph_grant_mail_read",
-  "reason": "grant only Mail.Read required by MEI MG NDR guard after confirming token has Mail.Send but no Mail.Read"
+  "reason": "retry least-privilege Mail.Read grant after fixing Graph filter encoding"
 }
