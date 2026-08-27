@@ -84,7 +84,40 @@ Ao adicionar novo arquivo em `/includes/` que precisa ser público:
 
 ## 🔴 Rotina de otimização inteligente Shopee (6h): `shopee-runtime-health.yml` voltou a falhar em todo run agendado desde 2026-08-22
 
-**Última atualização:** 2026-08-26
+**Última atualização:** 2026-08-27
+
+### Atualização 2026-08-27 — commit `a6c713a` (VM2 routing fix) corrige o alvo do SSH; erro real agora aponta pra credencial Shopee ausente na VM2, não mais conectividade
+
+O commit `a6c713a` ("fix: route production pipelines to VM2 (#1234)", 2026-08-27T10:52Z) corrigiu
+`.github/workflows/shopee-runtime-health.yml` pra fazer SSH em `136.248.69.116` (VM2, produção real)
+em vez de `137.131.156.17` (VM1, dev) — isso já resolve a hipótese de conectividade/cron saturado da
+VM1 aventada abaixo (atualização 2026-08-26). Disparei `shopee-runtime-health.yml` manualmente via
+`workflow_dispatch` (run `33107367820`, 2026-08-27T19:13Z, ação somente-leitura) pra confirmar: o SSH
+completa normalmente (sem timeout/erro de conexão), mas o script remoto falha com um erro específico
+e novo, visível pela primeira vez no log do job (antes só existia no artifact, inacessível a este
+sandbox):
+
+```
+ERROR: required Shopee runtime credentials are incomplete
+```
+
+`scripts/shopee_runtime_preflight.py` exige `SHOPEE_PARTNER_ID`, `SHOPEE_PARTNER_KEY`,
+`SHOPEE_SHOP_ID` e `SHOPEE_ACCESS_TOKEN`/`SHOPEE_REFRESH_TOKEN`, lidos de
+`shopvivaliz-deploy/shared/.env` + `shared/shopee-tokens.json` **na própria VM2**. Hipótese mais
+provável (não confirmada por falta de SSH neste sandbox): `shopvivaliz-shopee-token-renewer.service`
+(renova `shopee-tokens.json` a cada 3h) só foi instalado/rodado historicamente na VM1
+(`docs/MEMORIA-AGENTES.md:42`), então a VM2 nunca teve essas credenciais populadas, mesmo já sendo a
+produção real desde antes de 2026-08-26.
+
+**Ação sugerida:** (1) `ssh ubuntu@136.248.69.116 systemctl status shopvivaliz-shopee-token-renewer`;
+se ausente/parado, instalar (`deploy/systemd/shopvivaliz-shopee-token-renewer.service`) e popular
+`shared/.env`/`shared/shopee-tokens.json` da VM2 com as 4 credenciais `SHOPEE_*` (copiar de VM1 ou
+gerar novas); (2) rodar `shopee-runtime-health.yml` via `workflow_dispatch` de novo pra confirmar
+`status: ok`. Detalhe completo: `docs/HISTORICO-AGENTES-SHOPEE.md` seção 9.33.
+
+**Ver também registro anterior abaixo (2026-08-26)** — a hipótese de conectividade da VM1 nele descrita
+está descartada por este achado (o problema nunca foi só conectividade; agora que o SSH aponta pro
+alvo certo, o bloqueador real é credencial ausente na VM2).
 
 ### Atualização 2026-08-26 — regressão nova: health check volta a falhar em todo run agendado desde 2026-08-22, não detectada por 4 dias
 
