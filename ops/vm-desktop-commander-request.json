@@ -1,4 +1,4 @@
 {
-  "action": "disk_audit",
-  "reason": "post-freeze disk pressure audit before safe cleanup"
+  "action": "recover_session",
+  "reason": "restore last known persisted Desktop Commander session after provider disconnect"
 }
