@@ -1,4 +1,4 @@
 {
-  "action": "status",
-  "reason": "verify single canonical Desktop Commander after orphan removal"
+  "action": "dc_live_summary",
+  "reason": "read sanitized live output from the single canonical Desktop Commander process"
 }
