@@ -25,9 +25,9 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
-      - name: Inspect maintenance progress read only
+      - name: Inspect Desktop Commander process ownership read only
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'echo ===PROCESSES===; ps -eo pid,ppid,stat,etime,%cpu,%mem,comm,args | grep -E "[a]pt-get|[d]pkg|[d]ocker image prune|[j]ournalctl --vacuum|[r]m -rf /home/ubuntu/shopvivaliz-deploy" | head -80; echo ===LOCKS===; sudo fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock 2>/dev/null || true; echo ===PACKAGES===; dpkg -l 2>/dev/null | grep -E "^ii[[:space:]]+(apache2|certbot|php|libapache2)" | head -40 || true; echo ===PORTS===; ss -ltnp 2>/dev/null | grep -E ":(80|443)[[:space:]]" || true; echo ===DISK===; df -h /; echo ===LOAD===; uptime'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'echo ===SERVICE===; systemctl show shopvivaliz-desktop-commander.service -p MainPID -p ControlGroup -p ActiveState -p SubState -p NRestarts --no-pager; echo ===REMOTE_ROOTS===; pgrep -af "[n]pm exec @wonderwhy-er/desktop-commander@.* remote" || true; echo ===TREE===; ps -eo pid,ppid,pgid,sid,lstart,stat,comm,args --forest | grep -E "[d]esktop-commander|[n]pm exec @wonderwhy-er" | head -80 || true; echo ===CGROUP_MEMBERS===; cg=$(systemctl show shopvivaliz-desktop-commander.service -p ControlGroup --value); test -n "$cg" && systemd-cgls --no-pager "$cg" 2>/dev/null | head -120 || true; echo ===MARKERS===; for f in "$HOME/.desktop-commander-device/auth-required.cooldown" "$HOME/.desktop-commander-device/provider-connected.marker"; do test -e "$f" && echo "$(basename "$f")=present" || echo "$(basename "$f")=absent"; done'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts
