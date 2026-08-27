@@ -1,4 +1,4 @@
 {
-  "action": "graph_audit",
-  "reason": "rerun Graph permission audit after workflow YAML correction"
+  "action": "graph_grant_mail_read",
+  "reason": "grant only Mail.Read required by MEI MG NDR guard after confirming token has Mail.Send but no Mail.Read"
 }
