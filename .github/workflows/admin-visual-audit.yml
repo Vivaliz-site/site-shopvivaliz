@@ -42,7 +42,7 @@ jobs:
           archive="/tmp/shopvivaliz-admin-visual-audit-${GITHUB_RUN_ID}.tar.gz"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+            -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 \
             'bash -s' -- "$archive" <<'REMOTE'
           set -Eeuo pipefail
           archive="$1"
@@ -188,7 +188,7 @@ jobs:
           scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            "ubuntu@137.131.156.17:${archive}" admin-visual-audit.tar.gz
+            "ubuntu@136.248.69.116:${archive}" admin-visual-audit.tar.gz
           mkdir -p admin-audit
           tar -xzf admin-visual-audit.tar.gz -C admin-audit
 

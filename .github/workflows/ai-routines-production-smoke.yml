@@ -73,17 +73,17 @@ jobs:
 
       - name: Configure verified production SSH
         env:
-          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
-          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+          SHOPVIVALIZ_VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          SHOPVIVALIZ_VM_KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          test -n "$ORACLE_VM_SSH_KEY" || { echo '::error::ORACLE_VM_SSH_KEY is missing'; exit 1; }
-          test -n "$ORACLE_VM_KNOWN_HOSTS" || { echo '::error::ORACLE_VM_KNOWN_HOSTS is missing'; exit 1; }
+          test -n "$SHOPVIVALIZ_VM_SSH_KEY" || { echo '::error::SHOPVIVALIZ_VM_SSH_KEY is missing'; exit 1; }
+          test -n "$SHOPVIVALIZ_VM_KNOWN_HOSTS" || { echo '::error::SHOPVIVALIZ_VM_KNOWN_HOSTS is missing'; exit 1; }
           install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$SHOPVIVALIZ_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
           chmod 600 "$HOME/.ssh/id_rsa"
-          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          printf '%s\n' "$SHOPVIVALIZ_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
       - name: Wait for production release containing target commit
@@ -97,7 +97,7 @@ jobs:
           for attempt in $(seq 1 36); do
             deployed_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              ubuntu@137.131.156.17 \
+              ubuntu@136.248.69.116 \
               'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha 2>/dev/null || true')"
             if [[ "$deployed_sha" =~ ^[0-9a-f]{40}$ ]]; then
               if ! git cat-file -e "${deployed_sha}^{commit}" 2>/dev/null; then
@@ -132,7 +132,7 @@ jobs:
           image_report="/home/ubuntu/shopvivaliz-deploy/shared/logs/ai-image-smoke-v2-${GITHUB_SHA}.json"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 'bash -s' -- "$PRODUCTION_SHA" "$report" "$image_report" "$RUN_IMAGE" "$RUN_CATALOG" <<'REMOTE'
+            ubuntu@136.248.69.116 'bash -s' -- "$PRODUCTION_SHA" "$report" "$image_report" "$RUN_IMAGE" "$RUN_CATALOG" <<'REMOTE'
           set -Eeuo pipefail
           expected_sha="$1"
           report="$2"
@@ -192,10 +192,10 @@ jobs:
 
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "ubuntu@137.131.156.17:$report" ./ai-routines-smoke.json
+            "ubuntu@136.248.69.116:$report" ./ai-routines-smoke.json
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "ubuntu@137.131.156.17:$image_report" ./ai-image-smoke-v2.json
+            "ubuntu@136.248.69.116:$image_report" ./ai-image-smoke-v2.json
 
       - name: Validate redacted reports
         shell: bash

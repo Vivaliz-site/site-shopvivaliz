@@ -43,8 +43,8 @@ jobs:
       - name: Copy catalog snapshot from the active production release
         run: |
           set -euo pipefail
-          release_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha')"
-          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17:/home/ubuntu/shopvivaliz-deploy/current/storage/products-cache-ativos.json artifacts/catalog-snapshot/products-cache-ativos.json
+          release_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha')"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116:/home/ubuntu/shopvivaliz-deploy/current/storage/products-cache-ativos.json artifacts/catalog-snapshot/products-cache-ativos.json
           test -s artifacts/catalog-snapshot/products-cache-ativos.json
           python3 -m json.tool artifacts/catalog-snapshot/products-cache-ativos.json >/dev/null
           printf 'run_id=%s\nexecution_path=oracle-active-release\nrelease_sha=%s\n' "$GITHUB_RUN_ID" "$release_sha" > artifacts/catalog-snapshot/context.txt
@@ -99,7 +99,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 \
+            ubuntu@136.248.69.116 \
             'set -euo pipefail
              failures=0
              endpoints=(

@@ -35,7 +35,7 @@ jobs:
         run: |
           set -euo pipefail
           SHA='bf93c24fba027e2926088a76a6aef2a504b3c36b'
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' -- "$SHA" <<'REMOTE'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 'bash -s' -- "$SHA" <<'REMOTE'
           set -euo pipefail
           sha="$1"
           repo='/home/ubuntu/shopvivaliz-deploy/repo'
