@@ -25,9 +25,9 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
-      - name: Inspect later recovery migrations and live triggers read only
+      - name: Inspect envios constraints read only
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'set -Eeuo pipefail; cd /home/ubuntu/mei-mg-email; echo ===MIGRATIONS===; find db -maxdepth 3 -type f -name "V*.sql" -printf "%f\n" | sort -V | tail -40; echo ===UNCERTAIN_MATCHES===; grep -RFn --include="V*.sql" -E "delivery_uncertain|submitted_sem_prova|guard_uncertain_graph|provider_message_id|submitted_at" db 2>/dev/null | tail -160 || true; echo ===LIVE_TRIGGERS===; .venv/bin/python -c "import psycopg; from app.config import settings; c=psycopg.connect(settings.database_url); q=c.cursor(); q.execute(\"select tgname,pg_get_triggerdef(oid) from pg_trigger where tgrelid in (\047mei_email.envios\047::regclass,\047mei_email.lotes\047::regclass) and not tgisinternal order by tgname\"); [print(r[0],r[1]) for r in q.fetchall()]; q.execute(\"select proname,pg_get_functiondef(oid) from pg_proc where pronamespace=\047mei_email\047::regnamespace and proname like \047%uncertain%\047 order by proname\"); [print(\"FUNCTION\",r[0],r[1]) for r in q.fetchall()]; c.close()"'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'set -Eeuo pipefail; cd /home/ubuntu/mei-mg-email; .venv/bin/python -c "import psycopg; from app.config import settings; c=psycopg.connect(settings.database_url); q=c.cursor(); q.execute(\"select conname,pg_get_constraintdef(oid) from pg_constraint where conrelid=\047mei_email.envios\047::regclass order by conname\"); [print(\"CONSTRAINT\",r[0],r[1]) for r in q.fetchall()]; q.execute(\"select proname from pg_proc where pronamespace=\047mei_email\047::regnamespace and proname in (\047enforce_envio_live_eligibility\047,\047trg_marcar_empresa_submetida\047) order by proname\"); print(\"FUNCTION_NAMES\",q.fetchall()); c.close()"'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts
