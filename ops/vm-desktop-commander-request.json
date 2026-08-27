@@ -1,4 +1,4 @@
 {
-  "action": "clear_cooldown_restart",
-  "reason": "restart canonical agent with persisted access and refresh tokens after provider disconnect"
+  "action": "dc_live_summary",
+  "reason": "inspect live remote agent output after persisted-session restart"
 }
