@@ -25,9 +25,9 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
-      - name: Inspect replay guards read only
+      - name: Inspect uncertain dispatch recovery contract read only
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'set -Eeuo pipefail; cd /home/ubuntu/mei-mg-email; echo ===SAFE_ENTRYPOINT_HEAD===; sed -n "1,82p" worker/safe_entrypoint.py; echo ===WORKER_MARKING===; grep -n -B12 -A40 "def _marcar_envio_em_transito\|def _atualizar_envio\|dispatch_started" worker/worker.py worker/worker_queue_first.py | head -220; echo ===REPLAY_TEST===; sed -n "1,300p" tests/test_dispatch_replay_guard.py; echo ===RECOVERY_TEST===; sed -n "1,320p" tests/test_queue_recovery_and_autorepair.py'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'set -Eeuo pipefail; cd /home/ubuntu/mei-mg-email; echo ===V034===; sed -n "1,320p" db/migrations_archived_post_v020_20260821/V034__guard_uncertain_graph_dispatch_against_replay.sql; echo ===QUEUE_RECOVERY_MATCHES===; grep -n -B35 -A85 "recovered_stale_sending\|dispatch_started\|enviando" app/queue_recovery.py | head -320; echo ===RECOVERY_FUNCTION_HEAD===; sed -n "1,260p" app/queue_recovery.py'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts
