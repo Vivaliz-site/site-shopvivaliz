@@ -1310,3 +1310,51 @@ usado desde o ciclo 19 (não notificar bloqueio de fundo repetido). Recomendaç�
 — checar VM1 manualmente — mais um item novo: se a VM1 estiver saudável, vale considerar que o
 próprio agendamento do GitHub Actions pode estar sendo atrasado/descartado sob a carga do repo, o
 que é um problema diferente (e mais amplo) do que "SSH falhando".
+
+### 9.32 Atualização — ciclo de 2026-08-27 (~13h UTC), 37º ciclo — schedule voltou a disparar, mas em horário que não bate com nenhum slot do cron declarado
+
+Mesma checagem de sempre (sem credencial `SHOPEE|TINY|OLIST` no sandbox, esperado;
+`scripts/utils/shopee_client.py` e `scripts/shopee_full_catalog_optimizer.py` relidos e ainda sem
+nenhum endpoint de analytics/CTR/conversão do Shopee Open Platform — bloqueio de fundo idêntico aos
+ciclos 1-36). `listings/` segue com o mesmo watermark `shopee-listings-20260726-080756.json` desde
+26/07 (confirmado por ordenação de nome de arquivo, não só `mtime` do checkout). `shopee-production-seo.yml`
+segue com as mesmas 5 execuções de 2026-07-30, todas `failure`, sem `workflow_dispatch` novo (esperado).
+
+**Achado novo (resolve parcialmente, mas não contradiz, o achado do ciclo 36):** o caminho `schedule`
+de `shopee-runtime-health.yml` **voltou a disparar** — run `33060228852` (`run_number` 1341) às
+2026-08-27T09:48:27Z, `conclusion: failure` — ou seja, não estava permanentemente travado como o
+ciclo 36 temeu, só atrasado. Mas o horário real (09:48:27Z) **não corresponde a nenhum dos 4 slots do
+cron declarado** (`17 */6 * * *` → 00:17/06:17/12:17/18:17Z): não é o slot de 06:17 atrasado em ~3h30,
+nem o de 12:17 adiantado. Puxando o histórico completo de execuções `schedule` deste workflow (48 no
+total), o padrão se confirma nos últimos dias: 2026-08-25 18:56:42Z, 2026-08-26 01:58:12Z, 2026-08-26
+20:03:21Z, 2026-08-27 09:48:27Z — nenhum bate com 00:17/06:17/12:17/18:17. Ou seja, isso não é um caso
+isolado de atraso: o agendador do GitHub Actions para este workflow parece estar disparando em
+horários efetivamente arbitrários há pelo menos 2 dias, não só ocasionalmente atrasado. Isso deixa a
+hipótese "atraso/descarte de schedule sob carga alta do repositório" (aventada no ciclo 36) bem mais
+provável que "problema pontual de conectividade da VM1" — não seria de se esperar que uma falha de
+rede/SSH também deslocasse o *horário de disparo* do cron em si, já que isso é decidido inteiramente
+pelo agendador do GitHub, antes de qualquer tentativa de SSH.
+
+Também tentei, pela primeira vez nos 37 ciclos, inspecionar o conteúdo real do artifact
+`shopee-runtime-health-33060228852` (168 bytes, upload feito pelo próprio job após a falha) em vez de
+só ler os logs do job — os logs do job mostram que o step "Run read-only Shopee preflight on
+production VM" falha em ~3s no *check* Python local (`payload.get('status') != 'ok'` ou
+`catalog_read`/`detail_read` não `True`), não no SSH em si (a chamada SSH em si não aparece com erro
+visível nos logs, e o job segue até o upload do artifact). Peguei a `download_url` via
+`download_workflow_run_artifact`, mas o `curl` a partir deste sandbox falhou com `CONNECT tunnel
+failed, response 403` contra `productionresultssa4.blob.core.windows.net` — o proxy do ambiente não
+permite alcançar esse host. Ou seja, o conteúdo exato do JSON (que diria se é erro de token expirado,
+API do Shopee retornando erro, ou outra coisa) **continua não confirmado**, mesma limitação de acesso
+à VM/artifact que todos os ciclos anteriores já tinham, só que agora documentada como tentativa ativa
+e não apenas suposição.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado. **Nenhuma notificação push enviada neste ciclo** — o achado
+aprofunda o mesmo incidente de fundo já notificado (regressão de 08-22, ver atualização 08-26) sem
+mudar a ação recomendada ao usuário. Recomendação: mantém a do ciclo 35 (checar VM1/SSH manualmente),
+mas com prioridade revista — vale primeiro olhar o painel de Actions do repositório (aba "Insights" /
+"Scheduled workflows") ou abrir um ticket de suporte do GitHub sobre atraso de `schedule` neste repo
+especificamente, já que o padrão de horários observado aponta mais para o agendador do GitHub do que
+para a VM1 em si. Se/quando alguém tiver acesso de fato à VM1, também vale simplesmente rodar
+`scripts/shopee_runtime_preflight.py` manualmente por SSH pra ver o erro puro, sem depender do
+Actions.
