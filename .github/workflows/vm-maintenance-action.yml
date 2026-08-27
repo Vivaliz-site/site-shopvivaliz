@@ -35,39 +35,16 @@ jobs:
           ACTION="$(jq -r '.action // "health"' ops/vm-maintenance-request.json)"
           case "$ACTION" in
             graph_audit)
-              COMMAND='set -Eeuo pipefail; cd /home/ubuntu/mei-mg-email; ./.venv/bin/python - <<"PY"
-import base64, inspect, json, urllib.error, urllib.request
-from dotenv import load_dotenv
-load_dotenv(".env", override=True)
-from app.email_provider import MicrosoftGraphEmailProvider
-p=MicrosoftGraphEmailProvider()
-methods=[n for n in dir(p) if "token" in n.lower() and callable(getattr(p,n,None))]
-print("TOKEN_METHODS="+",".join(methods))
-token=None
-used=None
-for name in ("_get_access_token","_get_token","get_access_token","get_token"):
-    fn=getattr(p,name,None)
-    if callable(fn):
-        try:
-            token=fn(); used=name; break
-        except Exception as exc:
-            print("TOKEN_METHOD_ERROR="+name+":"+type(exc).__name__)
-if token:
-    payload=token.split(".")[1]; payload += "="*((4-len(payload)%4)%4)
-    claims=json.loads(base64.urlsafe_b64decode(payload.encode()))
-    print("TOKEN_METHOD_USED="+str(used))
-    print("TOKEN_ROLES="+",".join(sorted(claims.get("roles",[]))))
-    addr=p.address
-    tests=[("USER",f"https://graph.microsoft.com/v1.0/users/{addr}?$select=id"),("MAIL_READ",f"https://graph.microsoft.com/v1.0/users/{addr}/mailFolders/inbox/messages?$top=1&$select=id")]
-    for label,url in tests:
-        req=urllib.request.Request(url,headers={"Authorization":"Bearer "+token})
-        try:
-            with urllib.request.urlopen(req,timeout=20) as r: print(label+"_HTTP="+str(r.status))
-        except urllib.error.HTTPError as e: print(label+"_HTTP="+str(e.code))
-else:
-    print("TOKEN_OBTAINED=false")
-PY
- echo ===SERVICES===; systemctl show mei-mg-email-worker.service mei-mg-email-ndr-guard.service -p Id -p ActiveState -p SubState -p MainPID -p NRestarts --no-pager; echo ===RECENT===; journalctl -u mei-mg-email-worker.service -u mei-mg-email-ndr-guard.service --since "10 minutes ago" --no-pager | grep -Ei "APP-ONLY active|NDR_GUARD|submitted|sent|Traceback|RuntimeError|HTTP_403|Failed with result" | tail -120 || true'
+              COMMAND="$(cat <<'EOF'
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          ./.venv/bin/python -c 'import base64,json,urllib.error,urllib.request; from dotenv import load_dotenv; load_dotenv(".env",override=True); from app.email_provider import MicrosoftGraphEmailProvider; p=MicrosoftGraphEmailProvider(); names=[n for n in dir(p) if "token" in n.lower() and callable(getattr(p,n,None))]; print("TOKEN_METHODS="+",".join(names)); fn=next((getattr(p,n) for n in ("_get_access_token","_get_token","get_access_token","get_token") if callable(getattr(p,n,None))),None); token=fn() if fn else None; print("TOKEN_OBTAINED="+str(bool(token)).lower()); payload=(token.split(".")[1]+"===") if token else ""; claims=json.loads(base64.urlsafe_b64decode(payload)) if token else {}; print("TOKEN_ROLES="+",".join(sorted(claims.get("roles",[])))); addr=p.address; tests=[("USER",f"https://graph.microsoft.com/v1.0/users/{addr}?$select=id"),("MAIL_READ",f"https://graph.microsoft.com/v1.0/users/{addr}/mailFolders/inbox/messages?$top=1&$select=id")]; [(lambda label,url: (print(label+"_HTTP="+str(urllib.request.urlopen(urllib.request.Request(url,headers={"Authorization":"Bearer "+token}),timeout=20).status))))(*x) for x in tests]'
+          echo ===SERVICES===
+          systemctl show mei-mg-email-worker.service mei-mg-email-ndr-guard.service -p Id -p ActiveState -p SubState -p MainPID -p NRestarts --no-pager
+          echo ===RECENT===
+          journalctl -u mei-mg-email-worker.service -u mei-mg-email-ndr-guard.service --since "10 minutes ago" --no-pager | grep -Ei "APP-ONLY active|NDR_GUARD|submitted|sent|Traceback|RuntimeError|HTTP_403|Failed with result" | tail -120 || true
+          EOF
+              )"
               ;;
             health)
               COMMAND='set -Eeuo pipefail; echo ===SERVICES===; for s in ssh shopvivaliz-desktop-commander.service snap.oracle-cloud-agent.oracle-cloud-agent.service mei-mg-email-worker.service mei-mg-email-monitor.service mei-mg-email-ndr-guard.service mei-mg-email-queue-replenisher.service docker; do printf "%s=" "$s"; systemctl is-active "$s" 2>/dev/null || true; done; echo ===DISK===; df -h /; echo ===MEM===; free -h; echo ===LOAD===; uptime; echo ===PORTS===; ss -ltnp 2>/dev/null | grep -E ":(22|80|443|5433|8010)[[:space:]]" || true; echo ===FAILED===; systemctl --failed --no-pager --plain || true'
