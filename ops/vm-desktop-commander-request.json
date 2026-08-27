@@ -1,4 +1,4 @@
 {
-  "action": "dc_live_summary",
-  "reason": "inspect live VM1 Desktop Commander output without exposing credentials"
+  "action": "site_precheck",
+  "reason": "verify Apache and Certbot are legacy-only before removing old site stack from VM1"
 }
