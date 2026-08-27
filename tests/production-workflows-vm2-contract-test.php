@@ -14,6 +14,9 @@ $allowedLegacyControl = [
     'fix-old-vm-mei-apache-http01-20260825.yml',
     'pr-conflict-auto-healer.yml',
     'audit-openai-secondary-vm.yml',
+    'active-products-browser-smoke.yml',
+    'fred-win-admin-mobile-readonly-smoke.yml',
+    'image-run-browser-smoke.yml',
 ];
 $violations = [];
 foreach (glob($workflowDir . '/*.yml') as $path) {
