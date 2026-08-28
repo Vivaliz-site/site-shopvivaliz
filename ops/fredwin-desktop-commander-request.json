@@ -1,4 +1,4 @@
 {
-  "action": "status",
-  "reason": "Fresh verification of Fred-Win Desktop Commander over canonical private reverse-SSH relay 5557"
+  "action": "install_or_repair",
+  "reason": "Host 1 of 4: deploy Fred-Win refreshed-session persistence and broker-ready detection through the verified private relay"
 }
