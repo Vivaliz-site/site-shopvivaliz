@@ -1486,3 +1486,27 @@ escalado no ciclo 38, sem fato novo que mude a recomendação (confirmar o mesmo
 cron corrobora, não altera, o diagnóstico). Recomendação pro usuário: inalterada desde o ciclo 38 —
 verificar/instalar `shopvivaliz-shopee-token-renewer` na VM2 e popular `shared/shopee-tokens.json`/
 `.env` com as 4 credenciais `SHOPEE_*`.
+
+### 9.36 Atualização — ciclo de 2026-08-28 (~19h UTC), 41º ciclo — terceiro disparo (manual) confirma bloqueio inalterado; nenhum commit tocou credenciais desde o ciclo 40
+
+`git log` confirma HEAD em `179e40b` (o próprio commit do ciclo 40) — nenhum commit desde então
+tocou `shopee-tokens.json`, `.env` da VM2 ou o serviço `shopvivaliz-shopee-token-renewer`; os únicos
+commits no meio tempo (`9bcf208`) são `ops:` de sessão do Desktop Commander, sem relação com Shopee.
+
+`list_workflow_runs` (`event: schedule`) não mostra nenhum run agendado novo desde `33166952180`
+(ciclo 39, 11:23 UTC) — os slots de cron das 13h e 19h não geraram um evento `schedule` na API (mesmo
+padrão de atraso/descarte do agendador já registrado no ciclo 37, seção 9.32). Pra não depender de o
+cron disparar dentro da janela deste ciclo, disparei `shopee-runtime-health.yml` manualmente via
+`workflow_dispatch` (run `33202786646`, 2026-08-28T19:11:57Z, ação somente-leitura) e confirmei o job
+(`list_workflow_jobs`, `job_id 98956165182`): falha no mesmo passo ("Run read-only Shopee preflight on
+production VM"), SSH completa normalmente, script remoto falha ~3s depois. Log não inspecionado
+literalmente neste ciclo (texto já confirmado idêntico nos ciclos 38-40 via `get_job_logs`), mas
+duração, passo de falha e `conclusion: failure` batem exatamente com os runs anteriores — sem
+indício de mudança de causa raiz.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado — mesma justificativa das seções 9.33-9.35. **Nenhuma notificação
+push enviada neste ciclo** — mesmo bloqueio já escalado no ciclo 38 (7 dias corridos sem o
+token-renewer da VM2 ser instalado/populado), sem fato novo que mude a recomendação. Recomendação pro
+usuário: inalterada desde o ciclo 38 — verificar/instalar `shopvivaliz-shopee-token-renewer` na VM2 e
+popular `shared/shopee-tokens.json`/`.env` com as 4 credenciais `SHOPEE_*`.
