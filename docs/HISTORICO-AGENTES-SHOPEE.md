@@ -1,7 +1,7 @@
 # Histórico de Agentes Shopee — ShopVivaliz
 
 **Repositório:** `fredmourao-ai/site-shopvivaliz`  
-**Última atualização:** 2026-08-28 (ciclo 39)  
+**Última atualização:** 2026-08-28 (ciclo 40)  
 **Branch de origem:** `claude/guth-portfolio-access-81jjq2`
 
 > Documento de consulta para agentes. Descreve o que foi implementado, como usar, quais secrets são necessários e quais limitações existem.
@@ -1453,3 +1453,36 @@ disparo manual — o que corrobora mas não altera o diagnóstico). Segue a conv
 ciclo 19 de não notificar bloqueio de fundo repetido. Recomendação pro usuário: a mesma do ciclo 38,
 ainda pendente — verificar/instalar `shopvivaliz-shopee-token-renewer` na VM2 e popular
 `shared/shopee-tokens.json`/`.env` com as 4 credenciais `SHOPEE_*`.
+
+### 9.35 Atualização — ciclo de 2026-08-28 (~11h UTC), 40º ciclo — mesmo bloqueio, agora confirmado em dois runs de cron consecutivos
+
+`git fetch origin main` confirma HEAD ainda em `f4fa730` (o próprio commit do ciclo 39) — nenhum
+commit desde então tocou credenciais Shopee, `shopee-tokens.json`, `.env` da VM2 ou o serviço
+`shopvivaliz-shopee-token-renewer`; os únicos commits no meio tempo (`20ff0eb`, `14fb3de`, `10c9a93`,
+etc.) são `ops:`/`fix:`/`test:` de recuperação de sessão do Fred-Win Desktop Commander, sem relação
+com Shopee.
+
+Consultei `list_workflow_runs` de `shopee-runtime-health.yml`: o run agendado mais recente é
+`33166952180` (run_number 1455, `event: schedule`, 2026-08-28T11:23:12Z, `conclusion: failure`) — o
+segundo disparo automático de cron real contra a VM2 desde o fix de roteamento (o primeiro foi
+`33121776705`, citado na seção 9.34). Peguei o log do job (`get_job_logs`, `job_id 98834532556`): a
+falha ocorre no mesmo passo (SSH completa normalmente, script remoto falha ~4s depois), com o mesmo
+texto de erro —
+
+```
+ERROR: required Shopee runtime credentials are incomplete
+##[error]Process completed with exit code 4.
+```
+
+— texto e exit code idênticos aos ciclos 38 e 39. Não há fato novo: dois runs de cron consecutivos
+(1410 e 1455) reproduzem o mesmo bloqueio de credencial ausente na VM2, e a ação recomendada desde o
+ciclo 38 (instalar/popular `shopvivaliz-shopee-token-renewer` na VM2) segue sem execução.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado — mesma justificativa das seções 9.33/9.34 (sem endpoint de
+analytics do Shopee Open Platform em nenhum script de produção; apply real exige confirmação humana
+`APPLY_ALL_SHOPEE_PRODUCTS`). **Nenhuma notificação push enviada neste ciclo** — mesmo bloqueio já
+escalado no ciclo 38, sem fato novo que mude a recomendação (confirmar o mesmo erro num segundo run de
+cron corrobora, não altera, o diagnóstico). Recomendação pro usuário: inalterada desde o ciclo 38 —
+verificar/instalar `shopvivaliz-shopee-token-renewer` na VM2 e popular `shared/shopee-tokens.json`/
+`.env` com as 4 credenciais `SHOPEE_*`.
