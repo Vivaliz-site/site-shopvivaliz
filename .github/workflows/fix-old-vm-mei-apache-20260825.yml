@@ -27,7 +27,7 @@ jobs:
           printf '%s\n' "$VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
           printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
-          printf 'dns_cloudflare_api_token = %s\n' "$CF_TOKEN" > "$RUNNER_TEMP/cloudflare.ini"
+          python -c 'import os,pathlib; pathlib.Path(os.environ["RUNNER_TEMP"], "cloudflare.ini").write_text("dns_cloudflare_api_token = " + os.environ["CF_TOKEN"] + "\n", encoding="utf-8")'
           chmod 600 "$RUNNER_TEMP/cloudflare.ini"
 
       - name: Repair certificate and Apache
@@ -38,7 +38,11 @@ jobs:
           set -Eeuo pipefail
           stamp=$(date +%Y%m%d-%H%M%S)
           sudo install -d -m 700 /root/apache-repair-backups/$stamp
-          sudo cp -a /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/000-default-le-ssl.conf /root/apache-repair-backups/$stamp/ 2>/dev/null || true
+          for apache_conf in /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/000-default-le-ssl.conf; do
+            if [ -e "$apache_conf" ]; then
+              sudo cp -a "$apache_conf" "/root/apache-repair-backups/$stamp/"
+            fi
+          done
 
           if [ ! -s /etc/letsencrypt/live/dev.shopvivaliz.com.br/fullchain.pem ] || [ ! -s /etc/letsencrypt/live/dev.shopvivaliz.com.br/privkey.pem ]; then
             sudo apt-get update -qq
@@ -101,13 +105,20 @@ jobs:
       - name: External validation
         run: |
           set -Eeuo pipefail
+          public_ok=false
           for i in 1 2 3 4 5; do
-            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 12 'https://dev.shopvivaliz.com.br/mei-email-assets/logo-contabilidade-melo-transparente.png' || true)
-            echo "PUBLIC_HTTP_CODE=$code"
-            case "$code" in 200|304) exit 0;; esac
+            if code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 12 'https://dev.shopvivaliz.com.br/mei-email-assets/logo-contabilidade-melo-transparente.png'); then
+              echo "PUBLIC_HTTP_CODE=$code"
+            else
+              code=000
+              echo 'PUBLIC_HTTP_CODE=000'
+            fi
+            case "$code" in
+              200|304) public_ok=true; break ;;
+            esac
             sleep 5
           done
-          exit 1
+          $public_ok
 
       - name: Cleanup
         if: always()
