@@ -11,6 +11,8 @@ CONNECTED_MARKER="$DEVICE_DIR/provider-connected.marker"
 LOCK_FILE="$DEVICE_DIR/remote-owner.lock"
 PACKAGE='@wonderwhy-er/desktop-commander@0.2.47'
 NPX_BIN="${NPX_BIN:-npx}"
+NODE_BIN="${NODE_BIN:-node}"
+SESSION_PATCHER="${SESSION_PATCHER:-/usr/local/lib/shopvivaliz/patch-desktop-commander-session-persistence.mjs}"
 AUTH_REGEX='Please complete authentication|Starting device authorization flow|device code|Authorization required'
 CONNECTED_REGEX='Device ready|Found persisted session|Connected to Remote MCP|WebSocket connected'
 REMOTE_OWNER_PID="$$"
@@ -33,6 +35,19 @@ restore_device_state() {
 }
 
 restore_device_state
+
+if [[ ! -f "$SESSION_PATCHER" ]]; then
+  echo 'SESSION_REFRESH_PATCH=false reason=patcher_missing'
+  exit 22
+fi
+
+DC_BIN="$("$NPX_BIN" --yes --package "$PACKAGE" sh -c 'command -v desktop-commander')"
+if [[ -z "$DC_BIN" || ! -x "$DC_BIN" ]]; then
+  echo 'SESSION_REFRESH_PATCH=false reason=package_binary_missing'
+  exit 22
+fi
+DC_PACKAGE_ROOT="$(cd "$(dirname "$(readlink -f "$DC_BIN")")/.." && pwd -P)"
+"$NODE_BIN" "$SESSION_PATCHER" "$DC_PACKAGE_ROOT"
 
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
