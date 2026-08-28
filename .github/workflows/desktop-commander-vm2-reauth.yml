@@ -36,6 +36,13 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
+      - name: Inspect previous VM2 reauth attempt
+        run: |
+          set -Eeuo pipefail
+          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116)
+          "${SSH[@]}" 'tail -60 "$HOME/.desktop-commander-device/manual-reauth.log" 2>/dev/null || true' |
+            sed -E 's/((token|secret|password|authorization)[=: ]+)[^ ]+/\1REDACTED/Ig'
+
       - name: Start fresh provider authorization on VM2
         run: |
           set -Eeuo pipefail
