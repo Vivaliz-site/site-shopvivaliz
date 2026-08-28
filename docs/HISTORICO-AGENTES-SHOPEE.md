@@ -1,7 +1,7 @@
 # Histórico de Agentes Shopee — ShopVivaliz
 
 **Repositório:** `fredmourao-ai/site-shopvivaliz`  
-**Última atualização:** 2026-08-19 (ciclo 34)  
+**Última atualização:** 2026-08-28 (ciclo 39)  
 **Branch de origem:** `claude/guth-portfolio-access-81jjq2`
 
 > Documento de consulta para agentes. Descreve o que foi implementado, como usar, quais secrets são necessários e quais limitações existem.
@@ -1419,3 +1419,37 @@ tiverem expirado); (2) depois disso, rodar `shopee-runtime-health.yml` via `work
 pra confirmar `status: ok`; (3) achado estrutural de fundo (sem endpoint de analytics/CTR do Shopee
 Open Platform em nenhum script) permanece sem mudança e continua bloqueando os itens 1/3/9/10 desta
 rotina mesmo depois de credenciais OK.
+
+### 9.34 Atualização — ciclo de 2026-08-28 (~01h UTC), 39º ciclo — mesmo erro confirmado agora via cron real (não só `workflow_dispatch` manual)
+
+`git fetch origin main` confirma HEAD idêntico a `origin/main` (`20ff0eb`); nenhum commit desde o
+ciclo 38 (~19h UTC 08-27) tocou `shopee-tokens.json`, `.env` da VM2, o serviço
+`shopvivaliz-shopee-token-renewer` ou qualquer arquivo relacionado a credenciais Shopee — só commits
+`ops:`/`fix:`/`test:` não relacionados (recuperação de sessão do Fred-Win Desktop Commander). Ou seja,
+a ação recomendada no ciclo 38 (instalar/popular o token-renewer na VM2) ainda não foi executada.
+
+Verifiquei os runs `schedule` reais de `shopee-runtime-health.yml` desde o ciclo 38: o primeiro (e até
+agora único) disparo automático de cron contra VM2 foi `33121776705` (run 1410, 2026-08-27T22:15:43Z,
+`conclusion: failure`) — antes disso só existia o disparo manual (`workflow_dispatch`, `33107367820`,
+19:13Z) que o próprio ciclo 38 já tinha usado. Peguei o log do job (`get_job_logs`, `job_id
+98690128344`) pra confirmar se o erro muda entre disparo manual e disparo por cron real: é idêntico —
+
+```
+ERROR: required Shopee runtime credentials are incomplete
+##[error]Process completed with exit code 4.
+```
+
+mesmo texto, mesmo exit code 4, falha em ~2s após a conexão SSH completar normalmente (sem timeout).
+Não há nenhum run `schedule` mais recente que este até o momento desta checagem.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6 (reforçado por
+`KNOWN_ISSUES.md`: nenhum script de produção chama endpoint de analytics do Shopee Open Platform, e o
+apply real via `shopee-production-seo.yml` exige confirmação humana digitada
+`APPLY_ALL_SHOPEE_PRODUCTS` que nenhum agente autônomo deve disparar). **Nenhuma notificação push
+enviada neste ciclo** — critério atendido: é o mesmo bloqueio já reportado e escalado no ciclo 38, sem
+fato novo que mude a recomendação (confirma o mesmo erro por uma via diferente — cron em vez de
+disparo manual — o que corrobora mas não altera o diagnóstico). Segue a convenção adotada desde o
+ciclo 19 de não notificar bloqueio de fundo repetido. Recomendação pro usuário: a mesma do ciclo 38,
+ainda pendente — verificar/instalar `shopvivaliz-shopee-token-renewer` na VM2 e popular
+`shared/shopee-tokens.json`/`.env` com as 4 credenciais `SHOPEE_*`.
