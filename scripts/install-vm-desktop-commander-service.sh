@@ -5,10 +5,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 UNIT_SOURCE="$REPO_ROOT/ops/systemd/shopvivaliz-desktop-commander.service"
 SUPERVISOR_SOURCE="$REPO_ROOT/scripts/vm-desktop-commander-supervisor.sh"
+SESSION_PATCHER_SOURCE="$REPO_ROOT/scripts/patch-desktop-commander-session-persistence.mjs"
 UNIT_TARGET='/etc/systemd/system/shopvivaliz-desktop-commander.service'
 ENV_TARGET='/etc/default/shopvivaliz-desktop-commander'
 LIB_DIR='/usr/local/lib/shopvivaliz'
 SUPERVISOR_TARGET="$LIB_DIR/vm-desktop-commander-supervisor.sh"
+SESSION_PATCHER_TARGET="$LIB_DIR/patch-desktop-commander-session-persistence.mjs"
 SERVICE='shopvivaliz-desktop-commander.service'
 LEGACY_SERVICE='desktop-commander.service'
 LEGACY_UNIT_TARGET='/etc/systemd/system/desktop-commander.service'
@@ -45,9 +47,11 @@ if [[ -z "$NODE_BIN" || ! -x "$NODE_BIN" ]]; then echo 'ERROR node missing for t
 if [[ -z "$NPX_BIN" || ! -x "$NPX_BIN" ]]; then echo 'ERROR npx missing for target user'; exit 4; fi
 if [[ ! -f "$UNIT_SOURCE" ]]; then echo 'ERROR unit template missing'; exit 5; fi
 if [[ ! -f "$SUPERVISOR_SOURCE" ]]; then echo 'ERROR supervisor missing'; exit 6; fi
+if [[ ! -f "$SESSION_PATCHER_SOURCE" ]]; then echo 'ERROR session patcher missing'; exit 8; fi
 
 install -d -m 0755 "$LIB_DIR"
 install -m 0755 "$SUPERVISOR_SOURCE" "$SUPERVISOR_TARGET"
+install -m 0644 "$SESSION_PATCHER_SOURCE" "$SESSION_PATCHER_TARGET"
 install -m 0644 "$UNIT_SOURCE" "$UNIT_TARGET"
 NODE_BIN_DIR="$(dirname "$NODE_BIN")"
 printf 'NODE_BIN=%s\nNPX_BIN=%s\nPATH=%s:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n' "$NODE_BIN" "$NPX_BIN" "$NODE_BIN_DIR" > "$ENV_TARGET"

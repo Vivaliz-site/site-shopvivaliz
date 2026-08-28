@@ -11,6 +11,8 @@ CONNECTED_MARKER="$DEVICE_DIR/provider-connected.marker"
 LOCK_FILE="$DEVICE_DIR/remote-owner.lock"
 PACKAGE='@wonderwhy-er/desktop-commander@0.2.47'
 NPX_BIN="${NPX_BIN:-npx}"
+NODE_BIN="${NODE_BIN:-node}"
+SESSION_PATCHER="${SESSION_PATCHER:-/usr/local/lib/shopvivaliz/patch-desktop-commander-session-persistence.mjs}"
 AUTH_REGEX='Please complete authentication|Starting device authorization flow|device code|Authorization required'
 CONNECTED_REGEX='Device ready|Found persisted session|Connected to Remote MCP|WebSocket connected'
 REMOTE_OWNER_PID="$$"
@@ -34,10 +36,23 @@ restore_device_state() {
 
 restore_device_state
 
+if [[ ! -f "$SESSION_PATCHER" ]]; then
+  echo 'SESSION_REFRESH_PATCH=false reason=patcher_missing'
+  exit 22
+fi
+
+DC_BIN="$("$NPX_BIN" --yes --package "$PACKAGE" sh -c 'command -v desktop-commander')"
+if [[ -z "$DC_BIN" || ! -x "$DC_BIN" ]]; then
+  echo 'SESSION_REFRESH_PATCH=false reason=package_binary_missing'
+  exit 22
+fi
+DC_PACKAGE_ROOT="$(cd "$(dirname "$(readlink -f "$DC_BIN")")/.." && pwd -P)"
+"$NODE_BIN" "$SESSION_PATCHER" "$DC_PACKAGE_ROOT"
+
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
   echo 'REMOTE_OWNER_CONFLICT=true reason=supervisor_lock_held'
-  exit 0
+  exit 21
 fi
 chmod 0600 "$LOCK_FILE"
 
@@ -51,15 +66,15 @@ device_state_newer_than_cooldown() {
 }
 
 find_competing_remote_sessions() {
-  pgrep -f 'npm exec @wonderwhy-er/desktop-commander@0\.2\.47 remote --persist-session' 2>/dev/null || true
+  pgrep -f 'npm exec @wonderwhy-er/desktop-commander@0\.2\.47 remote --persist-session' 2>/dev/null || :
 }
 
 terminate_process_tree() {
   local pid="$1" child
   while read -r child; do
     [[ -n "$child" ]] && terminate_process_tree "$child"
-  done < <(pgrep -P "$pid" 2>/dev/null || true)
-  kill -TERM "$pid" 2>/dev/null || true
+  done < <(pgrep -P "$pid" 2>/dev/null || :)
+  kill -TERM "$pid" 2>/dev/null || :
 }
 
 terminate_competing_remote_sessions() {
@@ -100,7 +115,7 @@ cleanup() {
   if [[ "$connected" -eq 1 ]]; then backup_device_state; fi
   rm -f "$tmp"
   if [[ -n "$child" ]] && kill -0 "$child" 2>/dev/null; then
-    kill -TERM -- "-$child" 2>/dev/null || kill -TERM "$child" 2>/dev/null || true
+    kill -TERM -- "-$child" 2>/dev/null || kill -TERM "$child" 2>/dev/null || :
   fi
   rm -f "$CONNECTED_MARKER"
 }
@@ -116,12 +131,12 @@ while kill -0 "$child" 2>/dev/null; do
     auth_required=1
     : > "$COOLDOWN_FILE"
     chmod 0600 "$COOLDOWN_FILE"
-    kill -TERM -- "-$child" 2>/dev/null || kill -TERM "$child" 2>/dev/null || true
+    kill -TERM -- "-$child" 2>/dev/null || kill -TERM "$child" 2>/dev/null || :
     for _ in {1..10}; do
       kill -0 "$child" 2>/dev/null || break
       sleep 1
     done
-    kill -KILL -- "-$child" 2>/dev/null || kill -KILL "$child" 2>/dev/null || true
+    kill -KILL -- "-$child" 2>/dev/null || kill -KILL "$child" 2>/dev/null || :
     break
   fi
   if [[ "$connected" -eq 0 ]] && grep -Eqi "$CONNECTED_REGEX" "$tmp"; then
