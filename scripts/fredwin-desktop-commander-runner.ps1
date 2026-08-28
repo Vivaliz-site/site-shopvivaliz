@@ -31,25 +31,6 @@ function Test-DeviceStateNewerThanCooldown {
     return ((Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc -gt (Get-Item -LiteralPath $CooldownFile).LastWriteTimeUtc)
 }
 
-$readOffsets = @{}
-function Read-NewCapturedProviderText([string[]]$Paths) {
-    $parts = @()
-    foreach ($path in $Paths) {
-        if (-not (Test-Path -LiteralPath $path)) { continue }
-        try {
-            $content = [System.IO.File]::ReadAllText($path)
-            $offset = 0
-            if ($script:readOffsets.ContainsKey($path)) { $offset = [int]$script:readOffsets[$path] }
-            if ($content.Length -lt $offset) { $offset = 0 }
-            if ($content.Length -gt $offset) {
-                $parts += $content.Substring($offset)
-                $script:readOffsets[$path] = $content.Length
-            }
-        } catch { }
-    }
-    return ($parts -join "`n")
-}
-
 $npx = (Get-Command npx.cmd -ErrorAction SilentlyContinue).Source
 if (-not $npx) { $npx = (Get-Command npx -ErrorAction SilentlyContinue).Source }
 if (-not $npx) { Log 'ERROR npx not found'; exit 3 }
@@ -76,24 +57,64 @@ function Install-SessionRefreshPatch {
     Log $patchState
 }
 
+function Start-HiddenCapturedProcess {
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $npx
+    $psi.Arguments = "--yes $Package remote --persist-session"
+    $psi.WorkingDirectory = $Repo
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+    $outProperty = 'RedirectStandard' + 'Output'
+    $errProperty = 'RedirectStandard' + 'Error'
+    $psi.$outProperty = $true
+    $psi.$errProperty = $true
+    $p = New-Object System.Diagnostics.Process
+    $p.StartInfo = $psi
+    if (-not $p.Start()) { throw 'Desktop Commander process did not start' }
+    return $p
+}
+
 try { Install-SessionRefreshPatch } catch { Log ('SESSION_REFRESH_PATCH=false reason=' + $_.Exception.Message); exit 22 }
 
-$tmpBase = Join-Path $env:TEMP ('shopvivaliz-dc-' + [guid]::NewGuid().ToString('N'))
-$outFile = $tmpBase + '.out'
-$errFile = $tmpBase + '.err'
 Remove-Item -LiteralPath $ConnectedMarker -Force -ErrorAction SilentlyContinue
 $proc = $null
+$stdoutTask = $null
+$stderrTask = $null
 $authRequired = $false
 $authStarted = $null
 $readySeenAfterAuth = $false
 $connected = $false
 $rc = 1
 try {
-    $proc = Start-Process -FilePath $npx -ArgumentList @('--yes',$Package,'remote','--persist-session') -WorkingDirectory $Repo -WindowStyle Hidden -RedirectStandardOutput $outFile -RedirectStandardError $errFile -PassThru
+    $proc = Start-HiddenCapturedProcess
+    $stdoutTask = $proc.StandardOutput.ReadLineAsync()
+    $stderrTask = $proc.StandardError.ReadLineAsync()
+
     while ($true) {
         $proc.Refresh()
-        $newText = Read-NewCapturedProviderText @($outFile,$errFile)
+        $lines = New-Object System.Collections.Generic.List[string]
 
+        if ($stdoutTask -and $stdoutTask.IsCompleted) {
+            $line = $stdoutTask.Result
+            if ($null -ne $line) {
+                [void]$lines.Add([string]$line)
+                $stdoutTask = $proc.StandardOutput.ReadLineAsync()
+            } else {
+                $stdoutTask = $null
+            }
+        }
+        if ($stderrTask -and $stderrTask.IsCompleted) {
+            $line = $stderrTask.Result
+            if ($null -ne $line) {
+                [void]$lines.Add([string]$line)
+                $stderrTask = $proc.StandardError.ReadLineAsync()
+            } else {
+                $stderrTask = $null
+            }
+        }
+
+        $newText = ($lines -join "`n")
         if ($newText -match $AuthPattern) {
             if (-not $authRequired) {
                 $authRequired = $true
@@ -134,26 +155,18 @@ try {
             }
         }
 
-        if ($proc.HasExited) { break }
-        Start-Sleep -Seconds 1
+        if ($proc.HasExited -and -not $stdoutTask -and -not $stderrTask) { break }
+        Start-Sleep -Milliseconds 200
     }
 
-    $proc.Refresh()
-    $newText = Read-NewCapturedProviderText @($outFile,$errFile)
-    if ($newText -match $AuthPattern) {
-        if (-not $authRequired) {
-            $authRequired = $true
-            '' | Out-File -FilePath $CooldownFile -Force -Encoding ascii
-            Remove-Item -LiteralPath $ConnectedMarker -Force -ErrorAction SilentlyContinue
-            $connected = $false
-            Log 'AUTH_REQUIRED provider requested device authorization before exit'
-        }
-    }
     if ($proc.HasExited) { $rc = $proc.ExitCode }
 }
 finally {
-    Remove-Item -LiteralPath $outFile,$errFile -Force -ErrorAction SilentlyContinue
+    if ($proc -and -not $proc.HasExited) {
+        try { & taskkill.exe /PID $proc.Id /T /F 2>$null | Out-Null } catch { }
+    }
     if ($proc -and $proc.HasExited) { Remove-Item -LiteralPath $ConnectedMarker -Force -ErrorAction SilentlyContinue }
+    if ($proc) { $proc.Dispose() }
 }
 if ($authRequired) { exit 20 }
 Log ('Remote Desktop Commander runner exited rc=' + $rc)
