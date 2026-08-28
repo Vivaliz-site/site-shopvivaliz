@@ -4,9 +4,9 @@ $path = $root . '/.github/workflows/fred-win-desktop-commander-action.yml';
 if (!is_file($path)) { fwrite(STDERR, "FALHOU: workflow Fred-Win ausente\n"); exit(1); }
 $yml = file_get_contents($path);
 foreach ([
-    'scripts\\fredwin-desktop-commander-supervisor.ps1',
-    'scripts\\fredwin-desktop-commander-runner.ps1',
-    'scripts\\patch-desktop-commander-session-persistence.mjs',
+    'scripts/fredwin-desktop-commander-supervisor.ps1',
+    'scripts/fredwin-desktop-commander-runner.ps1',
+    'scripts/patch-desktop-commander-session-persistence.mjs',
     'git restore --source=origin/main --',
     'StrictHostKeyChecking=yes',
     'http://127.0.0.1:5557/health',
