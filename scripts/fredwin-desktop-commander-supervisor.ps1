@@ -20,6 +20,21 @@ function Log([string]$Message) {
     $stamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     "$stamp - $Message" | Out-File -FilePath $SupervisorLog -Append -Encoding utf8
 }
+$MutexName = 'Global\ShopVivalizDesktopCommander-FRED'
+$OwnerMutex = New-Object System.Threading.Mutex($false, $MutexName)
+$OwnerMutexAcquired = $false
+try {
+    try { $OwnerMutexAcquired = $OwnerMutex.WaitOne(0) }
+    catch [System.Threading.AbandonedMutexException] { $OwnerMutexAcquired = $true }
+} catch {
+    $OwnerMutex.Dispose()
+    throw
+}
+if (-not $OwnerMutexAcquired) {
+    Log 'REMOTE_OWNER_CONFLICT mutex already held; refusing concurrent supervisor'
+    Write-Output 'REMOTE_OWNER_CONFLICT=true reason=supervisor_mutex_held'
+    exit 21
+}
 function Ensure-ProfileEnvironment {
     if (-not $env:USERPROFILE) {
         $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
@@ -192,11 +207,17 @@ function Install-Task {
     Write-Output 'TASK_INSTALLED=true'
 }
 
-switch ($Mode) {
-    'InstallTask' { Install-Task; Stop-RemoteProcesses; Start-Sleep -Seconds 2; Ensure-Agent }
-    'Restart' { Stop-RemoteProcesses; Start-Sleep -Seconds 2; Ensure-Agent }
-    'KillForRecoveryTest' { Stop-RemoteProcesses; Write-Output 'REMOTE_AGENT_KILLED=true' }
-    'Status' { & $StatusScript }
-    default { Ensure-Agent }
+try {
+    switch ($Mode) {
+        'InstallTask' { Install-Task; Stop-RemoteProcesses; Start-Sleep -Seconds 2; Ensure-Agent }
+        'Restart' { Stop-RemoteProcesses; Start-Sleep -Seconds 2; Ensure-Agent }
+        'KillForRecoveryTest' { Stop-RemoteProcesses; Write-Output 'REMOTE_AGENT_KILLED=true' }
+        'Status' { & $StatusScript }
+        default { Ensure-Agent }
+    }
+} finally {
+    if ($OwnerMutexAcquired) {
+        $OwnerMutex.ReleaseMutex()
+        $OwnerMutex.Dispose()
+    }
 }
-

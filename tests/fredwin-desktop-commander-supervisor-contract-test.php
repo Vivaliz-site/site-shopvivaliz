@@ -24,6 +24,7 @@ $required = [
     'MultipleInstances IgnoreNew', 'StartWhenAvailable',
     'RestartCount', 'RestartInterval', 'New-TimeSpan -Minutes 1',
     'AUTH_REQUIRED', 'WindowStyle Hidden'
+    , 'System.Threading.Mutex', 'WaitOne(0)', 'supervisor_mutex_held', 'ReleaseMutex'
 ];
 foreach ($required as $needle) {
     if (stripos($s, $needle) === false) { fwrite(STDERR, "FALHOU: supervisor sem {$needle}\n"); exit(1); }

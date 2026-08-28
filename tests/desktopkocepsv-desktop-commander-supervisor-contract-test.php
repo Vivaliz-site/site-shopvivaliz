@@ -27,7 +27,8 @@ foreach ([
     'NONCANONICAL_AGENT_COUNT',
     'Register-ScheduledTask',
     '-ErrorAction Stop',
-    'Stop-LauncherTree([int]$ProcessId)'
+    'Stop-LauncherTree([int]$ProcessId)',
+    'System.Threading.Mutex', 'WaitOne(0)', 'supervisor_mutex_held', 'ReleaseMutex'
 ] as $needle) {
     if (stripos($all, $needle) === false) { fwrite(STDERR, "FALHOU: ausente {$needle}\n"); exit(1); }
 }
