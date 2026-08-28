@@ -1,5 +1,5 @@
 {
-  "action": "install_or_repair",
-  "requested_at": "2026-08-28T02:22:00Z",
-  "reason": "Host 1 of 4: deploy merged Fred-Win DC repair while preserving the verified private reverse-SSH relay on VM1:5557"
+  "action": "recover_session",
+  "requested_at": "2026-08-28T02:27:00-03:00",
+  "reason": "Recover canonical persistent hidden Desktop Commander session on LAPTOP-NIG4IFUU, clear stale auth cooldown, preserve singleton launcher tree, and avoid interactive device flow"
 }
