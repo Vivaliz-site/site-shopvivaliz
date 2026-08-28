@@ -59,16 +59,14 @@ function Install-SessionRefreshPatch {
 
 function Start-HiddenCapturedProcess {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $npx
-    $psi.Arguments = "--yes $Package remote --persist-session"
+    $psi.FileName = if ($env:ComSpec) { $env:ComSpec } else { 'C:\Windows\System32\cmd.exe' }
+    $psi.Arguments = '/d /s /c ""' + $npx + '" --yes ' + $Package + ' remote --persist-session"'
     $psi.WorkingDirectory = $Repo
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
     $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
-    $outProperty = 'RedirectStandard' + 'Output'
-    $errProperty = 'RedirectStandard' + 'Error'
-    $psi.$outProperty = $true
-    $psi.$errProperty = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
     $p = New-Object System.Diagnostics.Process
     $p.StartInfo = $psi
     if (-not $p.Start()) { throw 'Desktop Commander process did not start' }
