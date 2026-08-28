@@ -14,6 +14,11 @@ foreach ([
     'provider authorization grace',
     'Device ready',
     'Test-DeviceStateNewerThanCooldown',
+    '$env:ComSpec',
+    'UseShellExecute = $false',
+    'CreateNoWindow = $true',
+    'RedirectStandardOutput = $true',
+    'RedirectStandardError = $true',
 ] as $needle) {
     if (strpos($runner, $needle) === false) {
         fwrite(STDERR, "FALHOU: Fred-Win sem {$needle}\n");
@@ -28,9 +33,9 @@ if (strpos($runner, 'if ((-not $connected) -and ($text -match $AuthPattern))') !
     fwrite(STDERR, "FALHOU: Fred-Win ainda ignora reauth depois de falso connected\n");
     exit(1);
 }
-foreach (['access_token', 'refresh_token', 'auth_token'] as $forbidden) {
+foreach (['access_token', 'refresh_token', 'auth_token', '-RedirectStandardOutput', '-RedirectStandardError', "'.out'", "'.err'"] as $forbidden) {
     if (stripos($runner, $forbidden) !== false) {
-        fwrite(STDERR, "FALHOU: segredo explicito {$forbidden}\n");
+        fwrite(STDERR, "FALHOU: segredo ou captura em disco proibida {$forbidden}\n");
         exit(1);
     }
 }
