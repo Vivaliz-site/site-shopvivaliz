@@ -1,5 +1,5 @@
 {
   "action": "install_or_repair",
-  "requested_at": "2026-08-28T02:13:30Z",
-  "reason": "Host 1 of 4: deploy Fred-Win refreshed-session persistence and broker-ready detection through verified private relay 5557"
+  "requested_at": "2026-08-28T02:22:00Z",
+  "reason": "Host 1 of 4: deploy merged Fred-Win DC repair while preserving the verified private reverse-SSH relay on VM1:5557"
 }
