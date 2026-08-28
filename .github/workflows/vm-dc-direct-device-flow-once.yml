@@ -1,5 +1,6 @@
 name: VM DC Direct Device Flow Once
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -9,7 +10,7 @@ permissions:
 jobs:
   start-flow:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 18
     steps:
       - name: Configure SSH
         env:
@@ -20,31 +21,56 @@ jobs:
           printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
           printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
-      - name: Request fresh Desktop Commander device code
+      - name: Request and persist fresh Desktop Commander device session
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17 'node <<'"'"'NODE'"'"'
+          ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17 'set -Eeuo pipefail; sudo systemctl stop shopvivaliz-desktop-commander.service; node <<'"'"'NODE'"'"'
           const fs = require("fs");
           const os = require("os");
           const path = require("path");
-          const crypto = require("crypto");
-          (async () => {
+            const crypto = require("crypto");
+            const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+            (async () => {
             const verifier = crypto.randomBytes(32).toString("base64url");
             const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
             const r = await fetch("https://mcp.desktopcommander.app/device/start", {
               method: "POST",
               headers: {"Content-Type":"application/json"},
-              body: JSON.stringify({client_id:"mcp-device",scope:"mcp:tools",device_name:os.hostname(),device_type:"mcp",device_id:"9478be08-f829-42ba-988d-a4b9ef0e874b",code_challenge:challenge,code_challenge_method:"S256"})
+              body: JSON.stringify({client_id:"mcp-device",scope:"mcp:tools",device_name:os.hostname(),device_type:"mcp",device_id:crypto.randomUUID(),code_challenge:challenge,code_challenge_method:"S256"})
             });
             const data = await r.json();
             if (!r.ok || !data.user_code || !data.device_code) throw new Error(data.error_description || data.error || `HTTP ${r.status}`);
             const dir = path.join(os.homedir(), ".desktop-commander-device");
             fs.mkdirSync(dir,{recursive:true,mode:0o700});
-            fs.writeFileSync(path.join(dir,"direct-device-flow.json"), JSON.stringify({device_code:data.device_code,code_verifier:verifier,expires_at:Date.now()+data.expires_in*1000,interval:data.interval||5}), {mode:0o600});
+            fs.mkdirSync(dir,{recursive:true,mode:0o700});
             console.log(`DEVICE_CODE=${data.user_code}`);
             console.log(`VERIFY_URL=${data.verification_uri}`);
             console.log(`EXPIRES_MIN=${Math.floor(data.expires_in/60)}`);
+            const interval = (data.interval || 5) * 1000;
+            const deadline = Date.now() + data.expires_in * 1000;
+            let session = null;
+            while (Date.now() < deadline) {
+              await sleep(interval);
+              const poll = await fetch("https://mcp.desktopcommander.app/device/poll", {
+                method:"POST", headers:{"Content-Type":"application/json"},
+                body:JSON.stringify({device_code:data.device_code,client_id:"mcp-device",code_verifier:verifier})
+              });
+              const result = await poll.json();
+              if (poll.ok && result.access_token) { session = result; break; }
+              if (!['authorization_pending','slow_down'].includes(result.error)) throw new Error(result.error_description || result.error || `HTTP ${poll.status}`);
+              if (result.error === 'slow_down') await sleep(interval);
+            }
+            if (!session || !session.device_id || !session.refresh_token) throw new Error('authorization timed out or returned incomplete session');
+            fs.writeFileSync(path.join(dir,"device.json"), JSON.stringify({deviceId:session.device_id,session:{access_token:session.access_token,refresh_token:session.refresh_token}}, null, 2), {mode:0o600});
+            console.log("AUTHORIZATION_PERSISTED=true");
           })().catch(e=>{console.error(`FLOW_ERROR=${e.message}`);process.exit(1)});
+          NODE
+          install -d -m 700 "$HOME/.desktop-commander-device/session-backup"
+          install -m 600 "$HOME/.desktop-commander-device/device.json" "$HOME/.desktop-commander-device/session-backup/device.json"
+          rm -f "$HOME/.desktop-commander-device/auth-required.cooldown"
+          sudo systemctl start shopvivaliz-desktop-commander.service
+          sleep 12
+          systemctl is-active --quiet shopvivaliz-desktop-commander.service
           NODE'
       - name: Cleanup
         if: always()
