@@ -83,7 +83,7 @@ jobs:
           sudo systemctl restart mei-mg-email-ndr-guard.service
           sleep 8
           systemctl show mei-mg-email-ndr-guard.service -p ActiveState -p SubState -p MainPID -p NRestarts --no-pager
-          journalctl -u mei-mg-email-ndr-guard.service --since "20 seconds ago" --no-pager | grep -Ei "NDR guard iniciado|NDR_GUARD_CHECK_FAILED|HTTP_403|Traceback|APP-ONLY active" | tail -80 || true
+          if journalctl -u mei-mg-email-ndr-guard.service --since "20 seconds ago" --no-pager | grep -Ei "NDR guard iniciado|NDR_GUARD_CHECK_FAILED|HTTP_403|Traceback|APP-ONLY active" | tail -80; then :; fi
           EOF
               )"
               ;;
@@ -101,10 +101,10 @@ jobs:
           echo ===SCRIPT_CAPABILITY_REFERENCES===
           grep -RIlE 'AppRoleAssignment|appRoleAssignments|Mail\.Read|Connect-MgGraph|Connect-AzAccount|adminconsent|Directory\.ReadWrite|Application\.ReadWrite|RoleManagement' /opt/m365 /home/ubuntu/mei-mg-email/scripts 2>/dev/null | head -120
           echo ===TOOLS===
-          command -v az || true
-          command -v pwsh || true
-          command -v powershell || true
-          command -v oci || true
+          if command -v az; then :; fi
+          if command -v pwsh; then :; fi
+          if command -v powershell; then :; fi
+          if command -v oci; then :; fi
           python3 - <<'PY'
           import importlib.util
           for m in ('msal','azure.identity','requests'):
@@ -114,13 +114,13 @@ jobs:
               )"
               ;;
             health)
-              COMMAND='set -Eeuo pipefail; echo ===SERVICES===; for s in ssh shopvivaliz-desktop-commander.service snap.oracle-cloud-agent.oracle-cloud-agent.service mei-mg-email-worker.service mei-mg-email-monitor.service mei-mg-email-ndr-guard.service mei-mg-email-queue-replenisher.service docker; do printf "%s=" "$s"; systemctl is-active "$s" 2>/dev/null || true; done; echo ===DISK===; df -h /; echo ===MEM===; free -h; echo ===LOAD===; uptime; echo ===PORTS===; ss -ltnp 2>/dev/null | grep -E ":(22|80|443|5433|8010)[[:space:]]" || true; echo ===FAILED===; systemctl --failed --no-pager --plain || true'
+              COMMAND='set -Eeuo pipefail; echo ===SERVICES===; for s in ssh shopvivaliz-desktop-commander.service snap.oracle-cloud-agent.oracle-cloud-agent.service mei-mg-email-worker.service mei-mg-email-monitor.service mei-mg-email-ndr-guard.service mei-mg-email-queue-replenisher.service docker; do printf "%s=" "$s"; if systemctl is-active "$s" 2>/dev/null; then :; fi; done; echo ===DISK===; df -h /; echo ===MEM===; free -h; echo ===LOAD===; uptime; echo ===PORTS===; if ss -ltnp 2>/dev/null | grep -E ":(22|80|443|5433|8010)[[:space:]]"; then :; fi; echo ===FAILED===; if systemctl --failed --no-pager --plain; then :; fi'
               ;;
             site_cleanup)
-              COMMAND='set -Eeuo pipefail; echo ===GUARD===; for f in /etc/systemd/system/mei-mg-email-*.service /etc/systemd/system/shopvivaliz-desktop-commander.service; do test -f "$f" || continue; if grep -Eqi "apache2|certbot|letsencrypt|/var/www|php" "$f"; then echo "ABORT_REFERENCE=$f"; exit 8; fi; done; echo GUARD_OK; sudo systemctl disable --now apache2 certbot.timer 2>/dev/null || true; sudo rm -f /etc/cron.d/shopvivaliz-blog-publish; export DEBIAN_FRONTEND=noninteractive; sudo apt-get purge -y apache2 apache2-bin apache2-data apache2-utils certbot python3-certbot python3-certbot-apache python3-certbot-dns-cloudflare libapache2-mod-php libapache2-mod-php8.3 php php-cli php-common php-apcu php-mbstring php-mysql php8.3 php8.3-apcu php8.3-cli php8.3-common php8.3-curl php8.3-mbstring php8.3-mysql php8.3-opcache php8.3-readline php8.3-sqlite3 || true; sudo apt-get autoremove --purge -y; sudo apt-get clean; sudo rm -rf /home/ubuntu/shopvivaliz-deploy /var/www /etc/apache2 /etc/letsencrypt /var/log/apache2; rm -rf "$HOME/.npm/_cacache" "$HOME/.npm/_logs" "$HOME/.cache/pip" "$HOME/.cache/uv"; sudo journalctl --vacuum-size=200M >/dev/null || true; docker image prune -a -f || true; echo ===RESULT===; dpkg -l | grep -E "apache2|certbot|libapache2-mod-php" || true; ss -ltnp 2>/dev/null | grep -E ":(80|443)[[:space:]]" || true; df -h /'
+              COMMAND='set -Eeuo pipefail; echo ===GUARD===; for f in /etc/systemd/system/mei-mg-email-*.service /etc/systemd/system/shopvivaliz-desktop-commander.service; do test -f "$f" || continue; if grep -Eqi "apache2|certbot|letsencrypt|/var/www|php" "$f"; then echo "ABORT_REFERENCE=$f"; exit 8; fi; done; echo GUARD_OK; if sudo systemctl disable --now apache2 certbot.timer 2>/dev/null; then :; fi; sudo rm -f /etc/cron.d/shopvivaliz-blog-publish; export DEBIAN_FRONTEND=noninteractive; if sudo apt-get purge -y apache2 apache2-bin apache2-data apache2-utils certbot python3-certbot python3-certbot-apache python3-certbot-dns-cloudflare libapache2-mod-php libapache2-mod-php8.3 php php-cli php-common php-apcu php-mbstring php-mysql php8.3 php8.3-apcu php8.3-cli php8.3-common php8.3-curl php8.3-mbstring php8.3-mysql php8.3-opcache php8.3-readline php8.3-sqlite3; then :; fi; sudo apt-get autoremove --purge -y; sudo apt-get clean; sudo rm -rf /home/ubuntu/shopvivaliz-deploy /var/www /etc/apache2 /etc/letsencrypt /var/log/apache2; rm -rf "$HOME/.npm/_cacache" "$HOME/.npm/_logs" "$HOME/.cache/pip" "$HOME/.cache/uv"; if sudo journalctl --vacuum-size=200M >/dev/null; then :; fi; if docker image prune -a -f; then :; fi; echo ===RESULT===; if dpkg -l | grep -E "apache2|certbot|libapache2-mod-php"; then :; fi; if ss -ltnp 2>/dev/null | grep -E ":(80|443)[[:space:]]"; then :; fi; df -h /'
               ;;
             final_verify)
-              COMMAND='set -Eeuo pipefail; echo ===SERVICES===; for s in ssh shopvivaliz-desktop-commander.service snap.oracle-cloud-agent.oracle-cloud-agent.service mei-mg-email-worker.service mei-mg-email-monitor.service mei-mg-email-ndr-guard.service mei-mg-email-queue-replenisher.service docker; do printf "%s=" "$s"; systemctl is-active "$s" 2>/dev/null || true; done; echo ===ENABLED===; for s in shopvivaliz-desktop-commander.service snap.oracle-cloud-agent.oracle-cloud-agent.service mei-mg-email-worker.service mei-mg-email-monitor.service mei-mg-email-ndr-guard.service mei-mg-email-queue-replenisher.service docker; do printf "%s=" "$s"; systemctl is-enabled "$s" 2>/dev/null || true; done; echo ===WEB_ABSENT===; systemctl status apache2 --no-pager 2>/dev/null || true; command -v certbot || true; test ! -e /home/ubuntu/shopvivaliz-deploy && echo SITE_DEPLOY_ABSENT=true; test ! -e /etc/letsencrypt && echo LETSENCRYPT_ABSENT=true; echo ===PORTS===; ss -ltnp 2>/dev/null | grep -E ":(22|80|443|5433|8010)[[:space:]]" || true; echo ===DOCKER===; docker ps --format "{{.Names}} {{.Image}} {{.Status}}" 2>/dev/null || true; echo ===DC===; systemctl show shopvivaliz-desktop-commander.service -p ActiveState -p SubState -p MainPID -p NRestarts --no-pager; echo ===ORACLE===; snap services oracle-cloud-agent 2>/dev/null || true; echo ===MEI_RECENT_ERRORS===; journalctl -u mei-mg-email-worker.service -u mei-mg-email-ndr-guard.service --since "10 minutes ago" --no-pager | grep -Ei "Traceback|RuntimeError|Failed with result|HTTP_403|certificate/key not found" | tail -80 || true; echo ===RESOURCES===; free -h; df -h /; uptime; echo ===FAILED===; systemctl --failed --no-pager --plain || true'
+              COMMAND='set -Eeuo pipefail; echo ===SERVICES===; for s in ssh shopvivaliz-desktop-commander.service snap.oracle-cloud-agent.oracle-cloud-agent.service mei-mg-email-worker.service mei-mg-email-monitor.service mei-mg-email-ndr-guard.service mei-mg-email-queue-replenisher.service docker; do printf "%s=" "$s"; if systemctl is-active "$s" 2>/dev/null; then :; fi; done; echo ===ENABLED===; for s in shopvivaliz-desktop-commander.service snap.oracle-cloud-agent.oracle-cloud-agent.service mei-mg-email-worker.service mei-mg-email-monitor.service mei-mg-email-ndr-guard.service mei-mg-email-queue-replenisher.service docker; do printf "%s=" "$s"; if systemctl is-enabled "$s" 2>/dev/null; then :; fi; done; echo ===WEB_ABSENT===; if systemctl status apache2 --no-pager 2>/dev/null; then :; fi; if command -v certbot; then :; fi; test ! -e /home/ubuntu/shopvivaliz-deploy && echo SITE_DEPLOY_ABSENT=true; test ! -e /etc/letsencrypt && echo LETSENCRYPT_ABSENT=true; echo ===PORTS===; if ss -ltnp 2>/dev/null | grep -E ":(22|80|443|5433|8010)[[:space:]]"; then :; fi; echo ===DOCKER===; if docker ps --format "{{.Names}} {{.Image}} {{.Status}}" 2>/dev/null; then :; fi; echo ===DC===; systemctl show shopvivaliz-desktop-commander.service -p ActiveState -p SubState -p MainPID -p NRestarts --no-pager; echo ===ORACLE===; if snap services oracle-cloud-agent 2>/dev/null; then :; fi; echo ===MEI_RECENT_ERRORS===; if journalctl -u mei-mg-email-worker.service -u mei-mg-email-ndr-guard.service --since "10 minutes ago" --no-pager | grep -Ei "Traceback|RuntimeError|Failed with result|HTTP_403|certificate/key not found" | tail -80; then :; fi; echo ===RESOURCES===; free -h; df -h /; uptime; echo ===FAILED===; if systemctl --failed --no-pager --plain; then :; fi'
               ;;
             *) echo "Action not allowlisted: $ACTION"; exit 3 ;;
           esac
@@ -130,7 +130,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           CMD_B64="$(cat /tmp/vm-maint-command.b64)"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "VM_CMD_B64='$CMD_B64' bash -lc 'printf %s \"\$VM_CMD_B64\" | base64 -d | bash'"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@136.248.69.116 "VM_CMD_B64='$CMD_B64' bash -lc 'printf %s \"\$VM_CMD_B64\" | base64 -d | bash'"
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts /tmp/vm-maint-command.b64
