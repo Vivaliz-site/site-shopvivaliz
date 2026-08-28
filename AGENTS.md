@@ -460,6 +460,7 @@ vierem de uma fonte oficial e identificável.
 - Métricas não podem registrar mensagem bruta, token, senha ou dado pessoal.
 - Alterações na Liz devem incluir testes de conversa, segurança e regressão.
 
+<<<<<<< HEAD
 ## Oracle Cloud (OCI) — acesso obrigatório para agentes
 
 Para operações OCI, use somente a identidade dedicada `AGENTS`; nunca use como fallback o perfil pessoal `DEFAULT`. O procedimento e os caminhos por host estão em [`docs/operations/oci-agent-access.md`](docs/operations/oci-agent-access.md).
@@ -470,3 +471,13 @@ Para operações OCI, use somente a identidade dedicada `AGENTS`; nunca use como
 - É proibido versionar, imprimir ou transportar em logs/prompts chaves `*.pem`, security tokens, cookies de sessão ou headers de autenticação.
 - Valide acesso com uma leitura autenticada real antes de declarar OCI operacional.
 - Em caso de falha externa de autenticação, permissão, rede ou serviço, investigue e procure uma solução segura; não trate o bloqueio como encerramento automático da tarefa.
+=======
+## Politica obrigatoria de PR, gate, merge e bloqueios (2026-08-27)
+
+- Toda alteracao finalizada deve terminar em PR validado e merge; nao deixar PR pronta aberta sem motivo tecnico comprovado.
+- Se qualquer check, teste, lint, gate, conflito ou Action falhar: investigar a causa raiz, corrigir, revalidar e repetir ate ficar verde. E proibido contornar falha com bypass, mascaramento de exit code, force merge ou desativacao de protecao.
+- Gate verde autoriza merge automatico somente para PR do proprio repositorio depois que todos os checks canonicos aplicaveis passarem.
+- Bloqueio aparentemente externo nao encerra a tarefa: procurar solucao segura por configuracao, credencial, permissao, host key, secret, servico, provider, infraestrutura ou rota alternativa antes de classificar como INCONCLUSIVO.
+- Depois do merge, verificar Actions do SHA resultante e corrigir qualquer falha regressiva antes de declarar conclusao.
+- No ShopVivaliz, Quality Gate verde em main deve acionar automaticamente o Master Production Pipeline e o deploy canonico na VM2; VM1 nao e destino de producao do site.
+>>>>>>> origin/main
