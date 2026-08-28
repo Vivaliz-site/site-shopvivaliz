@@ -1,7 +1,7 @@
 # Histórico de Agentes Shopee — ShopVivaliz
 
 **Repositório:** `fredmourao-ai/site-shopvivaliz`  
-**Última atualização:** 2026-08-19 (ciclo 34)  
+**Última atualização:** 2026-08-28 (ciclo 39)  
 **Branch de origem:** `claude/guth-portfolio-access-81jjq2`
 
 > Documento de consulta para agentes. Descreve o que foi implementado, como usar, quais secrets são necessários e quais limitações existem.
@@ -1419,3 +1419,31 @@ tiverem expirado); (2) depois disso, rodar `shopee-runtime-health.yml` via `work
 pra confirmar `status: ok`; (3) achado estrutural de fundo (sem endpoint de analytics/CTR do Shopee
 Open Platform em nenhum script) permanece sem mudança e continua bloqueando os itens 1/3/9/10 desta
 rotina mesmo depois de credenciais OK.
+
+### 9.34 Atualização — ciclo de 2026-08-28 (~01h UTC), 39º ciclo — estado idêntico ao ciclo 38, sem execução `schedule` nova desde então
+
+`git status`/`git log` confirmam HEAD ainda em `1bb4816` (topo de `main`, mesmo commit já citado por
+runs recentes). Nenhum arquivo novo em `listings/` desde `20260726-080756` (mesmo ponto de sempre —
+esta rotina não escreve `listings/*.json`, quem escreve são os workflows `fetch`/`optimize` removidos
+em 2026-07-26). Este sandbox continua sem cliente `ssh` instalado e sem nenhum secret `SHOPEE_*`/`SSH`
+no `env` — confirmado de novo nesta sessão (`which ssh` → not found; `env | grep -i shopee` → vazio) —
+ou seja, seguimos sem meio de confirmar/corrigir a VM2 diretamente a partir daqui; só é possível
+auditar via API do GitHub Actions.
+
+Verificação via `actions_list`/`get_workflow_jobs`: a última execução `schedule` de
+`shopee-runtime-health.yml` continua sendo `33121776705` (run 1410, 2026-08-27T22:15:43Z,
+`conclusion: failure`), a mesma já vista antes desta sessão começar — **nenhum novo slot de cron
+(01:xx UTC) rodou ainda no momento desta checagem**. O job falha no mesmo passo (`Run read-only Shopee
+preflight...`) em ~2s, padrão idêntico ao erro `ERROR: required Shopee runtime credentials are
+incomplete` confirmado explicitamente no ciclo 38 (run `33107367820`). Nada mudou: mesma causa
+(hipótese não confirmada de `shopvivaliz-shopee-token-renewer.service` nunca instalado na VM2), mesma
+recomendação (checar/instalar o serviço na VM2 e popular `shared/.env`/`shopee-tokens.json` com as 4
+credenciais `SHOPEE_*`), nenhum apply de produção rodado desde o fix de roteamento (`shopee-production-seo.yml`
+seguiria bloqueado pelo mesmo motivo, e de qualquer forma seu gate exige confirmação humana explícita).
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6 — o gap estrutural de
+analytics (seção "Lacuna que permanece" de `docs/audits/shopee-runtime-credentials-2026-08-14.md`)
+também segue sem mudança. **Nenhuma notificação push enviada neste ciclo** — critério de silêncio
+aplicado (usado desde o ciclo 19): mesmo bloqueio de fundo já relatado e notificado no ciclo anterior
+(~6h antes), sem fato novo, específico ou acionável que mude a recomendação já dada.
