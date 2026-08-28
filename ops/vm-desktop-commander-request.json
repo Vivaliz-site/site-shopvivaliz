@@ -1,4 +1,4 @@
 {
-  "action": "install_or_repair",
-  "reason": "sequential host repair 1 of 4: converge VM1 to current persistent-session single-owner implementation"
+  "action": "recover_session",
+  "reason": "sequential host repair 1 of 4: recover VM1 canonical persisted session without host checkout dependency"
 }
