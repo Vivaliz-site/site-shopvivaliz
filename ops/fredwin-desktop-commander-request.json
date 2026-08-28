@@ -1,4 +1,4 @@
 {
-  "action": "recover_session",
-  "reason": "2026-08-25 post-reboot recovery: clear AUTH_REQUIRED cooldown and restore canonical Fred-Win Desktop Commander without touching user worktree changes"
+  "action": "status",
+  "reason": "Fresh verification of Fred-Win Desktop Commander over canonical private reverse-SSH relay 5557"
 }
