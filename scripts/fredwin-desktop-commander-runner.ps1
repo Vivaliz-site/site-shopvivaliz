@@ -6,7 +6,7 @@ $SupervisorLog = Join-Path $LogDir 'desktop-commander-supervisor.log'
 $CooldownFile = Join-Path $LogDir 'desktop-commander-auth-required.cooldown'
 $ConnectedMarker = Join-Path $LogDir 'desktop-commander-provider-connected.marker'
 $Package = '@wonderwhy-er/desktop-commander@0.2.47'
-$AuthPattern = 'Please complete authentication|Starting device authorization flow|Authorization required'
+$AuthPattern = 'Please complete authentication|Starting device authorization flow|device code|Authorization required'
 $ConnectedPattern = 'Device ready|Found persisted session|Connected to Remote MCP|WebSocket connected'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
