@@ -23,8 +23,8 @@ $required = [
     'LogonType S4U', 'RunLevel Highest',
     'MultipleInstances IgnoreNew', 'StartWhenAvailable',
     'RestartCount', 'RestartInterval', 'New-TimeSpan -Minutes 1',
-    'AUTH_REQUIRED', 'WindowStyle Hidden'
-    , 'System.Threading.Mutex', 'WaitOne(0)', 'supervisor_mutex_held', 'ReleaseMutex'
+    'AUTH_REQUIRED', 'WindowStyle Hidden',
+    'System.Threading.Mutex', 'WaitOne(0)', 'supervisor_mutex_held', 'ReleaseMutex'
 ];
 foreach ($required as $needle) {
     if (stripos($s, $needle) === false) { fwrite(STDERR, "FALHOU: supervisor sem {$needle}\n"); exit(1); }
@@ -32,11 +32,11 @@ foreach ($required as $needle) {
 foreach (['CANONICAL_AGENT_COUNT','NONCANONICAL_AGENT_COUNT','TASK_LOGON_TYPE','TASK_RUN_LEVEL','AUTH_REQUIRED'] as $needle) {
     if (stripos($st, $needle) === false) { fwrite(STDERR, "FALHOU: status sem {$needle}\n"); exit(1); }
 }
-foreach (['@wonderwhy-er/desktop-commander@0.2.47','remote','--persist-session','Please complete authentication','Starting device authorization flow','device code','AUTH_REQUIRED'] as $needle) {
+foreach (['@wonderwhy-er/desktop-commander@0.2.47','remote','--persist-session','Please complete authentication','Starting device authorization flow','device code','AUTH_REQUIRED','RedirectStandardOutput = $true','RedirectStandardError = $true'] as $needle) {
     if (stripos($r, $needle) === false) { fwrite(STDERR, "FALHOU: runner sem {$needle}\n"); exit(1); }
 }
 $all = $s . $st . $r;
-$forbidden = ['access_token','refresh_token','auth_token','ConvertTo-SecureString','Password=','*>>','RedirectStandardOutput','RedirectStandardError','Get-Process node | Stop-Process','Stop-LauncherTree([int]$Pid)'];
+$forbidden = ['access_token','refresh_token','auth_token','ConvertTo-SecureString','Password=','*>>','-RedirectStandardOutput','-RedirectStandardError',"'.out'","'.err'",'Get-Process node | Stop-Process','Stop-LauncherTree([int]$Pid)'];
 foreach ($forbidden as $needle) {
     if (stripos($all, $needle) !== false) { fwrite(STDERR, "FALHOU: segredo/log bruto proibido {$needle}\n"); exit(1); }
 }
