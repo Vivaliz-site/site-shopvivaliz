@@ -56,6 +56,8 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -Eeuo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin "$BASE_SHA"
           if git merge --no-ff --no-commit "$BASE_SHA" >/tmp/ai-merge.log 2>&1; then
             if git rev-parse -q --verify MERGE_HEAD >/dev/null; then
@@ -65,7 +67,10 @@ jobs:
             echo "safe=false" >> "$GITHUB_OUTPUT"
           else
             conflicts="$(git diff --name-only --diff-filter=U)"
-            test -n "$conflicts"
+            if [ -z "$conflicts" ]; then
+              cat /tmp/ai-merge.log >&2
+              false
+            fi
             echo "has_conflicts=true" >> "$GITHUB_OUTPUT"
             CONFLICTS="$conflicts" python3 - <<'PY' > /tmp/ai-protected.txt
           import importlib.util, os
