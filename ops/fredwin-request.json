@@ -1,5 +1,5 @@
 {
-  "action": "verify_auto_sync",
-  "requested_at": "2026-08-23T04:33:00Z",
-  "reason": "Inspect Fred-Win scheduled startup and self-heal path; user expects unattended reconnect without device-code prompts"
+  "action": "health",
+  "requested_at": "2026-08-28T02:00:00Z",
+  "reason": "Verify canonical Fred-Win private reverse-SSH tunnel as the fallback control path while Desktop Commander broker presence is unstable"
 }
