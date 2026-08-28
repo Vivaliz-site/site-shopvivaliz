@@ -2,10 +2,12 @@
 $root = dirname(__DIR__);
 $fred = file_get_contents($root . '/scripts/fredwin-desktop-commander-runner.ps1');
 $vm = file_get_contents($root . '/scripts/vm-desktop-commander-supervisor.sh');
+$patcher = file_get_contents($root . '/scripts/patch-desktop-commander-session-persistence.mjs');
+$installer = file_get_contents($root . '/scripts/install-vm-desktop-commander-service.sh');
 $status = file_get_contents($root . '/scripts/fredwin-desktop-commander-status.ps1');
 $supervisor = file_get_contents($root . '/scripts/fredwin-desktop-commander-supervisor.ps1');
 $health = file_get_contents($root . '/.github/workflows/desktop-commander-24h-health.yml');
-if ($fred === false || $vm === false || $status === false || $supervisor === false || $health === false) { fwrite(STDERR, "FALHOU: supervisor/health ausente\n"); exit(1); }
+if ($fred === false || $vm === false || $patcher === false || $installer === false || $status === false || $supervisor === false || $health === false) { fwrite(STDERR, "FALHOU: supervisor/patcher/health ausente\n"); exit(1); }
 foreach (['fredwin' => $fred, 'vm' => $vm] as $name => $content) {
     if (strpos($content, '--persist-session') === false) {
         fwrite(STDERR, "FALHOU: {$name} sem --persist-session\n");
@@ -21,6 +23,28 @@ foreach (['fredwin' => $fred, 'vm' => $vm] as $name => $content) {
 foreach (['SESSION_BACKUP_DIR', 'session-backup/device.json', 'install -m 600 "$DEVICE_FILE"'] as $needle) {
     if (strpos($vm, $needle) === false) {
         fwrite(STDERR, "FALHOU: VM sem backup persistente de sessao: {$needle}\n");
+        exit(1);
+    }
+}
+foreach ([
+    'TOKEN_REFRESHED',
+    'void this.savePersistedConfig()',
+    'expected one persistence marker',
+] as $needle) {
+    if (strpos($patcher, $needle) === false) {
+        fwrite(STDERR, "FALHOU: patcher nao persiste renovacao de sessao: {$needle}\n");
+        exit(1);
+    }
+}
+foreach (['SESSION_PATCHER', 'DC_PACKAGE_ROOT', 'SESSION_REFRESH_PATCH'] as $needle) {
+    if (strpos($vm, $needle) === false) {
+        fwrite(STDERR, "FALHOU: supervisor VM nao aplica patch de renovacao: {$needle}\n");
+        exit(1);
+    }
+}
+foreach (['SESSION_PATCHER_SOURCE', 'SESSION_PATCHER_TARGET', 'install -m 0644 "$SESSION_PATCHER_SOURCE"'] as $needle) {
+    if (strpos($installer, $needle) === false) {
+        fwrite(STDERR, "FALHOU: instalador nao publica patcher de sessao: {$needle}\n");
         exit(1);
     }
 }
