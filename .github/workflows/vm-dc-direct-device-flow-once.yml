@@ -57,10 +57,10 @@ jobs:
               });
               const result = await poll.json();
               if (poll.ok && result.access_token) { session = result; break; }
-              if (!['authorization_pending','slow_down'].includes(result.error)) throw new Error(result.error_description || result.error || `HTTP ${poll.status}`);
-              if (result.error === 'slow_down') await sleep(interval);
+              if (!["authorization_pending","slow_down"].includes(result.error)) throw new Error(result.error_description || result.error || `HTTP ${poll.status}`);
+              if (result.error === "slow_down") await sleep(interval);
             }
-            if (!session || !session.device_id || !session.refresh_token) throw new Error('authorization timed out or returned incomplete session');
+            if (!session || !session.device_id || !session.refresh_token) throw new Error("authorization timed out or returned incomplete session");
             fs.writeFileSync(path.join(dir,"device.json"), JSON.stringify({deviceId:session.device_id,session:{access_token:session.access_token,refresh_token:session.refresh_token}}, null, 2), {mode:0o600});
             console.log("AUTHORIZATION_PERSISTED=true");
           })().catch(e=>{console.error(`FLOW_ERROR=${e.message}`);process.exit(1)});
