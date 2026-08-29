@@ -1,0 +1,28 @@
+diff --git a/scripts/production-functional-audit.sh b/scripts/production-functional-audit.sh
+index e1c2caf..f984626 100644
+--- a/scripts/production-functional-audit.sh
++++ b/scripts/production-functional-audit.sh
+@@ -72,8 +72,6 @@ items={x.get('key'):x for x in r.get('integrations',[]) if isinstance(x,dict)}
+ for key in ('mercado_pago','melhor_envio','olist_tiny'):
+     if items.get(key,{}).get('status') != 'connected':
+         raise SystemExit(1)
+-if r.get('ok') is not True:
+-    raise SystemExit(1)
+ PY
+ pass integrations 'olist_tiny mercado_pago melhor_envio connected'
+ 
+diff --git a/tests/test_production_functional_audit_contract.py b/tests/test_production_functional_audit_contract.py
+index a04a41a..f3efe3b 100644
+--- a/tests/test_production_functional_audit_contract.py
++++ b/tests/test_production_functional_audit_contract.py
+@@ -26,6 +26,10 @@ def test() -> None:
+     for marker in required_audit_markers:
+         assert marker in audit, f"missing functional audit marker: {marker}"
+ 
++    assert "r.get('ok')" not in audit, (
++        "optional/non-storefront integrations must not make the critical storefront audit fail"
++    )
++
+     assert "LOCAL_CONTRACT_SMOKE=PASS" in smoke
+     assert "Storefront smoke tests passed." not in smoke
+ 
