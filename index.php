@@ -1033,7 +1033,7 @@ $svNavCurrent = '';
                         Como funciona a política de devolução?
                         <span class="faq-icon">+</span>
                     </summary>
-                    <p class="faq-body">Para compras online, você pode solicitar o direito de arrependimento em até 7 dias corridos após o recebimento. Entre em contato com o número do pedido; a equipe orientará cada etapa conforme a <a href="/politica-devolucoes">Política de Trocas e Devoluções</a>.</p>
+                    <p class="faq-body">Para compras online, você pode solicitar o direito de arrependimento em até 7 dias corridos após o recebimento. Entre em contato com o número do pedido; a equipe orientará cada etapa conforme a <a href="/politica-devolucoes/">Política de Trocas e Devoluções</a>.</p>
                 </details>
                 <details class="faq-item sv-reveal sv-reveal-delay-3">
                     <summary>
