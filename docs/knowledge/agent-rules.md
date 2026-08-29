@@ -14,6 +14,19 @@
 - Não tratar 404, 405, 500, CORS e DNS como o mesmo problema.
 - Não declarar que produção, deploy, banco, preço, imagem ou integração estão corretos sem teste verificável.
 
+## AUDITORIA_FUNCIONAL_PRODUCAO
+
+- HTTP 200 nao prova funcionamento. Arquivo presente, endpoint existente, secret configurado, schema valido ou pagina renderizada sao apenas evidencias estruturais.
+- Auditoria local, lint, unit test e smoke estrutural nunca podem declarar a loja funcional em producao.
+- Para declarar producao funcional, executar `scripts/production-functional-audit.sh` contra `https://shopvivaliz.com.br` e exigir `PRODUCTION_FUNCTIONAL_AUDIT=PASS`.
+- A auditoria obrigatoria deve usar produto real disponivel e percorrer, no minimo: catalogo, carrinho, cotacao real de frete, checkout, health de pedidos e integracoes criticas.
+- Melhor Envio, Olist e Mercado Pago so podem ser considerados saudaveis quando o provider real aceitar a credencial e responder ao probe funcional previsto.
+- `configured=true`, token presente ou variavel de ambiente preenchida nao provam autenticacao nem funcionamento.
+- qualquer falha critica deve produzir FAIL. Nao converter falha critica em `attention`, `warning`, sucesso parcial ou nota percentual capaz de resultar em status saudavel.
+- Se a auditoria funcional nao puder ser executada por falta de credencial, conectividade ou ambiente, o resultado e INCONCLUSIVO/FAIL, nunca PASS.
+- Relatorios devem separar explicitamente `STRUCTURAL`, `INTEGRATION`, `FUNCTIONAL` e `TRANSACTIONAL`.
+- Nenhum agente, workflow, monitor, Claude, Codex ou automacao pode substituir o gate funcional por verificacao superficial.
+
 ## Validação do Squad Chat
 
 Considerar o health válido somente quando todos os requisitos forem atendidos:
