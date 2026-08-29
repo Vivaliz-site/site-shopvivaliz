@@ -1,4 +1,4 @@
 {
-  "action": "status",
-  "reason": "post-recovery verification: confirm provider connectivity, canonical owner and auth state before advancing"
+  "action": "recover_session",
+  "reason": "restore canonical Desktop Commander provider session on the control VM before continuing the authorized OCI migration"
 }
