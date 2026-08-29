@@ -1,0 +1,149 @@
+name: Master Production Pipeline 24/7
+
+on:
+  workflow_run:
+    workflows: [Quality Gate]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Digite DEPLOY para confirmar'
+        required: true
+        type: string
+
+concurrency:
+  group: production-deploy-a1
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  DEPLOY_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+jobs:
+  validate:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Validate manual confirmation
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        run: test '${{ inputs.confirmation }}' = DEPLOY
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          persist-credentials: false
+      - name: Verify deployable revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          php -l sitemap.php >/dev/null
+          php tests/google-indexing-canonical-regression-test.php
+          python3 -m py_compile scripts/seo-integrity-audit.py
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Package immutable release
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar --exclude=.git -czf /tmp/shopvivaliz-release.tgz .
+      - name: Configure pinned A1 SSH
+        shell: bash
+        env:
+          KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s %s\n' '163.176.103.253' 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICPXjLoakI7MkHQrhQF1jaCF8VTtY1SbDiffx8gNeSxw' > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Upload release
+        shell: bash
+        run: |
+          set -euo pipefail
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" /tmp/shopvivaliz-release.tgz ubuntu@163.176.103.253:/tmp/shopvivaliz-release-${DEPLOY_SHA}.tgz
+      - name: Activate release atomically
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' -- "$DEPLOY_SHA" <<'REMOTE'
+          set -euo pipefail
+          sha="$1"
+          root='/home/ubuntu/shopvivaliz-deploy'
+          releases="$root/releases"
+          shared="$root/shared"
+          current="$root/current"
+          archive="/tmp/shopvivaliz-release-${sha}.tgz"
+          stamp="$(date -u +%Y%m%d-%H%M%S)"
+          release="$releases/${stamp}-${sha:0:8}"
+          previous="$(readlink -f "$current" 2>/dev/null || true)"
+          cleanup() { rm -f "$archive"; }
+          trap cleanup EXIT
+          mkdir -p "$release"
+          tar -xzf "$archive" -C "$release"
+          printf '%s\n' "$sha" > "$release/.release-sha"
+          for name in .env tasks-queue.json logs storage cache uploads sessions; do
+            rm -rf "$release/$name"
+            ln -s "../../shared/$name" "$release/$name"
+          done
+          mkdir -p "$release/config"
+          rm -f "$release/config/runtime-secrets.php"
+          ln -s '../../../shared/runtime-secrets.php' "$release/config/runtime-secrets.php"
+          php -l "$release/sitemap.php" >/dev/null
+          php "$release/tests/google-indexing-canonical-regression-test.php"
+          sudo a2enmod rewrite >/dev/null
+          sudo apache2ctl configtest
+          ln -sfn "releases/$(basename "$release")" "$root/current.next"
+          mv -Tf "$root/current.next" "$current"
+          sudo systemctl reload apache2
+          sleep 2
+          fail=0
+          for path in / /sitemap.xml /catalogo/ /termos/ /politica-entrega/ /politica-devolucoes/; do
+            code="$(curl -sS -o /tmp/smoke-body -w '%{http_code}' -H 'Host: shopvivaliz.com.br' "http://127.0.0.1${path}" || true)"
+            echo "$path -> $code"
+            [ "$code" = 200 ] || fail=1
+          done
+          if [ "$fail" -ne 0 ]; then
+            if [ -n "$previous" ] && [ -d "$previous" ]; then
+              ln -sfn "releases/$(basename "$previous")" "$root/current.rollback"
+              mv -Tf "$root/current.rollback" "$current"
+              sudo systemctl reload apache2
+            fi
+            exit 1
+          fi
+          find "$releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -nr | tail -n +6 | cut -d' ' -f2- | while IFS= read -r old; do
+            [ "$(readlink -f "$current")" = "$old" ] || rm -rf -- "$old"
+          done
+          REMOTE
+
+  monitor:
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify public production
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in / /sitemap.xml /catalogo/ /termos/ /politica-entrega/ /politica-devolucoes/; do
+            code="$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 20 "https://shopvivaliz.com.br${path}")"
+            echo "$path -> $code"
+            test "$code" = 200
+          done
+          grep -q '<urlset' <(curl -sS --max-time 20 https://shopvivaliz.com.br/sitemap.xml)
