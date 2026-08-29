@@ -1,0 +1,67 @@
+name: Cloudflare Email Routing Bootstrap
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cloudflare-email-routing-bootstrap.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      ZONE_NAME: shopvivaliz.com.br
+      DEST_EMAIL: fredmourao@gmail.com
+    steps:
+      - name: Inspect and bootstrap Email Routing destination
+        shell: bash
+        run: |
+          set -euo pipefail
+          api='https://api.cloudflare.com/client/v4'
+          auth=(-H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json')
+
+          test -n "${CF_TOKEN:-}" || { echo 'CF_TOKEN_MISSING'; exit 1; }
+          verify=$(curl -fsS "${auth[@]}" "$api/user/tokens/verify")
+          test "$(jq -r '.success' <<<"$verify")" = true || { echo 'TOKEN_VERIFY_FAILED'; exit 1; }
+          echo 'TOKEN_VERIFY_OK'
+
+          zones=$(curl -fsS "${auth[@]}" "$api/zones?name=$ZONE_NAME")
+          zone_id=$(jq -r '.result[0].id // empty' <<<"$zones")
+          account_id=$(jq -r '.result[0].account.id // empty' <<<"$zones")
+          test -n "$zone_id" -a -n "$account_id" || { echo 'ZONE_OR_ACCOUNT_NOT_FOUND'; exit 1; }
+          echo 'ZONE_LOOKUP_OK'
+
+          settings=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/email/routing" || true)
+          if [ -n "$settings" ]; then
+            echo "ROUTING_STATUS=$(jq -r '.result.status // "unknown"' <<<"$settings")"
+            echo "ROUTING_ENABLED=$(jq -r '.result.enabled // false' <<<"$settings")"
+          fi
+
+          addresses=$(curl -sS "${auth[@]}" "$api/accounts/$account_id/email/routing/addresses")
+          if [ "$(jq -r '.success' <<<"$addresses")" != true ]; then
+            echo 'ADDRESS_LIST_PERMISSION_FAILED'
+            jq -c '{errors}' <<<"$addresses"
+            exit 2
+          fi
+          existing=$(jq -r --arg e "$DEST_EMAIL" '.result[]? | select(.email==$e) | .id' <<<"$addresses" | head -n1)
+          if [ -n "$existing" ]; then
+            verified=$(jq -r --arg e "$DEST_EMAIL" '.result[]? | select(.email==$e) | .verified // empty' <<<"$addresses" | head -n1)
+            echo 'DESTINATION_EXISTS'
+            if [ -n "$verified" ]; then echo 'DESTINATION_VERIFIED'; else echo 'DESTINATION_PENDING_VERIFICATION'; fi
+            exit 0
+          fi
+
+          payload=$(jq -nc --arg email "$DEST_EMAIL" '{email:$email}')
+          created=$(curl -sS -X POST "${auth[@]}" --data "$payload" "$api/accounts/$account_id/email/routing/addresses")
+          if [ "$(jq -r '.success' <<<"$created")" != true ]; then
+            echo 'DESTINATION_CREATE_FAILED'
+            jq -c '{errors}' <<<"$created"
+            exit 3
+          fi
+          echo 'DESTINATION_CREATED_PENDING_VERIFICATION'
