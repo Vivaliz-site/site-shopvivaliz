@@ -44,10 +44,9 @@ for (const profile of profiles) {
             return { selector: el.id ? `#${el.id}` : `.${el.classList[0]}`, left: r.left, right: r.right, top: r.top, bottom: r.bottom };
           });
         const footerRect = footer?.getBoundingClientRect() || null;
-        const legal = document.querySelector('.footer-legal');
-        const legalStyle = legal ? getComputedStyle(legal) : null;
         return {
           viewportWidth: innerWidth,
+          viewportHeight: innerHeight,
           scrollWidth: Math.max(doc.scrollWidth, body?.scrollWidth || 0),
           footerCount: document.querySelectorAll('footer').length,
           footerRect: footerRect ? { left: footerRect.left, right: footerRect.right, width: footerRect.width } : null,
@@ -56,7 +55,6 @@ for (const profile of profiles) {
           supportDockCount: document.querySelectorAll('.sv-support-dock').length,
           fixedUi,
           bodyPaddingBottom: parseFloat(getComputedStyle(body).paddingBottom) || 0,
-          legalBackground: legalStyle?.backgroundColor || '',
           isMobile,
         };
       }, { isMobile: profile.isMobile });
@@ -69,7 +67,7 @@ for (const profile of profiles) {
       if (metrics.supportDockCount > 1) localFailures.push(`duplicate support dock (${metrics.supportDockCount})`);
       if (metrics.footerRect && (metrics.footerRect.left < -2 || metrics.footerRect.right > metrics.viewportWidth + 2)) localFailures.push('footer extends outside viewport');
       for (const item of metrics.fixedUi) {
-        if (item.left < -2 || item.right > metrics.viewportWidth + 2 || item.top < -2 || item.bottom > innerHeight + 2) {
+        if (item.left < -2 || item.right > metrics.viewportWidth + 2 || item.top < -2 || item.bottom > metrics.viewportHeight + 2) {
           localFailures.push(`${item.selector} outside viewport`);
         }
       }
@@ -78,8 +76,7 @@ for (const profile of profiles) {
         if (metrics.navCount === 1 && metrics.bodyPaddingBottom < 70) localFailures.push(`mobile body bottom padding too small (${metrics.bodyPaddingBottom}px)`);
       }
 
-      const row = { profile: profile.name, route, url: page.url(), status, metrics, failures: localFailures };
-      results.push(row);
+      results.push({ profile: profile.name, route, url: page.url(), status, metrics, failures: localFailures });
       failures.push(...localFailures.map((message) => `${profile.name} ${route}: ${message}`));
     } catch (error) {
       failures.push(`${profile.name} ${route}: ${error.message}`);
