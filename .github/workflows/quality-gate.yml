@@ -37,6 +37,7 @@ jobs:
           php tests/google-indexing-canonical-regression-test.php
           python3 -m py_compile scripts/seo-integrity-audit.py
           node --check scripts/public-layout-audit.mjs
+          node --test tests/public-route-discovery.test.mjs
           bash -n scripts/deploy-production.sh
           grep -q 'a2enmod rewrite' scripts/deploy-production.sh
           grep -q 'urllib.parse.quote(path' scripts/seo-integrity-audit.py
@@ -44,6 +45,7 @@ jobs:
           grep -q 'horizontal overflow' scripts/public-layout-audit.mjs
           grep -q 'expected exactly one footer' scripts/public-layout-audit.mjs
           grep -q 'expected one mobile navigation' scripts/public-layout-audit.mjs
+          grep -q 'discoverPublicRoutes' scripts/public-layout-audit.mjs
           ! grep -Rqs '?busca=' blog/content.php includes/blog-editorial-autopilot.php
           ! grep -RqsE 'href="/(termos|politica-entrega|politica-devolucoes)"' includes/footer.php termos.php index.php faq/index.php
       - name: Validate production workflow target
