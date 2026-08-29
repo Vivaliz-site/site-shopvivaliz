@@ -1,0 +1,1 @@
+Runtime gate is pending. Merge the branch once GitHub checks are acceptable; the request file will then trigger the interactive authorization path. Do not declare the four-host control plane healthy before fresh two-ping and harmless-command evidence exists for every required host.
