@@ -34,7 +34,7 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Inspect renewer and token storage without exposing credentials
+      - name: Inspect renewer, live token storage, and backup metadata
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -42,65 +42,73 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
             ubuntu@136.248.69.116 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
-          shared=/home/ubuntu/shopvivaliz-deploy/shared
-          current=/home/ubuntu/shopvivaliz-deploy/current
-          store="$shared/private/olist-tokens.json"
-          env="$shared/.env"
-
           echo "service_active=$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null || true)"
           echo "service_enabled=$(systemctl is-enabled shopvivaliz-token-renewer.service 2>/dev/null || true)"
           systemctl show shopvivaliz-token-renewer.service \
             -p User -p Group -p MainPID -p ExecMainStatus -p ActiveState -p SubState --no-pager
 
           python3 - <<'PY'
-          import json, os, stat
+          import json, stat
+          from datetime import datetime, timezone
           from pathlib import Path
           shared=Path('/home/ubuntu/shopvivaliz-deploy/shared')
           env=shared/'.env'
           store=shared/'private/olist-tokens.json'
           private=shared/'private'
+
           def meta(path):
-              if not path.exists():
-                  return {'exists':False}
+              if not path.exists(): return {'exists':False}
               st=path.stat()
-              return {
-                  'exists':True,
-                  'mode':oct(stat.S_IMODE(st.st_mode)),
-                  'uid':st.st_uid,
-                  'gid':st.st_gid,
-                  'size':st.st_size,
-              }
-          env_keys=set()
-          if env.is_file():
-              for raw in env.read_text(encoding='utf-8').splitlines():
-                  if '=' in raw and not raw.lstrip().startswith('#'):
-                      k,v=raw.split('=',1)
-                      if v.strip(): env_keys.add(k.strip())
+              return {'exists':True,'mode':oct(stat.S_IMODE(st.st_mode)),'uid':st.st_uid,'gid':st.st_gid,'size':st.st_size}
+
+          def read_key_presence(path):
+              keys={}
+              try: lines=path.read_text(encoding='utf-8').splitlines()
+              except Exception: return keys
+              for raw in lines:
+                  if '=' not in raw or raw.lstrip().startswith('#'): continue
+                  key,value=raw.split('=',1)
+                  keys[key.strip()]=bool(value.strip().strip('"\''))
+              return keys
+
+          live=read_key_presence(env)
           report={
-              'env':meta(env),
-              'private':meta(private),
-              'token_store':meta(store),
-              'env_has_client_id':('TINY_CLIENT_ID' in env_keys or 'OLIST_CLIENT_ID' in env_keys),
-              'env_has_client_secret':('TINY_CLIENT_SECRET' in env_keys or 'OLIST_CLIENT_SECRET' in env_keys),
-              'env_has_access_token':('TINY_ACCESS_TOKEN' in env_keys or 'OLIST_ACCESS_TOKEN' in env_keys),
-              'env_has_refresh_token':('TINY_REFRESH_TOKEN' in env_keys or 'OLIST_REFRESH_TOKEN' in env_keys),
+              'env':meta(env),'private':meta(private),'token_store':meta(store),
+              'env_has_client_id':bool(live.get('TINY_CLIENT_ID') or live.get('OLIST_CLIENT_ID')),
+              'env_has_client_secret':bool(live.get('TINY_CLIENT_SECRET') or live.get('OLIST_CLIENT_SECRET')),
+              'env_has_access_token':bool(live.get('TINY_ACCESS_TOKEN') or live.get('OLIST_ACCESS_TOKEN')),
+              'env_has_refresh_token':bool(live.get('TINY_REFRESH_TOKEN') or live.get('OLIST_REFRESH_TOKEN')),
           }
           if store.is_file():
-              try:
-                  data=json.loads(store.read_text(encoding='utf-8'))
-              except Exception:
-                  data={}
+              try: data=json.loads(store.read_text(encoding='utf-8'))
+              except Exception: data={}
               report['store_has_access_token']=bool(data.get('OLIST_ACCESS_TOKEN') or data.get('TINY_ACCESS_TOKEN'))
               report['store_has_refresh_token']=bool(data.get('OLIST_REFRESH_TOKEN') or data.get('TINY_REFRESH_TOKEN'))
               report['store_has_expiry']=bool(data.get('expires_at_epoch'))
-              report['store_updated_at_present']=bool(data.get('updated_at'))
           print('storage_state='+json.dumps(report,sort_keys=True))
+
+          paths=[]
+          paths += list(shared.glob('.env.backup.*'))
+          reauth=private/'oauth-reauth-backups'
+          if reauth.is_dir(): paths += list(reauth.glob('.env.*.bak'))
+          backups=[]
+          for path in sorted(paths,key=lambda p:p.stat().st_mtime,reverse=True)[:60]:
+              keys=read_key_presence(path)
+              backups.append({
+                  'name':str(path.relative_to(shared)),
+                  'mtime':datetime.fromtimestamp(path.stat().st_mtime,timezone.utc).isoformat(),
+                  'has_client_id':bool(keys.get('TINY_CLIENT_ID') or keys.get('OLIST_CLIENT_ID')),
+                  'has_client_secret':bool(keys.get('TINY_CLIENT_SECRET') or keys.get('OLIST_CLIENT_SECRET')),
+                  'has_access_token':bool(keys.get('TINY_ACCESS_TOKEN') or keys.get('OLIST_ACCESS_TOKEN')),
+                  'has_refresh_token':bool(keys.get('TINY_REFRESH_TOKEN') or keys.get('OLIST_REFRESH_TOKEN')),
+              })
+          print('backup_oauth_presence='+json.dumps(backups,sort_keys=True))
           PY
 
           echo 'journal_sanitized_begin'
           journalctl -u shopvivaliz-token-renewer.service -n 80 --no-pager -o cat 2>/dev/null \
             | sed -E 's/(access_token|refresh_token|client_secret|client_id)=[^[:space:]]+/\1=[REDACTED]/Ig' \
-            | grep -E 'Renova|renova|OAuth|oauth|token|Token|HTTP|invalid|Credenciais|active|started|failed|erro|error' \
+            | grep -E 'Renova|renova|OAuth|oauth|token|Token|HTTP|invalid|Credenciais|started|failed|erro|error' \
             | tail -40 || true
           echo 'journal_sanitized_end'
           REMOTE
