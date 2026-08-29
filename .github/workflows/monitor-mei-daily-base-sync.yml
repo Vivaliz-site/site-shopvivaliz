@@ -22,7 +22,7 @@ jobs:
           chmod 600 ~/.ssh/vmkey
       - name: Verify timer execution and upstream freshness
         run: |
-          timeout 180s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          timeout 180s ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 <<'EOF'
           set -euo pipefail
           cd /home/ubuntu/mei-mg-email
           test "$(sudo systemctl is-enabled mei-mg-base-sync.timer)" = enabled
