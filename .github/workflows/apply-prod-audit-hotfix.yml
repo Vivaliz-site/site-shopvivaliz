@@ -1,0 +1,51 @@
+name: Apply Production Audit Hotfix
+
+on:
+  push:
+    branches:
+      - fix/prod-audit-runtime-20260829
+    paths:
+      - 'ops/prod-audit-hotfix.patch'
+      - 'ops/prod-audit-critical-only.patch'
+      - '.github/workflows/apply-prod-audit-hotfix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: fix/prod-audit-runtime-20260829
+          fetch-depth: 0
+
+      - name: Apply exact staged patches and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ops/prod-audit-hotfix.patch
+          test -f ops/prod-audit-critical-only.patch
+          git apply --check ops/prod-audit-hotfix.patch
+          git apply ops/prod-audit-hotfix.patch
+          git apply --check ops/prod-audit-critical-only.patch
+          git apply ops/prod-audit-critical-only.patch
+
+          python3 tests/test_production_functional_audit_contract.py
+          python3 tests/test_catalog_available_only_contract.py
+          python3 tests/test_melhorenvio_integration_health_contract.py
+          python3 tests/test_critical_integration_recovery_workflows.py
+          python3 tests/test_production_pipeline_runtime_contract.py
+          python3 -m unittest tests.unit.test_runtime_deploy_reconciliation
+          php -l includes/integration-health.php
+          bash -n scripts/production-functional-audit.sh
+          php tests/integration-health-credentials-test.php
+
+          rm -f ops/prod-audit-hotfix.patch ops/prod-audit-critical-only.patch .github/workflows/apply-prod-audit-hotfix.yml
+          git config user.name 'Agente Autonomo ShopVivaliz'
+          git config user.email 'fredmourao@gmail.com'
+          git add -A
+          git commit -m 'fix: harden production audit and runtime recovery'
+          git push origin HEAD:fix/prod-audit-runtime-20260829
