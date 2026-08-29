@@ -1,4 +1,4 @@
 {
-  "action": "restart",
-  "reason": "persistence validation after provider session recovery; verify restart reconnects without human authorization"
+  "action": "kill_for_recovery_test",
+  "reason": "controlled persistence test: stop canonical DC process, then recover from persisted session without human authorization"
 }
