@@ -9,6 +9,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "refresh-olist-token-2h.yml"
+CONFIGURE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "configure-production-runtime.yml"
 BOOTSTRAP = REPO_ROOT / "scripts" / "bootstrap-olist-oauth-runtime.py"
 OAUTH_VALUES = {
     "OLIST_CLIENT_ID": "olist-client-id-sentinel",
@@ -46,6 +47,11 @@ class OlistOAuthBootstrapWorkflowTests(unittest.TestCase):
         self.assertIn("oauth-bootstrap.seed", text)
         self.assertIn("if: always()", text)
         self.assertIn("Remove OAuth bootstrap seed", text)
+
+    def test_static_runtime_keeps_www_data_group_for_rotating_token_store(self) -> None:
+        text = CONFIGURE_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn('sudo chown ubuntu:www-data "$shared/.env"', text)
+        self.assertNotIn('sudo chown ubuntu:ubuntu "$shared/.env"', text)
 
 
 class OlistOAuthBootstrapScriptTests(unittest.TestCase):
