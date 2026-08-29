@@ -1,0 +1,119 @@
+name: Japi Itemwise Readonly Probe
+
+on:
+  push:
+    branches:
+      - ops/japi-itemwise-audit-20260829
+    paths:
+      - '.github/workflows/ops-japi-itemwise-readonly.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: japi-itemwise-readonly-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: production
+    steps:
+      - name: Configure verified VM2 SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key"
+          test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Read product 353698710 from live Olist ERP
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@136.248.69.116 'python3 -' <<'PY'
+          import json
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          product_id = 353698710
+          store = Path('/home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json')
+          data = json.loads(store.read_text(encoding='utf-8'))
+          token = data.get('OLIST_ACCESS_TOKEN') or data.get('TINY_ACCESS_TOKEN') or ''
+          if not token:
+              raise SystemExit('canonical_token_missing')
+
+          def get(url):
+              req = urllib.request.Request(
+                  url,
+                  headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/json'},
+              )
+              with urllib.request.urlopen(req, timeout=25) as response:
+                  if int(response.status) != 200:
+                      raise SystemExit('unexpected_http_' + str(response.status))
+                  return json.loads(response.read().decode('utf-8'))
+
+          product = get(f'https://api.tiny.com.br/public-api/v3/produtos/{product_id}')
+          kit = product.get('kit') or []
+          report = {
+              'id': product.get('id'),
+              'sku': product.get('sku'),
+              'descricao': product.get('descricao'),
+              'tipo': product.get('tipo'),
+              'situacao': product.get('situacao'),
+              'descricaoComplementar': product.get('descricaoComplementar'),
+              'garantia': product.get('garantia'),
+              'categoria': product.get('categoria'),
+              'marca': product.get('marca'),
+              'precoCusto': (product.get('precos') or {}).get('precoCusto'),
+              'estoqueQuantidade': (product.get('estoque') or {}).get('quantidade'),
+              'seo': product.get('seo'),
+              'variacoes': [
+                  {
+                      'id': item.get('id'),
+                      'sku': item.get('sku'),
+                      'descricao': item.get('descricao'),
+                      'grade': item.get('grade'),
+                  }
+                  for item in (product.get('variacoes') or [])
+              ],
+              'kit': [
+                  {
+                      'produto': {
+                          'id': (item.get('produto') or {}).get('id'),
+                          'sku': (item.get('produto') or {}).get('sku'),
+                          'descricao': (item.get('produto') or {}).get('descricao'),
+                      },
+                      'quantidade': item.get('quantidade'),
+                  }
+                  for item in kit
+              ],
+              'anexos': [item.get('url') for item in (product.get('anexos') or [])[:5]],
+          }
+          print('japi_live_product=' + json.dumps(report, ensure_ascii=False, sort_keys=True))
+          if kit:
+              live_kit = get(f'https://api.tiny.com.br/public-api/v3/produtos/{product_id}/kit')
+              print('japi_live_kit=' + json.dumps(live_kit, ensure_ascii=False, sort_keys=True))
+          print('mutation_performed=false')
+          PY
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
