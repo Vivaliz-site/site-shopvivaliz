@@ -1,0 +1,49 @@
+name: SEO Rewrite Recovery A1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/seo-rewrite-recovery-a1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          KNOWN: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$KEY"
+          test -n "$KNOWN"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Recover canonical routes on A1
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          sudo a2enmod rewrite >/dev/null
+          sudo apache2ctl configtest
+          sudo systemctl reload apache2
+          sleep 2
+          sudo apache2ctl -M 2>/dev/null | grep -q rewrite_module
+          for path in /sitemap.xml /termos/ /politica-entrega/ /catalogo/; do
+            code="$(curl -sS -o /tmp/body -w '%{http_code}' -H 'Host: shopvivaliz.com.br' "http://127.0.0.1${path}")"
+            echo "$path -> $code"
+            test "$code" = 200
+          done
+          REMOTE
