@@ -1,4 +1,4 @@
 {
-  "action": "kill_for_recovery_test",
-  "reason": "controlled persistence test: stop canonical DC process, then recover from persisted session without human authorization"
+  "action": "recover_session",
+  "reason": "controlled persistence test phase 2: recover canonical DC from persisted session after deliberate stop, with no human authorization"
 }
