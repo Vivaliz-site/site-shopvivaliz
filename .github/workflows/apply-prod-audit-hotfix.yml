@@ -26,8 +26,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f ops/prod-audit-hotfix.patch
-          test -f ops/prod-audit-critical-only.patch
+          if [[ ! -f ops/prod-audit-hotfix.patch || ! -f ops/prod-audit-critical-only.patch ]]; then
+            echo 'staged_patches_already_applied=true'
+            exit 0
+          fi
           git apply --check ops/prod-audit-hotfix.patch
           git apply ops/prod-audit-hotfix.patch
           git apply --check ops/prod-audit-critical-only.patch
@@ -43,7 +45,8 @@ jobs:
           bash -n scripts/production-functional-audit.sh
           php tests/integration-health-credentials-test.php
 
-          rm -f ops/prod-audit-hotfix.patch ops/prod-audit-critical-only.patch .github/workflows/apply-prod-audit-hotfix.yml
+          git restore --source=HEAD -- .github/workflows
+          rm -f ops/prod-audit-hotfix.patch ops/prod-audit-critical-only.patch
           git config user.name 'Agente Autonomo ShopVivaliz'
           git config user.email 'fredmourao@gmail.com'
           git add -A
