@@ -1,8 +1,8 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-SITE HEALTH CHECK - Validação Automática
-Verifica se todos os componentes estão funcionando
+SITE HEALTH CHECK - ValidaÃ§Ã£o AutomÃ¡tica
+Verifica se todos os componentes estÃ£o funcionando
 """
 
 import json
@@ -10,7 +10,7 @@ import datetime
 from pathlib import Path
 
 def health_check_report():
-    """Gera relatório de saúde do site"""
+    """Gera relatÃ³rio de saÃºde do site"""
 
     report = {
         "timestamp": datetime.datetime.now().isoformat(),
@@ -24,7 +24,7 @@ def health_check_report():
             },
             "infrastructure": {
                 "status": "OPERATIONAL",
-                "vm_oracle": "137.131.156.17",
+                "vm_oracle": "163.176.103.253",
                 "git_sync": "30min cron",
                 "uptime": "99.9%",
                 "cache": "Cloudflare (7d)"
@@ -65,7 +65,7 @@ def health_check_report():
         "next_check": (datetime.datetime.now() + datetime.timedelta(hours=1)).isoformat()
     }
 
-    # Salvar relatório
+    # Salvar relatÃ³rio
     report_file = Path("logs/site-health-check.json")
     report_file.parent.mkdir(exist_ok=True)
 
@@ -82,10 +82,10 @@ def health_check_report():
 
     for component, data in report["checks"].items():
         status = data.get("status", "UNKNOWN")
-        icon = "✓" if status in ["ACTIVE", "OPERATIONAL", "COMPLETE", "CONNECTED", "ACTIVE", "SYNCED"] else "✗"
+        icon = "âœ“" if status in ["ACTIVE", "OPERATIONAL", "COMPLETE", "CONNECTED", "ACTIVE", "SYNCED"] else "âœ—"
         print(f"  {icon} {component.upper()}: {status}")
 
-    print(f"\nRelatório salvo: {report_file}")
+    print(f"\nRelatÃ³rio salvo: {report_file}")
     print("\n" + "="*70 + "\n")
 
     return report
