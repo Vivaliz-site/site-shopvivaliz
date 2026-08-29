@@ -1,0 +1,20 @@
+# SHA256 recovery evidence captured 2026-08-29
+# Complete 74-file migration manifest itself:
+bd7ba45d50cd258801427d6feb5ea6e7ab441be31c22959cfc516a7475ed2d05  /home/ubuntu/oci-a1-migration-20260828/REPORTS/recovery-checksums-20260829.sha256
+# Key recovery artifacts:
+176a1046f87bedaccf97cd13690503880fddacdeb412c2baf28608a9fedbca88  BACKUPS/20260828-1345-backend/mei_mg_email.pgcustom.dump
+1eee2861d0e518ff9267c0a3a33b2233bc46e238a70aad5322bd040b3b0219e3  BACKUPS/20260829-cutover/mei_mg_email.final.pgcustom.dump
+dfbc7bf59f5e1a5a10461c042d07f6ee6c36d2f75af090b69bd7d4cac2700841  BACKUPS/20260829-base-sync-gate/mei_mg_email-pre-base-sync.pgcustom.dump
+b98e5a3b45bb2ecd1386393c82eab8115ffea03940194adaa66ed743743e6ca0  BACKUPS/20260828-1345-backend/git-mei-mg-email/repository.bundle
+5a9ff54751049caf6b2d3af3de14d12d2e894f3a89bb26bbce66971e97be0558  BACKUPS/20260828-1345-backend/git-solange-rolla-consultorio/repository.bundle
+cdfc558ab1ac34a83ce6ddb0a99d8ea340a19caf6618558baf3bd6b01eb4dfce  BACKUPS/20260828-1345-backend/solange-rolla-consultorio.tgz
+2731466887a4f532ce60d033f93c65aaae43f4b17398cf34e99b2e89d102a4b4  BACKUPS/20260828-1345-backend/opt-m365.tgz
+287a29593822120c7d8d2b5ec529491ef3c96dc33d8fddffc16275052440b651  BACKUPS/20260828-1420-site/shopvivaliz-deploy.bundle
+d4dd112924b16528ff371a7edf6c59aa15eee7020171eca8476e9f6126a6e412  BACKUPS/20260828-1420-site/deployed-release-20260828-011605-77ebe145.tgz
+cdd1ed275ff6fc7aa7fc823a4bb521494711269e344a4b4fc3f96420c4a1d145  BACKUPS/20260828-1420-site/shopvivaliz.mysql.sql
+450651c5fba3805295f6a3edf8119ded65cd0999d663f12a3fae957fa27e9b88  BACKUPS/20260828-1420-site/system-and-app-configs.tgz
+64e59204bdbc62beb3e330a3d61a35b0b7f199243a4db03a50df5e61df286aa0  BACKUPS/20260829-cutover/site/shopvivaliz.final.20260829.sql.gz
+# Fresh pre-reconciliation manifests:
+57b8db062d5370249b3d5b45f576fef434a8a56cd034d508a90d7074558d2012  backend:/home/ubuntu/recovery-two-a1-20260829/pre-reconcile/SHA256SUMS
+0912f77117923da54e09bc07294123eb9feb8dff7d249dddc0193bf2e27c0c54  site:/home/ubuntu/recovery-two-a1-20260829/pre-reconcile/SHA256SUMS
+3dec42f18ea2f62dff90d8cf17b99189650106e705512046375f31253195c3f2  fred-win:C:/Users/FRED/repo-backups/two-a1-recovery-20260829/pre-reconcile-v2/SHA256SUMS
