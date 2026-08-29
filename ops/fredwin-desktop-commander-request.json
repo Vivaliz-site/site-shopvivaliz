@@ -1,5 +1,5 @@
 {
   "action": "recover_session",
-  "requested_at": "2026-08-28T02:27:00-03:00",
-  "reason": "Recover canonical persistent hidden Desktop Commander session on LAPTOP-NIG4IFUU, clear stale auth cooldown, preserve singleton launcher tree, and avoid interactive device flow"
+  "requested_at": "2026-08-29T13:56:00-03:00",
+  "reason": "bounded recovery retry after VM control-plane persistence fix; clear stale cooldown and restore canonical hidden Fred-Win session without interactive device flow"
 }
