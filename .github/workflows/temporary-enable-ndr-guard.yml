@@ -1,0 +1,33 @@
+name: Temporary Enable NDR Guard
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure SSH
+        env:
+          K1: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          K2: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          H1: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          H2: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$K1" > ~/.ssh/key1
+          printf '%s\n' "$K2" > ~/.ssh/key2
+          { printf '%s\n' "$H1"; printf '%s\n' "$H2"; } | sed '/^[[:space:]]*$/d' | sort -u > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/key1 ~/.ssh/key2 ~/.ssh/known_hosts
+      - name: Enable NDR guard on backend A1
+        run: |
+          set -Eeuo pipefail
+          opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -o IdentitiesOnly=yes -i "$HOME/.ssh/key1" -i "$HOME/.ssh/key2")
+          host="$(ssh "${opts[@]}" ubuntu@144.22.157.209 hostname)"
+          test "$host" = "always-free-arm-1787907847-26"
+          ssh "${opts[@]}" ubuntu@144.22.157.209 'set -Eeuo pipefail; cd /home/ubuntu/mei-mg-email; .venv/bin/python scripts/auditar_graph_mail_read.py; sudo systemctl enable --now mei-mg-email-ndr-guard.service; sleep 3; test "$(systemctl is-enabled mei-mg-email-ndr-guard.service)" = enabled; test "$(systemctl is-active mei-mg-email-ndr-guard.service)" = active; echo NDR_GUARD_ENABLED_OK'
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/key1 ~/.ssh/key2 ~/.ssh/known_hosts
