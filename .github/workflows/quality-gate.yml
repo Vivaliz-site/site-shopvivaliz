@@ -1,0 +1,50 @@
+name: Quality Gate
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - name: Validate changed runtime contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l sitemap.php >/dev/null
+          php -l includes/blog-article-repository.php >/dev/null
+          php -l blog/content.php >/dev/null
+          php -l includes/blog-editorial-autopilot.php >/dev/null
+          php tests/google-indexing-canonical-regression-test.php
+          python3 -m py_compile scripts/seo-integrity-audit.py
+          bash -n scripts/deploy-production.sh
+          grep -q 'a2enmod rewrite' scripts/deploy-production.sh
+          grep -q 'urllib.parse.quote(path' scripts/seo-integrity-audit.py
+          ! grep -Rqs '?busca=' blog/content.php includes/blog-editorial-autopilot.php
+          ! grep -RqsE 'href="/(termos|politica-entrega|politica-devolucoes)"' includes/footer.php termos.php index.php faq/index.php
+      - name: Validate production workflow target
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '163.176.103.253' .github/workflows/master-production-pipeline.yml
+          ! grep -q '136.248.69.116' .github/workflows/master-production-pipeline.yml
+          grep -q 'SEO routing invariant' scripts/deploy-production.sh
