@@ -51,20 +51,19 @@ jobs:
         run: |
           set -Eeuo pipefail
           tenancy="$(awk -F= '/^tenancy=/{print $2; exit}' "$HOME/.oci/config")"
-          echo '=== REGIONS ==='
-          oci iam region-subscription list --all --query 'data[].{"region":"region-name","status":status}' --output table
-          echo '=== INSTANCES ==='
-          oci compute instance list --compartment-id "$tenancy" --all --query 'data[?"lifecycle-state"!=`TERMINATED`].{"name":"display-name","state":"lifecycle-state","shape":shape,"id":id,"ad":"availability-domain"}' --output table
-          echo '=== TARGET PUBLIC IP LOOKUP ==='
-          found=0
+          echo '=== ALL INSTANCES ==='
+          oci compute instance list --compartment-id "$tenancy" --all --query 'data[].{"name":"display-name","state":"lifecycle-state","shape":shape,"time_created":"time-created","id":id,"ad":"availability-domain"}' --output table
+          echo '=== ACTIVE VNICs ==='
           for iid in $(oci compute instance list --compartment-id "$tenancy" --all --query 'data[?"lifecycle-state"!=`TERMINATED`].id' --raw-output | tr -d '[]",' ); do
             test -n "$iid" || continue
             name=$(oci compute instance get --instance-id "$iid" --query 'data."display-name"' --raw-output)
             for vid in $(oci compute vnic-attachment list --compartment-id "$tenancy" --instance-id "$iid" --query 'data[]."vnic-id"' --raw-output | tr -d '[]",' ); do
               test -n "$vid" || continue
-              oci network vnic get --vnic-id "$vid" --query 'data.{name:"display-name",public_ip:"public-ip",private_ip:"private-ip",subnet_id:"subnet-id",nsg_ids:"nsg-ids"}' --output json | python3 -c 'import json,sys; d=json.load(sys.stdin); print("instance='"$name"' public_ip=%s private_ip=%s subnet_id=%s nsg_count=%s"%(d.get("public_ip"),d.get("private_ip"),d.get("subnet_id"),len(d.get("nsg_ids") or [])))'
+              oci network vnic get --vnic-id "$vid" --query 'data.{public_ip:"public-ip",private_ip:"private-ip",subnet_id:"subnet-id",nsg_ids:"nsg-ids"}' --output json | python3 -c 'import json,sys; d=json.load(sys.stdin); print("instance='"$name"' public_ip=%s private_ip=%s subnet_id=%s nsg_count=%s"%(d.get("public_ip"),d.get("private_ip"),d.get("subnet_id"),len(d.get("nsg_ids") or [])))'
             done
           done
+          echo '=== BOOT VOLUMES ==='
+          oci bv boot-volume list --compartment-id "$tenancy" --all --query 'data[].{"name":"display-name","state":"lifecycle-state","size_gb":"size-in-gbs","time_created":"time-created","id":id,"ad":"availability-domain"}' --output table
 
       - name: Cleanup OCI material
         if: always()
