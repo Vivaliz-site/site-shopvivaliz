@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.test_olist_oauth_credential_candidates import OlistOAuthCredentialCandidateTests  # noqa: F401
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "refresh-olist-token-2h.yml"
 CONFIGURE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "configure-production-runtime.yml"
