@@ -40,14 +40,14 @@ code=$(request GET "$BASE_URL/api/orders/health.php" "" "$TMPDIR/orders.json")
 json_assert "$TMPDIR/orders.json" 'd.get("ok") is True' orders_health
 pass orders_health 'ok=true'
 
-code=$(request GET "$BASE_URL/api/catalog/products.php?limit=10&available_only=1" "" "$TMPDIR/products.json")
+code=$(request GET "$BASE_URL/api/catalog/products.php?limit=10&available=1" "" "$TMPDIR/products.json")
 [[ "$code" == 200 ]] || fail catalog "http=$code"
 python3 - "$TMPDIR/products.json" "$TMPDIR/item.json" <<'PY' || fail catalog 'no auditable product'
 import json, pathlib, sys
 p=json.loads(pathlib.Path(sys.argv[1]).read_text())
 for x in p.get('products',[]):
     sku=str(x.get('sku') or '').strip(); pid=str(x.get('id') or x.get('olist_product_id') or '').strip()
-    if sku or pid:
+    if (sku or pid) and float(x.get('stock') or 0) > 0:
         pathlib.Path(sys.argv[2]).write_text(json.dumps({'sku':sku,'product_id':pid,'quantity':1}))
         raise SystemExit(0)
 raise SystemExit(1)
