@@ -1,4 +1,4 @@
 {
   "action": "recover_session",
-  "reason": "controlled persistence test phase 2: recover canonical DC from persisted session after deliberate stop, with no human authorization"
+  "reason": "retry controlled persistence recovery after fixing explicit session-backup discovery and current-commit recovery script"
 }
