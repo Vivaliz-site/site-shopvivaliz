@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      VM_HOST: 136.248.69.116
+      VM_HOST: 163.176.103.253
       VM_USER: ubuntu
       VM_ENV: /home/ubuntu/shopvivaliz-deploy/shared/.env
       VM_LOCK: /etc/shopvivaliz/env-keyset.lock.json

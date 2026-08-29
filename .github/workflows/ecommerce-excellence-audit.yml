@@ -160,7 +160,7 @@ jobs:
             -i "$HOME/.ssh/id_rsa" \
             scripts/ecommerce-excellence-audit.py \
             scripts/google-commerce-config-audit.php \
-            ubuntu@136.248.69.116:/tmp/
+            ubuntu@163.176.103.253:/tmp/
 
       - name: Run live SEO sitemap feed and security audit
         shell: bash
@@ -171,7 +171,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@136.248.69.116 \
+            ubuntu@163.176.103.253 \
             'python3 /tmp/ecommerce-excellence-audit.py --mode live --base-url https://shopvivaliz.com.br --output /tmp/ecommerce-live.json --fail-on blocker'
 
       - name: Validate Google commerce and runtime integration presence
@@ -183,7 +183,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@136.248.69.116 \
+            ubuntu@163.176.103.253 \
             'SHOPVIVALIZ_ROOT=/home/ubuntu/shopvivaliz-deploy/current php /tmp/google-commerce-config-audit.php > /tmp/google-commerce-config.json'
 
       - name: Download redacted live evidence
@@ -197,19 +197,19 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@136.248.69.116:/tmp/ecommerce-live.json artifacts/ecommerce-live.json
+            ubuntu@163.176.103.253:/tmp/ecommerce-live.json artifacts/ecommerce-live.json
           scp \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@136.248.69.116:/tmp/ecommerce-live.md artifacts/ecommerce-live.md
+            ubuntu@163.176.103.253:/tmp/ecommerce-live.md artifacts/ecommerce-live.md
           scp \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@136.248.69.116:/tmp/google-commerce-config.json artifacts/google-commerce-config.json
+            ubuntu@163.176.103.253:/tmp/google-commerce-config.json artifacts/google-commerce-config.json
 
       - name: Upload live production evidence
         if: always()

@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 20
     env:
       REPO: ${{ github.repository }}
-      VM_HOST: 137.131.156.17
+      VM_HOST: 163.176.103.253
       VM_USER: ubuntu
       GH_TOKEN: ${{ github.token }}
 
