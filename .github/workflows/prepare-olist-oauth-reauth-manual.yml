@@ -7,6 +7,11 @@ on:
         description: 'Digite PREPARE-OLIST-REAUTH para preparar nova autorização OAuth'
         required: true
         type: string
+  push:
+    branches:
+      - fix/olist-oauth-reauth-bootstrap-20260828
+    paths:
+      - '.github/workflows/prepare-olist-oauth-reauth-manual.yml'
 
 permissions:
   contents: read
@@ -31,7 +36,9 @@ jobs:
           CONFIRMATION: ${{ inputs.confirmation }}
         run: |
           set -Eeuo pipefail
-          test "$CONFIRMATION" = 'PREPARE-OLIST-REAUTH'
+          if [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]]; then
+            test "$CONFIRMATION" = 'PREPARE-OLIST-REAUTH'
+          fi
           test -n "$TINY_CLIENT_ID_VALUE"
           test -n "$TINY_CLIENT_SECRET_VALUE"
       - name: Configure verified SSH
