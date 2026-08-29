@@ -146,10 +146,10 @@ jobs:
           print(urlparse(os.environ.get('LOCATION', '')).hostname or '')
           PY
           )"
-          echo "connect_http=$status"
-          echo "authorization_host=$host"
           test "$status" = 302
           test "$host" = accounts.tiny.com.br
+          echo 'connect_http=302'
+          echo 'authorization_host=accounts.tiny.com.br'
       - name: Remove temporary seeds and SSH material
         if: always()
         shell: bash
