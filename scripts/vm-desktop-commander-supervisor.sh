@@ -17,6 +17,7 @@ AUTH_REGEX='Please complete authentication|Starting device authorization flow|de
 CONNECTED_REGEX='Device ready|Found persisted session|Connected to Remote MCP|WebSocket connected'
 REMOTE_OWNER_PID="$$"
 REMOTE_OWNER_SESSION='systemd'
+AUTH_GRACE_SECONDS="${AUTH_GRACE_SECONDS:-300}"
 
 mkdir -p "$DEVICE_DIR"
 install -d -m 700 "$SESSION_BACKUP_DIR"
@@ -127,17 +128,23 @@ setsid "$NPX_BIN" --yes "$PACKAGE" remote --persist-session >"$tmp" 2>&1 &
 child=$!
 auth_required=0
 while kill -0 "$child" 2>/dev/null; do
-  if grep -Eqi "$AUTH_REGEX" "$tmp"; then
+  if [[ "$auth_required" -eq 0 ]] && grep -Eqi "$AUTH_REGEX" "$tmp"; then
     auth_required=1
-    : > "$COOLDOWN_FILE"
-    chmod 0600 "$COOLDOWN_FILE"
-    kill -TERM -- "-$child" 2>/dev/null || kill -TERM "$child" 2>/dev/null || :
-    for _ in {1..10}; do
-      kill -0 "$child" 2>/dev/null || break
-      sleep 1
-    done
-    kill -KILL -- "-$child" 2>/dev/null || kill -KILL "$child" 2>/dev/null || :
-    break
+    auth_started_at="$(date +%s)"
+    device_mtime_at_auth="$(stat -c %Y "$DEVICE_FILE" 2>/dev/null || echo 0)"
+    echo 'AUTH_REQUIRED=true reason=provider_device_flow_waiting'
+  fi
+  if [[ "$auth_required" -eq 1 ]]; then
+    current_device_mtime="$(stat -c %Y "$DEVICE_FILE" 2>/dev/null || echo 0)"
+    if grep -Eqi "$CONNECTED_REGEX" "$tmp" || [[ "$current_device_mtime" -gt "$device_mtime_at_auth" ]]; then
+      auth_required=0
+      rm -f "$COOLDOWN_FILE"
+    elif (( $(date +%s) - auth_started_at >= AUTH_GRACE_SECONDS )); then
+      : > "$COOLDOWN_FILE"
+      chmod 0600 "$COOLDOWN_FILE"
+      kill -TERM -- "-$child" 2>/dev/null || kill -TERM "$child" 2>/dev/null || :
+      break
+    fi
   fi
   if [[ "$connected" -eq 0 ]] && grep -Eqi "$CONNECTED_REGEX" "$tmp"; then
     : > "$CONNECTED_MARKER"
@@ -152,7 +159,7 @@ done
 rc=0
 if wait "$child"; then rc=0; else rc=$?; fi
 if [[ "$connected" -eq 1 ]]; then backup_device_state; fi
-if [[ "$auth_required" -eq 0 ]] && grep -Eqi "$AUTH_REGEX" "$tmp"; then
+if [[ "$connected" -eq 0 && "$auth_required" -eq 0 ]] && grep -Eqi "$AUTH_REGEX" "$tmp"; then
   auth_required=1
   : > "$COOLDOWN_FILE"
   chmod 0600 "$COOLDOWN_FILE"
