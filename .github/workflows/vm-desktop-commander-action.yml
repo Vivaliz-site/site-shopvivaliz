@@ -71,7 +71,7 @@ jobs:
               COMMAND='set -Eeuo pipefail; sudo systemctl stop shopvivaliz-desktop-commander.service; pkill -f "[n]pm exec @wonderwhy-er/desktop-commander@0.2.47 remote --persist-session" 2>/dev/null || true; echo KILL_FOR_RECOVERY_TEST=true'
               ;;
             recover_session)
-              COMMAND='set -Eeuo pipefail; tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/baa8d1cffcae9cc667b8ea07e99de59bba1749d7/scripts/vm-desktop-commander-recover-session.sh -o "$tmp"; sudo bash "$tmp"'
+              COMMAND="set -Eeuo pipefail; tmp=\$(mktemp); trap 'rm -f \$tmp' EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/$GITHUB_SHA/scripts/vm-desktop-commander-recover-session.sh -o \"\$tmp\"; sudo bash \"\$tmp\""
               ;;
             *) echo "Action not allowlisted: $ACTION"; exit 3 ;;
           esac

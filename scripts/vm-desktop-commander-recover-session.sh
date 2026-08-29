@@ -15,6 +15,7 @@ import sys
 
 target = sys.argv[1]
 patterns = [
+    '/home/ubuntu/.desktop-commander-device/session-backup/device.json',
     '/home/ubuntu/.desktop-commander-device/*.json*',
     '/home/ubuntu/.desktop-commander-device*/*.json*',
     '/home/ubuntu/.config/**/*desktop*commander*.json*',
