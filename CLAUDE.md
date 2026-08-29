@@ -17,7 +17,9 @@
 ## 📊 Visão Geral do Sistema
 
 ShopVivaliz é um **e-commerce de alto rendimento** com automação de:
-- **Deploy:** produção real roda na VM Oracle `shopvivaliz-micro-2` (IP `136.248.69.116`) —
+
+> **ARQUITETURA VINCULANTE DESDE 2026-08-29:** produção opera somente em duas A1: backend/MEI/M365/relay Fred-Win em `always-free-arm-1787907847-26` (`144.22.157.209`) e site/web/deploy em `shopvivaliz-free-a1` (`163.176.103.253`). As E2 antigas foram encerradas; qualquer seção VM1/VM2 abaixo é histórico e não define destinos operacionais atuais.
+- **Deploy:** produção web/deploy roda na A1 `shopvivaliz-free-a1` (`163.176.103.253`); backend/MEI/M365 roda na A1 `always-free-arm-1787907847-26` (`144.22.157.209`).
   ver `### 🔴 VM1 vs VM2 — não confundir (corrigido 2026-08-26)` logo abaixo antes de mexer em
   qualquer coisa em qualquer uma das VMs, principalmente `.env`. Não é FTP/HostGator.
 - **Validação:** QA lint dispara em push/PR (`shopvivaliz-qa.yml`)
@@ -249,7 +251,7 @@ Todos configurados em `Settings > Secrets and variables > Actions`:
   e troca o symlink `current` — é isso que efetivamente coloca código em produção (ver diagrama em
   `### 🏗️ Arquitetura Real de Deploy` no topo deste arquivo).
 - Para forçar deploy imediato sem esperar o cron:
-  `ssh -i "C:\Users\FRED\Downloads\ssh-key-2026-07-04.key" ubuntu@137.131.156.17
+  `ssh -i "C:\Users\FRED\Downloads\ssh-key-2026-07-04.key" ubuntu@163.176.103.253
   "sudo /usr/local/lib/shopvivaliz/deploy-production.sh"`
 - Chave SSH funcional confirmada em 2026-07-30: `C:\Users\FRED\Downloads\ssh-key-2026-07-04.key`
   (ver `docs/AGENTS.md` entrada 2026-07-29 "Toolkit local e alvo persistente de deploy").

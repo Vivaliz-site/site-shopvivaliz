@@ -414,9 +414,9 @@ Regras:
 
 ```bash
 # Use a chave baseada no perfil ativo (FRED ou user)
-ssh -i "C:\Users\user\Downloads\ssh-key-2026-07-04.key" ubuntu@137.131.156.17
+ssh -i "C:\Users\user\Downloads\ssh-key-2026-07-04.key" ubuntu@163.176.103.253
 # ou
-ssh -i "C:\Users\FRED\Downloads\ssh-key-2026-07-04.key" ubuntu@137.131.156.17
+ssh -i "C:\Users\FRED\Downloads\ssh-key-2026-07-04.key" ubuntu@163.176.103.253
 
 # Monitorar deploy (a cada 2 min, cron roda)
 tail -f /var/log/shopvivaliz-deploy.log

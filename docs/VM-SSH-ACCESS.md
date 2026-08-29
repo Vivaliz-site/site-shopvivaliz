@@ -11,7 +11,7 @@
 
 | Item | Valor |
 |---|---|
-| IP da VM | `137.131.156.17` |
+| IP da VM | `163.176.103.253` |
 | Usuário | `ubuntu` |
 | Domínio servido | `dev.shopvivaliz.com.br` (produção real, ver `CLAUDE.md`) |
 | Diretório ativo da app na VM | `/home/ubuntu/shopvivaliz-deploy/current` |
@@ -81,7 +81,7 @@ copiado para um arquivo do repo). Exemplo de uso num step:
     mkdir -p ~/.ssh
     echo "${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}" > ~/.ssh/shopvivaliz_vm_agent
     chmod 600 ~/.ssh/shopvivaliz_vm_agent
-    ssh -o StrictHostKeyChecking=no -i ~/.ssh/shopvivaliz_vm_agent ubuntu@137.131.156.17 "comando aqui"
+    ssh -o StrictHostKeyChecking=no -i ~/.ssh/shopvivaliz_vm_agent ubuntu@163.176.103.253 "comando aqui"
 ```
 
 O arquivo criado em `~/.ssh/` existe só dentro do runner efêmero do Actions
@@ -102,7 +102,7 @@ só são injetados dentro de workflows). Nesse caso, o caminho é:
 ## Como usar (a partir de uma sessão com acesso à máquina do Fred, ex: via Desktop Commander/terminal local)
 
 ```powershell
-ssh -i C:\Users\FRED\Downloads\ssh-key-2026-07-04.key -o StrictHostKeyChecking=no ubuntu@137.131.156.17 "comando aqui"
+ssh -i C:\Users\FRED\Downloads\ssh-key-2026-07-04.key -o StrictHostKeyChecking=no ubuntu@163.176.103.253 "comando aqui"
 ```
 
 Toolkit local preferencial quando disponível no terminal:
@@ -136,7 +136,7 @@ Use este prompt quando quiser que um agente Claude acesse a VM para executar uma
 Você tem acesso à VM de produção ShopVivaliz via SSH para completar esta tarefa:
 
 **Credenciais e Ambiente:**
-- Host: 137.131.156.17
+- Host: 163.176.103.253
 - Usuário: ubuntu
 - Chave SSH: Configurada em GitHub Secrets como SHOPVIVALIZ_VM_SSH_KEY
 - Diretório de deploy ativo: /home/ubuntu/shopvivaliz-deploy/
@@ -161,7 +161,7 @@ Você tem acesso à VM de produção ShopVivaliz via SSH para completar esta tar
 
 **Passos para executar:**
 1. Conecte via SSH:
-   ssh -i ~/.ssh/id_rsa ubuntu@137.131.156.17
+   ssh -i ~/.ssh/id_rsa ubuntu@163.176.103.253
 
 2. Navegue para o diretório apropriado:
    - Deploy ativo: cd /home/ubuntu/shopvivaliz-deploy/current
@@ -206,7 +206,7 @@ Você tem acesso à VM de produção ShopVivaliz via SSH para completar esta tar
   (confirmado repetidamente nesta investigação, inclusive com redirecionamento
   explícito via `Start-Process -RedirectStandardError`). Se isso acontecer de
   novo, não assuma rede quebrada — teste a porta separadamente
-  (`Test-NetConnection -ComputerName 137.131.156.17 -Port 22`) antes de
+  (`Test-NetConnection -ComputerName 163.176.103.253 -Port 22`) antes de
   investigar mais. Para gerar novas chaves de forma confiável nesse ambiente,
   use Python (`cryptography.hazmat.primitives.asymmetric.ed25519`) em vez de
   `ssh-keygen.exe`, que apresentou o mesmo problema de saída silenciosa.
