@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   prepare:
-    name: Seed Tiny app credentials on VM2
+    name: Seed Tiny app credentials on Site A1
     runs-on: ubuntu-latest
     timeout-minutes: 8
     environment: production
@@ -77,13 +77,13 @@ jobs:
           path.write_text(''.join(f'{k}={v}\n' for k, v in values.items()), encoding='utf-8')
           path.chmod(0o600)
           PY
-          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "$seed" ubuntu@136.248.69.116:/tmp/shopvivaliz-olist-client.seed
+          scp -q -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            "$seed" ubuntu@163.176.103.253:/tmp/shopvivaliz-olist-client.seed
       - name: Seed only Tiny client credentials and verify authorization endpoint
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 'sudo -n python3 -' <<'PY'
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'sudo -n python3 -' <<'PY'
           import os
           import shutil
           import tempfile
@@ -142,7 +142,7 @@ jobs:
               tmp.unlink(missing_ok=True)
           print('client_credentials_seeded=true')
           PY
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 \
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
             'set -Eeuo pipefail; shared=/home/ubuntu/shopvivaliz-deploy/shared; sudo chown ubuntu:www-data "$shared/.env"; chmod 640 "$shared/.env"; sudo chown ubuntu:www-data "$shared/private"; sudo chmod 770 "$shared/private"; sudo -u www-data test -r "$shared/.env"; sudo -u www-data test -w "$shared/private"'
           response="$(curl -sS -o /dev/null -D - --max-time 20 https://shopvivaliz.com.br/olist/connect.php)"
           status="$(printf '%s\n' "$response" | awk 'toupper($1) ~ /^HTTP\// {code=$2} END{print code}')"
@@ -165,8 +165,8 @@ jobs:
           cleanup_rc=0
           rm -f "$RUNNER_TEMP/olist-client.seed"
           if [[ -f "$HOME/.ssh/id_rsa" && -f "$HOME/.ssh/known_hosts" ]]; then
-            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              ubuntu@136.248.69.116 'rm -f /tmp/shopvivaliz-olist-client.seed' || cleanup_rc=$?
+            ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+              ubuntu@163.176.103.253 'rm -f /tmp/shopvivaliz-olist-client.seed' || cleanup_rc=$?
           fi
           rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
           exit "$cleanup_rc"
