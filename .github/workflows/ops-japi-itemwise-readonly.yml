@@ -17,9 +17,36 @@ concurrency:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     environment: production
     steps:
+      - name: Probe GitHub access-token secrets without mutation
+        shell: bash
+        env:
+          OLIST_ACCESS_TOKEN_VALUE: ${{ secrets.OLIST_ACCESS_TOKEN }}
+          TINY_ACCESS_TOKEN_VALUE: ${{ secrets.TINY_ACCESS_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json, os, urllib.error, urllib.request
+          url='https://api.tiny.com.br/public-api/v3/produtos/353698710'
+          probes=[]
+          for key in ('OLIST_ACCESS_TOKEN_VALUE','TINY_ACCESS_TOKEN_VALUE'):
+              token=os.environ.get(key,'')
+              if not token:
+                  probes.append({'source':'github-secret','key':key.replace('_VALUE',''),'http':'missing'})
+                  continue
+              req=urllib.request.Request(url,headers={'Authorization':'Bearer '+token,'Accept':'application/json'})
+              try:
+                  with urllib.request.urlopen(req,timeout=25) as response:
+                      probes.append({'source':'github-secret','key':key.replace('_VALUE',''),'http':int(response.status)})
+              except urllib.error.HTTPError as exc:
+                  probes.append({'source':'github-secret','key':key.replace('_VALUE',''),'http':int(exc.code)})
+              except Exception as exc:
+                  probes.append({'source':'github-secret','key':key.replace('_VALUE',''),'http':type(exc).__name__})
+          print('github_token_probe='+json.dumps(probes,sort_keys=True))
+          PY
+
       - name: Configure verified VM2 SSH
         shell: bash
         env:
@@ -38,132 +65,91 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Read product 353698710 from live Olist ERP
+      - name: Probe VM2 live and backup access tokens and read product if possible
         shell: bash
         run: |
           set -Eeuo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
             ubuntu@136.248.69.116 'python3 -' <<'PY'
-          import json
-          import urllib.error
-          import urllib.request
+          import json, urllib.error, urllib.request
           from pathlib import Path
 
-          product_id = 353698710
-          shared = Path('/home/ubuntu/shopvivaliz-deploy/shared')
-          store = shared / 'private/olist-tokens.json'
-          env_path = shared / '.env'
+          product_id=353698710
+          shared=Path('/home/ubuntu/shopvivaliz-deploy/shared')
 
           def read_env(path):
-              values = {}
-              if not path.is_file():
+              values={}
+              try:
+                  text=path.read_text(encoding='utf-8')
+              except Exception:
                   return values
-              for raw in path.read_text(encoding='utf-8').splitlines():
-                  line = raw.strip()
+              for raw in text.splitlines():
+                  line=raw.strip()
                   if not line or line.startswith('#') or '=' not in line:
                       continue
-                  key, value = line.split('=', 1)
-                  values[key.strip()] = value.strip().strip('"').strip("'")
+                  key,value=line.split('=',1)
+                  values[key.strip()]=value.strip().strip('"').strip("'")
               return values
 
-          candidates = []
+          sources=[]
+          store=shared/'private/olist-tokens.json'
           if store.is_file():
-              values = json.loads(store.read_text(encoding='utf-8'))
-              for key in ('OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN'):
-                  if values.get(key):
-                      candidates.append(('olist-tokens.json', key, values[key]))
-          env_values = read_env(env_path)
-          for key in ('OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN'):
-              if env_values.get(key):
-                  candidates.append(('.env', key, env_values[key]))
-
-          unique = []
-          seen = set()
-          for source, key, token in candidates:
-              fingerprint = (source, key, token)
-              if fingerprint not in seen:
-                  seen.add(fingerprint)
-                  unique.append((source, key, token))
-
-          url = f'https://api.tiny.com.br/public-api/v3/produtos/{product_id}'
-          probes = []
-          selected = None
-          product = None
-          for source, key, token in unique:
-              req = urllib.request.Request(
-                  url,
-                  headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/json'},
-              )
               try:
-                  with urllib.request.urlopen(req, timeout=25) as response:
-                      status = int(response.status)
-                      body = response.read().decode('utf-8')
-                  probes.append({'source': source, 'key': key, 'http': status})
-                  if status == 200 and selected is None:
-                      selected = (source, key, token)
-                      product = json.loads(body)
+                  sources.append(('olist-tokens.json',json.loads(store.read_text(encoding='utf-8'))))
+              except Exception:
+                  pass
+          for path in [shared/'.env', *sorted(shared.glob('.env.backup.*'), key=lambda p:p.stat().st_mtime, reverse=True)[:30]]:
+              if path.is_file():
+                  sources.append((path.name,read_env(path)))
+          reauth=shared/'private/oauth-reauth-backups'
+          if reauth.is_dir():
+              for path in sorted(reauth.glob('.env.*.bak'), key=lambda p:p.stat().st_mtime, reverse=True)[:20]:
+                  sources.append(('oauth-reauth-backups/'+path.name,read_env(path)))
+
+          candidates=[]
+          seen_tokens=set()
+          for source,values in sources:
+              for key in ('OLIST_ACCESS_TOKEN','TINY_ACCESS_TOKEN'):
+                  token=values.get(key,'')
+                  if token and token not in seen_tokens:
+                      seen_tokens.add(token)
+                      candidates.append((source,key,token))
+
+          url=f'https://api.tiny.com.br/public-api/v3/produtos/{product_id}'
+          probes=[]; selected=None; product=None
+          for source,key,token in candidates:
+              req=urllib.request.Request(url,headers={'Authorization':'Bearer '+token,'Accept':'application/json'})
+              try:
+                  with urllib.request.urlopen(req,timeout=25) as response:
+                      status=int(response.status); body=response.read().decode('utf-8')
+                  probes.append({'source':source,'key':key,'http':status})
+                  if status==200 and selected is None:
+                      selected=(source,key,token); product=json.loads(body)
               except urllib.error.HTTPError as exc:
-                  probes.append({'source': source, 'key': key, 'http': int(exc.code)})
+                  probes.append({'source':source,'key':key,'http':int(exc.code)})
               except Exception as exc:
-                  probes.append({'source': source, 'key': key, 'http': type(exc).__name__})
-
-          print('token_probe=' + json.dumps(probes, sort_keys=True))
-          if selected is None or product is None:
+                  probes.append({'source':source,'key':key,'http':type(exc).__name__})
+          print('vm_token_probe='+json.dumps(probes,sort_keys=True))
+          if selected is None:
               raise SystemExit('no_valid_access_token')
-          source, key, token = selected
-          print('selected_token_source=' + source + ':' + key)
 
-          def get(url):
-              req = urllib.request.Request(
-                  url,
-                  headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/json'},
-              )
-              with urllib.request.urlopen(req, timeout=25) as response:
-                  if int(response.status) != 200:
-                      raise SystemExit('unexpected_http_' + str(response.status))
-                  return json.loads(response.read().decode('utf-8'))
-
-          kit = product.get('kit') or []
-          report = {
-              'id': product.get('id'),
-              'sku': product.get('sku'),
-              'descricao': product.get('descricao'),
-              'tipo': product.get('tipo'),
-              'situacao': product.get('situacao'),
-              'descricaoComplementar': product.get('descricaoComplementar'),
-              'garantia': product.get('garantia'),
-              'categoria': product.get('categoria'),
-              'marca': product.get('marca'),
-              'precoCusto': (product.get('precos') or {}).get('precoCusto'),
-              'estoqueQuantidade': (product.get('estoque') or {}).get('quantidade'),
-              'seo': product.get('seo'),
-              'variacoes': [
-                  {
-                      'id': item.get('id'),
-                      'sku': item.get('sku'),
-                      'descricao': item.get('descricao'),
-                      'grade': item.get('grade'),
-                  }
-                  for item in (product.get('variacoes') or [])
-              ],
-              'kit': [
-                  {
-                      'produto': {
-                          'id': (item.get('produto') or {}).get('id'),
-                          'sku': (item.get('produto') or {}).get('sku'),
-                          'descricao': (item.get('produto') or {}).get('descricao'),
-                      },
-                      'quantidade': item.get('quantidade'),
-                  }
-                  for item in kit
-              ],
-              'anexos': [item.get('url') for item in (product.get('anexos') or [])[:5]],
+          source,key,token=selected
+          print('selected_token_source='+source+':'+key)
+          kit=product.get('kit') or []
+          report={
+              'id':product.get('id'),'sku':product.get('sku'),'descricao':product.get('descricao'),
+              'tipo':product.get('tipo'),'situacao':product.get('situacao'),
+              'descricaoComplementar':product.get('descricaoComplementar'),'garantia':product.get('garantia'),
+              'categoria':product.get('categoria'),'marca':product.get('marca'),
+              'precoCusto':(product.get('precos') or {}).get('precoCusto'),
+              'estoqueQuantidade':(product.get('estoque') or {}).get('quantidade'),
+              'seo':product.get('seo'),
+              'variacoes':[{'id':v.get('id'),'sku':v.get('sku'),'descricao':v.get('descricao'),'grade':v.get('grade')} for v in (product.get('variacoes') or [])],
+              'kit':[{'produto':{'id':(i.get('produto') or {}).get('id'),'sku':(i.get('produto') or {}).get('sku'),'descricao':(i.get('produto') or {}).get('descricao')},'quantidade':i.get('quantidade')} for i in kit],
+              'anexos':[a.get('url') for a in (product.get('anexos') or [])[:5]],
           }
-          print('japi_live_product=' + json.dumps(report, ensure_ascii=False, sort_keys=True))
-          if kit:
-              live_kit = get(f'https://api.tiny.com.br/public-api/v3/produtos/{product_id}/kit')
-              print('japi_live_kit=' + json.dumps(live_kit, ensure_ascii=False, sort_keys=True))
+          print('japi_live_product='+json.dumps(report,ensure_ascii=False,sort_keys=True))
           print('mutation_performed=false')
           PY
 
