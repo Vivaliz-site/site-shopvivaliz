@@ -43,6 +43,9 @@ jobs:
             recover_session)
               COMMAND="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"& { \$ErrorActionPreference='Stop'; Set-Location 'C:\site-shopvivaliz'; git fetch origin main | Out-Null; if (\$LASTEXITCODE -ne 0) { throw 'git fetch failed' }; git restore --source=origin/main -- scripts/fredwin-desktop-commander-supervisor.ps1 scripts/fredwin-desktop-commander-runner.ps1 scripts/patch-desktop-commander-session-persistence.mjs; if (\$LASTEXITCODE -ne 0) { throw 'DC infra restore failed' }; Remove-Item 'C:\site-shopvivaliz\logs\desktop-commander-auth-required.cooldown' -Force -ErrorAction SilentlyContinue; & 'C:\site-shopvivaliz\scripts\fredwin-desktop-commander-supervisor.ps1' -Mode Ensure }\""
               ;;
+            authorize_interactive)
+              COMMAND="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"& { \$ErrorActionPreference='Stop'; Set-Location 'C:\site-shopvivaliz'; git fetch origin main | Out-Null; if (\$LASTEXITCODE -ne 0) { throw 'git fetch failed' }; git restore --source=origin/main -- scripts/fredwin-desktop-commander-runner.ps1 scripts/patch-desktop-commander-session-persistence.mjs scripts/fredwin-desktop-commander-interactive-auth.ps1; if (\$LASTEXITCODE -ne 0) { throw 'DC auth infra restore failed' }; & 'C:\site-shopvivaliz\scripts\fredwin-desktop-commander-interactive-auth.ps1' -Mode Bootstrap }\""
+              ;;
             restart)
               COMMAND='powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\site-shopvivaliz\scripts\fredwin-desktop-commander-supervisor.ps1" -Mode Restart'
               ;;
@@ -63,9 +66,9 @@ jobs:
           ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
           import base64, json, os, urllib.request
           command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
-          body = json.dumps({'params': {'command': command, 'timeout': 240}}).encode('utf-8')
+          body = json.dumps({'params': {'command': command, 'timeout': 420}}).encode('utf-8')
           req = urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command', data=body, headers={'Content-Type':'application/json'}, method='POST')
-          with urllib.request.urlopen(req, timeout=250) as response:
+          with urllib.request.urlopen(req, timeout=430) as response:
               payload = json.loads(response.read().decode('utf-8'))
           result = payload.get('result') or {}
           output = str(result.get('output') or '')
