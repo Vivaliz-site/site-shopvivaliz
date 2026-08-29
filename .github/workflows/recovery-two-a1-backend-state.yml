@@ -1,0 +1,58 @@
+name: Recovery two-A1 backend state
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - recovery/two-a1-20260829
+    paths:
+      - .github/workflows/recovery-two-a1-backend-state.yml
+
+permissions:
+  contents: read
+
+jobs:
+  restore-m365-cron:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 8
+    steps:
+      - name: Configure SSH
+        env:
+          VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_SSH_KEY"
+          test -n "$VM_KNOWN_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Restore and verify backend schedule
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa")
+          ssh "${ssh_opts[@]}" ubuntu@144.22.157.209 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          expected_host='always-free-arm-1787907847-26'
+          [ "$(hostname)" = "$expected_host" ] || { echo 'backend_identity_mismatch'; exit 20; }
+          root="$HOME/recovery-two-a1-20260829/runtime-fixes/m365-cron"
+          umask 077
+          mkdir -p "$root"
+          crontab -l > "$root/crontab.before-actions" 2>/dev/null || :
+          bash -n /opt/m365/run_automation.sh
+          wanted='0 9 * * 1 /opt/m365/run_automation.sh'
+          { grep -Fvx "$wanted" "$root/crontab.before-actions" || true; printf '%s\n' "$wanted"; } | sed '/^[[:space:]]*$/d' | crontab -
+          crontab -l > "$root/crontab.after-actions"
+          [ "$(grep -Fxc "$wanted" "$root/crontab.after-actions")" -eq 1 ] || exit 21
+          printf 'crontab_sha256='; sha256sum "$root/crontab.after-actions" | awk '{print $1}'
+          printf 'cron='; systemctl is-active cron
+          printf 'cron_enabled='; systemctl is-enabled cron
+          printf 'sender_pids='; ps -eo args= | grep -F 'worker.safe_entrypoint' | grep -v grep | wc -l
+          for s in mei-mg-email-api.service mei-mg-email-worker.service mei-mg-email-queue-replenisher.service mei-mg-email-monitor.service docker.service; do printf '%s=' "$s"; systemctl is-active "$s"; done
+          printf 'base_sync_timer='; systemctl is-active mei-mg-email-base-sync.timer
+          printf 'failed_units='; systemctl --failed --no-legend | grep -c . || true
+          find "$root" -type f -exec chmod 600 {} +
+          REMOTE
