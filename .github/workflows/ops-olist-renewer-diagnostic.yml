@@ -1,0 +1,111 @@
+name: Olist Token Renewer Diagnostic
+
+on:
+  push:
+    branches:
+      - ops/japi-itemwise-audit-20260829
+    paths:
+      - '.github/workflows/ops-olist-renewer-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: production
+    steps:
+      - name: Configure verified VM2 SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key"
+          test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Inspect renewer and token storage without exposing credentials
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@136.248.69.116 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          shared=/home/ubuntu/shopvivaliz-deploy/shared
+          current=/home/ubuntu/shopvivaliz-deploy/current
+          store="$shared/private/olist-tokens.json"
+          env="$shared/.env"
+
+          echo "service_active=$(systemctl is-active shopvivaliz-token-renewer.service 2>/dev/null || true)"
+          echo "service_enabled=$(systemctl is-enabled shopvivaliz-token-renewer.service 2>/dev/null || true)"
+          systemctl show shopvivaliz-token-renewer.service \
+            -p User -p Group -p MainPID -p ExecMainStatus -p ActiveState -p SubState --no-pager
+
+          python3 - <<'PY'
+          import json, os, stat
+          from pathlib import Path
+          shared=Path('/home/ubuntu/shopvivaliz-deploy/shared')
+          env=shared/'.env'
+          store=shared/'private/olist-tokens.json'
+          private=shared/'private'
+          def meta(path):
+              if not path.exists():
+                  return {'exists':False}
+              st=path.stat()
+              return {
+                  'exists':True,
+                  'mode':oct(stat.S_IMODE(st.st_mode)),
+                  'uid':st.st_uid,
+                  'gid':st.st_gid,
+                  'size':st.st_size,
+              }
+          env_keys=set()
+          if env.is_file():
+              for raw in env.read_text(encoding='utf-8').splitlines():
+                  if '=' in raw and not raw.lstrip().startswith('#'):
+                      k,v=raw.split('=',1)
+                      if v.strip(): env_keys.add(k.strip())
+          report={
+              'env':meta(env),
+              'private':meta(private),
+              'token_store':meta(store),
+              'env_has_client_id':('TINY_CLIENT_ID' in env_keys or 'OLIST_CLIENT_ID' in env_keys),
+              'env_has_client_secret':('TINY_CLIENT_SECRET' in env_keys or 'OLIST_CLIENT_SECRET' in env_keys),
+              'env_has_access_token':('TINY_ACCESS_TOKEN' in env_keys or 'OLIST_ACCESS_TOKEN' in env_keys),
+              'env_has_refresh_token':('TINY_REFRESH_TOKEN' in env_keys or 'OLIST_REFRESH_TOKEN' in env_keys),
+          }
+          if store.is_file():
+              try:
+                  data=json.loads(store.read_text(encoding='utf-8'))
+              except Exception:
+                  data={}
+              report['store_has_access_token']=bool(data.get('OLIST_ACCESS_TOKEN') or data.get('TINY_ACCESS_TOKEN'))
+              report['store_has_refresh_token']=bool(data.get('OLIST_REFRESH_TOKEN') or data.get('TINY_REFRESH_TOKEN'))
+              report['store_has_expiry']=bool(data.get('expires_at_epoch'))
+              report['store_updated_at_present']=bool(data.get('updated_at'))
+          print('storage_state='+json.dumps(report,sort_keys=True))
+          PY
+
+          echo 'journal_sanitized_begin'
+          journalctl -u shopvivaliz-token-renewer.service -n 80 --no-pager -o cat 2>/dev/null \
+            | sed -E 's/(access_token|refresh_token|client_secret|client_id)=[^[:space:]]+/\1=[REDACTED]/Ig' \
+            | grep -E 'Renova|renova|OAuth|oauth|token|Token|HTTP|invalid|Credenciais|active|started|failed|erro|error' \
+            | tail -40 || true
+          echo 'journal_sanitized_end'
+          REMOTE
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
