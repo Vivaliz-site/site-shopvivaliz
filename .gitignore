@@ -190,3 +190,6 @@ reports/*.png
 # Screenshots de QA/browser-testing são temporários, nunca versionados.
 scratch/*.png
 scratch/*.jpg
+
+# Isolated agent worktrees
+.worktrees/
