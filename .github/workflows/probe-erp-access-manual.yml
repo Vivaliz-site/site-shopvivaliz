@@ -4,9 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: "Digite PROBE-ERP para consultar tokens contra a API real sem alterar produção"
+        description: "Digite PROBE-ERP para consultar a API real sem alterar produção"
         required: true
         type: string
+  push:
+    branches:
+      - fix/olist-oauth-reauth-bootstrap-20260828
+    paths:
+      - '.github/workflows/probe-erp-access-manual.yml'
 
 permissions:
   contents: read
@@ -17,11 +22,10 @@ concurrency:
 
 jobs:
   probe:
-    name: Consultar tokens Olist e Tiny
+    name: Consultar produto Olist Tiny v3
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
-
     steps:
       - name: Confirmar consulta somente leitura
         shell: bash
@@ -29,65 +33,76 @@ jobs:
           CONFIRMATION: ${{ inputs.confirmation }}
         run: |
           set -euo pipefail
-          test "$CONFIRMATION" = PROBE-ERP
+          if [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]]; then
+            test "$CONFIRMATION" = PROBE-ERP
+          fi
 
       - name: Configurar SSH verificado
         shell: bash
         env:
-          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
-          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          test -n "$ORACLE_VM_SSH_KEY"
-          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key"
+          test -n "$known_hosts"
           install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
-          chmod 600 "$HOME/.ssh/id_rsa"
-          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/known_hosts"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Consultar API sem modificar runtime
+      - name: Auditar ID 343571958 somente leitura
         shell: bash
         run: |
           set -euo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 'python3 -' <<'PY'
           from pathlib import Path
           import json
-          import urllib.error
           import urllib.request
 
-          shared = Path('/home/ubuntu/shopvivaliz-deploy/shared/.env')
-          keys = ('OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN')
+          store = Path('/home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json')
+          payload = json.loads(store.read_text(encoding='utf-8'))
+          token = payload.get('TINY_ACCESS_TOKEN') or payload.get('OLIST_ACCESS_TOKEN') or ''
+          if not token:
+              raise SystemExit('token_store_missing_access_token')
 
-          def read_env(path: Path):
-              values = {}
-              for line in path.read_text(encoding='utf-8').splitlines():
-                  if '=' not in line or line.lstrip().startswith('#'):
-                      continue
-                  key, value = line.split('=', 1)
-                  values[key.strip()] = value.strip().strip('"').strip("'")
-              return values
+          url = 'https://api.tiny.com.br/public-api/v3/produtos/343571958'
+          req = urllib.request.Request(url, headers={'Authorization': f'Bearer {token}', 'Accept': 'application/json'})
+          with urllib.request.urlopen(req, timeout=30) as response:
+              data = json.loads(response.read().decode('utf-8'))
+              status = response.status
 
-          def probe(token: str):
-              request = urllib.request.Request(
-                  'https://api.tiny.com.br/public-api/v3/produtos?limit=1&offset=0',
-                  headers={'Authorization': f'Bearer {token}', 'Accept': 'application/json'},
-              )
-              try:
-                  with urllib.request.urlopen(request, timeout=30) as response:
-                      return response.status
-              except urllib.error.HTTPError as exc:
-                  return exc.code
-              except Exception as exc:
-                  return type(exc).__name__
+          def first(obj, *names):
+              if not isinstance(obj, dict):
+                  return None
+              for name in names:
+                  if name in obj:
+                      return obj.get(name)
+              return None
 
-          paths = [shared]
-          paths.extend(sorted(shared.parent.glob('.env.backup.*'), key=lambda item: item.stat().st_mtime, reverse=True))
-          for path in paths[:31]:
-              values = read_env(path)
-              report = {'source': path.name, 'tokens': {}}
-              for key in keys:
-                  token = values.get(key, '')
-                  report['tokens'][key] = 'missing' if not token else probe(token)
-              print(json.dumps(report, sort_keys=True))
+          report = {
+              'http': status,
+              'id': first(data, 'id', 'idProduto'),
+              'sku': first(data, 'sku', 'codigo'),
+              'descricao': first(data, 'descricao', 'nome'),
+              'situacao': first(data, 'situacao'),
+              'preco': first(data, 'preco'),
+              'custo': first(data, 'precoCusto', 'preco_custo'),
+              'gtin': first(data, 'gtin', 'gtinEan', 'codigoBarras'),
+              'marca': first(data, 'marca'),
+              'garantia': first(data, 'garantia'),
+              'seo': first(data, 'seo'),
+              'keys': sorted(data.keys()) if isinstance(data, dict) else [],
+          }
+          print(json.dumps(report, ensure_ascii=False, sort_keys=True))
           PY
+
+      - name: Limpar material SSH
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
