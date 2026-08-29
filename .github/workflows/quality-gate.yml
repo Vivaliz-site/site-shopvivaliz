@@ -36,9 +36,14 @@ jobs:
           php -l includes/blog-editorial-autopilot.php >/dev/null
           php tests/google-indexing-canonical-regression-test.php
           python3 -m py_compile scripts/seo-integrity-audit.py
+          node --check scripts/public-layout-audit.mjs
           bash -n scripts/deploy-production.sh
           grep -q 'a2enmod rewrite' scripts/deploy-production.sh
           grep -q 'urllib.parse.quote(path' scripts/seo-integrity-audit.py
+          grep -q 'Release gate visual 2026-08-29' css/public-experience-v1.css
+          grep -q 'horizontal overflow' scripts/public-layout-audit.mjs
+          grep -q 'expected exactly one footer' scripts/public-layout-audit.mjs
+          grep -q 'expected one mobile navigation' scripts/public-layout-audit.mjs
           ! grep -Rqs '?busca=' blog/content.php includes/blog-editorial-autopilot.php
           ! grep -RqsE 'href="/(termos|politica-entrega|politica-devolucoes)"' includes/footer.php termos.php index.php faq/index.php
       - name: Validate production workflow target
@@ -48,3 +53,5 @@ jobs:
           grep -q '163.176.103.253' .github/workflows/master-production-pipeline.yml
           ! grep -q '136.248.69.116' .github/workflows/master-production-pipeline.yml
           grep -q 'SEO routing invariant' scripts/deploy-production.sh
+          test -f .github/workflows/public-layout-audit.yml
+          grep -q 'Master Production Pipeline 24/7' .github/workflows/public-layout-audit.yml
