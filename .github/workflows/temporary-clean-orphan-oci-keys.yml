@@ -1,0 +1,39 @@
+name: Temporary Clean Orphan OCI Keys
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure SSH
+        env:
+          K1: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          K2: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          H1: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          H2: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$K1" > ~/.ssh/key1
+          printf '%s\n' "$K2" > ~/.ssh/key2
+          { printf '%s\n' "$H1"; printf '%s\n' "$H2"; } | sed '/^[[:space:]]*$/d' | sort -u > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/key1 ~/.ssh/key2 ~/.ssh/known_hosts
+      - name: Remove only unconfigured orphan OCI keypairs
+        run: |
+          set -Eeuo pipefail
+          opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -o IdentitiesOnly=yes -i "$HOME/.ssh/key1" -i "$HOME/.ssh/key2")
+          for target in "144.22.157.209:always-free-arm-1787907847-26" "163.176.103.253:shopvivaliz-free-a1"; do
+            ip="${target%%:*}"; expected="${target#*:}"
+            actual="$(ssh "${opts[@]}" ubuntu@"$ip" hostname)"
+            test "$actual" = "$expected"
+            ssh "${opts[@]}" ubuntu@"$ip" 'set -Eeuo pipefail; test ! -e /home/ubuntu/.oci/config; test -f /home/ubuntu/.oci/oci_api_key.pem; test -f /home/ubuntu/.oci/oci_api_key_public.pem; rm -f /home/ubuntu/.oci/oci_api_key.pem /home/ubuntu/.oci/oci_api_key_public.pem; test ! -e /home/ubuntu/.oci/oci_api_key.pem; test ! -e /home/ubuntu/.oci/oci_api_key_public.pem; echo OCI_ORPHAN_KEYS_REMOVED_OK'
+          done
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/key1 ~/.ssh/key2 ~/.ssh/known_hosts
