@@ -19,6 +19,8 @@
 - Do not resize compute until free-tier/quota/cost state is freshly verified.
 - Functional tests are mandatory; static review or service-active status is not sufficient.
 - Do not change active production checkout until the corresponding recovery artifact and rollback path exist.
+- Legacy E2 endpoints `137.131.156.17`, `136.248.69.116`, `shopvivaliz-ai`, `shopvivaliz-micro-2`, private IPs `10.0.1.13`/`10.0.1.203`, and any secret/alias that resolves to them must not remain in an active operational path. Historical evidence may retain them only when clearly marked historical/non-executable.
+- Canonical A1 roles must be addressed by role/secret/alias rather than hard-coded transient public IP wherever technically possible.
 
 ---
 
@@ -26,10 +28,12 @@
 **Files:**
 - Create: `docs/operations/recovery/2026-08-29-inventory.md`
 - Create: `docs/operations/recovery/2026-08-29-checksums.sha256`
+- Create: `docs/operations/recovery/2026-08-29-legacy-endpoints.md`
 
 - [ ] Record hostname, architecture, CPU/RAM/disk, active services, timers, cron, Docker containers and network listeners on both A1 VMs.
 - [ ] Inventory `/home/ubuntu/oci-a1-migration-20260828`, migration staging, deploy releases, database dumps, Git bundles, patches and config archives.
 - [ ] Inventory Fred Win recovery sources: `.codex`, SSH config/key presence, repository clones and migration archives without exposing secret content.
+- [ ] Search both A1s, Fred Win and all three GitHub repos for legacy E2 public/private IPs, hostnames and aliases; classify each occurrence as ACTIVE, CONFIG, TEST, DOC-HISTORICAL or LOG-HISTORICAL.
 - [ ] Produce SHA256 manifests for recovery archives and database dumps.
 - [ ] Commit the inventory only after verifying no secret values are embedded.
 
@@ -50,6 +54,7 @@
 - Create: `docs/operations/recovery/2026-08-29-agent-state.md`
 
 - [ ] Record the accidental E2 retirement, two-A1 binding architecture and preservation rules in agent memory.
+- [ ] Record the legacy endpoint prohibition and require endpoint inventory before any workflow/deploy/remote-control change.
 - [ ] Inventory Codex state on both A1s and Fred Win; preserve non-secret histories/configuration useful for recovery.
 - [ ] Reconstruct required agent definitions from GitHub/current site checkout.
 - [ ] Ensure future agents are instructed to read the recovery spec and master plan before infrastructure changes.
@@ -100,6 +105,7 @@
 - [ ] Verify existing OCI API-signing authentication path and GitHub `OCI_CLI_*` secret-backed workflows.
 - [ ] Configure host-local OCI CLI credentials only through secure secret transfer; never commit key contents.
 - [ ] Validate read-only OCI inventory from each intended administrative path.
+- [ ] Replace E2 SSH aliases/endpoints with A1 role aliases; retain E2 names only as clearly disabled/historical references.
 - [ ] Document revocation/rotation and recovery steps.
 
 ### Task 9: Verify capacity and free-tier compliance before resizing
@@ -141,14 +147,19 @@
 - [ ] Verify systemd/container/deploy behavior and rollback.
 - [ ] Record any external dependency gate separately from code defects.
 
-### Task 13: CI/CD, guards and automation audit across all projects
+### Task 13: CI/CD, guards, endpoints and automation audit across all projects
 **Files:**
 - Create: `docs/audits/2026-08-29-automation-e2e.md`
 
 - [ ] Enumerate workflows, scheduled jobs, systemd timers, cron, watchdogs, auto-repairs and agents.
+- [ ] Search executable/config paths for `137.131.156.17`, `136.248.69.116`, `10.0.1.13`, `10.0.1.203`, `shopvivaliz-ai`, `shopvivaliz-micro-2` and stale VM secrets/aliases.
+- [ ] Correct every active workflow/script/config that targets a retired E2; prefer role-based GitHub environment secrets or stable aliases over literal public IPs.
+- [ ] Add a regression test/gate that fails when a retired E2 endpoint is introduced into executable workflows/scripts/configuration.
+- [ ] Keep historical reports/logs unchanged or label them historical rather than rewriting evidence.
 - [ ] Identify duplicate/conflicting automation and establish one owner per responsibility.
 - [ ] Verify fail-closed behavior for protected/destructive operations.
 - [ ] Verify workflows cannot silently reintroduce retired fields/services or overwrite production with a dirty checkout.
+- [ ] Execute safe workflow validation/smoke tests and confirm the target host resolves to the intended A1 role before declaring each route repaired.
 
 ### Task 14: Disaster-recovery proof
 **Files:**
@@ -166,6 +177,7 @@
 
 - [ ] Re-run critical tests after all recovery changes.
 - [ ] Compare intended architecture against actual running processes, ports, timers and cron.
+- [ ] Confirm no executable workflow/script/config references a retired E2 endpoint or alias.
 - [ ] Confirm backups/hashes still validate.
 - [ ] Confirm no secrets were committed and no paid OCI resource was created.
 - [ ] List every unresolved item with owner, evidence and blocking reason; do not label the system healthy while a critical path remains untested.
