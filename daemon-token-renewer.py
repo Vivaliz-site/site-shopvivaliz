@@ -219,7 +219,7 @@ def renew_token(config: dict[str, str]) -> dict[str, Any] | None:
                 if error_code == "invalid_client":
                     client_rejected = True
                     break
-                if error_code == "invalid_grant":
+                if error_code in {"invalid_grant", "unauthorized_client"}:
                     continue
                 print_oauth_failure(status, error_code, client_alias, refresh_alias)
                 return None
