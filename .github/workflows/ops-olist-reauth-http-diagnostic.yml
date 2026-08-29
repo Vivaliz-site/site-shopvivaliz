@@ -1,0 +1,97 @@
+name: Olist Reauth HTTP Diagnostic
+
+on:
+  push:
+    branches:
+      - ops/japi-itemwise-audit-20260829
+    paths:
+      - '.github/workflows/ops-olist-reauth-http-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - name: Probe public connect endpoint
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          response="$(curl -sS -o /dev/null -D - --max-time 20 https://shopvivaliz.com.br/olist/connect.php)"
+          status="$(printf '%s\n' "$response" | awk 'toupper($1) ~ /^HTTP\// {code=$2} END{print code}')"
+          location="$(printf '%s\n' "$response" | awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/^[^:]*:[[:space:]]*/,""); sub(/\r$/,""); print; exit}')"
+          host="$(LOCATION="$location" python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          print(urlparse(os.environ.get('LOCATION','')).hostname or '')
+          PY
+          )"
+          echo "public_http=${status:-none}"
+          echo "public_location_host=${host:-none}"
+
+      - name: Configure verified VM2 SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key"
+          test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Probe VM2 origin and runtime wiring
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@136.248.69.116 'python3 -' <<'PY'
+          import os,ssl,urllib.error,urllib.request
+          from pathlib import Path
+          env=Path('/home/ubuntu/shopvivaliz-deploy/shared/.env')
+          current=Path('/home/ubuntu/shopvivaliz-deploy/current')
+          keys=set()
+          if env.is_file():
+              for raw in env.read_text(encoding='utf-8').splitlines():
+                  if '=' in raw and not raw.lstrip().startswith('#'):
+                      key,value=raw.split('=',1)
+                      if value.strip(): keys.add(key.strip())
+          print('tiny_client_id_present='+str('TINY_CLIENT_ID' in keys).lower())
+          print('tiny_client_secret_present='+str('TINY_CLIENT_SECRET' in keys).lower())
+          print('current_env_exists='+str((current/'.env').exists()).lower())
+          try:
+              same=(current/'.env').resolve()==env.resolve()
+          except Exception:
+              same=False
+          print('current_env_resolves_shared='+str(same).lower())
+
+          ctx=ssl._create_unverified_context()
+          req=urllib.request.Request('https://127.0.0.1/olist/connect.php',headers={'Host':'shopvivaliz.com.br','User-Agent':'ShopVivaliz-OAuth-Diagnostic/1.0'})
+          opener=urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx))
+          try:
+              response=opener.open(req,timeout=20)
+              status=int(response.status); location=response.headers.get('Location','')
+          except urllib.error.HTTPError as exc:
+              status=int(exc.code); location=exc.headers.get('Location','')
+          from urllib.parse import urlparse
+          print('origin_http='+str(status))
+          print('origin_location_host='+(urlparse(location).hostname or 'none'))
+          PY
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
