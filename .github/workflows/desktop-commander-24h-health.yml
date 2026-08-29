@@ -112,7 +112,7 @@ jobs:
           import time
 
           MAX_REPAIR_ATTEMPTS = 1
-          VM_TARGET = 'ubuntu@137.131.156.17'
+          VM_TARGET = 'ubuntu@144.22.157.209'
           SSH = [
               'ssh',
               '-o', 'StrictHostKeyChecking=yes',
@@ -290,13 +290,13 @@ jobs:
               ok, values = vm_status()
               if not ok:
                   return {
-                      'host': 'shopvivaliz-ai', 'state': 'unreachable',
+                      'host': 'shopvivaliz-a1-backend', 'state': 'unreachable',
                       'watchdog': 'unreachable', 'canonical': '—',
                       'auth': 'unknown', 'recovery': 'vm_ssh_unreachable'
                   }
               if vm_healthy(values):
                   return {
-                      'host': 'shopvivaliz-ai', 'state': 'healthy',
+                      'host': 'shopvivaliz-a1-backend', 'state': 'healthy',
                       'watchdog': 'systemd=enabled/active', 'canonical': '1',
                       'auth': 'false', 'recovery': 'not_needed'
                   }
@@ -344,7 +344,7 @@ jobs:
                   f"{values.get('SERVICE_ACTIVE','unknown')}"
               )
               return {
-                  'host': 'shopvivaliz-ai', 'state': state,
+                  'host': 'shopvivaliz-a1-backend', 'state': state,
                   'watchdog': watchdog, 'canonical': canonical,
                   'auth': auth_text, 'recovery': recovery
               }

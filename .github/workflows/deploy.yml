@@ -1,8 +1,8 @@
-name: Deploy Automático Seguro - Shop Vivaliz (DESATIVADO - VM Oracle é a produção real)
+name: Deploy Automático Seguro - Shop Vivaliz (DESATIVADO - pipeline principal usa A1 site)
 
 # ⚠️ DESATIVADO: FTP deploy não é usado em produção.
 #
-# A produção real é a VM Oracle Cloud (137.131.156.17) que roda:
+# A produção real usa a VM Oracle A1 site (163.176.103.253) e o pipeline principal:
 # - git-auto-sync.py a cada 30 minutos
 # - Faz `git fetch` + `reset --hard origin/main`
 #

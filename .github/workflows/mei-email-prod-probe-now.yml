@@ -18,7 +18,7 @@ jobs:
     environment: Production
     timeout-minutes: 8
     env:
-      VM_HOST: 137.131.156.17
+      VM_HOST: 144.22.157.209
       VM_USER: ubuntu
     steps:
       - name: Configure verified Oracle SSH
