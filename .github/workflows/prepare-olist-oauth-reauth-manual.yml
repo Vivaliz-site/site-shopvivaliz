@@ -86,20 +86,27 @@ jobs:
           current=/home/ubuntu/shopvivaliz-deploy/current
           shared=/home/ubuntu/shopvivaliz-deploy/shared
           seed=/tmp/shopvivaliz-olist-recovery.seed
-          temp_store=/tmp/shopvivaliz-olist-recovery.tokens.json
+          work=/tmp/shopvivaliz-olist-recovery-work
+          temp_store="$work/tokens.json"
           canonical="$shared/private/olist-tokens.json"
+          cleanup() {
+            rm -f "$seed" "$temp_store"
+            rmdir "$work" 2>/dev/null || true
+          }
+          trap cleanup EXIT
           test -s "$seed"
           chmod 600 "$seed"
+          rm -rf "$work"
+          install -m 700 -d "$work"
           cd "$current"
 
-          rm -f "$temp_store"
           SHOPVIVALIZ_ENV_PATH="$seed" SHOPVIVALIZ_OLIST_TOKEN_FILE="$temp_store" \
             python3 daemon-token-renewer.py --once
 
           SHOPVIVALIZ_OLIST_TOKEN_FILE="$temp_store" python3 - <<'PY'
           import json, time, urllib.request
           from pathlib import Path
-          path=Path('/tmp/shopvivaliz-olist-recovery.tokens.json')
+          path=Path('/tmp/shopvivaliz-olist-recovery-work/tokens.json')
           data=json.loads(path.read_text(encoding='utf-8'))
           token=data.get('TINY_ACCESS_TOKEN') or data.get('OLIST_ACCESS_TOKEN') or ''
           refresh=data.get('TINY_REFRESH_TOKEN') or data.get('OLIST_REFRESH_TOKEN') or ''
@@ -144,4 +151,9 @@ jobs:
         if: always()
         shell: bash
         run: |
-          rm -f "$RUNNER_TEMP/olist-recovery.seed" "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+          rm -f "$RUNNER_TEMP/olist-recovery.seed"
+          if [[ -f "$HOME/.ssh/id_rsa" && -f "$HOME/.ssh/known_hosts" ]]; then
+            ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+              ubuntu@163.176.103.253 'rm -f /tmp/shopvivaliz-olist-recovery.seed; rm -rf /tmp/shopvivaliz-olist-recovery-work' || true
+          fi
+          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
