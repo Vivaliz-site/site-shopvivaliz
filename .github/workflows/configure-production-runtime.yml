@@ -70,7 +70,7 @@ jobs:
         run: |
           set -euo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 \
-            'set -euo pipefail; shared=/home/ubuntu/shopvivaliz-deploy/shared; sudo chown ubuntu:ubuntu "$shared/.env"; chmod 600 "$shared/.env"; php /home/ubuntu/shopvivaliz-deploy/current/scripts/materialize-runtime-secrets.php; sudo chown ubuntu:www-data "$shared/runtime-secrets.php"; chmod 640 "$shared/runtime-secrets.php"; stat -c "shared_env_mode=%a shared_env_group=%G" "$shared/.env"; stat -c "runtime_secrets_mode=%a runtime_secrets_group=%G" "$shared/runtime-secrets.php"'
+            'set -euo pipefail; shared=/home/ubuntu/shopvivaliz-deploy/shared; sudo chown ubuntu:www-data "$shared/.env"; chmod 600 "$shared/.env"; php /home/ubuntu/shopvivaliz-deploy/current/scripts/materialize-runtime-secrets.php; sudo chown ubuntu:www-data "$shared/runtime-secrets.php"; chmod 640 "$shared/runtime-secrets.php"; stat -c "shared_env_mode=%a shared_env_group=%G" "$shared/.env"; stat -c "runtime_secrets_mode=%a runtime_secrets_group=%G" "$shared/runtime-secrets.php"'
 
       - name: Reiniciar serviços e confirmar execução real
         shell: bash
