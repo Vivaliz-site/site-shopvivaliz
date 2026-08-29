@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { discoverPublicRoutes } from './lib/public-route-discovery.mjs';
+import { reportableResourceFailure } from './lib/public-page-health.mjs';
 
 const baseUrl = (process.env.E2E_BASE_URL || 'https://shopvivaliz.com.br').replace(/\/$/, '');
 const outDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || join(process.cwd(), 'artifacts', 'public-layout-audit');
@@ -31,6 +32,21 @@ for (const profile of profiles) {
 
   for (const route of routes) {
     const page = await context.newPage();
+    const pageErrors = [];
+    const resourceFailures = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    page.on('response', (response) => {
+      const request = response.request();
+      if (reportableResourceFailure({
+        url: response.url(),
+        status: response.status(),
+        resourceType: request.resourceType(),
+        baseUrl,
+      })) {
+        resourceFailures.push(`${response.status()} ${request.resourceType()} ${response.url()}`);
+      }
+    });
+
     const url = `${baseUrl}${route.startsWith('/') ? route : `/${route}`}`;
     const slug = route === '/' ? 'home' : route.replace(/^\/+|\/+$/g, '').replace(/[^a-z0-9]+/gi, '-').slice(0, 120);
     try {
@@ -80,6 +96,8 @@ for (const profile of profiles) {
       if (metrics.lizCount > 1) localFailures.push(`duplicate Liz launcher (${metrics.lizCount})`);
       if (metrics.supportDockCount > 1) localFailures.push(`duplicate support dock (${metrics.supportDockCount})`);
       if (metrics.brokenImages.length) localFailures.push(`broken images: ${metrics.brokenImages.join(', ')}`);
+      if (pageErrors.length) localFailures.push(`page errors: ${pageErrors.slice(0, 5).join(' | ')}`);
+      if (resourceFailures.length) localFailures.push(`failed core resources: ${resourceFailures.slice(0, 10).join(' | ')}`);
       if (metrics.footerRect && (metrics.footerRect.left < -2 || metrics.footerRect.right > metrics.viewportWidth + 2)) localFailures.push('footer extends outside viewport');
       for (const item of metrics.fixedUi) {
         if (item.left < -2 || item.right > metrics.viewportWidth + 2 || item.top < -2 || item.bottom > metrics.viewportHeight + 2) {
@@ -91,11 +109,11 @@ for (const profile of profiles) {
         if (metrics.navCount === 1 && metrics.bodyPaddingBottom < 70) localFailures.push(`mobile body bottom padding too small (${metrics.bodyPaddingBottom}px)`);
       }
 
-      results.push({ profile: profile.name, route, url: page.url(), status, metrics, failures: localFailures });
+      results.push({ profile: profile.name, route, url: page.url(), status, metrics, pageErrors, resourceFailures, failures: localFailures });
       failures.push(...localFailures.map((message) => `${profile.name} ${route}: ${message}`));
     } catch (error) {
       failures.push(`${profile.name} ${route}: ${error.message}`);
-      results.push({ profile: profile.name, route, url, failures: [error.message] });
+      results.push({ profile: profile.name, route, url, pageErrors, resourceFailures, failures: [error.message] });
     } finally {
       await page.close();
     }
