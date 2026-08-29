@@ -8,6 +8,21 @@
 
 ---
 
+## 🔴 2026-08-29 — Recuperação pós-E2 e arquitetura obrigatória de 2 A1
+
+**Estado vinculante:** produção passa a operar somente nas duas A1 sobreviventes: `always-free-arm-1787907847-26` (backend/dados/serviços) e `shopvivaliz-free-a1` (site/web/deploy). As E2 `shopvivaliz-ai` (`137.131.156.17`) e `shopvivaliz-micro-2` (`136.248.69.116`) foram encerradas e são **alvos aposentados**.
+
+**Regras para qualquer agente:**
+- Nunca apontar workflow, script, cron, systemd, SSH, MCP, health-check ou deploy para IP/hostname das E2 aposentadas.
+- Referências antigas em logs/relatórios permanecem como evidência histórica; referências executáveis/configuráveis são defeitos e devem ser corrigidas.
+- Preservar mudanças locais, dumps, bundles, patches e backups antes de qualquer limpeza/reconciliação.
+- Não executar operação OCI destrutiva durante esta recuperação e nunca expor/commitar secrets.
+- MEI deve manter exatamente um sender de produção.
+- `systemctl active`, HTTP 200 e revisão estática não bastam: validação funcional ponta a ponta é obrigatória, inclusive frete/checkout real de teste.
+
+**Fontes normativas:** `.codex/RECOVERY-MEMORY.md`, `docs/operations/TWO-A1-RECOVERY-SPEC-2026-08-29.md` e `docs/superpowers/plans/2026-08-29-two-a1-recovery-master.md`.
+
+---
 ## 📋 Como Usar Este Arquivo
 
 ### Antes de começar uma sessão
