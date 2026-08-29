@@ -1,0 +1,71 @@
+name: OCI control-plane diagnostics
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/oci-control-plane-diagnostics.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure OCI credentials in runner
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        run: |
+          set -Eeuo pipefail
+          for v in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!v:-}" || { echo "missing_secret=$v"; exit 2; }
+          done
+          install -m 700 -d "$HOME/.oci"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$HOME/.oci/key.pem"
+          chmod 600 "$HOME/.oci/key.pem"
+          cat > "$HOME/.oci/config" <<EOF
+          [DEFAULT]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$HOME/.oci/key.pem
+          EOF
+          chmod 600 "$HOME/.oci/config"
+          echo 'oci_credentials_configured=true'
+
+      - name: Install OCI CLI
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --quiet oci-cli
+          oci --version
+
+      - name: Read-only OCI inventory
+        run: |
+          set -Eeuo pipefail
+          tenancy="$(awk -F= '/^tenancy=/{print $2; exit}' "$HOME/.oci/config")"
+          echo '=== REGIONS ==='
+          oci iam region-subscription list --all --query 'data[].{"region":"region-name","status":status}' --output table
+          echo '=== INSTANCES ==='
+          oci compute instance list --compartment-id "$tenancy" --all --query 'data[?"lifecycle-state"!=`TERMINATED`].{"name":"display-name","state":"lifecycle-state","shape":shape,"id":id,"ad":"availability-domain"}' --output table
+          echo '=== TARGET PUBLIC IP LOOKUP ==='
+          found=0
+          for iid in $(oci compute instance list --compartment-id "$tenancy" --all --query 'data[?"lifecycle-state"!=`TERMINATED`].id' --raw-output | tr -d '[]",' ); do
+            test -n "$iid" || continue
+            name=$(oci compute instance get --instance-id "$iid" --query 'data."display-name"' --raw-output)
+            for vid in $(oci compute vnic-attachment list --compartment-id "$tenancy" --instance-id "$iid" --query 'data[]."vnic-id"' --raw-output | tr -d '[]",' ); do
+              test -n "$vid" || continue
+              oci network vnic get --vnic-id "$vid" --query 'data.{name:"display-name",public_ip:"public-ip",private_ip:"private-ip",subnet_id:"subnet-id",nsg_ids:"nsg-ids"}' --output json | python3 -c 'import json,sys; d=json.load(sys.stdin); print("instance='"$name"' public_ip=%s private_ip=%s subnet_id=%s nsg_count=%s"%(d.get("public_ip"),d.get("private_ip"),d.get("subnet_id"),len(d.get("nsg_ids") or [])))'
+            done
+          done
+
+      - name: Cleanup OCI material
+        if: always()
+        run: rm -rf "$HOME/.oci"
