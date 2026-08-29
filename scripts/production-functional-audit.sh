@@ -14,7 +14,7 @@ request() {
   if [[ "$method" == POST ]]; then
     code=$(curl -sS --max-time 30 -o "$output" -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data "$body" "$url") || fail network "$url"
   else
-    code=$(curl -sS --max-time 30 -o "$output" -w '%{http_code}' "$url") || fail network "$url"
+    code=$(curl -sSL --max-time 30 -o "$output" -w '%{http_code}' "$url") || fail network "$url"
   fi
   printf '%s' "$code"
 }
@@ -51,7 +51,6 @@ for x in p.get('products',[]):
         raise SystemExit(0)
 raise SystemExit(1)
 PY
-item=$(cat "$TMPDIR/item.json")
 shipping_payload=$(python3 - "$AUDIT_CEP" "$TMPDIR/item.json" <<'PY'
 import json, pathlib, sys
 print(json.dumps({'cep':sys.argv[1],'items':[json.loads(pathlib.Path(sys.argv[2]).read_text())]}))
