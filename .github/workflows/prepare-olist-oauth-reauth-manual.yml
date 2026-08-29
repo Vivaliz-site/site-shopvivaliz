@@ -1,46 +1,40 @@
-name: Prepare Olist OAuth Reauthorization
+name: Recover Olist OAuth on Site A1
 
 on:
-  workflow_dispatch:
-    inputs:
-      confirmation:
-        description: 'Digite PREPARE-OLIST-REAUTH para preparar nova autorização OAuth'
-        required: true
-        type: string
   push:
     branches:
       - fix/olist-oauth-reauth-bootstrap-20260828
     paths:
       - '.github/workflows/prepare-olist-oauth-reauth-manual.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: prepare-olist-oauth-reauth
+  group: recover-olist-oauth-a1
   cancel-in-progress: false
 
 jobs:
-  prepare:
-    name: Seed Tiny app credentials on Site A1
+  recover:
+    name: Test refresh then promote on Site A1
     runs-on: ubuntu-latest
     timeout-minutes: 8
     environment: production
     env:
       TINY_CLIENT_ID_VALUE: ${{ secrets.TINY_CLIENT_ID }}
       TINY_CLIENT_SECRET_VALUE: ${{ secrets.TINY_CLIENT_SECRET }}
+      TINY_REFRESH_TOKEN_VALUE: ${{ secrets.TINY_REFRESH_TOKEN }}
     steps:
-      - name: Require explicit confirmation and app credentials
+      - name: Require Tiny OAuth recovery inputs
         shell: bash
-        env:
-          CONFIRMATION: ${{ inputs.confirmation }}
         run: |
           set -Eeuo pipefail
-          if [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]]; then
-            test "$CONFIRMATION" = 'PREPARE-OLIST-REAUTH'
-          fi
           test -n "$TINY_CLIENT_ID_VALUE"
           test -n "$TINY_CLIENT_SECRET_VALUE"
+          test -n "$TINY_REFRESH_TOKEN_VALUE"
+          echo 'tiny_recovery_inputs=present'
+
       - name: Configure verified SSH
         shell: bash
         env:
@@ -58,115 +52,96 @@ jobs:
           printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
-      - name: Upload temporary client seed
+
+      - name: Upload protected recovery seed
         shell: bash
         run: |
           set -Eeuo pipefail
-          seed="$RUNNER_TEMP/olist-client.seed"
+          seed="$RUNNER_TEMP/olist-recovery.seed"
           SEED_PATH="$seed" python3 - <<'PY'
           import os
           from pathlib import Path
           values = {
               'TINY_CLIENT_ID': os.environ.get('TINY_CLIENT_ID_VALUE', ''),
               'TINY_CLIENT_SECRET': os.environ.get('TINY_CLIENT_SECRET_VALUE', ''),
+              'TINY_REFRESH_TOKEN': os.environ.get('TINY_REFRESH_TOKEN_VALUE', ''),
           }
           for key, value in values.items():
-              if len(value.strip()) < 16 or any(ch in value for ch in ('\r', '\n', '\x00')):
-                  raise SystemExit('invalid client credential: ' + key)
+              if not value.strip() or any(ch in value for ch in ('\r', '\n', '\x00')):
+                  raise SystemExit('invalid recovery credential: ' + key)
           path = Path(os.environ['SEED_PATH'])
           path.write_text(''.join(f'{k}={v}\n' for k, v in values.items()), encoding='utf-8')
           path.chmod(0o600)
+          print('recovery_seed_prepared=true')
           PY
           scp -q -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "$seed" ubuntu@163.176.103.253:/tmp/shopvivaliz-olist-client.seed
-      - name: Seed only Tiny client credentials and verify authorization endpoint
+            "$seed" ubuntu@163.176.103.253:/tmp/shopvivaliz-olist-recovery.seed
+
+      - name: Test refresh in isolation and promote only after API 200
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'sudo -n python3 -' <<'PY'
-          import os
-          import shutil
-          import tempfile
-          import time
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          current=/home/ubuntu/shopvivaliz-deploy/current
+          shared=/home/ubuntu/shopvivaliz-deploy/shared
+          seed=/tmp/shopvivaliz-olist-recovery.seed
+          temp_store=/tmp/shopvivaliz-olist-recovery.tokens.json
+          canonical="$shared/private/olist-tokens.json"
+          test -s "$seed"
+          chmod 600 "$seed"
+          cd "$current"
+
+          rm -f "$temp_store"
+          SHOPVIVALIZ_ENV_PATH="$seed" SHOPVIVALIZ_OLIST_TOKEN_FILE="$temp_store" \
+            python3 daemon-token-renewer.py --once
+
+          SHOPVIVALIZ_OLIST_TOKEN_FILE="$temp_store" python3 - <<'PY'
+          import json, time, urllib.request
           from pathlib import Path
-
-          target = Path('/home/ubuntu/shopvivaliz-deploy/shared/.env')
-          seed = Path('/tmp/shopvivaliz-olist-client.seed')
-          backup_dir = Path('/home/ubuntu/shopvivaliz-deploy/shared/private/oauth-reauth-backups')
-          if not target.is_file() or not seed.is_file():
-              raise SystemExit('runtime or client seed missing')
-
-          values = {}
-          for raw in seed.read_text(encoding='utf-8').splitlines():
-              if '=' in raw:
-                  key, value = raw.split('=', 1)
-                  values[key.strip()] = value.strip()
-          required = ('TINY_CLIENT_ID', 'TINY_CLIENT_SECRET')
-          if any(len(values.get(key, '')) < 16 for key in required):
-              raise SystemExit('client seed incomplete')
-
-          original = target.stat()
-          original_text = target.read_text(encoding='utf-8')
-          backup_dir.mkdir(parents=True, exist_ok=True)
-          stamp = time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())
-          backup = backup_dir / f'.env.{stamp}.bak'
-          shutil.copy2(target, backup)
-          os.chmod(backup, 0o600)
-
-          output = []
-          seen = set()
-          for line in original_text.splitlines():
-              key = line.split('=', 1)[0].strip() if '=' in line else ''
-              if key in values:
-                  if key not in seen:
-                      output.append(f'{key}={values[key]}')
-                      seen.add(key)
-                  continue
-              output.append(line)
-          for key in required:
-              if key not in seen:
-                  output.append(f'{key}={values[key]}')
-          candidate = '\n'.join(output).rstrip('\n') + '\n'
-
-          fd, tmp_name = tempfile.mkstemp(prefix='.env.reauth.', dir=target.parent)
-          tmp = Path(tmp_name)
-          try:
-              with os.fdopen(fd, 'w', encoding='utf-8', newline='\n') as handle:
-                  handle.write(candidate)
-                  handle.flush()
-                  os.fsync(handle.fileno())
-              os.chmod(tmp, original.st_mode & 0o777)
-              os.chown(tmp, original.st_uid, original.st_gid)
-              os.replace(tmp, target)
-          finally:
-              tmp.unlink(missing_ok=True)
-          print('client_credentials_seeded=true')
+          path=Path('/tmp/shopvivaliz-olist-recovery.tokens.json')
+          data=json.loads(path.read_text(encoding='utf-8'))
+          token=data.get('TINY_ACCESS_TOKEN') or data.get('OLIST_ACCESS_TOKEN') or ''
+          refresh=data.get('TINY_REFRESH_TOKEN') or data.get('OLIST_REFRESH_TOKEN') or ''
+          expires=int(data.get('expires_at_epoch') or 0)
+          assert token and refresh and expires > int(time.time())
+          req=urllib.request.Request(
+              'https://api.tiny.com.br/public-api/v3/produtos/343571958',
+              headers={'Authorization':'Bearer '+token,'Accept':'application/json'},
+          )
+          with urllib.request.urlopen(req, timeout=20) as response:
+              assert int(response.status) == 200
+          print('isolated_product_get_http=200')
           PY
-          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
-            'set -Eeuo pipefail; shared=/home/ubuntu/shopvivaliz-deploy/shared; sudo chown ubuntu:www-data "$shared/.env"; chmod 640 "$shared/.env"; sudo chown ubuntu:www-data "$shared/private"; sudo chmod 770 "$shared/private"; sudo -u www-data test -r "$shared/.env"; sudo -u www-data test -w "$shared/private"'
-          response="$(curl -sS -o /dev/null -D - --max-time 20 https://shopvivaliz.com.br/olist/connect.php)"
-          status="$(printf '%s\n' "$response" | awk 'toupper($1) ~ /^HTTP\// {code=$2} END{print code}')"
-          location="$(printf '%s\n' "$response" | awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/^[^:]*:[[:space:]]*/, ""); sub(/\r$/, ""); print; exit}')"
-          host="$(LOCATION="$location" python3 - <<'PY'
-          import os
-          from urllib.parse import urlparse
-          print(urlparse(os.environ.get('LOCATION', '')).hostname or '')
+
+          install -m 660 -o ubuntu -g www-data "$temp_store" "$canonical"
+          SHOPVIVALIZ_ENV_PATH="$shared/.env" SHOPVIVALIZ_OLIST_TOKEN_FILE="$canonical" \
+            python3 daemon-token-renewer.py --once
+          sudo chown ubuntu:www-data "$shared/.env" "$canonical"
+          chmod 640 "$shared/.env"
+          chmod 660 "$canonical"
+
+          python3 - <<'PY'
+          import json, time, urllib.request
+          from pathlib import Path
+          path=Path('/home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json')
+          data=json.loads(path.read_text(encoding='utf-8'))
+          token=data.get('TINY_ACCESS_TOKEN') or data.get('OLIST_ACCESS_TOKEN') or ''
+          expires=int(data.get('expires_at_epoch') or 0)
+          assert token and expires > int(time.time())
+          req=urllib.request.Request(
+              'https://api.tiny.com.br/public-api/v3/produtos/343571958',
+              headers={'Authorization':'Bearer '+token,'Accept':'application/json'},
+          )
+          with urllib.request.urlopen(req, timeout=20) as response:
+              assert int(response.status) == 200
+          print('canonical_product_get_http=200')
+          print('oauth_recovery_promoted=true')
           PY
-          )"
-          test "$status" = 302
-          test "$host" = accounts.tiny.com.br
-          echo 'connect_http=302'
-          echo 'authorization_host=accounts.tiny.com.br'
-      - name: Remove temporary seeds and SSH material
+          REMOTE
+
+      - name: Remove recovery material
         if: always()
         shell: bash
         run: |
-          set -Eeuo pipefail
-          cleanup_rc=0
-          rm -f "$RUNNER_TEMP/olist-client.seed"
-          if [[ -f "$HOME/.ssh/id_rsa" && -f "$HOME/.ssh/known_hosts" ]]; then
-            ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              ubuntu@163.176.103.253 'rm -f /tmp/shopvivaliz-olist-client.seed' || cleanup_rc=$?
-          fi
-          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
-          exit "$cleanup_rc"
+          rm -f "$RUNNER_TEMP/olist-recovery.seed" "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
