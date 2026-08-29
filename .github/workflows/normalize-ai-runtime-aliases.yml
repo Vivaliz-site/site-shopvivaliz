@@ -44,7 +44,7 @@ jobs:
           set -Eeuo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 'python3 -' <<'PY'
+            -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'python3 -' <<'PY'
           import os
           import re
           from pathlib import Path
@@ -133,7 +133,7 @@ jobs:
           set -Eeuo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 \
+            -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
             "cd /home/ubuntu/shopvivaliz-deploy/current && php -r 'require \"config/constants.php\"; foreach ([\"OPENAI_API_KEY\",\"GEMINI_API_KEY\",\"GOOGLE_API_KEY\",\"GOOGLE_GEMINI_API_KEY\",\"GOOGLE_IMAGEN_API_KEY\",\"ANTHROPIC_API_KEY\",\"CLAUDE_API_KEY\"] as \$k) { echo strtolower(\$k), \"_present=\", trim((string)getenv(\$k)) !== \"\" ? \"true\" : \"false\", PHP_EOL; }'"
 
       - name: Remove SSH material

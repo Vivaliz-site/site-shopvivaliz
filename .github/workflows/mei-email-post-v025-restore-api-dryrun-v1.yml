@@ -27,7 +27,7 @@ jobs:
       - name: Restore API and verify V025
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 <<'EOF'
           set -euo pipefail
           cd /home/ubuntu/mei-mg-email
           sudo systemctl reset-failed mei-mg-email-api.service || true
@@ -54,7 +54,7 @@ jobs:
       - name: Bounded retention dry run
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 <<'EOF'
           set -euo pipefail
           cd /home/ubuntu/mei-mg-email
           if [ -x .venv/bin/python ]; then py=.venv/bin/python; else py=python3; fi
@@ -66,7 +66,7 @@ jobs:
       - name: Final protected state
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 <<'EOF'
           set -euo pipefail
           sudo systemctl is-active --quiet mei-mg-email-api.service
           echo 'API_FINAL=active'

@@ -41,7 +41,7 @@ jobs:
           archive="/tmp/shopvivaliz-public-runtime-audit-${GITHUB_RUN_ID}.tar.gz"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 \
+            -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
             'bash -s' -- "$archive" <<'REMOTE'
           set -Eeuo pipefail
           archive="$1"
@@ -203,7 +203,7 @@ jobs:
           scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            "ubuntu@136.248.69.116:${archive}" public-runtime-audit.tar.gz
+            "ubuntu@163.176.103.253:${archive}" public-runtime-audit.tar.gz
           mkdir -p public-audit
           tar -xzf public-runtime-audit.tar.gz -C public-audit
 

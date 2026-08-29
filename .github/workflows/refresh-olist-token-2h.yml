@@ -143,12 +143,12 @@ jobs:
           print('oauth_bootstrap_seed_prepared=true')
           PY
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "$SEED_PATH" ubuntu@136.248.69.116:/tmp/shopvivaliz-oauth-bootstrap.seed
+            "$SEED_PATH" ubuntu@163.176.103.253:/tmp/shopvivaliz-oauth-bootstrap.seed
       - name: Refresh once and prove canonical token store
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 'bash -s' <<'REMOTE'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
           current=/home/ubuntu/shopvivaliz-deploy/current
           shared=/home/ubuntu/shopvivaliz-deploy/shared
@@ -197,6 +197,6 @@ jobs:
           rm -f "$RUNNER_TEMP/oauth-bootstrap.seed"
           if [[ -f "$HOME/.ssh/id_rsa" && -f "$HOME/.ssh/known_hosts" ]]; then
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              ubuntu@136.248.69.116 'rm -f /tmp/shopvivaliz-oauth-bootstrap.seed'
+              ubuntu@163.176.103.253 'rm -f /tmp/shopvivaliz-oauth-bootstrap.seed'
           fi
           rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"

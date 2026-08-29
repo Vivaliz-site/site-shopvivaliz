@@ -1,4 +1,4 @@
-name: Desktop Commander Three Host Quick Probe
+﻿name: Desktop Commander Three Host Quick Probe
 
 on:
   push:
@@ -31,7 +31,7 @@ jobs:
       - name: Probe sanitized state
         run: |
           set -Eeuo pipefail
-          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17)
+          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@144.22.157.209)
           vm_state="$(${SSH[@]} 'active=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true); enabled=$(systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null || true); auth=false; test -f "$HOME/.desktop-commander-device/auth-required.cooldown" && auth=true; printf "%s/%s/%s" "$enabled" "$active" "$auth"' 2>/dev/null || printf 'ssh_unreachable')"
           if ${SSH[@]} 'curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:5557/health >/dev/null' 2>/dev/null; then fred=reachable; else fred=unreachable; fi
           if ${SSH[@]} 'curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:5558/health >/dev/null' 2>/dev/null; then desk=reachable; else desk=unreachable; fi
@@ -43,10 +43,10 @@ jobs:
             echo "- LAPTOP-NIG4IFUU private relay: **$fred**"
             echo "- DESKTOP-KOCEPSV private relay: **$desk**"
             case "$vm_state" in
-              enabled/active/false) echo '- shopvivaliz-ai canonical service: **active, no auth cooldown**' ;;
-              enabled/failed/true|enabled/inactive/true) echo '- shopvivaliz-ai canonical service: **stopped by provider-auth cooldown**' ;;
-              ssh_unreachable) echo '- shopvivaliz-ai SSH: **unreachable**' ;;
-              *) echo '- shopvivaliz-ai canonical service: **degraded**' ;;
+              enabled/active/false) echo '- always-free-arm-1787907847-26 canonical service: **active, no auth cooldown**' ;;
+              enabled/failed/true|enabled/inactive/true) echo '- always-free-arm-1787907847-26 canonical service: **stopped by provider-auth cooldown**' ;;
+              ssh_unreachable) echo '- always-free-arm-1787907847-26 SSH: **unreachable**' ;;
+              *) echo '- always-free-arm-1787907847-26 canonical service: **degraded**' ;;
             esac
           } > /tmp/quick-probe.md
       - name: Publish probe

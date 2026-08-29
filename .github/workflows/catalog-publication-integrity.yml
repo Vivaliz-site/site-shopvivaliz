@@ -149,7 +149,7 @@ jobs:
           for attempt in $(seq 1 36); do
             if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-              -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 \
+              -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
               "test -r /home/ubuntu/shopvivaliz-deploy/current/scripts/maintenance/marketplace_publication_readiness.php && \
                test -r /home/ubuntu/shopvivaliz-deploy/current/scripts/maintenance/reconcile_catalog_publications.php && \
                test -r /home/ubuntu/shopvivaliz-deploy/current/includes/integration-health-marketplaces.php && \
@@ -168,7 +168,7 @@ jobs:
           set -Eeuo pipefail
           if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 \
+            -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
             'cd /home/ubuntu/shopvivaliz-deploy/current && php scripts/maintenance/marketplace_publication_readiness.php' \
             > marketplace-publication-readiness.json; then
             audit_status=0

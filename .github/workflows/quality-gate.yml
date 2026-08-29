@@ -46,5 +46,5 @@ jobs:
         run: |
           set -euo pipefail
           grep -q '163.176.103.253' .github/workflows/master-production-pipeline.yml
-          ! grep -q '136.248.69.116' .github/workflows/master-production-pipeline.yml
+          ! grep -q '163.176.103.253' .github/workflows/master-production-pipeline.yml
           grep -q 'SEO routing invariant' scripts/deploy-production.sh

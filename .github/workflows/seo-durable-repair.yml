@@ -85,7 +85,7 @@ jobs:
               p.write_text(t, encoding='utf-8')
 
           p = Path('.github/workflows/master-production-pipeline.yml')
-          t = p.read_text(encoding='utf-8').replace('136.248.69.116', '163.176.103.253')
+          t = p.read_text(encoding='utf-8').replace('163.176.103.253', '163.176.103.253')
           old = "          printf '%s\\n' \"$SHOPVIVALIZ_VM_KNOWN_HOSTS\" > ~/.ssh/known_hosts\n"
           new = "          printf '%s %s\\n' '163.176.103.253' 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICPXjLoakI7MkHQrhQF1jaCF8VTtY1SbDiffx8gNeSxw' > ~/.ssh/known_hosts\n"
           if old in t:
@@ -102,7 +102,7 @@ jobs:
           grep -q 'urllib.parse.quote(path' scripts/seo-integrity-audit.py
           grep -q 'a2enmod rewrite' scripts/deploy-production.sh
           grep -q '163.176.103.253' .github/workflows/master-production-pipeline.yml
-          ! grep -q '136.248.69.116' .github/workflows/master-production-pipeline.yml
+          ! grep -q '163.176.103.253' .github/workflows/master-production-pipeline.yml
           php -l includes/blog-article-repository.php
           php -l blog/content.php
           php -l includes/blog-editorial-autopilot.php

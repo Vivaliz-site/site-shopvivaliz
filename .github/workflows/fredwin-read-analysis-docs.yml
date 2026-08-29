@@ -1,4 +1,4 @@
-name: FredWin Read Analysis Docs
+﻿name: FredWin Read Analysis Docs
 
 on:
   push:
@@ -27,12 +27,12 @@ jobs:
 
       - name: Verify FredWin tunnel
         run: |
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 \
             'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health'
 
       - name: Stage only requested documents inside local Windows repo
         run: |
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 - <<'"'"'PY'"'"'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'python3 - <<'"'"'PY'"'"'
           import json, urllib.request
           ps = r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "$downloads=[Environment]::GetFolderPath('UserProfile') + '\\Downloads'; $cache='C:\\site-shopvivaliz\\.fredwin-cache'; New-Item -ItemType Directory -Path $cache -Force | Out-Null; $targets=@(@('*Analise*shopvivaliz*melhorias*.md','analysis.md'),@('*Resumo*executivo*vivaliz*.htm*','executive.html'),@('*Guia*tecnico*implementacao*.md','guide.md')); foreach($t in $targets){ $f=Get-ChildItem -Path $downloads -File -Filter $t[0] -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if($f){ Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $cache $t[1]) -Force } }; exit 0"'''
           body=json.dumps({'params':{'command':ps,'timeout':120}}).encode()
@@ -47,7 +47,7 @@ jobs:
 
       - name: Read staged documents through private MCP
         run: |
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 - <<'"'"'PY'"'"'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'python3 - <<'"'"'PY'"'"'
           import json, urllib.request
           paths=['.fredwin-cache/analysis.md','.fredwin-cache/executive.html','.fredwin-cache/guide.md']
           found=0

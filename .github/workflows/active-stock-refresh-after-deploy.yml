@@ -44,7 +44,7 @@ jobs:
           for attempt in $(seq 1 150); do
             live="$(ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
               -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-              -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 \
+              -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
               'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha 2>/dev/null || true' | tr -d '\r\n')"
             if [ "$live" = "$EXPECTED_SHA" ]; then
               echo "Exact SHA is live on Oracle: $live"
@@ -61,7 +61,7 @@ jobs:
           set -Eeuo pipefail
           ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
             -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 \
+            -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
             'cd /home/ubuntu/shopvivaliz-deploy/current && php olist/sync-on-webhook.php && php olist/fetch-estoque-v3.php && php sync-daemon-to-db.php'
 
       - name: Verify available active products from Oracle
@@ -70,7 +70,7 @@ jobs:
           set -Eeuo pipefail
           ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
             -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 \
+            -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
             'curl -fsS --connect-timeout 5 --max-time 20 "https://shopvivaliz.com.br/api/catalog/products.php?limit=5&available=1&no_cache=1" | python3 -c '\''import json,sys; d=json.load(sys.stdin); assert d.get("ok") is True and d.get("source")=="catalog_runtime" and int(d.get("total") or 0)>0 and len(d.get("products") or [])>0, d; print("available_active_products=", d.get("total"))'\'''
 
       - name: Cleanup
