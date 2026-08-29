@@ -1,0 +1,1 @@
+After merge, wait for the Fred-Win Desktop Commander 24h Action triggered by the request file. Do not run a second interactive authorization concurrently. Verify the resulting broker identity against the existing LAPTOP-NIG4IFUU records and fail closed if a new third device identity appears.
