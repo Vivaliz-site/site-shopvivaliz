@@ -1,4 +1,4 @@
 {
-  "action": "recover_session",
-  "reason": "sequential host repair 1 of 4: recover VM1 canonical persisted session without host checkout dependency"
+  "action": "restart",
+  "reason": "persistence validation after provider session recovery; verify restart reconnects without human authorization"
 }
