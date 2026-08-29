@@ -11,6 +11,7 @@ from tests.test_olist_oauth_credential_candidates import OlistOAuthCredentialCan
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "refresh-olist-token-2h.yml"
+REAUTH_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "prepare-olist-oauth-reauth-manual.yml"
 CONFIGURE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "configure-production-runtime.yml"
 BOOTSTRAP = REPO_ROOT / "scripts" / "bootstrap-olist-oauth-runtime.py"
 OAUTH_VALUES = {
@@ -38,7 +39,6 @@ class OlistOAuthBootstrapWorkflowTests(unittest.TestCase):
         }
         for name, expression in expected.items():
             self.assertIn(f"{name}: {expression}", text)
-
         self.assertIn("bootstrap-olist-oauth-runtime.py", text)
         self.assertNotIn("OLIST_ACCESS_TOKEN_VALUE:", text)
         self.assertNotIn("TINY_ACCESS_TOKEN_VALUE:", text)
@@ -49,6 +49,20 @@ class OlistOAuthBootstrapWorkflowTests(unittest.TestCase):
         self.assertIn("oauth-bootstrap.seed", text)
         self.assertIn("if: always()", text)
         self.assertIn("Remove OAuth bootstrap seed", text)
+
+    def test_reauthorization_preparation_seeds_only_tiny_app_credentials(self) -> None:
+        text = REAUTH_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("TINY_CLIENT_ID_VALUE: ${{ secrets.TINY_CLIENT_ID }}", text)
+        self.assertIn("TINY_CLIENT_SECRET_VALUE: ${{ secrets.TINY_CLIENT_SECRET }}", text)
+        for forbidden in (
+            "TINY_ACCESS_TOKEN_VALUE:", "TINY_REFRESH_TOKEN_VALUE:",
+            "OLIST_ACCESS_TOKEN_VALUE:", "OLIST_REFRESH_TOKEN_VALUE:",
+        ):
+            self.assertNotIn(forbidden, text)
+        self.assertIn("client_credentials_seeded=true", text)
+        self.assertIn("connect_http=302", text)
+        self.assertIn("authorization_host=accounts.tiny.com.br", text)
+        self.assertIn("if: always()", text)
 
     def test_static_runtime_keeps_www_data_group_for_rotating_token_store(self) -> None:
         text = CONFIGURE_WORKFLOW.read_text(encoding="utf-8")
@@ -79,10 +93,8 @@ class OlistOAuthBootstrapScriptTests(unittest.TestCase):
             target.write_text("DB_HOST=db.internal\nSHOPVIVALIZ_AGENT_KEY=keep-me\n", encoding="utf-8")
             target.chmod(0o600)
             self.write_seed(seed)
-
             result = self.run_bootstrap(target, seed)
             content = target.read_text(encoding="utf-8")
-
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("DB_HOST=db.internal", content)
             self.assertIn("SHOPVIVALIZ_AGENT_KEY=keep-me", content)
@@ -101,9 +113,7 @@ class OlistOAuthBootstrapScriptTests(unittest.TestCase):
             values = dict(OAUTH_VALUES)
             values.pop("TINY_REFRESH_TOKEN")
             self.write_seed(seed, values)
-
             result = self.run_bootstrap(target, seed)
-
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(target.read_text(encoding="utf-8"), original)
             self.assertIn("missing_oauth_keys", result.stderr)
@@ -115,10 +125,8 @@ class OlistOAuthBootstrapScriptTests(unittest.TestCase):
             seed = root / "oauth-bootstrap.seed"
             target.write_text("DB_HOST=db.internal\n", encoding="utf-8")
             self.write_seed(seed)
-
             result = self.run_bootstrap(target, seed)
             combined = result.stdout + result.stderr
-
             self.assertEqual(result.returncode, 0, combined)
             for value in OAUTH_VALUES.values():
                 self.assertNotIn(value, combined)
