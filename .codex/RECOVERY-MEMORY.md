@@ -7,6 +7,7 @@ Read before infrastructure, deploy, cleanup, migration or recovery work.
 - Backend/data/services: `always-free-arm-1787907847-26`.
 - Storefront/web/deploy: `shopvivaliz-free-a1`.
 - `shopvivaliz-ai` and `shopvivaliz-micro-2` were accidentally terminated and their boot volumes deleted; do not assume their local files still exist.
+- Retired E2 endpoints include public IPs `137.131.156.17` and `136.248.69.116`, and historical private IPs `10.0.1.13` and `10.0.1.203`.
 - Do not recreate E2 as a production dependency unless a future explicit architecture change supersedes this memory.
 
 ## Recovery sources
@@ -25,6 +26,9 @@ Read before infrastructure, deploy, cleanup, migration or recovery work.
 6. Freight/checkout validation must exercise a real CEP/address calculation and prove error reporting works.
 7. Before changing capacity, record OCI quota/free-tier/cost state and validate backups.
 8. Work on `recovery/two-a1-20260829` or isolated worktrees; production deploy stays unchanged until reviewed artifacts pass gates.
+9. Before editing any workflow, deploy script, remote-control route, cron, systemd unit or SSH config, search for all retired E2 IPs/hostnames and classify every occurrence. Active operational references to retired E2 endpoints are defects.
+10. Prefer stable role aliases or environment/GitHub secrets for A1 targets; do not introduce literal transient public IPs into new operational code when an indirection is available.
+11. Historical logs/reports may retain old endpoints as evidence; do not rewrite history merely to make searches clean. Regression gates must distinguish executable/config paths from historical evidence.
 
 ## Required reading
 - `docs/operations/TWO-A1-RECOVERY-SPEC-2026-08-29.md`
@@ -36,4 +40,4 @@ Read before infrastructure, deploy, cleanup, migration or recovery work.
 Microsoft Graph Application `Mail.Read` remains blocked by administrative permission/consent (previous app-only attempts returned HTTP 403). Do not loop retries or broaden privileges automatically; record it as an external gate while recovering all independent functionality.
 
 ## Completion rule
-Do not declare recovery complete until Shop Vivaliz, MEI and Solange pass their end-to-end audits and the two-A1 disaster-recovery restore drill has been demonstrated.
+Do not declare recovery complete until Shop Vivaliz, MEI and Solange pass their end-to-end audits, no executable/config route targets a retired E2 endpoint, and the two-A1 disaster-recovery restore drill has been demonstrated.
