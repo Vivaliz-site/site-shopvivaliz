@@ -1,0 +1,162 @@
+name: Olist Reauth Bootstrap One-Shot
+
+on:
+  push:
+    branches:
+      - ops/japi-itemwise-audit-20260829
+    paths:
+      - '.github/workflows/ops-olist-reauth-bootstrap.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ops-olist-reauth-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: production
+    env:
+      TINY_CLIENT_ID_VALUE: ${{ secrets.TINY_CLIENT_ID }}
+      TINY_CLIENT_SECRET_VALUE: ${{ secrets.TINY_CLIENT_SECRET }}
+    steps:
+      - name: Require Tiny application credentials
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$TINY_CLIENT_ID_VALUE"
+          test -n "$TINY_CLIENT_SECRET_VALUE"
+
+      - name: Configure verified VM2 SSH
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key"
+          test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Upload temporary Tiny app credential seed
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          seed="$RUNNER_TEMP/olist-client.seed"
+          SEED_PATH="$seed" python3 - <<'PY'
+          import os
+          from pathlib import Path
+          values={
+              'TINY_CLIENT_ID':os.environ.get('TINY_CLIENT_ID_VALUE',''),
+              'TINY_CLIENT_SECRET':os.environ.get('TINY_CLIENT_SECRET_VALUE',''),
+          }
+          for key,value in values.items():
+              if len(value.strip()) < 16 or any(ch in value for ch in ('\r','\n','\x00')):
+                  raise SystemExit('invalid_app_credential:'+key)
+          path=Path(os.environ['SEED_PATH'])
+          path.write_text(''.join(f'{key}={value}\n' for key,value in values.items()),encoding='utf-8')
+          path.chmod(0o600)
+          PY
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            "$seed" ubuntu@136.248.69.116:/tmp/shopvivaliz-olist-client.seed
+
+      - name: Seed only app credentials and prepare private token store
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@136.248.69.116 'sudo -n python3 -' <<'PY'
+          import os,shutil,tempfile,time
+          from pathlib import Path
+          target=Path('/home/ubuntu/shopvivaliz-deploy/shared/.env')
+          seed=Path('/tmp/shopvivaliz-olist-client.seed')
+          private=Path('/home/ubuntu/shopvivaliz-deploy/shared/private')
+          backup_dir=private/'oauth-reauth-backups'
+          if not target.is_file() or not seed.is_file():
+              raise SystemExit('runtime_or_seed_missing')
+          values={}
+          for raw in seed.read_text(encoding='utf-8').splitlines():
+              if '=' in raw:
+                  key,value=raw.split('=',1); values[key.strip()]=value.strip()
+          required=('TINY_CLIENT_ID','TINY_CLIENT_SECRET')
+          if any(len(values.get(key,'')) < 16 for key in required):
+              raise SystemExit('client_seed_incomplete')
+          private.mkdir(parents=True,exist_ok=True)
+          backup_dir.mkdir(parents=True,exist_ok=True)
+          original=target.stat(); original_text=target.read_text(encoding='utf-8')
+          stamp=time.strftime('%Y%m%dT%H%M%SZ',time.gmtime())
+          backup=backup_dir/f'.env.{stamp}.bak'
+          shutil.copy2(target,backup); os.chmod(backup,0o600)
+          output=[]; seen=set()
+          for line in original_text.splitlines():
+              key=line.split('=',1)[0].strip() if '=' in line else ''
+              if key in values:
+                  if key not in seen:
+                      output.append(f'{key}={values[key]}'); seen.add(key)
+                  continue
+              output.append(line)
+          for key in required:
+              if key not in seen: output.append(f'{key}={values[key]}')
+          candidate='\n'.join(output).rstrip('\n')+'\n'
+          fd,tmp_name=tempfile.mkstemp(prefix='.env.reauth.',dir=target.parent)
+          tmp=Path(tmp_name)
+          try:
+              with os.fdopen(fd,'w',encoding='utf-8',newline='\n') as handle:
+                  handle.write(candidate); handle.flush(); os.fsync(handle.fileno())
+              os.chmod(tmp,original.st_mode & 0o777); os.chown(tmp,original.st_uid,original.st_gid)
+              os.replace(tmp,target)
+          finally:
+              tmp.unlink(missing_ok=True)
+          print('client_credentials_seeded=true')
+          print('token_store_directory_ready=true')
+          PY
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@136.248.69.116 \
+            'set -Eeuo pipefail; shared=/home/ubuntu/shopvivaliz-deploy/shared; sudo chown ubuntu:www-data "$shared/.env"; chmod 640 "$shared/.env"; sudo chown ubuntu:www-data "$shared/private"; sudo chmod 770 "$shared/private"; sudo -u www-data test -r "$shared/.env"; sudo -u www-data test -w "$shared/private"'
+
+      - name: Verify official authorization redirect
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          response="$(curl -sS -o /dev/null -D - --max-time 20 https://shopvivaliz.com.br/olist/connect.php)"
+          status="$(printf '%s\n' "$response" | awk 'toupper($1) ~ /^HTTP\// {code=$2} END{print code}')"
+          location="$(printf '%s\n' "$response" | awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/^[^:]*:[[:space:]]*/,""); sub(/\r$/,""); print; exit}')"
+          host="$(LOCATION="$location" python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          print(urlparse(os.environ.get('LOCATION','')).hostname or '')
+          PY
+          )"
+          test "$status" = 302
+          test "$host" = accounts.tiny.com.br
+          echo 'connect_http=302'
+          echo 'authorization_host=accounts.tiny.com.br'
+          echo 'oauth_user_consent_required=true'
+
+      - name: Cleanup temporary material
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cleanup_rc=0
+          rm -f "$RUNNER_TEMP/olist-client.seed"
+          if [[ -f "$HOME/.ssh/id_rsa" && -f "$HOME/.ssh/known_hosts" ]]; then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+              ubuntu@136.248.69.116 'rm -f /tmp/shopvivaliz-olist-client.seed' || cleanup_rc=$?
+          fi
+          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+          exit "$cleanup_rc"
