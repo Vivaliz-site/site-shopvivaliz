@@ -44,6 +44,9 @@ jobs:
           php -l sitemap.php >/dev/null
           php tests/google-indexing-canonical-regression-test.php
           python3 -m py_compile scripts/seo-integrity-audit.py
+          ! grep -Fq 'http://127.0.0.1${path}' .github/workflows/master-production-pipeline.yml
+          grep -Fq 'api/health/version.php' .github/workflows/master-production-pipeline.yml
+          grep -Fq 'served_sha' .github/workflows/master-production-pipeline.yml
 
   deploy:
     needs: validate
@@ -114,8 +117,11 @@ jobs:
           sudo systemctl reload apache2
           sleep 2
           fail=0
+          served_sha="$(curl -fsS -H 'Cache-Control: no-cache' --max-time 20 "https://shopvivaliz.com.br/api/health/version.php?deploy=${sha}" | php -r '$j=json_decode(stream_get_contents(STDIN), true); echo is_array($j) ? ($j["release_sha"] ?? "") : "";' || true)"
+          echo "release_sha -> $served_sha"
+          [ "$served_sha" = "$sha" ] || fail=1
           for path in / /sitemap.xml /catalogo/ /termos/ /politica-entrega/ /politica-devolucoes/; do
-            code="$(curl -sS -o /tmp/smoke-body -w '%{http_code}' -H 'Host: shopvivaliz.com.br' "http://127.0.0.1${path}" || true)"
+            code="$(curl -sS -o /tmp/smoke-body -w '%{http_code}' -H 'Cache-Control: no-cache' --max-time 20 "https://shopvivaliz.com.br${path}" || true)"
             echo "$path -> $code"
             [ "$code" = 200 ] || fail=1
           done
@@ -141,9 +147,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          served_sha="$(curl -fsS -H 'Cache-Control: no-cache' --max-time 20 "https://shopvivaliz.com.br/api/health/version.php?monitor=${DEPLOY_SHA}" | php -r '$j=json_decode(stream_get_contents(STDIN), true); echo is_array($j) ? ($j["release_sha"] ?? "") : "";')"
+          echo "release_sha -> $served_sha"
+          test "$served_sha" = "$DEPLOY_SHA"
           for path in / /sitemap.xml /catalogo/ /termos/ /politica-entrega/ /politica-devolucoes/; do
-            code="$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 20 "https://shopvivaliz.com.br${path}")"
+            code="$(curl -sS -o /tmp/body -w '%{http_code}' -H 'Cache-Control: no-cache' --max-time 20 "https://shopvivaliz.com.br${path}")"
             echo "$path -> $code"
             test "$code" = 200
           done
-          grep -q '<urlset' <(curl -sS --max-time 20 https://shopvivaliz.com.br/sitemap.xml)
+          grep -q '<urlset' <(curl -sS -H 'Cache-Control: no-cache' --max-time 20 https://shopvivaliz.com.br/sitemap.xml)
