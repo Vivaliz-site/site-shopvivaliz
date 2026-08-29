@@ -1,0 +1,1 @@
+The interactive authorization action is single-run. Its bootstrap disables the canonical task before starting the interactive worker, and the worker kills its temporary launcher tree before enabling the canonical S4U task. Do not run the authorize action twice concurrently.
