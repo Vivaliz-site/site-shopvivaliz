@@ -1,0 +1,49 @@
+name: Google SMTP Custom From Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/google-smtp-custom-from-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SMTP_HOST: ${{ secrets.EMAIL_SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.EMAIL_SMTP_PORT }}
+      SMTP_USER: ${{ secrets.EMAIL_USER }}
+      SMTP_PASS: ${{ secrets.EMAIL_PASSWORD }}
+      DEST: fredmourao@gmail.com
+      FROM_ADDR: atendimento@shopvivaliz.com.br
+    steps:
+      - name: Send one controlled identity test
+        shell: python
+        run: |
+          import os, smtplib, ssl, uuid
+          from email.message import EmailMessage
+          required=['SMTP_HOST','SMTP_PORT','SMTP_USER','SMTP_PASS','DEST','FROM_ADDR']
+          if any(not os.getenv(k) for k in required): raise SystemExit('CONFIG_MISSING')
+          marker='SV-GOOGLE-SMTP-'+uuid.uuid4().hex[:12]
+          msg=EmailMessage()
+          msg['Subject']=marker
+          msg['From']='ShopVivaliz Atendimento <'+os.environ['FROM_ADDR']+'>'
+          msg['To']=os.environ['DEST']
+          msg['Reply-To']=os.environ['FROM_ADDR']
+          msg.set_content('Controlled ShopVivaliz outbound identity test. No action required.')
+          p=int(os.environ['SMTP_PORT'])
+          if p==465:
+              s=smtplib.SMTP_SSL(os.environ['SMTP_HOST'],p,timeout=15,context=ssl.create_default_context())
+          else:
+              s=smtplib.SMTP(os.environ['SMTP_HOST'],p,timeout=15); s.ehlo()
+              if s.has_extn('starttls'):
+                  s.starttls(context=ssl.create_default_context()); s.ehlo()
+          s.login(os.environ['SMTP_USER'],os.environ['SMTP_PASS'])
+          s.send_message(msg); s.quit()
+          print('CONTROLLED_TEST_SENT')
+          print('MARKER='+marker)
