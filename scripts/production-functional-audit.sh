@@ -24,7 +24,8 @@ json_assert() {
 import json, pathlib, sys
 obj=json.loads(pathlib.Path(sys.argv[1]).read_text())
 expr=sys.argv[2]
-if not eval(expr, {"__builtins__": {}}, {"d": obj}): raise SystemExit(1)
+safe={"len":len,"float":float,"int":int,"str":str,"bool":bool}
+if not eval(expr, {"__builtins__": safe}, {"d": obj}): raise SystemExit(1)
 PY
 }
 
