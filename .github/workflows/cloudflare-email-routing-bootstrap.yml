@@ -132,7 +132,7 @@ jobs:
           else
             payload=$(jq -nc --arg src "$PROBE_EMAIL" --arg dst "$DEST_EMAIL" '{name:"ShopVivaliz isolated inbound probe",enabled:true,matchers:[{type:"literal",field:"to",value:$src}],actions:[{type:"forward",value:[$dst]}],source:"api"}')
             created=$(curl -fsS -X POST "${auth[@]}" --data "$payload" "$api/zones/$ZONE_ID/email/routing/rules")
-            test "$(jq -r '.success' <<<"$created")" = true || { echo 'PROBE_RULE_ENABLE_FAILED'; exit 12; }
+            test "$(jq -r '.success' <<<"$created")" = true || { echo 'PROBE_RULE_CREATE_FAILED'; exit 12; }
           fi
           echo 'PROBE_ROUTING_RULE_ENABLED'
 
