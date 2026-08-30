@@ -42,11 +42,7 @@ jobs:
             echo 'TAILSCALE=missing'
             exit 0
           fi
-          peer_info="$(tailscale status --json 2>/dev/null | python3 -c 'import json,sys; d=json.load(sys.stdin); found=[]
-for p in (d.get("Peer") or {}).values():
- n=str(p.get("HostName") or p.get("DNSName") or "").rstrip(".")
- if "DESKTOP-KOCEPSV" in n.upper():
-  ips=p.get("TailscaleIPs") or []; ip=next((x for x in ips if ":" not in x),""); print("NAME="+n); print("ONLINE="+str(bool(p.get("Online"))).lower()); print("IP="+ip); break')"
+          peer_info="$(tailscale status --json 2>/dev/null | python3 -c 'import json,sys; d=json.load(sys.stdin); ps=[p for p in (d.get("Peer") or {}).values() if "DESKTOP-KOCEPSV" in str(p.get("HostName") or p.get("DNSName") or "").upper()]; p=ps[0] if ps else {}; n=str(p.get("HostName") or p.get("DNSName") or "").rstrip("."); ips=p.get("TailscaleIPs") or []; ip=next((x for x in ips if ":" not in x),""); print("NAME="+n); print("ONLINE="+str(bool(p.get("Online"))).lower()); print("IP="+ip)')"
           printf '%s\n' "$peer_info"
           ip="$(printf '%s\n' "$peer_info" | awk -F= '$1=="IP"{print $2}')"
           if [[ -z "$ip" ]]; then
