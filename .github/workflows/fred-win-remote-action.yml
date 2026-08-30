@@ -20,7 +20,7 @@ jobs:
 
       - name: Configure VM key
         env:
-          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}`n          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
           test -n "$VM_KEY" || { echo "SHOPVIVALIZ_VM_SSH_KEY missing"; exit 2; }
           mkdir -p ~/.ssh
@@ -67,14 +67,14 @@ jobs:
 
       - name: Check private MCP path through VM
         run: |
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 \
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 \
             'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health'
 
       - name: Execute allowlisted action
         if: steps.action.outputs.action != 'health'
         run: |
           CMD_B64="$(cat /tmp/fredwin-command.b64)"
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 \
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 \
             "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
           import base64, json, os, urllib.error, urllib.request
           command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
@@ -93,4 +93,4 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: rm -f ~/.ssh/vmkey /tmp/fredwin-command.b64
+        run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts /tmp/fredwin-command.b64
