@@ -77,7 +77,7 @@ jobs:
           jq -r --arg n "$ZONE_NAME" '.result[] | select(.type=="MX" and .name==$n) | "MX priority=\(.priority) content=\(.content)"' <<<"$dns"
           echo 'CURRENT_MX_END'
           echo 'CURRENT_ROOT_SPF_BEGIN'
-          jq -r --arg n "$ZONE_NAME" '.result[] | select(.type=="TXT" and .name==$n and (.content|startswith("v=spf1"))) | .content' <<<"$dns"
+          jq -r --arg n "$ZONE_NAME" '.result[] | select(.type=="TXT" and .name==$n and (.content|contains("v=spf1"))) | .content' <<<"$dns"
           echo 'CURRENT_ROOT_SPF_END'
 
           addresses=$(curl -fsS "${auth[@]}" "$api/accounts/$account_id/email/routing/addresses")
@@ -178,7 +178,7 @@ jobs:
             done < <(jq -r --arg n "$ZONE_NAME" '.result[] | select(.type=="MX" and .name==$n and (.content|test("^route[123]\\.mx\\.cloudflare\\.net$"))) | .id' <<<"$dns_now")
 
             dns_now=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/dns_records?per_page=500")
-            spf_ids=$(jq -r --arg n "$ZONE_NAME" '.result[] | select(.type=="TXT" and .name==$n and (.content|startswith("v=spf1"))) | .id' <<<"$dns_now")
+            spf_ids=$(jq -r --arg n "$ZONE_NAME" '.result[] | select(.type=="TXT" and .name==$n and (.content|contains("v=spf1"))) | .id' <<<"$dns_now")
             spf_count=$(grep -c . <<<"$spf_ids" || true)
             if [ "$spf_count" -eq 0 ]; then
               spf_payload=$(jq -nc --arg n "$ZONE_NAME" --arg c "$ORIGINAL_SPF" '{type:"TXT",name:$n,content:$c,ttl:1}')
@@ -221,19 +221,19 @@ jobs:
           test "$root_mx_count" -eq 2 -a "$titan_ok" -eq 2 || { echo 'UNEXPECTED_ROOT_MX_STATE_ABORT'; exit 20; }
           echo 'TITAN_MX_SNAPSHOT_READY'
 
-          spf_rows=$(jq -c --arg n "$ZONE_NAME" '[.result[] | select(.type=="TXT" and .name==$n and (.content|startswith("v=spf1")))]' <<<"$dns")
+          spf_rows=$(jq -c --arg n "$ZONE_NAME" '[.result[] | select(.type=="TXT" and .name==$n and (.content|contains("v=spf1")))]' <<<"$dns")
           test "$(jq 'length' <<<"$spf_rows")" -eq 1 || { echo 'ROOT_SPF_COUNT_NOT_ONE_ABORT'; exit 21; }
           spf_id=$(jq -r '.[0].id' <<<"$spf_rows")
           spf_content=$(jq -r '.[0].content' <<<"$spf_rows")
-          case "$spf_content" in
-            "$ORIGINAL_SPF")
-              spf_payload=$(jq -nc --arg n "$ZONE_NAME" --arg c "$ROUTING_SPF" '{type:"TXT",name:$n,content:$c,ttl:1}')
-              curl -fsS -X PUT "${auth[@]}" --data "$spf_payload" "$api/zones/$ZONE_ID/dns_records/$spf_id" >/dev/null
-              echo 'ROOT_SPF_MERGED_FOR_CLOUDFLARE'
-              ;;
-            "$ROUTING_SPF") echo 'ROOT_SPF_ALREADY_MERGED' ;;
-            *) echo 'UNEXPECTED_ROOT_SPF_ABORT'; exit 22 ;;
-          esac
+          if [[ "$spf_content" == *"include:amazonses.com"* && "$spf_content" == *"include:spf.titan.email"* && "$spf_content" != *"include:_spf.mx.cloudflare.net"* ]]; then
+            spf_payload=$(jq -nc --arg n "$ZONE_NAME" --arg c "$ROUTING_SPF" '{type:"TXT",name:$n,content:$c,ttl:1}')
+            curl -fsS -X PUT "${auth[@]}" --data "$spf_payload" "$api/zones/$ZONE_ID/dns_records/$spf_id" >/dev/null
+            echo 'ROOT_SPF_MERGED_FOR_CLOUDFLARE'
+          elif [[ "$spf_content" == *"include:amazonses.com"* && "$spf_content" == *"include:spf.titan.email"* && "$spf_content" == *"include:_spf.mx.cloudflare.net"* ]]; then
+            echo 'ROOT_SPF_ALREADY_MERGED'
+          else
+            echo 'UNEXPECTED_ROOT_SPF_ABORT'; exit 22
+          fi
 
           titan_ids=$(jq -r --arg n "$ZONE_NAME" --arg m1 "$TITAN_MX1" --arg m2 "$TITAN_MX2" '.result[] | select(.type=="MX" and .name==$n and (.content==$m1 or .content==$m2)) | .id' <<<"$dns")
           while read -r rid; do
@@ -253,8 +253,8 @@ jobs:
           dns_after=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/dns_records?per_page=500")
           cf_after=$(jq -r --arg n "$ZONE_NAME" '[.result[] | select(.type=="MX" and .name==$n and (.content|test("^route[123]\\.mx\\.cloudflare\\.net$")))] | length' <<<"$dns_after")
           titan_after=$(jq -r --arg n "$ZONE_NAME" '[.result[] | select(.type=="MX" and .name==$n and (.content|endswith("titan.email")))] | length' <<<"$dns_after")
-          spf_after=$(jq -r --arg n "$ZONE_NAME" '[.result[] | select(.type=="TXT" and .name==$n and (.content|startswith("v=spf1")))] | length' <<<"$dns_after")
-          spf_cloudflare=$(jq -r --arg n "$ZONE_NAME" '[.result[] | select(.type=="TXT" and .name==$n and (.content|startswith("v=spf1")) and (.content|contains("include:_spf.mx.cloudflare.net")))] | length' <<<"$dns_after")
+          spf_after=$(jq -r --arg n "$ZONE_NAME" '[.result[] | select(.type=="TXT" and .name==$n and (.content|contains("v=spf1")))] | length' <<<"$dns_after")
+          spf_cloudflare=$(jq -r --arg n "$ZONE_NAME" '[.result[] | select(.type=="TXT" and .name==$n and (.content|contains("v=spf1")) and (.content|contains("include:_spf.mx.cloudflare.net")))] | length' <<<"$dns_after")
           settings=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/email/routing")
           if [ "$cf_after" -lt 3 ] || [ "$titan_after" -ne 0 ] || [ "$spf_after" -ne 1 ] || [ "$spf_cloudflare" -ne 1 ] || [ "$(jq -r '.result.enabled // false' <<<"$settings")" != true ]; then
             echo 'POST_CUTOVER_VERIFY_FAILED_ROLLING_BACK'
@@ -282,7 +282,7 @@ jobs:
           done < <(jq -r --arg n "$ZONE_NAME" '.result[] | select(.type=="MX" and .name==$n and (.content|test("^route[123]\\.mx\\.cloudflare\\.net$"))) | .id' <<<"$dns")
 
           dns=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/dns_records?per_page=500")
-          spf_ids=$(jq -r --arg n "$ZONE_NAME" '.result[] | select(.type=="TXT" and .name==$n and (.content|startswith("v=spf1"))) | .id' <<<"$dns")
+          spf_ids=$(jq -r --arg n "$ZONE_NAME" '.result[] | select(.type=="TXT" and .name==$n and (.content|contains("v=spf1"))) | .id' <<<"$dns")
           spf_count=$(grep -c . <<<"$spf_ids" || true)
           if [ "$spf_count" -eq 0 ]; then
             p=$(jq -nc --arg n "$ZONE_NAME" --arg c "$ORIGINAL_SPF" '{type:"TXT",name:$n,content:$c,ttl:1}')
@@ -308,7 +308,7 @@ jobs:
           final=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/dns_records?per_page=500")
           mx1=$(jq -r --arg n "$ZONE_NAME" --arg m "$TITAN_MX1" '[.result[] | select(.type=="MX" and .name==$n and .content==$m and .priority==10)] | length' <<<"$final")
           mx2=$(jq -r --arg n "$ZONE_NAME" --arg m "$TITAN_MX2" '[.result[] | select(.type=="MX" and .name==$n and .content==$m and .priority==20)] | length' <<<"$final")
-          spf=$(jq -r --arg n "$ZONE_NAME" --arg c "$ORIGINAL_SPF" '[.result[] | select(.type=="TXT" and .name==$n and .content==$c)] | length' <<<"$final")
+          spf=$(jq -r --arg n "$ZONE_NAME" --arg c "$ORIGINAL_SPF" '[.result[] | select(.type=="TXT" and .name==$n and (.content|contains($c)))] | length' <<<"$final")
           test "$mx1" -eq 1 -a "$mx2" -eq 1 -a "$spf" -eq 1 || { echo 'ROLLBACK_VERIFY_FAILED'; exit 31; }
           echo 'TITAN_MX_SNAPSHOT_RESTORED'
           echo 'ROLLBACK_VERIFIED'
