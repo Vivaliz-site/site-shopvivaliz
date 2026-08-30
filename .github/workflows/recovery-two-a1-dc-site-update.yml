@@ -1,0 +1,76 @@
+name: Recovery two-A1 DC site canary update
+
+on:
+  push:
+    branches: [recovery/two-a1-20260829]
+    paths:
+      - '.github/workflows/recovery-two-a1-dc-site-update.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  update-site-dc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate persistence contract
+        run: php tests/desktop-commander-persist-session-contract-test.php
+
+      - name: Configure site SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/sitekey
+          chmod 600 ~/.ssh/sitekey
+
+      - name: Upload supervisor and session patcher
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/sitekey \
+            scripts/vm-desktop-commander-supervisor.sh \
+            scripts/patch-desktop-commander-session-persistence.mjs \
+            ubuntu@163.176.103.253:/tmp/
+
+      - name: Install canary update preserving authentication state
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/sitekey ubuntu@163.176.103.253 'bash -s' <<'SH'
+          set -Eeuo pipefail
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          backup="$HOME/recovery-backups/dc-$stamp"
+          mkdir -p "$backup"
+          for f in /usr/local/lib/shopvivaliz/vm-desktop-commander-supervisor.sh /usr/local/lib/shopvivaliz/patch-desktop-commander-session-persistence.mjs; do
+            if [ -f "$f" ]; then cp -a "$f" "$backup/"; fi
+          done
+          if [ -f "$HOME/.desktop-commander-device/device.json" ]; then
+            stat -c 'DEVICE_BEFORE|mtime=%y|size=%s|mode=%a' "$HOME/.desktop-commander-device/device.json"
+          fi
+          sudo install -d -m 0755 /usr/local/lib/shopvivaliz
+          sudo install -m 0755 /tmp/vm-desktop-commander-supervisor.sh /usr/local/lib/shopvivaliz/vm-desktop-commander-supervisor.sh
+          sudo install -m 0644 /tmp/patch-desktop-commander-session-persistence.mjs /usr/local/lib/shopvivaliz/patch-desktop-commander-session-persistence.mjs
+          rm -f /tmp/vm-desktop-commander-supervisor.sh /tmp/patch-desktop-commander-session-persistence.mjs
+          echo "BACKUP_DIR=$backup"
+          sha256sum /usr/local/lib/shopvivaliz/vm-desktop-commander-supervisor.sh /usr/local/lib/shopvivaliz/patch-desktop-commander-session-persistence.mjs
+          sudo systemctl restart shopvivaliz-desktop-commander.service || true
+          sleep 8
+          echo "SERVICE_ACTIVE=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true)"
+          echo "SERVICE_ENABLED=$(systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null || true)"
+          if [ -f "$HOME/.desktop-commander-device/device.json" ]; then
+            stat -c 'DEVICE_AFTER|mtime=%y|size=%s|mode=%a' "$HOME/.desktop-commander-device/device.json"
+          fi
+          test -f /usr/local/lib/shopvivaliz/patch-desktop-commander-session-persistence.mjs
+          grep -q 'TOKEN_REFRESHED' /usr/local/lib/shopvivaliz/patch-desktop-commander-session-persistence.mjs
+          SH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/sitekey
