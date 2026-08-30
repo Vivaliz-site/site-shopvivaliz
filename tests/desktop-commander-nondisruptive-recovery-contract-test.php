@@ -24,9 +24,11 @@ foreach (['git reset --hard', 'git clean -', 'git merge --ff-only', 'sudo kill -
         exit(1);
     }
 }
-if (strpos($control, 'READ_ONLY_DIAGNOSIS=true') === false) {
-    fwrite(STDERR, "dc-nondisruptive: control plane must remain read-only\n");
-    exit(1);
+foreach (['diagnose:', 'Sanitized diagnostic only. No credentials', 'Publish sanitized status'] as $needle) {
+    if (strpos($control, $needle) === false) {
+        fwrite(STDERR, "dc-nondisruptive: control plane read-only marker missing {$needle}\n");
+        exit(1);
+    }
 }
 
 echo "desktop-commander-nondisruptive-recovery: ok\n";
