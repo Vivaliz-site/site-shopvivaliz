@@ -1,0 +1,121 @@
+name: Critical Storefront Integration Recovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/recover-critical-storefront-integrations.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: critical-storefront-integration-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      MERCADOPAGO_ACCESS_TOKEN_VALUE: ${{ secrets.MERCADOPAGO_ACCESS_TOKEN }}
+      MERCADOPAGO_PUBLIC_KEY_VALUE: ${{ secrets.MERCADOPAGO_PUBLIC_KEY }}
+      MERCADOPAGO_WEBHOOK_SECRET_VALUE: ${{ secrets.MERCADOPAGO_WEBHOOK_SECRET }}
+      MELHORENVIO_ACCESS_TOKEN_VALUE: ${{ secrets.MELHORENVIO_ACCESS_TOKEN }}
+      OLIST_CLIENT_ID_VALUE: ${{ secrets.OLIST_CLIENT_ID }}
+      OLIST_CLIENT_SECRET_VALUE: ${{ secrets.OLIST_CLIENT_SECRET }}
+      OLIST_REFRESH_TOKEN_VALUE: ${{ secrets.OLIST_REFRESH_TOKEN }}
+      TINY_CLIENT_ID_VALUE: ${{ secrets.TINY_CLIENT_ID }}
+      TINY_CLIENT_SECRET_VALUE: ${{ secrets.TINY_CLIENT_SECRET }}
+      TINY_REFRESH_TOKEN_VALUE: ${{ secrets.TINY_REFRESH_TOKEN }}
+      AGENT_KEY_VALUE: ${{ secrets.SHOPVIVALIZ_AGENT_KEY != '' && secrets.SHOPVIVALIZ_AGENT_KEY || secrets.AGENT_KEY }}
+      VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Validate recovery inputs without exposing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in MERCADOPAGO_ACCESS_TOKEN_VALUE MERCADOPAGO_PUBLIC_KEY_VALUE MERCADOPAGO_WEBHOOK_SECRET_VALUE OLIST_CLIENT_ID_VALUE OLIST_CLIENT_SECRET_VALUE OLIST_REFRESH_TOKEN_VALUE TINY_CLIENT_ID_VALUE TINY_CLIENT_SECRET_VALUE TINY_REFRESH_TOKEN_VALUE AGENT_KEY_VALUE VM_KEY; do
+            test -n "${!name:-}" || { echo "::error::Required production secret missing: $name"; exit 1; }
+          done
+          echo 'critical_recovery_inputs=present'
+      - name: Configure pinned A1 SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s %s\n' '163.176.103.253' 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICPXjLoakI7MkHQrhQF1jaCF8VTtY1SbDiffx8gNeSxw' > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Restore static checkout credentials atomically
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'cd /home/ubuntu/shopvivaliz-deploy/shared && python3 /home/ubuntu/shopvivaliz-deploy/current/scripts/update-production-env.py'
+          import json, os
+          payload = {
+              'MERCADOPAGO_ACCESS_TOKEN': os.environ['MERCADOPAGO_ACCESS_TOKEN_VALUE'],
+              'MERCADOPAGO_PUBLIC_KEY': os.environ['MERCADOPAGO_PUBLIC_KEY_VALUE'],
+              'MERCADOPAGO_WEBHOOK_SECRET': os.environ['MERCADOPAGO_WEBHOOK_SECRET_VALUE'],
+          }
+          if os.environ.get('MELHORENVIO_ACCESS_TOKEN_VALUE'):
+              payload['MELHORENVIO_ACCESS_TOKEN'] = os.environ['MELHORENVIO_ACCESS_TOKEN_VALUE']
+          print(json.dumps(payload))
+          PY
+      - name: Refresh Olist OAuth into canonical token store
+        shell: bash
+        run: |
+          set -euo pipefail
+          seed="$RUNNER_TEMP/olist-oauth.seed"
+          umask 077
+          printf 'OLIST_CLIENT_ID=%s\nOLIST_CLIENT_SECRET=%s\nOLIST_REFRESH_TOKEN=%s\nTINY_CLIENT_ID=%s\nTINY_CLIENT_SECRET=%s\nTINY_REFRESH_TOKEN=%s\n' \
+            "$OLIST_CLIENT_ID_VALUE" "$OLIST_CLIENT_SECRET_VALUE" "$OLIST_REFRESH_TOKEN_VALUE" \
+            "$TINY_CLIENT_ID_VALUE" "$TINY_CLIENT_SECRET_VALUE" "$TINY_REFRESH_TOKEN_VALUE" > "$seed"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" "$seed" ubuntu@163.176.103.253:/tmp/shopvivaliz-oauth-bootstrap.seed
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          current=/home/ubuntu/shopvivaliz-deploy/current
+          shared=/home/ubuntu/shopvivaliz-deploy/shared
+          seed=/tmp/shopvivaliz-oauth-bootstrap.seed
+          export SHOPVIVALIZ_ENV_PATH="$seed"
+          export SHOPVIVALIZ_OLIST_TOKEN_FILE="$shared/private/olist-tokens.json"
+          cd "$current"
+          python3 daemon-token-renewer.py --once
+          python3 scripts/bootstrap-olist-oauth-runtime.py "$shared/.env" "$seed"
+          sudo chown ubuntu:www-data "$shared/.env"
+          chmod 640 "$shared/.env"
+          sudo bash "$current/scripts/install-catalog-sync-service.sh"
+          echo 'olist_oauth_runtime_bootstrap=verified'
+          REMOTE
+      - name: Verify critical providers and storefront audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$RUNNER_TEMP/integrations.json"
+          code="$(curl -sS --max-time 60 -o "$body" -w '%{http_code}' -H "X-Agent-Key: $AGENT_KEY_VALUE" https://shopvivaliz.com.br/api/agent/integrations-health.php)"
+          echo "integration_health_http=$code"
+          python3 - "$body" <<'PY'
+          import json, sys
+          data=json.load(open(sys.argv[1], encoding='utf-8'))
+          states={x.get('key'):x.get('status') for x in data.get('integrations',[]) if isinstance(x,dict)}
+          required=('olist_tiny','mercado_pago','melhor_envio')
+          print('critical_provider_states=' + ','.join(f'{k}:{states.get(k)}' for k in required))
+          if any(states.get(k) != 'connected' for k in required):
+              raise SystemExit('critical provider validation failed')
+          PY
+          SHOPVIVALIZ_AGENT_KEY="$AGENT_KEY_VALUE" bash scripts/production-functional-audit.sh
+
+      - name: Remove temporary credentials
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts" "$RUNNER_TEMP/olist-oauth.seed"
