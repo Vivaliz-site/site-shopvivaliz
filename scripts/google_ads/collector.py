@@ -108,11 +108,13 @@ LIMIT 1
 RECOMMENDATIONS_QUERY = """
 SELECT recommendation.resource_name, recommendation.type,
        recommendation.campaign, recommendation.ad_group,
+       recommendation.impact.base_metrics.impressions,
+       recommendation.impact.base_metrics.clicks,
        recommendation.impact.base_metrics.conversions,
-       recommendation.impact.base_metrics.conversions_value,
        recommendation.impact.base_metrics.cost_micros,
+       recommendation.impact.potential_metrics.impressions,
+       recommendation.impact.potential_metrics.clicks,
        recommendation.impact.potential_metrics.conversions,
-       recommendation.impact.potential_metrics.conversions_value,
        recommendation.impact.potential_metrics.cost_micros
 FROM recommendation
 """
@@ -163,7 +165,7 @@ LIMIT 2000
 """,
     "search_terms": """
 SELECT campaign.id, ad_group.id, search_term_view.search_term,
-       search_term_view.status, segments.search_term_match_type,
+       segments.search_term_targeting_status, segments.search_term_match_type,
        metrics.impressions, metrics.clicks, metrics.cost_micros,
        metrics.conversions, metrics.conversions_value
 FROM search_term_view

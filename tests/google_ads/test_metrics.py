@@ -60,6 +60,19 @@ class MetricsTests(unittest.TestCase):
         self.assertEqual(health["status"], "healthy")
         self.assertEqual(health["reasons"], [])
 
+    def test_non_primary_purchase_action_does_not_open_scaling_gate(self):
+        actions = [
+            {
+                "category": "PURCHASE",
+                "status": "ENABLED",
+                "primary_for_goal": False,
+                "include_in_conversions_metric": True,
+            }
+        ]
+        health = tracking_health(actions, {"7d": [{"conversions": 2, "conversion_value": 150}]})
+        self.assertEqual(health["status"], "unknown")
+        self.assertIn("purchase_conversion_action_missing", health["reasons"])
+
 
 if __name__ == "__main__":
     unittest.main()

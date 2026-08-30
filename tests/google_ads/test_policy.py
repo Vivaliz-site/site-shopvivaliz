@@ -73,6 +73,15 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(result["classification"], "REVIEW")
         self.assertIn("phase_one_excluded", result["blocked_by"])
 
+    def test_performance_max_migration_is_explicitly_phase_one_excluded(self):
+        result = classify_recommendation(
+            {"type": "MIGRATE_DYNAMIC_SEARCH_ADS_CAMPAIGN_TO_PERFORMANCE_MAX", "resource_name": "x"},
+            {"tracking_health": "healthy", "recent_conversions": 100},
+            CONFIG,
+        )
+        self.assertEqual(result["classification"], "REVIEW")
+        self.assertIn("phase_one_excluded", result["blocked_by"])
+
     def test_verified_rsa_asset_completeness_can_be_apply(self):
         result = classify_recommendation(
             {"type": "RESPONSIVE_SEARCH_AD_IMPROVE_AD_STRENGTH", "resource_name": "x"},
@@ -85,6 +94,15 @@ class PolicyTests(unittest.TestCase):
         configured = dict(CONFIG, target_cpa_brl=50.0)
         result = classify_recommendation(
             {"type": "TARGET_CPA_OPT_IN", "resource_name": "x"},
+            {"tracking_health": "healthy", "recent_conversions": 100},
+            configured,
+        )
+        self.assertEqual(result["classification"], "TEST")
+
+    def test_set_target_roas_is_treated_as_bidding_experiment(self):
+        configured = dict(CONFIG, minimum_roas=3.0)
+        result = classify_recommendation(
+            {"type": "SET_TARGET_ROAS", "resource_name": "x"},
             {"tracking_health": "healthy", "recent_conversions": 100},
             configured,
         )

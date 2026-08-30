@@ -1,7 +1,12 @@
 import unittest
 
 from scripts.google_ads.client import GoogleAdsError
-from scripts.google_ads.collector import WINDOWS, collect_account
+from scripts.google_ads.collector import (
+    RECOMMENDATIONS_QUERY,
+    WINDOWS,
+    WINDOW_QUERY_FIELDS,
+    collect_account,
+)
 
 
 class FakeClient:
@@ -108,6 +113,13 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual(error["window"], "7d")
         self.assertEqual(error["reason"], "INVALID_ARGUMENT")
         self.assertNotIn("fixture secret detail", str(error))
+
+    def test_v25_queries_use_supported_impact_and_search_term_fields(self):
+        self.assertNotIn("impact.base_metrics.conversions_value", RECOMMENDATIONS_QUERY)
+        self.assertNotIn("impact.potential_metrics.conversions_value", RECOMMENDATIONS_QUERY)
+        self.assertIn("impact.base_metrics.conversions", RECOMMENDATIONS_QUERY)
+        self.assertNotIn("search_term_view.status", WINDOW_QUERY_FIELDS["search_terms"])
+        self.assertIn("segments.search_term_targeting_status", WINDOW_QUERY_FIELDS["search_terms"])
 
 
 if __name__ == "__main__":

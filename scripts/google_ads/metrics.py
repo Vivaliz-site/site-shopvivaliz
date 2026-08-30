@@ -64,7 +64,13 @@ def tracking_health(
             "include_in_conversions_metric",
             action.get("includeInConversionsMetric", True),
         )
-        if category in {"PURCHASE", "SALE"} and status == "ENABLED" and included is not False:
+        primary = action.get("primary_for_goal", action.get("primaryForGoal", True))
+        if (
+            category in {"PURCHASE", "SALE"}
+            and status == "ENABLED"
+            and included is not False
+            and primary is not False
+        ):
             purchase_actions.append(action)
 
     reasons: list[str] = []
