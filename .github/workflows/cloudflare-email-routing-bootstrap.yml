@@ -6,27 +6,51 @@ on:
     paths:
       - '.github/workflows/cloudflare-email-routing-bootstrap.yml'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'prepare = stage rule only; cutover = enable routing DNS; rollback = disable Cloudflare routing DNS'
+        required: true
+        type: choice
+        default: prepare
+        options:
+          - prepare
+          - cutover
+          - rollback
 
 permissions:
   contents: read
 
 jobs:
-  bootstrap:
+  email-routing:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     env:
       CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+      MODE: ${{ github.event.inputs.mode || 'prepare' }}
       ZONE_NAME: shopvivaliz.com.br
+      SOURCE_EMAIL: atendimento@shopvivaliz.com.br
       DEST_EMAIL: fredmourao@gmail.com
     steps:
-      - name: Inspect and bootstrap Email Routing destination
+      - name: Validate mode and credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$MODE" in prepare|cutover|rollback) ;; *) echo 'INVALID_MODE'; exit 1;; esac
+          test -n "${CF_TOKEN:-}" || { echo 'CF_TOKEN_MISSING'; exit 1; }
+          if [ "$MODE" = cutover ]; then
+            test -n "${BREVO_API_KEY:-}" || { echo 'BREVO_API_KEY_MISSING'; exit 1; }
+          fi
+          echo "MODE=$MODE"
+
+      - name: Inspect state and stage routing rule
+        if: ${{ github.event.inputs.mode != 'rollback' }}
         shell: bash
         run: |
           set -euo pipefail
           api='https://api.cloudflare.com/client/v4'
           auth=(-H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json')
 
-          test -n "${CF_TOKEN:-}" || { echo 'CF_TOKEN_MISSING'; exit 1; }
           verify=$(curl -fsS "${auth[@]}" "$api/user/tokens/verify")
           test "$(jq -r '.success' <<<"$verify")" = true || { echo 'TOKEN_VERIFY_FAILED'; exit 1; }
           echo 'TOKEN_VERIFY_OK'
@@ -35,35 +59,87 @@ jobs:
           zone_id=$(jq -r '.result[0].id // empty' <<<"$zones")
           account_id=$(jq -r '.result[0].account.id // empty' <<<"$zones")
           test -n "$zone_id" -a -n "$account_id" || { echo 'ZONE_OR_ACCOUNT_NOT_FOUND'; exit 1; }
+          echo "ZONE_ID=$zone_id" >> "$GITHUB_ENV"
+          echo "ACCOUNT_ID=$account_id" >> "$GITHUB_ENV"
           echo 'ZONE_LOOKUP_OK'
 
-          settings=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/email/routing" || true)
-          if [ -n "$settings" ]; then
-            echo "ROUTING_STATUS=$(jq -r '.result.status // "unknown"' <<<"$settings")"
-            echo "ROUTING_ENABLED=$(jq -r '.result.enabled // false' <<<"$settings")"
+          settings=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/email/routing")
+          echo "ROUTING_STATUS=$(jq -r '.result.status // "unknown"' <<<"$settings")"
+          echo "ROUTING_ENABLED=$(jq -r '.result.enabled // false' <<<"$settings")"
+
+          dns=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/dns_records?per_page=100")
+          echo 'CURRENT_MX_BEGIN'
+          jq -r --arg n "$ZONE_NAME" '.result[] | select(.type=="MX" and .name==$n) | "MX priority=\(.priority) content=\(.content)"' <<<"$dns"
+          echo 'CURRENT_MX_END'
+
+          addresses=$(curl -fsS "${auth[@]}" "$api/accounts/$account_id/email/routing/addresses")
+          dest_id=$(jq -r --arg e "$DEST_EMAIL" '.result[]? | select(.email==$e and .verified != null) | .id' <<<"$addresses" | head -n1)
+          test -n "$dest_id" || { echo 'DESTINATION_NOT_VERIFIED'; exit 2; }
+          echo 'DESTINATION_VERIFIED'
+
+          rules=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/email/routing/rules")
+          rule_id=$(jq -r --arg src "$SOURCE_EMAIL" '.result[]? | select(any(.matchers[]?; .type=="literal" and .field=="to" and .value==$src)) | .id' <<<"$rules" | head -n1)
+          if [ -n "$rule_id" ]; then
+            target_ok=$(jq -r --arg id "$rule_id" --arg dst "$DEST_EMAIL" '.result[]? | select(.id==$id) | any(.actions[]?; .type=="forward" and (.value // []) == [$dst])' <<<"$rules")
+            test "$target_ok" = true || { echo 'EXISTING_RULE_TARGET_MISMATCH'; exit 3; }
+            echo 'ROUTING_RULE_EXISTS_AND_MATCHES'
+          else
+            payload=$(jq -nc --arg src "$SOURCE_EMAIL" --arg dst "$DEST_EMAIL" '{name:"ShopVivaliz atendimento forwarding",enabled:false,matchers:[{type:"literal",field:"to",value:$src}],actions:[{type:"forward",value:[$dst]}],source:"api"}')
+            created=$(curl -fsS -X POST "${auth[@]}" --data "$payload" "$api/zones/$zone_id/email/routing/rules")
+            test "$(jq -r '.success' <<<"$created")" = true || { echo 'ROUTING_RULE_CREATE_FAILED'; exit 4; }
+            rule_id=$(jq -r '.result.id' <<<"$created")
+            echo 'ROUTING_RULE_CREATED_DISABLED'
+          fi
+          echo "RULE_ID=$rule_id" >> "$GITHUB_ENV"
+          echo 'PREPARE_GATES_PASS'
+
+      - name: Enable rule and Cloudflare routing DNS
+        if: ${{ github.event.inputs.mode == 'cutover' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          api='https://api.cloudflare.com/client/v4'
+          auth=(-H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json')
+
+          current=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/email/routing/rules/$RULE_ID")
+          payload=$(jq '.result | {name,matchers,actions,priority,source} + {enabled:true}' <<<"$current")
+          updated=$(curl -fsS -X PUT "${auth[@]}" --data "$payload" "$api/zones/$ZONE_ID/email/routing/rules/$RULE_ID")
+          test "$(jq -r '.success' <<<"$updated")" = true || { echo 'RULE_ENABLE_FAILED'; exit 5; }
+          echo 'ROUTING_RULE_ENABLED'
+
+          enabled=$(curl -sS -X POST "${auth[@]}" --data '{}' "$api/zones/$ZONE_ID/email/routing/dns")
+          if [ "$(jq -r '.success' <<<"$enabled")" != true ]; then
+            echo 'ROUTING_DNS_ENABLE_FAILED_NO_CUTOVER_CONFIRMED'
+            jq -c '{errors}' <<<"$enabled"
+            exit 6
           fi
 
-          addresses=$(curl -sS "${auth[@]}" "$api/accounts/$account_id/email/routing/addresses")
-          if [ "$(jq -r '.success' <<<"$addresses")" != true ]; then
-            echo 'ADDRESS_LIST_PERMISSION_FAILED'
-            jq -c '{errors}' <<<"$addresses"
-            exit 2
-          fi
-          existing=$(jq -r --arg e "$DEST_EMAIL" '.result[]? | select(.email==$e) | .id' <<<"$addresses" | head -n1)
-          if [ -n "$existing" ]; then
-            verified=$(jq -r --arg e "$DEST_EMAIL" '.result[]? | select(.email==$e) | .verified // empty' <<<"$addresses" | head -n1)
-            echo 'DESTINATION_EXISTS'
-            if [ -n "$verified" ]; then echo 'DESTINATION_VERIFIED'; else echo 'DESTINATION_PENDING_VERIFICATION'; fi
-            exit 0
-          fi
+          settings=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/email/routing")
+          test "$(jq -r '.result.enabled // false' <<<"$settings")" = true || { echo 'ROUTING_NOT_ENABLED_AFTER_API_CALL'; exit 7; }
+          echo 'ROUTING_DNS_ENABLED'
 
-          payload=$(jq -nc --arg email "$DEST_EMAIL" '{email:$email}')
-          created=$(curl -sS -X POST "${auth[@]}" --data "$payload" "$api/accounts/$account_id/email/routing/addresses")
-          if [ "$(jq -r '.success' <<<"$created")" != true ]; then
-            echo 'DESTINATION_CREATE_FAILED'
-            jq -c '{errors}' <<<"$created"
-            exit 3
-          fi
-          echo 'DESTINATION_CREATED_PENDING_VERIFICATION'
+      - name: Send controlled inbound probe through Brevo
+        if: ${{ github.event.inputs.mode == 'cutover' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          subject="ShopVivaliz Cloudflare inbound probe ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          payload=$(jq -nc --arg from "$SOURCE_EMAIL" --arg to "$SOURCE_EMAIL" --arg subject "$subject" '{sender:{name:"Shop Vivaliz Atendimento",email:$from},to:[{email:$to,name:"Shop Vivaliz Atendimento"}],subject:$subject,htmlContent:"Controlled inbound validation after Cloudflare Email Routing cutover."}')
+          response=$(curl -fsS -X POST 'https://api.brevo.com/v3/smtp/email' -H 'Content-Type: application/json' -H "api-key: $BREVO_API_KEY" --data "$payload")
+          test -n "$(jq -r '.messageId // empty' <<<"$response")" || { echo 'INBOUND_PROBE_SEND_FAILED'; exit 8; }
+          echo "INBOUND_PROBE_SUBJECT=$subject"
+          echo 'INBOUND_PROBE_SENT_AWAIT_EXTERNAL_GMAIL_VALIDATION'
 
-# probe: 2026-08-29T13:25Z
+      - name: Roll back Cloudflare routing DNS
+        if: ${{ github.event.inputs.mode == 'rollback' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          api='https://api.cloudflare.com/client/v4'
+          auth=(-H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json')
+          zones=$(curl -fsS "${auth[@]}" "$api/zones?name=$ZONE_NAME")
+          zone_id=$(jq -r '.result[0].id // empty' <<<"$zones")
+          test -n "$zone_id" || { echo 'ZONE_NOT_FOUND'; exit 1; }
+          response=$(curl -sS -X DELETE "${auth[@]}" "$api/zones/$zone_id/email/routing/dns")
+          test "$(jq -r '.success' <<<"$response")" = true || { echo 'ROLLBACK_FAILED'; jq -c '{errors}' <<<"$response"; exit 9; }
+          echo 'CLOUDFLARE_ROUTING_DNS_DISABLED'
