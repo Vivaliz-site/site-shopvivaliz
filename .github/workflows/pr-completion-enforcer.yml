@@ -148,7 +148,7 @@ jobs:
                 echo "pr_${pr}_native_branch_update_requested=true"
               else
                 echo "pr_${pr}_native_update_conflicted=true"
-                gh workflow run ai-conflict-resolver.yml --repo "$REPO" --ref main -f "repair-pr-branch=${pr}"
+                gh workflow run ai-conflict-resolver.yml --repo "$REPO" --ref main -f "repair_pr_branch=${pr}"
                 echo "pr_${pr}_free_ai_conflict_repair_dispatched=true"
               fi
               gh api --method POST "repos/${REPO}/issues/${pr}/labels" -f 'labels[]=repair-required-now' >/dev/null
