@@ -1,7 +1,8 @@
 <?php
 $root = dirname(__DIR__);
 $scriptPath = $root . '/scripts/retire-vm-legacy-runtime.sh';
-$workflowPath = $root . '/.github/workflows/vm-legacy-runtime-cleanup.yml';
+$activeWorkflowPath = $root . '/.github/workflows/vm-legacy-runtime-cleanup.yml';
+$disabledWorkflowPath = $activeWorkflowPath . '.disabled';
 $errors = [];
 
 if (!is_file($scriptPath)) {
@@ -44,16 +45,11 @@ if (!is_file($scriptPath)) {
     if (!str_contains($script, 'shopvivaliz-shopee-token-renewer.service.repair-20260808T160822Z.bak')) $errors[] = 'Shopee repair backup cleanup missing';
 }
 
-if (!is_file($workflowPath)) {
-    $errors[] = 'cleanup workflow missing';
-} else {
-    $workflow = (string) file_get_contents($workflowPath);
-    foreach (['StrictHostKeyChecking=yes', 'git restore --source=origin/main -- scripts/retire-vm-legacy-runtime.sh', 'sudo bash scripts/retire-vm-legacy-runtime.sh'] as $needle) {
-        if (!str_contains($workflow, $needle)) $errors[] = "workflow missing: {$needle}";
-    }
-    if (str_contains($workflow, 'git reset --hard') || str_contains($workflow, 'git merge --ff-only')) {
-        $errors[] = 'workflow contains broad/destructive repository mutation';
-    }
+if (is_file($activeWorkflowPath)) {
+    $errors[] = 'retired legacy cleanup workflow must remain inactive';
+}
+if (!is_file($disabledWorkflowPath)) {
+    $errors[] = 'disabled legacy cleanup workflow evidence missing';
 }
 
 if ($errors) {
