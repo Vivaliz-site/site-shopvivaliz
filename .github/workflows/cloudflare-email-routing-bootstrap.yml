@@ -26,7 +26,10 @@ jobs:
           api='https://api.cloudflare.com/client/v4'
           auth=(-H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json')
 
-          test -n "${CF_TOKEN:-}" || { echo 'CF_TOKEN_MISSING'; exit 1; }
+          if [[ -z "${CF_TOKEN:-}" ]]; then
+            echo 'CLOUDFLARE_CREDENTIAL_MISSING'
+            exit 1
+          fi
           verify=$(curl -fsS "${auth[@]}" "$api/user/tokens/verify")
           test "$(jq -r '.success' <<<"$verify")" = true || { echo 'TOKEN_VERIFY_FAILED'; exit 1; }
           echo 'TOKEN_VERIFY_OK'
