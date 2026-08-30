@@ -1,0 +1,62 @@
+name: KOCEPSV Private Peer Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/kocepsv-private-peer-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure verified VM SSH
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key"
+          test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+      - name: Probe KOCEPSV peer without mutation
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" \
+            ubuntu@144.22.157.209 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          if ! command -v tailscale >/dev/null 2>&1; then
+            echo 'TAILSCALE=missing'
+            exit 0
+          fi
+          peer_info="$(tailscale status --json 2>/dev/null | python3 -c 'import json,sys; d=json.load(sys.stdin); found=[]
+for p in (d.get("Peer") or {}).values():
+ n=str(p.get("HostName") or p.get("DNSName") or "").rstrip(".")
+ if "DESKTOP-KOCEPSV" in n.upper():
+  ips=p.get("TailscaleIPs") or []; ip=next((x for x in ips if ":" not in x),""); print("NAME="+n); print("ONLINE="+str(bool(p.get("Online"))).lower()); print("IP="+ip); break')"
+          printf '%s\n' "$peer_info"
+          ip="$(printf '%s\n' "$peer_info" | awk -F= '$1=="IP"{print $2}')"
+          if [[ -z "$ip" ]]; then
+            echo 'SSH22=not_tested'
+          elif timeout 4 bash -c "</dev/tcp/$ip/22" 2>/dev/null; then
+            echo 'SSH22=reachable'
+          else
+            echo 'SSH22=unreachable'
+          fi
+          REMOTE
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
