@@ -74,6 +74,7 @@ jobs:
             scripts/maintenance/audit_automation_changes.py \
             scripts/maintenance/audit_active_workflows.py \
             scripts/maintenance/audit_secret_references.py \
+            scripts/maintenance/compare_secret_audit_reports.py \
             scripts/maintenance/system_health_check.py \
             scripts/maintenance/finalize_reorganization.py \
             scripts/generate_repository_index.py \
@@ -109,9 +110,11 @@ jobs:
             tests.unit.test_audit_automation_changes \
             tests.unit.test_audit_active_workflows \
             tests.unit.test_agent_evidence_state \
+            tests.unit.test_compare_secret_audit_reports \
             tests.unit.test_git_auto_sync \
             tests.unit.test_generate_repository_index \
             tests.unit.test_olist_entrypoints_safe \
+            tests.unit.test_repository_governance_secret_debt \
             tests.unit.test_shopee_legacy_credentials_safe \
             -v
 
@@ -154,7 +157,42 @@ jobs:
 
       - name: Audit token and secret references
         if: always()
-        run: python scripts/maintenance/audit_secret_references.py
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          status=0
+          python scripts/maintenance/audit_secret_references.py || status=$?
+          test -s artifacts/secret-references/report.json
+          test -s artifacts/secret-references/report.md
+
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "$status" -ne 0 ]; then
+            base_dir="$RUNNER_TEMP/secret-audit-base-${GITHUB_RUN_ID}"
+            git worktree add --detach "$base_dir" "${{ steps.base.outputs.base }}"
+            if (
+              cd "$base_dir"
+              mkdir -p artifacts/secret-references
+              python scripts/maintenance/audit_secret_references.py >/dev/null 2>&1
+            ); then
+              test -s "$base_dir/artifacts/secret-references/report.json"
+            else
+              test -s "$base_dir/artifacts/secret-references/report.json"
+            fi
+
+            compare_status=0
+            python scripts/maintenance/compare_secret_audit_reports.py \
+              --base-report "$base_dir/artifacts/secret-references/report.json" \
+              --head-report "artifacts/secret-references/report.json" || compare_status=$?
+            git worktree remove --force "$base_dir"
+            if [ "$compare_status" -ne 0 ]; then
+              exit "$compare_status"
+            fi
+            echo "::warning::Repository-wide secret-reference debt is unchanged from the PR base; no new blocking finding was introduced."
+            status=0
+          fi
+
+          exit "$status"
 
       - name: Verify final reorganization contract
         if: always()
