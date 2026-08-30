@@ -40,6 +40,7 @@ jobs:
           python3 tests/test_melhorenvio_integration_health_contract.py
           python3 tests/test_critical_integration_recovery_workflows.py
           python3 tests/test_production_pipeline_runtime_contract.py
+          python3 tests/test_policy_engine_nonvisual_contract.py
           python3 -m py_compile scripts/seo-integrity-audit.py
           node --check scripts/public-layout-audit.mjs
           node --test tests/public-route-discovery.test.mjs tests/public-page-health.test.mjs
