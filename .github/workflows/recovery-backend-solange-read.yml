@@ -1,0 +1,50 @@
+name: Recovery backend Solange preserved files read-only
+
+on:
+  push:
+    branches: [recovery/two-a1-20260829]
+    paths:
+      - '.github/workflows/recovery-backend-solange-read.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  read-preserved:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure verified backend SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
+
+      - name: Read preserved Solange files
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'bash -s' <<'SH'
+          set -Eeuo pipefail
+          cd /home/ubuntu/solange-rolla-consultorio
+          for f in \
+            'src/app/api/webhooks/messaging/[provider]/route.ts' \
+            'src/modules/messaging/application/ingest-provider-event.ts' \
+            'tests/architecture/vitest-operational-ignore.test.ts' \
+            'tests/integration/messaging-webhook.test.ts'; do
+            echo "===FILE:$f==="
+            base64 -w0 "$f"
+            echo
+            echo "===END:$f==="
+          done
+          SH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts
