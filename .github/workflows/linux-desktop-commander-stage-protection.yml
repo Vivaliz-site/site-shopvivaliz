@@ -51,7 +51,7 @@ jobs:
             "ubuntu@${VM_HOST}" "SOURCE_SHA='${SOURCE_SHA}' bash -s" <<'REMOTE'
           set -Eeuo pipefail
           supervisor="$(mktemp)"
-          patcher="$(mktemp)"
+          patcher="$(mktemp /tmp/dc-patcher.XXXXXX.mjs)"
           cleanup() { rm -f "$supervisor" "$patcher"; }
           trap cleanup EXIT
           base="https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/${SOURCE_SHA}/scripts"
