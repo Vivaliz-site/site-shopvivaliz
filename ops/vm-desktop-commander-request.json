@@ -1,4 +1,4 @@
 {
-  "action": "recover_session",
-  "reason": "restore provider session only from a backup with the exact same Desktop Commander deviceId"
+  "action": "dc_diagnose",
+  "reason": "diagnose provider/session loss after same-device backup recovery without changing identity"
 }
