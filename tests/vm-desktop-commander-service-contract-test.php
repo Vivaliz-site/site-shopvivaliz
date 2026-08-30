@@ -32,7 +32,11 @@ foreach ([
     if (strpos($installer, $needle) === false) { fwrite(STDERR, "FALHOU: installer sem {$needle}\n"); exit(1); }
 }
 $supervisor = file_get_contents($supervisorPath);
-foreach (['.desktop-commander-device/device.json','NPX_BIN','@wonderwhy-er/desktop-commander@0.2.47','AUTH_REQUIRED','exit 20','remote --persist-session'] as $needle) {
+foreach ([
+    'DEVICE_DIR="$HOME/.desktop-commander-device"',
+    'DEVICE_FILE="$DEVICE_DIR/device.json"',
+    'NPX_BIN','@wonderwhy-er/desktop-commander@0.2.47','AUTH_REQUIRED','exit 20','remote --persist-session'
+] as $needle) {
     if (strpos($supervisor, $needle) === false) { fwrite(STDERR, "FALHOU: supervisor sem {$needle}\n"); exit(1); }
 }
 $all = $unit . $installer . $supervisor;
