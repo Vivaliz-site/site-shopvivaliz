@@ -1,4 +1,4 @@
 {
-  "action": "recover_session",
-  "reason": "restore canonical Desktop Commander provider session on the control VM before continuing the authorized OCI migration"
+  "action": "status",
+  "reason": "safe live audit before minimal Desktop Commander repair on always-free-arm replacement"
 }
