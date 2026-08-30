@@ -39,6 +39,7 @@ jobs:
           node --check scripts/public-layout-audit.mjs
           node --test tests/public-route-discovery.test.mjs tests/public-page-health.test.mjs
           bash tests/master-production-monitor-regression.sh
+          bash tests/production-runtime-reconciliation-regression.sh
           bash -n scripts/deploy-production.sh
           grep -q 'a2enmod rewrite' scripts/deploy-production.sh
           grep -q 'urllib.parse.quote(path' scripts/seo-integrity-audit.py
@@ -56,7 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -q '163.176.103.253' .github/workflows/master-production-pipeline.yml
-          ! grep -q '163.176.103.253' .github/workflows/master-production-pipeline.yml
+          ! grep -q '137.131.156.17' .github/workflows/master-production-pipeline.yml
           grep -q 'SEO routing invariant' scripts/deploy-production.sh
           test -f .github/workflows/public-layout-audit.yml
           grep -q 'Master Production Pipeline 24/7' .github/workflows/public-layout-audit.yml
