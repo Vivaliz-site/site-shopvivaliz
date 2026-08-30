@@ -76,7 +76,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Instalar pytest
-        run: pip install --quiet pytest
+        run: pip install --quiet pytest requests
       - name: Rodar pytest (nao bloqueante, so inventario)
         run: |
           set +e
