@@ -39,6 +39,7 @@ jobs:
           node --check scripts/public-layout-audit.mjs
           node --test tests/public-route-discovery.test.mjs tests/public-page-health.test.mjs
           bash tests/master-production-monitor-regression.sh
+          bash tests/production-runtime-reconciliation-regression.sh
           bash -n scripts/deploy-production.sh
           grep -q 'a2enmod rewrite' scripts/deploy-production.sh
           grep -q 'urllib.parse.quote(path' scripts/seo-integrity-audit.py
