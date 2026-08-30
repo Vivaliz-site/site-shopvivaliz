@@ -71,6 +71,12 @@ jobs:
           codex login status 2>/dev/null || true
           ls -ld "$HOME/.codex" 2>/dev/null || true
           test -f "$HOME/.codex/auth.json" && echo 'CODEX_AUTH_FILE_PRESENT=true' || echo 'CODEX_AUTH_FILE_PRESENT=false'
+          echo '=== DC PERSISTENCE METADATA ==='
+          for f in "$HOME/.desktop-commander-device/device.json" "$HOME/.desktop-commander-device/session-backup/device.json" "$HOME/.desktop-commander-device/auth-required.cooldown" "$HOME/.desktop-commander-device/provider-connected.marker"; do
+            if [ -e "$f" ]; then stat -c '%n|mtime=%y|size=%s|mode=%a' "$f"; else echo "$f|absent"; fi
+          done
+          sha256sum /usr/local/lib/shopvivaliz/vm-desktop-commander-supervisor.sh /usr/local/lib/shopvivaliz/patch-desktop-commander-session-persistence.mjs 2>/dev/null || true
+          grep -q 'Persist refreshed credentials before a service restart can lose them.' /usr/local/lib/shopvivaliz/patch-desktop-commander-session-persistence.mjs 2>/dev/null && echo 'PATCHER_SENTINEL=true' || echo 'PATCHER_SENTINEL=false'
           echo '=== DC UNIT ==='
           systemctl cat shopvivaliz-desktop-commander.service 2>/dev/null || true
           echo '=== DC STATUS ==='
