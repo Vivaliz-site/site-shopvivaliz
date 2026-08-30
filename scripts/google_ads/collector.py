@@ -186,6 +186,7 @@ LIMIT 1000
 
 def collect_account(client: GoogleAdsClient) -> dict[str, Any]:
     output: dict[str, Any] = {
+        "api_version": client.api_version,
         "customer": {
             "id": client.customer_id,
             "descriptive_name": "",
