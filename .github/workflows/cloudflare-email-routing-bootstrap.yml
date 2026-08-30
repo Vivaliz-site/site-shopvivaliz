@@ -241,8 +241,7 @@ jobs:
           done <<<"$titan_ids"
           echo 'TITAN_MX_REMOVED_FOR_CUTOVER'
 
-          enable_payload=$(jq -nc --arg name "$ZONE_NAME" '{name:$name}')
-          enabled=$(curl -sS -X POST "${auth[@]}" --data "$enable_payload" "$api/zones/$ZONE_ID/email/routing/dns")
+          enabled=$(curl -sS -X POST "${auth[@]}" --data '{}' "$api/zones/$ZONE_ID/email/routing/dns")
           if [ "$(jq -r '.success' <<<"$enabled")" != true ]; then
             echo 'ROUTING_DNS_ENABLE_FAILED_ROLLING_BACK'
             jq -c '{errors}' <<<"$enabled"
