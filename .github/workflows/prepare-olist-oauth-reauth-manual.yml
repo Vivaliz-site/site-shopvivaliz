@@ -56,10 +56,15 @@ jobs:
 
           test -s "$canonical"
           echo 'target_local_store_present=true'
-          sudo chown ubuntu:www-data "$canonical"
+          sudo chown ubuntu:ubuntu "$canonical" "$shared/.env"
           chmod 660 "$canonical"
-          sudo chown ubuntu:www-data "$shared/.env"
           chmod 640 "$shared/.env"
+          restore_group() {
+            sudo chown ubuntu:www-data "$canonical" "$shared/.env" >/dev/null 2>&1 || true
+            chmod 660 "$canonical" >/dev/null 2>&1 || true
+            chmod 640 "$shared/.env" >/dev/null 2>&1 || true
+          }
+          trap restore_group EXIT
 
           python3 - <<'PY'
           import json
@@ -75,10 +80,11 @@ jobs:
           PY
 
           cd "$current"
-          sudo -u ubuntu -g www-data env \
-            SHOPVIVALIZ_ENV_PATH="$shared/.env" \
-            SHOPVIVALIZ_OLIST_TOKEN_FILE="$canonical" \
+          SHOPVIVALIZ_ENV_PATH="$shared/.env" SHOPVIVALIZ_OLIST_TOKEN_FILE="$canonical" \
             python3 daemon-token-renewer.py --once
+
+          restore_group
+          trap - EXIT
 
           python3 - <<'PY'
           import json
