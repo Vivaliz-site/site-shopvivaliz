@@ -14,11 +14,13 @@ def test() -> None:
     assert 'scripts/materialize-runtime-secrets.php' in text
     assert '/tmp/shopvivaliz-update-production-env.py' in text
     assert '/tmp/shopvivaliz-materialize-runtime-secrets.php' in text
-    assert '/api/agent/integrations-health.php' in text
+    assert 'svih_check_all(false)' in text
     assert 'mercado_pago' in text
-    assert 'sudo chown ubuntu:www-data "$shared/.env"' in text
-    materialize = 'php /tmp/shopvivaliz-materialize-runtime-secrets.php'
+    assert 'SHOPVIVALIZ_AGENT_KEY_VALUE' not in text
+    assert 'secrets.SHOPVIVALIZ_AGENT_KEY' not in text
+    assert '/api/agent/integrations-health.php' not in text
     chown = 'sudo chown ubuntu:www-data "$shared/.env"'
+    materialize = 'php /tmp/shopvivaliz-materialize-runtime-secrets.php'
     assert text.index(chown) < text.index(materialize), 'shared env ownership must be fixed before materialization'
     for forbidden in ('secrets.DB_USER','secrets.DB_PASS','secrets.DB_HOST','secrets.OLIST_REFRESH_TOKEN'):
         assert forbidden not in text, f'provider workflow must not touch {forbidden}'
