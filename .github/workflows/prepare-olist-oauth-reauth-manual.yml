@@ -16,25 +16,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  recover:
-    name: Test refresh then promote on Site A1
+  cutover:
+    name: Move live rotating OAuth store to Site A1
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     environment: production
     env:
-      TINY_CLIENT_ID_VALUE: ${{ secrets.TINY_CLIENT_ID }}
-      TINY_CLIENT_SECRET_VALUE: ${{ secrets.TINY_CLIENT_SECRET }}
-      TINY_REFRESH_TOKEN_VALUE: ${{ secrets.TINY_REFRESH_TOKEN }}
+      SOURCE_HOST: 136.248.69.116
+      TARGET_HOST: 163.176.103.253
     steps:
-      - name: Require Tiny OAuth recovery inputs
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          test -n "$TINY_CLIENT_ID_VALUE"
-          test -n "$TINY_CLIENT_SECRET_VALUE"
-          test -n "$TINY_REFRESH_TOKEN_VALUE"
-          echo 'tiny_recovery_inputs=present'
-
       - name: Configure verified SSH
         shell: bash
         env:
@@ -53,75 +43,88 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Upload protected recovery seed
+      - name: Validate live source token store
         shell: bash
         run: |
           set -Eeuo pipefail
-          seed="$RUNNER_TEMP/olist-recovery.seed"
-          SEED_PATH="$seed" python3 - <<'PY'
-          import os
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            "ubuntu@$SOURCE_HOST" 'python3 -' <<'PY'
+          import json
+          import time
+          import urllib.request
           from pathlib import Path
-          values = {
-              'TINY_CLIENT_ID': os.environ.get('TINY_CLIENT_ID_VALUE', ''),
-              'TINY_CLIENT_SECRET': os.environ.get('TINY_CLIENT_SECRET_VALUE', ''),
-              'TINY_REFRESH_TOKEN': os.environ.get('TINY_REFRESH_TOKEN_VALUE', ''),
-          }
-          for key, value in values.items():
-              if not value.strip() or any(ch in value for ch in ('\r', '\n', '\x00')):
-                  raise SystemExit('invalid recovery credential: ' + key)
-          path = Path(os.environ['SEED_PATH'])
-          path.write_text(''.join(f'{k}={v}\n' for k, v in values.items()), encoding='utf-8')
-          path.chmod(0o600)
-          print('recovery_seed_prepared=true')
-          PY
-          scp -q -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "$seed" ubuntu@163.176.103.253:/tmp/shopvivaliz-olist-recovery.seed
 
-      - name: Test refresh in isolation and promote only after API 200
+          path = Path('/home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json')
+          if not path.is_file():
+              raise SystemExit('source token store missing')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          token = data.get('TINY_ACCESS_TOKEN') or data.get('OLIST_ACCESS_TOKEN') or ''
+          refresh = data.get('TINY_REFRESH_TOKEN') or data.get('OLIST_REFRESH_TOKEN') or ''
+          expires = int(data.get('expires_at_epoch') or 0)
+          if not token or not refresh or expires <= int(time.time()):
+              raise SystemExit('source token store is not currently valid')
+          req = urllib.request.Request(
+              'https://api.tiny.com.br/public-api/v3/produtos/343571958',
+              headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/json'},
+          )
+          with urllib.request.urlopen(req, timeout=20) as response:
+              if int(response.status) != 200:
+                  raise SystemExit('source API validation failed')
+          print('source_token_store_valid=true')
+          print('source_product_get_http=200')
+          PY
+
+      - name: Freeze source rotation and transfer protected store
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
+          transport="$RUNNER_TEMP/olist-tokens.cutover.json"
+          source_frozen=0
+          promoted=0
+          cleanup() {
+            rc=$?
+            rm -f "$transport"
+            ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+              "ubuntu@$TARGET_HOST" 'rm -f /tmp/olist-tokens.cutover.json' >/dev/null 2>&1 || true
+            if [[ "$source_frozen" = 1 && "$promoted" != 1 ]]; then
+              ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+                -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+                "ubuntu@$SOURCE_HOST" 'sudo systemctl start shopvivaliz-token-renewer.service' >/dev/null 2>&1 || true
+            fi
+            exit "$rc"
+          }
+          trap cleanup EXIT
+
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            "ubuntu@$SOURCE_HOST" 'sudo systemctl stop shopvivaliz-token-renewer.service'
+          source_frozen=1
+
+          scp -q -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            "ubuntu@$SOURCE_HOST:/home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json" "$transport"
+          chmod 600 "$transport"
+          test -s "$transport"
+
+          scp -q -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            "$transport" "ubuntu@$TARGET_HOST:/tmp/olist-tokens.cutover.json"
+
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            "ubuntu@$TARGET_HOST" 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
           current=/home/ubuntu/shopvivaliz-deploy/current
           shared=/home/ubuntu/shopvivaliz-deploy/shared
-          seed=/tmp/shopvivaliz-olist-recovery.seed
-          work=/tmp/shopvivaliz-olist-recovery-work
-          temp_store="$work/tokens.json"
+          incoming=/tmp/olist-tokens.cutover.json
           canonical="$shared/private/olist-tokens.json"
-          cleanup() {
-            rm -f "$seed" "$temp_store"
-            rmdir "$work" 2>/dev/null || true
-          }
-          trap cleanup EXIT
-          test -s "$seed"
-          chmod 600 "$seed"
-          rm -rf "$work"
-          install -m 700 -d "$work"
+          test -s "$incoming"
+          install -m 660 -o ubuntu -g www-data "$incoming" "$canonical"
+          rm -f "$incoming"
+
           cd "$current"
-
-          SHOPVIVALIZ_ENV_PATH="$seed" SHOPVIVALIZ_OLIST_TOKEN_FILE="$temp_store" \
-            python3 daemon-token-renewer.py --once
-
-          SHOPVIVALIZ_OLIST_TOKEN_FILE="$temp_store" python3 - <<'PY'
-          import json, time, urllib.request
-          from pathlib import Path
-          path=Path('/tmp/shopvivaliz-olist-recovery-work/tokens.json')
-          data=json.loads(path.read_text(encoding='utf-8'))
-          token=data.get('TINY_ACCESS_TOKEN') or data.get('OLIST_ACCESS_TOKEN') or ''
-          refresh=data.get('TINY_REFRESH_TOKEN') or data.get('OLIST_REFRESH_TOKEN') or ''
-          expires=int(data.get('expires_at_epoch') or 0)
-          assert token and refresh and expires > int(time.time())
-          req=urllib.request.Request(
-              'https://api.tiny.com.br/public-api/v3/produtos/343571958',
-              headers={'Authorization':'Bearer '+token,'Accept':'application/json'},
-          )
-          with urllib.request.urlopen(req, timeout=20) as response:
-              assert int(response.status) == 200
-          print('isolated_product_get_http=200')
-          PY
-
-          install -m 660 -o ubuntu -g www-data "$temp_store" "$canonical"
           SHOPVIVALIZ_ENV_PATH="$shared/.env" SHOPVIVALIZ_OLIST_TOKEN_FILE="$canonical" \
             python3 daemon-token-renewer.py --once
           sudo chown ubuntu:www-data "$shared/.env" "$canonical"
@@ -129,31 +132,77 @@ jobs:
           chmod 660 "$canonical"
 
           python3 - <<'PY'
-          import json, time, urllib.request
+          import json
+          import time
+          import urllib.request
           from pathlib import Path
-          path=Path('/home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json')
-          data=json.loads(path.read_text(encoding='utf-8'))
-          token=data.get('TINY_ACCESS_TOKEN') or data.get('OLIST_ACCESS_TOKEN') or ''
-          expires=int(data.get('expires_at_epoch') or 0)
-          assert token and expires > int(time.time())
-          req=urllib.request.Request(
+
+          path = Path('/home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          token = data.get('TINY_ACCESS_TOKEN') or data.get('OLIST_ACCESS_TOKEN') or ''
+          refresh = data.get('TINY_REFRESH_TOKEN') or data.get('OLIST_REFRESH_TOKEN') or ''
+          expires = int(data.get('expires_at_epoch') or 0)
+          if not token or not refresh or expires <= int(time.time()):
+              raise SystemExit('target token store invalid after rotation')
+          req = urllib.request.Request(
               'https://api.tiny.com.br/public-api/v3/produtos/343571958',
-              headers={'Authorization':'Bearer '+token,'Accept':'application/json'},
+              headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/json'},
           )
           with urllib.request.urlopen(req, timeout=20) as response:
-              assert int(response.status) == 200
-          print('canonical_product_get_http=200')
-          print('oauth_recovery_promoted=true')
+              if int(response.status) != 200:
+                  raise SystemExit('target API validation failed')
+          print('target_product_get_http=200')
+          print('oauth_cutover_promoted=true')
           PY
+
+          sudo tee /etc/systemd/system/shopvivaliz-token-renewer.service >/dev/null <<'UNIT'
+          [Unit]
+          Description=ShopVivaliz Olist OAuth Token Renewer
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          User=ubuntu
+          Group=www-data
+          WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/current
+          EnvironmentFile=/home/ubuntu/shopvivaliz-deploy/shared/.env
+          Environment=PYTHONUNBUFFERED=1
+          ExecStart=/usr/bin/python3 /home/ubuntu/shopvivaliz-deploy/current/daemon-token-renewer.py --interval 7200 --retry-interval 900
+          Restart=always
+          RestartSec=30
+          TimeoutStopSec=30
+          UMask=0027
+          NoNewPrivileges=true
+          PrivateTmp=true
+          ProtectSystem=full
+          StandardOutput=journal
+          StandardError=journal
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+          sudo systemctl daemon-reload
+          sudo systemctl enable --now shopvivaliz-token-renewer.service
+          systemctl is-active --quiet shopvivaliz-token-renewer.service
+          systemctl is-enabled --quiet shopvivaliz-token-renewer.service
+          echo 'target_token_renewer=active_enabled'
           REMOTE
+
+          promoted=1
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            "ubuntu@$SOURCE_HOST" 'sudo systemctl disable shopvivaliz-token-renewer.service >/dev/null 2>&1 || true'
+          echo 'source_token_renewer=stopped_disabled'
 
       - name: Remove recovery material
         if: always()
         shell: bash
         run: |
-          rm -f "$RUNNER_TEMP/olist-recovery.seed"
+          rm -f "$RUNNER_TEMP/olist-tokens.cutover.json"
           if [[ -f "$HOME/.ssh/id_rsa" && -f "$HOME/.ssh/known_hosts" ]]; then
-            ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              ubuntu@163.176.103.253 'rm -f /tmp/shopvivaliz-olist-recovery.seed; rm -rf /tmp/shopvivaliz-olist-recovery-work' || true
+            ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+              "ubuntu@$TARGET_HOST" 'rm -f /tmp/olist-tokens.cutover.json' >/dev/null 2>&1 || true
           fi
           rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
