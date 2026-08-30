@@ -57,8 +57,8 @@ jobs:
             --time-usage-ended "$end" \
             --granularity DAILY \
             --query-type COST \
-            --query 'data.items[].{"service":service,"sku":skuName,"amount":computedAmount,"currency":currency,"subscription":"subscription-id","start":"time-usage-started"}' \
-            --output table || true
+            --query 'data.items[].{"service":service,"sku":"sku-name","amount":"computed-amount","currency":currency,"quantity":"computed-quantity","unit":unit,"start":"time-usage-started"}' \
+            --output table
 
       - name: Cleanup
         if: always()
