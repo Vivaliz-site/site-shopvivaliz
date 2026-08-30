@@ -1,0 +1,75 @@
+name: Recovery two-A1 OCI read-only audit
+
+on:
+  push:
+    branches: [recovery/two-a1-20260829]
+    paths:
+      - '.github/workflows/recovery-two-a1-oci-readonly.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Configure OCI credentials
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for v in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!v:-}" || { echo "missing_secret=$v"; exit 2; }
+          done
+          install -m 700 -d "$HOME/.oci"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$HOME/.oci/key.pem"
+          chmod 600 "$HOME/.oci/key.pem"
+          cat > "$HOME/.oci/config" <<EOF
+          [DEFAULT]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$HOME/.oci/key.pem
+          EOF
+          chmod 600 "$HOME/.oci/config"
+
+      - name: Install OCI CLI
+        run: python3 -m pip install --quiet oci-cli
+
+      - name: Read current compute and storage state
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          tenancy="$(awk -F= '/^tenancy=/{print $2; exit}' "$HOME/.oci/config")"
+          echo '=== ACTIVE INSTANCES ==='
+          oci compute instance list --compartment-id "$tenancy" --all \
+            --query 'data[?"lifecycle-state"!=`TERMINATED`].{"name":"display-name","state":"lifecycle-state","shape":shape,"ocpus":"shape-config".ocpus,"memory_gb":"shape-config"."memory-in-gbs","created":"time-created","id":id}' --output table
+          echo '=== ALL BOOT VOLUMES ==='
+          oci bv boot-volume list --compartment-id "$tenancy" --all \
+            --query 'data[].{"name":"display-name","state":"lifecycle-state","size_gb":"size-in-gbs","created":"time-created","id":id}' --output table
+          echo '=== BOOT VOLUME BACKUPS ==='
+          oci bv boot-volume-backup list --compartment-id "$tenancy" --all \
+            --query 'data[].{"name":"display-name","state":"lifecycle-state","size_gb":"size-in-gbs","created":"time-created","source_type":"source-type","id":id}' --output table
+          echo '=== CUSTOM IMAGES ==='
+          oci compute image list --compartment-id "$tenancy" --all \
+            --query 'data[?"operating-system"!=null].{"name":"display-name","state":"lifecycle-state","created":"time-created","base":"base-image-id","id":id}' --output table
+          echo '=== BLOCK VOLUMES ==='
+          oci bv volume list --compartment-id "$tenancy" --all \
+            --query 'data[].{"name":"display-name","state":"lifecycle-state","size_gb":"size-in-gbs","created":"time-created","id":id}' --output table
+          echo '=== A1 SERVICE LIMITS ==='
+          oci limits value list --service-name compute --compartment-id "$tenancy" --all \
+            --query 'data[?contains(name, `a1`) || contains(name, `standard-a1`) || contains(name, `vm-standard-a1`)].{name:name,value:value,scope:"scope-type"}' --output table || true
+          echo '=== STANDARD E2 SERVICE LIMITS ==='
+          oci limits value list --service-name compute --compartment-id "$tenancy" --all \
+            --query 'data[?contains(name, `e2`) || contains(name, `standard-e2`)].{name:name,value:value,scope:"scope-type"}' --output table || true
+
+      - name: Cleanup
+        if: always()
+        run: rm -rf "$HOME/.oci"
