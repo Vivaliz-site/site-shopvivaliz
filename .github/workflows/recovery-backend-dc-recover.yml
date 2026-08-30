@@ -1,0 +1,55 @@
+name: Recovery backend Desktop Commander inspect and recover
+
+on:
+  push:
+    branches: [recovery/two-a1-20260829]
+    paths:
+      - '.github/workflows/recovery-backend-dc-recover.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Configure verified backend SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
+
+      - name: Inspect and safely restart backend DC
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'bash -s' <<'SH'
+          set -Eeuo pipefail
+          service=shopvivaliz-desktop-commander.service
+          echo "HOST=$(hostname)"
+          echo "BEFORE_ACTIVE=$(systemctl is-active "$service" 2>/dev/null || true)"
+          echo "BEFORE_ENABLED=$(systemctl is-enabled "$service" 2>/dev/null || true)"
+          journalctl -u "$service" -b -n 40 --no-pager 2>/dev/null | sed -E 's/(token|secret|password|authorization)=[^ ]+/\1=[REDACTED]/Ig' || true
+          if systemctl is-active --quiet "$service"; then
+            echo 'RESTART_NEEDED=false'
+          else
+            echo 'RESTART_NEEDED=true'
+            sudo systemctl restart "$service" || true
+            sleep 8
+          fi
+          echo "AFTER_ACTIVE=$(systemctl is-active "$service" 2>/dev/null || true)"
+          echo "AFTER_ENABLED=$(systemctl is-enabled "$service" 2>/dev/null || true)"
+          test -f "$HOME/.desktop-commander-device/provider-connected.marker" && echo 'PROVIDER_MARKER=true' || echo 'PROVIDER_MARKER=false'
+          test -f "$HOME/.desktop-commander-device/auth-required.cooldown" && echo 'AUTH_COOLDOWN=true' || echo 'AUTH_COOLDOWN=false'
+          SH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts
