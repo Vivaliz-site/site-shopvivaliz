@@ -75,7 +75,9 @@ jobs:
           PY
 
           cd "$current"
-          SHOPVIVALIZ_ENV_PATH="$shared/.env" SHOPVIVALIZ_OLIST_TOKEN_FILE="$canonical" \
+          sudo -u ubuntu -g www-data env \
+            SHOPVIVALIZ_ENV_PATH="$shared/.env" \
+            SHOPVIVALIZ_OLIST_TOKEN_FILE="$canonical" \
             python3 daemon-token-renewer.py --once
 
           python3 - <<'PY'
