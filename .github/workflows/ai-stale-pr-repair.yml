@@ -1,0 +1,233 @@
+name: AI Stale PR Repair
+
+on:
+  workflow_dispatch:
+    inputs:
+      repair_pr_branch:
+        description: "Internal PR number to repair against current main"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: ai-stale-pr-repair-${{ inputs.repair_pr_branch }}
+  cancel-in-progress: true
+
+env:
+  OLLAMA_MODEL: qwen2.5-coder:1.5b
+
+jobs:
+  repair:
+    name: repair-pr-branch with free local AI
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Resolve trusted PR metadata
+        id: meta
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const pr = Number('${{ inputs.repair_pr_branch }}');
+            if (!Number.isInteger(pr) || pr <= 0) {
+              core.setFailed('invalid PR number');
+              return;
+            }
+            const { data } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr
+            });
+            if (data.state !== 'open' || data.base.ref !== 'main' || data.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
+              core.setFailed('repair target must be an open internal PR against main');
+              return;
+            }
+            core.setOutput('head_ref', data.head.ref);
+            core.setOutput('head_sha', data.head.sha);
+
+      - name: Checkout exact PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.head_ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Merge current main and classify
+        id: merge
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          base_sha="$(git rev-parse origin/main)"
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+          if git merge --no-ff --no-commit "$base_sha" >/tmp/stale-pr-merge.log 2>&1; then
+            echo "has_conflicts=false" >> "$GITHUB_OUTPUT"
+            echo "safe=true" >> "$GITHUB_OUTPUT"
+          else
+            conflicts="$(git diff --name-only --diff-filter=U)"
+            test -n "$conflicts" || { cat /tmp/stale-pr-merge.log >&2; false; }
+            echo "has_conflicts=true" >> "$GITHUB_OUTPUT"
+            CONFLICTS="$conflicts" python3 - <<'PY' > /tmp/ai-protected.txt
+          import importlib.util
+          import os
+          spec = importlib.util.spec_from_file_location("resolver", ".github/scripts/ai_conflict_resolver.py")
+          resolver = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(resolver)
+          for path in os.environ["CONFLICTS"].splitlines():
+              if resolver.is_protected_path(path):
+                  print(path)
+          PY
+            if [ -s /tmp/ai-protected.txt ]; then
+              echo "safe=false" >> "$GITHUB_OUTPUT"
+              cat /tmp/ai-protected.txt >&2
+              false
+            fi
+            echo "safe=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install local Ollama for real conflicts
+        if: steps.merge.outputs.has_conflicts == 'true' && steps.merge.outputs.safe == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          curl -fsSL https://ollama.com/install.sh | sh
+          nohup ollama serve >/tmp/ollama.log 2>&1 &
+          ready=false
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = true
+          ollama pull "$OLLAMA_MODEL"
+
+      - name: Resolve safe conflicts with free local model
+        if: steps.merge.outputs.has_conflicts == 'true' && steps.merge.outputs.safe == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/ai_conflict_resolver.py
+          test -z "$(git diff --name-only --diff-filter=U)"
+
+      - name: Validate repaired tree
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -z "$(git diff --name-only --diff-filter=U)"
+          git diff --check
+          python3 -m unittest tests/test_ai_conflict_resolver.py
+
+      - name: Build verified Git Data manifest
+        env:
+          MANIFEST_PATH: ${{ runner.temp }}/stale-pr-writeback.json
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import base64
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          def git(*args):
+              return subprocess.check_output(["git", *args])
+
+          raw = git("diff", "--name-status", "-z", "HEAD")
+          parts = raw.decode().split("\0")
+          entries = []
+          i = 0
+          while i < len(parts) and parts[i]:
+              status = parts[i]
+              i += 1
+              code = status[0]
+              if code in {"R", "C"}:
+                  old_path, new_path = parts[i], parts[i + 1]
+                  i += 2
+                  if code == "R":
+                      entries.append({"path": old_path, "delete": True})
+                  path = new_path
+              else:
+                  path = parts[i]
+                  i += 1
+              if code == "D":
+                  entries.append({"path": path, "delete": True})
+                  continue
+              mode_line = git("ls-files", "-s", "--", path).decode().strip()
+              mode = mode_line.split()[0] if mode_line else "100644"
+              entries.append({
+                  "path": path,
+                  "mode": mode,
+                  "content_b64": base64.b64encode(Path(path).read_bytes()).decode(),
+              })
+          if not entries:
+              raise SystemExit("repair produced no tree delta")
+          Path(os.environ["MANIFEST_PATH"]).write_text(json.dumps(entries), encoding="utf-8")
+          print(f"writeback_entries={len(entries)}")
+          PY
+
+      - name: Publish repaired merge commit through GitHub Git Data API
+        uses: actions/github-script@v7
+        env:
+          MANIFEST_PATH: ${{ runner.temp }}/stale-pr-writeback.json
+          HEAD_SHA: ${{ steps.meta.outputs.head_sha }}
+          BASE_SHA: ${{ steps.merge.outputs.base_sha }}
+          HEAD_REF: ${{ steps.meta.outputs.head_ref }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const headSha = process.env.HEAD_SHA;
+            const baseSha = process.env.BASE_SHA;
+            const headRef = process.env.HEAD_REF;
+            const current = await github.rest.git.getRef({ owner, repo, ref: `heads/${headRef}` });
+            if (current.data.object.sha !== headSha) {
+              core.setFailed(`PR branch moved: expected ${headSha}, found ${current.data.object.sha}`);
+              return;
+            }
+            const headCommit = await github.rest.git.getCommit({ owner, repo, commit_sha: headSha });
+            const manifest = JSON.parse(fs.readFileSync(process.env.MANIFEST_PATH, 'utf8'));
+            const tree = [];
+            for (const item of manifest) {
+              if (item.delete) {
+                tree.push({ path: item.path, mode: '100644', type: 'blob', sha: null });
+                continue;
+              }
+              const blob = await github.rest.git.createBlob({
+                owner,
+                repo,
+                content: item.content_b64,
+                encoding: 'base64'
+              });
+              tree.push({ path: item.path, mode: item.mode, type: 'blob', sha: blob.data.sha });
+            }
+            const newTree = await github.rest.git.createTree({
+              owner,
+              repo,
+              base_tree: headCommit.data.tree.sha,
+              tree
+            });
+            const commit = await github.rest.git.createCommit({
+              owner,
+              repo,
+              message: 'chore: synchronize PR with main using free local AI repair',
+              tree: newTree.data.sha,
+              parents: [headSha, baseSha]
+            });
+            await github.rest.git.updateRef({
+              owner,
+              repo,
+              ref: `heads/${headRef}`,
+              sha: commit.data.sha,
+              force: false
+            });
+            core.info(`stale_pr_repair_commit=${commit.data.sha}`);
