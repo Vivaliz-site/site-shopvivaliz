@@ -66,6 +66,8 @@ jobs:
             scripts/configure-production-runtime.py ubuntu@163.176.103.253:/tmp/shopvivaliz-configure-production-runtime.py
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
             scripts/materialize-runtime-secrets.php ubuntu@163.176.103.253:/tmp/shopvivaliz-materialize-runtime-secrets.php
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            scripts/env_keyset_guard.py ubuntu@163.176.103.253:/tmp/env_keyset_guard.py
       - name: Atualizar somente configuração estática
         shell: bash
         run: |
@@ -74,7 +76,7 @@ jobs:
             "$DB_HOST_VALUE" "${DB_PORT_VALUE:-3306}" "$DB_NAME_VALUE" "$DB_USER_VALUE" "$DB_PASS_VALUE" \
             "$SHOPVIVALIZ_AGENT_KEY_VALUE" "$MERCADOPAGO_ACCESS_TOKEN_VALUE" "$MERCADOPAGO_PUBLIC_KEY_VALUE" "$MERCADOPAGO_WEBHOOK_SECRET_VALUE" |
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
-              'python3 /tmp/shopvivaliz-configure-production-runtime.py /home/ubuntu/shopvivaliz-deploy/shared/.env'
+              'PYTHONPATH=/tmp python3 /tmp/shopvivaliz-configure-production-runtime.py /home/ubuntu/shopvivaliz-deploy/shared/.env'
 
       - name: Atualizar runtime mínimo do usuário web
         shell: bash
@@ -188,6 +190,6 @@ jobs:
           set -euo pipefail
           if [[ -f "$HOME/.ssh/id_rsa" && -f "$HOME/.ssh/known_hosts" ]]; then
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
-              'rm -f /tmp/shopvivaliz-configure-production-runtime.py /tmp/shopvivaliz-materialize-runtime-secrets.php' || true
+              'rm -f /tmp/shopvivaliz-configure-production-runtime.py /tmp/shopvivaliz-materialize-runtime-secrets.php /tmp/env_keyset_guard.py' || true
           fi
           rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"

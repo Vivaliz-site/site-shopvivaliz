@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WF = ROOT / '.github' / 'workflows' / 'configure-production-runtime.yml'
@@ -8,8 +8,11 @@ def test() -> None:
     text = WF.read_text(encoding='utf-8')
     assert 'scripts/configure-production-runtime.py' in text
     assert 'scripts/materialize-runtime-secrets.php' in text
+    assert 'scripts/env_keyset_guard.py' in text
     assert '/tmp/shopvivaliz-configure-production-runtime.py' in text
     assert '/tmp/shopvivaliz-materialize-runtime-secrets.php' in text
+    assert '/tmp/env_keyset_guard.py' in text
+    assert 'PYTHONPATH=/tmp python3 /tmp/shopvivaliz-configure-production-runtime.py' in text
     assert 'scp ' in text
     assert "python3 /tmp/shopvivaliz-configure-production-runtime.py" in text
     assert "php /tmp/shopvivaliz-materialize-runtime-secrets.php" in text
