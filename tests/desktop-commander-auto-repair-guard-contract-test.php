@@ -19,11 +19,13 @@ if (preg_match('/bootstrap[^\n]*-Mode InstallTask/i', $health)) {
 }
 
 $control = (string) file_get_contents($controlPath);
-if (strpos($control, 'READ_ONLY_DIAGNOSIS=true') === false) {
-    fwrite(STDERR, "desktop-commander-three-host-control-plane.yml: diagnostico precisa permanecer read-only\n");
-    exit(1);
+foreach (['diagnose:', 'Sanitized diagnostic only. No credentials', 'Publish sanitized status'] as $needle) {
+    if (strpos($control, $needle) === false) {
+        fwrite(STDERR, "desktop-commander-three-host-control-plane.yml: marcador read-only ausente: {$needle}\n");
+        exit(1);
+    }
 }
-foreach (['-Mode InstallTask', 'Register-ScheduledTask', 'install_or_repair)', 'git reset --hard', 'git clean -'] as $forbidden) {
+foreach (['-Mode InstallTask', 'Register-ScheduledTask', 'install_or_repair)', 'git reset --hard', 'git clean -', 'systemctl restart shopvivaliz-desktop-commander'] as $forbidden) {
     if (stripos($control, $forbidden) !== false) {
         fwrite(STDERR, "desktop-commander-three-host-control-plane.yml: mutacao proibida em diagnostico: {$forbidden}\n");
         exit(1);
