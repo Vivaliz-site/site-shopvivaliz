@@ -42,6 +42,12 @@ $attrsCorChumbo = svs_catalog_attributes($comCorChumbo);
 svjapi_assert(in_array('Cor: Preto', $attrsCorChumbo, true), 'grade Cor Chumbo da JAPI deve ser normalizada para Preto');
 svjapi_assert(!in_array('Cor: Chumbo', $attrsCorChumbo, true), 'catalogo nao deve publicar Cor: Chumbo para JAPI');
 
+$comCorAzulExplicita = $japiChumbo;
+$comCorAzulExplicita['variacoes'] = [['grade' => [['chave' => 'Cor', 'valor' => 'Azul']]]];
+$attrsCorAzulExplicita = svs_catalog_attributes($comCorAzulExplicita);
+svjapi_assert(in_array('Cor: Azul', $attrsCorAzulExplicita, true), 'cor explicita diferente de Chumbo deve ser preservada');
+svjapi_assert(!in_array('Cor: Preto', $attrsCorAzulExplicita, true), 'regra JAPI nao pode sobrescrever cor explicita diferente');
+
 $syncSource = (string)file_get_contents(__DIR__ . '/../olist/sync-products.php');
 svjapi_assert(
     str_contains($syncSource, "require_once __DIR__ . '/catalog-attributes.php';"),
