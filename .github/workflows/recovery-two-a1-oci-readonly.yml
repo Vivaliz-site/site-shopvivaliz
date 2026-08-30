@@ -51,24 +51,15 @@ jobs:
           echo '=== ACTIVE INSTANCES ==='
           oci compute instance list --compartment-id "$tenancy" --all \
             --query 'data[?"lifecycle-state"!=`TERMINATED`].{"name":"display-name","state":"lifecycle-state","shape":shape,"ocpus":"shape-config".ocpus,"memory_gb":"shape-config"."memory-in-gbs","created":"time-created","id":id}' --output table
-          echo '=== ALL BOOT VOLUMES ==='
+          echo '=== ACTIVE BOOT VOLUMES ==='
           oci bv boot-volume list --compartment-id "$tenancy" --all \
-            --query 'data[].{"name":"display-name","state":"lifecycle-state","size_gb":"size-in-gbs","created":"time-created","id":id}' --output table
+            --query 'data[?"lifecycle-state"==`AVAILABLE`].{"name":"display-name","size_gb":"size-in-gbs","vpus_per_gb":"vpus-per-gb","state":"lifecycle-state","id":id}' --output table
           echo '=== BOOT VOLUME BACKUPS ==='
           oci bv boot-volume-backup list --compartment-id "$tenancy" --all \
             --query 'data[].{"name":"display-name","state":"lifecycle-state","size_gb":"size-in-gbs","created":"time-created","source_type":"source-type","id":id}' --output table
-          echo '=== CUSTOM IMAGES ==='
-          oci compute image list --compartment-id "$tenancy" --all \
-            --query 'data[?"operating-system"!=null].{"name":"display-name","state":"lifecycle-state","created":"time-created","base":"base-image-id","id":id}' --output table
           echo '=== BLOCK VOLUMES ==='
           oci bv volume list --compartment-id "$tenancy" --all \
-            --query 'data[].{"name":"display-name","state":"lifecycle-state","size_gb":"size-in-gbs","created":"time-created","id":id}' --output table
-          echo '=== A1 SERVICE LIMITS ==='
-          oci limits value list --service-name compute --compartment-id "$tenancy" --all \
-            --query 'data[?contains(name, `a1`) || contains(name, `standard-a1`) || contains(name, `vm-standard-a1`)].{name:name,value:value,scope:"scope-type"}' --output table || true
-          echo '=== STANDARD E2 SERVICE LIMITS ==='
-          oci limits value list --service-name compute --compartment-id "$tenancy" --all \
-            --query 'data[?contains(name, `e2`) || contains(name, `standard-e2`)].{name:name,value:value,scope:"scope-type"}' --output table || true
+            --query 'data[].{"name":"display-name","state":"lifecycle-state","size_gb":"size-in-gbs","vpus_per_gb":"vpus-per-gb","id":id}' --output table
 
       - name: Cleanup
         if: always()
