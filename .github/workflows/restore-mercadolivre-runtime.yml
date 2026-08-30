@@ -1,0 +1,113 @@
+name: Restore Mercado Livre Runtime
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: restore-mercadolivre-runtime
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      ML_CLIENT_ID_VALUE: ${{ secrets.ML_CLIENT_ID }}
+      ML_CLIENT_SECRET_VALUE: ${{ secrets.ML_CLIENT_SECRET }}
+      ML_REDIRECT_URI_VALUE: ${{ secrets.ML_REDIRECT_URI }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Validate Mercado Livre static credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in ML_CLIENT_ID_VALUE ML_CLIENT_SECRET_VALUE ML_REDIRECT_URI_VALUE; do
+            test -n "${!name:-}" || { echo "::error::Required Mercado Livre secret missing: $name"; exit 1; }
+          done
+          echo 'mercadolivre_static_credentials=present'
+
+      - name: Configure verified SSH
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Upload checked-in runtime tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            scripts/update-production-env.py ubuntu@163.176.103.253:/tmp/shopvivaliz-update-production-env.py
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            scripts/materialize-runtime-secrets.php ubuntu@163.176.103.253:/tmp/shopvivaliz-materialize-runtime-secrets.php
+
+      - name: Merge only Mercado Livre static settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
+            'cd /home/ubuntu/shopvivaliz-deploy/shared && python3 /tmp/shopvivaliz-update-production-env.py'
+          import json, os
+          keys = ('ML_CLIENT_ID','ML_CLIENT_SECRET','ML_REDIRECT_URI')
+          print(json.dumps({key: os.environ[key + '_VALUE'] for key in keys}))
+          PY
+
+      - name: Materialize PHP runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
+            'set -euo pipefail; shared=/home/ubuntu/shopvivaliz-deploy/shared; sudo chown ubuntu:www-data "$shared/.env"; chmod 600 "$shared/.env"; SHOPVIVALIZ_SHARED_ENV="$shared/.env" SHOPVIVALIZ_RUNTIME_SECRETS="$shared/runtime-secrets.php" SHOPVIVALIZ_SHARED_GROUP=www-data php /tmp/shopvivaliz-materialize-runtime-secrets.php; sudo chown ubuntu:www-data "$shared/runtime-secrets.php"; chmod 640 "$shared/runtime-secrets.php"'
+
+      - name: Backup and refresh Mercado Livre OAuth
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          current=/home/ubuntu/shopvivaliz-deploy/current
+          shared=/home/ubuntu/shopvivaliz-deploy/shared
+          store="$shared/storage/private/ml-tokens.json"
+          test -f "$store" || { echo 'ml_token_store_missing' >&2; exit 2; }
+          backup="${store}.backup.$(date -u +%Y%m%d%H%M%S)"
+          cp -p "$store" "$backup"
+          php <<'PHP'
+          <?php
+          require '/home/ubuntu/shopvivaliz-deploy/current/includes/integration-health.php';
+          $item = svih_ml(true);
+          if (($item['status'] ?? '') !== 'connected' || (int)($item['provider_status'] ?? 0) !== 200) {
+              fwrite(STDERR, "mercadolivre_refresh_failed\n");
+              exit(1);
+          }
+          echo "mercadolivre_provider_http=200\n";
+          PHP
+          sudo chown ubuntu:www-data "$store"
+          chmod 640 "$store"
+          test -s "$backup"
+          REMOTE
+
+      - name: Cleanup temporary runtime tools
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f "$HOME/.ssh/id_rsa" && -f "$HOME/.ssh/known_hosts" ]]; then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
+              'rm -f /tmp/shopvivaliz-update-production-env.py /tmp/shopvivaliz-materialize-runtime-secrets.php' || true
+          fi
+          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
