@@ -143,6 +143,19 @@ jobs:
           echo "INBOUND_PROBE_SUBJECT=$subject"
           echo 'ISOLATED_INBOUND_PROBE_SENT'
 
+          sleep 15
+          events=$(curl -fsS -G 'https://api.brevo.com/v3/smtp/statistics/events' -H 'accept: application/json' -H "api-key: $BREVO_API_KEY" --data-urlencode "email=$PROBE_EMAIL" --data-urlencode 'limit=20' --data-urlencode 'sort=desc')
+          echo 'BREVO_PROBE_EVENTS_BEGIN'
+          jq -r '.events[]? | [.date,.event,(.reason // ""),(.subject // "")] | @tsv' <<<"$events"
+          echo 'BREVO_PROBE_EVENTS_END'
+          latest=$(jq -r --arg s "$subject" '.events[]? | select(.subject==$s) | .event' <<<"$events" | head -n1)
+          if [ -z "$latest" ]; then
+            echo 'BREVO_PROBE_EVENT_PENDING'
+          else
+            echo "BREVO_PROBE_EVENT=$latest"
+            case "$latest" in hardBounce|softBounce|blocked|invalid) exit 14;; esac
+          fi
+
       - name: Enable rule and Cloudflare routing DNS
         if: ${{ github.event.inputs.mode == 'cutover' }}
         shell: bash
