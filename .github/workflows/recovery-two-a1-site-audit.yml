@@ -6,6 +6,9 @@ on:
     paths:
       - '.github/workflows/recovery-two-a1-site-audit.yml'
       - 'tests/retired-e2-endpoints-contract-test.php'
+      - 'scripts/vm-desktop-commander-supervisor.sh'
+      - 'scripts/patch-desktop-commander-session-persistence.mjs'
+      - 'tests/desktop-commander-persist-session-contract-test.php'
       - 'DEPLOY_NOW.ps1'
       - 'EXECUTA-ISTO-NO-SERVIDOR.sh'
       - 'TEST-AGENT-ACCESS.sh'
@@ -21,15 +24,15 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Verify PHP and retired-endpoint gates
+      - name: Verify recovery contracts
         shell: bash
         run: |
           set -Eeuo pipefail
-          php -v
           php tests/retired-e2-endpoints-contract-test.php
           php tests/production-workflows-vm2-contract-test.php
           php tests/dated-retired-e2-workflows-disabled-contract-test.php
           php tests/legacy-diagnostic-workflows-disabled-contract-test.php
+          php tests/desktop-commander-persist-session-contract-test.php
 
   site-audit:
     runs-on: ubuntu-latest
@@ -76,15 +79,9 @@ jobs:
             if [ -e "$f" ]; then stat -c '%n|mtime=%y|size=%s|mode=%a' "$f"; else echo "$f|absent"; fi
           done
           sha256sum /usr/local/lib/shopvivaliz/vm-desktop-commander-supervisor.sh /usr/local/lib/shopvivaliz/patch-desktop-commander-session-persistence.mjs 2>/dev/null || true
-          grep -q 'Persist refreshed credentials before a service restart can lose them.' /usr/local/lib/shopvivaliz/patch-desktop-commander-session-persistence.mjs 2>/dev/null && echo 'PATCHER_SENTINEL=true' || echo 'PATCHER_SENTINEL=false'
-          echo '=== DC UNIT ==='
-          systemctl cat shopvivaliz-desktop-commander.service 2>/dev/null || true
+          grep -q 'TOKEN_REFRESHED' /usr/local/lib/shopvivaliz/patch-desktop-commander-session-persistence.mjs 2>/dev/null && echo 'PATCHER_TOKEN_REFRESHED=true' || echo 'PATCHER_TOKEN_REFRESHED=false'
           echo '=== DC STATUS ==='
-          systemctl status shopvivaliz-desktop-commander.service --no-pager -l 2>/dev/null | tail -100 || true
-          echo '=== DC JOURNAL ==='
-          journalctl -u shopvivaliz-desktop-commander.service -b -n 160 --no-pager 2>/dev/null | tail -160 || true
-          echo '=== DC PROCESS ==='
-          pgrep -af 'desktop-commander.*remote|@wonderwhy-er/desktop-commander' 2>/dev/null || true
+          systemctl status shopvivaliz-desktop-commander.service --no-pager -l 2>/dev/null | tail -40 || true
           echo '=== DC FINAL STATE ==='
           systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true
           systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null || true
