@@ -1,0 +1,65 @@
+name: Recovery two-A1 OCI cost read-only audit
+
+on:
+  push:
+    branches: [recovery/two-a1-20260829]
+    paths:
+      - '.github/workflows/recovery-two-a1-oci-cost-readonly.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  cost-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure OCI credentials
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for v in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!v:-}" || { echo "missing_secret=$v"; exit 2; }
+          done
+          install -m 700 -d "$HOME/.oci"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$HOME/.oci/key.pem"
+          chmod 600 "$HOME/.oci/key.pem"
+          cat > "$HOME/.oci/config" <<EOF
+          [DEFAULT]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$HOME/.oci/key.pem
+          EOF
+          chmod 600 "$HOME/.oci/config"
+
+      - name: Install OCI CLI
+        run: python3 -m pip install --quiet oci-cli
+
+      - name: Read recent summarized costs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          tenancy="$(awk -F= '/^tenancy=/{print $2; exit}' "$HOME/.oci/config")"
+          start="$(date -u -d '3 days ago' +%Y-%m-%dT00:00:00Z)"
+          end="$(date -u -d 'tomorrow' +%Y-%m-%dT00:00:00Z)"
+          echo "window=$start..$end"
+          oci usage-api usage-summary request-summarized-usages \
+            --tenant-id "$tenancy" \
+            --time-usage-started "$start" \
+            --time-usage-ended "$end" \
+            --granularity DAILY \
+            --query-type COST \
+            --query 'data.items[].{"service":service,"sku":skuName,"amount":computedAmount,"currency":currency,"subscription":"subscription-id","start":"time-usage-started"}' \
+            --output table || true
+
+      - name: Cleanup
+        if: always()
+        run: rm -rf "$HOME/.oci"
