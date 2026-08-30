@@ -115,11 +115,11 @@ class CollectorTests(unittest.TestCase):
         self.assertNotIn("fixture secret detail", str(error))
 
     def test_v25_queries_use_supported_impact_and_search_term_fields(self):
-        self.assertNotIn("impact.base_metrics.conversions_value", RECOMMENDATIONS_QUERY)
-        self.assertNotIn("impact.potential_metrics.conversions_value", RECOMMENDATIONS_QUERY)
-        self.assertIn("impact.base_metrics.conversions", RECOMMENDATIONS_QUERY)
-        self.assertNotIn("search_term_view.status", WINDOW_QUERY_FIELDS["search_terms"])
-        self.assertIn("segments.search_term_targeting_status", WINDOW_QUERY_FIELDS["search_terms"])
+        self.assertIn("recommendation.impact", RECOMMENDATIONS_QUERY)
+        self.assertNotIn("recommendation.impact.base_metrics", RECOMMENDATIONS_QUERY)
+        self.assertNotIn("recommendation.impact.potential_metrics", RECOMMENDATIONS_QUERY)
+        self.assertIn("search_term_view.status", WINDOW_QUERY_FIELDS["search_terms"])
+        self.assertNotIn("segments.search_term_targeting_status", WINDOW_QUERY_FIELDS["search_terms"])
 
 
 if __name__ == "__main__":

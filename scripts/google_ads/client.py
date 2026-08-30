@@ -49,6 +49,8 @@ def _api_error(error: urllib.error.HTTPError, label: str) -> GoogleAdsError:
         payload = json.loads(body)
     except (TypeError, ValueError):
         payload = {}
+    if isinstance(payload, list) and payload and isinstance(payload[0], dict):
+        payload = payload[0]
     api_error = payload.get("error", {}) if isinstance(payload, dict) else {}
     status = str(api_error.get("status") or f"HTTP_{error.code}")
     message = str(api_error.get("message") or "Google Ads API request failed")[:700]
