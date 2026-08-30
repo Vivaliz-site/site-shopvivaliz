@@ -40,9 +40,15 @@ jobs:
         run: |
           set -euo pipefail
           case "$MODE" in prepare|probe|cutover|rollback) ;; *) echo 'INVALID_MODE'; exit 1;; esac
-          test -n "${CF_TOKEN:-}" || { echo 'CF_TOKEN_MISSING'; exit 1; }
+          if [ -z "${CF_TOKEN:-}" ]; then
+            echo 'CLOUDFLARE_CREDENTIAL_MISSING'
+            exit 1
+          fi
           if [ "$MODE" = cutover ] || [ "$MODE" = probe ]; then
-            test -n "${BREVO_API_KEY:-}" || { echo 'BREVO_API_KEY_MISSING'; exit 1; }
+            if [ -z "${BREVO_API_KEY:-}" ]; then
+              echo 'BREVO_CREDENTIAL_MISSING'
+              exit 1
+            fi
           fi
           echo "MODE=$MODE"
 
@@ -126,7 +132,7 @@ jobs:
           else
             payload=$(jq -nc --arg src "$PROBE_EMAIL" --arg dst "$DEST_EMAIL" '{name:"ShopVivaliz isolated inbound probe",enabled:true,matchers:[{type:"literal",field:"to",value:$src}],actions:[{type:"forward",value:[$dst]}],source:"api"}')
             created=$(curl -fsS -X POST "${auth[@]}" --data "$payload" "$api/zones/$ZONE_ID/email/routing/rules")
-            test "$(jq -r '.success' <<<"$created")" = true || { echo 'PROBE_RULE_CREATE_FAILED'; exit 12; }
+            test "$(jq -r '.success' <<<"$created")" = true || { echo 'PROBE_RULE_ENABLE_FAILED'; exit 12; }
           fi
           echo 'PROBE_ROUTING_RULE_ENABLED'
 
