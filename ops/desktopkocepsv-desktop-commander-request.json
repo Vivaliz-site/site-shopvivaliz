@@ -1,4 +1,4 @@
 {
-  "action": "install_or_repair",
-  "reason": "bounded unattended three-host recovery"
+  "action": "status",
+  "reason": "safe relay probe before minimal KOCEPSV Desktop Commander recovery"
 }
