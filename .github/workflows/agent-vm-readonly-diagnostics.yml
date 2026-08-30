@@ -138,7 +138,12 @@ jobs:
           echo "MODE=apply-checkout-migration"
           cd /home/ubuntu/shopvivaliz-deploy/repo
           git fetch origin main
-          git reset --hard origin/main
+          expected_checkout=$(git rev-parse origin/main:checkout.php)
+          actual_checkout=$(git hash-object checkout.php)
+          if [ "$actual_checkout" != "$expected_checkout" ]; then
+            echo "CHECKOUT_BASE_MISMATCH"
+            exit 20
+          fi
           patch_checkout /home/ubuntu/shopvivaliz-deploy/repo/checkout.php
           php scripts/quality/validate-order-erp-authority.php
           current=$(readlink -f /home/ubuntu/shopvivaliz-deploy/current)
