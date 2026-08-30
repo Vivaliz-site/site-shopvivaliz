@@ -6,6 +6,11 @@ on:
     paths:
       - '.github/workflows/recovery-two-a1-site-audit.yml'
       - 'tests/retired-e2-endpoints-contract-test.php'
+      - 'DEPLOY_NOW.ps1'
+      - 'EXECUTA-ISTO-NO-SERVIDOR.sh'
+      - 'TEST-AGENT-ACCESS.sh'
+      - 'bootstrap-claude-access.sh'
+      - 'installer/make-admin.php'
 
 permissions:
   contents: read
