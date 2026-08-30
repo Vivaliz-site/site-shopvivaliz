@@ -43,7 +43,7 @@ jobs:
       - name: Install OCI CLI
         run: python3 -m pip install --quiet oci-cli
 
-      - name: Read recent summarized costs
+      - name: Read recent costs by service and SKU
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -57,6 +57,7 @@ jobs:
             --time-usage-ended "$end" \
             --granularity DAILY \
             --query-type COST \
+            --group-by '["service","skuName"]' \
             --query 'data.items[].{"service":service,"sku":"sku-name","amount":"computed-amount","currency":currency,"quantity":"computed-quantity","unit":unit,"start":"time-usage-started"}' \
             --output table
 
