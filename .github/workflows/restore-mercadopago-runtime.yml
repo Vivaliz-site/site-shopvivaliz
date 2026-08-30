@@ -71,7 +71,7 @@ jobs:
         run: |
           set -euo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
-            'set -euo pipefail; shared=/home/ubuntu/shopvivaliz-deploy/shared; SHOPVIVALIZ_SHARED_ENV="$shared/.env" SHOPVIVALIZ_RUNTIME_SECRETS="$shared/runtime-secrets.php" SHOPVIVALIZ_SHARED_GROUP=www-data php /tmp/shopvivaliz-materialize-runtime-secrets.php; sudo chown ubuntu:www-data "$shared/.env" "$shared/runtime-secrets.php"; chmod 600 "$shared/.env"; chmod 640 "$shared/runtime-secrets.php"'
+            'set -euo pipefail; shared=/home/ubuntu/shopvivaliz-deploy/shared; sudo chown ubuntu:www-data "$shared/.env"; chmod 600 "$shared/.env"; SHOPVIVALIZ_SHARED_ENV="$shared/.env" SHOPVIVALIZ_RUNTIME_SECRETS="$shared/runtime-secrets.php" SHOPVIVALIZ_SHARED_GROUP=www-data php /tmp/shopvivaliz-materialize-runtime-secrets.php; sudo chown ubuntu:www-data "$shared/runtime-secrets.php"; chmod 640 "$shared/runtime-secrets.php"'
 
       - name: Verify Mercado Pago provider in production
         shell: bash

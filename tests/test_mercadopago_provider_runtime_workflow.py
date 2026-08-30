@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WF = ROOT / '.github' / 'workflows' / 'restore-mercadopago-runtime.yml'
@@ -16,6 +16,10 @@ def test() -> None:
     assert '/tmp/shopvivaliz-materialize-runtime-secrets.php' in text
     assert '/api/agent/integrations-health.php' in text
     assert 'mercado_pago' in text
+    assert 'sudo chown ubuntu:www-data "$shared/.env"' in text
+    materialize = 'php /tmp/shopvivaliz-materialize-runtime-secrets.php'
+    chown = 'sudo chown ubuntu:www-data "$shared/.env"'
+    assert text.index(chown) < text.index(materialize), 'shared env ownership must be fixed before materialization'
     for forbidden in ('secrets.DB_USER','secrets.DB_PASS','secrets.DB_HOST','secrets.OLIST_REFRESH_TOKEN'):
         assert forbidden not in text, f'provider workflow must not touch {forbidden}'
 
