@@ -12,10 +12,10 @@ $required = [
     'fredwin-desktop-commander-runner.ps1',
     'fredwin-desktop-commander-status.ps1',
     'fredwin-desktop-commander-supervisor.ps1',
+    'patch-desktop-commander-session-persistence.mjs',
     "Set-Location 'C:\\site-shopvivaliz'",
     'git fetch origin main',
     'git restore --source=origin/main --',
-    'ops/windows-task/FredWin-DesktopCommander-24h.xml',
     'Action not allowlisted'
 ];
 foreach ($required as $needle) {
@@ -23,9 +23,10 @@ foreach ($required as $needle) {
 }
 $forbidden = [
     'device.json | Get-Content', 'access_token', 'refresh_token', 'auth_token',
-    'git reset --hard', 'git clean -', 'git merge --ff-only origin/main'
+    'git reset --hard', 'git clean -', 'git merge --ff-only origin/main',
+    'ops/windows-task/FredWin-DesktopCommander-24h.xml'
 ];
 foreach ($forbidden as $needle) {
-    if (stripos($yml, $needle) !== false) { fwrite(STDERR, "FALHOU: segredo/log ou mutacao proibida {$needle}\n"); exit(1); }
+    if (stripos($yml, $needle) !== false) { fwrite(STDERR, "FALHOU: segredo/log, artefato aposentado ou mutacao proibida {$needle}\n"); exit(1); }
 }
 echo "fredwin-desktop-commander-relay-contract: ok\n";
