@@ -21,9 +21,14 @@ def test() -> None:
         "shipping_options",
         "mercado_pago",
         "melhor_envio",
+        "olist_tiny",
     ]
     for marker in required_audit_markers:
         assert marker in audit, f"missing functional audit marker: {marker}"
+
+    assert "r.get('ok')" not in audit, (
+        "optional/non-storefront integrations must not make the critical storefront audit fail"
+    )
 
     assert "LOCAL_CONTRACT_SMOKE=PASS" in smoke
     assert "Storefront smoke tests passed." not in smoke
