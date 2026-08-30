@@ -2,6 +2,10 @@ name: Linux Desktop Commander Stage Protection
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/linux-desktop-commander-stage-protection.yml'
 
 permissions:
   contents: read
