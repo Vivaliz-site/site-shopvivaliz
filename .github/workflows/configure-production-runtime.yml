@@ -23,6 +23,9 @@ jobs:
       DB_USER_VALUE: ${{ secrets.DB_USER != '' && secrets.DB_USER || secrets.DB_USERNAME }}
       DB_PASS_VALUE: ${{ secrets.DB_PASS != '' && secrets.DB_PASS || secrets.DB_PASSWORD }}
       SHOPVIVALIZ_AGENT_KEY_VALUE: ${{ secrets.SHOPVIVALIZ_AGENT_KEY != '' && secrets.SHOPVIVALIZ_AGENT_KEY || secrets.AGENT_KEY != '' && secrets.AGENT_KEY || secrets.WATCHDOG_AGENT_KEY != '' && secrets.WATCHDOG_AGENT_KEY || secrets.AUTONOMOUS_AGENT_KEY }}
+      MERCADOPAGO_ACCESS_TOKEN_VALUE: ${{ secrets.MERCADOPAGO_ACCESS_TOKEN }}
+      MERCADOPAGO_PUBLIC_KEY_VALUE: ${{ secrets.MERCADOPAGO_PUBLIC_KEY }}
+      MERCADOPAGO_WEBHOOK_SECRET_VALUE: ${{ secrets.MERCADOPAGO_WEBHOOK_SECRET }}
 
     steps:
       - name: Checkout do código validado
@@ -34,7 +37,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for name in DB_HOST_VALUE DB_NAME_VALUE DB_USER_VALUE DB_PASS_VALUE SHOPVIVALIZ_AGENT_KEY_VALUE; do
+          for name in DB_HOST_VALUE DB_NAME_VALUE DB_USER_VALUE DB_PASS_VALUE SHOPVIVALIZ_AGENT_KEY_VALUE MERCADOPAGO_ACCESS_TOKEN_VALUE MERCADOPAGO_PUBLIC_KEY_VALUE MERCADOPAGO_WEBHOOK_SECRET_VALUE; do
             test -n "${!name:-}" || { echo "::error::Secret ausente: $name"; exit 1; }
           done
           echo 'required_static_runtime_secrets=present'
@@ -61,7 +64,7 @@ jobs:
           set -euo pipefail
           printf '%s\0' \
             "$DB_HOST_VALUE" "${DB_PORT_VALUE:-3306}" "$DB_NAME_VALUE" "$DB_USER_VALUE" "$DB_PASS_VALUE" \
-            "$SHOPVIVALIZ_AGENT_KEY_VALUE" |
+            "$SHOPVIVALIZ_AGENT_KEY_VALUE" "$MERCADOPAGO_ACCESS_TOKEN_VALUE" "$MERCADOPAGO_PUBLIC_KEY_VALUE" "$MERCADOPAGO_WEBHOOK_SECRET_VALUE" |
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
               'python3 /home/ubuntu/shopvivaliz-deploy/current/scripts/configure-production-runtime.py /home/ubuntu/shopvivaliz-deploy/shared/.env'
 

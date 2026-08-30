@@ -16,6 +16,9 @@ KEYS = (
     "DB_USER",
     "DB_PASS",
     "SHOPVIVALIZ_AGENT_KEY",
+    "MERCADOPAGO_ACCESS_TOKEN",
+    "MERCADOPAGO_PUBLIC_KEY",
+    "MERCADOPAGO_WEBHOOK_SECRET",
 )
 
 
@@ -27,6 +30,9 @@ def payload(overrides: dict[str, str]) -> bytes:
         "DB_USER": "shop_runtime",
         "DB_PASS": "database-password",
         "SHOPVIVALIZ_AGENT_KEY": "a" * 40,
+        "MERCADOPAGO_ACCESS_TOKEN": "mp-access",
+        "MERCADOPAGO_PUBLIC_KEY": "mp-public",
+        "MERCADOPAGO_WEBHOOK_SECRET": "mp-webhook",
     }
     values.update(overrides)
     return b"\0".join(values[key].encode() for key in KEYS) + b"\0"
