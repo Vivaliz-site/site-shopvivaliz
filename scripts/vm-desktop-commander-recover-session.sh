@@ -5,8 +5,6 @@ SERVICE='shopvivaliz-desktop-commander.service'
 TARGET='/home/ubuntu/.desktop-commander-device/device.json'
 COOLDOWN='/home/ubuntu/.desktop-commander-device/auth-required.cooldown'
 
-systemctl stop "$SERVICE" || true
-
 candidate="$(python3 - "$TARGET" <<'PY'
 import glob
 import json
@@ -14,6 +12,14 @@ import os
 import sys
 
 target = sys.argv[1]
+try:
+    with open(target, encoding='utf-8') as fh:
+        current = json.load(fh)
+except Exception:
+    raise SystemExit(2)
+current_id = current.get('deviceId') if isinstance(current, dict) else None
+if not isinstance(current_id, str) or not current_id:
+    raise SystemExit(2)
 patterns = [
     '/home/ubuntu/.desktop-commander-device/session-backup/device.json',
     '/home/ubuntu/.desktop-commander-device/*.json*',
@@ -31,21 +37,26 @@ for pattern in patterns:
                 data = json.load(fh)
         except Exception:
             continue
-        session = data.get('session') if isinstance(data, dict) else None
-        if isinstance(session, dict) and session:
-            print(path)
-            raise SystemExit(0)
+        if not isinstance(data, dict) or data.get('deviceId') != current_id:
+            continue
+        session = data.get('session')
+        if not isinstance(session, dict):
+            continue
+        if not session.get('access_token') or not session.get('refresh_token'):
+            continue
+        print(path)
+        raise SystemExit(0)
 raise SystemExit(1)
 PY
 )" || true
 
 if [[ -z "$candidate" ]]; then
   echo 'SESSION_BACKUP_FOUND=false'
-  systemctl start "$SERVICE" || true
   exit 21
 fi
 
 echo 'SESSION_BACKUP_FOUND=true'
+systemctl stop "$SERVICE" || true
 install -m 0600 -o ubuntu -g ubuntu "$candidate" "$TARGET"
 rm -f "$COOLDOWN"
 systemctl start "$SERVICE"
