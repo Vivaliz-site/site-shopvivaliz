@@ -1,0 +1,26 @@
+name: Recovery MEI private access probe
+
+on:
+  push:
+    branches: [recovery/two-a1-20260829]
+    paths:
+      - '.github/workflows/recovery-mei-private-access-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.GH_REPO_TOKEN }}
+    steps:
+      - name: Verify configured cross-repository access
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$GH_TOKEN" || { echo 'GH_REPO_TOKEN_PRESENT=false'; exit 2; }
+          echo 'GH_REPO_TOKEN_PRESENT=true'
+          gh api repos/fredmourao-ai/mei-mg-email --jq '"MEI_ACCESS=true repo=" + .full_name'
+          gh api repos/fredmourao-ai/solange-rolla-consultorio --jq '"SOLANGE_ACCESS=true repo=" + .full_name'
