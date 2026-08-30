@@ -1,25 +1,33 @@
-﻿<?php
-$files = [
-    __DIR__ . '/../.github/workflows/desktop-commander-24h-health.yml',
-    __DIR__ . '/../.github/workflows/desktop-commander-three-host-control-plane.yml',
-];
-foreach ($files as $file) {
-    $text = file_get_contents($file);
-    if (strpos($text, "TASK_EXISTS") === false || strpos($text, "'InstallTask' if") === false) {
-        fwrite(STDERR, basename($file) . ": InstallTask must be conditional on missing TASK_EXISTS\n");
-        exit(1);
-    }
-    if (strpos($text, '-Mode {repair_mode}') === false && strpos($text, '-Mode {mode}') === false) {
-        fwrite(STDERR, basename($file) . ": scheduled DC repair must select Ensure/InstallTask dynamically\n");
-        exit(1);
-    }
-    if (preg_match('/bootstrap[^\n]*-Mode InstallTask/i', $text)) {
-        fwrite(STDERR, basename($file) . ": scheduled bootstrap must not use InstallTask\n");
-        exit(1);
-    }
-    if (!preg_match('/bootstrap[^\n]*-Mode Ensure/i', $text)) {
-        fwrite(STDERR, basename($file) . ": scheduled bootstrap must use Ensure\n");
+<?php
+$root = dirname(__DIR__);
+$healthPath = $root . '/.github/workflows/desktop-commander-24h-health.yml';
+$controlPath = $root . '/.github/workflows/desktop-commander-three-host-control-plane.yml';
+foreach ([$healthPath, $controlPath] as $path) {
+    if (!is_file($path)) { fwrite(STDERR, "FALHOU: workflow ausente {$path}\n"); exit(1); }
+}
+
+$health = (string) file_get_contents($healthPath);
+foreach (["TASK_EXISTS", "'InstallTask' if", '-Mode {repair_mode}', '-Mode Ensure', 'MAX_REPAIR_ATTEMPTS = 1'] as $needle) {
+    if (strpos($health, $needle) === false) {
+        fwrite(STDERR, "desktop-commander-24h-health.yml: bounded repair guard ausente: {$needle}\n");
         exit(1);
     }
 }
+if (preg_match('/bootstrap[^\n]*-Mode InstallTask/i', $health)) {
+    fwrite(STDERR, "desktop-commander-24h-health.yml: bootstrap agendado nao pode usar InstallTask\n");
+    exit(1);
+}
+
+$control = (string) file_get_contents($controlPath);
+if (strpos($control, 'READ_ONLY_DIAGNOSIS=true') === false) {
+    fwrite(STDERR, "desktop-commander-three-host-control-plane.yml: diagnostico precisa permanecer read-only\n");
+    exit(1);
+}
+foreach (['-Mode InstallTask', 'Register-ScheduledTask', 'install_or_repair)', 'git reset --hard', 'git clean -'] as $forbidden) {
+    if (stripos($control, $forbidden) !== false) {
+        fwrite(STDERR, "desktop-commander-three-host-control-plane.yml: mutacao proibida em diagnostico: {$forbidden}\n");
+        exit(1);
+    }
+}
+
 echo "desktop-commander auto-repair guard contract OK\n";
