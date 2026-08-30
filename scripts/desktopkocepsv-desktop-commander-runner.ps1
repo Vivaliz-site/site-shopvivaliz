@@ -5,9 +5,10 @@ $LogDir = Join-Path $Repo 'logs'
 $SupervisorLog = Join-Path $LogDir 'desktopkocepsv-desktop-commander.log'
 $CooldownFile = Join-Path $LogDir 'desktopkocepsv-desktop-commander-auth-required.cooldown'
 $ConnectedMarker = Join-Path $LogDir 'desktopkocepsv-desktop-commander-provider-connected.marker'
+$SessionPatcher = Join-Path $Repo 'scripts\patch-desktop-commander-session-persistence.mjs'
 $Package = '@wonderwhy-er/desktop-commander@0.2.47'
-$AuthPattern = 'Please complete authentication|Starting device authorization flow|device code|Authorization required'
-$ConnectedPattern = 'Device ready|Found persisted session|Connected to Remote MCP|WebSocket connected'
+$AuthPattern = 'Please complete authentication|Starting device authorization flow|device code|Authorization required|Persisted session invalid|Authenticating with Remote MCP server'
+$ConnectedPattern = 'Device ready'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 function Log([string]$Message) {
@@ -27,6 +28,30 @@ function Read-CapturedProviderText([string[]]$Paths) {
 $npx = (Get-Command npx.cmd -ErrorAction SilentlyContinue).Source
 if (-not $npx) { $npx = (Get-Command npx -ErrorAction SilentlyContinue).Source }
 if (-not $npx) { Log 'ERROR npx not found'; exit 3 }
+$node = (Get-Command node.exe -ErrorAction SilentlyContinue).Source
+if (-not $node) { $node = (Get-Command node -ErrorAction SilentlyContinue).Source }
+if (-not $node) { Log 'ERROR node not found'; exit 3 }
+if (-not (Test-Path -LiteralPath $SessionPatcher)) { Log 'SESSION_REFRESH_PATCH=false reason=patcher_missing'; exit 22 }
+
+function Install-SessionRefreshPatch {
+    $probeScript = "process.stdout.write(process.env.PATH.split(require('path').delimiter)[0])"
+    $probeArgs = @('--yes','--package',$Package,'--','node','-e',$probeScript)
+    $probeOutput = @(& $npx @probeArgs 2>$null)
+    if ($LASTEXITCODE -ne 0) { throw 'Desktop Commander package probe failed' }
+    $binDir = [string]($probeOutput | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -Last 1)
+    $binDir = $binDir.Trim()
+    if (-not $binDir) { throw 'Desktop Commander package bin path missing' }
+    $nodeModules = Split-Path -Parent $binDir
+    $packageRoot = Join-Path $nodeModules '@wonderwhy-er\desktop-commander'
+    if (-not (Test-Path -LiteralPath (Join-Path $packageRoot 'package.json'))) { throw 'Desktop Commander package root missing' }
+    $patchOutput = @(& $node $SessionPatcher $packageRoot 2>&1)
+    if ($LASTEXITCODE -ne 0) { throw 'Desktop Commander session persistence patch failed' }
+    $patchState = [string]($patchOutput | Where-Object { [string]$_ -match '^SESSION_REFRESH_PATCH=' } | Select-Object -Last 1)
+    if (-not $patchState) { throw 'Desktop Commander session persistence patch state missing' }
+    Log $patchState
+}
+
+try { Install-SessionRefreshPatch } catch { Log ('SESSION_REFRESH_PATCH=false reason=' + $_.Exception.Message); exit 22 }
 
 $tmpBase = Join-Path $env:TEMP ('shopvivaliz-dc-' + [guid]::NewGuid().ToString('N'))
 $outFile = $tmpBase + '.out'
@@ -51,8 +76,9 @@ try {
         }
         if ((-not $connected) -and ($text -match $ConnectedPattern)) {
             $connected = $true
+            Remove-Item -LiteralPath $CooldownFile -Force -ErrorAction SilentlyContinue
             '' | Out-File -FilePath $ConnectedMarker -Force -Encoding ascii
-            Log 'Remote Desktop Commander provider connection observed'
+            Log 'Remote Desktop Commander broker ready observed'
         }
         if ($proc.HasExited) { break }
         Start-Sleep -Seconds 1
