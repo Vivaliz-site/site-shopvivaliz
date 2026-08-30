@@ -49,7 +49,7 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/sitekey
           chmod 600 ~/.ssh/sitekey
 
-      - name: Audit current site A1 and diagnose Desktop Commander
+      - name: Verify current site A1 and Desktop Commander provider state
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -57,7 +57,6 @@ jobs:
           set -Eeuo pipefail
           echo '=== HOST ==='
           hostname
-          uname -m
           nproc
           free -h
           df -h /
@@ -66,25 +65,16 @@ jobs:
             printf '%s=' "$s"
             systemctl is-active "$s" 2>/dev/null || true
           done
+          echo '=== DC PROVIDER ==='
+          test -f "$HOME/.desktop-commander-device/provider-connected.marker" && echo 'PROVIDER_CONNECTED=true' || echo 'PROVIDER_CONNECTED=false'
+          test -f "$HOME/.desktop-commander-device/auth-required.cooldown" && echo 'AUTH_COOLDOWN_PRESENT=true' || echo 'AUTH_COOLDOWN_PRESENT=false'
+          pgrep -af '@wonderwhy-er/desktop-commander.*remote --persist-session' 2>/dev/null | sed -E 's/[[:space:]]+/ /g' || true
+          sha256sum /usr/local/lib/shopvivaliz/vm-desktop-commander-supervisor.sh /usr/local/lib/shopvivaliz/patch-desktop-commander-session-persistence.mjs 2>/dev/null || true
+          if [ -f "$HOME/.desktop-commander-device/device.json" ]; then
+            stat -c 'DEVICE_STATE|mtime=%y|size=%s|mode=%a' "$HOME/.desktop-commander-device/device.json"
+          fi
           echo '=== FAILED ==='
           systemctl --failed --no-pager --plain || true
-          echo '=== CODEX METADATA ==='
-          command -v codex || true
-          codex --version 2>/dev/null || true
-          codex login status 2>/dev/null || true
-          ls -ld "$HOME/.codex" 2>/dev/null || true
-          test -f "$HOME/.codex/auth.json" && echo 'CODEX_AUTH_FILE_PRESENT=true' || echo 'CODEX_AUTH_FILE_PRESENT=false'
-          echo '=== DC PERSISTENCE METADATA ==='
-          for f in "$HOME/.desktop-commander-device/device.json" "$HOME/.desktop-commander-device/session-backup/device.json" "$HOME/.desktop-commander-device/auth-required.cooldown" "$HOME/.desktop-commander-device/provider-connected.marker"; do
-            if [ -e "$f" ]; then stat -c '%n|mtime=%y|size=%s|mode=%a' "$f"; else echo "$f|absent"; fi
-          done
-          sha256sum /usr/local/lib/shopvivaliz/vm-desktop-commander-supervisor.sh /usr/local/lib/shopvivaliz/patch-desktop-commander-session-persistence.mjs 2>/dev/null || true
-          grep -q 'TOKEN_REFRESHED' /usr/local/lib/shopvivaliz/patch-desktop-commander-session-persistence.mjs 2>/dev/null && echo 'PATCHER_TOKEN_REFRESHED=true' || echo 'PATCHER_TOKEN_REFRESHED=false'
-          echo '=== DC STATUS ==='
-          systemctl status shopvivaliz-desktop-commander.service --no-pager -l 2>/dev/null | tail -40 || true
-          echo '=== DC FINAL STATE ==='
-          systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true
-          systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null || true
           SH
 
       - name: Cleanup
