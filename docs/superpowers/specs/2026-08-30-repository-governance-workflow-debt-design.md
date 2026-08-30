@@ -57,6 +57,10 @@ The affected workflow set is:
 - `.github/workflows/vm-desktop-commander-connection-probe.yml`
 - `.github/workflows/windows-private-peer-recovery.yml`
 
+The six direct-ref publishers are `agent-vm-readonly-diagnostics`, `apply-gsc-indexing-fix-20260824`, `fred-win-terminal`, `mei-email-graph-token-diagnostic`, `seo-durable-code`, and `seo-durable-repair`.
+
+The eight automatic issue writers are `actions-run-index`, the three Desktop Commander health/probe workflows, both MEI production probes, `vm-desktop-commander-connection-probe`, and `windows-private-peer-recovery`.
+
 ## Chosen Architecture
 
 Use separation of observation from mutation.
@@ -66,6 +70,14 @@ Automatically triggered workflows may observe, validate, emit logs, upload manda
 Any remediation that changes repository content or production state must use an explicitly authorized path. Repository changes are prepared as reviewed branches/PRs outside the automatically triggered diagnostic workflow. Production-changing operations use `workflow_dispatch` or an equivalent explicit authorization boundary and retain least-privilege permissions.
 
 This keeps the auditor strict and makes the workflow topology itself compliant rather than teaching the auditor to ignore known debt.
+
+## Audit Correctness Preflight
+
+Before changing the 16 workflows, protect the detector itself with a semantic regression test: a manual-only `workflow_dispatch` workflow that has `permissions: issues: write` and an issue command must not be classified as automatically triggered merely because the permission line contains `issues:`.
+
+If that test is RED, fix automatic-trigger detection so it only recognizes events declared under the workflow `on:` stanza. This is a detector-correctness fix, not an exception to a policy rule. Rerun the full audit after the detector fix and use the resulting count as the authoritative migration baseline.
+
+The currently observed 29 findings remain the historical baseline and all 16 listed workflows still have genuine unsafe or fail-open behavior that requires review.
 
 ## Remediation Rules
 
@@ -77,9 +89,9 @@ No replacement using `gh api`, raw REST ref mutation, or another semantically eq
 
 ### 2. Automatically triggered write workflows
 
-For the 14 automatic-write findings, scheduled/push/workflow-run/repository-dispatch diagnostic paths become read-only.
+For automatic-write findings, scheduled/push/issues/workflow-run/repository-dispatch diagnostic paths become read-only.
 
-If a workflow currently writes an issue solely to report health, replace that write with required artifacts plus a failing job when intervention is required. Existing platform workflow notifications remain the alert channel.
+If a workflow currently writes an issue solely to report health, replace that write with required artifacts plus a failing job when intervention is required. Workflow run status and required artifacts become the durable evidence channel. Any centralized status surface that depends on issue mutation is documented as intentionally retired rather than silently preserved through another write mechanism.
 
 If a workflow performs a real remediation, split the remediation into an explicitly authorized manual path rather than retaining write permissions on the automatic diagnostic path.
 
@@ -115,7 +127,7 @@ Acceptance: no `workflow_push` findings and no destructive Git regression.
 
 Convert the remaining automatic diagnostics/monitors to read-only execution. Where a file mixes diagnosis and remediation, split those concerns so the automatic side is read-only and the mutating side requires explicit authorization.
 
-Acceptance: no `automatic_write_workflow` findings while existing diagnostic evidence remains available.
+Acceptance: no `automatic_write_workflow` findings while existing diagnostic evidence remains available through workflow status and required artifacts.
 
 ### Batch C — failure semantics
 
@@ -140,7 +152,7 @@ Required validation for each batch:
 - parse every changed YAML file;
 - `python -m unittest tests.unit.test_audit_active_workflows -v`;
 - targeted workflow regression tests for the changed files;
-- `python scripts/maintenance/audit_automation_changes.py --base <merge-base> --head <head>`;
+- resolve `BASE_SHA="$(git merge-base origin/main HEAD)"` and run `python scripts/maintenance/audit_automation_changes.py --base "$BASE_SHA" --head HEAD`;
 - `python scripts/maintenance/audit_active_workflows.py`;
 - `python scripts/maintenance/audit_secret_references.py`;
 - `python scripts/audit-agents-real-work.py`;
