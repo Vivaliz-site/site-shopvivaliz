@@ -21,13 +21,13 @@ jobs:
           printf '%s\n' "$K2" > ~/.ssh/key2
           { printf '%s\n' "$H1"; printf '%s\n' "$H2"; } | sed '/^[[:space:]]*$/d' | sort -u > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/key1 ~/.ssh/key2 ~/.ssh/known_hosts
-      - name: Verify and recover site DC
+      - name: Diagnose site DC
         run: |
           set -Eeuo pipefail
           opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -o IdentitiesOnly=yes -i "$HOME/.ssh/key1" -i "$HOME/.ssh/key2")
           host="$(ssh "${opts[@]}" ubuntu@163.176.103.253 hostname)"
           test "$host" = "shopvivaliz-free-a1"
-          ssh "${opts[@]}" ubuntu@163.176.103.253 'set -Eeuo pipefail; echo HOST=$(hostname); echo OCPU=$(nproc); free -h; systemctl is-active apache2 mysql shopvivaliz-queue-worker.service; sudo systemctl enable --now shopvivaliz-desktop-commander.service; sleep 3; systemctl is-active shopvivaliz-desktop-commander.service; systemctl is-enabled shopvivaliz-desktop-commander.service; systemctl --failed --no-pager'
+          ssh "${opts[@]}" ubuntu@163.176.103.253 'set -u; echo ===UNIT===; systemctl cat shopvivaliz-desktop-commander.service || true; echo ===STATUS===; systemctl status shopvivaliz-desktop-commander.service --no-pager -l || true; echo ===JOURNAL===; journalctl -u shopvivaliz-desktop-commander.service -n 80 --no-pager || true; echo ===NODE===; command -v node || true; node --version || true; command -v npx || true; npx --version || true; echo ===FILES===; ls -la /home/ubuntu/.local/bin /home/ubuntu/.npm-global/bin 2>/dev/null || true'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/key1 ~/.ssh/key2 ~/.ssh/known_hosts
