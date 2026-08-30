@@ -40,7 +40,7 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/sitekey
           chmod 600 ~/.ssh/sitekey
 
-      - name: Audit current site A1 and recover Desktop Commander if needed
+      - name: Audit current site A1 and diagnose Desktop Commander
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -65,16 +65,15 @@ jobs:
           codex login status 2>/dev/null || true
           ls -ld "$HOME/.codex" 2>/dev/null || true
           test -f "$HOME/.codex/auth.json" && echo 'CODEX_AUTH_FILE_PRESENT=true' || echo 'CODEX_AUTH_FILE_PRESENT=false'
-          echo '=== RETIRED ENDPOINTS IN ACTIVE HOST CONFIG ==='
-          grep -RInE '137\.131\.156\.17|136\.248\.69\.116|10\.0\.1\.13|10\.0\.1\.203|shopvivaliz-ai|shopvivaliz-micro-2' \
-            "$HOME/shopvivaliz-deploy/current" /etc/cron.d /etc/systemd/system 2>/dev/null \
-            | grep -Ev '/docs/|/history/|\.disabled' | head -200 || true
-          dc_state="$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true)"
-          if [ "$dc_state" != active ]; then
-            sudo systemctl restart shopvivaliz-desktop-commander.service
-            sleep 8
-          fi
-          echo '=== DC AFTER ==='
+          echo '=== DC UNIT ==='
+          systemctl cat shopvivaliz-desktop-commander.service 2>/dev/null || true
+          echo '=== DC STATUS ==='
+          systemctl status shopvivaliz-desktop-commander.service --no-pager -l 2>/dev/null | tail -100 || true
+          echo '=== DC JOURNAL ==='
+          journalctl -u shopvivaliz-desktop-commander.service -b -n 160 --no-pager 2>/dev/null | tail -160 || true
+          echo '=== DC PROCESS ==='
+          pgrep -af 'desktop-commander.*remote|@wonderwhy-er/desktop-commander' 2>/dev/null || true
+          echo '=== DC FINAL STATE ==='
           systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true
           systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null || true
           SH
