@@ -28,7 +28,8 @@ foreach (['SESSION_BACKUP_DIR', 'session-backup/device.json', 'install -m 600 "$
 }
 foreach ([
     'TOKEN_REFRESHED',
-    'void this.savePersistedConfig()',
+    'await this.savePersistedConfig()',
+    'SESSION_REFRESH_PERSIST_ATTEMPTED',
     'expected one persistence marker',
 ] as $needle) {
     if (strpos($patcher, $needle) === false) {

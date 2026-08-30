@@ -33,7 +33,10 @@ foreach ([
 ] as $needle) {
     if (stripos($all, $needle) === false) { fwrite(STDERR, "FALHOU: ausente {$needle}\n"); exit(1); }
 }
-if (!preg_match("/ArgumentList\\s+@\\([^)]*'remote'\\s*,\\s*'--persist-session'/i", $runner)) {
+if (
+    !preg_match("/ArgumentList\\s+@\\([^)]*'remote'\\s*,\\s*'--persist-session'/i", $runner)
+    && !preg_match('/Arguments\\s*=.*remote --persist-session/i', $runner)
+) {
     fwrite(STDERR, "FALHOU: runner sem argumentos canonicos remote + --persist-session\n");
     exit(1);
 }
