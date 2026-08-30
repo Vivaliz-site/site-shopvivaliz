@@ -35,6 +35,9 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn("googleads:mutate", lowered)
         self.assertNotIn("mutate_", lowered)
 
+    def test_workflow_never_disables_fail_fast(self):
+        self.assertNotIn("set +e", self.text)
+
 
 if __name__ == "__main__":
     unittest.main()

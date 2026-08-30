@@ -105,16 +105,18 @@ jobs:
           test -r "$env_path"
           tar -xzf "$stage/package.tgz" -C "$stage"
           output="$stage/latest-readonly-audit.json"
-          set +e
-          (
+          audit_exit=0
+          if (
             cd "$stage"
             python3 scripts/google_ads/audit.py \
               --env "$env_path" \
               --config ops/google-ads/config.json \
               --output "$output"
-          )
-          audit_exit=$?
-          set -e
+          ); then
+            audit_exit=0
+          else
+            audit_exit=$?
+          fi
           printf '%s\n' "$audit_exit" > "$stage/audit.exit"
           test -s "$output"
           python3 - "$output" <<'PY'
