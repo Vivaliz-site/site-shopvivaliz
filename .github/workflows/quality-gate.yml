@@ -57,7 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -q '163.176.103.253' .github/workflows/master-production-pipeline.yml
-          ! grep -q '137.131.156.17' .github/workflows/master-production-pipeline.yml
+          php tests/retired-e2-endpoints-contract-test.php
           grep -q 'SEO routing invariant' scripts/deploy-production.sh
           test -f .github/workflows/public-layout-audit.yml
           grep -q 'Master Production Pipeline 24/7' .github/workflows/public-layout-audit.yml
