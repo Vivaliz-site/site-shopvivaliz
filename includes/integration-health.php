@@ -84,6 +84,49 @@ function svih_http(string $method, string $url, array $headers = [], ?array $fie
     ];
 }
 
+function svih_http_json(string $method, string $url, array $headers, array $payload): array
+{
+    $ch = curl_init($url);
+    if ($ch === false) {
+        return ['ok' => false, 'status' => 0, 'error' => 'curl_init_failed', 'data' => null, 'raw' => null];
+    }
+    $headers[] = 'Content-Type: application/json';
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CUSTOMREQUEST => strtoupper($method),
+        CURLOPT_CONNECTTIMEOUT => 8,
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
+    ]);
+    $body = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $error = curl_error($ch);
+    curl_close($ch);
+    $data = is_string($body) ? json_decode($body, true) : null;
+    return ['ok' => $status >= 200 && $status < 300, 'status' => $status, 'error' => $error !== '' ? $error : null, 'data' => $data, 'raw' => is_string($body) ? $body : null];
+}
+
+function svih_melhor_envio_probe_request(string $fromPostalCode): array
+{
+    $from = preg_replace('/\D+/', '', $fromPostalCode) ?: '35501236';
+    return [
+        'method' => 'POST',
+        'url' => me_api_base() . '/api/v2/me/shipment/calculate',
+        'payload' => [
+            'from' => ['postal_code' => $from],
+            'to' => ['postal_code' => '30140071'],
+            'products' => [[
+                'id' => 'health-probe', 'width' => 16, 'height' => 16, 'length' => 16,
+                'weight' => 1.0, 'insurance_value' => 10.0, 'quantity' => 1,
+            ]],
+            'options' => ['receipt' => false, 'own_hand' => false, 'collect' => false],
+        ],
+    ];
+}
+
 function svih_read_json(string $path): array
 {
     if (!is_file($path)) {
@@ -405,11 +448,13 @@ function svih_melhor_envio(bool $fix): array
         if ($token === '') {
             return ['ok' => false, 'status' => 0, 'error' => 'token_missing'];
         }
-        return svih_http('GET', me_api_base() . '/api/v2/me', [
+        $from = svih_env('MELHORENVIO_FROM_POSTAL_CODE', 'SHOPVIVALIZ_FROM_POSTAL_CODE');
+        $probe = svih_melhor_envio_probe_request($from);
+        return svih_http_json($probe['method'], $probe['url'], [
             'Authorization: Bearer ' . $token,
             'Accept: application/json',
             'User-Agent: ' . me_user_agent(),
-        ]);
+        ], $probe['payload']);
     };
 
     $api = $check($access);
