@@ -13,8 +13,8 @@ PACKAGE='@wonderwhy-er/desktop-commander@0.2.47'
 NPX_BIN="${NPX_BIN:-npx}"
 NODE_BIN="${NODE_BIN:-node}"
 SESSION_PATCHER="${SESSION_PATCHER:-/usr/local/lib/shopvivaliz/patch-desktop-commander-session-persistence.mjs}"
-AUTH_REGEX='Please complete authentication|Starting device authorization flow|device code|Authorization required'
-CONNECTED_REGEX='Device ready|Found persisted session|Connected to Remote MCP|WebSocket connected'
+AUTH_REGEX='Please complete authentication|Starting device authorization flow|device code|Authorization required|Persisted session invalid|Authenticating with Remote MCP server'
+CONNECTED_REGEX='Device ready'
 REMOTE_OWNER_PID="$$"
 REMOTE_OWNER_SESSION='systemd'
 AUTH_GRACE_SECONDS="${AUTH_GRACE_SECONDS:-300}"
@@ -123,20 +123,45 @@ cleanup() {
 trap cleanup EXIT INT TERM
 rm -f "$CONNECTED_MARKER"
 
+last_match_line() {
+  local regex="$1"
+  grep -Ein "$regex" "$tmp" 2>/dev/null | tail -1 | cut -d: -f1 || true
+}
+
+auth_is_pending() {
+  local auth_line ready_line
+  auth_line="$(last_match_line "$AUTH_REGEX")"
+  ready_line="$(last_match_line "$CONNECTED_REGEX")"
+  [[ -n "$auth_line" && ( -z "$ready_line" || "$auth_line" -gt "$ready_line" ) ]]
+}
+
+ready_is_current() {
+  local auth_line ready_line
+  auth_line="$(last_match_line "$AUTH_REGEX")"
+  ready_line="$(last_match_line "$CONNECTED_REGEX")"
+  [[ -n "$ready_line" && ( -z "$auth_line" || "$ready_line" -gt "$auth_line" ) ]]
+}
+
 echo "REMOTE_OWNER_PID=$REMOTE_OWNER_PID REMOTE_OWNER_SESSION=$REMOTE_OWNER_SESSION"
 setsid "$NPX_BIN" --yes "$PACKAGE" remote --persist-session >"$tmp" 2>&1 &
 child=$!
 auth_required=0
 while kill -0 "$child" 2>/dev/null; do
-  if [[ "$auth_required" -eq 0 ]] && grep -Eqi "$AUTH_REGEX" "$tmp"; then
-    auth_required=1
-    auth_started_at="$(date +%s)"
-    device_mtime_at_auth="$(stat -c %Y "$DEVICE_FILE" 2>/dev/null || echo 0)"
-    echo 'AUTH_REQUIRED=true reason=provider_device_flow_waiting'
+  if auth_is_pending; then
+    if [[ "$connected" -eq 1 ]]; then
+      connected=0
+      rm -f "$CONNECTED_MARKER"
+    fi
+    if [[ "$auth_required" -eq 0 ]]; then
+      auth_required=1
+      auth_started_at="$(date +%s)"
+      device_mtime_at_auth="$(stat -c %Y "$DEVICE_FILE" 2>/dev/null || echo 0)"
+      echo 'AUTH_REQUIRED=true reason=provider_device_flow_waiting'
+    fi
   fi
   if [[ "$auth_required" -eq 1 ]]; then
     current_device_mtime="$(stat -c %Y "$DEVICE_FILE" 2>/dev/null || echo 0)"
-    if grep -Eqi "$CONNECTED_REGEX" "$tmp" || [[ "$current_device_mtime" -gt "$device_mtime_at_auth" ]]; then
+    if ready_is_current || [[ "$current_device_mtime" -gt "$device_mtime_at_auth" ]]; then
       auth_required=0
       rm -f "$COOLDOWN_FILE"
     elif (( $(date +%s) - auth_started_at >= AUTH_GRACE_SECONDS )); then
@@ -146,7 +171,7 @@ while kill -0 "$child" 2>/dev/null; do
       break
     fi
   fi
-  if [[ "$connected" -eq 0 ]] && grep -Eqi "$CONNECTED_REGEX" "$tmp"; then
+  if [[ "$connected" -eq 0 ]] && ready_is_current; then
     : > "$CONNECTED_MARKER"
     chmod 0600 "$CONNECTED_MARKER"
     backup_device_state
@@ -159,7 +184,7 @@ done
 rc=0
 if wait "$child"; then rc=0; else rc=$?; fi
 if [[ "$connected" -eq 1 ]]; then backup_device_state; fi
-if [[ "$connected" -eq 0 && "$auth_required" -eq 0 ]] && grep -Eqi "$AUTH_REGEX" "$tmp"; then
+if [[ "$connected" -eq 0 && "$auth_required" -eq 0 ]] && auth_is_pending; then
   auth_required=1
   : > "$COOLDOWN_FILE"
   chmod 0600 "$COOLDOWN_FILE"
