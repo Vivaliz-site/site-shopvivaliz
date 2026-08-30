@@ -18,6 +18,10 @@ def test() -> None:
     assert 'backup.' in text
     assert 'svih_ml(true)' in text
     assert 'mercadolivre_provider_http=200' in text
+    assert 'push:' in text and 'branches: [main]' in text
+    assert '.github/workflows/restore-mercadolivre-runtime.yml' in text
+    assert "[restore-ml-runtime]" in text
+    assert "github.event_name == 'workflow_dispatch'" in text
     assert 'rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"' in text
 
 

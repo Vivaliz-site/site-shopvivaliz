@@ -2,6 +2,10 @@ name: Restore Mercado Livre Runtime
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/restore-mercadolivre-runtime.yml'
 
 permissions:
   contents: read
@@ -12,6 +16,7 @@ concurrency:
 
 jobs:
   restore:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[restore-ml-runtime]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
