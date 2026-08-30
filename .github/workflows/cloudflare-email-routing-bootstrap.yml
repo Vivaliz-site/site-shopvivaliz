@@ -104,6 +104,40 @@ jobs:
           fi
           echo 'PREPARE_GATES_PASS'
 
+      - name: Inspect Cloudflare routing activity
+        if: ${{ github.event.inputs.mode == 'prepare' || github.event.inputs.mode == 'probe' || github.event_name == 'push' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          api='https://api.cloudflare.com/client/v4'
+          auth=(-H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json')
+
+          sub=$(curl -sS "${auth[@]}" "$api/zones/$ZONE_ID/email/routing/dns?subdomain=$PROBE_DOMAIN")
+          echo "PROBE_DNS_QUERY_SUCCESS=$(jq -r '.success // false' <<<"$sub")"
+          echo 'PROBE_DNS_STATE_BEGIN'
+          jq -c '.result // {} | {status,enabled,name,errors}' <<<"$sub"
+          echo 'PROBE_DNS_STATE_END'
+
+          rules=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/email/routing/rules")
+          echo 'PROBE_RULE_STATE_BEGIN'
+          jq -c --arg src "$PROBE_EMAIL" '.result[]? | select(any(.matchers[]?; .type=="literal" and .field=="to" and .value==$src)) | {id,enabled,name,priority,matchers,action_types:[.actions[]?.type]}' <<<"$rules"
+          echo 'PROBE_RULE_STATE_END'
+
+          start=$(date -u -d '2 hours ago' '+%Y-%m-%dT%H:%M:%SZ')
+          end=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+          query='query RecentRoutingEvents($zoneTag: string!, $start: Time!, $end: Time!) { viewer { zones(filter: { zoneTag: $zoneTag }) { emailRoutingAdaptive(filter: { datetime_geq: $start, datetime_leq: $end } limit: 50 orderBy: [datetime_DESC]) { datetime from to subject status action ruleMatched messageId errorDetail dkim dmarc spf isSpam } } } }'
+          vars=$(jq -nc --arg zoneTag "$ZONE_ID" --arg start "$start" --arg end "$end" '{zoneTag:$zoneTag,start:$start,end:$end}')
+          body=$(jq -nc --arg query "$query" --argjson variables "$vars" '{query:$query,variables:$variables}')
+          activity=$(curl -sS -X POST "${auth[@]}" --data "$body" 'https://api.cloudflare.com/client/v4/graphql')
+          if [ "$(jq -r 'has("errors") and (.errors|length>0)' <<<"$activity")" = true ]; then
+            echo 'CLOUDFLARE_ACTIVITY_QUERY_UNAVAILABLE'
+            jq -c '.errors | map({message})' <<<"$activity"
+          else
+            echo 'CLOUDFLARE_ROUTING_ACTIVITY_BEGIN'
+            jq -r --arg probe "$PROBE_DOMAIN" '.data.viewer.zones[0].emailRoutingAdaptive[]? | select((.to // "") | contains($probe)) | [.datetime,.status,.action,(.ruleMatched // ""),(.to // ""),(.subject // ""),(.errorDetail // ""),(.spf // ""),(.dkim // ""),(.dmarc // "")] | @tsv' <<<"$activity"
+            echo 'CLOUDFLARE_ROUTING_ACTIVITY_END'
+          fi
+
       - name: Validate inbound routing on isolated subdomain
         if: ${{ github.event.inputs.mode == 'probe' }}
         shell: bash
