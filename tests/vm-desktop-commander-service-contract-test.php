@@ -47,7 +47,7 @@ if (strpos($supervisor, 'HOME_DIR="${HOME:-/home/ubuntu}"') === false) {
 $all = $unit . $installer . $supervisor;
 $forbidden = [
     'access_token','refresh_token','auth_token','0.0.0.0',
-    'set +' . 'e', 'tee "$tmp"', 'pkill -f node'
+    '|' . '| true', 'set +' . 'e', 'tee "$tmp"', 'pkill -f node'
 ];
 foreach ($forbidden as $needle) {
     if (stripos($all, $needle) !== false) { fwrite(STDERR, "FALHOU: configuracao proibida {$needle}\n"); exit(1); }
