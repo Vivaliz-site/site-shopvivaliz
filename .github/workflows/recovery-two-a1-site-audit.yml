@@ -5,6 +5,7 @@ on:
     branches: [recovery/two-a1-20260829]
     paths:
       - '.github/workflows/recovery-two-a1-site-audit.yml'
+      - 'tests/retired-e2-endpoints-contract-test.php'
 
 permissions:
   contents: read
