@@ -8,12 +8,13 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'prepare = stage rule only; cutover = enable routing DNS; rollback = disable Cloudflare routing DNS'
+        description: 'prepare = stage apex rule; probe = validate isolated subdomain; cutover = enable apex routing DNS; rollback = disable Cloudflare routing DNS'
         required: true
         type: choice
         default: prepare
         options:
           - prepare
+          - probe
           - cutover
           - rollback
 
@@ -31,17 +32,19 @@ jobs:
       ZONE_NAME: shopvivaliz.com.br
       SOURCE_EMAIL: atendimento@shopvivaliz.com.br
       DEST_EMAIL: fredmourao@gmail.com
+      PROBE_DOMAIN: cfmail.shopvivaliz.com.br
+      PROBE_EMAIL: probe@cfmail.shopvivaliz.com.br
     steps:
       - name: Validate mode and credentials
         shell: bash
         run: |
           set -euo pipefail
-          case "$MODE" in prepare|cutover|rollback) ;; *) echo 'INVALID_MODE'; exit 1;; esac
+          case "$MODE" in prepare|probe|cutover|rollback) ;; *) echo 'INVALID_MODE'; exit 1;; esac
           if [ -z "${CF_TOKEN:-}" ]; then
             echo 'CF_TOKEN_MISSING'
             exit 1
           fi
-          if [ "$MODE" = cutover ]; then
+          if [ "$MODE" = cutover ] || [ "$MODE" = probe ]; then
             if [ -z "${BREVO_API_KEY:-}" ]; then
               echo 'BREVO_API_KEY_MISSING'
               exit 1
@@ -83,21 +86,75 @@ jobs:
           test -n "$dest_id" || { echo 'DESTINATION_NOT_VERIFIED'; exit 2; }
           echo 'DESTINATION_VERIFIED'
 
-          rules=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/email/routing/rules")
-          rule_id=$(jq -r --arg src "$SOURCE_EMAIL" '.result[]? | select(any(.matchers[]?; .type=="literal" and .field=="to" and .value==$src)) | .id' <<<"$rules" | head -n1)
-          if [ -n "$rule_id" ]; then
-            target_ok=$(jq -r --arg id "$rule_id" --arg dst "$DEST_EMAIL" '.result[]? | select(.id==$id) | any(.actions[]?; .type=="forward" and (.value // []) == [$dst])' <<<"$rules")
-            test "$target_ok" = true || { echo 'EXISTING_RULE_TARGET_MISMATCH'; exit 3; }
-            echo 'ROUTING_RULE_EXISTS_AND_MATCHES'
-          else
-            payload=$(jq -nc --arg src "$SOURCE_EMAIL" --arg dst "$DEST_EMAIL" '{name:"ShopVivaliz atendimento forwarding",enabled:false,matchers:[{type:"literal",field:"to",value:$src}],actions:[{type:"forward",value:[$dst]}],source:"api"}')
-            created=$(curl -fsS -X POST "${auth[@]}" --data "$payload" "$api/zones/$zone_id/email/routing/rules")
-            test "$(jq -r '.success' <<<"$created")" = true || { echo 'ROUTING_RULE_CREATE_FAILED'; exit 4; }
-            rule_id=$(jq -r '.result.id' <<<"$created")
-            echo 'ROUTING_RULE_CREATED_DISABLED'
+          if [ "$MODE" = prepare ] || [ "$MODE" = cutover ]; then
+            rules=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/email/routing/rules")
+            rule_id=$(jq -r --arg src "$SOURCE_EMAIL" '.result[]? | select(any(.matchers[]?; .type=="literal" and .field=="to" and .value==$src)) | .id' <<<"$rules" | head -n1)
+            if [ -n "$rule_id" ]; then
+              target_ok=$(jq -r --arg id "$rule_id" --arg dst "$DEST_EMAIL" '.result[]? | select(.id==$id) | any(.actions[]?; .type=="forward" and (.value // []) == [$dst])' <<<"$rules")
+              test "$target_ok" = true || { echo 'EXISTING_RULE_TARGET_MISMATCH'; exit 3; }
+              echo 'ROUTING_RULE_EXISTS_AND_MATCHES'
+            else
+              payload=$(jq -nc --arg src "$SOURCE_EMAIL" --arg dst "$DEST_EMAIL" '{name:"ShopVivaliz atendimento forwarding",enabled:false,matchers:[{type:"literal",field:"to",value:$src}],actions:[{type:"forward",value:[$dst]}],source:"api"}')
+              created=$(curl -fsS -X POST "${auth[@]}" --data "$payload" "$api/zones/$zone_id/email/routing/rules")
+              test "$(jq -r '.success' <<<"$created")" = true || { echo 'ROUTING_RULE_CREATE_FAILED'; exit 4; }
+              rule_id=$(jq -r '.result.id' <<<"$created")
+              echo 'ROUTING_RULE_CREATED_DISABLED'
+            fi
+            echo "RULE_ID=$rule_id" >> "$GITHUB_ENV"
           fi
-          echo "RULE_ID=$rule_id" >> "$GITHUB_ENV"
           echo 'PREPARE_GATES_PASS'
+
+      - name: Validate inbound routing on isolated subdomain
+        if: ${{ github.event.inputs.mode == 'probe' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          api='https://api.cloudflare.com/client/v4'
+          auth=(-H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json')
+
+          dns_payload=$(jq -nc --arg name "$PROBE_DOMAIN" '{name:$name}')
+          enabled=$(curl -sS -X POST "${auth[@]}" --data "$dns_payload" "$api/zones/$ZONE_ID/email/routing/dns")
+          if [ "$(jq -r '.success' <<<"$enabled")" != true ]; then
+            errors=$(jq -c '.errors // []' <<<"$enabled")
+            echo "PROBE_SUBDOMAIN_ENABLE_RESPONSE=$errors"
+            state=$(curl -sS "${auth[@]}" "$api/zones/$ZONE_ID/email/routing/dns?subdomain=$PROBE_DOMAIN")
+            test "$(jq -r '.success' <<<"$state")" = true || { echo 'PROBE_SUBDOMAIN_ENABLE_FAILED'; exit 10; }
+          fi
+          echo 'PROBE_SUBDOMAIN_ROUTING_CONFIGURED'
+
+          rules=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/email/routing/rules")
+          probe_rule_id=$(jq -r --arg src "$PROBE_EMAIL" '.result[]? | select(any(.matchers[]?; .type=="literal" and .field=="to" and .value==$src)) | .id' <<<"$rules" | head -n1)
+          if [ -n "$probe_rule_id" ]; then
+            current=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/email/routing/rules/$probe_rule_id")
+            payload=$(jq '.result | {name,matchers,actions,priority,source} + {enabled:true}' <<<"$current")
+            updated=$(curl -fsS -X PUT "${auth[@]}" --data "$payload" "$api/zones/$ZONE_ID/email/routing/rules/$probe_rule_id")
+            test "$(jq -r '.success' <<<"$updated")" = true || { echo 'PROBE_RULE_ENABLE_FAILED'; exit 11; }
+          else
+            payload=$(jq -nc --arg src "$PROBE_EMAIL" --arg dst "$DEST_EMAIL" '{name:"ShopVivaliz isolated inbound probe",enabled:true,matchers:[{type:"literal",field:"to",value:$src}],actions:[{type:"forward",value:[$dst]}],source:"api"}')
+            created=$(curl -fsS -X POST "${auth[@]}" --data "$payload" "$api/zones/$ZONE_ID/email/routing/rules")
+            test "$(jq -r '.success' <<<"$created")" = true || { echo 'PROBE_RULE_CREATE_FAILED'; exit 12; }
+          fi
+          echo 'PROBE_ROUTING_RULE_ENABLED'
+
+          subject="ShopVivaliz isolated inbound probe ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mail=$(jq -nc --arg from "$SOURCE_EMAIL" --arg to "$PROBE_EMAIL" --arg subject "$subject" '{sender:{name:"Shop Vivaliz Atendimento",email:$from},to:[{email:$to,name:"ShopVivaliz Cloudflare Probe"}],subject:$subject,htmlContent:"Controlled isolated inbound validation through Cloudflare Email Routing."}')
+          response=$(curl -fsS -X POST 'https://api.brevo.com/v3/smtp/email' -H 'Content-Type: application/json' -H "api-key: $BREVO_API_KEY" --data "$mail")
+          test -n "$(jq -r '.messageId // empty' <<<"$response")" || { echo 'PROBE_SEND_FAILED'; exit 13; }
+          echo "INBOUND_PROBE_SUBJECT=$subject"
+          echo 'ISOLATED_INBOUND_PROBE_SENT'
+
+          sleep 15
+          events=$(curl -fsS -G 'https://api.brevo.com/v3/smtp/statistics/events' -H 'accept: application/json' -H "api-key: $BREVO_API_KEY" --data-urlencode "email=$PROBE_EMAIL" --data-urlencode 'limit=20' --data-urlencode 'sort=desc')
+          echo 'BREVO_PROBE_EVENTS_BEGIN'
+          jq -r '.events[]? | [.date,.event,(.reason // ""),(.subject // "")] | @tsv' <<<"$events"
+          echo 'BREVO_PROBE_EVENTS_END'
+          latest=$(jq -r --arg s "$subject" '.events[]? | select(.subject==$s) | .event' <<<"$events" | head -n1)
+          if [ -z "$latest" ]; then
+            echo 'BREVO_PROBE_EVENT_PENDING'
+          else
+            echo "BREVO_PROBE_EVENT=$latest"
+            case "$latest" in hardBounce|softBounce|blocked|invalid) exit 14;; esac
+          fi
 
       - name: Enable rule and Cloudflare routing DNS
         if: ${{ github.event.inputs.mode == 'cutover' }}
