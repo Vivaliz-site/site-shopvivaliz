@@ -21,13 +21,13 @@ jobs:
           printf '%s\n' "$K2" > ~/.ssh/key2
           { printf '%s\n' "$H1"; printf '%s\n' "$H2"; } | sed '/^[[:space:]]*$/d' | sort -u > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/key1 ~/.ssh/key2 ~/.ssh/known_hosts
-      - name: Inspect supervisor branches
+      - name: Inspect official recovery state
         run: |
           set -Eeuo pipefail
           opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -o IdentitiesOnly=yes -i "$HOME/.ssh/key1" -i "$HOME/.ssh/key2")
           host="$(ssh "${opts[@]}" ubuntu@163.176.103.253 hostname)"
           test "$host" = "shopvivaliz-free-a1"
-          ssh "${opts[@]}" ubuntu@163.176.103.253 'set -Eeuo pipefail; nl -ba /usr/local/lib/shopvivaliz/vm-desktop-commander-supervisor.sh | sed -n "1,175p"'
+          ssh "${opts[@]}" ubuntu@163.176.103.253 'set -Eeuo pipefail; echo ===WRAPPER===; sed -n "1,120p" /home/ubuntu/.local/bin/shopvivaliz-dc-remote; echo ===STATE_META===; for f in /home/ubuntu/.desktop-commander-device/device.json /home/ubuntu/.desktop-commander-device/session-backup/device.json /home/ubuntu/.desktop-commander-device/auth-required.cooldown; do if test -e "$f"; then stat -c "%n size=%s mtime=%y" "$f"; sha256sum "$f" | sed "s#  .*#  [redacted-path]#"; else echo "$f absent"; fi; done; echo ===REMOTE_HELP===; /home/ubuntu/.local/bin/shopvivaliz-dc-remote --help 2>&1 | head -120 || true; echo ===PACKAGE_MATCHES===; grep -RniE "persist-session|recover.session|device authorization|device.json" /home/ubuntu/.local/lib/node_modules/@wonderwhy-er/desktop-commander 2>/dev/null | head -120 || true'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/key1 ~/.ssh/key2 ~/.ssh/known_hosts
