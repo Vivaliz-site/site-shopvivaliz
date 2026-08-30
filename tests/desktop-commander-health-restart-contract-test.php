@@ -19,7 +19,7 @@ $required = [
     "UserKnownHostsFile=",
     "LAPTOP-NIG4IFUU",
     "DESKTOP-KOCEPSV",
-    "shopvivaliz-ai",
+    "shopvivaliz-a1-backend",
     "5557",
     "5558",
     "fredwin-desktop-commander-status.ps1",
