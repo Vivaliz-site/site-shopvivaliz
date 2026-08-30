@@ -134,7 +134,7 @@ jobs:
             exit 1
           fi
           find "$releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -nr | tail -n +6 | cut -d' ' -f2- | while IFS= read -r old; do
-            [ "$(readlink -f "$current")" = "$old" ] || rm -rf -- "$old"
+            [ "$(readlink -f "$current")" = "$old" ] || sudo rm -rf -- "$old"
           done
           REMOTE
 
