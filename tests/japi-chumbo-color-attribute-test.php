@@ -36,4 +36,14 @@ $attrsGrade = svs_catalog_attributes($comGrade);
 svjapi_assert(in_array('Tamanho: M', $attrsGrade, true), 'atributos reais de grade devem ser preservados');
 svjapi_assert(in_array('Cor: Preto', $attrsGrade, true), 'regra JAPI deve coexistir com grade real');
 
+$syncSource = (string)file_get_contents(__DIR__ . '/../olist/sync-products.php');
+svjapi_assert(
+    str_contains($syncSource, "require_once __DIR__ . '/catalog-attributes.php';"),
+    'sync deve carregar o normalizador de atributos'
+);
+svjapi_assert(
+    str_contains($syncSource, '$attributes = svs_catalog_attributes($p);'),
+    'sync deve usar o normalizador na montagem do catalogo'
+);
+
 fwrite(STDOUT, "japi-chumbo-color-attribute-test: ok\n");
