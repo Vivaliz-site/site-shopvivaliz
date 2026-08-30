@@ -1,0 +1,84 @@
+name: Recovery two-A1 site audit
+
+on:
+  push:
+    branches: [recovery/two-a1-20260829]
+    paths:
+      - '.github/workflows/recovery-two-a1-site-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify PHP and retired-endpoint gates
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php -v
+          php tests/retired-e2-endpoints-contract-test.php
+          php tests/production-workflows-vm2-contract-test.php
+          php tests/dated-retired-e2-workflows-disabled-contract-test.php
+          php tests/legacy-diagnostic-workflows-disabled-contract-test.php
+
+  site-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure site SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/sitekey
+          chmod 600 ~/.ssh/sitekey
+
+      - name: Audit current site A1 and recover Desktop Commander if needed
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/sitekey ubuntu@163.176.103.253 'bash -s' <<'SH'
+          set -Eeuo pipefail
+          echo '=== HOST ==='
+          hostname
+          uname -m
+          nproc
+          free -h
+          df -h /
+          echo '=== CORE SERVICES ==='
+          for s in apache2 mysql shopvivaliz-queue-worker.service shopvivaliz-desktop-commander.service; do
+            printf '%s=' "$s"
+            systemctl is-active "$s" 2>/dev/null || true
+          done
+          echo '=== FAILED ==='
+          systemctl --failed --no-pager --plain || true
+          echo '=== CODEX METADATA ==='
+          command -v codex || true
+          codex --version 2>/dev/null || true
+          codex login status 2>/dev/null || true
+          ls -ld "$HOME/.codex" 2>/dev/null || true
+          test -f "$HOME/.codex/auth.json" && echo 'CODEX_AUTH_FILE_PRESENT=true' || echo 'CODEX_AUTH_FILE_PRESENT=false'
+          echo '=== RETIRED ENDPOINTS IN ACTIVE HOST CONFIG ==='
+          grep -RInE '137\.131\.156\.17|136\.248\.69\.116|10\.0\.1\.13|10\.0\.1\.203|shopvivaliz-ai|shopvivaliz-micro-2' \
+            "$HOME/shopvivaliz-deploy/current" /etc/cron.d /etc/systemd/system 2>/dev/null \
+            | grep -Ev '/docs/|/history/|\.disabled' | head -200 || true
+          dc_state="$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true)"
+          if [ "$dc_state" != active ]; then
+            sudo systemctl restart shopvivaliz-desktop-commander.service
+            sleep 8
+          fi
+          echo '=== DC AFTER ==='
+          systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true
+          systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null || true
+          SH
+
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/sitekey
