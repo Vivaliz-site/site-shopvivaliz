@@ -46,6 +46,7 @@ jobs:
           php tests/integration-health-credentials-test.php
 
           git restore --source=HEAD -- .github/workflows
+          rm -f .github/workflows/critical-storefront-integration-recovery.yml
           rm -f ops/prod-audit-hotfix.patch ops/prod-audit-critical-only.patch
           git config user.name 'Agente Autonomo ShopVivaliz'
           git config user.email 'fredmourao@gmail.com'
