@@ -114,6 +114,7 @@ jobs:
           sudo apache2ctl configtest
           ln -sfn "releases/$(basename "$release")" "$root/current.next"
           mv -Tf "$root/current.next" "$current"
+          sudo bash "$current/scripts/install-catalog-sync-service.sh"
           sudo systemctl reload apache2
           sleep 2
           fail=0
