@@ -20,12 +20,14 @@ jobs:
 
       - name: Configure VM key
         env:
-          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}`n          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
-          test -n "$VM_KEY" || { echo "SHOPVIVALIZ_VM_SSH_KEY missing"; exit 2; }
+          test -n "$VM_KEY" || { echo "VM SSH key missing"; exit 2; }
+          test -n "$VM_HOSTS" || { echo "VM known_hosts missing"; exit 2; }
           mkdir -p ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
-          chmod 600 ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
 
       - name: Resolve allowlisted action
         id: action
