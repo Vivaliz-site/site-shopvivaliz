@@ -1,0 +1,33 @@
+name: Temporary Site DC Recovery
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure SSH
+        env:
+          K1: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          K2: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          H1: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          H2: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$K1" > ~/.ssh/key1
+          printf '%s\n' "$K2" > ~/.ssh/key2
+          { printf '%s\n' "$H1"; printf '%s\n' "$H2"; } | sed '/^[[:space:]]*$/d' | sort -u > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/key1 ~/.ssh/key2 ~/.ssh/known_hosts
+      - name: Verify and recover site DC
+        run: |
+          set -Eeuo pipefail
+          opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -o IdentitiesOnly=yes -i "$HOME/.ssh/key1" -i "$HOME/.ssh/key2")
+          host="$(ssh "${opts[@]}" ubuntu@163.176.103.253 hostname)"
+          test "$host" = "shopvivaliz-free-a1"
+          ssh "${opts[@]}" ubuntu@163.176.103.253 'set -Eeuo pipefail; echo HOST=$(hostname); echo OCPU=$(nproc); free -h; systemctl is-active apache2 mysql shopvivaliz-queue-worker.service; sudo systemctl enable --now shopvivaliz-desktop-commander.service; sleep 3; systemctl is-active shopvivaliz-desktop-commander.service; systemctl is-enabled shopvivaliz-desktop-commander.service; systemctl --failed --no-pager'
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/key1 ~/.ssh/key2 ~/.ssh/known_hosts
