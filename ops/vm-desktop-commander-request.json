@@ -1,4 +1,4 @@
 {
-  "action": "dc_diagnose",
-  "reason": "root-cause diagnosis for failed Desktop Commander service on always-free-arm replacement"
+  "action": "recover_session",
+  "reason": "restore provider session only from a backup with the exact same Desktop Commander deviceId"
 }
