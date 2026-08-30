@@ -18,9 +18,10 @@ class OlistOAuthLiveCutoverWorkflowTests(unittest.TestCase):
 
     def test_local_store_is_normalized_rotated_and_guarded_by_service(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn('chown ubuntu:www-data "$canonical"', text)
+        self.assertIn('chown ubuntu:ubuntu "$canonical" "$shared/.env"', text)
+        self.assertIn('chown ubuntu:www-data "$canonical" "$shared/.env"', text)
         self.assertIn('chmod 660 "$canonical"', text)
-        self.assertIn("sudo -u ubuntu -g www-data", text)
+        self.assertNotIn("sudo -u ubuntu -g www-data", text)
         self.assertIn("daemon-token-renewer.py --once", text)
         self.assertIn("shopvivaliz-token-renewer.service", text)
         self.assertIn("target_token_renewer=active_enabled", text)
