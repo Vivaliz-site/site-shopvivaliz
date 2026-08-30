@@ -9,6 +9,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 set_time_limit(0);
 ignore_user_abort(true);
+require_once __DIR__ . '/catalog-attributes.php';
 
 /* ── helpers ── */
 function svs_root(): string { return dirname(__DIR__); }
@@ -369,18 +370,9 @@ function svs_normalize(array $p, string $source): array {
         if ($kitSku !== '') $kitItems[] = ['sku' => $kitSku, 'quantity' => $kitQty];
     }
 
-    // 'grade' das variacoes = atributos reais do produto (ex: cor=Azul,
-    // tamanho=M) -- so existe quando o produto tem variacoes cadastradas.
-    $attributes = [];
-    foreach ((is_array($p['variacoes'] ?? null) ? $p['variacoes'] : []) as $variation) {
-        foreach ((is_array($variation['grade'] ?? null) ? $variation['grade'] : []) as $pair) {
-            $key = trim((string)($pair['chave'] ?? ''));
-            $value = trim((string)($pair['valor'] ?? ''));
-            if ($key !== '' && $value !== '' && !in_array("$key: $value", $attributes, true)) {
-                $attributes[] = "$key: $value";
-            }
-        }
-    }
+    // Atributos estruturados: preserva grade real e aplica normalizacoes
+    // taxonomicas que nao alteram titulo/descricao do cadastro ERP.
+    $attributes = svs_catalog_attributes($p);
 
     return [
         'olist_product_id' => $id,
