@@ -1,162 +1,207 @@
-name: Google Ads REST Readonly Audit
+name: Google Ads Optimization Intelligence Readonly Audit
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - "ops/google-ads-rest-audit.json"
+      - ".github/workflows/google-ads-rest-audit.yml"
+      - "scripts/google_ads/**"
+      - "ops/google-ads/**"
 
 permissions:
   contents: read
 
+concurrency:
+  group: google-ads-readonly-audit
+  cancel-in-progress: false
+
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 12
+    env:
+      SITE_A1_HOST: 163.176.103.253
+      REMOTE_STAGE: /tmp/google-ads-readonly-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - name: Configure VM key
+      - name: Checkout exact audit revision
+        uses: actions/checkout@v4
+
+      - name: Configure verified A1 SSH access
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
         shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
           test -n "$VM_KEY"
-          mkdir -p ~/.ssh
-          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
-          chmod 600 ~/.ssh/vmkey
+          test -n "$VM_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
 
-      - name: Run Google Ads v25 REST audit
+      - name: Stage exact read-only package on site A1
         shell: bash
         run: |
-          set -euo pipefail
-          ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@163.176.103.253 'python3 -' <<'PY'
-          import json, urllib.parse, urllib.request, urllib.error
+          set -Eeuo pipefail
+          archive="$RUNNER_TEMP/google-ads-readonly.tgz"
+          tar -czf "$archive" scripts/google_ads ops/google-ads/config.json
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" \
+            "ubuntu@$SITE_A1_HOST" 'bash -s' -- "$REMOTE_STAGE" <<'REMOTE'
+          set -Eeuo pipefail
+          stage=$1
+          test "$(hostname -s)" = "shopvivaliz-free-a1"
+          case "$stage" in
+            /tmp/google-ads-readonly-*) ;;
+            *) echo "INVALID_REMOTE_STAGE"; exit 1 ;;
+          esac
+          install -d -m 700 "$stage"
+          REMOTE
+          scp -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" \
+            "$archive" "ubuntu@$SITE_A1_HOST:$REMOTE_STAGE/package.tgz"
+
+      - name: Discover canonical immutable runtime and run audit
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" \
+            "ubuntu@$SITE_A1_HOST" 'bash -s' -- "$REMOTE_STAGE" <<'REMOTE'
+          set -Eeuo pipefail
+          stage=$1
+          test "$(hostname -s)" = "shopvivaliz-free-a1"
+          document_roots=$(grep -RhsE '^[[:space:]]*DocumentRoot[[:space:]]+' /etc/apache2/sites-enabled/)
+          test -n "$document_roots"
+          document_root=""
+          while IFS= read -r line; do
+            candidate=$(awk '{gsub(/"/, "", $2); print $2}' <<<"$line")
+            resolved=$(readlink -f "$candidate")
+            case "$resolved" in
+              */shopvivaliz-deploy/releases/*)
+                if [[ -f "$resolved/index.php" && -e "$candidate/.env" ]]; then
+                  document_root=$candidate
+                  break
+                fi
+                ;;
+            esac
+          done <<<"$document_roots"
+          test -n "$document_root"
+          release=$(readlink -f "$document_root")
+          env_path=$(readlink -f "$document_root/.env")
+          case "$release" in
+            /home/ubuntu/shopvivaliz-deploy/releases/*) ;;
+            *) echo "INVALID_IMMUTABLE_RELEASE"; exit 1 ;;
+          esac
+          case "$env_path" in
+            /home/ubuntu/shopvivaliz-deploy/shared/.env) ;;
+            *) echo "INVALID_CANONICAL_ENV"; exit 1 ;;
+          esac
+          deploy_root=${release%%/releases/*}
+          canonical_repo="$deploy_root/repo"
+          test -d "$canonical_repo/.git"
+          test -r "$env_path"
+          tar -xzf "$stage/package.tgz" -C "$stage"
+          output="$stage/latest-readonly-audit.json"
+          audit_exit=0
+          if (
+            cd "$stage"
+            python3 scripts/google_ads/audit.py \
+              --env "$env_path" \
+              --config ops/google-ads/config.json \
+              --output "$output"
+          ); then
+            audit_exit=0
+          else
+            audit_exit=$?
+          fi
+          printf '%s\n' "$audit_exit" > "$stage/audit.exit"
+          test -s "$output"
+          python3 - "$output" <<'PY'
+          import json
+          import sys
           from pathlib import Path
 
-          env={}
-          p=Path('/home/ubuntu/shopvivaliz-deploy/shared/.env')
-          for raw in p.read_text(encoding='utf-8', errors='ignore').splitlines():
-              line=raw.strip()
-              if not line or line.startswith('#') or '=' not in line: continue
-              k,v=line.split('=',1)
-              env[k.strip()]=v.strip().strip('"\'')
-
-          required=['GOOGLE_OAUTH_CLIENT_ID','GOOGLE_OAUTH_CLIENT_SECRET','GOOGLE_ADS_REFRESH_TOKEN','GOOGLE_ADS_DEVELOPER_TOKEN','GOOGLE_ADS_CUSTOMER_ID']
-          missing=[k for k in required if not env.get(k,'').strip()]
-          if missing:
-              print('REST_AUDIT_NOT_READY')
-              print('missing=' + ','.join(missing))
-              raise SystemExit(2)
-
-          token_data=urllib.parse.urlencode({
-              'client_id':env['GOOGLE_OAUTH_CLIENT_ID'],
-              'client_secret':env['GOOGLE_OAUTH_CLIENT_SECRET'],
-              'refresh_token':env['GOOGLE_ADS_REFRESH_TOKEN'],
-              'grant_type':'refresh_token',
-          }).encode()
-          token_req=urllib.request.Request('https://oauth2.googleapis.com/token', data=token_data, headers={'Content-Type':'application/x-www-form-urlencoded'}, method='POST')
-          with urllib.request.urlopen(token_req, timeout=20) as r:
-              access=json.loads(r.read().decode()).get('access_token','')
-          if not access:
-              print('OAUTH_REFRESH_VALID=no')
-              raise SystemExit(3)
-          print('OAUTH_REFRESH_VALID=yes')
-
-          cid=env['GOOGLE_ADS_CUSTOMER_ID'].replace('-','').strip()
-          base=f'https://googleads.googleapis.com/v25/customers/{cid}/googleAds:searchStream'
-          headers={
-              'Content-Type':'application/json',
-              'Authorization':'Bearer ' + access,
-              'developer-token':env['GOOGLE_ADS_DEVELOPER_TOKEN'],
-          }
-          login=env.get('GOOGLE_ADS_LOGIN_CUSTOMER_ID','').replace('-','').strip()
-          if login:
-              headers['login-customer-id']=login
-
-          def error_parts(data, http_code):
-              items=data if isinstance(data,list) else [data]
-              statuses=[]; messages=[]; reasons=[]
-              for item in items:
-                  if not isinstance(item,dict): continue
-                  err=item.get('error') if isinstance(item.get('error'),dict) else item
-                  if not isinstance(err,dict): continue
-                  if err.get('status'): statuses.append(str(err.get('status')))
-                  if err.get('message'): messages.append(str(err.get('message')))
-                  details=err.get('details') or []
-                  for detail in details if isinstance(details,list) else []:
-                      if not isinstance(detail,dict): continue
-                      errors=detail.get('errors') or []
-                      for ge in errors if isinstance(errors,list) else []:
-                          if not isinstance(ge,dict): continue
-                          code=ge.get('errorCode') or {}
-                          if isinstance(code,dict):
-                              for k,v in code.items(): reasons.append(str(k)+'='+str(v))
-                          if ge.get('message'): messages.append(str(ge.get('message')))
-              return (statuses[0] if statuses else 'HTTP_'+str(http_code), ' | '.join(dict.fromkeys(messages)), ' | '.join(dict.fromkeys(reasons)))
-
-          def query(label, gaql):
-              req=urllib.request.Request(base, data=json.dumps({'query':gaql}).encode(), headers=headers, method='POST')
-              try:
-                  with urllib.request.urlopen(req, timeout=30) as r:
-                      payload=json.loads(r.read().decode())
-              except urllib.error.HTTPError as e:
-                  body=e.read().decode(errors='ignore')
-                  try: data=json.loads(body)
-                  except Exception: data={}
-                  status,message,reasons=error_parts(data,e.code)
-                  print(label + '_FAILED')
-                  print('http_code=' + str(e.code))
-                  print('status=' + status)
-                  print('reasons=' + reasons[:500].replace('\n',' '))
-                  print('message=' + message[:700].replace('\n',' '))
-                  raise SystemExit(4)
-              rows=[]
-              for batch in payload if isinstance(payload,list) else []:
-                  if isinstance(batch,dict): rows.extend(batch.get('results') or [])
-              return rows
-
-          campaign_q='''
-          SELECT campaign.id, campaign.name, campaign.status,
-                 campaign.advertising_channel_type, campaign_budget.amount_micros,
-                 metrics.impressions, metrics.clicks, metrics.cost_micros,
-                 metrics.conversions, metrics.conversions_value
-          FROM campaign
-          WHERE campaign.status != 'REMOVED'
-            AND segments.date DURING LAST_30_DAYS
-          ORDER BY metrics.cost_micros DESC
-          LIMIT 50
-          '''
-          rows=query('CAMPAIGN_AUDIT', campaign_q)
-          print('CAMPAIGN_AUDIT_OK')
-          print('campaign_rows=' + str(len(rows)))
-          for r in rows:
-              c=r.get('campaign') or {}; b=r.get('campaignBudget') or {}; m=r.get('metrics') or {}
-              print('campaign=' + str(c.get('id',''))
-                    + '\tname=' + str(c.get('name',''))
-                    + '\tstatus=' + str(c.get('status',''))
-                    + '\tchannel=' + str(c.get('advertisingChannelType',''))
-                    + '\tbudget_brl=' + f"{float(b.get('amountMicros',0))/1_000_000:.2f}"
-                    + '\timpressions=' + str(m.get('impressions',0))
-                    + '\tclicks=' + str(m.get('clicks',0))
-                    + '\tcost_brl=' + f"{float(m.get('costMicros',0))/1_000_000:.2f}"
-                    + '\tconversions=' + str(m.get('conversions',0))
-                    + '\tconversion_value=' + str(m.get('conversionsValue',0)))
-
-          rec_q='''
-          SELECT recommendation.resource_name, recommendation.type, recommendation.campaign
-          FROM recommendation
-          WHERE recommendation.type = 'DYNAMIC_IMAGE_EXTENSION_OPT_IN'
-          '''
-          recs=query('DYNAMIC_IMAGE_AUDIT', rec_q)
-          print('DYNAMIC_IMAGE_AUDIT_OK')
-          print('dynamic_image_recommendations=' + str(len(recs)))
-          for r in recs:
-              rec=r.get('recommendation') or {}
-              print('dynamic_image_resource=' + str(rec.get('resourceName',''))
-                    + '\tcampaign=' + str(rec.get('campaign','')))
-          print('GOOGLE_ADS_REST_READONLY_AUDIT_COMPLETE')
+          path = Path(sys.argv[1])
+          report = json.loads(path.read_text(encoding="utf-8"))
+          assert report["mode"] == "readonly"
+          assert report["schema_version"] == 1
+          blob = path.read_text(encoding="utf-8").lower()
+          for forbidden in (
+              "access_token",
+              "refresh_token",
+              "client_secret",
+              "developer_token",
+              "authorization",
+          ):
+              assert forbidden not in blob, forbidden
+          print("LIVE_REPORT_SANITIZED_OK")
           PY
+          printf 'runtime_host=%s\n' "$(hostname -s)"
+          printf 'release=%s\n' "$release"
+          printf 'canonical_repo=%s\n' "$canonical_repo"
+          printf 'env_path=%s\n' "$env_path"
+          REMOTE
 
-      - name: Cleanup
+      - name: Retrieve sanitized evidence only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          install -d -m 700 artifacts
+          scp -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" \
+            "ubuntu@$SITE_A1_HOST:$REMOTE_STAGE/latest-readonly-audit.json" \
+            artifacts/google-ads-latest-readonly-audit.json
+          scp -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" \
+            "ubuntu@$SITE_A1_HOST:$REMOTE_STAGE/audit.exit" \
+            artifacts/audit.exit
+
+      - name: Validate retrieved report and audit status
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("artifacts/google-ads-latest-readonly-audit.json")
+          report = json.loads(path.read_text(encoding="utf-8"))
+          assert report["mode"] == "readonly"
+          assert report["schema_version"] == 1
+          assert report["partial"] is False
+          assert report["customer"]
+          assert isinstance(report["decisions"], list)
+          print("GOOGLE_ADS_READONLY_WORKFLOW_OK")
+          PY
+          audit_exit=$(tr -d '[:space:]' < artifacts/audit.exit)
+          test "$audit_exit" = "0"
+
+      - name: Upload sanitized live report
+        uses: actions/upload-artifact@v4
+        with:
+          name: google-ads-readonly-audit-${{ github.sha }}
+          path: artifacts/google-ads-latest-readonly-audit.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Cleanup temporary audit files
         if: always()
-        run: rm -f ~/.ssh/vmkey
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ -f "$HOME/.ssh/vmkey" && -f "$HOME/.ssh/known_hosts" ]]; then
+            ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" \
+              "ubuntu@$SITE_A1_HOST" 'bash -s' -- "$REMOTE_STAGE" <<'REMOTE'
+            set -Eeuo pipefail
+            stage=$1
+            case "$stage" in
+              /tmp/google-ads-readonly-*) rm -rf -- "$stage" ;;
+              *) echo "INVALID_REMOTE_STAGE"; exit 1 ;;
+            esac
+            REMOTE
+          fi
+          rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
