@@ -64,15 +64,16 @@ pass melhor_envio 'real quote returned shipping_options'
 
 [[ -n "$AGENT_KEY" ]] || fail integrations 'SHOPVIVALIZ_AGENT_KEY/AGENT_KEY missing; cannot prove provider functionality'
 code=$(curl -sS --max-time 45 -o "$TMPDIR/integrations.json" -w '%{http_code}' -H "X-Agent-Key: $AGENT_KEY" "$BASE_URL/api/agent/integrations-health.php") || fail integrations network
-[[ "$code" == 200 ]] || fail integrations "http=$code body=$(cat "$TMPDIR/integrations.json")"
+[[ "$code" == 200 || "$code" == 207 ]] || fail integrations "http=$code body=$(cat "$TMPDIR/integrations.json")"
 python3 - "$TMPDIR/integrations.json" <<'PY' || fail integrations 'critical provider not connected'
 import json, pathlib, sys
 r=json.loads(pathlib.Path(sys.argv[1]).read_text())
 items={x.get('key'):x for x in r.get('integrations',[]) if isinstance(x,dict)}
-for key in ('mercado_pago','melhor_envio','olist'):
+for key in ('mercado_pago','melhor_envio','olist_tiny'):
     if items.get(key,{}).get('status') != 'connected':
         raise SystemExit(1)
-if r.get('ok') is not True:
+summary = r.get('summary') or {}
+if int(summary.get('failed') or 0) != 0:
     raise SystemExit(1)
 PY
 pass integrations 'olist mercado_pago melhor_envio connected'
