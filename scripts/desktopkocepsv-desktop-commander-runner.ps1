@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $Repo = 'C:\site-shopvivaliz'
 $Package = '@wonderwhy-er/desktop-commander@0.2.47'
 $MaxLogBytes = 5MB
-$AuthPattern = 'Persisted session invalid|Authenticating with Remote MCP server|Please complete authentication|Starting device authorization flow|Authorization required'
+$AuthPattern = 'Persisted session invalid|Authenticating with Remote MCP server|Please complete authentication|Starting device authorization flow|device code|Authorization required'
 $ConnectedPattern = 'Device ready'
 $DegradedPattern = 'InvalidJWTToken|Token has expired|Device marked as offline|Channel (closed|errored)|Failed to (recreate|subscribe)|Subscription unhealthy'
 $RecoveredPattern = 'Device ready|Channel subscribed|recovered after'
@@ -142,6 +142,7 @@ function Observe-ProviderLine([string]$Line) {
     if ((-not $script:Connected) -and ($Line -match $ConnectedPattern)) {
         $script:Connected = $true
         $script:DegradedSinceUtc = $null
+        Remove-Item -LiteralPath $CooldownFile -Force -ErrorAction SilentlyContinue
         if (Test-Path -LiteralPath $DeviceFile) { $script:LastDeviceStateWriteUtc = (Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc }
         Write-ConnectionMarker
         Log 'Remote Desktop Commander provider connection observed'

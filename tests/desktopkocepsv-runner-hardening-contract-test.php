@@ -30,6 +30,8 @@ foreach (['shopvivaliz-dc-', 'RedirectStandardOutput $outFile', 'Read-CapturedPr
 foreach ([
     'Deploy-OperationalFiles',
     'Set-PrivateAcl',
+    'REMOTE_OWNER_CONFLICT',
+    'Global\ShopVivalizDesktopCommander-DESKTOP-KOCEPSV',
     '-WakeToRun -Hidden',
     'Remove-LegacyRawCaptures',
     'Microsoft-Windows-TaskScheduler/Operational',

@@ -55,6 +55,31 @@ function Log([string]$Message) {
     }
 }
 
+$OwnerMutexName = 'Global\ShopVivalizDesktopCommander-DESKTOP-KOCEPSV'
+function Enter-OwnerMutex {
+    $mutex = New-Object System.Threading.Mutex($false, $OwnerMutexName)
+    $acquired = $false
+    try {
+        try { $acquired = $mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $acquired = $true }
+        if (-not $acquired) {
+            Log 'REMOTE_OWNER_CONFLICT mutex already held; refusing concurrent supervisor'
+            Write-Output 'REMOTE_OWNER_CONFLICT=true reason=supervisor_mutex_held'
+            $mutex.Dispose()
+            exit 21
+        }
+        return $mutex
+    }
+    catch {
+        if (-not $acquired) { $mutex.Dispose() }
+        throw
+    }
+}
+
+function Exit-OwnerMutex([System.Threading.Mutex]$Mutex) {
+    if (-not $Mutex) { return }
+    try { $Mutex.ReleaseMutex() } finally { $Mutex.Dispose() }
+}
+
 function Set-PrivateAcl([string]$Path, [bool]$IsFile = $false) {
     $owner = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
     $allowed = @(
@@ -265,20 +290,24 @@ function Enable-TaskSchedulerOperationalLog {
 }
 
 function Install-Task {
-    $installedSupervisor = Deploy-OperationalFiles
-    $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-    $arguments = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $installedSupervisor + '" -Mode Ensure'
-    $action = New-ScheduledTaskAction -Execute $WindowsPowerShell -Argument $arguments -WorkingDirectory $InstallRoot
-    $startup = New-ScheduledTaskTrigger -AtStartup
-    $watchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)
-    $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType S4U -RunLevel Highest
-    $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -WakeToRun -Hidden
-    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($startup,$watchdog) -Principal $principal -Settings $settings -Description 'Keeps DESKTOP-KOCEPSV Desktop Commander online without interactive logon.' -Force -ErrorAction Stop | Out-Null
-    Enable-TaskSchedulerOperationalLog
-    Stop-RemoteProcesses
-    Start-Sleep -Seconds 3
-    $removed = Remove-LegacyRawCaptures
-    Remove-Item -LiteralPath $ConnectedMarker -Force -ErrorAction SilentlyContinue
+    $installMutex = Enter-OwnerMutex
+    try {
+        $installedSupervisor = Deploy-OperationalFiles
+        $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $arguments = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $installedSupervisor + '" -Mode Ensure'
+        $action = New-ScheduledTaskAction -Execute $WindowsPowerShell -Argument $arguments -WorkingDirectory $InstallRoot
+        $startup = New-ScheduledTaskTrigger -AtStartup
+        $watchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)
+        $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType S4U -RunLevel Highest
+        $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -WakeToRun -Hidden
+        Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($startup,$watchdog) -Principal $principal -Settings $settings -Description 'Keeps DESKTOP-KOCEPSV Desktop Commander online without interactive logon.' -Force -ErrorAction Stop | Out-Null
+        Enable-TaskSchedulerOperationalLog
+        Stop-RemoteProcesses
+        Start-Sleep -Seconds 3
+        $removed = Remove-LegacyRawCaptures
+        Remove-Item -LiteralPath $ConnectedMarker -Force -ErrorAction SilentlyContinue
+    }
+    finally { Exit-OwnerMutex $installMutex }
     Start-ScheduledTask -TaskName $TaskName -ErrorAction Stop
     if (-not (Wait-AgentConvergence -TimeoutSeconds 75)) {
         if (Test-RecentCooldown) { Write-Output 'AUTH_REQUIRED=true'; exit 20 }
@@ -290,10 +319,15 @@ function Install-Task {
     Write-Output ('LEGACY_RAW_CAPTURES_REMOVED=' + $removed)
 }
 
-switch ($Mode) {
-    'InstallTask' { Install-Task }
-    'Restart' { Stop-RemoteProcesses; Start-Sleep -Seconds 2; Ensure-Agent }
-    'KillForRecoveryTest' { Stop-RemoteProcesses; Write-Output 'REMOTE_AGENT_KILLED=true' }
-    'Status' { & $StatusScript }
-    default { Ensure-Agent }
+$ownerMutex = $null
+try {
+    if ($Mode -ne 'InstallTask' -and $Mode -ne 'Status') { $ownerMutex = Enter-OwnerMutex }
+    switch ($Mode) {
+        'InstallTask' { Install-Task }
+        'Restart' { Stop-RemoteProcesses; Start-Sleep -Seconds 2; Ensure-Agent }
+        'KillForRecoveryTest' { Stop-RemoteProcesses; Write-Output 'REMOTE_AGENT_KILLED=true' }
+        'Status' { & $StatusScript }
+        default { Ensure-Agent }
+    }
 }
+finally { Exit-OwnerMutex $ownerMutex }

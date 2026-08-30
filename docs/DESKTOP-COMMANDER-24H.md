@@ -27,6 +27,7 @@ O runner descarta a saída bruta do provedor. Se detectar solicitação de devic
 - Depois da primeira resolução pelo `npx`, o caminho do pacote é validado por nome/versão e guardado em `package-root.txt`; reinícios seguintes usam esse hint privado e só voltam ao `npx` se o cache tiver sido removido ou não passar na validação.
 - O log operacional fica em `%LOCALAPPDATA%\ShopVivaliz\DesktopCommander\logs`, rotacionado em 5 MiB com uma geração anterior.
 - O monitor renova um marcador a cada 30 segundos depois de `Device ready`. Marcador vencido, processo duplicado ou canal degradado sem recuperação convergem para reinício único.
+- Um mutex global recusa supervisores concorrentes mesmo quando a chamada não veio do Agendador; a tarefa continua usando `IgnoreNew` como segunda barreira.
 - A tarefa habilita o log operacional `Microsoft-Windows-TaskScheduler/Operational` quando a política local permite.
 
 ### Persistência de renovação de sessão
