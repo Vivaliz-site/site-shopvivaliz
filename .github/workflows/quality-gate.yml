@@ -35,6 +35,11 @@ jobs:
           php -l blog/content.php >/dev/null
           php -l includes/blog-editorial-autopilot.php >/dev/null
           php tests/google-indexing-canonical-regression-test.php
+          python3 tests/test_production_functional_audit_contract.py
+          python3 tests/test_catalog_available_only_contract.py
+          python3 tests/test_melhorenvio_integration_health_contract.py
+          python3 tests/test_critical_integration_recovery_workflows.py
+          python3 tests/test_production_pipeline_runtime_contract.py
           python3 -m py_compile scripts/seo-integrity-audit.py
           node --check scripts/public-layout-audit.mjs
           node --test tests/public-route-discovery.test.mjs tests/public-page-health.test.mjs
@@ -55,7 +60,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -q '163.176.103.253' .github/workflows/master-production-pipeline.yml
-          ! grep -q '163.176.103.253' .github/workflows/master-production-pipeline.yml
+          ! grep -q '137.131.156.17' .github/workflows/master-production-pipeline.yml
           grep -q 'SEO routing invariant' scripts/deploy-production.sh
           test -f .github/workflows/public-layout-audit.yml
           grep -q 'Master Production Pipeline 24/7' .github/workflows/public-layout-audit.yml
