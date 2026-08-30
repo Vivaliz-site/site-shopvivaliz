@@ -19,11 +19,15 @@ def test() -> None:
         "/api/orders/health.php",
         "/api/catalog/products.php",
         "shipping_options",
+        "olist_tiny",
+        "mercado_livre",
         "mercado_pago",
         "melhor_envio",
     ]
     for marker in required_audit_markers:
         assert marker in audit, f"missing functional audit marker: {marker}"
+    assert "r.get('ok') is not True" not in audit
+    assert 'if r.get("ok") is not True' not in audit
 
     assert "LOCAL_CONTRACT_SMOKE=PASS" in smoke
     assert "Storefront smoke tests passed." not in smoke

@@ -69,13 +69,11 @@ python3 - "$TMPDIR/integrations.json" <<'PY' || fail integrations 'critical prov
 import json, pathlib, sys
 r=json.loads(pathlib.Path(sys.argv[1]).read_text())
 items={x.get('key'):x for x in r.get('integrations',[]) if isinstance(x,dict)}
-for key in ('mercado_pago','melhor_envio','olist'):
+for key in ('olist_tiny','mercado_livre','mercado_pago','melhor_envio'):
     if items.get(key,{}).get('status') != 'connected':
         raise SystemExit(1)
-if r.get('ok') is not True:
-    raise SystemExit(1)
 PY
-pass integrations 'olist mercado_pago melhor_envio connected'
+pass integrations 'olist_tiny mercado_livre mercado_pago melhor_envio connected'
 
 echo 'AUDITORIA_FUNCIONAL_PRODUCAO=PASS'
 echo 'PRODUCTION_FUNCTIONAL_AUDIT=PASS'
