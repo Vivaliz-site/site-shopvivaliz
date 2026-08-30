@@ -8,6 +8,21 @@
 
 ---
 
+## 🔴 2026-08-29 — Recuperação pós-E2 e arquitetura obrigatória de 2 A1
+
+**Estado vinculante:** produção passa a operar somente nas duas A1 sobreviventes: `always-free-arm-1787907847-26` (backend/dados/serviços) e `shopvivaliz-free-a1` (site/web/deploy). As E2 `shopvivaliz-ai` (`137.131.156.17`) e `shopvivaliz-micro-2` (`136.248.69.116`) foram encerradas e são **alvos aposentados**.
+
+**Regras para qualquer agente:**
+- Nunca apontar workflow, script, cron, systemd, SSH, MCP, health-check ou deploy para IP/hostname das E2 aposentadas.
+- Referências antigas em logs/relatórios permanecem como evidência histórica; referências executáveis/configuráveis são defeitos e devem ser corrigidas.
+- Preservar mudanças locais, dumps, bundles, patches e backups antes de qualquer limpeza/reconciliação.
+- Não executar operação OCI destrutiva durante esta recuperação e nunca expor/commitar secrets.
+- MEI deve manter exatamente um sender de produção.
+- `systemctl active`, HTTP 200 e revisão estática não bastam: validação funcional ponta a ponta é obrigatória, inclusive frete/checkout real de teste.
+
+**Fontes normativas:** `.codex/RECOVERY-MEMORY.md`, `docs/operations/TWO-A1-RECOVERY-SPEC-2026-08-29.md` e `docs/superpowers/plans/2026-08-29-two-a1-recovery-master.md`.
+
+---
 ## 📋 Como Usar Este Arquivo
 
 ### Antes de começar uma sessão
@@ -145,6 +160,58 @@ sempre em produção via Apache/PHP-FPM puro.
 ---
 
 ## 🔴 Crítico: Problemas Não Resolvidos
+
+### 2026-08-26 — CORREÇÃO CRÍTICA: VM1 (137.131.156.17) é DEV, não produção — VM2 (136.248.69.116) é a produção real
+**Sistema/arquivo:** VM Oracle `shopvivaliz-ai` (`137.131.156.17`) e `shopvivaliz-micro-2` (`136.248.69.116`), `CLAUDE.md` seção "🔴 VM1 vs VM2 — não confundir"
+**O que descobri:** A entrada de 2026-08-25 logo abaixo (mantida por histórico) e o `CLAUDE.md`
+da época afirmavam que `137.131.156.17` ("VM1", chamada de "original") era a produção real e que
+`136.248.69.116` ("VM2", `shopvivaliz-micro-2`) era só um destino temporário planejado, com corte
+de DNS ainda pendente. **Isso estava errado.** Fred corrigiu diretamente nesta sessão: a VM2 já é
+a produção real (`shopvivaliz.com.br`) e a VM1 é só o ambiente **dev**, usado pra envio de e-mail
+(`mei-mg-email`). Verificado ao vivo em 2026-08-26: (1) Apache de **ambas** as VMs tem
+`ServerName dev.shopvivaliz.com.br` — nenhuma delas se identifica como produção pelo próprio
+vhost, então esse campo sozinho não serve pra decidir; (2) `shopvivaliz_access.log` da VM2 mostra
+tráfego real via IPs Cloudflare (`104.22.x`, `172.68-71.x`) pedindo páginas de produto e recebendo
+webhooks do Mercado Livre — o da VM1 não; (3) o header `Content-Security-Policy` enforced ao vivo
+na VM2 bate exatamente com o `.htaccess` do repo (Rodada 10.1); (4) `shopvivaliz-queue-worker.service`
+(fix da fila de pagamentos, R9-1/R9-2) está `active (running)` na VM2 há 15h+ sem erro de permissão
+recente, fila em dia (0 pendentes); (5) o release atual da VM2 (`readlink current` →
+`20260826-034203-c10cda5a`) tem os 10 commits das Rodadas 1-10 + o fix da fila de pagamentos na
+ancestralidade, confirmado via `git merge-base --is-ancestor <cada commit> c10cda5a` — todos "SIM".
+Ou seja: **como o deploy de ambas as VMs puxa do mesmo `main` via cron a cada 2min, todo o
+trabalho das 10 rodadas + fix da fila chegou na produção real (VM2) mesmo com a validação ao vivo
+de várias rodadas anteriores tendo sido feita (erroneamente) contra a VM1.**
+**Por quê importa:** Qualquer agente que valide algo "ao vivo" numa VM Oracle deve **primeiro
+confirmar contra qual domínio real está testando** (`shopvivaliz_access.log` com tráfego
+Cloudflare real é o sinal mais confiável — `ServerName` do vhost NÃO é, porque as duas VMs usam o
+mesmo nome dev por trás de Cloudflare Authenticated Origin Pull). Não assuma que "VM original" ou
+"primeira VM que aparece no `~/.bash_history`" é produção. Quando a `shopvivaliz-free-a1` for
+provisionada, o corte futuro deve partir da VM2 (produção real atual), não da VM1.
+**Ver também:** `CLAUDE.md` (seção "🔴 VM1 vs VM2 — não confundir"), entrada abaixo (2026-08-25, histórico da migração original — papéis planejados nela estão desatualizados, mas o contexto do incidente de memory thrashing continua válido)
+
+---
+
+### 2026-08-25 — VM Oracle original travou por memory thrashing; migração de 3 VMs em andamento
+**Sistema/arquivo:** VM Oracle (`137.131.156.17`), `CLAUDE.md` seção "🚧 Migração de VM em andamento"
+**O que descobri:** A VM original (`shopvivaliz-ai`, shape `E2.1.Micro`, só 954Mi RAM) hospeda
+shopvivaliz + `mei-mg-email` + `solange-rolla-consultorio` simultaneamente. Em 2026-08-25 ficou
+totalmente sem resposta (SSH incluído) por ~12min — journal mostra `systemd-journald: Under
+memory pressure, flushing caches` repetido e lag de 5+ min entre a app escrever um log e o
+journald recebê-lo, sem nenhum OOM-killer disparado (RAM+swap esgotados = thrashing total, pior
+que um OOM-kill porque nada morre pra liberar memória). Iniciei provisionamento de 2 VMs novas no
+mesmo tenancy Oracle (`fredmourao`, Always Free) pra separar as cargas: `shopvivaliz-micro-2`
+(`136.248.69.116`, E2.1.Micro, já no ar) como destino temporário "limpo" pra loja em produção, e
+`shopvivaliz-free-a1` (Ampere A1.Flex, 2 OCPU/12GB) como destino final quando a capacidade da
+Oracle liberar (erro "Out of host capacity" recorrente na região sa-saopaulo-1, retry automático
+em andamento).
+**⚠️ CORREÇÃO (ver entrada de 2026-08-26 acima):** os papéis descritos aqui (VM1=produção,
+VM2=temporária) estavam errados — VM2 já era a produção real. O restante desta entrada (contexto
+do incidente de memory thrashing) continua válido como histórico.
+**Credenciais:** chave SSH única para as 3 VMs (`ssh-key-2026-07-04.key`, mesmo caminho de sempre),
+API OCI configurada em `~/.oci/config` local e secrets `OCI_CLI_*` no GitHub para gerência via CLI.
+**Ver também:** `CLAUDE.md` (seção "🔴 VM1 vs VM2 — não confundir"), [[feedback_local_autosync_bypasses_pr]] (memória de sessão — mesmo daemon de auto-sync que já causou problemas de merge continua ativo nesta VM local)
+
+---
 
 ### Shopee/Tiny OAuth2 — PARADO HÁ 3+ SEMANAS + workflows removidos (2026-07-27)
 **Status:** Requer ação manual (regenerar client OAuth2 na Tiny) **e** recriar workflows
@@ -608,6 +675,40 @@ cobre 3 desses itens; os que ficaram de fora (com justificativa) estão listados
   público ou não — é de produto, não de segurança; o estado atual não corre risco.
 **Ver também:** `docs/AGENTS.md` (entradas das Rodadas 1-10, acima), relatório da
 Rodada 10 (`outputs/rodada10-diagnostico.md`), resumo entregue ao Fred no chat.
+
+### 2026-08-27 — Policy Engine bloqueia merge de mudança server-side não-visual (Sonnet)
+
+**Sistema/arquivo:** `agents/policy-engine/index.js` (`isVisualFile()`/`validateVisual()`),
+workflow `enforce`.
+**Contexto:** PR com fix de normalização de hash (SHA256) do Facebook Pixel Advanced
+Matching em `includes/analytics-tracking.php` foi bloqueado pelo check `enforce` com
+"validação visual expirada" — mesmo a mudança sendo puramente server-side (normaliza
+email/telefone antes do hash, sem nenhum efeito em layout renderizado).
+
+- `isVisualFile()` decide por **path + extensão**, não por conteúdo do diff: qualquer
+  arquivo `.php`/`.js`/`.css`/etc sob `includes/`, `public/`, `templates/`, `views/` ou
+  `pages/` é tratado como visual, com exceções só para 2 arquivos específicos
+  (`includes/product-seo.php`, `includes/catalog-authoritative-stock-carry.php`) e
+  `includes/marketplace/*`. Isso é falso-positivo pra qualquer outra lógica puramente
+  server-side dentro de `includes/` (helpers de tracking, normalização de dados, etc).
+- Quando isso acontecer: **não** tente contornar o Policy Engine (é fail-closed de
+  propósito). Se a sessão não tem navegador conectado pra gerar `visual-proof.json`
+  (screenshot + reviewer + timestamp <1h), separe a mudança visual-flagada num PR próprio
+  e sinalize como bloqueada pendente de QA visual humana — não force merge, não edite
+  `isVisualFile()` pra adicionar exceção sem autorização do Fred (mesmo que a exceção
+  pareça óbvia — é uma decisão de política, não técnica).
+- Outro achado no mesmo PR: 3 checks (`Audit agents with evidence`, `Audit repository
+  automation`, `Resolve same-repository PR conflicts with private Oracle Gemini pool`) já
+  estavam falhando repetidamente em `main` havia horas, sem relação com o diff — confirmado
+  via `gh run list --branch main --workflow "<nome>"`. Antes de tratar uma falha de check
+  como bloqueio do seu PR, confirme se ela já falha em `main` também.
+- `gh pr edit` (gh CLI 2.45.0) falha sempre com `GraphQL: Projects (classic) is being
+  deprecated...` mesmo sem nenhum campo de projeto envolvido — bug conhecido da versão.
+  Workaround: `gh api repos/<owner>/<repo>/pulls/<n> -X PATCH -f title=... -f body=...`
+  funciona normalmente.
+- Branch protection está **desabilitada** neste repo (`gh api .../branches/main/protection`
+  → 404 "Branch protection has been disabled"). `mergeStateStatus: UNSTABLE` não bloqueia
+  merge de fato — é só informativo sobre checks não-obrigatórios pendentes/falhando.
 
 ## 🤖 Agentes Autônomos Ativos
 

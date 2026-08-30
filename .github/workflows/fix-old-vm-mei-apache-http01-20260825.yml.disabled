@@ -1,0 +1,109 @@
+name: Repair old VM MEI Apache HTTP01
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  repair:
+    if: github.event.issue.title == '[fix-old-vm-mei-apache-http01]'
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 12
+    steps:
+      - name: Prepare SSH
+        env:
+          VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Obtain certificate and repair Apache
+        run: |
+          set -Eeuo pipefail
+          ssh -i "$HOME/.ssh/id_rsa" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          stamp=$(date +%Y%m%d-%H%M%S)
+          sudo install -d -m 700 /root/apache-repair-backups/$stamp
+          sudo cp -a /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/000-default-le-ssl.conf /root/apache-repair-backups/$stamp/ 2>/dev/null || true
+          rm -f /home/ubuntu/cloudflare-certbot.ini
+
+          sudo install -d -o ubuntu -g ubuntu -m 755 /home/ubuntu/shopvivaliz-deploy/current/.well-known/acme-challenge
+          printf 'acme-probe-%s\n' "$stamp" > /home/ubuntu/shopvivaliz-deploy/current/.well-known/acme-challenge/preflight
+          chmod 644 /home/ubuntu/shopvivaliz-deploy/current/.well-known/acme-challenge/preflight
+          curl -fsS --max-time 5 -H 'Host: dev.shopvivaliz.com.br' http://127.0.0.1/.well-known/acme-challenge/preflight >/dev/null
+
+          sudo certbot certonly --webroot -w /home/ubuntu/shopvivaliz-deploy/current -d dev.shopvivaliz.com.br --non-interactive --agree-tos --register-unsafely-without-email
+          test -s /etc/letsencrypt/live/dev.shopvivaliz.com.br/fullchain.pem
+          test -s /etc/letsencrypt/live/dev.shopvivaliz.com.br/privkey.pem
+
+          sudo tee /etc/apache2/sites-available/000-default.conf >/dev/null <<'HTTP'
+          <VirtualHost *:80>
+              ServerName dev.shopvivaliz.com.br
+              ProxyPreserveHost On
+              ProxyPass "/descadastro" "http://127.0.0.1:8010/descadastro"
+              ProxyPassReverse "/descadastro" "http://127.0.0.1:8010/descadastro"
+              ProxyPass "/mei-email-assets" "http://127.0.0.1:8010/mei-email-assets"
+              ProxyPassReverse "/mei-email-assets" "http://127.0.0.1:8010/mei-email-assets"
+              RedirectMatch 404 ^/$
+              ErrorLog ${APACHE_LOG_DIR}/mei_endpoint_error.log
+              CustomLog ${APACHE_LOG_DIR}/mei_endpoint_access.log combined
+          </VirtualHost>
+          HTTP
+
+          sudo tee /etc/apache2/sites-available/000-default-le-ssl.conf >/dev/null <<'HTTPS'
+          <IfModule mod_ssl.c>
+          <VirtualHost *:443>
+              ServerName dev.shopvivaliz.com.br
+              ProxyPreserveHost On
+              ProxyPass "/descadastro" "http://127.0.0.1:8010/descadastro"
+              ProxyPassReverse "/descadastro" "http://127.0.0.1:8010/descadastro"
+              ProxyPass "/mei-email-assets" "http://127.0.0.1:8010/mei-email-assets"
+              ProxyPassReverse "/mei-email-assets" "http://127.0.0.1:8010/mei-email-assets"
+              RedirectMatch 404 ^/$
+              ErrorLog ${APACHE_LOG_DIR}/mei_endpoint_error.log
+              CustomLog ${APACHE_LOG_DIR}/mei_endpoint_access.log combined
+              Include /etc/letsencrypt/options-ssl-apache.conf
+              SSLCertificateFile /etc/letsencrypt/live/dev.shopvivaliz.com.br/fullchain.pem
+              SSLCertificateKeyFile /etc/letsencrypt/live/dev.shopvivaliz.com.br/privkey.pem
+              SSLCACertificateFile /etc/ssl/certs/cloudflare-origin-pull-ca.pem
+              SSLVerifyClient require
+              SSLVerifyDepth 1
+          </VirtualHost>
+          </IfModule>
+          HTTPS
+
+          sudo apache2ctl configtest
+          systemctl is-active --quiet mei-mg-email-api.service
+          curl -fsS --max-time 5 http://127.0.0.1:8010/mei-email-assets/logo-contabilidade-melo-transparente.png -o /dev/null
+          sudo systemctl reload apache2
+          sleep 2
+          sudo apache2ctl configtest
+          systemctl is-active --quiet apache2
+          systemctl is-active --quiet mei-mg-email-api.service
+          rm -rf /home/ubuntu/shopvivaliz-deploy
+          echo APACHE_REPAIR_LOCAL_OK=true
+          REMOTE
+
+      - name: Validate public endpoint
+        run: |
+          set -Eeuo pipefail
+          for i in 1 2 3 4 5; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 12 'https://dev.shopvivaliz.com.br/mei-email-assets/logo-contabilidade-melo-transparente.png' || true)
+            echo "PUBLIC_HTTP_CODE=$code"
+            case "$code" in 200|304) exit 0;; esac
+            sleep 4
+          done
+          exit 1
+
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"

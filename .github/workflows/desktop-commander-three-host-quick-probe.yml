@@ -1,0 +1,58 @@
+﻿name: Desktop Commander Three Host Quick Probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/desktop-commander-three-host-quick-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Configure verified SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${VM_KEY:-}"
+          test -n "${VM_HOSTS:-}"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+      - name: Probe sanitized state
+        run: |
+          set -Eeuo pipefail
+          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@144.22.157.209)
+          vm_state="$(${SSH[@]} 'active=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true); enabled=$(systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null || true); auth=false; test -f "$HOME/.desktop-commander-device/auth-required.cooldown" && auth=true; printf "%s/%s/%s" "$enabled" "$active" "$auth"' 2>/dev/null || printf 'ssh_unreachable')"
+          if ${SSH[@]} 'curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:5557/health >/dev/null' 2>/dev/null; then fred=reachable; else fred=unreachable; fi
+          if ${SSH[@]} 'curl -fsS --connect-timeout 3 --max-time 5 http://127.0.0.1:5558/health >/dev/null' 2>/dev/null; then desk=reachable; else desk=unreachable; fi
+          now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          {
+            echo '### Three-host quick relay probe'
+            echo
+            echo "Recorded: $now"
+            echo "- LAPTOP-NIG4IFUU private relay: **$fred**"
+            echo "- DESKTOP-KOCEPSV private relay: **$desk**"
+            case "$vm_state" in
+              enabled/active/false) echo '- always-free-arm-1787907847-26 canonical service: **active, no auth cooldown**' ;;
+              enabled/failed/true|enabled/inactive/true) echo '- always-free-arm-1787907847-26 canonical service: **stopped by provider-auth cooldown**' ;;
+              ssh_unreachable) echo '- always-free-arm-1787907847-26 SSH: **unreachable**' ;;
+              *) echo '- always-free-arm-1787907847-26 canonical service: **degraded**' ;;
+            esac
+          } > /tmp/quick-probe.md
+      - name: Publish probe
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 1207 --repo "${{ github.repository }}" --body-file /tmp/quick-probe.md
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts" /tmp/quick-probe.md

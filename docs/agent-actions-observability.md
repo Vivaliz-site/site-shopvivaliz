@@ -62,7 +62,7 @@ Agents must not claim that run discovery is unavailable until this index path ha
 
 Fred-Win must be accessed only through the private relay architecture:
 
-`GitHub Actions -> Oracle VM 137.131.156.17 via SSH -> VM 127.0.0.1:5557 -> reverse SSH tunnel -> Fred-Win 127.0.0.1:5557 -> MCP`
+`GitHub Actions -> backend A1 144.22.157.209 via SSH -> VM 127.0.0.1:5557 -> reverse SSH tunnel -> Fred-Win 127.0.0.1:5557 -> MCP`
 
 Do not validate Fred-Win by `https://rce-shopvivaliz.trycloudflare.com`; that endpoint is historical and not canonical.
 

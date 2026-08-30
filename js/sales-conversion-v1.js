@@ -30,11 +30,12 @@
       ? 'Este item já atinge o mínimo do cupom <code>VIVALIZ10</code>: 10% OFF no checkout.'
       : 'Use <code>VIVALIZ10</code> para 10% OFF quando o carrinho passar de R$ 100.';
     offer.innerHTML='<strong>Oferta disponível para sua compra</strong><span>'+message+'</span>';
-    buy.parentNode.insertBefore(offer,buy);
+    var buyTarget = buy.closest('.product-buy-group') || buy.closest('.produto-actions') || buy;
+    buyTarget.parentNode.insertBefore(offer, buyTarget);
     var note=document.createElement('div');
     note.className='sv-sales-assurance';
     note.textContent='“Comprar agora” adiciona o item ao carrinho; você ainda calcula o frete e revisa tudo antes do pagamento.';
-    buy.insertAdjacentElement('afterend',note);
+    buyTarget.insertAdjacentElement('afterend', note);
   }
   function installCheckoutClarity(){
     if((location.pathname||'').replace(/\/$/,'')!=='/checkout') return;

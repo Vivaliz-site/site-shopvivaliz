@@ -82,9 +82,67 @@ Ao adicionar novo arquivo em `/includes/` que precisa ser público:
 
 ---
 
-## 🟡 Rotina de otimização inteligente Shopee (6h): credencial corrigida em 2026-08-14, mas falta integração de analytics (CTR/conversão)
+## 🔴 Rotina de otimização inteligente Shopee (6h): `shopee-runtime-health.yml` voltou a falhar em todo run agendado desde 2026-08-22
 
-**Última atualização:** 2026-08-15
+**Última atualização:** 2026-08-27
+
+### Atualização 2026-08-27 — commit `a6c713a` (VM2 routing fix) corrige o alvo do SSH; erro real agora aponta pra credencial Shopee ausente na VM2, não mais conectividade
+
+O commit `a6c713a` ("fix: route production pipelines to VM2 (#1234)", 2026-08-27T10:52Z) corrigiu
+`.github/workflows/shopee-runtime-health.yml` pra fazer SSH em `136.248.69.116` (VM2, produção real)
+em vez de `137.131.156.17` (VM1, dev) — isso já resolve a hipótese de conectividade/cron saturado da
+VM1 aventada abaixo (atualização 2026-08-26). Disparei `shopee-runtime-health.yml` manualmente via
+`workflow_dispatch` (run `33107367820`, 2026-08-27T19:13Z, ação somente-leitura) pra confirmar: o SSH
+completa normalmente (sem timeout/erro de conexão), mas o script remoto falha com um erro específico
+e novo, visível pela primeira vez no log do job (antes só existia no artifact, inacessível a este
+sandbox):
+
+```
+ERROR: required Shopee runtime credentials are incomplete
+```
+
+`scripts/shopee_runtime_preflight.py` exige `SHOPEE_PARTNER_ID`, `SHOPEE_PARTNER_KEY`,
+`SHOPEE_SHOP_ID` e `SHOPEE_ACCESS_TOKEN`/`SHOPEE_REFRESH_TOKEN`, lidos de
+`shopvivaliz-deploy/shared/.env` + `shared/shopee-tokens.json` **na própria VM2**. Hipótese mais
+provável (não confirmada por falta de SSH neste sandbox): `shopvivaliz-shopee-token-renewer.service`
+(renova `shopee-tokens.json` a cada 3h) só foi instalado/rodado historicamente na VM1
+(`docs/MEMORIA-AGENTES.md:42`), então a VM2 nunca teve essas credenciais populadas, mesmo já sendo a
+produção real desde antes de 2026-08-26.
+
+**Ação sugerida:** (1) `ssh ubuntu@136.248.69.116 systemctl status shopvivaliz-shopee-token-renewer`;
+se ausente/parado, instalar (`deploy/systemd/shopvivaliz-shopee-token-renewer.service`) e popular
+`shared/.env`/`shared/shopee-tokens.json` da VM2 com as 4 credenciais `SHOPEE_*` (copiar de VM1 ou
+gerar novas); (2) rodar `shopee-runtime-health.yml` via `workflow_dispatch` de novo pra confirmar
+`status: ok`. Detalhe completo: `docs/HISTORICO-AGENTES-SHOPEE.md` seção 9.33.
+
+**Ver também registro anterior abaixo (2026-08-26)** — a hipótese de conectividade da VM1 nele descrita
+está descartada por este achado (o problema nunca foi só conectividade; agora que o SSH aponta pro
+alvo certo, o bloqueador real é credencial ausente na VM2).
+
+### Atualização 2026-08-26 — regressão nova: health check volta a falhar em todo run agendado desde 2026-08-22, não detectada por 4 dias
+
+`shopee-runtime-health.yml` (schedule a cada 6h, ver atualização 2026-08-15 abaixo) tinha 3/3
+sucessos em 2026-08-15 e continuou passando até `run_number 1114` (2026-08-22 06:59 UTC). A
+partir de `run_number 1121` (2026-08-22 18:48 UTC) todo run agendado falha (`conclusion:
+failure`), confirmado até `run_number 1326` (2026-08-26 07:08 UTC) — 4 dias corridos sem
+nenhum sucesso agendado no meio. O job falha em ~3s no passo SSH que chama
+`scripts/shopee_runtime_preflight.py` na VM (`137.131.156.17`); o corpo do erro só existe no
+artifact `shopee-runtime-health-<run_id>.json` (não inspecionado ainda — baixar o artifact via
+`gh`/API com acesso à VM). Causa raiz não confirmada; hipótese mais provável é
+`daemon-shopee-token-renewer.py` (`shopvivaliz-shopee-token-renewer.service`) ter parado de
+rodar por volta de 2026-08-22, deixando o access token expirar (4h) sem renovação — checar
+`systemctl status shopvivaliz-shopee-token-renewer` na VM primeiro. Não parece ligado ao crash
+de memory thrashing de 2026-08-25 nem aos workflows `ops: vm-slim-*` (todos posteriores ao
+início desta falha). Nenhuma sessão de agente pegou isso entre 08-22 e 08-26 porque a
+reconfirmação rápida de rotina (usada desde 2026-08-06, ver `docs/MEMORIA-AGENTES.md`) só
+olhava `listings/*.json` e git log, não a run history deste workflow. Detalhe completo:
+`docs/MEMORIA-AGENTES.md` entrada 2026-08-26.
+
+**Ação sugerida para quando o usuário tiver tempo:** (1) checar `systemctl status
+shopvivaliz-shopee-token-renewer` na VM e os logs do daemon; (2) se o daemon estiver parado,
+reiniciar e confirmar que um novo `shopee-tokens.json` foi escrito; (3) disparar
+`shopee-runtime-health.yml` via `workflow_dispatch` pra confirmar recuperação antes de esperar
+o próximo schedule.
 
 ### Atualização 2026-08-15 — bloqueador primário corrigido; premissa dos registros abaixo (2026-07-XX) estava errada
 

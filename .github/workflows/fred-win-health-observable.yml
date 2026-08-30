@@ -1,4 +1,4 @@
-name: Fred-Win Health Observable
+﻿name: Fred-Win Health Observable
 
 on:
   workflow_dispatch:
@@ -47,7 +47,7 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -o ConnectTimeout=10 -o ServerAliveInterval=10 \
             -o ServerAliveCountMax=2 -i "$HOME/.ssh/vmkey" \
-            ubuntu@137.131.156.17 \
+            ubuntu@144.22.157.209 \
             'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health' \
             > /tmp/fredwin-health-output.txt 2>&1; then
             code=0
@@ -119,13 +119,13 @@ jobs:
               'trigger_sha': os.environ.get('GITHUB_SHA'),
               'private_relay': {
                   'architecture': (
-                      'GitHub Actions -> Oracle VM 137.131.156.17 via SSH -> '
+                      'GitHub Actions -> Oracle VM 144.22.157.209 via SSH -> '
                       'VM 127.0.0.1:5557 -> reverse SSH tunnel -> '
                       'Fred-Win 127.0.0.1:5557 -> MCP'
                   ),
                   'endpoint_checked_from_vm': 'http://127.0.0.1:5557/health',
                   'cloudflare_endpoint_used': False,
-                  'ssh_target': 'ubuntu@137.131.156.17',
+                  'ssh_target': 'ubuntu@144.22.157.209',
               },
               'health': {
                   'exit_code': exit_code,

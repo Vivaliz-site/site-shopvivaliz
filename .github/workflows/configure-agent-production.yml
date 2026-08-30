@@ -43,7 +43,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 \
+            ubuntu@163.176.103.253 \
             'set -euo pipefail; key="$(cat)"; SHOPVIVALIZ_AGENT_KEY="$key" python3 - /home/ubuntu/shopvivaliz-deploy/shared/.env <<"PY"
           from pathlib import Path
           import os
@@ -82,7 +82,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 \
+            ubuntu@163.176.103.253 \
             'set -euo pipefail; shared=/home/ubuntu/shopvivaliz-deploy/shared; sudo chown ubuntu:ubuntu "$shared/.env"; chmod 600 "$shared/.env"; php /home/ubuntu/shopvivaliz-deploy/current/scripts/materialize-runtime-secrets.php; sudo chown ubuntu:www-data "$shared/runtime-secrets.php"; chmod 640 "$shared/runtime-secrets.php"; stat -c "shared_env_mode=%a shared_env_group=%G" "$shared/.env"; stat -c "runtime_secrets_mode=%a runtime_secrets_group=%G" "$shared/runtime-secrets.php"'
 
       - name: Execute and verify the real production watchdog
@@ -94,7 +94,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 \
+            ubuntu@163.176.103.253 \
             'set -euo pipefail; /usr/bin/flock -w 120 /var/lock/shopvivaliz-autonomous-watchdog.lock /usr/bin/php /home/ubuntu/shopvivaliz-deploy/current/api/agent/autonomous-watchdog.php' \
             > watchdog-response.json
           cat watchdog-response.json

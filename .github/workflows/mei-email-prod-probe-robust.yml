@@ -1,4 +1,4 @@
-name: MEI Email Production Probe Robust
+﻿name: MEI Email Production Probe Robust
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
     environment: Production
     timeout-minutes: 10
     env:
-      VM_HOST: 137.131.156.17
+      VM_HOST: 144.22.157.209
       VM_USER: ubuntu
     steps:
       - name: Configure verified Oracle SSH
@@ -118,7 +118,7 @@ jobs:
                       )
                   """)
                   out['orphan_lots'] = int(cur.fetchone()['orphan_lots'] or 0)
-                  cur.execute("select count(*) n from mei_email.campanhas where corpo_template ilike '%base pública de CNPJ%'")
+                  cur.execute("select count(*) n from mei_email.campanhas where corpo_template ilike '%base pÃºblica de CNPJ%'")
                   out['legacy_copy_campaigns'] = int(cur.fetchone()['n'] or 0)
                   cur.execute("""
                     select count(*) n

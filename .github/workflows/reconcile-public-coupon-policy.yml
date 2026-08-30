@@ -41,7 +41,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 'php -d display_errors=1 -r '\''
+            ubuntu@163.176.103.253 'php -d display_errors=1 -r '\''
               require "/home/ubuntu/shopvivaliz-deploy/current/includes/pdo-database.php";
               $pdo = sv_pdo();
               $codes = ["VIVALIZ10", "PRIMEIRA10"];
@@ -71,7 +71,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+            ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
           set -euo pipefail
           body="$(curl --fail --silent --show-error --max-time 20 https://shopvivaliz.com.br/api/coupons/active.php)"
           printf '%s\n' "$body"

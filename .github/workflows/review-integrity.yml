@@ -88,13 +88,13 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
             scripts/review-integrity-live.php \
-            ubuntu@137.131.156.17:/tmp/review-integrity-live.php
+            ubuntu@163.176.103.253:/tmp/review-integrity-live.php
           ssh \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 \
+            ubuntu@163.176.103.253 \
             'php /tmp/review-integrity-live.php' \
             | tee review-integrity.json
 

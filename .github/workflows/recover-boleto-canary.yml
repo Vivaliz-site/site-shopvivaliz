@@ -101,7 +101,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 \
+            ubuntu@163.176.103.253 \
             'bash -s' -- "$EXPECTED_SHA" "$TARGET_ORDER" "$RUN_ID" "$RUN_ATTEMPT" <<'REMOTE'
           set -euo pipefail
           expected_sha="$1"
@@ -253,7 +253,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            "ubuntu@137.131.156.17:/home/ubuntu/shopvivaliz-deploy/state/evidence/boleto-reconciliation/${TARGET_ORDER}-${RUN_ID}-${RUN_ATTEMPT}.json" \
+            "ubuntu@163.176.103.253:/home/ubuntu/shopvivaliz-deploy/state/evidence/boleto-reconciliation/${TARGET_ORDER}-${RUN_ID}-${RUN_ATTEMPT}.json" \
             artifacts/boleto-reconciliation.json
 
       - name: Validate redacted evidence contract

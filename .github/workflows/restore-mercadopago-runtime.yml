@@ -1,0 +1,105 @@
+name: Restore Mercado Pago Runtime
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: restore-mercadopago-runtime
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      MERCADOPAGO_ACCESS_TOKEN_VALUE: ${{ secrets.MERCADOPAGO_ACCESS_TOKEN }}
+      MERCADOPAGO_PUBLIC_KEY_VALUE: ${{ secrets.MERCADOPAGO_PUBLIC_KEY }}
+      MERCADOPAGO_WEBHOOK_SECRET_VALUE: ${{ secrets.MERCADOPAGO_WEBHOOK_SECRET }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Validate provider secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in MERCADOPAGO_ACCESS_TOKEN_VALUE MERCADOPAGO_PUBLIC_KEY_VALUE MERCADOPAGO_WEBHOOK_SECRET_VALUE; do
+            test -n "${!name:-}" || { echo "::error::Required provider secret missing: $name"; exit 1; }
+          done
+          echo 'mercadopago_provider_secrets=present'
+
+      - name: Configure verified SSH
+        shell: bash
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$ORACLE_VM_SSH_KEY"
+          test -n "$ORACLE_VM_KNOWN_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+      - name: Upload checked-in runtime tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            scripts/update-production-env.py ubuntu@163.176.103.253:/tmp/shopvivaliz-update-production-env.py
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            scripts/materialize-runtime-secrets.php ubuntu@163.176.103.253:/tmp/shopvivaliz-materialize-runtime-secrets.php
+
+      - name: Merge only Mercado Pago settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
+            'cd /home/ubuntu/shopvivaliz-deploy/shared && python3 /tmp/shopvivaliz-update-production-env.py'
+          import json, os
+          keys = ('MERCADOPAGO_ACCESS_TOKEN','MERCADOPAGO_PUBLIC_KEY','MERCADOPAGO_WEBHOOK_SECRET')
+          print(json.dumps({key: os.environ[key + '_VALUE'] for key in keys}))
+          PY
+      - name: Materialize web runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
+            'set -euo pipefail; shared=/home/ubuntu/shopvivaliz-deploy/shared; sudo chown ubuntu:www-data "$shared/.env"; chmod 600 "$shared/.env"; SHOPVIVALIZ_SHARED_ENV="$shared/.env" SHOPVIVALIZ_RUNTIME_SECRETS="$shared/runtime-secrets.php" SHOPVIVALIZ_SHARED_GROUP=www-data php /tmp/shopvivaliz-materialize-runtime-secrets.php; sudo chown ubuntu:www-data "$shared/runtime-secrets.php"; chmod 640 "$shared/runtime-secrets.php"'
+
+      - name: Verify Mercado Pago provider in production
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /home/ubuntu/shopvivaliz-deploy/current
+          php <<'PHP'
+          <?php
+          require 'includes/integration-health.php';
+          $result = svih_check_all(false);
+          foreach (($result['integrations'] ?? []) as $item) {
+              if (($item['key'] ?? '') !== 'mercado_pago') { continue; }
+              if (($item['status'] ?? '') !== 'connected' || (int)($item['provider_status'] ?? 0) !== 200) { exit(1); }
+              echo "mercadopago_provider_http=200\n";
+              exit(0);
+          }
+          exit(2);
+          PHP
+          REMOTE
+
+      - name: Cleanup temporary runtime tools
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f "$HOME/.ssh/id_rsa" && -f "$HOME/.ssh/known_hosts" ]]; then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
+              'rm -f /tmp/shopvivaliz-update-production-env.py /tmp/shopvivaliz-materialize-runtime-secrets.php' || true
+          fi
+          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"

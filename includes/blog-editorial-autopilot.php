@@ -121,7 +121,7 @@ function sv_blog_editorial_build_article(string $title, string $weekdayKey): arr
         'keywords' => sv_blog_editorial_keywords($title, $profile),
         'meta_title' => $metaTitle,
         'meta_description' => $metaDescription,
-        'related_products_url' => '/catalogo?busca=' . rawurlencode($profile['search_term']),
+        'related_products_url' => '/catalogo/?q=' . rawurlencode($profile['search_term']),
         'author' => 'Equipe ShopVivaliz',
         'featured' => false,
         'reading_time' => $weekdayKey === 'monday' ? 6 : 5,

@@ -216,6 +216,13 @@ final class BlogArticleRepository
         $currentImage = (string)($article['image'] ?? $article['image_url'] ?? '');
         $resolvedImage = $this->resolveImage($currentImage, $article);
         $article['image'] = $resolvedImage;
+        if (isset($article['related_products_url'])) {
+            $article['related_products_url'] = str_replace(
+                ['/catalogo?busca=', '/catalogo/?busca='],
+                ['/catalogo/?q=', '/catalogo/?q='],
+                (string)$article['related_products_url']
+            );
+        }
         if (array_key_exists('image_url', $article)) {
             $article['image_url'] = $resolvedImage;
         }

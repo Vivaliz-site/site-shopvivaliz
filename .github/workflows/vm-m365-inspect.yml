@@ -1,0 +1,33 @@
+name: VM M365 Inspect
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/vm-m365-inspect.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Configure verified VM SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
+      - name: Inspect targeted MEI diffs read only
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'set -Eeuo pipefail; cd /home/ubuntu/mei-mg-email; echo ===WORKER_DIFF===; git diff -- worker/worker_queue_first.py | head -500; echo ===RECOVERY_DIFF===; git diff -- app/queue_recovery.py | head -500; echo ===TEST_DIFF===; git diff -- tests/test_worker_partial_lot_invariant.py tests/test_dispatch_replay_guard.py tests/test_queue_recovery_and_autorepair.py | head -500; echo ===RECENT_COMMITS===; git log --oneline -12'
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts

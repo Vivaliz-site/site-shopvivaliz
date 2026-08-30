@@ -1,21 +1,39 @@
-param(
+﻿param(
     [ValidateSet('Ensure','InstallTask','Restart','KillForRecoveryTest','Status')]
     [string]$Mode = 'Ensure'
 )
 $ErrorActionPreference = 'Stop'
 $Repo = 'C:\site-shopvivaliz'
 $TaskName = 'ShopVivaliz Desktop Commander 24h'
+$LegacyTaskNames = @('DesktopCommanderHidden','DesktopCommanderUser24x7')
+$LegacyStartupName = 'desktop-commander.vbs'
 $StatusScript = Join-Path $Repo 'scripts\fredwin-desktop-commander-status.ps1'
 $RunnerScript = Join-Path $Repo 'scripts\fredwin-desktop-commander-runner.ps1'
 $LogDir = Join-Path $Repo 'logs'
 $SupervisorLog = Join-Path $LogDir 'desktop-commander-supervisor.log'
 $CooldownFile = Join-Path $LogDir 'desktop-commander-auth-required.cooldown'
 $DeviceFile = $null
+$Package = '@wonderwhy-er/desktop-commander@0.2.47'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 function Log([string]$Message) {
     $stamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     "$stamp - $Message" | Out-File -FilePath $SupervisorLog -Append -Encoding utf8
+}
+$MutexName = 'Global\ShopVivalizDesktopCommander-FRED'
+$OwnerMutex = New-Object System.Threading.Mutex($false, $MutexName)
+$OwnerMutexAcquired = $false
+try {
+    try { $OwnerMutexAcquired = $OwnerMutex.WaitOne(0) }
+    catch [System.Threading.AbandonedMutexException] { $OwnerMutexAcquired = $true }
+} catch {
+    $OwnerMutex.Dispose()
+    throw
+}
+if (-not $OwnerMutexAcquired) {
+    Log 'REMOTE_OWNER_CONFLICT mutex already held; refusing concurrent supervisor'
+    Write-Output 'REMOTE_OWNER_CONFLICT=true reason=supervisor_mutex_held'
+    exit 21
 }
 function Ensure-ProfileEnvironment {
     if (-not $env:USERPROFILE) {
@@ -29,16 +47,97 @@ function Ensure-ProfileEnvironment {
     $env:HOME = $env:USERPROFILE
     $script:DeviceFile = Join-Path (Join-Path $env:USERPROFILE '.desktop-commander-device') 'device.json'
 }
-function Get-RemoteProcesses {
-    return @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue | Where-Object { [string]$_.CommandLine -match 'desktop-commander.*remote' })
+function Test-DeviceStateNewerThanCooldown {
+    if (-not $DeviceFile -or -not (Test-Path -LiteralPath $DeviceFile) -or -not (Test-Path -LiteralPath $CooldownFile)) { return $false }
+    return ((Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc -gt (Get-Item -LiteralPath $CooldownFile).LastWriteTimeUtc)
+}
+function Get-DesktopCommanderRemoteLaunchers {
+    return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+        $cmd = [string]$_.CommandLine
+        $cmd -match '@wonderwhy-er/desktop-commander@[^ ]+.*\bremote\b'
+    })
+}
+function Get-OrphanDirectRemoteLaunchers {
+    $all = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+    $ids = @($all | ForEach-Object { [int]$_.ProcessId })
+    return @($all | Where-Object {
+        $cmd = [string]$_.CommandLine
+        $_.Name -eq 'node.exe' -and
+        $cmd -like '*npm-cache\_npx\*\node_modules\@wonderwhy-er\desktop-commander\dist\index.js*remote*--persist-session*' -and
+        $ids -notcontains [int]$_.ParentProcessId
+    })
+}
+function Stop-OrphanDirectRemoteLaunchers {
+    foreach ($p in @(Get-OrphanDirectRemoteLaunchers)) {
+        try {
+            & taskkill.exe /PID $p.ProcessId /T /F 2>$null | Out-Null
+            Log ('Stopped orphan Desktop Commander direct wrapper pid=' + $p.ProcessId)
+        } catch { Log ('WARNING orphan wrapper stop failed pid=' + $p.ProcessId) }
+    }
+}
+function Get-LauncherRoots([object[]]$Launchers) {
+    $items = @($Launchers)
+    if ($items.Count -le 1) { return $items }
+    $ids = @($items | ForEach-Object { [int]$_.ProcessId })
+    return @($items | Where-Object { $ids -notcontains [int]$_.ParentProcessId })
+}
+function Get-CanonicalRemoteLaunchers {
+    $matches = @(Get-DesktopCommanderRemoteLaunchers | Where-Object {
+        $cmd = [string]$_.CommandLine
+        $cmd -match '@wonderwhy-er/desktop-commander@0\.2\.47.*\bremote\b.*--persist-session'
+    })
+    return @(Get-LauncherRoots $matches)
+}
+function Test-CanonicalTransport([object[]]$Launchers) {
+    $roots = @($Launchers)
+    if ($roots.Count -ne 1) { return $false }
+    $all = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+    $desc = New-Object System.Collections.Generic.HashSet[int]
+    [void]$desc.Add([int]$roots[0].ProcessId)
+    $changed = $true
+    while ($changed) {
+        $changed = $false
+        foreach ($p in $all) {
+            if ($desc.Contains([int]$p.ParentProcessId) -and -not $desc.Contains([int]$p.ProcessId)) {
+                [void]$desc.Add([int]$p.ProcessId); $changed = $true
+            }
+        }
+    }
+    $conns = @(Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue | Where-Object {
+        $desc.Contains([int]$_.OwningProcess) -and $_.RemotePort -eq 443 -and $_.RemoteAddress -notin @('127.0.0.1','::1')
+    })
+    return ($conns.Count -gt 0)
+}
+function Get-NonCanonicalRemoteLaunchers {
+    $all = @(Get-DesktopCommanderRemoteLaunchers)
+    $canonicalProcesses = @($all | Where-Object {
+        $cmd = [string]$_.CommandLine
+        $cmd -match '@wonderwhy-er/desktop-commander@0\.2\.47.*\bremote\b.*--persist-session'
+    })
+    $canonicalIds = @($canonicalProcesses.ProcessId)
+    $noncanonical = @($all | Where-Object { $canonicalIds -notcontains $_.ProcessId })
+    return @(Get-LauncherRoots $noncanonical)
+}
+function Stop-LauncherTree([int]$ProcessId) {
+    try {
+        & taskkill.exe /PID $ProcessId /T /F 2>$null | Out-Null
+        Log ('Stopped Desktop Commander launcher tree pid=' + $ProcessId)
+    } catch { Log ('WARNING stop failed pid=' + $ProcessId) }
 }
 function Stop-RemoteProcesses {
-    foreach ($p in (Get-RemoteProcesses)) {
-        try { Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop; Log ('Stopped remote agent pid=' + $p.ProcessId) } catch { Log ('WARNING stop failed pid=' + $p.ProcessId) }
+    foreach ($p in (Get-LauncherRoots (Get-DesktopCommanderRemoteLaunchers))) { Stop-LauncherTree -ProcessId $p.ProcessId }
+}
+function Remove-LegacyPersistence {
+    foreach ($name in $LegacyTaskNames) {
+        $task = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+        if ($task) { Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction SilentlyContinue; Log ('Removed legacy task ' + $name) }
     }
+    $startup = Join-Path $env:APPDATA ('Microsoft\Windows\Start Menu\Programs\Startup\' + $LegacyStartupName)
+    if (Test-Path -LiteralPath $startup) { Remove-Item -LiteralPath $startup -Force -ErrorAction SilentlyContinue; Log ('Removed legacy startup ' + $LegacyStartupName) }
 }
 function Test-RecentCooldown {
     if (-not (Test-Path -LiteralPath $CooldownFile)) { return $false }
+    if (Test-DeviceStateNewerThanCooldown) { return $false }
     $age = (Get-Date).ToUniversalTime() - (Get-Item -LiteralPath $CooldownFile).LastWriteTimeUtc
     return ($age.TotalHours -lt 6)
 }
@@ -47,32 +146,50 @@ function Ensure-Agent {
     if (-not (Test-Path -LiteralPath $RunnerScript)) { throw 'sanitized runner not found' }
     if (-not (Test-Path -LiteralPath $DeviceFile)) {
         Log 'AUTH_REQUIRED device state missing; not starting interactive device flow'
-        Write-Output 'AUTH_REQUIRED=true'
-        exit 20
+        Write-Output 'AUTH_REQUIRED=true'; exit 20
     }
-    $existing = Get-RemoteProcesses
-    if ($existing.Count -gt 0) {
-        Log ('Remote agent already running count=' + $existing.Count)
-        Write-Output 'REMOTE_AGENT_RUNNING=true'
-        return
+    if (Test-DeviceStateNewerThanCooldown) {
+        Remove-Item -LiteralPath $CooldownFile -Force -ErrorAction SilentlyContinue
+        Log 'Cleared stale auth cooldown because device state is newer'
+    }
+    Stop-OrphanDirectRemoteLaunchers
+    $canonical = @(Get-CanonicalRemoteLaunchers)
+    $noncanonical = @(Get-NonCanonicalRemoteLaunchers)
+    if ($canonical.Count -eq 1 -and $noncanonical.Count -eq 0 -and (Test-CanonicalTransport $canonical)) {
+        Remove-LegacyPersistence
+        Log ('Canonical remote agent healthy transport=established pid=' + $canonical[0].ProcessId)
+        Write-Output 'REMOTE_AGENT_RUNNING=true'; return
+    }
+    if ($canonical.Count -eq 1 -and $noncanonical.Count -eq 0) {
+        Log ('Canonical process exists but transport is stale; restarting pid=' + $canonical[0].ProcessId)
+    }
+    if ($canonical.Count -gt 0 -or $noncanonical.Count -gt 0) {
+        Log ('Converging launchers canonical=' + $canonical.Count + ' noncanonical=' + $noncanonical.Count)
+        Stop-RemoteProcesses
+        Start-Sleep -Seconds 2
     }
     if (Test-RecentCooldown) {
         Log 'AUTH_REQUIRED recent provider device-flow request; retry cooldown active'
-        Write-Output 'AUTH_REQUIRED=true'
-        exit 20
+        Write-Output 'AUTH_REQUIRED=true'; exit 20
     }
     $args = @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',$RunnerScript)
     Start-Process -FilePath 'powershell.exe' -ArgumentList $args -WorkingDirectory $Repo -WindowStyle Hidden
-    Start-Sleep -Seconds 10
-    if (Test-RecentCooldown) {
-        Stop-RemoteProcesses
-        Log 'AUTH_REQUIRED provider requested device authorization; cooldown active'
-        Write-Output 'AUTH_REQUIRED=true'
-        exit 20
+    for ($attempt = 0; $attempt -lt 30; $attempt++) {
+        Start-Sleep -Seconds 1
+        if (Test-RecentCooldown) {
+            Stop-RemoteProcesses
+            Log 'AUTH_REQUIRED provider requested device authorization; cooldown active'
+            Write-Output 'AUTH_REQUIRED=true'; exit 20
+        }
+        $canonical = @(Get-CanonicalRemoteLaunchers)
+        $noncanonical = @(Get-NonCanonicalRemoteLaunchers)
+        if ($canonical.Count -eq 1 -and $noncanonical.Count -eq 0) { break }
     }
-    $running = Get-RemoteProcesses
-    if ($running.Count -eq 0) { throw 'Remote Desktop Commander did not stay running' }
-    Log ('Remote agent started pid=' + (($running.ProcessId | Sort-Object) -join ','))
+    $canonical = @(Get-CanonicalRemoteLaunchers)
+    $noncanonical = @(Get-NonCanonicalRemoteLaunchers)
+    if ($canonical.Count -ne 1 -or $noncanonical.Count -ne 0) { throw ('Remote Desktop Commander singleton convergence failed canonical=' + $canonical.Count + ' noncanonical=' + $noncanonical.Count) }
+    Remove-LegacyPersistence
+    Log ('Remote agent started pid=' + $canonical[0].ProcessId)
     Write-Output 'REMOTE_AGENT_RUNNING=true'
 }
 function Install-Task {
@@ -85,16 +202,23 @@ function Install-Task {
     $watchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)
     $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType S4U -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
+    $settings.Hidden = $true
     Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($startup,$watchdog) -Principal $principal -Settings $settings -Description 'Keeps official Remote Desktop Commander online under the persistent user profile without interactive startup.' -Force | Out-Null
     Log ('Scheduled task installed user=' + $user + ' logon=S4U watchdog=1m')
-    Start-ScheduledTask -TaskName $TaskName
     Write-Output 'TASK_INSTALLED=true'
 }
 
-switch ($Mode) {
-    'InstallTask' { Install-Task; Start-Sleep -Seconds 2; Ensure-Agent }
-    'Restart' { Stop-RemoteProcesses; if (Test-Path -LiteralPath $CooldownFile) { Remove-Item -LiteralPath $CooldownFile -Force -ErrorAction SilentlyContinue }; Start-Sleep -Seconds 2; Ensure-Agent }
-    'KillForRecoveryTest' { Stop-RemoteProcesses; Write-Output 'REMOTE_AGENT_KILLED=true' }
-    'Status' { & $StatusScript }
-    default { Ensure-Agent }
+try {
+    switch ($Mode) {
+        'InstallTask' { Install-Task; Stop-RemoteProcesses; Start-Sleep -Seconds 2; Ensure-Agent }
+        'Restart' { Stop-RemoteProcesses; Start-Sleep -Seconds 2; Ensure-Agent }
+        'KillForRecoveryTest' { Stop-RemoteProcesses; Write-Output 'REMOTE_AGENT_KILLED=true' }
+        'Status' { & $StatusScript }
+        default { Ensure-Agent }
+    }
+} finally {
+    if ($OwnerMutexAcquired) {
+        $OwnerMutex.ReleaseMutex()
+        $OwnerMutex.Dispose()
+    }
 }

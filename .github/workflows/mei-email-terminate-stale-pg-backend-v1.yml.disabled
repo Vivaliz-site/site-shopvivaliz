@@ -1,0 +1,62 @@
+name: MEI email terminate stale PG backend v1
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mei-email-terminate-stale-pg-backend-v1.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Configure VM SSH key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Terminate stale MEI DB update backend
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 <<'EOF'
+          set -euo pipefail
+          sudo systemctl stop mei-mg-email-worker.service || true
+          echo 'STALE_BEFORE_BEGIN'
+          ps -eo pid,ppid,stat,etime,pcpu,pmem,args | grep 'postgres: postgres mei_mg_email' | grep -E 'UPDATE|INSERT|DELETE' || true
+          echo 'STALE_BEFORE_END'
+
+          # Terminate only child PostgreSQL client backends older than 60 minutes.
+          mainpid="$(docker inspect -f '{{.State.Pid}}' mei-mg-email-db)"
+          mapfile -t victims < <(ps -eo pid=,ppid=,etimes=,args= | awk -v main="$mainpid" '$2==main && $3>3600 && $0 ~ /postgres: postgres mei_mg_email/ && $0 ~ /(UPDATE|INSERT|DELETE)/ {print $1}')
+          echo "STALE_VICTIM_COUNT=${#victims[@]}"
+          for pid in "${victims[@]}"; do
+            echo "TERMINATING_BACKEND_PID=$pid"
+            sudo kill -TERM "$pid" || true
+          done
+          sleep 10
+          for pid in "${victims[@]}"; do
+            if sudo kill -0 "$pid" 2>/dev/null; then
+              echo "FORCE_KILL_BACKEND_PID=$pid"
+              sudo kill -KILL "$pid" || true
+            fi
+          done
+          sleep 10
+
+          timeout 15s docker exec mei-mg-email-db pg_isready -U postgres -d mei_mg_email
+          timeout 20s docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -v ON_ERROR_STOP=1 -Atc "select 'DB_OK='||now();"
+          echo 'STALE_AFTER_BEGIN'
+          ps -eo pid,ppid,stat,etime,pcpu,pmem,args | grep 'postgres: postgres mei_mg_email' | grep -E 'UPDATE|INSERT|DELETE' || true
+          echo 'STALE_AFTER_END'
+          uptime
+          EOF
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/vmkey

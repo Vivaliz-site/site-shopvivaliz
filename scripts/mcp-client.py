@@ -119,7 +119,7 @@ class MCPCloudManager:
         default_config = {
             "servers": {
                 "windows-local": "http://localhost:5555",
-                "ubuntu-vm": "http://137.131.156.17:5556",
+                "backend-a1-fred-relay": {"url": "http://127.0.0.1:5557", "enabled": False, "environment": "backend-a1", "location": "Backend A1 local-only Fred-Win relay"},
                 "fred-win": "http://192.168.1.100:5557",
             }
         }

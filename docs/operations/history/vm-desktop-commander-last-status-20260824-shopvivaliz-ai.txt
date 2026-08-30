@@ -1,0 +1,19 @@
+captured_at=2026-08-24T12:10:56Z
+action=status
+USER=ubuntu
+HOME=/home/ubuntu
+NODE=v22.23.2
+NPM=10.9.8
+NPX=10.9.8
+DEVICE_STATE_EXISTS=true
+DEVICE_STATE_MTIME=2026-08-23 18:38:12.014077502 -0300
+SERVICE_ENABLED=enabled
+SERVICE_ACTIVE=failed
+SERVICE_USER=ubuntu
+SERVICE_MAINPID=0
+REMOTE_PROCESS_FOUND=false
+Aug 24 07:20:47 shopvivaliz-ai bash[996973]: REMOTE_AGENT_EXIT_RC=1
+Aug 24 07:41:46 shopvivaliz-ai bash[1000859]: AUTH_REQUIRED=true reason=provider_device_flow
+Aug 24 09:01:50 shopvivaliz-ai bash[1019619]: AUTH_REQUIRED=true reason=recent_provider_reauth_request
+Aug 24 09:08:07 shopvivaliz-ai bash[1022254]: AUTH_REQUIRED=true reason=recent_provider_reauth_request
+Aug 24 09:08:49 shopvivaliz-ai bash[1022575]: AUTH_REQUIRED=true reason=recent_provider_reauth_request

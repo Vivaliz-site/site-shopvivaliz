@@ -1,0 +1,8 @@
+{
+  "requested_at": "2026-08-24T08:59:00-03:00",
+  "reason": "Reconcile Microsoft 365 DKIM CNAMEs for dev.shopvivaliz.com.br after Outlook DMARC report showed intermittent DKIM temperror",
+  "expected": {
+    "selector1": "selector1-dev-shopvivaliz-com-br._domainkey.contabilidademelo.a-v1.dkim.mail.microsoft",
+    "selector2": "selector2-dev-shopvivaliz-com-br._domainkey.contabilidademelo.a-v1.dkim.mail.microsoft"
+  }
+}

@@ -1,4 +1,5 @@
 {
-  "action": "desktop_commander_kill_for_recovery_test",
-  "reason": "verify unattended Fred-Win Desktop Commander auto-recovery"
+  "action": "install_or_repair",
+  "requested_at": "2026-08-29T13:58:00-03:00",
+  "reason": "repair disabled S4U Highest watchdog task while preserving recovered canonical session and hidden launcher"
 }

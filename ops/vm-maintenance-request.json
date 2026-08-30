@@ -1,0 +1,4 @@
+{
+  "action": "graph_grant_mail_read",
+  "reason": "grant the required Microsoft Graph application Mail.Read role and restart the NDR guard"
+}

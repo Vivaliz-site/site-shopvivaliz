@@ -1,0 +1,73 @@
+name: Linux Desktop Commander Stage Protection
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/linux-desktop-commander-stage-protection.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  stage:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: always-free-arm
+            host: 144.22.157.209
+          - name: shopvivaliz-free-a1
+            host: 163.176.103.253
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure verified SSH
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key"
+          test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+      - name: Stage protection without restart
+        env:
+          VM_HOST: ${{ matrix.host }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" \
+            "ubuntu@${VM_HOST}" "SOURCE_SHA='${SOURCE_SHA}' bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+          supervisor="$(mktemp)"
+          patcher="$(mktemp /tmp/dc-patcher.XXXXXX.mjs)"
+          cleanup() { rm -f "$supervisor" "$patcher"; }
+          trap cleanup EXIT
+          base="https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/${SOURCE_SHA}/scripts"
+          curl -fsSL "$base/vm-desktop-commander-supervisor.sh" -o "$supervisor"
+          curl -fsSL "$base/patch-desktop-commander-session-persistence.mjs" -o "$patcher"
+          bash -n "$supervisor"
+          node --check "$patcher"
+          sudo install -d -m 0755 /usr/local/lib/shopvivaliz
+          sudo install -m 0755 "$supervisor" /usr/local/lib/shopvivaliz/vm-desktop-commander-supervisor.sh
+          sudo install -m 0644 "$patcher" /usr/local/lib/shopvivaliz/patch-desktop-commander-session-persistence.mjs
+          printf 'SERVICE=%s\n' "$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true)"
+          printf 'SERVICE_ENABLED=%s\n' "$(systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null || true)"
+          printf 'MAINPID=%s\n' "$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service 2>/dev/null || true)"
+          printf 'GUARDIAN_TIMER=%s\n' "$(systemctl is-active shopvivaliz-desktop-commander-guardian.timer 2>/dev/null || true)"
+          echo 'PROTECTION_FILES_STAGED=true'
+          REMOTE
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"

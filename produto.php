@@ -166,6 +166,17 @@ function sv_slugify(string $name, string $sku): string
     return trim($base . '-' . $skuPart, '-') ?: $skuPart;
 }
 
+function sv_product_canonical_slug_redirect(string $requestedSlug, string $canonicalSlug): ?string
+{
+    $requested = strtolower(trim(urldecode($requestedSlug)));
+    $canonical = strtolower(trim($canonicalSlug));
+    if ($requested === '' || $canonical === '' || $requested === $canonical) {
+        return null;
+    }
+
+    return '/produto/' . rawurlencode($canonicalSlug);
+}
+
 function sv_product_find_slug(string $slug): array
 {
     $slugNorm = strtolower(trim(urldecode($slug)));
@@ -302,6 +313,14 @@ $tags     = is_array($resolved['tags'] ?? null) ? $resolved['tags'] : [];
 $qScore   = (int)($resolved['quality_score'] ?? 0);
 $rawSlug  = trim((string)($resolved['slug'] ?? '')) ?: ($sku !== '' && $name !== '' ? sv_slugify($name, $sku) : '');
 
+if (!$notFound && $slug !== '' && $rawSlug !== '') {
+    $redirectPath = sv_product_canonical_slug_redirect($slug, $rawSlug);
+    if ($redirectPath !== null) {
+        header('Location: ' . $redirectPath, true, 301);
+        exit;
+    }
+}
+
 $priceRaw   = (float)($resolved['price'] ?? (float)sv_qv('price', '0'));
 $stockRaw   = (int)($resolved['stock'] ?? 0);
 $brandName  = sv_product_infer_brand($resolved);
@@ -357,7 +376,15 @@ if ($description === '') {
     $tagPart  = !empty($tags) ? ' (' . implode(', ', array_slice($tags, 0, 3)) . ')' : '';
     $description = "Confira {$name}{$catPart}{$tagPart}. Consulte as imagens, o SKU, a disponibilidade e o frete pelo seu CEP antes de comprar.";
 }
-$seoDescription = $seoDescription !== '' ? $seoDescription : sv_product_trim(strip_tags($description), 155, '');
+$cleanDescription = preg_replace('/<br\s*\/?>/i', "\n", $description);
+$cleanDescription = preg_replace('/<\/(p|div|li|h[1-6])>/i', "\n", (string)$cleanDescription);
+$cleanDescription = strip_tags((string)$cleanDescription);
+$cleanDescription = html_entity_decode((string)$cleanDescription, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+$cleanDescription = preg_replace("/[ \t]+/", " ", (string)$cleanDescription);
+$cleanDescription = preg_replace("/\n\s*\n+/", "\n\n", (string)$cleanDescription);
+$cleanDescription = trim((string)$cleanDescription);
+$seoDescription = $seoDescription !== '' ? $seoDescription : sv_product_trim($cleanDescription, 155, '');
+
 $specifications = [];
 foreach ([
     'Marca' => $brandName,
@@ -390,7 +417,7 @@ if ($notFound) {
     $description = 'O produto solicitado não foi localizado no catálogo atual da Vivaliz. Explore outras opções ou fale com a equipe comercial.';
     $seoTitle = $name;
     $seoDescription = $description;
-    $canonicalUrl = $baseUrl . '/catalogo';
+    $canonicalUrl = $baseUrl . '/catalogo/';
     $priceRaw = 0.0;
     $priceLabel = 'Produto indisponível';
     $tags = [];
@@ -408,7 +435,7 @@ $breadcrumbItems = [
         '@type' => 'ListItem',
         'position' => 2,
         'name' => 'Produtos',
-        'item' => $baseUrl . '/catalogo',
+        'item' => $baseUrl . '/catalogo/',
     ],
 ];
 
@@ -417,7 +444,7 @@ if ($category !== '') {
         '@type' => 'ListItem',
         'position' => count($breadcrumbItems) + 1,
         'name' => $category,
-        'item' => $baseUrl . '/catalogo?categoria=' . rawurlencode($category),
+        'item' => $baseUrl . '/catalogo/?categoria=' . rawurlencode($category),
     ];
 }
 
@@ -578,8 +605,8 @@ if ($notFound) {
 
     <main class="container produto-layout">
         <nav class="breadcrumb" aria-label="Navegação estrutural">
-            <a href="/">Início</a> › <a href="/catalogo">Produtos</a>
-            <?php if ($category !== ''): ?> › <a href="/catalogo?categoria=<?= rawurlencode($category) ?>"><?= sv_esc($category) ?></a><?php endif; ?>
+            <a href="/">Início</a> › <a href="/catalogo/">Produtos</a>
+            <?php if ($category !== ''): ?> › <a href="/catalogo/?categoria=<?= rawurlencode($category) ?>"><?= sv_esc($category) ?></a><?php endif; ?>
             › <span><?= sv_esc(sv_product_trim($name, 40, '...')) ?></span>
         </nav>
 
@@ -588,158 +615,176 @@ if ($notFound) {
             <h1>Produto não encontrado</h1>
             <p class="product-description"><?= sv_esc($description) ?></p>
             <div class="produto-actions">
-                <a class="btn btn-primary" href="/catalogo">Explorar catálogo</a>
+                <a class="btn btn-primary" href="/catalogo/">Explorar catálogo</a>
                 <a class="btn btn-secondary" href="/contato">Falar com a equipe</a>
             </div>
         </section>
         <?php else: ?>
         <div class="product-detail" data-sku="<?= sv_esc($sku) ?>" data-product-id="<?= sv_esc($olistId !== '' ? $olistId : $sku) ?>">
-            <div style="display:flex; flex-direction:column; gap:12px; max-width: 100%;">
+            <!-- Coluna da Esquerda: Galeria de Imagens -->
+            <div class="product-gallery-column">
                 <div class="product-detail-image skeleton hover-zoom-container" id="product-zoom-box" data-sku="<?= sv_esc($sku) ?>" data-product-id="<?= sv_esc($olistId !== '' ? $olistId : $sku) ?>">
                     <img id="main-product-image" src="<?= sv_esc($image) ?>" alt="<?= sv_esc($name) ?>" width="600" height="600" onerror="this.src='<?= sv_product_default_image() ?>'" loading="eager" fetchpriority="high" decoding="async">
                 </div>
-                <!-- Interactive Product Gallery Thumbnails -->
-                <div class="product-gallery-thumbnails" style="display:flex; gap:10px; justify-content:center; margin-bottom:12px; flex-wrap:wrap;">
+                <!-- Miniaturas Interativas -->
+                <div class="product-gallery-thumbnails">
                     <?php foreach ($galleryImages as $galleryIndex => $galleryUrl): ?>
-                    <button type="button" class="thumb-btn<?= $galleryIndex === 0 ? ' active' : '' ?>" data-src="<?= sv_esc($galleryUrl) ?>" aria-label="Ver imagem <?= $galleryIndex + 1 ?>"
-                            style="width:54px; height:54px; border:<?= $galleryIndex === 0 ? '2px solid #0b4f88' : '1px solid #e2e8f0' ?>; border-radius:8px; overflow:hidden; cursor:pointer; padding:0; background:#fff; transition: border-color 0.2s;">
-                        <img src="<?= sv_esc($galleryUrl) ?>" alt="<?= sv_esc('Imagem adicional de ' . $name) ?>" width="54" height="54" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='<?= sv_product_default_image() ?>'">
+                    <button type="button" class="thumb-btn<?= $galleryIndex === 0 ? ' active' : '' ?>" data-src="<?= sv_esc($galleryUrl) ?>" aria-label="Ver imagem <?= $galleryIndex + 1 ?>">
+                        <img src="<?= sv_esc($galleryUrl) ?>" alt="<?= sv_esc('Imagem adicional de ' . $name) ?>" width="56" height="56" loading="lazy" decoding="async" onerror="this.src='<?= sv_product_default_image() ?>'">
                     </button>
                     <?php endforeach; ?>
                     <?php if ($videoEmbedUrl !== ''): ?>
-                    <button type="button" class="thumb-btn" data-type="video" data-src="<?= sv_esc($videoEmbedUrl) ?>" aria-label="Ver vídeo do produto"
-                            style="width:54px; height:54px; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; cursor:pointer; padding:0; background:#fff; transition: border-color 0.2s; position:relative; display:flex; align-items:center; justify-content:center;">
-                        <img src="<?= sv_esc($image) ?>" alt="<?= sv_esc('Vídeo de ' . $name) ?>" width="54" height="54" loading="lazy" decoding="async" style="width:100%; height:100%; object-fit:cover; opacity:0.6;" onerror="this.src='<?= sv_product_default_image() ?>'">
-                        <div style="position:absolute; width:24px; height:24px; background:rgba(11,79,136,0.9); border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(0,0,0,0.2);">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="#fff"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                    <button type="button" class="thumb-btn thumb-video" data-type="video" data-src="<?= sv_esc($videoEmbedUrl) ?>" aria-label="Ver vídeo do produto">
+                        <img src="<?= sv_esc($image) ?>" alt="<?= sv_esc('Vídeo de ' . $name) ?>" width="56" height="56" loading="lazy" decoding="async" onerror="this.src='<?= sv_product_default_image() ?>'">
+                        <div class="play-icon-badge">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="#fff"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                         </div>
                     </button>
                     <?php endif; ?>
                 </div>
             </div>
+
+            <!-- Coluna da Direita: Informações, Compra, Frete e Confiança -->
             <div class="product-detail-copy">
-                <?php if ($category !== ''): ?>
-                    <div class="product-category"><?= sv_esc($category) ?></div>
-                <?php endif; ?>
-                <h1><?= sv_esc($name) ?></h1>
-                <?php if ($priceRaw > 0 && $stockRaw > 0): ?>
-                    <div class="desktop-buy-rail" aria-label="Compra rápida">
-                        <div class="desktop-buy-rail__price">
-                            <span>Pronto para comprar?</span>
-                            <strong><?= sv_esc($priceLabel) ?></strong>
-                        </div>
-                        <button class="btn btn-primary desktop-buy-rail__button" type="button" onclick="document.getElementById('buy-now').click()">
-                            🛒 Comprar agora
-                        </button>
-                    </div>
-                <?php endif; ?>
-                <div class="product-description"><?= nl2br(sv_esc($description)) ?></div>
-                <?php if ($specifications !== []): ?>
-                <section aria-labelledby="product-specifications-title" style="margin:18px 0;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
-                    <h2 id="product-specifications-title" style="font-size:18px;margin:0 0 10px;color:#173b63;">Informações do produto</h2>
-                    <dl style="display:grid;grid-template-columns:minmax(130px,0.45fr) 1fr;gap:8px 14px;margin:0;">
-                        <?php foreach ($specifications as $specLabel => $specValue): ?>
-                            <dt style="font-weight:700;color:#475569;"><?= sv_esc($specLabel) ?></dt>
-                            <dd style="margin:0;color:#0f172a;"><?= sv_esc($specValue) ?></dd>
-                        <?php endforeach; ?>
-                    </dl>
-                </section>
-                <?php endif; ?>
+                <div class="product-meta-top">
+                    <?php if ($category !== ''): ?>
+                        <a href="/catalogo?categoria=<?= rawurlencode($category) ?>" class="product-category-pill"><?= sv_esc($category) ?></a>
+                    <?php endif; ?>
+                    <?php if ($stockRaw > 0): ?>
+                        <span class="stock-pill in-stock">✓ Em Estoque</span>
+                    <?php else: ?>
+                        <span class="stock-pill out-of-stock">Esgotado</span>
+                    <?php endif; ?>
+                </div>
+
+                <h1 class="product-main-title"><?= sv_esc($name) ?></h1>
+
+                <div class="product-sku-row">
+                    <span class="sku-text">SKU: <strong><?= sv_esc($sku) ?></strong></span>
+                    <?php if ($brandName !== ''): ?>
+                        <span class="brand-text">Marca: <strong><?= sv_esc($brandName) ?></strong></span>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Bloco Unificado de Preço -->
                 <div class="product-price-block">
                     <?php if ($stockRaw > 0 && $stockRaw <= 5): ?>
                         <div class="urgency-tag">
                             <i>🔥</i> Apenas <?= $stockRaw ?> unidades restantes!
                         </div>
                     <?php endif; ?>
-                    <span class="product-price-label"><?= sv_esc($priceLabel) ?></span>
+                    <div class="product-price-label"><?= sv_esc($priceLabel) ?></div>
                     <?php if ($priceRaw > 0): ?>
-                        <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">
-                            <div class="pix-discount-badge" style="display:inline-flex; align-items:center; gap:6px; background:var(--accent-bg); color:var(--accent); padding:6px 12px; border-radius:8px; font-weight:700; font-size:14px; border:1px solid rgba(5,150,105,0.18); width:fit-content;">
-                                <span>PIX disponível no checkout</span>
+                        <div class="price-perks">
+                            <div class="perk-pix">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                                <span>PIX com aprovação imediata</span>
                             </div>
-                            <div class="installment-label" style="font-size:13px; color:#64748b; font-weight:600;">
+                            <div class="perk-card">
                                 <span>Parcelamento conforme a opção de pagamento escolhida</span>
                             </div>
                         </div>
-                    <?php endif; ?>
-                    <?php if ($priceRaw === 0.0): ?>
-                        <span class="price-hint">Fale com a equipe para confirmar valor e disponibilidade</span>
                     <?php elseif ($stockRaw <= 0): ?>
                         <span class="out-of-stock-badge">Esgotado</span>
-                    <?php endif; ?>
-                </div>
-                <?php if (!empty($tags)): ?>
-                    <div class="product-tags">
-                        <?php foreach ($tags as $tag): ?>
-                            <span class="tag"><?= sv_esc($tag) ?></span>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-                <div class="product-confidence-box" aria-label="Informações de confiança da compra" style="display: flex; flex-direction: column; gap: 10px; margin: 20px 0; padding: 15px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
-                    <div class="confidence-item" style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem; color: #334155;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                        <span>Compra segura com ambiente protegido</span>
-                    </div>
-                    <div class="confidence-item" style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem; color: #334155;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
-                        <span>Envio para todo o Brasil</span>
-                    </div>
-                    <div class="confidence-item" style="display: flex; align-items: center; gap: 8px; font-size: 0.95rem; color: #334155;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                        <span>Suporte comercial antes e depois do pedido</span>
-                    </div>
-                </div>
-                <div class="produto-actions">
-                    <?php if ($priceRaw > 0 && $stockRaw > 0): ?>
-                        <button class="btn btn-primary btn-large btn-cta btn-premium main-buy-button" type="button" id="buy-now" data-sku="<?= sv_esc($sku) ?>" data-product-id="<?= sv_esc($olistId !== '' ? $olistId : $sku) ?>" data-add-to-cart="1" style="width: 100%; font-size: 1.2rem;">
-                            🛒 COMPRAR AGORA
-                        </button>
-                        <!-- Calculador de Frete no Produto -->
-                        <div class="product-frete-box" style="margin-top: 18px; padding: 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;">
-                            <label for="p-frete-cep" style="font-size: 12px; font-weight: 700; color: #475569; display: block; margin-bottom: 6px;">
-                                🚚 Calcular frete e prazo de entrega
-                            </label>
-                            <div style="display: flex; gap: 8px;">
-                                <input type="text" id="p-frete-cep" placeholder="Digite seu CEP" maxlength="9" inputmode="numeric" style="flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 13px;">
-                                <button type="button" id="p-frete-btn" class="btn btn-secondary" style="padding: 8px 14px; font-size: 13px; font-weight: 700; white-space: nowrap;">Calcular</button>
-                            </div>
-                            <div id="p-frete-result" style="font-size: 12px; color: #475569; margin-top: 8px; line-height: 1.4;"></div>
-                        </div>
-                        <div class="trust-badges-container" style="display: flex; justify-content: space-between; margin-top: 15px; gap: 10px; flex-wrap: wrap;">
-                            <div class="trust-badge-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #64748b;">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                                <span>Pagamento processado em ambiente protegido</span>
-                            </div>
-                            <div class="trust-badge-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #64748b;">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                                <span><?= trim((string)($resolved['warranty'] ?? '')) !== '' ? 'Garantia informada: ' . sv_esc((string)$resolved['warranty']) : 'Condições exibidas antes do pagamento' ?></span>
-                            </div>
-                            <div class="trust-badge-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #64748b;">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
-                                <span>7 dias para Devolução</span>
-                            </div>
-                        </div>
-                    <?php elseif ($priceRaw > 0 && $stockRaw <= 0): ?>
-                        <div class="stock-alert-form" id="stock-alert-form" style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd;">
-                            <h4 style="margin-top: 0; color: #d9534f;">Produto Esgotado 😢</h4>
-                            <p style="font-size: 0.9em; margin-bottom: 10px;">Mas não se preocupe! Insira seu e-mail abaixo e avisaremos assim que chegar.</p>
-                            <form id="frm-stock-alert" style="display: flex; gap: 10px;">
-                                <input type="email" id="alert-email" placeholder="Seu melhor e-mail" required style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
-                                <button type="submit" class="btn btn-primary" style="padding: 10px 15px; background: #007bff; border: none; color: #fff; border-radius: 4px; cursor: pointer;">Avise-me!</button>
-                            </form>
-                            <div id="alert-msg" style="margin-top: 10px; font-size: 0.9em; display: none;"></div>
-                        </div>
                     <?php else: ?>
-                        <button class="btn btn-disabled" type="button" disabled style="width: 100%;">Produto indisponível</button>
+                        <span class="price-hint">Fale com a equipe para confirmar valor e disponibilidade</span>
                     <?php endif; ?>
-                    <a class="btn btn-secondary" href="/catalogo<?= $category !== '' ? '?categoria=' . rawurlencode($category) : '' ?>">← Voltar ao catálogo</a>
                 </div>
+
+                <!-- Ações de Compra: Quantidade + Botão Comprar -->
+                <?php if ($priceRaw > 0 && $stockRaw > 0): ?>
+                <div class="product-buy-group">
+                    <div class="product-qty-wrapper" aria-label="Quantidade">
+                        <button type="button" class="qty-btn" id="qty-minus" aria-label="Diminuir quantidade">−</button>
+                        <input type="number" id="product-qty-input" min="1" max="99" value="1" aria-label="Quantidade" readonly>
+                        <button type="button" class="qty-btn" id="qty-plus" aria-label="Aumentar quantidade">+</button>
+                    </div>
+                    <button class="btn btn-primary btn-cta btn-buy-main main-buy-button" type="button" id="buy-now" data-sku="<?= sv_esc($sku) ?>" data-product-id="<?= sv_esc($olistId !== '' ? $olistId : $sku) ?>" data-add-to-cart="1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+                        COMPRAR AGORA
+                    </button>
+                </div>
+
+                <!-- Calculador Único de Frete -->
+                <div class="product-frete-box">
+                    <label for="p-frete-cep" class="frete-header">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0b4f88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+                        <span>Calcular frete e prazo de entrega</span>
+                    </label>
+                    <div class="frete-input-row">
+                        <input type="text" id="p-frete-cep" placeholder="Digite seu CEP (ex: 01310-100)" maxlength="9" inputmode="numeric" aria-label="CEP para entrega">
+                        <button type="button" id="p-frete-btn" class="btn btn-frete">Calcular</button>
+                    </div>
+                    <div id="p-frete-result" class="frete-result-box" aria-live="polite"></div>
+                </div>
+
+                <!-- Faixa Consolidada de Confiança / Garantia -->
+                <div class="product-trust-strip">
+                    <div class="trust-pill">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        <div>
+                            <strong>Compra Segura</strong>
+                            <small>Ambiente protegido</small>
+                        </div>
+                    </div>
+                    <div class="trust-pill">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                        <div>
+                            <strong><?= trim((string)($resolved['warranty'] ?? '')) !== '' ? 'Garantia ' . sv_esc((string)$resolved['warranty']) : 'Garantia de Fábrica' ?></strong>
+                            <small>Produto original</small>
+                        </div>
+                    </div>
+                    <div class="trust-pill">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
+                        <div>
+                            <strong>7 Dias para Devolução</strong>
+                            <small>Sem burocracia</small>
+                        </div>
+                    </div>
+                </div>
+
+                <?php elseif ($priceRaw > 0 && $stockRaw <= 0): ?>
+                <div class="stock-alert-form" id="stock-alert-form">
+                    <h4>Produto Esgotado 😢</h4>
+                    <p>Insira seu e-mail abaixo e avisaremos assim que chegar nova remessa.</p>
+                    <form id="frm-stock-alert">
+                        <input type="email" id="alert-email" placeholder="Seu melhor e-mail" required>
+                        <button type="submit" class="btn btn-primary">Avise-me!</button>
+                    </form>
+                    <div id="alert-msg"></div>
+                </div>
+                <?php else: ?>
+                <button class="btn btn-disabled" type="button" disabled style="width: 100%;">Produto indisponível</button>
+                <?php endif; ?>
+
+                <!-- Especificações Técnicas -->
+                <?php if ($specifications !== []): ?>
+                <section class="product-specs-card" aria-labelledby="product-specifications-title">
+                    <h2 id="product-specifications-title">Informações do Produto</h2>
+                    <dl class="specs-grid">
+                        <?php foreach ($specifications as $specLabel => $specValue): ?>
+                            <dt><?= sv_esc($specLabel) ?></dt>
+                            <dd><?= sv_esc($specValue) ?></dd>
+                        <?php endforeach; ?>
+                    </dl>
+                </section>
+                <?php endif; ?>
+
+                <!-- Descrição do Produto -->
+                <section class="product-desc-card" aria-labelledby="product-description-title">
+                    <h2 id="product-description-title">Descrição</h2>
+                    <div class="product-description-text">
+                        <?= nl2br(sv_esc($cleanDescription)) ?>
+                    </div>
+                </section>
+
+                <!-- Suporte Comercial -->
                 <div class="product-support-link">
-                    Dúvidas sobre aplicação, entrega ou compatibilidade?
-                    <a href="/contato">Fale com a equipe da Vivaliz antes de concluir.</a>
+                    <span>Dúvidas sobre aplicação, entrega ou compatibilidade?</span>
+                    <a href="/contato">Fale com a equipe da Vivaliz</a>
                 </div>
                 <div class="status-line" id="product-status"></div>
-                <div class="product-sku-line">SKU: <?= sv_esc($sku) ?></div>
+                <div class="product-sku-line" style="display:none;">SKU: <?= sv_esc($sku) ?></div>
             </div>
         <!-- Avaliacoes reais: sem notas ou depoimentos inventados. -->
         <section class="container sv-reviews-section" style="margin-top: 40px; padding: 24px; background: #fff; border: 1px solid rgba(11,79,136,0.1); border-radius: 20px;">
@@ -840,34 +885,44 @@ if ($notFound) {
             function calcProductFrete() {
                 var cep = pFreteCep.value.replace(/\D/g, '');
                 if (cep.length !== 8) {
-                    pFreteResult.innerHTML = '<span style="color:#b91c1c;">Por favor, digite um CEP válido com 8 números.</span>';
+                    pFreteResult.innerHTML = '<span style="color:#b91c1c;font-weight:600;">Por favor, digite um CEP válido com 8 dígitos.</span>';
                     return;
                 }
-                pFreteResult.innerHTML = '<span style="color:#64748b;">Calculando as melhores opções de envio...</span>';
-                fetch('/api/frete/calcular.php', {
+                var qtyInput = document.getElementById('product-qty-input');
+                var quantity = parseInt(qtyInput ? qtyInput.value : '1', 10) || 1;
+                pFreteResult.innerHTML = '<span style="color:#0b4f88;font-weight:600;">Calculando as melhores opções de envio...</span>';
+                fetch('/api/melhorenvio/shipping-check-v2.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         cep: cep,
-                        items: [{ sku: product.sku, quantity: 1, price: product.price, olist_product_id: product.olist_product_id }]
+                        items: [{
+                            sku: product.sku,
+                            quantity: quantity,
+                            price: product.price,
+                            olist_product_id: product.olist_product_id
+                        }]
                     })
                 })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
-                    var options = Array.isArray(data.options) ? data.options : (Array.isArray(data.cotacoes) ? data.cotacoes : []);
-                    if (!options.length) {
-                        pFreteResult.innerHTML = '<span style="color:#b91c1c;">Nenhuma transportadora disponível para este CEP.</span>';
+                    var options = Array.isArray(data.shipping_options) ? data.shipping_options : (Array.isArray(data.options) ? data.options : []);
+                    if (!data.ok || !options.length) {
+                        var msg = data.message || 'Nenhuma opção de frete encontrada para este CEP.';
+                        pFreteResult.innerHTML = '<span style="color:#b91c1c;">' + msg + '</span>';
                         return;
                     }
-                    var html = '<div style="margin-top:6px; display:grid; gap:4px;">';
-                    options.slice(0, 3).forEach(function(opt) {
-                        var name = opt.name || opt.transportadora || 'Envio Expresso';
-                        var price = opt.price !== undefined ? Number(opt.price) : Number(opt.valor || 0);
-                        var deadline = opt.deadline || opt.prazo || '3 a 7';
+                    var html = '<div class="frete-results-list">';
+                    options.slice(0, 4).forEach(function(opt) {
+                        var comp = opt.company ? opt.company + ' - ' : '';
+                        var name = comp + (opt.name || 'Entrega Padrão');
+                        var price = Number(opt.price || 0);
+                        var deadline = opt.delivery_time || opt.deadline || '';
+                        var daysText = deadline ? ' (até ' + deadline + ' dias úteis)' : '';
                         var formattedPrice = price === 0 ? '<strong style="color:#10b981;">GRÁTIS</strong>' : '<strong>R$ ' + price.toFixed(2).replace('.', ',') + '</strong>';
-                        html += '<div style="display:flex; justify-content:space-between; align-items:center; padding:4px 0; border-bottom:1px solid #f1f5f9;">' +
-                            '<span>' + name + ' (até ' + deadline + ' dias úteis)</span>' +
-                            '<span>' + formattedPrice + '</span>' +
+                        html += '<div class="frete-result-item">' +
+                            '<span class="frete-item-name">' + name + daysText + '</span>' +
+                            '<span class="frete-item-price">' + formattedPrice + '</span>' +
                         '</div>';
                     });
                     html += '</div>';

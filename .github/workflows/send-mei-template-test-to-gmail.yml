@@ -1,4 +1,4 @@
-name: Recover storefront upload mapping
+﻿name: Recover storefront upload mapping
 on:
   push:
     branches: [main]
@@ -21,7 +21,7 @@ jobs:
           chmod 600 ~/.ssh/vmkey
       - name: Locate and recover upload mapping safely
         run: |
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@163.176.103.253 <<'EOF'
           set -euo pipefail
           BASE=/home/ubuntu/shopvivaliz-deploy
           SHARED="$BASE/shared/uploads"

@@ -1,92 +1,407 @@
 name: Desktop Commander 24h Health
 
 on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
   pull_request:
     paths:
       - "ops/fredwin-desktop-commander-request.json"
       - "ops/vm-desktop-commander-request.json"
+      - "ops/desktopkocepsv-desktop-commander-request.json"
+      - "scripts/fredwin-desktop-commander-runner.ps1"
+      - "scripts/fredwin-desktop-commander-status.ps1"
+      - "scripts/fredwin-desktop-commander-supervisor.ps1"
+      - "scripts/fredwin-remote-bootstrap.ps1"
+      - "scripts/ssh-tunnel-service-managed.ps1"
+      - "scripts/desktopkocepsv-desktop-commander-runner.ps1"
+      - "scripts/desktopkocepsv-desktop-commander-status.ps1"
+      - "scripts/desktopkocepsv-desktop-commander-supervisor.ps1"
+      - "scripts/desktopkocepsv-remote-bootstrap.ps1"
+      - "scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1"
+      - "scripts/vm-desktop-commander-supervisor.sh"
+      - "scripts/install-vm-desktop-commander-service.sh"
+      - "ops/systemd/shopvivaliz-desktop-commander.service"
       - ".github/workflows/desktop-commander-24h-health.yml"
-  workflow_dispatch:
+      - ".github/workflows/fred-win-desktop-commander-action.yml"
+      - ".github/workflows/vm-desktop-commander-action.yml"
+      - ".github/workflows/desktopkocepsv-desktop-commander-action.yml"
+      - "tests/desktop-commander-health-restart-contract-test.php"
+      - "tests/desktop-commander-persist-session-contract-test.php"
+      - "tests/desktop-commander-three-host-action-contract-test.php"
+  push:
+    branches: [main]
+    paths:
+      - "ops/fredwin-desktop-commander-request.json"
+      - "ops/vm-desktop-commander-request.json"
+      - "ops/desktopkocepsv-desktop-commander-request.json"
+      - "scripts/fredwin-desktop-commander-runner.ps1"
+      - "scripts/fredwin-desktop-commander-status.ps1"
+      - "scripts/fredwin-desktop-commander-supervisor.ps1"
+      - "scripts/fredwin-remote-bootstrap.ps1"
+      - "scripts/ssh-tunnel-service-managed.ps1"
+      - "scripts/desktopkocepsv-desktop-commander-runner.ps1"
+      - "scripts/desktopkocepsv-desktop-commander-status.ps1"
+      - "scripts/desktopkocepsv-desktop-commander-supervisor.ps1"
+      - "scripts/desktopkocepsv-remote-bootstrap.ps1"
+      - "scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1"
+      - "scripts/vm-desktop-commander-supervisor.sh"
+      - "scripts/install-vm-desktop-commander-service.sh"
+      - "ops/systemd/shopvivaliz-desktop-commander.service"
+      - ".github/workflows/desktop-commander-24h-health.yml"
+      - ".github/workflows/fred-win-desktop-commander-action.yml"
+      - ".github/workflows/vm-desktop-commander-action.yml"
+      - ".github/workflows/desktopkocepsv-desktop-commander-action.yml"
+      - "tests/desktop-commander-health-restart-contract-test.php"
+      - "tests/desktop-commander-persist-session-contract-test.php"
+      - "tests/desktop-commander-three-host-action-contract-test.php"
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
-  verify:
+  contract:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 4
     steps:
       - uses: actions/checkout@v4
-      - name: Configure VM key
+      - name: Verify Desktop Commander control-plane contracts
+        run: |
+          set -Eeuo pipefail
+          php tests/desktop-commander-persist-session-contract-test.php
+          php tests/desktop-commander-health-restart-contract-test.php
+          php tests/desktop-commander-three-host-action-contract-test.php
+
+  runtime:
+    if: github.event_name != 'pull_request'
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      STATUS_ISSUE_NUMBER: '1207'
+      STATUS_ISSUE_TITLE: 'Desktop Commander 24h Control Plane Status'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure verified VM SSH
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
         run: |
           set -Eeuo pipefail
           test -n "$VM_KEY"
+          test -n "$VM_HOSTS"
           install -m 700 -d ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
-          chmod 600 ~/.ssh/vmkey
-      - name: Verify VM supervisor
-        run: |
-          set -Eeuo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
-            set -Eeuo pipefail
-            enabled=$(systemctl is-enabled shopvivaliz-desktop-commander.service)
-            active=$(systemctl is-active shopvivaliz-desktop-commander.service)
-            pid=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service)
-            test "$enabled" = enabled
-            test "$active" = active
-            test "$pid" -gt 1
-            test -f "$HOME/.desktop-commander-device/device.json"
-            echo "VM_SERVICE_ENABLED=$enabled"
-            echo "VM_SERVICE_ACTIVE=$active"
-            echo "VM_MAINPID=$pid"
-            echo "VM_DEVICE_STATE_EXISTS=true"
-          '
-      - name: Verify Fred-Win supervisor through private relay
-        run: |
-          set -Eeuo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 -' <<'PY'
-          import json
-          import urllib.request
+          printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
 
-          command = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\\site-shopvivaliz\\scripts\\fredwin-desktop-commander-status.ps1"'
-          body = json.dumps({'params': {'command': command, 'timeout': 120}}).encode('utf-8')
-          req = urllib.request.Request(
-              'http://127.0.0.1:5557/mcp/tool/execute_command',
-              data=body,
-              headers={'Content-Type': 'application/json'},
-              method='POST',
-          )
-          with urllib.request.urlopen(req, timeout=130) as response:
-              payload = json.loads(response.read().decode('utf-8'))
-          result = payload.get('result') or {}
-          if result.get('success') is not True:
-              raise SystemExit('Fred-Win status command failed')
-          output = str(result.get('output') or '')
-          safe_lines = []
-          wanted = {
-              'DEVICE_STATE_EXISTS', 'REMOTE_AGENT_COUNT', 'REMOTE_AGENT_PIDS',
-              'TASK_EXISTS', 'TASK_STATE', 'TASK_LAST_RESULT', 'AUTH_REQUIRED'
+      - name: Probe and perform one bounded repair per unhealthy host
+        env:
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import base64
+          import datetime as dt
+          import json
+          import os
+          import pathlib
+          import subprocess
+          import time
+
+          MAX_REPAIR_ATTEMPTS = 1
+          VM_TARGET = 'ubuntu@144.22.157.209'
+          SSH = [
+              'ssh',
+              '-o', 'StrictHostKeyChecking=yes',
+              '-o', 'UserKnownHostsFile=' + os.path.expanduser('~/.ssh/known_hosts'),
+              '-o', 'BatchMode=yes',
+              '-o', 'ConnectTimeout=10',
+              '-i', os.path.expanduser('~/.ssh/vmkey'),
+              VM_TARGET,
+          ]
+          SAFE_KEYS = {
+              'DEVICE_STATE_EXISTS', 'CANONICAL_AGENT_COUNT',
+              'NONCANONICAL_AGENT_COUNT', 'TASK_EXISTS', 'TASK_STATE',
+              'TASK_LAST_RESULT', 'TASK_LOGON_TYPE', 'TASK_RUN_LEVEL',
+              'AUTH_REQUIRED', 'PROVIDER_CONNECTED', 'SERVICE_ENABLED', 'SERVICE_ACTIVE',
+              'SERVICE_USER', 'SERVICE_MAINPID'
           }
-          values = {}
-          for line in output.splitlines():
-              if '=' not in line:
-                  continue
-              key, value = line.split('=', 1)
-              if key in wanted:
-                  values[key] = value.strip()
-                  safe_lines.append(f'{key}={value.strip()}')
-          print('\n'.join(safe_lines))
-          if values.get('DEVICE_STATE_EXISTS', '').lower() != 'true':
-              raise SystemExit('Fred-Win device state missing')
-          if values.get('TASK_EXISTS', '').lower() != 'true':
-              raise SystemExit('Fred-Win scheduled task missing')
-          if int(values.get('REMOTE_AGENT_COUNT', '0')) < 1:
-              raise SystemExit('Fred-Win remote agent not running')
-          if values.get('AUTH_REQUIRED', '').lower() == 'true':
-              raise SystemExit('Fred-Win provider reauthorization required')
+
+          def ssh_run(command, timeout=180, stdin=None):
+              try:
+                  cp = subprocess.run(
+                      SSH + [command], input=stdin, text=True,
+                      capture_output=True, timeout=timeout, check=False
+                  )
+                  return cp.returncode == 0, cp.stdout or ''
+              except Exception:
+                  return False, ''
+
+          def relay_exec(port, command, want_output=True, timeout=260):
+              encoded = base64.b64encode(command.encode('utf-8')).decode('ascii')
+              code = f'''import base64, json, urllib.request\ncommand=base64.b64decode("{encoded}").decode("utf-8")\nbody=json.dumps({{"params":{{"command":command,"timeout":240}}}}).encode("utf-8")\nreq=urllib.request.Request("http://127.0.0.1:{port}/mcp/tool/execute_command",data=body,headers={{"Content-Type":"application/json"}},method="POST")\ntry:\n  with urllib.request.urlopen(req,timeout=250) as response:\n    payload=json.loads(response.read().decode("utf-8"))\n  result=payload.get("result") or {{}}\n  ok=result.get("success") is True\n  print(json.dumps({{"ok":ok,"output":str(result.get("output") or "") if {str(want_output)} else ""}}))\nexcept Exception:\n  print(json.dumps({{"ok":False,"output":""}}))\n'''
+              ok, out = ssh_run('python3 -', timeout=timeout, stdin=code)
+              if not ok:
+                  return False, ''
+              try:
+                  payload = json.loads(out.strip().splitlines()[-1])
+                  return bool(payload.get('ok')), str(payload.get('output') or '')
+              except Exception:
+                  return False, ''
+
+          def parse_safe(text):
+              values = {}
+              for raw in text.splitlines():
+                  if '=' not in raw:
+                      continue
+                  key, value = raw.split('=', 1)
+                  key = key.strip()
+                  if key in SAFE_KEYS:
+                      values[key] = value.strip()
+              return values
+
+          def is_true(value):
+              return str(value).strip().lower() == 'true'
+
+          def win_healthy(values):
+              return (
+                  is_true(values.get('DEVICE_STATE_EXISTS'))
+                  and values.get('CANONICAL_AGENT_COUNT') == '1'
+                  and values.get('NONCANONICAL_AGENT_COUNT') == '0'
+                  and is_true(values.get('TASK_EXISTS'))
+                  and values.get('TASK_LOGON_TYPE', '').lower() == 's4u'
+                  and values.get('TASK_RUN_LEVEL', '').lower() == 'highest'
+                  and not is_true(values.get('AUTH_REQUIRED'))
+              )
+
+          def win_probe(name, port, status_script, supervisor_script, bootstrap_script):
+              status_command = (
+                  'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass '
+                  f'-File "C:\\site-shopvivaliz\\scripts\\{status_script}"'
+              )
+              ok, output = relay_exec(port, status_command, want_output=True)
+              if not ok:
+                  return {
+                      'host': name, 'state': 'unreachable', 'watchdog': 'unreachable',
+                      'canonical': '—', 'auth': 'unknown', 'recovery': 'relay_unreachable'
+                  }
+              values = parse_safe(output)
+              if win_healthy(values):
+                  return {
+                      'host': name, 'state': 'healthy',
+                      'watchdog': 'S4U/Highest', 'canonical': '1',
+                      'auth': 'false', 'recovery': 'not_needed'
+                  }
+              auth = is_true(values.get('AUTH_REQUIRED'))
+              provider_connected = is_true(values.get('PROVIDER_CONNECTED'))
+              structurally_healthy = (
+                  is_true(values.get('DEVICE_STATE_EXISTS'))
+                  and values.get('SERVICE_ENABLED') == 'enabled'
+                  and values.get('SERVICE_ACTIVE') == 'active'
+                  and values.get('SERVICE_USER') == 'ubuntu'
+                  and values.get('CANONICAL_AGENT_COUNT') == '1'
+                  and values.get('NONCANONICAL_AGENT_COUNT') == '0'
+              )
+              if auth:
+                  recovery = 'blocked_by_provider_auth'
+              elif structurally_healthy and not provider_connected:
+                  recovery = 'provider_disconnected'
+              else:
+                  recovery = 'not_attempted'
+              if not auth and not structurally_healthy and MAX_REPAIR_ATTEMPTS == 1:
+                  repair_mode = 'InstallTask' if not is_true(values.get('TASK_EXISTS')) else 'Ensure'
+                  repair = (
+                      'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command '
+                      '"& { $ErrorActionPreference=\'Stop\'; Set-Location \'C:\\site-shopvivaliz\'; '
+                      'git fetch origin main | Out-Null; if ($LASTEXITCODE -ne 0) { throw \'git fetch failed\' }; '
+                      'git merge --ff-only origin/main | Out-Null; if ($LASTEXITCODE -ne 0) { throw \'git sync failed\' }; '
+                      f'& \'C:\\site-shopvivaliz\\scripts\\{supervisor_script}\' -Mode {repair_mode}; '
+                      f'& \'C:\\site-shopvivaliz\\scripts\\{bootstrap_script}\' -Mode Ensure }}"'
+                  )
+                  repair_ok, _ = relay_exec(port, repair, want_output=False)
+                  recovery = 'repair_requested' if repair_ok else 'repair_path_restarted'
+                  time.sleep(15)
+                  ok2, output2 = relay_exec(port, status_command, want_output=True)
+                  if ok2:
+                      values = parse_safe(output2)
+              healthy = win_healthy(values)
+              if healthy:
+                  state = 'healthy'
+                  canonical = '1'
+                  auth_text = 'false'
+                  if recovery != 'not_attempted':
+                      recovery = 'recovered'
+              else:
+                  state = 'degraded'
+                  canonical = values.get('CANONICAL_AGENT_COUNT', '0')
+                  auth_text = 'true' if is_true(values.get('AUTH_REQUIRED')) else 'false'
+              watchdog = (
+                  f"task={values.get('TASK_EXISTS','unknown')},"
+                  f"logon={values.get('TASK_LOGON_TYPE','unknown')},"
+                  f"runlevel={values.get('TASK_RUN_LEVEL','unknown')}"
+              )
+              return {
+                  'host': name, 'state': state, 'watchdog': watchdog,
+                  'canonical': canonical, 'auth': auth_text, 'recovery': recovery
+              }
+
+          def vm_status():
+              command = r'''set -Eeuo pipefail
+          device=false
+          test -f "$HOME/.desktop-commander-device/device.json" && device=true
+          enabled=$(systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null || true)
+          active=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true)
+          mainpid=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service 2>/dev/null || true)
+          user=$(systemctl show -p User --value shopvivaliz-desktop-commander.service 2>/dev/null || true)
+          auth=false
+          test -f "$HOME/.desktop-commander-device/auth-required.cooldown" && auth=true
+          provider=false
+          test -f "$HOME/.desktop-commander-device/provider-connected.marker" && provider=true
+          canonical=0
+          noncanonical=0
+          while IFS= read -r line; do
+            test -z "$line" && continue
+            case "$line" in
+              *"@wonderwhy-er/desktop-commander@0.2.47"*" remote "*"--persist-session"*) canonical=$((canonical+1));;
+              *) noncanonical=$((noncanonical+1));;
+            esac
+          done < <(pgrep -af '[n]pm exec @wonderwhy-er/desktop-commander@.* remote' 2>/dev/null || true)
+          printf 'DEVICE_STATE_EXISTS=%s\nSERVICE_ENABLED=%s\nSERVICE_ACTIVE=%s\nSERVICE_USER=%s\nSERVICE_MAINPID=%s\nCANONICAL_AGENT_COUNT=%s\nNONCANONICAL_AGENT_COUNT=%s\nAUTH_REQUIRED=%s\nPROVIDER_CONNECTED=%s\n' "$device" "${enabled:-unknown}" "${active:-unknown}" "${user:-unknown}" "${mainpid:-0}" "$canonical" "$noncanonical" "$auth" "$provider"
+          '''
+              ok, out = ssh_run(command, timeout=120)
+              return ok, parse_safe(out)
+
+          def vm_healthy(values):
+              return (
+                  is_true(values.get('DEVICE_STATE_EXISTS'))
+                  and values.get('SERVICE_ENABLED') == 'enabled'
+                  and values.get('SERVICE_ACTIVE') == 'active'
+                  and values.get('SERVICE_USER') == 'ubuntu'
+                  and values.get('CANONICAL_AGENT_COUNT') == '1'
+                  and values.get('NONCANONICAL_AGENT_COUNT') == '0'
+                  and not is_true(values.get('AUTH_REQUIRED'))
+                  and is_true(values.get('PROVIDER_CONNECTED'))
+              )
+
+          def vm_probe():
+              ok, values = vm_status()
+              if not ok:
+                  return {
+                      'host': 'shopvivaliz-a1-backend', 'state': 'unreachable',
+                      'watchdog': 'unreachable', 'canonical': '—',
+                      'auth': 'unknown', 'recovery': 'vm_ssh_unreachable'
+                  }
+              if vm_healthy(values):
+                  return {
+                      'host': 'shopvivaliz-a1-backend', 'state': 'healthy',
+                      'watchdog': 'systemd=enabled/active', 'canonical': '1',
+                      'auth': 'false', 'recovery': 'not_needed'
+                  }
+              auth = is_true(values.get('AUTH_REQUIRED'))
+              provider_connected = is_true(values.get('PROVIDER_CONNECTED'))
+              structurally_healthy = (
+                  is_true(values.get('DEVICE_STATE_EXISTS'))
+                  and values.get('SERVICE_ENABLED') == 'enabled'
+                  and values.get('SERVICE_ACTIVE') == 'active'
+                  and values.get('SERVICE_USER') == 'ubuntu'
+                  and values.get('CANONICAL_AGENT_COUNT') == '1'
+                  and values.get('NONCANONICAL_AGENT_COUNT') == '0'
+              )
+              if auth:
+                  recovery = 'blocked_by_provider_auth'
+              elif structurally_healthy and not provider_connected:
+                  recovery = 'provider_disconnected'
+              else:
+                  recovery = 'not_attempted'
+              if not auth and not structurally_healthy and MAX_REPAIR_ATTEMPTS == 1:
+                  repair = (
+                      'set -Eeuo pipefail; cd /home/ubuntu/shopvivaliz-deploy/repo; '
+                      'git fetch origin main >/dev/null; git merge --ff-only origin/main >/dev/null; '
+                      'sudo bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/install-vm-desktop-commander-service.sh'
+                  )
+                  repair_ok, _ = ssh_run(repair, timeout=260)
+                  recovery = 'repair_requested' if repair_ok else 'repair_failed'
+                  time.sleep(15)
+                  ok2, values2 = vm_status()
+                  if ok2:
+                      values = values2
+              healthy = vm_healthy(values)
+              if healthy:
+                  state = 'healthy'
+                  canonical = '1'
+                  auth_text = 'false'
+                  if recovery != 'not_attempted':
+                      recovery = 'recovered'
+              else:
+                  state = 'degraded'
+                  canonical = values.get('CANONICAL_AGENT_COUNT', '0')
+                  auth_text = 'true' if is_true(values.get('AUTH_REQUIRED')) else 'false'
+              watchdog = (
+                  f"systemd={values.get('SERVICE_ENABLED','unknown')}/"
+                  f"{values.get('SERVICE_ACTIVE','unknown')}"
+              )
+              return {
+                  'host': 'shopvivaliz-a1-backend', 'state': state,
+                  'watchdog': watchdog, 'canonical': canonical,
+                  'auth': auth_text, 'recovery': recovery
+              }
+
+          results = [
+              win_probe(
+                  'LAPTOP-NIG4IFUU', 5557,
+                  'fredwin-desktop-commander-status.ps1',
+                  'fredwin-desktop-commander-supervisor.ps1',
+                  'fredwin-remote-bootstrap.ps1'
+              ),
+              win_probe(
+                  'DESKTOP-KOCEPSV', 5558,
+                  'desktopkocepsv-desktop-commander-status.ps1',
+                  'desktopkocepsv-desktop-commander-supervisor.ps1',
+                  'desktopkocepsv-remote-bootstrap.ps1'
+              ),
+              vm_probe(),
+          ]
+          now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
+          run_id = os.environ.get('RUN_ID', 'unknown')
+          lines = [
+              '# Desktop Commander 24h Control Plane Status',
+              '',
+              'Sanitized three-host health only. Provider credentials, session data, private keys and device-state contents are never published here.',
+              '',
+              '| Host | State | Watchdog | Canonical agents | Auth required | Last check | Recovery |',
+              '|---|---|---|---:|---|---|---|',
+          ]
+          for item in results:
+              lines.append(
+                  f"| {item['host']} | {item['state']} | {item['watchdog']} | "
+                  f"{item['canonical']} | {item['auth']} | {now} | {item['recovery']} |"
+              )
+          lines += ['', f'Source workflow run: {run_id}']
+          pathlib.Path('/tmp/dc-control-plane-status.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          pathlib.Path('/tmp/dc-control-plane-status.json').write_text(json.dumps(results), encoding='utf-8')
+          print(json.dumps({'states': {x['host']: x['state'] for x in results}}, sort_keys=True))
           PY
+
+      - name: Update canonical sanitized status issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          gh issue edit "$STATUS_ISSUE_NUMBER" --repo "${{ github.repository }}" --title "$STATUS_ISSUE_TITLE" --body-file /tmp/dc-control-plane-status.md
+
+      - name: Mark run degraded when any host is not healthy
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/dc-control-plane-status.json',encoding='utf-8'))
+          if any(item.get('state') != 'healthy' for item in data):
+              raise SystemExit(1)
+          PY
+
       - name: Cleanup
         if: always()
-        run: rm -f ~/.ssh/vmkey
+        run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts /tmp/dc-control-plane-status.md /tmp/dc-control-plane-status.json

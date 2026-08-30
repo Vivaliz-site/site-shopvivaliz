@@ -41,7 +41,7 @@ jobs:
       - name: Publish and send from the active Oracle release
         run: |
           set -euo pipefail
-          SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17)
+          SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253)
 
           "${SSH[@]}" 'set -euo pipefail; cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha' > artifacts/blog-publish/release-sha.txt
           "${SSH[@]}" 'set -euo pipefail; cd /home/ubuntu/shopvivaliz-deploy/current; test -r scripts/apply-real-email-campaigns-migration.php; test -r api/blog/publish-scheduled.php; test -r scripts/run-blog-email-campaigns.php; exec 9>/tmp/shopvivaliz-blog-publish.lock; flock -w 120 9; /usr/bin/php scripts/apply-real-email-campaigns-migration.php; printf "\n"; /usr/bin/php api/blog/publish-scheduled.php; printf "\n"; /usr/bin/php scripts/run-blog-email-campaigns.php; printf "\n"' > artifacts/blog-publish/response.jsonl

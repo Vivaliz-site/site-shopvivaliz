@@ -1,0 +1,13 @@
+name: VM DC Direct Device Flow Once (decommissioned)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  decommissioned:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse unsafe identity regeneration
+        run: |
+          echo 'This workflow is intentionally decommissioned. Use the canonical Desktop Commander supervisor with the existing device identity.'
+          exit 1

@@ -1,0 +1,59 @@
+name: Old VM slimming finalize
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  finalize:
+    if: github.event.issue.title == '[vm-slim-finalize]'
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 8
+    steps:
+      - name: Configure SSH
+        env:
+          VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Mask DBus-reactivated unused services and verify
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          echo '=== PRE ==='
+          uptime
+          free -h
+          systemctl list-dependencies --reverse fwupd.service --plain --no-pager || true
+          systemctl list-dependencies --reverse udisks2.service --plain --no-pager || true
+
+          sudo systemctl mask --now fwupd.service fwupd-refresh.service fwupd-refresh.timer udisks2.service
+
+          sleep 10
+          echo '=== REQUIRED ==='
+          required=(docker apache2 ssh shopvivaliz-desktop-commander mei-mg-email-worker mei-mg-email-api mei-mg-email-monitor mei-mg-email-ndr-guard mei-mg-email-queue-replenisher)
+          for unit in "${required[@]}"; do systemctl is-active --quiet "$unit" && echo "OK=$unit" || { echo "FAIL=$unit"; exit 2; }; done
+          docker ps --format '{{.Names}}' | grep -qx 'mei-mg-email-db' && echo 'OK=mei-mg-email-db'
+          tmux has-session -t solange 2>/dev/null && echo 'OK=tmux-solange'
+
+          echo '=== FINAL ==='
+          uptime
+          free -h
+          systemctl is-active fwupd.service udisks2.service 2>/dev/null || true
+          systemctl is-enabled fwupd.service udisks2.service 2>/dev/null || true
+          ps -eo pid,comm,%cpu,%mem,rss,args --sort=-%cpu | head -18
+          REMOTE
+
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"

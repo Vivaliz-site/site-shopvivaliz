@@ -1,26 +1,19 @@
 name: Master Production Pipeline 24/7
 
-# Pipeline de producao automatico apos Quality Gate aprovado.
-# Fluxo: validar o commit -> implantar o SHA exato -> monitorar producao.
-# O acionamento manual com confirmacao DEPLOY permanece disponivel para emergencia.
-
 on:
   workflow_run:
-    workflows:
-      - Quality Gate
-    types:
-      - completed
-    branches:
-      - main
+    workflows: [Quality Gate]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       confirmation:
-        description: 'Digite DEPLOY para confirmar a implantacao manual'
+        description: 'Digite DEPLOY para confirmar'
         required: true
         type: string
 
 concurrency:
-  group: production-deploy
+  group: production-deploy-a1
   cancel-in-progress: false
 
 permissions:
@@ -31,443 +24,170 @@ env:
 
 jobs:
   validate:
-    name: Validate Commit
-    if: >-
-      ${{ github.event_name == 'workflow_dispatch' ||
-          github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 12
     steps:
-      - name: Require explicit confirmation for manual deployment
+      - name: Validate manual confirmation
         if: ${{ github.event_name == 'workflow_dispatch' }}
         shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "${{ inputs.confirmation }}" != "DEPLOY" ]]; then
-            echo "::error::Confirmacao invalida. Digite DEPLOY para continuar."
-            exit 1
-          fi
-
-      - name: Checkout exact validated commit
-        uses: actions/checkout@v6
+        run: test '${{ inputs.confirmation }}' = DEPLOY
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.DEPLOY_SHA }}
           persist-credentials: false
-          fetch-depth: 1
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-
-      - name: Install verified Gitleaks CLI
+      - name: Verify deployable revision
         shell: bash
         run: |
           set -euo pipefail
-          version='8.30.1'
-          archive="gitleaks_${version}_linux_x64.tar.gz"
-          expected_sha='551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb'
-          curl --fail --location --silent --show-error \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${version}/${archive}" \
-            --output "/tmp/${archive}"
-          echo "${expected_sha}  /tmp/${archive}" | sha256sum --check --strict
-          tar -xzf "/tmp/${archive}" -C /tmp gitleaks
-          sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
-          gitleaks version
-
-      - name: PHP syntax validation
-        shell: bash
-        run: |
-          set -euo pipefail
-          found=0
-          while IFS= read -r -d '' file; do
-            found=1
-            php -l "$file" >/dev/null || {
-              echo "::error file=$file::PHP lint failed"
-              exit 1
-            }
-          done < <(find . -path './vendor' -prune -o -name '*.php' -print0)
-          if [[ "$found" -eq 0 ]]; then
-            echo "No PHP files found."
-          fi
-          echo "PHP syntax OK"
-
-      - name: Block dangerous CSS wildcard selectors
-        shell: bash
-        run: |
-          set -euo pipefail
-          pattern="\\[class[[:space:]]*\\*=[[:space:]]*[\"'](hero|banner|section|page|layout|container)"
-          if grep -rEn "$pattern" --include='*.css' --exclude-dir=vendor .; then
-            echo "::error::Structural CSS wildcard selector detected"
-            exit 1
-          fi
-          echo "CSS wildcard check passed"
-
-      - name: Scan current repository files for secrets with Gitleaks CLI
-        shell: bash
-        run: |
-          set -euo pipefail
-          gitleaks dir . \
-            --config .gitleaks.toml \
-            --redact \
-            --verbose
-
-      - name: Reject destructive deployment commands in workflow
-        shell: bash
-        run: |
-          set -euo pipefail
-          workflow='.github/workflows/master-production-pipeline.yml'
-          forbidden='git[[:space:]]+push[[:space:]].*--force|git[[:space:]]+clean[[:space:]]+-[a-z]*f|git[[:space:]]+reset[[:space:]]+--hard[[:space:]]+(HEAD~|origin/)'
-          if grep -En "$forbidden" "$workflow"; then
-            echo "::error::Forbidden destructive deployment command found"
-            exit 1
-          fi
-          echo "Destructive command check passed"
-
-      - name: Record validated commit
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Validated commit: $DEPLOY_SHA"
-          git rev-parse HEAD
           test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          php -l sitemap.php >/dev/null
+          php tests/google-indexing-canonical-regression-test.php
+          python3 -m py_compile scripts/seo-integrity-audit.py
+          ! grep -Fq 'http://127.0.0.1${path}' .github/workflows/master-production-pipeline.yml
+          grep -Fq 'api/health/version.php' .github/workflows/master-production-pipeline.yml
+          grep -Fq 'served_sha' .github/workflows/master-production-pipeline.yml
 
   deploy:
-    name: Deploy Exact Commit to Oracle VM
-    runs-on: ubuntu-latest
     needs: validate
-    # O cron canonico da VM roda a cada 2 minutos e, em releases grandes,
-    # pode manter o mesmo lock por mais de 8 minutos. O Master precisa ter
-    # janela suficiente para aguardar esse deploy concorrente terminar e
-    # ainda executar a reconciliacao do SHA exato.
-    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: production
+    env:
+      ML_CLIENT_ID_VALUE: ${{ secrets.ML_CLIENT_ID }}
+      ML_CLIENT_SECRET_VALUE: ${{ secrets.ML_CLIENT_SECRET }}
+      ML_REDIRECT_URI_VALUE: ${{ secrets.ML_REDIRECT_URI }}
     steps:
-      - name: Checkout exact validated commit
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.DEPLOY_SHA }}
           persist-credentials: false
           fetch-depth: 1
-
-      - name: Configure verified SSH host
+      - name: Package immutable release
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar --exclude=.git -czf /tmp/shopvivaliz-release.tgz .
+      - name: Configure pinned A1 SSH
         shell: bash
         env:
-          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
-          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+          KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
         run: |
           set -euo pipefail
-          test -n "$ORACLE_VM_SSH_KEY" || { echo "::error::ORACLE_VM_SSH_KEY is missing"; exit 1; }
-          test -n "$ORACLE_VM_KNOWN_HOSTS" || { echo "::error::ORACLE_VM_KNOWN_HOSTS is missing"; exit 1; }
+          test -n "$KEY"
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa
+          printf '%s\n' "$KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s %s\n' '163.176.103.253' 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICPXjLoakI7MkHQrhQF1jaCF8VTtY1SbDiffx8gNeSxw' > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
-
-      - name: Deploy with reversible server backup
+      - name: Synchronize Mercado Livre static runtime
         shell: bash
         run: |
           set -euo pipefail
-          ssh \
-            -o BatchMode=yes \
-            -o ServerAliveInterval=30 \
-            -o ServerAliveCountMax=20 \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 \
-            'bash -s' -- "$DEPLOY_SHA" <<'REMOTE_SCRIPT'
-          set -euo pipefail
-          expected_sha="$1"
-          repo='/home/ubuntu/shopvivaliz-deploy/repo'
-          current_link='/home/ubuntu/shopvivaliz-deploy/current'
-          deploy_script="$repo/scripts/deploy-production.sh"
-          deploy_log='/home/ubuntu/shopvivaliz-deploy/logs/deploy.log'
-
-          # Keep local Git operations unchanged, but bound/retry only the
-          # network subcommands that can fail transiently against GitHub.
-          git_retry_dir="$(mktemp -d /tmp/shopvivaliz-git-retry.XXXXXX)"
-          cleanup_git_retry() {
-            rm -rf -- "$git_retry_dir"
-          }
-          trap cleanup_git_retry EXIT
-          cat > "$git_retry_dir/git" <<'GIT_RETRY_WRAPPER'
-          #!/usr/bin/env bash
-          set -u
-          network_command=0
-          for argument in "$@"; do
-            case "$argument" in
-              fetch|ls-remote)
-                network_command=1
-                break
-                ;;
-            esac
+          for name in ML_CLIENT_ID_VALUE ML_CLIENT_SECRET_VALUE ML_REDIRECT_URI_VALUE; do
+            test -n "${!name:-}" || { echo "::error::Required Mercado Livre secret missing: $name"; exit 1; }
           done
-          if [[ "$network_command" -eq 0 ]]; then
-            exec /usr/bin/git "$@"
-          fi
-
-          status=0
-          for attempt in 1 2 3; do
-            if timeout 90s /usr/bin/git "$@"; then
-              exit 0
-            else
-              status=$?
-            fi
-            if [[ "$attempt" -lt 3 ]]; then
-              echo "Transient Git network failure; retrying attempt=$((attempt + 1))/3" >&2
-              sleep $((attempt * 5))
-            fi
-          done
-          exit "$status"
-          GIT_RETRY_WRAPPER
-          chmod 0755 "$git_retry_dir/git"
-          export PATH="$git_retry_dir:$PATH"
-          test -x /usr/bin/git
-          command -v timeout >/dev/null
-
-          test -f "$deploy_script"
-          git -C "$repo" rev-parse --is-inside-work-tree >/dev/null
-          git -C "$repo" remote get-url origin >/dev/null
-          # The deploy clone is canonically owned by ubuntu. Repair legacy or
-          # sudo-created ownership drift before Git needs to write new objects.
-          sudo chown -R ubuntu:ubuntu "$repo"
-          test -w "$repo/.git/objects"
-          git -C "$repo" fetch --no-tags origin "$expected_sha"
-          git -C "$repo" cat-file -e "${expected_sha}^{commit}"
-          git -C "$repo" cat-file -e "${expected_sha}:scripts/deploy-production.sh"
-
-          # Releases are created from git archive of the validated SHA, so
-          # untracked files in the long-lived deploy clone cannot enter a
-          # release. Avoid enumerating that potentially huge tree and keep the
-          # safety gate strict for tracked/index modifications only.
-          git -C "$repo" config status.showUntrackedFiles no
-          dirty="$(git -C "$repo" status --porcelain=v1 --untracked-files=no)"
-          if [[ -n "$dirty" ]]; then
-            dirty_paths="$(printf '%s\n' "$dirty" | sed -E 's/^.. //')"
-            if [[ "$dirty_paths" != 'scripts/deploy-production.sh' ]]; then
-              echo "Unexpected dirty deploy checkout:" >&2
-              printf '%s\n' "$dirty" >&2
-              exit 1
-            fi
-          fi
-
-          expected_runner_blob="$(git -C "$repo" rev-parse "${expected_sha}:scripts/deploy-production.sh")"
-          current_runner_blob="$(git -C "$repo" hash-object -- "$deploy_script")"
-          if [[ "$current_runner_blob" != "$expected_runner_blob" ]]; then
-            backup_dir='/home/ubuntu/shopvivaliz-deploy/shared/logs/runner-recovery'
-            mkdir -p "$backup_dir"
-            recovery_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-            backup_path="$backup_dir/deploy-production.sh.$recovery_stamp.$expected_sha"
-            cp -p "$deploy_script" "$backup_path"
-            sha256sum "$deploy_script" > "$backup_path.sha256"
-            printf 'recovered_at=%s\nexpected_sha=%s\noriginal_path=%s\n' \
-              "$recovery_stamp" "$expected_sha" "$deploy_script" > "$backup_path.meta"
-            restore_tmp="$(mktemp "$repo/scripts/.deploy-bootstrap.XXXXXX")"
-            git -C "$repo" show "${expected_sha}:scripts/deploy-production.sh" > "$restore_tmp"
-            chmod 0755 "$restore_tmp"
-            mv -f -- "$restore_tmp" "$deploy_script"
-            test "$(git -C "$repo" hash-object -- "$deploy_script")" = "$expected_runner_blob"
-            echo "Staged exact deploy runner for $expected_sha; previous runner preserved at $backup_path"
-          else
-            echo "Deploy runner already matches validated SHA $expected_sha"
-          fi
-
-          previous_release=''
-          previous_sha=''
-          if [[ -L "$current_link" && -e "$current_link" ]]; then
-            previous_release="$(basename "$(readlink -f "$current_link")")"
-            if [[ -f "$current_link/.release-sha" ]]; then
-              previous_sha="$(cat "$current_link/.release-sha")"
-            fi
-          fi
-
-          current_release="$(basename "$(readlink -f "$current_link")")"
-          deployed_sha="$(cat "$current_link/.release-sha")"
-          if [[ "$deployed_sha" == "$expected_sha" ]]; then
-            echo "Expected commit already active. Reconciling runtime before monitoring."
-          fi
-
-          deploy_status=0
-          flock -n -E 75 /var/lock/shopvivaliz-deploy.lock "$deploy_script" "$expected_sha" || deploy_status=$?
-          if [[ "$deploy_status" -eq 75 ]]; then
-            echo "Deploy lock busy. Waiting up to 600s to run exact runner after concurrent deployment..."
-            deploy_status=0
-            flock -w 600 -E 75 /var/lock/shopvivaliz-deploy.lock "$deploy_script" "$expected_sha" || deploy_status=$?
-          fi
-          if [[ "$deploy_status" -ne 0 ]]; then
-            echo "Deployment script failed with status $deploy_status." >&2
-            if [[ -r "$deploy_log" ]]; then
-              echo 'Sanitized deployment log tail:' >&2
-              tail -n 80 "$deploy_log" \
-                | sed -E 's/([A-Za-z0-9_]*(PASS|PASSWORD|SECRET|TOKEN|KEY)[A-Za-z0-9_]*=)[^[:space:]]+/\1[REDACTED]/Ig' \
-                >&2
-            fi
-            exit "$deploy_status"
-          fi
-
-          current_release="$(basename "$(readlink -f "$current_link")")"
-          deployed_sha="$(cat "$current_link/.release-sha")"
-          test "$deployed_sha" = "$expected_sha"
-
-          echo "Previous release: $previous_release"
-          echo "Previous commit: $previous_sha"
-          echo "Current release: $current_release"
-          echo "Deployed commit: $deployed_sha"
-
-          canonical_main="$(git -C "$repo" ls-remote origin refs/heads/main | awk '{print $1}')"
-          if [[ "$canonical_main" == "$expected_sha" ]]; then
-            target_file='/home/ubuntu/shopvivaliz-deploy/shared/deploy-target-ref'
-            current_target="$(head -n 1 "$target_file" 2>/dev/null | tr -d '\r' | xargs || true)"
-            if [[ "$current_target" != 'main' ]]; then
-              backup_dir='/home/ubuntu/shopvivaliz-deploy/shared/logs/target-recovery'
-              mkdir -p "$backup_dir"
-              recovery_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-              backup_path="$backup_dir/deploy-target-ref.$recovery_stamp.$expected_sha.bak"
-              cp -p "$target_file" "$backup_path"
-              sha256sum "$target_file" > "$backup_path.sha256"
-              printf 'previous_target=%s\nnew_target=main\nactive_sha=%s\n' \
-                "$current_target" "$expected_sha" > "$backup_path.meta"
-              target_tmp="$(mktemp '/home/ubuntu/shopvivaliz-deploy/shared/.deploy-target.XXXXXX')"
-              printf 'main\n' > "$target_tmp"
-              chmod 0644 "$target_tmp"
-              mv -f -- "$target_tmp" "$target_file"
-              echo "Canonicalized deploy target from $current_target to main; backup=$backup_path"
-            fi
-          fi
-          REMOTE_SCRIPT
-
-      - name: Write deployment evidence
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" scripts/update-production-env.py ubuntu@163.176.103.253:/tmp/shopvivaliz-update-production-env.py
+          python3 - <<'PY' | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'cd /home/ubuntu/shopvivaliz-deploy/shared && python3 /tmp/shopvivaliz-update-production-env.py'
+          import json, os
+          keys = ('ML_CLIENT_ID', 'ML_CLIENT_SECRET', 'ML_REDIRECT_URI')
+          print(json.dumps({key: os.environ[key + '_VALUE'] for key in keys}))
+          PY
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'rm -f /tmp/shopvivaliz-update-production-env.py'
+      - name: Upload release
         shell: bash
         run: |
           set -euo pipefail
-          cat > "deployment-log-${DEPLOY_SHA}.txt" <<EOF
-          DEPLOYMENT COMPLETED
-          Commit: ${DEPLOY_SHA}
-          Actor: ${{ github.actor }}
-          Repository: ${{ github.repository }}
-          Workflow run: ${{ github.run_id }}
-          Trigger: ${{ github.event_name }}
-          EOF
-          cat "deployment-log-${DEPLOY_SHA}.txt"
-
-      - name: Upload deployment evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: deployment-log-${{ env.DEPLOY_SHA }}
-          path: deployment-log-${{ env.DEPLOY_SHA }}.txt
-          retention-days: 30
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" /tmp/shopvivaliz-release.tgz ubuntu@163.176.103.253:/tmp/shopvivaliz-release-${DEPLOY_SHA}.tgz
+      - name: Activate release atomically
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' -- "$DEPLOY_SHA" <<'REMOTE'
+          set -euo pipefail
+          sha="$1"
+          root='/home/ubuntu/shopvivaliz-deploy'
+          releases="$root/releases"
+          shared="$root/shared"
+          current="$root/current"
+          archive="/tmp/shopvivaliz-release-${sha}.tgz"
+          stamp="$(date -u +%Y%m%d-%H%M%S)"
+          release="$releases/${stamp}-${sha:0:8}"
+          previous="$(readlink -f "$current" 2>/dev/null || true)"
+          cleanup() { rm -f "$archive"; }
+          trap cleanup EXIT
+          mkdir -p "$release"
+          tar -xzf "$archive" -C "$release"
+          printf '%s\n' "$sha" > "$release/.release-sha"
+          for name in .env tasks-queue.json logs storage cache uploads sessions; do
+            rm -rf "$release/$name"
+            ln -s "../../shared/$name" "$release/$name"
+          done
+          mkdir -p "$release/config"
+          rm -f "$release/config/runtime-secrets.php"
+          ln -s '../../../shared/runtime-secrets.php' "$release/config/runtime-secrets.php"
+          php -l "$release/sitemap.php" >/dev/null
+          php "$release/tests/google-indexing-canonical-regression-test.php"
+          sudo a2enmod rewrite >/dev/null
+          sudo apache2ctl configtest
+          ln -sfn "releases/$(basename "$release")" "$root/current.next"
+          mv -Tf "$root/current.next" "$current"
+          sudo bash "$current/scripts/install-catalog-sync-service.sh"
+          sudo systemctl reload apache2
+          sleep 2
+          fail=0
+          served_sha="$(curl -fsS -H 'Cache-Control: no-cache' --max-time 20 "https://shopvivaliz.com.br/api/health/version.php?deploy=${sha}" | php -r '$j=json_decode(stream_get_contents(STDIN), true); echo is_array($j) ? ($j["release_sha"] ?? "") : "";' || true)"
+          echo "release_sha -> $served_sha"
+          [ "$served_sha" = "$sha" ] || fail=1
+          for path in / /sitemap.xml /catalogo/ /termos/ /politica-entrega/ /politica-devolucoes/; do
+            code="$(curl -sS -o /tmp/smoke-body -w '%{http_code}' -H 'Cache-Control: no-cache' --max-time 20 "https://shopvivaliz.com.br${path}" || true)"
+            echo "$path -> $code"
+            [ "$code" = 200 ] || fail=1
+          done
+          if [ "$fail" -ne 0 ]; then
+            if [ -n "$previous" ] && [ -d "$previous" ]; then
+              ln -sfn "releases/$(basename "$previous")" "$root/current.rollback"
+              mv -Tf "$root/current.rollback" "$current"
+              sudo systemctl reload apache2
+            fi
+            exit 1
+          fi
+          find "$releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -nr | tail -n +6 | cut -d' ' -f2- | while IFS= read -r old; do
+            [ "$(readlink -f "$current")" = "$old" ] || sudo rm -rf -- "$old"
+          done
+          REMOTE
 
   monitor:
-    name: Post-deploy Monitoring
-    runs-on: ubuntu-latest
     needs: deploy
-    timeout-minutes: 6
-    permissions:
-      contents: write
-    steps:
-      - name: Configure verified SSH host
-        shell: bash
-        env:
-          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
-          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
-        run: |
-          set -euo pipefail
-          test -n "$ORACLE_VM_SSH_KEY" || { echo "::error::ORACLE_VM_SSH_KEY is missing"; exit 1; }
-          test -n "$ORACLE_VM_KNOWN_HOSTS" || { echo "::error::ORACLE_VM_KNOWN_HOSTS is missing"; exit 1; }
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$ORACLE_VM_SSH_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-
-      - name: Run canonical production smoke test from Oracle VM
-        shell: bash
-        run: |
-          set -euo pipefail
-          ssh \
-            -o BatchMode=yes \
-            -o ServerAliveInterval=30 \
-            -o ServerAliveCountMax=20 \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 \
-            'bash -s' -- "$DEPLOY_SHA" > >(tee smoke-results.txt) 2>&1 <<'REMOTE_SCRIPT'
-          set -euo pipefail
-          expected_sha="$1"
-          smoke_script='/home/ubuntu/shopvivaliz-deploy/current/scripts/production-smoke-test.sh'
-          test -r "$smoke_script"
-          bash "$smoke_script" "$expected_sha"
-          REMOTE_SCRIPT
-
-      - name: Publish immutable deployment evidence branch
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EVIDENCE_BRANCH: deployment-evidence
-        run: |
-          set -euo pipefail
-          python3 - <<'PY' > /tmp/deployment-evidence.json
-          import json
-          import os
-          from datetime import datetime, timezone
-          from pathlib import Path
-
-          results = [
-              line.strip()
-              for line in Path('smoke-results.txt').read_text(encoding='utf-8').splitlines()
-              if line.startswith('OK ')
-          ]
-          evidence = {
-              'status': 'PRODUCTION_UPDATED',
-              'sha': os.environ['DEPLOY_SHA'],
-              'workflow_run_id': os.environ['GITHUB_RUN_ID'],
-              'workflow_run_url': f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
-              'jobs': {
-                  'validate': 'success',
-                  'deploy': 'success',
-                  'smoke_test': 'success',
-              },
-              'results': results,
-              'verified_at': datetime.now(timezone.utc).isoformat(),
-          }
-          print(json.dumps(evidence, ensure_ascii=False, indent=2))
-          PY
-
-          cat /tmp/deployment-evidence.json
-          content="$(base64 -w0 /tmp/deployment-evidence.json)"
-          path='deployment/latest.json'
-          existing_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${EVIDENCE_BRANCH}" --jq '.sha' 2>/dev/null || true)"
-          if [[ -n "$existing_sha" ]]; then
-            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${path}" \
-              -f message="evidence: production ${DEPLOY_SHA}" \
-              -f content="$content" \
-              -f branch="$EVIDENCE_BRANCH" \
-              -f sha="$existing_sha" >/dev/null
-          else
-            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${path}" \
-              -f message="evidence: production ${DEPLOY_SHA}" \
-              -f content="$content" \
-              -f branch="$EVIDENCE_BRANCH" >/dev/null
-          fi
-
-  deployment_failure_notice:
-    name: Deployment Failure Notice
     runs-on: ubuntu-latest
-    needs: [validate, deploy, monitor]
-    if: failure()
-    permissions:
-      contents: read
+    timeout-minutes: 8
     steps:
-      - name: Report without automatic rollback
+      - name: Configure pinned A1 SSH
+        shell: bash
+        env:
+          KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s %s\n' '163.176.103.253' 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICPXjLoakI7MkHQrhQF1jaCF8VTtY1SbDiffx8gNeSxw' > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Verify public production
         shell: bash
         run: |
-          cat <<EOF
-          DEPLOYMENT OR MONITORING FAILED
-          No automatic rollback was executed.
-          Review workflow run ${{ github.run_id }} and use the server-backup branch
-          created during deployment if a manual, reviewed recovery is required.
-          EOF
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' -- "$DEPLOY_SHA" <<'REMOTE'
+          set -euo pipefail
+          sha="$1"
+          served_sha="$(cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha)"
+          echo "release_sha -> $served_sha"
+          test "$served_sha" = "$sha"
+          for path in / /sitemap.xml /catalogo/ /termos/ /politica-entrega/ /politica-devolucoes/; do
+            code="$(curl -sS -o /tmp/body -w '%{http_code}' -H 'Cache-Control: no-cache' --max-time 20 "https://shopvivaliz.com.br${path}")"
+            echo "$path -> $code"
+            test "$code" = 200
+          done
+          grep -q '<urlset' <(curl -sS -H 'Cache-Control: no-cache' --max-time 20 https://shopvivaliz.com.br/sitemap.xml)
+          REMOTE

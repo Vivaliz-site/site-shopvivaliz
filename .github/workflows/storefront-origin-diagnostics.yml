@@ -1,4 +1,4 @@
-name: Storefront Origin Diagnostics
+﻿name: Storefront Origin Diagnostics
 
 # Triggered operationally to diagnose storefront origin/edge failures.
 on:
@@ -33,7 +33,7 @@ jobs:
       - name: Diagnose Oracle origin and public edge
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
           echo '=== time / uptime / reboot ==='
           date -Is
@@ -79,11 +79,11 @@ jobs:
           cat /tmp/local-health
           echo
           echo '=== origin public IP HTTP ==='
-          curl -sS -D - -o /tmp/ip-home -H 'Host: shopvivaliz.com.br' --connect-timeout 5 --max-time 20 http://137.131.156.17/ | head -n 80
+          curl -sS -D - -o /tmp/ip-home -H 'Host: shopvivaliz.com.br' --connect-timeout 5 --max-time 20 http://163.176.103.253/ | head -n 80
           echo 'BODY_BYTES='$(wc -c </tmp/ip-home 2>/dev/null)
           echo
           echo '=== origin public IP HTTPS ==='
-          curl -k -sS -D - -o /tmp/ip-https --resolve shopvivaliz.com.br:443:137.131.156.17 --connect-timeout 5 --max-time 20 https://shopvivaliz.com.br/ | head -n 100
+          curl -k -sS -D - -o /tmp/ip-https --resolve shopvivaliz.com.br:443:163.176.103.253 --connect-timeout 5 --max-time 20 https://shopvivaliz.com.br/ | head -n 100
           echo 'BODY_BYTES='$(wc -c </tmp/ip-https 2>/dev/null)
           echo
           echo '=== public Cloudflare path ==='

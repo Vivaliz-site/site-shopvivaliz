@@ -61,7 +61,7 @@ jobs:
             relation="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              ubuntu@137.131.156.17 'bash -s' -- "$TARGET_SHA" <<'REMOTE'
+              ubuntu@163.176.103.253 'bash -s' -- "$TARGET_SHA" <<'REMOTE'
           set -Eeuo pipefail
           target="$1"
           repo='/home/ubuntu/shopvivaliz-deploy/repo'
@@ -104,7 +104,7 @@ jobs:
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+            ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
           cd /home/ubuntu/shopvivaliz-deploy/current
           test -r admin/catalog-optimization/repair_hard_quality_pending.php

@@ -1,0 +1,54 @@
+name: Production Functional Audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'api/**'
+      - 'includes/**'
+      - 'config/**'
+      - 'js/**'
+      - 'checkout*.php'
+      - 'carrinho*.php'
+      - 'catalogo*.php'
+      - 'scripts/production-functional-audit.sh'
+      - 'tests/test_production_functional_audit_contract.py'
+      - 'docs/knowledge/agent-rules.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-functional-audit
+  cancel-in-progress: true
+
+jobs:
+  functional:
+    name: Prove production actually works
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: production
+    env:
+      BASE_URL: https://shopvivaliz.com.br
+      SHOPVIVALIZ_AGENT_KEY: ${{ secrets.SHOPVIVALIZ_AGENT_KEY != '' && secrets.SHOPVIVALIZ_AGENT_KEY || secrets.AGENT_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Validate anti-false-positive contract
+        run: python3 tests/test_production_functional_audit_contract.py
+
+      - name: Execute real production transaction probes
+        shell: bash
+        run: bash scripts/production-functional-audit.sh
+
+      - name: Publish failure summary
+        if: failure()
+        shell: bash
+        run: |
+          echo '::error::PRODUCTION_FUNCTIONAL_AUDIT=FAIL. Producao nao pode ser declarada saudavel.'
+          echo 'Functional audit failed; inspect the failing stage before proposing a fix.' >> "$GITHUB_STEP_SUMMARY"

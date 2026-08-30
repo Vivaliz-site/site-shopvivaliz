@@ -1,0 +1,37 @@
+name: Recover historical category image selections
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/tmp-recover-category-images-20260812.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+      - name: Find historical product caches and derive category choices
+        run: |
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@136.248.69.116 <<'EOF'
+          set -euo pipefail
+          echo '=== CANDIDATE CACHES ==='
+          find /home/ubuntu/shopvivaliz-deploy /home/ubuntu/shopvivaliz-preview-20260810 \
+            -type f \( -name 'products-cache-ativos*.json*' -o -name '*products*cache*.json*' -o -name '*catalog*backup*.json*' \) \
+            -newermt '2026-08-09 00:00:00' ! -newermt '2026-08-12 00:00:00' \
+            -printf '%TY-%Tm-%Td %TH:%TM:%TS %s %p\n' 2>/dev/null | sort | tail -n 80 || true
+          echo '=== ALL KNOWN CACHES ==='
+          find /home/ubuntu/shopvivaliz-deploy/shared/storage /home/ubuntu/shopvivaliz-deploy/repo/storage /home/ubuntu/shopvivaliz-preview-20260810/storage \
+            -maxdepth 3 -type f -name 'products-cache-ativos*.json*' \
+            -printf '%TY-%Tm-%Td %TH:%TM:%TS %s %p\n' 2>/dev/null | sort || true
+          EOF
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey

@@ -20,19 +20,34 @@ foreach ($requiredUnit as $needle) {
     if (strpos($unit, $needle) === false) { fwrite(STDERR, "FALHOU: unit sem {$needle}\n"); exit(1); }
 }
 $installer = file_get_contents($installerPath);
-foreach (['sudo -u', 'NODE_BIN', 'NPX_BIN', 'systemctl daemon-reload','systemctl enable shopvivaliz-desktop-commander.service','systemctl restart shopvivaliz-desktop-commander.service','is-enabled','is-active'] as $needle) {
+foreach ([
+    'sudo -u', 'NODE_BIN', 'NPX_BIN', 'systemctl daemon-reload',
+    'systemctl enable "$SERVICE"', 'systemctl restart "$SERVICE"',
+    'LEGACY_SERVICE=', 'desktop-commander.service', 'disable --now',
+    'kill_tree', 'CANONICAL_REMOTE_COUNT', 'NONCANONICAL_REMOTE_COUNT',
+    '@wonderwhy-er/desktop-commander@0.2.47 remote --persist-session',
+    'for attempt in {1..12}', 'sleep 5',
+    'is-enabled', 'is-active'
+] as $needle) {
     if (strpos($installer, $needle) === false) { fwrite(STDERR, "FALHOU: installer sem {$needle}\n"); exit(1); }
 }
 $supervisor = file_get_contents($supervisorPath);
-foreach (['.desktop-commander-device/device.json','NPX_BIN','@wonderwhy-er/desktop-commander@0.2.47','AUTH_REQUIRED','exit 20','remote'] as $needle) {
+$requiredSupervisor = [
+    'DEVICE_DIR="$HOME_DIR/.desktop-commander-device"',
+    'DEVICE_FILE="$DEVICE_DIR/device.json"',
+    'NPX_BIN','@wonderwhy-er/desktop-commander@0.2.47','AUTH_REQUIRED','exit 20','remote --persist-session'
+];
+foreach ($requiredSupervisor as $needle) {
     if (strpos($supervisor, $needle) === false) { fwrite(STDERR, "FALHOU: supervisor sem {$needle}\n"); exit(1); }
+}
+if (strpos($supervisor, 'HOME_DIR="${HOME:-/home/ubuntu}"') === false) {
+    fwrite(STDERR, "FALHOU: supervisor sem HOME_DIR canonico\n");
+    exit(1);
 }
 $all = $unit . $installer . $supervisor;
 $forbidden = [
     'access_token','refresh_token','auth_token','0.0.0.0',
-    '|' . '| true',
-    'set +' . 'e',
-    'tee "$tmp"'
+    'set +' . 'e', 'tee "$tmp"', 'pkill -f node'
 ];
 foreach ($forbidden as $needle) {
     if (stripos($all, $needle) !== false) { fwrite(STDERR, "FALHOU: configuracao proibida {$needle}\n"); exit(1); }

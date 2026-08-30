@@ -1,6 +1,6 @@
 {
-  "workflow": "fred-win-remote-action.yml",
-  "limit": 10,
-  "requested_at": "2026-08-18T23:05:00Z",
-  "reason": "Expose GitHub Actions runs through a versioned file readable by the connector"
+  "workflow": "fredwin-2222-secure-recovery.yml",
+  "limit": 5,
+  "requested_at": "2026-08-24T13:46:00Z",
+  "reason": "Inspect secure Fred-Win diagnostic recovery run"
 }

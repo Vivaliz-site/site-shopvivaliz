@@ -206,10 +206,10 @@ footer .footer-legal a{color:#17324f!important;}
 
             <div>
                 <strong>Termos e condições</strong>
-                <a href="/termos">Termos e condições</a>
+                <a href="/termos/">Termos e condições</a>
                 <a href="/politica-privacidade/">Privacidade e LGPD</a>
-                <a href="/politica-devolucoes">Trocas e devoluções</a>
-                <a href="/politica-entrega">Frete e entrega</a>
+                <a href="/politica-devolucoes/">Trocas e devoluções</a>
+                <a href="/politica-entrega/">Frete e entrega</a>
             </div>
 
             <div>

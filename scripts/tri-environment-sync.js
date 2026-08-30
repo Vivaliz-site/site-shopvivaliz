@@ -97,7 +97,7 @@ function detectEnvironment(manifest) {
     ? manifest.environment_detection.aliases
     : {};
 
-  const oracleAliases = aliases.oracle || ['oracle', 'shopvivaliz-ai', 'ubuntu', 'vps', 'server'];
+  const oracleAliases = aliases.oracle || ['oracle', 'always-free-arm-1787907847-26', 'shopvivaliz-free-a1', 'ubuntu', 'vps', 'server'];
   const pcAliases = aliases.pc || ['pc', 'desktop', 'windows', 'workstation', 'fred'];
 
   if (oracleAliases.some(function (needle) { return hostProbe.indexOf(needle) !== -1; })) {

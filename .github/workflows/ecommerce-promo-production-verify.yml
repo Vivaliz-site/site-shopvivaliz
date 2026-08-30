@@ -37,7 +37,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+            ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
           set -euo pipefail
           current='/home/ubuntu/shopvivaliz-deploy/current'
           test -r "$current/tests/ecommerce-excellence-regression-test.php"

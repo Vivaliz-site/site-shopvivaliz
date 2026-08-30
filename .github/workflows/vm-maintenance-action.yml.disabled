@@ -1,0 +1,136 @@
+name: VM Maintenance Action
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ops/vm-maintenance-request.json"
+
+permissions:
+  contents: read
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure verified VM SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
+      - name: Resolve allowlisted maintenance action
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ACTION="$(jq -r '.action // "health"' ops/vm-maintenance-request.json)"
+          case "$ACTION" in
+            graph_audit)
+              COMMAND="$(cat <<'EOF'
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          ./.venv/bin/python -c 'import base64,json,urllib.error,urllib.request; from dotenv import load_dotenv; load_dotenv(".env",override=True); from app.email_provider import MicrosoftGraphEmailProvider; p=MicrosoftGraphEmailProvider(); token=p._get_access_token(); payload=token.split(".")[1]+"==="; claims=json.loads(base64.urlsafe_b64decode(payload)); print("TOKEN_ROLES="+",".join(sorted(claims.get("roles",[])))); addr=p.address; tests=[("USER",f"https://graph.microsoft.com/v1.0/users/{addr}?$select=id"),("MAIL_READ",f"https://graph.microsoft.com/v1.0/users/{addr}/mailFolders/inbox/messages?$top=1&$select=id")];
+          for label,url in tests:
+            req=urllib.request.Request(url,headers={"Authorization":"Bearer "+token})
+            try:
+              with urllib.request.urlopen(req,timeout=20) as r: print(label+"_HTTP="+str(r.status))
+            except urllib.error.HTTPError as e: print(label+"_HTTP="+str(e.code))'
+          echo ===SERVICES===
+          systemctl show mei-mg-email-worker.service mei-mg-email-ndr-guard.service -p Id -p ActiveState -p SubState -p MainPID -p NRestarts --no-pager
+          EOF
+              )"
+              ;;
+            graph_grant_mail_read)
+              COMMAND="$(cat <<'EOF'
+          set -Eeuo pipefail
+          cd /home/ubuntu/mei-mg-email
+          ./.venv/bin/python - <<'PY'
+          import json, urllib.error, urllib.parse, urllib.request
+          from dotenv import load_dotenv
+          load_dotenv('.env', override=True)
+          from app.email_provider import MicrosoftGraphEmailProvider
+          p=MicrosoftGraphEmailProvider(); token=p._get_access_token()
+          headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'}
+          def get(url):
+              req=urllib.request.Request(url,headers=headers)
+              with urllib.request.urlopen(req,timeout=30) as r: return json.loads(r.read())
+          client_filter=urllib.parse.quote("appId eq '%s'"%p.client_id,safe="'")
+          graph_filter=urllib.parse.quote("appId eq '00000003-0000-0000-c000-000000000000'",safe="'")
+          client=get('https://graph.microsoft.com/v1.0/servicePrincipals?$filter='+client_filter)['value'][0]
+          graph=get('https://graph.microsoft.com/v1.0/servicePrincipals?$filter='+graph_filter)['value'][0]
+          role=next(r for r in graph['appRoles'] if r.get('value')=='Mail.Read' and 'Application' in r.get('allowedMemberTypes',[]))
+          assignments=get('https://graph.microsoft.com/v1.0/servicePrincipals/'+client['id']+'/appRoleAssignments')['value']
+          existing=any(a.get('resourceId')==graph['id'] and a.get('appRoleId')==role['id'] for a in assignments)
+          print('MAIL_READ_ALREADY_ASSIGNED='+str(existing).lower())
+          if not existing:
+              body=json.dumps({'principalId':client['id'],'resourceId':graph['id'],'appRoleId':role['id']}).encode()
+              req=urllib.request.Request('https://graph.microsoft.com/v1.0/servicePrincipals/'+client['id']+'/appRoleAssignments',data=body,headers=headers,method='POST')
+              try:
+                  with urllib.request.urlopen(req,timeout=30) as r: print('MAIL_READ_ASSIGN_HTTP='+str(r.status))
+              except urllib.error.HTTPError as e:
+                  print('MAIL_READ_ASSIGN_HTTP='+str(e.code)); print('MAIL_READ_ASSIGN_FAILED=true'); raise
+          else: print('MAIL_READ_ASSIGN_HTTP=existing')
+          PY
+          sudo systemctl restart mei-mg-email-ndr-guard.service
+          sleep 8
+          systemctl show mei-mg-email-ndr-guard.service -p ActiveState -p SubState -p MainPID -p NRestarts --no-pager
+          if journalctl -u mei-mg-email-ndr-guard.service --since "20 seconds ago" --no-pager | grep -Ei "NDR guard iniciado|NDR_GUARD_CHECK_FAILED|HTTP_403|Traceback|APP-ONLY active" | tail -80; then :; fi
+          EOF
+              )"
+              ;;
+            m365_admin_audit)
+              COMMAND="$(cat <<'EOF'
+          set -Eeuo pipefail
+          echo ===ENV_KEY_NAMES===
+          for f in /opt/m365/.env /opt/m365/.env.local /home/ubuntu/mei-mg-email/.env; do
+            test -f "$f" || continue
+            echo FILE=$f
+            sed -n -E 's/^([A-Za-z_][A-Za-z0-9_]*)=.*/\1/p' "$f" | grep -Ei 'tenant|client|secret|cert|graph|admin|token|azure|entra|m365|microsoft' | sort -u
+          done
+          echo ===ADMIN_RELATED_FILES===
+          find /opt/m365 /home/ubuntu/mei-mg-email/scripts -maxdepth 3 -type f 2>/dev/null | grep -Ei 'admin|graph|entra|azure|exchange|permission|role|consent|oauth|token|cert' | head -120
+          echo ===SCRIPT_CAPABILITY_REFERENCES===
+          grep -RIlE 'AppRoleAssignment|appRoleAssignments|Mail\.Read|Connect-MgGraph|Connect-AzAccount|adminconsent|Directory\.ReadWrite|Application\.ReadWrite|RoleManagement' /opt/m365 /home/ubuntu/mei-mg-email/scripts 2>/dev/null | head -120
+          echo ===TOOLS===
+          if command -v az; then :; fi
+          if command -v pwsh; then :; fi
+          if command -v powershell; then :; fi
+          if command -v oci; then :; fi
+          python3 - <<'PY'
+          import importlib.util
+          for m in ('msal','azure.identity','requests'):
+              print(m+'='+str(bool(importlib.util.find_spec(m))).lower())
+          PY
+          EOF
+              )"
+              ;;
+            health)
+              COMMAND='set -Eeuo pipefail; echo ===SERVICES===; for s in ssh shopvivaliz-desktop-commander.service snap.oracle-cloud-agent.oracle-cloud-agent.service mei-mg-email-worker.service mei-mg-email-monitor.service mei-mg-email-ndr-guard.service mei-mg-email-queue-replenisher.service docker; do printf "%s=" "$s"; if systemctl is-active "$s" 2>/dev/null; then :; fi; done; echo ===DISK===; df -h /; echo ===MEM===; free -h; echo ===LOAD===; uptime; echo ===PORTS===; if ss -ltnp 2>/dev/null | grep -E ":(22|80|443|5433|8010)[[:space:]]"; then :; fi; echo ===FAILED===; if systemctl --failed --no-pager --plain; then :; fi'
+              ;;
+            site_cleanup)
+              COMMAND='set -Eeuo pipefail; echo ===GUARD===; for f in /etc/systemd/system/mei-mg-email-*.service /etc/systemd/system/shopvivaliz-desktop-commander.service; do test -f "$f" || continue; if grep -Eqi "apache2|certbot|letsencrypt|/var/www|php" "$f"; then echo "ABORT_REFERENCE=$f"; exit 8; fi; done; echo GUARD_OK; if sudo systemctl disable --now apache2 certbot.timer 2>/dev/null; then :; fi; sudo rm -f /etc/cron.d/shopvivaliz-blog-publish; export DEBIAN_FRONTEND=noninteractive; if sudo apt-get purge -y apache2 apache2-bin apache2-data apache2-utils certbot python3-certbot python3-certbot-apache python3-certbot-dns-cloudflare libapache2-mod-php libapache2-mod-php8.3 php php-cli php-common php-apcu php-mbstring php-mysql php8.3 php8.3-apcu php8.3-cli php8.3-common php8.3-curl php8.3-mbstring php8.3-mysql php8.3-opcache php8.3-readline php8.3-sqlite3; then :; fi; sudo apt-get autoremove --purge -y; sudo apt-get clean; sudo rm -rf /home/ubuntu/shopvivaliz-deploy /var/www /etc/apache2 /etc/letsencrypt /var/log/apache2; rm -rf "$HOME/.npm/_cacache" "$HOME/.npm/_logs" "$HOME/.cache/pip" "$HOME/.cache/uv"; if sudo journalctl --vacuum-size=200M >/dev/null; then :; fi; if docker image prune -a -f; then :; fi; echo ===RESULT===; if dpkg -l | grep -E "apache2|certbot|libapache2-mod-php"; then :; fi; if ss -ltnp 2>/dev/null | grep -E ":(80|443)[[:space:]]"; then :; fi; df -h /'
+              ;;
+            final_verify)
+              COMMAND='set -Eeuo pipefail; echo ===SERVICES===; for s in ssh shopvivaliz-desktop-commander.service snap.oracle-cloud-agent.oracle-cloud-agent.service mei-mg-email-worker.service mei-mg-email-monitor.service mei-mg-email-ndr-guard.service mei-mg-email-queue-replenisher.service docker; do printf "%s=" "$s"; if systemctl is-active "$s" 2>/dev/null; then :; fi; done; echo ===ENABLED===; for s in shopvivaliz-desktop-commander.service snap.oracle-cloud-agent.oracle-cloud-agent.service mei-mg-email-worker.service mei-mg-email-monitor.service mei-mg-email-ndr-guard.service mei-mg-email-queue-replenisher.service docker; do printf "%s=" "$s"; if systemctl is-enabled "$s" 2>/dev/null; then :; fi; done; echo ===WEB_ABSENT===; if systemctl status apache2 --no-pager 2>/dev/null; then :; fi; if command -v certbot; then :; fi; test ! -e /home/ubuntu/shopvivaliz-deploy && echo SITE_DEPLOY_ABSENT=true; test ! -e /etc/letsencrypt && echo LETSENCRYPT_ABSENT=true; echo ===PORTS===; if ss -ltnp 2>/dev/null | grep -E ":(22|80|443|5433|8010)[[:space:]]"; then :; fi; echo ===DOCKER===; if docker ps --format "{{.Names}} {{.Image}} {{.Status}}" 2>/dev/null; then :; fi; echo ===DC===; systemctl show shopvivaliz-desktop-commander.service -p ActiveState -p SubState -p MainPID -p NRestarts --no-pager; echo ===ORACLE===; if snap services oracle-cloud-agent 2>/dev/null; then :; fi; echo ===MEI_RECENT_ERRORS===; if journalctl -u mei-mg-email-worker.service -u mei-mg-email-ndr-guard.service --since "10 minutes ago" --no-pager | grep -Ei "Traceback|RuntimeError|Failed with result|HTTP_403|certificate/key not found" | tail -80; then :; fi; echo ===RESOURCES===; free -h; df -h /; uptime; echo ===FAILED===; if systemctl --failed --no-pager --plain; then :; fi'
+              ;;
+            *) echo "Action not allowlisted: $ACTION"; exit 3 ;;
+          esac
+          printf '%s' "$COMMAND" | base64 -w0 > /tmp/vm-maint-command.b64
+      - name: Execute fixed VM maintenance action
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          CMD_B64="$(cat /tmp/vm-maint-command.b64)"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@136.248.69.116 "VM_CMD_B64='$CMD_B64' bash -lc 'printf %s \"\$VM_CMD_B64\" | base64 -d | bash'"
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts /tmp/vm-maint-command.b64

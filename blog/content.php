@@ -66,7 +66,7 @@ function sv_blog_articles(): array
                 ['question' => 'Qual é a primeira ferramenta que devo comprar?', 'answer' => 'Para um kit doméstico, comece por trena, martelo, alicate universal e um conjunto de chaves. A prioridade depende dos reparos mais comuns na sua casa.'],
                 ['question' => 'Preciso comprar um kit com muitas peças?', 'answer' => 'Não. Kits muito grandes podem incluir itens que nunca serão usados. Prefira ferramentas essenciais de boa qualidade e amplie o conjunto conforme surgir necessidade.'],
             ],
-            '/catalogo?busca=ferramentas',
+            '/catalogo/?q=ferramentas',
             7,
             true
         ),
@@ -89,7 +89,7 @@ function sv_blog_articles(): array
                 ['question' => 'Devo comprar organizadores antes de separar os objetos?', 'answer' => 'O ideal é primeiro selecionar, agrupar e medir. Assim você compra apenas o tamanho e o tipo necessários.'],
                 ['question' => 'Como manter a organização por mais tempo?', 'answer' => 'Defina locais simples para cada grupo de itens e faça pequenas revisões frequentes.'],
             ],
-            '/catalogo?busca=organizacao',
+            '/catalogo/?q=organizacao',
             5
         ),
         sv_blog_make_article(
@@ -111,7 +111,7 @@ function sv_blog_articles(): array
                 ['question' => 'Toda peça de metal pode ser usada no banheiro?', 'answer' => 'Não. A resistência depende do material, acabamento e indicação do fabricante. Confirme a aplicação antes da compra.'],
                 ['question' => 'Posso usar palha de aço para limpar ferragens?', 'answer' => 'Em geral, abrasivos podem riscar ou remover o acabamento. Siga a orientação específica do fabricante da peça.'],
             ],
-            '/catalogo?busca=ferragens',
+            '/catalogo/?q=ferragens',
             6
         ),
         sv_blog_make_article(
@@ -133,7 +133,7 @@ function sv_blog_articles(): array
                 ['question' => 'Posso usar qualquer rodízio em piso laminado?', 'answer' => 'Não. Prefira modelos indicados para pisos delicados e confirme a recomendação do fabricante.'],
                 ['question' => 'Rodízio com trava é sempre necessário?', 'answer' => 'É recomendado quando o móvel precisa permanecer parado com segurança, principalmente em áreas de circulação.'],
             ],
-            '/catalogo?busca=rodizio',
+            '/catalogo/?q=rodizio',
             6,
             true
         ),
@@ -156,7 +156,7 @@ function sv_blog_articles(): array
                 ['question' => 'Caixas organizadoras podem ser empilhadas?', 'answer' => 'Podem, desde que o modelo seja adequado para isso e o peso não comprometa a estabilidade.'],
                 ['question' => 'Qual tamanho devo comprar?', 'answer' => 'Depende do espaço disponível e do volume dos objetos. Meça antes e deixe margem para manuseio.'],
             ],
-            '/catalogo?busca=caixa%20organizadora',
+            '/catalogo/?q=caixa%20organizadora',
             5
         ),
         sv_blog_make_article(
@@ -178,7 +178,7 @@ function sv_blog_articles(): array
                 ['question' => 'Todo cadeado serve para área externa?', 'answer' => 'Não. Verifique se o modelo é indicado para chuva, sol ou umidade frequente.'],
                 ['question' => 'Posso lubrificar qualquer cadeado?', 'answer' => 'Siga a recomendação do fabricante. Produto inadequado pode acumular sujeira ou prejudicar o mecanismo.'],
             ],
-            '/catalogo?busca=cadeado',
+            '/catalogo/?q=cadeado',
             5
         ),
         sv_blog_make_article(
@@ -200,7 +200,7 @@ function sv_blog_articles(): array
                 ['question' => 'Como começar a organizar uma cozinha pequena?', 'answer' => 'Retire excessos, agrupe por função e deixe os itens diários nos pontos mais acessíveis.'],
                 ['question' => 'Vale usar ganchos e suportes?', 'answer' => 'Sim, quando a instalação é segura e o peso fica dentro da capacidade indicada.'],
             ],
-            '/catalogo?busca=cozinha',
+            '/catalogo/?q=cozinha',
             5
         ),
         sv_blog_make_article(
@@ -222,7 +222,7 @@ function sv_blog_articles(): array
                 ['question' => 'Ferrugem sempre significa troca imediata?', 'answer' => 'Não necessariamente, mas sinais de oxidação devem ser avaliados. Se houver perda estrutural, substitua a peça.'],
                 ['question' => 'Produto de limpeza forte remove ferrugem?', 'answer' => 'Pode danificar o acabamento. Use apenas produtos recomendados para o material.'],
             ],
-            '/catalogo?busca=ferragem',
+            '/catalogo/?q=ferragem',
             6
         ),
         sv_blog_make_article(
@@ -244,7 +244,7 @@ function sv_blog_articles(): array
                 ['question' => 'Posso lavar ferramentas com água?', 'answer' => 'Depende da ferramenta e do material. Quando usar água, seque completamente antes de guardar.'],
                 ['question' => 'Como evitar perda de peças pequenas?', 'answer' => 'Use organizadores com divisórias e mantenha cada grupo de acessórios em local definido.'],
             ],
-            '/catalogo?busca=ferramentas',
+            '/catalogo/?q=ferramentas',
             5
         ),
         sv_blog_make_article(
@@ -266,7 +266,7 @@ function sv_blog_articles(): array
                 ['question' => 'Posso usar a mesma bucha em qualquer parede?', 'answer' => 'Não. A bucha precisa ser compatível com o tipo de parede e a carga.'],
                 ['question' => 'Como saber a capacidade de carga?', 'answer' => 'Consulte a especificação do fabricante e considere margem de segurança.'],
             ],
-            '/catalogo?busca=fixacao',
+            '/catalogo/?q=fixacao',
             6,
             true
         ),
@@ -289,7 +289,7 @@ function sv_blog_articles(): array
                 ['question' => 'Como evitar comprar o acessório errado?', 'answer' => 'Defina o uso, meça o espaço e confira material, instalação e capacidade indicada.'],
                 ['question' => 'Vale trocar por um produto mais resistente?', 'answer' => 'Vale quando o uso é frequente, o ambiente é exigente ou a segurança depende da peça.'],
             ],
-            '/catalogo?busca=utilidades',
+            '/catalogo/?q=utilidades',
             5
         ),
     ];

@@ -1,4 +1,4 @@
 {
-  "action": "kill_for_recovery_test",
-  "reason": "verify unattended VM Desktop Commander auto-recovery"
+  "action": "dc_diagnose",
+  "reason": "diagnose provider/session loss after same-device backup recovery without changing identity"
 }

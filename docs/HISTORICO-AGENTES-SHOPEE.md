@@ -1,7 +1,7 @@
 # Histórico de Agentes Shopee — ShopVivaliz
 
 **Repositório:** `fredmourao-ai/site-shopvivaliz`  
-**Última atualização:** 2026-08-19 (ciclo 34)  
+**Última atualização:** 2026-08-28 (ciclo 40)  
 **Branch de origem:** `claude/guth-portfolio-access-81jjq2`
 
 > Documento de consulta para agentes. Descreve o que foi implementado, como usar, quais secrets são necessários e quais limitações existem.
@@ -1227,3 +1227,286 @@ artefato novo com erro diferente, execução de `shopee-production-seo.yml` com 
 bem-sucedido) ocorreu. Recomendação para quando o usuário tiver tempo permanece a mesma dos ciclos
 19–33: regenerar client OAuth2 na Tiny e recriar `fetch-shopee-listings.yml`/
 `optimize-shopee-listings.yml` (ver seção 🔴 de `docs/AGENTS.md`).
+
+### 9.30 Atualização — ciclo de 2026-08-27 (~07h UTC), 35º ciclo — gap de 8 dias sem registro; bloqueio de fundo idêntico, mas achado novo: `shopee-runtime-health.yml` parou de passar
+
+Gap de 8 dias sem entrada nesta seção (último registro: ciclo 34, 2026-08-19). Checagem completa via
+`git fetch origin main` (HEAD em `1bfbe14`) e `mcp__github__actions_list`/`get_job_logs` para
+`shopee-production-seo.yml` e `shopee-runtime-health.yml`; `env | grep -iE "SHOPEE|TINY|OLIST"`
+continua vazio neste sandbox, como esperado. `git log --since=2026-08-19 -- '*shopee*' '*Shopee*'`
+não mostra nenhum commit que reative o pipeline Tiny — os commits que tocam scripts Shopee no
+período (endurecimento de segurança, guardas CLI-only) não mudam o bloqueio de fundo.
+`listings/` continua parado em `shopee-listings-20260726-080756.json`. `.github/workflows/` segue só
+com `shopee-optimizer-safety.yml`/`shopee-production-seo.yml`/`shopee-runtime-health.yml` sob Shopee;
+`fetch-shopee-listings.yml`/`optimize-shopee-listings.yml` seguem ausentes. Nenhum endpoint de
+analytics do Shopee Open Platform (CTR, taxa de conversão) foi integrado — a análise orientada a
+dado pedida por este agente de otimização continua tecnicamente inexequível neste ambiente, mesmo
+bloqueio dos ciclos 1–34.
+
+**Achado novo (motivo do desvio do padrão "sem fato novo" dos últimos ciclos):**
+`shopee-runtime-health.yml` — até aqui a única confirmação real de acesso à API Shopee (ciclos
+26–34, sempre `conclusion: success`) — está falhando em **todas** as execuções agendadas desde
+2026-08-25 (`32886726199` @ 18:56 UTC, `32920953261`, `32941349895`, `32973250684`, `33008419370`
+@ 2026-08-26 20:03 UTC — 5+ falhas seguidas em ~36h, nenhuma execução `schedule` bem-sucedida nesse
+intervalo). O job (`Verify canonical VM credentials and catalog read`) falha em ~3-4s, no próprio
+comando `ssh ... ubuntu@137.131.156.17` (antes de qualquer output do preflight Python do lado do
+Shopee) — ou seja, é uma falha de conectividade/autenticação SSH na VM, não um erro de token/API da
+Shopee. Não foi possível baixar o artefato `shopee-runtime-health.json` pra confirmar o payload
+exato (bloqueio de rede do proxy do sandbox pro blob storage do Actions, `curl` retornou
+`CONNECT tunnel failed, 403` — não uma limitação da checagem em si).
+
+Dois fatos do período reforçam essa leitura: (1) `dcd77df` (2026-08-26) confirmou que
+`137.131.156.17` (o alvo do SSH deste workflow) é a **VM1/dev**, não produção — então esta checagem
+nunca validou a API Shopee em produção real, só no ambiente dev; (2) `1bfbe14` (2026-08-27, o commit
+mais recente em `main`) instalou nessa mesma VM1 um cron persistente a cada 3 minutos
+(`scripts/oci-a1-retry.sh`) pra tentar provisionar a `shopvivaliz-free-a1` — rodando exatamente na
+janela em que a checagem começou a falhar. Não é possível confirmar causalidade sem acesso à VM (fora
+do escopo deste agente), mas a coincidência temporal é forte o bastante pra registrar como hipótese:
+o cron novo pode estar competindo por recursos/rede na VM1 ou interferindo na sessão SSH usada pelo
+health check. `shopee-production-seo.yml` segue sem execução nova (mesmas 5 falhas de 2026-07-30,
+esperado — exige `workflow_dispatch` manual).
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. **Notificação push
+enviada neste ciclo** — critério atendido: um sinal que era confiável e passava (`shopee-runtime-
+health.yml`) parou de passar de forma consistente, o que é diferente do bloqueio de fundo repetido
+(inexistência de analytics) que já não gera aviso desde o ciclo 19. Recomendação pro usuário: (1)
+verificar se `137.131.156.17` está acessível via SSH manualmente e se o cron `oci-a1-retry.sh`
+(instalado por `1bfbe14`) não está saturando a VM1; (2) considerar mover o alvo deste health check
+pra VM2 (`136.248.69.116`, produção real) já que `dcd77df` confirmou que VM1 nunca foi produção; (3)
+a recomendação de fundo dos ciclos 19-34 sobre o OAuth2 da Tiny permanece igual e independente deste
+achado.
+
+### 9.31 Atualização — ciclo de 2026-08-27 (~13h UTC), 36º ciclo — health check parou de disparar via `schedule`, não só de falhar
+
+Checagem via `git log`/`grep` (nenhuma credencial `SHOPEE|TINY|OLIST` no ambiente sandbox, como
+esperado), `mcp__github__actions_list`/`actions_get` para `shopee-runtime-health.yml` e
+`shopee-production-seo.yml`. `listings/` continua parado em `shopee-listings-20260726-080756.json`,
+mesma marca d'água de todos os ciclos desde 26/07. `shopee-production-seo.yml` segue com as mesmas 5
+execuções de 2026-07-30 (`30585266165`/`30571531668`/`30571478470`/`30571242284`/`30570700034`),
+todas `conclusion: failure`, sem `workflow_dispatch` novo — esperado, exige confirmação humana
+digitada.
+
+**Achado novo (aprofunda, mas não substitui, o achado do ciclo 35):** `shopee-runtime-health.yml`
+segue `state: active` e o cron (`17 */6 * * *`, i.e. ~00:17/06:17/12:17/18:17 UTC) está intacto no
+YAML, mas a última execução disparada por `schedule` foi `33008419370` em 2026-08-26T20:03:21Z
+(`conclusion: failure`, mesma que o ciclo 35 já via) — nenhuma execução `schedule` nova apareceu
+desde então, apesar de pelo menos 3 horários de cron já terem passado (~00:17, ~06:17 e ~12:17 UTC
+de 08-27). O workflow segue sendo *disparado* com frequência via `workflow_run` (encadeado a
+`master-production-pipeline.yml`, que roda a cada poucos minutos), mas todas essas execuções têm
+`conclusion: skipped` — não são o health check real, só o gatilho condicional que não passa. Ou
+seja: o único caminho que de fato tenta o SSH (`schedule`) parou de disparar, não só de passar.
+Não foi possível confirmar a causa (sem acesso à VM nem ao log interno do agendador do GitHub Actions
+a partir deste sandbox) — pode ser o mesmo problema de conectividade/recursos da VM1 já hipotetizado
+no ciclo 35 (cron `oci-a1-retry.sh` de `1bfbe14`), ou simplesmente atraso do agendador do GitHub
+Actions sob a carga muito alta deste repositório (`master-production-pipeline.yml` sozinho já vai em
+`run_number` 2532, todo disparado por push/workflow_run).
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. **Nenhuma notificação
+push enviada neste ciclo** — o achado é um aprofundamento do mesmo incidente já notificado no ciclo
+35 (~6h atrás), não um fato novo e independente que mude a ação recomendada ao usuário; ver critério
+usado desde o ciclo 19 (não notificar bloqueio de fundo repetido). Recomendação: a mesma do ciclo 35
+— checar VM1 manualmente — mais um item novo: se a VM1 estiver saudável, vale considerar que o
+próprio agendamento do GitHub Actions pode estar sendo atrasado/descartado sob a carga do repo, o
+que é um problema diferente (e mais amplo) do que "SSH falhando".
+
+### 9.32 Atualização — ciclo de 2026-08-27 (~13h UTC), 37º ciclo — schedule voltou a disparar, mas em horário que não bate com nenhum slot do cron declarado
+
+Mesma checagem de sempre (sem credencial `SHOPEE|TINY|OLIST` no sandbox, esperado;
+`scripts/utils/shopee_client.py` e `scripts/shopee_full_catalog_optimizer.py` relidos e ainda sem
+nenhum endpoint de analytics/CTR/conversão do Shopee Open Platform — bloqueio de fundo idêntico aos
+ciclos 1-36). `listings/` segue com o mesmo watermark `shopee-listings-20260726-080756.json` desde
+26/07 (confirmado por ordenação de nome de arquivo, não só `mtime` do checkout). `shopee-production-seo.yml`
+segue com as mesmas 5 execuções de 2026-07-30, todas `failure`, sem `workflow_dispatch` novo (esperado).
+
+**Achado novo (resolve parcialmente, mas não contradiz, o achado do ciclo 36):** o caminho `schedule`
+de `shopee-runtime-health.yml` **voltou a disparar** — run `33060228852` (`run_number` 1341) às
+2026-08-27T09:48:27Z, `conclusion: failure` — ou seja, não estava permanentemente travado como o
+ciclo 36 temeu, só atrasado. Mas o horário real (09:48:27Z) **não corresponde a nenhum dos 4 slots do
+cron declarado** (`17 */6 * * *` → 00:17/06:17/12:17/18:17Z): não é o slot de 06:17 atrasado em ~3h30,
+nem o de 12:17 adiantado. Puxando o histórico completo de execuções `schedule` deste workflow (48 no
+total), o padrão se confirma nos últimos dias: 2026-08-25 18:56:42Z, 2026-08-26 01:58:12Z, 2026-08-26
+20:03:21Z, 2026-08-27 09:48:27Z — nenhum bate com 00:17/06:17/12:17/18:17. Ou seja, isso não é um caso
+isolado de atraso: o agendador do GitHub Actions para este workflow parece estar disparando em
+horários efetivamente arbitrários há pelo menos 2 dias, não só ocasionalmente atrasado. Isso deixa a
+hipótese "atraso/descarte de schedule sob carga alta do repositório" (aventada no ciclo 36) bem mais
+provável que "problema pontual de conectividade da VM1" — não seria de se esperar que uma falha de
+rede/SSH também deslocasse o *horário de disparo* do cron em si, já que isso é decidido inteiramente
+pelo agendador do GitHub, antes de qualquer tentativa de SSH.
+
+Também tentei, pela primeira vez nos 37 ciclos, inspecionar o conteúdo real do artifact
+`shopee-runtime-health-33060228852` (168 bytes, upload feito pelo próprio job após a falha) em vez de
+só ler os logs do job — os logs do job mostram que o step "Run read-only Shopee preflight on
+production VM" falha em ~3s no *check* Python local (`payload.get('status') != 'ok'` ou
+`catalog_read`/`detail_read` não `True`), não no SSH em si (a chamada SSH em si não aparece com erro
+visível nos logs, e o job segue até o upload do artifact). Peguei a `download_url` via
+`download_workflow_run_artifact`, mas o `curl` a partir deste sandbox falhou com `CONNECT tunnel
+failed, response 403` contra `productionresultssa4.blob.core.windows.net` — o proxy do ambiente não
+permite alcançar esse host. Ou seja, o conteúdo exato do JSON (que diria se é erro de token expirado,
+API do Shopee retornando erro, ou outra coisa) **continua não confirmado**, mesma limitação de acesso
+à VM/artifact que todos os ciclos anteriores já tinham, só que agora documentada como tentativa ativa
+e não apenas suposição.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado. **Nenhuma notificação push enviada neste ciclo** — o achado
+aprofunda o mesmo incidente de fundo já notificado (regressão de 08-22, ver atualização 08-26) sem
+mudar a ação recomendada ao usuário. Recomendação: mantém a do ciclo 35 (checar VM1/SSH manualmente),
+mas com prioridade revista — vale primeiro olhar o painel de Actions do repositório (aba "Insights" /
+"Scheduled workflows") ou abrir um ticket de suporte do GitHub sobre atraso de `schedule` neste repo
+especificamente, já que o padrão de horários observado aponta mais para o agendador do GitHub do que
+para a VM1 em si. Se/quando alguém tiver acesso de fato à VM1, também vale simplesmente rodar
+`scripts/shopee_runtime_preflight.py` manualmente por SSH pra ver o erro puro, sem depender do
+Actions.
+
+### 9.33 Atualização — ciclo de 2026-08-27 (~19h UTC), 38º ciclo — VM2 routing fix (commit `a6c713a`) muda o erro pela primeira vez em 38 ciclos: SSH conecta, mas VM2 não tem credencial Shopee
+
+`git fetch origin main` confirma HEAD idêntico a `origin/main` (`223fd39`, o próprio commit do ciclo
+37). Fato novo e estrutural desde o ciclo 37 (~6h antes): o commit `a6c713a` ("fix: route production
+pipelines to VM2 (#1234)", 2026-08-27T10:52:38Z, autor `fredmourao@gmail.com`, PR #1234) alterou
+`.github/workflows/shopee-runtime-health.yml` para apontar o SSH de `ubuntu@137.131.156.17` (VM1,
+dev) para `ubuntu@136.248.69.116` (VM2, produção real — confirmado como tal em `dcd77df`,
+2026-08-26). Esse commit fazia parte de uma auditoria maior corrigindo dezenas de workflows que ainda
+apontavam pra VM1 depois da migração do site pra VM2; não foi motivado por esta rotina, mas afeta
+diretamente o bloqueador dos ciclos 34-37 (hipótese de conectividade/cron saturado na VM1).
+
+**Nenhuma execução `schedule` nova rodou desde o fix** (a última `schedule` continua sendo
+`33060228852`, 09:48:27Z, ainda contra VM1, antes do merge de `a6c713a` às 10:52Z) — os únicos runs
+entre o fix e agora são `workflow_run` (encadeados ao Master Production Pipeline, todos `skipped`
+porque o job só roda de fato em evento `schedule`/`workflow_dispatch`). Pra não esperar até o próximo
+slot de cron sem saber se o fix funcionou, disparei manualmente via `workflow_dispatch`
+(`mcp__github__actions_run_trigger`, método `run_workflow`) — ação de baixo risco: o job é
+inteiramente somente-leitura (`ssh` roda só `shopee_runtime_preflight.py --max-items 5`, sem nenhum
+write no catálogo). Resultado: run `33107367820`, 2026-08-27T19:13:06Z, **ainda `conclusion:
+failure`**, mas pela primeira vez em 38 ciclos com uma mensagem de erro real e específica no log do
+job (antes o erro ficava só no artifact, inacessível a este sandbox):
+
+```
+ERROR: required Shopee runtime credentials are incomplete
+##[error]Process completed with exit code 4.
+```
+
+O job levou ~4s até esse erro, com o step de SSH completo (não houve timeout nem erro de conexão) —
+ou seja, **o fix de roteamento funcionou**: a sessão SSH contra VM2 conecta e o script remoto roda até
+o ponto de checar as credenciais. O que muda é *qual* erro aparece: antes (contra VM1) era falha
+silenciosa em `payload.get('status') != 'ok'`; agora (contra VM2) é uma mensagem explícita do próprio
+`scripts/shopee_runtime_preflight.py` dizendo que as credenciais Shopee estão incompletas. Lendo o
+script (`scripts/shopee_runtime_preflight.py:24-46`), as chaves exigidas são `SHOPEE_PARTNER_ID`,
+`SHOPEE_PARTNER_KEY`, `SHOPEE_SHOP_ID` e pelo menos uma de `SHOPEE_ACCESS_TOKEN`/
+`SHOPEE_REFRESH_TOKEN`, lidas de `/home/ubuntu/shopvivaliz-deploy/shared/.env` +
+`SHOPEE_TOKEN_FILE=/home/ubuntu/shopvivaliz-deploy/shared/shopee-tokens.json` **na própria VM alvo**
+— ou seja, algo nesse conjunto está ausente/vazio especificamente em VM2, não é um erro de código.
+
+Isso é consistente com uma lacuna estrutural já sugerida (mas nunca confirmada) pelos ciclos 15/26 e
+pela entrada de `docs/MEMORIA-AGENTES.md`: o serviço `shopvivaliz-shopee-token-renewer.service`
+(`deploy/systemd/shopvivaliz-shopee-token-renewer.service`, renova `shared/shopee-tokens.json` a cada
+3h) parece ter sido instalado/rodado historicamente só na VM1 (`docs/MEMORIA-AGENTES.md:42` associa
+esse daemon explicitamente à VM1, `137.131.156.17`) — a VM2 provavelmente nunca teve esse daemon
+rodando, então nunca teve um `shopee-tokens.json` populado, mesmo estando confirmada como produção
+real desde `dcd77df`. Não consegui confirmar isso diretamente (sem SSH neste sandbox), é inferência a
+partir do texto do erro + do arquivo de systemd + do histórico já registrado.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6. **Notificação push
+enviada neste ciclo** — critério atendido: fato novo, específico e acionável que muda a recomendação
+pela primeira vez desde o ciclo 35 (não é mais "verificar SSH/cron da VM1", é "verificar se
+`shopvivaliz-shopee-token-renewer.service` está instalado e rodando na VM2, e se
+`shared/shopee-tokens.json`/`.env` da VM2 têm as 4 credenciais Shopee"). Recomendação pro usuário: (1)
+`ssh ubuntu@136.248.69.116 systemctl status shopvivaliz-shopee-token-renewer` — se o serviço não
+existir ou estiver parado, instalar/iniciar (`deploy/systemd/shopvivaliz-shopee-token-renewer.service`)
+e copiar `shopee-tokens.json`/as 4 variáveis `SHOPEE_*` de VM1 pra VM2 (ou gerar tokens novos se
+tiverem expirado); (2) depois disso, rodar `shopee-runtime-health.yml` via `workflow_dispatch` de novo
+pra confirmar `status: ok`; (3) achado estrutural de fundo (sem endpoint de analytics/CTR do Shopee
+Open Platform em nenhum script) permanece sem mudança e continua bloqueando os itens 1/3/9/10 desta
+rotina mesmo depois de credenciais OK.
+
+### 9.34 Atualização — ciclo de 2026-08-28 (~01h UTC), 39º ciclo — mesmo erro confirmado agora via cron real (não só `workflow_dispatch` manual)
+
+`git fetch origin main` confirma HEAD idêntico a `origin/main` (`20ff0eb`); nenhum commit desde o
+ciclo 38 (~19h UTC 08-27) tocou `shopee-tokens.json`, `.env` da VM2, o serviço
+`shopvivaliz-shopee-token-renewer` ou qualquer arquivo relacionado a credenciais Shopee — só commits
+`ops:`/`fix:`/`test:` não relacionados (recuperação de sessão do Fred-Win Desktop Commander). Ou seja,
+a ação recomendada no ciclo 38 (instalar/popular o token-renewer na VM2) ainda não foi executada.
+
+Verifiquei os runs `schedule` reais de `shopee-runtime-health.yml` desde o ciclo 38: o primeiro (e até
+agora único) disparo automático de cron contra VM2 foi `33121776705` (run 1410, 2026-08-27T22:15:43Z,
+`conclusion: failure`) — antes disso só existia o disparo manual (`workflow_dispatch`, `33107367820`,
+19:13Z) que o próprio ciclo 38 já tinha usado. Peguei o log do job (`get_job_logs`, `job_id
+98690128344`) pra confirmar se o erro muda entre disparo manual e disparo por cron real: é idêntico —
+
+```
+ERROR: required Shopee runtime credentials are incomplete
+##[error]Process completed with exit code 4.
+```
+
+mesmo texto, mesmo exit code 4, falha em ~2s após a conexão SSH completar normalmente (sem timeout).
+Não há nenhum run `schedule` mais recente que este até o momento desta checagem.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado, conforme a regra de segurança da seção 6 (reforçado por
+`KNOWN_ISSUES.md`: nenhum script de produção chama endpoint de analytics do Shopee Open Platform, e o
+apply real via `shopee-production-seo.yml` exige confirmação humana digitada
+`APPLY_ALL_SHOPEE_PRODUCTS` que nenhum agente autônomo deve disparar). **Nenhuma notificação push
+enviada neste ciclo** — critério atendido: é o mesmo bloqueio já reportado e escalado no ciclo 38, sem
+fato novo que mude a recomendação (confirma o mesmo erro por uma via diferente — cron em vez de
+disparo manual — o que corrobora mas não altera o diagnóstico). Segue a convenção adotada desde o
+ciclo 19 de não notificar bloqueio de fundo repetido. Recomendação pro usuário: a mesma do ciclo 38,
+ainda pendente — verificar/instalar `shopvivaliz-shopee-token-renewer` na VM2 e popular
+`shared/shopee-tokens.json`/`.env` com as 4 credenciais `SHOPEE_*`.
+
+### 9.35 Atualização — ciclo de 2026-08-28 (~11h UTC), 40º ciclo — mesmo bloqueio, agora confirmado em dois runs de cron consecutivos
+
+`git fetch origin main` confirma HEAD ainda em `f4fa730` (o próprio commit do ciclo 39) — nenhum
+commit desde então tocou credenciais Shopee, `shopee-tokens.json`, `.env` da VM2 ou o serviço
+`shopvivaliz-shopee-token-renewer`; os únicos commits no meio tempo (`20ff0eb`, `14fb3de`, `10c9a93`,
+etc.) são `ops:`/`fix:`/`test:` de recuperação de sessão do Fred-Win Desktop Commander, sem relação
+com Shopee.
+
+Consultei `list_workflow_runs` de `shopee-runtime-health.yml`: o run agendado mais recente é
+`33166952180` (run_number 1455, `event: schedule`, 2026-08-28T11:23:12Z, `conclusion: failure`) — o
+segundo disparo automático de cron real contra a VM2 desde o fix de roteamento (o primeiro foi
+`33121776705`, citado na seção 9.34). Peguei o log do job (`get_job_logs`, `job_id 98834532556`): a
+falha ocorre no mesmo passo (SSH completa normalmente, script remoto falha ~4s depois), com o mesmo
+texto de erro —
+
+```
+ERROR: required Shopee runtime credentials are incomplete
+##[error]Process completed with exit code 4.
+```
+
+— texto e exit code idênticos aos ciclos 38 e 39. Não há fato novo: dois runs de cron consecutivos
+(1410 e 1455) reproduzem o mesmo bloqueio de credencial ausente na VM2, e a ação recomendada desde o
+ciclo 38 (instalar/popular `shopvivaliz-shopee-token-renewer` na VM2) segue sem execução.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado — mesma justificativa das seções 9.33/9.34 (sem endpoint de
+analytics do Shopee Open Platform em nenhum script de produção; apply real exige confirmação humana
+`APPLY_ALL_SHOPEE_PRODUCTS`). **Nenhuma notificação push enviada neste ciclo** — mesmo bloqueio já
+escalado no ciclo 38, sem fato novo que mude a recomendação (confirmar o mesmo erro num segundo run de
+cron corrobora, não altera, o diagnóstico). Recomendação pro usuário: inalterada desde o ciclo 38 —
+verificar/instalar `shopvivaliz-shopee-token-renewer` na VM2 e popular `shared/shopee-tokens.json`/
+`.env` com as 4 credenciais `SHOPEE_*`.
+
+### 9.36 Atualização — ciclo de 2026-08-28 (~19h UTC), 41º ciclo — terceiro disparo (manual) confirma bloqueio inalterado; nenhum commit tocou credenciais desde o ciclo 40
+
+`git log` confirma HEAD em `179e40b` (o próprio commit do ciclo 40) — nenhum commit desde então
+tocou `shopee-tokens.json`, `.env` da VM2 ou o serviço `shopvivaliz-shopee-token-renewer`; os únicos
+commits no meio tempo (`9bcf208`) são `ops:` de sessão do Desktop Commander, sem relação com Shopee.
+
+`list_workflow_runs` (`event: schedule`) não mostra nenhum run agendado novo desde `33166952180`
+(ciclo 39, 11:23 UTC) — os slots de cron das 13h e 19h não geraram um evento `schedule` na API (mesmo
+padrão de atraso/descarte do agendador já registrado no ciclo 37, seção 9.32). Pra não depender de o
+cron disparar dentro da janela deste ciclo, disparei `shopee-runtime-health.yml` manualmente via
+`workflow_dispatch` (run `33202786646`, 2026-08-28T19:11:57Z, ação somente-leitura) e confirmei o job
+(`list_workflow_jobs`, `job_id 98956165182`): falha no mesmo passo ("Run read-only Shopee preflight on
+production VM"), SSH completa normalmente, script remoto falha ~3s depois. Log não inspecionado
+literalmente neste ciclo (texto já confirmado idêntico nos ciclos 38-40 via `get_job_logs`), mas
+duração, passo de falha e `conclusion: failure` batem exatamente com os runs anteriores — sem
+indício de mudança de causa raiz.
+
+Nenhuma otimização de título/descrição/imagem/atributo/preço aplicada e nenhum dado de
+CTR/conversão/venda foi inventado — mesma justificativa das seções 9.33-9.35. **Nenhuma notificação
+push enviada neste ciclo** — mesmo bloqueio já escalado no ciclo 38 (7 dias corridos sem o
+token-renewer da VM2 ser instalado/populado), sem fato novo que mude a recomendação. Recomendação pro
+usuário: inalterada desde o ciclo 38 — verificar/instalar `shopvivaliz-shopee-token-renewer` na VM2 e
+popular `shared/shopee-tokens.json`/`.env` com as 4 credenciais `SHOPEE_*`.

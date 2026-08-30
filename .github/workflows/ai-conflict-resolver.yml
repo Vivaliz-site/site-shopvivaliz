@@ -1,0 +1,235 @@
+name: AI Conflict Resolver
+
+on:
+  push:
+    branches: [ai-conflict-resolver]
+    paths:
+      - ".github/scripts/ai_conflict_resolver.py"
+      - ".github/workflows/ai-conflict-resolver.yml"
+      - "tests/test_ai_conflict_resolver.py"
+      - "AI_CONFLICT_RULES.md"
+  pull_request:
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: ai-conflict-resolver-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  OLLAMA_MODEL: qwen2.5-coder:1.5b
+
+jobs:
+  self-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolver unit tests
+        run: python3 -m unittest tests/test_ai_conflict_resolver.py
+      - name: Python syntax
+        run: python3 -m py_compile .github/scripts/ai_conflict_resolver.py
+
+  resolve:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    needs: self-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Merge exact base and classify conflicts
+        id: merge
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -Eeuo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "$BASE_SHA"
+          if git merge --no-ff --no-commit "$BASE_SHA" >/tmp/ai-merge.log 2>&1; then
+            if git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+              git merge --abort
+            fi
+            echo "has_conflicts=false" >> "$GITHUB_OUTPUT"
+            echo "safe=false" >> "$GITHUB_OUTPUT"
+          else
+            conflicts="$(git diff --name-only --diff-filter=U)"
+            if [ -z "$conflicts" ]; then
+              cat /tmp/ai-merge.log >&2
+              false
+            fi
+            echo "has_conflicts=true" >> "$GITHUB_OUTPUT"
+            CONFLICTS="$conflicts" python3 - <<'PY' > /tmp/ai-protected.txt
+          import importlib.util, os
+          spec = importlib.util.spec_from_file_location("r", ".github/scripts/ai_conflict_resolver.py")
+          mod = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          for path in os.environ["CONFLICTS"].splitlines():
+              if mod.is_protected_path(path):
+                  print(path)
+          PY
+            if [ -s /tmp/ai-protected.txt ]; then
+              echo "safe=false" >> "$GITHUB_OUTPUT"
+              echo "### AI conflict resolver: human review required" >> "$GITHUB_STEP_SUMMARY"
+              echo "Protected conflicts were not sent to a model." >> "$GITHUB_STEP_SUMMARY"
+              git merge --abort
+            else
+              echo "safe=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Install local Ollama
+        if: steps.merge.outputs.has_conflicts == 'true' && steps.merge.outputs.safe == 'true'
+        run: |
+          set -Eeuo pipefail
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama --version
+          nohup ollama serve >/tmp/ollama.log 2>&1 &
+          ready=false
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = true
+
+      - name: Pull free local model
+        if: steps.merge.outputs.has_conflicts == 'true' && steps.merge.outputs.safe == 'true'
+        run: ollama pull "$OLLAMA_MODEL"
+
+      - name: Resolve safe conflicts
+        id: resolve
+        if: steps.merge.outputs.has_conflicts == 'true' && steps.merge.outputs.safe == 'true'
+        run: |
+          set -Eeuo pipefail
+          if python3 .github/scripts/ai_conflict_resolver.py; then
+            echo "resolved=true" >> "$GITHUB_OUTPUT"
+          else
+            if git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+              git merge --abort
+            fi
+            echo "resolved=false" >> "$GITHUB_OUTPUT"
+            echo "### AI conflict resolver: human review required" >> "$GITHUB_STEP_SUMMARY"
+            echo "The local model or deterministic safety gate declined the resolution." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Validate resolution
+        if: steps.resolve.outputs.resolved == 'true'
+        run: |
+          set -Eeuo pipefail
+          test -z "$(git diff --name-only --diff-filter=U)"
+          git diff --check
+          python3 -m unittest tests/test_ai_conflict_resolver.py
+          python3 scripts/autonomous-change-guard.py --base HEAD
+
+      - name: Build verified write-back manifest
+        if: steps.resolve.outputs.resolved == 'true'
+        env:
+          MANIFEST_PATH: ${{ runner.temp }}/ai-writeback.json
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import base64, json, os, subprocess
+          from pathlib import Path
+
+          def git(*args):
+              return subprocess.check_output(["git", *args])
+
+          raw = git("diff", "--name-status", "-z", "HEAD")
+          parts = raw.decode().split("\0")
+          entries = []
+          i = 0
+          while i < len(parts) and parts[i]:
+              status = parts[i]
+              i += 1
+              code = status[0]
+              if code in {"R", "C"}:
+                  old_path, new_path = parts[i], parts[i + 1]
+                  i += 2
+                  if code == "R":
+                      entries.append({"path": old_path, "delete": True})
+                  path = new_path
+              else:
+                  path = parts[i]
+                  i += 1
+              if code == "D":
+                  entries.append({"path": path, "delete": True})
+                  continue
+              mode_line = git("ls-files", "-s", "--", path).decode().strip()
+              mode = mode_line.split()[0] if mode_line else "100644"
+              data = Path(path).read_bytes()
+              entries.append({
+                  "path": path,
+                  "mode": mode,
+                  "content_b64": base64.b64encode(data).decode(),
+              })
+          if not entries:
+              raise SystemExit("write-back manifest unexpectedly empty")
+          Path(os.environ["MANIFEST_PATH"]).write_text(json.dumps(entries), encoding="utf-8")
+          print(f"writeback_entries={len(entries)}")
+          PY
+
+      - name: Write resolution commit through GitHub Git Data API
+        if: steps.resolve.outputs.resolved == 'true'
+        uses: actions/github-script@v7
+        env:
+          MANIFEST_PATH: ${{ runner.temp }}/ai-writeback.json
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const headSha = process.env.HEAD_SHA;
+            const baseSha = process.env.BASE_SHA;
+            const headRef = process.env.HEAD_REF;
+            const current = await github.rest.git.getRef({ owner, repo, ref: `heads/${headRef}` });
+            if (current.data.object.sha !== headSha) {
+              core.setFailed(`PR branch moved: expected ${headSha}, found ${current.data.object.sha}`);
+              return;
+            }
+            const headCommit = await github.rest.git.getCommit({ owner, repo, commit_sha: headSha });
+            const manifest = JSON.parse(fs.readFileSync(process.env.MANIFEST_PATH, 'utf8'));
+            const tree = [];
+            for (const item of manifest) {
+              if (item.delete) {
+                tree.push({ path: item.path, mode: '100644', type: 'blob', sha: null });
+                continue;
+              }
+              const blob = await github.rest.git.createBlob({
+                owner, repo, content: item.content_b64, encoding: 'base64'
+              });
+              tree.push({ path: item.path, mode: item.mode, type: 'blob', sha: blob.data.sha });
+            }
+            const newTree = await github.rest.git.createTree({
+              owner, repo, base_tree: headCommit.data.tree.sha, tree
+            });
+            const commit = await github.rest.git.createCommit({
+              owner,
+              repo,
+              message: 'chore: resolve merge conflicts with local AI',
+              tree: newTree.data.sha,
+              parents: [headSha, baseSha]
+            });
+            await github.rest.git.updateRef({
+              owner, repo, ref: `heads/${headRef}`, sha: commit.data.sha, force: false
+            });
+            core.info(`resolution_commit=${commit.data.sha}`);

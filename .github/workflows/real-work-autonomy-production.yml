@@ -28,25 +28,25 @@ jobs:
 
       - name: Configure verified Oracle SSH
         env:
-          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
-          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+          SHOPVIVALIZ_VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          SHOPVIVALIZ_VM_KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          test -n "${ORACLE_VM_SSH_KEY:-}"
-          test -n "${ORACLE_VM_KNOWN_HOSTS:-}"
+          test -n "${SHOPVIVALIZ_VM_SSH_KEY:-}"
+          test -n "${SHOPVIVALIZ_VM_KNOWN_HOSTS:-}"
           install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$SHOPVIVALIZ_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
           chmod 600 "$HOME/.ssh/id_rsa"
-          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          printf '%s\n' "$SHOPVIVALIZ_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
       - name: Execute agent in active production release
         run: |
           set -euo pipefail
-          release_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha')"
+          release_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha')"
           printf 'execution_path=oracle-active-release\nrelease_sha=%s\n' "$release_sha" >> artifacts/real-work/context.txt
 
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
             'set -euo pipefail; test -r /home/ubuntu/shopvivaliz-deploy/current/api/agent/real-work-orchestrator.php; /usr/bin/flock -w 120 /var/lock/shopvivaliz-real-work.lock /usr/bin/php /home/ubuntu/shopvivaliz-deploy/current/api/agent/real-work-orchestrator.php' \
             > artifacts/real-work/response.json
           cat artifacts/real-work/response.json
@@ -102,7 +102,7 @@ jobs:
       - name: Validate production surface from Oracle VM
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 \
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
             'bash -s' > artifacts/real-work/http-checks.txt <<'REMOTE_SCRIPT'
           set -euo pipefail
           for url in \

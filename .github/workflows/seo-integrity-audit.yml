@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - 'produto.php'
-      - 'produto-numeric-route.php'
       - 'catalogo.php'
       - 'sitemap.php'
       - '.htaccess'

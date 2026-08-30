@@ -94,6 +94,9 @@ def canonicalize(base: str, raw: str) -> str | None:
     if parts.scheme not in {"http", "https"} or parts.netloc.lower() != base_parts.netloc.lower():
         return None
     path = parts.path or "/"
+    if path.startswith("/cdn-cgi/"):
+        return None
+    path = urllib.parse.quote(path, safe="/%:@!$&()*+,;=-._~")
     return urllib.parse.urlunsplit((base_parts.scheme, base_parts.netloc, path, parts.query, ""))
 
 

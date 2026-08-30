@@ -1,4 +1,4 @@
-name: Policy Engine
+﻿name: Policy Engine
 
 on:
   pull_request:
@@ -45,11 +45,20 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          # Corrigido 2026-08-27: usava retired-backend-E2 (VM1, retired-backend-E2,
+          # dev.shopvivaliz.com.br) como relay de saida so pra chamar o endpoint
+          # publico de producao (https://shopvivaliz.com.br/erp/health, servido
+          # pela VM2). Isso deixava o gate fail-closed de TODAS as PRs do repo
+          # refem do uptime da VM1 (dev), mesmo com a producao real (VM2) no ar
+          # -- foi exatamente o que aconteceu em 2026-08-27 (VM1 fora do ar por
+          # algumas horas derrubou o check "enforce" em quase toda PR aberta).
+          # A VM2 (163.176.103.253) e a propria producao real (ver CLAUDE.md),
+          # entao so cai junto com o site -- relay muito mais confiavel aqui.
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -o ConnectTimeout=12 -o ServerAliveInterval=10 \
             -o ServerAliveCountMax=3 -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 'python3 -' <<'PY' > erp-health.json
+            ubuntu@163.176.103.253 'python3 -' <<'PY' > erp-health.json
           import json
           import sys
           import time

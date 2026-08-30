@@ -1,4 +1,4 @@
 Deploy trigger
-Updated at: 2026-08-06T22:55:07Z
-Source HEAD: 5486e5fed4b4452725ec70188ce450c4fae57a54
-Purpose: retry Quality Gate and canonical production deployment after the prior trigger produced no workflow run.
+Updated at: 2026-08-29T14:03:00Z
+Source HEAD: 5cb95296f4c9128c741458b6ecc793110a60fc40
+Purpose: trigger restored Quality Gate and canonical A1 production deployment after durable SEO routing repair.

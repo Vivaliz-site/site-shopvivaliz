@@ -1,0 +1,87 @@
+name: Desktop Commander VM2 Reauth
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/desktop-commander-vm2-reauth.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-commander-vm2-reauth
+  cancel-in-progress: true
+
+jobs:
+  reauth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Configure verified VM2 SSH
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key"
+          test -n "$known_hosts"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Inspect previous VM2 reauth attempt
+        run: |
+          set -Eeuo pipefail
+          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116)
+          "${SSH[@]}" 'tail -60 "$HOME/.desktop-commander-device/manual-reauth.log" 2>/dev/null || true' |
+            sed -E 's/((token|secret|password|authorization)[=: ]+)[^ ]+/\1REDACTED/Ig'
+
+      - name: Start fresh provider authorization on VM2
+        run: |
+          set -Eeuo pipefail
+          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116)
+          "${SSH[@]}" 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          state="$HOME/.desktop-commander-device"
+          mkdir -p "$state"
+          chmod 700 "$state"
+          sudo -n systemctl stop shopvivaliz-desktop-commander.service || true
+          pkill -u ubuntu -f '@wonderwhy-er/desktop-commander.* remote --persist-session' 2>/dev/null || true
+          sleep 2
+          rm -f "$state/auth-required.cooldown" "$state/manual-reauth.log" "$state/manual-reauth.pid"
+          nohup npx --yes @wonderwhy-er/desktop-commander@0.2.47 remote --persist-session >"$state/manual-reauth.log" 2>&1 </dev/null &
+          printf '%s\n' "$!" > "$state/manual-reauth.pid"
+          REMOTE
+
+      - name: Return fresh authorization link and code
+        run: |
+          set -Eeuo pipefail
+          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116)
+          log=''
+          for _ in $(seq 1 30); do
+            log="$("${SSH[@]}" 'cat "$HOME/.desktop-commander-device/manual-reauth.log" 2>/dev/null || true')"
+            if printf '%s\n' "$log" | grep -Eq 'https://mcp\.desktopcommander\.app/device/verify' && printf '%s\n' "$log" | grep -Eq '[A-Z0-9]{4}-[A-Z0-9]{4}'; then
+              break
+            fi
+            sleep 2
+          done
+          url="$(printf '%s\n' "$log" | grep -Eo 'https://mcp\.desktopcommander\.app/device/verify' | tail -1)"
+          code="$(printf '%s\n' "$log" | grep -Eo '[A-Z0-9]{4}-[A-Z0-9]{4}' | tail -1)"
+          test -n "$url"
+          test -n "$code"
+          echo "AUTH_URL=$url"
+          echo "DEVICE_CODE=$code"
+          echo 'VALID_FOR=approximately_15_minutes'
+
+      - name: Remove runner SSH material
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+# Triggered on demand to obtain a fresh provider device code.

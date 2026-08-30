@@ -8,6 +8,8 @@ on:
       - 'includes/marketplace/TinyV3Runtime.php'
       - 'includes/tiny-order-push.php'
       - 'olist/sync-products.php'
+      - 'scripts/bootstrap-olist-oauth-runtime.py'
+      - 'tests/test_olist_oauth_bootstrap_workflow.py'
       - '.github/workflows/refresh-olist-token-2h.yml'
   push:
     branches:
@@ -18,6 +20,8 @@ on:
       - 'includes/marketplace/TinyV3Runtime.php'
       - 'includes/tiny-order-push.php'
       - 'olist/sync-products.php'
+      - 'scripts/bootstrap-olist-oauth-runtime.py'
+      - 'tests/test_olist_oauth_bootstrap_workflow.py'
       - '.github/workflows/refresh-olist-token-2h.yml'
   workflow_dispatch:
     inputs:
@@ -46,11 +50,12 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m py_compile daemon-token-renewer.py
+          python3 -m py_compile daemon-token-renewer.py scripts/bootstrap-olist-oauth-runtime.py
           php -l olist/callback.php
           php -l includes/marketplace/TinyV3Runtime.php
           php -l includes/tiny-order-push.php
           php -l olist/sync-products.php
+          python3 -m unittest tests/test_olist_oauth_bootstrap_workflow.py
           python3 - <<'PY'
           from pathlib import Path
           endpoint = 'accounts.tiny.com.br/realms/tiny/protocol/openid-connect/token'
@@ -75,12 +80,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     environment: production
+    env:
+      OLIST_CLIENT_ID_VALUE: ${{ secrets.OLIST_CLIENT_ID }}
+      OLIST_CLIENT_SECRET_VALUE: ${{ secrets.OLIST_CLIENT_SECRET }}
+      OLIST_REFRESH_TOKEN_VALUE: ${{ secrets.OLIST_REFRESH_TOKEN }}
+      TINY_CLIENT_ID_VALUE: ${{ secrets.TINY_CLIENT_ID }}
+      TINY_CLIENT_SECRET_VALUE: ${{ secrets.TINY_CLIENT_SECRET }}
+      TINY_REFRESH_TOKEN_VALUE: ${{ secrets.TINY_REFRESH_TOKEN }}
     steps:
-      - name: Require explicit confirmation
+      - name: Require explicit confirmation and OAuth seed
         shell: bash
         env:
           CONFIRMATION: ${{ inputs.confirmation }}
-        run: test "$CONFIRMATION" = 'REFRESH_OLIST_TOKEN'
+        run: |
+          set -Eeuo pipefail
+          test "$CONFIRMATION" = 'REFRESH_OLIST_TOKEN'
+          for name in OLIST_CLIENT_ID_VALUE OLIST_CLIENT_SECRET_VALUE OLIST_REFRESH_TOKEN_VALUE TINY_CLIENT_ID_VALUE TINY_CLIENT_SECRET_VALUE TINY_REFRESH_TOKEN_VALUE; do
+            test -n "${!name:-}" || { echo "::error::OAuth production secret missing: $name"; exit 1; }
+          done
+          echo 'oauth_bootstrap_secrets=present'
       - name: Configure verified SSH
         shell: bash
         env:
@@ -98,18 +116,56 @@ jobs:
           printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+      - name: Create and upload OAuth bootstrap seed
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          export SEED_PATH="$RUNNER_TEMP/oauth-bootstrap.seed"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          keys = (
+              'OLIST_CLIENT_ID', 'OLIST_CLIENT_SECRET', 'OLIST_REFRESH_TOKEN',
+              'TINY_CLIENT_ID', 'TINY_CLIENT_SECRET', 'TINY_REFRESH_TOKEN',
+          )
+          values = {}
+          for key in keys:
+              value = os.environ.get(key + '_VALUE', '')
+              if not value:
+                  raise SystemExit('oauth bootstrap value missing: ' + key)
+              if any(char in value for char in ('\r', '\n', '\x00')):
+                  raise SystemExit('oauth bootstrap value contains control character: ' + key)
+              values[key] = value
+          path = Path(os.environ['SEED_PATH'])
+          path.write_text(''.join(f'{key}={values[key]}\n' for key in keys), encoding='utf-8')
+          path.chmod(0o600)
+          print('oauth_bootstrap_seed_prepared=true')
+          PY
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            "$SEED_PATH" ubuntu@163.176.103.253:/tmp/shopvivaliz-oauth-bootstrap.seed
       - name: Refresh once and prove canonical token store
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
           current=/home/ubuntu/shopvivaliz-deploy/current
           shared=/home/ubuntu/shopvivaliz-deploy/shared
-          export SHOPVIVALIZ_ENV_PATH="$shared/.env"
-          export SHOPVIVALIZ_OLIST_TOKEN_FILE="$shared/private/olist-tokens.json"
+          seed=/tmp/shopvivaliz-oauth-bootstrap.seed
+          token_store="$shared/private/olist-tokens.json"
+          test -s "$seed"
+          sudo chown ubuntu:www-data "$seed"
+          chmod 600 "$seed"
+          export SHOPVIVALIZ_ENV_PATH="$seed"
+          export SHOPVIVALIZ_OLIST_TOKEN_FILE="$token_store"
           cd "$current"
           python3 daemon-token-renewer.py --once
+          python3 scripts/bootstrap-olist-oauth-runtime.py "$shared/.env" "$seed"
+          sudo chown ubuntu:www-data "$shared/.env"
+          chmod 600 "$shared/.env"
+          sudo chown ubuntu:www-data "$token_store"
+          chmod 660 "$token_store"
           python3 - <<'PY'
           import json, time, urllib.request
           from pathlib import Path
@@ -128,9 +184,19 @@ jobs:
           print('olist_api_http=200')
           print('remaining_seconds='+str(expires-int(time.time())))
           PY
+          sudo systemctl restart shopvivaliz-token-renewer.service
           systemctl is-active --quiet shopvivaliz-token-renewer.service
           systemctl is-enabled --quiet shopvivaliz-token-renewer.service
+          echo 'olist_oauth_runtime_bootstrap=verified'
           REMOTE
-      - name: Remove SSH material
+      - name: Remove OAuth bootstrap seed and SSH material
         if: always()
-        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -f "$RUNNER_TEMP/oauth-bootstrap.seed"
+          if [[ -f "$HOME/.ssh/id_rsa" && -f "$HOME/.ssh/known_hosts" ]]; then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+              ubuntu@163.176.103.253 'rm -f /tmp/shopvivaliz-oauth-bootstrap.seed'
+          fi
+          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"

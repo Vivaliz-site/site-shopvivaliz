@@ -13,42 +13,75 @@ permissions:
 jobs:
   execute:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Configure VM key
+      - name: Configure verified VM SSH
         env:
-          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
+          set -Eeuo pipefail
           test -n "$VM_KEY"
-          mkdir -p ~/.ssh
+          test -n "$VM_HOSTS"
+          install -m 700 -d ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
-          chmod 600 ~/.ssh/vmkey
+          printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
       - name: Resolve allowlisted action
-        id: action
         shell: bash
         run: |
+          set -Eeuo pipefail
           ACTION="$(jq -r '.action // "status"' ops/vm-desktop-commander-request.json)"
           case "$ACTION" in
             status)
-              COMMAND='echo USER=$(whoami); echo HOME=$HOME; if command -v node >/dev/null 2>&1; then echo NODE=$(node --version); else echo NODE=missing; fi; if command -v npm >/dev/null 2>&1; then echo NPM=$(npm --version); else echo NPM=missing; fi; if command -v npx >/dev/null 2>&1; then echo NPX=$(npx --version); else echo NPX=missing; fi; if test -f "$HOME/.desktop-commander-device/device.json"; then echo DEVICE_STATE_EXISTS=true; stat -c DEVICE_STATE_MTIME=%y "$HOME/.desktop-commander-device/device.json"; else echo DEVICE_STATE_EXISTS=false; fi; if SERVICE_ENABLED=$(systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null); then :; else SERVICE_ENABLED=${SERVICE_ENABLED:-not-enabled}; fi; echo SERVICE_ENABLED=$SERVICE_ENABLED; if SERVICE_ACTIVE=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null); then :; else SERVICE_ACTIVE=${SERVICE_ACTIVE:-inactive}; fi; echo SERVICE_ACTIVE=$SERVICE_ACTIVE; SERVICE_USER=$(systemctl show -p User --value shopvivaliz-desktop-commander.service 2>/dev/null); echo SERVICE_USER=${SERVICE_USER:-unknown}; SERVICE_MAINPID=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service 2>/dev/null); echo SERVICE_MAINPID=${SERVICE_MAINPID:-0}; if PROCS=$(pgrep -af "desktop-commander.*remote"); then printf "%s\n" "$PROCS" | sed -E "s/(device|token|code)=[^ ]+/\\1=[REDACTED]/Ig"; else echo REMOTE_PROCESS_FOUND=false; fi; if JOURNAL=$(journalctl -u shopvivaliz-desktop-commander.service -n 40 --no-pager 2>/dev/null); then printf "%s\n" "$JOURNAL" | grep -E "AUTH_REQUIRED|REMOTE_AGENT_EXIT_RC" | tail -20; else echo JOURNAL_READABLE=false; fi; test "$SERVICE_ENABLED" = enabled; test "$SERVICE_ACTIVE" = active; test "${SERVICE_MAINPID:-0}" -gt 1'
+              COMMAND='set -Eeuo pipefail; device=false; test -f "$HOME/.desktop-commander-device/device.json" && device=true; enabled=$(systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null || true); active=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true); mainpid=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service 2>/dev/null || true); user=$(systemctl show -p User --value shopvivaliz-desktop-commander.service 2>/dev/null || true); auth=false; cooldown="$HOME/.desktop-commander-device/auth-required.cooldown"; device_file="$HOME/.desktop-commander-device/device.json"; if test -f "$cooldown"; then if test -f "$device_file" && test "$device_file" -nt "$cooldown"; then auth=false; else auth=true; fi; fi; connected=false; test -f "$HOME/.desktop-commander-device/provider-connected.marker" && connected=true; canonical=0; noncanonical=0; while IFS= read -r line; do test -z "$line" && continue; case "$line" in *"@wonderwhy-er/desktop-commander@0.2.47"*" remote "*"--persist-session"*) canonical=$((canonical+1));; *) noncanonical=$((noncanonical+1));; esac; done < <(pgrep -af "[n]pm exec @wonderwhy-er/desktop-commander@.* remote" 2>/dev/null || true); printf "DEVICE_STATE_EXISTS=%s\nSERVICE_ENABLED=%s\nSERVICE_ACTIVE=%s\nSERVICE_USER=%s\nSERVICE_MAINPID=%s\nCANONICAL_AGENT_COUNT=%s\nNONCANONICAL_AGENT_COUNT=%s\nAUTH_REQUIRED=%s\nPROVIDER_CONNECTED=%s\n" "$device" "${enabled:-unknown}" "${active:-unknown}" "$user" "$mainpid" "$canonical" "$noncanonical" "$auth" "$connected"'
               ;;
-            install)
-              COMMAND='set -e; cd /home/ubuntu/shopvivaliz-deploy/repo; git fetch origin main; git merge --ff-only origin/main; sudo bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/install-vm-desktop-commander-service.sh'
+            clear_cooldown_restart)
+              COMMAND='set -Eeuo pipefail; rm -f "$HOME/.desktop-commander-device/auth-required.cooldown"; sudo systemctl restart shopvivaliz-desktop-commander.service; sleep 12; active=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true); auth=false; test -f "$HOME/.desktop-commander-device/auth-required.cooldown" && auth=true; connected=false; test -f "$HOME/.desktop-commander-device/provider-connected.marker" && connected=true; canonical=0; while IFS= read -r line; do test -z "$line" && continue; case "$line" in *"@wonderwhy-er/desktop-commander@0.2.47"*" remote "*"--persist-session"*) canonical=$((canonical+1));; esac; done < <(pgrep -af "[n]pm exec @wonderwhy-er/desktop-commander@.* remote" 2>/dev/null || true); printf "SERVICE_ACTIVE=%s\nAUTH_REQUIRED=%s\nPROVIDER_CONNECTED=%s\nCANONICAL_AGENT_COUNT=%s\n" "$active" "$auth" "$connected" "$canonical"'
+              ;;
+            dc_diagnose)
+              COMMAND='set -Eeuo pipefail; echo ===PROCESS===; systemctl status shopvivaliz-desktop-commander.service --no-pager -l | sed -E "s/[A-Za-z0-9._-]{48,}/[redacted]/g" | tail -80 || true; echo ===NETWORK===; pids=$(pgrep -d, -f "desktop-commander.*remote|@wonderwhy-er/desktop-commander" 2>/dev/null || true); if test -n "$pids"; then sudo ss -ntp 2>/dev/null | grep -E "pid=($(echo "$pids" | tr , "|"))" | sed -E "s/users:\(\([^)]*\)\)/users:[redacted]/g" || true; fi; echo ===DNS===; getent ahosts mcp.remote-mcp.com 2>/dev/null | head -4 || true; getent ahosts remote-mcp.com 2>/dev/null | head -4 || true; echo ===JOURNAL===; journalctl -u shopvivaliz-desktop-commander.service -b --since "20 minutes ago" --no-pager 2>/dev/null | sed -E "s/[A-Za-z0-9._-]{48,}/[redacted]/g" | tail -120 || true; echo ===MARKERS===; for f in "$HOME/.desktop-commander-device/auth-required.cooldown" "$HOME/.desktop-commander-device/provider-connected.marker"; do if test -e "$f"; then printf "%s age_s=" "$(basename "$f")"; echo $(( $(date +%s) - $(stat -c %Y "$f") )); else printf "%s absent\n" "$(basename "$f")"; fi; done'
+              ;;
+            dc_live_summary)
+              COMMAND='set -Eeuo pipefail; pid=$(pgrep -f "node .*desktop-commander.* remote --persist-session" | head -1 || true); test -n "$pid" || pid=$(pgrep -f "npm exec @wonderwhy-er/desktop-commander@0.2.47 remote --persist-session" | head -1 || true); echo "REMOTE_PID_PRESENT=$([ -n "$pid" ] && echo true || echo false)"; if test -n "$pid"; then out=$(readlink -f "/proc/$pid/fd/1" 2>/dev/null || true); if test -f "$out"; then echo "LIVE_OUTPUT_FILE=true"; printf "LIVE_OUTPUT_SIZE="; stat -c %s "$out"; echo ===SAFE_TAIL===; tail -120 "$out" | grep -Ei "Device ready|Found persisted session|Connected to Remote MCP|WebSocket connected|subscribed|online|error|failed|ECONN|ETIMEDOUT|ENOTFOUND|authentication" | sed -E "s/[A-Za-z0-9._-]{32,}/[redacted]/g" | tail -40 || true; else echo "LIVE_OUTPUT_FILE=false"; fi; fi'
+              ;;
+            oracle_agent_audit)
+              COMMAND='set -Eeuo pipefail; echo ===SNAP===; snap list oracle-cloud-agent 2>/dev/null || true; snap services oracle-cloud-agent 2>/dev/null || true; echo ===SYSTEMD===; systemctl status snap.oracle-cloud-agent.oracle-cloud-agent.service --no-pager -l 2>/dev/null | tail -80 || true; echo ===JOURNAL===; journalctl -u snap.oracle-cloud-agent.oracle-cloud-agent.service -b -n 120 --no-pager 2>/dev/null | tail -120 || true; echo ===DISABLED===; systemctl is-enabled snap.oracle-cloud-agent.oracle-cloud-agent.service 2>/dev/null || true; echo ===SNAP_CHANGES===; snap changes 2>/dev/null | tail -20 || true'
+              ;;
+            oracle_agent_enable)
+              COMMAND='set -Eeuo pipefail; sudo snap start --enable oracle-cloud-agent; sleep 8; echo ===SNAP===; snap services oracle-cloud-agent; echo ===SYSTEMD===; systemctl is-active snap.oracle-cloud-agent.oracle-cloud-agent.service 2>/dev/null || true; systemctl is-enabled snap.oracle-cloud-agent.oracle-cloud-agent.service 2>/dev/null || true; echo ===JOURNAL===; journalctl -u snap.oracle-cloud-agent.oracle-cloud-agent.service -b -n 60 --no-pager 2>/dev/null | tail -60 || true'
+              ;;
+            site_precheck)
+              COMMAND='set -Eeuo pipefail; echo ===PACKAGES===; dpkg-query -W -f="${binary:Package}\t${Status}\n" 2>/dev/null | grep -E "^(apache2|apache2-bin|apache2-data|apache2-utils|certbot|python3-certbot|libapache2)" || true; echo ===PORT_OWNERS===; sudo ss -ltnp | grep -E ":(80|443)[[:space:]]" || true; echo ===REFERENCES===; sudo grep -RIlE "apache2|certbot|letsencrypt|dev\.shopvivaliz\.com\.br|/var/www" /etc/systemd/system /etc/cron.d /etc/cron.daily /etc/cron.weekly /home/ubuntu/mei-mg-email /home/ubuntu/solange-rolla-consultorio 2>/dev/null | head -100 || true; echo ===VHOSTS===; sudo grep -RHE "ServerName|DocumentRoot|SSLCertificateFile" /etc/apache2/sites-enabled /etc/apache2/sites-available 2>/dev/null | head -100 || true; echo ===M365_CERT_REFS===; grep -RIl "/opt/m365\|shopvivaliz_cert_new\.pfx" /home/ubuntu/mei-mg-email /etc/systemd/system 2>/dev/null | head -50 || true'
+              ;;
+            disk_audit)
+              COMMAND='set -Eeuo pipefail; echo ===ROOT===; sudo du -x -h -d1 / 2>/dev/null | sort -h | tail -20; echo ===HOME===; sudo du -x -h -d2 /home/ubuntu 2>/dev/null | sort -h | tail -30; echo ===VAR===; sudo du -x -h -d2 /var 2>/dev/null | sort -h | tail -30; echo ===OPT===; sudo du -x -h -d2 /opt 2>/dev/null | sort -h | tail -20; echo ===JOURNAL===; journalctl --disk-usage 2>/dev/null || true; echo ===DOCKER===; docker system df 2>/dev/null || true; echo ===SNAPS===; snap list --all 2>/dev/null || true; echo ===APT===; sudo du -sh /var/cache/apt /var/lib/apt/lists 2>/dev/null || true; echo ===NPM===; du -sh "$HOME/.npm" "$HOME/.cache" "$HOME/.codex" 2>/dev/null || true'
+              ;;
+            system_audit)
+              COMMAND='set -Eeuo pipefail; echo ===SERVICES===; for s in ssh shopvivaliz-desktop-commander.service snap.oracle-cloud-agent.oracle-cloud-agent.service apache2 certbot.timer mei-mg-email-worker.service mei-mg-email-monitor.service mei-mg-email-ndr-guard.service mei-mg-email-queue-replenisher.service docker containerd; do printf "%s=" "$s"; systemctl is-active "$s" 2>/dev/null || true; done; echo ===ENABLED===; for s in shopvivaliz-desktop-commander.service snap.oracle-cloud-agent.oracle-cloud-agent.service apache2 certbot.timer mei-mg-email-worker.service mei-mg-email-monitor.service mei-mg-email-ndr-guard.service mei-mg-email-queue-replenisher.service docker; do printf "%s=" "$s"; systemctl is-enabled "$s" 2>/dev/null || true; done; echo ===DC===; systemctl show shopvivaliz-desktop-commander.service -p ActiveState -p SubState -p MainPID -p ExecMainStatus --no-pager; echo ===PORTS===; ss -ltnp 2>/dev/null | grep -E ":(22|80|443|5433|8010)[[:space:]]" || true; echo ===DOCKER===; docker ps --format "{{.Names}} {{.Image}} {{.Status}}" 2>/dev/null || true; echo ===SITE_RESIDUES===; for p in /home/ubuntu/shopvivaliz-deploy /var/www /etc/apache2 /etc/letsencrypt /var/log/apache2; do if test -e "$p"; then sudo du -sh "$p" 2>/dev/null || true; fi; done; echo ===SITE_CRON===; test -e /etc/cron.d/shopvivaliz-blog-publish && echo present || echo absent; echo ===RESOURCES===; free -h; df -h /; echo ===FAILED===; systemctl --failed --no-pager --plain || true'
+              ;;
+            install_or_repair)
+              COMMAND='set -Eeuo pipefail; cd /home/ubuntu/shopvivaliz-deploy/repo; git fetch origin main >/dev/null; sudo bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/install-vm-desktop-commander-service.sh'
               ;;
             restart)
-              COMMAND='set -e; sudo systemctl restart shopvivaliz-desktop-commander.service; sleep 3; systemctl is-active shopvivaliz-desktop-commander.service'
+              COMMAND='set -Eeuo pipefail; active=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true); if test "$active" = active; then printf "RESTART_SKIPPED=healthy\n"; else sudo systemctl restart shopvivaliz-desktop-commander.service; sleep 5; systemctl is-active --quiet shopvivaliz-desktop-commander.service || test -f "$HOME/.desktop-commander-device/auth-required.cooldown"; fi'
               ;;
             kill_for_recovery_test)
-              COMMAND='set -e; before=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service); test "$before" -gt 1; sudo kill -9 "$before"; sleep 15; after=$(systemctl show -p MainPID --value shopvivaliz-desktop-commander.service); echo BEFORE_PID=$before; echo AFTER_PID=$after; echo SERVICE_ACTIVE=$(systemctl is-active shopvivaliz-desktop-commander.service); test "$after" -gt 1; test "$after" != "$before"'
+              COMMAND='set -Eeuo pipefail; sudo systemctl stop shopvivaliz-desktop-commander.service; pkill -f "[n]pm exec @wonderwhy-er/desktop-commander@0.2.47 remote --persist-session" 2>/dev/null || true; echo KILL_FOR_RECOVERY_TEST=true'
+              ;;
+            recover_session)
+              COMMAND="set -Eeuo pipefail; tmp=\$(mktemp); trap 'rm -f \$tmp' EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/$GITHUB_SHA/scripts/vm-desktop-commander-recover-session.sh -o \"\$tmp\"; sudo bash \"\$tmp\""
               ;;
             *) echo "Action not allowlisted: $ACTION"; exit 3 ;;
           esac
           printf '%s' "$COMMAND" | base64 -w0 > /tmp/vm-command.b64
       - name: Execute fixed VM action
+        shell: bash
         run: |
+          set -Eeuo pipefail
           CMD_B64="$(cat /tmp/vm-command.b64)"
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "VM_CMD_B64='$CMD_B64' bash -lc 'echo \"\$VM_CMD_B64\" | base64 -d | bash'"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 "VM_CMD_B64='$CMD_B64' bash -lc 'printf %s \"\$VM_CMD_B64\" | base64 -d | bash'"
       - name: Cleanup
         if: always()
-        run: rm -f ~/.ssh/vmkey /tmp/vm-command.b64
+        run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts /tmp/vm-command.b64

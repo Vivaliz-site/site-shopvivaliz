@@ -1,0 +1,36 @@
+name: VM Desktop Commander Read Active Authorization
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/vm-desktop-commander-read-auth.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Configure verified VM SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+      - name: Read active authorization code
+        run: |
+          set -Eeuo pipefail
+          out="$(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17 'cat "$HOME/.desktop-commander-device/manual-authorize.log" 2>/dev/null || true')"
+          code="$(printf '%s\n' "$out" | grep -Eo '[A-Z0-9]{4}-[A-Z0-9]{4}' | tail -1)"
+          test -n "$code"
+          echo "DEVICE_CODE=$code"
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"

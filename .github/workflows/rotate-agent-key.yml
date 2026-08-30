@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      VM_HOST: 137.131.156.17
+      VM_HOST: 163.176.103.253
       VM_USER: ubuntu
       REPO_DIR: /home/ubuntu/shopvivaliz-deploy/shared
     steps:

@@ -1,0 +1,77 @@
+name: SEO Durable Code Repair
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/seo-durable-code.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Apply and verify durable SEO code
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          for rel in ['blog/content.php', 'includes/blog-editorial-autopilot.php']:
+              p=Path(rel); t=p.read_text(encoding='utf-8')
+              t=t.replace('/catalogo?busca=', '/catalogo/?q=').replace('/catalogo/?busca=', '/catalogo/?q=')
+              p.write_text(t, encoding='utf-8')
+          for rel in ['includes/footer.php','termos.php','index.php','faq/index.php']:
+              p=Path(rel); t=p.read_text(encoding='utf-8')
+              for name in ('termos','politica-entrega','politica-devolucoes'):
+                  t=t.replace(f'href="/{name}"', f'href="/{name}/"')
+              p.write_text(t, encoding='utf-8')
+          p=Path('includes/blog-article-repository.php'); t=p.read_text(encoding='utf-8')
+          marker="str_replace(\n                ['/catalogo?busca=', '/catalogo/?busca=']"
+          if marker not in t:
+              needle="        $article['image'] = $resolvedImage;\n"
+              insert=needle+"        if (isset($article['related_products_url'])) {\n            $article['related_products_url'] = str_replace(\n                ['/catalogo?busca=', '/catalogo/?busca='],\n                ['/catalogo/?q=', '/catalogo/?q='],\n                (string)$article['related_products_url']\n            );\n        }\n"
+              if needle not in t: raise SystemExit('blog repository anchor missing')
+              p.write_text(t.replace(needle,insert,1), encoding='utf-8')
+          p=Path('scripts/seo-integrity-audit.py'); t=p.read_text(encoding='utf-8')
+          if 'urllib.parse.quote(path' not in t:
+              old='    path = parts.path or "/"\n    return urllib.parse.urlunsplit((base_parts.scheme, base_parts.netloc, path, parts.query, ""))\n'
+              new='    path = parts.path or "/"\n    if path.startswith("/cdn-cgi/"):\n        return None\n    path = urllib.parse.quote(path, safe="/%:@!$&()*+,;=-._~")\n    return urllib.parse.urlunsplit((base_parts.scheme, base_parts.netloc, path, parts.query, ""))\n'
+              if old not in t: raise SystemExit('audit anchor missing')
+              p.write_text(t.replace(old,new,1), encoding='utf-8')
+          p=Path('scripts/deploy-production.sh'); t=p.read_text(encoding='utf-8')
+          marker='# SEO routing invariant: friendly canonical URLs require mod_rewrite.'
+          if marker not in t:
+              anchor='if ! sudo systemctl reload apache2; then\n'
+              idx=t.rfind(anchor)
+              if idx < 0: raise SystemExit('deploy reload anchor missing')
+              pre=marker+'\nif ! sudo a2enmod rewrite >/dev/null || ! sudo apache2ctl configtest; then\n  rollback_to "$ACTIVE_RELEASE"\n  write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "Apache SEO routing preflight failed"\n  exit 1\nfi\n\n'
+              t=t[:idx]+pre+t[idx:]
+              p.write_text(t,encoding='utf-8')
+          PY
+          ! grep -Rqs '?busca=' blog/content.php includes/blog-editorial-autopilot.php
+          ! grep -RqsE 'href="/(termos|politica-entrega|politica-devolucoes)"' includes/footer.php termos.php index.php faq/index.php
+          grep -q 'urllib.parse.quote(path' scripts/seo-integrity-audit.py
+          grep -q 'a2enmod rewrite' scripts/deploy-production.sh
+          php -l includes/blog-article-repository.php
+          php -l blog/content.php
+          php -l includes/blog-editorial-autopilot.php
+          python3 -m py_compile scripts/seo-integrity-audit.py
+          bash -n scripts/deploy-production.sh
+      - name: Commit repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'shopvivaliz-seo-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add blog/content.php includes/blog-editorial-autopilot.php includes/footer.php termos.php index.php faq/index.php includes/blog-article-repository.php scripts/seo-integrity-audit.py scripts/deploy-production.sh
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix: preserve canonical SEO routing on A1'
+          git push origin HEAD:main

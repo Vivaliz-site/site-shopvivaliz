@@ -1,0 +1,26 @@
+name: Google Indexing Canonical Regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "catalogo.php"
+      - "produto.php"
+      - "tests/google-indexing-canonical-regression-test.php"
+      - ".github/workflows/google-indexing-canonical-regression.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+      - run: php tests/google-indexing-canonical-regression-test.php

@@ -29,27 +29,27 @@ jobs:
 
       - name: Configure verified Oracle SSH
         env:
-          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
-          ORACLE_VM_KNOWN_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+          SHOPVIVALIZ_VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          SHOPVIVALIZ_VM_KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          test -n "${ORACLE_VM_SSH_KEY:-}"
-          test -n "${ORACLE_VM_KNOWN_HOSTS:-}"
+          test -n "${SHOPVIVALIZ_VM_SSH_KEY:-}"
+          test -n "${SHOPVIVALIZ_VM_KNOWN_HOSTS:-}"
           install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$SHOPVIVALIZ_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
           chmod 600 "$HOME/.ssh/id_rsa"
-          printf '%s\n' "$ORACLE_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          printf '%s\n' "$SHOPVIVALIZ_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
       - name: Execute all registered production agents
         run: |
           set -euo pipefail
-          SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17)
+          SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253)
           SCP=(scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa")
 
           "${SSH[@]}" 'set -euo pipefail; cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha' > artifacts/agent-watchdog/release-sha.txt
           "${SSH[@]}" 'set -euo pipefail; cd /home/ubuntu/shopvivaliz-deploy/current; test -r api/agent/real-work-orchestrator.php; test -r includes/production-agent-registry.php; timeout 1500s flock -w 120 /tmp/shopvivaliz-real-work.lock /usr/bin/php api/agent/real-work-orchestrator.php' > artifacts/agent-watchdog/response.json
-          "${SCP[@]}" ubuntu@137.131.156.17:/home/ubuntu/shopvivaliz-deploy/current/storage/agent-evidence/latest-agent-cycle.json artifacts/agent-watchdog/latest-agent-cycle.json
+          "${SCP[@]}" ubuntu@163.176.103.253:/home/ubuntu/shopvivaliz-deploy/current/storage/agent-evidence/latest-agent-cycle.json artifacts/agent-watchdog/latest-agent-cycle.json
 
           release_sha="$(tr -d '\r\n' < artifacts/agent-watchdog/release-sha.txt)"
           printf 'execution_path=oracle-active-release\nrelease_sha=%s\n' "$release_sha" >> artifacts/agent-watchdog/context.txt

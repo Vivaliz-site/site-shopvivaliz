@@ -1,0 +1,75 @@
+name: Fred-Win Secure 2222 Recovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fredwin-2222-secure-recovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Configure verified VM SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${VM_KEY:-}"
+          test -n "${VM_HOSTS:-}"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+
+      - name: Recover Fred-Win through private diagnostic SSH if present
+        run: |
+          set -Eeuo pipefail
+          SSH_VM=(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17)
+          if ! "${SSH_VM[@]}" 'timeout 3 bash -c "</dev/tcp/127.0.0.1/2222"' >/dev/null 2>&1; then
+            printf 'FRED_PORT2222=closed\n' > /tmp/fred-recovery-safe.txt
+            exit 4
+          fi
+          ssh -fNT -o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ServerAliveInterval=15 -i "$HOME/.ssh/vmkey" -L 32222:127.0.0.1:2222 ubuntu@137.131.156.17
+          sleep 2
+          ssh-keyscan -T 5 -p 32222 127.0.0.1 2>/dev/null > /tmp/fred-hosts
+          test -s /tmp/fred-hosts
+          chmod 600 /tmp/fred-hosts
+          POWERSHELL="& { \$ErrorActionPreference='Stop'; Set-Location 'C:\site-shopvivaliz'; git fetch origin main | Out-Null; if (\$LASTEXITCODE -ne 0) { throw 'fetch failed' }; git merge --ff-only origin/main | Out-Null; if (\$LASTEXITCODE -ne 0) { throw 'sync failed' }; & 'C:\site-shopvivaliz\scripts\fredwin-desktop-commander-supervisor.ps1' -Mode InstallTask; & 'C:\site-shopvivaliz\scripts\fredwin-remote-bootstrap.ps1' -Mode InstallTask }"
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/tmp/fred-hosts -p 32222 -i "$HOME/.ssh/vmkey" FRED@127.0.0.1 "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$POWERSHELL\"" >/dev/null
+          sleep 15
+          if "${SSH_VM[@]}" 'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health >/dev/null'; then
+            relay=reachable
+          else
+            relay=unreachable
+          fi
+          printf 'FRED_PORT2222=open\nFRED_REPAIR=executed\nFRED_RELAY5557=%s\n' "$relay" > /tmp/fred-recovery-safe.txt
+
+      - name: Publish sanitized recovery evidence
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          test -f /tmp/fred-recovery-safe.txt || printf 'FRED_RECOVERY=no_evidence\n' > /tmp/fred-recovery-safe.txt
+          {
+            echo '### Fred-Win secure diagnostic recovery'
+            echo
+            echo '```text'
+            cat /tmp/fred-recovery-safe.txt
+            echo '```'
+          } > /tmp/fred-comment.md
+          gh issue comment 1207 --repo "${{ github.repository }}" --body-file /tmp/fred-comment.md
+
+      - name: Cleanup
+        if: always()
+        run: |
+          pkill -f '32222:127.0.0.1:2222' || true
+          rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts" /tmp/fred-hosts /tmp/fred-recovery-safe.txt /tmp/fred-comment.md
