@@ -1,4 +1,4 @@
 {
-  "action": "status",
-  "reason": "safe live audit before minimal Desktop Commander repair on always-free-arm replacement"
+  "action": "dc_diagnose",
+  "reason": "root-cause diagnosis for failed Desktop Commander service on always-free-arm replacement"
 }
