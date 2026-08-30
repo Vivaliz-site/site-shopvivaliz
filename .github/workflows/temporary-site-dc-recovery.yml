@@ -21,13 +21,13 @@ jobs:
           printf '%s\n' "$K2" > ~/.ssh/key2
           { printf '%s\n' "$H1"; printf '%s\n' "$H2"; } | sed '/^[[:space:]]*$/d' | sort -u > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/key1 ~/.ssh/key2 ~/.ssh/known_hosts
-      - name: Inspect DC reauth logic
+      - name: Inspect supervisor branches
         run: |
           set -Eeuo pipefail
           opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -o IdentitiesOnly=yes -i "$HOME/.ssh/key1" -i "$HOME/.ssh/key2")
           host="$(ssh "${opts[@]}" ubuntu@163.176.103.253 hostname)"
           test "$host" = "shopvivaliz-free-a1"
-          ssh "${opts[@]}" ubuntu@163.176.103.253 'set -Eeuo pipefail; echo ===SUPERVISOR_MATCHES===; grep -nE "AUTH_REQUIRED|provider_device_flow|reauth|request" /usr/local/lib/shopvivaliz/vm-desktop-commander-supervisor.sh || true; echo ===STATE_FILENAMES===; find /home/ubuntu/.config /home/ubuntu/.cache /home/ubuntu/.local/state /var/lib/shopvivaliz /run/shopvivaliz -maxdepth 4 -type f 2>/dev/null | grep -Ei "desktop|commander|reauth|auth|request" | sed "s#^#/path #" | head -80 || true; echo ===ENV_KEYS_ONLY===; sed -n "s/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p" /etc/default/shopvivaliz-desktop-commander 2>/dev/null || true'
+          ssh "${opts[@]}" ubuntu@163.176.103.253 'set -Eeuo pipefail; nl -ba /usr/local/lib/shopvivaliz/vm-desktop-commander-supervisor.sh | sed -n "1,175p"'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/key1 ~/.ssh/key2 ~/.ssh/known_hosts
