@@ -1,0 +1,48 @@
+name: Recovery MEI venv private transfer
+
+on:
+  push:
+    branches: [recovery/two-a1-20260829]
+    paths:
+      - '.github/workflows/recovery-mei-venv-transfer.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Configure A1 SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
+
+      - name: Transfer backend MEI virtualenv to isolated site recovery path
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          backend=144.22.157.209
+          site=163.176.103.253
+          ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey)
+          venv=$(ssh "${ssh_opts[@]}" ubuntu@$backend "for d in /home/ubuntu/mei-mg-email/.venv /home/ubuntu/mei-mg-email/venv; do test -x \"\$d/bin/python\" && { echo \"\$d\"; break; }; done")
+          test -n "$venv" || { echo 'BACKEND_VENV=false'; exit 2; }
+          echo "BACKEND_VENV=true path=$venv"
+          ssh "${ssh_opts[@]}" ubuntu@$backend "du -sh '$venv'"
+          ssh "${ssh_opts[@]}" ubuntu@$backend "tar -C '$venv' -czf - ." > /tmp/mei-venv.tgz
+          sha256sum /tmp/mei-venv.tgz
+          ssh "${ssh_opts[@]}" ubuntu@$site 'rm -rf /home/ubuntu/recovery-two-a1/mei/backend-venv && mkdir -p /home/ubuntu/recovery-two-a1/mei/backend-venv'
+          cat /tmp/mei-venv.tgz | ssh "${ssh_opts[@]}" ubuntu@$site 'tar -C /home/ubuntu/recovery-two-a1/mei/backend-venv -xzf -'
+          ssh "${ssh_opts[@]}" ubuntu@$site '/home/ubuntu/recovery-two-a1/mei/backend-venv/bin/python --version'
+
+      - name: Cleanup
+        if: always()
+        run: rm -rf ~/.ssh/vmkey ~/.ssh/known_hosts /tmp/mei-venv.tgz
