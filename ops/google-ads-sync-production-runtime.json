@@ -1,4 +1,4 @@
 {
-  "requested_at": "2026-08-20T20:28:00-03:00",
-  "reason": "Resync the currently working Google Ads Production secrets from GitHub Actions to the production VM after stale local invalid_grant state was reported; do not expose secret values; validate runtime file permissions and public OAuth redirect"
+  "requested_at": "2026-08-30T00:28:30-03:00",
+  "reason": "Restore missing Google OAuth runtime credentials on production A1 after migration; do not expose secret values; validate OAuth redirect and preserve existing runtime values."
 }
