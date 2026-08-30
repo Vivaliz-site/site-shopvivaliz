@@ -1,0 +1,14 @@
+{
+  "min_recent_conversions_for_scaling": 15,
+  "max_budget_increase_pct": 0.1,
+  "min_search_term_clicks_for_negative_candidate": 20,
+  "min_search_term_spend_brl_for_negative_candidate": 30.0,
+  "protected_terms": [
+    "vivaliz",
+    "shop vivaliz",
+    "shopvivaliz"
+  ],
+  "target_cpa_brl": null,
+  "minimum_roas": null,
+  "gross_margin_pct": null
+}
