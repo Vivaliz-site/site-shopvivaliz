@@ -74,11 +74,15 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          gh api "repos/${REPO}/labels/repair-required-now" >/dev/null 2>&1 || \
+          if gh api "repos/${REPO}/labels/repair-required-now" >/dev/null 2>&1; then
+            echo 'repair_label=existing'
+          else
             gh api --method POST "repos/${REPO}/labels" \
               -f name='repair-required-now' \
               -f color='D73A4A' \
               -f description='Falha corrigível: reparar na mesma branch e concluir o merge agora'
+            echo 'repair_label=created'
+          fi
 
       - name: Stage trusted finalizer in Oracle temporary boundary
         id: stage
@@ -148,7 +152,7 @@ jobs:
                 echo "pr_${pr}_native_branch_update_requested=true"
               else
                 echo "pr_${pr}_native_update_conflicted=true"
-                gh workflow run ai-conflict-resolver.yml --repo "$REPO" --ref main -f "repair_pr_branch=${pr}"
+                gh workflow run ai-stale-pr-repair.yml --repo "$REPO" --ref main -f "repair_pr_branch=${pr}"
                 echo "pr_${pr}_free_ai_conflict_repair_dispatched=true"
               fi
               gh api --method POST "repos/${REPO}/issues/${pr}/labels" -f 'labels[]=repair-required-now' >/dev/null
@@ -204,7 +208,9 @@ jobs:
             fi
 
             if [[ "$ready" -ne 1 ]]; then
-              (( pending == 1 )) && waiting_count=$((waiting_count + 1))
+              if [[ "$pending" -eq 1 ]]; then
+                waiting_count=$((waiting_count + 1))
+              fi
               echo "pr_${pr}_merge_ready=false"
               continue
             fi
@@ -216,7 +222,11 @@ jobs:
               continue
             fi
 
-            gh api --method DELETE "repos/${REPO}/issues/${pr}/labels/repair-required-now" >/dev/null 2>&1 || true
+            if gh api --method DELETE "repos/${REPO}/issues/${pr}/labels/repair-required-now" >/dev/null 2>&1; then
+              echo "pr_${pr}_repair_label_removed=true"
+            else
+              echo "pr_${pr}_repair_label_absent=true"
+            fi
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
               "${VM_USER}@${VM_HOST}" \
@@ -248,9 +258,11 @@ jobs:
         run: |
           set -Eeuo pipefail
           if [[ -n "${REMOTE_SCRIPT:-}" && -r "$HOME/.ssh/id_rsa" && -r "$HOME/.ssh/known_hosts" ]]; then
-            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            if ! ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              "${VM_USER}@${VM_HOST}" "rm -f '${REMOTE_SCRIPT}'" || true
+              "${VM_USER}@${VM_HOST}" "rm -f '${REMOTE_SCRIPT}'"; then
+              echo '::warning::temporary Oracle cleanup failed'
+            fi
           fi
           rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
@@ -267,3 +279,5 @@ jobs:
           echo 'draft_internal_pr_silently_ignored=false'
           echo 'green_pr_without_current_main_merge_allowed=false'
           echo 'fork_pr_auto_merge_allowed=false'
+          echo 'github_write_token_copied_to_actions=false'
+          echo 'secret_values_printed=false'
