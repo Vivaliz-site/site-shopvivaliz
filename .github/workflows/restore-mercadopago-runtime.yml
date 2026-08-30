@@ -19,7 +19,6 @@ jobs:
       MERCADOPAGO_ACCESS_TOKEN_VALUE: ${{ secrets.MERCADOPAGO_ACCESS_TOKEN }}
       MERCADOPAGO_PUBLIC_KEY_VALUE: ${{ secrets.MERCADOPAGO_PUBLIC_KEY }}
       MERCADOPAGO_WEBHOOK_SECRET_VALUE: ${{ secrets.MERCADOPAGO_WEBHOOK_SECRET }}
-      SHOPVIVALIZ_AGENT_KEY_VALUE: ${{ secrets.SHOPVIVALIZ_AGENT_KEY }}
 
     steps:
       - uses: actions/checkout@v6
@@ -29,7 +28,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for name in MERCADOPAGO_ACCESS_TOKEN_VALUE MERCADOPAGO_PUBLIC_KEY_VALUE MERCADOPAGO_WEBHOOK_SECRET_VALUE SHOPVIVALIZ_AGENT_KEY_VALUE; do
+          for name in MERCADOPAGO_ACCESS_TOKEN_VALUE MERCADOPAGO_PUBLIC_KEY_VALUE MERCADOPAGO_WEBHOOK_SECRET_VALUE; do
             test -n "${!name:-}" || { echo "::error::Required provider secret missing: $name"; exit 1; }
           done
           echo 'mercadopago_provider_secrets=present'
@@ -77,19 +76,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          body="$(mktemp)"
-          trap 'rm -f "$body"' EXIT
-          code="$(curl -sS --max-time 45 -o "$body" -w '%{http_code}' -H "X-Agent-Key: $SHOPVIVALIZ_AGENT_KEY_VALUE" https://shopvivaliz.com.br/api/agent/integrations-health.php)"
-          test "$code" = 200 -o "$code" = 207
-          python3 - "$body" <<'PY'
-          import json, pathlib, sys
-          data=json.loads(pathlib.Path(sys.argv[1]).read_text())
-          item=next((x for x in data.get('integrations',[]) if x.get('key') == 'mercado_pago'), None)
-          assert item is not None
-          assert item.get('status') == 'connected', item.get('status')
-          assert int(item.get('provider_status') or 0) == 200
-          print('mercadopago_provider_http=200')
-          PY
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /home/ubuntu/shopvivaliz-deploy/current
+          php <<'PHP'
+          <?php
+          require 'includes/integration-health.php';
+          $result = svih_check_all(false);
+          foreach (($result['integrations'] ?? []) as $item) {
+              if (($item['key'] ?? '') !== 'mercado_pago') { continue; }
+              if (($item['status'] ?? '') !== 'connected' || (int)($item['provider_status'] ?? 0) !== 200) { exit(1); }
+              echo "mercadopago_provider_http=200\n";
+              exit(0);
+          }
+          exit(2);
+          PHP
+          REMOTE
+
       - name: Cleanup temporary runtime tools
         if: always()
         shell: bash
