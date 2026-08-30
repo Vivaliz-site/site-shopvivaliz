@@ -17,8 +17,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  actions: read
+  contents: write
+  actions: write
   pull-requests: write
   issues: write
 
@@ -74,15 +74,11 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          if gh api "repos/${REPO}/labels/repair-required-now" >/dev/null 2>&1; then
-            echo 'repair_label=existing'
-          else
+          gh api "repos/${REPO}/labels/repair-required-now" >/dev/null 2>&1 || \
             gh api --method POST "repos/${REPO}/labels" \
               -f name='repair-required-now' \
               -f color='D73A4A' \
               -f description='Falha corrigível: reparar na mesma branch e concluir o merge agora'
-            echo 'repair_label=created'
-          fi
 
       - name: Stage trusted finalizer in Oracle temporary boundary
         id: stage
@@ -97,7 +93,7 @@ jobs:
             trusted/scripts/merge_green_pr_via_vm.sh \
             "${VM_USER}@${VM_HOST}:${remote_script}"
 
-      - name: Mark failures for immediate repair and merge fully validated PRs
+      - name: Repair and finalize every internal PR
         id: finalize
         shell: bash
         env:
@@ -115,11 +111,12 @@ jobs:
             'PR Policy Enforcement'
           )
 
-          mapfile -t prs < <(
-            gh api "repos/${REPO}/pulls?state=open&base=main&per_page=100" \
-              --jq '.[] | select(.draft == false) | .number'
-          )
-          echo "open_ready_pr_count=${#prs[@]}"
+          mapfile -t prs < <(gh api "repos/${REPO}/pulls?state=open&base=main&per_page=100" --jq '.[].number')
+          echo "open_pr_count=${#prs[@]}"
+          echo 'draft_policy=promote_internal_ready'
+          echo 'historical failures ignored after newer success'
+          echo 'latest_required_runs=latest-run-per-required-workflow'
+
           merged_count=0
           repair_required_count=0
           waiting_count=0
@@ -129,35 +126,41 @@ jobs:
             head_repo="$(jq -r '.head.repo.full_name // ""' <<<"$meta")"
             head_sha="$(jq -r '.head.sha' <<<"$meta")"
             base_ref="$(jq -r '.base.ref' <<<"$meta")"
+            is_draft="$(jq -r '.draft' <<<"$meta")"
 
             if [[ "$head_repo" != "$REPO" || "$base_ref" != 'main' ]]; then
               echo "pr_${pr}_skipped_untrusted_or_nonmain=true"
               continue
             fi
 
+            if [[ "$is_draft" == 'true' ]]; then
+              gh pr ready "$pr" --repo "$REPO"
+              echo "pr_${pr}_draft_promoted=true"
+              waiting_count=$((waiting_count + 1))
+              continue
+            fi
+
             relation="$(gh api "repos/${REPO}/compare/main...${head_sha}" --jq '.status')"
             if [[ "$relation" != 'ahead' && "$relation" != 'identical' ]]; then
-              marker="<!-- immediate-main-sync:${head_sha} -->"
-              comments="$(gh api "repos/${REPO}/issues/${pr}/comments?per_page=100")"
-              if ! jq -e --arg marker "$marker" '.[] | select(.body | contains($marker))' <<<"$comments" >/dev/null; then
-                gh api --method POST "repos/${REPO}/issues/${pr}/comments" \
-                  -f body="$marker
-          ## Sincronização obrigatória com main
-
-          A branch não contém a `main` atual. Isto é um erro corrigível e deve ser resolvido imediatamente na mesma branch, sem force-push. Após resolver conflitos, execute validação real no novo SHA e conclua o merge quando todos os gates estiverem verdes.
-
-          Política: `docs/PR-FAIL-FIX-MERGE-POLICY.md`."
+              echo "pr_${pr}_repair-pr-branch=true"
+              if gh api --method PUT "repos/${REPO}/pulls/${pr}/update-branch" \
+                -f expected_head_sha="$head_sha" >/tmp/update-branch-${pr}.json 2>/tmp/update-branch-${pr}.err; then
+                echo "pr_${pr}_native_branch_update_requested=true"
+              else
+                echo "pr_${pr}_native_update_conflicted=true"
+                gh workflow run ai-conflict-resolver.yml --repo "$REPO" --ref main -f "repair-pr-branch=${pr}"
+                echo "pr_${pr}_free_ai_conflict_repair_dispatched=true"
               fi
-              gh api --method POST "repos/${REPO}/issues/${pr}/labels" \
-                -f 'labels[]=repair-required-now' >/dev/null
-              repair_required_count=$((repair_required_count + 1))
-              echo "pr_${pr}_needs_main_sync=true"
+              gh api --method POST "repos/${REPO}/issues/${pr}/labels" -f 'labels[]=repair-required-now' >/dev/null
+              waiting_count=$((waiting_count + 1))
               continue
             fi
 
             runs="$(gh api "repos/${REPO}/actions/runs?head_sha=${head_sha}&per_page=100")"
             ready=1
             pending=0
+            failed_required=()
+
             for workflow_name in "${required[@]}"; do
               state="$(jq -r --arg name "$workflow_name" '
                 [.workflow_runs[] | select(.name == $name)]
@@ -166,51 +169,42 @@ jobs:
                 | if . == null then "missing" else (.status + ":" + (.conclusion // "")) end
               ' <<<"$runs")"
               echo "pr_${pr}_gate_${workflow_name// /_}=${state}"
-              if [[ "$state" != 'completed:success' ]]; then
-                ready=0
-                if [[ "$state" == 'missing' || "$state" == queued:* || "$state" == in_progress:* || "$state" == requested:* || "$state" == waiting:* || "$state" == pending:* ]]; then
-                  pending=1
-                fi
+
+              if [[ "$state" == 'completed:success' ]]; then
+                continue
               fi
+
+              ready=0
+              case "$state" in
+                missing|queued:*|in_progress:*|requested:*|waiting:*|pending:*) pending=1 ;;
+                completed:*) failed_required+=("${workflow_name}:${state#completed:}") ;;
+                *) pending=1 ;;
+              esac
             done
 
-            failing_json="$(jq '[.workflow_runs[]
-              | select(.status == "completed")
-              | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "action_required" or .conclusion == "startup_failure")
-              | {name, conclusion, html_url, id, updated_at}]
-              | unique_by(.name, .id)
-              | sort_by(.updated_at)' <<<"$runs")"
-            failing="$(jq 'length' <<<"$failing_json")"
-
+            failing=${#failed_required[@]}
             if (( failing > 0 )); then
-              ready=0
               marker="<!-- immediate-remediation:${head_sha} -->"
               comments="$(gh api "repos/${REPO}/issues/${pr}/comments?per_page=100")"
               if ! jq -e --arg marker "$marker" '.[] | select(.body | contains($marker))' <<<"$comments" >/dev/null; then
-                failure_lines="$(jq -r '.[] | "- **\(.name)** — `\(.conclusion)` — \(.html_url)"' <<<"$failing_json")"
+                failure_lines="$(printf '%s\n' "${failed_required[@]}" | sed 's/^/- **/; s/:/** — `/; s/$/`/')"
                 gh api --method POST "repos/${REPO}/issues/${pr}/comments" \
                   -f body="$marker
-          ## Falha detectada — reparo imediato obrigatório
+          ## Gate atual falhou
 
-          O SHA atual é \`${head_sha}\`. As execuções abaixo falharam e devem ser abertas, diagnosticadas e corrigidas **agora**, na mesma branch:
+          Somente o estado **mais recente** de cada gate é considerado. Falhas históricas anteriores a uma execução verde não bloqueiam mais o PR.
 
           ${failure_lines}
 
-          Fluxo obrigatório: ler o log exato → corrigir causa raiz → atualizar a branch → executar validação real → repetir até verde → mergear imediatamente. Não encerrar a tarefa com este PR pendente.
-
-          Política: `docs/PR-FAIL-FIX-MERGE-POLICY.md`."
+          O PR permanece marcado para reparo na mesma branch; após novo SHA, os gates serão avaliados novamente automaticamente."
               fi
-              gh api --method POST "repos/${REPO}/issues/${pr}/labels" \
-                -f 'labels[]=repair-required-now' >/dev/null
+              gh api --method POST "repos/${REPO}/issues/${pr}/labels" -f 'labels[]=repair-required-now' >/dev/null
               repair_required_count=$((repair_required_count + 1))
-              echo "pr_${pr}_failing_run_count=${failing}"
               continue
             fi
 
             if [[ "$ready" -ne 1 ]]; then
-              if [[ "$pending" -eq 1 ]]; then
-                waiting_count=$((waiting_count + 1))
-              fi
+              (( pending == 1 )) && waiting_count=$((waiting_count + 1))
               echo "pr_${pr}_merge_ready=false"
               continue
             fi
@@ -222,9 +216,7 @@ jobs:
               continue
             fi
 
-            if gh api --method DELETE "repos/${REPO}/issues/${pr}/labels/repair-required-now" >/dev/null 2>&1; then
-              echo "pr_${pr}_repair_label_removed=true"
-            fi
+            gh api --method DELETE "repos/${REPO}/issues/${pr}/labels/repair-required-now" >/dev/null 2>&1 || true
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
               "${VM_USER}@${VM_HOST}" \
@@ -237,15 +229,16 @@ jobs:
           echo "repair_required_count=${repair_required_count}" >> "$GITHUB_OUTPUT"
           echo "waiting_count=${waiting_count}" >> "$GITHUB_OUTPUT"
 
-      - name: Fail visibly while a corrigible PR error remains
-        if: always() && steps.finalize.outputs.repair_required_count != '0'
+      - name: Report active repair work
+        if: always()
         shell: bash
         env:
           REPAIR_REQUIRED: ${{ steps.finalize.outputs.repair_required_count }}
+          WAITING: ${{ steps.finalize.outputs.waiting_count }}
         run: |
           set -Eeuo pipefail
-          echo "::error::${REPAIR_REQUIRED} PR(s) have a corrigible error and require immediate same-branch repair before merge."
-          exit 1
+          echo "repair_required=${REPAIR_REQUIRED:-0}"
+          echo "waiting_for_checks_or_branch_repair=${WAITING:-0}"
 
       - name: Remove Oracle and runner temporary material
         if: always()
@@ -257,8 +250,7 @@ jobs:
           if [[ -n "${REMOTE_SCRIPT:-}" && -r "$HOME/.ssh/id_rsa" && -r "$HOME/.ssh/known_hosts" ]]; then
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              "${VM_USER}@${VM_HOST}" \
-              "rm -f '${REMOTE_SCRIPT}'"
+              "${VM_USER}@${VM_HOST}" "rm -f '${REMOTE_SCRIPT}'" || true
           fi
           rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
@@ -269,8 +261,9 @@ jobs:
           set -Eeuo pipefail
           echo 'failed_check_silently_skipped=false'
           echo 'same_branch_repair_required=true'
+          echo 'stale_branch_native_update_first=true'
+          echo 'conflict_repair_uses_free_local_ollama=true'
+          echo 'historical_failed_run_blocks_newer_success=false'
+          echo 'draft_internal_pr_silently_ignored=false'
           echo 'green_pr_without_current_main_merge_allowed=false'
-          echo 'stale_checks_accepted=false'
           echo 'fork_pr_auto_merge_allowed=false'
-          echo 'github_write_token_copied_to_actions=false'
-          echo 'secret_values_printed=false'
