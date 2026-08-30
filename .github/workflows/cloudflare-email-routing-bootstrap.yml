@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'prepare = stage apex rule; probe = validate isolated subdomain; cutover = enable apex routing DNS; rollback = disable Cloudflare routing DNS'
+        description: 'prepare = stage apex rule; probe = validate isolated subdomain; cutover = transactional apex MX switch; rollback = restore Titan MX/SPF'
         required: true
         type: choice
         default: prepare
@@ -34,21 +34,19 @@ jobs:
       DEST_EMAIL: fredmourao@gmail.com
       PROBE_DOMAIN: cfmail.shopvivaliz.com.br
       PROBE_EMAIL: probe@cfmail.shopvivaliz.com.br
+      TITAN_MX1: mx1.titan.email
+      TITAN_MX2: mx2.titan.email
+      ORIGINAL_SPF: 'v=spf1 include:amazonses.com include:spf.titan.email ~all'
+      ROUTING_SPF: 'v=spf1 include:amazonses.com include:spf.titan.email include:_spf.mx.cloudflare.net ~all'
     steps:
       - name: Validate mode and credentials
         shell: bash
         run: |
           set -euo pipefail
           case "$MODE" in prepare|probe|cutover|rollback) ;; *) echo 'INVALID_MODE'; exit 1;; esac
-          if [ -z "${CF_TOKEN:-}" ]; then
-            echo 'CLOUDFLARE_CREDENTIAL_MISSING'
-            exit 1
-          fi
+          test -n "${CF_TOKEN:-}" || { echo 'CLOUDFLARE_CREDENTIAL_MISSING'; exit 1; }
           if [ "$MODE" = cutover ] || [ "$MODE" = probe ]; then
-            if [ -z "${BREVO_API_KEY:-}" ]; then
-              echo 'BREVO_CREDENTIAL_MISSING'
-              exit 1
-            fi
+            test -n "${BREVO_API_KEY:-}" || { echo 'BREVO_CREDENTIAL_MISSING'; exit 1; }
           fi
           echo "MODE=$MODE"
 
@@ -62,8 +60,6 @@ jobs:
 
           verify=$(curl -fsS "${auth[@]}" "$api/user/tokens/verify")
           test "$(jq -r '.success' <<<"$verify")" = true || { echo 'TOKEN_VERIFY_FAILED'; exit 1; }
-          echo 'TOKEN_VERIFY_OK'
-
           zones=$(curl -fsS "${auth[@]}" "$api/zones?name=$ZONE_NAME")
           zone_id=$(jq -r '.result[0].id // empty' <<<"$zones")
           account_id=$(jq -r '.result[0].account.id // empty' <<<"$zones")
@@ -76,10 +72,13 @@ jobs:
           echo "ROUTING_STATUS=$(jq -r '.result.status // "unknown"' <<<"$settings")"
           echo "ROUTING_ENABLED=$(jq -r '.result.enabled // false' <<<"$settings")"
 
-          dns=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/dns_records?per_page=100")
+          dns=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/dns_records?per_page=500")
           echo 'CURRENT_MX_BEGIN'
           jq -r --arg n "$ZONE_NAME" '.result[] | select(.type=="MX" and .name==$n) | "MX priority=\(.priority) content=\(.content)"' <<<"$dns"
           echo 'CURRENT_MX_END'
+          echo 'CURRENT_ROOT_SPF_BEGIN'
+          jq -r --arg n "$ZONE_NAME" '.result[] | select(.type=="TXT" and .name==$n and (.content|startswith("v=spf1"))) | .content' <<<"$dns"
+          echo 'CURRENT_ROOT_SPF_END'
 
           addresses=$(curl -fsS "${auth[@]}" "$api/accounts/$account_id/email/routing/addresses")
           dest_id=$(jq -r --arg e "$DEST_EMAIL" '.result[]? | select(.email==$e and .verified != null) | .id' <<<"$addresses" | head -n1)
@@ -111,19 +110,12 @@ jobs:
           set -euo pipefail
           api='https://api.cloudflare.com/client/v4'
           auth=(-H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json')
-
-          sub=$(curl -sS "${auth[@]}" "$api/zones/$ZONE_ID/email/routing/dns?subdomain=$PROBE_DOMAIN")
-          echo "PROBE_DNS_QUERY_SUCCESS=$(jq -r '.success // false' <<<"$sub")"
-          echo 'PROBE_DNS_STATE_BEGIN'
-          jq -c '.result // {} | {status,enabled,name,errors}' <<<"$sub"
-          echo 'PROBE_DNS_STATE_END'
-
           rules=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/email/routing/rules")
           echo 'PROBE_RULE_STATE_BEGIN'
-          jq -c --arg src "$PROBE_EMAIL" '.result[]? | select(any(.matchers[]?; .type=="literal" and .field=="to" and .value==$src)) | {id,enabled,name,priority,matchers,action_types:[.actions[]?.type]}' <<<"$rules"
+          jq -c --arg src "$PROBE_EMAIL" '.result[]? | select(any(.matchers[]?; .type=="literal" and .field=="to" and .value==$src)) | {id,enabled,name,priority,matchers,actions}' <<<"$rules"
           echo 'PROBE_RULE_STATE_END'
 
-          start=$(date -u -d '2 hours ago' '+%Y-%m-%dT%H:%M:%SZ')
+          start=$(date -u -d '24 hours ago' '+%Y-%m-%dT%H:%M:%SZ')
           end=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
           query='query RecentRoutingEvents($zoneTag: string!, $start: Time!, $end: Time!) { viewer { zones(filter: { zoneTag: $zoneTag }) { emailRoutingAdaptive(filter: { datetime_geq: $start, datetime_leq: $end } limit: 50 orderBy: [datetime_DESC]) { datetime from to subject status action ruleMatched messageId errorDetail dkim dmarc spf isSpam } } } }'
           vars=$(jq -nc --arg zoneTag "$ZONE_ID" --arg start "$start" --arg end "$end" '{zoneTag:$zoneTag,start:$start,end:$end}')
@@ -145,17 +137,12 @@ jobs:
           set -euo pipefail
           api='https://api.cloudflare.com/client/v4'
           auth=(-H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json')
-
           dns_payload=$(jq -nc --arg name "$PROBE_DOMAIN" '{name:$name}')
           enabled=$(curl -sS -X POST "${auth[@]}" --data "$dns_payload" "$api/zones/$ZONE_ID/email/routing/dns")
           if [ "$(jq -r '.success' <<<"$enabled")" != true ]; then
-            errors=$(jq -c '.errors // []' <<<"$enabled")
-            echo "PROBE_SUBDOMAIN_ENABLE_RESPONSE=$errors"
             state=$(curl -sS "${auth[@]}" "$api/zones/$ZONE_ID/email/routing/dns?subdomain=$PROBE_DOMAIN")
             test "$(jq -r '.success' <<<"$state")" = true || { echo 'PROBE_SUBDOMAIN_ENABLE_FAILED'; exit 10; }
           fi
-          echo 'PROBE_SUBDOMAIN_ROUTING_CONFIGURED'
-
           rules=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/email/routing/rules")
           probe_rule_id=$(jq -r --arg src "$PROBE_EMAIL" '.result[]? | select(any(.matchers[]?; .type=="literal" and .field=="to" and .value==$src)) | .id' <<<"$rules" | head -n1)
           if [ -n "$probe_rule_id" ]; then
@@ -168,29 +155,13 @@ jobs:
             created=$(curl -fsS -X POST "${auth[@]}" --data "$payload" "$api/zones/$ZONE_ID/email/routing/rules")
             test "$(jq -r '.success' <<<"$created")" = true || { echo 'PROBE_RULE_CREATE_FAILED'; exit 12; }
           fi
-          echo 'PROBE_ROUTING_RULE_ENABLED'
-
           subject="ShopVivaliz isolated inbound probe ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          mail=$(jq -nc --arg from "$SOURCE_EMAIL" --arg to "$PROBE_EMAIL" --arg subject "$subject" '{sender:{name:"Shop Vivaliz Atendimento",email:$from},to:[{email:$to,name:"ShopVivaliz Cloudflare Probe"}],subject:$subject,htmlContent:"Controlled isolated inbound validation through Cloudflare Email Routing."}')
+          mail=$(jq -nc --arg from "$SOURCE_EMAIL" --arg to "$PROBE_EMAIL" --arg subject "$subject" '{sender:{name:"Shop Vivaliz Atendimento",email:$from},to:[{email:$to}],subject:$subject,htmlContent:"Controlled isolated inbound validation through Cloudflare Email Routing."}')
           response=$(curl -fsS -X POST 'https://api.brevo.com/v3/smtp/email' -H 'Content-Type: application/json' -H "api-key: $BREVO_API_KEY" --data "$mail")
           test -n "$(jq -r '.messageId // empty' <<<"$response")" || { echo 'PROBE_SEND_FAILED'; exit 13; }
           echo "INBOUND_PROBE_SUBJECT=$subject"
-          echo 'ISOLATED_INBOUND_PROBE_SENT'
 
-          sleep 15
-          events=$(curl -fsS -G 'https://api.brevo.com/v3/smtp/statistics/events' -H 'accept: application/json' -H "api-key: $BREVO_API_KEY" --data-urlencode "email=$PROBE_EMAIL" --data-urlencode 'limit=20' --data-urlencode 'sort=desc')
-          echo 'BREVO_PROBE_EVENTS_BEGIN'
-          jq -r '.events[]? | [.date,.event,(.reason // ""),(.subject // "")] | @tsv' <<<"$events"
-          echo 'BREVO_PROBE_EVENTS_END'
-          latest=$(jq -r --arg s "$subject" '.events[]? | select(.subject==$s) | .event' <<<"$events" | head -n1)
-          if [ -z "$latest" ]; then
-            echo 'BREVO_PROBE_EVENT_PENDING'
-          else
-            echo "BREVO_PROBE_EVENT=$latest"
-            case "$latest" in hardBounce|softBounce|blocked|invalid) exit 14;; esac
-          fi
-
-      - name: Enable rule and Cloudflare routing DNS
+      - name: Transactional root MX cutover
         if: ${{ github.event.inputs.mode == 'cutover' }}
         shell: bash
         run: |
@@ -198,36 +169,102 @@ jobs:
           api='https://api.cloudflare.com/client/v4'
           auth=(-H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json')
 
-          current=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/email/routing/rules/$RULE_ID")
-          payload=$(jq '.result | {name,matchers,actions,priority,source} + {enabled:true}' <<<"$current")
-          updated=$(curl -fsS -X PUT "${auth[@]}" --data "$payload" "$api/zones/$ZONE_ID/email/routing/rules/$RULE_ID")
-          test "$(jq -r '.success' <<<"$updated")" = true || { echo 'RULE_ENABLE_FAILED'; exit 5; }
-          echo 'ROUTING_RULE_ENABLED'
+          restore_titan_state() {
+            echo 'CUTOVER_ROLLBACK_BEGIN'
+            curl -sS -X DELETE "${auth[@]}" "$api/zones/$ZONE_ID/email/routing/dns" >/dev/null || true
+            dns_now=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/dns_records?per_page=500")
+            while read -r rid; do
+              [ -n "$rid" ] && curl -fsS -X DELETE "${auth[@]}" "$api/zones/$ZONE_ID/dns_records/$rid" >/dev/null
+            done < <(jq -r --arg n "$ZONE_NAME" '.result[] | select(.type=="MX" and .name==$n and (.content|test("^route[123]\\.mx\\.cloudflare\\.net$"))) | .id' <<<"$dns_now")
 
-          enabled=$(curl -sS -X POST "${auth[@]}" --data '{}' "$api/zones/$ZONE_ID/email/routing/dns")
+            dns_now=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/dns_records?per_page=500")
+            spf_ids=$(jq -r --arg n "$ZONE_NAME" '.result[] | select(.type=="TXT" and .name==$n and (.content|startswith("v=spf1"))) | .id' <<<"$dns_now")
+            spf_count=$(grep -c . <<<"$spf_ids" || true)
+            if [ "$spf_count" -eq 0 ]; then
+              spf_payload=$(jq -nc --arg n "$ZONE_NAME" --arg c "$ORIGINAL_SPF" '{type:"TXT",name:$n,content:$c,ttl:1}')
+              curl -fsS -X POST "${auth[@]}" --data "$spf_payload" "$api/zones/$ZONE_ID/dns_records" >/dev/null
+            elif [ "$spf_count" -eq 1 ]; then
+              spf_id=$(head -n1 <<<"$spf_ids")
+              spf_payload=$(jq -nc --arg n "$ZONE_NAME" --arg c "$ORIGINAL_SPF" '{type:"TXT",name:$n,content:$c,ttl:1}')
+              curl -fsS -X PUT "${auth[@]}" --data "$spf_payload" "$api/zones/$ZONE_ID/dns_records/$spf_id" >/dev/null
+            else
+              echo 'ROLLBACK_BLOCKED_MULTIPLE_ROOT_SPF'
+              return 1
+            fi
+
+            dns_now=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/dns_records?per_page=500")
+            if ! jq -e --arg n "$ZONE_NAME" --arg m "$TITAN_MX1" '.result[] | select(.type=="MX" and .name==$n and .content==$m and .priority==10)' <<<"$dns_now" >/dev/null; then
+              p=$(jq -nc --arg n "$ZONE_NAME" --arg m "$TITAN_MX1" '{type:"MX",name:$n,content:$m,priority:10,ttl:1}')
+              curl -fsS -X POST "${auth[@]}" --data "$p" "$api/zones/$ZONE_ID/dns_records" >/dev/null
+            fi
+            if ! jq -e --arg n "$ZONE_NAME" --arg m "$TITAN_MX2" '.result[] | select(.type=="MX" and .name==$n and .content==$m and .priority==20)' <<<"$dns_now" >/dev/null; then
+              p=$(jq -nc --arg n "$ZONE_NAME" --arg m "$TITAN_MX2" '{type:"MX",name:$n,content:$m,priority:20,ttl:1}')
+              curl -fsS -X POST "${auth[@]}" --data "$p" "$api/zones/$ZONE_ID/dns_records" >/dev/null
+            fi
+            echo 'TITAN_MX_SNAPSHOT_RESTORED'
+            echo 'CUTOVER_ROLLBACK_END'
+          }
+
+          current=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/email/routing/rules/$RULE_ID")
+          rule_payload=$(jq '.result | {name,matchers,actions,priority,source} + {enabled:true}' <<<"$current")
+          updated=$(curl -fsS -X PUT "${auth[@]}" --data "$rule_payload" "$api/zones/$ZONE_ID/email/routing/rules/$RULE_ID")
+          test "$(jq -r '.success' <<<"$updated")" = true || { echo 'RULE_ENABLE_FAILED'; exit 5; }
+
+          dns=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/dns_records?per_page=500")
+          root_mx_count=$(jq -r --arg n "$ZONE_NAME" '[.result[] | select(.type=="MX" and .name==$n)] | length' <<<"$dns")
+          titan_ok=$(jq -r --arg n "$ZONE_NAME" --arg m1 "$TITAN_MX1" --arg m2 "$TITAN_MX2" '[.result[] | select(.type=="MX" and .name==$n and ((.content==$m1 and .priority==10) or (.content==$m2 and .priority==20)))] | length' <<<"$dns")
+          cf_count=$(jq -r --arg n "$ZONE_NAME" '[.result[] | select(.type=="MX" and .name==$n and (.content|test("^route[123]\\.mx\\.cloudflare\\.net$")))] | length' <<<"$dns")
+          if [ "$cf_count" -ge 3 ] && [ "$titan_ok" -eq 0 ]; then
+            echo 'CUTOVER_ALREADY_ACTIVE'
+            exit 0
+          fi
+          test "$root_mx_count" -eq 2 -a "$titan_ok" -eq 2 || { echo 'UNEXPECTED_ROOT_MX_STATE_ABORT'; exit 20; }
+          echo 'TITAN_MX_SNAPSHOT_READY'
+
+          spf_rows=$(jq -c --arg n "$ZONE_NAME" '[.result[] | select(.type=="TXT" and .name==$n and (.content|startswith("v=spf1")))]' <<<"$dns")
+          test "$(jq 'length' <<<"$spf_rows")" -eq 1 || { echo 'ROOT_SPF_COUNT_NOT_ONE_ABORT'; exit 21; }
+          spf_id=$(jq -r '.[0].id' <<<"$spf_rows")
+          spf_content=$(jq -r '.[0].content' <<<"$spf_rows")
+          case "$spf_content" in
+            "$ORIGINAL_SPF")
+              spf_payload=$(jq -nc --arg n "$ZONE_NAME" --arg c "$ROUTING_SPF" '{type:"TXT",name:$n,content:$c,ttl:1}')
+              curl -fsS -X PUT "${auth[@]}" --data "$spf_payload" "$api/zones/$ZONE_ID/dns_records/$spf_id" >/dev/null
+              echo 'ROOT_SPF_MERGED_FOR_CLOUDFLARE'
+              ;;
+            "$ROUTING_SPF") echo 'ROOT_SPF_ALREADY_MERGED' ;;
+            *) echo 'UNEXPECTED_ROOT_SPF_ABORT'; exit 22 ;;
+          esac
+
+          titan_ids=$(jq -r --arg n "$ZONE_NAME" --arg m1 "$TITAN_MX1" --arg m2 "$TITAN_MX2" '.result[] | select(.type=="MX" and .name==$n and (.content==$m1 or .content==$m2)) | .id' <<<"$dns")
+          while read -r rid; do
+            [ -n "$rid" ] && curl -fsS -X DELETE "${auth[@]}" "$api/zones/$ZONE_ID/dns_records/$rid" >/dev/null
+          done <<<"$titan_ids"
+          echo 'TITAN_MX_REMOVED_FOR_CUTOVER'
+
+          enable_payload=$(jq -nc --arg name "$ZONE_NAME" '{name:$name}')
+          enabled=$(curl -sS -X POST "${auth[@]}" --data "$enable_payload" "$api/zones/$ZONE_ID/email/routing/dns")
           if [ "$(jq -r '.success' <<<"$enabled")" != true ]; then
-            echo 'ROUTING_DNS_ENABLE_FAILED_NO_CUTOVER_CONFIRMED'
+            echo 'ROUTING_DNS_ENABLE_FAILED_ROLLING_BACK'
             jq -c '{errors}' <<<"$enabled"
-            exit 6
+            restore_titan_state
+            exit 23
           fi
 
+          dns_after=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/dns_records?per_page=500")
+          cf_after=$(jq -r --arg n "$ZONE_NAME" '[.result[] | select(.type=="MX" and .name==$n and (.content|test("^route[123]\\.mx\\.cloudflare\\.net$")))] | length' <<<"$dns_after")
+          titan_after=$(jq -r --arg n "$ZONE_NAME" '[.result[] | select(.type=="MX" and .name==$n and (.content|endswith("titan.email")))] | length' <<<"$dns_after")
+          spf_after=$(jq -r --arg n "$ZONE_NAME" '[.result[] | select(.type=="TXT" and .name==$n and (.content|startswith("v=spf1")))] | length' <<<"$dns_after")
+          spf_cloudflare=$(jq -r --arg n "$ZONE_NAME" '[.result[] | select(.type=="TXT" and .name==$n and (.content|startswith("v=spf1")) and (.content|contains("include:_spf.mx.cloudflare.net")))] | length' <<<"$dns_after")
           settings=$(curl -fsS "${auth[@]}" "$api/zones/$ZONE_ID/email/routing")
-          test "$(jq -r '.result.enabled // false' <<<"$settings")" = true || { echo 'ROUTING_NOT_ENABLED_AFTER_API_CALL'; exit 7; }
-          echo 'ROUTING_DNS_ENABLED'
+          if [ "$cf_after" -lt 3 ] || [ "$titan_after" -ne 0 ] || [ "$spf_after" -ne 1 ] || [ "$spf_cloudflare" -ne 1 ] || [ "$(jq -r '.result.enabled // false' <<<"$settings")" != true ]; then
+            echo 'POST_CUTOVER_VERIFY_FAILED_ROLLING_BACK'
+            restore_titan_state
+            exit 24
+          fi
+          echo 'ROOT_CUTOVER_VERIFIED'
+          echo 'AWAIT_EXTERNAL_INBOUND_VALIDATION'
 
-      - name: Send controlled inbound probe through Brevo
-        if: ${{ github.event.inputs.mode == 'cutover' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          subject="ShopVivaliz Cloudflare inbound probe ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          payload=$(jq -nc --arg from "$SOURCE_EMAIL" --arg to "$SOURCE_EMAIL" --arg subject "$subject" '{sender:{name:"Shop Vivaliz Atendimento",email:$from},to:[{email:$to,name:"Shop Vivaliz Atendimento"}],subject:$subject,htmlContent:"Controlled inbound validation after Cloudflare Email Routing cutover."}')
-          response=$(curl -fsS -X POST 'https://api.brevo.com/v3/smtp/email' -H 'Content-Type: application/json' -H "api-key: $BREVO_API_KEY" --data "$payload")
-          test -n "$(jq -r '.messageId // empty' <<<"$response")" || { echo 'INBOUND_PROBE_SEND_FAILED'; exit 8; }
-          echo "INBOUND_PROBE_SUBJECT=$subject"
-          echo 'INBOUND_PROBE_SENT_AWAIT_EXTERNAL_GMAIL_VALIDATION'
-
-      - name: Roll back Cloudflare routing DNS
+      - name: Restore Titan MX and original SPF
         if: ${{ github.event.inputs.mode == 'rollback' }}
         shell: bash
         run: |
@@ -237,6 +274,41 @@ jobs:
           zones=$(curl -fsS "${auth[@]}" "$api/zones?name=$ZONE_NAME")
           zone_id=$(jq -r '.result[0].id // empty' <<<"$zones")
           test -n "$zone_id" || { echo 'ZONE_NOT_FOUND'; exit 1; }
-          response=$(curl -sS -X DELETE "${auth[@]}" "$api/zones/$zone_id/email/routing/dns")
-          test "$(jq -r '.success' <<<"$response")" = true || { echo 'ROLLBACK_FAILED'; jq -c '{errors}' <<<"$response"; exit 9; }
-          echo 'CLOUDFLARE_ROUTING_DNS_DISABLED'
+
+          curl -sS -X DELETE "${auth[@]}" "$api/zones/$zone_id/email/routing/dns" >/dev/null || true
+          dns=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/dns_records?per_page=500")
+          while read -r rid; do
+            [ -n "$rid" ] && curl -fsS -X DELETE "${auth[@]}" "$api/zones/$zone_id/dns_records/$rid" >/dev/null
+          done < <(jq -r --arg n "$ZONE_NAME" '.result[] | select(.type=="MX" and .name==$n and (.content|test("^route[123]\\.mx\\.cloudflare\\.net$"))) | .id' <<<"$dns")
+
+          dns=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/dns_records?per_page=500")
+          spf_ids=$(jq -r --arg n "$ZONE_NAME" '.result[] | select(.type=="TXT" and .name==$n and (.content|startswith("v=spf1"))) | .id' <<<"$dns")
+          spf_count=$(grep -c . <<<"$spf_ids" || true)
+          if [ "$spf_count" -eq 0 ]; then
+            p=$(jq -nc --arg n "$ZONE_NAME" --arg c "$ORIGINAL_SPF" '{type:"TXT",name:$n,content:$c,ttl:1}')
+            curl -fsS -X POST "${auth[@]}" --data "$p" "$api/zones/$zone_id/dns_records" >/dev/null
+          elif [ "$spf_count" -eq 1 ]; then
+            spf_id=$(head -n1 <<<"$spf_ids")
+            p=$(jq -nc --arg n "$ZONE_NAME" --arg c "$ORIGINAL_SPF" '{type:"TXT",name:$n,content:$c,ttl:1}')
+            curl -fsS -X PUT "${auth[@]}" --data "$p" "$api/zones/$zone_id/dns_records/$spf_id" >/dev/null
+          else
+            echo 'ROLLBACK_BLOCKED_MULTIPLE_ROOT_SPF'; exit 30
+          fi
+
+          dns=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/dns_records?per_page=500")
+          if ! jq -e --arg n "$ZONE_NAME" --arg m "$TITAN_MX1" '.result[] | select(.type=="MX" and .name==$n and .content==$m and .priority==10)' <<<"$dns" >/dev/null; then
+            p=$(jq -nc --arg n "$ZONE_NAME" --arg m "$TITAN_MX1" '{type:"MX",name:$n,content:$m,priority:10,ttl:1}')
+            curl -fsS -X POST "${auth[@]}" --data "$p" "$api/zones/$zone_id/dns_records" >/dev/null
+          fi
+          if ! jq -e --arg n "$ZONE_NAME" --arg m "$TITAN_MX2" '.result[] | select(.type=="MX" and .name==$n and .content==$m and .priority==20)' <<<"$dns" >/dev/null; then
+            p=$(jq -nc --arg n "$ZONE_NAME" --arg m "$TITAN_MX2" '{type:"MX",name:$n,content:$m,priority:20,ttl:1}')
+            curl -fsS -X POST "${auth[@]}" --data "$p" "$api/zones/$zone_id/dns_records" >/dev/null
+          fi
+
+          final=$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/dns_records?per_page=500")
+          mx1=$(jq -r --arg n "$ZONE_NAME" --arg m "$TITAN_MX1" '[.result[] | select(.type=="MX" and .name==$n and .content==$m and .priority==10)] | length' <<<"$final")
+          mx2=$(jq -r --arg n "$ZONE_NAME" --arg m "$TITAN_MX2" '[.result[] | select(.type=="MX" and .name==$n and .content==$m and .priority==20)] | length' <<<"$final")
+          spf=$(jq -r --arg n "$ZONE_NAME" --arg c "$ORIGINAL_SPF" '[.result[] | select(.type=="TXT" and .name==$n and .content==$c)] | length' <<<"$final")
+          test "$mx1" -eq 1 -a "$mx2" -eq 1 -a "$spf" -eq 1 || { echo 'ROLLBACK_VERIFY_FAILED'; exit 31; }
+          echo 'TITAN_MX_SNAPSHOT_RESTORED'
+          echo 'ROLLBACK_VERIFIED'
