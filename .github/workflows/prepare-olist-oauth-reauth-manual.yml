@@ -22,10 +22,10 @@ jobs:
     timeout-minutes: 10
     environment: production
     env:
-      SOURCE_HOST: 136.248.69.116
       TARGET_HOST: 163.176.103.253
+      SOURCE_PRIVATE_HOST: 10.0.1.38
     steps:
-      - name: Configure verified SSH
+      - name: Configure verified SSH with agent forwarding
         shell: bash
         env:
           PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
@@ -42,28 +42,68 @@ jobs:
           printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+          eval "$(ssh-agent -s)" >/dev/null
+          ssh-add "$HOME/.ssh/id_rsa" >/dev/null
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
 
-      - name: Validate live source token store
+      - name: Cut over live rotating store through Site A1 bastion
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+          ssh -A -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "ubuntu@$SOURCE_HOST" 'python3 -' <<'PY'
+            "ubuntu@$TARGET_HOST" "SOURCE_PRIVATE_HOST='$SOURCE_PRIVATE_HOST' bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+          current=/home/ubuntu/shopvivaliz-deploy/current
+          shared=/home/ubuntu/shopvivaliz-deploy/shared
+          canonical="$shared/private/olist-tokens.json"
+          incoming=/tmp/olist-tokens.cutover.json
+          source_store=/home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json
+          source_frozen=0
+          target_rotated=0
+          promoted=0
+
+          source_ssh() {
+            ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+              ubuntu@"$SOURCE_PRIVATE_HOST" "$@"
+          }
+
+          rollback() {
+            rc=$?
+            rm -f "$incoming"
+            if [[ "$source_frozen" = 1 && "$promoted" != 1 ]]; then
+              if [[ "$target_rotated" = 1 && -s "$canonical" ]]; then
+                scp -q -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+                  "$canonical" ubuntu@"$SOURCE_PRIVATE_HOST":/tmp/olist-tokens.rollback.json || true
+                source_ssh "test -s /tmp/olist-tokens.rollback.json && install -m 660 -o ubuntu -g www-data /tmp/olist-tokens.rollback.json '$source_store'; rm -f /tmp/olist-tokens.rollback.json; sudo systemctl start shopvivaliz-token-renewer.service" || true
+              else
+                source_ssh 'sudo systemctl start shopvivaliz-token-renewer.service' || true
+              fi
+            fi
+            exit "$rc"
+          }
+          trap rollback EXIT
+
+          source_ssh 'test -s /home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json'
+          source_ssh 'sudo systemctl stop shopvivaliz-token-renewer.service'
+          source_frozen=1
+
+          source_ssh "cd /home/ubuntu/shopvivaliz-deploy/current && SHOPVIVALIZ_ENV_PATH=/home/ubuntu/shopvivaliz-deploy/shared/.env SHOPVIVALIZ_OLIST_TOKEN_FILE='$source_store' python3 daemon-token-renewer.py --once"
+
+          source_ssh 'python3 -' <<'PY'
           import json
           import time
           import urllib.request
           from pathlib import Path
 
           path = Path('/home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json')
-          if not path.is_file():
-              raise SystemExit('source token store missing')
           data = json.loads(path.read_text(encoding='utf-8'))
           token = data.get('TINY_ACCESS_TOKEN') or data.get('OLIST_ACCESS_TOKEN') or ''
           refresh = data.get('TINY_REFRESH_TOKEN') or data.get('OLIST_REFRESH_TOKEN') or ''
           expires = int(data.get('expires_at_epoch') or 0)
           if not token or not refresh or expires <= int(time.time()):
-              raise SystemExit('source token store is not currently valid')
+              raise SystemExit('source token store invalid after controlled rotation')
           req = urllib.request.Request(
               'https://api.tiny.com.br/public-api/v3/produtos/343571958',
               headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/json'},
@@ -75,51 +115,9 @@ jobs:
           print('source_product_get_http=200')
           PY
 
-      - name: Freeze source rotation and transfer protected store
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          transport="$RUNNER_TEMP/olist-tokens.cutover.json"
-          source_frozen=0
-          promoted=0
-          cleanup() {
-            rc=$?
-            rm -f "$transport"
-            ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
-              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              "ubuntu@$TARGET_HOST" 'rm -f /tmp/olist-tokens.cutover.json' >/dev/null 2>&1 || true
-            if [[ "$source_frozen" = 1 && "$promoted" != 1 ]]; then
-              ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
-                -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-                "ubuntu@$SOURCE_HOST" 'sudo systemctl start shopvivaliz-token-renewer.service' >/dev/null 2>&1 || true
-            fi
-            exit "$rc"
-          }
-          trap cleanup EXIT
-
-          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "ubuntu@$SOURCE_HOST" 'sudo systemctl stop shopvivaliz-token-renewer.service'
-          source_frozen=1
-
-          scp -q -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "ubuntu@$SOURCE_HOST:/home/ubuntu/shopvivaliz-deploy/shared/private/olist-tokens.json" "$transport"
-          chmod 600 "$transport"
-          test -s "$transport"
-
-          scp -q -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "$transport" "ubuntu@$TARGET_HOST:/tmp/olist-tokens.cutover.json"
-
-          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "ubuntu@$TARGET_HOST" 'bash -s' <<'REMOTE'
-          set -Eeuo pipefail
-          current=/home/ubuntu/shopvivaliz-deploy/current
-          shared=/home/ubuntu/shopvivaliz-deploy/shared
-          incoming=/tmp/olist-tokens.cutover.json
-          canonical="$shared/private/olist-tokens.json"
+          scp -q -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes \
+            ubuntu@"$SOURCE_PRIVATE_HOST":"$source_store" "$incoming"
+          chmod 600 "$incoming"
           test -s "$incoming"
           install -m 660 -o ubuntu -g www-data "$incoming" "$canonical"
           rm -f "$incoming"
@@ -127,6 +125,7 @@ jobs:
           cd "$current"
           SHOPVIVALIZ_ENV_PATH="$shared/.env" SHOPVIVALIZ_OLIST_TOKEN_FILE="$canonical" \
             python3 daemon-token-renewer.py --once
+          target_rotated=1
           sudo chown ubuntu:www-data "$shared/.env" "$canonical"
           chmod 640 "$shared/.env"
           chmod 660 "$canonical"
@@ -187,22 +186,17 @@ jobs:
           systemctl is-active --quiet shopvivaliz-token-renewer.service
           systemctl is-enabled --quiet shopvivaliz-token-renewer.service
           echo 'target_token_renewer=active_enabled'
-          REMOTE
 
           promoted=1
-          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "ubuntu@$SOURCE_HOST" 'sudo systemctl disable shopvivaliz-token-renewer.service >/dev/null 2>&1 || true'
+          source_ssh 'sudo systemctl disable shopvivaliz-token-renewer.service >/dev/null 2>&1 || true'
           echo 'source_token_renewer=stopped_disabled'
+          REMOTE
 
       - name: Remove recovery material
         if: always()
         shell: bash
         run: |
-          rm -f "$RUNNER_TEMP/olist-tokens.cutover.json"
-          if [[ -f "$HOME/.ssh/id_rsa" && -f "$HOME/.ssh/known_hosts" ]]; then
-            ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
-              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              "ubuntu@$TARGET_HOST" 'rm -f /tmp/olist-tokens.cutover.json' >/dev/null 2>&1 || true
+          if [[ -n "${SSH_AGENT_PID:-}" ]]; then
+            ssh-agent -k >/dev/null 2>&1 || true
           fi
           rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
