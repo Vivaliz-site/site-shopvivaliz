@@ -1,4 +1,4 @@
-﻿name: VM Desktop Commander Connection Probe
+name: VM Desktop Commander Connection Probe
 
 on:
   push:
@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   probe:
@@ -64,18 +63,23 @@ jobs:
           print(f"VM_PROCESS_TREE_COUNT={len(pids)}")
           print(f"VM_ESTABLISHED_CONNECTIONS={established}")
           PY' > /tmp/vm-connection-safe.txt
-      - name: Publish sanitized probe
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Stage sanitized connection evidence
         run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts/vm-desktop-commander-connection-probe
           {
             echo '### always-free-arm-1787907847-26 runtime connection probe'
             echo
             echo '```text'
             cat /tmp/vm-connection-safe.txt
             echo '```'
-          } > /tmp/vm-connection-comment.md
-          gh issue comment 1207 --repo "${{ github.repository }}" --body-file /tmp/vm-connection-comment.md
+          } > artifacts/vm-desktop-commander-connection-probe/probe.md
+      - name: Upload immutable connection evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm-desktop-commander-connection-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/vm-desktop-commander-connection-probe/
+          if-no-files-found: error
       - name: Cleanup
         if: always()
         run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts" /tmp/vm-connection-safe.txt /tmp/vm-connection-comment.md
