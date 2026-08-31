@@ -19,7 +19,12 @@ if (preg_match('/bootstrap[^\n]*-Mode InstallTask/i', $health)) {
 }
 
 $control = (string) file_get_contents($controlPath);
-foreach (['diagnose:', 'Sanitized diagnostic only. No credentials', 'Stage sanitized status evidence'] as $needle) {
+foreach ([
+    'diagnose:',
+    'Sanitized diagnostic only. No credentials',
+    'Stage sanitized status evidence',
+    'Upload immutable status evidence',
+] as $needle) {
     if (strpos($control, $needle) === false) {
         fwrite(STDERR, "desktop-commander-three-host-control-plane.yml: marcador read-only ausente: {$needle}\n");
         exit(1);

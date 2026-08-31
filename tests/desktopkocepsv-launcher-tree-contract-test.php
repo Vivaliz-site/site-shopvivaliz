@@ -10,6 +10,7 @@ foreach ($files as $path) {
     foreach ([
         'Get-LauncherRoots',
         'ParentProcessId',
+        "@('node.exe','cmd.exe')",
         '@wonderwhy-er[\\\\/]desktop-commander[\\\\/]dist[\\\\/]index\.js',
         '$canonical = @(Get-CanonicalRemoteLaunchers)',
         '$noncanonical = @(Get-NonCanonicalRemoteLaunchers)',
