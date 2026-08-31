@@ -51,7 +51,7 @@ if(!$result['ok']){
     svsh_json(502,['ok'=>false,'error'=>'shipping_provider_unavailable','message'=>$message,'provider'=>'melhorenvio','status'=>$status]);
 }
 $options=[]; foreach($result['body'] as $option){ if(!is_array($option)||!empty($option['error']))continue; $price=(float)($option['price']??0); if($price<=0)continue; $options[]=['id'=>(string)($option['id']??''),'name'=>(string)($option['name']??$option['company']['name']??'Frete'),'company'=>(string)($option['company']['name']??''),'price'=>round($price,2),'delivery_time'=>max(0,(int)($option['delivery_time']??0))]; }
-usort($options,static fn(array $a,array $b):int=>$a['price']<=>$b['price']); $options=array_slice($options,0,6); if($options===[])svsh_json(404,['ok'=>false,'error'=>'no_shipping_options']);
+usort($options,static fn(array $a,array $b):int=>$a['price']<=>$b['price']); $options=array_slice($options,0,5); if($options===[])svsh_json(404,['ok'=>false,'error'=>'no_shipping_options']);
 $expiresAt=time()+1800; foreach($options as &$option){$option['quote_id']=svsh_quote_id($cep,$fingerprintItems,$option,$expiresAt);$option['expires_at']=$expiresAt;} unset($option);
 $selected=$options[0];
 svsh_json(200,['ok'=>true,'provider'=>'melhorenvio','cep'=>$cep,'shipping_options'=>$options,'shipping_total'=>$selected['price'],'selected_option'=>$selected,'quote_id'=>$selected['quote_id'],'expires_at'=>$expiresAt]);
