@@ -3,21 +3,7 @@
   "framework": null,
   "installCommand": "",
   "buildCommand": null,
-  "outputDirectory": "proxy-empty",
-  "cleanUrls": false,
-  "trailingSlash": false,
-  "rewrites": [
-    {
-      "source": "/:path*",
-      "destination": "https://article-graphical-congratulations-rogers.trycloudflare.com/:path*"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/:path*",
-      "headers": [
-        { "key": "x-vercel-enable-rewrite-caching", "value": "0" }
-      ]
-    }
-  ]
+  "outputDirectory": "web",
+  "cleanUrls": true,
+  "trailingSlash": false
 }
