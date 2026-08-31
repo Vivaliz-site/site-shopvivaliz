@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -51,8 +52,9 @@ def assertion_name(call: ast.Call) -> str | None:
 
 
 def assertion_evaluated_text(line: str) -> str | None:
+    source = textwrap.dedent(line)
     try:
-        module = ast.parse(line)
+        module = ast.parse(source)
     except SyntaxError:
         return None
     if len(module.body) != 1:
@@ -77,7 +79,7 @@ def assertion_evaluated_text(line: str) -> str | None:
     for value in values:
         if isinstance(value, ast.Constant) and isinstance(value.value, (str, bytes)):
             continue
-        fragment = ast.get_source_segment(line, value)
+        fragment = ast.get_source_segment(source, value)
         if fragment:
             fragments.append(fragment)
     return " ".join(fragments)

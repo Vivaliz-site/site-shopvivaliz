@@ -31,19 +31,19 @@ class AutonomyPolicySemanticTests(unittest.TestCase):
         self.assertTrue(policy.should_scan_content('.github/workflows/stock-update.yml'))
 
     def test_negative_test_assertion_is_not_a_commercial_mutation(self):
-        assertion = 'self.assertNotIn("POST /api/catalog/stock", workflow_text)'
+        assertion = '        self.assertNotIn("POST /api/catalog/stock", workflow_text)'
         self.assertEqual(policy.sensitive_content([assertion]), [])
 
     def test_assertion_fixture_assignment_is_not_a_commercial_mutation(self):
-        fixture = 'assertion = \'self.assertNotIn("POST /api/catalog/stock", workflow_text)\''
+        fixture = '        assertion = \'self.assertNotIn("POST /api/catalog/stock", workflow_text)\''
         self.assertEqual(policy.sensitive_content([fixture]), [])
 
     def test_assertion_evaluated_argument_remains_sensitive(self):
-        assertion = 'self.assertIn("ok", post("/api/catalog", {"stock": 10}))'
+        assertion = '        self.assertIn("ok", post("/api/catalog", {"stock": 10}))'
         self.assertTrue(policy.sensitive_content([assertion]))
 
     def test_assertion_fstring_expression_remains_sensitive(self):
-        assertion = 'assertIn(f"{post(stock=10)}", response)'
+        assertion = '        assertIn(f"{post(stock=10)}", response)'
         self.assertTrue(policy.sensitive_content([assertion]))
 
 
