@@ -72,6 +72,13 @@ class AutonomyPolicySemanticTests(unittest.TestCase):
         ]
         self.assertTrue(policy.sensitive_content(lines))
 
+    def test_non_assertion_text_does_not_hide_following_real_mutation(self):
+        lines = [
+            '        fixture = "self.assertIn("',
+            '        post("/api/catalog", {"stock": 10})',
+        ]
+        self.assertTrue(policy.sensitive_content(lines))
+
     def test_incomplete_long_assertion_parses_ast_at_most_once(self):
         lines = ['        self.assertIn('] + ['            # formatting spacer'] * 5000
         original = policy.assertion_evaluated_text

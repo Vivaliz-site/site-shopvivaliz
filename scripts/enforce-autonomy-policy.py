@@ -174,11 +174,15 @@ def sensitive_content(lines: list[str]) -> list[str]:
         if ASSERTION_TEXT.search(line):
             source = assertion_source(lines, index)
             if source is None:
-                inspect(line, index, line)
+                evaluated = assertion_evaluated_text(line)
+                inspect(line if evaluated is None else evaluated, index, line)
                 continue
             evaluated = assertion_evaluated_text(source)
+            if evaluated is None:
+                inspect(line, index, line)
+                continue
             consumed.update(range(index, index + source.count("\n") + 1))
-            inspect("" if evaluated is None else evaluated, index, source)
+            inspect(evaluated, index, source)
             continue
 
         inspect(line, index, line)
