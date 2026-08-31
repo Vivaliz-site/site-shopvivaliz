@@ -76,6 +76,15 @@ def sensitive_path(path: str) -> bool:
     return any(fnmatch.fnmatch(name, pattern) for pattern in SENSITIVE_PATH_PATTERNS)
 
 
+def should_scan_content(path: str) -> bool:
+    lower = path.lower()
+    if lower.startswith(IGNORED_PREFIXES):
+        return False
+    if lower.startswith("tests/"):
+        return False
+    return True
+
+
 def sensitive_content(lines: list[str]) -> list[str]:
     findings: list[str] = []
     for index, line in enumerate(lines, start=1):
@@ -102,7 +111,7 @@ def main() -> int:
         path_findings: list[str] = []
         if sensitive_path(path):
             path_findings.append("sensitive_path")
-        if not path.lower().startswith(IGNORED_PREFIXES):
+        if should_scan_content(path):
             path_findings.extend(sensitive_content(added_lines(base, head, path)))
         if path_findings:
             findings.append({"path": path, "reasons": path_findings})

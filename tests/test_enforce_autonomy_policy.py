@@ -20,6 +20,12 @@ class AutonomyPolicySemanticTests(unittest.TestCase):
         findings = policy.sensitive_content(['curl -X POST /api/catalog -d stock=10'])
         self.assertTrue(findings)
 
+    def test_test_source_is_not_scanned_as_live_mutation_content(self):
+        self.assertFalse(policy.should_scan_content('tests/test_enforce_autonomy_policy.py'))
+
+    def test_workflow_content_is_still_scanned_for_real_mutations(self):
+        self.assertTrue(policy.should_scan_content('.github/workflows/stock-update.yml'))
+
 
 if __name__ == '__main__':
     unittest.main()
