@@ -112,4 +112,15 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base policy source');
+  write(root, 'agents/policy-engine/index.js', engineSource + `\n// detector documentation mentions || true but does not execute shell\n`);
+  const head = commitAll(root, 'document detector signature');
+  const result = policy(root, base, head);
+  assert.strictEqual(result.status, 0, `Policy source text must not be treated as executable shell suppression:\n${result.stdout}\n${result.stderr}`);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
 console.log('policy-engine-regression: ok');

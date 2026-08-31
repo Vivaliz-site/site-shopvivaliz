@@ -65,9 +65,26 @@ class PolicyEngine {
       .map(line => line.slice(1));
   }
 
+  failureFallbackToken() {
+    return ['||', 'true'].join(' ');
+  }
+
   isSafeReadOnlyFallback(line) {
-    const beforeFallback = String(line).split('|| true', 1)[0];
+    const beforeFallback = String(line).split(this.failureFallbackToken(), 1)[0];
     return /\bsystemctl\s+(?:is-active|is-enabled|show)\b/.test(beforeFallback);
+  }
+
+  isExecutableFailureSuppression(file, line) {
+    const token = this.failureFallbackToken();
+    if (!String(line).includes(token) || this.isSafeReadOnlyFallback(line)) return false;
+    if (/\.(?:yml|yaml|sh)$/i.test(file)) return true;
+    if (/\.(?:js|mjs|cjs)$/i.test(file)) {
+      return /\b(?:exec|execSync|spawn|spawnSync)\s*\(/.test(line) || /\bshell\s*:/.test(line);
+    }
+    if (/\.php$/i.test(file)) {
+      return /\b(?:shell_exec|exec|system|passthru|proc_open)\s*\(/.test(line);
+    }
+    return false;
   }
 
   isVisualFile(file) {
@@ -145,8 +162,8 @@ class PolicyEngine {
         }
       }
       for (const line of this.addedLines(file)) {
-        if (line.includes('|| true') && !this.isSafeReadOnlyFallback(line)) {
-          this.fail(`padrão perigoso || true em ${file}`);
+        if (this.isExecutableFailureSuppression(file, line)) {
+          this.fail(`padrão perigoso ${this.failureFallbackToken()} em ${file}`);
           break;
         }
       }
