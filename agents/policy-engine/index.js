@@ -119,8 +119,9 @@ class PolicyEngine {
     return false;
   }
 
-  isRegexLiteralStart(previousSignificant) {
-    return previousSignificant === '' || /[([{,:;=!?&|+\-*%^~<>]/.test(previousSignificant);
+  isRegexLiteralStart(text, index) {
+    const prefix = String(text).slice(Math.max(0, index - 96), index);
+    return /(?:^|[([{,:;=!?&|+\-*%^~<>]|\b(?:return|throw|case|delete|void|typeof|yield|await|else|do|in|of|instanceof|new))\s*$/.test(prefix);
   }
 
   executableCallArguments(value, wrapperPattern, syntax = 'generic') {
@@ -135,32 +136,37 @@ class PolicyEngine {
     while ((match = wrapper.exec(text)) !== null) {
       const openOffset = match[0].lastIndexOf('(');
       const openIndex = match.index + openOffset;
-      let depth = 0;
+      let depth = 1;
       let quote = null;
       let escaped = false;
       let lineComment = false;
       let blockComment = false;
       let regexLiteral = false;
       let regexClass = false;
-      let previousSignificant = '';
+      let argumentText = '';
       let closed = false;
 
-      for (let index = openIndex; index < text.length; index += 1) {
+      for (let index = openIndex + 1; index < text.length; index += 1) {
         const char = text[index];
         const next = text[index + 1] || '';
 
         if (lineComment) {
-          if (char === '\n') lineComment = false;
+          if (char === '\n') {
+            lineComment = false;
+            argumentText += '\n';
+          }
           continue;
         }
         if (blockComment) {
           if (char === '*' && next === '/') {
             blockComment = false;
             index += 1;
+            argumentText += ' ';
           }
           continue;
         }
         if (regexLiteral) {
+          argumentText += char;
           if (escaped) {
             escaped = false;
           } else if (char === '\\') {
@@ -171,16 +177,20 @@ class PolicyEngine {
             regexClass = false;
           } else if (char === '/' && !regexClass) {
             regexLiteral = false;
-            previousSignificant = '/';
           }
           continue;
         }
         if (quote !== null) {
+          argumentText += char;
           if (escaped) {
             escaped = false;
           } else if (char === '\\') {
             escaped = true;
-          } else if (char === quote) {
+          } else if (quote.length === 3 && text.startsWith(quote, index)) {
+            argumentText += quote.slice(1);
+            index += 2;
+            quote = null;
+          } else if (quote.length === 1 && char === quote) {
             quote = null;
           }
           continue;
@@ -190,37 +200,51 @@ class PolicyEngine {
         if (slashComments && char === '/' && next === '/') {
           lineComment = true;
           index += 1;
+          argumentText += ' ';
           continue;
         }
         if (slashComments && char === '/' && next === '*') {
           blockComment = true;
           index += 1;
+          argumentText += ' ';
           continue;
         }
         if ((syntax === 'python' || syntax === 'php') && char === '#') {
           lineComment = true;
+          argumentText += ' ';
           continue;
         }
-        if (syntax === 'javascript' && char === '/' && this.isRegexLiteralStart(previousSignificant)) {
+        if (syntax === 'javascript' && char === '/' && this.isRegexLiteralStart(text, index)) {
           regexLiteral = true;
           regexClass = false;
           escaped = false;
+          argumentText += char;
+          continue;
+        }
+        if (syntax === 'python' && (char === "'" || char === '"') && text.slice(index, index + 3) === char.repeat(3)) {
+          quote = char.repeat(3);
+          argumentText += quote;
+          index += 2;
           continue;
         }
         if (char === "'" || char === '"' || char === '`') {
           quote = char;
+          argumentText += char;
         } else if (char === '(') {
           depth += 1;
+          argumentText += char;
         } else if (char === ')') {
           depth -= 1;
           if (depth === 0) {
-            argumentsList.push(text.slice(openIndex + 1, index));
+            argumentsList.push(argumentText);
             wrapper.lastIndex = index + 1;
             closed = true;
             break;
           }
+          argumentText += char;
+        } else {
+          argumentText += char;
         }
-        if (!/\s/.test(char)) previousSignificant = char;
       }
 
       if (!closed) {

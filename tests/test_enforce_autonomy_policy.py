@@ -59,5 +59,19 @@ class AutonomyPolicySemanticTests(unittest.TestCase):
         self.assertTrue(policy.sensitive_content(lines))
 
 
+    def test_assertion_beyond_fifty_lines_remains_sensitive(self):
+        lines = ['        self.assertIn(']
+        lines += ['            # formatting spacer'] * 55
+        lines += [
+            '            "ok",',
+            '            post(',
+            '                "/api/catalog",',
+            '                {"stock": 10},',
+            '            ),',
+            '        )',
+        ]
+        self.assertTrue(policy.sensitive_content(lines))
+
+
 if __name__ == '__main__':
     unittest.main()

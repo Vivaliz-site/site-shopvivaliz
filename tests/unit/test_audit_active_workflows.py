@@ -267,5 +267,24 @@ jobs:
         self.assertIn("production_push_trigger", {item.rule for item in findings})
 
 
+    def test_anchored_block_mapping_triggers_are_parsed(self):
+        findings = self.audit(
+            "production-anchor-block.yml",
+            """name: Production anchor block
+on: &events
+  push: {}
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  x:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+""",
+        )
+        self.assertIn("production_push_trigger", {item.rule for item in findings})
+
+
 if __name__ == "__main__":
     unittest.main()

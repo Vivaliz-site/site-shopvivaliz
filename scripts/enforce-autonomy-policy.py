@@ -150,7 +150,7 @@ def sensitive_content(lines: list[str]) -> list[str]:
             continue
 
         if ASSERTION_TEXT.search(line):
-            for end in range(index, min(len(lines), index + 50)):
+            for end in range(index, len(lines)):
                 source = "\n".join(lines[index:end + 1])
                 evaluated = assertion_evaluated_text(source)
                 if evaluated is None:

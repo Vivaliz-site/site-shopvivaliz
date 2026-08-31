@@ -223,4 +223,37 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base keyword regex guard');
+  write(root, 'tests/keyword-regex-publish.js', `const { execSync } = require('child_process');\nexecSync((function () { return /[)]/; })() && 'git push origin HEAD:main');\n`);
+  const head = commitAll(root, 'add keyword-led regex executable mutation');
+  const result = policy(root, base, head);
+  assert.notStrictEqual(result.status, 0, 'Regex literals after return must not terminate executable argument scanning');
+  assert.match(result.stdout, /perigoso git push/);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base python triple quote guard');
+  write(root, 'tests/triple-quote-publish.py', `import subprocess\nsubprocess.run(\"\"\"echo \")\" ; git push origin HEAD:main\"\"\", shell=True, check=True)\n`);
+  const head = commitAll(root, 'add triple quoted shell mutation');
+  const result = policy(root, base, head);
+  assert.notStrictEqual(result.status, 0, 'Python triple-quoted strings must stay lexically intact while scanning executable arguments');
+  assert.match(result.stdout, /perigoso git push/);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base inert executable comment');
+  write(root, 'tests/comment-only-forbidden-text.js', `const { execSync } = require('child_process');\nexecSync(\n  // Verify this helper never uses git push.\n  'echo harmless'\n);\n`);
+  const head = commitAll(root, 'add inert comment inside executable call');
+  const result = policy(root, base, head);
+  assert.strictEqual(result.status, 0, `Comments inside executable calls must not be treated as executed commands:\n${result.stdout}\n${result.stderr}`);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
 console.log('policy-engine-regression: ok');
