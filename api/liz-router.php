@@ -5,6 +5,7 @@ require_once dirname(__DIR__) . '/config/bootstrap-env.php';
 require_once dirname(__DIR__) . '/config/agent-keys.php';
 require_once dirname(__DIR__) . '/includes/secure-session.php';
 require_once dirname(__DIR__) . '/includes/rate-limiter.php';
+require_once dirname(__DIR__) . '/includes/internal-http-origin.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -87,7 +88,7 @@ if ($method === 'GET' && isset($_GET['q'])) {
     }
 
     $target = '/api/product-search.php';
-    $url = 'http://127.0.0.1' . $target
+    $url = shopvivaliz_internal_url($target)
         . '?q=' . urlencode($q)
         . '&limit=' . $limit
         . '&page=' . $page
@@ -148,7 +149,7 @@ $target = $isCommerce ? '/api/liz-intelligent.php' : '/api/liz-general.php';
 
 // Encaminhamento somente para o próprio servidor. Não use HTTP_HOST do cliente,
 // evitando que um cabeçalho Host manipulado transforme o roteador em proxy SSRF.
-$url = 'http://127.0.0.1' . $target;
+$url = shopvivaliz_internal_url($target);
 $ch = curl_init($url);
 if ($ch === false) {
     lzr_reply(503, ['ok' => false, 'error' => 'A Liz está temporariamente indisponível.']);
