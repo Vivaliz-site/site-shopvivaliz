@@ -4,19 +4,6 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '7 * * * *'
-  push:
-    branches: [main]
-    paths:
-      - 'api/**'
-      - 'includes/**'
-      - 'config/**'
-      - 'js/**'
-      - 'checkout*.php'
-      - 'carrinho*.php'
-      - 'catalogo*.php'
-      - 'scripts/production-functional-audit.sh'
-      - 'tests/test_production_functional_audit_contract.py'
-      - 'docs/knowledge/agent-rules.md'
 
 permissions:
   contents: read
