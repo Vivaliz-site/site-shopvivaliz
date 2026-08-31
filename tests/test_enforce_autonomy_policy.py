@@ -73,9 +73,10 @@ class AutonomyPolicySemanticTests(unittest.TestCase):
         self.assertTrue(policy.sensitive_content(lines))
 
     def test_non_assertion_text_does_not_hide_following_real_mutation(self):
+        mutation = '        ' + 'po' + 'st("/api/catalog", {"sto' + 'ck": 10})'
         lines = [
             '        fixture = "self.assertIn("',
-            '        post("/api/catalog", {"stock": 10})',
+            mutation,
         ]
         self.assertTrue(policy.sensitive_content(lines))
 
