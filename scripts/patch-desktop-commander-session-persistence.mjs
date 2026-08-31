@@ -8,7 +8,7 @@ if (!packageRoot) {
 
 const deviceSource = path.join(packageRoot, 'dist', 'remote-device', 'device.js');
 const source = await readFile(deviceSource, 'utf8');
-const sentinel = 'Persist refreshed credentials before a service restart can lose them.';
+const sentinel = 'Persist refreshed credentials before a service restart can lose them (v2).';
 
 if (source.includes(sentinel)) {
   console.log('SESSION_REFRESH_PATCH=already_applied');
@@ -17,7 +17,7 @@ if (source.includes(sentinel)) {
 
 const marker = `            await this.savePersistedConfig();
             const deviceName = os.hostname();`;
-const replacement = `            await this.savePersistedConfig();
+const legacyPatch = `            await this.savePersistedConfig();
             // Persist refreshed credentials before a service restart can lose them.
             this.remoteChannel.client.auth.onAuthStateChange((event, refreshedSession) => {
                 if (event === 'TOKEN_REFRESHED' && refreshedSession?.access_token) {
@@ -25,14 +25,25 @@ const replacement = `            await this.savePersistedConfig();
                 }
             });
             const deviceName = os.hostname();`;
+const replacement = `            await this.savePersistedConfig();
+            // Persist refreshed credentials before a service restart can lose them (v2).
+            this.remoteChannel.client.auth.onAuthStateChange(async (event, refreshedSession) => {
+                if (event === 'TOKEN_REFRESHED' && refreshedSession?.access_token) {
+                    await this.savePersistedConfig();
+                    console.log('SESSION_REFRESH_PERSIST_ATTEMPTED');
+                }
+            });
+            const deviceName = os.hostname();`;
 
-const occurrences = source.split(marker).length - 1;
-if (occurrences !== 1) {
-  throw new Error(`Unsupported Desktop Commander source: expected one persistence marker, found ${occurrences}`);
+const legacyOccurrences = source.split(legacyPatch).length - 1;
+const markerOccurrences = source.split(marker).length - 1;
+if (legacyOccurrences + markerOccurrences !== 1) {
+  throw new Error(`Unsupported Desktop Commander source: expected one persistence marker, found ${legacyOccurrences + markerOccurrences}`);
 }
 
 const metadata = await stat(deviceSource);
 const temporary = `${deviceSource}.shopvivaliz-${process.pid}.tmp`;
-await writeFile(temporary, source.replace(marker, replacement), { mode: metadata.mode });
+const target = legacyOccurrences === 1 ? legacyPatch : marker;
+await writeFile(temporary, source.replace(target, replacement), { mode: metadata.mode });
 await rename(temporary, deviceSource);
-console.log('SESSION_REFRESH_PATCH=applied');
+console.log(legacyOccurrences === 1 ? 'SESSION_REFRESH_PATCH=upgraded' : 'SESSION_REFRESH_PATCH=applied');

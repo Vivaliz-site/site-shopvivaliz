@@ -52,3 +52,24 @@ def test_public_product_removes_internal_cost_and_supplier_data():
     assert product["precos"] == {"preco": 10.0, "precoPromocional": 0.0}
     assert "fornecedores" not in product
     assert product["anexos"] == [{"url": "https://example.test/image.jpg"}]
+
+def test_public_product_extracts_nested_olist_seo():
+    product = daemon.public_product({
+        "id": 1,
+        "sku": "SKU-1",
+        "descricao": "Produto",
+        "situacao": "A",
+        "seo": {
+            "titulo": "Titulo SEO",
+            "descricao": "Descricao SEO",
+            "keywords": ["vaso japi", "decoracao"],
+            "slug": "produto-japi",
+            "linkVideo": "https://example.test/video",
+        },
+    })
+
+    assert product["seo_title"] == "Titulo SEO"
+    assert product["seo_description"] == "Descricao SEO"
+    assert product["keywords"] == ["vaso japi", "decoracao"]
+    assert product["slug"] == "produto-japi"
+    assert product["video_url"] == "https://example.test/video"

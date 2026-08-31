@@ -29,6 +29,7 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
     category = item.get("categoria") if isinstance(item.get("categoria"), dict) else {}
     brand = item.get("marca") if isinstance(item.get("marca"), dict) else {}
     dimensions = item.get("dimensoes") if isinstance(item.get("dimensoes"), dict) else {}
+    seo = item.get("seo") if isinstance(item.get("seo"), dict) else {}
     attachments = []
     for attachment in item.get("anexos", []) if isinstance(item.get("anexos"), list) else []:
         if isinstance(attachment, dict) and str(attachment.get("url", "")).startswith("https://"):
@@ -72,10 +73,11 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
         },
         "anexos": attachments,
         "imagem_principal_url": str(item.get("imagem_principal_url") or ""),
-        "seo_title": str(item.get("seo_title") or ""),
-        "seo_description": str(item.get("seo_description") or ""),
-        "keywords": item.get("keywords", []) if isinstance(item.get("keywords"), list) else [],
-        "video_url": str((item.get("seo") or {}).get("linkVideo") if isinstance(item.get("seo"), dict) else (item.get("video_url") or "")).strip(),
+        "seo_title": str(seo.get("titulo") or item.get("seo_title") or ""),
+        "seo_description": str(seo.get("descricao") or item.get("seo_description") or ""),
+        "keywords": seo.get("keywords") if isinstance(seo.get("keywords"), list) else (item.get("keywords", []) if isinstance(item.get("keywords"), list) else []),
+        "slug": str(seo.get("slug") or item.get("slug") or ""),
+        "video_url": str(seo.get("linkVideo") or item.get("video_url") or "").strip(),
         "_detail_synced_at": str(item.get("_detail_synced_at") or datetime.now(timezone.utc).isoformat()),
     }
 

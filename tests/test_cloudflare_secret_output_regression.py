@@ -7,6 +7,7 @@ SECRET_NAMES = ("CF_TOKEN", "BREVO_API_KEY")
 
 
 class CloudflareSecretOutputRegressionTests(unittest.TestCase):
+    # Secret identifiers may be referenced for checks, but never on a logging line.
     def test_secret_identifiers_are_never_referenced_on_logging_lines(self):
         text = WORKFLOW.read_text(encoding="utf-8-sig")
         for line_number, line in enumerate(text.splitlines(), start=1):

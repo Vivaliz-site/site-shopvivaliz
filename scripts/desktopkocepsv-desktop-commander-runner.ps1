@@ -1,101 +1,250 @@
 param()
-$ErrorActionPreference = 'Continue'
+$ErrorActionPreference = 'Stop'
 $Repo = 'C:\site-shopvivaliz'
-$LogDir = Join-Path $Repo 'logs'
+$Package = '@wonderwhy-er/desktop-commander@0.2.47'
+$MaxLogBytes = 5MB
+$AuthPattern = 'Persisted session invalid|Authenticating with Remote MCP server|Please complete authentication|Starting device authorization flow|device code|Authorization required'
+$ConnectedPattern = 'Device ready'
+$DegradedPattern = 'InvalidJWTToken|Token has expired|Device marked as offline|Channel (closed|errored)|Failed to (recreate|subscribe)|Subscription unhealthy'
+$RecoveredPattern = 'Device ready|Channel subscribed|recovered after'
+$RefreshPersistAttemptPattern = 'SESSION_REFRESH_PERSIST_ATTEMPTED'
+$DegradedRestartSeconds = 180
+$MarkerRefreshSeconds = 30
+
+function Ensure-ProfileEnvironment {
+    if (-not $env:USERPROFILE) {
+        $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        $profileKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$sid"
+        $profile = (Get-ItemProperty -LiteralPath $profileKey -Name ProfileImagePath -ErrorAction Stop).ProfileImagePath
+        $env:USERPROFILE = [Environment]::ExpandEnvironmentVariables($profile)
+    }
+    if (-not $env:LOCALAPPDATA) { $env:LOCALAPPDATA = Join-Path $env:USERPROFILE 'AppData\Local' }
+    $env:HOME = $env:USERPROFILE
+}
+
+Ensure-ProfileEnvironment
+$InstallRoot = Join-Path $env:LOCALAPPDATA 'ShopVivaliz\DesktopCommander'
+$LogDir = Join-Path $InstallRoot 'logs'
 $SupervisorLog = Join-Path $LogDir 'desktopkocepsv-desktop-commander.log'
 $CooldownFile = Join-Path $LogDir 'desktopkocepsv-desktop-commander-auth-required.cooldown'
 $ConnectedMarker = Join-Path $LogDir 'desktopkocepsv-desktop-commander-provider-connected.marker'
-$SessionPatcher = Join-Path $Repo 'scripts\patch-desktop-commander-session-persistence.mjs'
-$Package = '@wonderwhy-er/desktop-commander@0.2.47'
-$AuthPattern = 'Please complete authentication|Starting device authorization flow|device code|Authorization required|Persisted session invalid|Authenticating with Remote MCP server'
-$ConnectedPattern = 'Device ready'
+$SessionPatcher = Join-Path $PSScriptRoot 'patch-desktop-commander-session-persistence.mjs'
+$PackageRootHint = Join-Path $InstallRoot 'package-root.txt'
+$DeviceFile = Join-Path (Join-Path $env:USERPROFILE '.desktop-commander-device') 'device.json'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 function Log([string]$Message) {
-    $stamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-    "$stamp - $Message" | Out-File -FilePath $SupervisorLog -Append -Encoding utf8
-}
-function Read-CapturedProviderText([string[]]$Paths) {
-    $parts = @()
-    foreach ($path in $Paths) {
-        if (Test-Path -LiteralPath $path) {
-            try { $parts += (Get-Content -LiteralPath $path -Raw -ErrorAction Stop) } catch { }
+    $mutex = New-Object System.Threading.Mutex($false, 'Local\ShopVivalizDesktopCommanderLog')
+    $locked = $false
+    try {
+        try { $locked = $mutex.WaitOne(5000) } catch [System.Threading.AbandonedMutexException] { $locked = $true }
+        if (-not $locked) { return }
+        if ((Test-Path -LiteralPath $SupervisorLog) -and (Get-Item -LiteralPath $SupervisorLog).Length -ge $MaxLogBytes) {
+            $rotated = $SupervisorLog + '.1'
+            Remove-Item -LiteralPath $rotated -Force -ErrorAction SilentlyContinue
+            Move-Item -LiteralPath $SupervisorLog -Destination $rotated -Force
         }
+        $stamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+        "$stamp - $Message" | Out-File -FilePath $SupervisorLog -Append -Encoding utf8
     }
-    return ($parts -join "`n")
+    finally {
+        if ($locked) { try { $mutex.ReleaseMutex() } catch { } }
+        $mutex.Dispose()
+    }
 }
-
-$npx = (Get-Command npx.cmd -ErrorAction SilentlyContinue).Source
-if (-not $npx) { $npx = (Get-Command npx -ErrorAction SilentlyContinue).Source }
-if (-not $npx) { Log 'ERROR npx not found'; exit 3 }
-$node = (Get-Command node.exe -ErrorAction SilentlyContinue).Source
-if (-not $node) { $node = (Get-Command node -ErrorAction SilentlyContinue).Source }
-if (-not $node) { Log 'ERROR node not found'; exit 3 }
-if (-not (Test-Path -LiteralPath $SessionPatcher)) { Log 'SESSION_REFRESH_PATCH=false reason=patcher_missing'; exit 22 }
 
 function Install-SessionRefreshPatch {
-    $probeScript = "process.stdout.write(process.env.PATH.split(require('path').delimiter)[0])"
-    $probeArgs = @('--yes','--package',$Package,'--','node','-e',$probeScript)
-    $probeOutput = @(& $npx @probeArgs 2>$null)
-    if ($LASTEXITCODE -ne 0) { throw 'Desktop Commander package probe failed' }
-    $binDir = [string]($probeOutput | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -Last 1)
-    $binDir = $binDir.Trim()
-    if (-not $binDir) { throw 'Desktop Commander package bin path missing' }
-    $nodeModules = Split-Path -Parent $binDir
-    $packageRoot = Join-Path $nodeModules '@wonderwhy-er\desktop-commander'
-    if (-not (Test-Path -LiteralPath (Join-Path $packageRoot 'package.json'))) { throw 'Desktop Commander package root missing' }
-    $patchOutput = @(& $node $SessionPatcher $packageRoot 2>&1)
-    if ($LASTEXITCODE -ne 0) { throw 'Desktop Commander session persistence patch failed' }
+    $node = (Get-Command node.exe -ErrorAction SilentlyContinue).Source
+    if (-not $node) { $node = (Get-Command node -ErrorAction SilentlyContinue).Source }
+    if (-not $node) { throw 'node not found' }
+    if (-not (Test-Path -LiteralPath $SessionPatcher)) { throw 'patcher missing' }
+    $savedErrorPreference = $ErrorActionPreference
+    $packageRoot = $null
+    if (Test-Path -LiteralPath $PackageRootHint) {
+        $candidate = [string](Get-Content -LiteralPath $PackageRootHint -Raw -ErrorAction SilentlyContinue)
+        $candidate = $candidate.Trim()
+        if ($candidate) {
+            $candidateManifest = Join-Path $candidate 'package.json'
+            $candidateEntry = Join-Path $candidate 'dist\index.js'
+            if ((Test-Path -LiteralPath $candidateManifest) -and (Test-Path -LiteralPath $candidateEntry)) {
+                try {
+                    $candidateIdentity = Get-Content -LiteralPath $candidateManifest -Raw | ConvertFrom-Json
+                    if ($candidateIdentity.name -eq '@wonderwhy-er/desktop-commander' -and $candidateIdentity.version -eq '0.2.47') {
+                        $packageRoot = $candidate
+                        Log 'PACKAGE_RESOLUTION=verified_hint'
+                    }
+                }
+                catch { }
+            }
+        }
+    }
+    if (-not $packageRoot) {
+        $npx = (Get-Command npx.cmd -ErrorAction SilentlyContinue).Source
+        if (-not $npx) { $npx = (Get-Command npx -ErrorAction SilentlyContinue).Source }
+        if (-not $npx) { throw 'npx not found' }
+        $probeScript = "process.stdout.write(process.env.PATH.split(require('path').delimiter)[0])"
+        $probeArgs = @('--yes','--package',$Package,'--','node','-e',$probeScript)
+        $ErrorActionPreference = 'Continue'
+        try {
+            $probeOutput = @(& $npx @probeArgs 2>$null)
+            $probeExitCode = $LASTEXITCODE
+        }
+        finally { $ErrorActionPreference = $savedErrorPreference }
+        if ($probeExitCode -ne 0) { throw "Desktop Commander package probe failed rc=$probeExitCode" }
+        $binDir = [string]($probeOutput | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -Last 1)
+        $binDir = $binDir.Trim()
+        if (-not $binDir) { throw 'Desktop Commander package bin path missing' }
+        $packageRoot = Join-Path (Split-Path -Parent $binDir) '@wonderwhy-er\desktop-commander'
+        $packageManifest = Join-Path $packageRoot 'package.json'
+        $entryPoint = Join-Path $packageRoot 'dist\index.js'
+        if (-not (Test-Path -LiteralPath $packageManifest) -or -not (Test-Path -LiteralPath $entryPoint)) { throw 'Desktop Commander package root incomplete' }
+        $manifest = Get-Content -LiteralPath $packageManifest -Raw | ConvertFrom-Json
+        if ($manifest.name -ne '@wonderwhy-er/desktop-commander' -or $manifest.version -ne '0.2.47') { throw 'Desktop Commander package identity mismatch' }
+        $packageRoot | Out-File -FilePath $PackageRootHint -Force -Encoding ascii
+        Log 'PACKAGE_RESOLUTION=npx_then_hint_saved'
+    }
+    $entryPoint = Join-Path $packageRoot 'dist\index.js'
+
+    $ErrorActionPreference = 'Continue'
+    try {
+        $patchOutput = @(& $node $SessionPatcher $packageRoot 2>&1)
+        $patchExitCode = $LASTEXITCODE
+    }
+    finally { $ErrorActionPreference = $savedErrorPreference }
+    if ($patchExitCode -ne 0) { throw "Desktop Commander session persistence patch failed rc=$patchExitCode" }
     $patchState = [string]($patchOutput | Where-Object { [string]$_ -match '^SESSION_REFRESH_PATCH=' } | Select-Object -Last 1)
     if (-not $patchState) { throw 'Desktop Commander session persistence patch state missing' }
     Log $patchState
+    return [pscustomobject]@{ Node = $node; EntryPoint = $entryPoint }
 }
 
-try { Install-SessionRefreshPatch } catch { Log ('SESSION_REFRESH_PATCH=false reason=' + $_.Exception.Message); exit 22 }
+$script:ProviderProcess = $null
+$script:Connected = $false
+$script:AuthRequired = $false
+$script:DegradedSinceUtc = $null
+$script:LastMarkerWriteUtc = [datetime]::MinValue
+$script:LastDeviceStateWriteUtc = if (Test-Path -LiteralPath $DeviceFile) { (Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc } else { [datetime]::MinValue }
 
-$tmpBase = Join-Path $env:TEMP ('shopvivaliz-dc-' + [guid]::NewGuid().ToString('N'))
-$outFile = $tmpBase + '.out'
-$errFile = $tmpBase + '.err'
-Remove-Item -LiteralPath $ConnectedMarker -Force -ErrorAction SilentlyContinue
-$proc = $null
-$authRequired = $false
-$connected = $false
-$rc = 1
-try {
-    $proc = Start-Process -FilePath $npx -ArgumentList @('--yes',$Package,'remote','--persist-session') -WorkingDirectory $Repo -WindowStyle Hidden -RedirectStandardOutput $outFile -RedirectStandardError $errFile -PassThru
-    while ($true) {
-        $proc.Refresh()
-        $text = Read-CapturedProviderText @($outFile,$errFile)
-        if ($text -match $AuthPattern) {
-            $authRequired = $true
-            '' | Out-File -FilePath $CooldownFile -Force -Encoding ascii
-            Log 'AUTH_REQUIRED provider requested device authorization; raw provider output discarded'
-            try { & taskkill.exe /PID $proc.Id /T /F 2>$null | Out-Null } catch { }
-            try { $proc.WaitForExit(10000) | Out-Null } catch { }
-            break
-        }
-        if ((-not $connected) -and ($text -match $ConnectedPattern)) {
-            $connected = $true
-            Remove-Item -LiteralPath $CooldownFile -Force -ErrorAction SilentlyContinue
-            '' | Out-File -FilePath $ConnectedMarker -Force -Encoding ascii
-            Log 'Remote Desktop Commander broker ready observed'
-        }
-        if ($proc.HasExited) { break }
-        Start-Sleep -Seconds 1
+function Write-ConnectionMarker {
+    if (-not $script:ProviderProcess) { return }
+    $utc = (Get-Date).ToUniversalTime()
+    @(
+        'state=connected',
+        ('updated_utc=' + $utc.ToString('o')),
+        ('runner_pid=' + $PID),
+        ('provider_pid=' + $script:ProviderProcess.Id)
+    ) | Out-File -FilePath $ConnectedMarker -Force -Encoding ascii
+    $script:LastMarkerWriteUtc = $utc
+}
+
+function Observe-ProviderLine([string]$Line) {
+    if ([string]::IsNullOrWhiteSpace($Line)) { return }
+    if ((-not $script:Connected) -and ($Line -match $ConnectedPattern)) {
+        $script:Connected = $true
+        $script:DegradedSinceUtc = $null
+        Remove-Item -LiteralPath $CooldownFile -Force -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $DeviceFile) { $script:LastDeviceStateWriteUtc = (Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc }
+        Write-ConnectionMarker
+        Log 'Remote Desktop Commander provider connection observed'
     }
-    $proc.Refresh()
-    $text = Read-CapturedProviderText @($outFile,$errFile)
-    if ((-not $authRequired) -and ($text -match $AuthPattern)) {
-        $authRequired = $true
+    if ((-not $script:Connected) -and ($Line -match $AuthPattern)) {
+        $script:AuthRequired = $true
         '' | Out-File -FilePath $CooldownFile -Force -Encoding ascii
-        Log 'AUTH_REQUIRED provider requested device authorization; raw provider output discarded'
+        Log 'AUTH_REQUIRED provider requested device authorization before connection; raw provider output discarded'
     }
-    if ($proc.HasExited) { $rc = $proc.ExitCode }
+    if ($script:Connected -and ($Line -match $DegradedPattern) -and -not $script:DegradedSinceUtc) {
+        $script:DegradedSinceUtc = (Get-Date).ToUniversalTime()
+        Log 'Provider channel degradation observed; recovery grace started'
+    }
+    if ($script:Connected -and $script:DegradedSinceUtc -and ($Line -match $RecoveredPattern)) {
+        $script:DegradedSinceUtc = $null
+        Write-ConnectionMarker
+        Log 'Provider channel recovery observed'
+    }
+    if ($script:Connected -and ($Line -match $RefreshPersistAttemptPattern)) {
+        $currentWrite = if (Test-Path -LiteralPath $DeviceFile) { (Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc } else { [datetime]::MinValue }
+        if ($currentWrite -gt $script:LastDeviceStateWriteUtc) {
+            $script:LastDeviceStateWriteUtc = $currentWrite
+            Log 'SESSION_REFRESH_PERSISTED=true'
+        }
+        else {
+            Log 'SESSION_REFRESH_PERSISTED=inconclusive reason=device_state_mtime_unchanged'
+        }
+    }
+}
+
+function Stop-ProviderTree {
+    if (-not $script:ProviderProcess -or $script:ProviderProcess.HasExited) { return }
+    try { & taskkill.exe /PID $script:ProviderProcess.Id /T /F 2>$null | Out-Null } catch { }
+    try { [void]$script:ProviderProcess.WaitForExit(10000) } catch { }
+}
+
+try { $launch = Install-SessionRefreshPatch }
+catch { Log ('SESSION_REFRESH_PATCH=false reason=' + $_.Exception.Message); exit 22 }
+
+Remove-Item -LiteralPath $ConnectedMarker -Force -ErrorAction SilentlyContinue
+$rc = 1
+$forcedExitCode = $null
+$stdoutTask = $null
+$stderrTask = $null
+try {
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = $launch.Node
+    $startInfo.Arguments = '"' + $launch.EntryPoint.Replace('"', '\"') + '" remote --persist-session'
+    $startInfo.WorkingDirectory = $Repo
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $script:ProviderProcess = New-Object System.Diagnostics.Process
+    $script:ProviderProcess.StartInfo = $startInfo
+    if (-not $script:ProviderProcess.Start()) { throw 'Desktop Commander provider process did not start' }
+
+    # Raw provider output is never persisted; only bounded, sanitized state transitions are logged.
+    $stdoutTask = $script:ProviderProcess.StandardOutput.ReadLineAsync()
+    $stderrTask = $script:ProviderProcess.StandardError.ReadLineAsync()
+    while ($true) {
+        if ($stdoutTask -and $stdoutTask.IsCompleted) {
+            try { $line = $stdoutTask.GetAwaiter().GetResult() } catch { $line = $null }
+            if ($null -eq $line) { $stdoutTask = $null }
+            else { Observe-ProviderLine $line; $stdoutTask = $script:ProviderProcess.StandardOutput.ReadLineAsync() }
+        }
+        if ($stderrTask -and $stderrTask.IsCompleted) {
+            try { $line = $stderrTask.GetAwaiter().GetResult() } catch { $line = $null }
+            if ($null -eq $line) { $stderrTask = $null }
+            else { Observe-ProviderLine $line; $stderrTask = $script:ProviderProcess.StandardError.ReadLineAsync() }
+        }
+        if ($script:AuthRequired) {
+            $forcedExitCode = 20
+            Stop-ProviderTree
+        }
+        if ($script:DegradedSinceUtc) {
+            $degradedAge = ((Get-Date).ToUniversalTime() - $script:DegradedSinceUtc).TotalSeconds
+            if ($degradedAge -ge $DegradedRestartSeconds) {
+                Log ('Provider channel recovery timed out seconds=' + [math]::Round($degradedAge))
+                $forcedExitCode = 23
+                Stop-ProviderTree
+            }
+        }
+        if ($script:Connected -and -not $script:DegradedSinceUtc -and (((Get-Date).ToUniversalTime() - $script:LastMarkerWriteUtc).TotalSeconds -ge $MarkerRefreshSeconds)) {
+            Write-ConnectionMarker
+        }
+        $script:ProviderProcess.Refresh()
+        if ($script:ProviderProcess.HasExited -and -not $stdoutTask -and -not $stderrTask) { break }
+        Start-Sleep -Milliseconds 100
+    }
+    $script:ProviderProcess.WaitForExit()
+    $rc = if ($null -ne $forcedExitCode) { $forcedExitCode } else { [int]$script:ProviderProcess.ExitCode }
+}
+catch {
+    Log ('Remote Desktop Commander runner exception type=' + $_.Exception.GetType().Name)
+    Stop-ProviderTree
+    $rc = if ($null -ne $forcedExitCode) { $forcedExitCode } else { 24 }
 }
 finally {
-    Remove-Item -LiteralPath $outFile,$errFile -Force -ErrorAction SilentlyContinue
-    if ($proc -and $proc.HasExited) { Remove-Item -LiteralPath $ConnectedMarker -Force -ErrorAction SilentlyContinue }
+    Remove-Item -LiteralPath $ConnectedMarker -Force -ErrorAction SilentlyContinue
+    if ($script:ProviderProcess) { $script:ProviderProcess.Dispose() }
 }
-if ($authRequired) { exit 20 }
 Log ('Remote Desktop Commander runner exited rc=' + $rc)
 exit $rc
