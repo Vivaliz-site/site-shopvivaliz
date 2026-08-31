@@ -8,6 +8,8 @@ on:
       - 'tests/desktop-commander-auto-repair-guard-contract-test.php'
       - 'tests/desktop-commander-nondisruptive-recovery-contract-test.php'
       - '.github/workflows/desktop-commander-three-host-control-plane.yml'
+      - '.github/workflows/vm-desktop-commander-action.yml'
+      - '.github/workflows/vm-desktop-commander-secure-recovery.yml'
       - '.github/workflows/dc-orphan-wrapper-contract.yml'
 
 permissions:

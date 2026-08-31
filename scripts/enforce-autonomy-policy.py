@@ -81,7 +81,7 @@ def assertion_evaluated_text(line: str) -> str | None:
             continue
         fragment = ast.get_source_segment(source, value)
         if fragment:
-            fragments.append(fragment)
+            fragments.append(" ".join(fragment.split()))
     return " ".join(fragments)
 
 
@@ -134,16 +134,36 @@ def should_scan_content(path: str) -> bool:
 
 def sensitive_content(lines: list[str]) -> list[str]:
     findings: list[str] = []
-    for index, line in enumerate(lines, start=1):
-        evaluated = assertion_evaluated_text(line)
-        scan_text = line if evaluated is None else evaluated
+    consumed: set[int] = set()
+
+    def inspect(scan_text: str, index: int, original: str) -> None:
         if not scan_text:
-            continue
+            return
         lower = scan_text.lower()
         if not any(token in lower for token in SENSITIVE_TOKENS):
-            continue
+            return
         if MUTATION_PATTERN.search(scan_text):
-            findings.append(f"added-line-{index}: {line[:240]}")
+            findings.append(f"added-line-{index + 1}: {original[:240]}")
+
+    for index, line in enumerate(lines):
+        if index in consumed:
+            continue
+
+        if ASSERTION_TEXT.search(line):
+            for end in range(index, min(len(lines), index + 50)):
+                source = "\n".join(lines[index:end + 1])
+                evaluated = assertion_evaluated_text(source)
+                if evaluated is None:
+                    continue
+                consumed.update(range(index, end + 1))
+                inspect(evaluated, index, source)
+                break
+            else:
+                inspect(line, index, line)
+            continue
+
+        inspect(line, index, line)
+
     return findings
 
 

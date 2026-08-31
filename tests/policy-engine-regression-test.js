@@ -200,4 +200,27 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
+{
+  const root = setupRepo();
+  write(root, 'tests/hunk-boundary.sh', `#!/usr/bin/env bash\nfalse\nrecover\necho one\necho two\necho three\necho four\necho old\n`);
+  const base = commitAll(root, 'base separated shell hunks');
+  write(root, 'tests/hunk-boundary.sh', `#!/usr/bin/env bash\nfalse ||\nrecover\necho one\necho two\necho three\necho four\ntrue\n`);
+  const head = commitAll(root, 'change separate shell hunks');
+  const result = policy(root, base, head);
+  assert.strictEqual(result.status, 0, `Separated diff hunks must not synthesize a nonexistent || true command:\n${result.stdout}\n${result.stderr}`);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base comment parenthesis lexer guard');
+  write(root, 'tests/comment-paren-publish.js', `const { spawnSync } = require('child_process');\nspawnSync('bash', [/* ) */ '-c', 'git push origin HEAD:main']);\n`);
+  const head = commitAll(root, 'add executable with comment parenthesis');
+  const result = policy(root, base, head);
+  assert.notStrictEqual(result.status, 0, 'Comment parentheses must not terminate executable argument scanning');
+  assert.match(result.stdout, /padrão perigoso git push/);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
 console.log('policy-engine-regression: ok');

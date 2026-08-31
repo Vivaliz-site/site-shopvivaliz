@@ -145,6 +145,7 @@ def workflow_trigger_names(text: str) -> set[str]:
 
     inline = match.group("inline").strip()
     if inline:
+        inline = re.sub(r"^(?:(?:&[^\s\[\]{},]+|![^\s\[\]{},]+)\s*)+", "", inline).strip()
         if inline.startswith("{"):
             brace = text.find("{", match.start("inline"), match.end("inline"))
             mapping = collect_flow_mapping(text, brace) if brace >= 0 else None

@@ -46,6 +46,18 @@ class AutonomyPolicySemanticTests(unittest.TestCase):
         assertion = '        assertIn(f"{post(stock=10)}", response)'
         self.assertTrue(policy.sensitive_content([assertion]))
 
+    def test_multiline_assertion_evaluated_mutation_remains_sensitive(self):
+        lines = [
+            '        self.assertIn(',
+            '            "ok",',
+            '            post(',
+            '                "/api/catalog",',
+            '                {"stock": 10},',
+            '            ),',
+            '        )',
+        ]
+        self.assertTrue(policy.sensitive_content(lines))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -145,7 +145,7 @@ class RepositoryWorkflowGovernanceRemediationTests(unittest.TestCase):
         text = self.text("mei-email-graph-token-diagnostic.yml")
         self.assertRegex(text, r"(?s)- name: Require diagnostic evidence\n\s+if: always\(\)")
         self.assertIn("GRAPH_DIAGNOSTIC_EVIDENCE=fallback", text)
-        self.assertIn('if [ ! -s "$REPORT_PATH" ]; then', text)
+        self.assertIn("if ! grep -qx", text)
 
     def test_dc_contracts_track_current_control_plane_status_step_and_changes(self):
         marker = "Stage sanitized status evidence"
@@ -161,6 +161,17 @@ class RepositoryWorkflowGovernanceRemediationTests(unittest.TestCase):
         self.assertIn("tests/desktop-commander-auto-repair-guard-contract-test.php", workflow)
         self.assertIn("tests/desktop-commander-nondisruptive-recovery-contract-test.php", workflow)
         self.assertIn("php tests/desktop-commander-nondisruptive-recovery-contract-test.php", workflow)
+
+    def test_graph_diagnostic_requires_completion_marker(self):
+        text = self.text("mei-email-graph-token-diagnostic.yml")
+        self.assertIn("GRAPH_DIAGNOSTIC_COMPLETE=1", text)
+        self.assertIn("if ! grep -qx", text)
+        self.assertIn("collection_failed_before_graph_diagnostic_completion", text)
+
+    def test_dc_contract_trigger_covers_all_validated_workflows(self):
+        workflow = self.text("dc-orphan-wrapper-contract.yml")
+        self.assertIn(".github/workflows/vm-desktop-commander-action.yml", workflow)
+        self.assertIn(".github/workflows/vm-desktop-commander-secure-recovery.yml", workflow)
 
 
 if __name__ == "__main__":

@@ -55,14 +55,28 @@ class PolicyEngine {
     return this.changedFilesCache;
   }
 
-  addedLines(file) {
+  addedHunks(file) {
     const baseSha = String(process.env.POLICY_BASE_SHA || '').trim();
     const headSha = String(process.env.POLICY_HEAD_SHA || '').trim();
     const diff = this.git(['diff', '--unified=0', '--no-color', `${baseSha}...${headSha}`, '--', file]);
-    return diff
-      .split(/\r?\n/)
-      .filter(line => line.startsWith('+') && !line.startsWith('+++'))
-      .map(line => line.slice(1));
+    const hunks = [];
+    let current = null;
+    for (const line of diff.split(/\r?\n/)) {
+      if (line.startsWith('@@')) {
+        if (current && current.length > 0) hunks.push(current);
+        current = [];
+        continue;
+      }
+      if (current !== null && line.startsWith('+') && !line.startsWith('+++')) {
+        current.push(line.slice(1));
+      }
+    }
+    if (current && current.length > 0) hunks.push(current);
+    return hunks;
+  }
+
+  addedLines(file) {
+    return this.addedHunks(file).flat();
   }
 
   failureFallbackToken() {
@@ -105,7 +119,11 @@ class PolicyEngine {
     return false;
   }
 
-  executableCallArguments(value, wrapperPattern) {
+  isRegexLiteralStart(previousSignificant) {
+    return previousSignificant === '' || /[([{,:;=!?&|+\-*%^~<>]/.test(previousSignificant);
+  }
+
+  executableCallArguments(value, wrapperPattern, syntax = 'generic') {
     const text = String(value);
     const flags = wrapperPattern.flags.includes('g')
       ? wrapperPattern.flags
@@ -120,10 +138,43 @@ class PolicyEngine {
       let depth = 0;
       let quote = null;
       let escaped = false;
+      let lineComment = false;
+      let blockComment = false;
+      let regexLiteral = false;
+      let regexClass = false;
+      let previousSignificant = '';
       let closed = false;
 
       for (let index = openIndex; index < text.length; index += 1) {
         const char = text[index];
+        const next = text[index + 1] || '';
+
+        if (lineComment) {
+          if (char === '\n') lineComment = false;
+          continue;
+        }
+        if (blockComment) {
+          if (char === '*' && next === '/') {
+            blockComment = false;
+            index += 1;
+          }
+          continue;
+        }
+        if (regexLiteral) {
+          if (escaped) {
+            escaped = false;
+          } else if (char === '\\') {
+            escaped = true;
+          } else if (char === '[') {
+            regexClass = true;
+          } else if (char === ']' && regexClass) {
+            regexClass = false;
+          } else if (char === '/' && !regexClass) {
+            regexLiteral = false;
+            previousSignificant = '/';
+          }
+          continue;
+        }
         if (quote !== null) {
           if (escaped) {
             escaped = false;
@@ -132,6 +183,28 @@ class PolicyEngine {
           } else if (char === quote) {
             quote = null;
           }
+          continue;
+        }
+
+        const slashComments = syntax === 'javascript' || syntax === 'php';
+        if (slashComments && char === '/' && next === '/') {
+          lineComment = true;
+          index += 1;
+          continue;
+        }
+        if (slashComments && char === '/' && next === '*') {
+          blockComment = true;
+          index += 1;
+          continue;
+        }
+        if ((syntax === 'python' || syntax === 'php') && char === '#') {
+          lineComment = true;
+          continue;
+        }
+        if (syntax === 'javascript' && char === '/' && this.isRegexLiteralStart(previousSignificant)) {
+          regexLiteral = true;
+          regexClass = false;
+          escaped = false;
           continue;
         }
         if (char === "'" || char === '"' || char === '`') {
@@ -147,6 +220,7 @@ class PolicyEngine {
             break;
           }
         }
+        if (!/\s/.test(char)) previousSignificant = char;
       }
 
       if (!closed) {
@@ -162,15 +236,17 @@ class PolicyEngine {
       return this.executableCallArguments(
         value,
         /\b(?:os\.system|subprocess\.(?:run|call|check_call|check_output|Popen))\s*\(/,
+        'python',
       );
     }
     if (/\.(?:js|mjs|cjs)$/i.test(file)) {
-      return this.executableCallArguments(value, /\b(?:exec|execSync|spawn|spawnSync)\s*\(/);
+      return this.executableCallArguments(value, /\b(?:exec|execSync|spawn|spawnSync)\s*\(/, 'javascript');
     }
     if (/\.php$/i.test(file)) {
       return this.executableCallArguments(
         value,
         /\b(?:shell_exec|exec|system|passthru|proc_open)\s*\(/,
+        'php',
       );
     }
     return [];
@@ -257,11 +333,10 @@ class PolicyEngine {
     for (const file of this.changedFiles()) {
       if (!/\.(?:js|mjs|cjs|py|sh|php|yml|yaml)$/i.test(file)) continue;
       if (!fs.existsSync(file)) continue;
-      const added = this.addedLines(file);
-      const addedText = added.join('\n');
+      const addedTexts = this.addedHunks(file).map(lines => lines.join('\n'));
       if (file.startsWith('tests/')) {
         for (const rule of rules) {
-          if (this.isExecutableForbiddenCommand(file, addedText, rule.pattern)) {
+          if (addedTexts.some(addedText => this.isExecutableForbiddenCommand(file, addedText, rule.pattern))) {
             this.fail(`padrão perigoso ${rule.label} em ${file}`);
           }
         }
@@ -273,7 +348,7 @@ class PolicyEngine {
           }
         }
       }
-      if (this.isExecutableFailureSuppression(file, addedText)) {
+      if (addedTexts.some(addedText => this.isExecutableFailureSuppression(file, addedText))) {
         this.fail(`padrão perigoso ${this.failureFallbackToken()} em ${file}`);
       }
     }
