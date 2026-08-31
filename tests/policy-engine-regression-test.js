@@ -68,6 +68,7 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
+
 {
   const root = setupRepo();
   const base = commitAll(root, 'base safe workflow');
@@ -99,6 +100,7 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
+
 {
   const root = setupRepo();
   const base = commitAll(root, 'base suppressed deployment');
@@ -110,6 +112,7 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
+
 {
   const root = setupRepo();
   const base = commitAll(root, 'base policy source');
@@ -119,6 +122,7 @@ function policy(root, base, head) {
   assert.strictEqual(result.status, 0, `Policy source text must not be treated as executable shell suppression:\n${result.stdout}\n${result.stderr}`);
   fs.rmSync(root, {recursive: true, force: true});
 }
+
 
 {
   const root = setupRepo();
@@ -130,6 +134,7 @@ function policy(root, base, head) {
   assert.match(result.stdout, /padrão perigoso git push/);
   fs.rmSync(root, {recursive: true, force: true});
 }
+
 
 {
   const root = setupRepo();
@@ -206,6 +211,7 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
+
 {
   const root = setupRepo();
   const base = commitAll(root, 'base comment parenthesis lexer guard');
@@ -216,6 +222,7 @@ function policy(root, base, head) {
   assert.match(result.stdout, /padrão perigoso git push/);
   fs.rmSync(root, {recursive: true, force: true});
 }
+
 
 {
   const root = setupRepo();
@@ -271,6 +278,7 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
+
 {
   const root = setupRepo();
   const base = commitAll(root, 'base identifier named of division');
@@ -281,6 +289,7 @@ function policy(root, base, head) {
   assert.match(result.stdout, /perigoso git push/);
   fs.rmSync(root, {recursive: true, force: true});
 }
+
 
 {
   const root = setupRepo();
