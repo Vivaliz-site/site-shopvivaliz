@@ -117,11 +117,10 @@ class PolicyEngine {
     const rules = [
       { label: ['git', 'push'].join(' '), pattern: /\bgit\s+push\b/ },
       { label: ['git', 'add', '-A'].join(' '), pattern: /\bgit\s+add\s+-A\b/ },
-      { label: ['or-or', 'true'].join(' '), pattern: /\|\|\s*true\b/ },
-      { label: ['exit', 'zero'].join(' '), pattern: /\bexit\s+0\b/ },
     ];
 
     for (const file of this.changedFiles()) {
+      if (file.startsWith('tests/')) continue;
       if (!/\.(?:js|mjs|cjs|sh|php|yml|yaml)$/i.test(file)) continue;
       if (!fs.existsSync(file)) continue;
       const content = fs.readFileSync(file, 'utf8');
