@@ -100,6 +100,44 @@ def flow_mapping_keys(value: str) -> set[str]:
     return names
 
 
+def collect_flow_mapping(text: str, start: int) -> str | None:
+    depth = 0
+    quote: str | None = None
+    escaped = False
+    comment = False
+    collected: list[str] = []
+    for index in range(start, len(text)):
+        char = text[index]
+        if comment:
+            if char == "\n":
+                comment = False
+                collected.append(char)
+            continue
+        if quote is not None:
+            collected.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\" and quote == '"':
+                escaped = True
+            elif char == quote:
+                quote = None
+            continue
+        if char == "#":
+            comment = True
+            continue
+
+        collected.append(char)
+        if char in ("'", '"'):
+            quote = char
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return "".join(collected)
+    return None
+
+
 def workflow_trigger_names(text: str) -> set[str]:
     match = ON_LINE.search(text)
     if not match:
@@ -107,8 +145,10 @@ def workflow_trigger_names(text: str) -> set[str]:
 
     inline = match.group("inline").strip()
     if inline:
-        if inline.startswith("{") and inline.endswith("}"):
-            return flow_mapping_keys(inline)
+        if inline.startswith("{"):
+            brace = text.find("{", match.start("inline"), match.end("inline"))
+            mapping = collect_flow_mapping(text, brace) if brace >= 0 else None
+            return flow_mapping_keys(mapping) if mapping is not None else set()
         if inline.startswith("[") and inline.endswith("]"):
             values = inline[1:-1].split(",")
         else:

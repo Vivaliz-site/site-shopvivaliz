@@ -212,6 +212,44 @@ jobs:
         )
         self.assertIn("production_push_trigger", {item.rule for item in findings})
 
+    def test_multiline_flow_mapping_triggers_are_parsed(self):
+        findings = self.audit(
+            "production-flow-multiline.yml",
+            """name: Production flow multiline
+on: {
+  push: {},
+  workflow_dispatch: {}
+}
+permissions:
+  contents: read
+jobs:
+  x:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+""",
+        )
+        self.assertIn("production_push_trigger", {item.rule for item in findings})
+
+    def test_multiline_flow_mapping_with_comments_is_parsed(self):
+        findings = self.audit(
+            "production-flow-comments.yml",
+            """name: Production flow comments
+on: { # flow mapping starts here
+  push: {},
+  workflow_dispatch: {} # manual path remains available
+}
+permissions:
+  contents: read
+jobs:
+  x:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+""",
+        )
+        self.assertIn("production_push_trigger", {item.rule for item in findings})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -69,51 +69,125 @@ class PolicyEngine {
     return ['||', 'true'].join(' ');
   }
 
-  failureFallbackMatch(line) {
-    return /\|\|\s+true\b/.exec(String(line));
+  failureFallbackMatches(value) {
+    return [...String(value).matchAll(/\|\|\s+true\b/g)];
   }
 
-  isSafeReadOnlyFallback(line) {
-    const match = this.failureFallbackMatch(line);
-    if (!match) return false;
-    const beforeFallback = String(line).slice(0, match.index);
-    return /\bsystemctl\s+(?:is-active|is-enabled|show)\b/.test(beforeFallback);
-  }
-
-  isExecutableFailureSuppression(file, line) {
-    if (!this.failureFallbackMatch(line) || this.isSafeReadOnlyFallback(line)) return false;
-    if (/\.(?:yml|yaml|sh)$/i.test(file)) return true;
-    if (/\.(?:js|mjs|cjs)$/i.test(file)) {
-      return /\b(?:exec|execSync|spawn|spawnSync)\s*\(/.test(line) || /\bshell\s*:/.test(line);
+  shellSegmentBefore(value, index) {
+    const before = String(value).slice(0, index);
+    const separators = [
+      { token: '\n', width: 1 },
+      { token: ';', width: 1 },
+      { token: '&&', width: 2 },
+      { token: '||', width: 2 },
+    ];
+    let start = -1;
+    let width = 0;
+    for (const separator of separators) {
+      const found = before.lastIndexOf(separator.token);
+      if (found > start) {
+        start = found;
+        width = separator.width;
+      }
     }
-    if (/\.php$/i.test(file)) {
-      return /\b(?:shell_exec|exec|system|passthru|proc_open)\s*\(/.test(line);
+    return before.slice(start < 0 ? 0 : start + width).trim();
+  }
+
+  isSafeReadOnlyFallbackAt(value, index) {
+    const command = this.shellSegmentBefore(value, index);
+    return /\bsystemctl\s+(?:is-active|is-enabled|show)\b/.test(command);
+  }
+
+  hasUnsafeFailureFallback(value) {
+    for (const match of this.failureFallbackMatches(value)) {
+      if (!this.isSafeReadOnlyFallbackAt(value, match.index)) return true;
     }
     return false;
+  }
+
+  executableCallArguments(value, wrapperPattern) {
+    const text = String(value);
+    const flags = wrapperPattern.flags.includes('g')
+      ? wrapperPattern.flags
+      : `${wrapperPattern.flags}g`;
+    const wrapper = new RegExp(wrapperPattern.source, flags);
+    const argumentsList = [];
+    let match;
+
+    while ((match = wrapper.exec(text)) !== null) {
+      const openOffset = match[0].lastIndexOf('(');
+      const openIndex = match.index + openOffset;
+      let depth = 0;
+      let quote = null;
+      let escaped = false;
+      let closed = false;
+
+      for (let index = openIndex; index < text.length; index += 1) {
+        const char = text[index];
+        if (quote !== null) {
+          if (escaped) {
+            escaped = false;
+          } else if (char === '\\') {
+            escaped = true;
+          } else if (char === quote) {
+            quote = null;
+          }
+          continue;
+        }
+        if (char === "'" || char === '"' || char === '`') {
+          quote = char;
+        } else if (char === '(') {
+          depth += 1;
+        } else if (char === ')') {
+          depth -= 1;
+          if (depth === 0) {
+            argumentsList.push(text.slice(openIndex + 1, index));
+            wrapper.lastIndex = index + 1;
+            closed = true;
+            break;
+          }
+        }
+      }
+
+      if (!closed) {
+        wrapper.lastIndex = match.index + match[0].length;
+      }
+    }
+
+    return argumentsList;
+  }
+
+  executableArguments(file, value) {
+    if (/\.py$/i.test(file)) {
+      return this.executableCallArguments(
+        value,
+        /\b(?:os\.system|subprocess\.(?:run|call|check_call|check_output|Popen))\s*\(/,
+      );
+    }
+    if (/\.(?:js|mjs|cjs)$/i.test(file)) {
+      return this.executableCallArguments(value, /\b(?:exec|execSync|spawn|spawnSync)\s*\(/);
+    }
+    if (/\.php$/i.test(file)) {
+      return this.executableCallArguments(
+        value,
+        /\b(?:shell_exec|exec|system|passthru|proc_open)\s*\(/,
+      );
+    }
+    return [];
+  }
+
+  isExecutableFailureSuppression(file, value) {
+    const text = String(value);
+    if (/\.(?:yml|yaml|sh)$/i.test(file)) return this.hasUnsafeFailureFallback(text);
+    return this.executableArguments(file, text)
+      .some(argumentsText => this.hasUnsafeFailureFallback(argumentsText));
   }
 
   isExecutableForbiddenCommand(file, value, pattern) {
     const text = String(value);
-    if (!pattern.test(text)) return false;
-    if (/\.(?:yml|yaml|sh)$/i.test(file)) return true;
-
-    const patternWithinExecutableWindow = wrapper => {
-      const match = wrapper.exec(text);
-      if (!match) return false;
-      return pattern.test(text.slice(match.index, match.index + 2000));
-    };
-
-    if (/\.py$/i.test(file)) {
-      return patternWithinExecutableWindow(/\b(?:os\.system|subprocess\.(?:run|call|check_call|check_output|Popen))\s*\(/);
-    }
-    if (/\.(?:js|mjs|cjs)$/i.test(file)) {
-      return patternWithinExecutableWindow(/\b(?:exec|execSync|spawn|spawnSync)\s*\(/)
-        || patternWithinExecutableWindow(/\bshell\s*:/);
-    }
-    if (/\.php$/i.test(file)) {
-      return patternWithinExecutableWindow(/\b(?:shell_exec|exec|system|passthru|proc_open)\s*\(/);
-    }
-    return false;
+    if (/\.(?:yml|yaml|sh)$/i.test(file)) return pattern.test(text);
+    return this.executableArguments(file, text)
+      .some(argumentsText => pattern.test(argumentsText));
   }
 
   isVisualFile(file) {
@@ -184,8 +258,8 @@ class PolicyEngine {
       if (!/\.(?:js|mjs|cjs|py|sh|php|yml|yaml)$/i.test(file)) continue;
       if (!fs.existsSync(file)) continue;
       const added = this.addedLines(file);
+      const addedText = added.join('\n');
       if (file.startsWith('tests/')) {
-        const addedText = added.join('\n');
         for (const rule of rules) {
           if (this.isExecutableForbiddenCommand(file, addedText, rule.pattern)) {
             this.fail(`padrão perigoso ${rule.label} em ${file}`);
@@ -199,11 +273,8 @@ class PolicyEngine {
           }
         }
       }
-      for (const line of added) {
-        if (this.isExecutableFailureSuppression(file, line)) {
-          this.fail(`padrão perigoso ${this.failureFallbackToken()} em ${file}`);
-          break;
-        }
+      if (this.isExecutableFailureSuppression(file, addedText)) {
+        this.fail(`padrão perigoso ${this.failureFallbackToken()} em ${file}`);
       }
     }
   }

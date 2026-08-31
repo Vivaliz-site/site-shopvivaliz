@@ -38,6 +38,14 @@ class AutonomyPolicySemanticTests(unittest.TestCase):
         fixture = 'assertion = \'self.assertNotIn("POST /api/catalog/stock", workflow_text)\''
         self.assertEqual(policy.sensitive_content([fixture]), [])
 
+    def test_assertion_evaluated_argument_remains_sensitive(self):
+        assertion = 'self.assertIn("ok", post("/api/catalog", {"stock": 10}))'
+        self.assertTrue(policy.sensitive_content([assertion]))
+
+    def test_assertion_fstring_expression_remains_sensitive(self):
+        assertion = 'assertIn(f"{post(stock=10)}", response)'
+        self.assertTrue(policy.sensitive_content([assertion]))
+
 
 if __name__ == '__main__':
     unittest.main()
