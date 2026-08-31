@@ -1,105 +1,69 @@
 # Agent merge policy
 
-This repository uses a merge-by-default operating rule for agent work.
+This repository uses a mandatory merge-completion rule for agent work.
 
 ## Required default
 
-Agents must not leave completed work stranded in an unmerged branch or pull request when it is safe to merge.
+An open branch or pull request is never a completed task. Direct-to-main work is forbidden.
 
-For any repository change, the default completion path is:
+For any repository change, the mandatory completion path is:
 
 1. Sync with `main` before changing files.
-2. Make the smallest safe change.
-3. Run the relevant validation available to the agent.
-4. If validation fails, diagnose and fix the failure immediately in the same work session.
-5. Re-run the failed validation and any directly affected checks.
-6. If the change is direct-to-main and safe, commit it to `main`.
-7. If the change is on a branch or pull request, merge it after required checks pass.
-8. Publish machine-readable merge feedback for autonomous agents.
-9. Record evidence: commit SHA, PR number when applicable, checks/run IDs, and any generated artifacts.
+2. Create or use a task-specific branch/worktree; never edit `main` directly.
+3. Make the smallest safe change.
+4. Run the real project validation required by `scripts/repository-governance-validate.sh` before commit.
+5. If validation fails, diagnose and fix the failure in the same work cycle, then re-run validation.
+6. Commit only after validation passes.
+7. Confirm `git status --porcelain=v1` is empty before push.
+8. Push only the task branch; direct push to `main`/`master` is forbidden.
+9. Open or update the pull request and require independent GitHub Actions validation.
+10. Repair checks, conflicts, review findings, workflow failures, and merge blockers until the current PR SHA is green.
+11. Merge immediately after all required gates pass.
+12. Perform post-merge verification and record merge SHA, PR number, checks/run IDs, and generated artifacts.
+
+Agents must never use `--no-verify`, force push, direct-to-main commits, disabled checks, or any equivalent bypass.
 
 ## Error handling before merge
 
-A failing check, test, lint, build, review comment, merge conflict, or runtime error is not a reason to leave a PR pending by default.
+A failing check, test, lint, build, review comment, merge conflict, runtime error, permission problem, runner failure, or provider outage is not permission to abandon a PR. Capture the exact evidence, identify the root cause, apply the smallest safe repair, and re-run the affected validation.
 
-When an error appears, the agent must immediately:
+Agents must not stop at `PR_OPEN`, `CHECK_FAILED`, `AWAITING_AGENT`, `PENDING_AGENT_FIX`, `NOT_MERGED`, or similar passive states when there is an actionable repair path.
 
-1. Capture the exact failing check, log, command, file, line, and run ID when available.
-2. Identify the smallest safe fix.
-3. Apply the fix in the same branch or PR whenever permitted.
-4. Re-run the failed check or an equivalent validation.
-5. Continue this repair loop until the branch is mergeable or a real blocker is proven.
-
-Agents must not stop at `PR_OPEN`, `CHECK_FAILED`, `AWAITING_AGENT`, or similar passive status when the error is actionable by the agent.
+If the blocker is external and cannot be removed in the current execution, the PR and task remain active work. Record the blocker and next repair action, but do not call the task complete. Resume the repair loop when the dependency is available.
 
 ## Machine-readable feedback for auto agents
 
-Every merge, direct-to-main commit, attempted merge, failed merge, or pending repair state must update the feedback bus documented in `docs/agent-merge-result-feedback.md`.
+Every attempted merge, failed merge, pending repair state, or completed merge must update the feedback bus documented in `docs/agent-merge-result-feedback.md`.
 
 Required files:
 
 - latest state: `ops/agent-merge-result.json`
 - optional history: `ops/agent-merge-results/<timestamp-or-run-id>.json`
 
-The latest state must tell the next autonomous agent whether work is pending and what to do next.
+`PENDING_AGENT_FIX` and `NOT_MERGED` may be used only as transient operational states. They never mean task completion and must include `pending=true`, concrete evidence, `auto_fix_action`, and `next_agent_instruction`.
 
-If work is pending because of an actionable failure, agents must publish:
-
-- `status=PENDING_AGENT_FIX`
-- `pending=true`
-- `auto_fix_required=true`
-- the failing check/run/job/log evidence
-- `auto_fix_action`
-- `next_agent_instruction`
-
-If work is complete, agents must publish `pending=false` and include merge/direct-to-main evidence.
-
-A natural-language chat response is not sufficient; autonomous agents must be able to read the JSON state without conversation history.
+A completed state requires `pending=false` plus PR and merge evidence.
 
 ## Meaning of "always merge"
 
-"Always merge" means agents must complete the integration step whenever it is safe and authorized. It also means agents must resolve actionable errors immediately so the work can be merged instead of staying pending.
+"Always merge" means the integration step is mandatory whenever a repository change is being delivered. Failures trigger repair, not abandonment. External blockers may pause execution but do not convert an open PR into a finished task.
 
-It does not authorize bypassing protections, hiding failures, force-pushing unsafe history, or merging unsafe work.
+This rule does not authorize bypassing protections, hiding failures, force-pushing unsafe history, disabling checks, or merging unsafe work. The agent must fix the condition that prevents a safe merge.
 
-Agents must prefer merge completion over leaving work pending.
-
-## When not to merge
-
-Agents must not merge when any of these are true:
-
-- required checks are failing after the agent has attempted and documented the repair loop;
-- merge conflicts require human/product judgment;
-- the change touches secrets, credentials, payments, orders, pricing, stock, ERP, marketplace publishing, or customer data outside the approved scope;
-- the user explicitly asks for a draft, review-only work, or no merge;
-- branch protection, required review, or repository rules block the merge;
-- the agent cannot verify what changed;
-- external credentials, production access, or human approval are required and unavailable.
-
-In those cases, the agent must stop with a clear status: `NOT_MERGED`, the blocker, what was tried, evidence links/run IDs/log excerpts, and the exact next action. The same information must also be written to `ops/agent-merge-result.json`.
+The only exception is an explicit user instruction for that specific task to stop before merge or perform review-only work.
 
 ## Required final report
 
-Every agent report must include one of:
+A completed task report may use only:
 
-- `MERGED` with commit SHA / PR / run evidence;
-- `DIRECT_TO_MAIN` with commit SHA / run evidence;
-- `FIXED_THEN_MERGED` with the original failure, fix commit, final passing evidence, and merge evidence;
-- `PENDING_AGENT_FIX` with failing evidence and next autonomous repair action;
-- `NOT_MERGED` with the blocker, attempted fixes, evidence, and next action.
+- `MERGED` with merge SHA / PR / run evidence; or
+- `FIXED_THEN_MERGED` with the original failure, repair commit, final passing evidence, and merge evidence.
 
-Reports must not use vague pending statuses without naming the blocker and why the agent could not resolve it immediately.
+Transient statuses such as `PENDING_AGENT_FIX` or `NOT_MERGED` are progress reports, never completion reports. `DIRECT_TO_MAIN` is not a valid status.
 
 ## GitHub Actions observability
 
-When a merge decision depends on GitHub Actions and the connector cannot list runs directly, use the canonical run index documented in `docs/agent-actions-observability.md`.
-
-Do not declare Actions run discovery unavailable before trying:
-
-1. `ops/actions-run-index-request.json`
-2. `ops/actions-run-index.json`
-
-After a failing run is identified, the agent must use available job/log/artifact actions to inspect the failure and attempt a fix before leaving work unmerged.
+When a merge decision depends on GitHub Actions, use the canonical run index documented in `docs/agent-actions-observability.md` when needed. Inspect failing jobs/logs/artifacts, repair the cause, and continue until the PR is merged.
 
 ## Fred-Win
 

@@ -1,0 +1,24 @@
+name: Mandatory Validation Gate
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+permissions:
+  contents: read
+jobs:
+  validation-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          tools: composer:v2
+          coverage: none
+      - name: Validate repository change
+        run: bash scripts/repository-governance-validate.sh ci
