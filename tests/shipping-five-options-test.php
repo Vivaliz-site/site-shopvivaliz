@@ -4,10 +4,10 @@ declare(strict_types=1);
 $root = dirname(__DIR__);
 $api = file_get_contents($root . '/api/melhorenvio/shipping-check-v2.php');
 $js = file_get_contents($root . '/js/sales-conversion-v1.js');
+$privacy = file_get_contents($root . '/js/privacy-consent-v1.js');
 $css = file_get_contents($root . '/css/sales-conversion-v1.css');
-$head = file_get_contents($root . '/includes/head-analytics.php');
 
-if (!is_string($api) || !is_string($js) || !is_string($css) || !is_string($head)) {
+if (!is_string($api) || !is_string($js) || !is_string($privacy) || !is_string($css)) {
     fwrite(STDERR, "shipping-five-options: source read failure\n");
     exit(1);
 }
@@ -19,8 +19,11 @@ $checks = [
         && str_contains($js, 'shipping-check-v2.php'),
     'Product receives up to five' => str_contains($js, "getElementById('p-frete-result')")
         && str_contains($js, 'slice(0,5)'),
-    'Direct produto.php loads five-option layer' => str_contains($js, "path==='/produto.php'")
-        && str_contains($head, "\$requestPath === '/produto.php'"),
+    'Direct produto.php bootstraps five-option layer' => str_contains($js, "path==='/produto.php'")
+        && str_contains($privacy, 'bootstrapDirectProductSalesLayer')
+        && str_contains($privacy, "path !== '/produto.php'")
+        && str_contains($privacy, '/js/sales-conversion-v1.js')
+        && str_contains($privacy, '/css/sales-conversion-v1.css'),
     'Checkout choices persist signed quote' => str_contains($js, 'sv_checkout_shipping_option')
         && str_contains($js, "localStorage.setItem('shopvivaliz_shipping_quote'")
         && str_contains($js, 'quote_id:option.quote_id'),
