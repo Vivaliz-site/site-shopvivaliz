@@ -5,6 +5,9 @@ on:
     paths:
       - 'scripts/fredwin-desktop-commander-supervisor.ps1'
       - 'tests/desktop-commander-orphan-wrapper-guard-contract-test.php'
+      - 'tests/desktop-commander-auto-repair-guard-contract-test.php'
+      - 'tests/desktop-commander-nondisruptive-recovery-contract-test.php'
+      - '.github/workflows/desktop-commander-three-host-control-plane.yml'
       - '.github/workflows/dc-orphan-wrapper-contract.yml'
 
 permissions:
@@ -24,6 +27,7 @@ jobs:
           set -euo pipefail
           php tests/desktop-commander-orphan-wrapper-guard-contract-test.php
           php tests/desktop-commander-auto-repair-guard-contract-test.php
+          php tests/desktop-commander-nondisruptive-recovery-contract-test.php
           php tests/desktop-commander-health-restart-contract-test.php
           php tests/desktop-commander-persist-session-contract-test.php
           php tests/desktop-commander-three-host-action-contract-test.php

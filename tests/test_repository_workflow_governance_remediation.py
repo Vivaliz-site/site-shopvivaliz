@@ -141,6 +141,27 @@ class RepositoryWorkflowGovernanceRemediationTests(unittest.TestCase):
         self.assertNotIn('exit "$status"', text)
         self.assertNotIn('if [ "$failed" -ne 0 ]; then\n            exit 1', text)
 
+    def test_graph_diagnostic_materializes_fallback_evidence(self):
+        text = self.text("mei-email-graph-token-diagnostic.yml")
+        self.assertRegex(text, r"(?s)- name: Require diagnostic evidence\n\s+if: always\(\)")
+        self.assertIn("GRAPH_DIAGNOSTIC_EVIDENCE=fallback", text)
+        self.assertIn('if [ ! -s "$REPORT_PATH" ]; then', text)
+
+    def test_dc_contracts_track_current_control_plane_status_step_and_changes(self):
+        marker = "Stage sanitized status evidence"
+        for name in (
+            "desktop-commander-auto-repair-guard-contract-test.php",
+            "desktop-commander-nondisruptive-recovery-contract-test.php",
+        ):
+            text = (ROOT / "tests" / name).read_text(encoding="utf-8")
+            self.assertIn(marker, text, name)
+            self.assertNotIn("Publish sanitized status", text, name)
+        workflow = self.text("dc-orphan-wrapper-contract.yml")
+        self.assertIn(".github/workflows/desktop-commander-three-host-control-plane.yml", workflow)
+        self.assertIn("tests/desktop-commander-auto-repair-guard-contract-test.php", workflow)
+        self.assertIn("tests/desktop-commander-nondisruptive-recovery-contract-test.php", workflow)
+        self.assertIn("php tests/desktop-commander-nondisruptive-recovery-contract-test.php", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

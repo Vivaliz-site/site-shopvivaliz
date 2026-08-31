@@ -111,6 +111,10 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          mkdir -p "$(dirname "$REPORT_PATH")"
+          if [ ! -s "$REPORT_PATH" ]; then
+            printf 'GRAPH_DIAGNOSTIC_EVIDENCE=fallback\ncollection_failed_before_graph_evidence_materialization\n' > "$REPORT_PATH"
+          fi
           test -s "$REPORT_PATH"
 
       - name: Upload diagnostic evidence

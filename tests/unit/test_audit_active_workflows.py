@@ -196,6 +196,22 @@ jobs:
         )
         self.assertIn("automatic_write_workflow", {item.rule for item in findings})
 
+    def test_flow_mapping_triggers_are_parsed(self):
+        findings = self.audit(
+            "production-flow.yml",
+            """name: Production flow
+on: {push: {}, workflow_dispatch: {}}
+permissions:
+  contents: read
+jobs:
+  x:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+""",
+        )
+        self.assertIn("production_push_trigger", {item.rule for item in findings})
+
 
 if __name__ == "__main__":
     unittest.main()

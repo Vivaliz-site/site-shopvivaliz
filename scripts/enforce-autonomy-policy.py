@@ -37,6 +37,13 @@ MUTATION_PATTERN = re.compile(
     r"\b(price|pricing|preco|preço|stock|estoque|inventory|quantity|quantidade)\b"
 )
 
+INERT_TEXT_ASSERTION = re.compile(
+    r"^\s*(?:self\.)?assert(?:NotIn|In)\s*\(\s*[rRuUbBfF]*['\"]"
+)
+INERT_ASSERTION_FIXTURE = re.compile(
+    r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*[rRuUbBfF]*['\"].*(?:self\.)?assert(?:NotIn|In)\s*\("
+)
+
 
 def git(*args: str) -> str:
     result = subprocess.run(
@@ -88,6 +95,8 @@ def should_scan_content(path: str) -> bool:
 def sensitive_content(lines: list[str]) -> list[str]:
     findings: list[str] = []
     for index, line in enumerate(lines, start=1):
+        if INERT_TEXT_ASSERTION.search(line) or INERT_ASSERTION_FIXTURE.search(line):
+            continue
         lower = line.lower()
         if not any(token in lower for token in SENSITIVE_TOKENS):
             continue

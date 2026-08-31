@@ -69,14 +69,19 @@ class PolicyEngine {
     return ['||', 'true'].join(' ');
   }
 
+  failureFallbackMatch(line) {
+    return /\|\|\s+true\b/.exec(String(line));
+  }
+
   isSafeReadOnlyFallback(line) {
-    const beforeFallback = String(line).split(this.failureFallbackToken(), 1)[0];
+    const match = this.failureFallbackMatch(line);
+    if (!match) return false;
+    const beforeFallback = String(line).slice(0, match.index);
     return /\bsystemctl\s+(?:is-active|is-enabled|show)\b/.test(beforeFallback);
   }
 
   isExecutableFailureSuppression(file, line) {
-    const token = this.failureFallbackToken();
-    if (!String(line).includes(token) || this.isSafeReadOnlyFallback(line)) return false;
+    if (!this.failureFallbackMatch(line) || this.isSafeReadOnlyFallback(line)) return false;
     if (/\.(?:yml|yaml|sh)$/i.test(file)) return true;
     if (/\.(?:js|mjs|cjs)$/i.test(file)) {
       return /\b(?:exec|execSync|spawn|spawnSync)\s*\(/.test(line) || /\bshell\s*:/.test(line);
@@ -87,17 +92,26 @@ class PolicyEngine {
     return false;
   }
 
-  isExecutableForbiddenCommand(file, line, pattern) {
-    if (!pattern.test(String(line))) return false;
+  isExecutableForbiddenCommand(file, value, pattern) {
+    const text = String(value);
+    if (!pattern.test(text)) return false;
     if (/\.(?:yml|yaml|sh)$/i.test(file)) return true;
+
+    const patternWithinExecutableWindow = wrapper => {
+      const match = wrapper.exec(text);
+      if (!match) return false;
+      return pattern.test(text.slice(match.index, match.index + 2000));
+    };
+
     if (/\.py$/i.test(file)) {
-      return /\b(?:os\.system|subprocess\.(?:run|call|check_call|check_output|Popen))\s*\(/.test(line);
+      return patternWithinExecutableWindow(/\b(?:os\.system|subprocess\.(?:run|call|check_call|check_output|Popen))\s*\(/);
     }
     if (/\.(?:js|mjs|cjs)$/i.test(file)) {
-      return /\b(?:exec|execSync|spawn|spawnSync)\s*\(/.test(line) || /\bshell\s*:/.test(line);
+      return patternWithinExecutableWindow(/\b(?:exec|execSync|spawn|spawnSync)\s*\(/)
+        || patternWithinExecutableWindow(/\bshell\s*:/);
     }
     if (/\.php$/i.test(file)) {
-      return /\b(?:shell_exec|exec|system|passthru|proc_open)\s*\(/.test(line);
+      return patternWithinExecutableWindow(/\b(?:shell_exec|exec|system|passthru|proc_open)\s*\(/);
     }
     return false;
   }
@@ -171,8 +185,9 @@ class PolicyEngine {
       if (!fs.existsSync(file)) continue;
       const added = this.addedLines(file);
       if (file.startsWith('tests/')) {
+        const addedText = added.join('\n');
         for (const rule of rules) {
-          if (added.some(line => this.isExecutableForbiddenCommand(file, line, rule.pattern))) {
+          if (this.isExecutableForbiddenCommand(file, addedText, rule.pattern)) {
             this.fail(`padrão perigoso ${rule.label} em ${file}`);
           }
         }

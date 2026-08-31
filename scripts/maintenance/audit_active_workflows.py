@@ -65,6 +65,41 @@ def excerpt(value: str) -> str:
     return " ".join(value.strip().split())[:200]
 
 
+def flow_mapping_keys(value: str) -> set[str]:
+    inner = value.strip()[1:-1]
+    items: list[str] = []
+    start = 0
+    depth = 0
+    quote: str | None = None
+    escaped = False
+    for index, char in enumerate(inner):
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = None
+            continue
+        if char in ("'", '"'):
+            quote = char
+        elif char in "[{(":
+            depth += 1
+        elif char in "]})":
+            depth = max(0, depth - 1)
+        elif char == "," and depth == 0:
+            items.append(inner[start:index])
+            start = index + 1
+    items.append(inner[start:])
+
+    names: set[str] = set()
+    for item in items:
+        name = item.split(":", 1)[0].strip().strip("'\"")
+        if re.fullmatch(r"[A-Za-z0-9_-]+", name):
+            names.add(name)
+    return names
+
+
 def workflow_trigger_names(text: str) -> set[str]:
     match = ON_LINE.search(text)
     if not match:
@@ -72,6 +107,8 @@ def workflow_trigger_names(text: str) -> set[str]:
 
     inline = match.group("inline").strip()
     if inline:
+        if inline.startswith("{") and inline.endswith("}"):
+            return flow_mapping_keys(inline)
         if inline.startswith("[") and inline.endswith("]"):
             values = inline[1:-1].split(",")
         else:
