@@ -12,6 +12,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
 require_once __DIR__ . '/../includes/liz-knowledge-context.php';
+require_once __DIR__ . '/../config/internal-http-origin.php';
 
 function lizk_json_response(int $status, array $payload): never
 {
@@ -52,7 +53,7 @@ $matches = sv_liz_knowledge_search($message, 3);
 
 $input['message'] = $message;
 
-$targetUrl = 'http://127.0.0.1/api/liz-intelligent.php';
+$targetUrl = shopvivaliz_internal_url('/api/liz-intelligent.php');
 
 $payload = json_encode($input, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 if (!is_string($payload)) {
