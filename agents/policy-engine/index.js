@@ -119,6 +119,54 @@ class PolicyEngine {
     return false;
   }
 
+  javascriptStructuralContext(value) {
+    let result = '';
+    let quote = null;
+    let escaped = false;
+
+    for (const char of String(value)) {
+      if (quote !== null) {
+        result += ' ';
+        if (escaped) {
+          escaped = false;
+        } else if (char === '\\') {
+          escaped = true;
+        } else if (char === quote) {
+          quote = null;
+        }
+        continue;
+      }
+      if (char === "'" || char === '"' || char === '`') {
+        quote = char;
+        result += ' ';
+        continue;
+      }
+      result += char;
+    }
+    return result;
+  }
+
+  isForOfRegexContext(contextBeforeKeyword) {
+    const structural = this.javascriptStructuralContext(contextBeforeKeyword);
+    let depth = 0;
+
+    for (let index = structural.length - 1; index >= 0; index -= 1) {
+      const char = structural[index];
+      if (char === ')') {
+        depth += 1;
+        continue;
+      }
+      if (char !== '(') continue;
+      if (depth > 0) {
+        depth -= 1;
+        continue;
+      }
+      const prefix = structural.slice(0, index).trimEnd();
+      return /\bfor(?:\s+await)?$/.test(prefix);
+    }
+    return false;
+  }
+
   isRegexLiteralStart(context) {
     const trimmed = String(context).trimEnd();
     if (!trimmed) return true;
@@ -132,6 +180,7 @@ class PolicyEngine {
     if (!match || !regexPrefixKeywords.has(match[1])) return false;
 
     const beforeKeyword = trimmed.slice(0, trimmed.length - match[1].length).trimEnd();
+    if (match[1] === 'of') return this.isForOfRegexContext(beforeKeyword);
     return !beforeKeyword.endsWith('.') && !beforeKeyword.endsWith('?.');
   }
 

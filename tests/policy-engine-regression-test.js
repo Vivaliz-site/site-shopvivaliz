@@ -68,7 +68,6 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
-
 {
   const root = setupRepo();
   const base = commitAll(root, 'base safe workflow');
@@ -100,7 +99,6 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
-
 {
   const root = setupRepo();
   const base = commitAll(root, 'base suppressed deployment');
@@ -112,7 +110,6 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
-
 {
   const root = setupRepo();
   const base = commitAll(root, 'base policy source');
@@ -122,7 +119,6 @@ function policy(root, base, head) {
   assert.strictEqual(result.status, 0, `Policy source text must not be treated as executable shell suppression:\n${result.stdout}\n${result.stderr}`);
   fs.rmSync(root, {recursive: true, force: true});
 }
-
 
 {
   const root = setupRepo();
@@ -134,7 +130,6 @@ function policy(root, base, head) {
   assert.match(result.stdout, /padrão perigoso git push/);
   fs.rmSync(root, {recursive: true, force: true});
 }
-
 
 {
   const root = setupRepo();
@@ -211,7 +206,6 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
-
 {
   const root = setupRepo();
   const base = commitAll(root, 'base comment parenthesis lexer guard');
@@ -222,7 +216,6 @@ function policy(root, base, head) {
   assert.match(result.stdout, /padrão perigoso git push/);
   fs.rmSync(root, {recursive: true, force: true});
 }
-
 
 {
   const root = setupRepo();
@@ -274,6 +267,28 @@ function policy(root, base, head) {
   const head = commitAll(root, 'add property division before direct push');
   const result = policy(root, base, head);
   assert.notStrictEqual(result.status, 0, 'Property names that match regex-leading keywords must still allow division parsing');
+  assert.match(result.stdout, /perigoso git push/);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base identifier named of division');
+  write(root, 'tests/of-identifier-division-publish.js', `const { execSync } = require('child_process');\nconst of = 10;\nexecSync((of / divisor) && 'git push origin HEAD:main');\n`);
+  const head = commitAll(root, 'add of identifier division before direct push');
+  const result = policy(root, base, head);
+  assert.notStrictEqual(result.status, 0, 'An identifier named of must not turn division into a regex literal');
+  assert.match(result.stdout, /perigoso git push/);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base for-of regex context');
+  write(root, 'tests/for-of-regex-publish.js', `const { execSync } = require('child_process');\nexecSync((function () { for (const x of /[)]/) {} return 'git push origin HEAD:main'; })());\n`);
+  const head = commitAll(root, 'add for-of regex before direct push');
+  const result = policy(root, base, head);
+  assert.notStrictEqual(result.status, 0, 'A contextual for-of keyword must still permit a regex literal');
   assert.match(result.stdout, /perigoso git push/);
   fs.rmSync(root, {recursive: true, force: true});
 }
