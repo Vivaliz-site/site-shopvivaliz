@@ -18,15 +18,18 @@ on:
       - 'scripts/utils/tiktok_client.py'
       - 'scripts/configure-production-runtime.py'
       - 'scripts/configure-marketplace-publication-runtime.py'
+      - 'scripts/merge-runtime-credential-union.py'
       - 'scripts/integrations/tiktok.py'
       - 'scripts/execute_marketplace_upload.py'
       - 'scripts/maintenance/catalog_real_execution_audit.py'
       - 'scripts/maintenance/marketplace_publication_readiness.php'
       - 'scripts/maintenance/reconcile_catalog_publications.php'
       - 'tests/test_configure_production_runtime.py'
+      - 'tests/test_merge_runtime_credential_union.py'
       - '.github/workflows/catalog-publication-integrity.yml'
       - '.github/workflows/catalog-publication-reconcile.yml'
       - '.github/workflows/configure-marketplace-publication-runtime.yml'
+      - '.github/workflows/merge-runtime-credential-union.yml'
   push:
     branches: [main]
     paths:
@@ -45,15 +48,18 @@ on:
       - 'scripts/utils/tiktok_client.py'
       - 'scripts/configure-production-runtime.py'
       - 'scripts/configure-marketplace-publication-runtime.py'
+      - 'scripts/merge-runtime-credential-union.py'
       - 'scripts/integrations/tiktok.py'
       - 'scripts/execute_marketplace_upload.py'
       - 'scripts/maintenance/catalog_real_execution_audit.py'
       - 'scripts/maintenance/marketplace_publication_readiness.php'
       - 'scripts/maintenance/reconcile_catalog_publications.php'
       - 'tests/test_configure_production_runtime.py'
+      - 'tests/test_merge_runtime_credential_union.py'
       - '.github/workflows/catalog-publication-integrity.yml'
       - '.github/workflows/catalog-publication-reconcile.yml'
       - '.github/workflows/configure-marketplace-publication-runtime.yml'
+      - '.github/workflows/merge-runtime-credential-union.yml'
   workflow_dispatch:
 
 permissions:
@@ -106,6 +112,7 @@ jobs:
             scripts/utils/tiktok_client.py \
             scripts/configure-production-runtime.py \
             scripts/configure-marketplace-publication-runtime.py \
+            scripts/merge-runtime-credential-union.py \
             scripts/integrations/tiktok.py \
             scripts/execute_marketplace_upload.py \
             scripts/maintenance/catalog_real_execution_audit.py
@@ -114,6 +121,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 tests/test_configure_production_runtime.py
+          python3 tests/test_merge_runtime_credential_union.py
       - name: Reject simulation and missing publisher wiring
         run: python3 scripts/maintenance/catalog_real_execution_audit.py
 
