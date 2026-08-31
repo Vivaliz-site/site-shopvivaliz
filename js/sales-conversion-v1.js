@@ -12,15 +12,37 @@
   function shippingReadQuote(){
     try{return JSON.parse(localStorage.getItem('shopvivaliz_shipping_quote')||'null');}catch(e){return null;}
   }
+  function shippingClearPendingPayment(){
+    try{localStorage.removeItem('shopvivaliz_pending_payment');}catch(e){}
+  }
+  function shippingOptionExpired(option){
+    var expiresAt=Number(option&&option.expires_at||0);
+    if(!expiresAt) return true;
+    var now=expiresAt>1000000000000?Date.now():Math.floor(Date.now()/1000);
+    return expiresAt<=now;
+  }
   function shippingQuote(option,cep){
     return {cep:cep,total:Number(option.price)||0,option:option,label:(option.company?option.company+' - ':'')+(option.name||'Frete'),quote_id:option.quote_id||'',expires_at:Number(option.expires_at)||0,provider:'melhorenvio'};
   }
+  function shippingRecalculateCheckout(){
+    var input=document.getElementById('cep-input');
+    var cep=String(input&&input.value||'').replace(/\D/g,'').slice(0,8);
+    try{localStorage.removeItem('shopvivaliz_shipping_quote');}catch(e){}
+    shippingClearPendingPayment();
+    var status=document.getElementById('checkout-shipping-status');
+    if(status){status.hidden=false;status.textContent='A cotação expirou. Recalculando o frete…';}
+    if(input&&cep.length===8){
+      try{input.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){input.dispatchEvent(new Event('input'));}
+    }
+  }
   function shippingSaveCheckoutChoice(option,cep){
+    if(document.documentElement.dataset.svCheckoutSubmitting==='1') return false;
+    if(shippingOptionExpired(option)){shippingRecalculateCheckout();return false;}
     var previous=shippingReadQuote();
     var previousTotal=previous?Number(previous.total)||0:0;
     var quote=shippingQuote(option,cep);
     try{localStorage.setItem('shopvivaliz_shipping_quote',JSON.stringify(quote));}catch(e){}
-    try{localStorage.removeItem('shopvivaliz_pending_payment');}catch(e){}
+    shippingClearPendingPayment();
     var shippingEl=document.getElementById('cart-shipping');
     var totalEl=document.getElementById('cart-total');
     if(shippingEl) shippingEl.textContent=shippingMoney(quote.total);
@@ -28,6 +50,7 @@
       var currentTotal=shippingParseMoney(totalEl.textContent);
       if(currentTotal!==null) totalEl.textContent=shippingMoney(Math.max(0,currentTotal-previousTotal+quote.total));
     }
+    return true;
   }
   function shippingCepFromRequest(init){
     try{
@@ -64,6 +87,8 @@
   function renderCheckoutShipping(options,cep){
     var status=document.getElementById('checkout-shipping-status');
     if(!status) return;
+    var validOptions=options.filter(function(option){return !shippingOptionExpired(option);}).slice(0,5);
+    if(!validOptions.length){shippingRecalculateCheckout();return;}
     status.dataset.svShippingRendering='1';
     status.hidden=false;
     status.innerHTML='';
@@ -76,12 +101,13 @@
     list.dataset.svFiveShipping='1';
     var current=shippingReadQuote();
     var currentId=current&&current.option?String(current.option.id||''):'';
-    options.slice(0, 5).forEach(function(option,index){
+    validOptions.forEach(function(option,index){
       var label=document.createElement('label');
       label.className='sv-shipping-choice';
       var input=document.createElement('input');
       input.type='radio';input.name='sv_checkout_shipping_option';input.value=String(option.id||index);
       input.checked=currentId?String(option.id||'')===currentId:index===0;
+      input.disabled=document.documentElement.dataset.svCheckoutSubmitting==='1';
       var info=document.createElement('span');
       var name=document.createElement('strong');
       name.textContent=(option.company?option.company+' - ':'')+(option.name||'Frete');
@@ -101,10 +127,39 @@
     var isCheckout=path==='/checkout';
     if((!isProduct&&!isCheckout)||typeof window.fetch!=='function') return;
     var pending=null;
+    var latestShippingRequest=0;
+    function currentCheckoutCep(){
+      var input=document.getElementById('cep-input');
+      return String(input&&input.value||'').replace(/\D/g,'').slice(0,8);
+    }
+    function setCheckoutSubmitting(active){
+      if(!isCheckout) return;
+      if(active) document.documentElement.dataset.svCheckoutSubmitting='1';
+      else delete document.documentElement.dataset.svCheckoutSubmitting;
+      document.querySelectorAll('input[name="sv_checkout_shipping_option"]').forEach(function(input){input.disabled=!!active;});
+    }
+    if(isCheckout){
+      var checkoutForm=document.getElementById('checkout-form');
+      var checkoutSubmit=document.getElementById('submit-btn');
+      if(checkoutForm){
+        checkoutForm.addEventListener('submit',function(){
+          setCheckoutSubmitting(true);
+          setTimeout(function(){if(!checkoutSubmit||!checkoutSubmit.disabled)setCheckoutSubmitting(false);},0);
+        },true);
+      }
+      if(checkoutSubmit&&typeof MutationObserver==='function'){
+        new MutationObserver(function(){if(!checkoutSubmit.disabled)setCheckoutSubmitting(false);})
+          .observe(checkoutSubmit,{attributes:true,attributeFilter:['disabled']});
+      }
+    }
     function renderPending(){
       if(!pending) return;
       if(isProduct) renderProductShipping(pending.options);
-      if(isCheckout) renderCheckoutShipping(pending.options,pending.cep);
+      if(isCheckout){
+        var currentCep=currentCheckoutCep();
+        if(!currentCep||currentCep!==pending.cep) return;
+        renderCheckoutShipping(pending.options,pending.cep);
+      }
     }
     var observed=isProduct?document.getElementById('p-frete-result'):document.getElementById('checkout-shipping-status');
     if(observed&&typeof MutationObserver==='function'){
@@ -117,21 +172,29 @@
     if(original.__svFiveShippingWrapped) return;
     function wrappedFetch(resource,init){
       var url=typeof resource==='string'?resource:(resource&&resource.url?String(resource.url):'');
-      var request=original.apply(this,arguments);
-      if(url.indexOf('/api/melhorenvio/shipping-check-v2.php')===-1) return request;
+      if(url.indexOf('/api/melhorenvio/shipping-check-v2.php')===-1) return original.apply(this,arguments);
       var requestCep=shippingCepFromRequest(init);
+      var requestVersion=++latestShippingRequest;
+      pending=null;
+      if(isCheckout) shippingClearPendingPayment();
+      var request=original.apply(this,arguments);
       return request.then(function(response){
         try{
           response.clone().json().then(function(data){
-            var options=data&&Array.isArray(data.shipping_options)?data.shipping_options.slice(0, 5):[];
-            if(!data||!data.ok||!options.length) return;
+            if(requestVersion!==latestShippingRequest) return;
+            var options=data&&Array.isArray(data.shipping_options)?data.shipping_options.slice(0,5):[];
+            if(!data||!data.ok||!options.length){pending=null;return;}
             var input=isProduct?document.getElementById('p-frete-cep'):document.getElementById('cep-input');
             var cep=requestCep||String(input&&input.value||'').replace(/\D/g,'').slice(0,8);
-            pending={options:options,cep:cep};
+            if(isCheckout&&currentCheckoutCep()&&cep!==currentCheckoutCep()){pending=null;return;}
+            pending={options:options,cep:cep,requestVersion:requestVersion};
             renderPending();
-          }).catch(function(){});
-        }catch(e){}
+          }).catch(function(){if(requestVersion===latestShippingRequest)pending=null;});
+        }catch(e){if(requestVersion===latestShippingRequest)pending=null;}
         return response;
+      },function(error){
+        if(requestVersion===latestShippingRequest) pending=null;
+        throw error;
       });
     }
     wrappedFetch.__svFiveShippingWrapped=true;
