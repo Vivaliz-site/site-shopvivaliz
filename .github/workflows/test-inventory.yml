@@ -6,10 +6,8 @@ name: Inventario de testes (nao bloqueante)
 # especificamente para impedir que ele volte). shopvivaliz-qa.yml cita
 # arquivos de teste um a um por nome, entao a lista diverge silenciosamente
 # conforme testes novos sao adicionados. Este workflow roda por glob (pega
-# tudo em tests/) em modo NAO-BLOQUEANTE (continue-on-error) para primeiro
-# inventariar quantos ja estao quebrados sem travar nenhum PR -- promover
-# pra bloqueante, e decidir o que fazer com os que falharem (consertar vs.
-# remover), e decisao do Fred. Ver R7-8 no relatorio da Rodada 7.
+# tudo em tests/) e continua informativo: captura cada falha explicitamente, publica
+# contagens/warnings e nao mascara comandos com continue-on-error ou set +e.
 
 on:
   push:
@@ -24,7 +22,6 @@ jobs:
   php-tests-inventory:
     name: Inventario de testes PHP (tests/*.php, glob)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
         with:
@@ -33,9 +30,9 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-      - name: Rodar cada tests/*.php encontrado (nao bloqueante)
+      - name: Rodar cada tests/*.php encontrado
         run: |
-          set +e
+          set -u
           total=0
           passed=0
           failed=0
@@ -43,8 +40,11 @@ jobs:
           while IFS= read -r -d '' file; do
             total=$((total+1))
             echo "::group::php $file"
-            php "$file"
-            status=$?
+            if php "$file"; then
+              status=0
+            else
+              status=$?
+            fi
             echo "::endgroup::"
             if [ "$status" -eq 0 ]; then
               passed=$((passed+1))
@@ -62,11 +62,14 @@ jobs:
             printf '%b\n' "$failed_list" >> "$GITHUB_STEP_SUMMARY"
           fi
           echo "Total: $total | Passaram: $passed | Falharam: $failed"
+          if [ "$failed" -ne 0 ]; then
+            echo "::warning::PHP inventory failures=$failed"
+          fi
+          exit 0
 
   python-tests-inventory:
     name: Inventario da suite pytest (tests/test_*.py)
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v7
         with:
@@ -77,11 +80,14 @@ jobs:
           python-version: '3.12'
       - name: Instalar pytest
         run: pip install --quiet pytest requests
-      - name: Rodar pytest (nao bloqueante, so inventario)
+      - name: Rodar pytest e reportar falhas
         run: |
-          set +e
-          pytest -q --continue-on-collection-errors > pytest-output.txt 2>&1
-          status=$?
+          set -u
+          if pytest -q --continue-on-collection-errors > pytest-output.txt 2>&1; then
+            status=0
+          else
+            status=$?
+          fi
           cat pytest-output.txt
           echo "## Inventario da suite pytest" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -89,3 +95,7 @@ jobs:
           tail -n 40 pytest-output.txt >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "pytest exit status: $status"
+          if [ "$status" -ne 0 ]; then
+            echo "::warning::pytest inventory exit status=$status"
+          fi
+          exit 0

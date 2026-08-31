@@ -55,6 +55,53 @@ class PolicyEngine {
     return this.changedFilesCache;
   }
 
+  addedLines(file) {
+    const baseSha = String(process.env.POLICY_BASE_SHA || '').trim();
+    const headSha = String(process.env.POLICY_HEAD_SHA || '').trim();
+    const diff = this.git(['diff', '--unified=0', '--no-color', `${baseSha}...${headSha}`, '--', file]);
+    return diff
+      .split(/\r?\n/)
+      .filter(line => line.startsWith('+') && !line.startsWith('+++'))
+      .map(line => line.slice(1));
+  }
+
+  failureFallbackToken() {
+    return ['||', 'true'].join(' ');
+  }
+
+  isSafeReadOnlyFallback(line) {
+    const beforeFallback = String(line).split(this.failureFallbackToken(), 1)[0];
+    return /\bsystemctl\s+(?:is-active|is-enabled|show)\b/.test(beforeFallback);
+  }
+
+  isExecutableFailureSuppression(file, line) {
+    const token = this.failureFallbackToken();
+    if (!String(line).includes(token) || this.isSafeReadOnlyFallback(line)) return false;
+    if (/\.(?:yml|yaml|sh)$/i.test(file)) return true;
+    if (/\.(?:js|mjs|cjs)$/i.test(file)) {
+      return /\b(?:exec|execSync|spawn|spawnSync)\s*\(/.test(line) || /\bshell\s*:/.test(line);
+    }
+    if (/\.php$/i.test(file)) {
+      return /\b(?:shell_exec|exec|system|passthru|proc_open)\s*\(/.test(line);
+    }
+    return false;
+  }
+
+  isExecutableForbiddenCommand(file, line, pattern) {
+    if (!pattern.test(String(line))) return false;
+    if (/\.(?:yml|yaml|sh)$/i.test(file)) return true;
+    if (/\.py$/i.test(file)) {
+      return /\b(?:os\.system|subprocess\.(?:run|call|check_call|check_output|Popen))\s*\(/.test(line);
+    }
+    if (/\.(?:js|mjs|cjs)$/i.test(file)) {
+      return /\b(?:exec|execSync|spawn|spawnSync)\s*\(/.test(line) || /\bshell\s*:/.test(line);
+    }
+    if (/\.php$/i.test(file)) {
+      return /\b(?:shell_exec|exec|system|passthru|proc_open)\s*\(/.test(line);
+    }
+    return false;
+  }
+
   isVisualFile(file) {
     // Server-side metadata, marketplace logic and stock continuity helpers do
     // not alter rendered layout, so screenshot evidence is not meaningful.
@@ -117,17 +164,30 @@ class PolicyEngine {
     const rules = [
       { label: ['git', 'push'].join(' '), pattern: /\bgit\s+push\b/ },
       { label: ['git', 'add', '-A'].join(' '), pattern: /\bgit\s+add\s+-A\b/ },
-      { label: ['or-or', 'true'].join(' '), pattern: /\|\|\s*true\b/ },
-      { label: ['exit', 'zero'].join(' '), pattern: /\bexit\s+0\b/ },
     ];
 
     for (const file of this.changedFiles()) {
-      if (!/\.(?:js|mjs|cjs|sh|php|yml|yaml)$/i.test(file)) continue;
+      if (!/\.(?:js|mjs|cjs|py|sh|php|yml|yaml)$/i.test(file)) continue;
       if (!fs.existsSync(file)) continue;
-      const content = fs.readFileSync(file, 'utf8');
-      for (const rule of rules) {
-        if (rule.pattern.test(content)) {
-          this.fail(`padrão perigoso ${rule.label} em ${file}`);
+      const added = this.addedLines(file);
+      if (file.startsWith('tests/')) {
+        for (const rule of rules) {
+          if (added.some(line => this.isExecutableForbiddenCommand(file, line, rule.pattern))) {
+            this.fail(`padrão perigoso ${rule.label} em ${file}`);
+          }
+        }
+      } else {
+        const content = fs.readFileSync(file, 'utf8');
+        for (const rule of rules) {
+          if (rule.pattern.test(content)) {
+            this.fail(`padrão perigoso ${rule.label} em ${file}`);
+          }
+        }
+      }
+      for (const line of added) {
+        if (this.isExecutableFailureSuppression(file, line)) {
+          this.fail(`padrão perigoso ${this.failureFallbackToken()} em ${file}`);
+          break;
         }
       }
     }

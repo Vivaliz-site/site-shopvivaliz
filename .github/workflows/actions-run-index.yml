@@ -11,7 +11,6 @@ on:
 permissions:
   contents: read
   actions: read
-  issues: write
 
 jobs:
   index:
@@ -109,17 +108,16 @@ jobs:
           print(json.dumps({'queried_workflow': workflow, 'returned_runs': len(runs), 'query_error': error}, sort_keys=True))
           PY
 
-      - name: Publish sanitized diagnostic comment
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Stage sanitized diagnostic evidence
         run: |
           set -Eeuo pipefail
-          gh issue comment 1207 --repo "${{ github.repository }}" --body-file /tmp/actions-run-index-diagnostic.md
+          test -s /tmp/actions-run-index-diagnostic.md
+          cp /tmp/actions-run-index-diagnostic.md artifacts/actions-run-index/diagnostic.md
 
       - name: Upload immutable run index
         uses: actions/upload-artifact@v4
         with:
           name: actions-run-index-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/actions-run-index/actions-run-index.json
+          path: artifacts/actions-run-index/
           if-no-files-found: error
           retention-days: 30

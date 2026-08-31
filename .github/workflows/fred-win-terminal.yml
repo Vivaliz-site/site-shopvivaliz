@@ -1,15 +1,10 @@
-﻿name: Fred-Win Terminal Relay
+name: Fred-Win Terminal Relay
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "ops/fredwin-terminal-request.json"
-      - ".github/workflows/fred-win-terminal.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: fred-win-terminal-relay
@@ -75,7 +70,7 @@ jobs:
         env:
           FREDWIN_TIMEOUT: ${{ steps.request.outputs.timeout }}
         run: |
-          set +e
+          set -uo pipefail
           mkdir -p reports
           CMD_B64="$(cat /tmp/fredwin-terminal-command.b64)"
           ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 \
@@ -114,21 +109,21 @@ jobs:
           echo "terminal_rc=$rc" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Persist sanitized terminal result
+      - name: Ensure sanitized terminal result exists
         if: always()
         shell: bash
         run: |
           set -Eeuo pipefail
           mkdir -p reports
           test -f reports/fredwin-terminal-latest.txt || printf '%s\n' 'FREDWIN_SUCCESS=false' 'TERMINAL_RESULT=missing' > reports/fredwin-terminal-latest.txt
-          git config user.name shopvivaliz-ops-bot
-          git config user.email ops@shopvivaliz.local
-          git add reports/fredwin-terminal-latest.txt
-          if ! git diff --cached --quiet; then
-            git commit -m 'ops: record sanitized Fred-Win terminal result'
-            git pull --rebase origin main
-            git push origin HEAD:main
-          fi
+
+      - name: Upload sanitized terminal result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fredwin-terminal-${{ github.run_id }}-${{ github.run_attempt }}
+          path: reports/fredwin-terminal-latest.txt
+          if-no-files-found: error
 
       - name: Enforce terminal result
         if: always()

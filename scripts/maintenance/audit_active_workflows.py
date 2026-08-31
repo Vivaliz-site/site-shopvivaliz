@@ -41,11 +41,10 @@ CAPTURED_STATUS_BLOCK = re.compile(
 )
 
 WRITE_PERMISSION = re.compile(r"(?m)^\s{2}(contents|issues|pull-requests|actions)\s*:\s*write\s*$", re.I)
-AUTO_TRIGGER = re.compile(r"(?m)^\s{2}(push|schedule|issues|workflow_run|repository_dispatch)\s*:")
+AUTOMATIC_TRIGGERS = {"push", "schedule", "issues", "workflow_run", "repository_dispatch"}
 MUTATION = re.compile(joined(r"git\s+pu", r"sh|gh\s+(?:pr\s+merge|issue\s+(?:create|edit|close|comment))"), re.I)
 PRODUCTION_NAME = re.compile(r"production|deploy|publish|apply", re.I)
-PUSH_TRIGGER = re.compile(r"(?m)^\s{2}push\s*:")
-MANUAL_TRIGGER = re.compile(r"(?m)^\s{2}workflow_dispatch\s*:")
+ON_LINE = re.compile(r"(?m)^on:[ \t]*(?P<inline>[^\n#]*)(?:#.*)?$")
 
 
 @dataclass(frozen=True)
@@ -64,6 +63,36 @@ def line_number(text: str, offset: int) -> int:
 
 def excerpt(value: str) -> str:
     return " ".join(value.strip().split())[:200]
+
+
+def workflow_trigger_names(text: str) -> set[str]:
+    match = ON_LINE.search(text)
+    if not match:
+        return set()
+
+    inline = match.group("inline").strip()
+    if inline:
+        if inline.startswith("[") and inline.endswith("]"):
+            values = inline[1:-1].split(",")
+        else:
+            values = [inline]
+        return {value.strip().strip("'\"") for value in values if value.strip()}
+
+    block: list[str] = []
+    for line in text[match.end():].splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            block.append(line)
+            continue
+        if line == line.lstrip():
+            break
+        block.append(line)
+
+    indented = [line for line in block if line.strip() and not line.lstrip().startswith("#")]
+    if not indented:
+        return set()
+    min_indent = min(len(line) - len(line.lstrip(" ")) for line in indented)
+    event = re.compile(rf"^ {{{min_indent}}}(?P<name>[A-Za-z0-9_-]+)\s*:")
+    return {m.group("name") for line in indented if (m := event.match(line))}
 
 
 def safely_rethrown_set_plus_e_offsets(text: str) -> set[int]:
@@ -89,7 +118,8 @@ def audit_workflow(path: Path) -> list[Finding]:
             findings.append(Finding(severity, rule, relative, line_number(text, match.start()), message, excerpt(match.group(0))))
 
     write_permissions = list(WRITE_PERMISSION.finditer(text))
-    automatic = AUTO_TRIGGER.search(text)
+    triggers = workflow_trigger_names(text)
+    automatic = bool(triggers & AUTOMATIC_TRIGGERS)
     mutation = MUTATION.search(text)
     if write_permissions and automatic and mutation:
         first = write_permissions[0]
@@ -102,13 +132,13 @@ def audit_workflow(path: Path) -> list[Finding]:
             excerpt(first.group(0)),
         ))
 
-    if PRODUCTION_NAME.search(path.name) and PUSH_TRIGGER.search(text) and MANUAL_TRIGGER.search(text):
-        match = PUSH_TRIGGER.search(text)
+    if PRODUCTION_NAME.search(path.name) and "push" in triggers and "workflow_dispatch" in triggers:
+        push_match = re.search(r"(?m)^on:[^\n]*\bpush\b", text) or re.search(r"(?m)^[ \t]+push\s*:", text)
         findings.append(Finding(
             "critical",
             "production_push_trigger",
             relative,
-            line_number(text, match.start()) if match else None,
+            line_number(text, push_match.start()) if push_match else None,
             "Production-like workflow can run from push instead of explicit manual authorization.",
             "push trigger",
         ))

@@ -44,9 +44,15 @@ jobs:
         run: |
           set -euo pipefail
           case "$MODE" in prepare|probe|cutover|rollback) ;; *) echo 'INVALID_MODE'; exit 1;; esac
-          test -n "${CF_TOKEN:-}" || { echo 'CLOUDFLARE_CREDENTIAL_MISSING'; exit 1; }
+          if [ -z "${CF_TOKEN:-}" ]; then
+            echo 'CLOUDFLARE_CREDENTIAL_MISSING'
+            exit 1
+          fi
           if [ "$MODE" = cutover ] || [ "$MODE" = probe ]; then
-            test -n "${BREVO_API_KEY:-}" || { echo 'BREVO_CREDENTIAL_MISSING'; exit 1; }
+            if [ -z "${BREVO_API_KEY:-}" ]; then
+              echo 'BREVO_CREDENTIAL_MISSING'
+              exit 1
+            fi
           fi
           echo "MODE=$MODE"
 

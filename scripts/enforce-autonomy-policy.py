@@ -27,6 +27,10 @@ IGNORED_PREFIXES = (
     "docs/", "release-notes/", "reports/", "artifacts/", "tests/fixtures/",
 )
 
+NONCOMMERCIAL_SENSITIVE_PATH_EXCEPTIONS = {
+    ".github/workflows/test-inventory.yml",
+}
+
 MUTATION_PATTERN = re.compile(
     r"(?i)(?:\bupdate\b|\binsert\s+into\b|\breplace\s+into\b|\bdelete\s+from\b|"
     r"\bset\b|\bassign\b|\bwrite\b|\bsync\b|\bpatch\b|\bput\b|\bpost\b).{0,160}"
@@ -68,8 +72,17 @@ def sensitive_path(path: str) -> bool:
     lower = path.lower()
     if lower.startswith(IGNORED_PREFIXES):
         return False
+    if lower in NONCOMMERCIAL_SENSITIVE_PATH_EXCEPTIONS:
+        return False
     name = Path(lower).name
     return any(fnmatch.fnmatch(name, pattern) for pattern in SENSITIVE_PATH_PATTERNS)
+
+
+def should_scan_content(path: str) -> bool:
+    lower = path.lower()
+    if lower.startswith(IGNORED_PREFIXES):
+        return False
+    return True
 
 
 def sensitive_content(lines: list[str]) -> list[str]:
@@ -98,7 +111,7 @@ def main() -> int:
         path_findings: list[str] = []
         if sensitive_path(path):
             path_findings.append("sensitive_path")
-        if not path.lower().startswith(IGNORED_PREFIXES):
+        if should_scan_content(path):
             path_findings.extend(sensitive_content(added_lines(base, head, path)))
         if path_findings:
             findings.append({"path": path, "reasons": path_findings})

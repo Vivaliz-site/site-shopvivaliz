@@ -109,5 +109,93 @@ jobs:
         self.assertIn("production_push_trigger", {item.rule for item in findings})
 
 
+    def test_manual_issue_permission_is_not_an_automatic_trigger(self):
+        findings = self.audit(
+            "manual.yml",
+            """name: Manual
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh issue comment 1 --body ok
+""",
+        )
+        self.assertNotIn("automatic_write_workflow", {item.rule for item in findings})
+
+    def test_real_issue_trigger_with_write_is_automatic(self):
+        findings = self.audit(
+            "event.yml",
+            """name: Event
+on:
+  issues:
+    types: [opened]
+permissions:
+  issues: write
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh issue comment 1 --body ok
+""",
+        )
+        self.assertIn("automatic_write_workflow", {item.rule for item in findings})
+
+    def test_blocks_destructive_reset(self):
+        findings = self.audit(
+            "reset.yml",
+            """name: Reset
+on:
+  workflow_dispatch:
+jobs:
+  x:
+    runs-on: ubuntu-latest
+    steps:
+      - run: git reset --hard origin/main
+""",
+        )
+        self.assertIn("destructive_git", {item.rule for item in findings})
+
+    def test_inline_trigger_list_is_parsed(self):
+        findings = self.audit(
+            "production-inline.yml",
+            """name: Production inline
+on: [push, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  x:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+""",
+        )
+        self.assertIn("production_push_trigger", {item.rule for item in findings})
+
+    def test_blank_lines_do_not_truncate_mapping_triggers(self):
+        findings = self.audit(
+            "sync-blank.yml",
+            """name: Sync blank
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: '0 * * * *'
+permissions:
+  issues: write
+jobs:
+  x:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh issue comment 1 --body ok
+""",
+        )
+        self.assertIn("automatic_write_workflow", {item.rule for item in findings})
+
+
 if __name__ == "__main__":
     unittest.main()
