@@ -12,7 +12,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
 require_once __DIR__ . '/../includes/liz-knowledge-context.php';
-require_once __DIR__ . '/../includes/internal-http-origin.php';
+require_once __DIR__ . '/../config/internal-http-origin.php';
 
 function lizk_json_response(int $status, array $payload): never
 {

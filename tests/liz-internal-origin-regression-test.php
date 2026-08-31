@@ -8,7 +8,7 @@ function liz_origin_assert(bool $condition, string $message): void
     exit(1);
 }
 
-$helper = __DIR__ . '/../includes/internal-http-origin.php';
+$helper = __DIR__ . '/../config/internal-http-origin.php';
 liz_origin_assert(is_file($helper), 'internal HTTP origin helper must exist.');
 require_once $helper;
 

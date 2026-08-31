@@ -5,7 +5,7 @@ require_once dirname(__DIR__) . '/config/bootstrap-env.php';
 require_once dirname(__DIR__) . '/config/agent-keys.php';
 require_once dirname(__DIR__) . '/includes/secure-session.php';
 require_once dirname(__DIR__) . '/includes/rate-limiter.php';
-require_once dirname(__DIR__) . '/includes/internal-http-origin.php';
+require_once dirname(__DIR__) . '/config/internal-http-origin.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
