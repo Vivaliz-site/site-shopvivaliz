@@ -1,4 +1,4 @@
-﻿name: MEI Email Production Probe Robust
+name: MEI Email Production Probe Robust
 
 on:
   push:
@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   probe:
@@ -40,7 +39,6 @@ jobs:
 
       - name: Collect sanitized production state
         id: collect
-        continue-on-error: true
         shell: bash
         run: |
           set -u
@@ -199,14 +197,14 @@ jobs:
           echo "COLLECT_EXIT=$rc" >> /tmp/mei-prod-probe-robust.txt
           exit "$rc"
 
-      - name: Publish sanitized probe as issue
+      - name: Stage sanitized robust probe evidence
         if: always()
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
           COLLECT_OUTCOME: ${{ steps.collect.outcome }}
         run: |
           set -Eeuo pipefail
+          mkdir -p artifacts/mei-email-prod-probe-robust
           if [ ! -s /tmp/mei-prod-probe-robust.txt ]; then
             echo 'PROBE_OUTPUT=missing (SSH configuration or preflight failed before collection)' > /tmp/mei-prod-probe-robust.txt
           fi
@@ -217,10 +215,15 @@ jobs:
             echo '```text'
             cat /tmp/mei-prod-probe-robust.txt
             echo '```'
-          } > /tmp/issue-body.md
-          gh issue create --repo "${GITHUB_REPOSITORY}" \
-            --title "MEI PROD PROBE ROBUST ${GITHUB_RUN_ID}" \
-            --body-file /tmp/issue-body.md
+          } > artifacts/mei-email-prod-probe-robust/probe.md
+
+      - name: Upload immutable robust probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mei-email-prod-probe-robust-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/mei-email-prod-probe-robust/
+          if-no-files-found: error
 
       - name: Cleanup SSH material
         if: always()
