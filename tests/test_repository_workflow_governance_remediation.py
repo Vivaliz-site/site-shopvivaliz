@@ -83,6 +83,36 @@ class RepositoryWorkflowGovernanceRemediationTests(unittest.TestCase):
         self.assertNotRegex(triggers, r"(?m)^  push:\s*$")
 
 
+    def test_checkout_migration_is_preview_only_and_never_edits_production(self):
+        text = self.text("agent-vm-readonly-diagnostics.yml")
+        self.assertIn("checkout_patch=preview_only", text)
+        self.assertNotIn("sudo cp \"$tmp\" \"$target\"", text)
+        self.assertNotIn("systemctl reload apache2", text)
+        self.assertNotIn("patch_checkout \"$current/checkout.php\"", text)
+        self.assertRegex(text, r"(?s)- name: Configure SSH\n\s+if: env\.MODE == 'health'")
+        self.assertRegex(text, r"(?s)- name: Run VM route\n\s+if: env\.MODE == 'health'")
+
+    def test_desktop_commander_health_materializes_fallback_evidence(self):
+        text = self.text("desktop-commander-24h-health.yml")
+        self.assertIn("CONTROL_PLANE_EVIDENCE=fallback", text)
+        self.assertIn("/tmp/dc-control-plane-status.json", text)
+        self.assertIn("/tmp/dc-control-plane-status.md", text)
+        self.assertIn("probe_failed_before_status_materialization", text)
+
+    def test_three_host_control_plane_materializes_fallback_evidence(self):
+        text = self.text("desktop-commander-three-host-control-plane.yml")
+        self.assertIn("CONTROL_PLANE_EVIDENCE=fallback", text)
+        self.assertIn("/tmp/dc-status.json", text)
+        self.assertIn("/tmp/dc-status.md", text)
+        self.assertIn("probe_failed_before_status_materialization", text)
+
+    def test_mei_probe_preserves_unknown_when_systemctl_returns_no_state(self):
+        text = self.text("mei-email-prod-probe-now.yml")
+        self.assertIn('worker_state="${worker_state:-unknown}"', text)
+        self.assertIn('timer_state="${timer_state:-unknown}"', text)
+        self.assertNotIn('worker_state="${worker_state:-inactive}"', text)
+        self.assertNotIn('timer_state="${timer_state:-inactive}"', text)
+
     def test_test_inventory_reports_failures_explicitly_without_blocking(self):
         text = self.text("test-inventory.yml")
         self.assertIn("::warning::PHP inventory failures=$failed", text)

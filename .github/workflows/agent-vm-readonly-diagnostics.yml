@@ -31,13 +31,15 @@ jobs:
       - name: Validate inputs and secrets
         run: |
           set -Eeuo pipefail
-          test -n "$VM_HOST"
-          test -n "$VM_USER"
-          case "$VM_HOST" in *[!A-Za-z0-9_.:-]*|'') echo "Invalid VM host" >&2; exit 1;; esac
-          case "$VM_USER" in *[!A-Za-z0-9_.-]*|'') echo "Invalid VM user" >&2; exit 1;; esac
           case "$MODE" in health|apply-checkout-migration) ;; *) echo "Invalid mode" >&2; exit 1;; esac
+          if [ "$MODE" = health ]; then
+            test -n "$VM_HOST"
+            test -n "$VM_USER"
+            case "$VM_HOST" in *[!A-Za-z0-9_.:-]*|'') echo "Invalid VM host" >&2; exit 1;; esac
+            case "$VM_USER" in *[!A-Za-z0-9_.-]*|'') echo "Invalid VM user" >&2; exit 1;; esac
+          fi
 
-      - name: Patch checkout in repository
+      - name: Prepare checkout patch preview
         if: env.MODE == 'apply-checkout-migration'
         run: |
           set -Eeuo pipefail
@@ -84,6 +86,7 @@ jobs:
           if-no-files-found: error
 
       - name: Configure SSH
+        if: env.MODE == 'health'
         env:
           VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
           VM_KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
@@ -97,72 +100,11 @@ jobs:
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
       - name: Run VM route
+        if: env.MODE == 'health'
         run: |
           set -Eeuo pipefail
           ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=2 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa")
-          remote_script=$(mktemp)
-          cat > "$remote_script" <<'REMOTE'
-          set -Eeuo pipefail
-          mode="$1"
-          patch_checkout() {
-            target="$1"
-            [ -f "$target" ] || { echo "missing=$target"; return 1; }
-            tmp=$(mktemp)
-            python3 - "$target" > "$tmp" <<'PY'
-          import sys
-          from pathlib import Path
-          p = Path(sys.argv[1])
-          s = p.read_text(encoding='utf-8')
-          bad = "        if (!HAS_PAYMENT_GATEWAY) {\n            status.textContent = 'Pagamento online temporariamente indisponível. Fale no WhatsApp para finalizar seu pedido.';\n            status.className='checkout-status-msg err';\n            return;\n        }\n"
-          if "function renderCart() {\n        var items = getCart();\n" + bad in s:
-              s = s.replace(bad, '', 1)
-          anchor = "        var btn = document.getElementById('submit-btn');\n        var status = document.getElementById('checkout-status');\n        var items = getCart();\n"
-          guard = "        if (!HAS_PAYMENT_GATEWAY) {\n            status.textContent = 'Pagamento online temporariamente indisponível. Fale no WhatsApp para finalizar seu pedido.';\n            status.className = 'checkout-status-msg err';\n            if (btn) {\n                btn.disabled = true;\n                btn.textContent = 'Pagamento indisponível';\n            }\n            return;\n        }\n"
-          if anchor not in s:
-              raise SystemExit('anchor missing')
-          if guard not in s:
-              s = s.replace(anchor, anchor + guard, 1)
-          if "function renderCart() {\n        var items = getCart();\n        if (!HAS_PAYMENT_GATEWAY)" in s:
-              raise SystemExit('guard still in renderCart')
-          if guard not in s:
-              raise SystemExit('guard missing in submit')
-          print(s, end='')
-          PY
-            if cmp -s "$target" "$tmp"; then echo "unchanged=$target"; else sudo cp "$tmp" "$target"; echo "patched=$target"; fi
-            rm -f "$tmp"
-            php -l "$target"
-          }
-          if [ "$mode" = health ]; then
-            echo "MODE=health"; uptime; df -h /; free -h; exit 0
-          fi
-          echo "MODE=apply-checkout-migration"
-          cd /home/ubuntu/shopvivaliz-deploy/repo
-          git fetch origin main
-          test "$(git branch --show-current)" = "main"
-          test -z "$(git status --porcelain)"
-          git merge --ff-only origin/main
-          expected_checkout=$(git rev-parse origin/main:checkout.php)
-          actual_checkout=$(git hash-object checkout.php)
-          if [ "$actual_checkout" != "$expected_checkout" ]; then
-            echo "CHECKOUT_BASE_MISMATCH"
-            exit 20
-          fi
-          patch_checkout /home/ubuntu/shopvivaliz-deploy/repo/checkout.php
-          php scripts/quality/validate-order-erp-authority.php
-          current=$(readlink -f /home/ubuntu/shopvivaliz-deploy/current)
-          patch_checkout "$current/checkout.php"
-          sudo apache2ctl configtest
-          sudo systemctl reload apache2
-          python3 - <<'PY'
-          import ssl, urllib.request
-          ctx = ssl._create_unverified_context()
-          for url in ['https://shopvivaliz.com.br/api/health.php', 'https://shopvivaliz.com.br/checkout.php']:
-              with urllib.request.urlopen(url, timeout=25, context=ctx) as r:
-                  data = r.read().decode('utf-8', 'ignore')
-              print(url.rsplit('/',1)[-1], 'code', r.status, 'size', len(data), 'gateway_msg', 'Pagamento online temporariamente indisponível' in data)
-          PY
-          REMOTE
-          output=$(ssh "${ssh_opts[@]}" "$VM_USER@$VM_HOST" 'bash -s -- "$1"' _ "$MODE" < "$remote_script")
+          output=$(ssh "${ssh_opts[@]}" "$VM_USER@$VM_HOST" 'set -Eeuo pipefail; echo MODE=health; uptime; df -h /; free -h')
           printf '%s\n' "$output"
           { echo "## Agent VM route"; echo; echo '```text'; printf '%s\n' "$output"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 

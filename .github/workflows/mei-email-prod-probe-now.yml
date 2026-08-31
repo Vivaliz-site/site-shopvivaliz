@@ -53,12 +53,12 @@ jobs:
           if worker_state="$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null)"; then
             :
           else
-            worker_state="${worker_state:-inactive}"
+            worker_state="${worker_state:-unknown}"
           fi
           if timer_state="$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null)"; then
             :
           else
-            timer_state="${timer_state:-inactive}"
+            timer_state="${timer_state:-unknown}"
           fi
           echo "WORKER=${worker_state:-unknown}"
           echo "AUTOREPAIR_TIMER=${timer_state:-unknown}"

@@ -388,8 +388,10 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p artifacts/desktop-commander-24h-health
-          test -s /tmp/dc-control-plane-status.md
-          test -s /tmp/dc-control-plane-status.json
+          if [ ! -s /tmp/dc-control-plane-status.md ] || [ ! -s /tmp/dc-control-plane-status.json ]; then
+            printf '# Desktop Commander 24h Control Plane Status\n\nCONTROL_PLANE_EVIDENCE=fallback\nprobe_failed_before_status_materialization\n' > /tmp/dc-control-plane-status.md
+            printf '[{"host":"control-plane","state":"degraded","watchdog":"unknown","canonical":"—","auth":"unknown","recovery":"probe_failed_before_status_materialization"}]\n' > /tmp/dc-control-plane-status.json
+          fi
           cp /tmp/dc-control-plane-status.md artifacts/desktop-commander-24h-health/status.md
           cp /tmp/dc-control-plane-status.json artifacts/desktop-commander-24h-health/status.json
 
