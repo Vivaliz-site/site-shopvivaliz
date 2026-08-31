@@ -1,14 +1,10 @@
 name: Apply GSC indexing fix 2026-08-24
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/apply-gsc-indexing-fix-20260824.yml"
-      - "ops/gsc-indexing-fix-20260824.patch"
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: apply-gsc-indexing-fix-20260824
@@ -39,20 +35,16 @@ jobs:
           php tests/legacy-product-seo-test.php
           php tests/ecommerce-excellence-regression-test.php
           git diff --check
-      - name: Commit and publish
+      - name: Stage verified patch preview
         shell: bash
         run: |
           set -Eeuo pipefail
-          git config user.name "shopvivaliz-actions"
-          git config user.email "actions@users.noreply.github.com"
-          git rm ops/gsc-indexing-fix-20260824.patch
-          git add .htaccess catalogo.php produto.php tests/google-indexing-canonical-regression-test.php tests/legacy-product-seo-test.php
-          git commit -m "fix: normalize catalog canonicals and stale product redirects"
-          git pull --rebase origin main
-          php -l catalogo.php
-          php -l produto.php
-          php tests/google-indexing-canonical-regression-test.php
-          php tests/legacy-product-seo-test.php
-          php tests/ecommerce-excellence-regression-test.php
-          git diff --check
-          git push origin HEAD:main
+          mkdir -p artifacts/gsc-indexing-fix
+          git diff --binary -- .htaccess catalogo.php produto.php tests/google-indexing-canonical-regression-test.php tests/legacy-product-seo-test.php > artifacts/gsc-indexing-fix/gsc-indexing-fix.patch
+          test -s artifacts/gsc-indexing-fix/gsc-indexing-fix.patch
+      - name: Upload verified patch preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: gsc-indexing-fix-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/gsc-indexing-fix/
+          if-no-files-found: error
