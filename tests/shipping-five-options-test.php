@@ -21,6 +21,8 @@ $checks = [
     'Checkout choices persist signed quote' => str_contains($js, 'sv_checkout_shipping_option')
         && str_contains($js, "localStorage.setItem('shopvivaliz_shipping_quote'")
         && str_contains($js, 'quote_id: option.quote_id'),
+    'Checkout reopens choices after native render' => str_contains($js, 'observed.hidden')
+        && str_contains($js, 'renderPending()'),
     'Selectable cards are styled' => str_contains($css, '.sv-shipping-choice-list')
         && str_contains($css, '.sv-shipping-choice'),
 ];
