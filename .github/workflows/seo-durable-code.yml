@@ -1,13 +1,10 @@
 name: SEO Durable Code Repair
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/seo-durable-code.yml'
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   repair:
@@ -65,13 +62,19 @@ jobs:
           php -l includes/blog-editorial-autopilot.php
           python3 -m py_compile scripts/seo-integrity-audit.py
           bash -n scripts/deploy-production.sh
-      - name: Commit repair
+      - name: Stage durable repair preview
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name 'shopvivaliz-seo-bot'
-          git config user.email 'actions@users.noreply.github.com'
-          git add blog/content.php includes/blog-editorial-autopilot.php includes/footer.php termos.php index.php faq/index.php includes/blog-article-repository.php scripts/seo-integrity-audit.py scripts/deploy-production.sh
-          git diff --cached --quiet && exit 0
-          git commit -m 'fix: preserve canonical SEO routing on A1'
-          git push origin HEAD:main
+          mkdir -p artifacts/seo-durable-code
+          git diff --binary > artifacts/seo-durable-code/seo-durable-code.patch
+          if [ ! -s artifacts/seo-durable-code/seo-durable-code.patch ]; then
+            printf 'NO_CHANGES_REQUIRED\n' > artifacts/seo-durable-code/status.txt
+          fi
+
+      - name: Upload durable repair preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: seo-durable-code-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/seo-durable-code/
+          if-no-files-found: error
