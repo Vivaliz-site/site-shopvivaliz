@@ -24,13 +24,13 @@
   function shippingQuote(option,cep){
     return {cep:cep,total:Number(option.price)||0,option:option,label:(option.company?option.company+' - ':'')+(option.name||'Frete'),quote_id:option.quote_id||'',expires_at:Number(option.expires_at)||0,provider:'melhorenvio'};
   }
-  function shippingRecalculateCheckout(){
+  function shippingRecalculateCheckout(message){
     var input=document.getElementById('cep-input');
     var cep=String(input&&input.value||'').replace(/\D/g,'').slice(0,8);
     try{localStorage.removeItem('shopvivaliz_shipping_quote');}catch(e){}
     shippingClearPendingPayment();
     var status=document.getElementById('checkout-shipping-status');
-    if(status){status.hidden=false;status.textContent='A cotação expirou. Recalculando o frete…';}
+    if(status){status.hidden=false;status.textContent=message||'A cotação expirou. Recalculando o frete…';}
     if(input&&cep.length===8){
       try{input.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){input.dispatchEvent(new Event('input'));}
     }
@@ -66,7 +66,7 @@
     var list=document.createElement('div');
     list.className='frete-results-list';
     list.dataset.svFiveShipping='1';
-    options.slice(0, 5).forEach(function(option){
+    options.slice(0,5).forEach(function(option){
       var row=document.createElement('div');
       row.className='frete-result-item';
       var name=document.createElement('span');
@@ -123,20 +123,71 @@
   }
   function installShippingOptions(){
     var path=(location.pathname||'').replace(/\/$/,'');
-    var isProduct=path==='/produto'||path.indexOf('/produto/')===0;
+    var isProduct=path==='/produto'||path==='/produto.php'||path.indexOf('/produto/')===0;
     var isCheckout=path==='/checkout';
     if((!isProduct&&!isCheckout)||typeof window.fetch!=='function') return;
     var pending=null;
     var latestShippingRequest=0;
+    var activeShippingController=null;
+    var cartRecalcTimer=null;
     function currentCheckoutCep(){
       var input=document.getElementById('cep-input');
       return String(input&&input.value||'').replace(/\D/g,'').slice(0,8);
+    }
+    function checkoutHasItems(){
+      try{
+        if(window.ShopVivalizCart&&typeof window.ShopVivalizCart.get==='function') return window.ShopVivalizCart.get().length>0;
+        return JSON.parse(localStorage.getItem('shopvivaliz_cart')||'[]').length>0;
+      }catch(e){return false;}
+    }
+    function staleShippingError(){
+      var error=new Error('superseded_shipping_quote');
+      error.name='AbortError';
+      return error;
     }
     function setCheckoutSubmitting(active){
       if(!isCheckout) return;
       if(active) document.documentElement.dataset.svCheckoutSubmitting='1';
       else delete document.documentElement.dataset.svCheckoutSubmitting;
       document.querySelectorAll('input[name="sv_checkout_shipping_option"]').forEach(function(input){input.disabled=!!active;});
+      var cepInput=document.getElementById('cep-input');
+      if(cepInput){cepInput.readOnly=!!active;cepInput.setAttribute('aria-disabled',active?'true':'false');}
+      document.querySelectorAll('#cart-items .qty-btn,#cart-items .btn-remove').forEach(function(button){button.disabled=!!active;});
+    }
+    function guardNativeShippingResponse(response,requestVersion,requestCep){
+      if(!isCheckout||typeof Proxy!=='function') return response;
+      return new Proxy(response,{
+        get:function(target,prop){
+          if(prop==='json'){
+            return function(){
+              return target.json().then(function(data){
+                var currentCep=currentCheckoutCep();
+                if(requestVersion!==latestShippingRequest||(requestCep&&currentCep&&requestCep!==currentCep)) throw staleShippingError();
+                return data;
+              });
+            };
+          }
+          var value=Reflect.get(target,prop,target);
+          return typeof value==='function'?value.bind(target):value;
+        }
+      });
+    }
+    function invalidateCheckoutChoices(message){
+      if(!isCheckout||document.documentElement.dataset.svCheckoutSubmitting==='1') return;
+      pending=null;
+      latestShippingRequest+=1;
+      if(activeShippingController){try{activeShippingController.abort();}catch(e){}activeShippingController=null;}
+      shippingClearPendingPayment();
+      try{localStorage.removeItem('shopvivaliz_shipping_quote');}catch(e){}
+      if(cartRecalcTimer) clearTimeout(cartRecalcTimer);
+      cartRecalcTimer=setTimeout(function(){
+        if(!checkoutHasItems()){
+          var emptyStatus=document.getElementById('checkout-shipping-status');
+          if(emptyStatus){emptyStatus.hidden=true;emptyStatus.innerHTML='';}
+          return;
+        }
+        shippingRecalculateCheckout(message||'Carrinho alterado. Recalculando o frete…');
+      },0);
     }
     if(isCheckout){
       var checkoutForm=document.getElementById('checkout-form');
@@ -150,6 +201,13 @@
       if(checkoutSubmit&&typeof MutationObserver==='function'){
         new MutationObserver(function(){if(!checkoutSubmit.disabled)setCheckoutSubmitting(false);})
           .observe(checkoutSubmit,{attributes:true,attributeFilter:['disabled']});
+      }
+      var cartItems=document.getElementById('cart-items');
+      if(cartItems){
+        cartItems.addEventListener('click',function(event){
+          var target=event.target&&event.target.closest?event.target.closest('.qty-btn,.btn-remove'):null;
+          if(target) invalidateCheckoutChoices('Itens alterados. Recalculando o frete…');
+        });
       }
     }
     function renderPending(){
@@ -176,9 +234,25 @@
       var requestCep=shippingCepFromRequest(init);
       var requestVersion=++latestShippingRequest;
       pending=null;
-      if(isCheckout) shippingClearPendingPayment();
-      var request=original.apply(this,arguments);
+      var request;
+      if(isCheckout){
+        shippingClearPendingPayment();
+        try{localStorage.removeItem('shopvivaliz_shipping_quote');}catch(e){}
+        if(activeShippingController){try{activeShippingController.abort();}catch(e){}}
+        if(typeof AbortController==='function'){
+          activeShippingController=new AbortController();
+          var guardedInit=Object.assign({},init||{});
+          guardedInit.signal=activeShippingController.signal;
+          request=original.call(this,resource,guardedInit);
+        }else{
+          activeShippingController=null;
+          request=original.apply(this,arguments);
+        }
+      }else{
+        request=original.apply(this,arguments);
+      }
       return request.then(function(response){
+        if(requestVersion!==latestShippingRequest) throw staleShippingError();
         try{
           response.clone().json().then(function(data){
             if(requestVersion!==latestShippingRequest) return;
@@ -191,7 +265,7 @@
             renderPending();
           }).catch(function(){if(requestVersion===latestShippingRequest)pending=null;});
         }catch(e){if(requestVersion===latestShippingRequest)pending=null;}
-        return response;
+        return guardNativeShippingResponse(response,requestVersion,requestCep);
       },function(error){
         if(requestVersion===latestShippingRequest) pending=null;
         throw error;
@@ -218,7 +292,7 @@
   }
   function installProductOffer(){
     var path=(location.pathname||'').replace(/\/$/,'');
-    if(path!=='/produto' && path.indexOf('/produto/')!==0) return;
+    if(path!=='/produto'&&path!=='/produto.php'&&path.indexOf('/produto/')!==0) return;
     var buy=document.getElementById('buy-now');
     if(!buy || document.getElementById('sv-product-sales-offer')) return;
     var ctx=window.ShopVivalizProductContext||{};
@@ -231,11 +305,11 @@
       : 'Use <code>VIVALIZ10</code> para 10% OFF quando o carrinho passar de R$ 100.';
     offer.innerHTML='<strong>Oferta disponível para sua compra</strong><span>'+message+'</span>';
     var buyTarget = buy.closest('.product-buy-group') || buy.closest('.produto-actions') || buy;
-    buyTarget.parentNode.insertBefore(offer, buyTarget);
+    buyTarget.parentNode.insertBefore(offer,buyTarget);
     var note=document.createElement('div');
     note.className='sv-sales-assurance';
     note.textContent='“Comprar agora” adiciona o item ao carrinho; você ainda calcula o frete e revisa tudo antes do pagamento.';
-    buyTarget.insertAdjacentElement('afterend', note);
+    buyTarget.insertAdjacentElement('afterend',note);
   }
   function installCheckoutClarity(){
     if((location.pathname||'').replace(/\/$/,'')!=='/checkout') return;
@@ -285,5 +359,5 @@
       }
     }
   }
-  onReady(function(){ installShippingOptions(); installCartOffer(); installProductOffer(); installCheckoutClarity(); });
+  onReady(function(){installShippingOptions();installCartOffer();installProductOffer();installCheckoutClarity();});
 })();
