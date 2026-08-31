@@ -1,15 +1,10 @@
 name: Windows Private Peer Desktop Commander Recovery
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/windows-private-peer-recovery.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   recover:
@@ -97,12 +92,11 @@ jobs:
           recover_peer FRED "$fred_ip" FRED 32223 fredwin 5557
           recover_peer DESKTOP "$desk_ip" user 32224 desktopkocepsv 5558
 
-      - name: Publish sanitized private-peer recovery evidence
+      - name: Stage sanitized private-peer recovery evidence
         if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
+          mkdir -p artifacts/windows-private-peer-recovery
           test -f /tmp/windows-peer-safe.txt || printf 'PRIVATE_NETWORK=no_evidence\n' > /tmp/windows-peer-safe.txt
           {
             echo '### Windows private-peer recovery fallback'
@@ -110,8 +104,15 @@ jobs:
             echo '```text'
             cat /tmp/windows-peer-safe.txt
             echo '```'
-          } > /tmp/windows-peer-comment.md
-          gh issue comment 1207 --repo "${{ github.repository }}" --body-file /tmp/windows-peer-comment.md
+          } > artifacts/windows-private-peer-recovery/recovery.md
+
+      - name: Upload immutable recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-private-peer-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/windows-private-peer-recovery/
+          if-no-files-found: error
 
       - name: Cleanup
         if: always()
