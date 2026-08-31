@@ -13,7 +13,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 concurrency:
   group: desktop-commander-three-host-control-plane
@@ -23,8 +22,6 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      STATUS_ISSUE: '1207'
     steps:
       - uses: actions/checkout@v4
 
@@ -215,14 +212,23 @@ jobs:
           PY
           python3 /tmp/dc-readonly.py
 
-      - name: Publish sanitized status
+      - name: Stage sanitized status evidence
         if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
-          test -f /tmp/dc-status.md
-          gh issue edit "$STATUS_ISSUE" --repo "${{ github.repository }}" --body-file /tmp/dc-status.md
+          mkdir -p artifacts/desktop-commander-three-host-control-plane
+          test -s /tmp/dc-status.md
+          test -s /tmp/dc-status.json
+          cp /tmp/dc-status.md artifacts/desktop-commander-three-host-control-plane/status.md
+          cp /tmp/dc-status.json artifacts/desktop-commander-three-host-control-plane/status.json
+
+      - name: Upload immutable status evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-commander-three-host-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/desktop-commander-three-host-control-plane/
+          if-no-files-found: error
 
       - name: Require all hosts healthy
         run: |
