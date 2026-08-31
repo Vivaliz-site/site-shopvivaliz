@@ -35,7 +35,7 @@ jobs:
           ssh "${opts[@]}" ubuntu@144.22.157.209 '[ "$(hostname)" = "always-free-arm-1787907847-26" ]'
           scp "${opts[@]}" ubuntu@144.22.157.209:/home/ubuntu/solange-client-demo/recovery/solange-client-ready.patch recovery/
           scp "${opts[@]}" ubuntu@144.22.157.209:/home/ubuntu/solange-client-demo/recovery/solange-client-ready-series.patch recovery/
-          ssh "${opts[@]}" ubuntu@144.22.157.209 'cd /home/ubuntu/solange-recovered && printf "head=%s\nbranch=%s\n" "$(git rev-parse HEAD)" "$(git branch --show-current)" && git log -6 --format="commit=%H subject=%s"' > recovery/MANIFEST.txt
+          ssh "${opts[@]}" ubuntu@144.22.157.209 'cd /home/ubuntu/solange-recovered && printf "head=%s\nbranch=%s\nbase=%s\ncount=%s\n" "$(git rev-parse HEAD)" "$(git branch --show-current)" "e423e46" "$(git rev-list --count e423e46..HEAD)" && git log -11 --format="commit=%H subject=%s"' > recovery/MANIFEST.txt
           sha256sum recovery/*.patch > recovery/SHA256SUMS
           cat recovery/MANIFEST.txt
           cat recovery/SHA256SUMS
@@ -43,7 +43,7 @@ jobs:
       - name: Upload restore artifact
         uses: actions/upload-artifact@v4
         with:
-          name: solange-client-ready-20260830-six-commits
+          name: solange-client-ready-20260831-eleven-commits
           path: recovery/
           retention-days: 30
           if-no-files-found: error
