@@ -58,7 +58,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   contract:
@@ -79,8 +78,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      STATUS_ISSUE_NUMBER: '1207'
-      STATUS_ISSUE_TITLE: 'Desktop Commander 24h Control Plane Status'
+      ALLOW_REPAIR: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
       - name: Configure verified VM SSH
@@ -96,7 +94,7 @@ jobs:
           printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
 
-      - name: Probe and perform one bounded repair per unhealthy host
+      - name: Probe and optionally perform one bounded repair per unhealthy host
         env:
           REPOSITORY: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
@@ -111,7 +109,7 @@ jobs:
           import subprocess
           import time
 
-          MAX_REPAIR_ATTEMPTS = 1
+          MAX_REPAIR_ATTEMPTS = 1 if os.environ.get('ALLOW_REPAIR') == '1' else 0
           VM_TARGET = 'ubuntu@144.22.157.209'
           SSH = [
               'ssh',
@@ -385,12 +383,23 @@ jobs:
           print(json.dumps({'states': {x['host']: x['state'] for x in results}}, sort_keys=True))
           PY
 
-      - name: Update canonical sanitized status issue
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Stage sanitized control-plane evidence
+        if: always()
         run: |
           set -Eeuo pipefail
-          gh issue edit "$STATUS_ISSUE_NUMBER" --repo "${{ github.repository }}" --title "$STATUS_ISSUE_TITLE" --body-file /tmp/dc-control-plane-status.md
+          mkdir -p artifacts/desktop-commander-24h-health
+          test -s /tmp/dc-control-plane-status.md
+          test -s /tmp/dc-control-plane-status.json
+          cp /tmp/dc-control-plane-status.md artifacts/desktop-commander-24h-health/status.md
+          cp /tmp/dc-control-plane-status.json artifacts/desktop-commander-24h-health/status.json
+
+      - name: Upload immutable control-plane evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-commander-24h-health-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/desktop-commander-24h-health/
+          if-no-files-found: error
 
       - name: Mark run degraded when any host is not healthy
         run: |
