@@ -10,7 +10,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   probe:
@@ -51,10 +50,16 @@ jobs:
           cd /home/ubuntu/mei-mg-email
           echo "CHECKED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           echo "HEAD=$(git rev-parse HEAD)"
-          set +e
-          worker_state="$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null)"
-          timer_state="$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null)"
-          set -e
+          if worker_state="$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null)"; then
+            :
+          else
+            worker_state="${worker_state:-inactive}"
+          fi
+          if timer_state="$(sudo systemctl is-active mei-mg-email-autorepair.timer 2>/dev/null)"; then
+            :
+          else
+            timer_state="${timer_state:-inactive}"
+          fi
           echo "WORKER=${worker_state:-unknown}"
           echo "AUTOREPAIR_TIMER=${timer_state:-unknown}"
           if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause || test -f runtime/sender_blocked.pause; then
@@ -172,29 +177,36 @@ jobs:
                   out['stale_lock_waiters'] = int(cur.fetchone()['n'] or 0)
           print('METRICS=' + json.dumps(out, default=str, sort_keys=True))
           PY
-          set +e
+          if sender_block_logs="$(
           sudo journalctl -u mei-mg-email-worker.service --since '2 hours ago' --no-pager \
             | grep -Eai 'AS\(42004\)|bad outbound sender|5\.1\.8' \
             | tail -n 20 \
             | sed 's/^/SENDER_BLOCK_LOG=/'
-          set -e
+          )"; then
+            printf '%s\n' "$sender_block_logs"
+          else
+            echo 'SENDER_BLOCK_LOG=none'
+          fi
           EOF
 
-      - name: Publish sanitized probe as issue
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Stage sanitized probe evidence
         run: |
           set -Eeuo pipefail
+          mkdir -p artifacts/mei-email-prod-probe-now
           {
             echo 'Sanitized production probe for the MEI sender.'
             echo
             echo '```text'
             cat /tmp/mei-prod-probe.txt
             echo '```'
-          } > /tmp/issue-body.md
-          gh issue create --repo "${GITHUB_REPOSITORY}" \
-            --title "MEI PROD PROBE V038 ${GITHUB_RUN_ID}" \
-            --body-file /tmp/issue-body.md
+          } > artifacts/mei-email-prod-probe-now/probe.md
+
+      - name: Upload immutable probe evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: mei-email-prod-probe-now-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/mei-email-prod-probe-now/
+          if-no-files-found: error
 
       - name: Cleanup SSH material
         if: always()
