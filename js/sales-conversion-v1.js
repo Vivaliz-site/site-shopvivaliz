@@ -109,7 +109,7 @@
     if(observed&&typeof MutationObserver==='function'){
       new MutationObserver(function(){
         if(observed.dataset.svShippingRendering==='1') return;
-        if(pending&&!observed.querySelector('[data-sv-five-shipping="1"]')) renderPending();
+        if(pending&&(observed.hidden||!observed.querySelector('[data-sv-five-shipping="1"]'))) renderPending();
       }).observe(observed,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden']});
     }
     var original=window.fetch;
