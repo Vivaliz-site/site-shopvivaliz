@@ -128,13 +128,62 @@ function sv_market_tiny_ensure_access_token(): string
 }
 
 /**
+ * @return array{status:int,body:string,json:array<string,mixed>}
+ */
+function sv_market_tiny_parse_response(int $status, string $body): array
+{
+    $decoded = $body !== '' ? json_decode($body, true) : null;
+    return [
+        'status' => $status,
+        'body' => $body,
+        'json' => is_array($decoded) ? $decoded : [],
+    ];
+}
+
+/**
+ * @param array<string,mixed>|null $payload
+ * @return array{status:int,body:string,json:array<string,mixed>}
+ */
+function sv_market_tiny_request_once(string $method, string $path, string $token, ?array $payload = null): array
+{
+    $url = 'https://api.tiny.com.br/public-api/v3' . $path;
+    $headers = [
+        'Authorization: Bearer ' . $token,
+        'Content-Type: application/json',
+        'Accept: application/json',
+        'User-Agent: ShopVivaliz/3.0',
+    ];
+    $options = [
+        CURLOPT_CUSTOMREQUEST => strtoupper($method),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_HTTPHEADER => $headers,
+    ];
+    if ($payload !== null) {
+        $options[CURLOPT_POSTFIELDS] = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, $options);
+    $body = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $transportFailed = $body === false;
+    curl_close($ch);
+
+    if ($transportFailed) {
+        return sv_market_tiny_parse_response(0, '');
+    }
+    return sv_market_tiny_parse_response($status, is_string($body) ? $body : '');
+}
+
+/**
  * @param array<string,mixed>|null $payload
  * @return array{status:int,body:string,json:array<string,mixed>}
  */
 function sv_market_tiny_request_v3(string $method, string $path, ?array $payload = null): array
 {
     $before = sv_market_tiny_ensure_access_token();
-    $response = svtop_tiny_request($method, $path, $before, $payload);
+    $response = sv_market_tiny_request_once($method, $path, $before, $payload);
     if ((int)$response['status'] !== 401) {
         return $response;
     }
@@ -142,7 +191,7 @@ function sv_market_tiny_request_v3(string $method, string $path, ?array $payload
     // The daemon may have published a new token between request and 401.
     $after = sv_market_tiny_access_token();
     if ($after !== '' && !hash_equals($before, $after)) {
-        return svtop_tiny_request($method, $path, $after, $payload);
+        return sv_market_tiny_request_once($method, $path, $after, $payload);
     }
     return $response;
 }
