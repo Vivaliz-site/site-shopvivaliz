@@ -20,6 +20,7 @@
     var previousTotal=previous?Number(previous.total)||0:0;
     var quote=shippingQuote(option,cep);
     try{localStorage.setItem('shopvivaliz_shipping_quote',JSON.stringify(quote));}catch(e){}
+    try{localStorage.removeItem('shopvivaliz_pending_payment');}catch(e){}
     var shippingEl=document.getElementById('cart-shipping');
     var totalEl=document.getElementById('cart-total');
     if(shippingEl) shippingEl.textContent=shippingMoney(quote.total);
