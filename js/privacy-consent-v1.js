@@ -3,6 +3,31 @@
 
   var STORAGE_KEY = 'shopvivaliz_privacy_consent_v1';
   var COOKIE_KEY = 'sv_privacy_consent';
+  var ASSET_VERSION = (function () {
+    try {
+      var source = document.currentScript && document.currentScript.src ? document.currentScript.src : '';
+      return source ? (new URL(source, window.location.href).searchParams.get('v') || '1') : '1';
+    } catch (error) {
+      return '1';
+    }
+  })();
+
+  function bootstrapDirectProductSalesLayer() {
+    var path = String(window.location.pathname || '').replace(/\/$/, '');
+    if (path !== '/produto.php') return;
+    if (!document.querySelector('link[href*="/css/sales-conversion-v1.css"]')) {
+      var style = document.createElement('link');
+      style.rel = 'stylesheet';
+      style.href = '/css/sales-conversion-v1.css?v=' + encodeURIComponent(ASSET_VERSION);
+      document.head.appendChild(style);
+    }
+    if (!document.querySelector('script[src*="/js/sales-conversion-v1.js"]')) {
+      var script = document.createElement('script');
+      script.src = '/js/sales-conversion-v1.js?v=' + encodeURIComponent(ASSET_VERSION);
+      script.defer = true;
+      document.head.appendChild(script);
+    }
+  }
 
   function cookieValue() {
     try {
@@ -117,6 +142,7 @@
     }
   };
 
+  bootstrapDirectProductSalesLayer();
   var choice = existing();
   if (choice) updateConsent(choice === 'accepted');
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', render);
