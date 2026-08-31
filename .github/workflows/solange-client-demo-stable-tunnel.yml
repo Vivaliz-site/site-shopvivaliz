@@ -1,150 +1,18 @@
-name: Solange client demo stable tunnel
+name: Solange client demo stable tunnel (disabled)
 
 on:
-  push:
-    branches: [recovery/two-a1-20260829]
-    paths: [.github/workflows/solange-client-demo-stable-tunnel.yml]
   workflow_dispatch:
 
 permissions:
   contents: read
 
-env:
-  ZONE_NAME: shopvivaliz.com.br
-  DEMO_HOSTNAME: solange-demo.shopvivaliz.com.br
-  TUNNEL_NAME: solange-client-demo
-  VM_HOST: 144.22.157.209
-
 jobs:
-  publish:
+  diagnostic:
     runs-on: ubuntu-latest
-    environment: Production
-    timeout-minutes: 12
     steps:
-      - name: Validate secrets and Cloudflare permissions
-        id: cf
-        env:
-          CF_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CF_DNS_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
-        shell: bash
+      - name: Explain disabled state
         run: |
-          set -euo pipefail
-          test -n "${CF_TUNNEL_TOKEN:-}"
-          test -n "${CF_DNS_TOKEN:-}"
-          api=https://api.cloudflare.com/client/v4
-          zones=$(curl -fsS -H "Authorization: Bearer $CF_DNS_TOKEN" "$api/zones?name=$ZONE_NAME")
-          zone_id=$(python3 -c 'import json,sys; d=json.load(sys.stdin); r=d.get("result") or []; print(r[0]["id"] if len(r)==1 else "")' <<<"$zones")
-          account_id=$(python3 -c 'import json,sys; d=json.load(sys.stdin); r=d.get("result") or []; print((r[0].get("account") or {}).get("id", "") if len(r)==1 else "")' <<<"$zones")
-          test -n "$zone_id" && test -n "$account_id"
-          probe=$(curl -sS -w '\n%{http_code}' -H "Authorization: Bearer $CF_TUNNEL_TOKEN" "$api/accounts/$account_id/cfd_tunnel?is_deleted=false&per_page=1")
-          code=${probe##*$'\n'}
-          [ "$code" = 200 ] || { echo "CLOUDFLARE_TUNNEL_PERMISSION_DENIED status=$code"; exit 20; }
-          echo "zone_id=$zone_id" >> "$GITHUB_OUTPUT"
-          echo "account_id=$account_id" >> "$GITHUB_OUTPUT"
-          echo 'CLOUDFLARE_TUNNEL_PERMISSION_OK'
-
-      - name: Create or reuse named tunnel and route
-        id: tunnel
-        env:
-          CF_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CF_DNS_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
-          ACCOUNT_ID: ${{ steps.cf.outputs.account_id }}
-          ZONE_ID: ${{ steps.cf.outputs.zone_id }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          api=https://api.cloudflare.com/client/v4
-          list=$(curl -fsS -H "Authorization: Bearer $CF_TUNNEL_TOKEN" "$api/accounts/$ACCOUNT_ID/cfd_tunnel?is_deleted=false&name=$TUNNEL_NAME")
-          tunnel_id=$(python3 -c 'import json,sys,os; d=json.load(sys.stdin); m=[x for x in d.get("result",[]) if x.get("name")==os.environ["TUNNEL_NAME"]]; print(m[0]["id"] if len(m)==1 else "")' <<<"$list")
-          if [ -z "$tunnel_id" ]; then
-            body=$(python3 -c 'import json,os; print(json.dumps({"name":os.environ["TUNNEL_NAME"],"config_src":"cloudflare"}))')
-            created=$(curl -fsS -X POST -H "Authorization: Bearer $CF_TUNNEL_TOKEN" -H 'Content-Type: application/json' --data "$body" "$api/accounts/$ACCOUNT_ID/cfd_tunnel")
-            tunnel_id=$(python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("result") or {}).get("id", ""))' <<<"$created")
-          fi
-          test -n "$tunnel_id"
-          config=$(python3 -c 'import json,os; print(json.dumps({"config":{"ingress":[{"hostname":os.environ["DEMO_HOSTNAME"],"service":"http://127.0.0.1:3300","originRequest":{}},{"service":"http_status:404"}]}}))')
-          curl -fsS -X PUT -H "Authorization: Bearer $CF_TUNNEL_TOKEN" -H 'Content-Type: application/json' --data "$config" "$api/accounts/$ACCOUNT_ID/cfd_tunnel/$tunnel_id/configurations" >/dev/null
-          target="$tunnel_id.cfargotunnel.com"
-          records=$(curl -fsS -H "Authorization: Bearer $CF_DNS_TOKEN" "$api/zones/$ZONE_ID/dns_records?name=$DEMO_HOSTNAME&per_page=100")
-          count=$(python3 -c 'import json,sys; print(len(json.load(sys.stdin).get("result",[])))' <<<"$records")
-          payload=$(python3 -c 'import json,os,sys; print(json.dumps({"type":"CNAME","name":os.environ["DEMO_HOSTNAME"],"content":sys.argv[1],"proxied":True,"ttl":1}))' "$target")
-          if [ "$count" = 0 ]; then
-            curl -fsS -X POST -H "Authorization: Bearer $CF_DNS_TOKEN" -H 'Content-Type: application/json' --data "$payload" "$api/zones/$ZONE_ID/dns_records" >/dev/null
-          elif [ "$count" = 1 ]; then
-            type=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["result"][0]["type"])' <<<"$records")
-            [ "$type" = CNAME ] || { echo "DNS_CONFLICT type=$type"; exit 21; }
-            rid=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["result"][0]["id"])' <<<"$records")
-            curl -fsS -X PUT -H "Authorization: Bearer $CF_DNS_TOKEN" -H 'Content-Type: application/json' --data "$payload" "$api/zones/$ZONE_ID/dns_records/$rid" >/dev/null
-          else
-            echo "DNS_CONFLICT count=$count"; exit 22
-          fi
-          response=$(curl -fsS -H "Authorization: Bearer $CF_TUNNEL_TOKEN" "$api/accounts/$ACCOUNT_ID/cfd_tunnel/$tunnel_id/token")
-          token=$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("result", ""))' <<<"$response")
-          test -n "$token"
-          echo "::add-mask::$token"
-          printf '%s' "$token" > /tmp/tunnel-token
-          chmod 600 /tmp/tunnel-token
-          echo "tunnel_id=$tunnel_id" >> "$GITHUB_OUTPUT"
-          echo 'NAMED_TUNNEL_CONFIGURED'
-
-      - name: Install named tunnel on demo VM
-        env:
-          VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
-          VM_KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -s /tmp/tunnel-token
-          install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
-          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
-          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa")
-          cat /tmp/tunnel-token | ssh "${ssh_opts[@]}" ubuntu@$VM_HOST 'umask 077; mkdir -p /home/ubuntu/solange-client-demo; cat > /home/ubuntu/solange-client-demo/cloudflared.named.token; chmod 600 /home/ubuntu/solange-client-demo/cloudflared.named.token'
-          ssh "${ssh_opts[@]}" ubuntu@$VM_HOST 'bash -s' <<'REMOTE'
-          set -euo pipefail
-          [ "$(hostname)" = 'always-free-arm-1787907847-26' ]
-          docker rm -f solange-demo-named-tunnel >/dev/null 2>&1 || true
-          docker run -d --name solange-demo-named-tunnel --restart unless-stopped --network host \
-            -v /home/ubuntu/solange-client-demo/cloudflared.named.token:/run/secrets/cloudflared-token:ro \
-            cloudflare/cloudflared:latest tunnel --no-autoupdate run --token-file /run/secrets/cloudflared-token >/dev/null
-          sleep 4
-          docker inspect solange-demo-named-tunnel --format '{{.State.Status}} {{.HostConfig.RestartPolicy.Name}}'
-          REMOTE
-
-      - name: Rebuild demo for stable hostname
-        env:
-          VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
-          VM_KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
-          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
-          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa")
-          ssh "${ssh_opts[@]}" ubuntu@$VM_HOST "DEMO_HOSTNAME='$DEMO_HOSTNAME' bash -s" <<'REMOTE'
-          set -euo pipefail
-          cd /home/ubuntu/solange-client-demo/app
-          sed -i -E "s#^NEXT_PUBLIC_SUPABASE_URL=.*#NEXT_PUBLIC_SUPABASE_URL=https://$DEMO_HOSTNAME#; s#^APP_URL=.*#APP_URL=https://$DEMO_HOSTNAME#" .env.production.local
-          npm run build
-          docker restart solange-client-demo-web >/dev/null
-          REMOTE
-
-      - name: Verify stable public demo
-        shell: bash
-        run: |
-          set -euo pipefail
-          url="https://$DEMO_HOSTNAME"
-          for i in $(seq 1 30); do
-            home=$(curl -sS -o /dev/null -w '%{http_code}' "$url/" || true)
-            health=$(curl -sS -o /dev/null -w '%{http_code}' "$url/api/health" || true)
-            if [ "$home" = 200 ] && [ "$health" = 200 ]; then
-              echo "STABLE_DEMO_OK url=$url"
-              exit 0
-            fi
-            sleep 4
-          done
-          echo 'STABLE_DEMO_FAILED'
-          exit 30
+          echo 'Stable tunnel automation is intentionally disabled.'
+          echo 'CLOUDFLARE_API_TOKEN returned HTTP 401 on 2026-08-31.'
+          echo 'No DNS record or named tunnel was created.'
+          echo 'Current client demo continues through the existing Quick Tunnel.'
