@@ -46,6 +46,7 @@ MUTATION = re.compile(joined(r"git\s+pu", r"sh|gh\s+(?:pr\s+merge|issue\s+(?:cre
 PRODUCTION_NAME = re.compile(r"production|deploy|publish|apply", re.I)
 PUSH_TRIGGER = re.compile(r"(?m)^\s{2}push\s*:")
 MANUAL_TRIGGER = re.compile(r"(?m)^\s{2}workflow_dispatch\s*:")
+TRIGGER_BLOCK = re.compile(r"(?m)^on:\s*\n(?P<body>(?:^[ \t]+[^\n]*(?:\n|$))*)")
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,11 @@ def line_number(text: str, offset: int) -> int:
 
 def excerpt(value: str) -> str:
     return " ".join(value.strip().split())[:200]
+
+
+def workflow_trigger_block(text: str) -> str:
+    match = TRIGGER_BLOCK.search(text)
+    return match.group("body") if match else ""
 
 
 def safely_rethrown_set_plus_e_offsets(text: str) -> set[int]:
@@ -89,7 +95,8 @@ def audit_workflow(path: Path) -> list[Finding]:
             findings.append(Finding(severity, rule, relative, line_number(text, match.start()), message, excerpt(match.group(0))))
 
     write_permissions = list(WRITE_PERMISSION.finditer(text))
-    automatic = AUTO_TRIGGER.search(text)
+    triggers = workflow_trigger_block(text)
+    automatic = AUTO_TRIGGER.search(triggers)
     mutation = MUTATION.search(text)
     if write_permissions and automatic and mutation:
         first = write_permissions[0]
@@ -102,8 +109,8 @@ def audit_workflow(path: Path) -> list[Finding]:
             excerpt(first.group(0)),
         ))
 
-    if PRODUCTION_NAME.search(path.name) and PUSH_TRIGGER.search(text) and MANUAL_TRIGGER.search(text):
-        match = PUSH_TRIGGER.search(text)
+    if PRODUCTION_NAME.search(path.name) and PUSH_TRIGGER.search(triggers) and MANUAL_TRIGGER.search(triggers):
+        match = PUSH_TRIGGER.search(triggers)
         findings.append(Finding(
             "critical",
             "production_push_trigger",
