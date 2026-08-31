@@ -322,7 +322,7 @@ def _atomic_write_private(
             os.fsync(handle.fileno())
         os.chmod(temporary, mode)
         if os.name != "nt" and uid is not None and gid is not None:
-            os.chown(temporary, uid, gid)
+            os.chown(temporary, -1, gid)
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)
