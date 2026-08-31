@@ -23,6 +23,7 @@ $checks = [
         && str_contains($js, 'quote_id: option.quote_id'),
     'Checkout reopens choices after native render' => str_contains($js, 'observed.hidden')
         && str_contains($js, 'renderPending()'),
+    'Changing shipping invalidates stale payment session' => str_contains($js, "removeItem('shopvivaliz_pending_payment')"),
     'Selectable cards are styled' => str_contains($css, '.sv-shipping-choice-list')
         && str_contains($css, '.sv-shipping-choice'),
 ];
