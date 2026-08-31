@@ -64,9 +64,13 @@ jobs:
           print(f"VM_ESTABLISHED_CONNECTIONS={established}")
           PY' > /tmp/vm-connection-safe.txt
       - name: Stage sanitized connection evidence
+        if: always()
         run: |
           set -Eeuo pipefail
           mkdir -p artifacts/vm-desktop-commander-connection-probe
+          if [ ! -s /tmp/vm-connection-safe.txt ]; then
+            printf 'VM_CONNECTION_EVIDENCE=fallback\nprobe_failed_before_connection_evidence_materialization\n' > /tmp/vm-connection-safe.txt
+          fi
           {
             echo '### always-free-arm-1787907847-26 runtime connection probe'
             echo
@@ -75,6 +79,7 @@ jobs:
             echo '```'
           } > artifacts/vm-desktop-commander-connection-probe/probe.md
       - name: Upload immutable connection evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: vm-desktop-commander-connection-${{ github.run_id }}-${{ github.run_attempt }}

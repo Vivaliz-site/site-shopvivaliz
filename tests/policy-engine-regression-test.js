@@ -123,4 +123,16 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base executable test guard');
+  write(root, 'tests/live-publish-check.sh', `#!/usr/bin/env bash\nset -Eeuo pipefail\ngit push origin HEAD:main\n`);
+  const head = commitAll(root, 'add executable test mutation');
+  const result = policy(root, base, head);
+  assert.notStrictEqual(result.status, 0, 'Executable tests containing a real direct push must remain blocked');
+  assert.match(result.stdout, /padrão perigoso git push/);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
 console.log('policy-engine-regression: ok');

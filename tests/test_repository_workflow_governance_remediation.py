@@ -106,6 +106,20 @@ class RepositoryWorkflowGovernanceRemediationTests(unittest.TestCase):
         self.assertIn("/tmp/dc-status.md", text)
         self.assertIn("probe_failed_before_status_materialization", text)
 
+    def test_three_host_quick_probe_materializes_fallback_evidence(self):
+        text = self.text("desktop-commander-three-host-quick-probe.yml")
+        self.assertRegex(text, r"(?s)- name: Stage sanitized probe evidence\n\s+if: always\(\)")
+        self.assertRegex(text, r"(?s)- name: Upload immutable probe evidence\n\s+if: always\(\)")
+        self.assertIn("QUICK_PROBE_EVIDENCE=fallback", text)
+        self.assertIn("probe_failed_before_quick_evidence_materialization", text)
+
+    def test_vm_connection_probe_materializes_fallback_evidence(self):
+        text = self.text("vm-desktop-commander-connection-probe.yml")
+        self.assertRegex(text, r"(?s)- name: Stage sanitized connection evidence\n\s+if: always\(\)")
+        self.assertRegex(text, r"(?s)- name: Upload immutable connection evidence\n\s+if: always\(\)")
+        self.assertIn("VM_CONNECTION_EVIDENCE=fallback", text)
+        self.assertIn("probe_failed_before_connection_evidence_materialization", text)
+
     def test_mei_probe_preserves_unknown_when_systemctl_returns_no_state(self):
         text = self.text("mei-email-prod-probe-now.yml")
         self.assertIn('worker_state="${worker_state:-unknown}"', text)

@@ -49,12 +49,16 @@ jobs:
             esac
           } > /tmp/quick-probe.md
       - name: Stage sanitized probe evidence
+        if: always()
         run: |
           set -Eeuo pipefail
           mkdir -p artifacts/desktop-commander-three-host-quick-probe
-          test -s /tmp/quick-probe.md
+          if [ ! -s /tmp/quick-probe.md ]; then
+            printf '### Three-host quick relay probe\n\nQUICK_PROBE_EVIDENCE=fallback\nprobe_failed_before_quick_evidence_materialization\n' > /tmp/quick-probe.md
+          fi
           cp /tmp/quick-probe.md artifacts/desktop-commander-three-host-quick-probe/probe.md
       - name: Upload immutable probe evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: desktop-commander-quick-probe-${{ github.run_id }}-${{ github.run_attempt }}
