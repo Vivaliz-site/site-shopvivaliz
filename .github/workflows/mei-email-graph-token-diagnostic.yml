@@ -1,14 +1,10 @@
-﻿name: MEI Email Graph Token Diagnostic
+name: MEI Email Graph Token Diagnostic
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/mei-email-graph-token-diagnostic.yml"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   diagnose:
@@ -110,18 +106,20 @@ jobs:
           sudo journalctl -u mei-mg-email-ndr-guard.service --since '-2 minutes' --no-pager | tail -n 60 || true
           EOF
 
-      - name: Persist diagnostic evidence
+      - name: Require diagnostic evidence
         if: always()
         shell: bash
         run: |
           set -Eeuo pipefail
-          test -s "$REPORT_PATH" || exit 0
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add "$REPORT_PATH"
-          git diff --cached --quiet && exit 0
-          git commit -m "ops: record Graph Mail.Read admin attempt"
-          git push origin HEAD:main
+          test -s "$REPORT_PATH"
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mei-graph-token-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.REPORT_PATH }}
+          if-no-files-found: error
 
       - name: Cleanup SSH material
         if: always()
