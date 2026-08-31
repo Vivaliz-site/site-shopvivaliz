@@ -120,7 +120,7 @@ if (in_array($requestPath, ['/', '/carrinho', '/checkout'], true)) {
 }
 
 // Pequena camada comercial compartilhada para produto, carrinho e checkout.
-if ($requestPath === '/carrinho' || $requestPath === '/checkout' || $requestPath === '/produto' || str_starts_with($requestPath, '/produto/')) {
+if ($requestPath === '/carrinho' || $requestPath === '/checkout' || $requestPath === '/produto' || $requestPath === '/produto.php' || str_starts_with($requestPath, '/produto/')) {
     $salesCss = dirname(__DIR__) . '/css/sales-conversion-v1.css';
     $salesJs = dirname(__DIR__) . '/js/sales-conversion-v1.js';
     $salesCssVersion = is_file($salesCss) ? (string)filemtime($salesCss) : '1';
