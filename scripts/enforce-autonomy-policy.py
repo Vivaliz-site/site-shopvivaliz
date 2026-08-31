@@ -68,6 +68,10 @@ def sensitive_path(path: str) -> bool:
     lower = path.lower()
     if lower.startswith(IGNORED_PREFIXES):
         return False
+    # Workflow filenames describe automation/test infrastructure, not catalog data.
+    # Their contents are still scanned below for real price/stock mutations.
+    if lower.startswith(".github/workflows/"):
+        return False
     name = Path(lower).name
     return any(fnmatch.fnmatch(name, pattern) for pattern in SENSITIVE_PATH_PATTERNS)
 
