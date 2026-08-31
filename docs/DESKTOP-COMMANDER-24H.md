@@ -28,6 +28,7 @@ O runner descarta a saída bruta do provedor. Se detectar solicitação de devic
 - O log operacional fica em `%LOCALAPPDATA%\ShopVivaliz\DesktopCommander\logs`, rotacionado em 5 MiB com uma geração anterior.
 - O monitor renova um marcador a cada 30 segundos depois de `Device ready`. Marcador vencido, processo duplicado ou canal degradado sem recuperação convergem para reinício único.
 - Um mutex global recusa supervisores concorrentes mesmo quando a chamada não veio do Agendador; a tarefa continua usando `IgnoreNew` como segunda barreira.
+- A descoberta de launchers limita candidatos a `node.exe` e `cmd.exe`; comandos de diagnóstico que apenas contenham o texto do pacote não são tratados como agentes concorrentes.
 - A tarefa habilita o log operacional `Microsoft-Windows-TaskScheduler/Operational` quando a política local permite.
 
 ### Persistência de renovação de sessão

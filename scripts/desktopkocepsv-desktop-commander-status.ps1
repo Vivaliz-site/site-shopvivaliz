@@ -25,6 +25,7 @@ function Test-DeviceStateNewerThanCooldown {
 
 function Get-DesktopCommanderRemoteLaunchers {
     return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+        ([string]$_.Name) -in @('node.exe','cmd.exe') -and
         ([string]$_.CommandLine) -match '(@wonderwhy-er/desktop-commander@[^ ]+|@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js).*\bremote\b'
     })
 }
