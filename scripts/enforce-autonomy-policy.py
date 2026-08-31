@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import ast
 import fnmatch
 import json
 import os
 import re
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,6 +38,51 @@ MUTATION_PATTERN = re.compile(
     r"\bset\b|\bassign\b|\bwrite\b|\bsync\b|\bpatch\b|\bput\b|\bpost\b).{0,160}"
     r"\b(price|pricing|preco|preço|stock|estoque|inventory|quantity|quantidade)\b"
 )
+
+ASSERTION_NAMES = {"assertIn", "assertNotIn"}
+ASSERTION_TEXT = re.compile(r"\b(?:self\.)?assert(?:NotIn|In)\s*\(")
+
+
+def assertion_name(call: ast.Call) -> str | None:
+    if isinstance(call.func, ast.Name):
+        return call.func.id
+    if isinstance(call.func, ast.Attribute):
+        return call.func.attr
+    return None
+
+
+def assertion_evaluated_text(line: str) -> str | None:
+    source = textwrap.dedent(line)
+    try:
+        module = ast.parse(source)
+    except SyntaxError:
+        return None
+    if len(module.body) != 1:
+        return None
+
+    statement = module.body[0]
+    if isinstance(statement, (ast.Assign, ast.AnnAssign)):
+        value = statement.value
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            if ASSERTION_TEXT.search(value.value):
+                return ""
+        return None
+
+    if not isinstance(statement, ast.Expr) or not isinstance(statement.value, ast.Call):
+        return None
+    call = statement.value
+    if assertion_name(call) not in ASSERTION_NAMES:
+        return None
+
+    fragments: list[str] = []
+    values = list(call.args) + [item.value for item in call.keywords]
+    for value in values:
+        if isinstance(value, ast.Constant) and isinstance(value.value, (str, bytes)):
+            continue
+        fragment = ast.get_source_segment(source, value)
+        if fragment:
+            fragments.append(" ".join(fragment.split()))
+    return " ".join(fragments)
 
 
 def git(*args: str) -> str:
@@ -87,12 +134,36 @@ def should_scan_content(path: str) -> bool:
 
 def sensitive_content(lines: list[str]) -> list[str]:
     findings: list[str] = []
-    for index, line in enumerate(lines, start=1):
-        lower = line.lower()
+    consumed: set[int] = set()
+
+    def inspect(scan_text: str, index: int, original: str) -> None:
+        if not scan_text:
+            return
+        lower = scan_text.lower()
         if not any(token in lower for token in SENSITIVE_TOKENS):
+            return
+        if MUTATION_PATTERN.search(scan_text):
+            findings.append(f"added-line-{index + 1}: {original[:240]}")
+
+    for index, line in enumerate(lines):
+        if index in consumed:
             continue
-        if MUTATION_PATTERN.search(line):
-            findings.append(f"added-line-{index}: {line[:240]}")
+
+        if ASSERTION_TEXT.search(line):
+            for end in range(index, min(len(lines), index + 50)):
+                source = "\n".join(lines[index:end + 1])
+                evaluated = assertion_evaluated_text(source)
+                if evaluated is None:
+                    continue
+                consumed.update(range(index, end + 1))
+                inspect(evaluated, index, source)
+                break
+            else:
+                inspect(line, index, line)
+            continue
+
+        inspect(line, index, line)
+
     return findings
 
 

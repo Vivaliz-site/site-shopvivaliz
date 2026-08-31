@@ -55,51 +55,215 @@ class PolicyEngine {
     return this.changedFilesCache;
   }
 
-  addedLines(file) {
+  addedHunks(file) {
     const baseSha = String(process.env.POLICY_BASE_SHA || '').trim();
     const headSha = String(process.env.POLICY_HEAD_SHA || '').trim();
     const diff = this.git(['diff', '--unified=0', '--no-color', `${baseSha}...${headSha}`, '--', file]);
-    return diff
-      .split(/\r?\n/)
-      .filter(line => line.startsWith('+') && !line.startsWith('+++'))
-      .map(line => line.slice(1));
+    const hunks = [];
+    let current = null;
+    for (const line of diff.split(/\r?\n/)) {
+      if (line.startsWith('@@')) {
+        if (current && current.length > 0) hunks.push(current);
+        current = [];
+        continue;
+      }
+      if (current !== null && line.startsWith('+') && !line.startsWith('+++')) {
+        current.push(line.slice(1));
+      }
+    }
+    if (current && current.length > 0) hunks.push(current);
+    return hunks;
+  }
+
+  addedLines(file) {
+    return this.addedHunks(file).flat();
   }
 
   failureFallbackToken() {
     return ['||', 'true'].join(' ');
   }
 
-  isSafeReadOnlyFallback(line) {
-    const beforeFallback = String(line).split(this.failureFallbackToken(), 1)[0];
-    return /\bsystemctl\s+(?:is-active|is-enabled|show)\b/.test(beforeFallback);
+  failureFallbackMatches(value) {
+    return [...String(value).matchAll(/\|\|\s+true\b/g)];
   }
 
-  isExecutableFailureSuppression(file, line) {
-    const token = this.failureFallbackToken();
-    if (!String(line).includes(token) || this.isSafeReadOnlyFallback(line)) return false;
-    if (/\.(?:yml|yaml|sh)$/i.test(file)) return true;
-    if (/\.(?:js|mjs|cjs)$/i.test(file)) {
-      return /\b(?:exec|execSync|spawn|spawnSync)\s*\(/.test(line) || /\bshell\s*:/.test(line);
+  shellSegmentBefore(value, index) {
+    const before = String(value).slice(0, index);
+    const separators = [
+      { token: '\n', width: 1 },
+      { token: ';', width: 1 },
+      { token: '&&', width: 2 },
+      { token: '||', width: 2 },
+    ];
+    let start = -1;
+    let width = 0;
+    for (const separator of separators) {
+      const found = before.lastIndexOf(separator.token);
+      if (found > start) {
+        start = found;
+        width = separator.width;
+      }
     }
-    if (/\.php$/i.test(file)) {
-      return /\b(?:shell_exec|exec|system|passthru|proc_open)\s*\(/.test(line);
+    return before.slice(start < 0 ? 0 : start + width).trim();
+  }
+
+  isSafeReadOnlyFallbackAt(value, index) {
+    const command = this.shellSegmentBefore(value, index);
+    return /\bsystemctl\s+(?:is-active|is-enabled|show)\b/.test(command);
+  }
+
+  hasUnsafeFailureFallback(value) {
+    for (const match of this.failureFallbackMatches(value)) {
+      if (!this.isSafeReadOnlyFallbackAt(value, match.index)) return true;
     }
     return false;
   }
 
-  isExecutableForbiddenCommand(file, line, pattern) {
-    if (!pattern.test(String(line))) return false;
-    if (/\.(?:yml|yaml|sh)$/i.test(file)) return true;
+  isRegexLiteralStart(previousSignificant) {
+    return previousSignificant === '' || /[([{,:;=!?&|+\-*%^~<>]/.test(previousSignificant);
+  }
+
+  executableCallArguments(value, wrapperPattern, syntax = 'generic') {
+    const text = String(value);
+    const flags = wrapperPattern.flags.includes('g')
+      ? wrapperPattern.flags
+      : `${wrapperPattern.flags}g`;
+    const wrapper = new RegExp(wrapperPattern.source, flags);
+    const argumentsList = [];
+    let match;
+
+    while ((match = wrapper.exec(text)) !== null) {
+      const openOffset = match[0].lastIndexOf('(');
+      const openIndex = match.index + openOffset;
+      let depth = 0;
+      let quote = null;
+      let escaped = false;
+      let lineComment = false;
+      let blockComment = false;
+      let regexLiteral = false;
+      let regexClass = false;
+      let previousSignificant = '';
+      let closed = false;
+
+      for (let index = openIndex; index < text.length; index += 1) {
+        const char = text[index];
+        const next = text[index + 1] || '';
+
+        if (lineComment) {
+          if (char === '\n') lineComment = false;
+          continue;
+        }
+        if (blockComment) {
+          if (char === '*' && next === '/') {
+            blockComment = false;
+            index += 1;
+          }
+          continue;
+        }
+        if (regexLiteral) {
+          if (escaped) {
+            escaped = false;
+          } else if (char === '\\') {
+            escaped = true;
+          } else if (char === '[') {
+            regexClass = true;
+          } else if (char === ']' && regexClass) {
+            regexClass = false;
+          } else if (char === '/' && !regexClass) {
+            regexLiteral = false;
+            previousSignificant = '/';
+          }
+          continue;
+        }
+        if (quote !== null) {
+          if (escaped) {
+            escaped = false;
+          } else if (char === '\\') {
+            escaped = true;
+          } else if (char === quote) {
+            quote = null;
+          }
+          continue;
+        }
+
+        const slashComments = syntax === 'javascript' || syntax === 'php';
+        if (slashComments && char === '/' && next === '/') {
+          lineComment = true;
+          index += 1;
+          continue;
+        }
+        if (slashComments && char === '/' && next === '*') {
+          blockComment = true;
+          index += 1;
+          continue;
+        }
+        if ((syntax === 'python' || syntax === 'php') && char === '#') {
+          lineComment = true;
+          continue;
+        }
+        if (syntax === 'javascript' && char === '/' && this.isRegexLiteralStart(previousSignificant)) {
+          regexLiteral = true;
+          regexClass = false;
+          escaped = false;
+          continue;
+        }
+        if (char === "'" || char === '"' || char === '`') {
+          quote = char;
+        } else if (char === '(') {
+          depth += 1;
+        } else if (char === ')') {
+          depth -= 1;
+          if (depth === 0) {
+            argumentsList.push(text.slice(openIndex + 1, index));
+            wrapper.lastIndex = index + 1;
+            closed = true;
+            break;
+          }
+        }
+        if (!/\s/.test(char)) previousSignificant = char;
+      }
+
+      if (!closed) {
+        wrapper.lastIndex = match.index + match[0].length;
+      }
+    }
+
+    return argumentsList;
+  }
+
+  executableArguments(file, value) {
     if (/\.py$/i.test(file)) {
-      return /\b(?:os\.system|subprocess\.(?:run|call|check_call|check_output|Popen))\s*\(/.test(line);
+      return this.executableCallArguments(
+        value,
+        /\b(?:os\.system|subprocess\.(?:run|call|check_call|check_output|Popen))\s*\(/,
+        'python',
+      );
     }
     if (/\.(?:js|mjs|cjs)$/i.test(file)) {
-      return /\b(?:exec|execSync|spawn|spawnSync)\s*\(/.test(line) || /\bshell\s*:/.test(line);
+      return this.executableCallArguments(value, /\b(?:exec|execSync|spawn|spawnSync)\s*\(/, 'javascript');
     }
     if (/\.php$/i.test(file)) {
-      return /\b(?:shell_exec|exec|system|passthru|proc_open)\s*\(/.test(line);
+      return this.executableCallArguments(
+        value,
+        /\b(?:shell_exec|exec|system|passthru|proc_open)\s*\(/,
+        'php',
+      );
     }
-    return false;
+    return [];
+  }
+
+  isExecutableFailureSuppression(file, value) {
+    const text = String(value);
+    if (/\.(?:yml|yaml|sh)$/i.test(file)) return this.hasUnsafeFailureFallback(text);
+    return this.executableArguments(file, text)
+      .some(argumentsText => this.hasUnsafeFailureFallback(argumentsText));
+  }
+
+  isExecutableForbiddenCommand(file, value, pattern) {
+    const text = String(value);
+    if (/\.(?:yml|yaml|sh)$/i.test(file)) return pattern.test(text);
+    return this.executableArguments(file, text)
+      .some(argumentsText => pattern.test(argumentsText));
   }
 
   isVisualFile(file) {
@@ -169,10 +333,10 @@ class PolicyEngine {
     for (const file of this.changedFiles()) {
       if (!/\.(?:js|mjs|cjs|py|sh|php|yml|yaml)$/i.test(file)) continue;
       if (!fs.existsSync(file)) continue;
-      const added = this.addedLines(file);
+      const addedTexts = this.addedHunks(file).map(lines => lines.join('\n'));
       if (file.startsWith('tests/')) {
         for (const rule of rules) {
-          if (added.some(line => this.isExecutableForbiddenCommand(file, line, rule.pattern))) {
+          if (addedTexts.some(addedText => this.isExecutableForbiddenCommand(file, addedText, rule.pattern))) {
             this.fail(`padrão perigoso ${rule.label} em ${file}`);
           }
         }
@@ -184,11 +348,8 @@ class PolicyEngine {
           }
         }
       }
-      for (const line of added) {
-        if (this.isExecutableFailureSuppression(file, line)) {
-          this.fail(`padrão perigoso ${this.failureFallbackToken()} em ${file}`);
-          break;
-        }
+      if (addedTexts.some(addedText => this.isExecutableFailureSuppression(file, addedText))) {
+        this.fail(`padrão perigoso ${this.failureFallbackToken()} em ${file}`);
       }
     }
   }

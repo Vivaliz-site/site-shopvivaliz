@@ -135,4 +135,92 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base whitespace suppression guard');
+  write(root, '.github/workflows/suppressed-spacing.yml', `name: Suppressed spacing\non:\n  workflow_dispatch:\njobs:\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ./deploy-production.sh ||  true\n`);
+  const head = commitAll(root, 'add spaced suppression');
+  const result = policy(root, base, head);
+  assert.notStrictEqual(result.status, 0, 'Failure suppression must block arbitrary shell whitespace after ||');
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base multiline executable guard');
+  write(root, 'tests/live-publish-check.js', `const { execSync } = require('child_process');\nexecSync(\n  \`git push origin HEAD:main\`\n);\n`);
+  const head = commitAll(root, 'add multiline executable mutation');
+  const result = policy(root, base, head);
+  assert.notStrictEqual(result.status, 0, 'Multiline executable test commands containing a real direct push must remain blocked');
+  assert.match(result.stdout, /padrão perigoso git push/);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base multiline suppression guard');
+  write(root, '.github/workflows/suppressed-multiline.yml', `name: Suppressed multiline\non:\n  workflow_dispatch:\njobs:\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          ./deploy-production.sh ||\n            true\n`);
+  const head = commitAll(root, 'add multiline suppression');
+  const result = policy(root, base, head);
+  assert.notStrictEqual(result.status, 0, 'Failure suppression split across shell lines must remain blocked');
+  assert.match(result.stdout, /padrão perigoso .*\|\| true/);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base multiline readonly fallback');
+  write(root, '.github/workflows/safe-multiline-fallback.yml', `name: Safe multiline fallback\non:\n  workflow_dispatch:\njobs:\n  probe:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          status=$(systemctl is-active demo.service ||\n            true)\n          test \"$status\" = active\n`);
+  const head = commitAll(root, 'add multiline readonly fallback');
+  const result = policy(root, base, head);
+  assert.strictEqual(result.status, 0, `Read-only systemctl fallback may span lines without becoming unsafe:\n${result.stdout}\n${result.stderr}`);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base executable argument scope');
+  write(root, 'tests/harmless-exec-check.js', `const assert = require('assert');\nconst { execSync } = require('child_process');\nexecSync('echo harmless');\nassert.doesNotMatch('git status', /git push/);\n`);
+  const head = commitAll(root, 'add harmless executable and negative assertion');
+  const result = policy(root, base, head);
+  assert.strictEqual(result.status, 0, `Forbidden text outside executable arguments must not block:\n${result.stdout}\n${result.stderr}`);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base multiple executable calls');
+  const padding = 'x'.repeat(2200);
+  write(root, 'tests/second-exec-publish.js', `const { execSync } = require('child_process');\nexecSync('echo harmless');\n// ${padding}\nexecSync('git push origin HEAD:main');\n`);
+  const head = commitAll(root, 'add forbidden second executable call');
+  const result = policy(root, base, head);
+  assert.notStrictEqual(result.status, 0, 'Every executable invocation must be inspected, not just the first window');
+  assert.match(result.stdout, /padrão perigoso git push/);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
+{
+  const root = setupRepo();
+  write(root, 'tests/hunk-boundary.sh', `#!/usr/bin/env bash\nfalse\nrecover\necho one\necho two\necho three\necho four\necho old\n`);
+  const base = commitAll(root, 'base separated shell hunks');
+  write(root, 'tests/hunk-boundary.sh', `#!/usr/bin/env bash\nfalse ||\nrecover\necho one\necho two\necho three\necho four\ntrue\n`);
+  const head = commitAll(root, 'change separate shell hunks');
+  const result = policy(root, base, head);
+  assert.strictEqual(result.status, 0, `Separated diff hunks must not synthesize a nonexistent || true command:\n${result.stdout}\n${result.stderr}`);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base comment parenthesis lexer guard');
+  write(root, 'tests/comment-paren-publish.js', `const { spawnSync } = require('child_process');\nspawnSync('bash', [/* ) */ '-c', 'git push origin HEAD:main']);\n`);
+  const head = commitAll(root, 'add executable with comment parenthesis');
+  const result = policy(root, base, head);
+  assert.notStrictEqual(result.status, 0, 'Comment parentheses must not terminate executable argument scanning');
+  assert.match(result.stdout, /padrão perigoso git push/);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
 console.log('policy-engine-regression: ok');

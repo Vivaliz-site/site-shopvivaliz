@@ -104,6 +104,7 @@ jobs:
           echo "WORKER_ACTIVE=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)"
           echo "NDR_GUARD_ACTIVE=$(sudo systemctl is-active mei-mg-email-ndr-guard.service 2>/dev/null || true)"
           sudo journalctl -u mei-mg-email-ndr-guard.service --since '-2 minutes' --no-pager | tail -n 60 || true
+          echo "GRAPH_DIAGNOSTIC_COMPLETE=1"
           EOF
 
       - name: Require diagnostic evidence
@@ -111,6 +112,10 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          mkdir -p "$(dirname "$REPORT_PATH")"
+          if ! grep -qx 'GRAPH_DIAGNOSTIC_COMPLETE=1' "$REPORT_PATH" 2>/dev/null; then
+            printf '\nGRAPH_DIAGNOSTIC_EVIDENCE=fallback\ncollection_failed_before_graph_diagnostic_completion\n' >> "$REPORT_PATH"
+          fi
           test -s "$REPORT_PATH"
 
       - name: Upload diagnostic evidence

@@ -30,6 +30,34 @@ class AutonomyPolicySemanticTests(unittest.TestCase):
     def test_workflow_content_is_still_scanned_for_real_mutations(self):
         self.assertTrue(policy.should_scan_content('.github/workflows/stock-update.yml'))
 
+    def test_negative_test_assertion_is_not_a_commercial_mutation(self):
+        assertion = '        self.assertNotIn("POST /api/catalog/stock", workflow_text)'
+        self.assertEqual(policy.sensitive_content([assertion]), [])
+
+    def test_assertion_fixture_assignment_is_not_a_commercial_mutation(self):
+        fixture = '        assertion = \'self.assertNotIn("POST /api/catalog/stock", workflow_text)\''
+        self.assertEqual(policy.sensitive_content([fixture]), [])
+
+    def test_assertion_evaluated_argument_remains_sensitive(self):
+        assertion = '        self.assertIn("ok", post("/api/catalog", {"stock": 10}))'
+        self.assertTrue(policy.sensitive_content([assertion]))
+
+    def test_assertion_fstring_expression_remains_sensitive(self):
+        assertion = '        assertIn(f"{post(stock=10)}", response)'
+        self.assertTrue(policy.sensitive_content([assertion]))
+
+    def test_multiline_assertion_evaluated_mutation_remains_sensitive(self):
+        lines = [
+            '        self.assertIn(',
+            '            "ok",',
+            '            post(',
+            '                "/api/catalog",',
+            '                {"stock": 10},',
+            '            ),',
+            '        )',
+        ]
+        self.assertTrue(policy.sensitive_content(lines))
+
 
 if __name__ == '__main__':
     unittest.main()
