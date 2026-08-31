@@ -8,7 +8,8 @@ $required = [
     "*/5 * * * *",
     "workflow_dispatch:",
     "contents: read",
-    "issues: write",
+    "actions/upload-artifact@v4",
+    "if-no-files-found: error",
     "contract:",
     "runtime:",
     "php tests/desktop-commander-persist-session-contract-test.php",
@@ -25,7 +26,8 @@ $required = [
     "fredwin-desktop-commander-status.ps1",
     "desktopkocepsv-desktop-commander-status.ps1",
     "shopvivaliz-desktop-commander.service",
-    "MAX_REPAIR_ATTEMPTS = 1",
+    "ALLOW_REPAIR: \${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}",
+    "MAX_REPAIR_ATTEMPTS = 1 if os.environ.get('ALLOW_REPAIR') == '1' else 0",
     "Desktop Commander 24h Control Plane Status"
 ];
 foreach ($required as $needle) {
@@ -44,6 +46,8 @@ $forbidden = [
     'device code',
     'verification_uri',
     'contents: write',
+    'issues: write',
+    'gh issue',
     'git push'
 ];
 foreach ($forbidden as $needle) {
