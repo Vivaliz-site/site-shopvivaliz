@@ -1,0 +1,49 @@
+name: Solange client-ready backup once
+
+on:
+  push:
+    branches: [recovery/two-a1-20260829]
+    paths: [.github/workflows/solange-client-ready-backup-once.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 8
+    steps:
+      - name: Configure SSH
+        env:
+          VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_SSH_KEY" && test -n "$VM_KNOWN_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Fetch recovery patches from validation VM
+        run: |
+          set -euo pipefail
+          mkdir -p recovery
+          opts=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa")
+          ssh "${opts[@]}" ubuntu@144.22.157.209 '[ "$(hostname)" = "always-free-arm-1787907847-26" ]'
+          scp "${opts[@]}" ubuntu@144.22.157.209:/home/ubuntu/solange-client-demo/recovery/solange-client-ready.patch recovery/
+          scp "${opts[@]}" ubuntu@144.22.157.209:/home/ubuntu/solange-client-demo/recovery/solange-client-ready-series.patch recovery/
+          ssh "${opts[@]}" ubuntu@144.22.157.209 'cd /home/ubuntu/solange-recovered && printf "head=%s\nbranch=%s\n" "$(git rev-parse HEAD)" "$(git branch --show-current)" && git log -5 --format="commit=%H subject=%s"' > recovery/MANIFEST.txt
+          sha256sum recovery/*.patch > recovery/SHA256SUMS
+          cat recovery/MANIFEST.txt
+          cat recovery/SHA256SUMS
+
+      - name: Upload restore artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: solange-client-ready-20260830
+          path: recovery/
+          retention-days: 30
+          if-no-files-found: error
