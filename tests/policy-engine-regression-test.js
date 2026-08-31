@@ -256,4 +256,26 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base regex context after block comment');
+  write(root, 'tests/comment-regex-publish.js', `const { execSync } = require('child_process');\nexecSync((/* grouping */ /[)]/.test(')')) && 'git push origin HEAD:main');\n`);
+  const head = commitAll(root, 'add regex after block comment');
+  const result = policy(root, base, head);
+  assert.notStrictEqual(result.status, 0, 'Block comments must not hide the lexical token that permits a regex literal');
+  assert.match(result.stdout, /perigoso git push/);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base property named return division');
+  write(root, 'tests/property-division-publish.js', `const { execSync } = require('child_process');\nexecSync((obj.return / divisor) && 'git push origin HEAD:main');\n`);
+  const head = commitAll(root, 'add property division before direct push');
+  const result = policy(root, base, head);
+  assert.notStrictEqual(result.status, 0, 'Property names that match regex-leading keywords must still allow division parsing');
+  assert.match(result.stdout, /perigoso git push/);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
 console.log('policy-engine-regression: ok');

@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import ast
 import fnmatch
+import io
 import json
 import os
 import re
 import subprocess
 import sys
 import textwrap
+import tokenize
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -85,6 +87,26 @@ def assertion_evaluated_text(line: str) -> str | None:
     return " ".join(fragments)
 
 
+def assertion_source(lines: list[str], index: int) -> str | None:
+    source = "\n".join(lines[index:])
+    depth = 0
+    started = False
+    try:
+        for token in tokenize.generate_tokens(io.StringIO(source).readline):
+            if token.type != tokenize.OP:
+                continue
+            if token.string == "(":
+                depth += 1
+                started = True
+            elif token.string == ")" and started:
+                depth -= 1
+                if depth == 0:
+                    return "\n".join(lines[index:index + token.end[0]])
+    except (tokenize.TokenError, IndentationError):
+        pass
+    return None
+
+
 def git(*args: str) -> str:
     result = subprocess.run(
         ["git", *args], cwd=ROOT, check=True, capture_output=True, text=True
@@ -150,16 +172,13 @@ def sensitive_content(lines: list[str]) -> list[str]:
             continue
 
         if ASSERTION_TEXT.search(line):
-            for end in range(index, len(lines)):
-                source = "\n".join(lines[index:end + 1])
-                evaluated = assertion_evaluated_text(source)
-                if evaluated is None:
-                    continue
-                consumed.update(range(index, end + 1))
-                inspect(evaluated, index, source)
-                break
-            else:
+            source = assertion_source(lines, index)
+            if source is None:
                 inspect(line, index, line)
+                continue
+            evaluated = assertion_evaluated_text(source)
+            consumed.update(range(index, index + source.count("\n") + 1))
+            inspect("" if evaluated is None else evaluated, index, source)
             continue
 
         inspect(line, index, line)

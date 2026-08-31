@@ -72,6 +72,23 @@ class AutonomyPolicySemanticTests(unittest.TestCase):
         ]
         self.assertTrue(policy.sensitive_content(lines))
 
+    def test_incomplete_long_assertion_parses_ast_at_most_once(self):
+        lines = ['        self.assertIn('] + ['            # formatting spacer'] * 5000
+        original = policy.assertion_evaluated_text
+        calls = 0
+
+        def counting(source):
+            nonlocal calls
+            calls += 1
+            return original(source)
+
+        policy.assertion_evaluated_text = counting
+        try:
+            policy.sensitive_content(lines)
+        finally:
+            policy.assertion_evaluated_text = original
+        self.assertLessEqual(calls, 1)
+
 
 if __name__ == '__main__':
     unittest.main()

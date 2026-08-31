@@ -119,9 +119,20 @@ class PolicyEngine {
     return false;
   }
 
-  isRegexLiteralStart(text, index) {
-    const prefix = String(text).slice(Math.max(0, index - 96), index);
-    return /(?:^|[([{,:;=!?&|+\-*%^~<>]|\b(?:return|throw|case|delete|void|typeof|yield|await|else|do|in|of|instanceof|new))\s*$/.test(prefix);
+  isRegexLiteralStart(context) {
+    const trimmed = String(context).trimEnd();
+    if (!trimmed) return true;
+    if (/[([{,:;=!?&|+\-*%^~<>]$/.test(trimmed)) return true;
+
+    const match = trimmed.match(/([A-Za-z_$][\w$]*)$/);
+    const regexPrefixKeywords = new Set([
+      'return', 'throw', 'case', 'delete', 'void', 'typeof', 'yield', 'await',
+      'else', 'do', 'in', 'of', 'instanceof', 'new',
+    ]);
+    if (!match || !regexPrefixKeywords.has(match[1])) return false;
+
+    const beforeKeyword = trimmed.slice(0, trimmed.length - match[1].length).trimEnd();
+    return !beforeKeyword.endsWith('.') && !beforeKeyword.endsWith('?.');
   }
 
   executableCallArguments(value, wrapperPattern, syntax = 'generic') {
@@ -214,7 +225,7 @@ class PolicyEngine {
           argumentText += ' ';
           continue;
         }
-        if (syntax === 'javascript' && char === '/' && this.isRegexLiteralStart(text, index)) {
+        if (syntax === 'javascript' && char === '/' && this.isRegexLiteralStart(argumentText)) {
           regexLiteral = true;
           regexClass = false;
           escaped = false;
