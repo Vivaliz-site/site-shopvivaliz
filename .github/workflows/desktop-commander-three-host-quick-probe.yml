@@ -1,4 +1,4 @@
-﻿name: Desktop Commander Three Host Quick Probe
+name: Desktop Commander Three Host Quick Probe
 
 on:
   push:
@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   probe:
@@ -49,10 +48,18 @@ jobs:
               *) echo '- always-free-arm-1787907847-26 canonical service: **degraded**' ;;
             esac
           } > /tmp/quick-probe.md
-      - name: Publish probe
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 1207 --repo "${{ github.repository }}" --body-file /tmp/quick-probe.md
+      - name: Stage sanitized probe evidence
+        run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts/desktop-commander-three-host-quick-probe
+          test -s /tmp/quick-probe.md
+          cp /tmp/quick-probe.md artifacts/desktop-commander-three-host-quick-probe/probe.md
+      - name: Upload immutable probe evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-commander-quick-probe-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/desktop-commander-three-host-quick-probe/
+          if-no-files-found: error
       - name: Cleanup
         if: always()
         run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts" /tmp/quick-probe.md
