@@ -113,6 +113,13 @@ class RepositoryWorkflowGovernanceRemediationTests(unittest.TestCase):
         self.assertNotIn('worker_state="${worker_state:-inactive}"', text)
         self.assertNotIn('timer_state="${timer_state:-inactive}"', text)
 
+    def test_mei_probe_materializes_evidence_after_collection_failure(self):
+        text = self.text("mei-email-prod-probe-now.yml")
+        self.assertRegex(text, r"(?s)- name: Stage sanitized probe evidence\n\s+if: always\(\)")
+        self.assertRegex(text, r"(?s)- name: Upload immutable probe evidence\n\s+if: always\(\)")
+        self.assertIn("PROBE_EVIDENCE=fallback", text)
+        self.assertIn("collection_failed_before_probe_materialization", text)
+
     def test_test_inventory_reports_failures_explicitly_without_blocking(self):
         text = self.text("test-inventory.yml")
         self.assertIn("::warning::PHP inventory failures=$failed", text)

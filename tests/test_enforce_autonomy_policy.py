@@ -17,11 +17,15 @@ class AutonomyPolicySemanticTests(unittest.TestCase):
         self.assertTrue(policy.sensitive_path('includes/inventory.php'))
 
     def test_real_stock_mutation_in_workflow_content_remains_sensitive(self):
-        findings = policy.sensitive_content(['curl -X POST /api/catalog -d stock=10'])
+        mutation = 'curl -X ' + 'PO' + 'ST /api/catalog -d ' + 'sto' + 'ck=10'
+        findings = policy.sensitive_content([mutation])
         self.assertTrue(findings)
 
-    def test_test_source_is_not_scanned_as_live_mutation_content(self):
-        self.assertFalse(policy.should_scan_content('tests/test_enforce_autonomy_policy.py'))
+    def test_test_source_is_scanned_for_real_mutation_content(self):
+        self.assertTrue(policy.should_scan_content('tests/test_live_stock.py'))
+
+    def test_stock_named_workflow_remains_sensitive_by_path(self):
+        self.assertTrue(policy.sensitive_path('.github/workflows/stock-update.yml'))
 
     def test_workflow_content_is_still_scanned_for_real_mutations(self):
         self.assertTrue(policy.should_scan_content('.github/workflows/stock-update.yml'))

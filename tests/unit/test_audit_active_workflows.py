@@ -160,6 +160,42 @@ jobs:
         )
         self.assertIn("destructive_git", {item.rule for item in findings})
 
+    def test_inline_trigger_list_is_parsed(self):
+        findings = self.audit(
+            "production-inline.yml",
+            """name: Production inline
+on: [push, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  x:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+""",
+        )
+        self.assertIn("production_push_trigger", {item.rule for item in findings})
+
+    def test_blank_lines_do_not_truncate_mapping_triggers(self):
+        findings = self.audit(
+            "sync-blank.yml",
+            """name: Sync blank
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: '0 * * * *'
+permissions:
+  issues: write
+jobs:
+  x:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh issue comment 1 --body ok
+""",
+        )
+        self.assertIn("automatic_write_workflow", {item.rule for item in findings})
+
 
 if __name__ == "__main__":
     unittest.main()

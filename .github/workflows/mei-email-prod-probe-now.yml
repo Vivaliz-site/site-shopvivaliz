@@ -190,9 +190,13 @@ jobs:
           EOF
 
       - name: Stage sanitized probe evidence
+        if: always()
         run: |
           set -Eeuo pipefail
           mkdir -p artifacts/mei-email-prod-probe-now
+          if [ ! -s /tmp/mei-prod-probe.txt ]; then
+            printf 'PROBE_EVIDENCE=fallback\ncollection_failed_before_probe_materialization\n' > /tmp/mei-prod-probe.txt
+          fi
           {
             echo 'Sanitized production probe for the MEI sender.'
             echo
@@ -202,6 +206,7 @@ jobs:
           } > artifacts/mei-email-prod-probe-now/probe.md
 
       - name: Upload immutable probe evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: mei-email-prod-probe-now-${{ github.run_id }}-${{ github.run_attempt }}

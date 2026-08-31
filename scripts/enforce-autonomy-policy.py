@@ -27,6 +27,10 @@ IGNORED_PREFIXES = (
     "docs/", "release-notes/", "reports/", "artifacts/", "tests/fixtures/",
 )
 
+NONCOMMERCIAL_SENSITIVE_PATH_EXCEPTIONS = {
+    ".github/workflows/test-inventory.yml",
+}
+
 MUTATION_PATTERN = re.compile(
     r"(?i)(?:\bupdate\b|\binsert\s+into\b|\breplace\s+into\b|\bdelete\s+from\b|"
     r"\bset\b|\bassign\b|\bwrite\b|\bsync\b|\bpatch\b|\bput\b|\bpost\b).{0,160}"
@@ -68,9 +72,7 @@ def sensitive_path(path: str) -> bool:
     lower = path.lower()
     if lower.startswith(IGNORED_PREFIXES):
         return False
-    # Workflow filenames describe automation/test infrastructure, not catalog data.
-    # Their contents are still scanned below for real price/stock mutations.
-    if lower.startswith(".github/workflows/"):
+    if lower in NONCOMMERCIAL_SENSITIVE_PATH_EXCEPTIONS:
         return False
     name = Path(lower).name
     return any(fnmatch.fnmatch(name, pattern) for pattern in SENSITIVE_PATH_PATTERNS)
@@ -79,8 +81,6 @@ def sensitive_path(path: str) -> bool:
 def should_scan_content(path: str) -> bool:
     lower = path.lower()
     if lower.startswith(IGNORED_PREFIXES):
-        return False
-    if lower.startswith("tests/"):
         return False
     return True
 

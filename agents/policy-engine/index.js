@@ -55,6 +55,21 @@ class PolicyEngine {
     return this.changedFilesCache;
   }
 
+  addedLines(file) {
+    const baseSha = String(process.env.POLICY_BASE_SHA || '').trim();
+    const headSha = String(process.env.POLICY_HEAD_SHA || '').trim();
+    const diff = this.git(['diff', '--unified=0', '--no-color', `${baseSha}...${headSha}`, '--', file]);
+    return diff
+      .split(/\r?\n/)
+      .filter(line => line.startsWith('+') && !line.startsWith('+++'))
+      .map(line => line.slice(1));
+  }
+
+  isSafeReadOnlyFallback(line) {
+    const beforeFallback = String(line).split('|| true', 1)[0];
+    return /\bsystemctl\s+(?:is-active|is-enabled|show)\b/.test(beforeFallback);
+  }
+
   isVisualFile(file) {
     // Server-side metadata, marketplace logic and stock continuity helpers do
     // not alter rendered layout, so screenshot evidence is not meaningful.
@@ -127,6 +142,12 @@ class PolicyEngine {
       for (const rule of rules) {
         if (rule.pattern.test(content)) {
           this.fail(`padrão perigoso ${rule.label} em ${file}`);
+        }
+      }
+      for (const line of this.addedLines(file)) {
+        if (line.includes('|| true') && !this.isSafeReadOnlyFallback(line)) {
+          this.fail(`padrão perigoso || true em ${file}`);
+          break;
         }
       }
     }
