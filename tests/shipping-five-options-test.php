@@ -20,10 +20,18 @@ $checks = [
         && str_contains($js, 'slice(0, 5)'),
     'Checkout choices persist signed quote' => str_contains($js, 'sv_checkout_shipping_option')
         && str_contains($js, "localStorage.setItem('shopvivaliz_shipping_quote'")
-        && str_contains($js, 'quote_id: option.quote_id'),
+        && str_contains($js, 'quote_id:option.quote_id'),
     'Checkout reopens choices after native render' => str_contains($js, 'observed.hidden')
         && str_contains($js, 'renderPending()'),
-    'Changing shipping invalidates stale payment session' => str_contains($js, "removeItem('shopvivaliz_pending_payment')"),
+    'Every checkout recalculation invalidates stale payment session' => str_contains($js, 'if(isCheckout) shippingClearPendingPayment();'),
+    'Shipping requests are versioned against stale CEP responses' => str_contains($js, 'latestShippingRequest')
+        && str_contains($js, 'requestVersion!==latestShippingRequest')
+        && str_contains($js, 'pending=null'),
+    'Checkout choices freeze during active submission' => str_contains($js, 'svCheckoutSubmitting')
+        && str_contains($js, "addEventListener('submit'")
+        && str_contains($js, 'input.disabled=!!active'),
+    'Expired choices force recalculation' => str_contains($js, 'shippingOptionExpired')
+        && str_contains($js, 'shippingRecalculateCheckout()'),
     'Selectable cards are styled' => str_contains($css, '.sv-shipping-choice-list')
         && str_contains($css, '.sv-shipping-choice'),
 ];
