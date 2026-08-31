@@ -102,9 +102,11 @@ jobs:
         run: echo "Security review remains required before merge. Do not commit credentials or production dumps."
       - name: Liz conversation and security regression tests
         run: |
-          set -e
+          set -Eeuo pipefail
           php tests/test-liz-intelligent.php
           php tests/test-liz-security-and-grounding.php
+          php tests/liz-internal-origin-regression-test.php
+          tests/liz-router-internal-origin-integration.sh
           node --check public/assets/liz-assistant/liz-assistant.js
       - name: Regressao de resolucao de credenciais Tiny/Olist (incidente #747)
         run: php tests/integration-health-credentials-test.php
