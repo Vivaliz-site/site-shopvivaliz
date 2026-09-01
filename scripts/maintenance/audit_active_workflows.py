@@ -146,15 +146,16 @@ def workflow_trigger_names(text: str) -> set[str]:
     inline = match.group("inline").strip()
     if inline:
         inline = re.sub(r"^(?:(?:&[^\s\[\]{},]+|![^\s\[\]{},]+)\s*)+", "", inline).strip()
-        if inline.startswith("{"):
-            brace = text.find("{", match.start("inline"), match.end("inline"))
-            mapping = collect_flow_mapping(text, brace) if brace >= 0 else None
-            return flow_mapping_keys(mapping) if mapping is not None else set()
-        if inline.startswith("[") and inline.endswith("]"):
-            values = inline[1:-1].split(",")
-        else:
-            values = [inline]
-        return {value.strip().strip("'\"") for value in values if value.strip()}
+        if inline:
+            if inline.startswith("{"):
+                brace = text.find("{", match.start("inline"), match.end("inline"))
+                mapping = collect_flow_mapping(text, brace) if brace >= 0 else None
+                return flow_mapping_keys(mapping) if mapping is not None else set()
+            if inline.startswith("[") and inline.endswith("]"):
+                values = inline[1:-1].split(",")
+            else:
+                values = [inline]
+            return {value.strip().strip("'\"") for value in values if value.strip()}
 
     block: list[str] = []
     for line in text[match.end():].splitlines():
