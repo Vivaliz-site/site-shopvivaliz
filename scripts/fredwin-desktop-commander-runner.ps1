@@ -114,7 +114,9 @@ try {
 
         $newText = ($lines -join "`n")
         if ($newText -match $AuthPattern) {
-            if (-not $authRequired) {
+            if ($connected) {
+                Log 'AUTH_SIGNAL_IGNORED connected provider remains healthy'
+            } elseif (-not $authRequired) {
                 $authRequired = $true
                 $authStarted = Get-Date
                 $readySeenAfterAuth = $false
