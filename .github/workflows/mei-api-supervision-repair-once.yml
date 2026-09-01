@@ -8,7 +8,6 @@ permissions:
 
 jobs:
   retired:
-    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - run: echo 'Retired one-shot recovery workflow; retained only as incident evidence.'

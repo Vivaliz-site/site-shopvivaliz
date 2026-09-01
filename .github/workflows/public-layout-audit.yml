@@ -10,7 +10,7 @@ on:
 
 concurrency:
   group: public-layout-audit
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   audit:
