@@ -70,3 +70,9 @@ def test_catalog_response_does_not_publish_runtime_debug_state() -> None:
     endpoint = (ROOT / "api" / "catalog" / "products.php").read_text(encoding="utf-8")
     assert "'debug'" not in endpoint
     assert 'error_log("[products.php]' not in endpoint
+
+
+def test_root_htaccess_blocks_public_technical_artifacts() -> None:
+    rules = (ROOT / ".htaccess").read_text(encoding="utf-8")
+    assert r"\.(?:md|py|sh|ps1|bat|ya?ml|csv|xlsx?|toml|vsix)(?:/|$)" in rules
+    assert r"^[^/]+\.(?:json|lock)(?:/|$)" in rules
