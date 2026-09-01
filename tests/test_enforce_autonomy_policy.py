@@ -59,5 +59,44 @@ class AutonomyPolicySemanticTests(unittest.TestCase):
         self.assertTrue(policy.sensitive_content(lines))
 
 
+    def test_assertion_beyond_fifty_lines_remains_sensitive(self):
+        lines = ['        self.assertIn(']
+        lines += ['            # formatting spacer'] * 55
+        lines += [
+            '            "ok",',
+            '            post(',
+            '                "/api/catalog",',
+            '                {"stock": 10},',
+            '            ),',
+            '        )',
+        ]
+        self.assertTrue(policy.sensitive_content(lines))
+
+    def test_non_assertion_text_does_not_hide_following_real_mutation(self):
+        mutation = '        ' + 'po' + 'st("/api/catalog", {"sto' + 'ck": 10})'
+        lines = [
+            '        fixture = "self.assertIn("',
+            mutation,
+        ]
+        self.assertTrue(policy.sensitive_content(lines))
+
+    def test_incomplete_long_assertion_parses_ast_at_most_once(self):
+        lines = ['        self.assertIn('] + ['            # formatting spacer'] * 5000
+        original = policy.assertion_evaluated_text
+        calls = 0
+
+        def counting(source):
+            nonlocal calls
+            calls += 1
+            return original(source)
+
+        policy.assertion_evaluated_text = counting
+        try:
+            policy.sensitive_content(lines)
+        finally:
+            policy.assertion_evaluated_text = original
+        self.assertLessEqual(calls, 1)
+
+
 if __name__ == '__main__':
     unittest.main()
