@@ -60,7 +60,7 @@ if ($key === '') {
     lizg_reply(503, ['ok' => false, 'error' => 'A pesquisa da Liz está temporariamente indisponível.']);
 }
 
-$model = trim((string)(getenv('GEMINI_MODEL') ?: 'gemini-2.0-flash'));
+$model = trim((string)(getenv('GEMINI_MODEL') ?: 'gemini-3.6-flash'));
 $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent';
 $system = <<<'TXT'
 Você é Liz, assistente virtual da ShopVivaliz. Também pode conversar de forma simpática sobre assuntos gerais, para tornar o atendimento mais humano.
