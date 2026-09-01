@@ -1,25 +1,24 @@
 {
   "validated": true,
-  "reviewer": "Claude Sonnet 5 (Claude in Chrome, autonomous QA)",
-  "timestamp": "2026-08-27T11:11:33.495397Z",
+  "reviewer": "GPT-5.6 Sol + Storefront Browser Audit",
+  "timestamp": "2026-09-01T01:21:35Z",
   "artifacts": [
-    "artifacts/visual-proof/fb-pixel-home.jpg",
-    "artifacts/visual-proof/fb-pixel-product-addtocart.jpg",
-    "artifacts/visual-proof/fb-pixel-checkout-empty.jpg"
+    "GitHub Actions artifact storefront-browser-audit-33458296737-1/desktop-produto.png",
+    "GitHub Actions artifact storefront-browser-audit-33458296737-1/desktop-checkout.png",
+    "GitHub Actions artifact storefront-browser-audit-33458296737-1/fast-3g-produto.png",
+    "GitHub Actions artifact storefront-browser-audit-33458296737-1/slow-4g-checkout.png"
   ],
   "evidence": {
-    "base_url": "https://shopvivaliz.com.br",
+    "workflow_run": 33458296737,
+    "workflow_artifact_id": 9782270069,
+    "workflow_artifact_digest": "sha256:227b7606ba33850be907dafdc69f03f534d848b79cba3e9f2d77a87de325f330",
+    "result": "REAL USER AUDIT PASS",
     "routes_checked": [
       "/",
-      "/produto/comedor-c%C3%A3es-gatos-autom%C3%A1tico-comedouro-fercar-25kg-com1",
-      "/checkout.php"
+      "/produto.php?id=341440872",
+      "/checkout"
     ],
-    "action_taken": "Adicionado produto (COM1) ao carrinho via botao 'Comprar agora' na pagina de produto, que dispara os eventos client-side de tracking (product-conversion-v5.js) que acabam alimentando o hash normalizado enviado ao Facebook Pixel Advanced Matching no backend (includes/analytics-tracking.php).",
-    "console_errors": 0,
-    "network_5xx_unrelated_to_change": [
-      "fonts.googleapis.com/css2 (503, terceiro Google Fonts, nao relacionado ao diff)",
-      "shopvivaliz.com.br/0fb1/ag/g/c (503, proxy server-side do GA4, nao relacionado ao diff)"
-    ],
-    "screenshot_source": "mcp__claude-in-chrome__computer screenshot, save_to_disk=true"
+    "additional_review": "Fresh connected-browser screenshot review of production product page; no visual regression observed from sender tax-document backend change.",
+    "change_scope": "Backend Melhor Envio sender payload: CNPJ is mapped to company_document; no presentation/UI code changed."
   }
 }
