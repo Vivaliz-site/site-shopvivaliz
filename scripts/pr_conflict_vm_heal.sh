@@ -12,6 +12,7 @@ pr_number="${1:-}"
 head_ref="${2:-}"
 expected_head_sha="${3:-}"
 trusted_healer="${4:-}"
+external_github_auth_used=false
 
 fail() {
   printf 'ERROR %s\n' "$1" >&2
@@ -27,16 +28,18 @@ fail() {
 [[ -r "$trusted_healer" ]] || fail 'trusted healer unavailable'
 [[ -r "$shared_env" ]] || fail 'private runtime env unavailable'
 command -v git >/dev/null || fail 'git unavailable on Oracle'
-command -v gh >/dev/null || fail 'gh unavailable on Oracle'
+command -v curl >/dev/null || fail 'curl unavailable on Oracle'
 command -v jq >/dev/null || fail 'jq unavailable on Oracle'
 command -v python3 >/dev/null || fail 'python3 unavailable on Oracle'
 
-# Check auth without revealing token material, then install gh as Git's
-# credential helper for the isolated temporary clone/push.
-gh auth status --hostname github.com >/dev/null 2>&1 || fail 'Oracle GitHub authentication unavailable'
-gh auth setup-git >/dev/null
+fetch_pr_meta() {
+  curl -fsSL --retry 3 --retry-delay 1 \
+    -H 'Accept: application/vnd.github+json' \
+    -H 'User-Agent: shopvivaliz-pr-auto-healer' \
+    "https://api.github.com/repos/${repo}/pulls/${pr_number}"
+}
 
-meta="$(gh api "repos/${repo}/pulls/${pr_number}")"
+meta="$(fetch_pr_meta)"
 state="$(jq -r '.state' <<<"$meta")"
 draft="$(jq -r '.draft' <<<"$meta")"
 base_ref="$(jq -r '.base.ref' <<<"$meta")"
@@ -59,7 +62,7 @@ trap cleanup EXIT
 
 # Clone into an isolated temporary checkout. Never touch production/current,
 # shared data, or the Agent Bridge working tree.
-gh repo clone "$repo" "$work/repo" -- --filter=blob:none --no-tags >/dev/null
+git clone --filter=blob:none --no-tags "https://github.com/${repo}.git" "$work/repo" >/dev/null 2>&1
 cd "$work/repo"
 git config user.name 'shopvivaliz-pr-auto-healer[bot]'
 git config user.email 'shopvivaliz-pr-auto-healer@users.noreply.github.com'
@@ -95,10 +98,16 @@ if [[ "$after_sha" == "$before_sha" ]]; then
 else
   # Before publication, ensure nobody moved the PR branch. This makes the push
   # strictly fast-forward and scoped to the original PR head.
-  latest="$(gh api "repos/${repo}/pulls/${pr_number}" --jq '.head.sha')"
+  latest="$(fetch_pr_meta | jq -r '.head.sha')"
   [[ "$latest" == "$expected_head_sha" ]] || fail 'remote PR branch moved before publication'
   remote_sha="$(git rev-parse "refs/remotes/origin/${head_ref}")"
   git merge-base --is-ancestor "$remote_sha" HEAD || fail 'publication would not be fast-forward'
+
+  # Write authentication is required only when a branch publication is necessary.
+  command -v gh >/dev/null || fail 'gh unavailable on Oracle for branch publication'
+  gh auth status --hostname github.com >/dev/null 2>&1 || fail 'Oracle GitHub authentication unavailable for branch publication'
+  gh auth setup-git >/dev/null
+  external_github_auth_used=true
 
   # ALLOW_SCOPED_PUSH: same-repository PR branch only, never protected refs.
   git push origin "HEAD:refs/heads/${head_ref}" >/dev/null
@@ -106,5 +115,5 @@ else
   echo "pr_head_sha=${after_sha}"
 fi
 
-echo 'external_github_auth_used=true'
+echo "external_github_auth_used=${external_github_auth_used}"
 echo 'secret_values_printed=false'
