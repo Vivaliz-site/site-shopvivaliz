@@ -27,8 +27,8 @@ The eight required gates for this proof are:
 
 1. The proof branch was created from pre-fix `main` commit `96482a787ed4f5e45ee93b38bcca75d22c451777`.
 2. The `PR Completion Enforcer` detected that the PR head did not contain current `main` and requested GitHub's native `update-branch`.
-3. GitHub created bot-authored synchronization commits. On proof head `cd4af2eafc85c2d811bebc982228ddff1215e261`, the normal `pull_request` runs were suppressed/blocked as `action_required` by the `GITHUB_TOKEN` recursion boundary.
-4. The `PR Completion Enforcer` replayed only the approved required gates with `workflow_dispatch` on that exact head SHA.
+3. GitHub created bot-authored synchronization commits. On proof head `cd4af2eafc85c2d811bebc982228ddff1215e261`, the required `pull_request` workflow runs were created but completed as `action_required` before job execution. This is distinct from `GITHUB_TOKEN` recursion suppression, where a triggered workflow run is not created at all.
+4. The `PR Completion Enforcer` classified those recoverable `action_required` gates on the exact current head and replayed the approved required workflows with `workflow_dispatch`.
 5. All eight replayed gates completed successfully on `cd4af2eafc85c2d811bebc982228ddff1215e261`:
    - `Quality Gate` — run `33471567242`
    - `ShopVivaliz QA` — run `33471568696`
@@ -40,4 +40,4 @@ The eight required gates for this proof are:
    - `PR Policy Enforcement` — run `33471576988`
 6. No empty/manual validation commit was required to obtain the replayed green gates.
 
-This proves the stale-head -> native bot sync -> missing/action-required gate replay path end to end while keeping failed gates fail-closed.
+This E2E run proves the stale-head -> native bot sync -> recoverable `action_required` gate replay -> all-eight-green path. It does not exercise a genuine `completed:failure` required gate, so fail-closed behavior for that separate scenario is outside the scope of this proof.
