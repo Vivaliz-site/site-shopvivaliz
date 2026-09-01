@@ -161,8 +161,13 @@ class PolicyEngine {
         depth -= 1;
         continue;
       }
+
       const prefix = structural.slice(0, index).trimEnd();
-      return /\bfor(?:\s+await)?$/.test(prefix);
+      if (!/\bfor(?:\s+await)?$/.test(prefix)) return false;
+
+      const header = structural.slice(index + 1).trimEnd();
+      if (!header || header.includes(';')) return false;
+      return /(?:[A-Za-z_$][\w$]*|\]|\})$/.test(header);
     }
     return false;
   }

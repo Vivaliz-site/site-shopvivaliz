@@ -302,4 +302,27 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base classic for of identifier division');
+  write(root, 'tests/classic-for-of-identifier-publish.js', `const { execSync } = require('child_process');\nexecSync((function () { for (x + of / divisor; keepGoing; step()) {} return 'git push origin HEAD:main'; })());\n`);
+  const head = commitAll(root, 'add classic for of identifier division');
+  const result = policy(root, base, head);
+  assert.notStrictEqual(result.status, 0, 'An of identifier inside a classic for expression must remain division');
+  assert.match(result.stdout, /perigoso git push/);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base classic for property named of division');
+  write(root, 'tests/classic-for-property-of-publish.js', `const { execSync } = require('child_process');\nexecSync((function () { for (foo.of / divisor; keepGoing; step()) {} return 'git push origin HEAD:main'; })());\n`);
+  const head = commitAll(root, 'add classic for property of division');
+  const result = policy(root, base, head);
+  assert.notStrictEqual(result.status, 0, 'A property named of inside a classic for expression must remain division');
+  assert.match(result.stdout, /perigoso git push/);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
 console.log('policy-engine-regression: ok');
