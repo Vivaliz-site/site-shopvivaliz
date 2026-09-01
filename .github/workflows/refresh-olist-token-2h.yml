@@ -10,6 +10,7 @@ on:
       - 'olist/sync-products.php'
       - 'scripts/bootstrap-olist-oauth-runtime.py'
       - 'tests/test_olist_oauth_bootstrap_workflow.py'
+      - 'tests/tiny-v3-http-fallback-test.php'
       - '.github/workflows/refresh-olist-token-2h.yml'
   push:
     branches:
@@ -22,6 +23,7 @@ on:
       - 'olist/sync-products.php'
       - 'scripts/bootstrap-olist-oauth-runtime.py'
       - 'tests/test_olist_oauth_bootstrap_workflow.py'
+      - 'tests/tiny-v3-http-fallback-test.php'
       - '.github/workflows/refresh-olist-token-2h.yml'
   workflow_dispatch:
     inputs:
@@ -55,6 +57,7 @@ jobs:
           php -l includes/marketplace/TinyV3Runtime.php
           php -l includes/tiny-order-push.php
           php -l olist/sync-products.php
+          php tests/tiny-v3-http-fallback-test.php
           python3 -m unittest tests/test_olist_oauth_bootstrap_workflow.py
           python3 - <<'PY'
           from pathlib import Path
