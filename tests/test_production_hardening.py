@@ -73,6 +73,7 @@ def test_catalog_response_does_not_publish_runtime_debug_state() -> None:
 
 
 def test_root_htaccess_blocks_public_technical_artifacts() -> None:
-    rules = (ROOT / ".htaccess").read_text(encoding="utf-8")
-    assert r"\.(?:md|py|sh|ps1|bat|ya?ml|csv|xlsx?|toml|vsix)(?:/|$)" in rules
-    assert r"^[^/]+\.(?:json|lock)(?:/|$)" in rules
+    lines = (ROOT / ".htaccess").read_text(encoding="utf-8").splitlines()
+    active_rules = {line.strip() for line in lines if line.strip() and not line.lstrip().startswith("#")}
+    assert r"RewriteRule \.(?:md|py|sh|ps1|bat|ya?ml|csv|xlsx?|toml|vsix)(?:/|$) - [F,L,NC]" in active_rules
+    assert r"RewriteRule ^[^/]+\.(?:json|lock)(?:/|$) - [F,L,NC]" in active_rules
