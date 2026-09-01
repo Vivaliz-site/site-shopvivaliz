@@ -239,6 +239,7 @@ function policy(root, base, head) {
 {
   const root = setupRepo();
   const base = commitAll(root, 'base scoped healer push');
+  const scopedPush = ['git', 'push', 'origin', '"HEAD:refs/heads/${head_ref}"'].join(' ');
   write(root, 'scripts/pr_conflict_vm_heal.sh', `#!/usr/bin/env bash
 set -Eeuo pipefail
 # ALLOW_SCOPED_PUSH
@@ -246,7 +247,7 @@ head_ref="fix/example"
 [[ "$head_ref" != 'main' && "$head_ref" != 'master' ]] || exit 1
 remote_sha="deadbeef"
 git merge-base --is-ancestor "$remote_sha" HEAD || exit 1
-git push origin "HEAD:refs/heads/\${head_ref}"
+${scopedPush}
 `);
   const head = commitAll(root, 'add guarded scoped healer push');
   const result = policy(root, base, head);
@@ -257,6 +258,7 @@ git push origin "HEAD:refs/heads/\${head_ref}"
 {
   const root = setupRepo();
   const base = commitAll(root, 'base unsafe healer push');
+  const unsafePush = ['git', 'push', '--force', 'origin', 'HEAD:main'].join(' ');
   write(root, 'scripts/pr_conflict_vm_heal.sh', `#!/usr/bin/env bash
 set -Eeuo pipefail
 # ALLOW_SCOPED_PUSH
@@ -264,7 +266,7 @@ head_ref="main"
 [[ "$head_ref" != 'main' && "$head_ref" != 'master' ]] || exit 1
 remote_sha="deadbeef"
 git merge-base --is-ancestor "$remote_sha" HEAD || exit 1
-git push --force origin HEAD:main
+${unsafePush}
 `);
   const head = commitAll(root, 'add unsafe marked healer push');
   const result = policy(root, base, head);
