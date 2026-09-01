@@ -42,6 +42,7 @@ jobs:
           bash tests/master-production-monitor-regression.sh
           bash tests/production-runtime-reconciliation-regression.sh
           bash tests/public-layout-a1-proxy-regression.sh
+          bash tests/public-layout-proxy-route-discovery-regression.sh
           bash tests/catalog-single-mobile-nav-regression.sh
           bash -n scripts/deploy-production.sh
           grep -q 'a2enmod rewrite' scripts/deploy-production.sh
