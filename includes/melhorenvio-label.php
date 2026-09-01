@@ -79,9 +79,9 @@ function svml_from_address(): array
         }
     }
 
-    return [
+    $taxId = preg_replace('/\D+/', '', svml_env('MELHORENVIO_FROM_DOCUMENT', 'MELHORENVIO_FROM_CNPJ') ?: (string)($company['cnpj'] ?? ''));
+    $from = [
         'name' => svml_env('MELHORENVIO_FROM_NAME') ?: (string)($company['fantasy_name'] ?? 'ShopVivaliz'),
-        'document' => preg_replace('/\D+/', '', svml_env('MELHORENVIO_FROM_DOCUMENT', 'MELHORENVIO_FROM_CNPJ') ?: (string)($company['cnpj'] ?? '')),
         'email' => svml_env('MELHORENVIO_FROM_EMAIL') ?: (string)($company['email'] ?? 'atendimento@shopvivaliz.com.br'),
         'phone' => preg_replace('/\D+/', '', svml_env('MELHORENVIO_FROM_PHONE') ?: (string)($company['phone'] ?? '')),
         'address' => svml_env('MELHORENVIO_FROM_ADDRESS') ?: (string)($company['address'] ?? ''),
@@ -92,16 +92,25 @@ function svml_from_address(): array
         'state_abbr' => strtoupper(svml_env('MELHORENVIO_FROM_STATE') ?: (string)($company['state'] ?? '')),
         'postal_code' => preg_replace('/\D+/', '', svml_env('MELHORENVIO_FROM_POSTAL_CODE', 'SHOPVIVALIZ_FROM_POSTAL_CODE') ?: (string)($company['zipcode'] ?? '')) ?: '35501236',
     ];
+
+    if (strlen($taxId) === 14) {
+        $from['company_document'] = $taxId;
+    } elseif (strlen($taxId) === 11) {
+        $from['document'] = $taxId;
+    }
+
+    return $from;
 }
 
 function svml_from_address_complete(array $from): bool
 {
-    foreach (['name', 'document', 'address', 'number', 'district', 'city', 'state_abbr', 'postal_code'] as $field) {
+    foreach (['name', 'address', 'number', 'district', 'city', 'state_abbr', 'postal_code'] as $field) {
         if (trim((string)($from[$field] ?? '')) === '') {
             return false;
         }
     }
-    return true;
+
+    return trim((string)($from['document'] ?? '')) !== '' || trim((string)($from['company_document'] ?? '')) !== '';
 }
 
 function svml_catalog_row(string $sku, string $olistId): array
