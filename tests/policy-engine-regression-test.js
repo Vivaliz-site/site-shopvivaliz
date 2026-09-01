@@ -235,4 +235,42 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base scoped healer push');
+  write(root, 'scripts/pr_conflict_vm_heal.sh', `#!/usr/bin/env bash
+set -Eeuo pipefail
+# ALLOW_SCOPED_PUSH
+head_ref="fix/example"
+[[ "$head_ref" != 'main' && "$head_ref" != 'master' ]] || exit 1
+remote_sha="deadbeef"
+git merge-base --is-ancestor "$remote_sha" HEAD || exit 1
+git push origin "HEAD:refs/heads/\${head_ref}"
+`);
+  const head = commitAll(root, 'add guarded scoped healer push');
+  const result = policy(root, base, head);
+  assert.strictEqual(result.status, 0, `Guarded same-PR scoped push must be allowed:\n${result.stdout}\n${result.stderr}`);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base unsafe healer push');
+  write(root, 'scripts/pr_conflict_vm_heal.sh', `#!/usr/bin/env bash
+set -Eeuo pipefail
+# ALLOW_SCOPED_PUSH
+head_ref="main"
+[[ "$head_ref" != 'main' && "$head_ref" != 'master' ]] || exit 1
+remote_sha="deadbeef"
+git merge-base --is-ancestor "$remote_sha" HEAD || exit 1
+git push --force origin HEAD:main
+`);
+  const head = commitAll(root, 'add unsafe marked healer push');
+  const result = policy(root, base, head);
+  assert.notStrictEqual(result.status, 0, 'ALLOW_SCOPED_PUSH must never permit force/protected-branch publication');
+  assert.match(result.stdout, /padrão perigoso git push/);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
 console.log('policy-engine-regression: ok');

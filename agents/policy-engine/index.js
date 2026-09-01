@@ -325,6 +325,27 @@ class PolicyEngine {
     }
   }
 
+  isAllowedScopedPush(file, value) {
+    if (file !== 'scripts/pr_conflict_vm_heal.sh') return false;
+    const text = String(value);
+    if (!text.includes('ALLOW_SCOPED_PUSH')) return false;
+    if (!text.includes(`"$head_ref" != 'main'`) || !text.includes(`"$head_ref" != 'master'`)) return false;
+    if (!text.includes('git merge-base --is-ancestor "$remote_sha" HEAD')) return false;
+
+    const pushPattern = /\bgit\s+push\b/;
+    const commands = text
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(line => pushPattern.test(line));
+    if (commands.length !== 1) return false;
+
+    const command = commands[0];
+    if (/(?:^|\s)--force(?:-with-lease)?\b|(?:^|\s)-f(?:\s|$)/.test(command)) return false;
+    if (/\b(?:main|master)\b/.test(command)) return false;
+    const expected = ['git', 'push', 'origin'].join(' ') + ' "HEAD:refs/heads/${head_ref}"';
+    return command === expected || command === `${expected} >/dev/null`;
+  }
+
   validateSecurity() {
     const rules = [
       { label: ['git', 'push'].join(' '), pattern: /\bgit\s+push\b/ },
@@ -345,7 +366,9 @@ class PolicyEngine {
         const content = fs.readFileSync(file, 'utf8');
         for (const rule of rules) {
           if (rule.pattern.test(content)) {
-            this.fail(`padrão perigoso ${rule.label} em ${file}`);
+            const scopedPush = rule.label === ['git', 'push'].join(' ')
+              && this.isAllowedScopedPush(file, content);
+            if (!scopedPush) this.fail(`padrão perigoso ${rule.label} em ${file}`);
           }
         }
       }
