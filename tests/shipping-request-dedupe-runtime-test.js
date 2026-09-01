@@ -32,8 +32,6 @@ const init = {
   body: JSON.stringify({ cep: '01001000', items: [{ sku: 'TEST', quantity: 1 }] }),
 };
 
-// Reproduz a ordem real do checkout: o primeiro consumidor registra json()
-// antes de o blur do CEP gerar a segunda chamada identica ainda em voo.
 const firstConsumer = windowObject.fetch(url, init).then((response) => response.json());
 const secondConsumer = windowObject.fetch(url, init).then((response) => response.json());
 
