@@ -65,6 +65,14 @@
 - ✓ Vincular imagens por SKU ou ID da origem (nunca by-name)
 - ✓ Distinguir falha de interface de falha de sincronização
 
+### Custo de IA — rotinas permanentes vs. tarefas pontuais
+- ✗ **Nunca** deixe um workflow, cron, systemd timer, script ou rotina que roda **permanentemente ou em intervalo** (schedule/cron, daemon 24h, loop `while true`, watchdog) chamando **Claude ou GPT** (APIs pagas) para gerar cada execução.
+- ✓ Rotina recorrente/permanente (monitoramento, probe de saúde, sync, resumo periódico) deve usar **IA gratuita** (ex: tier gratuito do Gemini, modelo local/Ollama) ou nenhuma IA, quando a tarefa não exigir raciocínio de LLM de verdade.
+- ✓ Claude/GPT só entram para **uma tarefa finita** (implementação, revisão, decisão pontual) que **termina** — não para ficar "vivo" respondendo a cada tick de um relógio.
+- ✓ Isso vale para **todos os hosts e repos** do ecossistema ShopVivaliz (VMs, notebooks locais, `site-shopvivaliz`, `-shopvivaliz-pipeline`, `mei-mg-email`, etc.), não só este repositório.
+- **Por quê importa:** em 2026-09-01, `claude.yml` (Claude Code Action, `on: issue_comment/pull_request_review*/issues` sem filtro) foi re-disparado **100+ vezes num único dia** porque um workflow de probe de saúde do Desktop Commander posta comentários automáticos a cada ~5min numa issue de tracking, e cada comentário — mesmo de bot — acionava uma execução paga completa. Nenhum desses runs correspondia a um pedido humano real. Corrigido gateando o trigger atrás de menção explícita `@claude` de um autor não-bot (ver entrada 2026-09-01 abaixo e PR `fix/claude-yml-loop-guard`).
+- ✓ Ao criar qualquer trigger de IA acionado por evento (issue_comment, webhook, cron), **sempre pergunte: "isso pode ser re-disparado por outra automação, em loop, sem intervenção humana?"** Se sim, adicione filtro explícito (menção obrigatória, allowlist de autor, ou condição de conteúdo) antes de commitar.
+
 ### Atualizações
 - ✓ Produza atualizações cumulativas (permitir pular versões)
 - ✓ Inclua automaticamente SQLs, migrations, reparos de vínculo
@@ -91,6 +99,17 @@ Essa autorização não permite force-push, bypass de branch protection, exposi�
 **O que descobri:** o endpoint oficial `PUT /public-api/v3/produtos/{idProduto}` responde `204 No Content` em sucesso. O helper `svtop_tiny_request()` tratava resposta sem JSON ou HTTP nao-2xx como falha e repetia a mesma requisicao pelo fallback Python, mesmo quando o cURL ja tinha recebido 204. Assim, cada atualizacao bem-sucedida de produto era enviada duas vezes. Qualquer resposta HTTP do ERP (100-599) e autoritativa e nunca deve ser repetida; o fallback fica restrito a falha real de transporte sem resposta HTTP.
 **Por quê importa:** read-back confirmava o estado final, mas escondia a duplicacao da mutacao. Ao validar writers v3, registre o status do PUT, faça GET independente e mantenha teste explicito de que respostas HTTP de sucesso, erro, conflito e rate limit nao acionam uma segunda chamada.
 **Ver também:** `docs/TINY-ERP-API-V3.md`, documentacao oficial `api-reference/produtos/atualizar-produto`.
+
+### 2026-09-01 — `claude.yml` sem filtro virou loop de auto-gasto: 100+ execuções pagas num dia, disparadas por comentários de bot
+**Sistema/arquivo:** `.github/workflows/claude.yml`, `desktop-commander-three-host-control-plane.yml`, `desktop-commander-24h-health.yml` (probes a cada 5min), issue de tracking "Desktop Commander 24h Control Plane Status"
+**O que descobri:**
+- `claude.yml` disparava em `issue_comment: [created]`, `pull_request_review_comment: [created]`, `pull_request_review: [submitted]` e `issues: [opened, assigned]` **sem nenhum filtro de conteúdo ou autor**.
+- Dois workflows agendados (`cron: '*/5 * * * *'`) postam comentários automáticos de status (health check do Desktop Commander/túnel SSH) numa issue de tracking a cada ~5 minutos. Cada um desses comentários — postado por `github-actions[bot]`, sem pedido humano nenhum — disparava uma execução completa e paga do `anthropics/claude-code-action@v1`.
+- Resultado confirmado via `gh run list --workflow=claude.yml`: **100 execuções só em 2026-09-01** (03:21–23:03), várias em `action_required` (permissão negada) e re-tentadas, alimentando o loop.
+- Também achei, fora do GitHub, uma tarefa agendada local (`ShopVivaliz Desktop Commander 24h` + `ShopVivaliz Fred-Win Relay 24h`, Task Scheduler do Windows, watchdog a cada 1min) que mantém um canal de controle remoto (`@wonderwhy-er/desktop-commander --remote --persist-session`) e um túnel SSH reverso permanente do notebook (`LAPTOP-NIG4IFUU`) para uma VM (`144.22.157.209`, portas 22 e 5557 expostas). Esse canal ficou "healthy"/conectado durante a investigação — não foi desligado nesta sessão (usuário pediu para focar no loop do GitHub primeiro; decisão sobre desligar esse canal ainda pendente).
+**Por quê importa:** um trigger de IA acionado por evento do GitHub sem filtro de conteúdo/autor é, na prática, um multiplicador de custo controlado por **qualquer** outra automação do repo — inclusive bots que não têm nada a ver com IA. Ver regra nova em "🚫 Regras Obrigatórias para Agentes > Custo de IA" acima.
+**Fix aplicado:** gate `if:` em `claude.yml` exigindo menção `@claude` explícita no corpo do comentário/issue/review **e** `!endsWith(github.actor, '[bot]')`. PR: `fix/claude-yml-loop-guard` → `main`.
+**Ver também:** seção "Custo de IA" nas Regras Obrigatórias, acima.
 
 ### 2026-08-11 — Catálogo público (`/catalogo`) renderizava vazio: estoque de TODOS os produtos ativos zerado por dois bugs em cadeia
 **Sistema/arquivo:** `olist/sync-on-webhook.php`, `olist/fetch-estoque-v3.php`, `api/catalog/products.php`, `scripts/products-active-sync-loop.sh`
