@@ -155,6 +155,8 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^(?:ferramentas|arte-papelaria-e-armarinho|produtos)(?:/.*)?$ /catalogo/ [R=301,L,NE,QSD,NC]
 
     # Nunca expor arquivos internos de configuracao e operacao
+    RewriteRule \.(?:md|py|sh|ps1|bat|ya?ml|csv|xlsx?|toml|vsix)(?:/|$) - [F,L,NC]
+    RewriteRule ^[^/]+\.(?:json|lock)(?:/|$) - [F,L,NC]
     RewriteRule ^config/ - [F,L]
     RewriteRule ^storage/ - [F,L]
     RewriteRule ^(?:criar-pagamento-teste-real|criar-pagamento-producao|gerar-payment-id-agora|fazer-pagamento-real-agora|simular-pagamento-real)\.php$ - [F,L,NC]
