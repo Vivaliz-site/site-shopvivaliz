@@ -105,6 +105,7 @@ jobs:
           set -Eeuo pipefail
           php tests/test-liz-intelligent.php
           php tests/test-liz-security-and-grounding.php
+          php tests/liz-current-gemini-model-regression-test.php
           php tests/liz-internal-origin-regression-test.php
           tests/liz-router-internal-origin-integration.sh
           node --check public/assets/liz-assistant/liz-assistant.js
