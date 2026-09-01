@@ -1,9 +1,7 @@
 <?php
 declare(strict_types=1);
-
-function sv_ar_action_idempotency_key(array $case,string $actionType): string
-{
-    $parts=[trim((string)($case['amazon_order_id'] ?? '')),trim((string)($case['amazon_order_item_id'] ?? '')),trim((string)($case['refund_event_id'] ?? '')),strtoupper(trim((string)($case['claim_reason'] ?? ''))),strtoupper(trim($actionType))];
-    if ($parts[0]==='' || $parts[3]==='' || $parts[4]==='') throw new InvalidArgumentException('order, claim reason and action are required for idempotency key');
-    return hash('sha256',implode('|',$parts));
-}
+function sv_ar_action_idempotency_key(array $case,string $actionType): string { $parts=[trim((string)($case['amazon_order_id']??'')),trim((string)($case['amazon_order_item_id']??'')),trim((string)($case['refund_event_id']??'')),strtoupper(trim((string)($case['claim_reason']??''))),strtoupper(trim($actionType))];if($parts[0]===''||$parts[3]===''||$parts[4]==='')throw new InvalidArgumentException('order, claim reason and action are required for idempotency key');return hash('sha256',implode('|',$parts)); }
+function sv_ar_schedule_action_db(PDO $db,int $caseId,array $case,string $actionType,array $payload): int { $key=sv_ar_action_idempotency_key($case,$actionType);$json=json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);$s=$db->prepare("INSERT INTO amazon_recovery_outbox (case_id,action_type,idempotency_key,payload_json,status) VALUES (?,?,?,?,'pending') ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)");$s->execute([$caseId,strtoupper($actionType),$key,$json]);return (int)$db->lastInsertId(); }
+function sv_ar_mark_action_uncertain(PDO $db,int $actionId,string $error): bool { $s=$db->prepare("UPDATE amazon_recovery_outbox SET status='uncertain',attempt_count=attempt_count+1,last_error=?,updated_at=NOW() WHERE id=? AND status<>'confirmed'");return $s->execute([$error,$actionId]); }
+function sv_ar_confirm_action(PDO $db,int $actionId,string $externalReference): bool { $s=$db->prepare("UPDATE amazon_recovery_outbox SET status='confirmed',external_reference=?,last_error=NULL,updated_at=NOW() WHERE id=?");return $s->execute([$externalReference,$actionId]); }
+function sv_ar_fail_action(PDO $db,int $actionId,string $error): bool { $s=$db->prepare("UPDATE amazon_recovery_outbox SET status='failed',attempt_count=attempt_count+1,last_error=?,updated_at=NOW() WHERE id=? AND status NOT IN ('confirmed','uncertain')");return $s->execute([$error,$actionId]); }
