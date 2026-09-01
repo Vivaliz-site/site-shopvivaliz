@@ -3,6 +3,25 @@ name: Autonomy Boundary
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
+  workflow_dispatch:
+    inputs:
+      base_sha:
+        description: Base SHA of the PR being replayed
+        required: true
+        type: string
+      head_sha:
+        description: Exact PR head SHA being replayed
+        required: true
+        type: string
+      head_ref:
+        description: PR head branch being replayed
+        required: true
+        type: string
+      pr_labels:
+        description: Comma-separated current PR labels
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -21,10 +40,10 @@ jobs:
 
       - name: Enforce autonomy policy
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || inputs.head_sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref || inputs.head_ref }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') || inputs.pr_labels }}
         run: |
           set -euo pipefail
           python3 scripts/enforce-autonomy-policy.py
