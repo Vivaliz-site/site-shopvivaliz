@@ -5,6 +5,7 @@ import { discoverPublicRoutes } from './lib/public-route-discovery.mjs';
 import { reportableResourceFailure } from './lib/public-page-health.mjs';
 
 const baseUrl = (process.env.E2E_BASE_URL || 'https://shopvivaliz.com.br').replace(/\/$/, '');
+const proxyServer = process.env.E2E_PROXY_SERVER || '';
 const outDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || join(process.cwd(), 'artifacts', 'public-layout-audit');
 const mandatoryRoutes = ['/', '/catalogo/', '/carrinho/', '/contato/', '/faq/', '/politica-privacidade/', '/politica-devolucoes/', '/politica-entrega/', '/termos/', '/sobre/', '/blog/', '/avaliacoes.php'];
 const explicitRoutes = (process.env.PUBLIC_AUDIT_ROUTES || '').split(',').map((value) => value.trim()).filter(Boolean);
@@ -18,7 +19,10 @@ const profiles = [
 if (!routes.length) throw new Error('No public routes discovered for audit');
 console.log(`Public layout audit: ${routes.length} routes x ${profiles.length} profiles`);
 mkdirSync(outDir, { recursive: true });
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({
+  headless: true,
+  proxy: proxyServer ? { server: proxyServer } : undefined,
+});
 const failures = [];
 const results = [];
 
