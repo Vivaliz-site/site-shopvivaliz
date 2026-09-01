@@ -29,6 +29,21 @@
     }
   }
 
+  function bootstrapCheckoutShippingDedupe() {
+    var path = String(window.location.pathname || '').replace(/\/$/, '');
+    if (path !== '/checkout') return;
+
+    function load() {
+      if (document.querySelector('script[src*="/js/shipping-request-dedupe-v1.js"]')) return;
+      var script = document.createElement('script');
+      script.src = '/js/shipping-request-dedupe-v1.js?v=' + encodeURIComponent(ASSET_VERSION);
+      document.head.appendChild(script);
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', load, { once: true });
+    else setTimeout(load, 0);
+  }
+
   function cookieValue() {
     try {
       var match = document.cookie.match(new RegExp('(?:^|;\\s*)' + COOKIE_KEY + '=([^;]+)'));
@@ -143,6 +158,7 @@
   };
 
   bootstrapDirectProductSalesLayer();
+  bootstrapCheckoutShippingDedupe();
   var choice = existing();
   if (choice) updateConsent(choice === 'accepted');
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', render);
