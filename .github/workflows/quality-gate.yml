@@ -39,6 +39,7 @@ jobs:
           node --check scripts/public-layout-audit.mjs
           node --check js/catalog-conversion-v4.js
           node --check js/product-conversion-v5.js
+          node tests/shipping-request-dedupe-runtime-test.js
           node --test tests/public-route-discovery.test.mjs tests/public-page-health.test.mjs
           bash tests/master-production-monitor-regression.sh
           bash tests/production-runtime-reconciliation-regression.sh

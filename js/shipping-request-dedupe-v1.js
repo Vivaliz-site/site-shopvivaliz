@@ -43,7 +43,9 @@
     }
 
     request.then(clear, clear);
-    return request;
+    return request.then(function (response) {
+      return response.clone();
+    });
   }
 
   wrappedFetch.__svShippingRequestDedupeWrapped = true;
