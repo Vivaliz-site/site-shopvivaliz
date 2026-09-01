@@ -13,6 +13,20 @@ on:
 jobs:
   claude:
     runs-on: ubuntu-latest
+    # Sem este filtro, o job dispara para QUALQUER comentário/review/issue do repo,
+    # incluindo comentários automáticos postados por outros workflows (ex: probes
+    # de status na issue #1207) — isso gerou 100+ execuções pagas num único dia
+    # (2026-09-01) sem nenhum pedido humano real. Só roda com menção explícita
+    # de um autor não-bot.
+    if: |
+      !endsWith(github.actor, '[bot]') &&
+      (
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+        (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      )
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
