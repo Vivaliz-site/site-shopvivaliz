@@ -21,6 +21,27 @@ foreach ([
         exit(1);
     }
 }
+
+foreach ([
+    'SESSION_REFRESH_PERSIST_FAILED',
+    '$script:PersistenceDegraded = $false',
+    'persistence_state=',
+    'SESSION_REFRESH_PERSISTED=false reason=provider_persistence_failure',
+    'SESSION_REFRESH_PERSISTENCE_RECOVERED=true',
+] as $needle) {
+    if (strpos($runner, $needle) === false) {
+        fwrite(STDERR, "runner missing persistence failure handling {$needle}\n");
+        exit(1);
+    }
+}
+if (!preg_match('/if \(\$script:Connected -and \(\$Line -match \$RefreshPersistFailurePattern\)\) \{(?P<body>.*?)\n    \}/s', $runner, $failureMatch)) {
+    fwrite(STDERR, "runner missing persistence failure handler\n");
+    exit(1);
+}
+if (strpos($failureMatch['body'], '$script:DegradedSinceUtc') !== false) {
+    fwrite(STDERR, "persistence failure must not trigger provider restart degradation\n");
+    exit(1);
+}
 foreach (['shopvivaliz-dc-', 'RedirectStandardOutput $outFile', 'Read-CapturedProviderText'] as $forbidden) {
     if (strpos($runner, $forbidden) !== false) {
         fwrite(STDERR, "runner persists raw capture via {$forbidden}\n");
