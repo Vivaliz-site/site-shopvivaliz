@@ -12,7 +12,6 @@ on:
 
 jobs:
   claude:
-    runs-on: ubuntu-latest
     # Sem este filtro, o job dispara para QUALQUER comentário/review/issue do repo,
     # incluindo comentários automáticos postados por outros workflows (ex: probes
     # de status na issue #1207) — isso gerou 100+ execuções pagas num único dia
