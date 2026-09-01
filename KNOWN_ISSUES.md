@@ -84,7 +84,39 @@ Ao adicionar novo arquivo em `/includes/` que precisa ser público:
 
 ## 🔴 Rotina de otimização inteligente Shopee (6h): `shopee-runtime-health.yml` voltou a falhar em todo run agendado desde 2026-08-22
 
-**Última atualização:** 2026-08-27
+**Última atualização:** 2026-09-01
+
+### Atualização 2026-09-01 — ainda falhando, mesmo erro, agora contra `shopvivaliz-free-a1` (163.176.103.253); rotina agendada de otimização Shopee não pode rodar
+
+Confirmado via run agendado `33476601383` (2026-09-01T06:12Z, job "Verify canonical VM credentials
+and catalog read"): falha em ~2s no mesmo ponto, mesmo erro de 2026-08-27:
+
+```
+ERROR: required Shopee runtime credentials are incomplete
+```
+
+Uma mudança de roteamento não documentada aqui trocou o alvo do SSH de `136.248.69.116` (VM2) para
+`163.176.103.253` — isso bate com a virada de arquitetura pra `shopvivaliz-free-a1` registrada no
+topo do `CLAUDE.md` ("ARQUITETURA VINCULANTE DESDE 2026-08-29"), mas ninguém repopulou
+`shared/shopee-tokens.json`/`shared/.env` no host novo: o bloqueador é o mesmo de sempre (credencial
+Shopee ausente na VM de produção atual), só que agora na A1 em vez da VM2. Ou seja, a mudança de VM2
+→ shopvivaliz-free-a1 **carregou o problema junto**, não o resolveu.
+
+Consequência prática: a "Otimização Inteligente Shopee" agendada a cada 6h (o pipeline que leria
+CTR/conversão reais e aplicaria mudanças de título/imagem/preço) **não tem como rodar** — não há
+CTR/conversão real acessível (nem por este sandbox, que não tem SSH/credenciais Shopee, nem pelo
+próprio pipeline agendado, que falha no preflight). Sessão autônoma que chegar aqui: não fabrique
+dados de performance nem "antes/depois" pra justificar mudanças de catálogo — sem preflight `status:
+ok`, não há dado real disponível. `shopee-production-seo.yml` (aplicação real, exige confirmação
+`APPLY_ALL_SHOPEE_PRODUCTS`) nunca teve um run bem-sucedido (5/5 falhas históricas, último run
+2026-07-30) e continua dependente do mesmo preflight — não dispare sem antes confirmar
+`shopee-runtime-health.yml` com `status: ok`.
+
+**Ação sugerida (seguem pendentes, agora no host novo):** popular `shared/shopee-tokens.json` +
+`shared/.env` com as 4 credenciais `SHOPEE_*` em `shopvivaliz-free-a1` (`163.176.103.253`) e
+confirmar que `shopvivaliz-shopee-token-renewer.service` está instalado/ativo lá; depois rodar
+`shopee-runtime-health.yml` via `workflow_dispatch` pra confirmar `status: ok` antes de considerar
+disparar `shopee-production-seo.yml`.
 
 ### Atualização 2026-08-27 — commit `a6c713a` (VM2 routing fix) corrige o alvo do SSH; erro real agora aponta pra credencial Shopee ausente na VM2, não mais conectividade
 
