@@ -1,0 +1,80 @@
+name: MEI API Supervision Repair Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mei-api-supervision-repair-once.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mei-api-supervision-repair-once
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Configure backend SSH
+        env:
+          KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$KEY"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$KEY" > "$HOME/.ssh/vmkey"
+          chmod 600 "$HOME/.ssh/vmkey"
+
+      - name: Restore canonical MEI API supervision
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i "$HOME/.ssh/vmkey" ubuntu@144.22.157.209 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          unit=/etc/systemd/system/mei-mg-email-api.service
+          backup="${unit}.backup.$(date -u +%Y%m%d%H%M%S)"
+          worker_before="$(systemctl show -p MainPID --value mei-mg-email-worker.service)"
+          sudo cp -p "$unit" "$backup"
+          cat > /tmp/mei-mg-email-api.service <<'UNIT'
+          [Unit]
+          Description=MEI MG Email API
+          After=network.target docker.service
+
+          [Service]
+          Type=simple
+          User=ubuntu
+          WorkingDirectory=/home/ubuntu/mei-mg-email
+          EnvironmentFile=/home/ubuntu/mei-mg-email/.env
+          ExecStart=/home/ubuntu/mei-mg-email/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8010
+          Restart=always
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+          sudo install -o root -g root -m 0644 /tmp/mei-mg-email-api.service "$unit"
+          rm -f /tmp/mei-mg-email-api.service
+          sudo systemctl daemon-reload
+          sudo systemctl enable mei-mg-email-api.service
+          sudo systemctl restart mei-mg-email-api.service
+          for i in $(seq 1 15); do
+            if systemctl is-active --quiet mei-mg-email-api.service && curl -fsS --max-time 4 http://127.0.0.1:8010/health >/tmp/mei-api-health.json; then
+              break
+            fi
+            sleep 1
+          done
+          systemctl is-active --quiet mei-mg-email-api.service
+          grep -Fxq 'Restart=always' "$unit"
+          grep -Fq '"status":"ok"' /tmp/mei-api-health.json
+          worker_after="$(systemctl show -p MainPID --value mei-mg-email-worker.service)"
+          test -n "$worker_before"
+          test "$worker_before" = "$worker_after"
+          echo "MEI_API_SUPERVISION_REPAIR=PASS"
+          echo "backup=$backup"
+          REMOTE
+
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/vmkey"
