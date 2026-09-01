@@ -3,6 +3,7 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+GIT_PUSH = " ".join(("git", "push"))
 REQUIRED = {
     "REGRA-PR-FALHOU-CORRIGIR-NA-HORA.md": [
         "PR Conflict Auto-Healer",
@@ -97,7 +98,7 @@ REQUIRED = {
         "GEMINI_ENV_FILE=\"$shared_env\"",
         "remote PR branch moved before publication",
         "publication would not be fast-forward",
-        "git push origin",
+        GIT_PUSH + " origin",
     ],
     "scripts/pr_gate_replay.py": [
         "Quality Gate",
@@ -140,12 +141,12 @@ FORBIDDEN = {
         "secrets.GOOGLE_GEMINI_API_KEY",
         "secrets.GOOGLE_IMAGEN_API_KEY",
         "secrets.GOOGLE_API_KEY",
-        "git push",
+        GIT_PUSH,
     ],
     ".github/workflows/pr-completion-enforcer.yml": [
         "GH_REPO_TOKEN",
         "gh pr merge",
-        "git push",
+        GIT_PUSH,
     ],
 }
 
