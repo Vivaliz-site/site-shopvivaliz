@@ -11,21 +11,24 @@ function tiny_v3_fallback_assert(bool $condition, string $message): void
     }
 }
 
+foreach ([200, 204, 400, 401, 409, 429, 500] as $status) {
+    tiny_v3_fallback_assert(
+        svtop_tiny_should_use_python_fallback('', 0, '', $status) === false,
+        "HTTP {$status} e autoritativo e nao pode acionar fallback"
+    );
+}
+
 tiny_v3_fallback_assert(
-    svtop_tiny_should_use_python_fallback(204) === false,
-    '204 No Content nao pode repetir PUT/POST no fallback Python'
+    svtop_tiny_should_use_python_fallback(false, 7, 'connection_failed', 0) === true,
+    'falha de transporte sem resposta HTTP deve acionar fallback'
 );
 tiny_v3_fallback_assert(
-    svtop_tiny_should_use_python_fallback(200) === false,
-    'qualquer resposta 2xx deve ser tratada como sucesso autoritativo'
+    svtop_tiny_should_use_python_fallback('', 0, '', 0) === false,
+    'status zero sem evidencia de falha de transporte nao deve repetir a chamada'
 );
 tiny_v3_fallback_assert(
-    svtop_tiny_should_use_python_fallback(401) === true,
-    'resposta HTTP de falha deve continuar elegivel ao fallback existente'
-);
-tiny_v3_fallback_assert(
-    svtop_tiny_should_use_python_fallback(0) === true,
-    'falha de transporte sem status HTTP deve continuar elegivel ao fallback'
+    svtop_tiny_should_use_python_fallback(false, 7, 'connection_failed', 500) === false,
+    'resposta HTTP real deve ser autoritativa mesmo com sinal de transporte'
 );
 
-fwrite(STDOUT, "COMPROVADO: respostas Tiny/Olist 2xx, inclusive 204 sem corpo, nao sao reenviadas.\n");
+fwrite(STDOUT, "COMPROVADO: qualquer resposta HTTP Tiny/Olist e autoritativa; apenas falha real de transporte sem HTTP usa fallback.\n");

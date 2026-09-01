@@ -88,8 +88,8 @@ Essa autorização não permite force-push, bypass de branch protection, exposi�
 
 ### 2026-09-01 — HTTP 204 do Tiny/Olist v3 nao pode acionar fallback que repete escrita
 **Sistema/arquivo:** `includes/tiny-order-push.php`, `includes/marketplace/TinyPublisher.php`, `tests/tiny-v3-http-fallback-test.php`
-**O que descobri:** o endpoint oficial `PUT /public-api/v3/produtos/{idProduto}` responde `204 No Content` em sucesso. O helper `svtop_tiny_request()` tratava qualquer resposta sem JSON como falha e repetia a mesma requisicao pelo fallback Python, mesmo quando o cURL ja tinha recebido 204. Assim, cada atualizacao bem-sucedida de produto era enviada duas vezes. Respostas HTTP 2xx agora sao autoritativas mesmo sem corpo; o fallback continua reservado a status fora de 2xx.
-**Por quê importa:** read-back confirmava o estado final, mas escondia a duplicacao da mutacao. Ao validar writers v3, registre o status do PUT, faça GET independente e mantenha teste explicito de que 204 nao aciona uma segunda chamada.
+**O que descobri:** o endpoint oficial `PUT /public-api/v3/produtos/{idProduto}` responde `204 No Content` em sucesso. O helper `svtop_tiny_request()` tratava resposta sem JSON ou HTTP nao-2xx como falha e repetia a mesma requisicao pelo fallback Python, mesmo quando o cURL ja tinha recebido 204. Assim, cada atualizacao bem-sucedida de produto era enviada duas vezes. Qualquer resposta HTTP do ERP (100-599) e autoritativa e nunca deve ser repetida; o fallback fica restrito a falha real de transporte sem resposta HTTP.
+**Por quê importa:** read-back confirmava o estado final, mas escondia a duplicacao da mutacao. Ao validar writers v3, registre o status do PUT, faça GET independente e mantenha teste explicito de que respostas HTTP de sucesso, erro, conflito e rate limit nao acionam uma segunda chamada.
 **Ver também:** `docs/TINY-ERP-API-V3.md`, documentacao oficial `api-reference/produtos/atualizar-produto`.
 
 ### 2026-08-11 — Catálogo público (`/catalogo`) renderizava vazio: estoque de TODOS os produtos ativos zerado por dois bugs em cadeia

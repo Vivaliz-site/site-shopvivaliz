@@ -245,12 +245,15 @@ function svtop_tiny_get_token(): string
     return svtop_env('OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN');
 }
 
-function svtop_tiny_should_use_python_fallback(int $status): bool
+function svtop_tiny_should_use_python_fallback($body, int $curlErrno, string $curlError, int $status): bool
 {
-    // Successful writes commonly return 204 No Content. Treat every 2xx as
-    // authoritative even when there is no JSON body; retrying would duplicate
-    // the mutation that the ERP already accepted.
-    return $status < 200 || $status >= 300;
+    // Any real HTTP response is authoritative, including errors and an empty
+    // 204. Repeating a request after the ERP answered can duplicate mutations.
+    if ($status >= 100 && $status <= 599) {
+        return false;
+    }
+
+    return $body === false || $curlErrno !== 0 || $curlError !== '';
 }
 
 function svtop_tiny_request(string $method, string $path, string $token, ?array $payload = null): array
@@ -274,9 +277,11 @@ function svtop_tiny_request(string $method, string $path, string $token, ?array 
     curl_setopt_array($ch, $opts);
     $body   = curl_exec($ch);
     $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    $curlErrno = curl_errno($ch);
+    $curlError = curl_error($ch);
     curl_close($ch);
     $json = json_decode(is_string($body) ? $body : '', true);
-    if (svtop_tiny_should_use_python_fallback($status)) {
+    if (svtop_tiny_should_use_python_fallback($body, $curlErrno, $curlError, $status)) {
         $fallback = svtop_python_request($method, $url, [
             'Authorization' => 'Bearer ' . $token,
             'Content-Type' => 'application/json',
