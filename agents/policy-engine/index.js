@@ -186,7 +186,7 @@ class PolicyEngine {
 
     const beforeKeyword = trimmed.slice(0, trimmed.length - match[1].length).trimEnd();
     if (match[1] === 'of') return this.isForOfRegexContext(beforeKeyword);
-    return !beforeKeyword.endsWith('.') && !beforeKeyword.endsWith('?.');
+    return !beforeKeyword.endsWith('.') && !beforeKeyword.endsWith('?.') && !beforeKeyword.endsWith('#');
   }
 
   executableCallArguments(value, wrapperPattern, syntax = 'generic') {

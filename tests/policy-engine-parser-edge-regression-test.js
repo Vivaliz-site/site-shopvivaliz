@@ -142,4 +142,17 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
+
+{
+  const root = setupRepo();
+  const base = commitAll(root, 'base private keyword property division');
+  const dangerous = ['git', 'push', 'origin', 'HEAD:main'].join(' ');
+  write(root, 'tests/private-keyword-division-publish.js', `const { execSync } = require('child_process');\nclass Probe { #return = 10; run(divisor) { execSync((this.#return / divisor) && '${dangerous}'); } }\n`);
+  const head = commitAll(root, 'add private keyword property division before direct push');
+  const result = policy(root, base, head);
+  assert.notStrictEqual(result.status, 0, 'A private property named after a regex-leading keyword must remain division');
+  assert.match(result.stdout, /perigoso git push/);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
 console.log('policy-engine-parser-edge-regression: ok');
