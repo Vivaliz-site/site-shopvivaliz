@@ -272,6 +272,7 @@ class PolicyEngine {
     if (
       file === 'includes/product-seo.php'
       || file === 'includes/catalog-authoritative-stock-carry.php'
+      || file === 'includes/tiny-order-push.php'
       || file.startsWith('includes/marketplace/')
     ) {
       return false;
