@@ -1,15 +1,36 @@
+import { execFile } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { chromium } from 'playwright';
 import { discoverPublicRoutes } from './lib/public-route-discovery.mjs';
 import { reportableResourceFailure } from './lib/public-page-health.mjs';
 
+const execFileAsync = promisify(execFile);
 const baseUrl = (process.env.E2E_BASE_URL || 'https://shopvivaliz.com.br').replace(/\/$/, '');
 const proxyServer = process.env.E2E_PROXY_SERVER || '';
 const outDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || join(process.cwd(), 'artifacts', 'public-layout-audit');
 const mandatoryRoutes = ['/', '/catalogo/', '/carrinho/', '/contato/', '/faq/', '/politica-privacidade/', '/politica-devolucoes/', '/politica-entrega/', '/termos/', '/sobre/', '/blog/', '/avaliacoes.php'];
 const explicitRoutes = (process.env.PUBLIC_AUDIT_ROUTES || '').split(',').map((value) => value.trim()).filter(Boolean);
-const discoveredRoutes = explicitRoutes.length ? [] : await discoverPublicRoutes({ baseUrl });
+
+const auditFetch = async (url, options = {}) => {
+  if (!proxyServer) return fetch(url, options);
+  const curlProxy = proxyServer.replace(/^socks5:\/\//, 'socks5h://');
+  try {
+    const { stdout } = await execFileAsync('curl', [
+      '-fsSL', '--max-time', '30', '--proxy', curlProxy, String(url),
+    ], { maxBuffer: 16 * 1024 * 1024 });
+    return { ok: true, status: 200, text: async () => stdout };
+  } catch (error) {
+    return {
+      ok: false,
+      status: Number(error?.code) || 0,
+      text: async () => '',
+    };
+  }
+};
+
+const discoveredRoutes = explicitRoutes.length ? [] : await discoverPublicRoutes({ baseUrl, fetchImpl: auditFetch });
 const routes = [...new Set([...(explicitRoutes.length ? explicitRoutes : discoveredRoutes), ...mandatoryRoutes])].sort((a, b) => a.localeCompare(b));
 const profiles = [
   { name: 'mobile', width: 390, height: 844, isMobile: true },
