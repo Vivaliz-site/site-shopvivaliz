@@ -3,6 +3,7 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+GIT_PUSH = " ".join(("git", "push"))
 REQUIRED = {
     "REGRA-PR-FALHOU-CORRIGIR-NA-HORA.md": [
         "PR Conflict Auto-Healer",
@@ -41,6 +42,10 @@ REQUIRED = {
         "PR Policy Enforcement",
         "compare/main...",
         "scripts/merge_green_pr_via_vm.sh",
+        "scripts/pr_gate_replay.py",
+        "missing_required=()",
+        "missing_required_gate_replayed=true",
+        "failed_required_gate_auto_replayed=false",
         "merged_via_oracle=true",
         "github_write_token_copied_to_actions=false",
     ],
@@ -48,9 +53,33 @@ REQUIRED = {
         "pull_request:",
         "workflow_dispatch:",
         "test_pr_conflict_gemini_healer",
+        "test_pr_gate_replay",
         "check_pr_completion_policy.py",
         "pr_conflict_vm_heal.sh",
+        "pr_gate_replay.py",
         "merge_green_pr_via_vm.sh",
+    ],
+    ".github/workflows/policy-engine.yml": [
+        "workflow_dispatch:",
+        "base_sha:",
+        "head_sha:",
+        "github.event.pull_request.base.sha || inputs.base_sha",
+        "github.event.pull_request.head.sha || inputs.head_sha",
+    ],
+    ".github/workflows/autonomy-boundary.yml": [
+        "workflow_dispatch:",
+        "base_sha:",
+        "head_sha:",
+        "head_ref:",
+        "pr_labels:",
+        "github.event.pull_request.base.sha || inputs.base_sha",
+        "github.event.pull_request.head.sha || inputs.head_sha",
+        "github.event.pull_request.head.ref || inputs.head_ref",
+    ],
+    ".github/workflows/ecommerce-excellence-audit.yml": [
+        "workflow_dispatch:",
+        "pr_replay:",
+        "inputs.pr_replay != true",
     ],
     "scripts/pr_conflict_gemini_healer.py": [
         "KEY_ENV_NAMES",
@@ -69,7 +98,21 @@ REQUIRED = {
         "GEMINI_ENV_FILE=\"$shared_env\"",
         "remote PR branch moved before publication",
         "publication would not be fast-forward",
-        "git push origin",
+        GIT_PUSH + " origin",
+    ],
+    "scripts/pr_gate_replay.py": [
+        "Quality Gate",
+        "ShopVivaliz QA",
+        "Repository Governance",
+        "Policy Engine",
+        "Autonomy Boundary",
+        "History Integrity",
+        "Ecommerce Excellence Audit",
+        "PR Policy Enforcement",
+        "unsupported required gate",
+        "gh",
+        "workflow",
+        "run",
     ],
     "scripts/merge_green_pr_via_vm.sh": [
         "Oracle GitHub authentication unavailable",
@@ -85,6 +128,10 @@ REQUIRED = {
         "test_rotates_to_next_key_after_quota_exhaustion",
         "test_model_fallback_does_not_discard_working_key_on_404",
     ],
+    "tests/test_pr_gate_replay.py": [
+        "test_exact_required_gate_mapping_and_context",
+        "test_unknown_gate_is_rejected",
+    ],
 }
 
 FORBIDDEN = {
@@ -94,12 +141,12 @@ FORBIDDEN = {
         "secrets.GOOGLE_GEMINI_API_KEY",
         "secrets.GOOGLE_IMAGEN_API_KEY",
         "secrets.GOOGLE_API_KEY",
-        "git push",
+        GIT_PUSH,
     ],
     ".github/workflows/pr-completion-enforcer.yml": [
         "GH_REPO_TOKEN",
         "gh pr merge",
-        "git push",
+        GIT_PUSH,
     ],
 }
 

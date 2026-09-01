@@ -6,6 +6,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      pr_replay:
+        description: Replay only the PR-safe static gate for a synchronized PR head
+        required: false
+        default: false
+        type: boolean
   schedule:
     - cron: '37 6 * * *'
 
@@ -94,7 +100,7 @@ jobs:
 
   live-production-audit:
     name: Validate real production from Oracle
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && inputs.pr_replay != true
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:

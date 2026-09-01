@@ -33,7 +33,9 @@ jobs:
           python3 -m py_compile \
             scripts/pr_conflict_gemini_healer.py \
             scripts/check_pr_completion_policy.py \
-            tests/test_pr_conflict_gemini_healer.py
+            scripts/pr_gate_replay.py \
+            tests/test_pr_conflict_gemini_healer.py \
+            tests/test_pr_gate_replay.py
           bash -n scripts/pr_conflict_vm_heal.sh
           bash -n scripts/merge_green_pr_via_vm.sh
 
@@ -42,6 +44,12 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 -m unittest tests.test_pr_conflict_gemini_healer -v
+
+      - name: Run Auto Gate replay regression tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m unittest tests.test_pr_gate_replay -v
 
       - name: Verify policy enforcement surfaces
         shell: bash
@@ -57,5 +65,7 @@ jobs:
           echo 'green_pr_must_merge=true'
           echo 'conflict_auto_heal_required=true'
           echo 'stale_check_merge_forbidden=true'
+          echo 'missing_gate_replay_required=true'
+          echo 'failed_gate_replay_forbidden=true'
           echo 'gemini_pool_stays_in_oracle=true'
           echo 'github_write_auth_stays_in_oracle=true'
