@@ -121,7 +121,7 @@ jobs:
           echo 'draft_policy=promote_internal_ready'
           echo 'historical failures ignored after newer success'
           echo 'latest_required_runs=latest-run-per-required-workflow'
-          echo 'missing_required_runs=explicit-workflow-dispatch-on-current-head'
+          echo 'replayable_required_runs=missing-or-action-required-on-current-head'
 
           merged_count=0
           repair_required_count=0
@@ -169,7 +169,7 @@ jobs:
             ready=1
             pending=0
             failed_required=()
-            missing_required=()
+            replay_required=()
 
             for workflow_name in "${required[@]}"; do
               state="$(jq -r --arg name "$workflow_name" '
@@ -186,7 +186,7 @@ jobs:
 
               ready=0
               case "$state" in
-                missing) missing_required+=("$workflow_name"); pending=1 ;;
+                missing|completed:action_required) replay_required+=("$workflow_name"); pending=1 ;;
                 queued:*|in_progress:*|requested:*|waiting:*|pending:*) pending=1 ;;
                 completed:*) failed_required+=("${workflow_name}:${state#completed:}") ;;
                 *) pending=1 ;;
@@ -214,8 +214,8 @@ jobs:
               continue
             fi
 
-            if (( ${#missing_required[@]} > 0 )); then
-              for workflow_name in "${missing_required[@]}"; do
+            if (( ${#replay_required[@]} > 0 )); then
+              for workflow_name in "${replay_required[@]}"; do
                 python3 trusted/scripts/pr_gate_replay.py \
                   --gate "$workflow_name" \
                   --repo "$REPO" \
@@ -224,7 +224,7 @@ jobs:
                   --head-sha "$head_sha" \
                   --pr-labels "$pr_labels"
               done
-              echo "pr_${pr}_missing_gate_replay_count=${#missing_required[@]}"
+              echo "pr_${pr}_gate_replay_count=${#replay_required[@]}"
               waiting_count=$((waiting_count + 1))
               continue
             fi
@@ -297,6 +297,7 @@ jobs:
           echo 'same_branch_repair_required=true'
           echo 'stale_branch_native_update_first=true'
           echo 'missing_required_gate_replayed=true'
+          echo 'action_required_gate_replayed=true'
           echo 'failed_required_gate_auto_replayed=false'
           echo 'conflict_repair_uses_free_local_ollama=true'
           echo 'historical_failed_run_blocks_newer_success=false'

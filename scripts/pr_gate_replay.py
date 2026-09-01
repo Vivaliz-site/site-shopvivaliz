@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dispatch one missing required PR gate on the exact PR head ref."""
+"""Dispatch one recoverable required PR gate on the exact PR head ref."""
 
 from __future__ import annotations
 
@@ -30,6 +30,11 @@ GATES: dict[str, str] = {
     "Ecommerce Excellence Audit": "ecommerce-excellence-audit.yml",
     "PR Policy Enforcement": "pr-policy-enforcement.yml",
 }
+
+
+def is_replayable_state(state: str) -> bool:
+    """Only recover states where the required gate did not actually execute."""
+    return state in {"missing", "completed:action_required"}
 
 
 def _validate(repo: str, head_ref: str, base_sha: str, head_sha: str) -> None:
