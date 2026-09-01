@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 import unittest
 
-from scripts.pr_gate_replay import GATES, build_command, build_dispatch_plan
+from scripts.pr_gate_replay import (
+    GATES,
+    build_command,
+    build_dispatch_plan,
+    is_replayable_state,
+)
 
 
 class PrGateReplayTest(unittest.TestCase):
@@ -58,6 +63,13 @@ class PrGateReplayTest(unittest.TestCase):
                 "fix/example-branch",
             ],
         )
+
+    def test_bot_action_required_is_replayable_but_real_failures_are_not(self) -> None:
+        self.assertTrue(is_replayable_state("missing"))
+        self.assertTrue(is_replayable_state("completed:action_required"))
+        self.assertFalse(is_replayable_state("completed:failure"))
+        self.assertFalse(is_replayable_state("completed:cancelled"))
+        self.assertFalse(is_replayable_state("in_progress:"))
 
     def test_unknown_gate_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "unsupported required gate"):
