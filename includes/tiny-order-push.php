@@ -245,6 +245,14 @@ function svtop_tiny_get_token(): string
     return svtop_env('OLIST_ACCESS_TOKEN', 'TINY_ACCESS_TOKEN');
 }
 
+function svtop_tiny_should_use_python_fallback(int $status): bool
+{
+    // Successful writes commonly return 204 No Content. Treat every 2xx as
+    // authoritative even when there is no JSON body; retrying would duplicate
+    // the mutation that the ERP already accepted.
+    return $status < 200 || $status >= 300;
+}
+
 function svtop_tiny_request(string $method, string $path, string $token, ?array $payload = null): array
 {
     $url = 'https://api.tiny.com.br/public-api/v3' . $path;
@@ -268,7 +276,7 @@ function svtop_tiny_request(string $method, string $path, string $token, ?array 
     $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
     curl_close($ch);
     $json = json_decode(is_string($body) ? $body : '', true);
-    if (!is_array($json) || $status < 200 || $status >= 300) {
+    if (svtop_tiny_should_use_python_fallback($status)) {
         $fallback = svtop_python_request($method, $url, [
             'Authorization' => 'Bearer ' . $token,
             'Content-Type' => 'application/json',

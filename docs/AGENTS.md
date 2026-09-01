@@ -86,6 +86,12 @@ Essa autorização não permite force-push, bypass de branch protection, exposi�
 
 ---
 
+### 2026-09-01 — HTTP 204 do Tiny/Olist v3 nao pode acionar fallback que repete escrita
+**Sistema/arquivo:** `includes/tiny-order-push.php`, `includes/marketplace/TinyPublisher.php`, `tests/tiny-v3-http-fallback-test.php`
+**O que descobri:** o endpoint oficial `PUT /public-api/v3/produtos/{idProduto}` responde `204 No Content` em sucesso. O helper `svtop_tiny_request()` tratava qualquer resposta sem JSON como falha e repetia a mesma requisicao pelo fallback Python, mesmo quando o cURL ja tinha recebido 204. Assim, cada atualizacao bem-sucedida de produto era enviada duas vezes. Respostas HTTP 2xx agora sao autoritativas mesmo sem corpo; o fallback continua reservado a status fora de 2xx.
+**Por quê importa:** read-back confirmava o estado final, mas escondia a duplicacao da mutacao. Ao validar writers v3, registre o status do PUT, faça GET independente e mantenha teste explicito de que 204 nao aciona uma segunda chamada.
+**Ver também:** `docs/TINY-ERP-API-V3.md`, documentacao oficial `api-reference/produtos/atualizar-produto`.
+
 ### 2026-08-11 — Catálogo público (`/catalogo`) renderizava vazio: estoque de TODOS os produtos ativos zerado por dois bugs em cadeia
 **Sistema/arquivo:** `olist/sync-on-webhook.php`, `olist/fetch-estoque-v3.php`, `api/catalog/products.php`, `scripts/products-active-sync-loop.sh`
 **O que descobri:**
@@ -750,4 +756,3 @@ email/telefone antes do hash, sem nenhum efeito em layout renderizado).
 - NF, rastreio e etiqueta devem usar o webhook Tiny/NF e `tiny_order_id`; não recriar autoridade em JSON, MySQL ou arquivo temporário.
 - Proibido reintroduzir Tiny v2, token estático antigo ou arrays/caches locais como fonte de pedido/NF.
 - Antes de PR/deploy envolvendo pedido, pagamento, NF ou etiqueta, rode `php scripts/quality/validate-order-erp-authority.php`.
-
