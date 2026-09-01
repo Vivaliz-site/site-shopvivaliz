@@ -74,7 +74,8 @@ try {
                 }
             });
             const deviceName = os.hostname();`
-  );  await writeFile(deviceSource, v2, 'utf8');
+  );
+  await writeFile(deviceSource, v2, 'utf8');
   runPatch('upgraded_v2');
   assertNonBlockingSource(await readFile(deviceSource, 'utf8'));
 

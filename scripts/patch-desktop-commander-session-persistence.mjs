@@ -50,7 +50,8 @@ const candidates = [
   { source: v2Patch, state: 'upgraded_v2' },
   { source: legacyPatch, state: 'upgraded_legacy' },
   { source: marker, state: 'applied' },
-];const matches = candidates.flatMap((candidate) => {
+];
+const matches = candidates.flatMap((candidate) => {
   const occurrences = source.split(candidate.source).length - 1;
   return Array.from({ length: occurrences }, () => candidate);
 });
