@@ -2,6 +2,16 @@
 
 on:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      base_sha:
+        description: Base SHA of the PR being replayed
+        required: true
+        type: string
+      head_sha:
+        description: Exact PR head SHA being replayed
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -150,8 +160,8 @@ jobs:
 
       - name: Run fail-closed Policy Engine
         env:
-          POLICY_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          POLICY_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          POLICY_BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha }}
+          POLICY_HEAD_SHA: ${{ github.event.pull_request.head.sha || inputs.head_sha }}
         run: |
           node tests/policy-engine-regression-test.js
           node agents/policy-engine/index.js
