@@ -293,7 +293,7 @@ def update_env(new_token: str, new_refresh_token: str) -> None:
             os.fsync(handle.fileno())
         os.chmod(temporary, mode)
         if os.name != "nt":
-            os.chown(temporary, original.st_uid, original.st_gid)
+            os.chown(temporary, -1, original.st_gid)
         os.replace(temporary, target)
         updated = target.stat()
         if (updated.st_mode & 0o777) != mode:
