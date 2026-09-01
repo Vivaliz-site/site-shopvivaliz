@@ -16,7 +16,6 @@
   window.addEventListener('resize',syncCatalogTop,{passive:true});
 
   var searchInput=document.getElementById('catalog-search');
-  var categorySelect=document.getElementById('catalog-category-select');
   if(searchInput&&!searchInput.getAttribute('placeholder')){
     searchInput.setAttribute('placeholder','Busque por produto, categoria ou SKU');
   }
@@ -86,38 +85,5 @@
     empty.className='sv-catalog-empty';
     empty.innerHTML='<h2>Nenhum produto encontrado</h2><p>Tente outro termo ou fale com a Liz para localizar o item certo.</p>';
     grid.appendChild(empty);
-  }
-
-  var bottoms=Array.prototype.slice.call(document.querySelectorAll('.sv-mobile-bottom-nav'));
-  var bottom=bottoms.shift()||null;
-  bottoms.forEach(function(extra){extra.remove();});
-
-  if(!bottom){
-    bottom=document.createElement('nav');
-    bottom.className='sv-mobile-bottom-nav';
-    bottom.setAttribute('aria-label','Navegação rápida');
-    bottom.innerHTML='<a href="/"><b>⌂</b><span>Início</span></a><button type="button" data-action="search"><b>⌕</b><span>Buscar</span></button><button type="button" data-action="filter"><b>☷</b><span>Categorias</span></button><a href="/carrinho"><b>🛒</b><span>Carrinho</span></a><a href="/auth/login.php"><b>◉</b><span>Conta</span></a>';
-    document.body.appendChild(bottom);
-  }
-
-  if(!bottom.dataset.svBound){
-    bottom.dataset.svBound='1';
-    bottom.addEventListener('click',function(e){
-      var button=e.target.closest('button');
-      if(!button)return;
-      if(button.dataset.action==='search'&&searchInput){
-        searchInput.scrollIntoView({behavior:'smooth',block:'center'});
-        setTimeout(function(){searchInput.focus();},300);
-      }
-      if(button.dataset.action==='filter'){
-        if(categorySelect){
-          categorySelect.scrollIntoView({behavior:'smooth',block:'center'});
-          setTimeout(function(){categorySelect.focus();},300);
-        }else if(toggle){
-          toggle.click();
-          tools.scrollIntoView({behavior:'smooth',block:'start'});
-        }
-      }
-    });
   }
 })();

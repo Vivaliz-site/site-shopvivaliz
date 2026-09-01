@@ -37,10 +37,12 @@ jobs:
           php tests/google-indexing-canonical-regression-test.php
           python3 -m py_compile scripts/seo-integrity-audit.py
           node --check scripts/public-layout-audit.mjs
+          node --check js/catalog-conversion-v4.js
           node --test tests/public-route-discovery.test.mjs tests/public-page-health.test.mjs
           bash tests/master-production-monitor-regression.sh
           bash tests/production-runtime-reconciliation-regression.sh
           bash tests/public-layout-a1-proxy-regression.sh
+          bash tests/catalog-single-mobile-nav-regression.sh
           bash -n scripts/deploy-production.sh
           grep -q 'a2enmod rewrite' scripts/deploy-production.sh
           grep -q 'urllib.parse.quote(path' scripts/seo-integrity-audit.py
