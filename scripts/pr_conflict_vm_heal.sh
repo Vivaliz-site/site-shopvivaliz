@@ -33,10 +33,11 @@ command -v jq >/dev/null || fail 'jq unavailable on Oracle'
 command -v python3 >/dev/null || fail 'python3 unavailable on Oracle'
 
 fetch_pr_meta() {
-  curl -fsSL --retry 3 --retry-delay 1 \
+  curl -fsSL --connect-timeout 10 --max-time 30 --retry 3 --retry-delay 1 \
     -H 'Accept: application/vnd.github+json' \
     -H 'User-Agent: shopvivaliz-pr-auto-healer' \
-    "https://api.github.com/repos/${repo}/pulls/${pr_number}"
+    "https://api.github.com/repos/${repo}/pulls/${pr_number}" \
+    || fail 'GitHub PR metadata fetch failed'
 }
 
 meta="$(fetch_pr_meta)"
@@ -62,7 +63,7 @@ trap cleanup EXIT
 
 # Clone into an isolated temporary checkout. Never touch production/current,
 # shared data, or the Agent Bridge working tree.
-git clone --filter=blob:none --no-tags "https://github.com/${repo}.git" "$work/repo" >/dev/null 2>&1
+git clone -q --filter=blob:none --no-tags "https://github.com/${repo}.git" "$work/repo"
 cd "$work/repo"
 git config user.name 'shopvivaliz-pr-auto-healer[bot]'
 git config user.email 'shopvivaliz-pr-auto-healer@users.noreply.github.com'
