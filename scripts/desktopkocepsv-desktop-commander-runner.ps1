@@ -8,6 +8,7 @@ $ConnectedPattern = 'Device ready'
 $DegradedPattern = 'InvalidJWTToken|Token has expired|Device marked as offline|Channel (closed|errored)|Failed to (recreate|subscribe)|Subscription unhealthy'
 $RecoveredPattern = 'Device ready|Channel subscribed|recovered after'
 $RefreshPersistAttemptPattern = 'SESSION_REFRESH_PERSIST_ATTEMPTED'
+$RefreshPersistFailurePattern = 'SESSION_REFRESH_PERSIST_FAILED'
 $DegradedRestartSeconds = 180
 $MarkerRefreshSeconds = 30
 
@@ -122,6 +123,7 @@ $script:ProviderProcess = $null
 $script:Connected = $false
 $script:AuthRequired = $false
 $script:DegradedSinceUtc = $null
+$script:PersistenceDegraded = $false
 $script:LastMarkerWriteUtc = [datetime]::MinValue
 $script:LastDeviceStateWriteUtc = if (Test-Path -LiteralPath $DeviceFile) { (Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc } else { [datetime]::MinValue }
 
@@ -132,7 +134,8 @@ function Write-ConnectionMarker {
         'state=connected',
         ('updated_utc=' + $utc.ToString('o')),
         ('runner_pid=' + $PID),
-        ('provider_pid=' + $script:ProviderProcess.Id)
+        ('provider_pid=' + $script:ProviderProcess.Id),
+        ('persistence_state=' + $(if ($script:PersistenceDegraded) { 'degraded' } else { 'healthy' }))
     ) | Out-File -FilePath $ConnectedMarker -Force -Encoding ascii
     $script:LastMarkerWriteUtc = $utc
 }
@@ -164,12 +167,23 @@ function Observe-ProviderLine([string]$Line) {
     if ($script:Connected -and ($Line -match $RefreshPersistAttemptPattern)) {
         $currentWrite = if (Test-Path -LiteralPath $DeviceFile) { (Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc } else { [datetime]::MinValue }
         if ($currentWrite -gt $script:LastDeviceStateWriteUtc) {
+            $wasPersistenceDegraded = $script:PersistenceDegraded
             $script:LastDeviceStateWriteUtc = $currentWrite
+            $script:PersistenceDegraded = $false
             Log 'SESSION_REFRESH_PERSISTED=true'
+            if ($wasPersistenceDegraded) { Log 'SESSION_REFRESH_PERSISTENCE_RECOVERED=true' }
+            Write-ConnectionMarker
         }
         else {
+            $script:PersistenceDegraded = $true
             Log 'SESSION_REFRESH_PERSISTED=inconclusive reason=device_state_mtime_unchanged'
+            Write-ConnectionMarker
         }
+    }
+    if ($script:Connected -and ($Line -match $RefreshPersistFailurePattern)) {
+        $script:PersistenceDegraded = $true
+        Write-ConnectionMarker
+        Log 'SESSION_REFRESH_PERSISTED=false reason=provider_persistence_failure'
     }
 }
 
