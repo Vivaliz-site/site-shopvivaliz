@@ -40,6 +40,34 @@ Simulação não substitui execução real: testes secos, mocks, screenshots hea
 
 ---
 
+## 💸 POLÍTICA OBRIGATÓRIA DE CONSUMO DE IA E EXECUÇÃO RECORRENTE (2026-09-01)
+
+Esta política é vinculante para **todos os projetos, hosts, workflows, serviços, timers, cron jobs, Scheduled Tasks, scripts, agentes e rotinas autônomas**.
+
+1. **Rotina permanente, periódica, agendada, daemon, watcher ou loop não pode usar Claude, GPT/OpenAI, Codex ou qualquer outro modelo pago por padrão.** Se IA for realmente necessária nesse tipo de rotina, deve usar primeiro uma opção gratuita/local explicitamente aprovada (por exemplo Ollama/local ou cota gratuita comprovada), com fallback determinístico sem IA. É proibido fazer fallback silencioso de IA gratuita para provedor pago.
+2. **Claude/GPT/Codex pagos são permitidos somente para tarefas finitas, iniciadas para atingir um objetivo concreto e que terminem ao concluir ou bloquear de forma real.** Eles não podem permanecer como daemon, supervisor, polling loop, autorepair, watchdog ou consumidor recorrente.
+3. **Toda execução finita de IA paga deve ter circuit breaker.** Definir limites coerentes de duração, tentativas/retries, chamadas ao modelo e tamanho de trabalho/contexto. `while true`, retry ilimitado, relançamento automático e continuidade sem teto são proibidos para consumidores pagos. Se o limite for atingido, persistir checkpoint e encerrar; uma nova execução só pode ocorrer por novo evento/tarefa explícita, nunca por loop de consumo.
+4. **Antes de habilitar ou manter uma automação, auditar cada consumidor individualmente.** Registrar: arquivo/comando, host, gatilho, frequência, provedor/modelo, se há custo, timeout, retries, limite de chamadas, condição de saída, necessidade real do processo e evidência de que não existe duplicação/órfão. Não assumir que um processo é necessário apenas porque já está instalado ou ativo.
+5. **Serviço contínuo só é legítimo quando a natureza do serviço exige continuidade.** Monitoramento, fila, API, renovação de token e health-check devem ser preferencialmente determinísticos. Trabalho periódico finito deve usar timer/cron + `oneshot`, e não processo infinito com `sleep`, quando não houver necessidade de daemon.
+6. **Processo travado, órfão ou sem progresso deve ser encerrado e investigado, não reiniciado indefinidamente.** Supervisores devem diferenciar falha transitória de erro persistente e possuir backoff, máximo de reinícios em janela e estado de bloqueio/cooldown.
+7. **Eventos de GitHub não podem disparar IA paga de forma ampla.** Workflows com Claude/GPT/Codex devem exigir gatilho explícito e restrito (por exemplo comando/label/dispatch autorizado), ter `timeout-minutes`, `concurrency` e cancelamento de execução obsoleta quando aplicável. Comentários, reviews, issues, pushes ou schedules genéricos não podem consumir IA paga automaticamente.
+8. **Fallback deve priorizar custo zero:** determinístico → local/gratuito → pago somente em tarefa finita explicitamente autorizada. Para rotinas recorrentes, a cadeia termina antes do provedor pago.
+9. **Teste de credencial não deve consumir modelo sem necessidade.** Preferir validação de formato/configuração/endpoint sem geração; quando uma chamada real for indispensável, ela deve ser manual/finita, mínima e sem repetição automática.
+10. **Observabilidade obrigatória:** consumidores de IA devem registrar, sem secrets, pelo menos início/fim, motivo/gatilho, provedor/modelo, quantidade de tentativas, duração, resultado e identificador da tarefa. Onde a API expuser uso, registrar métricas de tokens/custo agregadas. Alertar e bloquear comportamento anômalo.
+
+### Critério de classificação obrigatório
+
+| Tipo | Forma correta | IA paga |
+|---|---|---|
+| API/worker que precisa ficar online | serviço contínuo, lógica determinística | **PROIBIDA em loop** |
+| Verificação periódica | timer/cron + job `oneshot` finito | **PROIBIDA** |
+| Watchdog/autorepair | regras determinísticas + backoff/cooldown | **PROIBIDA** |
+| Resolução complexa sob demanda | tarefa finita com timeout/budget | Permitida, se necessária |
+| Revisão/implementação por agente | execução finita até conclusão, com circuit breaker | Permitida |
+| Conflito/triagem automatizada | determinístico ou IA local/gratuita | Paga somente por disparo manual explícito |
+
+**Regra de ouro:** concluir a tarefa não significa deixar o agente rodando. O estado final correto de Claude/GPT/Codex é **processo encerrado** após a tarefa; continuidade operacional pertence a software determinístico ou IA gratuita/local com limites.
+
 ## 🎯 PRINCÍPIOS FUNDAMENTAIS (4 REGRAS INVIOLÁVEIS)
 
 ### 1. NUNCA declare sucesso sem evidência INDEPENDENTE

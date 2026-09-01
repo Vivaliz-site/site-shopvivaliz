@@ -12,6 +12,8 @@
 >
 > `docs/AGENTS.md` é o **único lugar centralizado** onde erros não-óbvios são registrados. **Leia antes de começar. Adicione uma entrada ao terminar se aprendeu algo.**
 
+> 🔴 **POLÍTICA DE CUSTO/EXECUÇÃO:** Claude/GPT/Codex pagos só podem executar tarefas finitas e devem encerrar ao concluir. Nunca usar IA paga em cron/timer, daemon, watcher, autorepair, polling ou loop recorrente. Rotinas permanentes devem ser determinísticas ou usar IA gratuita/local aprovada e limitada. Toda execução paga exige timeout, limite de tentativas/chamadas e condição de saída. Ver `REGRAS-AGENTES-CENTRALIZADAS.md`.
+
 ---
 
 ## 📊 Visão Geral do Sistema
