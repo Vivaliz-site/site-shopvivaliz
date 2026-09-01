@@ -109,12 +109,17 @@
         var modal = document.createElement('div');
         modal.className = 'sv-image-modal';
         modal.hidden = true;
-        modal.innerHTML = '<button type="button" aria-label="Fechar">×</button><img alt="">';
+        modal.innerHTML = '<button type="button" aria-label="Fechar">×</button>';
         document.body.appendChild(modal);
 
         function openModal() {
-            modal.querySelector('img').src = image.src;
-            modal.querySelector('img').alt = image.alt;
+            var modalImage = modal.querySelector('img');
+            if (!modalImage) {
+                var modalImage = document.createElement('img');
+                modal.appendChild(modalImage);
+            }
+            modalImage.src = image.src;
+            modalImage.alt = image.alt;
             modal.hidden = false;
             document.body.style.overflow = 'hidden';
         }
