@@ -50,6 +50,14 @@
 - ✓ Vincular imagens por SKU ou ID da origem (nunca by-name)
 - ✓ Distinguir falha de interface de falha de sincronização
 
+### Custo de IA — rotinas permanentes vs. tarefas pontuais
+- ✗ **Nunca** deixe um workflow, cron, systemd timer, script ou rotina que roda **permanentemente ou em intervalo** (schedule/cron, daemon 24h, loop `while true`, watchdog) chamando **Claude ou GPT** (APIs pagas) para gerar cada execução.
+- ✓ Rotina recorrente/permanente (monitoramento, probe de saúde, sync, resumo periódico) deve usar **IA gratuita** (ex: tier gratuito do Gemini, modelo local/Ollama) ou nenhuma IA, quando a tarefa não exigir raciocínio de LLM de verdade.
+- ✓ Claude/GPT só entram para **uma tarefa finita** (implementação, revisão, decisão pontual) que **termina** — não para ficar "vivo" respondendo a cada tick de um relógio.
+- ✓ Isso vale para **todos os hosts e repos** do ecossistema ShopVivaliz (VMs Oracle, notebooks locais, `site-shopvivaliz`, `-shopvivaliz-pipeline`, `mei-mg-email`, etc.), não só este repositório.
+- **Por quê importa:** em 2026-09-01, `claude.yml` (Claude Code Action, `on: issue_comment/pull_request_review*/issues` sem filtro) foi re-disparado **100+ vezes num único dia** porque um workflow de probe de saúde do Desktop Commander posta comentários automáticos a cada ~5min numa issue de tracking, e cada comentário — mesmo de bot — acionava uma execução paga completa. Nenhum desses runs correspondia a um pedido humano real. Corrigido gateando o trigger atrás de menção explícita `@claude` de um autor não-bot (ver `docs/AGENTS.md` entrada 2026-09-01 abaixo e PR `fix/claude-yml-loop-guard`).
+- ✓ Ao criar qualquer trigger de IA acionado por evento (issue_comment, webhook, cron), **sempre pergunte: "isso pode ser re-disparado por outra automação, em loop, sem intervenção humana?"** Se sim, adicione filtro explícito (menção obrigatória, allowlist de autor, ou condição de conteúdo) antes de commitar.
+
 ### Atualizações
 - ✓ Produza atualizações cumulativas (permitir pular versões)
 - ✓ Inclua automaticamente SQLs, migrations, reparos de vínculo
