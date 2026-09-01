@@ -31,7 +31,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p reports
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'REMOTE' | tee reports/fredwin-force-reconnect-health.txt
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'bash -s' <<'REMOTE' | tee reports/fredwin-force-reconnect-health.txt
           set -Eeuo pipefail
           echo CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)
           pid=$(sudo ss -ltnp 2>/dev/null | awk '/127.0.0.1:5557|0.0.0.0:5557|\[::\]:5557/ {match($0,/pid=[0-9]+/); if(RSTART){print substr($0,RSTART+4,RLENGTH-4); exit}}')

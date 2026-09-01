@@ -22,7 +22,7 @@ jobs:
       - name: Reset only listener 5557 sshd session and verify reconnect
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 '
             set -e
             oldpid=$(sudo lsof -t -iTCP:5557 -sTCP:LISTEN 2>/dev/null | head -n1 || true)
             echo OLD_PID=${oldpid:-none}

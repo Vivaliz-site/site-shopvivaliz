@@ -43,7 +43,7 @@ jobs:
           set -Eeuo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            ubuntu@136.248.69.116 'python3 -' <<'PY'
+            ubuntu@163.176.103.253 'python3 -' <<'PY'
           from __future__ import annotations
 
           import os
@@ -204,7 +204,7 @@ jobs:
           set -Eeuo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            ubuntu@136.248.69.116 'bash -s' <<'REMOTE'
+            ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
           shared=/home/ubuntu/shopvivaliz-deploy/shared
           current=/home/ubuntu/shopvivaliz-deploy/current
@@ -225,7 +225,7 @@ jobs:
           set -Eeuo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            ubuntu@136.248.69.116 'bash -s' <<'REMOTE'
+            ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
           body="$(mktemp)"
           trap 'rm -f "$body"' EXIT

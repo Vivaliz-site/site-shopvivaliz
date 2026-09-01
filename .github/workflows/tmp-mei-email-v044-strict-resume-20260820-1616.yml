@@ -25,7 +25,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p reports
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' 2>&1 <<'REMOTE' | tee reports/mei-email-v044-strict-resume-20260820-1616.txt
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'bash -s' 2>&1 <<'REMOTE' | tee reports/mei-email-v044-strict-resume-20260820-1616.txt
           set -Eeuo pipefail
           cd /home/ubuntu/mei-mg-email
           echo CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)

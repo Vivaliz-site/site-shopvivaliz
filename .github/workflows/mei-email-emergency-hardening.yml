@@ -45,7 +45,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 \
+            ubuntu@144.22.157.209 \
             'bash -s' -- "$MEI_EXPECTED_SHA" <<'REMOTE'
           set -euo pipefail
           expected_sha="$1"
@@ -117,7 +117,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 \
+            ubuntu@144.22.157.209 \
             'bash -s' <<'REMOTE'
           set -euo pipefail
           repo='/home/ubuntu/mei-mg-email'
@@ -183,7 +183,7 @@ jobs:
               -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
               -i "$HOME/.ssh/id_rsa" \
-              ubuntu@137.131.156.17 \
+              ubuntu@144.22.157.209 \
               'bash -s' <<'REMOTE'
           set -euo pipefail
           state_dir='/var/lib/mei-mg-email'
@@ -246,7 +246,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 \
+            ubuntu@144.22.157.209 \
             'bash -s' -- "$MEI_EXPECTED_SHA" <<'REMOTE'
           set -euo pipefail
           expected_sha="$1"

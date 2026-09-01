@@ -27,7 +27,7 @@ jobs:
       - name: Read active authorization code
         run: |
           set -Eeuo pipefail
-          out="$(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17 'cat "$HOME/.desktop-commander-device/manual-authorize.log" 2>/dev/null || true')"
+          out="$(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@144.22.157.209 'cat "$HOME/.desktop-commander-device/manual-authorize.log" 2>/dev/null || true')"
           code="$(printf '%s\n' "$out" | grep -Eo '[A-Z0-9]{4}-[A-Z0-9]{4}' | tail -1)"
           test -n "$code"
           echo "DEVICE_CODE=$code"

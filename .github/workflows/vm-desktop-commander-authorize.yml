@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17)
+          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@144.22.157.209)
           "${SSH[@]}" 'set -Eeuo pipefail; sudo systemctl stop shopvivaliz-desktop-commander.service || true; d="$HOME/.desktop-commander-device"; mkdir -p "$d"; touch "$d/manual-authorize-start.marker" "$d/manual-authorize.log"; rm -f "$d/auth-required.cooldown" "$d/provider-connected.marker"; chmod 600 "$d/manual-authorize.log" "$d/manual-authorize-start.marker"; nohup timeout 600s npx --yes @wonderwhy-er/desktop-commander@0.2.47 remote --persist-session >"$d/manual-authorize.log" 2>&1 < /dev/null & echo $! >"$d/manual-authorize.pid"; chmod 600 "$d/manual-authorize.pid"'
           found=false
           for i in $(seq 1 30); do
@@ -51,7 +51,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17)
+          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@144.22.157.209)
           ok=false
           for i in $(seq 1 120); do
             sleep 4

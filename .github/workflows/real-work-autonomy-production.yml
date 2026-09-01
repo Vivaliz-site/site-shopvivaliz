@@ -43,10 +43,10 @@ jobs:
       - name: Execute agent in active production release
         run: |
           set -euo pipefail
-          release_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha')"
+          release_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha')"
           printf 'execution_path=oracle-active-release\nrelease_sha=%s\n' "$release_sha" >> artifacts/real-work/context.txt
 
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 \
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
             'set -euo pipefail; test -r /home/ubuntu/shopvivaliz-deploy/current/api/agent/real-work-orchestrator.php; /usr/bin/flock -w 120 /var/lock/shopvivaliz-real-work.lock /usr/bin/php /home/ubuntu/shopvivaliz-deploy/current/api/agent/real-work-orchestrator.php' \
             > artifacts/real-work/response.json
           cat artifacts/real-work/response.json
@@ -102,7 +102,7 @@ jobs:
       - name: Validate production surface from Oracle VM
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 \
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
             'bash -s' > artifacts/real-work/http-checks.txt <<'REMOTE_SCRIPT'
           set -euo pipefail
           for url in \

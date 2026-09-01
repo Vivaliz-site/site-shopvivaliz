@@ -25,7 +25,7 @@ jobs:
           chmod 600 ~/.ssh/vmkey
       - name: Snapshot host only
         run: |
-          ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 <<'EOF'
           echo 'UPTIME'; uptime
           echo 'TOP_CPU'; ps -eo pid,ppid,stat,etime,pcpu,pmem,wchan:24,comm,args --sort=-pcpu | head -n 40
           echo 'TOP_MEM'; ps -eo pid,ppid,stat,etime,pcpu,pmem,wchan:24,comm,args --sort=-pmem | head -n 30

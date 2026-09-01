@@ -31,7 +31,7 @@ jobs:
           set -euo pipefail
           mkdir -p reports
           R=reports/mei-email-state-20260820-1209.txt
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'REMOTE' > "$R"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'bash -s' <<'REMOTE' > "$R"
           set -u
           cd /home/ubuntu/mei-mg-email
           echo CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)

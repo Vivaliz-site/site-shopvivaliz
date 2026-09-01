@@ -33,8 +33,8 @@ jobs:
       - name: Repair certificate and Apache
         run: |
           set -Eeuo pipefail
-          scp -q -i "$HOME/.ssh/id_rsa" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" "$RUNNER_TEMP/cloudflare.ini" ubuntu@137.131.156.17:/home/ubuntu/cloudflare-certbot.ini
-          ssh -i "$HOME/.ssh/id_rsa" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          scp -q -i "$HOME/.ssh/id_rsa" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" "$RUNNER_TEMP/cloudflare.ini" ubuntu@144.22.157.209:/home/ubuntu/cloudflare-certbot.ini
+          ssh -i "$HOME/.ssh/id_rsa" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" ubuntu@144.22.157.209 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
           stamp=$(date +%Y%m%d-%H%M%S)
           sudo install -d -m 700 /root/apache-repair-backups/$stamp

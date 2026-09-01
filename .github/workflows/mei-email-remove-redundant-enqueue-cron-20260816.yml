@@ -22,7 +22,7 @@ jobs:
       - name: Disable redundant cron and terminate current replenisher
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 '
             set -euo pipefail
             ts=$(date +%Y%m%d-%H%M%S)
             crontab -l > "$HOME/crontab.before-mei-enqueue-fix-$ts.txt"

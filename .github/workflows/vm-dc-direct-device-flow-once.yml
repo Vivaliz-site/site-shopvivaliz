@@ -24,7 +24,7 @@ jobs:
       - name: Request and persist fresh Desktop Commander device session
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17 'set -Eeuo pipefail; sudo systemctl stop shopvivaliz-desktop-commander.service; node <<'"'"'NODE'"'"'
+          ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@144.22.157.209 'set -Eeuo pipefail; sudo systemctl stop shopvivaliz-desktop-commander.service; node <<'"'"'NODE'"'"'
           const fs = require("fs");
           const os = require("os");
           const path = require("path");

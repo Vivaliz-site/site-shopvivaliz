@@ -78,7 +78,7 @@ if [ -z "$AD_LIST" ]; then
     exit 0
 fi
 
-# ── 3. Descoberta dinamica: subnet (reusa a mesma rede da shopvivaliz-micro-2) ──
+# ── 3. Descoberta dinamica: subnet (reusa a mesma rede da shopvivaliz-a1-site) ──
 SUBNET_ID=""
 ALL_INSTANCES=$(oci compute instance list --compartment-id "$COMPARTMENT_ID" \
     --lifecycle-state RUNNING \
@@ -90,14 +90,14 @@ for INST_ID in $(echo "$ALL_INSTANCES" | tr -d '[]" ' | tr ',' '\n' | grep '^oci
     [ -z "$VNIC_ID" ] && continue
     VNIC_DETAIL=$(oci network vnic get --vnic-id "$VNIC_ID" 2>>"$LOG")
     PUB_IP=$(echo "$VNIC_DETAIL" | grep -o '"public-ip": *"[^"]*"' | head -1 | cut -d'"' -f4)
-    if [ "$PUB_IP" = "136.248.69.116" ]; then
+    if [ "$PUB_IP" = "163.176.103.253" ]; then
         SUBNET_ID=$(echo "$VNIC_DETAIL" | grep -o '"subnet-id": *"ocid1.subnet[^"]*"' | head -1 | cut -d'"' -f4)
         break
     fi
 done
 
 if [ -z "$SUBNET_ID" ]; then
-    log "ERRO: nao consegui descobrir a subnet reutilizando a shopvivaliz-micro-2 (136.248.69.116). Tentando de novo no proximo ciclo."
+    log "ERRO: nao consegui descobrir a subnet reutilizando a shopvivaliz-a1-site (163.176.103.253). Tentando de novo no proximo ciclo."
     exit 0
 fi
 

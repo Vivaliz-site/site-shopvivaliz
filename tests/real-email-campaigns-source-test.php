@@ -42,7 +42,7 @@ foreach (['dry_run', 'dry-run', 'simulate', 'simulation', 'fake_send', 'mock_sen
 }
 
 foreach ([$blogWorkflow, $productWorkflow] as $workflow) {
-    foreach (['ubuntu@137.131.156.17', '/home/ubuntu/shopvivaliz-deploy/current', 'StrictHostKeyChecking=yes', 'upload-artifact@v4'] as $snippet) {
+    foreach (['ubuntu@144.22.157.209', '/home/ubuntu/shopvivaliz-deploy/current', 'StrictHostKeyChecking=yes', 'upload-artifact@v4'] as $snippet) {
         if (!str_contains($workflow, $snippet)) {
             fwrite(STDERR, "FAIL: workflow is not production-bound: {$snippet}\n");
             exit(1);

@@ -24,7 +24,7 @@ jobs:
           set -euo pipefail
           COMMAND='C:\Windows\System32\cmd.exe /d /c "echo USER=%USERNAME% & echo CD=%CD% & where powershell.exe & where pwsh.exe 2>nul & tasklist /FI \"IMAGENAME eq explorer.exe\""'
           CMD_B64="$(printf '%s' "$COMMAND" | base64 -w0)"
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
           import base64,json,os,urllib.request
           command=base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode()
           body=json.dumps({'params':{'command':command,'timeout':45}}).encode()

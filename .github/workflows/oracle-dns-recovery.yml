@@ -41,7 +41,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+            ubuntu@144.22.157.209 'bash -s' <<'REMOTE'
           set -euo pipefail
           echo '=== before ==='
           cat /etc/resolv.conf || true

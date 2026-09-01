@@ -22,7 +22,7 @@ jobs:
       - name: Read PostgreSQL relation metadata only
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 '
             echo NOW=$(date -Is)
             echo DISK=$(df -h / | tail -n1)
             sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -P pager=off -x -c "select c.reltuples::bigint as estimated_rows, pg_size_pretty(pg_relation_size(c.oid)) as table_size, pg_size_pretty(pg_indexes_size(c.oid)) as indexes_size, pg_size_pretty(pg_total_relation_size(c.oid)) as total_size from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='mei_email' and c.relname='empresas';"

@@ -40,7 +40,7 @@ jobs:
           set -Eeuo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 'bash -s' <<'REMOTE'
+            -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
           set -u
           root='/home/ubuntu/shopvivaliz-deploy/current'
           cd "$root" || exit 2

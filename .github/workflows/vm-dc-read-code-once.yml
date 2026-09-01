@@ -23,7 +23,7 @@ jobs:
       - name: Read current device code
         run: |
           set -Eeuo pipefail
-          code=$(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17 'grep -Eo "[A-Z0-9]{4}-[A-Z0-9]{4}" "$HOME/.desktop-commander-device/manual-authorize.log" 2>/dev/null | tail -1' || true)
+          code=$(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@144.22.157.209 'grep -Eo "[A-Z0-9]{4}-[A-Z0-9]{4}" "$HOME/.desktop-commander-device/manual-authorize.log" 2>/dev/null | tail -1' || true)
           test -n "$code"
           echo "DEVICE_CODE=$code"
       - name: Cleanup

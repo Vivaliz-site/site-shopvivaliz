@@ -36,9 +36,9 @@ jobs:
           mkdir -p reports
           {
             echo CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)
-            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'timeout 3 bash -c "</dev/tcp/127.0.0.1/2222"' 2>/dev/null; then
+            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'timeout 3 bash -c "</dev/tcp/127.0.0.1/2222"' 2>/dev/null; then
               echo PORT2222=OPEN
-              ssh -fNT -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -i ~/.ssh/vmkey -L 32222:127.0.0.1:2222 ubuntu@137.131.156.17
+              ssh -fNT -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -i ~/.ssh/vmkey -L 32222:127.0.0.1:2222 ubuntu@144.22.157.209
               sleep 2
               if ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=8 -p 32222 -i ~/.ssh/vmkey FRED@127.0.0.1 'powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\site-shopvivaliz\scripts\fredwin-remote-bootstrap.ps1' >/tmp/fredwin-bootstrap.out 2>/tmp/fredwin-bootstrap.err; then
                 echo WINDOWS_SSH=OK
@@ -51,7 +51,7 @@ jobs:
             else
               echo PORT2222=CLOSED
             fi
-            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5557/health' >/tmp/fred-health.json 2>/dev/null; then
+            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:5557/health' >/tmp/fred-health.json 2>/dev/null; then
               echo MCP_HEALTH=OK
               python3 - <<'PY'
               import json

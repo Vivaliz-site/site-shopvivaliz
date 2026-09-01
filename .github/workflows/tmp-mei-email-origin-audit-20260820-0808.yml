@@ -23,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p reports
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF' > reports/mei-email-origin-audit-20260820-0808.txt 2>&1
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_rsa ubuntu@144.22.157.209 <<'EOF' > reports/mei-email-origin-audit-20260820-0808.txt 2>&1
           set -euo pipefail
           cd /home/ubuntu/mei-mg-email
           .venv/bin/python - <<'PY'

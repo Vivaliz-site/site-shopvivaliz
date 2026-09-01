@@ -19,7 +19,7 @@ jobs:
           chmod 600 ~/.ssh/vmkey
       - name: Inspect index and queue
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 <<'EOF'
           cd /home/ubuntu/mei-mg-email
           .venv/bin/python - <<'PY'
           from dotenv import load_dotenv

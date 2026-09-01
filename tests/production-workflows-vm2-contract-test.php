@@ -1,7 +1,7 @@
 <?php
 $root = dirname(__DIR__);
 $workflowDir = $root . '/.github/workflows';
-$legacyVm = '137.131.156.17';
+$legacyVm = '144.22.157.209';
 $productionPath = '/home/ubuntu/shopvivaliz-deploy';
 $allowedLegacyControl = [
     'desktop-commander-24h-health.yml',

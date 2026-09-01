@@ -7,7 +7,7 @@ if ($env:COMPUTERNAME -ne 'LAPTOP-NIG4IFUU') {
 }
 $KeyPath = 'C:\Users\FRED\Downloads\ssh-key-2026-07-04.key'
 $KnownHostsPath = 'C:\Users\FRED\.ssh\known_hosts'
-$VMHost = '137.131.156.17'
+$VMHost = '144.22.157.209'
 $VMUser = 'ubuntu'
 $SshExe = 'C:\Program Files\Git\usr\bin\ssh.exe'
 $LogDir = 'C:\site-shopvivaliz\logs'

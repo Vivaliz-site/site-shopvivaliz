@@ -23,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p reports
-          ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=60 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF' > reports/mei-email-throughput-diagnose-repair-20260819-2115.txt 2>&1
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 -o ServerAliveCountMax=60 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 <<'EOF' > reports/mei-email-throughput-diagnose-repair-20260819-2115.txt 2>&1
           set -u
           cd /home/ubuntu/mei-mg-email
           echo "CHECK_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"

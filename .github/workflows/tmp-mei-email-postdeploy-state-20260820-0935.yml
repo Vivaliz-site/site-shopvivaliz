@@ -21,7 +21,7 @@ jobs:
       - name: Capture
         run: |
           sleep 25
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF' | tee /tmp/state.txt
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_rsa ubuntu@144.22.157.209 <<'EOF' | tee /tmp/state.txt
           set -euo pipefail
           echo CHECK_UTC=$(date -u +%FT%TZ)
           echo WORKER=$(sudo systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)

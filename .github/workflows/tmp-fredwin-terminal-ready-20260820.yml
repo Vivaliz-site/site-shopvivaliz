@@ -35,13 +35,13 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p reports
-          curl_health="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health')"
+          curl_health="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health')"
           printf '%s' "$curl_health" | python3 -c "import json,sys; p=json.load(sys.stdin); assert p.get('status')=='ok' and p.get('environment')=='fred-win'"
 
           cat > /tmp/fredwin-check.ps1 <<'PS1'
           $ErrorActionPreference = 'Continue'
           $deployPath = '/home/ubuntu/shopvivaliz-deploy/current'
-          $knownVm = '137.131.156.17'
+          $knownVm = '144.22.157.209'
           $terminalReady = 'NO'
           $alias = ''
           $remoteHostname = ''
@@ -145,7 +145,7 @@ jobs:
           CMD_B64="$(printf '%s' "$COMMAND" | base64 -w0)"
           OUTFILE=/tmp/fredwin-output.txt
 
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 \
             "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
           import base64,json,os,urllib.request
           command=base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')

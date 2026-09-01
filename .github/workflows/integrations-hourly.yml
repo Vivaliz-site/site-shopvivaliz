@@ -53,7 +53,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@136.248.69.116 \
+            ubuntu@163.176.103.253 \
             'bash -s' > integrations-health.json 2> integrations-health.stderr <<'REMOTE_SCRIPT'
           set -euo pipefail
           current='/home/ubuntu/shopvivaliz-deploy/current'

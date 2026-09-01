@@ -29,7 +29,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p reports
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'REMOTE' | tee reports/mei-email-live-progress-20260820-1448.txt
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'bash -s' <<'REMOTE' | tee reports/mei-email-live-progress-20260820-1448.txt
           set -Eeuo pipefail
           echo CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)
           sentinel=absent

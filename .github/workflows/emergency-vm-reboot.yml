@@ -45,7 +45,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 \
+            ubuntu@144.22.157.209 \
             'echo "pre_reboot_uptime=$(uptime -p)"; sudo systemctl reboot' || true
 
       - name: Wait for SSH and validate services
@@ -60,7 +60,7 @@ jobs:
               -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
               -i "$HOME/.ssh/id_rsa" \
-              ubuntu@137.131.156.17 \
+              ubuntu@144.22.157.209 \
               'echo online; uptime; sudo systemctl is-active apache2' >/tmp/ssh-check.log 2>&1; then
               cat /tmp/ssh-check.log
               ssh_ready=1
@@ -76,7 +76,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@137.131.156.17 \
+            ubuntu@144.22.157.209 \
             'set -euo pipefail; sudo systemctl is-active --quiet apache2; curl --silent --show-error --fail --connect-timeout 5 --max-time 20 -H "Host: shopvivaliz.com.br" http://127.0.0.1/api/health/version.php'
 
       - name: Verify public storefront

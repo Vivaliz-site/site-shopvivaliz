@@ -61,7 +61,7 @@ jobs:
           for attempt in $(seq 1 30); do
             deployed_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              ubuntu@136.248.69.116 \
+              ubuntu@163.176.103.253 \
               'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha 2>/dev/null || true')"
             if [[ "$deployed_sha" == "$GITHUB_SHA" ]]; then
               ready=1
@@ -79,7 +79,7 @@ jobs:
           set -Eeuo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 'bash -s' \
+            -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' \
             > runtime-token-audit.json <<'REMOTE'
           set -Eeuo pipefail
           current='/home/ubuntu/shopvivaliz-deploy/current'
@@ -114,7 +114,7 @@ jobs:
           set -Eeuo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 'bash -s' \
+            -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' \
             > token-reference-audit.json <<'REMOTE'
           set -Eeuo pipefail
           current='/home/ubuntu/shopvivaliz-deploy/current'

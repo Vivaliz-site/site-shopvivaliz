@@ -22,7 +22,7 @@ jobs:
       - name: Sync, foreground Restricted Entities, and click Unblock
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 - <<'"'"'PY'"'"'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'python3 - <<'"'"'PY'"'"'
           import json, urllib.request
           base="http://127.0.0.1:5557/mcp/tool/"
           def call(tool, params, timeout=120):

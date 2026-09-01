@@ -20,7 +20,7 @@ jobs:
           chmod 600 ~/.ssh/vmkey
       - name: Targeted read-only queue details
         run: |
-          timeout 120s ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          timeout 120s ssh -o BatchMode=yes -o ConnectTimeout=12 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 <<'EOF'
           set -u
           cd /home/ubuntu/mei-mg-email || exit 2
           echo "DETAIL_TIME=$(date -Is)"

@@ -30,7 +30,7 @@ jobs:
           print(json.dumps({'params':{'command':ps,'timeout':90}}))
           PY
           BODY_B64="$(base64 -w0 /tmp/body.json)"
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 "BODY_B64='$BODY_B64' python3 - <<'PY'
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 "BODY_B64='$BODY_B64' python3 - <<'PY'
           import os,base64,urllib.request
           body=base64.b64decode(os.environ['BODY_B64'])
           req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')

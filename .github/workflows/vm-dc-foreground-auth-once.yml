@@ -23,7 +23,7 @@ jobs:
       - name: Generate code in foreground
         run: |
           set +e
-          timeout 35s ssh -tt -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17 'rm -f "$HOME/.desktop-commander-device/device.json" "$HOME/.desktop-commander-device/auth-required.cooldown" "$HOME/.desktop-commander-device/provider-connected.marker"; timeout 30s npx --yes @wonderwhy-er/desktop-commander@0.2.47 remote --persist-session' 2>&1 | tee /tmp/dc-auth.out
+          timeout 35s ssh -tt -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@144.22.157.209 'rm -f "$HOME/.desktop-commander-device/device.json" "$HOME/.desktop-commander-device/auth-required.cooldown" "$HOME/.desktop-commander-device/provider-connected.marker"; timeout 30s npx --yes @wonderwhy-er/desktop-commander@0.2.47 remote --persist-session' 2>&1 | tee /tmp/dc-auth.out
           code=$(grep -Eo '[A-Z0-9]{4}-[A-Z0-9]{4}' /tmp/dc-auth.out | tail -1)
           if [ -n "$code" ]; then echo "DEVICE_CODE=$code"; exit 0; fi
           echo DEVICE_CODE_NOT_FOUND

@@ -20,7 +20,7 @@ jobs:
           chmod 600 ~/.ssh/vmkey
       - name: Inventory VM
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 <<'EOF'
           set -u
           echo 'HOST'; hostname; date -Is
           echo 'HOME'; find /home/ubuntu -maxdepth 3 -type d \( -iname '*mei*' -o -iname '*email*' -o -iname '*shopvivaliz*' \) 2>/dev/null | head -100

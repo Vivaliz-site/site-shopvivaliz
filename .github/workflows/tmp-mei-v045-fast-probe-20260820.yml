@@ -20,7 +20,7 @@ jobs:
           set -Eeuo pipefail
           mkdir -p ~/.ssh reports
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey; chmod 600 ~/.ssh/vmkey
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' > reports/mei-v045-fast-probe-20260820.txt 2>&1 <<'REMOTE'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'bash -s' > reports/mei-v045-fast-probe-20260820.txt 2>&1 <<'REMOTE'
           set +e
           cd /home/ubuntu/mei-mg-email || exit 2
           q(){ sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -c "$1" 2>&1; }

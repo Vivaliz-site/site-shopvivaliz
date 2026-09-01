@@ -23,7 +23,7 @@ jobs:
       - name: Force fresh authorization state
         run: |
           set -Eeuo pipefail
-          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17)
+          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@144.22.157.209)
           "${SSH[@]}" 'set -Eeuo pipefail; sudo systemctl stop shopvivaliz-desktop-commander.service || true; pkill -f "[n]pm exec @wonderwhy-er/desktop-commander@0.2.47 remote --persist-session" 2>/dev/null || true; sleep 2; d="$HOME/.desktop-commander-device"; install -d -m 700 "$d/reauth-backup"; if test -f "$d/device.json"; then cp -p "$d/device.json" "$d/reauth-backup/device.json.pre-fresh"; chmod 600 "$d/reauth-backup/device.json.pre-fresh"; fi; rm -f "$d/device.json" "$d/auth-required.cooldown" "$d/provider-connected.marker" "$d/manual-authorize.log" "$d/manual-authorize.pid"; : > "$d/manual-authorize.log"; chmod 600 "$d/manual-authorize.log"; nohup timeout 600s npx --yes @wonderwhy-er/desktop-commander@0.2.47 remote --persist-session >"$d/manual-authorize.log" 2>&1 < /dev/null & echo $! > "$d/manual-authorize.pid"; chmod 600 "$d/manual-authorize.pid"'
           found=false
           for i in $(seq 1 45); do

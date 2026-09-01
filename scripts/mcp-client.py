@@ -119,7 +119,7 @@ class MCPCloudManager:
         default_config = {
             "servers": {
                 "windows-local": "http://localhost:5555",
-                "ubuntu-vm": "http://137.131.156.17:5556",
+                "ubuntu-vm": "http://144.22.157.209:5556",
                 "fred-win": "http://192.168.1.100:5557",
             }
         }

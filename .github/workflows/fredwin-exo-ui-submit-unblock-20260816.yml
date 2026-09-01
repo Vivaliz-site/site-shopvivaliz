@@ -22,7 +22,7 @@ jobs:
       - name: Click final Send in restricted sender dialog
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 - <<'"'"'PY'"'"'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'python3 - <<'"'"'PY'"'"'
           import json,urllib.request
           body=json.dumps({"params":{"command":"powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\fredwin-ui-schedule-click.ps1 -Name \"Enviar\" -RequireText \"NAORESPONDA@DEV.SHOPVIVALIZ.COM.BR\"","timeout":60}}).encode()
           req=urllib.request.Request("http://127.0.0.1:5557/mcp/tool/execute_command",data=body,headers={"Content-Type":"application/json"},method="POST")

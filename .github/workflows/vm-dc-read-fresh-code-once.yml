@@ -23,7 +23,7 @@ jobs:
       - name: Read device code
         run: |
           set -Eeuo pipefail
-          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17)
+          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@144.22.157.209)
           for i in $(seq 1 15); do
             code="$("${SSH[@]}" 'grep -Eo "[A-Z0-9]{4}-[A-Z0-9]{4}" "$HOME/.desktop-commander-device/manual-authorize.log" 2>/dev/null | tail -1' || true)"
             if [ -n "$code" ]; then echo "DEVICE_CODE=$code"; exit 0; fi

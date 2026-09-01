@@ -34,7 +34,7 @@ jobs:
       - name: Recover canonical VM agent without disruption
         run: |
           set -Eeuo pipefail
-          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=30 -o ConnectionAttempts=3 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17)
+          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=30 -o ConnectionAttempts=3 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@144.22.157.209)
           auth="$(${SSH[@]} 'd="$HOME/.desktop-commander-device/device.json"; c="$HOME/.desktop-commander-device/auth-required.cooldown"; if test -f "$c" && ! test -f "$d"; then echo true; elif test -f "$c" && test "$c" -nt "$d"; then echo true; else echo false; fi')"
           if [ "$auth" = true ]; then
             printf 'VM_AUTH_REQUIRED=true\nVM_RECOVERY=blocked_by_provider_auth\n' > /tmp/vm-dc-safe.txt
@@ -60,7 +60,7 @@ jobs:
           set -Eeuo pipefail
           test -f /tmp/vm-dc-safe.txt || printf 'VM_RECOVERY=no_evidence\n' > /tmp/vm-dc-safe.txt
           {
-            echo '### shopvivaliz-ai secure Desktop Commander recovery'
+            echo '### shopvivaliz-a1-backend secure Desktop Commander recovery'
             echo
             echo '```text'
             cat /tmp/vm-dc-safe.txt

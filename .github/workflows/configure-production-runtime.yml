@@ -62,21 +62,21 @@ jobs:
           printf '%s\0' \
             "$DB_HOST_VALUE" "${DB_PORT_VALUE:-3306}" "$DB_NAME_VALUE" "$DB_USER_VALUE" "$DB_PASS_VALUE" \
             "$SHOPVIVALIZ_AGENT_KEY_VALUE" |
-            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 \
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
               'python3 /home/ubuntu/shopvivaliz-deploy/current/scripts/configure-production-runtime.py /home/ubuntu/shopvivaliz-deploy/shared/.env'
 
       - name: Atualizar runtime mínimo do usuário web
         shell: bash
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 \
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
             'set -euo pipefail; shared=/home/ubuntu/shopvivaliz-deploy/shared; sudo chown ubuntu:ubuntu "$shared/.env"; chmod 600 "$shared/.env"; php /home/ubuntu/shopvivaliz-deploy/current/scripts/materialize-runtime-secrets.php; sudo chown ubuntu:www-data "$shared/runtime-secrets.php"; chmod 640 "$shared/runtime-secrets.php"; stat -c "shared_env_mode=%a shared_env_group=%G" "$shared/.env"; stat -c "runtime_secrets_mode=%a runtime_secrets_group=%G" "$shared/runtime-secrets.php"'
 
       - name: Reiniciar serviços e confirmar execução real
         shell: bash
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@136.248.69.116 'bash -s' <<'REMOTE_SCRIPT'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' <<'REMOTE_SCRIPT'
           set -euo pipefail
           sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-shopee-token-renewer.service
           if systemctl list-unit-files shopvivaliz-sync-products.service --no-legend 2>/dev/null | grep -q '^shopvivaliz-sync-products\.service'; then

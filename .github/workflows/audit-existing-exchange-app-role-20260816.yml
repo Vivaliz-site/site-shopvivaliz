@@ -22,7 +22,7 @@ jobs:
       - name: Audit current app Exchange assignments
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 <<'EOF'
           set -euo pipefail
           cd /home/ubuntu/mei-mg-email
           .venv/bin/python - <<'PY'

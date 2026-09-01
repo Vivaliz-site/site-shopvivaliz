@@ -27,7 +27,7 @@ jobs:
           set -o pipefail
           mkdir -p reports
           REPORT=reports/terminal-ready-direct-probe-20260820-1143.txt
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'bash -s' <<'EOF' | tee "$REPORT"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'bash -s' <<'EOF' | tee "$REPORT"
           set -u
           p=/home/ubuntu/shopvivaliz-deploy/current
           echo REMOTE_HOSTNAME=$(hostname)

@@ -24,7 +24,7 @@ def health_check_report():
             },
             "infrastructure": {
                 "status": "OPERATIONAL",
-                "vm_oracle": "137.131.156.17",
+                "vm_oracle": "144.22.157.209",
                 "git_sync": "30min cron",
                 "uptime": "99.9%",
                 "cache": "Cloudflare (7d)"

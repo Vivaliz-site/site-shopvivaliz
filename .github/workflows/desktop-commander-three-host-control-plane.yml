@@ -73,7 +73,7 @@ jobs:
               '-o', 'StrictHostKeyChecking=yes',
               '-o', 'UserKnownHostsFile=' + os.path.expanduser('~/.ssh/known_hosts'),
               '-i', os.path.expanduser('~/.ssh/vmkey'),
-              'ubuntu@137.131.156.17'
+              'ubuntu@144.22.157.209'
           ]
 
           SAFE = {
@@ -190,11 +190,11 @@ jobs:
               vm_values.get('CANONICAL_AGENT_COUNT') == '1' and vm_values.get('NONCANONICAL_AGENT_COUNT') == '0' and
               not truth(vm_values.get('AUTH_REQUIRED'))
           ):
-              vm_row = dict(host='shopvivaliz-ai',state='healthy',watchdog='systemd=enabled/active',canonical='1',auth='false',detail='not_needed')
+              vm_row = dict(host='shopvivaliz-a1-backend',state='healthy',watchdog='systemd=enabled/active',canonical='1',auth='false',detail='not_needed')
           elif vm_ssh_ok:
-              vm_row = dict(host='shopvivaliz-ai',state='degraded',watchdog=f"systemd={vm_values.get('SERVICE_ENABLED','unknown')}/{vm_values.get('SERVICE_ACTIVE','unknown')}",canonical=vm_values.get('CANONICAL_AGENT_COUNT','0'),auth='true' if truth(vm_values.get('AUTH_REQUIRED')) else 'false',detail='ssh_ok_status_not_canonical')
+              vm_row = dict(host='shopvivaliz-a1-backend',state='degraded',watchdog=f"systemd={vm_values.get('SERVICE_ENABLED','unknown')}/{vm_values.get('SERVICE_ACTIVE','unknown')}",canonical=vm_values.get('CANONICAL_AGENT_COUNT','0'),auth='true' if truth(vm_values.get('AUTH_REQUIRED')) else 'false',detail='ssh_ok_status_not_canonical')
           else:
-              vm_row = dict(host='shopvivaliz-ai',state='unreachable',watchdog='ssh_unreachable',canonical='—',auth='unknown',detail='ssh probe failed')
+              vm_row = dict(host='shopvivaliz-a1-backend',state='unreachable',watchdog='ssh_unreachable',canonical='—',auth='unknown',detail='ssh probe failed')
 
           results = [win('LAPTOP-NIG4IFUU',5557,'fredwin',vm_ssh_ok), win('DESKTOP-KOCEPSV',5558,'desktopkocepsv',vm_ssh_ok), vm_row]
           now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace('+00:00','Z')

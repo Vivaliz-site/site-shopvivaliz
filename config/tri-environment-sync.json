@@ -31,7 +31,7 @@
       ],
       "oracle": [
         "oracle",
-        "shopvivaliz-ai",
+        "shopvivaliz-a1-backend",
         "ubuntu",
         "vps",
         "server"
@@ -60,7 +60,7 @@
   },
   "triad_sync": {
     "ubuntu_server": {
-      "host": "137.131.156.17",
+      "host": "144.22.157.209",
       "user": "ubuntu",
       "repo_path": "/home/ubuntu/site-shopvivaliz",
       "ssh_key_windows": "C:\\Users\\FRED\\Downloads\\ssh-key-2026-07-04.key"

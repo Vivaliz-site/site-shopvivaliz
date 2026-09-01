@@ -36,7 +36,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p reports
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health' >/tmp/fredwin-health.json
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health' >/tmp/fredwin-health.json
           python3 -c "import json; p=json.load(open('/tmp/fredwin-health.json')); assert p.get('status')=='ok' and p.get('environment')=='fred-win'"
 
           cat >/tmp/stage1.ps1 <<'PS1'
@@ -52,7 +52,7 @@ jobs:
                 $cur=$Matches[1].Trim()
                 if($cur -match '[*?!\s]'){$cur=''}
               } elseif($cur -and $t -match '^HostName\s+(.+)$'){
-                if($Matches[1].Trim() -eq '137.131.156.17'){$alias=$cur;break}
+                if($Matches[1].Trim() -eq '144.22.157.209'){$alias=$cur;break}
               }
             }
             if(!$alias){
@@ -79,7 +79,7 @@ jobs:
           ENC="$(iconv -f UTF-8 -t UTF-16LE /tmp/stage1.ps1 | base64 -w0)"
           CMD="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $ENC"
           B64="$(printf '%s' "$CMD" | base64 -w0)"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 \
             "FREDWIN_CMD_B64='$B64' python3 - <<'PY'
           import base64,json,os,urllib.request
           cmd=base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode()
@@ -136,7 +136,7 @@ jobs:
           ENC="$(iconv -f UTF-8 -t UTF-16LE /tmp/stage2.ps1 | base64 -w0)"
           CMD="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $ENC"
           B64="$(printf '%s' "$CMD" | base64 -w0)"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 \
             "FREDWIN_CMD_B64='$B64' python3 - <<'PY'
           import base64,json,os,urllib.request
           cmd=base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode()

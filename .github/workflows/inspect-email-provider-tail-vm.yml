@@ -20,7 +20,7 @@ jobs:
           chmod 600 ~/.ssh/vmkey
       - name: Inspect relevant provider tail and config
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 <<'EOF'
           set -e
           cd /home/ubuntu/mei-mg-email
           echo 'PROVIDER_240_620_BEGIN'; sed -n '240,620p' app/email_provider.py; echo 'PROVIDER_240_620_END'

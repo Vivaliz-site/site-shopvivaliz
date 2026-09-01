@@ -130,7 +130,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           CMD_B64="$(cat /tmp/vm-maint-command.b64)"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "VM_CMD_B64='$CMD_B64' bash -lc 'printf %s \"\$VM_CMD_B64\" | base64 -d | bash'"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 "VM_CMD_B64='$CMD_B64' bash -lc 'printf %s \"\$VM_CMD_B64\" | base64 -d | bash'"
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts /tmp/vm-maint-command.b64

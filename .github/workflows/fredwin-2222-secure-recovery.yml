@@ -32,12 +32,12 @@ jobs:
       - name: Recover Fred-Win through private diagnostic SSH if present
         run: |
           set -Eeuo pipefail
-          SSH_VM=(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17)
+          SSH_VM=(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@144.22.157.209)
           if ! "${SSH_VM[@]}" 'timeout 3 bash -c "</dev/tcp/127.0.0.1/2222"' >/dev/null 2>&1; then
             printf 'FRED_PORT2222=closed\n' > /tmp/fred-recovery-safe.txt
             exit 4
           fi
-          ssh -fNT -o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ServerAliveInterval=15 -i "$HOME/.ssh/vmkey" -L 32222:127.0.0.1:2222 ubuntu@137.131.156.17
+          ssh -fNT -o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ServerAliveInterval=15 -i "$HOME/.ssh/vmkey" -L 32222:127.0.0.1:2222 ubuntu@144.22.157.209
           sleep 2
           ssh-keyscan -T 5 -p 32222 127.0.0.1 2>/dev/null > /tmp/fred-hosts
           test -s /tmp/fred-hosts

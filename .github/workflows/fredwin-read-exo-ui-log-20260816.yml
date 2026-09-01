@@ -21,7 +21,7 @@ jobs:
           chmod 600 ~/.ssh/vmkey
       - name: Read Fred-Win EXO UI log
         run: |
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 - <<'"'"'PY'"'"'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'python3 - <<'"'"'PY'"'"'
           import json, urllib.request
           body=json.dumps({"params":{"path":"logs/fredwin-exo-ui-expand.log"}}).encode()
           req=urllib.request.Request("http://127.0.0.1:5557/mcp/tool/read_file",data=body,headers={"Content-Type":"application/json"},method="POST")

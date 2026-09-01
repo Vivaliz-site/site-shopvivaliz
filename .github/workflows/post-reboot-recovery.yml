@@ -35,7 +35,7 @@ jobs:
           ready=0
           for attempt in $(seq 1 60); do
             echo "ssh_attempt=$attempt"
-            if ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'echo SSH_OK; cat /proc/sys/kernel/random/boot_id; uptime -p' ; then
+            if ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@144.22.157.209 'echo SSH_OK; cat /proc/sys/kernel/random/boot_id; uptime -p' ; then
               ready=1
               break
             fi
@@ -46,7 +46,7 @@ jobs:
       - name: Recover and validate origin
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 'bash -s' <<'REMOTE'
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@144.22.157.209 'bash -s' <<'REMOTE'
           set -euo pipefail
           echo '=== boot identity ==='
           cat /proc/sys/kernel/random/boot_id

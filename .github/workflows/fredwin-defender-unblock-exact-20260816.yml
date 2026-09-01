@@ -23,11 +23,11 @@ jobs:
       - name: Transfer guarded unblock scripts to VM
         run: |
           set -euo pipefail
-          scp -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey scripts/fredwin-defender-unblock-exact.ps1 scripts/tmp-fredwin-run-defender-unblock.py ubuntu@137.131.156.17:/tmp/
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey scripts/fredwin-defender-unblock-exact.ps1 scripts/tmp-fredwin-run-defender-unblock.py ubuntu@144.22.157.209:/tmp/
       - name: Execute guarded unblock through Fred-Win MCP
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 /tmp/tmp-fredwin-run-defender-unblock.py'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'python3 /tmp/tmp-fredwin-run-defender-unblock.py'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey

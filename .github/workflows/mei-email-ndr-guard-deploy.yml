@@ -20,7 +20,7 @@ jobs:
     environment: Production
     timeout-minutes: 10
     env:
-      VM_HOST: 137.131.156.17
+      VM_HOST: 144.22.157.209
       VM_USER: ubuntu
       REPORT_PATH: reports/mei-quota-fix-live-20260823.txt
     steps:

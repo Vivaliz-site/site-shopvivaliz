@@ -52,12 +52,12 @@ jobs:
       - name: Check DESKTOP-KOCEPSV private relay
         run: |
           set -Eeuo pipefail
-          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5558/health >/dev/null'
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5558/health >/dev/null'
       - name: Execute fixed DESKTOP-KOCEPSV action
         run: |
           set -Eeuo pipefail
           CMD_B64="$(cat /tmp/desktopkocepsv-command.b64)"
-          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "DESKTOPKOCEPSV_CMD_B64='$CMD_B64' python3 - <<'PY'
+          ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 "DESKTOPKOCEPSV_CMD_B64='$CMD_B64' python3 - <<'PY'
           import base64, json, os, urllib.request
           command = base64.b64decode(os.environ['DESKTOPKOCEPSV_CMD_B64']).decode('utf-8')
           body = json.dumps({'params': {'command': command, 'timeout': 240}}).encode('utf-8')

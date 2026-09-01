@@ -24,7 +24,7 @@ jobs:
           set -euo pipefail
           COMMAND='powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference=\"Stop\"; Write-Output (\"USER=\" + [System.Security.Principal.WindowsIdentity]::GetCurrent().Name); Write-Output (\"SESSION=\" + (Get-Process -Id $PID).SessionId); $p7=Get-Command pwsh.exe -ErrorAction SilentlyContinue; if($p7){Write-Output (\"PWSH=\" + $p7.Source)}else{Write-Output \"PWSH=missing\"}; $m=Get-Module -ListAvailable ExchangeOnlineManagement | Sort-Object Version -Descending | Select-Object -First 1; if($m){Write-Output (\"EXO_MODULE=\" + $m.Version + \"|\" + $m.Path)}else{Write-Output \"EXO_MODULE=missing\"}; Write-Output (\"EXPLORER_COUNT=\" + @(Get-Process explorer -ErrorAction SilentlyContinue).Count); Get-Process explorer -ErrorAction SilentlyContinue | Select-Object -First 3 | ForEach-Object { Write-Output (\"EXPLORER_SESSION=\" + $_.SessionId) }"'
           CMD_B64="$(printf '%s' "$COMMAND" | base64 -w0)"
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
           import base64,json,os,urllib.request
           command=base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode()
           body=json.dumps({'params':{'command':command,'timeout':90}}).encode()

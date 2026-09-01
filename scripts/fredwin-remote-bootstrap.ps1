@@ -1,4 +1,4 @@
-param([ValidateSet('Ensure','InstallTask')][string]$Mode = 'Ensure')
+﻿param([ValidateSet('Ensure','InstallTask')][string]$Mode = 'Ensure')
 $ErrorActionPreference = 'Stop'
 $Repo = 'C:\site-shopvivaliz'
 $McpScript = Join-Path $Repo 'scripts\mcp-server.py'
@@ -72,6 +72,7 @@ function Install-Task {
     $watchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)
     $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType S4U -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
+    $settings.Hidden = $true
     Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($startup,$watchdog) -Principal $principal -Settings $settings -Description 'Keeps the Fred-Win private loopback maintenance relay and diagnostic SSH forward available without interactive logon.' -Force | Out-Null
     Write-Output 'RELAY_TASK_INSTALLED=true'
 }

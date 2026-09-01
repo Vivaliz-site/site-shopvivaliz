@@ -20,7 +20,7 @@ jobs:
           chmod 600 ~/.ssh/vmkey
       - name: Find historical product caches and derive category choices
         run: |
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@136.248.69.116 <<'EOF'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@163.176.103.253 <<'EOF'
           set -euo pipefail
           echo '=== CANDIDATE CACHES ==='
           find /home/ubuntu/shopvivaliz-deploy /home/ubuntu/shopvivaliz-preview-20260810 \

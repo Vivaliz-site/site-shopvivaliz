@@ -23,11 +23,11 @@ jobs:
       - name: Transfer read-only state check
         run: |
           set -euo pipefail
-          scp -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey scripts/fredwin-defender-block-state.ps1 scripts/tmp-fredwin-run-block-state.py ubuntu@137.131.156.17:/tmp/
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey scripts/fredwin-defender-block-state.ps1 scripts/tmp-fredwin-run-block-state.py ubuntu@144.22.157.209:/tmp/
       - name: Check Defender restricted entity through Fred-Win
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'python3 /tmp/tmp-fredwin-run-block-state.py'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'python3 /tmp/tmp-fredwin-run-block-state.py'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey

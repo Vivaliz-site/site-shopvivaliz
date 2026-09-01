@@ -20,7 +20,7 @@ jobs:
           chmod 600 ~/.ssh/vmkey
       - name: Inspect campaign template hashes and sends
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 <<'EOF'
           set -euo pipefail
           cd /home/ubuntu/mei-mg-email
           /home/ubuntu/mei-mg-email/.venv/bin/python - <<'PY'

@@ -36,7 +36,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           mkdir -p reports
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=12 -i "$HOME/.ssh/id_rsa" ubuntu@137.131.156.17 <<'EOF' > reports/mei-watchdog-targeted-20260821.txt 2>&1
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=12 -i "$HOME/.ssh/id_rsa" ubuntu@144.22.157.209 <<'EOF' > reports/mei-watchdog-targeted-20260821.txt 2>&1
           set -u
           cd /home/ubuntu/mei-mg-email || exit 2
           echo "CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)"

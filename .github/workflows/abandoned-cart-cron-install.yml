@@ -31,13 +31,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Corrigido 2026-08-27: apontava para 137.131.156.17 (VM1, shopvivaliz-ai,
-          # dev.shopvivaliz.com.br) em vez da VM2 (136.248.69.116, shopvivaliz-micro-2),
+          # Corrigido 2026-08-27: apontava para 144.22.157.209 (VM1, shopvivaliz-a1-backend,
+          # dev.shopvivaliz.com.br) em vez da VM2 (163.176.103.253, shopvivaliz-a1-site),
           # que e a producao real desde antes de 2026-08-26 (ver CLAUDE.md). Resultado:
           # o cron de recuperacao de carrinho abandonado nunca foi instalado em producao
           # -- confirmado ao vivo via `crontab -l` na VM2, sem nenhuma entrada de
           # send-abandoned-cart-emails.php nem log em disco.
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@136.248.69.116 'bash -s' <<'SH'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@163.176.103.253 'bash -s' <<'SH'
           set -euo pipefail
 
           SCRIPT='/home/ubuntu/shopvivaliz-deploy/current/scripts/send-abandoned-cart-emails.php'

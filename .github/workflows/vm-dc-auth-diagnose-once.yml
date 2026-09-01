@@ -22,7 +22,7 @@ jobs:
           chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
       - name: Diagnose authorization output
         run: |
-          ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@137.131.156.17 'echo PROCESS; pgrep -af "desktop-commander.*remote|@wonderwhy-er/desktop-commander" || true; echo SAFE_LOG; grep -Ei "device|verify|code|auth|refresh|token|error|failed|remote mcp" "$HOME/.desktop-commander-device/manual-authorize.log" 2>/dev/null | sed -E "s/[A-Za-z0-9._-]{32,}/[redacted]/g" | tail -60 || true'
+          ssh -o BatchMode=yes -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@144.22.157.209 'echo PROCESS; pgrep -af "desktop-commander.*remote|@wonderwhy-er/desktop-commander" || true; echo SAFE_LOG; grep -Ei "device|verify|code|auth|refresh|token|error|failed|remote mcp" "$HOME/.desktop-commander-device/manual-authorize.log" 2>/dev/null | sed -E "s/[A-Za-z0-9._-]{32,}/[redacted]/g" | tail -60 || true'
       - name: Cleanup
         if: always()
         run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"

@@ -22,7 +22,7 @@ jobs:
       - name: Inspect reverse relay
         run: |
           set -euo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 '
             echo NOW=$(date -Is)
             echo ---LISTEN5557---
             sudo ss -ltnp | grep ":5557" || true

@@ -37,7 +37,7 @@ jobs:
             enc=$(printf '%s' "$ps" | iconv -f UTF-8 -t UTF-16LE | base64 -w0)
             cmd="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $enc"
             outer=$(printf '%s' "$cmd" | base64 -w0)
-            ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 \
               "FREDWIN_CMD_B64='$outer' python3 - <<'PY'
           import base64,json,os,urllib.request
           cmd=base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
@@ -50,7 +50,7 @@ jobs:
           PY"
           }
 
-          health=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health')
+          health=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health')
           printf '%s' "$health" | grep -q '"status": "ok"'
 
           IDENT=$(fred '$a="shopvivaliz-vm"; $p=@(& ssh -o BatchMode=yes -o ConnectTimeout=15 $a "hostname; whoami; pwd" 2>$null); if($LASTEXITCODE -eq 0 -and $p.Count -ge 3){Write-Output ("HOST="+$p[0]);Write-Output ("USER="+$p[1]);Write-Output "OK=YES"}else{Write-Output "OK=NO"}')

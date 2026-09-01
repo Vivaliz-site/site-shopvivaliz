@@ -20,7 +20,7 @@ jobs:
       - name: Diagnose queue
         run: |
           mkdir -p reports
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=12 -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF' > reports/mei-queue-diagnose-20260820-1247.txt 2>&1
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=12 -i ~/.ssh/vmkey ubuntu@144.22.157.209 <<'EOF' > reports/mei-queue-diagnose-20260820-1247.txt 2>&1
           cd /home/ubuntu/mei-mg-email || exit 2
           q(){ sudo docker exec mei-mg-email-db psql -U postgres -d mei_mg_email -At -v ON_ERROR_STOP=1 -c "$1"; }
           echo CHECK_BRT=$(TZ=America/Sao_Paulo date +%Y-%m-%dT%H:%M:%S%z)

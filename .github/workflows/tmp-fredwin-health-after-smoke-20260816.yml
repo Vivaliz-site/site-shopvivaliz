@@ -21,7 +21,7 @@ jobs:
           chmod 600 ~/.ssh/vmkey
       - name: Check MCP health only
         run: |
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@137.131.156.17 \
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 \
             'curl -fsS --connect-timeout 2 --max-time 3 http://127.0.0.1:5557/health'
       - name: Cleanup
         if: always()

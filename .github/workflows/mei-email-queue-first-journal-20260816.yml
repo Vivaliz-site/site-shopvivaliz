@@ -22,7 +22,7 @@ jobs:
       - name: Read worker state and journal
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 '
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 '
             echo NOW=$(date -Is)
             echo WORKER=$(systemctl is-active mei-mg-email-worker.service 2>/dev/null || true)
             echo SUBSTATE=$(systemctl show -p SubState --value mei-mg-email-worker.service 2>/dev/null || true)

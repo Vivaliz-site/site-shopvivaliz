@@ -11,7 +11,7 @@ jobs:
     environment: Production
     timeout-minutes: 4
     env:
-      VM_HOST: 137.131.156.17
+      VM_HOST: 144.22.157.209
       VM_USER: ubuntu
     steps:
       - uses: actions/checkout@v4

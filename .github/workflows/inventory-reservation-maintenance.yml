@@ -78,7 +78,7 @@ jobs:
               -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
               -i "$HOME/.ssh/id_rsa" \
-              ubuntu@136.248.69.116 \
+              ubuntu@163.176.103.253 \
               'cd /home/ubuntu/shopvivaliz-deploy/current && php scripts/release-expired-stock-reservations.php'
           })"
           printf '%s\n' "$output"

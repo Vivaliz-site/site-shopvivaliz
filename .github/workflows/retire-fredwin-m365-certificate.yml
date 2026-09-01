@@ -20,10 +20,10 @@ jobs:
           chmod 600 ~/.ssh/vmkey
       - name: Verify server Graph identity before retirement
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 '/home/ubuntu/.shopvivaliz/bin/graph-app-only.py'
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 '/home/ubuntu/.shopvivaliz/bin/graph-app-only.py'
       - name: Remove Fred-Win certificate from Entra app
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 <<'EOF'
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 <<'EOF'
           set -euo pipefail
           python3 - <<'PY'
           import base64,hashlib,importlib.util,json,os,subprocess,time,urllib.request,uuid
@@ -44,14 +44,14 @@ jobs:
           EOF
       - name: Remove Fred-Win local private certificate and temporary PFX
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 'curl -fsS --max-time 10 http://127.0.0.1:5557/health >/dev/null'
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 'curl -fsS --max-time 10 http://127.0.0.1:5557/health >/dev/null'
           python3 - <<'PY' > /tmp/body.json
           import json
           ps=r'''powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $thumb='7EFCBC6676B61F8C076F08127F5F7E365A95F2E9'; $store=New-Object System.Security.Cryptography.X509Certificates.X509Store('My','CurrentUser'); $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite); try { $matches=@($store.Certificates | Where-Object { $_.Thumbprint -eq $thumb }); foreach($cert in $matches){ $store.Remove($cert) }; Write-Output ('FRED_CERT_REMOVED_COUNT=' + $matches.Count) } finally { $store.Close() }; $files=@('C:\Users\FRED\Documents\Certs\ShopVivalizExchangeAuth.pfx','C:\Users\FRED\Documents\certs\ShopVivalizExchangeAuth.pfx'); foreach($f in $files){ if(Test-Path $f){ Remove-Item $f -Force; Write-Output ('PFX_REMOVED=' + $f) } }; $verify=New-Object System.Security.Cryptography.X509Certificates.X509Store('My','CurrentUser'); $verify.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly); try { if(@($verify.Certificates | Where-Object { $_.Thumbprint -eq $thumb }).Count -ne 0){ throw 'Fred certificate still present' } } finally { $verify.Close() }; Write-Output 'FRED_PRIVATE_IDENTITY_RETIRED'"'''
           print(json.dumps({'params':{'command':ps,'timeout':120}}))
           PY
           B64=$(base64 -w0 /tmp/body.json)
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 "B64='$B64' python3 - <<'PY'
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 "B64='$B64' python3 - <<'PY'
           import base64,json,os,urllib.request
           body=base64.b64decode(os.environ['B64'])
           req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
@@ -61,7 +61,7 @@ jobs:
           PY"
       - name: Revalidate VM after Fred credential retirement
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@137.131.156.17 '/home/ubuntu/.shopvivaliz/bin/graph-app-only.py'
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 '/home/ubuntu/.shopvivaliz/bin/graph-app-only.py'
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey /tmp/body.json

@@ -2,7 +2,7 @@ name: OCI A1 bootstrap (instala retry persistente na VM)
 
 # Autorizado por Fred em 2026-08-26 (sessao Cowork). Objetivo: entregar as
 # credenciais OCI_CLI_* (ja configuradas nos secrets do repo) pra dentro da
-# VM shopvivaliz-ai (137.131.156.17, ambiente dev -- ver CLAUDE.md secao
+# VM shopvivaliz-a1-backend (144.22.157.209, ambiente dev -- ver CLAUDE.md secao
 # "VM1 vs VM2"), instalar a oci CLI la, copiar scripts/oci-a1-retry.sh e
 # registrar um cron persistente (*/3 * * * *, com flock pra nao sobrepor
 # execucoes) que tenta provisionar a shopvivaliz-free-a1 (Ampere A1.Flex,
@@ -60,18 +60,18 @@ jobs:
           echo "Config montado (sem exibir valores sensiveis)."
           grep -c '=' /tmp/oci-config/config
 
-      - name: Copiar credenciais + script de retry para a VM (137.131.156.17)
+      - name: Copiar credenciais + script de retry para a VM (144.22.157.209)
         run: |
           set -euo pipefail
-          SSH="ssh -i ~/.ssh/oracle_vm_key -o UserKnownHostsFile=~/.ssh/known_hosts ubuntu@137.131.156.17"
+          SSH="ssh -i ~/.ssh/oracle_vm_key -o UserKnownHostsFile=~/.ssh/known_hosts ubuntu@144.22.157.209"
           SCP="scp -i ~/.ssh/oracle_vm_key -o UserKnownHostsFile=~/.ssh/known_hosts"
 
           $SSH "mkdir -p ~/.oci && chmod 700 ~/.oci"
-          $SCP /tmp/oci-config/config ubuntu@137.131.156.17:~/.oci/config
-          $SCP /tmp/oci-config/key.pem ubuntu@137.131.156.17:~/.oci/key.pem
+          $SCP /tmp/oci-config/config ubuntu@144.22.157.209:~/.oci/config
+          $SCP /tmp/oci-config/key.pem ubuntu@144.22.157.209:~/.oci/key.pem
           $SSH "chmod 600 ~/.oci/config ~/.oci/key.pem"
 
-          $SCP scripts/oci-a1-retry.sh ubuntu@137.131.156.17:/tmp/oci-a1-retry.sh
+          $SCP scripts/oci-a1-retry.sh ubuntu@144.22.157.209:/tmp/oci-a1-retry.sh
           $SSH "sudo mv /tmp/oci-a1-retry.sh /usr/local/bin/oci-a1-retry.sh && sudo chmod 755 /usr/local/bin/oci-a1-retry.sh"
 
           # limpa o config local do runner (nao deixar segredo no workspace do job)
@@ -80,13 +80,13 @@ jobs:
       - name: Instalar oci CLI na VM (se ainda nao estiver instalada)
         run: |
           set -euo pipefail
-          SSH="ssh -i ~/.ssh/oracle_vm_key -o UserKnownHostsFile=~/.ssh/known_hosts ubuntu@137.131.156.17"
+          SSH="ssh -i ~/.ssh/oracle_vm_key -o UserKnownHostsFile=~/.ssh/known_hosts ubuntu@144.22.157.209"
           $SSH 'command -v oci >/dev/null 2>&1 && echo "oci CLI ja instalada: $(oci --version)" || (sudo apt-get update -qq && sudo apt-get install -y -qq python3-pip >/dev/null && pip3 install --user --quiet oci-cli && echo "export PATH=\$HOME/.local/bin:\$PATH" >> ~/.bashrc && ~/.local/bin/oci --version)'
 
       - name: Registrar cron persistente (*/3 * * * *, com flock, sobrevive a reboot)
         run: |
           set -euo pipefail
-          SSH="ssh -i ~/.ssh/oracle_vm_key -o UserKnownHostsFile=~/.ssh/known_hosts ubuntu@137.131.156.17"
+          SSH="ssh -i ~/.ssh/oracle_vm_key -o UserKnownHostsFile=~/.ssh/known_hosts ubuntu@144.22.157.209"
           $SSH '
             ( crontab -l 2>/dev/null | grep -v "oci-a1-retry.sh" ; echo "*/3 * * * * PATH=/usr/bin:/bin:$HOME/.local/bin flock -n /tmp/oci-a1-retry.lock /usr/local/bin/oci-a1-retry.sh" ) | crontab -
             echo "--- crontab instalado ---"
@@ -96,5 +96,5 @@ jobs:
       - name: Rodar uma vez agora (primeira tentativa imediata, nao esperar 3min)
         run: |
           set -euo pipefail
-          SSH="ssh -i ~/.ssh/oracle_vm_key -o UserKnownHostsFile=~/.ssh/known_hosts ubuntu@137.131.156.17"
+          SSH="ssh -i ~/.ssh/oracle_vm_key -o UserKnownHostsFile=~/.ssh/known_hosts ubuntu@144.22.157.209"
           $SSH 'PATH=/usr/bin:/bin:$HOME/.local/bin /usr/local/bin/oci-a1-retry.sh; echo "--- log apos primeira execucao ---"; tail -30 "$HOME/oci-a1-retry.log"'

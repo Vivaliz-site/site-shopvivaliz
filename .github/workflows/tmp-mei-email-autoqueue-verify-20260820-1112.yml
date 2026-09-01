@@ -27,7 +27,7 @@ jobs:
         run: |
           set +e
           mkdir -p reports
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_rsa ubuntu@137.131.156.17 <<'EOF' 2>&1 | tee reports/mei-email-autoqueue-verify-20260820-1112.txt
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_rsa ubuntu@144.22.157.209 <<'EOF' 2>&1 | tee reports/mei-email-autoqueue-verify-20260820-1112.txt
           set -euo pipefail
           cd /home/ubuntu/mei-mg-email
           if sudo test -f /var/lib/mei-mg-email/sender_blocked.pause; then echo SENTINEL=present; exit 52; fi
