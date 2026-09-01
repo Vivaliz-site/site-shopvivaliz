@@ -319,4 +319,26 @@ $receivedOkProjection = SvAmazonReturnProjector::project($receivedOkDb, 78);
 policyAssertSame('RECEIVED_OK', $receivedOkProjection['state'], 'Explicit physical RECEIVED_OK must stop non-return handling.');
 policyAssertSame(0, $receivedOkProjection['exposed_quantity'], 'Explicit RECEIVED_OK must resolve the refunded quantity.');
 
+$damagedEvents = $receivedOkDb->events;
+$damagedEvents[2]['event_type'] = 'PHYSICAL_RECEIVED';
+$damagedEvents[2]['payload_json'] = json_encode(['quantity'=>1,'condition'=>'DAMAGED'], JSON_THROW_ON_ERROR);
+$damagedDb = new AmazonPolicyProjectionPdo(
+    array_replace($receivedOkDb->case, ['id' => 79, 'quantity_ordered' => 1]),
+    array_map(static function (array $event): array { $event['case_id'] = 79; return $event; }, $damagedEvents)
+);
+$damagedProjection = SvAmazonReturnProjector::project($damagedDb, 79);
+policyAssertSame('RECEIVED_DISCREPANT', $damagedProjection['state'], 'Full quantity returned damaged must not close as RECEIVED_OK.');
+policyAssertSame('RECEIVED_DISCREPANT', $damagedProjection['physical_status'], 'Damaged physical intake must remain a discrepancy path.');
+
+$wrongItemEvents = $receivedOkDb->events;
+$wrongItemEvents[2]['event_type'] = 'PHYSICAL_RECEIVED';
+$wrongItemEvents[2]['payload_json'] = json_encode(['quantity'=>0,'condition'=>'WRONG_ITEM'], JSON_THROW_ON_ERROR);
+$wrongItemDb = new AmazonPolicyProjectionPdo(
+    array_replace($receivedOkDb->case, ['id' => 80, 'quantity_ordered' => 1]),
+    array_map(static function (array $event): array { $event['case_id'] = 80; return $event; }, $wrongItemEvents)
+);
+$wrongItemProjection = SvAmazonReturnProjector::project($wrongItemDb, 80);
+policyAssertSame('RECEIVED_DISCREPANT', $wrongItemProjection['state'], 'Wrong item/package evidence must create discrepancy even when correct quantity received is zero.');
+policyAssertSame(1, $wrongItemProjection['exposed_quantity'], 'Wrong item must leave expected refunded unit unresolved.');
+
 echo "amazon-returns-policy-test: OK\n";

@@ -57,6 +57,7 @@ final class SvAmazonReturnProjector
             'closed_at' => null,
             'order_at' => null,
             'exposed_quantity' => 0,
+            'has_physical_discrepancy' => false,
         ];
     }
 
@@ -117,6 +118,10 @@ final class SvAmazonReturnProjector
             case 'PHYSICAL_RECEIVED':
             case 'WAREHOUSE_RECEIVED':
             case 'RECEIVED_OK':
+                $condition = strtoupper(trim((string)($payload['condition'] ?? 'OK')));
+                if (!in_array($condition, ['OK', 'INTACT'], true)) {
+                    $facts['has_physical_discrepancy'] = true;
+                }
                 if (array_key_exists('quantity_received_total', $payload)) {
                     $facts['quantity_received'] = self::nonNegativeInt(
                         $payload['quantity_received_total'],
@@ -145,6 +150,13 @@ final class SvAmazonReturnProjector
         $facts['quantity_received'] = $received;
         $facts['exposed_quantity'] = max(0, $refunded - $received);
 
+        if (($facts['has_physical_discrepancy'] ?? false) === true) {
+            $facts['physical_status'] = SvAmazonReturnPhysicalStatuses::RECEIVED_DISCREPANT;
+            $facts['state'] = SvAmazonReturnStates::RECEIVED_DISCREPANT;
+            $facts['terminal_reason'] = null;
+            $facts['closed_at'] = null;
+            return;
+        }
         if ($refunded > 0 && $facts['exposed_quantity'] === 0) {
             $facts['physical_status'] = SvAmazonReturnPhysicalStatuses::RECEIVED_OK;
             $facts['state'] = SvAmazonReturnStates::RECEIVED_OK;
