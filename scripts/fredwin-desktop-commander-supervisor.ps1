@@ -12,6 +12,7 @@ $RunnerScript = Join-Path $Repo 'scripts\fredwin-desktop-commander-runner.ps1'
 $LogDir = Join-Path $Repo 'logs'
 $SupervisorLog = Join-Path $LogDir 'desktop-commander-supervisor.log'
 $CooldownFile = Join-Path $LogDir 'desktop-commander-auth-required.cooldown'
+$ConnectedMarker = Join-Path $LogDir 'desktop-commander-provider-connected.marker'
 $DeviceFile = $null
 $Package = '@wonderwhy-er/desktop-commander@0.2.47'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
@@ -88,25 +89,12 @@ function Get-CanonicalRemoteLaunchers {
     })
     return @(Get-LauncherRoots $matches)
 }
-function Test-CanonicalTransport([object[]]$Launchers) {
-    $roots = @($Launchers)
-    if ($roots.Count -ne 1) { return $false }
-    $all = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
-    $desc = New-Object System.Collections.Generic.HashSet[int]
-    [void]$desc.Add([int]$roots[0].ProcessId)
-    $changed = $true
-    while ($changed) {
-        $changed = $false
-        foreach ($p in $all) {
-            if ($desc.Contains([int]$p.ParentProcessId) -and -not $desc.Contains([int]$p.ProcessId)) {
-                [void]$desc.Add([int]$p.ProcessId); $changed = $true
-            }
-        }
-    }
-    $conns = @(Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue | Where-Object {
-        $desc.Contains([int]$_.OwningProcess) -and $_.RemotePort -eq 443 -and $_.RemoteAddress -notin @('127.0.0.1','::1')
-    })
-    return ($conns.Count -gt 0)
+function Get-MarkerAgeSeconds {
+    if (-not (Test-Path -LiteralPath $ConnectedMarker)) { return [double]::PositiveInfinity }
+    return (((Get-Date).ToUniversalTime() - (Get-Item -LiteralPath $ConnectedMarker).LastWriteTimeUtc).TotalSeconds)
+}
+function Get-LauncherAgeSeconds([object]$Launcher) {
+    try { return (((Get-Date) - [datetime]$Launcher.CreationDate).TotalSeconds) } catch { return [double]::PositiveInfinity }
 }
 function Get-NonCanonicalRemoteLaunchers {
     $all = @(Get-DesktopCommanderRemoteLaunchers)
@@ -155,13 +143,17 @@ function Ensure-Agent {
     Stop-OrphanDirectRemoteLaunchers
     $canonical = @(Get-CanonicalRemoteLaunchers)
     $noncanonical = @(Get-NonCanonicalRemoteLaunchers)
-    if ($canonical.Count -eq 1 -and $noncanonical.Count -eq 0 -and (Test-CanonicalTransport $canonical)) {
-        Remove-LegacyPersistence
-        Log ('Canonical remote agent healthy transport=established pid=' + $canonical[0].ProcessId)
-        Write-Output 'REMOTE_AGENT_RUNNING=true'; return
-    }
     if ($canonical.Count -eq 1 -and $noncanonical.Count -eq 0) {
-        Log ('Canonical process exists but transport is stale; restarting pid=' + $canonical[0].ProcessId)
+        $markerAge = Get-MarkerAgeSeconds
+        if ($markerAge -le 150) {
+            Remove-LegacyPersistence
+            Log ('Canonical remote agent healthy marker_age_seconds=' + [math]::Round($markerAge) + ' pid=' + $canonical[0].ProcessId)
+            Write-Output 'REMOTE_AGENT_RUNNING=true'; return
+        }
+        if ((Get-LauncherAgeSeconds $canonical[0]) -lt 120) {
+            Write-Output 'REMOTE_AGENT_STARTING=true'; return
+        }
+        Log ('Provider monitor stale; restarting marker_age_seconds=' + [math]::Round($markerAge) + ' pid=' + $canonical[0].ProcessId)
     }
     if ($canonical.Count -gt 0 -or $noncanonical.Count -gt 0) {
         Log ('Converging launchers canonical=' + $canonical.Count + ' noncanonical=' + $noncanonical.Count)

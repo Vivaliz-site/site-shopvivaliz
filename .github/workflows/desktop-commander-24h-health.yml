@@ -27,6 +27,7 @@ on:
       - ".github/workflows/vm-desktop-commander-action.yml"
       - ".github/workflows/desktopkocepsv-desktop-commander-action.yml"
       - "tests/desktop-commander-health-restart-contract-test.php"
+      - "tests/fredwin-desktop-commander-stale-transport-contract-test.php"
       - "tests/desktop-commander-persist-session-contract-test.php"
       - "tests/desktop-commander-three-host-action-contract-test.php"
   push:
@@ -53,6 +54,7 @@ on:
       - ".github/workflows/vm-desktop-commander-action.yml"
       - ".github/workflows/desktopkocepsv-desktop-commander-action.yml"
       - "tests/desktop-commander-health-restart-contract-test.php"
+      - "tests/fredwin-desktop-commander-stale-transport-contract-test.php"
       - "tests/desktop-commander-persist-session-contract-test.php"
       - "tests/desktop-commander-three-host-action-contract-test.php"
 
@@ -70,6 +72,7 @@ jobs:
           set -Eeuo pipefail
           php tests/desktop-commander-persist-session-contract-test.php
           php tests/desktop-commander-health-restart-contract-test.php
+          php tests/fredwin-desktop-commander-stale-transport-contract-test.php
           php tests/desktop-commander-three-host-action-contract-test.php
 
   runtime:

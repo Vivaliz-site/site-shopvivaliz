@@ -14,6 +14,7 @@ $required = [
     "runtime:",
     "php tests/desktop-commander-persist-session-contract-test.php",
     "php tests/desktop-commander-health-restart-contract-test.php",
+    "php tests/fredwin-desktop-commander-stale-transport-contract-test.php",
     "php tests/desktop-commander-three-host-action-contract-test.php",
     "SHOPVIVALIZ_VM_KNOWN_HOSTS",
     "StrictHostKeyChecking=yes",
