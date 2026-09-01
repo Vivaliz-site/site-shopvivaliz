@@ -68,6 +68,18 @@ function policy(root, base, head) {
   fs.rmSync(root, {recursive: true, force: true});
 }
 
+{
+  const root = setupRepo();
+  write(root, 'includes/tiny-order-push.php', '<?php function tiny_request() { return 200; }\n');
+  const base = commitAll(root, 'base Tiny backend helper');
+  write(root, 'includes/tiny-order-push.php', '<?php function tiny_request() { return 204; }\n');
+  const head = commitAll(root, 'Tiny backend transport change');
+  const result = policy(root, base, head);
+  assert.strictEqual(result.status, 0, `Tiny/Olist backend helper must not require screenshot proof:\n${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /prova visual não exigida/);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
 
 {
   const root = setupRepo();
