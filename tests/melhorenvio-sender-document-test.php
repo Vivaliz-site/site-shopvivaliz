@@ -1,11 +1,19 @@
 <?php
 declare(strict_types=1);
 
-putenv('MELHORENVIO_FROM_DOCUMENT=');
-putenv('MELHORENVIO_FROM_CNPJ=11222333000181');
-
 require_once dirname(__DIR__) . '/includes/melhorenvio-label.php';
 
+function setSenderEnv(string $document, string $cnpj): void
+{
+    putenv('MELHORENVIO_FROM_DOCUMENT=' . $document);
+    putenv('MELHORENVIO_FROM_CNPJ=' . $cnpj);
+    $_ENV['MELHORENVIO_FROM_DOCUMENT'] = $document;
+    $_ENV['MELHORENVIO_FROM_CNPJ'] = $cnpj;
+    $_SERVER['MELHORENVIO_FROM_DOCUMENT'] = $document;
+    $_SERVER['MELHORENVIO_FROM_CNPJ'] = $cnpj;
+}
+
+setSenderEnv('', '11222333000181');
 $companyFrom = svml_from_address();
 
 if (($companyFrom['company_document'] ?? '') !== '11222333000181') {
@@ -33,8 +41,7 @@ if (!svml_from_address_complete($completeCompany)) {
     exit(1);
 }
 
-putenv('MELHORENVIO_FROM_CNPJ=');
-putenv('MELHORENVIO_FROM_DOCUMENT=52998224725');
+setSenderEnv('52998224725', '');
 $personFrom = svml_from_address();
 
 if (($personFrom['document'] ?? '') !== '52998224725') {
