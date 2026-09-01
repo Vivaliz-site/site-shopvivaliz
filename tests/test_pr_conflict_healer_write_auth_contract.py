@@ -18,6 +18,17 @@ if 'git clone ' not in script or 'https://github.com/${repo}.git' not in script:
     raise SystemExit('public git clone path missing')
 if 'curl -fsSL' not in script:
     raise SystemExit('public PR metadata fetch missing')
+
+if '--connect-timeout' not in script or '--max-time' not in script:
+    raise SystemExit('public PR metadata fetch lacks bounded timeouts')
+if "fail 'GitHub PR metadata fetch failed'" not in script:
+    raise SystemExit('public PR metadata fetch lacks controlled failure')
+if 'git clone -q --filter=blob:none --no-tags' not in script:
+    raise SystemExit('public clone is not quiet while preserving stderr')
+clone_lines = [line for line in script.splitlines() if line.strip().startswith('git clone ')]
+if len(clone_lines) != 1 or '2>&1' in clone_lines[0] or '>/dev/null' in clone_lines[0]:
+    raise SystemExit('public clone suppresses diagnostic stderr')
+
 if 'external_github_auth_used=false' not in script:
     raise SystemExit('GitHub auth telemetry does not default to false')
 if 'external_github_auth_used=true' not in script:
