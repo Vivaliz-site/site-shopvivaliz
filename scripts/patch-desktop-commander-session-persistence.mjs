@@ -24,7 +24,8 @@ const legacyPatch = `            await this.savePersistedConfig();
                     void this.savePersistedConfig();
                 }
             });
-            const deviceName = os.hostname();`;const v2Patch = `            await this.savePersistedConfig();
+            const deviceName = os.hostname();`;
+const v2Patch = `            await this.savePersistedConfig();
             // Persist refreshed credentials before a service restart can lose them (v2).
             this.remoteChannel.client.auth.onAuthStateChange(async (event, refreshedSession) => {
                 if (event === 'TOKEN_REFRESHED' && refreshedSession?.access_token) {

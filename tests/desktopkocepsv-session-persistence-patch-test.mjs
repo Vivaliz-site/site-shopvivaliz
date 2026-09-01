@@ -46,7 +46,8 @@ function assertNonBlockingSource(source) {
 try {
   await mkdir(deviceDir, { recursive: true });
   await writeFile(deviceSource, original, 'utf8');
-  runPatch('applied');  const patched = await readFile(deviceSource, 'utf8');
+  runPatch('applied');
+  const patched = await readFile(deviceSource, 'utf8');
   assertNonBlockingSource(patched);
 
   const moduleUrl = pathToFileURL(deviceSource).href + `?t=${Date.now()}`;
