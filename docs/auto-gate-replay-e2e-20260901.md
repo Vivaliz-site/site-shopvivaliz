@@ -27,9 +27,9 @@ The eight required gates for this proof are:
 
 1. The proof branch was created from pre-fix `main` commit `96482a787ed4f5e45ee93b38bcca75d22c451777`.
 2. The `PR Completion Enforcer` detected that the PR head did not contain current `main` and requested GitHub's native `update-branch`.
-3. GitHub created bot-authored synchronization commits. On proof head `cd4af2e...`, the normal `pull_request` runs were suppressed/blocked as `action_required` by the `GITHUB_TOKEN` recursion boundary.
+3. GitHub created bot-authored synchronization commits. On proof head `cd4af2eafc85c2d811bebc982228ddff1215e261`, the normal `pull_request` runs were suppressed/blocked as `action_required` by the `GITHUB_TOKEN` recursion boundary.
 4. The `PR Completion Enforcer` replayed only the approved required gates with `workflow_dispatch` on that exact head SHA.
-5. All eight replayed gates completed successfully on `cd4af2e...`:
+5. All eight replayed gates completed successfully on `cd4af2eafc85c2d811bebc982228ddff1215e261`:
    - `Quality Gate` — run `33471567242`
    - `ShopVivaliz QA` — run `33471568696`
    - `Repository Governance` — run `33471570097`
