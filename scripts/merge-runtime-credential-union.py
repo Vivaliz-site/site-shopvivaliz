@@ -17,6 +17,12 @@ import time
 from pathlib import Path
 
 
+EMAIL_KEYS = {
+    "BREVO_API_KEY",
+    "EMAIL_FROM", "EMAIL_PASSWORD", "EMAIL_SMTP_HOST", "EMAIL_SMTP_PORT", "EMAIL_TO", "EMAIL_USER",
+    "MAIL_HOST", "MAIL_PASS", "MAIL_PORT", "MAIL_USER",
+}
+
 ALLOWED_KEYS = {
     "ADMIN_EMAIL", "ANTHROPIC_API_KEY", "APP_URL", "BASE_URL",
     "BLOG_PUBLISH_TOKEN", "BREVO_API_KEY",
@@ -70,27 +76,38 @@ def validate_value(key: str, value: str) -> None:
         raise ValueError(f"suspiciously short credential refused for {key}")
 
 
-def read_payload() -> dict[str, str]:
-    fields = sys.stdin.buffer.read().split(b"\0")
-    if fields and fields[-1] == b"":
-        fields.pop()
+def parse_payload_fields(fields: list[bytes], scope: str = "all") -> dict[str, str]:
+    if scope not in {"all", "email"}:
+        raise ValueError(f"unsupported credential scope: {scope}")
     if len(fields) % 2:
         raise ValueError("payload must contain name/value pairs")
 
+    scope_keys = ALLOWED_KEYS if scope == "all" else EMAIL_KEYS
     values: dict[str, str] = {}
+    seen: set[str] = set()
     for raw_key, raw_value in zip(fields[0::2], fields[1::2]):
         key = raw_key.decode("ascii")
         value = raw_value.decode("utf-8").strip()
         if not KEY_RE.fullmatch(key) or key not in ALLOWED_KEYS:
             raise ValueError(f"unsupported runtime credential key: {key}")
-        if key in values:
+        if key in seen:
             raise ValueError(f"duplicate runtime credential key: {key}")
+        seen.add(key)
+        if key not in scope_keys:
+            continue
         validate_value(key, value)
         if value:
             values[key] = value
     if not values:
-        raise ValueError("no non-empty runtime credentials supplied")
+        raise ValueError(f"no non-empty runtime credentials supplied for scope {scope}")
     return values
+
+
+def read_payload(scope: str = "all") -> dict[str, str]:
+    fields = sys.stdin.buffer.read().split(b"\0")
+    if fields and fields[-1] == b"":
+        fields.pop()
+    return parse_payload_fields(fields, scope=scope)
 
 
 def merge_missing(path: Path, incoming: dict[str, str]) -> tuple[list[str], list[str], Path | None]:
@@ -163,12 +180,17 @@ def merge_missing(path: Path, incoming: dict[str, str]) -> tuple[list[str], list
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: merge-runtime-credential-union.py SHARED_ENV", file=sys.stderr)
+    args = sys.argv[1:]
+    scope = "all"
+    if len(args) == 3 and args[0] == "--scope":
+        scope = args[1]
+        args = args[2:]
+    if len(args) != 1 or scope not in {"all", "email"}:
+        print("usage: merge-runtime-credential-union.py [--scope all|email] SHARED_ENV", file=sys.stderr)
         return 2
     try:
-        incoming = read_payload()
-        added, preserved, backup = merge_missing(Path(sys.argv[1]), incoming)
+        incoming = read_payload(scope=scope)
+        added, preserved, backup = merge_missing(Path(args[0]), incoming)
     except (OSError, UnicodeDecodeError, ValueError, RuntimeError) as exc:
         print(f"credential union failed: {exc}", file=sys.stderr)
         return 2
