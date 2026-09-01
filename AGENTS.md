@@ -23,6 +23,16 @@ O proprietário autoriza os agentes com acesso técnico válido a validar pelo n
 > 
 > Toda alteração deve ser validada pelo navegador de forma visual e funcional (nada de scripts para essa validação) e seguir este fluxo. Não finalize rodadas de alterações mantendo-as apenas locais ou sem merge/deploy. Se houver impedimento, registre formalmente como **INCONCLUSIVO**.
 
+### 0.2 IA paga nunca em rotinas permanentes ou periódicas
+
+- Claude, GPT/OpenAI e Codex pagos são **somente para tarefas finitas** e devem encerrar ao concluir/bloquear.
+- É proibido usá-los em daemon, cron/timer periódico, watcher, autorepair, polling ou retry/loop sem limite.
+- Rotinas contínuas/periódicas devem ser determinísticas ou usar IA gratuita/local aprovada, sem fallback silencioso para provedor pago.
+- Toda tarefa finita com IA paga precisa de timeout, limite de retries/chamadas e condição de saída; ao atingir limite, salvar checkpoint e encerrar.
+- Antes de manter qualquer automação, auditar consumidor por consumidor: necessidade, gatilho, frequência, provedor/modelo, custo, retries, timeout, saída e duplicidade.
+- Workflows GitHub pagos devem exigir gatilho explícito/restrito; eventos genéricos e `schedule` não podem acionar Claude/GPT/Codex automaticamente.
+- Política completa: [`REGRAS-AGENTES-CENTRALIZADAS.md`](REGRAS-AGENTES-CENTRALIZADAS.md), seção **Política obrigatória de consumo de IA e execução recorrente**.
+
 ### 1. NUNCA Use `git reset --hard` em Produção
 
 **Proibido SEMPRE:**

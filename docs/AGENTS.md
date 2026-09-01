@@ -47,6 +47,15 @@
 
 ## 🚫 Regras Obrigatórias para Agentes
 
+### Consumo de IA e rotinas recorrentes
+- ✗ **Nunca** manter Claude, GPT/OpenAI ou Codex pago em daemon, loop, cron/timer, watcher, supervisor, autorepair ou polling recorrente.
+- ✓ IA paga é somente para tarefa finita, com objetivo, timeout, limite de tentativas/chamadas e condição de saída; ao terminar, o processo deve encerrar.
+- ✓ Rotina permanente/periódica deve ser determinística ou, quando IA for indispensável, usar opção gratuita/local aprovada sem fallback pago.
+- ✗ `while true`, retry ilimitado, relançamento automático e gatilho GitHub amplo consumindo IA paga são proibidos.
+- ✓ Auditar **cada consumidor** antes de habilitar/manter: necessidade, host, gatilho, frequência, provedor/modelo, custo, timeout, retries, condição de saída e duplicidade.
+- ✓ Processo sem progresso/travado/órfão deve ser encerrado e ter causa raiz investigada; não reiniciar indefinidamente.
+- Fonte normativa: `REGRAS-AGENTES-CENTRALIZADAS.md`, seção **Política obrigatória de consumo de IA e execução recorrente**.
+
 ### Diagnóstico
 - ✓ Identificar o erro antes de sugerir solução
 - ✓ Registrar HTTP method, URL, status, response body, etapa do fluxo
