@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 workflow=.github/workflows/public-layout-audit.yml
 
 grep -Fq 'group: public-layout-audit' "$workflow"
