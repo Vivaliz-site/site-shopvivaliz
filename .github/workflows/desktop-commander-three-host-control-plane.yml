@@ -1,8 +1,6 @@
 name: Desktop Commander Three Host Control Plane
 
 on:
-  schedule:
-    - cron: '*/5 * * * *'
   workflow_dispatch:
   push:
     branches: [main]

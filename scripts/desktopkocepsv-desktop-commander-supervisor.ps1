@@ -7,6 +7,7 @@ $Repo = 'C:\site-shopvivaliz'
 $TaskName = 'ShopVivaliz DESKTOP-KOCEPSV Desktop Commander 24h'
 $LegacyStartupName = 'desktop-commander-remote.vbs'
 $Package = '@wonderwhy-er/desktop-commander@0.2.47'
+$MarkerStaleSeconds = 240
 $MaxLogBytes = 5MB
 $DeviceFile = $null
 
@@ -185,9 +186,42 @@ function Get-NonCanonicalRemoteLaunchers {
     return @(Get-LauncherRoots $noncanonical)
 }
 
+function Test-LauncherOwnedByRunner([object]$Launcher) {
+    if (-not $Launcher) { return $false }
+    $snapshot = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+    $byPid = @{}
+    foreach ($p in $snapshot) { $byPid[[int]$p.ProcessId] = $p }
+    $parentPid = [int]$Launcher.ParentProcessId
+    for ($depth = 0; $depth -lt 12 -and $parentPid -gt 0; $depth++) {
+        if (-not $byPid.ContainsKey($parentPid)) { break }
+        $ancestor = $byPid[$parentPid]
+        if ([string]$ancestor.CommandLine -match 'desktopkocepsv-desktop-commander-runner\.ps1') { return $true }
+        $parentPid = [int]$ancestor.ParentProcessId
+    }
+    return $false
+}
+
+function Remove-DuplicateCanonicalLaunchers([object[]]$Canonical, [object[]]$NonCanonical) {
+    $canonicalItems = @($Canonical)
+    $managed = @($canonicalItems | Where-Object { Test-LauncherOwnedByRunner $_ })
+    if ($managed.Count -ne 1) { return $false }
+    $keepPid = [int]$managed[0].ProcessId
+    foreach ($p in @($canonicalItems | Where-Object { [int]$_.ProcessId -ne $keepPid })) {
+        Stop-LauncherTree -ProcessId $p.ProcessId
+        Log ('Duplicate canonical launcher removed pid=' + $p.ProcessId + ' kept_managed_pid=' + $keepPid)
+    }
+    foreach ($p in @($NonCanonical)) {
+        Stop-LauncherTree -ProcessId $p.ProcessId
+        Log ('Noncanonical launcher removed pid=' + $p.ProcessId + ' kept_managed_pid=' + $keepPid)
+    }
+    return $true
+}
+
 function Get-MarkerAgeSeconds {
-    if (-not (Test-Path -LiteralPath $ConnectedMarker)) { return [double]::PositiveInfinity }
-    return (((Get-Date).ToUniversalTime() - (Get-Item -LiteralPath $ConnectedMarker).LastWriteTimeUtc).TotalSeconds)
+    try {
+        $marker = Get-Item -LiteralPath $ConnectedMarker -ErrorAction Stop
+        return (((Get-Date).ToUniversalTime() - $marker.LastWriteTimeUtc).TotalSeconds)
+    } catch { return [double]::PositiveInfinity }
 }
 
 function Get-LauncherAgeSeconds([object]$Launcher) {
@@ -241,7 +275,7 @@ function Wait-AgentConvergence([int]$TimeoutSeconds = 60) {
         if (Test-RecentCooldown) { return $false }
         $canonical = @(Get-CanonicalRemoteLaunchers)
         $noncanonical = @(Get-NonCanonicalRemoteLaunchers)
-        if ($canonical.Count -eq 1 -and $noncanonical.Count -eq 0 -and (Get-MarkerAgeSeconds) -le 150) { return $true }
+        if ($canonical.Count -eq 1 -and $noncanonical.Count -eq 0 -and (Get-MarkerAgeSeconds) -le $MarkerStaleSeconds) { return $true }
     }
     return $false
 }
@@ -255,9 +289,16 @@ function Ensure-Agent {
     }
     $canonical = @(Get-CanonicalRemoteLaunchers)
     $noncanonical = @(Get-NonCanonicalRemoteLaunchers)
+    if ($canonical.Count -gt 0 -and ($canonical.Count -gt 1 -or $noncanonical.Count -gt 0)) {
+        if (Remove-DuplicateCanonicalLaunchers -Canonical $canonical -NonCanonical $noncanonical) {
+            Start-Sleep -Milliseconds 500
+            $canonical = @(Get-CanonicalRemoteLaunchers)
+            $noncanonical = @(Get-NonCanonicalRemoteLaunchers)
+        }
+    }
     if ($canonical.Count -eq 1 -and $noncanonical.Count -eq 0) {
         $markerAge = Get-MarkerAgeSeconds
-        if ($markerAge -le 150) {
+        if ($markerAge -le $MarkerStaleSeconds) {
             Remove-LegacyStartup
             Write-Output 'REMOTE_AGENT_RUNNING=true'
             return
