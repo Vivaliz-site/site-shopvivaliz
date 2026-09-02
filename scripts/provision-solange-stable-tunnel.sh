@@ -76,15 +76,10 @@ scp -q "${ssh_opts[@]}" "$token_tmp" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_ROOT/clo
 
 remote_script="$(cat <<'REMOTE'
 set -Eeuo pipefail
-root=/home/ubuntu/solange-client-demo
+root="${REMOTE_ROOT:?missing REMOTE_ROOT}"
+cloudflared_image="cloudflare/cloudflared@sha256:0aa26e284f05e6c77ae375b8c9c11d9eb6a448fb7bcd8d40f31cb6176189eb38"
 container_exists() {
   docker inspect "$1" >/dev/null 2>&1
-}
-stop_container_if_running() {
-  local name="$1"
-  if container_exists "$name" && [[ "$(docker inspect -f '{{.State.Running}}' "$name")" == true ]]; then
-    docker stop "$name" >/dev/null
-  fi
 }
 remove_container_if_present() {
   local name="$1"
@@ -97,7 +92,7 @@ chmod 600 "$root/cloudflared.token"
 remove_container_if_present solange-demo-tunnel-stable
 docker run -d --name solange-demo-tunnel-stable --restart unless-stopped --network host \
   -v "$root/cloudflared.token:/run/secrets/cloudflared-token:ro" \
-  cloudflare/cloudflared:latest tunnel --no-autoupdate run --token-file /run/secrets/cloudflared-token >/dev/null
+  "$cloudflared_image" tunnel --no-autoupdate run --token-file /run/secrets/cloudflared-token >/dev/null
 connected=false
 for _ in $(seq 1 30); do
   if docker logs solange-demo-tunnel-stable 2>&1 | grep -q 'Registered tunnel connection'; then
@@ -110,7 +105,6 @@ done
   docker logs --tail 80 solange-demo-tunnel-stable >&2
   exit 1
 }
-stop_container_if_running solange-demo-reconciler
 stable_url="https://$PUBLIC_HOSTNAME"
 sed -i -E "s#^NEXT_PUBLIC_SUPABASE_URL=.*#NEXT_PUBLIC_SUPABASE_URL=$stable_url#; s#^APP_URL=.*#APP_URL=$stable_url#" "$root/app/.env.production.local"
 docker run --rm --network host -v "$root/app:/app" -w /app node:24-bookworm-slim npm run build
@@ -119,7 +113,8 @@ printf '%s\n' "$stable_url" > "$root/state/current-url.txt"
 REMOTE
 )"
 printf -v remote_host_env '%q' "$PUBLIC_HOSTNAME"
-ssh "${ssh_opts[@]}" "$REMOTE_USER@$REMOTE_HOST" "PUBLIC_HOSTNAME=$remote_host_env bash -s" <<<"$remote_script"
+printf -v remote_root_env '%q' "$REMOTE_ROOT"
+ssh "${ssh_opts[@]}" "$REMOTE_USER@$REMOTE_HOST" "PUBLIC_HOSTNAME=$remote_host_env REMOTE_ROOT=$remote_root_env bash -s" <<<"$remote_script"
 
 stable_url="https://$PUBLIC_HOSTNAME"
 for _ in $(seq 1 30); do
@@ -132,7 +127,7 @@ curl --fail --silent --show-error --max-time 10 "$stable_url/api/health" >/dev/n
 curl --fail --silent --show-error --max-time 10 "$stable_url/" >/dev/null
 finalize_script="$(cat <<'REMOTE'
 set -Eeuo pipefail
-for name in solange-demo-tunnel solange-demo-caddy; do
+for name in solange-demo-reconciler solange-demo-tunnel solange-demo-caddy; do
   if docker inspect "$name" >/dev/null 2>&1; then
     if [[ "$(docker inspect -f '{{.State.Running}}' "$name")" == true ]]; then
       docker stop "$name" >/dev/null
