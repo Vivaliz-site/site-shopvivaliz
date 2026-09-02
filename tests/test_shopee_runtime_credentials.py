@@ -59,5 +59,62 @@ class ShopeeRuntimeCredentialsTest(unittest.TestCase):
         self.assertTrue(state["SHOPEE_REFRESH_TOKEN"])
 
 
+class ShopeeClientRetryTest(unittest.TestCase):
+    def _client(self):
+        module = load_module("shopee_client_retry_test", "scripts/utils/shopee_client.py")
+        client = module.ShopeeClient.__new__(module.ShopeeClient)
+        client._decode = lambda response: response
+        return module, client
+
+    def test_transient_timeout_retries_up_to_four_attempts(self):
+        module, client = self._client()
+        calls = 0
+
+        def send(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls < 4:
+                raise module.requests.Timeout("temporary")
+            return {"ok": True}
+
+        client._send_with_refresh = send
+        with patch.object(module.time, "sleep") as sleep:
+            self.assertEqual(client._get("/product/get_item_list"), {"ok": True})
+        self.assertEqual(calls, 4)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [2, 4, 8])
+
+    def test_transient_timeout_stops_after_four_attempts(self):
+        module, client = self._client()
+        calls = 0
+
+        def send(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            raise module.requests.Timeout("temporary")
+
+        client._send_with_refresh = send
+        with patch.object(module.time, "sleep") as sleep:
+            with self.assertRaises(module.requests.Timeout):
+                client._get("/product/get_item_list")
+        self.assertEqual(calls, 4)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [2, 4, 8])
+
+    def test_permanent_error_is_not_retried(self):
+        module, client = self._client()
+        calls = 0
+
+        def send(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            raise ValueError("permanent")
+
+        client._send_with_refresh = send
+        with patch.object(module.time, "sleep") as sleep:
+            with self.assertRaises(ValueError):
+                client._get("/product/get_item_list")
+        self.assertEqual(calls, 1)
+        sleep.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
