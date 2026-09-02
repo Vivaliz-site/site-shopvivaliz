@@ -44,6 +44,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
 // LLM na conta da loja. api/liz-intelligent.php (o endpoint que o widget da
 // vitrine realmente usa) ja tinha limite; estes dois nao tinham.
 require_once dirname(__DIR__) . '/includes/rate-limiter.php';
+require_once dirname(__DIR__) . '/includes/liz-general-policy.php';
 $lizgIp = (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');
 if (!RateLimiter::isAllowed('liz-general:' . $lizgIp, 10, 60)) {
     lizg_reply(429, ['ok' => false, 'error' => 'Muitas perguntas seguidas. Aguarde um minuto.']);
@@ -71,12 +72,15 @@ Não invente fatos. Em temas médicos, jurídicos ou financeiros, dê apenas inf
 Não transforme toda resposta em oferta comercial e não force o retorno ao assunto da loja.
 TXT;
 
+$groundingRequested = lizg_needs_web_grounding($message);
 $payload = [
     'system_instruction' => ['parts' => [['text' => $system]]],
     'contents' => [['role' => 'user', 'parts' => [['text' => $message]]]],
-    'tools' => [['google_search' => new stdClass()]],
     'generationConfig' => ['maxOutputTokens' => 900, 'temperature' => 0.35],
 ];
+if ($groundingRequested) {
+    $payload['tools'] = [['google_search' => new stdClass()]];
+}
 
 function lizg_request(string $url, string $key, array $payload): array
 {
@@ -97,16 +101,19 @@ function lizg_request(string $url, string $key, array $payload): array
 }
 
 [$status, $body] = lizg_request($url, $key, $payload);
-$groundingUsed = true;
+$groundingUsed = $groundingRequested && $status === 200;
 
-// Grounding é um recurso opcional. Se ele falhar por modelo, quota, billing,
-// permissão ou indisponibilidade temporária, a Liz ainda deve conseguir conversar.
-// A segunda tentativa não alega pesquisa web e preserva erros de autenticação da
-// chamada básica, que continuam resultando em 503 abaixo.
-if ($status !== 200) {
+// Grounding é opcional e consome uma cota separada. Perguntas estáveis não o
+// solicitam. Quando uma pergunta atual pede grounding e ele falha, fazemos uma
+// tentativa sem web. Em falhas transitórias da chamada simples, repetimos uma vez.
+if ($status !== 200 && $groundingRequested) {
     unset($payload['tools']);
     $groundingUsed = false;
     $payload['system_instruction']['parts'][0]['text'] .= "\nA pesquisa web não está disponível nesta execução. Não diga que pesquisou; avise quando uma informação atual não puder ser confirmada.";
+    [$status, $body] = lizg_request($url, $key, $payload);
+}
+if ($status !== 200 && !$groundingRequested && lizg_should_retry_plain($status)) {
+    usleep(200000);
     [$status, $body] = lizg_request($url, $key, $payload);
 }
 
