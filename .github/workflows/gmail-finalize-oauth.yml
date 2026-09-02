@@ -27,7 +27,7 @@ jobs:
       - name: Configure VM key
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
-          VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
+          VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST || '163.176.103.253' }}
         shell: bash
         run: |
           set -euo pipefail
