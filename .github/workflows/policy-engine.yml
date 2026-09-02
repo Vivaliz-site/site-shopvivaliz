@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   enforce:
@@ -158,6 +159,48 @@ jobs:
           print(f"erp_route={evidence.get('route')}")
           PY
 
+      - name: Materialize visual proof artifact
+        if: ${{ hashFiles('visual-proof.json') != '' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -Eeuo pipefail
+          eval "$(python3 - <<'PY'
+          import json, shlex
+          from pathlib import Path
+          data = json.loads(Path('visual-proof.json').read_text(encoding='utf-8'))
+          evidence = data.get('evidence') or {}
+          required = ('workflow_run', 'workflow_artifact_id', 'workflow_artifact_name', 'workflow_artifact_digest')
+          missing = [key for key in required if not evidence.get(key)]
+          if missing:
+              raise SystemExit('visual proof GitHub evidence missing: ' + ','.join(missing))
+          for key, value in {
+              'VISUAL_RUN_ID': evidence['workflow_run'],
+              'VISUAL_ARTIFACT_ID': evidence['workflow_artifact_id'],
+              'VISUAL_ARTIFACT_NAME': evidence['workflow_artifact_name'],
+              'VISUAL_ARTIFACT_DIGEST': evidence['workflow_artifact_digest'],
+          }.items():
+              print(f'{key}={shlex.quote(str(value))}')
+          PY
+          )"
+          metadata="$(gh api "repos/$GH_REPO/actions/artifacts/$VISUAL_ARTIFACT_ID")"
+          actual_name="$(jq -r '.name // empty' <<<"$metadata")"
+          actual_digest="$(jq -r '.digest // empty' <<<"$metadata")"
+          expired="$(jq -r '.expired // true' <<<"$metadata")"
+          test "$expired" = false
+          test "$actual_name" = "$VISUAL_ARTIFACT_NAME"
+          test "$actual_digest" = "$VISUAL_ARTIFACT_DIGEST"
+          dest=".policy-artifacts/$VISUAL_ARTIFACT_NAME"
+          rm -rf -- "$dest"
+          mkdir -p -- "$dest"
+          gh run download "$VISUAL_RUN_ID" -n "$VISUAL_ARTIFACT_NAME" -D "$dest"
+          test -s "$dest/desktop-produto.png"
+          test -s "$dest/desktop-checkout.png"
+          test -s "$dest/fast-3g-produto.png"
+          test -s "$dest/slow-4g-checkout.png"
+
       - name: Run fail-closed Policy Engine
         env:
           POLICY_BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha }}
@@ -165,6 +208,7 @@ jobs:
         run: |
           node tests/policy-engine-regression-test.js
           node tests/policy-engine-parser-edge-regression-test.js
+          node tests/policy-engine-visual-proof-workflow-test.js
           node agents/policy-engine/index.js
 
       - name: Cleanup SSH material
