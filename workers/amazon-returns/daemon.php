@@ -1,0 +1,364 @@
+<?php
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/../../config/constants.php';
+require_once __DIR__ . '/../../includes/pdo-database.php';
+require_once __DIR__ . '/../../includes/amazon-returns/Runtime.php';
+require_once __DIR__ . '/../../includes/amazon-returns/PolicyEngine.php';
+require_once __DIR__ . '/../../includes/amazon-returns/Projector.php';
+require_once __DIR__ . '/../../includes/amazon-returns/EventStore.php';
+require_once __DIR__ . '/../../includes/amazon-returns/SafeTDecisionEngine.php';
+require_once __DIR__ . '/../../includes/amazon-returns/Outbox.php';
+require_once __DIR__ . '/../../includes/amazon-returns/SpApi.php';
+require_once __DIR__ . '/../../includes/amazon-returns/SpApiEventSink.php';
+require_once __DIR__ . '/../../includes/amazon-returns/GmailApi.php';
+require_once __DIR__ . '/../../includes/amazon-returns/GmailEventSink.php';
+require_once __DIR__ . '/gmail-ingest.php';
+require_once __DIR__ . '/scheduler.php';
+require_once __DIR__ . '/reconcile.php';
+require_once __DIR__ . '/seller-central-worker.php';
+
+final class SvAmazonReturnsDaemon
+{
+    private SvAmazonReturnsConfig $config;
+    private string $stateFile;
+
+    public function __construct(private PDO $db, ?SvAmazonReturnsConfig $config = null)
+    {
+        $this->config = $config ?? new SvAmazonReturnsConfig();
+        $this->stateFile = $this->config->get(
+            'AMAZON_RETURNS_RUNTIME_STATE_FILE',
+            sys_get_temp_dir() . '/shopvivaliz-amazon-returns-state.json'
+        );
+    }
+
+    /** @return array<string,mixed> */
+    public function runOnce(?DateTimeImmutable $now = null): array
+    {
+        $now ??= new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $bootstrap = SvAmazonReturnsRuntime::bootstrap($this->db);
+        $state = $this->loadState();
+        $due = SvAmazonReturnsRuntime::dueTasks($state, $now);
+        $results = ['bootstrap' => $bootstrap];
+
+        foreach ($due as $task) {
+            if ($task === 'bootstrap') continue;
+            try {
+                $results[$task] = $this->runTask($task, $now);
+            } catch (Throwable $e) {
+                $results[$task] = [
+                    'status' => 'FAILED',
+                    'error_class' => $e::class,
+                    'error' => $this->safeError($e->getMessage()),
+                ];
+            }
+            $state[$task] = $now->format(DATE_ATOM);
+        }
+        $this->saveState($state);
+
+        return [
+            'status' => $this->overallStatus($results),
+            'at' => $now->format(DATE_ATOM),
+            'enabled' => $this->config->enabled(),
+            'mode' => $this->config->mode(),
+            'due' => $due,
+            'results' => $results,
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function runTask(string $task, DateTimeImmutable $now): array
+    {
+        if ($task === 'health') {
+            return SvAmazonReturnsRuntime::health($this->db, $this->config);
+        }
+        if (!$this->config->enabled()) {
+            return ['status' => 'SKIPPED_DISABLED', 'reason' => 'AMAZON_RETURNS_ENABLED=0'];
+        }
+
+        return match ($task) {
+            'gmail' => $this->runGmail(),
+            'scheduler' => $this->runScheduler($now),
+            'seller_central' => $this->runSellerCentral(),
+            'financial' => $this->runFinancial(),
+            'sp_api' => $this->runSpApiReconciliation(),
+            'returns_report' => $this->runReturnsReport($now),
+            'policy_monitor' => $this->config->flag('policy_monitor')
+                ? ['status' => 'SKIPPED_NO_OBSERVATION_PROVIDER']
+                : ['status' => 'SKIPPED_DISABLED', 'reason' => 'AMAZON_RETURNS_POLICY_MONITOR=0'],
+            default => ['status' => 'SKIPPED_UNKNOWN_TASK'],
+        };
+    }
+
+    /** @return array<string,mixed> */
+    private function dependencyGate(string $dependency, bool $featureEnabled = true): array
+    {
+        if (!$featureEnabled) return ['status' => 'SKIPPED_DISABLED'];
+        $readiness = $this->config->readiness()[$dependency] ?? ['ready' => false, 'missing' => []];
+        return ($readiness['ready'] ?? false)
+            ? ['status' => 'READY_NO_RUNTIME_PROVIDER']
+            : ['status' => 'BLOCKED_CREDENTIALS', 'missing' => $readiness['missing'] ?? []];
+    }
+
+    /** @return array<string,mixed> */
+    private function runGmail(): array
+    {
+        if (!$this->config->flag('gmail_ingest')) return ['status'=>'SKIPPED_DISABLED'];
+        $gate = $this->dependencyGate('gmail');
+        if (($gate['status'] ?? '') !== 'READY_NO_RUNTIME_PROVIDER') return $gate;
+        $ingestor = new SvAmazonGmailIngestor();
+        $cursor = SvAmazonGmailIngestor::loadCursor($this->db, 'history_id');
+        $pulled = (new SvAmazonGmailApiClient($this->config))->pull($cursor);
+        $result = $ingestor->ingest(
+            $pulled['messages'],
+            fn(array $event): int => SvAmazonGmailEventSink::persist($this->db, $event),
+            (string)$pulled['cursor']
+        );
+        SvAmazonGmailIngestor::saveCursor($this->db, 'history_id', (string)$pulled['cursor'], [
+            'message_count'=>$result['messages'],
+            'event_count'=>$result['events'],
+            'recovered_cursor'=>$pulled['recovered_cursor'] ?? false,
+        ]);
+        return ['status'=>'OK'] + $result + ['recovered_cursor'=>$pulled['recovered_cursor'] ?? false];
+    }
+
+    /** @return array<string,mixed> */
+    private function runScheduler(DateTimeImmutable $now): array
+    {
+        $cases = $this->db->query(
+            "SELECT * FROM amazon_return_cases WHERE closed_at IS NULL "
+            . "ORDER BY COALESCE(next_action_at, eligibility_at, created_at), id LIMIT 500"
+        )?->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $policies = $this->db->query(
+            "SELECT * FROM amazon_return_policies WHERE status='ACTIVE' ORDER BY effective_from DESC, id DESC"
+        )?->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $engine = new SvAmazonSafeTDecisionEngine();
+        $decisions = 0;
+        $enqueued = 0;
+        $blockedWrites = 0;
+
+        foreach ($cases as $case) {
+            $caseId = (int)($case['id'] ?? 0);
+            if ($caseId < 1) continue;
+            $projected = SvAmazonReturnProjector::project($this->db, $caseId);
+            $projected['policies'] = $policies;
+            $policy = SvAmazonReturnPolicyEngine::evaluate($projected, $now);
+            $decision = $engine->nextAction(
+                $projected,
+                SvAmazonReturnEventStore::eventsForCase($this->db, $caseId),
+                $policy
+            );
+            $decisions++;
+            $action = (string)($decision['action'] ?? 'WAIT');
+            if (!SvAmazonReturnsScheduler::isWriteAction($decision)) continue;
+            if (!$this->config->externalWriteAllowed($action)) {
+                $blockedWrites++;
+                continue;
+            }
+            if (!($this->config->readiness()['seller_central_bridge']['ready'] ?? false)) {
+                $blockedWrites++;
+                continue;
+            }
+            $scheduled = (new SvAmazonReturnsScheduler($engine))->schedule($this->db, $projected, [], $policy);
+            if (($scheduled['outbox_id'] ?? null) !== null) $enqueued++;
+        }
+
+        return ['status'=>'OK','cases'=>count($cases),'decisions'=>$decisions,'enqueued'=>$enqueued,'blocked_writes'=>$blockedWrites];
+    }
+
+    /** @return array<string,mixed> */
+    private function runSpApiReconciliation(): array
+    {
+        $gate = $this->dependencyGate('sp_api');
+        if (($gate['status'] ?? '') !== 'READY_NO_RUNTIME_PROVIDER') return $gate;
+        $api = new SvAmazonReturnsSpApi();
+        $orders = $this->db->query(
+            "SELECT DISTINCT amazon_order_id FROM amazon_return_cases WHERE closed_at IS NULL ORDER BY amazon_order_id LIMIT 25"
+        )?->fetchAll(PDO::FETCH_COLUMN) ?: [];
+        $synced = 0;
+        $persistedCases = 0;
+        $failures = 0;
+        $throttleMs = max(0, min(10000, (int)$this->config->get('AMAZON_RETURNS_SP_API_THROTTLE_MS','2100')));
+        foreach ($orders as $index=>$orderId) {
+            try {
+                $order = $api->syncOrder((string)$orderId);
+                $financial = $api->listTransactions((string)$orderId);
+                $saved = SvAmazonSpApiEventSink::persist($this->db, $order, $financial['transactions'] ?? []);
+                $persistedCases += count($saved['cases'] ?? []);
+                $synced++;
+            } catch (Throwable) {
+                $failures++;
+            }
+            if ($throttleMs > 0 && $index < count($orders)-1) usleep($throttleMs * 1000);
+        }
+        return ['status'=>$failures > 0 ? 'PARTIAL' : 'OK','orders'=>count($orders),'synced'=>$synced,'persisted_cases'=>$persistedCases,'failures'=>$failures];
+    }
+
+    /** @return array<string,mixed> */
+    private function runFinancial(): array
+    {
+        $worker = new SvAmazonReturnsReconcileWorker();
+        $cases = $this->db->query(
+            "SELECT * FROM amazon_return_cases WHERE expected_reimbursement_amount > 0 ORDER BY id LIMIT 250"
+        )?->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $updated = 0;
+        $withTransactions = 0;
+        foreach ($cases as $case) {
+            $events = SvAmazonReturnEventStore::eventsForCase($this->db, (int)$case['id']);
+            $transactions = [];
+            foreach ($events as $event) {
+                if (($event['event_type'] ?? '') !== 'FINANCIAL_TRANSACTION_OBSERVED') continue;
+                $transaction = $event['payload']['transaction'] ?? null;
+                if (is_array($transaction)) $transactions[] = $transaction;
+            }
+            if ($transactions === []) continue;
+            $withTransactions++;
+            $result = $worker->reconcileCase($case, $transactions);
+            $terminal = $result['state'] === SvAmazonReturnStates::RECOVERED;
+            $stmt = $this->db->prepare(
+                'UPDATE amazon_return_cases SET reconciled_credit_amount=:credit,state=:state,terminal_reason=:terminal_reason,closed_at=' . ($terminal ? 'COALESCE(closed_at,UTC_TIMESTAMP())' : 'NULL') . ',updated_at=UTC_TIMESTAMP() WHERE id=:id'
+            );
+            $stmt->execute([':credit'=>$result['credit_amount'],':state'=>$result['state'],':terminal_reason'=>$terminal?'FINANCIAL_RECOVERED':null,':id'=>(int)$case['id']]);
+            $updated++;
+        }
+        return ['status'=>'OK','cases'=>count($cases),'with_transactions'=>$withTransactions,'updated'=>$updated];
+    }
+
+    /** @return array<string,mixed> */
+    private function runReturnsReport(DateTimeImmutable $now): array
+    {
+        $gate = $this->dependencyGate('sp_api');
+        if (($gate['status'] ?? '') !== 'READY_NO_RUNTIME_PROVIDER') return $gate;
+        $api = new SvAmazonReturnsSpApi();
+        $report = $api->requestReturnsReport($now->sub(new DateInterval('P2D')), $now);
+        return ['status'=>'OK','report_id'=>$report['report_id'] ?? null,'request_id'=>$report['request_id'] ?? null];
+    }
+
+    /** @return array<string,mixed> */
+    private function runSellerCentral(): array
+    {
+        if ($this->config->sellerCentralBridgeMode() === 'polling') {
+            return ['status'=>'REMOTE_POLLING','reason'=>'WINDOWS_BRIDGE_OWNS_OUTBOX'];
+        }
+        $bridge = $this->config->readiness()['seller_central_bridge'] ?? ['ready'=>false,'missing'=>[]];
+        if (!($bridge['ready'] ?? false)) {
+            return ['status'=>'BLOCKED_CREDENTIALS','missing'=>$bridge['missing'] ?? []];
+        }
+        $writeFlags = $this->config->writeFlags();
+        if (!in_array(true, $writeFlags, true)) {
+            return ['status'=>'SKIPPED_DISABLED','reason'=>'ALL_SELLER_CENTRAL_WRITE_FLAGS_OFF'];
+        }
+
+        $rows = SvAmazonReturnsOutbox::claimBatch($this->db, 10);
+        $worker = new SvAmazonSellerCentralWorker();
+        $processed = 0;
+        $failed = 0;
+        foreach ($rows as $row) {
+            $kind = (string)($row['kind'] ?? '');
+            if (!($writeFlags[$kind] ?? false)) {
+                SvAmazonReturnsOutbox::releaseUnprocessed($this->db, (int)$row['id']);
+                continue;
+            }
+            $payload = is_array($row['payload'] ?? null) ? $row['payload'] : [];
+            $payload['kind'] = $kind;
+            $payload['dry_run'] = false;
+            $payload['write_flags'] = $writeFlags;
+            try {
+                $result = $worker->execute(['kind'=>$kind,'payload'=>$payload]);
+                if (in_array((string)($result['status'] ?? ''), ['ACCEPTED','ALREADY_EXISTS'], true)) {
+                    SvAmazonReturnsOutbox::markSucceeded($this->db, (int)$row['id']);
+                    $processed++;
+                } else {
+                    SvAmazonReturnsOutbox::markFailed($this->db, $row, (string)($result['status'] ?? 'FAILED'));
+                    $failed++;
+                }
+            } catch (Throwable $e) {
+                SvAmazonReturnsOutbox::markFailed($this->db, $row, $e);
+                $failed++;
+            }
+        }
+        return ['status'=>$failed > 0 ? 'PARTIAL' : 'OK','claimed'=>count($rows),'processed'=>$processed,'failed'=>$failed];
+    }
+
+    /** @return array<string,string> */
+    private function loadState(): array
+    {
+        if (!is_file($this->stateFile)) return [];
+        $raw = @file_get_contents($this->stateFile);
+        if (!is_string($raw) || trim($raw) === '') return [];
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) return [];
+        $state = [];
+        foreach ($decoded as $key => $value) {
+            if (is_string($key) && is_string($value)) $state[$key] = $value;
+        }
+        return $state;
+    }
+
+    /** @param array<string,string> $state */
+    private function saveState(array $state): void
+    {
+        $dir = dirname($this->stateFile);
+        if (!is_dir($dir) && !@mkdir($dir, 0770, true) && !is_dir($dir)) {
+            throw new RuntimeException('Unable to create Amazon returns runtime state directory.');
+        }
+        $tmp = $this->stateFile . '.tmp.' . getmypid();
+        $json = json_encode($state, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        if (@file_put_contents($tmp, $json . PHP_EOL, LOCK_EX) === false) {
+            throw new RuntimeException('Unable to write Amazon returns runtime state.');
+        }
+        if (!@rename($tmp, $this->stateFile)) {
+            @unlink($tmp);
+            throw new RuntimeException('Unable to publish Amazon returns runtime state.');
+        }
+    }
+
+    private function safeError(string $message): string
+    {
+        $message = preg_replace('/(access_token|refresh_token|client_secret|authorization)\s*[=:]\s*[^\s,;]+/i', '$1=[redacted]', $message) ?? $message;
+        return function_exists('mb_substr') ? mb_substr($message, 0, 600, 'UTF-8') : substr($message, 0, 600);
+    }
+
+    /** @param array<string,mixed> $results */
+    private function overallStatus(array $results): string
+    {
+        $statuses = [];
+        foreach ($results as $result) {
+            if (is_array($result) && isset($result['status'])) $statuses[] = (string)$result['status'];
+        }
+        if (in_array('FAILED', $statuses, true)) return 'FAILED';
+        if (in_array('PARTIAL', $statuses, true)) return 'PARTIAL';
+        if (in_array('BLOCKED_CREDENTIALS', $statuses, true)) return 'DEGRADED';
+        return 'OK';
+    }
+}
+
+function sv_amazon_returns_daemon_main(array $argv): int
+{
+    $once = in_array('--once', $argv, true);
+    $sleepSeconds = 30;
+    foreach ($argv as $arg) {
+        if (str_starts_with((string)$arg, '--sleep=')) {
+            $sleepSeconds = max(5, min(300, (int)substr((string)$arg, 8)));
+        }
+    }
+
+    $db = sv_pdo();
+    if (!$db instanceof PDO) {
+        fwrite(STDERR, "Amazon returns daemon: database unavailable\n");
+        return 2;
+    }
+    $daemon = new SvAmazonReturnsDaemon($db);
+    do {
+        $result = $daemon->runOnce();
+        fwrite(STDOUT, json_encode($result, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL);
+        if ($once) break;
+        sleep($sleepSeconds);
+    } while (true);
+    return 0;
+}
+
+if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
+    exit(sv_amazon_returns_daemon_main($argv ?? []));
+}
