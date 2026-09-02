@@ -5,6 +5,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $Repo = 'C:\site-shopvivaliz'
 $TaskName = 'ShopVivaliz Desktop Commander 24h'
+$GuardianTaskName = 'ShopVivaliz Desktop Commander Task Guardian'
+$GuardianScript = Join-Path $Repo 'scripts\fredwin-desktop-commander-task-guardian.ps1'
 $LegacyTaskNames = @('DesktopCommanderHidden','DesktopCommanderUser24x7')
 $LegacyStartupName = 'desktop-commander.vbs'
 $StatusScript = Join-Path $Repo 'scripts\fredwin-desktop-commander-status.ps1'
@@ -254,6 +256,15 @@ function Ensure-Agent {
     Log ('Remote agent started pid=' + $canonical[0].ProcessId)
     Write-Output 'REMOTE_AGENT_RUNNING=true'
 }
+function Restore-PersistentTaskState {
+    $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    if ($task -and $task.State -eq 'Disabled') {
+        Enable-ScheduledTask -TaskName $TaskName | Out-Null
+        Log 'Restored disabled persistent Desktop Commander task after recovery test'
+        Write-Output 'TASK_STATE_RESTORED=true'
+    }
+}
+
 function Install-Task {
     Ensure-ProfileEnvironment
     $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
@@ -265,9 +276,16 @@ function Install-Task {
     $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType S4U -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
     $settings.Hidden = $true
+    if (-not (Test-Path -LiteralPath $GuardianScript)) { throw 'Desktop Commander task guardian script missing' }
     Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($startup,$watchdog) -Principal $principal -Settings $settings -Description 'Keeps official Remote Desktop Commander online under the persistent user profile without interactive startup.' -Force | Out-Null
-    Log ('Scheduled task installed user=' + $user + ' logon=S4U watchdog=1m')
+    $guardianArguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $GuardianScript + '"'
+    $guardianAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $guardianArguments -WorkingDirectory $Repo
+    $guardianStartup = New-ScheduledTaskTrigger -AtStartup
+    $guardianWatchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)
+    Register-ScheduledTask -TaskName $GuardianTaskName -Action $guardianAction -Trigger @($guardianStartup,$guardianWatchdog) -Principal $principal -Settings $settings -Description 'Re-enables the official Desktop Commander watchdog if maintenance or a test disables it.' -Force | Out-Null
+    Log ('Scheduled task installed user=' + $user + ' logon=S4U watchdog=1m guardian=1m')
     Write-Output 'TASK_INSTALLED=true'
+    Write-Output 'GUARDIAN_TASK_INSTALLED=true'
 }
 
 if ($Mode -eq 'Ensure' -and (Test-HealthySingletonFastPath)) {
@@ -280,7 +298,10 @@ try {
     switch ($Mode) {
         'InstallTask' { Install-Task; Stop-RemoteProcesses; Start-Sleep -Seconds 2; Ensure-Agent }
         'Restart' { Stop-RemoteProcesses; Start-Sleep -Seconds 2; Ensure-Agent }
-        'KillForRecoveryTest' { Stop-RemoteProcesses; Write-Output 'REMOTE_AGENT_KILLED=true' }
+        'KillForRecoveryTest' {
+            try { Stop-RemoteProcesses; Write-Output 'REMOTE_AGENT_KILLED=true' }
+            finally { Restore-PersistentTaskState }
+        }
         'Status' { & $StatusScript }
         default { Ensure-Agent }
     }
