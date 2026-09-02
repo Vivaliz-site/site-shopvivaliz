@@ -1,0 +1,11 @@
+[Unit]
+Description=ShopVivaliz Desktop Commander guardian timer
+
+[Timer]
+OnActiveSec=20s
+OnUnitInactiveSec=15s
+AccuracySec=1s
+Unit=shopvivaliz-desktop-commander-guardian.service
+
+[Install]
+WantedBy=timers.target
