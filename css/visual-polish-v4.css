@@ -47,9 +47,15 @@ html.sv-cart-empty .cart-layout {
     justify-content: center;
 }
 
-html.sv-cart-empty #cart-summary,
-html.sv-cart-empty .cart-card > .cart-title {
+html.sv-cart-empty #cart-summary {
     display: none !important;
+}
+
+html.sv-cart-empty .cart-card > .cart-title,
+html.sv-checkout-empty .checkout-summary-card > .checkout-title {
+    display: block !important;
+    margin: 0 0 18px;
+    text-align: center;
 }
 
 html.sv-cart-empty .cart-card {
@@ -112,8 +118,7 @@ html.sv-checkout-empty #checkout-section,
 html.sv-checkout-empty .sv-coupon-box,
 html.sv-checkout-empty #coupon-status,
 html.sv-checkout-empty .summary-totals,
-html.sv-checkout-empty .trust-badges,
-html.sv-checkout-empty .checkout-summary-card > .checkout-title {
+html.sv-checkout-empty .trust-badges {
     display: none !important;
 }
 
