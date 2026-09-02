@@ -1,4 +1,4 @@
-﻿param(
+param(
     [ValidateSet('Ensure','InstallTask','Restart','KillForRecoveryTest','Status')]
     [string]$Mode = 'Ensure'
 )
@@ -15,6 +15,7 @@ $CooldownFile = Join-Path $LogDir 'desktop-commander-auth-required.cooldown'
 $ConnectedMarker = Join-Path $LogDir 'desktop-commander-provider-connected.marker'
 $DeviceFile = $null
 $Package = '@wonderwhy-er/desktop-commander@0.2.47'
+$MarkerStaleSeconds = 240
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 function Log([string]$Message) {
@@ -90,8 +91,10 @@ function Get-CanonicalRemoteLaunchers {
     return @(Get-LauncherRoots $matches)
 }
 function Get-MarkerAgeSeconds {
-    if (-not (Test-Path -LiteralPath $ConnectedMarker)) { return [double]::PositiveInfinity }
-    return (((Get-Date).ToUniversalTime() - (Get-Item -LiteralPath $ConnectedMarker).LastWriteTimeUtc).TotalSeconds)
+    try {
+        $marker = Get-Item -LiteralPath $ConnectedMarker -ErrorAction Stop
+        return (((Get-Date).ToUniversalTime() - $marker.LastWriteTimeUtc).TotalSeconds)
+    } catch { return [double]::PositiveInfinity }
 }
 function Get-LauncherAgeSeconds([object]$Launcher) {
     try { return (((Get-Date) - [datetime]$Launcher.CreationDate).TotalSeconds) } catch { return [double]::PositiveInfinity }
@@ -145,7 +148,7 @@ function Ensure-Agent {
     $noncanonical = @(Get-NonCanonicalRemoteLaunchers)
     if ($canonical.Count -eq 1 -and $noncanonical.Count -eq 0) {
         $markerAge = Get-MarkerAgeSeconds
-        if ($markerAge -le 150) {
+        if ($markerAge -le $MarkerStaleSeconds) {
             Remove-LegacyPersistence
             Log ('Canonical remote agent healthy marker_age_seconds=' + [math]::Round($markerAge) + ' pid=' + $canonical[0].ProcessId)
             Write-Output 'REMOTE_AGENT_RUNNING=true'; return
