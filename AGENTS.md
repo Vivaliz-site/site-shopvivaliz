@@ -16,12 +16,19 @@ O proprietário autoriza os agentes com acesso técnico válido a validar pelo n
 
 ### 0.1 Commit, PR e Merge Obrigatório ao Finalizar
 
-> ⚠️ **CRÍTICO:** Qualquer alteração feita no repositório, ao ser finalizada, deve obrigatoriamente ser validada e seguir o fluxo de:
-> 1. **Commit** das alterações locais.
-> 2. Abertura/atualização de **Pull Request (PR)**.
-> 3. Realização de **Merge** para a branch alvo.
-> 
-> Toda alteração deve ser validada pelo navegador de forma visual e funcional (nada de scripts para essa validação) e seguir este fluxo. Não finalize rodadas de alterações mantendo-as apenas locais ou sem merge/deploy. Se houver impedimento, registre formalmente como **INCONCLUSIVO**.
+> ⚠️ **CRÍTICO — COMMIT NÃO É ESTADO FINAL:** uma tarefa com alteração versionada só termina depois de **branch → validação real → commit → push → PR → checks/revisão → merge → validação pós-merge → working tree limpa → nenhuma PR pendente da tarefa**.
+>
+> É proibido encerrar a tarefa em qualquer estado intermediário, inclusive: commit apenas local, branch apenas enviada, PR aberta/draft, PR verde aguardando merge ou alteração local não commitada.
+>
+> Antes de responder como concluído, execute e confira:
+> 1. `git status --porcelain` vazio no workspace usado para a tarefa;
+> 2. commit/branch publicados no remoto;
+> 3. PR correspondente mergeada no ramo alvo;
+> 4. checks e validação real aplicável aprovados;
+> 5. validação pós-merge no ramo/deploy alvo;
+> 6. nenhuma PR aberta/draft referente à mesma rodada.
+>
+> Se um gate externo realmente impedir o merge após esgotadas as correções executáveis, reporte **INCONCLUSIVO** com o bloqueio concreto e não abandone uma PR aberta como estacionamento. Feche/limpe PRs obsoletas, duplicadas ou impossíveis de avançar.
 
 ### 0.2 IA paga nunca em rotinas permanentes ou periódicas
 
@@ -159,10 +166,15 @@ git checkout main
 git log --oneline -1
 
 # FASE 2: DISPARO
-echo "=== DISPARO ===" 
+echo "=== DISPARO ==="
+BRANCH="test/auto-sync-$(date +%Y%m%d-%H%M%S)"
+git switch -c "$BRANCH"
 git commit --allow-empty -m "test: sync"
-EXPECTED_SHA=$(git rev-parse HEAD)
-git push origin main
+git push -u origin "$BRANCH"
+PR_URL=$(gh pr create --base main --head "$BRANCH" --title "test: sync" --body "Teste controlado de sincronização")
+gh pr merge "$PR_URL" --squash --delete-branch
+git fetch origin main
+EXPECTED_SHA=$(git rev-parse origin/main)
 
 # FASE 3: ESPERA (SEM INTERVIR!)
 echo "Aguardando 4 minutos..."

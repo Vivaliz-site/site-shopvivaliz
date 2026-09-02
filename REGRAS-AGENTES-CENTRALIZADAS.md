@@ -42,13 +42,14 @@ Estas regras prevalecem sobre qualquer protocolo de autonomia, insistência até
 ---
 ### Commit, PR e Merge obrigatório ao finalizar rodada de alterações
 
-> ⚠️ **REGRA DE FINALIZAÇÃO OBRIGATÓRIA:**
-> Qualquer alteração feita no repositório, ao ser finalizada, deve obrigatoriamente ser validada e seguir o fluxo de:
-> 1. **Commit** das alterações locais.
-> 2. Abertura ou atualização do **Pull Request (PR)** correspondente.
-> 3. Realização de **Merge** para a branch principal ou branch ativa de entrega.
-> 
-> Toda alteração deve ser validada pelo navegador de forma visual e funcional (nada de scripts para essa validação) e seguir este fluxo. Não é aceitável encerrar uma rodada de alterações sem concluir o ciclo de commit, PR e merge/deploy quando houver acesso técnico para isso. Se houver algum impedimento técnico ou bloqueio de proteção de branch, o status deve ser reportado formalmente como **INCONCLUSIVO**.
+> ⚠️ **REGRA DE FINALIZAÇÃO OBRIGATÓRIA — COMMIT NÃO FINALIZA TAREFA:**
+> O único fluxo de conclusão aceito para alteração versionada é **branch → validação real → commit → push → PR → checks/revisão → merge → validação pós-merge → working tree limpa → zero PR pendente da própria rodada**.
+>
+> Um commit local, um push de branch, uma PR aberta/draft ou uma PR verde ainda sem merge são apenas estados intermediários. O agente deve continuar autonomamente enquanto houver ações executáveis necessárias para chegar ao merge e à validação final.
+>
+> Antes de declarar `COMPROVADO`, o agente deve verificar `git status --porcelain` vazio no workspace da tarefa e consultar as PRs relacionadas para confirmar que nenhuma ficou aberta/draft. Após merge, deve verificar o ramo/deploy alvo e registrar a evidência pós-merge.
+>
+> Se um bloqueio externo real impedir o merge depois de esgotadas as correções disponíveis, o resultado é **INCONCLUSIVO**. Não é permitido abandonar PR aberta como estacionamento: PR obsoleta, duplicada ou sem caminho executável para merge deve ser fechada/limpa com o motivo e ponto exato de continuação documentados.
 
 Ao concluir qualquer rodada de alterações versionadas, o agente deve deixar a mudança integrada por merge no ramo alvo e/ou publicada no alvo de deploy autorizado, desde que checks, revisões e proteções permitam. Não é aceitável encerrar uma rodada como "pronta" mantendo apenas branch local ou remoto sem merge/deploy quando o agente tem acesso técnico para concluir o fluxo. Se branch protection, CI, falta de permissão ou outro gate impedir o merge, o resultado deve ser registrado como **INCONCLUSIVO**, com link/SHA, checks observados e próximo bloqueio concreto.
 
@@ -355,10 +356,15 @@ ssh -i "$SSH_KEY" ubuntu@137.131.156.17 "grep NOME_SECRET /home/ubuntu/site-shop
 gh secret list --repo Vivaliz-site/site-shopvivaliz | grep NOME_SECRET
 ```
 
-#### Passo 5: COMMITAR
+#### Passo 5: VERSIONAR VIA BRANCH, PR E MERGE
 ```bash
-git commit -m "chore: atualizar NOME_SECRET (sincronizado em 3 ambientes)"
-git push origin main
+# Nunca versione o valor do secret. Inclua apenas arquivos permitidos que referenciem a mudança.
+git switch -c chore/sync-nome-secret
+git add <arquivos-versionados-sem-secrets>
+git commit -m "chore: sincronizar referência de NOME_SECRET"
+git push -u origin chore/sync-nome-secret
+PR_URL=$(gh pr create --base main --head chore/sync-nome-secret --title "chore: sincronizar NOME_SECRET" --body "Sincronização validada sem versionar o valor do secret")
+gh pr merge "$PR_URL" --squash --delete-branch
 ```
 
 ### Matriz de Sincronização

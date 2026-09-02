@@ -81,7 +81,10 @@
 - ✗ **Nunca** exija clique manual pra concluir instalação
 
 ### Finalização Obrigatória
-- ⚠️ **Ao finalizar alterações, faça sempre Commit, PR e Merge (Toda alteração deve ser validada de forma visual e funcional pelo navegador, sem scripts, e seguir este fluxo)** (Obrigatório)
+- ⚠️ **Commit nunca é ponto de parada.** Para qualquer alteração versionada, concluir significa: **branch → validação real → commit → push → PR → checks/revisão → merge → validação pós-merge → `git status --porcelain` vazio → nenhuma PR aberta/draft da tarefa**.
+- ✗ Não encerrar em commit local, branch enviada, PR aberta/draft ou PR verde ainda sem merge.
+- ✓ Se houver erro de CI/revisão/conflito, corrigir e repetir o ciclo; enquanto existir ação executável, continuar.
+- ✓ Se um bloqueio externo tornar o merge impossível, marcar **INCONCLUSIVO** e fechar/limpar PR obsoleta ou sem caminho de avanço, documentando o ponto exato de continuação.
 
 ---
 
