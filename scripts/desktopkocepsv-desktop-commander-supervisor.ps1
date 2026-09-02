@@ -147,8 +147,12 @@ function Deploy-OperationalFiles {
 }
 
 function Test-DeviceStateNewerThanCooldown {
-    if (-not $DeviceFile -or -not (Test-Path -LiteralPath $DeviceFile) -or -not (Test-Path -LiteralPath $CooldownFile)) { return $false }
-    return ((Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc -gt (Get-Item -LiteralPath $CooldownFile).LastWriteTimeUtc)
+    if (-not $DeviceFile) { return $false }
+    try {
+        $device = Get-Item -LiteralPath $DeviceFile -ErrorAction Stop
+        $cooldown = Get-Item -LiteralPath $CooldownFile -ErrorAction Stop
+        return ($device.LastWriteTimeUtc -gt $cooldown.LastWriteTimeUtc)
+    } catch { return $false }
 }
 
 function Get-DesktopCommanderRemoteLaunchers {
@@ -242,10 +246,12 @@ function Stop-RemoteProcesses {
 }
 
 function Test-RecentCooldown {
-    if (-not (Test-Path -LiteralPath $CooldownFile)) { return $false }
     if (Test-DeviceStateNewerThanCooldown) { return $false }
-    $age = (Get-Date).ToUniversalTime() - (Get-Item -LiteralPath $CooldownFile).LastWriteTimeUtc
-    return ($age.TotalHours -lt 6)
+    try {
+        $cooldown = Get-Item -LiteralPath $CooldownFile -ErrorAction Stop
+        $age = (Get-Date).ToUniversalTime() - $cooldown.LastWriteTimeUtc
+        return ($age.TotalHours -lt 6)
+    } catch { return $false }
 }
 
 function Remove-LegacyStartup {
@@ -278,6 +284,16 @@ function Wait-AgentConvergence([int]$TimeoutSeconds = 60) {
         if ($canonical.Count -eq 1 -and $noncanonical.Count -eq 0 -and (Get-MarkerAgeSeconds) -le $MarkerStaleSeconds) { return $true }
     }
     return $false
+}
+
+function Test-HealthySingletonFastPath {
+    if (-not (Test-Path -LiteralPath $DeviceFile)) { return $false }
+    if (Test-RecentCooldown) { return $false }
+    $canonical = @(Get-CanonicalRemoteLaunchers)
+    $noncanonical = @(Get-NonCanonicalRemoteLaunchers)
+    if ($canonical.Count -ne 1 -or $noncanonical.Count -ne 0) { return $false }
+    $markerAge = Get-MarkerAgeSeconds
+    return ($markerAge -le $MarkerStaleSeconds)
 }
 
 function Ensure-Agent {
@@ -359,6 +375,11 @@ function Install-Task {
     Write-Output 'TASK_INSTALLED=true'
     Write-Output 'TASK_ACTION_SECURE=true'
     Write-Output ('LEGACY_RAW_CAPTURES_REMOVED=' + $removed)
+}
+
+if ($Mode -eq 'Ensure' -and (Test-HealthySingletonFastPath)) {
+    Write-Output 'REMOTE_AGENT_RUNNING=true'
+    exit 0
 }
 
 $ownerMutex = $null

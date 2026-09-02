@@ -51,11 +51,13 @@ O diagnóstico esperado inclui `CANONICAL_AGENT_COUNT=1`, `NONCANONICAL_AGENT_CO
 - Node/npx são resolvidos sob o usuário `ubuntu` e apenas os caminhos executáveis são gravados em `/etc/default/shopvivaliz-desktop-commander`.
 - Recovery local independente: `shopvivaliz-desktop-commander-guardian.timer` executa um guardian a cada ~15 segundos, preserva processos dentro do cgroup do serviço e remove somente launchers estrangeiros.
 - Recovery cruzado: o backend ARM possui SSH privado dedicado para `shopvivaliz-free-a1` pela VCN; o monitor central pode verificar/reparar o segundo ARM mesmo se o Desktop Commander dele estiver indisponível.
+- Deploy Linux canônico: `.github/workflows/vm-desktop-commander-action.yml` com `install_or_repair`. O fluxo cria o checkout de deploy se ele ainda não existir; quando já existe, faz `fetch` e restaura somente os artefatos do Desktop Commander a partir de `origin/main`, sem reset/merge amplo, e só então reinstala serviço/guardian. O workflow antigo `vm-desktop-commander-secure-recovery.yml.disabled` não é caminho operacional.
 
 ## Regra de propriedade única
 - Nunca iniciar manualmente `npx --yes @wonderwhy-er/desktop-commander@0.2.47 remote --persist-session` em um host já gerenciado. O processo manual reutiliza o mesmo Device ID e pode disputar presença com a sessão 24h.
 - `ShopVivaliz Auto Sync` não inicia, repara nem reinstala Desktop Commander ou relay. Ele somente sincroniza o repositório e executa guards próprios; DC e relay pertencem exclusivamente aos watchdogs dedicados.
 - Em Windows, a tarefa S4U de 1 minuto é o único supervisor persistente. Em Linux, `shopvivaliz-desktop-commander.service` é o único owner do provider e o guardian apenas remove launchers fora do cgroup e recupera o serviço quando necessário.
+- Chamadas `Ensure` em Windows usam fast-path read-only antes do mutex somente quando existe exatamente 1 launcher canônico, 0 não canônicos, marker fresco e nenhum cooldown. Qualquer duplicata, marker stale, cooldown ou ambiguidade continua passando pelo mutex e pela convergência seletiva.
 - O monitor recorrente canônico é `.github/workflows/desktop-commander-24h-health.yml`, cobrindo quatro hosts. O antigo control plane de três hosts permanece apenas para uso manual/push, sem `schedule` recorrente.
 ## Diagnóstico seguro
 Nunca ler ou imprimir o conteúdo de `device.json`. Validar somente existência/mtime, ACL, usuário, HOME, estado do processo/tarefa/unit e PID. Nunca persistir token, cookie, device code, session blob, chave privada ou device identifier completo.

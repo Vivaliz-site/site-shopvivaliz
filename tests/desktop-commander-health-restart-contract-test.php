@@ -17,6 +17,7 @@ $required = [
     "php tests/fredwin-desktop-commander-stale-transport-contract-test.php",
     "php tests/vm-desktop-commander-auth-classification-contract-test.php",
     "php tests/fredwin-desktop-commander-duplicate-owner-contract-test.php",
+    "php tests/windows-desktop-commander-pre-mutex-fastpath-contract-test.php",
     "php tests/desktopkocepsv-duplicate-owner-contract-test.php",
     "php tests/local-auto-sync-dc-separation-contract-test.php",
     "php tests/vm-desktop-commander-guardian-contract-test.php",

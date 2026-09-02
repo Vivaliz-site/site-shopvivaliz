@@ -23,19 +23,26 @@ function Log([string]$Message) {
     "$stamp - $Message" | Out-File -FilePath $SupervisorLog -Append -Encoding utf8
 }
 $MutexName = 'Global\ShopVivalizDesktopCommander-FRED'
-$OwnerMutex = New-Object System.Threading.Mutex($false, $MutexName)
-$OwnerMutexAcquired = $false
-try {
-    try { $OwnerMutexAcquired = $OwnerMutex.WaitOne(0) }
-    catch [System.Threading.AbandonedMutexException] { $OwnerMutexAcquired = $true }
-} catch {
-    $OwnerMutex.Dispose()
-    throw
+function Enter-OwnerMutex {
+    $mutex = New-Object System.Threading.Mutex($false, $MutexName)
+    $acquired = $false
+    try {
+        try { $acquired = $mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $acquired = $true }
+        if (-not $acquired) {
+            Log 'REMOTE_OWNER_CONFLICT mutex already held; refusing concurrent supervisor'
+            Write-Output 'REMOTE_OWNER_CONFLICT=true reason=supervisor_mutex_held'
+            $mutex.Dispose()
+            exit 21
+        }
+        return $mutex
+    } catch {
+        if (-not $acquired) { $mutex.Dispose() }
+        throw
+    }
 }
-if (-not $OwnerMutexAcquired) {
-    Log 'REMOTE_OWNER_CONFLICT mutex already held; refusing concurrent supervisor'
-    Write-Output 'REMOTE_OWNER_CONFLICT=true reason=supervisor_mutex_held'
-    exit 21
+function Exit-OwnerMutex([System.Threading.Mutex]$Mutex) {
+    if (-not $Mutex) { return }
+    try { $Mutex.ReleaseMutex() } finally { $Mutex.Dispose() }
 }
 function Ensure-ProfileEnvironment {
     if (-not $env:USERPROFILE) {
@@ -50,8 +57,12 @@ function Ensure-ProfileEnvironment {
     $script:DeviceFile = Join-Path (Join-Path $env:USERPROFILE '.desktop-commander-device') 'device.json'
 }
 function Test-DeviceStateNewerThanCooldown {
-    if (-not $DeviceFile -or -not (Test-Path -LiteralPath $DeviceFile) -or -not (Test-Path -LiteralPath $CooldownFile)) { return $false }
-    return ((Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc -gt (Get-Item -LiteralPath $CooldownFile).LastWriteTimeUtc)
+    if (-not $DeviceFile) { return $false }
+    try {
+        $device = Get-Item -LiteralPath $DeviceFile -ErrorAction Stop
+        $cooldown = Get-Item -LiteralPath $CooldownFile -ErrorAction Stop
+        return ($device.LastWriteTimeUtc -gt $cooldown.LastWriteTimeUtc)
+    } catch { return $false }
 }
 function Get-DesktopCommanderRemoteLaunchers {
     return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
@@ -156,11 +167,25 @@ function Remove-LegacyPersistence {
     if (Test-Path -LiteralPath $startup) { Remove-Item -LiteralPath $startup -Force -ErrorAction SilentlyContinue; Log ('Removed legacy startup ' + $LegacyStartupName) }
 }
 function Test-RecentCooldown {
-    if (-not (Test-Path -LiteralPath $CooldownFile)) { return $false }
     if (Test-DeviceStateNewerThanCooldown) { return $false }
-    $age = (Get-Date).ToUniversalTime() - (Get-Item -LiteralPath $CooldownFile).LastWriteTimeUtc
-    return ($age.TotalHours -lt 6)
+    try {
+        $cooldown = Get-Item -LiteralPath $CooldownFile -ErrorAction Stop
+        $age = (Get-Date).ToUniversalTime() - $cooldown.LastWriteTimeUtc
+        return ($age.TotalHours -lt 6)
+    } catch { return $false }
 }
+
+function Test-HealthySingletonFastPath {
+    Ensure-ProfileEnvironment
+    if (-not (Test-Path -LiteralPath $DeviceFile)) { return $false }
+    if (Test-RecentCooldown) { return $false }
+    $canonical = @(Get-CanonicalRemoteLaunchers)
+    $noncanonical = @(Get-NonCanonicalRemoteLaunchers)
+    if ($canonical.Count -ne 1 -or $noncanonical.Count -ne 0) { return $false }
+    $markerAge = Get-MarkerAgeSeconds
+    return ($markerAge -le $MarkerStaleSeconds)
+}
+
 function Ensure-Agent {
     Ensure-ProfileEnvironment
     if (-not (Test-Path -LiteralPath $RunnerScript)) { throw 'sanitized runner not found' }
@@ -239,7 +264,13 @@ function Install-Task {
     Write-Output 'TASK_INSTALLED=true'
 }
 
+if ($Mode -eq 'Ensure' -and (Test-HealthySingletonFastPath)) {
+    Write-Output 'REMOTE_AGENT_RUNNING=true'
+    exit 0
+}
+$ownerMutex = $null
 try {
+    if ($Mode -ne 'Status') { $ownerMutex = Enter-OwnerMutex }
     switch ($Mode) {
         'InstallTask' { Install-Task; Stop-RemoteProcesses; Start-Sleep -Seconds 2; Ensure-Agent }
         'Restart' { Stop-RemoteProcesses; Start-Sleep -Seconds 2; Ensure-Agent }
@@ -248,8 +279,5 @@ try {
         default { Ensure-Agent }
     }
 } finally {
-    if ($OwnerMutexAcquired) {
-        $OwnerMutex.ReleaseMutex()
-        $OwnerMutex.Dispose()
-    }
+    Exit-OwnerMutex $ownerMutex
 }
