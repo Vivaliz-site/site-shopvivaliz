@@ -82,7 +82,7 @@ if ($groundingRequested) {
     $payload['tools'] = [['google_search' => new stdClass()]];
 }
 
-function lizg_request(string $url, string $key, array $payload): array
+function lizg_request(string $url, string $key, array $payload, int $timeoutSeconds = 18): array
 {
     $ch = curl_init($url);
     if ($ch === false) return [0, ''];
@@ -92,7 +92,7 @@ function lizg_request(string $url, string $key, array $payload): array
         CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'x-goog-api-key: ' . $key],
         CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         CURLOPT_CONNECTTIMEOUT => 5,
-        CURLOPT_TIMEOUT => 25,
+        CURLOPT_TIMEOUT => max(5, $timeoutSeconds),
     ]);
     $body = curl_exec($ch);
     $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -100,21 +100,34 @@ function lizg_request(string $url, string $key, array $payload): array
     return [$status, is_string($body) ? $body : ''];
 }
 
-[$status, $body] = lizg_request($url, $key, $payload);
-$groundingUsed = $groundingRequested && $status === 200;
+$status = 0;
+$body = '';
+$groundingUsed = false;
 
-// Grounding é opcional e consome uma cota separada. Perguntas estáveis não o
-// solicitam. Quando uma pergunta atual pede grounding e ele falha, fazemos uma
-// tentativa sem web. Em falhas transitórias da chamada simples, repetimos uma vez.
-if ($status !== 200 && $groundingRequested) {
-    unset($payload['tools']);
-    $groundingUsed = false;
-    $payload['system_instruction']['parts'][0]['text'] .= "\nA pesquisa web não está disponível nesta execução. Não diga que pesquisou; avise quando uma informação atual não puder ser confirmada.";
-    [$status, $body] = lizg_request($url, $key, $payload);
+// Grounding é opcional e consome cota separada. Faça no máximo uma tentativa
+// de pesquisa web; se ela falhar, preserve a conversa usando o modelo sem web.
+if ($groundingRequested) {
+    [$status, $body] = lizg_request($url, $key, $payload, 12);
+    $groundingUsed = $status === 200;
+    if (!$groundingUsed) {
+        unset($payload['tools']);
+        $payload['system_instruction']['parts'][0]['text'] .= "\nA pesquisa web não está disponível nesta execução. Não diga que pesquisou; avise quando uma informação atual não puder ser confirmada.";
+    }
 }
-if ($status !== 200 && !$groundingRequested && lizg_should_retry_plain($status)) {
-    usleep(200000);
-    [$status, $body] = lizg_request($url, $key, $payload);
+
+// A API Gemini pode ocasionalmente responder 503 ou estourar timeout mesmo
+// com credencial/modelo saudáveis. Para perguntas sem grounding (ou após a
+// queda controlada do grounding), faça até três tentativas curtas com backoff.
+if (!$groundingUsed) {
+    for ($attempt = 1; $attempt <= lizg_plain_max_attempts(); $attempt++) {
+        [$status, $body] = lizg_request($url, $key, $payload, 18);
+        if ($status === 200 || !lizg_should_retry_plain($status)) {
+            break;
+        }
+        if ($attempt < lizg_plain_max_attempts()) {
+            usleep(250000 * $attempt);
+        }
+    }
 }
 
 $data = json_decode($body, true);
