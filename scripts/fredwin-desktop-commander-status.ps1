@@ -20,7 +20,8 @@ function Test-DeviceStateNewerThanCooldown {
 function Get-DesktopCommanderRemoteLaunchers {
     return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
         $cmd = [string]$_.CommandLine
-        $cmd -match '@wonderwhy-er/desktop-commander@[^ ]+.*\bremote\b'
+        $cmd -match '@wonderwhy-er/desktop-commander@[^ ]+.*\bremote\b' -or
+        ($_.Name -eq 'node.exe' -and $cmd -match '@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js"?\s+remote\b.*--persist-session')
     })
 }
 function Get-LauncherRoots([object[]]$Launchers) {
@@ -29,19 +30,34 @@ function Get-LauncherRoots([object[]]$Launchers) {
     $ids = @($items | ForEach-Object { [int]$_.ProcessId })
     return @($items | Where-Object { $ids -notcontains [int]$_.ParentProcessId })
 }
+function Test-LauncherOwnedByRunner([object]$Launcher) {
+    if (-not $Launcher) { return $false }
+    $snapshot = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+    $byPid = @{}
+    foreach ($p in $snapshot) { $byPid[[int]$p.ProcessId] = $p }
+    $parentPid = [int]$Launcher.ParentProcessId
+    for ($depth = 0; $depth -lt 12 -and $parentPid -gt 0; $depth++) {
+        if (-not $byPid.ContainsKey($parentPid)) { break }
+        $ancestor = $byPid[$parentPid]
+        if ([string]$ancestor.CommandLine -match 'fredwin-desktop-commander-runner\.ps1') { return $true }
+        $parentPid = [int]$ancestor.ParentProcessId
+    }
+    return $false
+}
+function Test-CanonicalRemoteLauncher([object]$Launcher) {
+    $cmd = [string]$Launcher.CommandLine
+    if ($cmd -match '@wonderwhy-er/desktop-commander@0\.2\.47.*\bremote\b.*--persist-session') { return $true }
+    return ($Launcher.Name -eq 'node.exe' -and
+        $cmd -match '@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js"?\s+remote\b.*--persist-session' -and
+        (Test-LauncherOwnedByRunner $Launcher))
+}
 function Get-CanonicalRemoteLaunchers {
-    $matches = @(Get-DesktopCommanderRemoteLaunchers | Where-Object {
-        $cmd = [string]$_.CommandLine
-        $cmd -match '@wonderwhy-er/desktop-commander@0\.2\.47.*\bremote\b.*--persist-session'
-    })
+    $matches = @(Get-DesktopCommanderRemoteLaunchers | Where-Object { Test-CanonicalRemoteLauncher $_ })
     return @(Get-LauncherRoots $matches)
 }
 function Get-NonCanonicalRemoteLaunchers {
     $all = @(Get-DesktopCommanderRemoteLaunchers)
-    $canonicalProcesses = @($all | Where-Object {
-        $cmd = [string]$_.CommandLine
-        $cmd -match '@wonderwhy-er/desktop-commander@0\.2\.47.*\bremote\b.*--persist-session'
-    })
+    $canonicalProcesses = @($all | Where-Object { Test-CanonicalRemoteLauncher $_ })
     $canonicalIds = @($canonicalProcesses.ProcessId)
     $noncanonical = @($all | Where-Object { $canonicalIds -notcontains $_.ProcessId })
     return @(Get-LauncherRoots $noncanonical)
