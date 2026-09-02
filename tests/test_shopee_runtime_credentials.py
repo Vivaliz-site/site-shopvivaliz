@@ -61,7 +61,26 @@ class ShopeeRuntimeCredentialsTest(unittest.TestCase):
 
 class ShopeeClientRetryTest(unittest.TestCase):
     def _client(self):
-        module = load_module("shopee_client_retry_test", "scripts/utils/shopee_client.py")
+        fake_requests = types.ModuleType("requests")
+
+        class FakeHTTPError(Exception):
+            def __init__(self, *args, response=None, **kwargs):
+                super().__init__(*args)
+                self.response = response
+
+        class FakeConnectionError(Exception):
+            pass
+
+        class FakeTimeout(Exception):
+            pass
+
+        fake_requests.HTTPError = FakeHTTPError
+        fake_requests.ConnectionError = FakeConnectionError
+        fake_requests.Timeout = FakeTimeout
+        fake_requests.Session = object
+        fake_requests.Response = object
+        with patch.dict(sys.modules, {"requests": fake_requests}):
+            module = load_module("shopee_client_retry_test", "scripts/utils/shopee_client.py")
         client = module.ShopeeClient.__new__(module.ShopeeClient)
         client._decode = lambda response: response
         return module, client
