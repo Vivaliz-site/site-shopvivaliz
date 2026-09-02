@@ -25,7 +25,8 @@ $logDir = Join-Path $InstallDir 'logs'
 
 foreach ($required in @($WorkerSource, $opera, $profile, $token)) {
     if (-not (Test-Path $required)) { throw "Required bridge dependency missing: $required" }
-}New-Item -ItemType Directory -Force $InstallDir, $logDir | Out-Null
+}
+New-Item -ItemType Directory -Force $InstallDir, $logDir | Out-Null
 Copy-Item -Force $WorkerSource $worker
 $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $tokenAcl = Get-Acl $token
@@ -49,7 +50,8 @@ $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfil
 $triggers = @(
     (New-ScheduledTaskTrigger -AtStartup),
     (New-ScheduledTaskTrigger -AtLogOn -User $currentUser)
-)$settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
+)
+$settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
     -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
 $principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType S4U -RunLevel Highest
 $task = New-ScheduledTask -Action $action -Trigger $triggers -Settings $settings -Principal $principal

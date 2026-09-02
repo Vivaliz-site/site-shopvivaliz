@@ -72,3 +72,5 @@ $pipeline=(string)file_get_contents(__DIR__.'/../.github/workflows/master-produc
 rtAssert(str_contains($pipeline,'install-amazon-returns-service.sh'),'Master deploy must install Amazon returns service.');
 
 echo "amazon-returns-runtime-test: OK\n";
+
+rtAssert(str_contains($installer, 'systemctl restart "$service_name"'), 'Amazon returns installer must restart the daemon so EnvironmentFile changes are loaded.');
