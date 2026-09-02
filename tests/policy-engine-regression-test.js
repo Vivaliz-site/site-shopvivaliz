@@ -70,6 +70,18 @@ function policy(root, base, head) {
 
 {
   const root = setupRepo();
+  write(root, 'includes/amazon-returns/SpApi.php', '<?php final class SvAmazonReturnsSpApi { public function ping(): int { return 1; } }\n');
+  const base = commitAll(root, 'base amazon-returns backend');
+  write(root, 'includes/amazon-returns/SpApi.php', '<?php final class SvAmazonReturnsSpApi { public function ping(): int { return 2; } }\n');
+  const head = commitAll(root, 'amazon-returns backend change');
+  const result = policy(root, base, head);
+  assert.strictEqual(result.status, 0, `Amazon Returns/SAFE-T event-sourcing backend must not require screenshot proof:\n${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /prova visual não exigida/);
+  fs.rmSync(root, {recursive: true, force: true});
+}
+
+{
+  const root = setupRepo();
   write(root, 'includes/tiny-order-push.php', '<?php function tiny_request() { return 200; }\n');
   const base = commitAll(root, 'base Tiny backend helper');
   write(root, 'includes/tiny-order-push.php', '<?php function tiny_request() { return 204; }\n');
