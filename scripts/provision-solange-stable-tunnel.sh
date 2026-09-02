@@ -77,9 +77,24 @@ scp -q "${ssh_opts[@]}" "$token_tmp" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_ROOT/clo
 remote_script="$(cat <<'REMOTE'
 set -Eeuo pipefail
 root=/home/ubuntu/solange-client-demo
+container_exists() {
+  docker inspect "$1" >/dev/null 2>&1
+}
+stop_container_if_running() {
+  local name="$1"
+  if container_exists "$name" && [[ "$(docker inspect -f '{{.State.Running}}' "$name")" == true ]]; then
+    docker stop "$name" >/dev/null
+  fi
+}
+remove_container_if_present() {
+  local name="$1"
+  if container_exists "$name"; then
+    docker rm -f "$name" >/dev/null
+  fi
+}
 mv "$root/cloudflared.token.next" "$root/cloudflared.token"
 chmod 600 "$root/cloudflared.token"
-docker rm -f solange-demo-tunnel-stable >/dev/null 2>&1 || true
+remove_container_if_present solange-demo-tunnel-stable
 docker run -d --name solange-demo-tunnel-stable --restart unless-stopped --network host \
   -v "$root/cloudflared.token:/run/secrets/cloudflared-token:ro" \
   cloudflare/cloudflared:latest tunnel --no-autoupdate run --token-file /run/secrets/cloudflared-token >/dev/null
@@ -95,7 +110,7 @@ done
   docker logs --tail 80 solange-demo-tunnel-stable >&2
   exit 1
 }
-docker stop solange-demo-reconciler >/dev/null 2>&1 || true
+stop_container_if_running solange-demo-reconciler
 stable_url="https://$PUBLIC_HOSTNAME"
 sed -i -E "s#^NEXT_PUBLIC_SUPABASE_URL=.*#NEXT_PUBLIC_SUPABASE_URL=$stable_url#; s#^APP_URL=.*#APP_URL=$stable_url#" "$root/app/.env.production.local"
 docker run --rm --network host -v "$root/app:/app" -w /app node:24-bookworm-slim npm run build
@@ -115,8 +130,18 @@ for _ in $(seq 1 30); do
 done
 curl --fail --silent --show-error --max-time 10 "$stable_url/api/health" >/dev/null
 curl --fail --silent --show-error --max-time 10 "$stable_url/" >/dev/null
-ssh "${ssh_opts[@]}" "$REMOTE_USER@$REMOTE_HOST" \
-  'docker stop solange-demo-tunnel >/dev/null 2>&1 || true; docker stop solange-demo-caddy >/dev/null 2>&1 || true'
+finalize_script="$(cat <<'REMOTE'
+set -Eeuo pipefail
+for name in solange-demo-tunnel solange-demo-caddy; do
+  if docker inspect "$name" >/dev/null 2>&1; then
+    if [[ "$(docker inspect -f '{{.State.Running}}' "$name")" == true ]]; then
+      docker stop "$name" >/dev/null
+    fi
+  fi
+done
+REMOTE
+)"
+ssh "${ssh_opts[@]}" "$REMOTE_USER@$REMOTE_HOST" 'bash -s' <<<"$finalize_script"
 
 echo "COMPROVADO: tunnel Cloudflare persistente ativo em $stable_url"
 echo "TUNNEL_ID=$tunnel_id"
