@@ -17,6 +17,7 @@ $RefreshPersistFailurePattern = 'SESSION_REFRESH_PERSIST_FAILED'
 $AuthGraceSeconds = 300
 $DegradedRestartSeconds = 180
 $MarkerRefreshSeconds = 30
+$script:ProviderEntryPoint = $null
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 function Log([string]$Message) {
@@ -57,17 +58,21 @@ function Install-SessionRefreshPatch {
     $nodeModules = Split-Path -Parent $binDir
     $packageRoot = Join-Path $nodeModules '@wonderwhy-er\desktop-commander'
     if (-not (Test-Path -LiteralPath (Join-Path $packageRoot 'package.json'))) { throw 'Desktop Commander package root missing' }
+    $providerEntryPoint = Join-Path $packageRoot 'dist\index.js'
+    if (-not (Test-Path -LiteralPath $providerEntryPoint)) { throw 'Desktop Commander provider entrypoint missing' }
     $patchOutput = @(& $node $SessionPatcher $packageRoot 2>&1)
     if ($LASTEXITCODE -ne 0) { throw 'Desktop Commander session persistence patch failed' }
     $patchState = [string]($patchOutput | Where-Object { [string]$_ -match '^SESSION_REFRESH_PATCH=' } | Select-Object -Last 1)
     if (-not $patchState) { throw 'Desktop Commander session persistence patch state missing' }
+    $script:ProviderEntryPoint = $providerEntryPoint
     Log $patchState
 }
 
 function Start-HiddenCapturedProcess {
+    if (-not $script:ProviderEntryPoint -or -not (Test-Path -LiteralPath $script:ProviderEntryPoint)) { throw 'Patched Desktop Commander provider entrypoint unavailable' }
     $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = if ($env:ComSpec) { $env:ComSpec } else { 'C:\Windows\System32\cmd.exe' }
-    $psi.Arguments = '/d /s /c ""' + $npx + '" --yes ' + $Package + ' remote --persist-session"'
+    $psi.FileName = $node
+    $psi.Arguments = '"' + $script:ProviderEntryPoint + '" remote --persist-session'
     $psi.WorkingDirectory = $Repo
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
