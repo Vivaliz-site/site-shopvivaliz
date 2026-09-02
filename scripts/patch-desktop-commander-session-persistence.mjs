@@ -8,9 +8,9 @@ if (!packageRoot) {
 
 const deviceSource = path.join(packageRoot, 'dist', 'remote-device', 'device.js');
 const source = await readFile(deviceSource, 'utf8');
-const sentinelV3 = 'Persist refreshed credentials without blocking the auth refresh chain (v3).';
+const sentinelV4 = 'Proactively refresh credentials before the realtime expiry window (v4).';
 
-if (source.includes(sentinelV3)) {
+if (source.includes(sentinelV4)) {
   console.log('SESSION_REFRESH_PATCH=already_applied');
   process.exit(0);
 }
@@ -34,7 +34,7 @@ const v2Patch = `            await this.savePersistedConfig();
                 }
             });
             const deviceName = os.hostname();`;
-const replacement = `            await this.savePersistedConfig();
+const v3Patch = `            await this.savePersistedConfig();
             // Persist refreshed credentials without blocking the auth refresh chain (v3).
             this.remoteChannel.client.auth.onAuthStateChange((event, refreshedSession) => {
                 if (event === 'TOKEN_REFRESHED' && refreshedSession?.access_token) {
@@ -46,8 +46,48 @@ const replacement = `            await this.savePersistedConfig();
                 }
             });
             const deviceName = os.hostname();`;
+const replacement = `            await this.savePersistedConfig();
+            // Proactively refresh credentials before the realtime expiry window (v4).
+            const PROACTIVE_REFRESH_MARGIN_MS = 10 * 60 * 1000;
+            const PROACTIVE_REFRESH_CHECK_MS = 60 * 1000;
+            let proactiveRefreshInFlight = false;
+            const proactiveRefreshTick = async () => {
+                if (proactiveRefreshInFlight) return;
+                proactiveRefreshInFlight = true;
+                try {
+                    const { data: { session: currentSession } } = await this.remoteChannel.client.auth.getSession();
+                    const expiresAtMs = Number(currentSession?.expires_at || 0) * 1000;
+                    if (!currentSession?.refresh_token || !expiresAtMs || expiresAtMs - Date.now() > PROACTIVE_REFRESH_MARGIN_MS) return;
+                    const { data: refreshed, error: refreshError } = await this.remoteChannel.client.auth.refreshSession();
+                    if (refreshError || !refreshed?.session?.access_token) {
+                        console.error('PROACTIVE_SESSION_REFRESH_FAILED', refreshError?.message || 'missing refreshed session');
+                        return;
+                    }
+                    console.log('PROACTIVE_SESSION_REFRESH_OK');
+                }
+                catch (error) {
+                    console.error('PROACTIVE_SESSION_REFRESH_FAILED', error instanceof Error ? error.message : String(error));
+                }
+                finally {
+                    proactiveRefreshInFlight = false;
+                }
+            };
+            this.remoteChannel.client.auth.onAuthStateChange((event, refreshedSession) => {
+                if (event === 'TOKEN_REFRESHED' && refreshedSession?.access_token) {
+                    void this.savePersistedConfig()
+                        .then(() => console.log('SESSION_REFRESH_PERSIST_ATTEMPTED'))
+                        .catch((error) => {
+                            console.error('SESSION_REFRESH_PERSIST_FAILED', error instanceof Error ? error.message : String(error));
+                        });
+                }
+            });
+            const proactiveRefreshTimer = setInterval(() => { void proactiveRefreshTick(); }, PROACTIVE_REFRESH_CHECK_MS);
+            proactiveRefreshTimer.unref?.();
+            void proactiveRefreshTick();
+            const deviceName = os.hostname();`;
 
 const candidates = [
+  { source: v3Patch, state: 'upgraded_v3' },
   { source: v2Patch, state: 'upgraded_v2' },
   { source: legacyPatch, state: 'upgraded_legacy' },
   { source: marker, state: 'applied' },
