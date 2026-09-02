@@ -73,8 +73,6 @@ jobs:
           if not replaced: out.append(key+'='+token)
           tmp=envfile.with_suffix('.gmail.tmp'); tmp.write_text('\n'.join(out)+'\n'); os.chmod(tmp,0o600); os.replace(tmp,envfile)
           PY
-          token="$(cat "$recovered")"
-          printf '%s' "$token" | gh secret set GMAIL_OAUTH_REFRESH_TOKEN -R Vivaliz-site/site-shopvivaliz --env production
           sudo rm -f "$found"
           rm -f "$recovered"
           sudo systemctl restart shopvivaliz-amazon-returns.service
