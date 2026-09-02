@@ -38,6 +38,12 @@ final class ReliabilityMemoryStatement extends PDOStatement {
             foreach ($this->db->outbox as $row) if ($row['idempotency_key'] === $params[':idempotency_key']) $this->result[] = ['id'=>$row['id']];
             return true;
         }
+        if (str_starts_with(ltrim($sql), 'UPDATE AMAZON_RETURN_OUTBOX') && str_contains($sql, "STATUS='PENDING'")) {
+            $id = (int)$params[':id'];
+            $this->db->outbox[$id]['status'] = 'PENDING';
+            $this->db->outbox[$id]['attempt_count'] = max(0, (int)$this->db->outbox[$id]['attempt_count'] - 1);
+            return true;
+        }
         throw new LogicException('Unexpected reliability SQL: ' . $this->query);
     }
     public function fetchColumn(int $column = 0): mixed { $row = $this->result[$this->cursor++] ?? false; return is_array($row) ? array_values($row)[$column] : false; }
@@ -60,6 +66,11 @@ $deadline = SvAmazonReturnsOutbox::retryDecision(['attempt_count'=>1,'payload'=>
 rlSame('DEAD_LETTER', $deadline['status'], 'Retry that would miss deadline must DLQ/alert instead of silently expiring.');
 rlSame(true, SvAmazonReturnsOutbox::leaseExpired('2026-09-01T11:50:00Z', $now), 'Stale processing lease must be reclaimable after restart.');
 rlSame(false, SvAmazonReturnsOutbox::leaseExpired('2026-09-01T11:59:00Z', $now), 'Fresh processing lease must not be stolen.');
+$db->outbox[$first]['status'] = 'PROCESSING';
+$db->outbox[$first]['attempt_count'] = 2;
+SvAmazonReturnsOutbox::releaseUnprocessed($db, $first);
+rlSame('PENDING', $db->outbox[$first]['status'], 'Disabled write must return to pending without consuming the action.');
+rlSame(1, $db->outbox[$first]['attempt_count'], 'Release must undo the claim attempt count.');
 
 $reconciler = new SvAmazonFinancialReconciler();
 $case = ['state'=>'SAFE_T_APPROVED','expected_reimbursement_amount'=>'100.00','reconciled_credit_amount'=>'0.00'];

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/amazon-returns/SpApi.php';
+require_once __DIR__ . '/../includes/amazon-returns/SpApiEventSink.php';
 
 function spAssert(bool $condition, string $message): void {
     if (!$condition) throw new RuntimeException($message);
@@ -52,6 +53,21 @@ spSame('GET_FLAT_FILE_RETURNS_DATA_BY_RETURN_DATE', $client->calls[2]['body']['r
 spSame(['A2Q3Y263D00KWC'], $client->calls[2]['body']['marketplaceIds'] ?? null, 'Report must target current marketplace.');
 spSame('RPT-1', $report['report_id'], 'Report ID must normalize.');
 spSame('req-report-1', $report['request_id'], 'Report request ID must be retained.');
+
+
+spSame('DELIVERY_BY_AMAZON', SvAmazonSpApiEventSink::programFromOrder($order), 'DBA program must normalize deterministically.');
+spSame('STANDARD', SvAmazonSpApiEventSink::programFromOrder(['programs'=>[],'fulfillment'=>['channel'=>'MERCHANT']]), 'Merchant fulfillment maps to STANDARD.');
+$refundFact = SvAmazonSpApiEventSink::refundObservation([[
+    'transaction_id'=>'txn-refund','transaction_type'=>'Refund','transaction_status'=>'RELEASED',
+    'posted_at'=>'2026-08-01T12:00:00Z','total_amount'=>['amount'=>'-128.25','currency'=>'BRL'],
+]]);
+spSame('128.25', $refundFact['refund_amount'], 'Released negative refund is official seller debit evidence.');
+spSame('2026-08-01 12:00:00', $refundFact['seller_debit_at'], 'Seller debit date must normalize to UTC.');
+spSame('UNKNOWN', $refundFact['refund_initiator'], 'SP-API transaction alone must not invent refund initiator.');
+spSame(null, SvAmazonSpApiEventSink::refundObservation([[
+    'transaction_id'=>'txn-pending','transaction_type'=>'Refund','transaction_status'=>'DEFERRED',
+    'posted_at'=>'2026-08-01T12:00:00Z','total_amount'=>['amount'=>'-10.00','currency'=>'BRL'],
+]]), 'Deferred refund must not be treated as confirmed debit.');
 
 $notification = $api->consumeTransactionUpdate([
     'notificationType' => 'TRANSACTION_UPDATE',

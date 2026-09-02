@@ -73,6 +73,29 @@ function result(status, extra = {}) {
   return { status, external_id: null, block_reason: null, next_allowed_at: null, dry_run: true, submitted: false, retry_safe: false, ...extra };
 }
 
+async function fetchBridgeSnapshot(bridgeUrl, input) {
+  try {
+    const response = await fetch(bridgeUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        operation: 'snapshot',
+        action: cleanText(input.action, 64).toUpperCase(),
+        case: input.case && typeof input.case === 'object' ? input.case : {},
+        precondition: 'READ_ONLY_PREFLIGHT',
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+    const data = await response.json();
+    if (!response.ok || data?.status !== 'ACCEPTED' || !data?.snapshot || typeof data.snapshot !== 'object') {
+      return { error: result('FAILED', { reason: 'BROWSER_BRIDGE_SNAPSHOT_INVALID', retry_safe: false }) };
+    }
+    return { snapshot: data.snapshot };
+  } catch (error) {
+    return { error: result('FAILED', { reason: 'BROWSER_BRIDGE_SNAPSHOT_FAILURE', error_class: error?.name || 'Error', retry_safe: false }) };
+  }
+}
+
 async function executeBridgeWrite(bridgeUrl, input, preflight) {
   try {
     const response = await fetch(bridgeUrl, {
@@ -116,9 +139,18 @@ async function main() {
   for await (const chunk of process.stdin) raw += chunk;
   try {
     const input = JSON.parse(raw || '{}');
+    const bridgeUrl = cleanText(process.env.SELLER_CENTRAL_BROWSER_BRIDGE_URL, 1000);
+    const hasSnapshot = input?.snapshot && typeof input.snapshot === 'object' && Object.keys(input.snapshot).length > 0;
+    if (!hasSnapshot && bridgeUrl) {
+      const preflight = await fetchBridgeSnapshot(bridgeUrl, input);
+      if (preflight.error) {
+        process.stdout.write(JSON.stringify(preflight.error));
+        return;
+      }
+      input.snapshot = preflight.snapshot;
+    }
     let evaluated = evaluateSellerCentral(input);
     if (evaluated.status === 'ACCEPTED' && evaluated.would_write === true && evaluated.dry_run === false) {
-      const bridgeUrl = cleanText(process.env.SELLER_CENTRAL_BROWSER_BRIDGE_URL, 1000);
       if (!bridgeUrl) {
         evaluated = result('FAILED', { reason: 'BROWSER_BRIDGE_UNAVAILABLE', dry_run: false, submitted: false, retry_safe: false, evidence: evaluated.evidence });
       } else {

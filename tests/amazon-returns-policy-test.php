@@ -341,4 +341,30 @@ $wrongItemProjection = SvAmazonReturnProjector::project($wrongItemDb, 80);
 policyAssertSame('RECEIVED_DISCREPANT', $wrongItemProjection['state'], 'Wrong item/package evidence must create discrepancy even when correct quantity received is zero.');
 policyAssertSame(1, $wrongItemProjection['exposed_quantity'], 'Wrong item must leave expected refunded unit unresolved.');
 
+
+$advancedDb = new AmazonPolicyProjectionPdo(
+    [
+        'id'=>79,'amazon_order_id'=>'ORDER-ADV','amazon_order_item_id'=>'ITEM-ADV','marketplace_id'=>'A2Q3Y263D00KWC',
+        'quantity_ordered'=>1,'state'=>'SAFE_T_DENIED','physical_status'=>'NOT_RECEIVED','terminal_reason'=>null,'closed_at'=>null,
+    ],
+    [[
+        'id'=>1,'case_id'=>79,'event_type'=>'REFUND_CONFIRMED','source'=>'SP_API_FINANCES','source_event_id'=>'txn-adv',
+        'idempotency_key'=>hash('sha256','txn-adv'),'occurred_at'=>'2026-07-01 12:00:00',
+        'payload_json'=>json_encode(['quantity_refunded'=>1,'refund_initiator'=>'AMAZON_AUTOMATIC','program'=>'STANDARD','seller_debit_at'=>'2026-07-01 12:00:00'], JSON_THROW_ON_ERROR),
+        'evidence_sha256'=>null,'created_at'=>'2026-07-01 12:00:01',
+    ]]
+);
+$advancedProjection = SvAmazonReturnProjector::project($advancedDb,79);
+policyAssertSame('SAFE_T_DENIED',$advancedProjection['state'],'Projection must not downgrade advanced SAFE-T state during replay.');
+
+$reviewDb = new AmazonPolicyProjectionPdo(
+    [
+        'id'=>80,'amazon_order_id'=>'ORDER-REVIEW','amazon_order_item_id'=>'ITEM-REVIEW','marketplace_id'=>'A2Q3Y263D00KWC',
+        'quantity_ordered'=>1,'state'=>'POLICY_REVIEW_REQUIRED','physical_status'=>'NOT_RECEIVED','terminal_reason'=>null,'closed_at'=>null,
+    ],
+    []
+);
+$reviewProjection = SvAmazonReturnProjector::project($reviewDb,80);
+policyAssertSame('POLICY_REVIEW_REQUIRED',$reviewProjection['state'],'Projection must preserve an explicit safety review gate.');
+
 echo "amazon-returns-policy-test: OK\n";

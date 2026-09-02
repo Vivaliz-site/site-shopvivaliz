@@ -110,6 +110,15 @@ jobs:
           node --check public/assets/liz-assistant/liz-assistant.js
       - name: Regressao de resolucao de credenciais Tiny/Olist (incidente #747)
         run: php tests/integration-health-credentials-test.php
+      - name: Amazon Returns e SAFE-T recovery
+        run: |
+          set -Eeuo pipefail
+          for test in tests/amazon-returns-*.php; do php "$test"; done
+          node --check scripts/amazon-returns/seller-central-adapter.mjs
+          node --check scripts/amazon-returns/seller-central-bridge-worker.mjs
+          bash -n scripts/install-amazon-returns-service.sh
+          python3 tests/test_merge_runtime_credential_scope.py
+          python3 tests/test_merge_runtime_credential_union.py
       - name: Guarda do carrossel automatico de imagens
         run: php scripts/quality/validate-auto-image-carousel.php
       - name: Referencia oficial do site (rotas de navigation ao vivo)

@@ -756,3 +756,12 @@ email/telefone antes do hash, sem nenhum efeito em layout renderizado).
 - NF, rastreio e etiqueta devem usar o webhook Tiny/NF e `tiny_order_id`; não recriar autoridade em JSON, MySQL ou arquivo temporário.
 - Proibido reintroduzir Tiny v2, token estático antigo ou arrays/caches locais como fonte de pedido/NF.
 - Antes de PR/deploy envolvendo pedido, pagamento, NF ou etiqueta, rode `php scripts/quality/validate-order-erp-authority.php`.
+
+## Amazon Returns & SAFE-T Recovery
+
+- Fonte financeira: SP-API Orders/Finances; Gmail e rastreio sao sensores/evidencias, nunca verdade financeira isolada.
+- Recebimento fisico em `admin/amazon-returns/intake.php` prevalece sobre tracking para confirmar que a devolucao chegou.
+- Politicas D+45/D+60 ficam versionadas em `amazon_return_policies`; nao espalhar prazos em condicionais ad hoc.
+- `UNKNOWN` para programa/iniciador ou pedido multi-item ambiguo bloqueia escrita externa ate reconciliacao oficial.
+- Negativa SAFE-T automatica repetida e nao substantiva deve escalar para Ajuda uma unica vez por fingerprint; nao criar loop de respostas identicas.
+- SAFE-T aprovada so fecha financeiramente quando o credito correspondente aparecer no ledger SP-API.

@@ -17,6 +17,15 @@ import time
 from pathlib import Path
 
 
+AMAZON_KEYS = {
+    "AMAZON_LWA_CLIENT_ID", "AMAZON_LWA_CLIENT_SECRET", "AMAZON_LWA_REFRESH_TOKEN",
+    "SELLER_CENTRAL_BRIDGE_TOKEN",
+}
+AMAZON_RETURNS_KEYS = AMAZON_KEYS | {
+    "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "GOOGLE_OAUTH_REFRESH_TOKEN",
+    "SELLER_CENTRAL_BRIDGE_TOKEN",
+}
+
 EMAIL_KEYS = {
     "BREVO_API_KEY",
     "EMAIL_FROM", "EMAIL_PASSWORD", "EMAIL_SMTP_HOST", "EMAIL_SMTP_PORT", "EMAIL_TO", "EMAIL_USER",
@@ -47,6 +56,7 @@ ALLOWED_KEYS = {
     "TINY_ACCESS_TOKEN", "TINY_CLIENT_ID", "TINY_CLIENT_SECRET", "TINY_REDIRECT_URI", "TINY_REFRESH_TOKEN",
     "URL_REDIRCT_OLIST", "URL_TINY_OLIST", "WHATSAPP_NUMBER",
     "AMAZON_LWA_CLIENT_ID", "AMAZON_LWA_CLIENT_SECRET", "AMAZON_LWA_REFRESH_TOKEN",
+    "SELLER_CENTRAL_BRIDGE_TOKEN",
 }
 
 KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -77,12 +87,12 @@ def validate_value(key: str, value: str) -> None:
 
 
 def parse_payload_fields(fields: list[bytes], scope: str = "all") -> dict[str, str]:
-    if scope not in {"all", "email"}:
+    if scope not in {"all", "email", "amazon", "amazon_returns"}:
         raise ValueError(f"unsupported credential scope: {scope}")
     if len(fields) % 2:
         raise ValueError("payload must contain name/value pairs")
 
-    scope_keys = ALLOWED_KEYS if scope == "all" else EMAIL_KEYS
+    scope_keys = (ALLOWED_KEYS if scope == "all" else EMAIL_KEYS if scope == "email" else AMAZON_KEYS if scope == "amazon" else AMAZON_RETURNS_KEYS)
     values: dict[str, str] = {}
     seen: set[str] = set()
     for raw_key, raw_value in zip(fields[0::2], fields[1::2]):
@@ -185,8 +195,8 @@ def main() -> int:
     if len(args) == 3 and args[0] == "--scope":
         scope = args[1]
         args = args[2:]
-    if len(args) != 1 or scope not in {"all", "email"}:
-        print("usage: merge-runtime-credential-union.py [--scope all|email] SHARED_ENV", file=sys.stderr)
+    if len(args) != 1 or scope not in {"all", "email", "amazon", "amazon_returns"}:
+        print("usage: merge-runtime-credential-union.py [--scope all|email|amazon|amazon_returns] SHARED_ENV", file=sys.stderr)
         return 2
     try:
         incoming = read_payload(scope=scope)

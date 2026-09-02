@@ -9,10 +9,11 @@ function bcSame(mixed $expected, mixed $actual, string $message): void {
 }
 function bcAssert(bool $condition, string $message): void { if (!$condition) throw new RuntimeException($message); }
 
-function runNodeAdapter(array $input): array {
+function runNodeAdapter(array $input, array $env = []): array {
     $script = realpath(__DIR__ . '/../scripts/amazon-returns/seller-central-adapter.mjs');
     if ($script === false) throw new RuntimeException('Adapter script missing.');
-    $proc = proc_open(['node', $script], [['pipe','r'],['pipe','w'],['pipe','w']], $pipes);
+    $processEnv = array_merge(getenv() ?: [], $env);
+    $proc = proc_open(['node', $script], [['pipe','r'],['pipe','w'],['pipe','w']], $pipes, null, $processEnv);
     if (!is_resource($proc)) throw new RuntimeException('Could not start adapter.');
     fwrite($pipes[0], json_encode($input, JSON_THROW_ON_ERROR)); fclose($pipes[0]);
     $stdout = stream_get_contents($pipes[1]); fclose($pipes[1]);
@@ -64,6 +65,40 @@ $disabledResult = runNodeAdapter($enabled);
 bcSame('ACCEPTED', $disabledResult['status'], 'Disabled write flag remains safe evaluation.');
 bcSame(false, $disabledResult['submitted'], 'Write flag off cannot submit.');
 bcSame(true, $disabledResult['dry_run'], 'Write flag off forces effective dry-run.');
+
+
+$router = tempnam(sys_get_temp_dir(), 'amazon-bridge-test-');
+if ($router === false) throw new RuntimeException('Could not create bridge test router.');
+file_put_contents($router, <<<'PHP'
+<?php
+$input=json_decode(file_get_contents('php://input'),true) ?: [];
+header('Content-Type: application/json');
+if (($input['operation'] ?? '') === 'snapshot') {
+    echo json_encode(['status'=>'ACCEPTED','snapshot'=>[
+        'authenticated'=>true,'mfa_required'=>false,'captcha_present'=>false,'ui_contract'=>'safet-v1',
+        'current_url'=>'https://sellercentral.amazon.com.br/safet-claims/create-v2',
+        'existing_claim_id'=>null,'existing_support_case_id'=>null,'eligibility'=>['allowed'=>true],
+    ]]);
+    return;
+}
+echo json_encode(['status'=>'ACCEPTED','external_id'=>'99999-11111-2222222','submitted'=>true,'retry_safe'=>true]);
+PHP);
+$port = 19192;
+$bridgeProc = proc_open(['php','-S','127.0.0.1:'.$port,$router], [['pipe','r'],['pipe','w'],['pipe','w']], $bridgePipes);
+if (!is_resource($bridgeProc)) throw new RuntimeException('Could not start mock browser bridge.');
+usleep(300000);
+try {
+    $bridgeInput = ['action'=>'SAFE_T_SUBMIT','case'=>['order_id'=>'702-9999999-0000001'],'dry_run'=>false,'write_flags'=>['SAFE_T_SUBMIT'=>true]];
+    $bridgeResult = runNodeAdapter($bridgeInput, ['SELLER_CENTRAL_BROWSER_BRIDGE_URL'=>'http://127.0.0.1:'.$port]);
+    bcSame('ACCEPTED',$bridgeResult['status'],'Configured bridge must supply its own preflight snapshot.');
+    bcSame(true,$bridgeResult['submitted'],'Bridge write must be independently read back as submitted.');
+    bcSame('99999-11111-2222222',$bridgeResult['external_id'],'Bridge read-back external ID is mandatory.');
+} finally {
+    proc_terminate($bridgeProc);
+    foreach ($bridgePipes as $pipe) if (is_resource($pipe)) fclose($pipe);
+    proc_close($bridgeProc);
+    @unlink($router);
+}
 
 $worker = new SvAmazonSellerCentralWorker();
 $result = $worker->execute(['kind'=>'SAFE_T_SUBMIT','payload'=>['case_id'=>77]], static fn(array $payload): array => ['status'=>'ACCEPTED','submitted'=>false,'dry_run'=>true,'external_id'=>null]);

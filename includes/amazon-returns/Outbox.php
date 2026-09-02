@@ -108,6 +108,13 @@ final class SvAmazonReturnsOutbox
         $stmt->execute([':id'=>$id]);
     }
 
+    public static function releaseUnprocessed(PDO $db, int $id): void
+    {
+        if ($id < 1) throw new InvalidArgumentException('Invalid outbox ID.');
+        $stmt = $db->prepare("UPDATE amazon_return_outbox SET status='PENDING', attempt_count=GREATEST(attempt_count-1,0), locked_at=NULL, last_error=NULL, updated_at=UTC_TIMESTAMP() WHERE id=:id AND status='PROCESSING'");
+        $stmt->execute([':id'=>$id]);
+    }
+
     public static function markFailed(PDO $db, array $row, Throwable|string $error, ?DateTimeImmutable $now = null): array
     {
         $now ??= new DateTimeImmutable('now', new DateTimeZone('UTC'));

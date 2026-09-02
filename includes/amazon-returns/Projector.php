@@ -51,10 +51,12 @@ final class SvAmazonReturnProjector
             'refund_at' => null,
             'seller_debit_at' => null,
             'refund_amount' => '0.00',
-            'physical_status' => SvAmazonReturnPhysicalStatuses::NOT_RECEIVED,
-            'state' => SvAmazonReturnStates::REFUND_DETECTED,
-            'terminal_reason' => null,
-            'closed_at' => null,
+            'physical_status' => in_array((string)($case['physical_status'] ?? ''), SvAmazonReturnPhysicalStatuses::all(), true)
+                ? (string)$case['physical_status'] : SvAmazonReturnPhysicalStatuses::NOT_RECEIVED,
+            'state' => SvAmazonReturnStates::isValid((string)($case['state'] ?? ''))
+                ? (string)$case['state'] : SvAmazonReturnStates::REFUND_DETECTED,
+            'terminal_reason' => isset($case['terminal_reason']) ? (string)$case['terminal_reason'] : null,
+            'closed_at' => isset($case['closed_at']) && $case['closed_at'] !== null ? (string)$case['closed_at'] : null,
             'order_at' => null,
             'exposed_quantity' => 0,
             'has_physical_discrepancy' => false,
@@ -163,18 +165,44 @@ final class SvAmazonReturnProjector
             $facts['terminal_reason'] = 'PHYSICAL_RETURN_RECEIVED';
             return;
         }
-        $facts['closed_at'] = null;
+        $preserveState = self::preserveOperationalState((string)$facts['state']);
         if ($received > 0) {
             $facts['physical_status'] = SvAmazonReturnPhysicalStatuses::RECEIVED_DISCREPANT;
-            $facts['state'] = SvAmazonReturnStates::RECEIVED_DISCREPANT;
+            if (!$preserveState) {
+                $facts['state'] = SvAmazonReturnStates::RECEIVED_DISCREPANT;
+                $facts['closed_at'] = null;
+            }
             return;
         }
+        if ($preserveState) return;
+        $facts['closed_at'] = null;
         $facts['state'] = match ($facts['physical_status']) {
             SvAmazonReturnPhysicalStatuses::IN_TRANSIT => SvAmazonReturnStates::IN_TRANSIT,
             SvAmazonReturnPhysicalStatuses::CARRIER_DELIVERED_PENDING_PHYSICAL =>
                 SvAmazonReturnStates::CARRIER_DELIVERED_PENDING_PHYSICAL,
             default => SvAmazonReturnStates::AWAITING_RETURN,
         };
+    }
+
+    private static function preserveOperationalState(string $state): bool
+    {
+        return in_array($state, [
+            SvAmazonReturnStates::POLICY_REVIEW_REQUIRED,
+            SvAmazonReturnStates::SAFE_T_ELIGIBLE,
+            SvAmazonReturnStates::SAFE_T_READY,
+            SvAmazonReturnStates::SAFE_T_SUBMITTED,
+            SvAmazonReturnStates::SAFE_T_APPROVED,
+            SvAmazonReturnStates::SAFE_T_DENIED,
+            SvAmazonReturnStates::SAFE_T_INFO_REQUESTED,
+            SvAmazonReturnStates::APPEAL_REQUIRED,
+            SvAmazonReturnStates::APPEAL_SUBMITTED,
+            SvAmazonReturnStates::APPEAL_APPROVED,
+            SvAmazonReturnStates::APPEAL_DENIED_FINAL,
+            SvAmazonReturnStates::CREDIT_PENDING,
+            SvAmazonReturnStates::RECOVERED,
+            SvAmazonReturnStates::SUPPORT_ESCALATION,
+            SvAmazonReturnStates::CLOSED_LOSS,
+        ], true);
     }
 
     /** @param array<string,mixed> $facts */

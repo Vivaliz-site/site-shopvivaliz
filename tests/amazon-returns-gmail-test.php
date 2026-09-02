@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/amazon-returns/GmailParser.php';
+require_once __DIR__ . '/../includes/amazon-returns/GmailApi.php';
+require_once __DIR__ . '/../includes/amazon-returns/GmailEventSink.php';
 require_once __DIR__ . '/../workers/amazon-returns/gmail-ingest.php';
 
 function gmAssert(bool $condition, string $message): void { if (!$condition) throw new RuntimeException($message); }
@@ -39,6 +41,20 @@ gmSame('702-1111111-2222222', $returnAuth[0]['order_id'], 'Return authorization 
 $registered = $parser->parse(message('m-register', 'Sua solicitação do SAFE-T 98143-99485-9285859 foi registrada para o pedido 702-3333333-4444444'));
 gmSame('SAFE_T_REGISTERED_EMAIL', $registered[0]['event_type'], 'SAFE-T registration event type.');
 gmSame('98143-99485-9285859', $registered[0]['safe_t_id'], 'SAFE-T registration ID.');
+
+
+
+gmSame('item-1', SvAmazonGmailEventSink::targetItemId(['item-1']), 'Gmail replay after SP-API single-item resolution must attach to the resolved item.');
+gmSame(SvAmazonGmailEventSink::UNRESOLVED_ITEM_ID, SvAmazonGmailEventSink::targetItemId([]), 'No resolved item must use placeholder.');
+gmSame(SvAmazonGmailEventSink::UNRESOLVED_ITEM_ID, SvAmazonGmailEventSink::targetItemId(['item-1','item-2']), 'Multi-item order must remain ambiguous.');
+
+$refundPatch = SvAmazonGmailEventSink::casePatch($refund[0]);
+gmSame('POLICY_REVIEW_REQUIRED', $refundPatch['state'], 'Gmail-only refund must remain blocked for policy review.');
+gmAssert(!array_key_exists('seller_debit_at', $refundPatch), 'Gmail refund must not assert seller debit truth.');
+gmAssert(!array_key_exists('refund_initiator', $refundPatch), 'Gmail refund must not infer refund initiator.');
+$registeredPatch = SvAmazonGmailEventSink::casePatch($registered[0]);
+gmSame('98143-99485-9285859', $registeredPatch['safe_t_id'], 'SAFE-T email may attach the observed claim ID.');
+gmSame('SAFE_T_SUBMITTED', $registeredPatch['state'], 'Registered SAFE-T email updates observational state only.');
 
 $updated = $parser->parse(message('m-update', 'Atualização da solicitação do SAFE-T 12472-25597-6629839 para o pedido 702-5555555-6666666'));
 gmSame('SAFE_T_UPDATED_EMAIL', $updated[0]['event_type'], 'SAFE-T update event type.');
@@ -78,5 +94,32 @@ gmSame(1, $first['events'], 'First ingest must emit one relevant event.');
 gmSame(1, $second['events'], 'Replay is still observed as an event candidate.');
 gmSame(1, count($ids), 'Append idempotency prevents duplicate stored event.');
 gmSame('history-102', $second['cursor'], 'Cursor advances independently from unread labels.');
+
+
+$calls = [];
+$transport = static function(string $method, string $url, array $headers, ?array $body = null) use (&$calls): array {
+    $calls[] = [$method, $url, $headers, $body];
+    if (str_contains($url, '/profile')) return ['status'=>200,'json'=>['historyId'=>'200']];
+    if (str_contains($url, '/history?')) return ['status'=>200,'json'=>['history'=>[['messagesAdded'=>[['message'=>['id'=>'m-api-1']]]]]]];
+    if (str_contains($url, '/messages/m-api-1?')) return ['status'=>200,'json'=>[
+        'id'=>'m-api-1','threadId'=>'t-api-1','internalDate'=>'1788283827000',
+        'payload'=>['headers'=>[
+            ['name'=>'From','value'=>'Amazon <donotreply@amazon.com>'],
+            ['name'=>'Subject','value'=>'Reembolso de 10.50 BRL iniciado para o pedido 701-0000000-0000001'],
+        ],'mimeType'=>'text/plain','body'=>['data'=>rtrim(strtr(base64_encode('Pedido 701-0000000-0000001'), '+/', '-_'), '=')]],
+    ]];
+    throw new RuntimeException('Unexpected Gmail API URL: '.$url);
+};
+$gmailApi = new SvAmazonGmailApiClient(
+    new SvAmazonReturnsConfig(['GMAIL_OAUTH_ACCESS_TOKEN'=>'test-token']),
+    $transport
+);
+$pulled = $gmailApi->pull('100');
+gmSame('200', $pulled['cursor'], 'Gmail cursor must advance to profile historyId.');
+gmSame(1, count($pulled['messages']), 'History ingestion must fetch added messages.');
+gmSame('m-api-1', $pulled['messages'][0]['message_id'], 'Normalized Gmail message ID.');
+gmSame('Amazon <donotreply@amazon.com>', $pulled['messages'][0]['from'], 'Gmail From header normalization.');
+gmAssert(!in_array('UNREAD', $pulled['messages'][0]['labels'] ?? [], true), 'Unread state is not required for source cursor semantics.');
+gmAssert(str_starts_with($calls[1][1], 'https://gmail.googleapis.com/gmail/v1/users/me/history?'), 'Incremental pull must use Gmail history API.');
 
 echo "amazon-returns-gmail-test: OK\n";
