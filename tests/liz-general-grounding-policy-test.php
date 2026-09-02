@@ -22,5 +22,11 @@ foreach ($cases as [$message, $expected]) {
     }
 }
 
+
+if (lizg_plain_max_attempts() !== 3) {
+    fwrite(STDERR, "FAIL: general Liz must allow three plain Gemini attempts for transient failures.\n");
+    $failures++;
+}
+
 if ($failures > 0) exit(1);
 echo "PASS: stable questions skip web grounding; current/research questions request it.\n";

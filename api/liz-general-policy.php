@@ -27,3 +27,8 @@ function lizg_should_retry_plain(int $status): bool
 {
     return in_array($status, [0, 429, 500, 502, 503, 504], true);
 }
+
+function lizg_plain_max_attempts(): int
+{
+    return 3;
+}
