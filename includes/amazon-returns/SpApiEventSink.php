@@ -24,6 +24,9 @@ final class SvAmazonSpApiEventSink
             }
         }
         $fulfillment = is_array($order['fulfillment'] ?? null) ? $order['fulfillment'] : [];
+        $fulfilledBy = strtoupper(trim((string)($fulfillment['fulfilledBy'] ?? '')));
+        if ($fulfilledBy === 'AMAZON') return SvAmazonReturnPrograms::FBA;
+        if ($fulfilledBy === 'MERCHANT') return SvAmazonReturnPrograms::STANDARD;
         $channel = strtoupper(trim((string)($fulfillment['channel'] ?? $fulfillment['fulfillmentChannel'] ?? '')));
         if (in_array($channel, ['MERCHANT','MFN','SELLER'], true)) return SvAmazonReturnPrograms::STANDARD;
         return SvAmazonReturnPrograms::UNKNOWN;

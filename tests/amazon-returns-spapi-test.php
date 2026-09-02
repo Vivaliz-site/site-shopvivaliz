@@ -57,6 +57,9 @@ spSame('req-report-1', $report['request_id'], 'Report request ID must be retaine
 
 spSame('DELIVERY_BY_AMAZON', SvAmazonSpApiEventSink::programFromOrder($order), 'DBA program must normalize deterministically.');
 spSame('STANDARD', SvAmazonSpApiEventSink::programFromOrder(['programs'=>[],'fulfillment'=>['channel'=>'MERCHANT']]), 'Merchant fulfillment maps to STANDARD.');
+spSame('FBA', SvAmazonSpApiEventSink::programFromOrder(['programs'=>[],'fulfillment'=>['fulfilledBy'=>'AMAZON']]), 'Orders v2026 AMAZON fulfillment maps to FBA.');
+spSame('STANDARD', SvAmazonSpApiEventSink::programFromOrder(['programs'=>[],'fulfillment'=>['fulfilledBy'=>'MERCHANT']]), 'Orders v2026 MERCHANT fulfillment maps to STANDARD.');
+spSame('DELIVERY_BY_AMAZON', SvAmazonSpApiEventSink::programFromOrder(['programs'=>['DELIVERY_BY_AMAZON'],'fulfillment'=>['fulfilledBy'=>'AMAZON']]), 'Explicit DBA program takes precedence over fulfilledBy.');
 $refundFact = SvAmazonSpApiEventSink::refundObservation([[
     'transaction_id'=>'txn-refund','transaction_type'=>'Refund','transaction_status'=>'RELEASED',
     'posted_at'=>'2026-08-01T12:00:00Z','total_amount'=>['amount'=>'-128.25','currency'=>'BRL'],

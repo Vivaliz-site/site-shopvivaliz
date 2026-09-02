@@ -29,7 +29,7 @@ try {
         COALESCE(SUM(CASE WHEN state IN ('SAFE_T_APPROVED','APPEAL_APPROVED','CREDIT_PENDING') THEN GREATEST($exposure,0) ELSE 0 END),0) approved_awaiting_credit,
         COALESCE(SUM(CASE WHEN state='RECOVERED' THEN reconciled_credit_amount ELSE 0 END),0) recovered,
         COALESCE(SUM(CASE WHEN state='CLOSED_LOSS' THEN GREATEST($exposure,0) ELSE 0 END),0) loss,
-        SUM(CASE WHEN refund_initiator='UNKNOWN' OR program='UNKNOWN' OR seller_debit_at IS NULL THEN 1 ELSE 0 END) unclassified,
+        SUM(CASE WHEN program='UNKNOWN' THEN 1 WHEN program IN ('STANDARD','FBA_ONSITE','DELIVERY_BY_AMAZON') AND (refund_initiator='UNKNOWN' OR seller_debit_at IS NULL) THEN 1 ELSE 0 END) unclassified,
         SUM(CASE WHEN state IN ('SAFE_T_ELIGIBLE','SAFE_T_READY') AND safe_t_id IS NULL THEN 1 ELSE 0 END) eligible_without_action,
         SUM(CASE WHEN appeal_deadline_at IS NOT NULL AND appeal_deadline_at < UTC_TIMESTAMP() AND state IN ('SAFE_T_DENIED','SAFE_T_INFO_REQUESTED','APPEAL_REQUIRED') THEN 1 ELSE 0 END) expired_without_treatment,
         SUM(CASE WHEN reconciled_credit_amount > 0 AND state NOT IN ('RECOVERED','CREDIT_PENDING') THEN 1 ELSE 0 END) credit_without_reconciliation

@@ -127,6 +127,7 @@ final class SvAmazonReturnPhysicalStatuses
 final class SvAmazonReturnPrograms
 {
     public const UNKNOWN = 'UNKNOWN';
+    public const FBA = 'FBA';
     public const STANDARD = 'STANDARD';
     public const FBA_ONSITE = 'FBA_ONSITE';
     public const DELIVERY_BY_AMAZON = 'DELIVERY_BY_AMAZON';
@@ -134,6 +135,6 @@ final class SvAmazonReturnPrograms
     /** @return list<string> */
     public static function all(): array
     {
-        return [self::UNKNOWN, self::STANDARD, self::FBA_ONSITE, self::DELIVERY_BY_AMAZON];
+        return [self::UNKNOWN, self::FBA, self::STANDARD, self::FBA_ONSITE, self::DELIVERY_BY_AMAZON];
     }
 }
