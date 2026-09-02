@@ -23,4 +23,7 @@ foreach (['OnActiveSec=20s','OnUnitInactiveSec=15s'] as $needle) {
 foreach (['shopvivaliz-desktop-commander-guardian.service','shopvivaliz-desktop-commander-guardian.timer','vm-desktop-commander-guardian.sh','GUARDIAN_TIMER_ENABLED','GUARDIAN_TIMER_ACTIVE'] as $needle) {
     if (strpos((string)$installer, $needle) === false) { fwrite(STDERR, "VM installer does not manage guardian {$needle}\n"); exit(1); }
 }
+if (strpos((string)$guardian, 'AUTH_RETRY_MINUTES="${AUTH_RETRY_MINUTES:-15}"') === false) {
+    fwrite(STDERR, "VM guardian must retry recoverable provider auth after 15 minutes\n"); exit(1);
+}
 echo "vm-desktop-commander-guardian-contract: ok\n";

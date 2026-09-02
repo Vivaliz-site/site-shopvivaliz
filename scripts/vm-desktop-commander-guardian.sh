@@ -8,7 +8,7 @@ COOLDOWN_FILE="$DEVICE_DIR/auth-required.cooldown"
 LOCK_FILE='/run/lock/shopvivaliz-desktop-commander-guardian.lock'
 REMOTE_PATTERN='(@wonderwhy-er/desktop-commander@0[.]2[.]47 remote --persist-session|shopvivaliz-dc-remote|desktop-commander/dist/index[.]js remote --persist-session)'
 SERVICE_CGROUP="/system.slice/$SERVICE"
-AUTH_RETRY_MINUTES="${AUTH_RETRY_MINUTES:-360}"
+AUTH_RETRY_MINUTES="${AUTH_RETRY_MINUTES:-15}"
 
 exec 9>"$LOCK_FILE"
 if ! flock -n 9; then
