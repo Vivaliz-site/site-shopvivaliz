@@ -57,6 +57,7 @@ PY
 install -m 0644 "$unit_source" "/etc/systemd/system/$service_name"
 systemctl daemon-reload
 systemctl enable --now "$service_name"
+systemctl restart "$service_name"
 test "$(systemctl is-active "$service_name")" = active
 test "$(systemctl is-enabled "$service_name")" = enabled
 echo 'amazon_returns_service_ready=true'

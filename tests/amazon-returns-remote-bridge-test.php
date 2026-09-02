@@ -105,3 +105,5 @@ rbAssert(!str_contains($installerSource,'C:\\Users\\FRED'),'Windows bridge insta
 rbAssert(str_contains($installerSource,'LOCALAPPDATA'),'Windows bridge installer must discover Opera from the current host profile.');
 $qaWorkflow=(string)file_get_contents(__DIR__.'/../.github/workflows/shopvivaliz-qa.yml');
 rbAssert(str_contains($qaWorkflow,'node --check scripts/amazon-returns/seller-central-bridge-worker.mjs'),'CI must syntax-check the persistent Seller Central bridge worker.');
+rbAssert(!str_contains($installerSource, '}New-Item'), 'Windows bridge installer must preserve a statement boundary after dependency validation.');
+rbAssert(!str_contains($installerSource, ')$settings'), 'Windows bridge installer must preserve a statement boundary after trigger array creation.');
