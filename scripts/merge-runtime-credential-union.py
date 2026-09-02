@@ -23,6 +23,10 @@ EMAIL_KEYS = {
     "MAIL_HOST", "MAIL_PASS", "MAIL_PORT", "MAIL_USER",
 }
 
+SHOPEE_KEYS = {
+    "SHOPEE_PARTNER_ID", "SHOPEE_PARTNER_KEY", "SHOPEE_REDIRECT_URI", "SHOPEE_SHOP_ID",
+}
+
 ALLOWED_KEYS = {
     "ADMIN_EMAIL", "ANTHROPIC_API_KEY", "APP_URL", "BASE_URL",
     "BLOG_PUBLISH_TOKEN", "BREVO_API_KEY",
@@ -77,12 +81,18 @@ def validate_value(key: str, value: str) -> None:
 
 
 def parse_payload_fields(fields: list[bytes], scope: str = "all") -> dict[str, str]:
-    if scope not in {"all", "email"}:
+    if scope not in {"all", "email", "shopee"}:
         raise ValueError(f"unsupported credential scope: {scope}")
     if len(fields) % 2:
         raise ValueError("payload must contain name/value pairs")
 
-    scope_keys = ALLOWED_KEYS if scope == "all" else EMAIL_KEYS
+    if scope == "all":
+        scope_keys = ALLOWED_KEYS
+    elif scope == "email":
+        scope_keys = EMAIL_KEYS
+    else:
+        scope_keys = SHOPEE_KEYS
+
     values: dict[str, str] = {}
     seen: set[str] = set()
     for raw_key, raw_value in zip(fields[0::2], fields[1::2]):
@@ -185,8 +195,8 @@ def main() -> int:
     if len(args) == 3 and args[0] == "--scope":
         scope = args[1]
         args = args[2:]
-    if len(args) != 1 or scope not in {"all", "email"}:
-        print("usage: merge-runtime-credential-union.py [--scope all|email] SHARED_ENV", file=sys.stderr)
+    if len(args) != 1 or scope not in {"all", "email", "shopee"}:
+        print("usage: merge-runtime-credential-union.py [--scope all|email|shopee] SHARED_ENV", file=sys.stderr)
         return 2
     try:
         incoming = read_payload(scope=scope)
