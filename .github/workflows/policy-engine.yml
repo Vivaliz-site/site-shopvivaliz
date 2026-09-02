@@ -188,7 +188,7 @@ jobs:
           metadata="$(gh api "repos/$GH_REPO/actions/artifacts/$VISUAL_ARTIFACT_ID")"
           actual_name="$(jq -r '.name // empty' <<<"$metadata")"
           actual_digest="$(jq -r '.digest // empty' <<<"$metadata")"
-          expired="$(jq -r '.expired // true' <<<"$metadata")"
+          expired="$(jq -r 'if has("expired") then .expired else true end' <<<"$metadata")"
           test "$expired" = false
           test "$actual_name" = "$VISUAL_ARTIFACT_NAME"
           test "$actual_digest" = "$VISUAL_ARTIFACT_DIGEST"
