@@ -818,4 +818,26 @@ email/telefone antes do hash, sem nenhum efeito em layout renderizado).
   investigar "por que unclassified não zera", confirme se é falta de fonte de
   dado ou nome de campo errado lendo uma resposta real da API (não assuma pelo
   nome do campo no código).
+- **Limite real de janela do `GET_FLAT_FILE_RETURNS_DATA_BY_RETURN_DATE`:**
+  confirmado empiricamente em produção que a Amazon aceita no máximo ~30 dias
+  entre `dataStartTime`/`dataEndTime` para este relatório — janelas de 90 ou
+  120 dias voltam com `processingStatus=FATAL` (não documentado de forma clara
+  nos docs públicos da SP-API). Backfill histórico precisa rodar como vários
+  requests sequenciais de até 30 dias cada.
+- **Depois de corrigir `programFromOrder` e rodar o backfill do relatório em
+  produção (2026-09-02), os 15 casos que estavam com `unclassified=1` desde
+  antes desta sessão tiveram `program` corrigido para todos, mas
+  `refund_initiator` continuou `UNKNOWN` para 13/15** mesmo testando janelas
+  de relatório cobrindo maio-agosto/2026 — nenhuma linha do relatório bateu
+  com esses `amazon_order_id`. Hipótese mais provável: são exatamente o tipo
+  de caso que justifica um SAFE-T (Amazon reembolsou o cliente sem existir um
+  "return request" físico registrado — item perdido no fulfillment, por
+  exemplo), então não há linha correspondente no relatório de devoluções por
+  definição. `refund_initiator=UNKNOWN` nesses casos é o comportamento correto
+  do sistema (bloqueia escrita externa até reconciliação oficial, por design),
+  não um bug a "corrigir forçando" um valor. Se precisar fechar esses casos
+  específicos, a evidência tem que vir de outra fonte (ex.: revisão manual via
+  Seller Central, ou um e-mail de Ajuda que confirme o motivo) — não adivinhar
+  a partir de Finances/Orders/Reports, que não expõem essa informação para
+  este cenário.
 
