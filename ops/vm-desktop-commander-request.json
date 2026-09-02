@@ -1,4 +1,4 @@
 {
   "action": "install_or_repair",
-  "reason": "deploy Desktop Commander proactive token refresh v4 after PR 1353"
+  "reason": "deploy proactive refresh v4 and repair private A1 peer after auth expiry"
 }
