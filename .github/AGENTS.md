@@ -95,6 +95,8 @@ Smoke test pós-deploy                   ← Observability AI
 ### Regras absolutas de Git
 
 - **NUNCA** push direto para `main` — qualquer tentativa é bloqueada pelo hook `pre-push`
+- **NUNCA** trate commit, push de branch ou PR aberta como conclusão. A rodada só termina após checks, merge, validação pós-merge, working tree limpa e confirmação de que não existe PR aberta/draft da própria tarefa.
+- Se CI, review ou conflito falhar e houver correção executável, corrija e continue; não devolva o trabalho ao usuário no meio do fluxo.
 - **NUNCA** `--force` ou `--no-verify` sem autorização explícita do CTO
 - Branch naming: `feat/`, `fix/`, `hotfix/`, `chore/`, `docs/`
 - Commit messages: `type(scope): descrição` em português ou inglês
