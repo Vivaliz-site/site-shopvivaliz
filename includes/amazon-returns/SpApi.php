@@ -11,8 +11,10 @@ declare(strict_types=1);
 final class SvAmazonReturnsSpApi
 {
     private object $client;
+    /** @var callable(string):string */
+    private $documentDownloader;
 
-    public function __construct(?object $client = null)
+    public function __construct(?object $client = null, ?callable $documentDownloader = null)
     {
         if ($client === null) {
             require_once __DIR__ . '/../marketplace/AmazonPublisher.php';
@@ -24,6 +26,30 @@ final class SvAmazonReturnsSpApi
             }
         }
         $this->client = $client;
+        $this->documentDownloader = $documentDownloader ?? self::defaultDocumentDownloader();
+    }
+
+    private static function defaultDocumentDownloader(): callable
+    {
+        return static function (string $url): string {
+            $handle = curl_init($url);
+            if ($handle === false) throw new RuntimeException('Unable to initialize Amazon report document download.');
+            curl_setopt_array($handle, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_CONNECTTIMEOUT => 15,
+                CURLOPT_TIMEOUT => 120,
+                CURLOPT_SSL_VERIFYPEER => true,
+                CURLOPT_SSL_VERIFYHOST => 2,
+            ]);
+            $raw = curl_exec($handle);
+            $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+            $error = curl_error($handle);
+            curl_close($handle);
+            if (!is_string($raw) || $status < 200 || $status >= 300) {
+                throw new RuntimeException('Failed to download Amazon report document: HTTP ' . $status . ' ' . $error);
+            }
+            return $raw;
+        };
     }
 
     /** @return array<string,mixed> */
@@ -127,6 +153,49 @@ final class SvAmazonReturnsSpApi
             'report_id' => $reportId,
             'report_type' => $body['reportType'],
         ];
+    }
+
+    /** @return array{report_id:string,processing_status:string,report_document_id:?string} */
+    public function getReportStatus(string $reportId): array
+    {
+        $id = self::requiredId($reportId, 'Report ID');
+        $response = $this->client->request('GET', '/reports/2021-06-30/reports/' . rawurlencode($id));
+        self::assertSuccess($response, 'Reports getReport');
+        $data = self::responseData($response);
+        $payload = self::firstArray($data, ['payload']) ?? $data;
+        return [
+            'report_id' => trim((string)($payload['reportId'] ?? $id)),
+            'processing_status' => trim((string)($payload['processingStatus'] ?? '')),
+            'report_document_id' => self::nullableString($payload['reportDocumentId'] ?? null),
+        ];
+    }
+
+    /** @return array{url:string,compression_algorithm:?string} */
+    public function getReportDocument(string $reportDocumentId): array
+    {
+        $id = self::requiredId($reportDocumentId, 'Report document ID');
+        $response = $this->client->request('GET', '/reports/2021-06-30/documents/' . rawurlencode($id));
+        self::assertSuccess($response, 'Reports getReportDocument');
+        $data = self::responseData($response);
+        $payload = self::firstArray($data, ['payload']) ?? $data;
+        $url = trim((string)($payload['url'] ?? ''));
+        if ($url === '') throw new RuntimeException('Amazon Reports document did not return a download URL.');
+        return [
+            'url' => $url,
+            'compression_algorithm' => self::nullableString($payload['compressionAlgorithm'] ?? null),
+        ];
+    }
+
+    public function downloadReturnsReport(string $reportDocumentId): string
+    {
+        $document = $this->getReportDocument($reportDocumentId);
+        $raw = ($this->documentDownloader)($document['url']);
+        if (strtoupper((string)($document['compression_algorithm'] ?? '')) === 'GZIP') {
+            $decoded = @gzdecode($raw);
+            if (!is_string($decoded)) throw new RuntimeException('Failed to decompress Amazon report document.');
+            $raw = $decoded;
+        }
+        return $raw;
     }
 
     /** @return array<string,mixed> */

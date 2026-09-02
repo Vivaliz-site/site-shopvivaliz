@@ -363,6 +363,11 @@ class PolicyEngine {
       || file === 'includes/catalog-authoritative-stock-carry.php'
       || file === 'includes/tiny-order-push.php'
       || file.startsWith('includes/marketplace/')
+      // Amazon Returns/SAFE-T domain, event store, SP-API facade and report
+      // parsing — server-side event sourcing with no rendered output. The
+      // admin dashboard for this subsystem lives under admin/amazon-returns/
+      // and is not covered by this exemption.
+      || file.startsWith('includes/amazon-returns/')
     ) {
       return false;
     }

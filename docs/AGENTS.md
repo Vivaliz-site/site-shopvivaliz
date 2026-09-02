@@ -787,3 +787,35 @@ email/telefone antes do hash, sem nenhum efeito em layout renderizado).
 - Negativa SAFE-T automatica repetida e nao substantiva deve escalar para Ajuda uma unica vez por fingerprint; nao criar loop de respostas identicas.
 - SAFE-T aprovada so fecha financeiramente quando o credito correspondente aparecer no ledger SP-API.
 
+### 2026-09-02 — Reports (GET_FLAT_FILE_RETURNS_DATA_BY_RETURN_DATE) e programFromOrder (Sonnet)
+
+- **Achado:** `createReport` sozinho nunca preenchia `amazon_return_cases` — faltava o
+  poll (`GET /reports/2021-06-30/reports/{id}`) + download do documento (`GET
+  /reports/2021-06-30/documents/{id}`, presigned URL sem headers SP-API, GZIP
+  opcional) + parse. Implementado em `SvAmazonReturnsSpApi::getReportStatus/
+  getReportDocument/downloadReturnsReport` + `SvAmazonReturnsReportParser` (parser
+  puro) + `SvAmazonSpApiEventSink::persistReturnsReportRow` + orquestração em
+  `daemon.php::pollAndIngestReturnsReport` (poll limitado a ~2min por tick; se não
+  finalizar a tempo, o próximo tick de `returns_report` pede um relatório novo —
+  não há necessidade de persistir report_id entre ticks).
+- **Layout real confirmado** (TSV, cabeçalho com nomes exatos, não documentado
+  como golden fixture em nenhum outro lugar do repo): `Order ID`, `Order Item ID`,
+  `A-to-Z Claim` (Y/N), `Resolution` (ex.: `RefundAtFirstScan`), `Return Reason`,
+  entre outras. `refund_initiator` só é classificado com confiança quando
+  `A-to-Z Claim=Y` (→ `A_TO_Z`) ou `Resolution` contém `RefundAtFirstScan` (→
+  `AMAZON_AUTOMATIC`); qualquer outro valor fica `UNKNOWN` — não adivinhar.
+- **Bug real em `SvAmazonSpApiEventSink::programFromOrder`:** o código checava
+  `$order['fulfillment']['channel']`/`fulfillmentChannel`, mas o campo real
+  retornado pela Orders API v2026-01-01 é `fulfilledBy` (`AMAZON`|`MERCHANT`).
+  Resultado: **todo pedido FBA padrão (o caso mais comum) caía em `program=UNKNOWN`**,
+  mesmo com dados de fulfillment presentes — não era falta de dado, era nome de
+  campo errado. Corrigido para checar `fulfilledBy` primeiro, mantendo `channel`/
+  `fulfillmentChannel` como fallback (não quebra fixtures antigas). Confirmado
+  com chamada real contra dois pedidos de produção antes de corrigir.
+- **Por que importa:** esses dois bugs juntos explicavam os 15 casos presos em
+  `unclassified` mesmo com Finances já autorizado e `seller_debit_at` populado
+  corretamente — `refund_initiator`/`program` nunca tinham de onde vir. Antes de
+  investigar "por que unclassified não zera", confirme se é falta de fonte de
+  dado ou nome de campo errado lendo uma resposta real da API (não assuma pelo
+  nome do campo no código).
+
