@@ -1,4 +1,4 @@
 {
   "action": "install_or_repair",
-  "reason": "deploy VM Desktop Commander auth classification fix and preserve 24h persisted session"
+  "reason": "deploy Desktop Commander proactive token refresh v4 after PR 1353"
 }
