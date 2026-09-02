@@ -1,0 +1,8 @@
+[Unit]
+Description=ShopVivaliz Desktop Commander single-owner guardian
+After=network-online.target shopvivaliz-desktop-commander.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/shopvivaliz/vm-desktop-commander-guardian.sh

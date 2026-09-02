@@ -14,7 +14,8 @@ $required = [
     'install-vm-desktop-commander-service.sh',
     'shopvivaliz-desktop-commander.service',
     'systemctl is-enabled shopvivaliz-desktop-commander.service',
-    'systemctl is-active shopvivaliz-desktop-commander.service'
+    'systemctl is-active shopvivaliz-desktop-commander.service',
+    'git clone --filter=blob:none --branch main', 'git restore --source=origin/main --'
 ];
 foreach ($required as $needle) {
     if (strpos($yml, $needle) === false) { fwrite(STDERR, "FALHOU: ausente {$needle}\n"); exit(1); }
