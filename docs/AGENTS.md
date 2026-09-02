@@ -841,3 +841,41 @@ email/telefone antes do hash, sem nenhum efeito em layout renderizado).
   a partir de Finances/Orders/Reports, que não expõem essa informação para
   este cenário.
 
+### 2026-09-02 — Bridge do Seller Central em 401 permanente: Apache/mod_php não repassa Authorization (Sonnet)
+
+- **Sintoma:** `POST /api/amazon-returns/bridge.php` sempre respondia
+  `{"status":"UNAUTHORIZED"}` (HTTP 401), não importa qual valor de
+  `SELLER_CENTRAL_BRIDGE_TOKEN`/`bridge.token` (Windows) fosse usado — inclusive
+  com o token 100% correto e verificado byte a byte dos dois lados.
+- **Causa raiz real:** Apache com `mod_php` (`php_module`, não PHP-FPM) **não
+  estava populando `$_SERVER['HTTP_AUTHORIZATION']`** para este endpoint —
+  confirmado com um script de debug temporário que imprimiu
+  `apache_request_headers()` vs `$_SERVER`: o header `Authorization` chegava
+  normalmente do Cloudflare até o Apache (visível em `apache_request_headers()`),
+  mas nunca aparecia em `$_SERVER`. Isso é um comportamento conhecido (não um
+  bug de config específico deste site) de Apache+mod_php em várias combinações
+  de versão/distro — Apache trata `Authorization` como reservado para seus
+  próprios módulos de auth (`mod_auth_basic` etc.) e não o repassa ao CGI/SAPI
+  automaticamente.
+- **Como foi diagnosticado:** ~2h perdidas comparando hashes SHA-256 do token
+  de formas inconsistentes (`grep|cut|sha256sum` incluindo `\n` final vs
+  `trim()` do PHP/Node) antes de perceber que o token *nunca* foi o problema.
+  **Lição para o próximo agente:** se um Bearer token continua falhando mesmo
+  depois de confirmar que client e servidor têm o **mesmo valor exato**
+  (compare sempre com `trim()` dos dois lados, nunca hash de string com/sem
+  newline final misturado), o próximo passo é confirmar que o header
+  *chega* no `$_SERVER` do PHP antes de suspeitar do valor do token de novo.
+- **Correção aplicada:** `SvAmazonReturnsRemoteBridge::resolveAuthorizationHeader()`
+  (novo método) tenta `$_SERVER['HTTP_AUTHORIZATION']` /
+  `REDIRECT_HTTP_AUTHORIZATION` primeiro e cai para `apache_request_headers()`
+  quando vazio. `api/amazon-returns/bridge.php` usa esse método em vez de ler
+  `$_SERVER` diretamente. Qualquer outro endpoint deste projeto que dependa de
+  `Authorization: Bearer ...` sob Apache/mod_php deve considerar o mesmo padrão.
+- **Nunca deixar arquivo de debug temporário em produção:** durante o
+  diagnóstico, um arquivo temporário na raiz do documento (`/debug-*.php`) foi
+  bloqueado por uma regra de firewall da aplicação ("Área protegida", 403) —
+  arquivos soltos na raiz são tratados como não autorizados. Um arquivo dentro
+  de `api/amazon-returns/` (mesma pasta do `bridge.php`) passou normalmente.
+  Qualquer arquivo de debug ad hoc deve ser removido do release/produção assim
+  que o diagnóstico terminar — nunca commitado.
+
