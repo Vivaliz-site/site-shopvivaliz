@@ -43,7 +43,9 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
 
     def test_runtime_env_guard_smokes_local_release(self) -> None:
         text = (ROOT / ".github/workflows/runtime-env-guard.yml").read_text(encoding="utf-8")
-        self.assertIn("http://127.0.0.1/auth/login.php", text)
+        self.assertIn("http://127.0.0.1:8080/auth/login.php", text)
+        self.assertIn("http://127.0.0.1:8080/auth/google-start.php", text)
+        self.assertNotIn("http://127.0.0.1/auth/login.php", text)
         self.assertIn("-H 'Host: shopvivaliz.com.br'", text)
         self.assertNotIn("https://shopvivaliz.com.br/auth/login.php", text)
 
