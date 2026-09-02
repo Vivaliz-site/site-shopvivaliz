@@ -9,6 +9,11 @@ if (!sv_social_google_is_configured()) {
 }
 
 $job = strtolower(trim((string)($_GET['job'] ?? '')));
+$purpose = strtolower(trim((string)($_GET['purpose'] ?? 'google_ads')));
+if (!in_array($purpose, ['google_ads', 'gmail_readonly'], true)) {
+    http_response_code(400);
+    exit('Invalid authorization purpose.');
+}
 if (!preg_match('/^[a-f0-9]{32}$/', $job)) {
     http_response_code(400);
     exit('Invalid authorization job.');
@@ -20,6 +25,7 @@ if (!preg_match('/^[a-f0-9]{32}$/', $job)) {
 $payload = [
     'v' => 1,
     'job' => $job,
+    'purpose' => $purpose,
     'ts' => time(),
     'nonce' => bin2hex(random_bytes(12)),
 ];
@@ -32,10 +38,12 @@ $url = 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
     'client_id' => sv_social_env('GOOGLE_OAUTH_CLIENT_ID'),
     'redirect_uri' => sv_social_callback_url('google'),
     'response_type' => 'code',
-    'scope' => 'https://www.googleapis.com/auth/adwords',
+    'scope' => $purpose === 'gmail_readonly'
+        ? 'https://www.googleapis.com/auth/gmail.readonly'
+        : 'https://www.googleapis.com/auth/adwords',
     'state' => $state,
     'access_type' => 'offline',
-    'include_granted_scopes' => 'true',
+    'include_granted_scopes' => $purpose === 'gmail_readonly' ? 'false' : 'true',
     'prompt' => 'consent',
 ]);
 

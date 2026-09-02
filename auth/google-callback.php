@@ -6,6 +6,7 @@ require_once __DIR__ . '/../includes/social-auth.php';
 
 $error = '';
 $adsOauthSuccess = false;
+$gmailOauthSuccess = false;
 $cloudApiEnableSuccess = false;
 
 function sv_google_signed_state_payload(string $state, string $prefix): ?array
@@ -32,6 +33,13 @@ function sv_google_ads_signed_state_job(string $state): ?string
     if (!$payload) return null;
     $job = strtolower(trim((string)($payload['job'] ?? '')));
     return preg_match('/^[a-f0-9]{32}$/', $job) === 1 ? $job : null;
+}
+
+function sv_google_oauth_signed_state_purpose(string $state): string
+{
+    $payload = sv_google_signed_state_payload($state, 'gads1');
+    $purpose = is_array($payload) ? strtolower(trim((string)($payload['purpose'] ?? 'google_ads'))) : 'google_ads';
+    return in_array($purpose, ['google_ads', 'gmail_readonly'], true) ? $purpose : 'google_ads';
 }
 
 function sv_google_cloud_enable_project(string $state): ?string
@@ -146,6 +154,7 @@ try {
         $cloudApiEnableSuccess = true;
     } else {
         $signedAdsJob = sv_google_ads_signed_state_job($state);
+        $googleOauthPurpose = sv_google_oauth_signed_state_purpose($state);
         $adsRequest = $_SESSION['social_oauth']['google_ads'] ?? null;
         $sessionAdsJob = null;
         if (is_array($adsRequest)
@@ -171,7 +180,11 @@ try {
             $refreshToken = trim((string)($tokenData['refresh_token'] ?? ''));
             if ($refreshToken === '') throw new RuntimeException('Google não retornou refresh token. Reautorize com consentimento.');
             sv_google_ads_write_pending_refresh_token($adsJob, $refreshToken);
-            $adsOauthSuccess = true;
+            if ($googleOauthPurpose === 'gmail_readonly') {
+                $gmailOauthSuccess = true;
+            } else {
+                $adsOauthSuccess = true;
+            }
         } else {
             $request = sv_social_consume_request('google', $state);
             if (!$request) throw new RuntimeException('Sessão do login Google expirou. Tente novamente.');
@@ -212,6 +225,7 @@ try {
 <!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Google OAuth - ShopVivaliz</title><style>body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f6f8fb;color:#172033;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}.card{background:#fff;border-radius:14px;box-shadow:0 12px 40px rgba(15,23,42,.12);max-width:540px;width:100%;padding:32px}h1{font-size:24px;margin:0 0 12px}p{margin:0 0 18px;line-height:1.5;color:#475569}a{display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:600}</style></head><body><div class="card">
 <?php if ($cloudApiEnableSuccess): ?><h1>Google Ads API ativada</h1><p>Service Usage e Google Ads API foram ativadas no projeto Google Cloud. Esta janela pode ser fechada.</p>
+<?php elseif ($gmailOauthSuccess): ?><h1>Gmail autorizado</h1><p>A autorização de leitura do Gmail foi concluída. Esta janela pode ser fechada.</p>
 <?php elseif ($adsOauthSuccess): ?><h1>Google Ads autorizado</h1><p>A autorização foi concluída. Esta janela pode ser fechada.</p>
 <?php else: ?><h1>Não foi possível concluir a autorização do Google</h1><p><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></p><a href="/auth/login.php">Voltar</a><?php endif; ?>
 </div></body></html>
