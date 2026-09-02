@@ -11,23 +11,39 @@ SERVICE_CGROUP="/system.slice/$SERVICE"
 AUTH_RETRY_MINUTES="${AUTH_RETRY_MINUTES:-360}"
 
 exec 9>"$LOCK_FILE"
-flock -n 9 || exit 0
+if ! flock -n 9; then
+  exit 0
+fi
 
 log_guardian() {
-  logger -t shopvivaliz-dc-guardian -- "$*" 2>/dev/null || true
+  if ! logger -t shopvivaliz-dc-guardian -- "$*" 2>/dev/null; then
+    return 0
+  fi
 }
 
 proc_cgroup() {
-  awk -F: '$1 == "0" { print $3 }' "/proc/$1/cgroup" 2>/dev/null || true
+  local value=''
+  if value="$(awk -F: '$1 == "0" { print $3 }' "/proc/$1/cgroup" 2>/dev/null)"; then
+    printf '%s\n' "$value"
+  fi
+  return 0
+}
+proc_parent() {
+  local value=''
+  if value="$(awk '/^PPid:/ { print $2 }' "/proc/$1/status" 2>/dev/null)"; then
+    printf '%s\n' "$value"
+  fi
+  return 0
 }
 
-proc_parent() {
-  awk '/^PPid:/ { print $2 }' "/proc/$1/status" 2>/dev/null || true
-}
 is_dc_wrapper() {
-  local pid="$1" cmd
-  [[ -r "/proc/$pid/cmdline" ]] || return 1
-  cmd="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+  local pid="$1" cmd=''
+  if [[ ! -r "/proc/$pid/cmdline" ]]; then
+    return 1
+  fi
+  if ! cmd="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)"; then
+    return 1
+  fi
   [[ "$cmd" == *'desktop-commander'* ]]
 }
 
@@ -48,18 +64,27 @@ foreign_root_for_pid() {
 }
 
 kill_tree() {
-  local root="$1" child
-  while read -r child; do
-    [[ -n "$child" ]] && kill_tree "$child"
-  done < <(pgrep -P "$root" 2>/dev/null || true)
-  kill -TERM "$root" 2>/dev/null || true
+  local root="$1" child children=''
+  if children="$(pgrep -P "$root" 2>/dev/null)"; then
+    while read -r child; do
+      [[ -n "$child" ]] && kill_tree "$child"
+    done <<< "$children"
+  fi
+  if ! kill -TERM "$root" 2>/dev/null; then
+    :
+  fi
   sleep 1
-  kill -KILL "$root" 2>/dev/null || true
+  if ! kill -KILL "$root" 2>/dev/null; then
+    :
+  fi
 }
 
 kill_foreign_launchers() {
-  local pid cg root
+  local pid cg root matches=''
   declare -A seen=()
+  if ! matches="$(pgrep -f "$REMOTE_PATTERN" 2>/dev/null)"; then
+    return 0
+  fi
   while read -r pid; do
     [[ -n "$pid" ]] || continue
     cg="$(proc_cgroup "$pid")"
@@ -69,7 +94,7 @@ kill_foreign_launchers() {
     seen[$root]=1
     log_guardian "foreign_launcher_removed pid=$root cgroup=${cg:-unknown}"
     kill_tree "$root"
-  done < <(pgrep -f "$REMOTE_PATTERN" 2>/dev/null || true)
+  done <<< "$matches"
 }
 
 auth_blocked() {
@@ -87,20 +112,35 @@ auth_blocked() {
   return 1
 }
 
+service_state() {
+  local value='unknown'
+  if value="$(systemctl is-active "$SERVICE" 2>/dev/null)"; then
+    printf '%s\n' "$value"
+    return 0
+  fi
+  if [[ -n "$value" ]]; then
+    printf '%s\n' "$value"
+  else
+    printf 'unknown\n'
+  fi
+}
+
 kill_foreign_launchers
-active="$(systemctl is-active "$SERVICE" 2>/dev/null || true)"
+active="$(service_state)"
 if [[ "$active" != 'active' ]]; then
   if auth_blocked; then
     log_guardian 'service_not_started reason=provider_auth_or_missing_device_state'
     exit 0
   fi
-  systemctl reset-failed "$SERVICE" 2>/dev/null || true
+  if ! systemctl reset-failed "$SERVICE" 2>/dev/null; then
+    log_guardian 'reset_failed_warning=true'
+  fi
   systemctl start "$SERVICE"
   sleep 5
 fi
 
 kill_foreign_launchers
-active="$(systemctl is-active "$SERVICE" 2>/dev/null || true)"
+active="$(service_state)"
 if [[ "$active" != 'active' ]] && ! auth_blocked; then
   log_guardian "service_recovery_failed state=${active:-unknown}"
   exit 1

@@ -379,7 +379,7 @@ function Install-Task {
 
 if ($Mode -eq 'Ensure' -and (Test-HealthySingletonFastPath)) {
     Write-Output 'REMOTE_AGENT_RUNNING=true'
-    exit 0
+    return
 }
 
 $ownerMutex = $null

@@ -10,6 +10,10 @@ foreach ($files as $f) { if (!is_file($f)) { fwrite(STDERR, "VM guardian artifac
 $guardian = file_get_contents($files[0]);
 $timer = file_get_contents($files[2]);
 $installer = file_get_contents($root . '/scripts/install-vm-desktop-commander-service.sh');
+$failOpen = '|' . '| true';
+if (strpos((string)$guardian, $failOpen) !== false) {
+    fwrite(STDERR, "VM guardian contains forbidden fail-open operator\n"); exit(1);
+}
 foreach (['SERVICE_CGROUP','kill_foreign_launchers','foreign_launcher_removed','auth_blocked'] as $needle) {
     if (strpos((string)$guardian, $needle) === false) { fwrite(STDERR, "VM guardian missing {$needle}\n"); exit(1); }
 }
