@@ -44,7 +44,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
 // LLM na conta da loja. api/liz-intelligent.php (o endpoint que o widget da
 // vitrine realmente usa) ja tinha limite; estes dois nao tinham.
 require_once dirname(__DIR__) . '/includes/rate-limiter.php';
-require_once dirname(__DIR__) . '/includes/liz-general-policy.php';
+require_once __DIR__ . '/liz-general-policy.php';
 $lizgIp = (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');
 if (!RateLimiter::isAllowed('liz-general:' . $lizgIp, 10, 60)) {
     lizg_reply(429, ['ok' => false, 'error' => 'Muitas perguntas seguidas. Aguarde um minuto.']);

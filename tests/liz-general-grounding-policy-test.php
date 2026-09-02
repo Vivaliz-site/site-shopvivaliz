@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../includes/liz-general-policy.php';
+require_once __DIR__ . '/../api/liz-general-policy.php';
 
 $cases = [
     ['me passe uma receita curta de bolo', false],
