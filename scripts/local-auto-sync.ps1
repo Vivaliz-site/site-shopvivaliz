@@ -9,19 +9,13 @@ $LogDir = Join-Path $Repo "logs"
 $LogFile = Join-Path $LogDir ("local-sync-{0}.log" -f (Get-Date -Format "yyyy-MM-dd"))
 $HostName = [string]$env:COMPUTERNAME
 $HostKey = $HostName.ToUpperInvariant()
-$Bootstrap = $null
-$DesktopCommanderSupervisor = $null
 $HostLabel = $HostName
 
 switch ($HostKey) {
     'LAPTOP-NIG4IFUU' {
-        $Bootstrap = Join-Path $Repo "scripts\fredwin-remote-bootstrap.ps1"
-        $DesktopCommanderSupervisor = Join-Path $Repo "scripts\fredwin-desktop-commander-supervisor.ps1"
         $HostLabel = 'Fred-Win'
     }
     'DESKTOP-KOCEPSV' {
-        $Bootstrap = Join-Path $Repo "scripts\desktopkocepsv-remote-bootstrap.ps1"
-        $DesktopCommanderSupervisor = Join-Path $Repo "scripts\desktopkocepsv-desktop-commander-supervisor.ps1"
         $HostLabel = 'DESKTOP-KOCEPSV'
     }
 }
@@ -80,22 +74,8 @@ try {
         if ($LASTEXITCODE -ne 0) { Log "WARNING SMTP guard exit=$LASTEXITCODE" }
     }
 
-    if ($DesktopCommanderSupervisor -and (Test-Path $DesktopCommanderSupervisor)) {
-        Log "Ensuring canonical $HostLabel Desktop Commander remains healthy"
-        & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $DesktopCommanderSupervisor -Mode Ensure 2>&1 |
-            ForEach-Object { Log "desktop-commander: $_" }
-        if ($LASTEXITCODE -ne 0) { Log "WARNING Desktop Commander supervisor exit=$LASTEXITCODE" }
-    }
-    elseif ($DesktopCommanderSupervisor) { Log "Desktop Commander supervisor not present yet for $HostLabel" }
-    else { Log "No Desktop Commander host profile for $HostName; skipping host-specific recovery" }
 
-    if ($Bootstrap -and (Test-Path $Bootstrap)) {
-        Log "Repairing $HostLabel private relay task"
-        & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $Bootstrap -Mode InstallTask 2>&1 |
-            ForEach-Object { Log "bootstrap: $_" }
-        if ($LASTEXITCODE -ne 0) { Log "WARNING bootstrap exit=$LASTEXITCODE" }
-    }
-    elseif ($Bootstrap) { Log "Bootstrap not present yet for $HostLabel" }
+    Log "DC_AND_RELAY_OWNED_BY_DEDICATED_WATCHDOGS=true"
 
     Log "Auto-sync complete host=$HostLabel"
 }

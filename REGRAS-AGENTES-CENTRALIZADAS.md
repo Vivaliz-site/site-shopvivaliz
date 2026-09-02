@@ -24,21 +24,66 @@ Fluxo padrão: depois de validar a entrega e deixá-la pronta para revisão, o a
 
 Esta autorização remove apenas a espera por uma aprovação adicional. Ela não autoriza force-push, bypass de branch protection, exposição de secrets, cobrança real, exclusão destrutiva de dados ou declaração de sucesso sem evidência. Antes de merge/deploy, o agente deve confirmar o SHA alvo, os checks do PR, a validação real aplicável e, quando houver alteração publicada, a release ativa, os logs e o smoke test de produção. Se a plataforma bloquear autoaprovação ou outra etapa, o agente não deve contornar a proteção: deve registrar o bloqueio como **INCONCLUSIVO**.
 
+## 🛡️ SEGURANÇA DE AUTOMAÇÃO DE UI E AÇÕES DESTRUTIVAS (2026-09-01)
+
+Autonomia, conclusão ponta a ponta e autorização operacional **não ampliam o escopo destrutivo**. Exclusão, remoção, reset, revogação ou outra ação irreversível só é permitida quando **o alvo e o resultado destrutivo exatos** estiverem no pedido atual do proprietário. Pedidos genéricos como investigar, auditar, limpar, corrigir, concluir tudo ou fazer o necessário não autorizam apagar projetos, chats, contas ou dados por inferência.
+
+- **Probe, diagnóstico, auditoria, health check e observação são somente leitura.** É proibido invocar `Excluir`, `Delete`, `Remove`, `Reset`, `Revogar` ou confirmação destrutiva em dados reais durante esse tipo de tarefa.
+- Se for indispensável testar exclusão, use fixture/sandbox criada especificamente para o teste; nunca um projeto, chat, conta ou dado real do proprietário.
+- É proibido criar task agendada, serviço, script oculto ou processo elevado para contornar limites de permissão de ferramenta ou executar automação destrutiva de UI.
+- Tasks temporárias de UI não podem permanecer ativas após a tarefa e não devem usar `RunLevel Highest` como ponte para interação com aplicações do usuário.
+- Nomes devem descrever o efeito real. Um payload que altera estado nunca pode ser rotulado como `probe`, `check`, `audit` ou equivalente somente-leitura.
+- Antes de atribuir uma execução a terceiro, o agente deve correlacionar timestamps com **suas próprias chamadas de ferramenta e logs**. É proibido reportar como atividade externa uma ação que o próprio agente disparou.
+- `LastResult=0`, exit code 0 ou ausência de exceção comprovam apenas término técnico; não comprovam o efeito de negócio nem justificam inferir que uma exclusão foi concluída.
+- Em incidente, preserve evidência e hashes antes de limpar artefatos. O material preservado deve ficar fora de caminhos de execução automática.
+
+Estas regras prevalecem sobre qualquer protocolo de autonomia, insistência até conclusão ou orientação para não pedir confirmação.
+
+---
 ### Commit, PR e Merge obrigatório ao finalizar rodada de alterações
 
-> ⚠️ **REGRA DE FINALIZAÇÃO OBRIGATÓRIA:**
-> Qualquer alteração feita no repositório, ao ser finalizada, deve obrigatoriamente ser validada e seguir o fluxo de:
-> 1. **Commit** das alterações locais.
-> 2. Abertura ou atualização do **Pull Request (PR)** correspondente.
-> 3. Realização de **Merge** para a branch principal ou branch ativa de entrega.
-> 
-> Toda alteração deve ser validada pelo navegador de forma visual e funcional (nada de scripts para essa validação) e seguir este fluxo. Não é aceitável encerrar uma rodada de alterações sem concluir o ciclo de commit, PR e merge/deploy quando houver acesso técnico para isso. Se houver algum impedimento técnico ou bloqueio de proteção de branch, o status deve ser reportado formalmente como **INCONCLUSIVO**.
+> ⚠️ **REGRA DE FINALIZAÇÃO OBRIGATÓRIA — COMMIT NÃO FINALIZA TAREFA:**
+> O único fluxo de conclusão aceito para alteração versionada é **branch → validação real → commit → push → PR → checks/revisão → merge → validação pós-merge → working tree limpa → zero PR pendente da própria rodada**.
+>
+> Um commit local, um push de branch, uma PR aberta/draft ou uma PR verde ainda sem merge são apenas estados intermediários. O agente deve continuar autonomamente enquanto houver ações executáveis necessárias para chegar ao merge e à validação final.
+>
+> Antes de declarar `COMPROVADO`, o agente deve verificar `git status --porcelain` vazio no workspace da tarefa e consultar as PRs relacionadas para confirmar que nenhuma ficou aberta/draft. Após merge, deve verificar o ramo/deploy alvo e registrar a evidência pós-merge.
+>
+> Se um bloqueio externo real impedir o merge depois de esgotadas as correções disponíveis, o resultado é **INCONCLUSIVO**. Não é permitido abandonar PR aberta como estacionamento: PR obsoleta, duplicada ou sem caminho executável para merge deve ser fechada/limpa com o motivo e ponto exato de continuação documentados.
 
 Ao concluir qualquer rodada de alterações versionadas, o agente deve deixar a mudança integrada por merge no ramo alvo e/ou publicada no alvo de deploy autorizado, desde que checks, revisões e proteções permitam. Não é aceitável encerrar uma rodada como "pronta" mantendo apenas branch local ou remoto sem merge/deploy quando o agente tem acesso técnico para concluir o fluxo. Se branch protection, CI, falta de permissão ou outro gate impedir o merge, o resultado deve ser registrado como **INCONCLUSIVO**, com link/SHA, checks observados e próximo bloqueio concreto.
 
 Simulação não substitui execução real: testes secos, mocks, screenshots headless, `curl` isolado ou inspeção de código são apenas preparação. Para declarar entrega, o agente deve executar a rotina real aplicável e validar o efeito por evidência independente, incluindo navegador real para UI, sem gerar cobrança real, alterar preço/estoque/pedido fora do escopo, expor secrets ou contornar proteções.
 
 ---
+
+## 💸 POLÍTICA OBRIGATÓRIA DE CONSUMO DE IA E EXECUÇÃO RECORRENTE (2026-09-01)
+
+Esta política é vinculante para **todos os projetos, hosts, workflows, serviços, timers, cron jobs, Scheduled Tasks, scripts, agentes e rotinas autônomas**.
+
+1. **Rotina permanente, periódica, agendada, daemon, watcher ou loop não pode usar Claude, GPT/OpenAI, Codex ou qualquer outro modelo pago por padrão.** Se IA for realmente necessária nesse tipo de rotina, deve usar primeiro uma opção gratuita/local explicitamente aprovada (por exemplo Ollama/local ou cota gratuita comprovada), com fallback determinístico sem IA. É proibido fazer fallback silencioso de IA gratuita para provedor pago.
+2. **Claude/GPT/Codex pagos são permitidos somente para tarefas finitas, iniciadas para atingir um objetivo concreto e que terminem ao concluir ou bloquear de forma real.** Eles não podem permanecer como daemon, supervisor, polling loop, autorepair, watchdog ou consumidor recorrente.
+3. **Toda execução finita de IA paga deve ter circuit breaker.** Definir limites coerentes de duração, tentativas/retries, chamadas ao modelo e tamanho de trabalho/contexto. `while true`, retry ilimitado, relançamento automático e continuidade sem teto são proibidos para consumidores pagos. Se o limite for atingido, persistir checkpoint e encerrar; uma nova execução só pode ocorrer por novo evento/tarefa explícita, nunca por loop de consumo.
+4. **Antes de habilitar ou manter uma automação, auditar cada consumidor individualmente.** Registrar: arquivo/comando, host, gatilho, frequência, provedor/modelo, se há custo, timeout, retries, limite de chamadas, condição de saída, necessidade real do processo e evidência de que não existe duplicação/órfão. Não assumir que um processo é necessário apenas porque já está instalado ou ativo.
+5. **Serviço contínuo só é legítimo quando a natureza do serviço exige continuidade.** Monitoramento, fila, API, renovação de token e health-check devem ser preferencialmente determinísticos. Trabalho periódico finito deve usar timer/cron + `oneshot`, e não processo infinito com `sleep`, quando não houver necessidade de daemon.
+6. **Processo travado, órfão ou sem progresso deve ser encerrado e investigado, não reiniciado indefinidamente.** Supervisores devem diferenciar falha transitória de erro persistente e possuir backoff, máximo de reinícios em janela e estado de bloqueio/cooldown.
+7. **Eventos de GitHub não podem disparar IA paga de forma ampla.** Workflows com Claude/GPT/Codex devem exigir gatilho explícito e restrito (por exemplo comando/label/dispatch autorizado), ter `timeout-minutes`, `concurrency` e cancelamento de execução obsoleta quando aplicável. Comentários, reviews, issues, pushes ou schedules genéricos não podem consumir IA paga automaticamente.
+8. **Fallback deve priorizar custo zero:** determinístico → local/gratuito → pago somente em tarefa finita explicitamente autorizada. Para rotinas recorrentes, a cadeia termina antes do provedor pago.
+9. **Teste de credencial não deve consumir modelo sem necessidade.** Preferir validação de formato/configuração/endpoint sem geração; quando uma chamada real for indispensável, ela deve ser manual/finita, mínima e sem repetição automática.
+10. **Observabilidade obrigatória:** consumidores de IA devem registrar, sem secrets, pelo menos início/fim, motivo/gatilho, provedor/modelo, quantidade de tentativas, duração, resultado e identificador da tarefa. Onde a API expuser uso, registrar métricas de tokens/custo agregadas. Alertar e bloquear comportamento anômalo.
+
+### Critério de classificação obrigatório
+
+| Tipo | Forma correta | IA paga |
+|---|---|---|
+| API/worker que precisa ficar online | serviço contínuo, lógica determinística | **PROIBIDA em loop** |
+| Verificação periódica | timer/cron + job `oneshot` finito | **PROIBIDA** |
+| Watchdog/autorepair | regras determinísticas + backoff/cooldown | **PROIBIDA** |
+| Resolução complexa sob demanda | tarefa finita com timeout/budget | Permitida, se necessária |
+| Revisão/implementação por agente | execução finita até conclusão, com circuit breaker | Permitida |
+| Conflito/triagem automatizada | determinístico ou IA local/gratuita | Paga somente por disparo manual explícito |
+
+**Regra de ouro:** concluir a tarefa não significa deixar o agente rodando. O estado final correto de Claude/GPT/Codex é **processo encerrado** após a tarefa; continuidade operacional pertence a software determinístico ou IA gratuita/local com limites.
 
 ## 🎯 PRINCÍPIOS FUNDAMENTAIS (4 REGRAS INVIOLÁVEIS)
 
@@ -311,10 +356,15 @@ ssh -i "$SSH_KEY" ubuntu@137.131.156.17 "grep NOME_SECRET /home/ubuntu/site-shop
 gh secret list --repo Vivaliz-site/site-shopvivaliz | grep NOME_SECRET
 ```
 
-#### Passo 5: COMMITAR
+#### Passo 5: VERSIONAR VIA BRANCH, PR E MERGE
 ```bash
-git commit -m "chore: atualizar NOME_SECRET (sincronizado em 3 ambientes)"
-git push origin main
+# Nunca versione o valor do secret. Inclua apenas arquivos permitidos que referenciem a mudança.
+git switch -c chore/sync-nome-secret
+git add <arquivos-versionados-sem-secrets>
+git commit -m "chore: sincronizar referência de NOME_SECRET"
+git push -u origin chore/sync-nome-secret
+PR_URL=$(gh pr create --base main --head chore/sync-nome-secret --title "chore: sincronizar NOME_SECRET" --body "Sincronização validada sem versionar o valor do secret")
+gh pr merge "$PR_URL" --squash --delete-branch
 ```
 
 ### Matriz de Sincronização
@@ -468,3 +518,12 @@ git commit -m "fix: sincronizar secrets desincronizados (SOURCE: GitHub)"
 **Atualizado:** 2026-07-24  
 **Próxima Revisão:** 2026-08-07  
 **Status:** ✅ FONTE ÚNICA DE VERDADE
+
+## Gate obrigatorio de resposta final e deploy (FINAL_RESPONSE_DEPLOY_GATE_V1)
+
+- A resposta final de conclusao e um gate operacional: nao pode ser enviada enquanto houver qualquer etapa executavel necessaria ao pedido original.
+- Em alteracoes de codigo, configuracao ou documentacao versionada, PR aberto, checks verdes ou merge isoladamente NAO significam conclusao.
+- Quando existir alvo de deploy para o repositorio, e obrigatorio acompanhar o deploy ate o SHA correto estar ativo e executar validacao pós-deploy real e reproduzivel.
+- Se o deploy falhar, investigar a causa raiz, corrigir, revalidar, repetir commit/push/PR/merge quando necessario e tentar o deploy novamente; nao encerrar em estado intermediario.
+- Antes de qualquer resposta final, comparar pedido original x estado real e registrar evidencias de: validacao, commit, push, PR, checks, merge, deploy e pós-deploy, conforme aplicavel.
+- So e permitido encerrar sem deploy bem-sucedido diante de bloqueio externo genuino e incontornavel com os acessos/ferramentas disponiveis; nesse caso o estado e BLOCKED/INCONCLUSIVO, nunca sucesso.

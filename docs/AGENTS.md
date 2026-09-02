@@ -47,6 +47,15 @@
 
 ## 🚫 Regras Obrigatórias para Agentes
 
+### Consumo de IA e rotinas recorrentes
+- ✗ **Nunca** manter Claude, GPT/OpenAI ou Codex pago em daemon, loop, cron/timer, watcher, supervisor, autorepair ou polling recorrente.
+- ✓ IA paga é somente para tarefa finita, com objetivo, timeout, limite de tentativas/chamadas e condição de saída; ao terminar, o processo deve encerrar.
+- ✓ Rotina permanente/periódica deve ser determinística ou, quando IA for indispensável, usar opção gratuita/local aprovada sem fallback pago.
+- ✗ `while true`, retry ilimitado, relançamento automático e gatilho GitHub amplo consumindo IA paga são proibidos.
+- ✓ Auditar **cada consumidor** antes de habilitar/manter: necessidade, host, gatilho, frequência, provedor/modelo, custo, timeout, retries, condição de saída e duplicidade.
+- ✓ Processo sem progresso/travado/órfão deve ser encerrado e ter causa raiz investigada; não reiniciar indefinidamente.
+- Fonte normativa: `REGRAS-AGENTES-CENTRALIZADAS.md`, seção **Política obrigatória de consumo de IA e execução recorrente**.
+
 ### Diagnóstico
 - ✓ Identificar o erro antes de sugerir solução
 - ✓ Registrar HTTP method, URL, status, response body, etapa do fluxo
@@ -72,7 +81,10 @@
 - ✗ **Nunca** exija clique manual pra concluir instalação
 
 ### Finalização Obrigatória
-- ⚠️ **Ao finalizar alterações, faça sempre Commit, PR e Merge (Toda alteração deve ser validada de forma visual e funcional pelo navegador, sem scripts, e seguir este fluxo)** (Obrigatório)
+- ⚠️ **Commit nunca é ponto de parada.** Para qualquer alteração versionada, concluir significa: **branch → validação real → commit → push → PR → checks/revisão → merge → validação pós-merge → `git status --porcelain` vazio → nenhuma PR aberta/draft da tarefa**.
+- ✗ Não encerrar em commit local, branch enviada, PR aberta/draft ou PR verde ainda sem merge.
+- ✓ Se houver erro de CI/revisão/conflito, corrigir e repetir o ciclo; enquanto existir ação executável, continuar.
+- ✓ Se um bloqueio externo tornar o merge impossível, marcar **INCONCLUSIVO** e fechar/limpar PR obsoleta ou sem caminho de avanço, documentando o ponto exato de continuação.
 
 ---
 
@@ -757,6 +769,15 @@ email/telefone antes do hash, sem nenhum efeito em layout renderizado).
 - Proibido reintroduzir Tiny v2, token estático antigo ou arrays/caches locais como fonte de pedido/NF.
 - Antes de PR/deploy envolvendo pedido, pagamento, NF ou etiqueta, rode `php scripts/quality/validate-order-erp-authority.php`.
 
+## Gate obrigatorio de resposta final e deploy (FINAL_RESPONSE_DEPLOY_GATE_V1)
+
+- A resposta final de conclusao e um gate operacional: nao pode ser enviada enquanto houver qualquer etapa executavel necessaria ao pedido original.
+- Em alteracoes de codigo, configuracao ou documentacao versionada, PR aberto, checks verdes ou merge isoladamente NAO significam conclusao.
+- Quando existir alvo de deploy para o repositorio, e obrigatorio acompanhar o deploy ate o SHA correto estar ativo e executar validacao pós-deploy real e reproduzivel.
+- Se o deploy falhar, investigar a causa raiz, corrigir, revalidar, repetir commit/push/PR/merge quando necessario e tentar o deploy novamente; nao encerrar em estado intermediario.
+- Antes de qualquer resposta final, comparar pedido original x estado real e registrar evidencias de: validacao, commit, push, PR, checks, merge, deploy e pós-deploy, conforme aplicavel.
+- So e permitido encerrar sem deploy bem-sucedido diante de bloqueio externo genuino e incontornavel com os acessos/ferramentas disponiveis; nesse caso o estado e BLOCKED/INCONCLUSIVO, nunca sucesso.
+
 ## Amazon Returns & SAFE-T Recovery
 
 - Fonte financeira: SP-API Orders/Finances; Gmail e rastreio sao sensores/evidencias, nunca verdade financeira isolada.
@@ -765,3 +786,4 @@ email/telefone antes do hash, sem nenhum efeito em layout renderizado).
 - `UNKNOWN` para programa/iniciador ou pedido multi-item ambiguo bloqueia escrita externa ate reconciliacao oficial.
 - Negativa SAFE-T automatica repetida e nao substantiva deve escalar para Ajuda uma unica vez por fingerprint; nao criar loop de respostas identicas.
 - SAFE-T aprovada so fecha financeiramente quando o credito correspondente aparecer no ledger SP-API.
+

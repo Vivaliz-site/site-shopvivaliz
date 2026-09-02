@@ -1,4 +1,4 @@
-﻿param(
+param(
     [ValidateSet('Ensure','InstallTask','Restart','KillForRecoveryTest','Status')]
     [string]$Mode = 'Ensure'
 )
@@ -12,8 +12,10 @@ $RunnerScript = Join-Path $Repo 'scripts\fredwin-desktop-commander-runner.ps1'
 $LogDir = Join-Path $Repo 'logs'
 $SupervisorLog = Join-Path $LogDir 'desktop-commander-supervisor.log'
 $CooldownFile = Join-Path $LogDir 'desktop-commander-auth-required.cooldown'
+$ConnectedMarker = Join-Path $LogDir 'desktop-commander-provider-connected.marker'
 $DeviceFile = $null
 $Package = '@wonderwhy-er/desktop-commander@0.2.47'
+$MarkerStaleSeconds = 240
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 function Log([string]$Message) {
@@ -21,19 +23,26 @@ function Log([string]$Message) {
     "$stamp - $Message" | Out-File -FilePath $SupervisorLog -Append -Encoding utf8
 }
 $MutexName = 'Global\ShopVivalizDesktopCommander-FRED'
-$OwnerMutex = New-Object System.Threading.Mutex($false, $MutexName)
-$OwnerMutexAcquired = $false
-try {
-    try { $OwnerMutexAcquired = $OwnerMutex.WaitOne(0) }
-    catch [System.Threading.AbandonedMutexException] { $OwnerMutexAcquired = $true }
-} catch {
-    $OwnerMutex.Dispose()
-    throw
+function Enter-OwnerMutex {
+    $mutex = New-Object System.Threading.Mutex($false, $MutexName)
+    $acquired = $false
+    try {
+        try { $acquired = $mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $acquired = $true }
+        if (-not $acquired) {
+            Log 'REMOTE_OWNER_CONFLICT mutex already held; refusing concurrent supervisor'
+            Write-Output 'REMOTE_OWNER_CONFLICT=true reason=supervisor_mutex_held'
+            $mutex.Dispose()
+            exit 21
+        }
+        return $mutex
+    } catch {
+        if (-not $acquired) { $mutex.Dispose() }
+        throw
+    }
 }
-if (-not $OwnerMutexAcquired) {
-    Log 'REMOTE_OWNER_CONFLICT mutex already held; refusing concurrent supervisor'
-    Write-Output 'REMOTE_OWNER_CONFLICT=true reason=supervisor_mutex_held'
-    exit 21
+function Exit-OwnerMutex([System.Threading.Mutex]$Mutex) {
+    if (-not $Mutex) { return }
+    try { $Mutex.ReleaseMutex() } finally { $Mutex.Dispose() }
 }
 function Ensure-ProfileEnvironment {
     if (-not $env:USERPROFILE) {
@@ -48,13 +57,18 @@ function Ensure-ProfileEnvironment {
     $script:DeviceFile = Join-Path (Join-Path $env:USERPROFILE '.desktop-commander-device') 'device.json'
 }
 function Test-DeviceStateNewerThanCooldown {
-    if (-not $DeviceFile -or -not (Test-Path -LiteralPath $DeviceFile) -or -not (Test-Path -LiteralPath $CooldownFile)) { return $false }
-    return ((Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc -gt (Get-Item -LiteralPath $CooldownFile).LastWriteTimeUtc)
+    if (-not $DeviceFile) { return $false }
+    try {
+        $device = Get-Item -LiteralPath $DeviceFile -ErrorAction Stop
+        $cooldown = Get-Item -LiteralPath $CooldownFile -ErrorAction Stop
+        return ($device.LastWriteTimeUtc -gt $cooldown.LastWriteTimeUtc)
+    } catch { return $false }
 }
 function Get-DesktopCommanderRemoteLaunchers {
     return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
         $cmd = [string]$_.CommandLine
-        $cmd -match '@wonderwhy-er/desktop-commander@[^ ]+.*\bremote\b'
+        ($cmd -match '@wonderwhy-er/desktop-commander@[^ ]+.*\bremote\b') -or
+        ($_.Name -eq 'node.exe' -and $cmd -match '@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js"?\s+remote\b.*--persist-session')
     })
 }
 function Get-OrphanDirectRemoteLaunchers {
@@ -81,38 +95,61 @@ function Get-LauncherRoots([object[]]$Launchers) {
     $ids = @($items | ForEach-Object { [int]$_.ProcessId })
     return @($items | Where-Object { $ids -notcontains [int]$_.ParentProcessId })
 }
+function Test-CanonicalRemoteLauncher([object]$Launcher) {
+    $cmd = [string]$Launcher.CommandLine
+    if ($cmd -match '@wonderwhy-er/desktop-commander@0\.2\.47.*\bremote\b.*--persist-session') { return $true }
+    return ($Launcher.Name -eq 'node.exe' -and
+        $cmd -match '@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js"?\s+remote\b.*--persist-session' -and
+        (Test-LauncherOwnedByRunner $Launcher))
+}
 function Get-CanonicalRemoteLaunchers {
     $matches = @(Get-DesktopCommanderRemoteLaunchers | Where-Object {
-        $cmd = [string]$_.CommandLine
-        $cmd -match '@wonderwhy-er/desktop-commander@0\.2\.47.*\bremote\b.*--persist-session'
+        Test-CanonicalRemoteLauncher $_
     })
     return @(Get-LauncherRoots $matches)
 }
-function Test-CanonicalTransport([object[]]$Launchers) {
-    $roots = @($Launchers)
-    if ($roots.Count -ne 1) { return $false }
-    $all = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
-    $desc = New-Object System.Collections.Generic.HashSet[int]
-    [void]$desc.Add([int]$roots[0].ProcessId)
-    $changed = $true
-    while ($changed) {
-        $changed = $false
-        foreach ($p in $all) {
-            if ($desc.Contains([int]$p.ParentProcessId) -and -not $desc.Contains([int]$p.ProcessId)) {
-                [void]$desc.Add([int]$p.ProcessId); $changed = $true
-            }
-        }
+function Test-LauncherOwnedByRunner([object]$Launcher) {
+    if (-not $Launcher) { return $false }
+    $snapshot = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+    $byPid = @{}
+    foreach ($p in $snapshot) { $byPid[[int]$p.ProcessId] = $p }
+    $parentPid = [int]$Launcher.ParentProcessId
+    for ($depth = 0; $depth -lt 12 -and $parentPid -gt 0; $depth++) {
+        if (-not $byPid.ContainsKey($parentPid)) { break }
+        $ancestor = $byPid[$parentPid]
+        if ([string]$ancestor.CommandLine -match 'fredwin-desktop-commander-runner\.ps1') { return $true }
+        $parentPid = [int]$ancestor.ParentProcessId
     }
-    $conns = @(Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue | Where-Object {
-        $desc.Contains([int]$_.OwningProcess) -and $_.RemotePort -eq 443 -and $_.RemoteAddress -notin @('127.0.0.1','::1')
-    })
-    return ($conns.Count -gt 0)
+    return $false
+}
+function Remove-DuplicateCanonicalLaunchers([object[]]$Canonical, [object[]]$NonCanonical) {
+    $canonicalItems = @($Canonical)
+    $managed = @($canonicalItems | Where-Object { Test-LauncherOwnedByRunner $_ })
+    if ($managed.Count -ne 1) { return $false }
+    $keepPid = [int]$managed[0].ProcessId
+    foreach ($p in @($canonicalItems | Where-Object { [int]$_.ProcessId -ne $keepPid })) {
+        Stop-LauncherTree -ProcessId $p.ProcessId
+        Log ('Duplicate canonical launcher removed pid=' + $p.ProcessId + ' kept_managed_pid=' + $keepPid)
+    }
+    foreach ($p in @($NonCanonical)) {
+        Stop-LauncherTree -ProcessId $p.ProcessId
+        Log ('Noncanonical launcher removed pid=' + $p.ProcessId + ' kept_managed_pid=' + $keepPid)
+    }
+    return $true
+}
+function Get-MarkerAgeSeconds {
+    try {
+        $marker = Get-Item -LiteralPath $ConnectedMarker -ErrorAction Stop
+        return (((Get-Date).ToUniversalTime() - $marker.LastWriteTimeUtc).TotalSeconds)
+    } catch { return [double]::PositiveInfinity }
+}
+function Get-LauncherAgeSeconds([object]$Launcher) {
+    try { return (((Get-Date) - [datetime]$Launcher.CreationDate).TotalSeconds) } catch { return [double]::PositiveInfinity }
 }
 function Get-NonCanonicalRemoteLaunchers {
     $all = @(Get-DesktopCommanderRemoteLaunchers)
     $canonicalProcesses = @($all | Where-Object {
-        $cmd = [string]$_.CommandLine
-        $cmd -match '@wonderwhy-er/desktop-commander@0\.2\.47.*\bremote\b.*--persist-session'
+        Test-CanonicalRemoteLauncher $_
     })
     $canonicalIds = @($canonicalProcesses.ProcessId)
     $noncanonical = @($all | Where-Object { $canonicalIds -notcontains $_.ProcessId })
@@ -136,11 +173,25 @@ function Remove-LegacyPersistence {
     if (Test-Path -LiteralPath $startup) { Remove-Item -LiteralPath $startup -Force -ErrorAction SilentlyContinue; Log ('Removed legacy startup ' + $LegacyStartupName) }
 }
 function Test-RecentCooldown {
-    if (-not (Test-Path -LiteralPath $CooldownFile)) { return $false }
     if (Test-DeviceStateNewerThanCooldown) { return $false }
-    $age = (Get-Date).ToUniversalTime() - (Get-Item -LiteralPath $CooldownFile).LastWriteTimeUtc
-    return ($age.TotalHours -lt 6)
+    try {
+        $cooldown = Get-Item -LiteralPath $CooldownFile -ErrorAction Stop
+        $age = (Get-Date).ToUniversalTime() - $cooldown.LastWriteTimeUtc
+        return ($age.TotalHours -lt 6)
+    } catch { return $false }
 }
+
+function Test-HealthySingletonFastPath {
+    Ensure-ProfileEnvironment
+    if (-not (Test-Path -LiteralPath $DeviceFile)) { return $false }
+    if (Test-RecentCooldown) { return $false }
+    $canonical = @(Get-CanonicalRemoteLaunchers)
+    $noncanonical = @(Get-NonCanonicalRemoteLaunchers)
+    if ($canonical.Count -ne 1 -or $noncanonical.Count -ne 0) { return $false }
+    $markerAge = Get-MarkerAgeSeconds
+    return ($markerAge -le $MarkerStaleSeconds)
+}
+
 function Ensure-Agent {
     Ensure-ProfileEnvironment
     if (-not (Test-Path -LiteralPath $RunnerScript)) { throw 'sanitized runner not found' }
@@ -155,13 +206,24 @@ function Ensure-Agent {
     Stop-OrphanDirectRemoteLaunchers
     $canonical = @(Get-CanonicalRemoteLaunchers)
     $noncanonical = @(Get-NonCanonicalRemoteLaunchers)
-    if ($canonical.Count -eq 1 -and $noncanonical.Count -eq 0 -and (Test-CanonicalTransport $canonical)) {
-        Remove-LegacyPersistence
-        Log ('Canonical remote agent healthy transport=established pid=' + $canonical[0].ProcessId)
-        Write-Output 'REMOTE_AGENT_RUNNING=true'; return
+    if ($canonical.Count -gt 0 -and ($canonical.Count -gt 1 -or $noncanonical.Count -gt 0)) {
+        if (Remove-DuplicateCanonicalLaunchers -Canonical $canonical -NonCanonical $noncanonical) {
+            Start-Sleep -Milliseconds 500
+            $canonical = @(Get-CanonicalRemoteLaunchers)
+            $noncanonical = @(Get-NonCanonicalRemoteLaunchers)
+        }
     }
     if ($canonical.Count -eq 1 -and $noncanonical.Count -eq 0) {
-        Log ('Canonical process exists but transport is stale; restarting pid=' + $canonical[0].ProcessId)
+        $markerAge = Get-MarkerAgeSeconds
+        if ($markerAge -le $MarkerStaleSeconds) {
+            Remove-LegacyPersistence
+            Log ('Canonical remote agent healthy marker_age_seconds=' + [math]::Round($markerAge) + ' pid=' + $canonical[0].ProcessId)
+            Write-Output 'REMOTE_AGENT_RUNNING=true'; return
+        }
+        if ((Get-LauncherAgeSeconds $canonical[0]) -lt 120) {
+            Write-Output 'REMOTE_AGENT_STARTING=true'; return
+        }
+        Log ('Provider monitor stale; restarting marker_age_seconds=' + [math]::Round($markerAge) + ' pid=' + $canonical[0].ProcessId)
     }
     if ($canonical.Count -gt 0 -or $noncanonical.Count -gt 0) {
         Log ('Converging launchers canonical=' + $canonical.Count + ' noncanonical=' + $noncanonical.Count)
@@ -208,7 +270,13 @@ function Install-Task {
     Write-Output 'TASK_INSTALLED=true'
 }
 
+if ($Mode -eq 'Ensure' -and (Test-HealthySingletonFastPath)) {
+    Write-Output 'REMOTE_AGENT_RUNNING=true'
+    return
+}
+$ownerMutex = $null
 try {
+    if ($Mode -ne 'Status') { $ownerMutex = Enter-OwnerMutex }
     switch ($Mode) {
         'InstallTask' { Install-Task; Stop-RemoteProcesses; Start-Sleep -Seconds 2; Ensure-Agent }
         'Restart' { Stop-RemoteProcesses; Start-Sleep -Seconds 2; Ensure-Agent }
@@ -217,8 +285,5 @@ try {
         default { Ensure-Agent }
     }
 } finally {
-    if ($OwnerMutexAcquired) {
-        $OwnerMutex.ReleaseMutex()
-        $OwnerMutex.Dispose()
-    }
+    Exit-OwnerMutex $ownerMutex
 }

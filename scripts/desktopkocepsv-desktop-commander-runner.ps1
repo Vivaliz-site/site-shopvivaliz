@@ -5,7 +5,8 @@ $Package = '@wonderwhy-er/desktop-commander@0.2.47'
 $MaxLogBytes = 5MB
 $AuthPattern = 'Persisted session invalid|Authenticating with Remote MCP server|Please complete authentication|Starting device authorization flow|device code|Authorization required'
 $ConnectedPattern = 'Device ready'
-$DegradedPattern = 'InvalidJWTToken|Token has expired|Device marked as offline|Channel (closed|errored)|Failed to (recreate|subscribe)|Subscription unhealthy'
+$DegradedPattern = 'InvalidJWTToken|Token has expired|Device marked as offline|Failed to (recreate|subscribe)|Subscription unhealthy'
+$RecoverableChannelPattern = 'Channel (closed|errored)'
 $RecoveredPattern = 'Device ready|Channel subscribed|recovered after'
 $RefreshPersistAttemptPattern = 'SESSION_REFRESH_PERSIST_ATTEMPTED'
 $RefreshPersistFailurePattern = 'SESSION_REFRESH_PERSIST_FAILED'
@@ -154,6 +155,10 @@ function Observe-ProviderLine([string]$Line) {
         $script:AuthRequired = $true
         '' | Out-File -FilePath $CooldownFile -Force -Encoding ascii
         Log 'AUTH_REQUIRED provider requested device authorization before connection; raw provider output discarded'
+    }
+    if ($script:Connected -and ($Line -match $RecoverableChannelPattern)) {
+        Write-ConnectionMarker
+        Log 'Provider channel transient event observed; provider kept alive'
     }
     if ($script:Connected -and ($Line -match $DegradedPattern) -and -not $script:DegradedSinceUtc) {
         $script:DegradedSinceUtc = (Get-Date).ToUniversalTime()

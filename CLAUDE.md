@@ -12,6 +12,20 @@
 >
 > `docs/AGENTS.md` é o **único lugar centralizado** onde erros não-óbvios são registrados. **Leia antes de começar. Adicione uma entrada ao terminar se aprendeu algo.**
 
+## 🔴 Regra de conclusão Git — obrigatória para Claude
+
+**Nunca encerre uma tarefa versionada no commit.** Commit, push de branch e PR aberta são checkpoints intermediários, não entrega concluída.
+
+Fluxo obrigatório: **branch própria → validação real → commit → push da branch → PR → checks/revisão → merge → validação pós-merge → `git status --porcelain` vazio → nenhuma PR aberta/draft da própria tarefa**.
+
+- Nunca fazer push direto para `main`.
+- Se checks, review ou conflitos falharem e houver correção executável, corrigir e continuar até o merge.
+- Não usar PR aberta/draft como estacionamento para o usuário terminar depois.
+- Se um bloqueio externo realmente impedir o merge, registrar **INCONCLUSIVO** com evidência e fechar/limpar PR obsoleta ou sem caminho de avanço; não declarar conclusão.
+- Antes da resposta final, verificar explicitamente o estado do Git e das PRs relacionadas.
+
+> 🔴 **POLÍTICA DE CUSTO/EXECUÇÃO:** Claude/GPT/Codex pagos só podem executar tarefas finitas e devem encerrar ao concluir. Nunca usar IA paga em cron/timer, daemon, watcher, autorepair, polling ou loop recorrente. Rotinas permanentes devem ser determinísticas ou usar IA gratuita/local aprovada e limitada. Toda execução paga exige timeout, limite de tentativas/chamadas e condição de saída. Ver `REGRAS-AGENTES-CENTRALIZADAS.md`.
+
 ---
 
 ## 📊 Visão Geral do Sistema
@@ -132,14 +146,16 @@ Scripts também consolidados: 31 → 2 mestres (`olist-sync-master.py`, `git-aut
    ├─ Editar arquivo em C:\Users\FRED\site-shopvivaliz\
    └─ Testes locais se possível
 
-2. Commit e Push
-   └─ git add .
+2. Commit e Push da Branch
+   └─ git add <arquivos-da-tarefa>
    └─ git commit -m "feat: descrição clara"
-   └─ git push origin main
+   └─ git push -u origin <branch-da-tarefa>
 
-3. Pull Request (PR) e Merge (OBRIGATÓRIO)
-   ├─ Criar ou atualizar PR
-   └─ Efetuar Merge para branch alvo ao finalizar as alterações locais (Toda alteração deve ser validada de forma visual e funcional pelo navegador, sem scripts, e seguir este fluxo)
+3. Pull Request (PR), Checks e Merge (OBRIGATÓRIO)
+   ├─ Criar ou atualizar PR para `main`
+   ├─ Acompanhar checks/revisões e corrigir falhas executáveis
+   ├─ Efetuar merge quando os gates permitirem
+   └─ Validar pós-merge, confirmar working tree limpa e zero PR pendente da rodada
 
 4. GitHub Dispara Pipeline Automática
    ├─ [1] QA Lint (5 min) - Valida PHP/JS
@@ -169,11 +185,13 @@ Scripts também consolidados: 31 → 2 mestres (`olist-sync-master.py`, `git-aut
 **Adicionar feature simples:**
 ```bash
 cd C:\Users\FRED\site-shopvivaliz
+git switch -c feat/nova-feature-x
 # editar arquivo
-git add .
+git add <arquivos-da-tarefa>
 git commit -m "feat: nova feature X"
-git push origin main
-# Deploy automático em 5-10 minutos ✓
+git push -u origin feat/nova-feature-x
+# abrir PR para main, acompanhar checks, corrigir se necessário e fazer merge
+# depois validar o alvo, confirmar git status limpo e nenhuma PR da tarefa aberta
 ```
 
 **Resolver issue encontrada por validação:**
@@ -437,3 +455,12 @@ que parece já ter sido corrigido.
 ---
 
 **Sistema integrado e funcionando. Pronto para produção. 🚀**
+
+## Gate obrigatorio de resposta final e deploy (FINAL_RESPONSE_DEPLOY_GATE_V1)
+
+- A resposta final de conclusao e um gate operacional: nao pode ser enviada enquanto houver qualquer etapa executavel necessaria ao pedido original.
+- Em alteracoes de codigo, configuracao ou documentacao versionada, PR aberto, checks verdes ou merge isoladamente NAO significam conclusao.
+- Quando existir alvo de deploy para o repositorio, e obrigatorio acompanhar o deploy ate o SHA correto estar ativo e executar validacao pós-deploy real e reproduzivel.
+- Se o deploy falhar, investigar a causa raiz, corrigir, revalidar, repetir commit/push/PR/merge quando necessario e tentar o deploy novamente; nao encerrar em estado intermediario.
+- Antes de qualquer resposta final, comparar pedido original x estado real e registrar evidencias de: validacao, commit, push, PR, checks, merge, deploy e pós-deploy, conforme aplicavel.
+- So e permitido encerrar sem deploy bem-sucedido diante de bloqueio externo genuino e incontornavel com os acessos/ferramentas disponiveis; nesse caso o estado e BLOCKED/INCONCLUSIVO, nunca sucesso.

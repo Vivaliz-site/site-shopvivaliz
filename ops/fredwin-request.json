@@ -1,5 +1,5 @@
 {
-  "action": "health",
-  "requested_at": "2026-08-30T03:38:00Z",
-  "reason": "Fresh proof that GitHub to replacement VM to Fred-Win private relay survives while VM Desktop Commander provider auth is offline"
+  "action": "configure_desktop_commander_allow_all",
+  "requested_at": "2026-09-01T22:58:30Z",
+  "reason": "Configure Fred-Win Desktop Commander global allow-all settings through the documented private relay"
 }

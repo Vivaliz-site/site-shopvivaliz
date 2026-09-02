@@ -629,7 +629,7 @@ function liz_call_gemini(string $message, array $history, array $products, strin
     }
     $contents[] = ['role' => 'user', 'parts' => [['text' => $message]]];
 
-    $model = liz_env('GEMINI_MODEL') ?: 'gemini-1.5-flash';
+    $model = liz_env('GEMINI_MODEL') ?: 'gemini-3.1-flash-lite';
     $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent';
 
     $payload = [

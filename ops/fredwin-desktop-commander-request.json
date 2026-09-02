@@ -1,5 +1,5 @@
 {
   "action": "install_or_repair",
-  "requested_at": "2026-08-29T13:58:00-03:00",
-  "reason": "repair disabled S4U Highest watchdog task while preserving recovered canonical session and hidden launcher"
+  "requested_at": "2026-09-01T20:15:01-03:00",
+  "reason": "deploy robust Fred-Win provider health marker and eliminate false stale-transport restarts"
 }

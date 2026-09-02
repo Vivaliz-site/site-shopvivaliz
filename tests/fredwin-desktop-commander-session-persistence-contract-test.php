@@ -14,7 +14,8 @@ foreach ([
     'provider authorization grace',
     'Device ready',
     'Test-DeviceStateNewerThanCooldown',
-    '$env:ComSpec',
+    '$script:ProviderEntryPoint',
+    '$psi.FileName = $node',
     'UseShellExecute = $false',
     'CreateNoWindow = $true',
     'RedirectStandardOutput = $true',
@@ -31,6 +32,10 @@ if (strpos($runner, "Found persisted session|Connected to Remote MCP|WebSocket c
 }
 if (strpos($runner, 'if ((-not $connected) -and ($text -match $AuthPattern))') !== false) {
     fwrite(STDERR, "FALHOU: Fred-Win ainda ignora reauth depois de falso connected\n");
+    exit(1);
+}
+if (strpos($runner, '$psi.FileName = if ($env:ComSpec)') !== false) {
+    fwrite(STDERR, "FALHOU: Fred-Win ainda relanca provider via cmd/npx\n");
     exit(1);
 }
 foreach (['access_token', 'refresh_token', 'auth_token', '-RedirectStandardOutput', '-RedirectStandardError', "'.out'", "'.err'"] as $forbidden) {

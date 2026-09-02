@@ -31,9 +31,15 @@ foreach ([
     'await this.savePersistedConfig()',
     'SESSION_REFRESH_PERSIST_ATTEMPTED',
     'expected one persistence marker',
+    'PROACTIVE_REFRESH_MARGIN_MS',
+    'PROACTIVE_REFRESH_CHECK_MS',
+    '10 * 60 * 1000',
+    'refreshSession()',
+    'PROACTIVE_SESSION_REFRESH_OK',
+    'PROACTIVE_SESSION_REFRESH_FAILED',
 ] as $needle) {
     if (strpos($patcher, $needle) === false) {
-        fwrite(STDERR, "FALHOU: patcher nao persiste renovacao de sessao: {$needle}\n");
+        fwrite(STDERR, "FALHOU: patcher nao persiste/antecipa renovacao de sessao: {$needle}\n");
         exit(1);
     }
 }

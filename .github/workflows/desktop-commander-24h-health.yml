@@ -21,12 +21,25 @@ on:
       - "scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1"
       - "scripts/vm-desktop-commander-supervisor.sh"
       - "scripts/install-vm-desktop-commander-service.sh"
+      - "scripts/vm-desktop-commander-guardian.sh"
+      - "scripts/local-auto-sync.ps1"
       - "ops/systemd/shopvivaliz-desktop-commander.service"
+      - "ops/systemd/shopvivaliz-desktop-commander-guardian.service"
+      - "ops/systemd/shopvivaliz-desktop-commander-guardian.timer"
       - ".github/workflows/desktop-commander-24h-health.yml"
+      - ".github/workflows/desktop-commander-three-host-control-plane.yml"
       - ".github/workflows/fred-win-desktop-commander-action.yml"
       - ".github/workflows/vm-desktop-commander-action.yml"
       - ".github/workflows/desktopkocepsv-desktop-commander-action.yml"
       - "tests/desktop-commander-health-restart-contract-test.php"
+      - "tests/fredwin-desktop-commander-stale-transport-contract-test.php"
+      - "tests/vm-desktop-commander-auth-classification-contract-test.php"
+      - "tests/fredwin-desktop-commander-duplicate-owner-contract-test.php"
+      - "tests/windows-desktop-commander-pre-mutex-fastpath-contract-test.php"
+      - "tests/desktopkocepsv-duplicate-owner-contract-test.php"
+      - "tests/local-auto-sync-dc-separation-contract-test.php"
+      - "tests/vm-desktop-commander-guardian-contract-test.php"
+      - "tests/desktop-commander-four-host-monitor-contract-test.php"
       - "tests/desktop-commander-persist-session-contract-test.php"
       - "tests/desktop-commander-three-host-action-contract-test.php"
   push:
@@ -47,12 +60,25 @@ on:
       - "scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1"
       - "scripts/vm-desktop-commander-supervisor.sh"
       - "scripts/install-vm-desktop-commander-service.sh"
+      - "scripts/vm-desktop-commander-guardian.sh"
+      - "scripts/local-auto-sync.ps1"
       - "ops/systemd/shopvivaliz-desktop-commander.service"
+      - "ops/systemd/shopvivaliz-desktop-commander-guardian.service"
+      - "ops/systemd/shopvivaliz-desktop-commander-guardian.timer"
       - ".github/workflows/desktop-commander-24h-health.yml"
+      - ".github/workflows/desktop-commander-three-host-control-plane.yml"
       - ".github/workflows/fred-win-desktop-commander-action.yml"
       - ".github/workflows/vm-desktop-commander-action.yml"
       - ".github/workflows/desktopkocepsv-desktop-commander-action.yml"
       - "tests/desktop-commander-health-restart-contract-test.php"
+      - "tests/fredwin-desktop-commander-stale-transport-contract-test.php"
+      - "tests/vm-desktop-commander-auth-classification-contract-test.php"
+      - "tests/fredwin-desktop-commander-duplicate-owner-contract-test.php"
+      - "tests/windows-desktop-commander-pre-mutex-fastpath-contract-test.php"
+      - "tests/desktopkocepsv-duplicate-owner-contract-test.php"
+      - "tests/local-auto-sync-dc-separation-contract-test.php"
+      - "tests/vm-desktop-commander-guardian-contract-test.php"
+      - "tests/desktop-commander-four-host-monitor-contract-test.php"
       - "tests/desktop-commander-persist-session-contract-test.php"
       - "tests/desktop-commander-three-host-action-contract-test.php"
 
@@ -70,6 +96,14 @@ jobs:
           set -Eeuo pipefail
           php tests/desktop-commander-persist-session-contract-test.php
           php tests/desktop-commander-health-restart-contract-test.php
+          php tests/fredwin-desktop-commander-stale-transport-contract-test.php
+          php tests/vm-desktop-commander-auth-classification-contract-test.php
+          php tests/fredwin-desktop-commander-duplicate-owner-contract-test.php
+          php tests/windows-desktop-commander-pre-mutex-fastpath-contract-test.php
+          php tests/desktopkocepsv-duplicate-owner-contract-test.php
+          php tests/local-auto-sync-dc-separation-contract-test.php
+          php tests/vm-desktop-commander-guardian-contract-test.php
+          php tests/desktop-commander-four-host-monitor-contract-test.php
           php tests/desktop-commander-three-host-action-contract-test.php
 
   runtime:
@@ -106,6 +140,7 @@ jobs:
           import json
           import os
           import pathlib
+          import shlex
           import subprocess
           import time
 
@@ -246,7 +281,7 @@ jobs:
                   'canonical': canonical, 'auth': auth_text, 'recovery': recovery
               }
 
-          def vm_status():
+          def vm_status(peer=False):
               command = r'''set -Eeuo pipefail
           device=false
           test -f "$HOME/.desktop-commander-device/device.json" && device=true
@@ -269,9 +304,15 @@ jobs:
           done < <(pgrep -af '[n]pm exec @wonderwhy-er/desktop-commander@.* remote' 2>/dev/null || true)
           printf 'DEVICE_STATE_EXISTS=%s\nSERVICE_ENABLED=%s\nSERVICE_ACTIVE=%s\nSERVICE_USER=%s\nSERVICE_MAINPID=%s\nCANONICAL_AGENT_COUNT=%s\nNONCANONICAL_AGENT_COUNT=%s\nAUTH_REQUIRED=%s\nPROVIDER_CONNECTED=%s\n' "$device" "${enabled:-unknown}" "${active:-unknown}" "${user:-unknown}" "${mainpid:-0}" "$canonical" "$noncanonical" "$auth" "$provider"
           '''
+              if peer:
+                  peer_ssh = [
+                      'ssh', '-i', '/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor',
+                      '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes',
+                      '-o', 'ConnectTimeout=8', 'ubuntu@10.0.1.112', command,
+                  ]
+                  command = ' '.join(shlex.quote(part) for part in peer_ssh)
               ok, out = ssh_run(command, timeout=120)
               return ok, parse_safe(out)
-
           def vm_healthy(values):
               return (
                   is_true(values.get('DEVICE_STATE_EXISTS'))
@@ -284,17 +325,17 @@ jobs:
                   and is_true(values.get('PROVIDER_CONNECTED'))
               )
 
-          def vm_probe():
-              ok, values = vm_status()
+          def vm_probe(name, peer=False):
+              ok, values = vm_status(peer=peer)
               if not ok:
                   return {
-                      'host': 'shopvivaliz-a1-backend', 'state': 'unreachable',
+                      'host': name, 'state': 'unreachable',
                       'watchdog': 'unreachable', 'canonical': '—',
                       'auth': 'unknown', 'recovery': 'vm_ssh_unreachable'
                   }
               if vm_healthy(values):
                   return {
-                      'host': 'shopvivaliz-a1-backend', 'state': 'healthy',
+                      'host': name, 'state': 'healthy',
                       'watchdog': 'systemd=enabled/active', 'canonical': '1',
                       'auth': 'false', 'recovery': 'not_needed'
                   }
@@ -320,10 +361,17 @@ jobs:
                       'git fetch origin main >/dev/null; git merge --ff-only origin/main >/dev/null; '
                       'sudo bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/install-vm-desktop-commander-service.sh'
                   )
+                  if peer:
+                      peer_ssh = [
+                          'ssh', '-i', '/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor',
+                          '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes',
+                          '-o', 'ConnectTimeout=8', 'ubuntu@10.0.1.112', repair,
+                      ]
+                      repair = ' '.join(shlex.quote(part) for part in peer_ssh)
                   repair_ok, _ = ssh_run(repair, timeout=260)
                   recovery = 'repair_requested' if repair_ok else 'repair_failed'
                   time.sleep(15)
-                  ok2, values2 = vm_status()
+                  ok2, values2 = vm_status(peer=peer)
                   if ok2:
                       values = values2
               healthy = vm_healthy(values)
@@ -342,11 +390,10 @@ jobs:
                   f"{values.get('SERVICE_ACTIVE','unknown')}"
               )
               return {
-                  'host': 'shopvivaliz-a1-backend', 'state': state,
+                  'host': name, 'state': state,
                   'watchdog': watchdog, 'canonical': canonical,
                   'auth': auth_text, 'recovery': recovery
               }
-
           results = [
               win_probe(
                   'LAPTOP-NIG4IFUU', 5557,
@@ -360,14 +407,15 @@ jobs:
                   'desktopkocepsv-desktop-commander-supervisor.ps1',
                   'desktopkocepsv-remote-bootstrap.ps1'
               ),
-              vm_probe(),
+              vm_probe('shopvivaliz-a1-backend', peer=False),
+              vm_probe('shopvivaliz-free-a1', peer=True),
           ]
           now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
           run_id = os.environ.get('RUN_ID', 'unknown')
           lines = [
               '# Desktop Commander 24h Control Plane Status',
               '',
-              'Sanitized three-host health only. Provider credentials, session data, private keys and device-state contents are never published here.',
+              'Sanitized four-host health only. Provider credentials, session data, private keys and device-state contents are never published here.',
               '',
               '| Host | State | Watchdog | Canonical agents | Auth required | Last check | Recovery |',
               '|---|---|---|---:|---|---|---|',

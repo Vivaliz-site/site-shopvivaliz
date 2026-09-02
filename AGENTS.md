@@ -16,12 +16,29 @@ O proprietário autoriza os agentes com acesso técnico válido a validar pelo n
 
 ### 0.1 Commit, PR e Merge Obrigatório ao Finalizar
 
-> ⚠️ **CRÍTICO:** Qualquer alteração feita no repositório, ao ser finalizada, deve obrigatoriamente ser validada e seguir o fluxo de:
-> 1. **Commit** das alterações locais.
-> 2. Abertura/atualização de **Pull Request (PR)**.
-> 3. Realização de **Merge** para a branch alvo.
-> 
-> Toda alteração deve ser validada pelo navegador de forma visual e funcional (nada de scripts para essa validação) e seguir este fluxo. Não finalize rodadas de alterações mantendo-as apenas locais ou sem merge/deploy. Se houver impedimento, registre formalmente como **INCONCLUSIVO**.
+> ⚠️ **CRÍTICO — COMMIT NÃO É ESTADO FINAL:** uma tarefa com alteração versionada só termina depois de **branch → validação real → commit → push → PR → checks/revisão → merge → validação pós-merge → working tree limpa → nenhuma PR pendente da tarefa**.
+>
+> É proibido encerrar a tarefa em qualquer estado intermediário, inclusive: commit apenas local, branch apenas enviada, PR aberta/draft, PR verde aguardando merge ou alteração local não commitada.
+>
+> Antes de responder como concluído, execute e confira:
+> 1. `git status --porcelain` vazio no workspace usado para a tarefa;
+> 2. commit/branch publicados no remoto;
+> 3. PR correspondente mergeada no ramo alvo;
+> 4. checks e validação real aplicável aprovados;
+> 5. validação pós-merge no ramo/deploy alvo;
+> 6. nenhuma PR aberta/draft referente à mesma rodada.
+>
+> Se um gate externo realmente impedir o merge após esgotadas as correções executáveis, reporte **INCONCLUSIVO** com o bloqueio concreto e não abandone uma PR aberta como estacionamento. Feche/limpe PRs obsoletas, duplicadas ou impossíveis de avançar.
+
+### 0.2 IA paga nunca em rotinas permanentes ou periódicas
+
+- Claude, GPT/OpenAI e Codex pagos são **somente para tarefas finitas** e devem encerrar ao concluir/bloquear.
+- É proibido usá-los em daemon, cron/timer periódico, watcher, autorepair, polling ou retry/loop sem limite.
+- Rotinas contínuas/periódicas devem ser determinísticas ou usar IA gratuita/local aprovada, sem fallback silencioso para provedor pago.
+- Toda tarefa finita com IA paga precisa de timeout, limite de retries/chamadas e condição de saída; ao atingir limite, salvar checkpoint e encerrar.
+- Antes de manter qualquer automação, auditar consumidor por consumidor: necessidade, gatilho, frequência, provedor/modelo, custo, retries, timeout, saída e duplicidade.
+- Workflows GitHub pagos devem exigir gatilho explícito/restrito; eventos genéricos e `schedule` não podem acionar Claude/GPT/Codex automaticamente.
+- Política completa: [`REGRAS-AGENTES-CENTRALIZADAS.md`](REGRAS-AGENTES-CENTRALIZADAS.md), seção **Política obrigatória de consumo de IA e execução recorrente**.
 
 ### 1. NUNCA Use `git reset --hard` em Produção
 
@@ -149,10 +166,15 @@ git checkout main
 git log --oneline -1
 
 # FASE 2: DISPARO
-echo "=== DISPARO ===" 
+echo "=== DISPARO ==="
+BRANCH="test/auto-sync-$(date +%Y%m%d-%H%M%S)"
+git switch -c "$BRANCH"
 git commit --allow-empty -m "test: sync"
-EXPECTED_SHA=$(git rev-parse HEAD)
-git push origin main
+git push -u origin "$BRANCH"
+PR_URL=$(gh pr create --base main --head "$BRANCH" --title "test: sync" --body "Teste controlado de sincronização")
+gh pr merge "$PR_URL" --squash --delete-branch
+git fetch origin main
+EXPECTED_SHA=$(git rev-parse origin/main)
 
 # FASE 3: ESPERA (SEM INTERVIR!)
 echo "Aguardando 4 minutos..."
@@ -479,3 +501,12 @@ Para operações OCI, use somente a identidade dedicada `AGENTS`; nunca use como
 - É proibido versionar, imprimir ou transportar em logs/prompts chaves `*.pem`, security tokens, cookies de sessão ou headers de autenticação.
 - Valide acesso com uma leitura autenticada real antes de declarar OCI operacional.
 - Em caso de falha externa de autenticação, permissão, rede ou serviço, investigue e procure uma solução segura; não trate o bloqueio como encerramento automático da tarefa.
+
+## Gate obrigatorio de resposta final e deploy (FINAL_RESPONSE_DEPLOY_GATE_V1)
+
+- A resposta final de conclusao e um gate operacional: nao pode ser enviada enquanto houver qualquer etapa executavel necessaria ao pedido original.
+- Em alteracoes de codigo, configuracao ou documentacao versionada, PR aberto, checks verdes ou merge isoladamente NAO significam conclusao.
+- Quando existir alvo de deploy para o repositorio, e obrigatorio acompanhar o deploy ate o SHA correto estar ativo e executar validacao pós-deploy real e reproduzivel.
+- Se o deploy falhar, investigar a causa raiz, corrigir, revalidar, repetir commit/push/PR/merge quando necessario e tentar o deploy novamente; nao encerrar em estado intermediario.
+- Antes de qualquer resposta final, comparar pedido original x estado real e registrar evidencias de: validacao, commit, push, PR, checks, merge, deploy e pós-deploy, conforme aplicavel.
+- So e permitido encerrar sem deploy bem-sucedido diante de bloqueio externo genuino e incontornavel com os acessos/ferramentas disponiveis; nesse caso o estado e BLOCKED/INCONCLUSIVO, nunca sucesso.

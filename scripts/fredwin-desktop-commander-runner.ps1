@@ -7,9 +7,17 @@ $CooldownFile = Join-Path $LogDir 'desktop-commander-auth-required.cooldown'
 $ConnectedMarker = Join-Path $LogDir 'desktop-commander-provider-connected.marker'
 $SessionPatcher = Join-Path $Repo 'scripts\patch-desktop-commander-session-persistence.mjs'
 $Package = '@wonderwhy-er/desktop-commander@0.2.47'
-$AuthPattern = 'Please complete authentication|Starting device authorization flow|device code|Authorization required'
+$AuthPattern = 'Persisted session invalid|Please complete authentication|Starting device authorization flow|device code|Authorization required'
 $ReadyPattern = 'Device ready'
+$DegradedPattern = 'InvalidJWTToken|Token has expired|Device marked as offline|Failed to (recreate|subscribe)|Subscription unhealthy'
+$RecoverableChannelPattern = 'Channel (closed|errored)'
+$RecoveredPattern = 'Device ready|Channel subscribed|recovered after'
+$RefreshPersistAttemptPattern = 'SESSION_REFRESH_PERSIST_ATTEMPTED'
+$RefreshPersistFailurePattern = 'SESSION_REFRESH_PERSIST_FAILED'
 $AuthGraceSeconds = 300
+$DegradedRestartSeconds = 180
+$MarkerRefreshSeconds = 30
+$script:ProviderEntryPoint = $null
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 function Log([string]$Message) {
@@ -50,17 +58,21 @@ function Install-SessionRefreshPatch {
     $nodeModules = Split-Path -Parent $binDir
     $packageRoot = Join-Path $nodeModules '@wonderwhy-er\desktop-commander'
     if (-not (Test-Path -LiteralPath (Join-Path $packageRoot 'package.json'))) { throw 'Desktop Commander package root missing' }
+    $providerEntryPoint = Join-Path $packageRoot 'dist\index.js'
+    if (-not (Test-Path -LiteralPath $providerEntryPoint)) { throw 'Desktop Commander provider entrypoint missing' }
     $patchOutput = @(& $node $SessionPatcher $packageRoot 2>&1)
     if ($LASTEXITCODE -ne 0) { throw 'Desktop Commander session persistence patch failed' }
     $patchState = [string]($patchOutput | Where-Object { [string]$_ -match '^SESSION_REFRESH_PATCH=' } | Select-Object -Last 1)
     if (-not $patchState) { throw 'Desktop Commander session persistence patch state missing' }
+    $script:ProviderEntryPoint = $providerEntryPoint
     Log $patchState
 }
 
 function Start-HiddenCapturedProcess {
+    if (-not $script:ProviderEntryPoint -or -not (Test-Path -LiteralPath $script:ProviderEntryPoint)) { throw 'Patched Desktop Commander provider entrypoint unavailable' }
     $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = if ($env:ComSpec) { $env:ComSpec } else { 'C:\Windows\System32\cmd.exe' }
-    $psi.Arguments = '/d /s /c ""' + $npx + '" --yes ' + $Package + ' remote --persist-session"'
+    $psi.FileName = $node
+    $psi.Arguments = '"' + $script:ProviderEntryPoint + '" remote --persist-session'
     $psi.WorkingDirectory = $Repo
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
@@ -83,7 +95,19 @@ $authRequired = $false
 $authStarted = $null
 $readySeenAfterAuth = $false
 $connected = $false
+$degradedSinceUtc = $null
+$lastMarkerWriteUtc = [datetime]::MinValue
+$lastDeviceStateWriteUtc = if ($DeviceFile -and (Test-Path -LiteralPath $DeviceFile)) { (Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc } else { [datetime]::MinValue }
+$forcedExitCode = $null
 $rc = 1
+
+function Write-ConnectionMarker {
+    if (-not $proc -or $proc.HasExited) { return }
+    $utc = (Get-Date).ToUniversalTime()
+    @('state=connected', ('updated_utc=' + $utc.ToString('o')), ('provider_pid=' + $proc.Id)) | Out-File -FilePath $ConnectedMarker -Force -Encoding ascii
+    $script:lastMarkerWriteUtc = $utc
+}
+
 try {
     $proc = Start-HiddenCapturedProcess
     $stdoutTask = $proc.StandardOutput.ReadLineAsync()
@@ -114,11 +138,14 @@ try {
 
         $newText = ($lines -join "`n")
         if ($newText -match $AuthPattern) {
-            if (-not $authRequired) {
+            if ($connected) {
+                Log 'AUTH_SIGNAL_IGNORED connected provider remains healthy'
+            } elseif (-not $authRequired) {
                 $authRequired = $true
                 $authStarted = Get-Date
                 $readySeenAfterAuth = $false
                 $connected = $false
+                $degradedSinceUtc = $null
                 Remove-Item -LiteralPath $ConnectedMarker -Force -ErrorAction SilentlyContinue
                 '' | Out-File -FilePath $CooldownFile -Force -Encoding ascii
                 Log 'AUTH_REQUIRED provider authorization grace started'
@@ -130,8 +157,9 @@ try {
                 $readySeenAfterAuth = $true
             } else {
                 $connected = $true
+                $degradedSinceUtc = $null
                 Remove-Item -LiteralPath $CooldownFile -Force -ErrorAction SilentlyContinue
-                '' | Out-File -FilePath $ConnectedMarker -Force -Encoding ascii
+                Write-ConnectionMarker
                 Log 'Remote Desktop Commander broker ready observed'
             }
         }
@@ -142,8 +170,9 @@ try {
                 $authStarted = $null
                 $readySeenAfterAuth = $false
                 $connected = $true
+                $degradedSinceUtc = $null
                 Remove-Item -LiteralPath $CooldownFile -Force -ErrorAction SilentlyContinue
-                '' | Out-File -FilePath $ConnectedMarker -Force -Encoding ascii
+                Write-ConnectionMarker
                 Log 'Remote Desktop Commander provider authorization completed during grace'
             } elseif ($authStarted -and (((Get-Date) - $authStarted).TotalSeconds -ge $AuthGraceSeconds)) {
                 Log 'AUTH_REQUIRED provider authorization grace expired'
@@ -153,17 +182,57 @@ try {
             }
         }
 
+        if ($connected -and ($newText -match $RecoverableChannelPattern)) {
+            Write-ConnectionMarker
+            Log 'Provider channel transient event observed; provider kept alive'
+        }
+        if ($connected -and ($newText -match $DegradedPattern) -and -not $degradedSinceUtc) {
+            $degradedSinceUtc = (Get-Date).ToUniversalTime()
+            Log 'Provider channel degradation observed; recovery grace started'
+        }
+        if ($connected -and $degradedSinceUtc -and ($newText -match $RecoveredPattern)) {
+            $degradedSinceUtc = $null
+            Write-ConnectionMarker
+            Log 'Provider channel recovery observed'
+        }
+        if ($connected -and ($newText -match $RefreshPersistAttemptPattern)) {
+            $currentWrite = if ($DeviceFile -and (Test-Path -LiteralPath $DeviceFile)) { (Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc } else { [datetime]::MinValue }
+            if ($currentWrite -gt $lastDeviceStateWriteUtc) {
+                $lastDeviceStateWriteUtc = $currentWrite
+                Log 'SESSION_REFRESH_PERSISTED=true'
+            } else {
+                Log 'SESSION_REFRESH_PERSISTED=inconclusive reason=device_state_mtime_unchanged'
+            }
+        }
+        if ($connected -and ($newText -match $RefreshPersistFailurePattern)) {
+            Write-ConnectionMarker
+            Log 'SESSION_REFRESH_PERSISTED=false reason=provider_persistence_failure'
+        }
+        if ($degradedSinceUtc) {
+            $degradedAge = ((Get-Date).ToUniversalTime() - $degradedSinceUtc).TotalSeconds
+            if ($degradedAge -ge $DegradedRestartSeconds) {
+                Log ('Provider channel recovery timed out seconds=' + [math]::Round($degradedAge))
+                $forcedExitCode = 23
+                try { & taskkill.exe /PID $proc.Id /T /F 2>$null | Out-Null } catch { }
+                try { $proc.WaitForExit(10000) | Out-Null } catch { }
+                break
+            }
+        }
+        if ($connected -and -not $degradedSinceUtc -and (((Get-Date).ToUniversalTime() - $lastMarkerWriteUtc).TotalSeconds -ge $MarkerRefreshSeconds)) {
+            Write-ConnectionMarker
+        }
+
         if ($proc.HasExited -and -not $stdoutTask -and -not $stderrTask) { break }
         Start-Sleep -Milliseconds 200
     }
 
-    if ($proc.HasExited) { $rc = $proc.ExitCode }
+    $rc = if ($null -ne $forcedExitCode) { $forcedExitCode } elseif ($proc.HasExited) { $proc.ExitCode } else { 1 }
 }
 finally {
     if ($proc -and -not $proc.HasExited) {
         try { & taskkill.exe /PID $proc.Id /T /F 2>$null | Out-Null } catch { }
     }
-    if ($proc -and $proc.HasExited) { Remove-Item -LiteralPath $ConnectedMarker -Force -ErrorAction SilentlyContinue }
+    Remove-Item -LiteralPath $ConnectedMarker -Force -ErrorAction SilentlyContinue
     if ($proc) { $proc.Dispose() }
 }
 if ($authRequired) { exit 20 }

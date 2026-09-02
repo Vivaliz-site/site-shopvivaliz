@@ -44,6 +44,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
 // LLM na conta da loja. api/liz-intelligent.php (o endpoint que o widget da
 // vitrine realmente usa) ja tinha limite; estes dois nao tinham.
 require_once dirname(__DIR__) . '/includes/rate-limiter.php';
+require_once __DIR__ . '/liz-general-policy.php';
 $lizgIp = (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown');
 if (!RateLimiter::isAllowed('liz-general:' . $lizgIp, 10, 60)) {
     lizg_reply(429, ['ok' => false, 'error' => 'Muitas perguntas seguidas. Aguarde um minuto.']);
@@ -60,7 +61,7 @@ if ($key === '') {
     lizg_reply(503, ['ok' => false, 'error' => 'A pesquisa da Liz está temporariamente indisponível.']);
 }
 
-$model = trim((string)(getenv('GEMINI_MODEL') ?: 'gemini-2.0-flash'));
+$model = trim((string)(getenv('GEMINI_MODEL') ?: 'gemini-3.1-flash-lite'));
 $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent';
 $system = <<<'TXT'
 Você é Liz, assistente virtual da ShopVivaliz. Também pode conversar de forma simpática sobre assuntos gerais, para tornar o atendimento mais humano.
@@ -71,14 +72,17 @@ Não invente fatos. Em temas médicos, jurídicos ou financeiros, dê apenas inf
 Não transforme toda resposta em oferta comercial e não force o retorno ao assunto da loja.
 TXT;
 
+$groundingRequested = lizg_needs_web_grounding($message);
 $payload = [
     'system_instruction' => ['parts' => [['text' => $system]]],
     'contents' => [['role' => 'user', 'parts' => [['text' => $message]]]],
-    'tools' => [['google_search' => new stdClass()]],
     'generationConfig' => ['maxOutputTokens' => 900, 'temperature' => 0.35],
 ];
+if ($groundingRequested) {
+    $payload['tools'] = [['google_search' => new stdClass()]];
+}
 
-function lizg_request(string $url, string $key, array $payload): array
+function lizg_request(string $url, string $key, array $payload, int $timeoutSeconds = 18): array
 {
     $ch = curl_init($url);
     if ($ch === false) return [0, ''];
@@ -88,7 +92,7 @@ function lizg_request(string $url, string $key, array $payload): array
         CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'x-goog-api-key: ' . $key],
         CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         CURLOPT_CONNECTTIMEOUT => 5,
-        CURLOPT_TIMEOUT => 25,
+        CURLOPT_TIMEOUT => max(5, $timeoutSeconds),
     ]);
     $body = curl_exec($ch);
     $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -96,18 +100,34 @@ function lizg_request(string $url, string $key, array $payload): array
     return [$status, is_string($body) ? $body : ''];
 }
 
-[$status, $body] = lizg_request($url, $key, $payload);
-$groundingUsed = true;
+$status = 0;
+$body = '';
+$groundingUsed = false;
 
-// Grounding é um recurso opcional. Se ele falhar por modelo, quota, billing,
-// permissão ou indisponibilidade temporária, a Liz ainda deve conseguir conversar.
-// A segunda tentativa não alega pesquisa web e preserva erros de autenticação da
-// chamada básica, que continuam resultando em 503 abaixo.
-if ($status !== 200) {
-    unset($payload['tools']);
-    $groundingUsed = false;
-    $payload['system_instruction']['parts'][0]['text'] .= "\nA pesquisa web não está disponível nesta execução. Não diga que pesquisou; avise quando uma informação atual não puder ser confirmada.";
-    [$status, $body] = lizg_request($url, $key, $payload);
+// Grounding é opcional e consome cota separada. Faça no máximo uma tentativa
+// de pesquisa web; se ela falhar, preserve a conversa usando o modelo sem web.
+if ($groundingRequested) {
+    [$status, $body] = lizg_request($url, $key, $payload, 12);
+    $groundingUsed = $status === 200;
+    if (!$groundingUsed) {
+        unset($payload['tools']);
+        $payload['system_instruction']['parts'][0]['text'] .= "\nA pesquisa web não está disponível nesta execução. Não diga que pesquisou; avise quando uma informação atual não puder ser confirmada.";
+    }
+}
+
+// A API Gemini pode ocasionalmente responder 503 ou estourar timeout mesmo
+// com credencial/modelo saudáveis. Para perguntas sem grounding (ou após a
+// queda controlada do grounding), faça até três tentativas curtas com backoff.
+if (!$groundingUsed) {
+    for ($attempt = 1; $attempt <= lizg_plain_max_attempts(); $attempt++) {
+        [$status, $body] = lizg_request($url, $key, $payload, 18);
+        if ($status === 200 || !lizg_should_retry_plain($status)) {
+            break;
+        }
+        if ($attempt < lizg_plain_max_attempts()) {
+            usleep(250000 * $attempt);
+        }
+    }
 }
 
 $data = json_decode($body, true);
