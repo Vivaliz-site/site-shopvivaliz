@@ -28,8 +28,10 @@ foreach (['schedule:', "branches: [main]", 'StrictHostKeyChecking=no'] as $forbi
         exit(1);
     }
 }
-if (stripos($sh, 'trycloudflare.com') !== false) {
-    fwrite(STDERR, "FALHOU: tunnel persistente nao pode depender de Quick Tunnel\n");
-    exit(1);
+foreach (['trycloudflare.com', '|| true'] as $forbidden) {
+    if (stripos($sh, $forbidden) !== false) {
+        fwrite(STDERR, "FALHOU: provisionador contem padrao proibido {$forbidden}\n");
+        exit(1);
+    }
 }
 echo "solange-stable-tunnel-workflow-contract: ok\n";
