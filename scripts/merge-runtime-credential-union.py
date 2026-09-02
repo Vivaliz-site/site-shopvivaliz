@@ -17,6 +17,14 @@ import time
 from pathlib import Path
 
 
+AMAZON_KEYS = {
+    "AMAZON_LWA_CLIENT_ID", "AMAZON_LWA_CLIENT_SECRET", "AMAZON_LWA_REFRESH_TOKEN",
+    "SELLER_CENTRAL_BRIDGE_TOKEN",
+}
+AMAZON_RETURNS_KEYS = AMAZON_KEYS | {
+    "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "GOOGLE_OAUTH_REFRESH_TOKEN",
+}
+
 EMAIL_KEYS = {
     "BREVO_API_KEY",
     "EMAIL_FROM", "EMAIL_PASSWORD", "EMAIL_SMTP_HOST", "EMAIL_SMTP_PORT", "EMAIL_TO", "EMAIL_USER",
@@ -51,6 +59,7 @@ ALLOWED_KEYS = {
     "TINY_ACCESS_TOKEN", "TINY_CLIENT_ID", "TINY_CLIENT_SECRET", "TINY_REDIRECT_URI", "TINY_REFRESH_TOKEN",
     "URL_REDIRCT_OLIST", "URL_TINY_OLIST", "WHATSAPP_NUMBER",
     "AMAZON_LWA_CLIENT_ID", "AMAZON_LWA_CLIENT_SECRET", "AMAZON_LWA_REFRESH_TOKEN",
+    "SELLER_CENTRAL_BRIDGE_TOKEN",
 }
 
 KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -81,7 +90,7 @@ def validate_value(key: str, value: str) -> None:
 
 
 def parse_payload_fields(fields: list[bytes], scope: str = "all") -> dict[str, str]:
-    if scope not in {"all", "email", "shopee"}:
+    if scope not in {"all", "email", "shopee", "amazon", "amazon_returns"}:
         raise ValueError(f"unsupported credential scope: {scope}")
     if len(fields) % 2:
         raise ValueError("payload must contain name/value pairs")
@@ -90,8 +99,12 @@ def parse_payload_fields(fields: list[bytes], scope: str = "all") -> dict[str, s
         scope_keys = ALLOWED_KEYS
     elif scope == "email":
         scope_keys = EMAIL_KEYS
-    else:
+    elif scope == "shopee":
         scope_keys = SHOPEE_KEYS
+    elif scope == "amazon":
+        scope_keys = AMAZON_KEYS
+    else:
+        scope_keys = AMAZON_RETURNS_KEYS
 
     values: dict[str, str] = {}
     seen: set[str] = set()
@@ -195,8 +208,8 @@ def main() -> int:
     if len(args) == 3 and args[0] == "--scope":
         scope = args[1]
         args = args[2:]
-    if len(args) != 1 or scope not in {"all", "email", "shopee"}:
-        print("usage: merge-runtime-credential-union.py [--scope all|email|shopee] SHARED_ENV", file=sys.stderr)
+    if len(args) != 1 or scope not in {"all", "email", "shopee", "amazon", "amazon_returns"}:
+        print("usage: merge-runtime-credential-union.py [--scope all|email|shopee|amazon|amazon_returns] SHARED_ENV", file=sys.stderr)
         return 2
     try:
         incoming = read_payload(scope=scope)

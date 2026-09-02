@@ -1,24 +1,25 @@
 {
   "validated": true,
   "reviewer": "GPT-5.6 Sol + Storefront Browser Audit",
-  "timestamp": "2026-09-01T01:21:35Z",
+  "timestamp": "2026-09-02T05:37:12Z",
   "artifacts": [
-    "GitHub Actions artifact storefront-browser-audit-33458296737-1/desktop-produto.png",
-    "GitHub Actions artifact storefront-browser-audit-33458296737-1/desktop-checkout.png",
-    "GitHub Actions artifact storefront-browser-audit-33458296737-1/fast-3g-produto.png",
-    "GitHub Actions artifact storefront-browser-audit-33458296737-1/slow-4g-checkout.png"
+    ".policy-artifacts/storefront-browser-audit-33595293680-1/desktop-produto.png",
+    ".policy-artifacts/storefront-browser-audit-33595293680-1/desktop-checkout.png",
+    ".policy-artifacts/storefront-browser-audit-33595293680-1/fast-3g-produto.png",
+    ".policy-artifacts/storefront-browser-audit-33595293680-1/slow-4g-checkout.png"
   ],
   "evidence": {
-    "workflow_run": 33458296737,
-    "workflow_artifact_id": 9782270069,
-    "workflow_artifact_digest": "sha256:227b7606ba33850be907dafdc69f03f534d848b79cba3e9f2d77a87de325f330",
+    "workflow_run": 33595293680,
+    "workflow_artifact_id": 9833202988,
+    "workflow_artifact_digest": "sha256:0823cb0440e050abb3118091900ec1c9d3ad7c099a885add9ade04c387046ba2",
     "result": "REAL USER AUDIT PASS",
     "routes_checked": [
       "/",
       "/produto.php?id=341440872",
       "/checkout"
     ],
-    "additional_review": "Fresh connected-browser screenshot review of production product page; no visual regression observed from sender tax-document backend change.",
-    "change_scope": "Backend Melhor Envio sender payload: CNPJ is mapped to company_document; no presentation/UI code changed."
+    "additional_review": "Fresh Storefront Browser Audit passed on PR #1356 after Amazon Returns/SAFE-T integration was reconciled with current main.",
+    "change_scope": "Amazon Returns/SAFE-T backend, admin UI, runtime workers, Seller Central bridge and production credential/deploy wiring; storefront visual regression audit refreshed before merge.",
+    "workflow_artifact_name": "storefront-browser-audit-33595293680-1"
   }
 }
