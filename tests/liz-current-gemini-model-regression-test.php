@@ -9,7 +9,7 @@ function assert_contains(string $path, string $needle): void {
     }
 }
 
-assert_contains(__DIR__ . '/../api/liz-general.php', "getenv('GEMINI_MODEL') ?: 'gemini-2.5-flash-lite'");
-assert_contains(__DIR__ . '/../api/liz-intelligent.php', "liz_env('GEMINI_MODEL') ?: 'gemini-2.5-flash-lite'");
+assert_contains(__DIR__ . '/../api/liz-general.php', "getenv('GEMINI_MODEL') ?: 'gemini-3.1-flash-lite'");
+assert_contains(__DIR__ . '/../api/liz-intelligent.php', "liz_env('GEMINI_MODEL') ?: 'gemini-3.1-flash-lite'");
 
-echo "PASS: Liz defaults to the lowest-cost stable Gemini model.\n";
+echo "PASS: Liz defaults to the lowest-cost stable working Gemini model.\n";
