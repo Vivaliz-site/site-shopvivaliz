@@ -9,9 +9,11 @@ $SessionPatcher = Join-Path $Repo 'scripts\patch-desktop-commander-session-persi
 $Package = '@wonderwhy-er/desktop-commander@0.2.47'
 $AuthPattern = 'Persisted session invalid|Please complete authentication|Starting device authorization flow|device code|Authorization required'
 $ReadyPattern = 'Device ready'
-$DegradedPattern = 'InvalidJWTToken|Token has expired|Device marked as offline|Channel (closed|errored)|Failed to (recreate|subscribe)|Subscription unhealthy'
+$DegradedPattern = 'InvalidJWTToken|Token has expired|Device marked as offline|Failed to (recreate|subscribe)|Subscription unhealthy'
+$RecoverableChannelPattern = 'Channel (closed|errored)'
 $RecoveredPattern = 'Device ready|Channel subscribed|recovered after'
 $RefreshPersistAttemptPattern = 'SESSION_REFRESH_PERSIST_ATTEMPTED'
+$RefreshPersistFailurePattern = 'SESSION_REFRESH_PERSIST_FAILED'
 $AuthGraceSeconds = 300
 $DegradedRestartSeconds = 180
 $MarkerRefreshSeconds = 30
@@ -175,6 +177,10 @@ try {
             }
         }
 
+        if ($connected -and ($newText -match $RecoverableChannelPattern)) {
+            Write-ConnectionMarker
+            Log 'Provider channel transient event observed; provider kept alive'
+        }
         if ($connected -and ($newText -match $DegradedPattern) -and -not $degradedSinceUtc) {
             $degradedSinceUtc = (Get-Date).ToUniversalTime()
             Log 'Provider channel degradation observed; recovery grace started'
@@ -192,6 +198,10 @@ try {
             } else {
                 Log 'SESSION_REFRESH_PERSISTED=inconclusive reason=device_state_mtime_unchanged'
             }
+        }
+        if ($connected -and ($newText -match $RefreshPersistFailurePattern)) {
+            Write-ConnectionMarker
+            Log 'SESSION_REFRESH_PERSISTED=false reason=provider_persistence_failure'
         }
         if ($degradedSinceUtc) {
             $degradedAge = ((Get-Date).ToUniversalTime() - $degradedSinceUtc).TotalSeconds
@@ -211,13 +221,13 @@ try {
         Start-Sleep -Milliseconds 200
     }
 
-    if ($proc.HasExited) { $rc = if ($null -ne $forcedExitCode) { $forcedExitCode } else { $proc.ExitCode } }
+    $rc = if ($null -ne $forcedExitCode) { $forcedExitCode } elseif ($proc.HasExited) { $proc.ExitCode } else { 1 }
 }
 finally {
     if ($proc -and -not $proc.HasExited) {
         try { & taskkill.exe /PID $proc.Id /T /F 2>$null | Out-Null } catch { }
     }
-    if ($proc -and $proc.HasExited) { Remove-Item -LiteralPath $ConnectedMarker -Force -ErrorAction SilentlyContinue }
+    Remove-Item -LiteralPath $ConnectedMarker -Force -ErrorAction SilentlyContinue
     if ($proc) { $proc.Dispose() }
 }
 if ($authRequired) { exit 20 }

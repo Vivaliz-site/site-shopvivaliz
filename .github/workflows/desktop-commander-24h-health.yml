@@ -28,6 +28,7 @@ on:
       - ".github/workflows/desktopkocepsv-desktop-commander-action.yml"
       - "tests/desktop-commander-health-restart-contract-test.php"
       - "tests/fredwin-desktop-commander-stale-transport-contract-test.php"
+      - "tests/vm-desktop-commander-auth-classification-contract-test.php"
       - "tests/desktop-commander-persist-session-contract-test.php"
       - "tests/desktop-commander-three-host-action-contract-test.php"
   push:
@@ -55,6 +56,7 @@ on:
       - ".github/workflows/desktopkocepsv-desktop-commander-action.yml"
       - "tests/desktop-commander-health-restart-contract-test.php"
       - "tests/fredwin-desktop-commander-stale-transport-contract-test.php"
+      - "tests/vm-desktop-commander-auth-classification-contract-test.php"
       - "tests/desktop-commander-persist-session-contract-test.php"
       - "tests/desktop-commander-three-host-action-contract-test.php"
 
@@ -73,6 +75,7 @@ jobs:
           php tests/desktop-commander-persist-session-contract-test.php
           php tests/desktop-commander-health-restart-contract-test.php
           php tests/fredwin-desktop-commander-stale-transport-contract-test.php
+          php tests/vm-desktop-commander-auth-classification-contract-test.php
           php tests/desktop-commander-three-host-action-contract-test.php
 
   runtime:
