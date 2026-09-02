@@ -94,6 +94,8 @@ rbAssert(is_file($windowsWorker), 'Persistent Windows bridge worker must exist.'
 rbAssert(is_file($windowsInstaller), 'Windows bridge installer must exist.');
 $endpointSource = (string)file_get_contents($endpoint);
 rbAssert(str_contains($endpointSource, 'SELLER_CENTRAL_BRIDGE_TOKEN'), 'Bridge endpoint must require server-side token.');
+rbAssert(str_contains($endpointSource, "'REDIRECT_HTTP_AUTHORIZATION'"), 'Bridge endpoint must accept Apache redirected Authorization header.');
+rbAssert(str_contains($endpointSource, 'getallheaders'), 'Bridge endpoint must fall back to case-insensitive getallheaders Authorization lookup.');
 rbAssert(!str_contains($endpointSource, "\$_GET['token']"), 'Bridge token must never be accepted from query string.');
 $workerSource = (string)file_get_contents($windowsWorker);
 rbAssert(str_contains($workerSource, 'bridge.token'), 'Windows worker must read token from protected file.');
