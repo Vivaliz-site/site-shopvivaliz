@@ -143,7 +143,7 @@ jobs:
           code="$(curl --silent --show-error --connect-timeout 5 --max-time 20 \
             -H 'Host: shopvivaliz.com.br' \
             -o "$body" -w '%{http_code}' \
-            'http://127.0.0.1/auth/login.php')"
+            'http://127.0.0.1:8080/auth/login.php')"
           echo "login_http_status=$code"
           if [[ "$code" != '200' ]]; then
             echo '::error::Login local nao retornou HTTP 200.'
@@ -161,7 +161,7 @@ jobs:
           google_code="$(curl --silent --show-error --connect-timeout 5 --max-time 20 \
             -H 'Host: shopvivaliz.com.br' \
             -D "$headers" -o /dev/null -w '%{http_code}' \
-            'http://127.0.0.1/auth/google-start.php?redirect=%2Fadmin%2F')"
+            'http://127.0.0.1:8080/auth/google-start.php?redirect=%2Fadmin%2F')"
           echo "google_start_http_status=$google_code"
           if [[ "$google_code" != '302' && "$google_code" != '303' ]]; then
             echo '::error::Inicio do OAuth Google nao redirecionou.'
