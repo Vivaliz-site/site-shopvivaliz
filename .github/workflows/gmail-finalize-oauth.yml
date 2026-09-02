@@ -1,0 +1,87 @@
+name: Gmail Finalize OAuth
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ops/gmail-oauth-finalize.json"
+      - ".github/workflows/gmail-finalize-oauth.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate job
+        id: req
+        shell: bash
+        run: |
+          set -euo pipefail
+          JOB="$(jq -r '.job // ""' ops/gmail-oauth-finalize.json)"
+          [[ "$JOB" =~ ^[a-f0-9]{32}$ ]] || exit 2
+          echo "job=$JOB" >> "$GITHUB_OUTPUT"
+      - name: Configure VM key
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VM_KEY"
+          [[ "$VM_HOST" =~ ^[A-Za-z0-9._-]+$ ]] || exit 2
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
+          chmod 600 ~/.ssh/vmkey
+          echo "vm_host=$VM_HOST" >> "$GITHUB_ENV"
+      - name: Recover and install Gmail token
+        env:
+          JOB: ${{ steps.req.outputs.job }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/vmkey ubuntu@"$vm_host" 'bash -s' -- "$JOB" <<'REMOTE'
+          set -euo pipefail
+          job="$1"
+          envfile='/home/ubuntu/shopvivaliz-deploy/shared/.env'
+          current='/home/ubuntu/shopvivaliz-deploy/current'
+          recovered='/tmp/gmail-refresh-recovered.token'
+          found=''
+          while IFS= read -r candidate; do
+            if sudo test -s "$candidate"; then found="$candidate"; break; fi
+          done < <(sudo find /tmp /var/tmp -type f -path "*/shopvivaliz-google-ads-refresh/${job}.token" 2>/dev/null | head -20)
+          [ -n "$found" ] || { echo 'GMAIL_OAUTH_CALLBACK_TOKEN_NOT_FOUND'; exit 3; }
+          sudo cp "$found" "$recovered"
+          sudo chown ubuntu:ubuntu "$recovered"
+          chmod 600 "$recovered"
+          python3 - "$envfile" "$recovered" <<'PY'
+          import os, sys
+          from pathlib import Path
+          envfile, tokenfile = map(Path, sys.argv[1:])
+          token = tokenfile.read_text().strip()
+          if not token or any(c.isspace() for c in token): raise SystemExit('invalid token')
+          lines = envfile.read_text().splitlines()
+          key = 'GMAIL_OAUTH_REFRESH_TOKEN'
+          out=[]; replaced=False
+          for line in lines:
+              if line.startswith(key+'='):
+                  out.append(key+'='+token); replaced=True
+              else: out.append(line)
+          if not replaced: out.append(key+'='+token)
+          tmp=envfile.with_suffix('.gmail.tmp'); tmp.write_text('\n'.join(out)+'\n'); os.chmod(tmp,0o600); os.replace(tmp,envfile)
+          PY
+          token="$(cat "$recovered")"
+          printf '%s' "$token" | gh secret set GMAIL_OAUTH_REFRESH_TOKEN -R Vivaliz-site/site-shopvivaliz --env production
+          sudo rm -f "$found"
+          rm -f "$recovered"
+          sudo systemctl restart shopvivaliz-amazon-returns.service
+          sleep 3
+          systemctl is-active --quiet shopvivaliz-amazon-returns.service
+          echo 'GMAIL_OAUTH_INSTALLED=true'
+          REMOTE
+      - name: Cleanup
+        if: always()
+        run: rm -f ~/.ssh/vmkey
