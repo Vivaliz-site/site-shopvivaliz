@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Execute a command with SHOPEE_* values loaded from a private dotenv file.
+"""Execute a command with SHOPEE_* values loaded from private runtime storage.
 
-Only Shopee variables are imported. Values are never printed. This is intended for
-production jobs that run on the VM where shared/.env is the canonical credential
-source, avoiding copies of rotating OAuth tokens into GitHub Actions environments.
+Static Shopee credentials are imported from the shared dotenv file. Rotating OAuth
+tokens may come from that file or, when absent there, from the private token cache
+identified by ``SHOPEE_TOKEN_FILE``. Values are never printed.
 """
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shlex
 import subprocess
@@ -48,6 +49,25 @@ def load_shopee_env(path: Path) -> dict[str, str]:
     return result
 
 
+def load_shopee_token_file(path: Path, loaded: dict[str, str]) -> dict[str, str]:
+    result = dict(loaded)
+    if result.get("SHOPEE_ACCESS_TOKEN") or result.get("SHOPEE_REFRESH_TOKEN"):
+        return result
+    if not path.is_file() or not os.access(path, os.R_OK):
+        return result
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return result
+    access = str(data.get("access_token") or "").strip()
+    refresh = str(data.get("refresh_token") or "").strip()
+    if access:
+        result["SHOPEE_ACCESS_TOKEN"] = access
+    if refresh:
+        result["SHOPEE_REFRESH_TOKEN"] = refresh
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run a command with Shopee runtime credentials")
     parser.add_argument("--env-file", required=True)
@@ -62,6 +82,8 @@ def main() -> int:
 
     try:
         loaded = load_shopee_env(Path(args.env_file))
+        token_file = Path(os.environ.get("SHOPEE_TOKEN_FILE", "storage/private/shopee-tokens.json"))
+        loaded = load_shopee_token_file(token_file, loaded)
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 3
@@ -71,7 +93,7 @@ def main() -> int:
         print("ERROR: required Shopee runtime credentials are incomplete", file=sys.stderr)
         return 4
     if not loaded.get("SHOPEE_ACCESS_TOKEN") and not loaded.get("SHOPEE_REFRESH_TOKEN"):
-        print("ERROR: Shopee access/refresh token missing in runtime env", file=sys.stderr)
+        print("ERROR: Shopee access/refresh token missing in runtime storage", file=sys.stderr)
         return 4
 
     env = os.environ.copy()
