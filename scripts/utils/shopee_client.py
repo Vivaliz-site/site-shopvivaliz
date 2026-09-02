@@ -16,11 +16,12 @@ from pathlib import Path
 from typing import Generator
 
 import requests
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 DEFAULT_BASE_URL = "https://partner.shopeemobile.com/api/v2"
 SANDBOX_BASE_URL = "https://openplatform.sandbox.test-stable.shopee.sg/api/v2"
 TOKEN_REFRESH_INTERVAL_SECONDS = int(os.environ.get("SHOPEE_TOKEN_REFRESH_INTERVAL_SECONDS", "7200"))
+RETRY_ATTEMPTS = 4
+RETRY_BACKOFF_SECONDS = (2, 4, 8)
 
 
 def _is_retryable(exc: Exception) -> bool:
@@ -238,13 +239,28 @@ class ShopeeClient:
             raise RuntimeError(f"Shopee API error {data['error']}: {data.get('message')}")
         return data
 
-    @retry(retry=retry_if_exception(_is_retryable), wait=wait_exponential(multiplier=1, min=2, max=30), stop=stop_after_attempt(4))
-    def _get(self, path: str, extra_params: dict | None = None) -> dict:
-        return self._decode(self._send_with_refresh("GET", path, extra_params=extra_params, timeout=30))
+    @staticmethod
+    def _call_with_retry(operation):
+        for attempt in range(RETRY_ATTEMPTS):
+            try:
+                return operation()
+            except Exception as exc:
+                if not _is_retryable(exc) or attempt == RETRY_ATTEMPTS - 1:
+                    raise
+                time.sleep(RETRY_BACKOFF_SECONDS[attempt])
+        raise RuntimeError("unreachable retry state")
 
-    @retry(retry=retry_if_exception(_is_retryable), wait=wait_exponential(multiplier=1, min=2, max=30), stop=stop_after_attempt(4))
+    def _get(self, path: str, extra_params: dict | None = None) -> dict:
+        return self._call_with_retry(
+            lambda: self._decode(self._send_with_refresh("GET", path, extra_params=extra_params, timeout=30))
+        )
+
     def _post(self, path: str, body: dict, extra_params: dict | None = None) -> dict:
-        return self._decode(self._send_with_refresh("POST", path, extra_params=extra_params, json_body=body, timeout=30))
+        return self._call_with_retry(
+            lambda: self._decode(
+                self._send_with_refresh("POST", path, extra_params=extra_params, json_body=body, timeout=30)
+            )
+        )
 
     def iter_all_products(self, page_size: int = 100) -> Generator[dict, None, None]:
         path = "/product/get_item_list"
