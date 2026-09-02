@@ -1,0 +1,10 @@
+TDD evidence for Shopee runtime credential scope
+
+RED
+- Current parser rejected scope=shopee with: unsupported credential scope: shopee
+- Reproduction includes valid Shopee PARTNER_ID/PARTNER_KEY/SHOP_ID plus intentionally short OLIST_CLIENT_SECRET=bad.
+
+GREEN
+- scope=shopee accepts only Shopee keys and skips unrelated Olist validation.
+- scope=all still rejects the intentionally short OLIST_CLIENT_SECRET.
+- No global credential validation was weakened.
