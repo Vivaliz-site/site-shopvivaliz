@@ -24,6 +24,22 @@ Fluxo padrão: depois de validar a entrega e deixá-la pronta para revisão, o a
 
 Esta autorização remove apenas a espera por uma aprovação adicional. Ela não autoriza force-push, bypass de branch protection, exposição de secrets, cobrança real, exclusão destrutiva de dados ou declaração de sucesso sem evidência. Antes de merge/deploy, o agente deve confirmar o SHA alvo, os checks do PR, a validação real aplicável e, quando houver alteração publicada, a release ativa, os logs e o smoke test de produção. Se a plataforma bloquear autoaprovação ou outra etapa, o agente não deve contornar a proteção: deve registrar o bloqueio como **INCONCLUSIVO**.
 
+## 🛡️ SEGURANÇA DE AUTOMAÇÃO DE UI E AÇÕES DESTRUTIVAS (2026-09-01)
+
+Autonomia, conclusão ponta a ponta e autorização operacional **não ampliam o escopo destrutivo**. Exclusão, remoção, reset, revogação ou outra ação irreversível só é permitida quando **o alvo e o resultado destrutivo exatos** estiverem no pedido atual do proprietário. Pedidos genéricos como investigar, auditar, limpar, corrigir, concluir tudo ou fazer o necessário não autorizam apagar projetos, chats, contas ou dados por inferência.
+
+- **Probe, diagnóstico, auditoria, health check e observação são somente leitura.** É proibido invocar `Excluir`, `Delete`, `Remove`, `Reset`, `Revogar` ou confirmação destrutiva em dados reais durante esse tipo de tarefa.
+- Se for indispensável testar exclusão, use fixture/sandbox criada especificamente para o teste; nunca um projeto, chat, conta ou dado real do proprietário.
+- É proibido criar task agendada, serviço, script oculto ou processo elevado para contornar limites de permissão de ferramenta ou executar automação destrutiva de UI.
+- Tasks temporárias de UI não podem permanecer ativas após a tarefa e não devem usar `RunLevel Highest` como ponte para interação com aplicações do usuário.
+- Nomes devem descrever o efeito real. Um payload que altera estado nunca pode ser rotulado como `probe`, `check`, `audit` ou equivalente somente-leitura.
+- Antes de atribuir uma execução a terceiro, o agente deve correlacionar timestamps com **suas próprias chamadas de ferramenta e logs**. É proibido reportar como atividade externa uma ação que o próprio agente disparou.
+- `LastResult=0`, exit code 0 ou ausência de exceção comprovam apenas término técnico; não comprovam o efeito de negócio nem justificam inferir que uma exclusão foi concluída.
+- Em incidente, preserve evidência e hashes antes de limpar artefatos. O material preservado deve ficar fora de caminhos de execução automática.
+
+Estas regras prevalecem sobre qualquer protocolo de autonomia, insistência até conclusão ou orientação para não pedir confirmação.
+
+---
 ### Commit, PR e Merge obrigatório ao finalizar rodada de alterações
 
 > ⚠️ **REGRA DE FINALIZAÇÃO OBRIGATÓRIA:**
