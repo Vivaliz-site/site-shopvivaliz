@@ -12,7 +12,7 @@ if ($task.State -eq 'Disabled') {
     Write-Output 'TASK_GUARDIAN_REENABLED=true'
     Start-ScheduledTask -TaskName $TaskName
     Write-Output 'TASK_GUARDIAN_STARTED=true'
-    exit 0
+    return
 }
 
 Write-Output 'TASK_GUARDIAN_HEALTHY=true'
