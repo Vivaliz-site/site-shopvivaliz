@@ -65,9 +65,18 @@ if (strpos($runner, '(((Get-Date).ToUniversalTime() - $lastTransportCheckUtc).To
     fwrite(STDERR, "FALHOU: verificacao de transporte nao esta throttled\n");
     exit(1);
 }
-// Fail open on a query error -- a transient CIM hiccup must not itself force a restart.
-if (!preg_match('/function Test-BrokerTransportEstablished.*?\} catch \{ return \$true \}/s', $runner)) {
-    fwrite(STDERR, "FALHOU: verificacao de transporte nao falha aberta em erro de consulta\n");
+// Fail open on a REAL query error, but not on the ordinary "zero
+// established connections right now" case -- Get-NetTCPConnection reports
+// that as a suppressed non-terminating error too (verified live: "No
+// matching MSFT_NetTCPConnection objects found..."), not just an empty
+// result, so a naive try/-ErrorAction Stop/catch{return $true} would
+// silently swallow every real disconnection and make this check inert.
+if (!preg_match('/function Test-BrokerTransportEstablished.*?-ErrorVariable queryError.*?No matching .\* objects found.*?return \$false\s*\n\}/s', $runner)) {
+    fwrite(STDERR, "FALHOU: verificacao de transporte nao distingue erro real de resultado vazio\n");
+    exit(1);
+}
+if (!preg_match('/function Test-BrokerTransportEstablished.*?\n\}/s', $runner, $fnMatch) || strpos($fnMatch[0], '-ErrorAction Stop') !== false) {
+    fwrite(STDERR, "FALHOU: -ErrorAction Stop na funcao trataria 'zero conexoes' como excecao\n");
     exit(1);
 }
 // The marker must stop refreshing under either detector, pattern-based or transport-based.

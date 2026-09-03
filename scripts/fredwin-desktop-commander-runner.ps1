@@ -124,16 +124,26 @@ channel. It closes the actual gap reported in production: a connection that
 dies without ever printing one of DegradedPattern/RecoverableChannelPattern
 left the marker refreshing forever on a bare timer, so the device looked
 "healthy" locally while showing offline server-side. Fails OPEN (assumes
-connected) on a query error so a transient CIM hiccup cannot itself trigger
-a restart.
+connected) on a real query error so a transient CIM hiccup cannot itself
+trigger a restart -- but Get-NetTCPConnection reports the ordinary "zero
+established connections right now" case as a (suppressed) non-terminating
+error too (verified live: "No matching MSFT_NetTCPConnection objects
+found..."), not just an empty result, and -ErrorAction Stop would turn
+that expected case into a thrown exception caught by a blanket try/catch,
+silently making this whole check inert. So catch the error explicitly and
+only treat it as a real failure -- and therefore fail open -- when its
+text is not that specific "no matching objects" message.
 #>
 function Test-BrokerTransportEstablished([int]$ProcessId) {
-    try {
-        $conns = @(Get-NetTCPConnection -OwningProcess $ProcessId -State Established -ErrorAction SilentlyContinue | Where-Object {
-            $_.RemotePort -eq 443 -and $_.RemoteAddress -notin @('127.0.0.1', '::1')
-        })
-        return ($conns.Count -gt 0)
-    } catch { return $true }
+    $queryError = $null
+    $conns = @(Get-NetTCPConnection -OwningProcess $ProcessId -State Established -ErrorAction SilentlyContinue -ErrorVariable queryError | Where-Object {
+        $_.RemotePort -eq 443 -and $_.RemoteAddress -notin @('127.0.0.1', '::1')
+    })
+    if ($conns.Count -gt 0) { return $true }
+    foreach ($e in @($queryError)) {
+        if ($e.Exception.Message -notmatch 'No matching .* objects found') { return $true }
+    }
+    return $false
 }
 
 try {
