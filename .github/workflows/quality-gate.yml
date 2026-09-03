@@ -37,10 +37,11 @@ jobs:
           php tests/google-indexing-canonical-regression-test.php
           python3 -m py_compile scripts/seo-integrity-audit.py
           node --check scripts/public-layout-audit.mjs
+          node --check scripts/lib/audit-concurrency.mjs
           node --check js/catalog-conversion-v4.js
           node --check js/product-conversion-v5.js
           node tests/shipping-request-dedupe-runtime-test.js
-          node --test tests/public-route-discovery.test.mjs tests/public-page-health.test.mjs
+          node --test tests/public-route-discovery.test.mjs tests/public-page-health.test.mjs tests/public-layout-audit-parallelism.test.mjs
           bash tests/master-production-monitor-regression.sh
           bash tests/production-runtime-reconciliation-regression.sh
           bash tests/public-layout-a1-proxy-regression.sh
