@@ -17,6 +17,21 @@ function sv_queue_file_path(): string
     if (is_string($override) && trim($override) !== '') {
         return trim($override);
     }
+    // Releases are immutable and replaced on every deploy (see
+    // scripts/deploy-production.sh). A queue file living inside a release
+    // directory (the old SV_QUEUE_FILE default below) is invisible to any
+    // long-running worker process still attached to a previous, since-deleted
+    // release, and is abandoned on every deploy -- pending webhook jobs (ex:
+    // Mercado Pago payment confirmations) silently stop being processed.
+    // storage/queue.json must live in shared/, the same persistent directory
+    // already used for .env, so every release and every long-running worker
+    // agree on one file. Falls back to the release-local path when no
+    // shared/ sibling exists (ex: local/dev checkout without the release
+    // layout).
+    $sharedDir = dirname(__DIR__, 4) . '/shared';
+    if (is_dir($sharedDir)) {
+        return $sharedDir . '/storage/queue.json';
+    }
     return SV_QUEUE_FILE;
 }
 
