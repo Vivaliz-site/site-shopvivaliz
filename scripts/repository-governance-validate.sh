@@ -38,7 +38,19 @@ case "$phase" in
     git diff --name-only -z --diff-filter=ACMR "$base_ref"..HEAD -- '*.php' > "$tmp_php_list"
     lint_php_list "$tmp_php_list"
     ;;
-  ci|manual|full)
+  ci)
+    if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GITHUB_BASE_REF:-}" ]; then
+      base_ref="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
+      git diff --name-only -z --diff-filter=ACMR "$base_ref"..HEAD -- '*.php' > "$tmp_php_list"
+      lint_php_list "$tmp_php_list"
+    elif [ "${GITHUB_EVENT_NAME:-}" = "push" ] && [ -n "${PUSH_BEFORE_SHA:-}" ] && ! printf '%s' "$PUSH_BEFORE_SHA" | grep -Eq '^0+$'; then
+      git diff --name-only -z --diff-filter=ACMR "$PUSH_BEFORE_SHA"..HEAD -- '*.php' > "$tmp_php_list"
+      lint_php_list "$tmp_php_list"
+    else
+      find . -path './vendor' -prune -o -path './.git' -prune -o -path './.worktrees' -prune -o -path './node_modules' -prune -o -name '*.php' -type f -print0 | xargs -0 -r -n1 php -l >/dev/null
+    fi
+    ;;
+  manual|full)
     find . -path './vendor' -prune -o -path './.git' -prune -o -path './.worktrees' -prune -o -path './node_modules' -prune -o -name '*.php' -type f -print0 | xargs -0 -r -n1 php -l >/dev/null
     ;;
   *)
