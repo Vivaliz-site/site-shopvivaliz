@@ -9,7 +9,7 @@ grep -Fq -- "--exclude=.codex" "$pipeline"
 grep -Fq -- "--exclude=.claude" "$pipeline"
 grep -Fq -- "--exclude=docs" "$pipeline"
 grep -Fq -- "--exclude=tests" "$pipeline"
-grep -Fq 'rsync -a --delete --link-dest=' "$pipeline"
+grep -Fq 'rsync -a --checksum --delete --link-dest=' "$pipeline"
 grep -Fq 'release_dir=' "$pipeline"
 if grep -Fq 'shopvivaliz-release.tgz' "$pipeline"; then
   echo 'production deploy still transfers the full tar archive' >&2
