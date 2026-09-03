@@ -48,10 +48,10 @@ jobs:
           apache_modules="$(sudo apache2ctl -M 2>/dev/null)"
           [[ "$apache_modules" == *rewrite_module* ]]
           for path in /sitemap.xml /termos/ /politica-entrega/ /catalogo/; do
-            code="$(curl --silent --show-error --output /tmp/seo-route-body --write-out '%{http_code}' --max-time 15 -H 'Host: shopvivaliz.com.br' "http://127.0.0.1${path}")"
+            code="$(curl --silent --show-error --output /tmp/seo-route-body --write-out '%{http_code}' --max-time 15 -H 'Host: shopvivaliz.com.br' "http://127.0.0.1:8080${path}")"
             printf '%s -> %s\n' "$path" "$code"
             test "$code" = 200
           done
-          sitemap_body="$(curl --silent --show-error --max-time 15 -H 'Host: shopvivaliz.com.br' http://127.0.0.1/sitemap.xml)"
+          sitemap_body="$(curl --silent --show-error --max-time 15 -H 'Host: shopvivaliz.com.br' http://127.0.0.1:8080/sitemap.xml)"
           [[ "$sitemap_body" == *'<urlset'* ]]
           REMOTE
