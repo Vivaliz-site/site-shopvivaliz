@@ -7,7 +7,7 @@
 #>
 
 param(
-    [string]$BaseUrl = "https://dev.shopvivaliz.com.br",
+    [string]$BaseUrl = "https://shopvivaliz.com.br",
     [int]$Timeout = 15
 )
 

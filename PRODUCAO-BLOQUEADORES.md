@@ -16,7 +16,7 @@
 ### Ação Requerida
 ```bash
 # 1. Tentar renovação automática (5 min)
-curl -X POST http://dev.shopvivaliz.com.br/api/olist/refresh-token.php
+curl -X POST https://shopvivaliz.com.br/api/olist/refresh-token.php
 
 # 2. Se falhar (401), fazer re-auth manual em:
 https://www.olist.com.br/developer/settings/access-tokens
