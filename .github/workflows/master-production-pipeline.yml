@@ -61,7 +61,7 @@ jobs:
             echo 'manual deploy requested -> production deploy required'
           else
             git diff-tree --no-commit-id --name-only -r "$DEPLOY_SHA" | tee /tmp/shopvivaliz-changed-paths.txt
-            should_deploy="$(scripts/should-deploy-production.sh < /tmp/shopvivaliz-changed-paths.txt)"
+            should_deploy="$(bash scripts/should-deploy-production.sh < /tmp/shopvivaliz-changed-paths.txt)"
           fi
           echo "should_deploy=$should_deploy" >> "$GITHUB_OUTPUT"
           echo "production deploy required -> $should_deploy"
