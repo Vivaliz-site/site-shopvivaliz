@@ -27,6 +27,8 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    outputs:
+      should_deploy: ${{ steps.production_impact.outputs.should_deploy }}
     steps:
       - name: Validate manual confirmation
         if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -36,6 +38,7 @@ jobs:
         with:
           ref: ${{ env.DEPLOY_SHA }}
           persist-credentials: false
+          fetch-depth: 2
       - name: Verify deployable revision
         shell: bash
         run: |
@@ -47,9 +50,25 @@ jobs:
           ! grep -Fq 'http://127.0.0.1${path}' .github/workflows/master-production-pipeline.yml
           grep -Fq 'api/health/version.php' .github/workflows/master-production-pipeline.yml
           grep -Fq 'served_sha' .github/workflows/master-production-pipeline.yml
+          bash tests/should-deploy-production-test.sh
+      - name: Classify production impact
+        id: production_impact
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            should_deploy=true
+            echo 'manual deploy requested -> production deploy required'
+          else
+            git diff-tree --no-commit-id --name-only -r "$DEPLOY_SHA" | tee /tmp/shopvivaliz-changed-paths.txt
+            should_deploy="$(scripts/should-deploy-production.sh < /tmp/shopvivaliz-changed-paths.txt)"
+          fi
+          echo "should_deploy=$should_deploy" >> "$GITHUB_OUTPUT"
+          echo "production deploy required -> $should_deploy"
 
   deploy:
     needs: validate
+    if: ${{ needs.validate.outputs.should_deploy == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production
@@ -151,7 +170,7 @@ jobs:
               ln -sfn "releases/$(basename "$previous")" "$root/current.rollback"
               mv -Tf "$root/current.rollback" "$current"
               sudo systemctl restart apache2
-          sudo systemctl is-active --quiet apache2
+              sudo systemctl is-active --quiet apache2
             fi
             exit 1
           fi
