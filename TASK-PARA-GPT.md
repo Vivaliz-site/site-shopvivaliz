@@ -26,7 +26,7 @@ Sistema ShopVivaliz está **99% pronto para produção**. Auto-sync daemon e sin
 **Ação:**
 ```bash
 # Opção A: Tentar renovação automática
-curl -X POST http://dev.shopvivaliz.com.br/api/olist/refresh-token.php \
+curl -X POST https://shopvivaliz.com.br/api/olist/refresh-token.php \
   -H "Content-Type: application/json"
 
 # Se sucesso (status: ok, token: ey...):
@@ -102,7 +102,7 @@ SMTP_PASS=SG.xxxxxxxxxxxxx
 **Validação:**
 ```bash
 # Teste 1: Email de teste
-curl -X POST http://dev.shopvivaliz.com.br/api/mail/test.php \
+curl -X POST https://shopvivaliz.com.br/api/mail/test.php \
   -d "to=seu-email@teste.com"
 
 # Verificar inbox (30 seg)

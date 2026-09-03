@@ -16,10 +16,10 @@ Regras criticas:
 - Salvar relatorio JSON de aplicacao.
 
 URLs padrao:
-- update: https://dev.shopvivaliz.com.br/installer/update.php
-- check: https://dev.shopvivaliz.com.br/installer/update-applied-check.php
-- self-test: https://dev.shopvivaliz.com.br/installer/self-test.php
-- auto-routines: https://dev.shopvivaliz.com.br/installer/auto-routines.php?expected=200&limit=50
+- update: https://shopvivaliz.com.br/installer/update.php
+- check: https://shopvivaliz.com.br/installer/update-applied-check.php
+- self-test: https://shopvivaliz.com.br/installer/self-test.php
+- auto-routines: https://shopvivaliz.com.br/installer/auto-routines.php?expected=200&limit=50
 
 Secrets necessarios: SHOPVIVALIZ_UPDATE_URL, SHOPVIVALIZ_UPDATE_TOKEN.
 """

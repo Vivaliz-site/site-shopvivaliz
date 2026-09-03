@@ -132,7 +132,7 @@ push → master-production-pipeline.yml inicia
 git-auto-sync.py (*/30 * * * *)
   └─ git fetch origin main
   └─ git reset --hard origin/main
-  └─ Produção atualizada em dev.shopvivaliz.com.br
+  └─ Produção atualizada em shopvivaliz.com.br
 ```
 
 ### 4. Autonomous Monitor (contínuo, 24/7)
