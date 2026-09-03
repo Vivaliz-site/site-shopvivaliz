@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { chromium } from 'playwright';
+import { mapWithConcurrency, resolveAuditConcurrency } from './lib/audit-concurrency.mjs';
 import { discoverPublicRoutes } from './lib/public-route-discovery.mjs';
 import { reportableResourceFailure } from './lib/public-page-health.mjs';
 
@@ -12,6 +13,7 @@ const proxyServer = process.env.E2E_PROXY_SERVER || '';
 const outDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || join(process.cwd(), 'artifacts', 'public-layout-audit');
 const mandatoryRoutes = ['/', '/catalogo/', '/carrinho/', '/contato/', '/faq/', '/politica-privacidade/', '/politica-devolucoes/', '/politica-entrega/', '/termos/', '/sobre/', '/blog/', '/avaliacoes.php'];
 const explicitRoutes = (process.env.PUBLIC_AUDIT_ROUTES || '').split(',').map((value) => value.trim()).filter(Boolean);
+const auditConcurrency = resolveAuditConcurrency();
 
 const auditFetch = async (url, options = {}) => {
   if (!proxyServer) return fetch(url, options);
@@ -39,6 +41,7 @@ const profiles = [
 
 if (!routes.length) throw new Error('No public routes discovered for audit');
 console.log(`Public layout audit: ${routes.length} routes x ${profiles.length} profiles`);
+console.log(`Public layout audit concurrency: ${Math.min(auditConcurrency, routes.length)}`);
 mkdirSync(outDir, { recursive: true });
 const browser = await chromium.launch({
   headless: true,
@@ -55,7 +58,7 @@ for (const profile of profiles) {
     hasTouch: profile.isMobile,
   });
 
-  for (const route of routes) {
+  const profileResults = await mapWithConcurrency(routes, auditConcurrency, async (route) => {
     const page = await context.newPage();
     const pageErrors = [];
     const resourceFailures = [];
@@ -134,14 +137,23 @@ for (const profile of profiles) {
         if (metrics.navCount === 1 && metrics.bodyPaddingBottom < 70) localFailures.push(`mobile body bottom padding too small (${metrics.bodyPaddingBottom}px)`);
       }
 
-      results.push({ profile: profile.name, route, url: page.url(), status, metrics, pageErrors, resourceFailures, failures: localFailures });
-      failures.push(...localFailures.map((message) => `${profile.name} ${route}: ${message}`));
+      return {
+        result: { profile: profile.name, route, url: page.url(), status, metrics, pageErrors, resourceFailures, failures: localFailures },
+        failures: localFailures.map((message) => `${profile.name} ${route}: ${message}`),
+      };
     } catch (error) {
-      failures.push(`${profile.name} ${route}: ${error.message}`);
-      results.push({ profile: profile.name, route, url, pageErrors, resourceFailures, failures: [error.message] });
+      return {
+        result: { profile: profile.name, route, url, pageErrors, resourceFailures, failures: [error.message] },
+        failures: [`${profile.name} ${route}: ${error.message}`],
+      };
     } finally {
       await page.close();
     }
+  });
+
+  for (const item of profileResults) {
+    results.push(item.result);
+    failures.push(...item.failures);
   }
   await context.close();
 }
