@@ -82,19 +82,6 @@ jobs:
           ref: ${{ env.DEPLOY_SHA }}
           persist-credentials: false
           fetch-depth: 1
-      - name: Package immutable release
-        shell: bash
-        run: |
-          set -euo pipefail
-          tar \
-            --exclude=.git \
-            --exclude=.github \
-            --exclude=.codex \
-            --exclude=.claude \
-            --exclude=docs \
-            --exclude=tests \
-            -czf /tmp/shopvivaliz-release.tgz .
-          echo "release_archive_bytes=$(stat -c %s /tmp/shopvivaliz-release.tgz)"
       - name: Configure pinned A1 SSH
         shell: bash
         env:
@@ -121,30 +108,50 @@ jobs:
           print(json.dumps({key: os.environ[key + '_VALUE'] for key in keys}))
           PY
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'rm -f /tmp/shopvivaliz-update-production-env.py'
-      - name: Upload release
+      - name: Synchronize immutable release incrementally
         shell: bash
         run: |
           set -euo pipefail
-          scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" /tmp/shopvivaliz-release.tgz ubuntu@163.176.103.253:/tmp/shopvivaliz-release-${DEPLOY_SHA}.tgz
+          ssh_cmd="ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -i $HOME/.ssh/id_rsa"
+          release_dir="/home/ubuntu/shopvivaliz-deploy/releases/$(date -u +%Y%m%d-%H%M%S)-${DEPLOY_SHA:0:8}"
+          previous="$($ssh_cmd ubuntu@163.176.103.253 'readlink -f /home/ubuntu/shopvivaliz-deploy/current 2>/dev/null || true')"
+          $ssh_cmd ubuntu@163.176.103.253 "command -v rsync >/dev/null && mkdir -p '$release_dir'"
+          rsync -a --checksum --delete --link-dest="${previous:-/nonexistent}" \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude=.codex \
+            --exclude=.claude \
+            --exclude=docs \
+            --exclude=tests \
+            --exclude=.env \
+            --exclude=tasks-queue.json \
+            --exclude=logs \
+            --exclude=storage \
+            --exclude=cache \
+            --exclude=uploads \
+            --exclude=sessions \
+            -e "$ssh_cmd" ./ "ubuntu@163.176.103.253:$release_dir/"
+          printf '%s\n' "$release_dir" > /tmp/shopvivaliz-release-dir
+          echo "release_dir=$release_dir"
       - name: Activate release atomically
         shell: bash
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' -- "$DEPLOY_SHA" <<'REMOTE'
+          release_dir="$(cat /tmp/shopvivaliz-release-dir)"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' -- "$DEPLOY_SHA" "$release_dir" <<'REMOTE'
           set -euo pipefail
           sha="$1"
+          release="$2"
           root='/home/ubuntu/shopvivaliz-deploy'
           releases="$root/releases"
           shared="$root/shared"
           current="$root/current"
-          archive="/tmp/shopvivaliz-release-${sha}.tgz"
-          stamp="$(date -u +%Y%m%d-%H%M%S)"
-          release="$releases/${stamp}-${sha:0:8}"
           previous="$(readlink -f "$current" 2>/dev/null || true)"
-          cleanup() { rm -f "$archive"; }
-          trap cleanup EXIT
-          mkdir -p "$release"
-          tar -xzf "$archive" -C "$release"
+          case "$release" in
+            "$releases"/*) ;;
+            *) echo "invalid release directory: $release" >&2; exit 2 ;;
+          esac
+          test -d "$release"
           printf '%s\n' "$sha" > "$release/.release-sha"
           for name in .env tasks-queue.json logs storage cache uploads sessions; do
             rm -rf "$release/$name"
