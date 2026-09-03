@@ -12,9 +12,9 @@ final class SvAmazonReturnsSpApi
 {
     private object $client;
     /** @var callable(string):string */
-    private $documentDownloader;
+    private $documentTransport;
 
-    public function __construct(?object $client = null, ?callable $documentDownloader = null)
+    public function __construct(?object $client = null, ?callable $documentTransport = null)
     {
         if ($client === null) {
             require_once __DIR__ . '/../marketplace/AmazonPublisher.php';
@@ -26,30 +26,7 @@ final class SvAmazonReturnsSpApi
             }
         }
         $this->client = $client;
-        $this->documentDownloader = $documentDownloader ?? self::defaultDocumentDownloader();
-    }
-
-    private static function defaultDocumentDownloader(): callable
-    {
-        return static function (string $url): string {
-            $handle = curl_init($url);
-            if ($handle === false) throw new RuntimeException('Unable to initialize Amazon report document download.');
-            curl_setopt_array($handle, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_CONNECTTIMEOUT => 15,
-                CURLOPT_TIMEOUT => 120,
-                CURLOPT_SSL_VERIFYPEER => true,
-                CURLOPT_SSL_VERIFYHOST => 2,
-            ]);
-            $raw = curl_exec($handle);
-            $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
-            $error = curl_error($handle);
-            curl_close($handle);
-            if (!is_string($raw) || $status < 200 || $status >= 300) {
-                throw new RuntimeException('Failed to download Amazon report document: HTTP ' . $status . ' ' . $error);
-            }
-            return $raw;
-        };
+        $this->documentTransport = $documentTransport ?? [$this, 'httpDocument'];
     }
 
     /** @return array<string,mixed> */
@@ -155,7 +132,16 @@ final class SvAmazonReturnsSpApi
         ];
     }
 
-    /** @return array{report_id:string,processing_status:string,report_document_id:?string} */
+    /**
+     * Legacy status/document lookup pair, kept for the existing daemon-level
+     * fixed-2-day-window path and its dedicated tests. The scheduled
+     * ingestion cycle uses getReport()/downloadReportDocument() below, which
+     * add strict processing-status validation and a persisted cursor; this
+     * pair stays available (and covered) rather than being deleted mid-merge
+     * without a follow-up audit of every caller.
+     *
+     * @return array{report_id:string,processing_status:string,report_document_id:?string}
+     */
     public function getReportStatus(string $reportId): array
     {
         $id = self::requiredId($reportId, 'Report ID');
@@ -189,13 +175,63 @@ final class SvAmazonReturnsSpApi
     public function downloadReturnsReport(string $reportDocumentId): string
     {
         $document = $this->getReportDocument($reportDocumentId);
-        $raw = ($this->documentDownloader)($document['url']);
+        $raw = ($this->documentTransport)($document['url']);
+        if (!is_string($raw)) throw new RuntimeException('Amazon Reports document transport returned invalid content.');
         if (strtoupper((string)($document['compression_algorithm'] ?? '')) === 'GZIP') {
             $decoded = @gzdecode($raw);
             if (!is_string($decoded)) throw new RuntimeException('Failed to decompress Amazon report document.');
             $raw = $decoded;
         }
         return $raw;
+    }
+
+    /**
+     * Report status lookup with strict processing-status validation, used by
+     * the cursor-based incremental ingestion cycle (daemon.php runReturnsReport).
+     *
+     * @return array{source:string,request_id:string,report_id:string,processing_status:string,report_document_id:?string,data_start_time:?string,data_end_time:?string}
+     */
+    public function getReport(string $reportId): array
+    {
+        $id = self::requiredId($reportId, 'Amazon report ID');
+        $response = $this->client->request('GET', '/reports/2021-06-30/reports/' . rawurlencode($id));
+        self::assertSuccess($response, 'Reports getReport');
+        $data = self::responseData($response);
+        $payload = self::firstArray($data, ['payload']) ?? $data;
+        $status = strtoupper(trim((string)($payload['processingStatus'] ?? '')));
+        if (!in_array($status, ['IN_QUEUE','IN_PROGRESS','CANCELLED','DONE','FATAL'], true)) {
+            throw new RuntimeException('Amazon Reports returned an invalid processing status.');
+        }
+        return [
+            'source'=>'SP_API_REPORTS',
+            'request_id'=>(string)($response['request_id'] ?? ''),
+            'report_id'=>trim((string)($payload['reportId'] ?? $id)),
+            'processing_status'=>$status,
+            'report_document_id'=>self::nullableString($payload['reportDocumentId'] ?? null),
+            'data_start_time'=>self::nullableString($payload['dataStartTime'] ?? null),
+            'data_end_time'=>self::nullableString($payload['dataEndTime'] ?? null),
+        ];
+    }
+
+    /** @return array{source:string,request_id:string,document_id:string,content:string,content_sha256:string,compression:?string} */
+    public function downloadReportDocument(string $documentId): array
+    {
+        $id = self::requiredId($documentId, 'Amazon report document ID');
+        $response = $this->client->request('GET', '/reports/2021-06-30/documents/' . rawurlencode($id));
+        self::assertSuccess($response, 'Reports getReportDocument');
+        $data = self::responseData($response);
+        $payload = self::firstArray($data, ['payload']) ?? $data;
+        $url = trim((string)($payload['url'] ?? ''));
+        if ($url === '' || !str_starts_with($url, 'https://')) throw new RuntimeException('Amazon Reports document URL is invalid.');
+        $content = ($this->documentTransport)($url);
+        if (!is_string($content)) throw new RuntimeException('Amazon Reports document transport returned invalid content.');
+        $compression = self::nullableString($payload['compressionAlgorithm'] ?? null);
+        if (strtoupper((string)$compression) === 'GZIP') {
+            $decoded = gzdecode($content);
+            if (!is_string($decoded)) throw new RuntimeException('Amazon Reports document could not be decompressed.');
+            $content = $decoded;
+        }
+        return ['source'=>'SP_API_REPORTS','request_id'=>(string)($response['request_id'] ?? ''),'document_id'=>$id,'content'=>$content,'content_sha256'=>hash('sha256',$content),'compression'=>$compression];
     }
 
     /** @return array<string,mixed> */
@@ -293,5 +329,19 @@ final class SvAmazonReturnsSpApi
         if (!is_scalar($value)) return null;
         $value = trim((string)$value);
         return $value === '' ? null : $value;
+    }
+
+    private function httpDocument(string $url): string
+    {
+        $handle = curl_init($url);
+        if ($handle === false) throw new RuntimeException('Unable to initialize Amazon report download.');
+        curl_setopt_array($handle, [CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>15,CURLOPT_TIMEOUT=>120,CURLOPT_SSL_VERIFYPEER=>true,CURLOPT_SSL_VERIFYHOST=>2]);
+        $raw = curl_exec($handle);
+        $status = (int)curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+        $error = curl_error($handle);
+        curl_close($handle);
+        if (!is_string($raw)) throw new RuntimeException('Amazon report download failed: ' . $error);
+        if ($status < 200 || $status >= 300) throw new RuntimeException('Amazon report download failed with HTTP ' . $status . '.');
+        return $raw;
     }
 }

@@ -12,6 +12,7 @@ require_once __DIR__ . '/../../includes/amazon-returns/SafeTDecisionEngine.php';
 require_once __DIR__ . '/../../includes/amazon-returns/Outbox.php';
 require_once __DIR__ . '/../../includes/amazon-returns/SpApi.php';
 require_once __DIR__ . '/../../includes/amazon-returns/SpApiEventSink.php';
+require_once __DIR__ . '/../../includes/amazon-returns/ReturnsReport.php';
 require_once __DIR__ . '/../../includes/amazon-returns/GmailApi.php';
 require_once __DIR__ . '/../../includes/amazon-returns/GmailEventSink.php';
 require_once __DIR__ . '/gmail-ingest.php';
@@ -231,60 +232,67 @@ final class SvAmazonReturnsDaemon
         $gate = $this->dependencyGate('sp_api');
         if (($gate['status'] ?? '') !== 'READY_NO_RUNTIME_PROVIDER') return $gate;
         $api = new SvAmazonReturnsSpApi();
-        $report = $api->requestReturnsReport($now->sub(new DateInterval('P2D')), $now);
-        $reportId = (string)($report['report_id'] ?? '');
-        $ingest = $this->pollAndIngestReturnsReport($api, $reportId);
-        return [
-            'status'=>'OK',
+        $pending = SvAmazonReturnsReport::loadCursor($this->db, 'pending_report');
+        $requested = false;
+        if ($pending === null) {
+            $highWater = SvAmazonReturnsReport::loadCursor($this->db, 'return_date_high_water');
+            $window = SvAmazonReturnsReport::nextWindow(
+                $highWater['value'] ?? null,
+                SvAmazonReturnsReport::earliestCaseDate($this->db),
+                $now
+            );
+            $report = $api->requestReturnsReport($window['from'], $window['to']);
+            $metadata = [
+                'from'=>$window['from']->format(DATE_ATOM),
+                'to'=>$window['to']->format(DATE_ATOM),
+                'request_id'=>$report['request_id'] ?? null,
+            ];
+            SvAmazonReturnsReport::saveCursor($this->db, 'pending_report', (string)$report['report_id'], $metadata);
+            $pending = ['value'=>(string)$report['report_id'], 'metadata'=>$metadata];
+            $requested = true;
+        }
+
+        $reportId = trim((string)$pending['value']);
+        $metadata = is_array($pending['metadata'] ?? null) ? $pending['metadata'] : [];
+        $pollAttempts = max(1, min(12, (int)$this->config->get('AMAZON_RETURNS_REPORT_POLL_ATTEMPTS', '6')));
+        $pollMs = max(250, min(10000, (int)$this->config->get('AMAZON_RETURNS_REPORT_POLL_MS', '1500')));
+        $status = null;
+        for ($attempt = 0; $attempt < $pollAttempts; $attempt++) {
+            $status = $api->getReport($reportId);
+            if (in_array($status['processing_status'], ['DONE','CANCELLED','FATAL'], true)) break;
+            if ($attempt + 1 < $pollAttempts) usleep($pollMs * 1000);
+        }
+        if (!is_array($status)) throw new RuntimeException('Amazon report status unavailable.');
+        $processing = (string)$status['processing_status'];
+        if (in_array($processing, ['IN_QUEUE','IN_PROGRESS'], true)) {
+            return ['status'=>'PENDING','report_id'=>$reportId,'processing_status'=>$processing,'requested'=>$requested];
+        }
+        if ($processing === 'FATAL') {
+            SvAmazonReturnsReport::clearCursor($this->db, 'pending_report');
+            return ['status'=>'PARTIAL','report_id'=>$reportId,'processing_status'=>'FATAL','reason'=>'REPORT_FATAL_RETRY_WINDOW'];
+        }
+
+        $windowEnd = trim((string)($metadata['to'] ?? $status['data_end_time'] ?? $now->format(DATE_ATOM)));
+        if ($processing === 'CANCELLED') {
+            SvAmazonReturnsReport::saveCursor($this->db, 'return_date_high_water', $windowEnd, ['rows'=>0,'processing_status'=>'CANCELLED']);
+            SvAmazonReturnsReport::clearCursor($this->db, 'pending_report');
+            return ['status'=>'OK','report_id'=>$reportId,'processing_status'=>'CANCELLED','rows'=>0];
+        }
+
+        $documentId = trim((string)($status['report_document_id'] ?? ''));
+        if ($documentId === '') throw new RuntimeException('Completed Amazon report is missing reportDocumentId.');
+        $document = $api->downloadReportDocument($documentId);
+        $rows = SvAmazonReturnsReport::parse((string)$document['content']);
+        $persisted = SvAmazonReturnsReport::persistRows($this->db, $rows, $documentId, (string)$document['content_sha256']);
+        SvAmazonReturnsReport::saveCursor($this->db, 'return_date_high_water', $windowEnd, [
             'report_id'=>$reportId,
-            'request_id'=>$report['request_id'] ?? null,
-            'ingest'=>$ingest,
-        ];
-    }
-
-    /**
-     * Polls a just-requested returns report for a bounded time and, once
-     * DONE, downloads and ingests it. Amazon flat-file reports for a short
-     * (2-day) window typically finish within seconds to a couple of minutes;
-     * if it isn't done within the budget this tick simply reports PENDING —
-     * the next scheduled returns_report tick requests a fresh report anyway,
-     * so nothing is lost by not waiting longer here.
-     *
-     * @return array<string,mixed>
-     */
-    private function pollAndIngestReturnsReport(SvAmazonReturnsSpApi $api, string $reportId): array
-    {
-        if ($reportId === '') return ['status'=>'SKIPPED_NO_REPORT_ID'];
-        $maxAttempts = 12;
-        $sleepSeconds = 10;
-        $processingStatus = '';
-        $documentId = null;
-        for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
-            $status = $api->getReportStatus($reportId);
-            $processingStatus = (string)($status['processing_status'] ?? '');
-            if ($processingStatus === 'DONE') {
-                $documentId = $status['report_document_id'] ?? null;
-                break;
-            }
-            if (in_array($processingStatus, ['CANCELLED', 'FATAL'], true)) {
-                return ['status'=>'REPORT_' . $processingStatus, 'report_id'=>$reportId];
-            }
-            if ($attempt < $maxAttempts - 1) sleep($sleepSeconds);
-        }
-        if ($processingStatus !== 'DONE' || !is_string($documentId) || $documentId === '') {
-            return ['status'=>'PENDING', 'report_id'=>$reportId, 'last_processing_status'=>$processingStatus];
-        }
-
-        $content = $api->downloadReturnsReport($documentId);
-        $rows = SvAmazonReturnsReportParser::parse($content);
-        $matched = 0;
-        $applied = 0;
-        foreach ($rows as $row) {
-            $result = SvAmazonSpApiEventSink::persistReturnsReportRow($this->db, $row, $reportId);
-            if ($result['matched']) $matched++;
-            if ($result['applied']) $applied++;
-        }
-        return ['status'=>'INGESTED', 'report_id'=>$reportId, 'rows'=>count($rows), 'matched'=>$matched, 'applied'=>$applied];
+            'document_id'=>$documentId,
+            'document_sha256'=>$document['content_sha256'],
+            'rows'=>count($rows),
+        ]);
+        SvAmazonReturnsReport::clearCursor($this->db, 'pending_report');
+        unset($document['content']);
+        return ['status'=>'OK','report_id'=>$reportId,'document_id'=>$documentId,'processing_status'=>'DONE'] + $persisted;
     }
 
     /** @return array<string,mixed> */
