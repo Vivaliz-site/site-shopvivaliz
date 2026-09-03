@@ -51,5 +51,6 @@ jobs:
             printf '%s -> %s\n' "$path" "$code"
             test "$code" = 200
           done
-          grep -q '<urlset' <(curl --silent --show-error --max-time 15 -H 'Host: shopvivaliz.com.br' http://127.0.0.1/sitemap.xml)
+          sitemap_body="$(curl --silent --show-error --max-time 15 -H 'Host: shopvivaliz.com.br' http://127.0.0.1/sitemap.xml)"
+          [[ "$sitemap_body" == *'<urlset'* ]]
           REMOTE
