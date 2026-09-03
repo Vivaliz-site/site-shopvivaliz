@@ -17,6 +17,7 @@ function Test-DeviceStateNewerThanCooldown {
     if (-not $DeviceFile -or -not (Test-Path -LiteralPath $DeviceFile) -or -not (Test-Path -LiteralPath $CooldownFile)) { return $false }
     return ((Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc -gt (Get-Item -LiteralPath $CooldownFile).LastWriteTimeUtc)
 }
+# Canonical agents may be launched by the pinned npx package or directly by its dist/index.js entrypoint.
 function Get-DesktopCommanderRemoteLaunchers {
     return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
         ([string]$_.Name) -in @('node.exe','cmd.exe') -and
