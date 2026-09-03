@@ -11,7 +11,7 @@ if command -v composer >/dev/null 2>&1; then
   composer validate --no-check-publish --strict
 fi
 
-find . -path './vendor' -prune -o -path './.git' -prune -o -name '*.php' -type f -print0 | xargs -0 -r -n1 php -l >/dev/null
+find . -path './vendor' -prune -o -path './.git' -prune -o -path './.worktrees' -prune -o -path './node_modules' -prune -o -name '*.php' -type f -print0 | xargs -0 -r -n1 php -l >/dev/null
 
 if [ "$phase" = "ci" ]; then
   if command -v composer >/dev/null 2>&1 && [ ! -d vendor ]; then
