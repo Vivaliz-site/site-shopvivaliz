@@ -8,5 +8,9 @@
     "additionalDirectories": [
       "C:\\Users\\FRED\\site-shopvivaliz\\.vscode"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "codex-mesh-bridge",
+    "google-ads-readonly"
+  ]
 }
