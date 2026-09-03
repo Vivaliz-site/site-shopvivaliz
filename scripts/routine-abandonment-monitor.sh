@@ -44,6 +44,8 @@ tmp_flagged=$(mktemp)
 echo "[" > "$tmp_flagged"
 first=1
 
+tmp_units=$(mktemp)
+if systemctl list-units --all --type=service,timer --no-legend > "$tmp_units" 2>/dev/null; then
 while IFS= read -r unit; do
   unit=$(echo "$unit" | awk '{print $1}')
   [[ -z "$unit" ]] && continue
@@ -61,14 +63,18 @@ while IFS= read -r unit; do
 EOF
   flagged_count=$((flagged_count + 1))
   log "ABANDONED_CANDIDATE unit=$unit reason=$reason"
-done < <(systemctl list-units --all --type=service,timer --no-legend 2>/dev/null | awk '{print $1}' | grep -i '^shopvivaliz-' || true)
+done < <(awk 'tolower($1) ~ /^shopvivaliz-/ { print $1 }' "$tmp_units")
+fi
+rm -f "$tmp_units"
 
 # Jobs `at` pendentes com nome suspeito (oauth/click/verify/probe one-shot esquecido).
 if command -v atq >/dev/null 2>&1; then
+  tmp_atq=$(mktemp)
+  if atq > "$tmp_atq" 2>/dev/null; then
   while IFS= read -r line; do
     [[ -z "$line" ]] && continue
     job_id=$(echo "$line" | awk '{print $1}')
-    job_cmd=$(at -c "$job_id" 2>/dev/null | grep -iE 'oauth|click|verify|probe' | head -1)
+    job_cmd=$(at -c "$job_id" 2>/dev/null | awk 'tolower($0) ~ /oauth|click|verify|probe/ { print; exit }')
     if [[ -n "$job_cmd" ]]; then
       reviewed_count=$((reviewed_count + 1))
       if [[ $first -eq 0 ]]; then echo "," >> "$tmp_flagged"; fi
@@ -79,7 +85,9 @@ EOF
       flagged_count=$((flagged_count + 1))
       log "ABANDONED_CANDIDATE unit=at-job-$job_id reason=pending_at_job_matches_auth_bypass_pattern"
     fi
-  done < <(atq 2>/dev/null || true)
+  done < "$tmp_atq"
+  fi
+  rm -f "$tmp_atq"
 fi
 
 echo "]" >> "$tmp_flagged"
@@ -113,5 +121,4 @@ if [[ $flagged_count -gt 0 ]]; then
   exit 1
 else
   echo "OK: nenhuma rotina abandonada detectada."
-  exit 0
 fi

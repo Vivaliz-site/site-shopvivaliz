@@ -103,5 +103,4 @@ if ($flagged.Count -gt 0) {
     exit 1
 } else {
     Write-Output "OK: nenhuma rotina abandonada detectada."
-    exit 0
 }
