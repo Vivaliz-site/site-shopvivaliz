@@ -4,11 +4,11 @@ set -euo pipefail
 pipeline='.github/workflows/master-production-pipeline.yml'
 gate='.github/workflows/quality-gate.yml'
 
-grep -Fq "--exclude=.github" "$pipeline"
-grep -Fq "--exclude=.codex" "$pipeline"
-grep -Fq "--exclude=.claude" "$pipeline"
-grep -Fq "--exclude=docs" "$pipeline"
-grep -Fq "--exclude=tests" "$pipeline"
+grep -Fq -- "--exclude=.github" "$pipeline"
+grep -Fq -- "--exclude=.codex" "$pipeline"
+grep -Fq -- "--exclude=.claude" "$pipeline"
+grep -Fq -- "--exclude=docs" "$pipeline"
+grep -Fq -- "--exclude=tests" "$pipeline"
 grep -Fq 'catalog_service_changed=false' "$pipeline"
 grep -Fq 'amazon_service_changed=false' "$pipeline"
 grep -Fq 'cmp -s "$release/scripts/install-catalog-sync-service.sh" "$previous/scripts/install-catalog-sync-service.sh"' "$pipeline"
