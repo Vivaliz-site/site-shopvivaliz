@@ -68,8 +68,18 @@ if (strpos($runner, '(((Get-Date).ToUniversalTime() - $script:LastTransportCheck
     fwrite(STDERR, "transport liveness check is not throttled\n");
     exit(1);
 }
-if (!preg_match('/function Test-BrokerTransportEstablished.*?\} catch \{ return \$true \}/s', $runner)) {
-    fwrite(STDERR, "transport liveness check does not fail open on query error\n");
+// Fail open on a REAL query error, but not on the ordinary "zero
+// established connections right now" case -- Get-NetTCPConnection reports
+// that as a suppressed non-terminating error too (verified live: "No
+// matching MSFT_NetTCPConnection objects found..."), not just an empty
+// result, so a naive try/-ErrorAction Stop/catch{return $true} would
+// silently swallow every real disconnection and make this check inert.
+if (!preg_match('/function Test-BrokerTransportEstablished.*?-ErrorVariable queryError.*?No matching .\* objects found.*?return \$false\s*\n\}/s', $runner)) {
+    fwrite(STDERR, "transport liveness check does not distinguish a real error from an empty result\n");
+    exit(1);
+}
+if (!preg_match('/function Test-BrokerTransportEstablished.*?\n\}/s', $runner, $fnMatch) || strpos($fnMatch[0], '-ErrorAction Stop') !== false) {
+    fwrite(STDERR, "-ErrorAction Stop in the function would treat 'zero connections' as an exception\n");
     exit(1);
 }
 if (strpos($runner, '-not $script:DegradedSinceUtc -and -not $script:TransportDegradedSinceUtc') === false) {

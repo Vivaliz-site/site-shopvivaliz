@@ -238,13 +238,21 @@ jobs:
                   }
               auth = is_true(values.get('AUTH_REQUIRED'))
               provider_connected = is_true(values.get('PROVIDER_CONNECTED'))
+              # Windows structural health: process/task fields only. The
+              # SERVICE_* keys below belong to vm_probe's systemd-based
+              # check (see the near-identical block further down in this
+              # file) and Windows status scripts never emit them, so this
+              # was always False here regardless of actual health --
+              # confirmed present on main before this PR, not introduced
+              # by it, but this PR's own repair_mode/recovery labeling now
+              # depends on it being correct.
               structurally_healthy = (
                   is_true(values.get('DEVICE_STATE_EXISTS'))
-                  and values.get('SERVICE_ENABLED') == 'enabled'
-                  and values.get('SERVICE_ACTIVE') == 'active'
-                  and values.get('SERVICE_USER') == 'ubuntu'
                   and values.get('CANONICAL_AGENT_COUNT') == '1'
                   and values.get('NONCANONICAL_AGENT_COUNT') == '0'
+                  and is_true(values.get('TASK_EXISTS'))
+                  and values.get('TASK_LOGON_TYPE', '').lower() == 's4u'
+                  and values.get('TASK_RUN_LEVEL', '').lower() == 'highest'
               )
               if auth:
                   recovery = 'blocked_by_provider_auth'
