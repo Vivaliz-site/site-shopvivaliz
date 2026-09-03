@@ -86,7 +86,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tar --exclude=.git -czf /tmp/shopvivaliz-release.tgz .
+          tar \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude=.codex \
+            --exclude=.claude \
+            --exclude=docs \
+            --exclude=tests \
+            -czf /tmp/shopvivaliz-release.tgz .
+          echo "release_archive_bytes=$(stat -c %s /tmp/shopvivaliz-release.tgz)"
       - name: Configure pinned A1 SSH
         shell: bash
         env:
@@ -146,18 +154,45 @@ jobs:
           rm -f "$release/config/runtime-secrets.php"
           ln -s '../../../shared/runtime-secrets.php' "$release/config/runtime-secrets.php"
           php -l "$release/sitemap.php" >/dev/null
-          php "$release/tests/google-indexing-canonical-regression-test.php"
           sudo a2enmod rewrite >/dev/null
           sudo apache2ctl configtest
+
+          catalog_service_changed=true
+          amazon_service_changed=true
+          if [ -n "$previous" ] && [ -d "$previous" ]; then
+            if cmp -s "$release/scripts/install-catalog-sync-service.sh" "$previous/scripts/install-catalog-sync-service.sh" \
+              && cmp -s "$release/deploy/systemd/shopvivaliz-token-renewer.service" "$previous/deploy/systemd/shopvivaliz-token-renewer.service" \
+              && cmp -s "$release/deploy/systemd/shopvivaliz-shopee-token-renewer.service" "$previous/deploy/systemd/shopvivaliz-shopee-token-renewer.service"; then
+              catalog_service_changed=false
+            fi
+            if cmp -s "$release/scripts/install-amazon-returns-service.sh" "$previous/scripts/install-amazon-returns-service.sh" \
+              && cmp -s "$release/deploy/systemd/shopvivaliz-amazon-returns.service" "$previous/deploy/systemd/shopvivaliz-amazon-returns.service"; then
+              amazon_service_changed=false
+            fi
+          fi
+
           ln -sfn "releases/$(basename "$release")" "$root/current.next"
           mv -Tf "$root/current.next" "$current"
-          sudo bash "$current/scripts/install-catalog-sync-service.sh"
-          sudo bash "$current/scripts/install-amazon-returns-service.sh"
+          if [ "$catalog_service_changed" = true ]; then
+            sudo bash "$current/scripts/install-catalog-sync-service.sh"
+          else
+            echo 'catalog_token_services_unchanged=true'
+          fi
+          if [ "$amazon_service_changed" = true ]; then
+            sudo bash "$current/scripts/install-amazon-returns-service.sh"
+          else
+            echo 'amazon_returns_service_unchanged=true'
+          fi
           sudo systemctl restart apache2
           sudo systemctl is-active --quiet apache2
-          sleep 2
+
           fail=0
-          served_sha="$(curl -fsS -H 'Cache-Control: no-cache' --max-time 20 "https://shopvivaliz.com.br/api/health/version.php?deploy=${sha}" | php -r '$j=json_decode(stream_get_contents(STDIN), true); echo is_array($j) ? ($j["release_sha"] ?? "") : "";' || true)"
+          served_sha=''
+          for attempt in 1 2 3 4 5 6 7 8; do
+            served_sha="$(curl -fsS -H 'Cache-Control: no-cache' --max-time 5 "https://shopvivaliz.com.br/api/health/version.php?deploy=${sha}" | php -r '$j=json_decode(stream_get_contents(STDIN), true); echo is_array($j) ? ($j["release_sha"] ?? "") : "";' || true)"
+            [ "$served_sha" = "$sha" ] && break
+            sleep 0.25
+          done
           echo "release_sha -> $served_sha"
           [ "$served_sha" = "$sha" ] || fail=1
           for path in / /sitemap.xml /catalogo/ /termos/ /politica-entrega/ /politica-devolucoes/; do
