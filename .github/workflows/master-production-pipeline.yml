@@ -116,11 +116,7 @@ jobs:
           release_dir="/home/ubuntu/shopvivaliz-deploy/releases/$(date -u +%Y%m%d-%H%M%S)-${DEPLOY_SHA:0:8}"
           previous="$($ssh_cmd ubuntu@163.176.103.253 'readlink -f /home/ubuntu/shopvivaliz-deploy/current 2>/dev/null || true')"
           $ssh_cmd ubuntu@163.176.103.253 "command -v rsync >/dev/null && mkdir -p '$release_dir'"
-          link_dest=()
-          if [ -n "$previous" ]; then
-            link_dest=("--link-dest=$previous")
-          fi
-          rsync -a --delete --link-dest="${previous:-/nonexistent}" \
+          rsync -a --checksum --delete --link-dest="${previous:-/nonexistent}" \
             --exclude=.git \
             --exclude=.github \
             --exclude=.codex \
