@@ -17,6 +17,7 @@ $RefreshPersistFailurePattern = 'SESSION_REFRESH_PERSIST_FAILED'
 $AuthGraceSeconds = 300
 $DegradedRestartSeconds = 180
 $MarkerRefreshSeconds = 30
+$TransportCheckIntervalSeconds = 10
 $script:ProviderEntryPoint = $null
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
@@ -96,7 +97,9 @@ $authStarted = $null
 $readySeenAfterAuth = $false
 $connected = $false
 $degradedSinceUtc = $null
+$transportDegradedSinceUtc = $null
 $lastMarkerWriteUtc = [datetime]::MinValue
+$lastTransportCheckUtc = [datetime]::MinValue
 $lastDeviceStateWriteUtc = if ($DeviceFile -and (Test-Path -LiteralPath $DeviceFile)) { (Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc } else { [datetime]::MinValue }
 $forcedExitCode = $null
 $rc = 1
@@ -106,6 +109,31 @@ function Write-ConnectionMarker {
     $utc = (Get-Date).ToUniversalTime()
     @('state=connected', ('updated_utc=' + $utc.ToString('o')), ('provider_pid=' + $proc.Id)) | Out-File -FilePath $ConnectedMarker -Force -Encoding ascii
     $script:lastMarkerWriteUtc = $utc
+}
+
+<#
+Real transport-liveness check, independent of the provider's own log text.
+Deliberately NOT an instant/strict gate (that pattern was already tried and
+reverted in the supervisor for being fragile -- see
+tests/fredwin-desktop-commander-stale-transport-contract-test.php, which
+forbids Get-NetTCPConnection there): this runs throttled every
+TransportCheckIntervalSeconds and only feeds the SAME tolerant
+degraded/recovery grace window (DegradedRestartSeconds) the pattern-based
+detector already uses, so a brief reconnect blip is not mistaken for a dead
+channel. It closes the actual gap reported in production: a connection that
+dies without ever printing one of DegradedPattern/RecoverableChannelPattern
+left the marker refreshing forever on a bare timer, so the device looked
+"healthy" locally while showing offline server-side. Fails OPEN (assumes
+connected) on a query error so a transient CIM hiccup cannot itself trigger
+a restart.
+#>
+function Test-BrokerTransportEstablished([int]$ProcessId) {
+    try {
+        $conns = @(Get-NetTCPConnection -OwningProcess $ProcessId -State Established -ErrorAction SilentlyContinue | Where-Object {
+            $_.RemotePort -eq 443 -and $_.RemoteAddress -notin @('127.0.0.1', '::1')
+        })
+        return ($conns.Count -gt 0)
+    } catch { return $true }
 }
 
 try {
@@ -146,6 +174,7 @@ try {
                 $readySeenAfterAuth = $false
                 $connected = $false
                 $degradedSinceUtc = $null
+                $transportDegradedSinceUtc = $null
                 Remove-Item -LiteralPath $ConnectedMarker -Force -ErrorAction SilentlyContinue
                 '' | Out-File -FilePath $CooldownFile -Force -Encoding ascii
                 Log 'AUTH_REQUIRED provider authorization grace started'
@@ -158,6 +187,7 @@ try {
             } else {
                 $connected = $true
                 $degradedSinceUtc = $null
+                $transportDegradedSinceUtc = $null
                 Remove-Item -LiteralPath $CooldownFile -Force -ErrorAction SilentlyContinue
                 Write-ConnectionMarker
                 Log 'Remote Desktop Commander broker ready observed'
@@ -171,6 +201,7 @@ try {
                 $readySeenAfterAuth = $false
                 $connected = $true
                 $degradedSinceUtc = $null
+                $transportDegradedSinceUtc = $null
                 Remove-Item -LiteralPath $CooldownFile -Force -ErrorAction SilentlyContinue
                 Write-ConnectionMarker
                 Log 'Remote Desktop Commander provider authorization completed during grace'
@@ -208,6 +239,17 @@ try {
             Write-ConnectionMarker
             Log 'SESSION_REFRESH_PERSISTED=false reason=provider_persistence_failure'
         }
+        if ($connected -and -not $proc.HasExited -and (((Get-Date).ToUniversalTime() - $lastTransportCheckUtc).TotalSeconds -ge $TransportCheckIntervalSeconds)) {
+            $lastTransportCheckUtc = (Get-Date).ToUniversalTime()
+            $transportUp = Test-BrokerTransportEstablished $proc.Id
+            if (-not $transportUp -and -not $transportDegradedSinceUtc) {
+                $transportDegradedSinceUtc = (Get-Date).ToUniversalTime()
+                Log 'Provider channel degradation observed (no established transport); recovery grace started'
+            } elseif ($transportUp -and $transportDegradedSinceUtc) {
+                $transportDegradedSinceUtc = $null
+                Log 'Provider channel recovery observed (transport)'
+            }
+        }
         if ($degradedSinceUtc) {
             $degradedAge = ((Get-Date).ToUniversalTime() - $degradedSinceUtc).TotalSeconds
             if ($degradedAge -ge $DegradedRestartSeconds) {
@@ -218,7 +260,17 @@ try {
                 break
             }
         }
-        if ($connected -and -not $degradedSinceUtc -and (((Get-Date).ToUniversalTime() - $lastMarkerWriteUtc).TotalSeconds -ge $MarkerRefreshSeconds)) {
+        if ($transportDegradedSinceUtc) {
+            $transportDegradedAge = ((Get-Date).ToUniversalTime() - $transportDegradedSinceUtc).TotalSeconds
+            if ($transportDegradedAge -ge $DegradedRestartSeconds) {
+                Log ('Provider channel recovery timed out seconds=' + [math]::Round($transportDegradedAge) + ' reason=no_established_transport')
+                $forcedExitCode = 23
+                try { & taskkill.exe /PID $proc.Id /T /F 2>$null | Out-Null } catch { }
+                try { $proc.WaitForExit(10000) | Out-Null } catch { }
+                break
+            }
+        }
+        if ($connected -and -not $degradedSinceUtc -and -not $transportDegradedSinceUtc -and (((Get-Date).ToUniversalTime() - $lastMarkerWriteUtc).TotalSeconds -ge $MarkerRefreshSeconds)) {
             Write-ConnectionMarker
         }
 
