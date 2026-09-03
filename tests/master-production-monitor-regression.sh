@@ -16,7 +16,8 @@ grep -Fq 'sha="$1"' <<<"$monitor"
 grep -Fq '/home/ubuntu/shopvivaliz-deploy/current/.release-sha' <<<"$monitor"
 grep -Fq 'test "$served_sha" = "$sha"' <<<"$monitor"
 grep -Fq 'https://shopvivaliz.com.br${path}' <<<"$monitor"
-grep -Fq "grep -q '<urlset'" <<<"$monitor"
+grep -Fq 'sitemap_body="$(curl -sS' <<<"$monitor"
+grep -Fq '[[ "$sitemap_body" == *'\''<urlset'\''* ]]' <<<"$monitor"
 
 # mod_php keeps OPcache in the long-lived Apache parent process. A graceful
 # reload is insufficient after the stable `current` symlink changes targets.

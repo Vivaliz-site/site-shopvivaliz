@@ -192,5 +192,6 @@ jobs:
             echo "$path -> $code"
             test "$code" = 200
           done
-          grep -q '<urlset' <(curl -sS -H 'Cache-Control: no-cache' --max-time 20 https://shopvivaliz.com.br/sitemap.xml)
+          sitemap_body="$(curl -sS -H 'Cache-Control: no-cache' --max-time 20 https://shopvivaliz.com.br/sitemap.xml)"
+          [[ "$sitemap_body" == *'<urlset'* ]]
           REMOTE
