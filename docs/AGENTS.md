@@ -879,3 +879,42 @@ email/telefone antes do hash, sem nenhum efeito em layout renderizado).
   Qualquer arquivo de debug ad hoc deve ser removido do release/produção assim
   que o diagnóstico terminar — nunca commitado.
 
+### 2026-09-03 — Fase 1 (nenhum SAFE-T write oficial), merge/deploy do fix do bridge, e bug de CI no diff base do `workflow_dispatch` (Sonnet)
+
+- **Confirmado com evidência (não suposição):** a Finances API `v2024-06-19` expõe
+  só `GET /finances/2024-06-19/transactions` (leitura; inclui dados tipo
+  `SAFETReimbursementEvent` para observar crédito já concedido). Nenhum dos 53
+  modelos oficiais em `amzn/selling-partner-api-models` (checado em
+  2026-09-03) tem `claims`/`safe-t`/`a-to-z`/`returns`. Não existe submissão de
+  SAFE-T via SP-API — o desenho já aprovado neste repo (adapter de browser do
+  Seller Central) é o canal correto, não um workaround.
+- **PR #1381 mesclada e implantada:** o fix de `HTTP_AUTHORIZATION` (entrada
+  de 2026-09-02 acima) estava commitado e no `origin` desde ontem mas sem PR
+  aberta — só depois disso o bridge Windows (`seller-central-bridge-worker.mjs`,
+  polling `api/amazon-returns/bridge.php` a cada ~30s) parou de logar
+  `worker_error` a cada tentativa. Validado ao vivo pós-deploy com
+  `curl -H "Authorization: Bearer $(cat bridge.token)"` contra produção:
+  passou de 401 para 400 `INVALID_OPERATION` (token aceito, só a ação de
+  teste é que é inválida — prova real, não inferência de log).
+- **Bug real encontrado no próprio CI:** `.github/workflows/repository-governance.yml`,
+  step "Resolve comparison base" — o fallback para `workflow_dispatch`
+  (`base="$(git rev-parse HEAD^)"`) pega só o primeiro-pai de um commit de
+  merge, um ponto arbitrário anterior ao merge com `main` em vez de onde a
+  branch realmente divergiu. Como esse workflow também roda via
+  `workflow_dispatch` como "run sombra" quando a run real de `pull_request`
+  fica presa em `action_required`, isso gerava falso-positivo de "changed
+  automation surfaces" em arquivos que a PR nunca tocou (ex.:
+  `master-production-pipeline.yml`, reescrito por outro agente no `main` na
+  mesma janela). Corrigido para `git merge-base HEAD origin/main` nesse
+  fallback. Qualquer novo caso de "check falhando em arquivo que a PR não
+  mexeu" merece conferir esse mesmo padrão antes de assumir que é regressão
+  real.
+- **Estado real em produção 2026-09-03 ~04:43 UTC:** 15 casos rastreados,
+  `pending_outbox=0`, todos os 15 com decisão do scheduler mas **nenhum**
+  ainda `SAFE_T_READY`/enfileirado — não por bug, mas porque `refund_initiator`
+  segue `UNKNOWN` em 13/15 (ver entrada 2026-09-02 acima: são exatamente os
+  casos sem linha correspondente no relatório de devoluções, por definição).
+  Write flags (`SAFE_T_WRITE`/`APPEAL_WRITE`/`SUPPORT_WRITE`) seguem `0` em
+  produção — piloto controlado ainda não foi habilitado, isso é intencional
+  (ver rollout no spec), não uma lacuna deste fix.
+
