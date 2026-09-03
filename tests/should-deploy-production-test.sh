@@ -7,7 +7,7 @@ check() {
   local expected="$1"
   shift
   local actual
-  actual="$(printf '%s\n' "$@" | "$script")"
+  actual="$(printf '%s\n' "$@" | bash "$script")"
   if [ "$actual" != "$expected" ]; then
     echo "expected=$expected actual=$actual paths=$*" >&2
     exit 1
