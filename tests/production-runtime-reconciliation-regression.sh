@@ -9,6 +9,12 @@ grep -Fq -- "--exclude=.codex" "$pipeline"
 grep -Fq -- "--exclude=.claude" "$pipeline"
 grep -Fq -- "--exclude=docs" "$pipeline"
 grep -Fq -- "--exclude=tests" "$pipeline"
+grep -Fq 'rsync -a --delete --link-dest=' "$pipeline"
+grep -Fq 'release_dir=' "$pipeline"
+if grep -Fq 'shopvivaliz-release.tgz' "$pipeline"; then
+  echo 'production deploy still transfers the full tar archive' >&2
+  exit 1
+fi
 grep -Fq 'catalog_service_changed=false' "$pipeline"
 grep -Fq 'amazon_service_changed=false' "$pipeline"
 grep -Fq 'cmp -s "$release/scripts/install-catalog-sync-service.sh" "$previous/scripts/install-catalog-sync-service.sh"' "$pipeline"
