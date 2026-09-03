@@ -21,4 +21,6 @@ jobs:
           tools: composer:v2
           coverage: none
       - name: Validate repository change
+        env:
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
         run: bash scripts/repository-governance-validate.sh ci
