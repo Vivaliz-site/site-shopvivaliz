@@ -58,7 +58,7 @@ require_once __DIR__ . '/webhook-processor.php';
 
 ```
 ┌─────────────────────────────────────┐
-│  SITE (dev.shopvivaliz.com.br)      │
+│  SITE (shopvivaliz.com.br)      │
 │  ================================    │
 │  1. Cliente faz pedido               │
 │  2. api/orders/create.php            │

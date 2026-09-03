@@ -180,19 +180,27 @@ function ai_studio_catalog_context_brief(array $productContext): string
     return $parts === [] ? '' : implode(' | ', $parts);
 }
 
-function ai_studio_product_is_canonical_active(array $product): bool
+function ai_studio_product_matches_canonical_active(array $product, array $activeProducts): bool
 {
     $sku = trim((string)($product['sku'] ?? ''));
     $olistId = trim((string)($product['olist_id'] ?? $product['olist_product_id'] ?? ''));
     if ($sku === '' && $olistId === '') return false;
-    foreach (svcr_products() as $active) {
+    foreach ($activeProducts as $active) {
         if (!is_array($active)) continue;
         $activeSku = trim((string)($active['sku'] ?? ''));
-        $activeOlistId = trim((string)($active['olist_product_id'] ?? $active['id'] ?? ''));
         if ($sku !== '' && $activeSku !== '' && hash_equals($activeSku, $sku)) return true;
+    }
+    if ($sku !== '') return false;
+    foreach ($activeProducts as $active) {
+        if (!is_array($active)) continue;
+        $activeOlistId = trim((string)($active['olist_product_id'] ?? $active['id'] ?? ''));
         if ($olistId !== '' && $activeOlistId !== '' && hash_equals($activeOlistId, $olistId)) return true;
     }
     return false;
+}
+function ai_studio_product_is_canonical_active(array $product): bool
+{
+    return ai_studio_product_matches_canonical_active($product, svcr_products());
 }
 
 /** @return array{name:string,description:string,image_ref:string,sku:string,olist_id:string,category:string,brand:string,model:string,color:string,size:string,material:string}|null */

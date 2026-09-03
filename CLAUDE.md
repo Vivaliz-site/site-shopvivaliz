@@ -52,7 +52,7 @@ de pagamentos ativo) que a realidade atual é:
 
 | VM | IP | Papel real | Como confirmar |
 |---|---|---|---|
-| **VM1** `shopvivaliz-ai` | `137.131.156.17` | **DEV** — usado só para envio de e-mail (mei-mg-email) e testes. `ServerName dev.shopvivaliz.com.br` no Apache. **NÃO é produção**, apesar do nome "original". | `apache2ctl -S` mostra `dev.shopvivaliz.com.br`; `shopvivaliz_access.log` não tem tráfego real do Cloudflare |
+| **VM1** `shopvivaliz-ai` | `137.131.156.17` | **DEV** — usado só para envio de e-mail (mei-mg-email) e testes. host legado `dev.shopvivaliz.com.br` (não usar como dependência web). **NÃO é produção**, apesar do nome "original". | `apache2ctl -S` mostra `dev.shopvivaliz.com.br`; `shopvivaliz_access.log` não tem tráfego real do Cloudflare |
 | **VM2** `shopvivaliz-micro-2` | `136.248.69.116` | **PRODUÇÃO REAL** — é quem serve `shopvivaliz.com.br` de verdade. | `shopvivaliz_access.log` mostra hits reais de IPs Cloudflare (`104.22.x`, `172.68-71.x`) pedindo `/produto/...`, `/api/ml/webhook`; `CSP` enforced ao vivo bate com `.htaccess`; deploy atual (`readlink current`) tem os 10 commits das Rodadas 1-10 + fix da fila de pagamentos na ancestralidade (confirmado via `git merge-base --is-ancestor`) |
 | `shopvivaliz-free-a1` | *(pendente)* | Destino final planejado quando a Oracle liberar capacidade Ampere A1.Flex (2 OCPU/12GB) — ver seção de retry abaixo. Quando for provisionada, o corte deve ser feito **a partir da VM2** (produção real), não da VM1. | Bloqueada por "Out of host capacity" da Oracle |
 

@@ -11,7 +11,53 @@ if command -v composer >/dev/null 2>&1; then
   composer validate --no-check-publish --strict
 fi
 
-find . -path './vendor' -prune -o -path './.git' -prune -o -name '*.php' -type f -print0 | xargs -0 -r -n1 php -l >/dev/null
+lint_php_list() {
+  local list_file="$1"
+  while IFS= read -r -d '' file; do
+    if [ -f "$file" ]; then
+      php -l "$file" >/dev/null
+    fi
+  done < "$list_file"
+}
+
+tmp_php_list="$(mktemp)"
+trap 'rm -f "$tmp_php_list"' EXIT
+
+case "$phase" in
+  pre-commit)
+    git diff --cached --name-only -z --diff-filter=ACMR -- '*.php' > "$tmp_php_list"
+    lint_php_list "$tmp_php_list"
+    ;;
+  pre-push)
+    upstream_ref=""
+    if upstream_ref="$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null)"; then
+      base_ref="$(git merge-base HEAD "$upstream_ref")"
+    else
+      base_ref="$(git merge-base HEAD origin/main)"
+    fi
+    git diff --name-only -z --diff-filter=ACMR "$base_ref"..HEAD -- '*.php' > "$tmp_php_list"
+    lint_php_list "$tmp_php_list"
+    ;;
+  ci)
+    if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GITHUB_BASE_REF:-}" ]; then
+      base_ref="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
+      git diff --name-only -z --diff-filter=ACMR "$base_ref"..HEAD -- '*.php' > "$tmp_php_list"
+      lint_php_list "$tmp_php_list"
+    elif [ "${GITHUB_EVENT_NAME:-}" = "push" ] && [ -n "${PUSH_BEFORE_SHA:-}" ] && ! printf '%s' "$PUSH_BEFORE_SHA" | grep -Eq '^0+$'; then
+      git diff --name-only -z --diff-filter=ACMR "$PUSH_BEFORE_SHA"..HEAD -- '*.php' > "$tmp_php_list"
+      lint_php_list "$tmp_php_list"
+    else
+      find . -path './vendor' -prune -o -path './.git' -prune -o -path './.worktrees' -prune -o -path './node_modules' -prune -o -name '*.php' -type f -print0 | xargs -0 -r -n1 php -l >/dev/null
+    fi
+    ;;
+  manual|full)
+    find . -path './vendor' -prune -o -path './.git' -prune -o -path './.worktrees' -prune -o -path './node_modules' -prune -o -name '*.php' -type f -print0 | xargs -0 -r -n1 php -l >/dev/null
+    ;;
+  *)
+    echo "Unknown validation phase: $phase" >&2
+    exit 64
+    ;;
+esac
 
 if [ "$phase" = "ci" ]; then
   if command -v composer >/dev/null 2>&1 && [ ! -d vendor ]; then

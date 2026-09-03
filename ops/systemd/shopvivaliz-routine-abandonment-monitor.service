@@ -1,0 +1,8 @@
+[Unit]
+Description=ShopVivaliz Routine Abandonment Monitor (one-shot, deterministic, no AI calls)
+After=network.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/home/ubuntu/site-shopvivaliz/scripts/routine-abandonment-monitor.sh

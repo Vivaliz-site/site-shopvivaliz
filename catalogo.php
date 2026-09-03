@@ -632,6 +632,10 @@ $svNavCurrent = 'catalogo';
                 $contactUrl = sv_catalog_contact_url($product);
                 $stock      = (int)($product['stock'] ?? 0);
                 $hasPrice   = (float)$product['price'] > 0 && $stock > 0;
+                $productIdAttr = (string)($product['olist_product_id'] ?? '');
+                if ($productIdAttr === '') {
+                    $productIdAttr = (string)$product['sku'];
+                }
                 $payload = rawurlencode(json_encode([
                     'sku'              => $product['sku'],
                     'name'             => $product['name'],
@@ -641,9 +645,9 @@ $svNavCurrent = 'catalogo';
                     'stock'            => $stock,
                 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
                 ?>
-                <article class="product-card<?= $stock <= 0 ? ' is-out-of-stock' : '' ?>">
+                <article class="product-card<?= $stock <= 0 ? ' is-out-of-stock' : '' ?>" data-sku="<?= sv_catalog_esc($product['sku']) ?>" data-product-id="<?= sv_catalog_esc($productIdAttr) ?>">
                     <?php $cardImages = array_values(array_unique(array_filter(array_merge([$image], is_array($product['images'] ?? null) ? $product['images'] : [])))); ?>
-                    <a class="product-image" href="<?= sv_catalog_esc($productUrl) ?>" data-images="<?= sv_catalog_esc(json_encode(array_slice($cardImages, 0, 10), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>">
+                    <a class="product-image" href="<?= sv_catalog_esc($productUrl) ?>" data-images="<?= sv_catalog_esc(json_encode(array_slice($cardImages, 0, 10), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)) ?>" data-sku="<?= sv_catalog_esc($product['sku']) ?>" data-product-id="<?= sv_catalog_esc($productIdAttr) ?>">
                         <img src="<?= sv_catalog_esc($image) ?>" alt="<?= sv_catalog_esc($product['name']) ?>" width="400" height="400" loading="lazy" decoding="async" onerror="this.src='<?= sv_catalog_default_image() ?>'">
                         <?php if ($stock <= 0): ?><span class="out-of-stock-badge">Esgotado</span><?php endif; ?>
                     </a>
@@ -668,9 +672,9 @@ $svNavCurrent = 'catalogo';
                             </div>
                         <?php endif; ?>
                         <div class="card-actions">
-                            <a class="btn btn-secondary card-link" href="<?= sv_catalog_esc($productUrl) ?>">Ver detalhes</a>
+                            <a class="btn btn-secondary card-link" href="<?= sv_catalog_esc($productUrl) ?>" data-sku="<?= sv_catalog_esc($product['sku']) ?>" data-product-id="<?= sv_catalog_esc($productIdAttr) ?>">Ver detalhes</a>
                             <?php if ($hasPrice): ?>
-                                <button class="buy-button" type="button" data-product="<?= sv_catalog_esc($payload) ?>">Comprar agora</button>
+                                <button class="buy-button" type="button" data-product="<?= sv_catalog_esc($payload) ?>" data-sku="<?= sv_catalog_esc($product['sku']) ?>" data-product-id="<?= sv_catalog_esc($productIdAttr) ?>">Comprar agora</button>
                             <?php elseif ($stock <= 0): ?>
                                 <button class="btn btn-disabled card-link" type="button" disabled>Esgotado</button>
                             <?php else: ?>

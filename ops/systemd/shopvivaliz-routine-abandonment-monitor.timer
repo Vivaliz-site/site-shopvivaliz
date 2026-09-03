@@ -1,0 +1,10 @@
+[Unit]
+Description=Run ShopVivaliz Routine Abandonment Monitor every 30 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=30min
+Unit=shopvivaliz-routine-abandonment-monitor.service
+
+[Install]
+WantedBy=timers.target

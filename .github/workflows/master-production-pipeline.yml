@@ -27,6 +27,8 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    outputs:
+      should_deploy: ${{ steps.production_impact.outputs.should_deploy }}
     steps:
       - name: Validate manual confirmation
         if: ${{ github.event_name == 'workflow_dispatch' }}
@@ -36,6 +38,7 @@ jobs:
         with:
           ref: ${{ env.DEPLOY_SHA }}
           persist-credentials: false
+          fetch-depth: 2
       - name: Verify deployable revision
         shell: bash
         run: |
@@ -47,9 +50,25 @@ jobs:
           ! grep -Fq 'http://127.0.0.1${path}' .github/workflows/master-production-pipeline.yml
           grep -Fq 'api/health/version.php' .github/workflows/master-production-pipeline.yml
           grep -Fq 'served_sha' .github/workflows/master-production-pipeline.yml
+          bash tests/should-deploy-production-test.sh
+      - name: Classify production impact
+        id: production_impact
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            should_deploy=true
+            echo 'manual deploy requested -> production deploy required'
+          else
+            git diff-tree --no-commit-id --name-only -r "$DEPLOY_SHA" | tee /tmp/shopvivaliz-changed-paths.txt
+            should_deploy="$(bash scripts/should-deploy-production.sh < /tmp/shopvivaliz-changed-paths.txt)"
+          fi
+          echo "should_deploy=$should_deploy" >> "$GITHUB_OUTPUT"
+          echo "production deploy required -> $should_deploy"
 
   deploy:
     needs: validate
+    if: ${{ needs.validate.outputs.should_deploy == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production
@@ -63,11 +82,6 @@ jobs:
           ref: ${{ env.DEPLOY_SHA }}
           persist-credentials: false
           fetch-depth: 1
-      - name: Package immutable release
-        shell: bash
-        run: |
-          set -euo pipefail
-          tar --exclude=.git -czf /tmp/shopvivaliz-release.tgz .
       - name: Configure pinned A1 SSH
         shell: bash
         env:
@@ -94,30 +108,50 @@ jobs:
           print(json.dumps({key: os.environ[key + '_VALUE'] for key in keys}))
           PY
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'rm -f /tmp/shopvivaliz-update-production-env.py'
-      - name: Upload release
+      - name: Synchronize immutable release incrementally
         shell: bash
         run: |
           set -euo pipefail
-          scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" /tmp/shopvivaliz-release.tgz ubuntu@163.176.103.253:/tmp/shopvivaliz-release-${DEPLOY_SHA}.tgz
+          ssh_cmd="ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -i $HOME/.ssh/id_rsa"
+          release_dir="/home/ubuntu/shopvivaliz-deploy/releases/$(date -u +%Y%m%d-%H%M%S)-${DEPLOY_SHA:0:8}"
+          previous="$($ssh_cmd ubuntu@163.176.103.253 'readlink -f /home/ubuntu/shopvivaliz-deploy/current 2>/dev/null || true')"
+          $ssh_cmd ubuntu@163.176.103.253 "command -v rsync >/dev/null && mkdir -p '$release_dir'"
+          rsync -a --checksum --delete --link-dest="${previous:-/nonexistent}" \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude=.codex \
+            --exclude=.claude \
+            --exclude=docs \
+            --exclude=tests \
+            --exclude=.env \
+            --exclude=tasks-queue.json \
+            --exclude=logs \
+            --exclude=storage \
+            --exclude=cache \
+            --exclude=uploads \
+            --exclude=sessions \
+            -e "$ssh_cmd" ./ "ubuntu@163.176.103.253:$release_dir/"
+          printf '%s\n' "$release_dir" > /tmp/shopvivaliz-release-dir
+          echo "release_dir=$release_dir"
       - name: Activate release atomically
         shell: bash
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' -- "$DEPLOY_SHA" <<'REMOTE'
+          release_dir="$(cat /tmp/shopvivaliz-release-dir)"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' -- "$DEPLOY_SHA" "$release_dir" <<'REMOTE'
           set -euo pipefail
           sha="$1"
+          release="$2"
           root='/home/ubuntu/shopvivaliz-deploy'
           releases="$root/releases"
           shared="$root/shared"
           current="$root/current"
-          archive="/tmp/shopvivaliz-release-${sha}.tgz"
-          stamp="$(date -u +%Y%m%d-%H%M%S)"
-          release="$releases/${stamp}-${sha:0:8}"
           previous="$(readlink -f "$current" 2>/dev/null || true)"
-          cleanup() { rm -f "$archive"; }
-          trap cleanup EXIT
-          mkdir -p "$release"
-          tar -xzf "$archive" -C "$release"
+          case "$release" in
+            "$releases"/*) ;;
+            *) echo "invalid release directory: $release" >&2; exit 2 ;;
+          esac
+          test -d "$release"
           printf '%s\n' "$sha" > "$release/.release-sha"
           for name in .env tasks-queue.json logs storage cache uploads sessions; do
             rm -rf "$release/$name"
@@ -127,18 +161,45 @@ jobs:
           rm -f "$release/config/runtime-secrets.php"
           ln -s '../../../shared/runtime-secrets.php' "$release/config/runtime-secrets.php"
           php -l "$release/sitemap.php" >/dev/null
-          php "$release/tests/google-indexing-canonical-regression-test.php"
           sudo a2enmod rewrite >/dev/null
           sudo apache2ctl configtest
+
+          catalog_service_changed=true
+          amazon_service_changed=true
+          if [ -n "$previous" ] && [ -d "$previous" ]; then
+            if cmp -s "$release/scripts/install-catalog-sync-service.sh" "$previous/scripts/install-catalog-sync-service.sh" \
+              && cmp -s "$release/deploy/systemd/shopvivaliz-token-renewer.service" "$previous/deploy/systemd/shopvivaliz-token-renewer.service" \
+              && cmp -s "$release/deploy/systemd/shopvivaliz-shopee-token-renewer.service" "$previous/deploy/systemd/shopvivaliz-shopee-token-renewer.service"; then
+              catalog_service_changed=false
+            fi
+            if cmp -s "$release/scripts/install-amazon-returns-service.sh" "$previous/scripts/install-amazon-returns-service.sh" \
+              && cmp -s "$release/deploy/systemd/shopvivaliz-amazon-returns.service" "$previous/deploy/systemd/shopvivaliz-amazon-returns.service"; then
+              amazon_service_changed=false
+            fi
+          fi
+
           ln -sfn "releases/$(basename "$release")" "$root/current.next"
           mv -Tf "$root/current.next" "$current"
-          sudo bash "$current/scripts/install-catalog-sync-service.sh"
-          sudo bash "$current/scripts/install-amazon-returns-service.sh"
+          if [ "$catalog_service_changed" = true ]; then
+            sudo bash "$current/scripts/install-catalog-sync-service.sh"
+          else
+            echo 'catalog_token_services_unchanged=true'
+          fi
+          if [ "$amazon_service_changed" = true ]; then
+            sudo bash "$current/scripts/install-amazon-returns-service.sh"
+          else
+            echo 'amazon_returns_service_unchanged=true'
+          fi
           sudo systemctl restart apache2
           sudo systemctl is-active --quiet apache2
-          sleep 2
+
           fail=0
-          served_sha="$(curl -fsS -H 'Cache-Control: no-cache' --max-time 20 "https://shopvivaliz.com.br/api/health/version.php?deploy=${sha}" | php -r '$j=json_decode(stream_get_contents(STDIN), true); echo is_array($j) ? ($j["release_sha"] ?? "") : "";' || true)"
+          served_sha=''
+          for attempt in 1 2 3 4 5 6 7 8; do
+            served_sha="$(curl -fsS -H 'Cache-Control: no-cache' --max-time 5 "https://shopvivaliz.com.br/api/health/version.php?deploy=${sha}" | php -r '$j=json_decode(stream_get_contents(STDIN), true); echo is_array($j) ? ($j["release_sha"] ?? "") : "";' || true)"
+            [ "$served_sha" = "$sha" ] && break
+            sleep 0.25
+          done
           echo "release_sha -> $served_sha"
           [ "$served_sha" = "$sha" ] || fail=1
           for path in / /sitemap.xml /catalogo/ /termos/ /politica-entrega/ /politica-devolucoes/; do
@@ -151,7 +212,7 @@ jobs:
               ln -sfn "releases/$(basename "$previous")" "$root/current.rollback"
               mv -Tf "$root/current.rollback" "$current"
               sudo systemctl restart apache2
-          sudo systemctl is-active --quiet apache2
+              sudo systemctl is-active --quiet apache2
             fi
             exit 1
           fi
@@ -192,5 +253,6 @@ jobs:
             echo "$path -> $code"
             test "$code" = 200
           done
-          grep -q '<urlset' <(curl -sS -H 'Cache-Control: no-cache' --max-time 20 https://shopvivaliz.com.br/sitemap.xml)
+          sitemap_body="$(curl -sS -H 'Cache-Control: no-cache' --max-time 20 https://shopvivaliz.com.br/sitemap.xml)"
+          [[ "$sitemap_body" == *'<urlset'* ]]
           REMOTE

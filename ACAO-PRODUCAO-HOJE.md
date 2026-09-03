@@ -19,7 +19,7 @@ Resultado: Nenhum pedido chega ao ERP/Supplier
 
 **Opção A: Auto-renovação (tente primeiro)**
 ```bash
-curl -X POST http://dev.shopvivaliz.com.br/api/olist/refresh-token.php \
+curl -X POST https://shopvivaliz.com.br/api/olist/refresh-token.php \
   -H "Content-Type: application/json"
 
 # Se resposta for { "status": "ok", "token": "ey..." }
@@ -103,7 +103,7 @@ sudo systemctl restart apache2
 ### Validação
 ```bash
 # Teste 1: Enviar email de teste
-curl -X POST http://dev.shopvivaliz.com.br/api/mail/test.php \
+curl -X POST https://shopvivaliz.com.br/api/mail/test.php \
   -d "to=seu-email@teste.com"
 
 # Verificar inbox (deve chegar em 30 segundos)
