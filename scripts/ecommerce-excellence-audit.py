@@ -96,6 +96,21 @@ def tracked_files() -> list[pathlib.Path]:
     return [ROOT / item for item in result.split("\0") if item]
 
 
+def changed_tracked_files(base: str, head: str) -> list[pathlib.Path]:
+    result = subprocess.run(
+        ["git", "diff", "--name-only", "-z", "--diff-filter=ACMR", base, head],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    ).stdout.decode("utf-8", errors="replace")
+    tracked = {str(path.relative_to(ROOT)).replace("\\", "/") for path in tracked_files()}
+    files = []
+    for item in result.split("\0"):
+        if item and item in tracked:
+            files.append(ROOT / item)
+    return files
+
+
 def add(findings: list[Finding], severity: str, code: str, message: str, path: pathlib.Path | str = "") -> None:
     relative = ""
     if path:
@@ -106,19 +121,21 @@ def add(findings: list[Finding], severity: str, code: str, message: str, path: p
     findings.append(Finding(severity, code, message, relative))
 
 
-def validate_static() -> dict[str, Any]:
+def validate_static(files: list[pathlib.Path] | None = None, *, scope: str = "full") -> dict[str, Any]:
     findings: list[Finding] = []
-    files = tracked_files()
+    all_files = tracked_files()
+    files = all_files if files is None else files
     extension_counts: collections.Counter[str] = collections.Counter()
     hashes: dict[str, list[str]] = collections.defaultdict(list)
     total_bytes = 0
     empty_files = 0
     validated = collections.Counter()
 
-    relative_set = {str(path.relative_to(ROOT)).replace("\\", "/") for path in files}
-    for required in sorted(REQUIRED_FILES):
-        if required not in relative_set:
-            add(findings, "blocker", "required_file_missing", f"Required runtime file is missing: {required}", required)
+    relative_set = {str(path.relative_to(ROOT)).replace("\\", "/") for path in all_files}
+    if scope == "full":
+        for required in sorted(REQUIRED_FILES):
+            if required not in relative_set:
+                add(findings, "blocker", "required_file_missing", f"Required runtime file is missing: {required}", required)
 
     reference_pattern = re.compile(r"(?:src|href)\s*=\s*[\"'](/[^\"'?#]+)", re.I)
     css_url_pattern = re.compile(r"url\(\s*[\"']?(/[^\"')?#]+)", re.I)
@@ -200,17 +217,21 @@ def validate_static() -> dict[str, Any]:
                 if candidate not in relative_set and not (ROOT / candidate).exists():
                     add(findings, "warning", "missing_local_asset", f"Referenced local asset not found: {reference}", path)
 
-    duplicate_groups = [group for group in hashes.values() if len(group) > 1]
-    for group in duplicate_groups[:100]:
-        if all(item.startswith(("vendor/", "includes/PHPMailer/")) for item in group):
-            continue
-        add(findings, "info", "duplicate_content", "Identical tracked files: " + ", ".join(group[:8]))
+    duplicate_groups: list[list[str]] = []
+    if scope == "full":
+        duplicate_groups = [group for group in hashes.values() if len(group) > 1]
+        for group in duplicate_groups[:100]:
+            if all(item.startswith(("vendor/", "includes/PHPMailer/")) for item in group):
+                continue
+            add(findings, "info", "duplicate_content", "Identical tracked files: " + ", ".join(group[:8]))
 
     severity_counts = collections.Counter(item.severity for item in findings)
     return {
         "mode": "static",
+        "scope": scope,
         "generated_at": int(time.time()),
-        "tracked_files": len(files),
+        "tracked_files": len(all_files),
+        "scanned_files": len(files),
         "total_bytes": total_bytes,
         "empty_files": empty_files,
         "extensions": dict(extension_counts.most_common()),
@@ -409,7 +430,9 @@ def write_report(report: dict[str, Any], output: pathlib.Path) -> None:
         "# Ecommerce Excellence Audit",
         "",
         f"- Mode: `{report.get('mode')}`",
+        f"- Scope: `{report.get('scope', 'n/a')}`",
         f"- Generated: `{report.get('generated_at')}`",
+        f"- Scanned files: `{report.get('scanned_files', 'n/a')}`",
         f"- Blockers: `{report.get('severity', {}).get('blocker', 0)}`",
         f"- Warnings: `{report.get('severity', {}).get('warning', 0)}`",
         f"- Informational: `{report.get('severity', {}).get('info', 0)}`",
@@ -428,12 +451,26 @@ def write_report(report: dict[str, Any], output: pathlib.Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", choices=("static", "live"), required=True)
+    parser.add_argument("--scope", choices=("full", "changed"), default="full")
+    parser.add_argument("--base", default="")
+    parser.add_argument("--head", default="HEAD")
     parser.add_argument("--base-url", default="https://shopvivaliz.com.br")
     parser.add_argument("--output", default="artifacts/ecommerce-excellence-audit.json")
     parser.add_argument("--fail-on", choices=("never", "blocker", "warning"), default="blocker")
     args = parser.parse_args()
 
-    report = validate_static() if args.mode == "static" else validate_live(args.base_url)
+    if args.mode == "static":
+        if args.scope == "changed":
+            if not args.base:
+                print("--base is required with --scope changed", file=sys.stderr)
+                return 2
+            report = validate_static(changed_tracked_files(args.base, args.head), scope="changed")
+            report["base"] = args.base
+            report["head"] = args.head
+        else:
+            report = validate_static(scope="full")
+    else:
+        report = validate_live(args.base_url)
     write_report(report, pathlib.Path(args.output))
     print(json.dumps({k: v for k, v in report.items() if k != "findings"}, ensure_ascii=False, indent=2))
     counts = report.get("severity", {})

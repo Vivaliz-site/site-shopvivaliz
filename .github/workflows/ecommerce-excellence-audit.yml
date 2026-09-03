@@ -32,7 +32,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           persist-credentials: false
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -53,14 +53,47 @@ jobs:
           tar -xzf "/tmp/${archive}" -C /tmp gitleaks
           sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
 
-      - name: Run full tracked-file audit
+      - name: Resolve static audit scope
+        id: audit-scope
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          PUSH_HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          python3 scripts/ecommerce-excellence-audit.py \
-            --mode static \
-            --output artifacts/ecommerce-static.json \
-            --fail-on never
+          scope="full"
+          base=""
+          head="$PUSH_HEAD_SHA"
+          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_BASE_SHA" ] && [ -n "$PR_HEAD_SHA" ]; then
+            scope="changed"
+            base="$PR_BASE_SHA"
+            head="$PR_HEAD_SHA"
+          elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE_SHA" ] && ! printf '%s' "$PUSH_BEFORE_SHA" | grep -Eq '^0+$'; then
+            scope="changed"
+            base="$PUSH_BEFORE_SHA"
+            head="$PUSH_HEAD_SHA"
+          fi
+          echo "scope=$scope" >> "$GITHUB_OUTPUT"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          printf 'Static audit scope=%s base=%s head=%s\n' "$scope" "$base" "$head"
+
+      - name: Run scoped tracked-file audit
+        shell: bash
+        env:
+          AUDIT_SCOPE: ${{ steps.audit-scope.outputs.scope }}
+          AUDIT_BASE: ${{ steps.audit-scope.outputs.base }}
+          AUDIT_HEAD: ${{ steps.audit-scope.outputs.head }}
+        run: |
+          set -euo pipefail
+          args=(--mode static --scope "$AUDIT_SCOPE" --output artifacts/ecommerce-static.json --fail-on never)
+          if [ "$AUDIT_SCOPE" = "changed" ]; then
+            args+=(--base "$AUDIT_BASE" --head "$AUDIT_HEAD")
+          fi
+          python3 scripts/ecommerce-excellence-audit.py "${args[@]}"
           python3 scripts/refine-ecommerce-audit-report.py artifacts/ecommerce-static.json
 
           python3 - artifacts/ecommerce-static.json <<'PY'
@@ -81,12 +114,24 @@ jobs:
 
       - name: Scan all tracked content for real secrets
         shell: bash
+        env:
+          AUDIT_SCOPE: ${{ steps.audit-scope.outputs.scope }}
+          AUDIT_BASE: ${{ steps.audit-scope.outputs.base }}
+          AUDIT_HEAD: ${{ steps.audit-scope.outputs.head }}
         run: |
           set -euo pipefail
-          gitleaks dir . \
-            --config .gitleaks.toml \
-            --redact \
-            --verbose
+          if [ "$AUDIT_SCOPE" = "changed" ]; then
+            gitleaks git . \
+              --log-opts="${AUDIT_BASE}..${AUDIT_HEAD}" \
+              --config .gitleaks.toml \
+              --redact \
+              --verbose
+          else
+            gitleaks dir . \
+              --config .gitleaks.toml \
+              --redact \
+              --verbose
+          fi
 
       - name: Upload static audit evidence
         if: always()
