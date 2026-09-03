@@ -12,6 +12,8 @@ if (-not $env:APPDATA -and $env:USERPROFILE) { $env:APPDATA = Join-Path $env:USE
 if (-not $env:LOCALAPPDATA -and $env:USERPROFILE) { $env:LOCALAPPDATA = Join-Path $env:USERPROFILE 'AppData\Local' }
 $DeviceFile = if ($env:USERPROFILE) { Join-Path (Join-Path $env:USERPROFILE '.desktop-commander-device') 'device.json' } else { $null }
 $CooldownFile = 'C:\site-shopvivaliz\logs\desktop-commander-auth-required.cooldown'
+$ConnectedMarker = 'C:\site-shopvivaliz\logs\desktop-commander-provider-connected.marker'
+$MarkerStaleSeconds = 240
 
 function Test-DeviceStateNewerThanCooldown {
     if (-not $DeviceFile -or -not (Test-Path -LiteralPath $DeviceFile) -or -not (Test-Path -LiteralPath $CooldownFile)) { return $false }
@@ -77,3 +79,8 @@ if ($task) {
 }
 $authRequired = ((Test-Path -LiteralPath $CooldownFile) -and -not (Test-DeviceStateNewerThanCooldown))
 Write-Output ('AUTH_REQUIRED=' + $authRequired)
+$markerExists = Test-Path -LiteralPath $ConnectedMarker
+$markerAge = if ($markerExists) { [math]::Round((((Get-Date).ToUniversalTime() - (Get-Item -LiteralPath $ConnectedMarker).LastWriteTimeUtc).TotalSeconds), 1) } else { -1 }
+Write-Output ('MONITOR_MARKER_EXISTS=' + $markerExists)
+Write-Output ('MONITOR_MARKER_AGE_SECONDS=' + $markerAge)
+Write-Output ('PROVIDER_CONNECTED=' + [bool]($markerExists -and $markerAge -le $MarkerStaleSeconds))

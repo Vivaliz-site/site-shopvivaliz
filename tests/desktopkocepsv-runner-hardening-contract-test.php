@@ -48,6 +48,34 @@ foreach (['shopvivaliz-dc-', 'RedirectStandardOutput $outFile', 'Read-CapturedPr
         exit(1);
     }
 }
+
+// Same real transport-liveness requirement as fredwin's runner (see
+// tests/fredwin-desktop-commander-stale-transport-contract-test.php for the
+// full rationale): a silently dead channel must not refresh the marker
+// forever just because no recognized log line was ever printed.
+foreach ([
+    'Get-NetTCPConnection', 'Test-BrokerTransportEstablished',
+    '$TransportCheckIntervalSeconds = 10', '$script:TransportDegradedSinceUtc',
+    'no established transport', 'reason=no_established_transport',
+    'Provider channel recovery observed (transport)',
+] as $needle) {
+    if (strpos($runner, $needle) === false) {
+        fwrite(STDERR, "runner missing real transport liveness check: {$needle}\n");
+        exit(1);
+    }
+}
+if (strpos($runner, '(((Get-Date).ToUniversalTime() - $script:LastTransportCheckUtc).TotalSeconds -ge $TransportCheckIntervalSeconds)') === false) {
+    fwrite(STDERR, "transport liveness check is not throttled\n");
+    exit(1);
+}
+if (!preg_match('/function Test-BrokerTransportEstablished.*?\} catch \{ return \$true \}/s', $runner)) {
+    fwrite(STDERR, "transport liveness check does not fail open on query error\n");
+    exit(1);
+}
+if (strpos($runner, '-not $script:DegradedSinceUtc -and -not $script:TransportDegradedSinceUtc') === false) {
+    fwrite(STDERR, "marker refresh does not respect transport degradation\n");
+    exit(1);
+}
 foreach ([
     'Deploy-OperationalFiles',
     'Set-PrivateAcl',
