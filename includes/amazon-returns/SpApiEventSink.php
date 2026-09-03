@@ -197,7 +197,11 @@ final class SvAmazonSpApiEventSink
         $stmt = $db->prepare(
             "INSERT INTO amazon_return_cases (amazon_order_id,amazon_order_item_id,marketplace_id,sku,asin,quantity_ordered,program,refund_initiator,physical_status,state,created_at,updated_at) "
             . "VALUES (:order_id,:item_id,:marketplace_id,:sku,:asin,:quantity,:program,'UNKNOWN','NOT_RECEIVED','POLICY_REVIEW_REQUIRED',UTC_TIMESTAMP(),UTC_TIMESTAMP()) "
-            . "ON DUPLICATE KEY UPDATE marketplace_id=VALUES(marketplace_id),sku=COALESCE(VALUES(sku),sku),asin=COALESCE(VALUES(asin),asin),quantity_ordered=VALUES(quantity_ordered),program=VALUES(program),updated_at=UTC_TIMESTAMP()"
+            // program only advances forward: a routine resync that returns no
+            // program evidence (common for older orders where Orders API omits
+            // fulfillment.fulfilledBy) must never downgrade an already-known
+            // classification back to UNKNOWN.
+            . "ON DUPLICATE KEY UPDATE marketplace_id=VALUES(marketplace_id),sku=COALESCE(VALUES(sku),sku),asin=COALESCE(VALUES(asin),asin),quantity_ordered=VALUES(quantity_ordered),program=IF(VALUES(program)<>'UNKNOWN',VALUES(program),program),updated_at=UTC_TIMESTAMP()"
         );
 
         $stmt->execute([
