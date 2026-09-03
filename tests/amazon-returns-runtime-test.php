@@ -66,6 +66,10 @@ $due=SvAmazonReturnsRuntime::dueTasks($state,new DateTimeImmutable('2026-09-01T1
 $service=(string)file_get_contents(__DIR__.'/../deploy/systemd/shopvivaliz-amazon-returns.service');
 foreach(['User=www-data','Group=www-data','WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/current','EnvironmentFile=-/home/ubuntu/shopvivaliz-deploy/shared/.env','ExecStart=/usr/bin/php /home/ubuntu/shopvivaliz-deploy/current/workers/amazon-returns/daemon.php','Restart=always','NoNewPrivileges=true'] as $needle) rtAssert(str_contains($service,$needle),'Systemd service missing '.$needle);
 $daemon=(string)file_get_contents(__DIR__.'/../workers/amazon-returns/daemon.php'); rtAssert(str_contains($daemon,'--once'),'Daemon must support one-shot validation.'); rtAssert(str_contains($daemon,'AMAZON_RETURNS_RUNTIME_STATE_FILE'),'Daemon state path must be configurable/outside repo.'); rtAssert(str_contains($daemon,"sellerCentralBridgeMode() === 'polling'"),'Linux daemon must not claim Seller Central outbox in remote polling mode.');
+rtAssert(str_contains($daemon, "require_once __DIR__ . '/../../includes/amazon-returns/ReturnsReport.php'"), 'Daemon must load official returns report ingestion.');
+rtAssert(str_contains($daemon, "'pending_report'"), 'Daemon must retain a pending report across cycles.');
+rtAssert(str_contains($daemon, 'getReport(') && str_contains($daemon, 'downloadReportDocument('), 'Daemon must complete the Reports lifecycle.');
+rtAssert(str_contains($daemon, 'SvAmazonReturnsReport::parse') && str_contains($daemon, 'persistRows'), 'Daemon must parse and persist completed reports.');
 $installer=(string)file_get_contents(__DIR__.'/../scripts/install-amazon-returns-service.sh');
 foreach(['shopvivaliz-amazon-returns.service','AMAZON_RETURNS_ENABLED','AMAZON_RETURNS_SAFE_T_WRITE','systemctl enable --now'] as $needle) rtAssert(str_contains($installer,$needle),'Amazon returns installer missing '.$needle);
 $pipeline=(string)file_get_contents(__DIR__.'/../.github/workflows/master-production-pipeline.yml');

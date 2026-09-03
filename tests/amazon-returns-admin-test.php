@@ -34,6 +34,10 @@ $summary = source('admin/amazon-returns/api/summary.php');
 foreach (['unclassified','eligible_without_action','expired_without_treatment','credit_without_reconciliation'] as $gate) {
     adAssert(str_contains($summary, $gate), 'Summary must expose health gate ' . $gate);
 }
+adAssert(str_contains($summary, "WHEN program='UNKNOWN' THEN 1"), 'Unknown program must remain a critical classification gate.');
+adAssert(str_contains($summary, "program IN ('STANDARD','FBA_ONSITE','DELIVERY_BY_AMAZON')"), 'Only SAFE-T-managed programs require initiator and seller debit for the classification gate.');
+adAssert(!str_contains($summary, "refund_initiator='UNKNOWN' OR program='UNKNOWN' OR seller_debit_at IS NULL"), 'Known FBA cases must not be treated as unexplained SAFE-T cases.');
+
 foreach (['at_risk','eligible_now','safe_t_submitted','denied','appeal','support','approved_awaiting_credit','recovered','loss'] as $bucket) {
     adAssert(str_contains($summary, $bucket), 'Summary must expose money/queue bucket ' . $bucket);
 }

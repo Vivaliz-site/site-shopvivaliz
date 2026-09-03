@@ -25,12 +25,15 @@ final class SvAmazonSpApiEventSink
             }
         }
         $fulfillment = is_array($order['fulfillment'] ?? null) ? $order['fulfillment'] : [];
-        // 'fulfilledBy' is the real Orders v2026-01-01 field (AMAZON|MERCHANT).
-        // 'channel'/'fulfillmentChannel' are kept as fallbacks for other callers/fixtures.
-        $fulfilledBy = strtoupper(trim((string)(
-            $fulfillment['fulfilledBy'] ?? $fulfillment['channel'] ?? $fulfillment['fulfillmentChannel'] ?? ''
-        )));
-        if (in_array($fulfilledBy, ['AMAZON','MERCHANT','MFN','SELLER'], true)) return SvAmazonReturnPrograms::STANDARD;
+        // 'fulfilledBy' is the real Orders v2026-01-01 field (AMAZON|MERCHANT). AMAZON means
+        // standard FBA (Amazon-fulfilled, Amazon-managed reimbursement -- not SAFE-T-managed),
+        // which must stay distinct from seller-fulfilled STANDARD. 'channel'/'fulfillmentChannel'
+        // are kept as fallbacks for other callers/fixtures that predate the real field name.
+        $fulfilledBy = strtoupper(trim((string)($fulfillment['fulfilledBy'] ?? '')));
+        if ($fulfilledBy === 'AMAZON') return SvAmazonReturnPrograms::FBA;
+        if ($fulfilledBy === 'MERCHANT') return SvAmazonReturnPrograms::STANDARD;
+        $channel = strtoupper(trim((string)($fulfillment['channel'] ?? $fulfillment['fulfillmentChannel'] ?? '')));
+        if (in_array($channel, ['MERCHANT','MFN','SELLER'], true)) return SvAmazonReturnPrograms::STANDARD;
         return SvAmazonReturnPrograms::UNKNOWN;
     }
 

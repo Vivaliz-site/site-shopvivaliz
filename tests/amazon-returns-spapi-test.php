@@ -25,25 +25,25 @@ final class AmazonReturnsFakeClient {
         if ($path === '/finances/2024-06-19/transactions') {
             return ['status'=>200,'request_id'=>'req-fin-1','data'=>['transactions'=>[['transactionId'=>'txn-1','transactionType'=>'Refund','postedDate'=>'2026-08-01T12:00:00Z','relatedIdentifiers'=>[['name'=>'ORDER_ID','value'=>'702-1234567-1234567']]]]]];
         }
-        if ($path === '/reports/2021-06-30/reports') {
+        if ($path === '/reports/2021-06-30/reports' && $method === 'POST') {
             return ['status'=>202,'request_id'=>'req-report-1','data'=>['reportId'=>'RPT-1']];
         }
-        if ($path === '/reports/2021-06-30/reports/RPT-1') {
-            return ['status'=>200,'request_id'=>'req-report-status-1','data'=>[
-                'reportId'=>'RPT-1','processingStatus'=>'DONE','reportDocumentId'=>'DOC-1',
-            ]];
+        if ($path === '/reports/2021-06-30/reports/RPT-1' && $method === 'GET') {
+            return ['status'=>200,'request_id'=>'req-report-status-1','data'=>['reportId'=>'RPT-1','processingStatus'=>'DONE','reportDocumentId'=>'DOC-1','dataStartTime'=>'2026-08-01T00:00:00Z','dataEndTime'=>'2026-09-01T00:00:00Z']];
         }
-        if ($path === '/reports/2021-06-30/documents/DOC-1') {
-            return ['status'=>200,'request_id'=>'req-report-doc-1','data'=>[
-                'url'=>'https://example-report-bucket.test/DOC-1','compressionAlgorithm'=>'GZIP',
-            ]];
+        if ($path === '/reports/2021-06-30/documents/DOC-1' && $method === 'GET') {
+            return ['status'=>200,'request_id'=>'req-report-doc-1','data'=>['url'=>'https://signed.example.test/report','compressionAlgorithm'=>'GZIP']];
         }
         throw new RuntimeException('Unexpected fake request: ' . $method . ' ' . $path);
     }
 }
 
 $client = new AmazonReturnsFakeClient();
-$api = new SvAmazonReturnsSpApi($client);
+$downloads = [];
+$api = new SvAmazonReturnsSpApi($client, static function(string $url) use (&$downloads): string {
+    $downloads[] = $url;
+    return gzencode("Order ID\tOrder Item ID\n702-1234567-1234567\titem-1\n");
+});
 $order = $api->syncOrder('702-1234567-1234567');
 spSame('/orders/2026-01-01/orders/702-1234567-1234567', $client->calls[0]['path'], 'Orders v2026-01-01 path required.');
 spSame('req-order-1', $order['request_id'], 'Order request ID must be retained.');
@@ -80,12 +80,22 @@ $apiWithDownloader = new SvAmazonReturnsSpApi($client, function (string $url) us
     return $gzippedFixture;
 });
 $downloaded = $apiWithDownloader->downloadReturnsReport('DOC-1');
-spSame(['https://example-report-bucket.test/DOC-1'], $downloaderCalls, 'Report document download must fetch the presigned URL.');
-spSame("Order ID\tOrder Item ID\n701-1-1\t100-1\n", $downloaded, 'GZIP report documents must be decompressed transparently.');
+spSame(['https://signed.example.test/report'], $downloaderCalls, 'Legacy report document download must fetch the presigned URL.');
+spSame("Order ID\tOrder Item ID\n701-1-1\t100-1\n", $downloaded, 'GZIP report documents must be decompressed transparently (legacy downloadReturnsReport path).');
+
+$status = $api->getReport('RPT-1');
+spSame('DONE', $status['processing_status'], 'Report lifecycle must expose terminal DONE status.');
+spSame('DOC-1', $status['report_document_id'], 'Completed report must expose its document ID.');
+$document = $api->downloadReportDocument('DOC-1');
+spSame("Order ID\tOrder Item ID\n702-1234567-1234567\titem-1\n", $document['content'], 'GZIP report document must download and decompress in memory (cursor-based getReport/downloadReportDocument path).');
+spSame(['https://signed.example.test/report'], $downloads, 'Signed report URL must be used only by the document transport.');
+spAssert(!array_key_exists('url', $document), 'Signed report URL must not escape the transport boundary.');
 
 spSame('DELIVERY_BY_AMAZON', SvAmazonSpApiEventSink::programFromOrder($order), 'DBA program must normalize deterministically.');
 spSame('STANDARD', SvAmazonSpApiEventSink::programFromOrder(['programs'=>[],'fulfillment'=>['channel'=>'MERCHANT']]), 'Merchant fulfillment (fixture field name) maps to STANDARD.');
-spSame('STANDARD', SvAmazonSpApiEventSink::programFromOrder(['programs'=>[],'fulfillment'=>['fulfilledBy'=>'AMAZON']]), 'Real Orders v2026-01-01 fulfilledBy=AMAZON (standard FBA) maps to STANDARD.');
+spSame('FBA', SvAmazonSpApiEventSink::programFromOrder(['programs'=>[],'fulfillment'=>['fulfilledBy'=>'AMAZON']]), 'Orders v2026 AMAZON fulfillment (standard FBA) maps to FBA, distinct from seller-fulfilled STANDARD.');
+spSame('STANDARD', SvAmazonSpApiEventSink::programFromOrder(['programs'=>[],'fulfillment'=>['fulfilledBy'=>'MERCHANT']]), 'Orders v2026 MERCHANT fulfillment maps to STANDARD.');
+spSame('DELIVERY_BY_AMAZON', SvAmazonSpApiEventSink::programFromOrder(['programs'=>['DELIVERY_BY_AMAZON'],'fulfillment'=>['fulfilledBy'=>'AMAZON']]), 'Explicit DBA program takes precedence over fulfilledBy.');
 spSame('UNKNOWN', SvAmazonSpApiEventSink::programFromOrder(['programs'=>[],'fulfillment'=>[]]), 'Missing fulfillment data must stay UNKNOWN rather than guessing.');
 $refundFact = SvAmazonSpApiEventSink::refundObservation([[
     'transaction_id'=>'txn-refund','transaction_type'=>'Refund','transaction_status'=>'RELEASED',
