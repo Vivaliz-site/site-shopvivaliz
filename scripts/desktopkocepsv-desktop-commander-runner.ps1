@@ -12,6 +12,7 @@ $RefreshPersistAttemptPattern = 'SESSION_REFRESH_PERSIST_ATTEMPTED'
 $RefreshPersistFailurePattern = 'SESSION_REFRESH_PERSIST_FAILED'
 $DegradedRestartSeconds = 180
 $MarkerRefreshSeconds = 30
+$TransportCheckIntervalSeconds = 10
 
 function Ensure-ProfileEnvironment {
     if (-not $env:USERPROFILE) {
@@ -124,6 +125,8 @@ $script:ProviderProcess = $null
 $script:Connected = $false
 $script:AuthRequired = $false
 $script:DegradedSinceUtc = $null
+$script:TransportDegradedSinceUtc = $null
+$script:LastTransportCheckUtc = [datetime]::MinValue
 $script:PersistenceDegraded = $false
 $script:LastMarkerWriteUtc = [datetime]::MinValue
 $script:LastDeviceStateWriteUtc = if (Test-Path -LiteralPath $DeviceFile) { (Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc } else { [datetime]::MinValue }
@@ -141,11 +144,32 @@ function Write-ConnectionMarker {
     $script:LastMarkerWriteUtc = $utc
 }
 
+<#
+Real transport-liveness check, independent of the provider's own log text.
+Deliberately throttled + tolerant (not an instant/strict gate -- that
+pattern was already tried and reverted in the fredwin supervisor for being
+fragile; see tests/fredwin-desktop-commander-stale-transport-contract-test.php)
+so a brief reconnect blip is not mistaken for a dead channel. It feeds the
+same DegradedRestartSeconds grace window used by the pattern-based
+detector, closing the gap where a connection dying without ever printing
+one of DegradedPattern/RecoverableChannelPattern left the marker refreshing
+forever on a bare timer. Fails OPEN (assumes connected) on a query error.
+#>
+function Test-BrokerTransportEstablished([int]$ProcessId) {
+    try {
+        $conns = @(Get-NetTCPConnection -OwningProcess $ProcessId -State Established -ErrorAction SilentlyContinue | Where-Object {
+            $_.RemotePort -eq 443 -and $_.RemoteAddress -notin @('127.0.0.1', '::1')
+        })
+        return ($conns.Count -gt 0)
+    } catch { return $true }
+}
+
 function Observe-ProviderLine([string]$Line) {
     if ([string]::IsNullOrWhiteSpace($Line)) { return }
     if ((-not $script:Connected) -and ($Line -match $ConnectedPattern)) {
         $script:Connected = $true
         $script:DegradedSinceUtc = $null
+        $script:TransportDegradedSinceUtc = $null
         Remove-Item -LiteralPath $CooldownFile -Force -ErrorAction SilentlyContinue
         if (Test-Path -LiteralPath $DeviceFile) { $script:LastDeviceStateWriteUtc = (Get-Item -LiteralPath $DeviceFile).LastWriteTimeUtc }
         Write-ConnectionMarker
@@ -238,6 +262,17 @@ try {
             $forcedExitCode = 20
             Stop-ProviderTree
         }
+        if ($script:Connected -and $script:ProviderProcess -and -not $script:ProviderProcess.HasExited -and (((Get-Date).ToUniversalTime() - $script:LastTransportCheckUtc).TotalSeconds -ge $TransportCheckIntervalSeconds)) {
+            $script:LastTransportCheckUtc = (Get-Date).ToUniversalTime()
+            $transportUp = Test-BrokerTransportEstablished $script:ProviderProcess.Id
+            if (-not $transportUp -and -not $script:TransportDegradedSinceUtc) {
+                $script:TransportDegradedSinceUtc = (Get-Date).ToUniversalTime()
+                Log 'Provider channel degradation observed (no established transport); recovery grace started'
+            } elseif ($transportUp -and $script:TransportDegradedSinceUtc) {
+                $script:TransportDegradedSinceUtc = $null
+                Log 'Provider channel recovery observed (transport)'
+            }
+        }
         if ($script:DegradedSinceUtc) {
             $degradedAge = ((Get-Date).ToUniversalTime() - $script:DegradedSinceUtc).TotalSeconds
             if ($degradedAge -ge $DegradedRestartSeconds) {
@@ -246,7 +281,15 @@ try {
                 Stop-ProviderTree
             }
         }
-        if ($script:Connected -and -not $script:DegradedSinceUtc -and (((Get-Date).ToUniversalTime() - $script:LastMarkerWriteUtc).TotalSeconds -ge $MarkerRefreshSeconds)) {
+        if ($script:TransportDegradedSinceUtc) {
+            $transportDegradedAge = ((Get-Date).ToUniversalTime() - $script:TransportDegradedSinceUtc).TotalSeconds
+            if ($transportDegradedAge -ge $DegradedRestartSeconds) {
+                Log ('Provider channel recovery timed out seconds=' + [math]::Round($transportDegradedAge) + ' reason=no_established_transport')
+                $forcedExitCode = 23
+                Stop-ProviderTree
+            }
+        }
+        if ($script:Connected -and -not $script:DegradedSinceUtc -and -not $script:TransportDegradedSinceUtc -and (((Get-Date).ToUniversalTime() - $script:LastMarkerWriteUtc).TotalSeconds -ge $MarkerRefreshSeconds)) {
             Write-ConnectionMarker
         }
         $script:ProviderProcess.Refresh()

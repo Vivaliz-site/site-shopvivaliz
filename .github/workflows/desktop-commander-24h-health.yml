@@ -105,6 +105,13 @@ jobs:
           php tests/vm-desktop-commander-guardian-contract-test.php
           php tests/desktop-commander-four-host-monitor-contract-test.php
           php tests/desktop-commander-three-host-action-contract-test.php
+          php tests/desktop-commander-provider-connected-health-contract-test.php
+          php tests/desktopkocepsv-recoverable-channel-contract-test.php
+          php tests/desktopkocepsv-runner-hardening-contract-test.php
+          php tests/desktopkocepsv-desktop-commander-supervisor-contract-test.php
+          php tests/desktopkocepsv-launcher-tree-contract-test.php
+          php tests/desktopkocepsv-private-relay-contract-test.php
+          php tests/windows-desktop-commander-stale-cooldown-contract-test.php
 
   runtime:
     if: github.event_name != 'pull_request'
@@ -208,6 +215,7 @@ jobs:
                   and values.get('TASK_LOGON_TYPE', '').lower() == 's4u'
                   and values.get('TASK_RUN_LEVEL', '').lower() == 'highest'
                   and not is_true(values.get('AUTH_REQUIRED'))
+                  and is_true(values.get('PROVIDER_CONNECTED'))
               )
 
           def win_probe(name, port, status_script, supervisor_script, bootstrap_script):
@@ -244,8 +252,8 @@ jobs:
                   recovery = 'provider_disconnected'
               else:
                   recovery = 'not_attempted'
-              if not auth and not structurally_healthy and MAX_REPAIR_ATTEMPTS == 1:
-                  repair_mode = 'InstallTask' if not is_true(values.get('TASK_EXISTS')) else 'Ensure'
+              if not auth and (not structurally_healthy or not provider_connected) and MAX_REPAIR_ATTEMPTS == 1:
+                  repair_mode = 'InstallTask' if not is_true(values.get('TASK_EXISTS')) else 'Restart' if structurally_healthy else 'Ensure'
                   repair = (
                       'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command '
                       '"& { $ErrorActionPreference=\'Stop\'; Set-Location \'C:\\site-shopvivaliz\'; '
