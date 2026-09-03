@@ -15,7 +15,7 @@ default_agent = "shopvivaliz-release"
 [context]
 language = "pt-BR"
 stack = "PHP 8.3, MySQL 5.7, JavaScript, CSS"
-site_dev = "https://dev.shopvivaliz.com.br"
+site_dev = "https://shopvivaliz.com.br"
 release_policy = "cumulative"
 
 [quality]

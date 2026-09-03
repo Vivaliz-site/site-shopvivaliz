@@ -28,6 +28,32 @@ rbAssert(SvAmazonReturnsRemoteBridge::authorized('server-secret', 'Bearer server
 rbAssert(!SvAmazonReturnsRemoteBridge::authorized('server-secret', 'Bearer wrong'), 'Wrong Bearer token must fail.');
 rbAssert(!SvAmazonReturnsRemoteBridge::authorized('', 'Bearer server-secret'), 'Missing server token must fail closed.');
 
+rbSame(
+    'Bearer server-secret',
+    SvAmazonReturnsRemoteBridge::resolveAuthorizationHeader(['HTTP_AUTHORIZATION' => 'Bearer server-secret'], []),
+    'Authorization must resolve from $_SERVER when present.'
+);
+rbSame(
+    'Bearer server-secret',
+    SvAmazonReturnsRemoteBridge::resolveAuthorizationHeader([], ['Authorization' => 'Bearer server-secret']),
+    'Authorization must fall back to apache_request_headers() when $_SERVER lacks it (the real production bug: Apache mod_php never populated HTTP_AUTHORIZATION for this endpoint).'
+);
+rbSame(
+    'Bearer server-secret',
+    SvAmazonReturnsRemoteBridge::resolveAuthorizationHeader([], ['authorization' => 'Bearer server-secret']),
+    'Apache header fallback must match case-insensitively.'
+);
+rbSame(
+    'Bearer from-server',
+    SvAmazonReturnsRemoteBridge::resolveAuthorizationHeader(['HTTP_AUTHORIZATION' => 'Bearer from-server'], ['Authorization' => 'Bearer from-apache']),
+    'When $_SERVER already has Authorization, it takes precedence over the Apache fallback.'
+);
+rbSame(
+    '',
+    SvAmazonReturnsRemoteBridge::resolveAuthorizationHeader([], []),
+    'Missing Authorization everywhere must resolve to an empty string, not an error.'
+);
+
 $row = [
     'id' => 41,
     'case_id' => 77,
@@ -94,8 +120,7 @@ rbAssert(is_file($windowsWorker), 'Persistent Windows bridge worker must exist.'
 rbAssert(is_file($windowsInstaller), 'Windows bridge installer must exist.');
 $endpointSource = (string)file_get_contents($endpoint);
 rbAssert(str_contains($endpointSource, 'SELLER_CENTRAL_BRIDGE_TOKEN'), 'Bridge endpoint must require server-side token.');
-rbAssert(str_contains($endpointSource, "'REDIRECT_HTTP_AUTHORIZATION'"), 'Bridge endpoint must accept Apache redirected Authorization header.');
-rbAssert(str_contains($endpointSource, 'getallheaders'), 'Bridge endpoint must fall back to case-insensitive getallheaders Authorization lookup.');
+rbAssert(str_contains($endpointSource, 'apache_request_headers'), 'Bridge endpoint must fall back to apache_request_headers() for Authorization (Apache mod_php does not reliably populate $_SERVER[HTTP_AUTHORIZATION]).');
 rbAssert(!str_contains($endpointSource, "\$_GET['token']"), 'Bridge token must never be accepted from query string.');
 $workerSource = (string)file_get_contents($windowsWorker);
 rbAssert(str_contains($workerSource, 'bridge.token'), 'Windows worker must read token from protected file.');

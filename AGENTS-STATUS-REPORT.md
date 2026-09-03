@@ -180,7 +180,7 @@ Tempo de execução/ciclo: ~2 minutos
 - [x] Fila de tarefas dinâmica
 - [ ] Deploy automático ao HostGator (em progresso)
 - [ ] Email notifications (em progresso)
-- [ ] Monitor web (operacional em dev.shopvivaliz.com.br)
+- [ ] Monitor web (operacional em shopvivaliz.com.br)
 
 ---
 

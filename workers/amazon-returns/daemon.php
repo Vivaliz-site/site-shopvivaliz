@@ -232,7 +232,59 @@ final class SvAmazonReturnsDaemon
         if (($gate['status'] ?? '') !== 'READY_NO_RUNTIME_PROVIDER') return $gate;
         $api = new SvAmazonReturnsSpApi();
         $report = $api->requestReturnsReport($now->sub(new DateInterval('P2D')), $now);
-        return ['status'=>'OK','report_id'=>$report['report_id'] ?? null,'request_id'=>$report['request_id'] ?? null];
+        $reportId = (string)($report['report_id'] ?? '');
+        $ingest = $this->pollAndIngestReturnsReport($api, $reportId);
+        return [
+            'status'=>'OK',
+            'report_id'=>$reportId,
+            'request_id'=>$report['request_id'] ?? null,
+            'ingest'=>$ingest,
+        ];
+    }
+
+    /**
+     * Polls a just-requested returns report for a bounded time and, once
+     * DONE, downloads and ingests it. Amazon flat-file reports for a short
+     * (2-day) window typically finish within seconds to a couple of minutes;
+     * if it isn't done within the budget this tick simply reports PENDING —
+     * the next scheduled returns_report tick requests a fresh report anyway,
+     * so nothing is lost by not waiting longer here.
+     *
+     * @return array<string,mixed>
+     */
+    private function pollAndIngestReturnsReport(SvAmazonReturnsSpApi $api, string $reportId): array
+    {
+        if ($reportId === '') return ['status'=>'SKIPPED_NO_REPORT_ID'];
+        $maxAttempts = 12;
+        $sleepSeconds = 10;
+        $processingStatus = '';
+        $documentId = null;
+        for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+            $status = $api->getReportStatus($reportId);
+            $processingStatus = (string)($status['processing_status'] ?? '');
+            if ($processingStatus === 'DONE') {
+                $documentId = $status['report_document_id'] ?? null;
+                break;
+            }
+            if (in_array($processingStatus, ['CANCELLED', 'FATAL'], true)) {
+                return ['status'=>'REPORT_' . $processingStatus, 'report_id'=>$reportId];
+            }
+            if ($attempt < $maxAttempts - 1) sleep($sleepSeconds);
+        }
+        if ($processingStatus !== 'DONE' || !is_string($documentId) || $documentId === '') {
+            return ['status'=>'PENDING', 'report_id'=>$reportId, 'last_processing_status'=>$processingStatus];
+        }
+
+        $content = $api->downloadReturnsReport($documentId);
+        $rows = SvAmazonReturnsReportParser::parse($content);
+        $matched = 0;
+        $applied = 0;
+        foreach ($rows as $row) {
+            $result = SvAmazonSpApiEventSink::persistReturnsReportRow($this->db, $row, $reportId);
+            if ($result['matched']) $matched++;
+            if ($result['applied']) $applied++;
+        }
+        return ['status'=>'INGESTED', 'report_id'=>$reportId, 'rows'=>count($rows), 'matched'=>$matched, 'applied'=>$applied];
     }
 
     /** @return array<string,mixed> */

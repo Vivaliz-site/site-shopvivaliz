@@ -23,17 +23,8 @@ function sv_amz_bridge_reply(array $payload, int $status = 200): never
 
 function sv_amz_bridge_auth_header(): string
 {
-    foreach (['HTTP_AUTHORIZATION', 'REDIRECT_HTTP_AUTHORIZATION'] as $key) {
-        $auth = $_SERVER[$key] ?? '';
-        if (is_string($auth) && trim($auth) !== '') return trim($auth);
-    }
-    $headers = function_exists('getallheaders') ? getallheaders() : [];
-    foreach (is_array($headers) ? $headers : [] as $name => $value) {
-        if (strcasecmp((string)$name, 'Authorization') === 0 && is_string($value)) {
-            return trim($value);
-        }
-    }
-    return '';
+    $apacheHeaders = function_exists('apache_request_headers') ? apache_request_headers() : [];
+    return SvAmazonReturnsRemoteBridge::resolveAuthorizationHeader($_SERVER, is_array($apacheHeaders) ? $apacheHeaders : []);
 }
 
 $expectedToken = getenv('SELLER_CENTRAL_BRIDGE_TOKEN');

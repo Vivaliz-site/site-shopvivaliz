@@ -60,6 +60,15 @@ jobs:
             base="$PR_BASE_SHA"
           elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE_SHA" ] && ! printf '%s' "$PUSH_BEFORE_SHA" | grep -Eq '^0+$'; then
             base="$PUSH_BEFORE_SHA"
+          elif git cat-file -e origin/main^{commit} 2>/dev/null; then
+            # workflow_dispatch (used as a shadow status check when a pull_request
+            # run is stuck action_required) has no PR/push context. HEAD^ used to be
+            # the fallback, but on a merge commit that resolves to the first parent
+            # only, which can be an arbitrary pre-merge point on this branch rather
+            # than where it actually diverged from main -- producing false-positive
+            # "changed automation surfaces" for files this branch never touched.
+            # Compare against where the branch diverged from main instead.
+            base="$(git merge-base HEAD origin/main)"
           else
             base="$(git rev-parse HEAD^)"
           fi

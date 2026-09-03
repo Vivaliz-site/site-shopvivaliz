@@ -5,7 +5,7 @@
 .DESCRIPTION
     Testa status HTTP de todas as rotas conhecidas e todos os produtos
 .PARAMETER BaseUrl
-    URL base do site (padrão: https://dev.shopvivaliz.com.br)
+    URL base do site (padrão: https://shopvivaliz.com.br)
 .PARAMETER Timeout
     Timeout em segundos (padrão: 10)
 .EXAMPLE
@@ -14,7 +14,7 @@
 #>
 
 param(
-    [string]$BaseUrl = "https://dev.shopvivaliz.com.br",
+    [string]$BaseUrl = "https://shopvivaliz.com.br",
     [int]$Timeout = 10
 )
 

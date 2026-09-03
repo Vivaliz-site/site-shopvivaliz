@@ -163,6 +163,14 @@ try {
     $onlyId = ['olist_product_id' => '1001'];
     iip_assert($matchMethod->invoke($publisher, $onlyId, '', '1001') === true, 'ID-only source may match exact external ID');
 
+    $canonicalActive = [
+        ['sku' => 'ACTIVE-1', 'olist_product_id' => '257'],
+        ['sku' => 'ACTIVE-2', 'olist_product_id' => '999'],
+    ];
+    iip_assert(ai_studio_product_matches_canonical_active(['sku' => 'ACTIVE-1', 'olist_id' => '999'], $canonicalActive) === true, 'present SKU must match by SKU even if stale external ID differs');
+    iip_assert(ai_studio_product_matches_canonical_active(['sku' => 'STALE-SKU', 'olist_id' => '257'], $canonicalActive) === false, 'conflicting SKU must not be rescued by an external ID collision');
+    iip_assert(ai_studio_product_matches_canonical_active(['sku' => '', 'olist_id' => '257'], $canonicalActive) === true, 'external ID may be used only when SKU is absent');
+
     $orderMethod = $reflection->getMethod('orderImageCandidates');
     $orderMethod->setAccessible(true);
     $ordered = $orderMethod->invoke($publisher, [

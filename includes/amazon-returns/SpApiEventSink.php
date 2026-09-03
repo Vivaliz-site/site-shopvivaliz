@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/Enums.php';
 require_once __DIR__ . '/EventStore.php';
 require_once __DIR__ . '/GmailEventSink.php';
+require_once __DIR__ . '/ReturnsReportParser.php';
 
 final class SvAmazonSpApiEventSink
 {
@@ -24,6 +25,10 @@ final class SvAmazonSpApiEventSink
             }
         }
         $fulfillment = is_array($order['fulfillment'] ?? null) ? $order['fulfillment'] : [];
+        // 'fulfilledBy' is the real Orders v2026-01-01 field (AMAZON|MERCHANT). AMAZON means
+        // standard FBA (Amazon-fulfilled, Amazon-managed reimbursement -- not SAFE-T-managed),
+        // which must stay distinct from seller-fulfilled STANDARD. 'channel'/'fulfillmentChannel'
+        // are kept as fallbacks for other callers/fixtures that predate the real field name.
         $fulfilledBy = strtoupper(trim((string)($fulfillment['fulfilledBy'] ?? '')));
         if ($fulfilledBy === 'AMAZON') return SvAmazonReturnPrograms::FBA;
         if ($fulfilledBy === 'MERCHANT') return SvAmazonReturnPrograms::STANDARD;
@@ -108,6 +113,54 @@ final class SvAmazonSpApiEventSink
             $expected->execute([':amount'=>$refund['refund_amount'],':id'=>$caseIds[0]]);
         }
         return ['cases'=>$caseIds,'single_item'=>$single,'refund_event_id'=>$refundEventId];
+    }
+
+    /**
+     * Matches one official Returns Report row against an existing case by
+     * (order_id, order_item_id) and, only when the refund initiator can be
+     * confidently derived (A-to-Z claim or Amazon's automatic first-scan
+     * refund), appends an evidencing event. Rows that don't match a known
+     * case, or whose initiator stays ambiguous, are skipped without guessing.
+     *
+     * @param array<string,string> $row
+     * @return array{matched:bool,applied:bool}
+     */
+    public static function persistReturnsReportRow(PDO $db, array $row, string $reportId): array
+    {
+        $orderId = SvAmazonReturnsReportParser::orderId($row);
+        $itemId = SvAmazonReturnsReportParser::orderItemId($row);
+        if ($orderId === '') return ['matched'=>false,'applied'=>false];
+
+        $initiator = SvAmazonReturnsReportParser::refundInitiatorFromRow($row);
+        if ($initiator === SvAmazonRefundInitiators::UNKNOWN) return ['matched'=>false,'applied'=>false];
+
+        if ($itemId !== '') {
+            $find = $db->prepare(
+                'SELECT id FROM amazon_return_cases WHERE amazon_order_id=:order_id AND amazon_order_item_id=:item_id LIMIT 1'
+            );
+            $find->execute([':order_id'=>$orderId, ':item_id'=>$itemId]);
+        } else {
+            $find = $db->prepare('SELECT id FROM amazon_return_cases WHERE amazon_order_id=:order_id LIMIT 1');
+            $find->execute([':order_id'=>$orderId]);
+        }
+        $caseId = (int)$find->fetchColumn();
+        if ($caseId < 1) return ['matched'=>false,'applied'=>false];
+
+        SvAmazonReturnEventStore::append($db, [
+            'case_id'=>$caseId,
+            'event_type'=>'RETURNS_REPORT_MATCHED',
+            'source'=>'SP_API_REPORTS',
+            'source_event_id'=>$reportId,
+            'idempotency_key'=>hash('sha256', 'spapi-returns-report|' . $reportId . '|' . $orderId . '|' . $itemId . '|' . $initiator),
+            'occurred_at'=>gmdate('Y-m-d H:i:s'),
+            'payload'=>[
+                'refund_initiator'=>$initiator,
+                'financial_truth'=>false,
+                'return_reason'=>self::nullable($row['Return Reason'] ?? null),
+            ],
+            'evidence_sha256'=>null,
+        ]);
+        return ['matched'=>true,'applied'=>true];
     }
 
     private static function appendTransactions(PDO $db, int $caseId, array $transactions, bool $single): void

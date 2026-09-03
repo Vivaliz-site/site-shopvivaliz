@@ -787,3 +787,134 @@ email/telefone antes do hash, sem nenhum efeito em layout renderizado).
 - Negativa SAFE-T automatica repetida e nao substantiva deve escalar para Ajuda uma unica vez por fingerprint; nao criar loop de respostas identicas.
 - SAFE-T aprovada so fecha financeiramente quando o credito correspondente aparecer no ledger SP-API.
 
+### 2026-09-02 — Reports (GET_FLAT_FILE_RETURNS_DATA_BY_RETURN_DATE) e programFromOrder (Sonnet)
+
+- **Achado:** `createReport` sozinho nunca preenchia `amazon_return_cases` — faltava o
+  poll (`GET /reports/2021-06-30/reports/{id}`) + download do documento (`GET
+  /reports/2021-06-30/documents/{id}`, presigned URL sem headers SP-API, GZIP
+  opcional) + parse. Implementado em `SvAmazonReturnsSpApi::getReportStatus/
+  getReportDocument/downloadReturnsReport` + `SvAmazonReturnsReportParser` (parser
+  puro) + `SvAmazonSpApiEventSink::persistReturnsReportRow` + orquestração em
+  `daemon.php::pollAndIngestReturnsReport` (poll limitado a ~2min por tick; se não
+  finalizar a tempo, o próximo tick de `returns_report` pede um relatório novo —
+  não há necessidade de persistir report_id entre ticks).
+- **Layout real confirmado** (TSV, cabeçalho com nomes exatos, não documentado
+  como golden fixture em nenhum outro lugar do repo): `Order ID`, `Order Item ID`,
+  `A-to-Z Claim` (Y/N), `Resolution` (ex.: `RefundAtFirstScan`), `Return Reason`,
+  entre outras. `refund_initiator` só é classificado com confiança quando
+  `A-to-Z Claim=Y` (→ `A_TO_Z`) ou `Resolution` contém `RefundAtFirstScan` (→
+  `AMAZON_AUTOMATIC`); qualquer outro valor fica `UNKNOWN` — não adivinhar.
+- **Bug real em `SvAmazonSpApiEventSink::programFromOrder`:** o código checava
+  `$order['fulfillment']['channel']`/`fulfillmentChannel`, mas o campo real
+  retornado pela Orders API v2026-01-01 é `fulfilledBy` (`AMAZON`|`MERCHANT`).
+  Resultado: **todo pedido FBA padrão (o caso mais comum) caía em `program=UNKNOWN`**,
+  mesmo com dados de fulfillment presentes — não era falta de dado, era nome de
+  campo errado. Corrigido para checar `fulfilledBy` primeiro, mantendo `channel`/
+  `fulfillmentChannel` como fallback (não quebra fixtures antigas). Confirmado
+  com chamada real contra dois pedidos de produção antes de corrigir.
+- **Por que importa:** esses dois bugs juntos explicavam os 15 casos presos em
+  `unclassified` mesmo com Finances já autorizado e `seller_debit_at` populado
+  corretamente — `refund_initiator`/`program` nunca tinham de onde vir. Antes de
+  investigar "por que unclassified não zera", confirme se é falta de fonte de
+  dado ou nome de campo errado lendo uma resposta real da API (não assuma pelo
+  nome do campo no código).
+- **Limite real de janela do `GET_FLAT_FILE_RETURNS_DATA_BY_RETURN_DATE`:**
+  confirmado empiricamente em produção que a Amazon aceita no máximo ~30 dias
+  entre `dataStartTime`/`dataEndTime` para este relatório — janelas de 90 ou
+  120 dias voltam com `processingStatus=FATAL` (não documentado de forma clara
+  nos docs públicos da SP-API). Backfill histórico precisa rodar como vários
+  requests sequenciais de até 30 dias cada.
+- **Depois de corrigir `programFromOrder` e rodar o backfill do relatório em
+  produção (2026-09-02), os 15 casos que estavam com `unclassified=1` desde
+  antes desta sessão tiveram `program` corrigido para todos, mas
+  `refund_initiator` continuou `UNKNOWN` para 13/15** mesmo testando janelas
+  de relatório cobrindo maio-agosto/2026 — nenhuma linha do relatório bateu
+  com esses `amazon_order_id`. Hipótese mais provável: são exatamente o tipo
+  de caso que justifica um SAFE-T (Amazon reembolsou o cliente sem existir um
+  "return request" físico registrado — item perdido no fulfillment, por
+  exemplo), então não há linha correspondente no relatório de devoluções por
+  definição. `refund_initiator=UNKNOWN` nesses casos é o comportamento correto
+  do sistema (bloqueia escrita externa até reconciliação oficial, por design),
+  não um bug a "corrigir forçando" um valor. Se precisar fechar esses casos
+  específicos, a evidência tem que vir de outra fonte (ex.: revisão manual via
+  Seller Central, ou um e-mail de Ajuda que confirme o motivo) — não adivinhar
+  a partir de Finances/Orders/Reports, que não expõem essa informação para
+  este cenário.
+
+### 2026-09-02 — Bridge do Seller Central em 401 permanente: Apache/mod_php não repassa Authorization (Sonnet)
+
+- **Sintoma:** `POST /api/amazon-returns/bridge.php` sempre respondia
+  `{"status":"UNAUTHORIZED"}` (HTTP 401), não importa qual valor de
+  `SELLER_CENTRAL_BRIDGE_TOKEN`/`bridge.token` (Windows) fosse usado — inclusive
+  com o token 100% correto e verificado byte a byte dos dois lados.
+- **Causa raiz real:** Apache com `mod_php` (`php_module`, não PHP-FPM) **não
+  estava populando `$_SERVER['HTTP_AUTHORIZATION']`** para este endpoint —
+  confirmado com um script de debug temporário que imprimiu
+  `apache_request_headers()` vs `$_SERVER`: o header `Authorization` chegava
+  normalmente do Cloudflare até o Apache (visível em `apache_request_headers()`),
+  mas nunca aparecia em `$_SERVER`. Isso é um comportamento conhecido (não um
+  bug de config específico deste site) de Apache+mod_php em várias combinações
+  de versão/distro — Apache trata `Authorization` como reservado para seus
+  próprios módulos de auth (`mod_auth_basic` etc.) e não o repassa ao CGI/SAPI
+  automaticamente.
+- **Como foi diagnosticado:** ~2h perdidas comparando hashes SHA-256 do token
+  de formas inconsistentes (`grep|cut|sha256sum` incluindo `\n` final vs
+  `trim()` do PHP/Node) antes de perceber que o token *nunca* foi o problema.
+  **Lição para o próximo agente:** se um Bearer token continua falhando mesmo
+  depois de confirmar que client e servidor têm o **mesmo valor exato**
+  (compare sempre com `trim()` dos dois lados, nunca hash de string com/sem
+  newline final misturado), o próximo passo é confirmar que o header
+  *chega* no `$_SERVER` do PHP antes de suspeitar do valor do token de novo.
+- **Correção aplicada:** `SvAmazonReturnsRemoteBridge::resolveAuthorizationHeader()`
+  (novo método) tenta `$_SERVER['HTTP_AUTHORIZATION']` /
+  `REDIRECT_HTTP_AUTHORIZATION` primeiro e cai para `apache_request_headers()`
+  quando vazio. `api/amazon-returns/bridge.php` usa esse método em vez de ler
+  `$_SERVER` diretamente. Qualquer outro endpoint deste projeto que dependa de
+  `Authorization: Bearer ...` sob Apache/mod_php deve considerar o mesmo padrão.
+- **Nunca deixar arquivo de debug temporário em produção:** durante o
+  diagnóstico, um arquivo temporário na raiz do documento (`/debug-*.php`) foi
+  bloqueado por uma regra de firewall da aplicação ("Área protegida", 403) —
+  arquivos soltos na raiz são tratados como não autorizados. Um arquivo dentro
+  de `api/amazon-returns/` (mesma pasta do `bridge.php`) passou normalmente.
+  Qualquer arquivo de debug ad hoc deve ser removido do release/produção assim
+  que o diagnóstico terminar — nunca commitado.
+
+### 2026-09-03 — Fase 1 (nenhum SAFE-T write oficial), merge/deploy do fix do bridge, e bug de CI no diff base do `workflow_dispatch` (Sonnet)
+
+- **Confirmado com evidência (não suposição):** a Finances API `v2024-06-19` expõe
+  só `GET /finances/2024-06-19/transactions` (leitura; inclui dados tipo
+  `SAFETReimbursementEvent` para observar crédito já concedido). Nenhum dos 53
+  modelos oficiais em `amzn/selling-partner-api-models` (checado em
+  2026-09-03) tem `claims`/`safe-t`/`a-to-z`/`returns`. Não existe submissão de
+  SAFE-T via SP-API — o desenho já aprovado neste repo (adapter de browser do
+  Seller Central) é o canal correto, não um workaround.
+- **PR #1381 mesclada e implantada:** o fix de `HTTP_AUTHORIZATION` (entrada
+  de 2026-09-02 acima) estava commitado e no `origin` desde ontem mas sem PR
+  aberta — só depois disso o bridge Windows (`seller-central-bridge-worker.mjs`,
+  polling `api/amazon-returns/bridge.php` a cada ~30s) parou de logar
+  `worker_error` a cada tentativa. Validado ao vivo pós-deploy com
+  `curl -H "Authorization: Bearer $(cat bridge.token)"` contra produção:
+  passou de 401 para 400 `INVALID_OPERATION` (token aceito, só a ação de
+  teste é que é inválida — prova real, não inferência de log).
+- **Bug real encontrado no próprio CI:** `.github/workflows/repository-governance.yml`,
+  step "Resolve comparison base" — o fallback para `workflow_dispatch`
+  (`base="$(git rev-parse HEAD^)"`) pega só o primeiro-pai de um commit de
+  merge, um ponto arbitrário anterior ao merge com `main` em vez de onde a
+  branch realmente divergiu. Como esse workflow também roda via
+  `workflow_dispatch` como "run sombra" quando a run real de `pull_request`
+  fica presa em `action_required`, isso gerava falso-positivo de "changed
+  automation surfaces" em arquivos que a PR nunca tocou (ex.:
+  `master-production-pipeline.yml`, reescrito por outro agente no `main` na
+  mesma janela). Corrigido para `git merge-base HEAD origin/main` nesse
+  fallback. Qualquer novo caso de "check falhando em arquivo que a PR não
+  mexeu" merece conferir esse mesmo padrão antes de assumir que é regressão
+  real.
+- **Estado real em produção 2026-09-03 ~04:43 UTC:** 15 casos rastreados,
+  `pending_outbox=0`, todos os 15 com decisão do scheduler mas **nenhum**
+  ainda `SAFE_T_READY`/enfileirado — não por bug, mas porque `refund_initiator`
+  segue `UNKNOWN` em 13/15 (ver entrada 2026-09-02 acima: são exatamente os
+  casos sem linha correspondente no relatório de devoluções, por definição).
+  Write flags (`SAFE_T_WRITE`/`APPEAL_WRITE`/`SUPPORT_WRITE`) seguem `0` em
+  produção — piloto controlado ainda não foi habilitado, isso é intencional
+  (ver rollout no spec), não uma lacuna deste fix.
+

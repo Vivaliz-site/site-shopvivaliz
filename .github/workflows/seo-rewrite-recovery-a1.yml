@@ -40,9 +40,10 @@ jobs:
           sudo apache2ctl configtest
           sudo systemctl reload apache2
           sleep 2
-          sudo apache2ctl -M 2>/dev/null | grep -q rewrite_module
+          apache_modules="$(sudo apache2ctl -M 2>/dev/null)"
+          [[ "$apache_modules" == *rewrite_module* ]]
           for path in /sitemap.xml /termos/ /politica-entrega/ /catalogo/; do
-            code="$(curl -sS -o /tmp/body -w '%{http_code}' -H 'Host: shopvivaliz.com.br' "http://127.0.0.1${path}")"
+            code="$(curl -sS -o /tmp/body -w '%{http_code}' -H 'Host: shopvivaliz.com.br' "http://127.0.0.1:8080${path}")"
             echo "$path -> $code"
             test "$code" = 200
           done

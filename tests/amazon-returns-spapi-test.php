@@ -28,6 +28,16 @@ final class AmazonReturnsFakeClient {
         if ($path === '/reports/2021-06-30/reports') {
             return ['status'=>202,'request_id'=>'req-report-1','data'=>['reportId'=>'RPT-1']];
         }
+        if ($path === '/reports/2021-06-30/reports/RPT-1') {
+            return ['status'=>200,'request_id'=>'req-report-status-1','data'=>[
+                'reportId'=>'RPT-1','processingStatus'=>'DONE','reportDocumentId'=>'DOC-1',
+            ]];
+        }
+        if ($path === '/reports/2021-06-30/documents/DOC-1') {
+            return ['status'=>200,'request_id'=>'req-report-doc-1','data'=>[
+                'url'=>'https://example-report-bucket.test/DOC-1','compressionAlgorithm'=>'GZIP',
+            ]];
+        }
         throw new RuntimeException('Unexpected fake request: ' . $method . ' ' . $path);
     }
 }
@@ -54,12 +64,31 @@ spSame(['A2Q3Y263D00KWC'], $client->calls[2]['body']['marketplaceIds'] ?? null, 
 spSame('RPT-1', $report['report_id'], 'Report ID must normalize.');
 spSame('req-report-1', $report['request_id'], 'Report request ID must be retained.');
 
+$reportStatus = $api->getReportStatus('RPT-1');
+spSame('/reports/2021-06-30/reports/RPT-1', $client->calls[3]['path'], 'Report status must use Reports API v2021-06-30.');
+spSame('DONE', $reportStatus['processing_status'], 'Report processing status must normalize.');
+spSame('DOC-1', $reportStatus['report_document_id'], 'Report document ID must normalize.');
+
+$reportDocument = $api->getReportDocument('DOC-1');
+spSame('/reports/2021-06-30/documents/DOC-1', $client->calls[4]['path'], 'Report document lookup must use Reports API v2021-06-30.');
+spSame('GZIP', $reportDocument['compression_algorithm'], 'Report document compression must normalize.');
+
+$gzippedFixture = (string)gzencode("Order ID\tOrder Item ID\n701-1-1\t100-1\n");
+$downloaderCalls = [];
+$apiWithDownloader = new SvAmazonReturnsSpApi($client, function (string $url) use (&$downloaderCalls, $gzippedFixture): string {
+    $downloaderCalls[] = $url;
+    return $gzippedFixture;
+});
+$downloaded = $apiWithDownloader->downloadReturnsReport('DOC-1');
+spSame(['https://example-report-bucket.test/DOC-1'], $downloaderCalls, 'Report document download must fetch the presigned URL.');
+spSame("Order ID\tOrder Item ID\n701-1-1\t100-1\n", $downloaded, 'GZIP report documents must be decompressed transparently.');
 
 spSame('DELIVERY_BY_AMAZON', SvAmazonSpApiEventSink::programFromOrder($order), 'DBA program must normalize deterministically.');
-spSame('STANDARD', SvAmazonSpApiEventSink::programFromOrder(['programs'=>[],'fulfillment'=>['channel'=>'MERCHANT']]), 'Merchant fulfillment maps to STANDARD.');
-spSame('FBA', SvAmazonSpApiEventSink::programFromOrder(['programs'=>[],'fulfillment'=>['fulfilledBy'=>'AMAZON']]), 'Orders v2026 AMAZON fulfillment maps to FBA.');
+spSame('STANDARD', SvAmazonSpApiEventSink::programFromOrder(['programs'=>[],'fulfillment'=>['channel'=>'MERCHANT']]), 'Merchant fulfillment (fixture field name) maps to STANDARD.');
+spSame('FBA', SvAmazonSpApiEventSink::programFromOrder(['programs'=>[],'fulfillment'=>['fulfilledBy'=>'AMAZON']]), 'Orders v2026 AMAZON fulfillment (standard FBA) maps to FBA, distinct from seller-fulfilled STANDARD.');
 spSame('STANDARD', SvAmazonSpApiEventSink::programFromOrder(['programs'=>[],'fulfillment'=>['fulfilledBy'=>'MERCHANT']]), 'Orders v2026 MERCHANT fulfillment maps to STANDARD.');
 spSame('DELIVERY_BY_AMAZON', SvAmazonSpApiEventSink::programFromOrder(['programs'=>['DELIVERY_BY_AMAZON'],'fulfillment'=>['fulfilledBy'=>'AMAZON']]), 'Explicit DBA program takes precedence over fulfilledBy.');
+spSame('UNKNOWN', SvAmazonSpApiEventSink::programFromOrder(['programs'=>[],'fulfillment'=>[]]), 'Missing fulfillment data must stay UNKNOWN rather than guessing.');
 $refundFact = SvAmazonSpApiEventSink::refundObservation([[
     'transaction_id'=>'txn-refund','transaction_type'=>'Refund','transaction_status'=>'RELEASED',
     'posted_at'=>'2026-08-01T12:00:00Z','total_amount'=>['amount'=>'-128.25','currency'=>'BRL'],
@@ -87,9 +116,81 @@ $methods = array_map(static fn(ReflectionMethod $m): string => strtolower($m->ge
 foreach ($methods as $method) {
     spAssert(!str_contains($method, 'safe') && !str_contains($method, 'claim') && !str_contains($method, 'appeal'), 'SP-API facade must not expose invented SAFE-T/claim/appeal endpoints.');
 }
-$serialized = json_encode([$order,$fin,$report,$notification], JSON_THROW_ON_ERROR);
+$serialized = json_encode([$order,$fin,$report,$notification,$reportStatus,$reportDocument], JSON_THROW_ON_ERROR);
 foreach (['access_token','refresh_token','client_secret','x-amz-access-token'] as $secretKey) {
     spAssert(!str_contains(strtolower($serialized), $secretKey), 'Normalized outputs must not expose secrets: ' . $secretKey);
 }
+
+// persistReturnsReportRow: matches an existing case by (order_id, order_item_id)
+// and only appends an event when the initiator is confidently derived.
+final class SpApiReturnsReportMemoryPdo extends PDO {
+    /** @var array<int,array{amazon_order_id:string,amazon_order_item_id:string}> */
+    public array $cases = [];
+    /** @var array<string,true> */
+    public array $eventIdempotencyKeys = [];
+    public int $nextEventId = 1;
+    public function __construct() {}
+    public function prepare(string $query, array $options = []): PDOStatement|false { return new SpApiReturnsReportMemoryStatement($this, $query); }
+    public function lastInsertId(?string $name = null): string|false { return (string)($this->nextEventId - 1); }
+}
+final class SpApiReturnsReportMemoryStatement extends PDOStatement {
+    private array $result = [];
+    public function __construct(private SpApiReturnsReportMemoryPdo $db, private string $query) {}
+    public function execute(?array $params = null): bool {
+        $params ??= [];
+        $sql = strtoupper($this->query);
+        if (str_contains($sql, 'SELECT ID FROM AMAZON_RETURN_CASES')) {
+            $this->result = [];
+            foreach ($this->db->cases as $id => $case) {
+                if ($case['amazon_order_id'] !== $params[':order_id']) continue;
+                if (isset($params[':item_id']) && $case['amazon_order_item_id'] !== $params[':item_id']) continue;
+                $this->result[] = $id;
+            }
+            return true;
+        }
+        if (str_starts_with(ltrim($sql), 'INSERT INTO `AMAZON_RETURN_EVENTS`')) {
+            $key = $params[':idempotency_key'];
+            if (isset($this->db->eventIdempotencyKeys[$key])) throw new PDOException('Duplicate entry', 23000);
+            $this->db->eventIdempotencyKeys[$key] = true;
+            $this->db->nextEventId++;
+            return true;
+        }
+        if (str_contains($sql, 'SELECT `ID` FROM `AMAZON_RETURN_EVENTS`') && str_contains($sql, 'IDEMPOTENCY_KEY')) {
+            $key = $params[':idempotency_key'];
+            $this->result = isset($this->db->eventIdempotencyKeys[$key]) ? [1] : [];
+            return true;
+        }
+        throw new LogicException('Unexpected SQL in persistReturnsReportRow test: ' . $this->query);
+    }
+    public function fetchColumn(int $column = 0): mixed {
+        return $this->result === [] ? false : $this->result[0];
+    }
+    public function fetch(int $mode = PDO::FETCH_DEFAULT, int $cursorOrientation = PDO::FETCH_ORI_NEXT, int $cursorOffset = 0): mixed {
+        return $this->result === [] ? false : ['id' => $this->result[0]];
+    }
+}
+
+$reportDb = new SpApiReturnsReportMemoryPdo();
+$reportDb->cases[501] = ['amazon_order_id'=>'701-9999999-1111111','amazon_order_item_id'=>'item-a'];
+
+$autoScanRow = ['Order ID'=>'701-9999999-1111111','Order Item ID'=>'item-a','A-to-Z Claim'=>'N','Resolution'=>'RefundAtFirstScan'];
+$outcome = SvAmazonSpApiEventSink::persistReturnsReportRow($reportDb, $autoScanRow, 'RPT-1');
+spSame(true, $outcome['matched'], 'A matching order+item must be reported as matched.');
+spSame(true, $outcome['applied'], 'A confidently classified row must be applied.');
+spSame(1, count($reportDb->eventIdempotencyKeys), 'Matched row must append exactly one event.');
+
+$again = SvAmazonSpApiEventSink::persistReturnsReportRow($reportDb, $autoScanRow, 'RPT-1');
+spSame(true, $again['matched'], 'Re-ingesting the same row must still report matched.');
+spSame(1, count($reportDb->eventIdempotencyKeys), 'Re-ingesting the same row must be idempotent (no duplicate event).');
+
+$unmatchedRow = ['Order ID'=>'701-0000000-0000000','Order Item ID'=>'item-x','A-to-Z Claim'=>'N','Resolution'=>'RefundAtFirstScan'];
+$unmatchedOutcome = SvAmazonSpApiEventSink::persistReturnsReportRow($reportDb, $unmatchedRow, 'RPT-1');
+spSame(false, $unmatchedOutcome['matched'], 'A row for an unknown order must not match any case.');
+spSame(1, count($reportDb->eventIdempotencyKeys), 'An unmatched row must not append an event.');
+
+$ambiguousRow = ['Order ID'=>'701-9999999-1111111','Order Item ID'=>'item-a','A-to-Z Claim'=>'N','Resolution'=>'ManualRefund'];
+$ambiguousOutcome = SvAmazonSpApiEventSink::persistReturnsReportRow($reportDb, $ambiguousRow, 'RPT-1');
+spSame(false, $ambiguousOutcome['applied'], 'An ambiguous (unclassifiable) initiator must not be applied, even for a matching case.');
+spSame(1, count($reportDb->eventIdempotencyKeys), 'An ambiguous row must not append an event.');
 
 echo "amazon-returns-spapi-test: OK\n";

@@ -311,7 +311,7 @@ Deve retornar JSON com status OK
 ### F. ROTINAS DE DIAGNÓSTICO
 
 #### 1. Diagnóstico de Domínio
-- [ ] dev.shopvivaliz.com.br acessível
+- [ ] shopvivaliz.com.br acessível
 - [ ] Sem erro DNS
 - [ ] Sem erro 404
 - [ ] Sem erro 500
