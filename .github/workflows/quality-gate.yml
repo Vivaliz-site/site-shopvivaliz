@@ -35,6 +35,8 @@ jobs:
           php -l blog/content.php >/dev/null
           php -l includes/blog-editorial-autopilot.php >/dev/null
           php tests/google-indexing-canonical-regression-test.php
+          php tests/asset-source-dist-parity-test.php
+          php scripts/quality/validate-asset-manifest.php
           python3 -m py_compile scripts/seo-integrity-audit.py
           node --check scripts/public-layout-audit.mjs
           node --check scripts/lib/audit-concurrency.mjs

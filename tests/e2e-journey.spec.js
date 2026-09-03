@@ -52,7 +52,7 @@ test.describe('E2E Journey - Compra Completa', () => {
   test('Navegação de categorias funciona', async ({ page }) => {
     await page.goto(BASE_URL + '/');
 
-    const catalogLink = page.locator('.sv-navbar a[href="/catalogo"]').first();
+    const catalogLink = page.locator('.sv-navbar a[href="/catalogo/"], .sv-navbar a[href="/catalogo"]').first();
     await expect(catalogLink).toBeVisible();
     await catalogLink.click();
     await page.waitForLoadState('domcontentloaded');
@@ -72,7 +72,7 @@ test.describe('E2E Journey - Compra Completa', () => {
   });
 
   test('Carrinho funciona', async ({ page }) => {
-    await page.goto(BASE_URL + '/carrinho');
+    await page.goto(BASE_URL + (IS_LOCAL ? '/carrinho.php' : '/carrinho'));
     await page.waitForLoadState('domcontentloaded');
 
     expect(page.url()).toContain('/carrinho');
@@ -121,10 +121,16 @@ test.describe('E2E Journey - Compra Completa', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(BASE_URL + '/', { waitUntil: 'networkidle' });
 
+    const essentialOnly = page.getByRole('button', { name: /somente essenciais/i });
+    if (await essentialOnly.isVisible().catch(() => false)) {
+      await essentialOnly.click();
+    }
+
     const liz = page.locator('#sv-liz-launcher').first();
     const whatsapp = page.locator('.sv-support-whatsapp').first();
     await expect(liz).toBeVisible();
     await expect(whatsapp).toBeVisible();
+    await page.waitForTimeout(350);
 
     const lizBox = await liz.boundingBox();
     const whatsappBox = await whatsapp.boundingBox();
