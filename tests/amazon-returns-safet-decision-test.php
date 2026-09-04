@@ -37,12 +37,13 @@ sdAssert(preg_match('/^[a-f0-9]{64}$/', $submit['idempotency_key']) === 1, 'SAFE
 sdSame($submit, $engine->nextAction(eligibleCase(), [], $eligiblePolicy), 'Same inputs must give same submit action/key.');
 
 sdSame('WAIT', $engine->nextAction(eligibleCase(['seller_debit_at'=>null]), [], $eligiblePolicy)['action'], 'Missing seller debit confirmation must wait.');
-sdSame('BLOCKED_REVIEW', $engine->nextAction(eligibleCase(['refund_initiator'=>'UNKNOWN']), [], $eligiblePolicy)['action'], 'Unknown refund initiator must block auto-write.');
+sdSame('BLOCKED_REVIEW', $engine->nextAction(eligibleCase(['refund_initiator'=>'UNKNOWN']), [], $eligiblePolicy)['action'], 'Unknown refund initiator must block a new auto-write.');
 sdSame('WAIT', $engine->nextAction(eligibleCase(['physical_status'=>'RECEIVED_OK']), [], $eligiblePolicy)['action'], 'Physical receipt stops non-return SAFE-T.');
 sdSame('WAIT', $engine->nextAction(eligibleCase(['reconciled_credit_amount'=>'199.90']), [], $eligiblePolicy)['action'], 'Existing Amazon credit stops duplicate recovery.');
 sdSame('WAIT', $engine->nextAction(eligibleCase(), [], ['eligible'=>false,'state'=>'AWAITING_RETURN'])['action'], 'Ineligible policy must wait.');
-sdSame('BLOCKED_REVIEW', $engine->nextAction(eligibleCase(), [], ['eligible'=>false,'state'=>'POLICY_REVIEW_REQUIRED'])['action'], 'Policy ambiguity must block review.');
+sdSame('BLOCKED_REVIEW', $engine->nextAction(eligibleCase(), [], ['eligible'=>false,'state'=>'POLICY_REVIEW_REQUIRED'])['action'], 'Policy ambiguity must block a new claim.');
 sdSame('WAIT', $engine->nextAction(eligibleCase(['safe_t_id'=>'12797-64249-3531034','state'=>'SAFE_T_SUBMITTED']), [], $eligiblePolicy)['action'], 'Existing active claim suppresses duplicate submission.');
+sdSame('WAIT', $engine->nextAction(eligibleCase(['safe_t_id'=>'12797-64249-3531034','state'=>'SAFE_T_SUBMITTED','refund_initiator'=>'UNKNOWN','seller_debit_at'=>null]), [], ['eligible'=>false,'state'=>'POLICY_REVIEW_REQUIRED'])['action'], 'Existing claim lifecycle must not be blocked by historical eligibility facts that were never captured.');
 
 $analyzer = new SvAmazonDenialAnalyzer();
 $denialA = 'Pedido 702-1234567-7654321. Conforme G201382020 / Delivery by Amazon, sua solicitação não é elegível em 01/09/2026 às 14:27.';
@@ -66,6 +67,24 @@ $openSupport = $engine->nextAction($denied, [], $eligiblePolicy);
 sdSame('SELLER_SUPPORT_OPEN', $openSupport['action'], 'Repeated non-substantive denial must open Ajuda instead of looping appeal.');
 sdSame($analyzer->fingerprint($denialB), $openSupport['denial_fingerprint'], 'Support escalation must retain normalized denial fingerprint.');
 
+$timelineDenialText = 'Negado porque a devolução consta entregue ao vendedor.';
+$timelineDenied = eligibleCase([
+    'safe_t_id'=>'98143-99485-9285859',
+    'state'=>'SAFE_T_DENIED',
+    'refund_initiator'=>'UNKNOWN',
+    'seller_debit_at'=>null,
+]);
+$timeline = [[
+    'event_type'=>'SAFE_T_STATUS_OBSERVED',
+    'payload'=>[
+        'claim_status'=>'DENIED',
+        'decision_text'=>$timelineDenialText,
+        'decision_fingerprint'=>$analyzer->fingerprint($timelineDenialText),
+    ],
+]];
+$timelineAppeal = $engine->nextAction($timelineDenied, $timeline, ['eligible'=>false,'state'=>'POLICY_REVIEW_REQUIRED']);
+sdSame('SAFE_T_APPEAL', $timelineAppeal['action'], 'A Seller Central denial event must drive appeal even when the historical claim lacks original eligibility classification.');
+
 $activeSupport = $denied;
 $activeSupport['support_case_id'] = '21839000001';
 $activeSupport['support_case_status'] = 'OPEN';
@@ -78,7 +97,7 @@ $newDenial['latest_denial_text'] = 'Negada porque o rastreio mostra entrega ao v
 $appeal = $engine->nextAction($newDenial, [], $eligiblePolicy);
 sdSame('SAFE_T_APPEAL', $appeal['action'], 'Substantively new denial must receive adapted SAFE-T appeal, not automatic Help escalation.');
 
-$info = eligibleCase(['safe_t_id'=>'81342-77571-9071754','state'=>'SAFE_T_INFO_REQUESTED']);
-sdSame('SAFE_T_APPEAL', $engine->nextAction($info, [], $eligiblePolicy)['action'], 'Information request must generate a SAFE-T response action.');
+$info = eligibleCase(['safe_t_id'=>'81342-77571-9071754','state'=>'SAFE_T_INFO_REQUESTED','refund_initiator'=>'UNKNOWN','seller_debit_at'=>null]);
+sdSame('SAFE_T_APPEAL', $engine->nextAction($info, [], ['eligible'=>false,'state'=>'POLICY_REVIEW_REQUIRED'])['action'], 'Information request on an existing claim must generate a SAFE-T response independent of initial eligibility facts.');
 
 echo "amazon-returns-safet-decision-test: OK\n";
