@@ -54,6 +54,18 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+      - name: Stage TLS DNS credential
+        shell: bash
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$CF_TOKEN" > /tmp/amazon-returns-cf-token
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            /tmp/amazon-returns-cf-token ubuntu@163.176.103.253:/home/ubuntu/cloudflare-dns-token.next
+          rm -f /tmp/amazon-returns-cf-token
+
       - name: Provision isolated production runtime
         shell: bash
         run: |
@@ -64,9 +76,11 @@ jobs:
           git fetch --quiet origin main
           git merge --ff-only origin/main
           sudo env \
+            CLOUDFLARE_DNS_API_TOKEN_FILE=/home/ubuntu/cloudflare-dns-token.next \
             AMAZON_RETURNS_SOURCE_ENV=/home/ubuntu/shopvivaliz-deploy/shared/.env \
             AMAZON_RETURNS_IMPORT_SOURCE=1 \
             /home/ubuntu/amazon-returns-safet/scripts/provision-production.sh
+          rm -f /home/ubuntu/cloudflare-dns-token.next
           sudo systemctl is-active --quiet amazon-returns-safet.service
           sudo systemctl is-enabled --quiet amazon-returns-safet.service
           sudo systemctl is-active --quiet amazon-returns-deploy.timer
