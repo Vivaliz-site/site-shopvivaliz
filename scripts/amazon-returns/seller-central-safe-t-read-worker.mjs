@@ -223,9 +223,7 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch(error => {
-    log('fatal', { status: error?.name || 'Error' });
-    process.exitCode = 1;
-  });
-}
+main().catch(error => {
+  log('fatal', { status: error?.name || 'Error' });
+  process.exitCode = 1;
+});
