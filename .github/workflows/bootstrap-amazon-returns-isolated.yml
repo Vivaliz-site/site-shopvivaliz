@@ -1,0 +1,91 @@
+name: Bootstrap isolated Amazon Returns
+
+on:
+  push:
+    branches:
+      - fix/amazon-returns-full-cycle-20260904
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    if: contains(github.event.head_commit.message, '[bootstrap-amazon-returns]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Configure Cloudflare DNS
+        shell: bash
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$CF_TOKEN"
+          api='https://api.cloudflare.com/client/v4'
+          zone='shopvivaliz.com.br'
+          host='returns.shopvivaliz.com.br'
+          ip='163.176.103.253'
+          auth=(-H "Authorization: Bearer $CF_TOKEN" -H 'Content-Type: application/json')
+          zone_json="$(curl -fsS "${auth[@]}" "$api/zones?name=$zone&status=active&per_page=1")"
+          zone_id="$(jq -er '.result[0].id' <<<"$zone_json")"
+          records="$(curl -fsS "${auth[@]}" "$api/zones/$zone_id/dns_records?type=A&name=$host&per_page=10")"
+          record_id="$(jq -r '.result[0].id // empty' <<<"$records")"
+          body="$(jq -nc --arg name "$host" --arg content "$ip" '{type:"A",name:$name,content:$content,proxied:true,ttl:1}')"
+          if [ -n "$record_id" ]; then
+            result="$(curl -fsS -X PUT "${auth[@]}" --data "$body" "$api/zones/$zone_id/dns_records/$record_id")"
+          else
+            result="$(curl -fsS -X POST "${auth[@]}" --data "$body" "$api/zones/$zone_id/dns_records")"
+          fi
+          jq -e '.success == true' >/dev/null <<<"$result"
+          echo 'returns_dns_ready=true'
+
+      - name: Configure pinned VM SSH
+        shell: bash
+        env:
+          KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$KEY"
+          test -n "$KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Provision isolated production runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /home/ubuntu/amazon-returns-safet
+          git fetch --quiet origin main
+          git merge --ff-only origin/main
+          sudo env \
+            AMAZON_RETURNS_SOURCE_ENV=/home/ubuntu/shopvivaliz-deploy/shared/.env \
+            AMAZON_RETURNS_IMPORT_SOURCE=1 \
+            /home/ubuntu/amazon-returns-safet/scripts/provision-production.sh
+          sudo systemctl is-active --quiet amazon-returns-safet.service
+          sudo systemctl is-enabled --quiet amazon-returns-safet.service
+          sudo systemctl is-active --quiet amazon-returns-deploy.timer
+          REMOTE
+
+      - name: Validate isolated health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if body="$(curl -fsS --max-time 10 https://returns.shopvivaliz.com.br/api/health.php 2>/dev/null)"; then
+              status="$(jq -r '.status // empty' <<<"$body")"
+              service="$(jq -r '.service // empty' <<<"$body")"
+              if [ "$status" = OK ] && [ "$service" = amazon-returns-safet ]; then
+                echo 'isolated_health_ready=true'
+                exit 0
+              fi
+            fi
+            sleep 2
+          done
+          echo 'isolated health did not become ready' >&2
+          exit 1
