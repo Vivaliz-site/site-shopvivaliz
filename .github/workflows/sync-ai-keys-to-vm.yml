@@ -113,25 +113,34 @@ jobs:
           env_path="$(
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-              -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" '
-                set -euo pipefail
-                candidates="
-                /home/ubuntu/shopvivaliz-deploy/shared/.env
-                /home/ubuntu/shopvivaliz-deploy/current/.env
-                "
-                current_target="$(readlink -f /home/ubuntu/shopvivaliz-deploy/current 2>/dev/null || true)"
-                if [ -n "$current_target" ]; then
-                  candidates="$candidates
-                $current_target/.env"
-                fi
-                for p in $candidates; do
-                  if [ -f "$p" ]; then
-                    printf "%s\n" "$p"
-                    exit 0
-                  fi
-                done
-                find /home/ubuntu -maxdepth 4 \( -type f -o -type l \) -name ".env" 2>/dev/null | sort | head -1
-              '
+              -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" "python3 - <<'PY'
+          import os
+
+          candidates = [
+              '/home/ubuntu/shopvivaliz-deploy/shared/.env',
+              '/home/ubuntu/shopvivaliz-deploy/current/.env',
+          ]
+          current_target = os.path.realpath('/home/ubuntu/shopvivaliz-deploy/current')
+          if current_target and current_target != '/home/ubuntu/shopvivaliz-deploy/current':
+              candidates.append(current_target + '/.env')
+
+          for path in candidates:
+              if os.path.isfile(path):
+                  print(path)
+                  raise SystemExit(0)
+
+          search_root = '/home/ubuntu'
+          max_depth = 4
+          for root, dirs, files in os.walk(search_root):
+              depth = root[len(search_root):].count(os.sep)
+              if depth >= max_depth:
+                  dirs[:] = []
+              if '.env' in files:
+                  print(os.path.join(root, '.env'))
+                  raise SystemExit(0)
+
+          raise SystemExit(1)
+          PY"
           )"
           if [[ -z "${env_path:-}" ]]; then
             echo '::error::Nenhum arquivo .env de runtime foi encontrado na backend A1.'
