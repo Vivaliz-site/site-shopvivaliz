@@ -1,19 +1,23 @@
 import { createHash } from 'node:crypto';
 
 const MONTHS = { jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6, jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12 };
+const EN_MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
 const clean = value => String(value ?? '').replace(/\r/g, '').replace(/[ \t]+/g, ' ').trim();
 const compact = value => clean(value).replace(/\n+/g, '\n');
 const sha = value => createHash('sha256').update(String(value ?? '')).digest('hex');
 
 function parsePtDate(raw) {
   const value = clean(raw).toLowerCase();
-  const m = value.match(/(?:seg|ter|qua|qui|sex|s[aá]b|dom)\.?,\s*(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\.?\s+(\d{1,2}),\s*(\d{4}),\s*(\d{1,2}):(\d{2})\s*(am|pm)/i);
+  const pt = value.match(/(?:seg|ter|qua|qui|sex|s[aá]b|dom)\.?,\s*(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\.?\s+(\d{1,2}),\s*(\d{4}),\s*(\d{1,2}):(\d{2})\s*(am|pm)/i);
+  const en = value.match(/(?:mon|tue|wed|thu|fri|sat|sun),\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2}),\s*(\d{4}),\s*(\d{1,2}):(\d{2})\s*(am|pm)/i);
+  const m = pt || en;
   if (!m) return null;
   let hour = Number(m[4]);
   const ampm = m[6].toLowerCase();
   if (ampm === 'pm' && hour !== 12) hour += 12;
   if (ampm === 'am' && hour === 12) hour = 0;
-  const month = MONTHS[m[1].slice(0, 3)];
+  const months = pt ? MONTHS : EN_MONTHS;
+  const month = months[m[1].slice(0, 3)];
   const pad = n => String(n).padStart(2, '0');
   return `${m[3]}-${pad(month)}-${pad(Number(m[2]))}T${pad(hour)}:${m[5]}:00-03:00`;
 }
@@ -31,7 +35,9 @@ function statusFrom(body) {
 
 function extractLabeledDate(body, label) {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const m = body.match(new RegExp(`${escaped}\\s*:?\\s*\\n?\\s*((?:seg|ter|qua|qui|sex|s[aá]b|dom)\\.?,\\s*(?:jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\\.?\\s+\\d{1,2},\\s*\\d{4},\\s*\\d{1,2}:\\d{2}\\s*(?:AM|PM))`, 'i'));
+  const pt = '(?:seg|ter|qua|qui|sex|s[aá]b|dom)\\.?,\\s*(?:jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\\.?\\s+\\d{1,2},\\s*\\d{4},\\s*\\d{1,2}:\\d{2}\\s*(?:AM|PM)';
+  const en = '(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\\s*(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\s+\\d{1,2},\\s*\\d{4},\\s*\\d{1,2}:\\d{2}\\s*(?:AM|PM)';
+  const m = body.match(new RegExp(`${escaped}\\s*:?\\s*\\n?\\s*(${pt}|${en})`, 'i'));
   return m ? parsePtDate(m[1]) : null;
 }
 
