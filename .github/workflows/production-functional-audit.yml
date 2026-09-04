@@ -21,6 +21,8 @@ jobs:
     env:
       BASE_URL: https://shopvivaliz.com.br
       SHOPVIVALIZ_AGENT_KEY: ${{ secrets.SHOPVIVALIZ_AGENT_KEY != '' && secrets.SHOPVIVALIZ_AGENT_KEY || secrets.AGENT_KEY }}
+      SITE_A1_HOST: 163.176.103.253
+      REMOTE_STAGE: /tmp/production-functional-audit-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -29,9 +31,66 @@ jobs:
       - name: Validate anti-false-positive contract
         run: python3 tests/test_production_functional_audit_contract.py
 
-      - name: Execute real production transaction probes
+      - name: Configure verified A1 SSH access
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_KNOWN_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
         shell: bash
-        run: bash scripts/production-functional-audit.sh
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+
+      - name: Stage exact production audit on A1
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey")
+          ssh "${ssh_opts[@]}" "ubuntu@$SITE_A1_HOST" 'bash -s' -- "$REMOTE_STAGE" <<'REMOTE'
+          set -Eeuo pipefail
+          stage=$1
+          test "$(hostname -s)" = "shopvivaliz-free-a1"
+          case "$stage" in /tmp/production-functional-audit-*) ;; *) exit 2 ;; esac
+          install -d -m 700 "$stage"
+          REMOTE
+          scp "${ssh_opts[@]}" scripts/production-functional-audit.sh "ubuntu@$SITE_A1_HOST:$REMOTE_STAGE/production-functional-audit.sh"
+          printf '%s' "$SHOPVIVALIZ_AGENT_KEY" | ssh "${ssh_opts[@]}" "ubuntu@$SITE_A1_HOST" "umask 077; cat > '$REMOTE_STAGE/agent.key'"
+
+      - name: Execute real production transaction probes from A1
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey")
+          ssh "${ssh_opts[@]}" "ubuntu@$SITE_A1_HOST" 'bash -s' -- "$REMOTE_STAGE" "$BASE_URL" <<'REMOTE'
+          set -Eeuo pipefail
+          stage=$1
+          base_url=$2
+          test "$(hostname -s)" = "shopvivaliz-free-a1"
+          case "$stage" in /tmp/production-functional-audit-*) ;; *) exit 2 ;; esac
+          test -s "$stage/agent.key"
+          export BASE_URL="$base_url"
+          export SHOPVIVALIZ_AGENT_KEY="$(cat "$stage/agent.key")"
+          bash "$stage/production-functional-audit.sh"
+          REMOTE
+
+      - name: Cleanup remote production audit staging
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ -f "$HOME/.ssh/vmkey" && -f "$HOME/.ssh/known_hosts" ]]; then
+            ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey")
+            ssh "${ssh_opts[@]}" "ubuntu@$SITE_A1_HOST" 'bash -s' -- "$REMOTE_STAGE" <<'REMOTE'
+          set -Eeuo pipefail
+          stage=$1
+          case "$stage" in /tmp/production-functional-audit-*) rm -rf -- "$stage" ;; *) exit 2 ;; esac
+          REMOTE
+          fi
+          rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
 
       - name: Publish failure summary
         if: failure()
