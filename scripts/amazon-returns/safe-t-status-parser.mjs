@@ -27,7 +27,7 @@ function statusFrom(body) {
   const statusSection = normalized.match(/status da reivindicacao\s*\n?\s*([^\n]{1,80})/i)?.[1] ?? '';
   const candidate = statusSection || normalized;
   if (/\bnegad[oa]\b/.test(candidate)) return 'DENIED';
-  if (/\baprovad[oa]\b/.test(candidate)) return 'APPROVED';
+  if (/\b(?:aprovad[oa]|concedid[oa])\b/.test(candidate)) return 'APPROVED';
   if (/\binformac(?:ao|oes) solicitad[ao]s?\b|\bmais informac(?:ao|oes) necessarias?\b/.test(candidate)) return 'INFO_REQUESTED';
   if (/\bem analise\b|\bpendente\b|\bem andamento\b/.test(candidate)) return 'PENDING';
   return 'UNKNOWN';

@@ -54,6 +54,7 @@ bcSame('2026-09-08T14:29:00-03:00', $parsedEnglishDeadline['appeal_deadline_at']
 bcAssert(str_contains((string)$parsedDenied['decision_text'], 'devolução foi considerada concluída'), 'Amazon denial text must be retained for adapted appeal.');
 bcAssert(preg_match('/^[a-f0-9]{64}$/', (string)$parsedDenied['decision_fingerprint']) === 1, 'Denial must get deterministic fingerprint.');
 bcSame('APPROVED', runNodeJsonScript('scripts/amazon-returns/safe-t-status-parser.mjs', ['body_text'=>"Status da reivindicação\nAprovado"] )['claim_status'], 'Aprovado must map to APPROVED.');
+bcSame('APPROVED', runNodeJsonScript('scripts/amazon-returns/safe-t-status-parser.mjs', ['body_text'=>"Concedido"] )['claim_status'], 'Seller Central status Concedido must map to APPROVED.');
 bcSame('INFO_REQUESTED', runNodeJsonScript('scripts/amazon-returns/safe-t-status-parser.mjs', ['body_text'=>"Status da reivindicação\nInformações solicitadas"] )['claim_status'], 'Explicit information request must map to INFO_REQUESTED.');
 bcSame('UNKNOWN', runNodeJsonScript('scripts/amazon-returns/safe-t-status-parser.mjs', ['body_text'=>"Status da reivindicação\nNovo texto desconhecido"] )['claim_status'], 'Unknown Seller Central status must fail closed.');
 
