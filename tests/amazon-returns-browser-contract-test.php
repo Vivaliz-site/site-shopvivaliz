@@ -9,21 +9,49 @@ function bcSame(mixed $expected, mixed $actual, string $message): void {
 }
 function bcAssert(bool $condition, string $message): void { if (!$condition) throw new RuntimeException($message); }
 
-function runNodeAdapter(array $input, array $env = []): array {
-    $script = realpath(__DIR__ . '/../scripts/amazon-returns/seller-central-adapter.mjs');
-    if ($script === false) throw new RuntimeException('Adapter script missing.');
+function runNodeJsonScript(string $relativeScript, array $input, array $env = []): array {
+    $script = realpath(__DIR__ . '/../' . ltrim($relativeScript, '/'));
+    if ($script === false) throw new RuntimeException('Node script missing: ' . $relativeScript);
     $processEnv = array_merge(getenv() ?: [], $env);
     $proc = proc_open(['node', $script], [['pipe','r'],['pipe','w'],['pipe','w']], $pipes, null, $processEnv);
-    if (!is_resource($proc)) throw new RuntimeException('Could not start adapter.');
+    if (!is_resource($proc)) throw new RuntimeException('Could not start Node script.');
     fwrite($pipes[0], json_encode($input, JSON_THROW_ON_ERROR)); fclose($pipes[0]);
     $stdout = stream_get_contents($pipes[1]); fclose($pipes[1]);
     $stderr = stream_get_contents($pipes[2]); fclose($pipes[2]);
     $rc = proc_close($proc);
-    if ($rc !== 0) throw new RuntimeException('Adapter failed: ' . $stderr);
+    if ($rc !== 0) throw new RuntimeException('Node script failed: ' . $stderr);
     $decoded = json_decode($stdout, true, 512, JSON_THROW_ON_ERROR);
-    if (!is_array($decoded)) throw new RuntimeException('Adapter output invalid.');
+    if (!is_array($decoded)) throw new RuntimeException('Node script output invalid.');
     return $decoded;
 }
+function runNodeAdapter(array $input, array $env = []): array {
+    return runNodeJsonScript('scripts/amazon-returns/seller-central-adapter.mjs', $input, $env);
+}
+
+$deniedPage = <<<'TXT'
+ID do pedido: 702-9582024-4340203
+Data da reivindicação
+seg., ago. 31, 2026, 10:00 PM
+Status da reivindicação
+Negado
+Data de negação
+ter., set. 01, 2026, 01:23 PM
+Recorrer por: ter., set. 08, 2026, 01:23 PM
+ID da reivindicação SAFE-T: 98143-99485-9285859
+Comentário da Amazon: A devolução foi considerada concluída e a solicitação não é elegível.
+TXT;
+$parsedDenied = runNodeJsonScript('scripts/amazon-returns/safe-t-status-parser.mjs', [
+    'body_text'=>$deniedPage,
+    'expected'=>['safe_t_id'=>'98143-99485-9285859','order_id'=>'702-9582024-4340203'],
+]);
+bcSame('DENIED', $parsedDenied['claim_status'], 'Seller Central text “Negado” must map to DENIED.');
+bcSame('2026-09-01T13:23:00-03:00', $parsedDenied['denied_at'], 'Denial timestamp must be captured from Seller Central.');
+bcSame('2026-09-08T13:23:00-03:00', $parsedDenied['appeal_deadline_at'], '“Recorrer por” deadline must be captured exactly.');
+bcAssert(str_contains((string)$parsedDenied['decision_text'], 'devolução foi considerada concluída'), 'Amazon denial text must be retained for adapted appeal.');
+bcAssert(preg_match('/^[a-f0-9]{64}$/', (string)$parsedDenied['decision_fingerprint']) === 1, 'Denial must get deterministic fingerprint.');
+bcSame('APPROVED', runNodeJsonScript('scripts/amazon-returns/safe-t-status-parser.mjs', ['body_text'=>"Status da reivindicação\nAprovado"] )['claim_status'], 'Aprovado must map to APPROVED.');
+bcSame('INFO_REQUESTED', runNodeJsonScript('scripts/amazon-returns/safe-t-status-parser.mjs', ['body_text'=>"Status da reivindicação\nInformações solicitadas"] )['claim_status'], 'Explicit information request must map to INFO_REQUESTED.');
+bcSame('UNKNOWN', runNodeJsonScript('scripts/amazon-returns/safe-t-status-parser.mjs', ['body_text'=>"Status da reivindicação\nNovo texto desconhecido"] )['claim_status'], 'Unknown Seller Central status must fail closed.');
 
 $base = [
     'action'=>'SAFE_T_SUBMIT',
@@ -65,7 +93,6 @@ $disabledResult = runNodeAdapter($enabled);
 bcSame('ACCEPTED', $disabledResult['status'], 'Disabled write flag remains safe evaluation.');
 bcSame(false, $disabledResult['submitted'], 'Write flag off cannot submit.');
 bcSame(true, $disabledResult['dry_run'], 'Write flag off forces effective dry-run.');
-
 
 $router = tempnam(sys_get_temp_dir(), 'amazon-bridge-test-');
 if ($router === false) throw new RuntimeException('Could not create bridge test router.');
