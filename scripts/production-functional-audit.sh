@@ -15,7 +15,7 @@ request() {
   if [[ "$method" == POST ]]; then
     code=$(curl -sS -A "$AUDIT_USER_AGENT" --max-time 30 -o "$output" -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data "$body" "$url") || fail network "$url"
   else
-    code=$(curl -sSL -A "$AUDIT_USER_AGENT" --max-time 30 -o "$output" -w '%{http_code}' "$url") || fail network "$url"
+    code=$(curl -sSL -A "$AUDIT_USER_AGENT" --max-time 30 -D "${output}.headers" -o "$output" -w '%{http_code}' "$url") || fail network "$url"
   fi
   printf '%s' "$code"
 }
@@ -32,7 +32,11 @@ PY
 
 for path in / /catalogo /carrinho /checkout; do
   code=$(request GET "$BASE_URL$path" "" "$TMPDIR/page")
-  [[ "$code" == 200 ]] || fail page "$path http=$code"
+  if [[ "$code" != 200 ]]; then
+    headers=$(grep -Eai "^(server|cf-ray|content-type|location):" "$TMPDIR/page.headers" | tr "\n" " " | head -c 400)
+    body=$(head -c 300 "$TMPDIR/page" | tr "\r\n" "  ")
+    fail page "$path http=$code headers=$headers body=$body"
+  fi
   pass page "$path http=200"
 done
 
