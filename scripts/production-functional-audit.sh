@@ -70,7 +70,9 @@ import json, pathlib, sys
 r=json.loads(pathlib.Path(sys.argv[1]).read_text())
 items={x.get('key'):x for x in r.get('integrations',[]) if isinstance(x,dict)}
 for key in ('mercado_pago','melhor_envio','olist_tiny'):
-    if items.get(key,{}).get('status') != 'connected':
+    status=items.get(key,{}).get('status')
+    print(f'INTEGRATION_STATUS key={key} status={status}')
+    if status != 'connected':
         raise SystemExit(1)
 summary = r.get('summary') or {}
 if int(summary.get('failed') or 0) != 0:
