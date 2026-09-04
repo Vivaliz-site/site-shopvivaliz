@@ -75,6 +75,20 @@ jobs:
           cd /home/ubuntu/amazon-returns-safet
           git fetch --quiet origin main
           git merge --ff-only origin/main
+          old_env=/home/ubuntu/shopvivaliz-deploy/shared/.env
+          if grep -Eq '^AMAZON_RETURNS_(SAFE_T_WRITE|APPEAL_WRITE|EMAIL_REVIEW_WRITE|SUPPORT_WRITE)=1$' "$old_env"; then
+            echo 'old_external_write_flag_enabled=true' >&2
+            exit 1
+          fi
+          php -r 'require "/home/ubuntu/shopvivaliz-deploy/current/includes/pdo-database.php"; $db=sv_pdo(); $n=(int)$db->query("SELECT COUNT(*) FROM amazon_return_outbox WHERE status=\"PROCESSING\" AND kind<>\"SAFE_T_READ\"")->fetchColumn(); echo "old_processing_writes=$n\n"; if($n!==0) exit(2);'
+          old_enabled_line="$(grep -m1 '^AMAZON_RETURNS_ENABLED=' "$old_env" || true)"
+          rollback_old() {
+            if [ -n "$old_enabled_line" ]; then sudo sed -i "s/^AMAZON_RETURNS_ENABLED=.*/$old_enabled_line/" "$old_env"; fi
+            sudo systemctl enable --now shopvivaliz-amazon-returns.service >/dev/null 2>&1 || true
+          }
+          trap rollback_old ERR
+          sudo sed -i 's/^AMAZON_RETURNS_ENABLED=.*/AMAZON_RETURNS_ENABLED=0/' "$old_env"
+          sudo systemctl disable --now shopvivaliz-amazon-returns.service >/dev/null
           sudo env \
             CLOUDFLARE_DNS_API_TOKEN_FILE=/home/ubuntu/cloudflare-dns-token.next \
             AMAZON_RETURNS_SOURCE_ENV=/home/ubuntu/shopvivaliz-deploy/shared/.env \
@@ -85,13 +99,17 @@ jobs:
           sudo systemctl is-enabled --quiet amazon-returns-safet.service
           sudo systemctl is-active --quiet amazon-returns-deploy.timer
           sudo php /home/ubuntu/amazon-returns-deploy/current/scripts/shadow-audit.php
+          if systemctl is-active --quiet shopvivaliz-amazon-returns.service; then echo 'old_service_still_active=true' >&2; exit 1; fi
+          old_frozen=true
+          trap - ERR
+          echo 'single_writer_cutover=true'
           REMOTE
 
       - name: Validate isolated health
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 90); do
             if body="$(curl -fsS --max-time 10 https://returns.shopvivaliz.com.br/api/health.php 2>/dev/null)"; then
               status="$(jq -r '.status // empty' <<<"$body")"
               service="$(jq -r '.service // empty' <<<"$body")"
