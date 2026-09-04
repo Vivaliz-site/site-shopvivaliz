@@ -21,7 +21,6 @@ final class SvAmazonSafeTStatusService
             (string)($read['denied_at'] ?? ''),
             (string)($read['appeal_deadline_at'] ?? ''),
             (string)($read['decision_fingerprint'] ?? ''),
-            (string)($snapshotHash ?? ''),
         ];
         return hash('sha256', implode('|', $parts));
     }
