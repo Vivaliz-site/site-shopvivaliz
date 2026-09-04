@@ -1,0 +1,208 @@
+name: Sync AI keys to backend A1 (one-time)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Digite SYNC_AI_KEYS para confirmar'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-ai-keys-to-backend-a1
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Escrever OPENAI_API_KEY, ANTHROPIC_API_KEY e GEMINI_API_KEY no backend A1
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      VM_HOST: 144.22.157.209
+      VM_USER: ubuntu
+      VM_ENV: /home/ubuntu/shopvivaliz-deploy/shared/.env
+      VM_PAYLOAD: /home/ubuntu/shopvivaliz-deploy/shared/.codex-ai-keys-payload
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - name: Confirmar execucao manual
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.confirmation }}" != 'SYNC_AI_KEYS' ]]; then
+            echo '::error::Confirmacao invalida. Digite exatamente SYNC_AI_KEYS.'
+            exit 1
+          fi
+
+      - name: Validar e mascarar chaves de entrada
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in OPENAI_API_KEY ANTHROPIC_API_KEY GEMINI_API_KEY; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::$name ausente nos GitHub Secrets do repositorio."
+              exit 1
+            fi
+            echo "::add-mask::${!name}"
+          done
+
+      - name: Configurar SSH autenticado
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          if [[ -z "$key" || -z "$known_hosts" ]]; then
+            echo '::error::Chave SSH ou known_hosts fixado nao configurado.'
+            exit 1
+          fi
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Transferir payload temporario
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+
+          Path('/tmp/ai-keys-payload').write_text(
+              'OPENAI_API_KEY=' + os.environ['OPENAI_API_KEY'] + '\n'
+              'ANTHROPIC_API_KEY=' + os.environ['ANTHROPIC_API_KEY'] + '\n'
+              'GEMINI_API_KEY=' + os.environ['GEMINI_API_KEY'] + '\n',
+              encoding='utf-8',
+          )
+          PY
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" \
+            /tmp/ai-keys-payload "${VM_USER}@${VM_HOST}:${VM_PAYLOAD}"
+          rm -f /tmp/ai-keys-payload
+
+      - name: Fundir no shared env e validar auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" \
+            "python3 - '$VM_ENV' '$VM_PAYLOAD'" <<'PY'
+          import os
+          import re
+          import shutil
+          import subprocess
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          env_path = Path(sys.argv[1])
+          payload_path = Path(sys.argv[2])
+          payload = {}
+          for raw in payload_path.read_text(encoding='utf-8').splitlines():
+              if '=' in raw:
+                  key, value = raw.split('=', 1)
+                  payload[key] = value
+
+          required = ('OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY')
+          if any(not payload.get(key) for key in required):
+              raise SystemExit('payload de chaves incompleto')
+          if not env_path.is_file():
+              raise SystemExit('shared env ausente')
+
+          original_stat = env_path.stat()
+          original_mode = original_stat.st_mode & 0o777
+          original_uid = original_stat.st_uid
+          original_gid = original_stat.st_gid
+
+          backup = env_path.with_name('.env.backend-a1-ai-backup-' + datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S'))
+          shutil.copy2(env_path, backup)
+          backup.chmod(0o600)
+
+          data = env_path.read_text(encoding='utf-8')
+          for key, value in payload.items():
+              line = key + '=' + value
+              pattern = r'^' + re.escape(key) + r'=.*$'
+              if re.search(pattern, data, flags=re.MULTILINE):
+                  data = re.sub(pattern, line, data, count=1, flags=re.MULTILINE)
+              else:
+                  data = data.rstrip('\n') + '\n' + line + '\n'
+
+          tmp_path = env_path.with_name('.env.backend-a1-ai-tmp')
+          tmp_path.write_text(data, encoding='utf-8')
+          tmp_path.chmod(original_mode)
+          try:
+              os.chown(tmp_path, original_uid, original_gid)
+          except PermissionError:
+              pass
+          os.replace(tmp_path, env_path)
+          payload_path.unlink(missing_ok=True)
+
+          post_stat = env_path.stat()
+          print('env_file_mode_before=' + oct(original_mode))
+          print('env_file_mode_after=' + oct(post_stat.st_mode & 0o777))
+          print('env_file_readable_by_owner_or_group=' + str(bool(post_stat.st_mode & 0o044)))
+
+          def probe(cmd):
+              result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+              return result.stdout.strip()
+
+          openai_models_code = probe([
+              'curl', '-sS', '-o', '/dev/null', '-w', '%{http_code}',
+              '--max-time', '20', 'https://api.openai.com/v1/models',
+              '-H', 'Authorization: Bearer ' + payload['OPENAI_API_KEY'],
+          ])
+          openai_responses_code = probe([
+              'curl', '-sS', '-o', '/dev/null', '-w', '%{http_code}',
+              '--max-time', '20', 'https://api.openai.com/v1/responses',
+              '-H', 'Authorization: Bearer ' + payload['OPENAI_API_KEY'],
+              '-H', 'Content-Type: application/json',
+              '-d', '{"model":"gpt-4o-mini","input":"ping","max_output_tokens":1}',
+          ])
+          anthropic_code = probe([
+              'curl', '-sS', '-o', '/dev/null', '-w', '%{http_code}',
+              '--max-time', '20', 'https://api.anthropic.com/v1/messages',
+              '-H', 'x-api-key: ' + payload['ANTHROPIC_API_KEY'],
+              '-H', 'anthropic-version: 2023-06-01',
+              '-H', 'content-type: application/json',
+              '-d', '{"model":"claude-3-5-haiku-20241022","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}',
+          ])
+          gemini_code = probe([
+              'curl', '-sS', '-o', '/dev/null', '-w', '%{http_code}',
+              '--max-time', '20',
+              'https://generativelanguage.googleapis.com/v1beta/models?key=' + payload['GEMINI_API_KEY'],
+          ])
+
+          print('openai_api_key_present=true')
+          print('anthropic_api_key_present=true')
+          print('gemini_api_key_present=true')
+          print('openai_models_http_code=' + openai_models_code)
+          print('openai_responses_http_code=' + openai_responses_code)
+          print('anthropic_http_code=' + anthropic_code)
+          print('gemini_http_code=' + gemini_code)
+
+          if openai_models_code != '200':
+              raise SystemExit('OpenAI models probe falhou')
+          if openai_responses_code != '200':
+              raise SystemExit('OpenAI responses probe falhou')
+          if anthropic_code not in ('200', '201'):
+              raise SystemExit('Anthropic probe falhou')
+          if gemini_code not in ('200', '201'):
+              raise SystemExit('Gemini probe falhou')
+          PY
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
