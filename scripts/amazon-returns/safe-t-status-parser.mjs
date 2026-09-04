@@ -42,11 +42,27 @@ function extractLabeledDate(body, label) {
 }
 
 function decisionText(body, status) {
-  const m = body.match(/(?:Coment[aá]rio da Amazon|Motivo(?: da nega[cç][aã]o)?|Detalhes da decis[aã]o)\s*:?\s*([^\n]+(?:\n(?!\s*(?:ID do pedido|Data da reivindica[cç][aã]o|Status da reivindica[cç][aã]o|Data de nega[cç][aã]o|Recorrer por|ID da reivindica[cç][aã]o SAFE-T)\b)[^\n]+)*)/i);
+  const strong = /(?:Analisamos (?:seu|o) recurso[^\n]*|Negamos sua reivindica[cç][aã]o SAFE-T[^\n]*|Nenhuma a[cç][aã]o [ée] necess[aá]ria da nossa parte neste momento[^\n]*|Sua reivindica[cç][aã]o n[aã]o foi registrada dentro do prazo do recurso[^\n]*)/gi;
+  const matches = [...body.matchAll(strong)];
+  if (matches.length) {
+    const start = matches[matches.length - 1].index ?? 0;
+    const tail = body.slice(start);
+    const stop = tail.search(/\n(?:Account Specialist|Amazon\.com\.br|Mapa do site)\b/i);
+    return compact(stop > 0 ? tail.slice(0, stop) : tail).slice(0, 8000);
+  }
+  const m = body.match(/(?:Coment[aá]rio da Amazon|Motivo da nega[cç][aã]o|Detalhes da decis[aã]o)\s*:?\s*([^\n]+(?:\n(?!\s*(?:ID do pedido|Data da reivindica[cç][aã]o|Status da reivindica[cç][aã]o|Data de nega[cç][aã]o|Recorrer por|ID da reivindica[cç][aã]o SAFE-T)\b)[^\n]+)*)/i);
   const extracted = compact(m?.[1] ?? '');
   if (extracted) return extracted.slice(0, 8000);
   if (status === 'DENIED' || status === 'INFO_REQUESTED') return compact(body).slice(0, 8000);
   return '';
+}
+
+function appealState(body, decision) {
+  const normalizedBody = body.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const normalizedDecision = decision.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const submitted = /analisamos (?:seu|o) recurso|analise do recurso|recurso referente a decisao|solicito (?:nova )?revisao|solicito[^\n]{0,160}\brecurso\b/.test(normalizedBody);
+  const denied = submitted && /\brecurso\b/.test(normalizedDecision) && /\bnegamos\b|\bnegad[oa]\b|reafirmamos nossa decisao/.test(normalizedDecision);
+  return { appeal_submitted: submitted, appeal_denied: denied };
 }
 
 export function parseSafeTStatus(rawBody, expected = {}) {
@@ -55,6 +71,7 @@ export function parseSafeTStatus(rawBody, expected = {}) {
   const safeTId = clean(expected.safe_t_id) || (body.match(/\b\d{5}-\d{5}-\d{7}\b/)?.[0] ?? '');
   const orderId = clean(expected.order_id) || (body.match(/\b\d{3}-\d{7}-\d{7}\b/)?.[0] ?? '');
   const decision = decisionText(body, claimStatus);
+  const appeal = appealState(body, decision);
   return {
     claim_status: claimStatus,
     safe_t_id: safeTId || null,
@@ -63,6 +80,8 @@ export function parseSafeTStatus(rawBody, expected = {}) {
     appeal_deadline_at: extractLabeledDate(body, 'Recorrer por'),
     decision_text: decision || null,
     decision_fingerprint: decision ? sha(decision.toLowerCase().replace(/\s+/g, ' ').trim()) : null,
+    appeal_submitted: appeal.appeal_submitted,
+    appeal_denied: appeal.appeal_denied,
   };
 }
 

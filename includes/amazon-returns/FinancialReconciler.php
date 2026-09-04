@@ -13,13 +13,30 @@ final class SvAmazonFinancialReconciler
         $credit = 0.0;
         $ids = [];
         $unclassified = 0;
+        $lifecycleGroups = [];
         foreach ($transactions as $tx) {
             if (!is_array($tx)) continue;
             $effect = $this->sellerEffect($tx);
             if ($effect === null) { $unclassified++; continue; }
-            $credit += $effect;
             $id = trim((string)($tx['transaction_id'] ?? ''));
             if ($id !== '') $ids[] = $id;
+            $status = strtoupper(trim((string)($tx['transaction_status'] ?? '')));
+            $type = strtoupper(trim((string)($tx['transaction_type'] ?? '')));
+            if ($type !== '' && in_array($status, ['RELEASED','DEFERRED_RELEASED'], true)) {
+                $amountData = is_array($tx['total_amount'] ?? null) ? $tx['total_amount'] : [];
+                $currency = strtoupper(trim((string)($amountData['currency'] ?? '')));
+                $related = $tx['related_identifiers'] ?? $tx['relatedIdentifiers'] ?? [];
+                $relatedKey = is_array($related) ? hash('sha256', json_encode($related, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '[]') : '';
+                $key = $type . '|' . number_format($effect, 2, '.', '') . '|' . $currency . '|' . $relatedKey;
+                if (!isset($lifecycleGroups[$key])) $lifecycleGroups[$key] = ['effect'=>$effect,'statuses'=>[]];
+                $lifecycleGroups[$key]['statuses'][$status] = (int)($lifecycleGroups[$key]['statuses'][$status] ?? 0) + 1;
+                continue;
+            }
+            $credit += $effect;
+        }
+        foreach ($lifecycleGroups as $group) {
+            $occurrences = max((int)($group['statuses']['RELEASED'] ?? 0), (int)($group['statuses']['DEFERRED_RELEASED'] ?? 0));
+            $credit += ((float)$group['effect']) * $occurrences;
         }
         $credit = max(0.0, $credit);
         $outstanding = max(0.0, $expected - $credit);

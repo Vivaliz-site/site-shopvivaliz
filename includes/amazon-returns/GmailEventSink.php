@@ -23,6 +23,13 @@ final class SvAmazonGmailEventSink
         if ($type === 'SAFE_T_UPDATED_EMAIL') {
             return ['safe_t_id'=>trim((string)($event['safe_t_id'] ?? ''))];
         }
+        if ($type === 'SAFE_T_EMAIL_REVIEW_RESPONSE') {
+            $patch = ['safe_t_id'=>trim((string)($event['safe_t_id'] ?? ''))];
+            $outcome = strtoupper(trim((string)($event['review_outcome'] ?? 'UNKNOWN')));
+            if ($outcome === 'APPROVED') $patch['state'] = SvAmazonReturnStates::CREDIT_PENDING;
+            elseif ($outcome === 'DENIED') $patch['state'] = SvAmazonReturnStates::SUPPORT_ESCALATION;
+            return $patch;
+        }
         return ['state'=>SvAmazonReturnStates::POLICY_REVIEW_REQUIRED];
     }
 
@@ -55,6 +62,7 @@ final class SvAmazonGmailEventSink
             'safe_t_id'=>$event['safe_t_id'] ?? null,
             'amount'=>$event['amount'] ?? null,
             'currency'=>$event['currency'] ?? null,
+            'review_outcome'=>$event['review_outcome'] ?? null,
             'financial_truth'=>false,
             'content_sha256'=>$event['content_sha256'] ?? null,
         ];

@@ -40,7 +40,7 @@ final class SvAmazonSpApiEventSink
     /** @return array<string,mixed>|null */
     public static function refundObservation(array $transactions): ?array
     {
-        $amount = 0.0;
+        $groups = [];
         $dates = [];
         $ids = [];
 
@@ -52,13 +52,27 @@ final class SvAmazonSpApiEventSink
             $money = is_array($tx['total_amount'] ?? null) ? $tx['total_amount'] : [];
             $raw = $money['amount'] ?? null;
             if (!is_numeric($raw) || (float)$raw >= 0) continue;
-            $amount += abs((float)$raw);
+            $currency = strtoupper(trim((string)($money['currency'] ?? '')));
+            $unitAmount = number_format(abs((float)$raw), 2, '.', '');
+            $related = $tx['related_identifiers'] ?? $tx['relatedIdentifiers'] ?? [];
+            $relatedKey = is_array($related) ? hash('sha256', json_encode($related, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '[]') : '';
+            $key = $type . '|' . $unitAmount . '|' . $currency . '|' . $relatedKey;
+            if (!isset($groups[$key])) $groups[$key] = ['amount'=>(float)$unitAmount,'statuses'=>[]];
+            $groups[$key]['statuses'][$status] = (int)($groups[$key]['statuses'][$status] ?? 0) + 1;
             $date = self::utcSql($tx['posted_at'] ?? null);
             if ($date !== null) $dates[] = $date;
             $id = trim((string)($tx['transaction_id'] ?? ''));
             if ($id !== '') $ids[] = $id;
         }
-        if ($amount <= 0.00001 || $dates === []) return null;
+        if ($groups === [] || $dates === []) return null;
+        $amount = 0.0;
+        foreach ($groups as $group) {
+            $released = (int)($group['statuses']['RELEASED'] ?? 0);
+            $deferredReleased = (int)($group['statuses']['DEFERRED_RELEASED'] ?? 0);
+            $economicOccurrences = max($released, $deferredReleased);
+            $amount += ((float)$group['amount']) * $economicOccurrences;
+        }
+        if ($amount <= 0.00001) return null;
         sort($dates, SORT_STRING);
         return [
             'seller_debit_at'=>$dates[0],

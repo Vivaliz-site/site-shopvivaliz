@@ -19,6 +19,7 @@ final class SvAmazonReturnStates
     public const APPEAL_SUBMITTED = 'APPEAL_SUBMITTED';
     public const APPEAL_APPROVED = 'APPEAL_APPROVED';
     public const APPEAL_DENIED_FINAL = 'APPEAL_DENIED_FINAL';
+    public const EMAIL_REVIEW_SENT = 'EMAIL_REVIEW_SENT';
     public const CREDIT_PENDING = 'CREDIT_PENDING';
     public const RECOVERED = 'RECOVERED';
     public const SUPPORT_ESCALATION = 'SUPPORT_ESCALATION';
@@ -45,6 +46,7 @@ final class SvAmazonReturnStates
             self::APPEAL_SUBMITTED,
             self::APPEAL_APPROVED,
             self::APPEAL_DENIED_FINAL,
+            self::EMAIL_REVIEW_SENT,
             self::CREDIT_PENDING,
             self::RECOVERED,
             self::SUPPORT_ESCALATION,

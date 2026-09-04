@@ -64,8 +64,8 @@ $denied = eligibleCase([
     'submitted_facts' => ['data de devolução','rastreio','comprovante'],
 ]);
 $openSupport = $engine->nextAction($denied, [], $eligiblePolicy);
-sdSame('SELLER_SUPPORT_OPEN', $openSupport['action'], 'Repeated non-substantive denial must open Ajuda instead of looping appeal.');
-sdSame($analyzer->fingerprint($denialB), $openSupport['denial_fingerprint'], 'Support escalation must retain normalized denial fingerprint.');
+sdSame('SAFE_T_APPEAL', $openSupport['action'], 'Any first SAFE-T denial must appeal in Seller Central before email or Support escalation.');
+sdSame($analyzer->fingerprint($denialB), $openSupport['denial_fingerprint'], 'First appeal must retain normalized denial fingerprint.');
 
 $timelineDenialText = 'Negado porque a devolução consta entregue ao vendedor.';
 $timelineDenied = eligibleCase([
@@ -85,12 +85,19 @@ $timeline = [[
 $timelineAppeal = $engine->nextAction($timelineDenied, $timeline, ['eligible'=>false,'state'=>'POLICY_REVIEW_REQUIRED']);
 sdSame('SAFE_T_APPEAL', $timelineAppeal['action'], 'A Seller Central denial event must drive appeal even when the historical claim lacks original eligibility classification.');
 
-$activeSupport = $denied;
-$activeSupport['support_case_id'] = '21839000001';
-$activeSupport['support_case_status'] = 'OPEN';
-sdSame('WAIT', $engine->nextAction($activeSupport, [], $eligiblePolicy)['action'], 'One active support escalation must suppress duplicate ticket.');
-$activeSupport['new_support_fact'] = true;
-sdSame('SELLER_SUPPORT_UPDATE', $engine->nextAction($activeSupport, [], $eligiblePolicy)['action'], 'New fact updates active support case.');
+$appealDenied = eligibleCase([
+    'safe_t_id'=>'12472-25597-6629839',
+    'state'=>'APPEAL_DENIED_FINAL',
+    'refund_initiator'=>'UNKNOWN',
+    'seller_debit_at'=>null,
+]);
+$emailReview = $engine->nextAction($appealDenied, $timeline, ['eligible'=>false,'state'=>'POLICY_REVIEW_REQUIRED']);
+sdSame('SAFE_T_EMAIL_REVIEW', $emailReview['action'], 'Denied SAFE-T appeal must escalate to detailed review email, not another appeal or Help loop.');
+sdAssert(preg_match('/^[a-f0-9]{64}$/', (string)($emailReview['idempotency_key'] ?? '')) === 1, 'Email review must have deterministic idempotency key.');
+$emailDenied = $appealDenied;
+$emailDenied['state'] = 'SUPPORT_ESCALATION';
+$supportAfterEmail = $engine->nextAction($emailDenied, $timeline, ['eligible'=>false,'state'=>'POLICY_REVIEW_REQUIRED']);
+sdSame('SELLER_SUPPORT_OPEN', $supportAfterEmail['action'], 'Denied detailed email review must escalate to one Seller Support case.');
 
 $newDenial = $denied;
 $newDenial['latest_denial_text'] = 'Negada porque o rastreio mostra entrega ao vendedor em 30/08/2026. Envie comprovante de divergência.';

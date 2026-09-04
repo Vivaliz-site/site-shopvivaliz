@@ -12,16 +12,17 @@ function rtAssert(bool $condition, string $message): void { if (!$condition) thr
 $defaults = new SvAmazonReturnsConfig([]);
 rtSame(false, $defaults->enabled(), 'Master switch defaults off.');
 rtSame('dry-run', $defaults->mode(), 'Mode defaults dry-run.');
-foreach (['gmail_ingest','safe_t_write','appeal_write','support_write','policy_monitor'] as $flag) rtSame(false, $defaults->flag($flag), "{$flag} defaults off.");
+foreach (['gmail_ingest','safe_t_write','appeal_write','email_review_write','support_write','policy_monitor'] as $flag) rtSame(false, $defaults->flag($flag), "{$flag} defaults off.");
 rtSame(false, $defaults->externalWriteAllowed('SAFE_T_SUBMIT'), 'Default cannot write SAFE-T.');
 
 $prodOnly = new SvAmazonReturnsConfig(['AMAZON_RETURNS_MODE'=>'production']);
 rtSame(false, $prodOnly->externalWriteAllowed('SAFE_T_SUBMIT'), 'Production mode alone cannot enable writes.');
 $enabled = new SvAmazonReturnsConfig([
- 'AMAZON_RETURNS_ENABLED'=>'1','AMAZON_RETURNS_MODE'=>'production','AMAZON_RETURNS_SAFE_T_WRITE'=>'1','AMAZON_RETURNS_APPEAL_WRITE'=>'1','AMAZON_RETURNS_SUPPORT_WRITE'=>'1',
+ 'AMAZON_RETURNS_ENABLED'=>'1','AMAZON_RETURNS_MODE'=>'production','AMAZON_RETURNS_SAFE_T_WRITE'=>'1','AMAZON_RETURNS_APPEAL_WRITE'=>'1','AMAZON_RETURNS_EMAIL_REVIEW_WRITE'=>'1','AMAZON_RETURNS_SUPPORT_WRITE'=>'1',
 ]);
 rtSame(true, $enabled->externalWriteAllowed('SAFE_T_SUBMIT'), 'Explicit safe-t flag enables submit only with master+production.');
 rtSame(true, $enabled->externalWriteAllowed('SAFE_T_APPEAL'), 'Explicit appeal flag.');
+rtSame(true, $enabled->externalWriteAllowed('SAFE_T_EMAIL_REVIEW'), 'Explicit email review flag.');
 rtSame(true, $enabled->externalWriteAllowed('SELLER_SUPPORT_OPEN'), 'Explicit support flag.');
 rtSame(false, $enabled->externalWriteAllowed('DELETE'), 'Unknown action never writes.');
 
@@ -51,9 +52,9 @@ $policies = SvAmazonReturnPolicySeeder::definitions();
 rtSame(3, count($policies), 'Initial policy seed has standard + FBA Onsite + DBA.');
 $byProgram=[]; foreach($policies as $p){$byProgram[$p['program']]=$p; rtAssert(preg_match('/^[a-f0-9]{64}$/',$p['source_hash'])===1,'Policy source hash required.'); rtAssert(str_starts_with($p['source_url'],'https://sellercentral.amazon.com.br/'),'Policy source must be Amazon Seller Central.');}
 rtSame('A2Q3Y263D00KWC',$byProgram['STANDARD']['marketplace_id'],'Brazil policy seed must use the SP-API marketplace ID, not the country code.');
-rtSame(45,$byProgram['STANDARD']['eligibility_days'],'Standard rule D+45.');
-rtSame(60,$byProgram['FBA_ONSITE']['eligibility_days'],'FBA Onsite D+60.');
-rtSame(60,$byProgram['DELIVERY_BY_AMAZON']['eligibility_days'],'DBA D+60.');
+rtSame(75,$byProgram['STANDARD']['eligibility_days'],'Standard rule D+75.');
+rtSame(75,$byProgram['FBA_ONSITE']['eligibility_days'],'FBA Onsite D+75.');
+rtSame(75,$byProgram['DELIVERY_BY_AMAZON']['eligibility_days'],'DBA D+75.');
 rtSame('2026-04-21',$byProgram['FBA_ONSITE']['effective_from'],'D+60 effective date.');
 rtSame('2026-04-21',$byProgram['DELIVERY_BY_AMAZON']['effective_from'],'DBA D+60 effective date.');
 
@@ -66,6 +67,10 @@ $due=SvAmazonReturnsRuntime::dueTasks($state,new DateTimeImmutable('2026-09-01T1
 $service=(string)file_get_contents(__DIR__.'/../deploy/systemd/shopvivaliz-amazon-returns.service');
 foreach(['User=www-data','Group=www-data','WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/current','EnvironmentFile=-/home/ubuntu/shopvivaliz-deploy/shared/.env','ExecStart=/usr/bin/php /home/ubuntu/shopvivaliz-deploy/current/workers/amazon-returns/daemon.php','Restart=always','NoNewPrivileges=true'] as $needle) rtAssert(str_contains($service,$needle),'Systemd service missing '.$needle);
 $daemon=(string)file_get_contents(__DIR__.'/../workers/amazon-returns/daemon.php'); rtAssert(str_contains($daemon,'--once'),'Daemon must support one-shot validation.'); rtAssert(str_contains($daemon,'AMAZON_RETURNS_RUNTIME_STATE_FILE'),'Daemon state path must be configurable/outside repo.'); rtAssert(str_contains($daemon,"sellerCentralBridgeMode() === 'polling'"),'Linux daemon must not claim Seller Central outbox in remote polling mode.');
+rtAssert(!str_contains($daemon, 'schedule($this->db, $projected, [], $policy)'), 'Scheduler must not discard SAFE-T status timeline when enqueuing appeal/email actions.');
+rtAssert(str_contains($daemon, 'dependencyForAction'), 'Scheduler must route email review through Gmail readiness and Seller Central writes through browser readiness.');
+rtAssert(str_contains($daemon, 'claimBatch($this->db, 10, [\'SAFE_T_EMAIL_REVIEW\'])'), 'Gmail task must claim only SAFE-T email review outbox jobs.');
+rtAssert(str_contains($daemon, "['SAFE_T_SUBMIT','SAFE_T_APPEAL','SELLER_SUPPORT_OPEN','SELLER_SUPPORT_UPDATE']"), 'Seller Central task must be isolated from email review jobs.');
 rtAssert(str_contains($daemon, "require_once __DIR__ . '/../../includes/amazon-returns/ReturnsReport.php'"), 'Daemon must load official returns report ingestion.');
 rtAssert(str_contains($daemon, "'pending_report'"), 'Daemon must retain a pending report across cycles.');
 rtAssert(str_contains($daemon, 'getReport(') && str_contains($daemon, 'downloadReportDocument('), 'Daemon must complete the Reports lifecycle.');

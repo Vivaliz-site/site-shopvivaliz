@@ -164,6 +164,9 @@ rbAssert(str_contains($statusWorkerSource, 'SAFE_T_READ'), 'Status worker must b
 rbAssert(!str_contains($statusWorkerSource, 'SAFE_T_SUBMIT'), 'Read-only status worker must not contain SAFE-T submission action.');
 rbAssert(!str_contains($statusWorkerSource, 'SAFE_T_APPEAL'), 'Read-only status worker must not contain appeal write action.');
 rbAssert(!str_contains($statusWorkerSource, 'if (import.meta.url === `file://${process.argv[1]}`)'), 'Persistent Windows worker must not use a POSIX-only import.meta entrypoint guard.');
+rbAssert(str_contains($statusWorkerSource, "addEventListener('close'"), 'Status worker must reject pending CDP requests when browser WebSocket closes.');
+rbAssert(str_contains($statusWorkerSource, "addEventListener('error'"), 'Status worker must reject pending CDP requests on browser WebSocket error.');
+rbAssert(str_contains($statusWorkerSource, 'rejectPending'), 'Status worker must centrally drain/reject pending CDP waiters.');
 
 $installerSource=(string)file_get_contents(__DIR__.'/../scripts/install-amazon-returns-windows-bridge.ps1');
 rbAssert(!str_contains($installerSource,'New-ScheduledTaskTrigger -AtStartup,'),'Windows bridge installer must use valid trigger expressions without a trailing command comma.');

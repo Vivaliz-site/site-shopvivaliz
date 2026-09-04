@@ -86,6 +86,14 @@ class Cdp {
       this.pending.delete(message.id);
       message.error ? waiter.reject(new Error(message.error.message || 'CDP error')) : waiter.resolve(message.result);
     });
+    ws.addEventListener('close', () => this.rejectPending(new Error('CDP WebSocket closed')));
+    ws.addEventListener('error', () => this.rejectPending(new Error('CDP WebSocket error')));
+  }
+
+  rejectPending(error) {
+    const reason = error instanceof Error ? error : new Error(String(error || 'CDP connection closed'));
+    for (const waiter of this.pending.values()) waiter.reject(reason);
+    this.pending.clear();
   }
 
   static async connect() {

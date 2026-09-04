@@ -15,6 +15,7 @@ require_once __DIR__ . '/../../includes/amazon-returns/SpApiEventSink.php';
 require_once __DIR__ . '/../../includes/amazon-returns/ReturnsReport.php';
 require_once __DIR__ . '/../../includes/amazon-returns/GmailApi.php';
 require_once __DIR__ . '/../../includes/amazon-returns/GmailEventSink.php';
+require_once __DIR__ . '/../../includes/amazon-returns/SafeTEmailReview.php';
 require_once __DIR__ . '/gmail-ingest.php';
 require_once __DIR__ . '/scheduler.php';
 require_once __DIR__ . '/reconcile.php';
@@ -105,23 +106,72 @@ final class SvAmazonReturnsDaemon
     /** @return array<string,mixed> */
     private function runGmail(): array
     {
-        if (!$this->config->flag('gmail_ingest')) return ['status'=>'SKIPPED_DISABLED'];
+        $ingestEnabled = $this->config->flag('gmail_ingest');
+        $reviewWriteEnabled = $this->config->externalWriteAllowed('SAFE_T_EMAIL_REVIEW');
+        if (!$ingestEnabled && !$reviewWriteEnabled) return ['status'=>'SKIPPED_DISABLED'];
         $gate = $this->dependencyGate('gmail');
         if (($gate['status'] ?? '') !== 'READY_NO_RUNTIME_PROVIDER') return $gate;
-        $ingestor = new SvAmazonGmailIngestor();
-        $cursor = SvAmazonGmailIngestor::loadCursor($this->db, 'history_id');
-        $pulled = (new SvAmazonGmailApiClient($this->config))->pull($cursor);
-        $result = $ingestor->ingest(
-            $pulled['messages'],
-            fn(array $event): int => SvAmazonGmailEventSink::persist($this->db, $event),
-            (string)$pulled['cursor']
-        );
-        SvAmazonGmailIngestor::saveCursor($this->db, 'history_id', (string)$pulled['cursor'], [
-            'message_count'=>$result['messages'],
-            'event_count'=>$result['events'],
-            'recovered_cursor'=>$pulled['recovered_cursor'] ?? false,
-        ]);
-        return ['status'=>'OK'] + $result + ['recovered_cursor'=>$pulled['recovered_cursor'] ?? false];
+        $gmail = new SvAmazonGmailApiClient($this->config);
+        $result = ['status'=>'OK','messages'=>0,'events'=>0,'review_claimed'=>0,'review_sent'=>0,'review_failed'=>0];
+
+        if ($ingestEnabled) {
+            $ingestor = new SvAmazonGmailIngestor();
+            $cursor = SvAmazonGmailIngestor::loadCursor($this->db, 'history_id');
+            $pulled = $gmail->pull($cursor);
+            $ingested = $ingestor->ingest(
+                $pulled['messages'],
+                fn(array $event): int => SvAmazonGmailEventSink::persist($this->db, $event),
+                (string)$pulled['cursor']
+            );
+            SvAmazonGmailIngestor::saveCursor($this->db, 'history_id', (string)$pulled['cursor'], [
+                'message_count'=>$ingested['messages'],
+                'event_count'=>$ingested['events'],
+                'recovered_cursor'=>$pulled['recovered_cursor'] ?? false,
+            ]);
+            $result['messages'] = $ingested['messages'];
+            $result['events'] = $ingested['events'];
+            $result['recovered_cursor'] = $pulled['recovered_cursor'] ?? false;
+        }
+
+        if ($reviewWriteEnabled) {
+            $rows = SvAmazonReturnsOutbox::claimBatch($this->db, 10, ['SAFE_T_EMAIL_REVIEW']);
+            $result['review_claimed'] = count($rows);
+            foreach ($rows as $row) {
+                try {
+                    $caseId = (int)($row['case_id'] ?? 0);
+                    $stmt = $this->db->prepare('SELECT * FROM amazon_return_cases WHERE id=:id LIMIT 1');
+                    $stmt->execute([':id'=>$caseId]);
+                    $case = $stmt->fetch(PDO::FETCH_ASSOC);
+                    if (!is_array($case)) throw new RuntimeException('SAFE-T email review case not found.');
+                    $timeline = SvAmazonReturnEventStore::eventsForCase($this->db, $caseId);
+                    $message = SvAmazonSafeTEmailReview::compose($case, $timeline);
+                    $sent = $gmail->sendOnce($message['to'], $message['subject'], $message['body'], (string)$row['idempotency_key']);
+                    SvAmazonReturnEventStore::append($this->db, [
+                        'case_id'=>$caseId,
+                        'event_type'=>'SAFE_T_EMAIL_REVIEW_SENT',
+                        'source'=>'GMAIL',
+                        'source_event_id'=>$sent['message_id'],
+                        'idempotency_key'=>hash('sha256', 'safe-t-email-review-sent|' . (string)$row['idempotency_key']),
+                        'occurred_at'=>gmdate('Y-m-d H:i:s'),
+                        'payload'=>[
+                            'order_id'=>(string)$case['amazon_order_id'],
+                            'safe_t_id'=>(string)$case['safe_t_id'],
+                            'gmail_message_id'=>$sent['message_id'],
+                            'gmail_thread_id'=>$sent['thread_id'],
+                        ],
+                    ]);
+                    $update = $this->db->prepare("UPDATE amazon_return_cases SET state='EMAIL_REVIEW_SENT',updated_at=UTC_TIMESTAMP() WHERE id=:id");
+                    $update->execute([':id'=>$caseId]);
+                    SvAmazonReturnsOutbox::markSucceeded($this->db, (int)$row['id']);
+                    $result['review_sent']++;
+                } catch (Throwable $e) {
+                    SvAmazonReturnsOutbox::markFailed($this->db, $row, $e);
+                    $result['review_failed']++;
+                }
+            }
+            if ($result['review_failed'] > 0) $result['status'] = 'PARTIAL';
+        }
+        return $result;
     }
 
     /** @return array<string,mixed> */
@@ -145,11 +195,8 @@ final class SvAmazonReturnsDaemon
             $projected = SvAmazonReturnProjector::project($this->db, $caseId);
             $projected['policies'] = $policies;
             $policy = SvAmazonReturnPolicyEngine::evaluate($projected, $now);
-            $decision = $engine->nextAction(
-                $projected,
-                SvAmazonReturnEventStore::eventsForCase($this->db, $caseId),
-                $policy
-            );
+            $timeline = SvAmazonReturnEventStore::eventsForCase($this->db, $caseId);
+            $decision = $engine->nextAction($projected, $timeline, $policy);
             $decisions++;
             $action = (string)($decision['action'] ?? 'WAIT');
             if (!SvAmazonReturnsScheduler::isWriteAction($decision)) continue;
@@ -157,11 +204,12 @@ final class SvAmazonReturnsDaemon
                 $blockedWrites++;
                 continue;
             }
-            if (!($this->config->readiness()['seller_central_bridge']['ready'] ?? false)) {
+            $dependency = SvAmazonReturnsScheduler::dependencyForAction($action);
+            if (!(($this->config->readiness()[$dependency]['ready'] ?? false))) {
                 $blockedWrites++;
                 continue;
             }
-            $scheduled = (new SvAmazonReturnsScheduler($engine))->schedule($this->db, $projected, [], $policy);
+            $scheduled = (new SvAmazonReturnsScheduler($engine))->schedule($this->db, $projected, $timeline, $policy);
             if (($scheduled['outbox_id'] ?? null) !== null) $enqueued++;
         }
 
@@ -310,7 +358,7 @@ final class SvAmazonReturnsDaemon
             return ['status'=>'SKIPPED_DISABLED','reason'=>'ALL_SELLER_CENTRAL_WRITE_FLAGS_OFF'];
         }
 
-        $rows = SvAmazonReturnsOutbox::claimBatch($this->db, 10);
+        $rows = SvAmazonReturnsOutbox::claimBatch($this->db, 10, ['SAFE_T_SUBMIT','SAFE_T_APPEAL','SELLER_SUPPORT_OPEN','SELLER_SUPPORT_UPDATE']);
         $worker = new SvAmazonSellerCentralWorker();
         $processed = 0;
         $failed = 0;

@@ -178,7 +178,7 @@ try {
                 'payload'=>$read,
                 'evidence_sha256'=>$snapshotHash,
             ]);
-            $nextState = SvAmazonSafeTStatusService::nextState((string)$row['state'], (string)$read['claim_status']);
+            $nextState = SvAmazonSafeTStatusService::nextState((string)$row['state'], (string)$read['claim_status'], (bool)($read['appeal_denied'] ?? false));
             $newFingerprint = (string)($read['decision_fingerprint'] ?? '');
             $repeatCount = (int)($row['repeated_denial_count'] ?? 0);
             $lastFingerprint = trim((string)($row['last_denial_fingerprint'] ?? ''));

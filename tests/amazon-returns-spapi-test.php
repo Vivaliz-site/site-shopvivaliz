@@ -104,6 +104,13 @@ $refundFact = SvAmazonSpApiEventSink::refundObservation([[
 spSame('128.25', $refundFact['refund_amount'], 'Released negative refund is official seller debit evidence.');
 spSame('2026-08-01 12:00:00', $refundFact['seller_debit_at'], 'Seller debit date must normalize to UTC.');
 spSame('UNKNOWN', $refundFact['refund_initiator'], 'SP-API transaction alone must not invent refund initiator.');
+$duplicateLifecycle = SvAmazonSpApiEventSink::refundObservation([
+    ['transaction_id'=>'refund-deferred','transaction_type'=>'Refund','transaction_status'=>'DEFERRED_RELEASED','posted_at'=>'2026-06-21T21:20:33Z','total_amount'=>['amount'=>'-266.70','currency'=>'BRL']],
+    ['transaction_id'=>'refund-released','transaction_type'=>'Refund','transaction_status'=>'RELEASED','posted_at'=>'2026-06-27T18:59:09Z','total_amount'=>['amount'=>'-266.70','currency'=>'BRL']],
+]);
+spSame('266.70', $duplicateLifecycle['refund_amount'], 'Deferred->released lifecycle representations of one refund must count once economically.');
+spSame('2026-06-21 21:20:33', $duplicateLifecycle['seller_debit_at'], 'Economic refund keeps earliest seller exposure timestamp.');
+spSame(['refund-deferred','refund-released'], $duplicateLifecycle['transaction_ids'], 'Both lifecycle transaction IDs remain evidence even when economic amount is deduplicated.');
 spSame(null, SvAmazonSpApiEventSink::refundObservation([[
     'transaction_id'=>'txn-pending','transaction_type'=>'Refund','transaction_status'=>'DEFERRED',
     'posted_at'=>'2026-08-01T12:00:00Z','total_amount'=>['amount'=>'-10.00','currency'=>'BRL'],

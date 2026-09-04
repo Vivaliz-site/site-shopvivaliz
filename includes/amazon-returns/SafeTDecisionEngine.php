@@ -40,49 +40,57 @@ final class SvAmazonSafeTDecisionEngine
                 ];
             }
 
-            if (in_array($state, [SvAmazonReturnStates::SAFE_T_DENIED, SvAmazonReturnStates::APPEAL_REQUIRED, SvAmazonReturnStates::APPEAL_DENIED_FINAL], true)) {
+            if ($state === SvAmazonReturnStates::APPEAL_DENIED_FINAL) {
                 $denialContext = SvAmazonSafeTStatus::denialContext($timeline);
                 $latestText = trim((string)($case['latest_denial_text'] ?? $denialContext['latest_denial_text']));
                 if ($latestText === '') {
                     return $this->decision('BLOCKED_REVIEW', 'DENIAL_TEXT_MISSING', $caseId);
                 }
-                $analysisCase = $case;
-                if (trim((string)($analysisCase['previous_denial_fingerprint'] ?? '')) === '' && $denialContext['previous_denial_fingerprint'] !== '') {
-                    $analysisCase['previous_denial_fingerprint'] = $denialContext['previous_denial_fingerprint'];
-                }
-                $analysis = $this->denialAnalyzer->analyze($analysisCase, $latestText);
-                $fingerprint = $analysis['fingerprint'];
-                if ($analysis['repeated'] && $analysis['non_substantive']) {
-                    if ($this->hasActiveSupportCase($case)) {
-                        if (($case['new_support_fact'] ?? false) === true) {
-                            return [
-                                'action' => 'SELLER_SUPPORT_UPDATE',
-                                'reason' => 'REPEATED_AUTOMATED_DENIAL_NEW_FACT',
-                                'support_case_id' => (string)$case['support_case_id'],
-                                'denial_fingerprint' => $fingerprint,
-                                'idempotency_key' => hash('sha256', 'support-update|' . (string)$case['support_case_id'] . '|' . $fingerprint . '|' . (string)($case['support_fact_hash'] ?? 'new-fact')),
-                            ];
-                        }
+                $fingerprint = $this->denialAnalyzer->fingerprint($latestText);
+                return [
+                    'action' => 'SAFE_T_EMAIL_REVIEW',
+                    'reason' => 'APPEAL_DENIED_REQUIRES_DETAILED_EMAIL_REVIEW',
+                    'denial_fingerprint' => $fingerprint,
+                    'idempotency_key' => hash('sha256', 'safe-t-email-review|' . $safeTId . '|' . $fingerprint),
+                ];
+            }
+
+            if ($state === SvAmazonReturnStates::SUPPORT_ESCALATION) {
+                $denialContext = SvAmazonSafeTStatus::denialContext($timeline);
+                $latestText = trim((string)($case['latest_denial_text'] ?? $denialContext['latest_denial_text']));
+                if ($latestText === '') return $this->decision('BLOCKED_REVIEW', 'DENIAL_TEXT_MISSING', $caseId);
+                $fingerprint = $this->denialAnalyzer->fingerprint($latestText);
+                if ($this->hasActiveSupportCase($case)) {
+                    if (($case['new_support_fact'] ?? false) === true) {
                         return [
-                            'action' => 'WAIT',
-                            'reason' => 'SUPPORT_ESCALATION_ALREADY_ACTIVE',
-                            'support_case_id' => (string)$case['support_case_id'],
-                            'denial_fingerprint' => $fingerprint,
+                            'action'=>'SELLER_SUPPORT_UPDATE',
+                            'reason'=>'EMAIL_REVIEW_DENIED_NEW_FACT',
+                            'support_case_id'=>(string)$case['support_case_id'],
+                            'denial_fingerprint'=>$fingerprint,
+                            'idempotency_key'=>hash('sha256', 'support-update|' . (string)$case['support_case_id'] . '|' . $fingerprint . '|' . (string)($case['support_fact_hash'] ?? 'new-fact')),
                         ];
                     }
-                    $round = max(1, (int)($case['support_escalation_round'] ?? 1));
-                    return [
-                        'action' => 'SELLER_SUPPORT_OPEN',
-                        'reason' => 'REPEATED_AUTOMATED_DENIAL_WITHOUT_SUBSTANTIVE_REVIEW',
-                        'denial_fingerprint' => $fingerprint,
-                        'repeated_denial_count' => max(1, (int)($case['repeated_denial_count'] ?? 0) + 1),
-                        'idempotency_key' => hash('sha256', 'support-open|' . $safeTId . '|' . $fingerprint . '|' . $round),
-                    ];
+                    return ['action'=>'WAIT','reason'=>'SUPPORT_ESCALATION_ALREADY_ACTIVE','support_case_id'=>(string)$case['support_case_id'],'denial_fingerprint'=>$fingerprint];
                 }
+                $round = max(1, (int)($case['support_escalation_round'] ?? 1));
+                return [
+                    'action'=>'SELLER_SUPPORT_OPEN',
+                    'reason'=>'EMAIL_REVIEW_DENIED_REQUIRES_SUPPORT',
+                    'denial_fingerprint'=>$fingerprint,
+                    'idempotency_key'=>hash('sha256', 'support-open|' . $safeTId . '|' . $fingerprint . '|' . $round),
+                ];
+            }
 
+            if (in_array($state, [SvAmazonReturnStates::SAFE_T_DENIED, SvAmazonReturnStates::APPEAL_REQUIRED], true)) {
+                $denialContext = SvAmazonSafeTStatus::denialContext($timeline);
+                $latestText = trim((string)($case['latest_denial_text'] ?? $denialContext['latest_denial_text']));
+                if ($latestText === '') {
+                    return $this->decision('BLOCKED_REVIEW', 'DENIAL_TEXT_MISSING', $caseId);
+                }
+                $fingerprint = $this->denialAnalyzer->fingerprint($latestText);
                 return [
                     'action' => 'SAFE_T_APPEAL',
-                    'reason' => 'SUBSTANTIVE_DENIAL_REQUIRES_ADAPTED_RESPONSE',
+                    'reason' => 'SAFE_T_DENIAL_REQUIRES_FIRST_APPEAL',
                     'denial_fingerprint' => $fingerprint,
                     'idempotency_key' => hash('sha256', 'safe-t-appeal|' . $safeTId . '|' . $fingerprint),
                 ];

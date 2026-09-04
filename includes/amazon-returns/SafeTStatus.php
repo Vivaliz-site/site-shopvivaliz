@@ -5,7 +5,7 @@ final class SvAmazonSafeTStatus
 {
     private const CLAIM_STATUSES = ['DENIED','APPROVED','INFO_REQUESTED','PENDING','UNKNOWN'];
 
-    /** @return array{claim_status:string,safe_t_id:?string,order_id:?string,denied_at:?string,appeal_deadline_at:?string,decision_text:?string,decision_fingerprint:?string} */
+    /** @return array{claim_status:string,safe_t_id:?string,order_id:?string,denied_at:?string,appeal_deadline_at:?string,decision_text:?string,decision_fingerprint:?string,appeal_submitted:bool,appeal_denied:bool} */
     public static function normalize(array $read): array
     {
         $status = strtoupper(trim((string)($read['claim_status'] ?? 'UNKNOWN')));
@@ -27,6 +27,8 @@ final class SvAmazonSafeTStatus
             'appeal_deadline_at'=>self::utc($read['appeal_deadline_at'] ?? null),
             'decision_text'=>$decisionText,
             'decision_fingerprint'=>$fingerprint,
+            'appeal_submitted'=>(bool)($read['appeal_submitted'] ?? false),
+            'appeal_denied'=>(bool)($read['appeal_denied'] ?? false),
         ];
     }
 

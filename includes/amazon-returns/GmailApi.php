@@ -19,6 +19,53 @@ final class SvAmazonGmailApiClient
         $this->transport = $transport ?? [$this, 'httpJson'];
     }
 
+    /** @return array{message_id:string,thread_id:string} */
+    public function send(string $to, string $subject, string $body): array
+    {
+        return $this->sendMessage($to, $subject, $body, null);
+    }
+
+    /** @return array{message_id:string,thread_id:string} */
+    public function sendOnce(string $to, string $subject, string $body, string $idempotencyKey): array
+    {
+        $key = strtolower(trim($idempotencyKey));
+        if (preg_match('/^[a-f0-9]{64}$/', $key) !== 1) throw new InvalidArgumentException('Invalid Gmail idempotency key.');
+        $messageId = 'amazon-returns-' . $key . '@shopvivaliz.com.br';
+        $found = $this->request('GET', '/messages', ['q'=>'in:sent rfc822msgid:' . $messageId, 'maxResults'=>'1']);
+        $existing = is_array($found['messages'][0] ?? null) ? $found['messages'][0] : null;
+        if ($existing !== null && trim((string)($existing['id'] ?? '')) !== '') {
+            return ['message_id'=>trim((string)$existing['id']), 'thread_id'=>trim((string)($existing['threadId'] ?? ''))];
+        }
+        return $this->sendMessage($to, $subject, $body, $messageId);
+    }
+
+    /** @return array{message_id:string,thread_id:string} */
+    private function sendMessage(string $to, string $subject, string $body, ?string $messageId): array
+    {
+        $to = trim($to);
+        $subject = trim(preg_replace('/[\r\n]+/', ' ', $subject) ?? $subject);
+        if (filter_var($to, FILTER_VALIDATE_EMAIL) === false || $subject === '' || trim($body) === '') {
+            throw new InvalidArgumentException('Invalid Gmail outbound message.');
+        }
+        $encodedSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+        $headers = ["To: {$to}", "Subject: {$encodedSubject}", 'MIME-Version: 1.0', 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: 8bit'];
+        if ($messageId !== null) $headers[] = 'Message-ID: <' . $messageId . '>';
+        $mime = implode("\r\n", $headers) . "\r\n\r\n" . $body;
+        $raw = rtrim(strtr(base64_encode($mime), '+/', '-_'), '=');
+        $response = ($this->transport)(
+            'POST',
+            'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+            ['Authorization'=>'Bearer ' . $this->token(), 'Accept'=>'application/json'],
+            ['raw'=>$raw]
+        );
+        $status = (int)($response['status'] ?? 0);
+        $json = is_array($response['json'] ?? null) ? $response['json'] : [];
+        if ($status < 200 || $status >= 300) throw new RuntimeException('Gmail API HTTP ' . $status . '.');
+        $sentId = trim((string)($json['id'] ?? ''));
+        if ($sentId === '') throw new RuntimeException('Gmail send did not return message ID.');
+        return ['message_id'=>$sentId,'thread_id'=>trim((string)($json['threadId'] ?? ''))];
+    }
+
     /** @return array{messages:list<array<string,mixed>>,cursor:string,recovered_cursor:bool} */
     public function pull(?string $cursor, int $bootstrapDays = 2): array
     {
@@ -74,7 +121,7 @@ final class SvAmazonGmailApiClient
     {
         $ids = [];
         $pageToken = null;
-        $queryText = 'newer_than:' . $days . 'd (from:donotreply@amazon.com OR from:amazon.com.br)';
+        $queryText = 'newer_than:' . $days . 'd (from:donotreply@amazon.com OR from:amazon.com.br OR from:Safe-T-Review@amazon.com)';
         do {
             $query = ['q'=>$queryText,'maxResults'=>'500'];
             if ($pageToken !== null) $query['pageToken'] = $pageToken;

@@ -24,8 +24,19 @@ final class SvAmazonGmailParser
         $safeTId = null;
         $amount = null;
         $currency = null;
+        $reviewOutcome = null;
 
-        if (preg_match('/\bReembolso\s+de\s+([0-9]+(?:[\.,][0-9]{1,2})?)\s+BRL\s+iniciado\s+para\s+o\s+pedido\b/iu', $subject, $match) === 1) {
+        $combined = $subject . "\n" . $body;
+        $isReviewChannel = stripos($from, 'safe-t-review@amazon.com') !== false
+            || preg_match('/solicita(?:ç|c)ão\s+de\s+revisão\s+detalhada.*SAFE-T/iu', $subject) === 1;
+        if ($isReviewChannel && preg_match('/\b([0-9]{5}-[0-9]{5}-[0-9]{7})\b/', $combined, $reviewMatch) === 1) {
+            $eventType = 'SAFE_T_EMAIL_REVIEW_RESPONSE';
+            $safeTId = $reviewMatch[1];
+            $normalizedReview = $this->canonicalText($body);
+            if (preg_match('/\b(?:negamos|negada|negado|não podemos conceder|nao podemos conceder)\b/u', $normalizedReview) === 1) $reviewOutcome = 'DENIED';
+            elseif (preg_match('/\b(?:aprovamos|aprovada|aprovado|concedido|ressarcimento.*aprovado)\b/u', $normalizedReview) === 1) $reviewOutcome = 'APPROVED';
+            else $reviewOutcome = 'UNKNOWN';
+        } elseif ($eventType === null && preg_match('/\bReembolso\s+de\s+([0-9]+(?:[\.,][0-9]{1,2})?)\s+BRL\s+iniciado\s+para\s+o\s+pedido\b/iu', $subject, $match) === 1) {
             $eventType = 'REFUND_ISSUED_EMAIL';
             $amount = $this->normalizeAmount($match[1]);
             $currency = 'BRL';
@@ -58,6 +69,7 @@ final class SvAmazonGmailParser
             'occurred_at' => $this->normalizeDate($message['received_at'] ?? $message['email_ts'] ?? null),
             'amount' => $amount,
             'currency' => $currency,
+            'review_outcome' => $reviewOutcome,
             'content_sha256' => $contentSha,
             'idempotency_key' => hash('sha256', implode('|', $identityParts)),
         ]];

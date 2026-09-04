@@ -53,6 +53,34 @@ $parsedEnglishDeadline = runNodeJsonScript('scripts/amazon-returns/safe-t-status
 bcSame('2026-09-08T14:29:00-03:00', $parsedEnglishDeadline['appeal_deadline_at'], 'English Seller Central deadline must be captured on pt-BR pages.');
 bcAssert(str_contains((string)$parsedDenied['decision_text'], 'devolução foi considerada concluída'), 'Amazon denial text must be retained for adapted appeal.');
 bcAssert(preg_match('/^[a-f0-9]{64}$/', (string)$parsedDenied['decision_fingerprint']) === 1, 'Denial must get deterministic fingerprint.');
+$realConversation = <<<'TXT'
+Detalhes da reivindicação: 12472-25597-6629839
+Negado
+ID da reivindicação SAFE-T
+12472-25597-6629839
+Motivo
+Não recebi a devolução
+Recorrer por
+Tue, Sep 8, 2026, 02:29 PM
+Aug 10, 2026, 08:28 PM
+Caro ,
+Essa mensagem é para confirmar que o ID da reivindicação SAFE-T foi registrado.
+Motivo da reivindicação SAFE-T – Não recebi a devolução
+Sep 1, 2026, 10:19 AM
+Olá, ShopVivaLiz,
+Analisamos seu recurso da decisão de reivindicação SAFE-T referente ao pedido 702-5349464-0245862. Após a análise do recurso, negamos sua solicitação de reembolso.
+Por que isso aconteceu?
+Sua reivindicação SAFE-T para este pedido não foi registrada dentro do período elegível.
+Entendemos sua posição, mas reafirmamos nossa decisão. Não podemos fornecer mais detalhes, portanto, não responderemos a outras comunicações sobre esta reivindicação.
+TXT;
+$parsedConversation = runNodeJsonScript('scripts/amazon-returns/safe-t-status-parser.mjs', [
+    'body_text'=>$realConversation,
+    'expected'=>['safe_t_id'=>'12472-25597-6629839','order_id'=>'702-5349464-0245862'],
+]);
+bcAssert(str_contains((string)$parsedConversation['decision_text'], 'não foi registrada dentro do período elegível'), 'Latest Amazon decision must be extracted instead of original claim Motivo.');
+bcAssert(!str_starts_with((string)$parsedConversation['decision_text'], 'Não recebi a devolução'), 'Original claim Motivo must never be treated as Amazon decision text.');
+bcSame(true, $parsedConversation['appeal_submitted'] ?? null, 'Seller appeal in conversation must be detected.');
+bcSame(true, $parsedConversation['appeal_denied'] ?? null, 'Amazon denial after seller appeal must be detected.');
 bcSame('APPROVED', runNodeJsonScript('scripts/amazon-returns/safe-t-status-parser.mjs', ['body_text'=>"Status da reivindicação\nAprovado"] )['claim_status'], 'Aprovado must map to APPROVED.');
 bcSame('APPROVED', runNodeJsonScript('scripts/amazon-returns/safe-t-status-parser.mjs', ['body_text'=>"Concedido"] )['claim_status'], 'Seller Central status Concedido must map to APPROVED.');
 bcSame('INFO_REQUESTED', runNodeJsonScript('scripts/amazon-returns/safe-t-status-parser.mjs', ['body_text'=>"Status da reivindicação\nInformações solicitadas"] )['claim_status'], 'Explicit information request must map to INFO_REQUESTED.');

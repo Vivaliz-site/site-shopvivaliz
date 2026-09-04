@@ -21,15 +21,17 @@ final class SvAmazonSafeTStatusService
             (string)($read['denied_at'] ?? ''),
             (string)($read['appeal_deadline_at'] ?? ''),
             (string)($read['decision_fingerprint'] ?? ''),
+            !empty($read['appeal_submitted']) ? 'appeal-submitted' : 'no-appeal',
+            !empty($read['appeal_denied']) ? 'appeal-denied' : 'appeal-not-denied',
         ];
         return hash('sha256', implode('|', $parts));
     }
 
-    public static function nextState(string $currentState, string $claimStatus): string
+    public static function nextState(string $currentState, string $claimStatus, bool $appealDenied = false): string
     {
         return match (strtoupper(trim($claimStatus))) {
-            'DENIED' => 'SAFE_T_DENIED',
-            'APPROVED' => 'SAFE_T_APPROVED',
+            'DENIED' => $appealDenied ? 'APPEAL_DENIED_FINAL' : 'SAFE_T_DENIED',
+            'APPROVED' => $currentState === 'APPEAL_SUBMITTED' ? 'APPEAL_APPROVED' : 'SAFE_T_APPROVED',
             'INFO_REQUESTED' => 'SAFE_T_INFO_REQUESTED',
             'PENDING' => in_array($currentState, ['POLICY_REVIEW_REQUIRED','SAFE_T_ELIGIBLE','SAFE_T_READY','AWAITING_RETURN','REFUND_DETECTED'], true)
                 ? 'SAFE_T_SUBMITTED' : $currentState,

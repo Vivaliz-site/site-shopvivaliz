@@ -77,14 +77,16 @@ final class SvAmazonReturnsOutbox
     }
 
     /** @return list<array<string,mixed>> */
-    public static function claimBatch(PDO $db, int $limit = 10): array
+    public static function claimBatch(PDO $db, int $limit = 10, array $kinds = []): array
     {
         $limit = max(1, min(50, $limit));
+        $normalizedKinds = array_values(array_unique(array_filter(array_map(static fn(mixed $kind): string => strtoupper(trim((string)$kind)), $kinds))));
         $db->beginTransaction();
         try {
+            $kindSql = $normalizedKinds === [] ? '' : ' AND kind IN (' . implode(',', array_map(static fn(string $kind): string => $db->quote($kind), $normalizedKinds)) . ')';
             $sql = 'SELECT * FROM amazon_return_outbox '
-                . 'WHERE (status = \'PENDING\' AND available_at <= UTC_TIMESTAMP()) '
-                . 'OR (status = \'PROCESSING\' AND locked_at <= DATE_SUB(UTC_TIMESTAMP(), INTERVAL ' . self::LEASE_SECONDS . ' SECOND)) '
+                . 'WHERE ((status = \'PENDING\' AND available_at <= UTC_TIMESTAMP()) '
+                . 'OR (status = \'PROCESSING\' AND locked_at <= DATE_SUB(UTC_TIMESTAMP(), INTERVAL ' . self::LEASE_SECONDS . ' SECOND)))' . $kindSql . ' '
                 . 'ORDER BY available_at, id LIMIT ' . $limit . ' FOR UPDATE SKIP LOCKED';
             $rows = $db->query($sql)?->fetchAll(PDO::FETCH_ASSOC) ?: [];
             $update = $db->prepare('UPDATE amazon_return_outbox SET status=\'PROCESSING\', attempt_count=attempt_count+1, locked_at=UTC_TIMESTAMP(), updated_at=UTC_TIMESTAMP() WHERE id=:id');
