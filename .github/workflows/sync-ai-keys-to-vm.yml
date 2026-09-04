@@ -1,4 +1,4 @@
-name: Sync AI provider keys to VM (one-time)
+name: Sync AI provider keys to backend A1 (one-time)
 
 # Traz OPENAI_API_KEY, ANTHROPIC_API_KEY e GEMINI_API_KEY dos GitHub Secrets
 # do repositorio para o shared/.env real da VM Oracle, sem NUNCA imprimir o
@@ -41,16 +41,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: sync-ai-keys-to-vm
+  group: sync-ai-keys-to-backend-a1
   cancel-in-progress: false
 
 jobs:
   sync:
-    name: Escrever OPENAI_API_KEY/ANTHROPIC_API_KEY/GEMINI_API_KEY no shared/.env da VM
+    name: Escrever OPENAI_API_KEY/ANTHROPIC_API_KEY/GEMINI_API_KEY no shared/.env do backend A1
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      VM_HOST: 163.176.103.253
+      VM_HOST: 144.22.157.209
       VM_USER: ubuntu
       VM_ENV: /home/ubuntu/shopvivaliz-deploy/shared/.env
       VM_PAYLOAD: /home/ubuntu/shopvivaliz-deploy/shared/.codex-ai-keys-payload
