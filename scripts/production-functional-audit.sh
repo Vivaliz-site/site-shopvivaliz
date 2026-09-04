@@ -75,6 +75,11 @@ for key in ('mercado_pago','melhor_envio','olist_tiny'):
     if status != 'connected':
         raise SystemExit(1)
 summary = r.get('summary') or {}
+print('INTEGRATION_SUMMARY '+ ' '.join(f'{k}={summary.get(k)}' for k in sorted(summary)))
+for key,item in sorted(items.items()):
+    status=item.get('status')
+    if status != 'connected':
+        print(f'INTEGRATION_NONCONNECTED key={key} status={status}')
 if int(summary.get('failed') or 0) != 0:
     raise SystemExit(1)
 PY
