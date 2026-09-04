@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/Enums.php';
 require_once __DIR__ . '/DenialAnalyzer.php';
+require_once __DIR__ . '/SafeTStatus.php';
 
 final class SvAmazonSafeTDecisionEngine
 {
@@ -59,11 +60,16 @@ final class SvAmazonSafeTDecisionEngine
         }
 
         if (in_array($state, [SvAmazonReturnStates::SAFE_T_DENIED, SvAmazonReturnStates::APPEAL_REQUIRED, SvAmazonReturnStates::APPEAL_DENIED_FINAL], true)) {
-            $latestText = trim((string)($case['latest_denial_text'] ?? ''));
+            $denialContext = SvAmazonSafeTStatus::denialContext($timeline);
+            $latestText = trim((string)($case['latest_denial_text'] ?? $denialContext['latest_denial_text']));
             if ($latestText === '') {
                 return $this->decision('BLOCKED_REVIEW', 'DENIAL_TEXT_MISSING', $caseId);
             }
-            $analysis = $this->denialAnalyzer->analyze($case, $latestText);
+            $analysisCase = $case;
+            if (trim((string)($analysisCase['previous_denial_fingerprint'] ?? '')) === '' && $denialContext['previous_denial_fingerprint'] !== '') {
+                $analysisCase['previous_denial_fingerprint'] = $denialContext['previous_denial_fingerprint'];
+            }
+            $analysis = $this->denialAnalyzer->analyze($analysisCase, $latestText);
             $fingerprint = $analysis['fingerprint'];
             if ($analysis['repeated'] && $analysis['non_substantive']) {
                 if ($this->hasActiveSupportCase($case)) {
