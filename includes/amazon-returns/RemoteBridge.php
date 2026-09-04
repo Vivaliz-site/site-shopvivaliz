@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/SafeTStatus.php';
+
 final class SvAmazonReturnsRemoteBridge
 {
     private const KINDS = [
@@ -107,6 +109,7 @@ final class SvAmazonReturnsRemoteBridge
             'next_allowed_at' => self::nullableString($result['next_allowed_at'] ?? null),
             'reason' => self::nullableString($result['reason'] ?? null),
             'evidence' => is_array($result['evidence'] ?? null) ? $result['evidence'] : [],
+            'read' => is_array($result['read'] ?? null) ? SvAmazonSafeTStatus::normalize($result['read']) : null,
         ];
     }
 
