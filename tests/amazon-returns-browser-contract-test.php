@@ -47,6 +47,10 @@ $parsedDenied = runNodeJsonScript('scripts/amazon-returns/safe-t-status-parser.m
 bcSame('DENIED', $parsedDenied['claim_status'], 'Seller Central text “Negado” must map to DENIED.');
 bcSame('2026-09-01T13:23:00-03:00', $parsedDenied['denied_at'], 'Denial timestamp must be captured from Seller Central.');
 bcSame('2026-09-08T13:23:00-03:00', $parsedDenied['appeal_deadline_at'], '“Recorrer por” deadline must be captured exactly.');
+$parsedEnglishDeadline = runNodeJsonScript('scripts/amazon-returns/safe-t-status-parser.mjs', [
+    'body_text'=>"Negado\nRecorrer por\nTue, Sep 8, 2026, 02:29 PM",
+]);
+bcSame('2026-09-08T14:29:00-03:00', $parsedEnglishDeadline['appeal_deadline_at'], 'English Seller Central deadline must be captured on pt-BR pages.');
 bcAssert(str_contains((string)$parsedDenied['decision_text'], 'devolução foi considerada concluída'), 'Amazon denial text must be retained for adapted appeal.');
 bcAssert(preg_match('/^[a-f0-9]{64}$/', (string)$parsedDenied['decision_fingerprint']) === 1, 'Denial must get deterministic fingerprint.');
 bcSame('APPROVED', runNodeJsonScript('scripts/amazon-returns/safe-t-status-parser.mjs', ['body_text'=>"Status da reivindicação\nAprovado"] )['claim_status'], 'Aprovado must map to APPROVED.');
