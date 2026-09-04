@@ -119,6 +119,7 @@ jobs:
           candidates = [
               '/home/ubuntu/shopvivaliz-deploy/shared/.env',
               '/home/ubuntu/shopvivaliz-deploy/current/.env',
+              '/home/ubuntu/mei-mg-email/.env',
           ]
           current_target = os.path.realpath('/home/ubuntu/shopvivaliz-deploy/current')
           if current_target and current_target != '/home/ubuntu/shopvivaliz-deploy/current':
