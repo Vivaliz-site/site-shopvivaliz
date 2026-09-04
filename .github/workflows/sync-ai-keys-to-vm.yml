@@ -52,8 +52,6 @@ jobs:
     env:
       VM_HOST: 144.22.157.209
       VM_USER: ubuntu
-      VM_ENV: /home/ubuntu/shopvivaliz-deploy/shared/.env
-      VM_PAYLOAD: /home/ubuntu/shopvivaliz-deploy/shared/.codex-ai-keys-payload
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -107,8 +105,48 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
+      - name: Descobrir .env canonico de runtime na A1
+        id: runtime_env
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          env_path="$(
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+              -i "$HOME/.ssh/id_rsa" "${VM_USER}@${VM_HOST}" '
+                set -euo pipefail
+                candidates="
+                /home/ubuntu/shopvivaliz-deploy/shared/.env
+                /home/ubuntu/shopvivaliz-deploy/current/.env
+                "
+                current_target="$(readlink -f /home/ubuntu/shopvivaliz-deploy/current 2>/dev/null || true)"
+                if [ -n "$current_target" ]; then
+                  candidates="$candidates
+                $current_target/.env"
+                fi
+                for p in $candidates; do
+                  if [ -f "$p" ]; then
+                    printf "%s\n" "$p"
+                    exit 0
+                  fi
+                done
+                find /home/ubuntu -maxdepth 4 \( -type f -o -type l \) -name ".env" 2>/dev/null | sort | head -1
+              '
+          )"
+          if [[ -z "${env_path:-}" ]]; then
+            echo '::error::Nenhum arquivo .env de runtime foi encontrado na backend A1.'
+            exit 1
+          fi
+          payload_path="/tmp/.codex-ai-keys-payload"
+          echo "env_path=$env_path" >> "$GITHUB_OUTPUT"
+          echo "payload_path=$payload_path" >> "$GITHUB_OUTPUT"
+          echo "env_path_detected=$env_path"
+          echo "payload_path_detected=$payload_path"
+
       - name: Transferir payload (arquivo temporario, permissao restrita)
         shell: bash
+        env:
+          VM_PAYLOAD: ${{ steps.runtime_env.outputs.payload_path }}
         run: |
           set -euo pipefail
           umask 077
@@ -131,6 +169,9 @@ jobs:
 
       - name: Fundir no shared/.env real e validar (sem ecoar segredo)
         shell: bash
+        env:
+          VM_ENV: ${{ steps.runtime_env.outputs.env_path }}
+          VM_PAYLOAD: ${{ steps.runtime_env.outputs.payload_path }}
         run: |
           set -euo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
@@ -228,6 +269,13 @@ jobs:
               '--max-time', '15', 'https://api.openai.com/v1/models',
               '-H', 'Authorization: Bearer ' + payload['OPENAI_API_KEY'],
           ])
+          openai_responses_code = probe([
+              'curl', '-sS', '-o', '/dev/null', '-w', '%{http_code}',
+              '--max-time', '20', 'https://api.openai.com/v1/responses',
+              '-H', 'Authorization: Bearer ' + payload['OPENAI_API_KEY'],
+              '-H', 'content-type: application/json',
+              '-d', '{"input":"ping","model":"gpt-4.1-mini","max_output_tokens":1}',
+          ])
           anthropic_code = probe([
               'curl', '-sS', '-o', '/dev/null', '-w', '%{http_code}',
               '--max-time', '15', 'https://api.anthropic.com/v1/messages',
@@ -246,11 +294,13 @@ jobs:
           print('anthropic_api_key_present=true')
           print('gemini_api_key_present=true')
           print('openai_live_probe_http_code=' + openai_code)
+          print('openai_responses_http_code=' + openai_responses_code)
           print('anthropic_live_probe_http_code=' + anthropic_code)
           print('gemini_live_probe_http_code=' + gemini_code)
 
           checks = (
               ('OpenAI', openai_code, ('200', '201')),
+              ('OpenAI Responses auth', openai_responses_code, ('200', '201', '400', '404', '422')),
               ('Anthropic', anthropic_code, ('200', '201')),
               ('Gemini', gemini_code, ('200', '201')),
           )
