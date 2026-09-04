@@ -21,10 +21,12 @@ def test() -> None:
         "shipping_options",
         "mercado_pago",
         "melhor_envio",
+        "ShopVivaliz-Production-Audit/1.0",
     ]
     for marker in required_audit_markers:
         assert marker in audit, f"missing functional audit marker: {marker}"
 
+    assert 'curl -sSL -A "$AUDIT_USER_AGENT"' in audit, "page GET probes must send the explicit audit user-agent"
     assert '[[ "$code" == 200 || "$code" == 207 ]]' in audit, "integration health must accept HTTP 207 when critical providers are connected"
     assert "for key in ('mercado_pago','melhor_envio','olist_tiny')" in audit, "audit must use the current Olist integration key"
     assert "summary = r.get('summary') or {}" in audit and "summary.get('failed')" in audit, "audit must accept optional attention while rejecting failed providers"

@@ -4,6 +4,7 @@ set -euo pipefail
 BASE_URL="${BASE_URL:-https://shopvivaliz.com.br}"
 AUDIT_CEP="${AUDIT_CEP:-35500006}"
 AGENT_KEY="${SHOPVIVALIZ_AGENT_KEY:-${AGENT_KEY:-}}"
+AUDIT_USER_AGENT="ShopVivaliz-Production-Audit/1.0"
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR"' EXIT
 
@@ -12,9 +13,9 @@ pass() { echo "PASS stage=$1 detail=$2"; }
 request() {
   local method="$1" url="$2" body="${3:-}" output="$4" code
   if [[ "$method" == POST ]]; then
-    code=$(curl -sS --max-time 30 -o "$output" -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data "$body" "$url") || fail network "$url"
+    code=$(curl -sS -A "$AUDIT_USER_AGENT" --max-time 30 -o "$output" -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data "$body" "$url") || fail network "$url"
   else
-    code=$(curl -sSL --max-time 30 -o "$output" -w '%{http_code}' "$url") || fail network "$url"
+    code=$(curl -sSL -A "$AUDIT_USER_AGENT" --max-time 30 -o "$output" -w '%{http_code}' "$url") || fail network "$url"
   fi
   printf '%s' "$code"
 }
@@ -63,7 +64,7 @@ json_assert "$TMPDIR/shipping.json" 'd.get("ok") is True and len(d.get("shipping
 pass melhor_envio 'real quote returned shipping_options'
 
 [[ -n "$AGENT_KEY" ]] || fail integrations 'SHOPVIVALIZ_AGENT_KEY/AGENT_KEY missing; cannot prove provider functionality'
-code=$(curl -sS --max-time 45 -o "$TMPDIR/integrations.json" -w '%{http_code}' -H "X-Agent-Key: $AGENT_KEY" "$BASE_URL/api/agent/integrations-health.php") || fail integrations network
+code=$(curl -sS -A "$AUDIT_USER_AGENT" --max-time 45 -o "$TMPDIR/integrations.json" -w '%{http_code}' -H "X-Agent-Key: $AGENT_KEY" "$BASE_URL/api/agent/integrations-health.php") || fail integrations network
 [[ "$code" == 200 || "$code" == 207 ]] || fail integrations "http=$code body=$(cat "$TMPDIR/integrations.json")"
 python3 - "$TMPDIR/integrations.json" <<'PY' || fail integrations 'critical provider not connected'
 import json, pathlib, sys
