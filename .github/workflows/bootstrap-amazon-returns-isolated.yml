@@ -84,6 +84,7 @@ jobs:
           sudo systemctl is-active --quiet amazon-returns-safet.service
           sudo systemctl is-enabled --quiet amazon-returns-safet.service
           sudo systemctl is-active --quiet amazon-returns-deploy.timer
+          sudo php /home/ubuntu/amazon-returns-deploy/current/scripts/shadow-audit.php
           REMOTE
 
       - name: Validate isolated health
