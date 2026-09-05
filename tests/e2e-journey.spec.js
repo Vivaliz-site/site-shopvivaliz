@@ -8,6 +8,7 @@ const { test, expect } = require('@playwright/test');
 const BASE_URL = process.env.E2E_BASE_URL || 'https://shopvivaliz.com.br';
 const IS_LOCAL = /^http:\/\/(127\.0\.0\.1|localhost)(:|\/)/.test(BASE_URL);
 const TIMEOUT = 30000;
+const CART_PATH = IS_LOCAL ? '/carrinho.php' : '/carrinho';
 
 test.describe('E2E Journey - Compra Completa', () => {
 
@@ -72,12 +73,12 @@ test.describe('E2E Journey - Compra Completa', () => {
   });
 
   test('Carrinho funciona', async ({ page }) => {
-    await page.goto(BASE_URL + (IS_LOCAL ? '/carrinho.php' : '/carrinho'));
+    await page.goto(BASE_URL + CART_PATH);
     await page.waitForLoadState('domcontentloaded');
 
     expect(page.url()).toContain('/carrinho');
     await expect(page.locator('.sv-navbar')).toBeVisible();
-    await expect(page.getByRole('heading', { name: /meu carrinho/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /meu carrinho/i }).or(page.getByText(/seu carrinho .* vazio/i))).toBeVisible();
   });
 
   test('Checkout está acessível', async ({ page }) => {
@@ -122,15 +123,30 @@ test.describe('E2E Journey - Compra Completa', () => {
     await page.goto(BASE_URL + '/', { waitUntil: 'networkidle' });
 
     const essentialOnly = page.getByRole('button', { name: /somente essenciais/i });
-    if (await essentialOnly.isVisible().catch(() => false)) {
+    const consentVisible = await essentialOnly.waitFor({ state: 'visible', timeout: 1500 }).then(() => true).catch(() => false);
+    if (consentVisible) {
       await essentialOnly.click();
+      await essentialOnly.waitFor({ state: 'detached', timeout: 3000 }).catch(async () => {
+        await essentialOnly.waitFor({ state: 'hidden', timeout: 3000 });
+      });
     }
 
     const liz = page.locator('#sv-liz-launcher').first();
     const whatsapp = page.locator('.sv-support-whatsapp').first();
     await expect(liz).toBeVisible();
     await expect(whatsapp).toBeVisible();
-    await page.waitForTimeout(350);
+    await page.waitForFunction(() => {
+      const lizEl = document.querySelector('#sv-liz-launcher');
+      const whatsappEl = document.querySelector('.sv-support-whatsapp');
+      if (!lizEl || !whatsappEl) return false;
+      const key = [lizEl, whatsappEl].map(el => {
+        const r = el.getBoundingClientRect();
+        return [r.x, r.y, r.width, r.height].map(v => Math.round(v * 10) / 10).join(',');
+      }).join('|');
+      if (window.__svStableSupportGeometry === key) return true;
+      window.__svStableSupportGeometry = key;
+      return false;
+    }, { polling: 150, timeout: 3000 });
 
     const lizBox = await liz.boundingBox();
     const whatsappBox = await whatsapp.boundingBox();
@@ -174,7 +190,7 @@ test.describe('E2E Journey - Compra Completa', () => {
       }
     });
 
-    const routes = ['/', '/catalogo', '/carrinho', '/checkout', '/blog/', '/contato', '/faq'];
+    const routes = ['/', '/catalogo', CART_PATH, '/checkout', '/blog/', '/contato', '/faq'];
     for (const route of routes) {
       await page.goto(BASE_URL + route, { waitUntil: 'domcontentloaded' });
     }

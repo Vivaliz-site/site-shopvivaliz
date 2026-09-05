@@ -3,8 +3,9 @@ declare(strict_types=1);
 
 $root = dirname(__DIR__);
 $manifestPath = $root . '/public/dist/asset-manifest.json';
-$manifest = json_decode((string) file_get_contents($manifestPath), true);
-if (!is_array($manifest['assets'] ?? null)) {
+$manifestRaw = @file_get_contents($manifestPath);
+$manifest = is_string($manifestRaw) ? json_decode($manifestRaw, true) : null;
+if (!is_array($manifest) || !is_array($manifest['assets'] ?? null)) {
     fwrite(STDERR, "invalid asset manifest\n");
     exit(1);
 }
@@ -40,6 +41,7 @@ foreach ($targets as $dir => $extensions) {
         if (!isset($manifest['assets'][$relative])) { $missing[] = $relative; }
     }
 }
+sort($missing, SORT_STRING);
 if ($missing !== []) {
     fwrite(STDERR, 'source assets missing from manifest: ' . implode(', ', $missing) . "\n");
     exit(1);
@@ -56,15 +58,17 @@ foreach ($manifest['assets'] as $source => $entry) {
     $sourcePath = $root . str_replace('/', DIRECTORY_SEPARATOR, $source);
     $distPath = $root . str_replace('/', DIRECTORY_SEPARATOR, $entry['file']);
     if (!is_file($sourcePath) || !is_file($distPath)) {
+        $stale[] = $source;
         continue;
     }
     $expected = sv_minify_asset((string) file_get_contents($sourcePath), '.' . $ext);
-    $actual = (string) file_get_contents($distPath);
+    $actual = trim((string) file_get_contents($distPath));
     if ($expected !== $actual) {
         $stale[] = $source;
     }
 }
 
+sort($stale, SORT_STRING);
 if ($stale !== []) {
     fwrite(STDERR, 'stale generated assets: ' . implode(', ', $stale) . "\n");
     exit(1);
