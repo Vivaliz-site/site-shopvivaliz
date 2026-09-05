@@ -143,9 +143,35 @@ jobs:
             artifacts/ecommerce-static.md
           retention-days: 30
 
+  classify-production-impact:
+    name: Classify production impact for live audit
+    if: github.event_name != 'pull_request' && inputs.pr_replay != true
+    runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.scope.outputs.should_deploy }}
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+
+      - name: Reuse canonical production-impact classifier
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = 'push' ]; then
+            git diff-tree --no-commit-id --name-only -r "${{ github.sha }}" > /tmp/ecommerce-live-changed-paths.txt
+            should_deploy="$(bash scripts/should-deploy-production.sh < /tmp/ecommerce-live-changed-paths.txt)"
+          else
+            should_deploy=true
+          fi
+          echo "should_deploy=$should_deploy" >> "$GITHUB_OUTPUT"
   live-production-audit:
     name: Validate real production from Oracle
-    if: github.event_name != 'pull_request' && inputs.pr_replay != true
+    needs: classify-production-impact
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.pr_replay != true) || (github.event_name == 'push' && needs.classify-production-impact.outputs.should_deploy == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -159,7 +185,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_SHA: ${{ github.event_name == 'push' && github.sha || '' }}
         run: |
           set -euo pipefail
           ready=0
@@ -168,7 +194,8 @@ jobs:
               -H 'Accept: application/vnd.github.raw+json' \
               "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json?ref=deployment-evidence" \
               > /tmp/deployment-latest.json 2>/tmp/deployment-error.txt; then
-              if python3 - "$EXPECTED_SHA" /tmp/deployment-latest.json <<'PY'
+              if [ -n "$EXPECTED_SHA" ]; then
+                python3 - "$EXPECTED_SHA" /tmp/deployment-latest.json <<'PY'
           import json, sys
           expected = sys.argv[1].lower()
           data = json.load(open(sys.argv[2], encoding='utf-8'))
@@ -176,10 +203,16 @@ jobs:
           assert data.get('status') == 'PRODUCTION_UPDATED'
           assert all((data.get('jobs') or {}).get(name) == 'success' for name in ('validate', 'deploy', 'smoke_test'))
           PY
-              then
-                ready=1
-                break
+              else
+                python3 - /tmp/deployment-latest.json <<'PY'
+          import json, sys
+          data = json.load(open(sys.argv[1], encoding='utf-8'))
+          assert data.get('status') == 'PRODUCTION_UPDATED'
+          assert all((data.get('jobs') or {}).get(name) == 'success' for name in ('validate', 'deploy', 'smoke_test'))
+          PY
               fi
+              ready=1
+              break
             fi
             sleep 20
           done
