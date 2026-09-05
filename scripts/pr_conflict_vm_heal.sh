@@ -55,7 +55,9 @@ head_repo="$(jq -r '.head.repo.full_name // ""' <<<"$meta")"
 [[ "$remote_head_ref" == "$head_ref" ]] || fail 'PR head ref changed'
 [[ "$remote_head_sha" == "$expected_head_sha" ]] || fail 'PR head SHA changed'
 
-work="$(mktemp -d "/tmp/shopvivaliz-pr-heal-${pr_number}-XXXXXX")"
+work_parent=/home/ubuntu/.cache/shopvivaliz-pr-healer-work
+install -d -m 700 "$work_parent"
+work="$(mktemp -d "${work_parent}/pr-${pr_number}-XXXXXX")"
 cleanup() {
   rm -rf "$work"
 }
