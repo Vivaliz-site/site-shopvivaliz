@@ -256,3 +256,64 @@ jobs:
           sitemap_body="$(curl -sS -H 'Cache-Control: no-cache' --max-time 20 https://shopvivaliz.com.br/sitemap.xml)"
           [[ "$sitemap_body" == *'<urlset'* ]]
           REMOTE
+
+  publish_evidence:
+    name: Publish exact deployment evidence
+    needs: [validate, deploy, monitor]
+    if: ${{ always() && needs.validate.result == 'success' && needs.validate.outputs.should_deploy == 'true' && needs.deploy.result == 'success' && needs.monitor.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: write
+    steps:
+      - name: Publish immutable deploy evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          evidence="$(mktemp)"
+          python3 - "$DEPLOY_SHA" "$GITHUB_RUN_ID" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" <<'PY' > "$evidence"
+          import datetime
+          import json
+          import sys
+
+          sha, run_id, run_url = sys.argv[1:]
+          payload = {
+              'status': 'PRODUCTION_UPDATED',
+              'sha': sha,
+              'workflow_run_id': run_id,
+              'workflow_run_url': run_url,
+              'jobs': {
+                  'validate': 'success',
+                  'deploy': 'success',
+                  'smoke_test': 'success',
+              },
+              'results': [
+                  f'OK release SHA marker: {sha}',
+                  'OK official master production pipeline: validate=success deploy=success monitor=success',
+              ],
+              'verified_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+          }
+          print(json.dumps(payload, indent=2, sort_keys=True))
+          PY
+          current_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json?ref=deployment-evidence" --jq '.sha')"
+          content_b64="$(base64 -w0 "$evidence")"
+          gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json" \
+            -f message="chore(deploy): record ${DEPLOY_SHA}" \
+            -f content="$content_b64" \
+            -f sha="$current_sha" \
+            -f branch=deployment-evidence >/dev/null
+          gh api -H 'Accept: application/vnd.github.raw+json' \
+            "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json?ref=deployment-evidence" \
+            > /tmp/deployment-latest-published.json
+          python3 - "$DEPLOY_SHA" /tmp/deployment-latest-published.json <<'PY'
+          import json
+          import sys
+          expected, path = sys.argv[1:]
+          data = json.load(open(path, encoding='utf-8'))
+          assert data.get('status') == 'PRODUCTION_UPDATED'
+          assert data.get('sha') == expected
+          assert all((data.get('jobs') or {}).get(name) == 'success' for name in ('validate', 'deploy', 'smoke_test'))
+          PY
+          rm -f "$evidence" /tmp/deployment-latest-published.json
