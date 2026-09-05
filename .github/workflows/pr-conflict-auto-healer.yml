@@ -65,7 +65,11 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          remote_base="/tmp/shopvivaliz-pr-healer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          remote_dir="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            "${VM_USER}@${VM_HOST}" \
+            "mktemp -d /tmp/shopvivaliz-pr-healer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-XXXXXX")"
+          remote_base="${remote_dir}/healer"
           echo "remote_base=$remote_base" >> "$GITHUB_OUTPUT"
           scp -q \
             -o BatchMode=yes -o StrictHostKeyChecking=yes \
@@ -155,7 +159,7 @@ jobs:
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
               "${VM_USER}@${VM_HOST}" \
-              "rm -f '${REMOTE_BASE}.py' '${REMOTE_BASE}.sh'"
+              "rm -rf -- '${REMOTE_BASE%/*}'"
           fi
           rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
