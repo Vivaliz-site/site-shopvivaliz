@@ -60,6 +60,15 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
+      - name: Diagnose SSH filesystem boundary
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            "${VM_USER}@${VM_HOST}" \
+            "id; stat -c 'tmp_mode=%a tmp_owner=%U tmp_group=%G' /tmp; stat -c 'home_mode=%a home_owner=%U home_group=%G' /home/ubuntu"
       - name: Stage trusted healer in Oracle temporary boundary
         id: stage
         shell: bash
