@@ -1,25 +1,25 @@
 {
   "validated": true,
   "reviewer": "GPT-5.6 Sol + Storefront Browser Audit",
-  "timestamp": "2026-09-02T05:37:12Z",
+  "timestamp": "2026-09-05T03:02:23Z",
   "artifacts": [
-    ".policy-artifacts/storefront-browser-audit-33595293680-1/desktop-produto.png",
-    ".policy-artifacts/storefront-browser-audit-33595293680-1/desktop-checkout.png",
-    ".policy-artifacts/storefront-browser-audit-33595293680-1/fast-3g-produto.png",
-    ".policy-artifacts/storefront-browser-audit-33595293680-1/slow-4g-checkout.png"
+    ".policy-artifacts/storefront-browser-audit-33940814947-1/desktop-produto.png",
+    ".policy-artifacts/storefront-browser-audit-33940814947-1/desktop-checkout.png",
+    ".policy-artifacts/storefront-browser-audit-33940814947-1/fast-3g-produto.png",
+    ".policy-artifacts/storefront-browser-audit-33940814947-1/slow-4g-checkout.png"
   ],
   "evidence": {
-    "workflow_run": 33595293680,
-    "workflow_artifact_id": 9833202988,
-    "workflow_artifact_digest": "sha256:0823cb0440e050abb3118091900ec1c9d3ad7c099a885add9ade04c387046ba2",
+    "workflow_run": 33940814947,
+    "workflow_artifact_id": 9961768689,
+    "workflow_artifact_digest": "sha256:0d76f9b5cf2f1483646eaa44d9e9ce8158ab8ed2c73b1ea5066932c9d9d67f47",
     "result": "REAL USER AUDIT PASS",
     "routes_checked": [
       "/",
       "/produto.php?id=341440872",
       "/checkout"
     ],
-    "additional_review": "Fresh Storefront Browser Audit passed on PR #1356 after Amazon Returns/SAFE-T integration was reconciled with current main.",
-    "change_scope": "Amazon Returns/SAFE-T backend, admin UI, runtime workers, Seller Central bridge and production credential/deploy wiring; storefront visual regression audit refreshed before merge.",
-    "workflow_artifact_name": "storefront-browser-audit-33595293680-1"
+    "additional_review": "Fresh Storefront Browser Audit passed on PR #1386 after review hardening and E2E stabilization.",
+    "change_scope": "Frontend source-dist parity enforcement, generated assets, cart/category E2E routes, consent handling, and support-control geometry stabilization.",
+    "workflow_artifact_name": "storefront-browser-audit-33940814947-1"
   }
 }
