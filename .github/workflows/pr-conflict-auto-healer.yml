@@ -60,7 +60,7 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Diagnose SSH filesystem boundary
+      - name: Repair and verify SSH temporary boundary
         if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
@@ -68,7 +68,7 @@ jobs:
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
             "${VM_USER}@${VM_HOST}" \
-            "id; stat -c 'tmp_mode=%a tmp_owner=%U tmp_group=%G' /tmp; stat -c 'home_mode=%a home_owner=%U home_group=%G' /home/ubuntu"
+            'mode="$(stat -c %a /tmp)"; if [[ "$mode" != 1777 ]]; then sudo chmod 1777 /tmp; fi; test "$(stat -c %a /tmp)" = 1777; probe="$(mktemp /tmp/shopvivaliz-pr-healer-probe-XXXXXX)"; rm -f "$probe"; echo tmp_boundary_repaired=true'
       - name: Stage trusted healer in Oracle temporary boundary
         id: stage
         shell: bash
