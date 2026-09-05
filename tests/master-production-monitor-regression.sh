@@ -31,3 +31,14 @@ if grep -Fq 'sudo systemctl reload apache2' <<<"$deploy"; then
   exit 1
 fi
 grep -Fq 'sudo systemctl is-active --quiet apache2' <<<"$deploy"
+
+# Successful production deploys must publish exact-SHA evidence for downstream live audits.
+evidence="$(sed -n '/^  publish_evidence:/,$p' "$workflow")"
+grep -Fq 'needs: [validate, deploy, monitor]' <<<"$evidence"
+grep -Fq 'contents: write' <<<"$evidence"
+grep -Fq 'deployment/latest.json?ref=deployment-evidence' <<<"$evidence"
+grep -Fq "'status': 'PRODUCTION_UPDATED'" <<<"$evidence"
+grep -Fq "'sha': sha" <<<"$evidence"
+grep -Fq "'validate': 'success'" <<<"$evidence"
+grep -Fq "'deploy': 'success'" <<<"$evidence"
+grep -Fq "'smoke_test': 'success'" <<<"$evidence"
