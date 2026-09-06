@@ -11,43 +11,78 @@ This repository uses a dedicated Oracle Cloud Infrastructure API signing key for
 
 Agents must use the `AGENTS` identity and must not fall back to a user's `DEFAULT`/personal OCI profile.
 
-## Host access
+## Current VM targets
 
-### Fred-Win (`LAPTOP-NIG4IFUU`)
+- `vm1`: `shopvivaliz-free-a1`
+- `vm2`: `always-free-arm-1787907847-26`
+- Canonical OCI controller: Fred-Win (`LAPTOP-NIG4IFUU`)
+
+The old `shopvivaliz-ai` and `shopvivaliz-micro-2` names are historical and must not be used as current VM targets.
+
+## Canonical direct shell via OCI Run Command
+
+On Fred-Win the protected profile remains at:
+
+```text
+C:\Users\FRED\.oci\agents\config
+```
+
+Use the installed helper:
+
+```powershell
+sv-oci-vm-run vm1 "hostname; id; pwd"
+sv-oci-vm-run vm2 "hostname; id; pwd"
+```
+
+Equivalent full names are accepted:
+
+```powershell
+sv-oci-vm-run shopvivaliz-free-a1 "systemctl --failed"
+sv-oci-vm-run always-free-arm-1787907847-26 "docker ps"
+```
+
+The helper uses OCI Compute Instance Run Command. It creates the command with the `AGENTS` profile, polls execution to a terminal lifecycle state, prints the remote stdout, and exits with the remote exit code. It does not require SSH or an inbound port to be available.
+
+## Access order for agents
+
+1. Remote Desktop Commander directly to the current VM when its device is online.
+2. SSH when host identity and key authentication have been verified. Do not use `StrictHostKeyChecking=no`.
+3. OCI Compute Instance Run Command through Fred-Win and the `AGENTS` profile.
+4. OCI serial console only as the last recovery channel.
+
+Do not duplicate the OCI private key to either VM merely to make automation easier. The controller model keeps the signing key on the protected host and lets Oracle Cloud Agent execute the requested script inside the target VM.
+
+## Verified state on 2026-09-06
+
+Both ARM VMs have Oracle Cloud Agent snap enabled and active. The `Compute Instance Run Command` plugin reports `RUNNING` for the instances. Real commands created through the OCI API completed as `SUCCEEDED` with exit code `0` on both targets.
+
+The plugin executes Linux scripts as user `ocarun` (UID 999) by default. Do not assume root. Administrative commands require an already-authorized sudo path or an explicit least-privilege sudoers policy for `ocarun`; do not bypass host controls.
+
+## Validation
+
+A file existing on disk is not proof of access. Validate the signed OCI identity and then validate a real command:
 
 ```powershell
 oci iam region list --config-file C:\Users\FRED\.oci\agents\config --profile AGENTS
+sv-oci-vm-run vm1 "echo OCI_RUN_COMMAND_OK; hostname; id -u"
+sv-oci-vm-run vm2 "echo OCI_RUN_COMMAND_OK; hostname; id -u"
 ```
 
-### VM1 (`shopvivaliz-ai`)
+For Run Command, `ACCEPTED` only means the service accepted the request. Completion requires terminal state `SUCCEEDED` plus the expected stdout and exit code `0`.
 
-```bash
-/home/ubuntu/.local/oci-cli-venv/bin/oci --config-file /home/ubuntu/.oci/agents/config --profile AGENTS iam region list
-```
-### VM2 (`shopvivaliz-micro-2`)
+If execution does not progress, confirm plugin status and inspect:
 
-VM2 has a local signed-request helper and the protected `AGENTS` profile:
-
-```bash
-/home/ubuntu/.local/bin/oci-agent-request GET https://identity.sa-saopaulo-1.oci.oraclecloud.com/20160918/regions
+```text
+/var/log/oracle-cloud-agent/plugins/runcommand/runcommand.log
 ```
 
-Use OCI's documented REST endpoints with this helper when the full CLI is unavailable. Production remains on VM2; OCI access does not change deployment targeting.
-
-### DESKTOP-KOCEPSV
-
-The OCI private key is intentionally **not duplicated** to this host. Agents use the verified SSH path to VM1, which holds the protected `AGENTS` profile:
-
-```powershell
-powershell -NoProfile -File C:\Users\user\bin\oci-agent.ps1 iam region list --output table
-```
-
-The wrapper uses the existing host key verification and SSH identity. Do not replace it with `StrictHostKeyChecking=no` or copy the OCI private key to this host.
+Do not stop Oracle Cloud Agent or the Run Command plugin from a Run Command task.
 
 ## Security and rotation
 
 - Never commit `*.pem`, OCI session tokens, browser tokens, or `security_token_file` contents.
 - Never echo private-key material or authentication headers.
+- Never send passwords, private keys, API tokens, or other confidential material as plain Run Command text.
 - Keep key/config permissions restricted to the operating account.
-- If compromise is suspected, revoke the API key by fingerprint in OCI, generate a replacement, update protected host storage, then revalidate all four host paths.
-- A successful validation is a real authenticated read such as region listing; file presence alone is not proof of access.
+- If compromise is suspected, revoke the API key by fingerprint in OCI, generate a replacement, update protected host storage, then revalidate signed OCI access and both VM Run Command paths.
+- Prefer OCI Vault/Object Storage protected workflows when a command genuinely needs sensitive input or output.
