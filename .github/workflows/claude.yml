@@ -10,12 +10,12 @@ on:
   pull_request_review:
     types: [submitted]
 
-concurrency:
-  group: claude-${{ github.repository }}-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: true
-
 jobs:
   claude:
+    # Job-level concurrency: skipped/non-trusted events never enter the paid-run cancellation group.
+    concurrency:
+      group: claude-${{ github.repository }}-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: true
     # Sem este filtro, o job dispara para QUALQUER comentário/review/issue do repo,
     # incluindo comentários automáticos postados por outros workflows (ex: probes
     # de status 24h do Desktop Commander) — isso gerou 100+ execuções pagas num
