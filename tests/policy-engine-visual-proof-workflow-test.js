@@ -16,3 +16,7 @@ assert(workflow.includes('if has("expired") then .expired else true end'), 'Poli
 assert(proof.evidence?.workflow_artifact_name, 'visual-proof must declare workflow_artifact_name');
 assert(proof.artifacts.every((p) => p.startsWith('.policy-artifacts/')), 'visual artifacts must point to materialized local evidence paths');
 console.log('policy-engine-visual-proof-workflow-test: ok');
+assert(workflow.includes('Detect visual proof requirement'), 'Policy workflow must determine whether the PR has visual changes before materializing proof');
+assert(workflow.includes("steps.visual_scope.outputs.required == 'true'"), 'Visual artifact download must run only when visual proof is required');
+assert(workflow.includes("path.startswith('includes/amazon-returns/')"), 'Visual scope preflight must preserve backend-only exemptions');
+assert(workflow.includes("re.match(r'^(?:public|includes|templates|views|pages)/'"), 'Visual scope preflight must restrict visual paths');

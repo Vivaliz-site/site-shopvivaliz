@@ -159,8 +159,49 @@ jobs:
           print(f"erp_route={evidence.get('route')}")
           PY
 
+      - name: Detect visual proof requirement
+        id: visual_scope
+        shell: bash
+        env:
+          POLICY_BASE_SHA: ${{ github.event.pull_request.base.sha || inputs.base_sha }}
+          POLICY_HEAD_SHA: ${{ github.event.pull_request.head.sha || inputs.head_sha }}
+        run: |
+          set -Eeuo pipefail
+          required="$(python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+
+          base = os.environ['POLICY_BASE_SHA']
+          head = os.environ['POLICY_HEAD_SHA']
+          changed = subprocess.check_output(
+              ['git', 'diff', '--name-only', '--diff-filter=ACMRTUXB', f'{base}...{head}', '--'],
+              text=True,
+          ).splitlines()
+
+          def is_visual(path):
+              if path in {
+                  'includes/product-seo.php',
+                  'includes/catalog-authoritative-stock-carry.php',
+                  'includes/tiny-order-push.php',
+              }:
+                  return False
+              if path.startswith('includes/marketplace/') or path.startswith('includes/amazon-returns/'):
+                  return False
+              return bool(
+                  re.match(r'^(?:public|includes|templates|views|pages)/', path)
+                  and re.search(r'\.(?:css|scss|js|jsx|ts|tsx|php|html)$', path, re.I)
+              )
+
+          print('true' if any(is_visual(path.strip()) for path in changed if path.strip()) else 'false')
+          PY
+          )"
+          test "$required" = true || test "$required" = false
+          echo "required=$required" >> "$GITHUB_OUTPUT"
+          echo "visual_proof_required=$required"
+
       - name: Materialize visual proof artifact
-        if: ${{ hashFiles('visual-proof.json') != '' }}
+        if: ${{ steps.visual_scope.outputs.required == 'true' }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
