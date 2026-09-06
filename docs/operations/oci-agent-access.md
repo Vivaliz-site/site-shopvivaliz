@@ -1,5 +1,7 @@
 # OCI access for agents
 
+The canonical operational runbook for direct VM commands is [`../../AGENTS-VM-ACCESS.md`](../../AGENTS-VM-ACCESS.md). Read it before operating Oracle Cloud infrastructure.
+
 This repository uses a dedicated Oracle Cloud Infrastructure API signing key for agent operations. The credential is separate from personal OCI credentials and must never be committed, printed, copied into logs, issues, PRs, prompts, or workflow output.
 
 ## Canonical identity
@@ -45,18 +47,34 @@ The helper uses OCI Compute Instance Run Command. It creates the command with th
 
 ## Access order for agents
 
-1. Remote Desktop Commander directly to the current VM when its device is online.
-2. SSH when host identity and key authentication have been verified. Do not use `StrictHostKeyChecking=no`.
-3. OCI Compute Instance Run Command through Fred-Win and the `AGENTS` profile.
+1. Remote Desktop Commander directly to the current VM when its device is online, for normal non-root operation.
+2. Administrative SSH from Fred-Win when `sudo`/root is required.
+3. OCI Compute Instance Run Command through Fred-Win and the `AGENTS` profile as an SSH-independent shell fallback.
 4. OCI serial console only as the last recovery channel.
 
-Do not duplicate the OCI private key to either VM merely to make automation easier. The controller model keeps the signing key on the protected host and lets Oracle Cloud Agent execute the requested script inside the target VM.
+Do not weaken Desktop Commander `sudo`/`NoNewPrivileges` controls merely to obtain root. Do not duplicate the OCI private key to either VM merely to make automation easier.
+
+## Administrative SSH
+
+The validated automated SSH executable on Fred-Win is the Git distribution:
+
+```powershell
+& 'C:\Program Files\Git\usr\bin\ssh.exe' -o BatchMode=yes shopvivaliz-a1-site-raw 'hostname; id -un; sudo -n id -u'
+& 'C:\Program Files\Git\usr\bin\ssh.exe' -o BatchMode=yes shopvivaliz-a1-backend-raw 'hostname; id -un; sudo -n id -u'
+```
+
+As validated on 2026-09-06, both aliases authenticate and `sudo -n id -u` returns `0` with local exit code `0`. In the same automated Fred-Win session, `C:\Windows\System32\OpenSSH\ssh.exe` returned exit `255` without stderr, while Git SSH worked; prefer Git SSH until the native client is separately revalidated. Never use `StrictHostKeyChecking=no`.
 
 ## Verified state on 2026-09-06
 
 Both ARM VMs have Oracle Cloud Agent snap enabled and active. The `Compute Instance Run Command` plugin reports `RUNNING` for the instances. Real commands created through the OCI API completed as `SUCCEEDED` with exit code `0` on both targets.
 
-The plugin executes Linux scripts as user `ocarun` (UID 999) by default. Do not assume root. Administrative commands require an already-authorized sudo path or an explicit least-privilege sudoers policy for `ocarun`; do not bypass host controls.
+The canonical helper was also validated end-to-end on both targets:
+
+- `vm1`: `HELPER_OK`, `shopvivaliz-free-a1`, `ocarun`, local helper exit code `0`.
+- `vm2`: `HELPER_OK`, `always-free-arm-1787907847-26`, `ocarun`, local helper exit code `0`.
+
+The plugin executes Linux scripts as user `ocarun` (UID 999) by default. Direct `sudo -n` as `ocarun` required a password on both VMs, so **OCI API/Run Command provides a working shell but must not be treated as root**. Administrative commands use the already-authorized SSH path above or, for recovery, the OCI serial console.
 
 ## Validation
 
@@ -68,7 +86,7 @@ sv-oci-vm-run vm1 "echo OCI_RUN_COMMAND_OK; hostname; id -u"
 sv-oci-vm-run vm2 "echo OCI_RUN_COMMAND_OK; hostname; id -u"
 ```
 
-For Run Command, `ACCEPTED` only means the service accepted the request. Completion requires terminal state `SUCCEEDED` plus the expected stdout and exit code `0`.
+For Run Command, `ACCEPTED` only means the service accepted the request. Completion requires terminal state `SUCCEEDED` plus the expected stdout and exit code `0`. Oracle Agent polling uses jitter, so a command can remain `ACCEPTED` for a few minutes; do not create duplicate commands simply because one polling cycle has not completed.
 
 If execution does not progress, confirm plugin status and inspect:
 
