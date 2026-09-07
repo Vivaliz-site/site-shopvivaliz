@@ -38,10 +38,21 @@ jobs:
           fi
           echo "ZONE_ID=$zone_id"
 
-          for setting in cache_level browser_cache_ttl always_online brotli minify rocket_loader development_mode ssl automatic_https_rewrites; do
+          for setting in cache_level browser_cache_ttl always_online brotli minify rocket_loader development_mode ssl automatic_https_rewrites bot_fight_mode; do
             resp=$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones/$zone_id/settings/$setting")
             echo "SETTING[$setting]=$resp"
           done
 
+          echo 'WAF_RULESET_SUMMARY_BEGIN'
+          rulesets=$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones/$zone_id/rulesets")
+          echo "$rulesets" | python3 -c 'import json,sys; d=json.load(sys.stdin); rows=d.get("result") or []; [print("RULESET", r.get("id",""), r.get("name",""), r.get("kind",""), r.get("phase","")) for r in rows]'
+          for phase in http_request_firewall_custom http_request_firewall_managed http_request_sbfm; do
+            resp=$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones/$zone_id/rulesets/phases/$phase/entrypoint")
+            echo "PHASE[$phase]=$resp"
+          done
+          bot_config=$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones/$zone_id/bot_management")
+          echo "BOT_MANAGEMENT=$bot_config"
+          echo 'WAF_RULESET_SUMMARY_END'
+
       - name: No changes applied
-        run: echo 'READ_ONLY_CHECK_COMPLETE — nenhuma configuracao foi alterada'
+        run: echo 'READ_ONLY_CHECK_COMPLETE - nenhuma configuracao foi alterada'
