@@ -17,6 +17,7 @@ readonly RETENTION_COUNT=5
 readonly -a RUNTIME_SERVICES=(
   "shopvivaliz-token-renewer.service"
   "shopvivaliz-shopee-token-renewer.service"
+  "shopvivaliz-mercadolivre-token-renewer.service"
   "shopvivaliz-queue-worker.service"
 )
 
@@ -56,16 +57,59 @@ PY
 
 restart_runtime_services() {
   local service
-  if ! sudo systemctl restart "${RUNTIME_SERVICES[@]}"; then
+  local -a services=()
+  for service in "${RUNTIME_SERVICES[@]}"; do
+    if [ "$service" = "shopvivaliz-mercadolivre-token-renewer.service" ] && [ ! -f "$CURRENT_LINK/daemon-mercadolivre-token-renewer.php" ]; then
+      if sudo systemctl cat "$service" >/dev/null 2>&1; then
+        if ! sudo systemctl stop "$service"; then
+          log ERROR "Nao foi possivel parar o renovador Mercado Livre ausente na release ativa"
+          return 1
+        fi
+      fi
+      continue
+    fi
+    services+=("$service")
+  done
+  if ! sudo systemctl restart "${services[@]}"; then
     log ERROR "Reinicio dos servicos de runtime falhou"
     return 1
   fi
-  for service in "${RUNTIME_SERVICES[@]}"; do
+  for service in "${services[@]}"; do
     if ! sudo systemctl is-active --quiet "$service"; then
       log ERROR "Servico de runtime inativo apos reinicio: $service"
       return 1
     fi
   done
+}
+
+reconcile_runtime_service_units() {
+  local release_path="$1"
+  local service="shopvivaliz-mercadolivre-token-renewer.service"
+  local source="$release_path/deploy/systemd/$service"
+  local target="/etc/systemd/system/$service"
+  if [ ! -f "$source" ]; then
+    if [ -f "$release_path/daemon-mercadolivre-token-renewer.php" ]; then
+      log ERROR "Unit do renovador Mercado Livre ausente na release: $source"
+      return 1
+    fi
+    return 0
+  fi
+  if ! sudo install -o root -g root -m 0644 "$source" "$target"; then
+    log ERROR "Falha ao instalar unit do renovador Mercado Livre"
+    return 1
+  fi
+  if ! sudo systemd-analyze verify "$target" >> "$LOG_FILE" 2>&1; then
+    log ERROR "Unit do renovador Mercado Livre invalida"
+    return 1
+  fi
+  if ! sudo systemctl daemon-reload; then
+    log ERROR "systemd daemon-reload falhou"
+    return 1
+  fi
+  if ! sudo systemctl enable "$service" >> "$LOG_FILE" 2>&1; then
+    log ERROR "Falha ao habilitar renovador Mercado Livre"
+    return 1
+  fi
 }
 
 assert_managed_release_path() {
@@ -179,6 +223,12 @@ rollback_to() {
   if ! mv -Tf "$CURRENT_LINK.tmp" "$CURRENT_LINK"; then
     log ERROR "Rollback falhou ao restaurar o symlink current"
     return 1
+  fi
+  if [ -f "$RELEASES_DIR/$previous_release/deploy/systemd/shopvivaliz-mercadolivre-token-renewer.service" ]; then
+    if ! reconcile_runtime_service_units "$RELEASES_DIR/$previous_release"; then
+      log ERROR "Rollback nao conseguiu reconciliar a unit Mercado Livre"
+      return 1
+    fi
   fi
   if ! restart_runtime_services; then
     log ERROR "Rollback restaurou o symlink, mas nao reiniciou as integracoes"
@@ -539,6 +589,14 @@ fi
 
 ln -sfn "releases/$NEW_RELEASE" "$CURRENT_LINK.tmp"
 mv -Tf "$CURRENT_LINK.tmp" "$CURRENT_LINK"
+
+if ! reconcile_runtime_service_units "$NEW_RELEASE_PATH"; then
+  if ! rollback_to "$ACTIVE_RELEASE"; then
+    log ERROR "Rollback apos falha ao instalar unit Mercado Livre tambem falhou"
+  fi
+  write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "reconciliacao da unit Mercado Livre falhou"
+  exit 1
+fi
 
 if ! restart_runtime_services; then
   if ! rollback_to "$ACTIVE_RELEASE"; then

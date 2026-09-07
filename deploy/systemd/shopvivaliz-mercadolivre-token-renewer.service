@@ -1,0 +1,24 @@
+[Unit]
+Description=ShopVivaliz Mercado Livre OAuth Proactive Token Renewer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/current
+EnvironmentFile=/home/ubuntu/shopvivaliz-deploy/shared/.env
+ExecStart=/usr/bin/php /home/ubuntu/shopvivaliz-deploy/current/daemon-mercadolivre-token-renewer.php --interval 300
+Restart=always
+RestartSec=60
+TimeoutStopSec=30
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
