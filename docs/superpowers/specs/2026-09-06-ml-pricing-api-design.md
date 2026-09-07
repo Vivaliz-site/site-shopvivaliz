@@ -7,515 +7,466 @@
 
 ## 1. Goal
 
-Build an isolated, API-first, auditable service that calculates and explains contribution margin for Mercado Livre listings, promotions and sales using official Mercado Livre APIs plus seller-owned cost/tax data.
+Build an isolated, API-first and auditable service that calculates contribution margin for Mercado Livre listings, promotions and sales using official Mercado Livre APIs plus seller-owned cost/tax data.
 
-The first version must reproduce the economically useful core observed in Mercado Turbo without depending on Mercado Turbo at runtime and without copying its proprietary code, UI, assets or private API implementation.
+The first release reproduces the economically useful core observed in Mercado Turbo without depending on Mercado Turbo at runtime and without copying its proprietary code, UI, assets, selectors or private API implementation.
 
-The service must distinguish three financial states:
+The service distinguishes three immutable financial states:
 
 1. `ESTIMATED`: pre-sale quote using current item, price, promotion, fee, shipping and seller cost assumptions.
-2. `ACTUAL`: post-sale calculation using the confirmed order, applied discounts and actual shipment charge when available.
-3. `RECONCILED`: post-billing result after later Mercado Livre credits/debits/adjustments have been reconciled.
+2. `ACTUAL`: post-sale result using confirmed order, actual sale fee, applied discount context and actual shipment charge when available.
+3. `RECONCILED`: later result after official billing credits/debits/adjustments are reconciled.
+
+A later state never mutates an older snapshot.
 
 ## 2. Non-negotiable rules
 
 - Mercado Livre official APIs are the production source of truth for marketplace facts.
-- Mercado Turbo is a benchmark/oracle for parity testing only; no production dependency on its endpoints, extension, tokens or cached data.
-- Do not copy Mercado Turbo source code, selectors, visual assets or proprietary implementation. Reimplement behavior independently from official API contracts and seller-owned data.
-- V1 is read-only against Mercado Livre. It may write internal cost/tax/configuration data, but it must not change an ML item price, promotion, stock, automation or campaign.
-- Existing repository policy that protects marketplace prices remains in force.
-- Every monetary result must be explainable from persisted source facts and a versioned deterministic formula.
-- Never silently substitute a guessed fee, freight, tax, promotion contribution or historical cost when the authoritative input is missing.
-- Missing inputs produce an explicit completeness state, not a fabricated margin.
-- `1 MLB = 1 SKU = 1 price` must never be assumed. The model must support User Products, conditions of sale and legacy variations.
-- All seller/account-scoped rows carry `tenant_id` and `ml_account_id` from day one, even though the first deployment enables one tenant/account.
+- Mercado Turbo is a black-box benchmark only; no production dependency on its endpoints, extension, tokens or cached data.
+- V1 is read-only against Mercado Livre. It may write internal cost/tax/configuration data only.
+- No ML price, promotion, stock, campaign or pricing-automation mutation route exists in V1.
+- Existing repository policy protecting marketplace prices remains in force.
+- Every monetary result is explainable from persisted source facts and a versioned deterministic formula.
+- Missing fee, freight, tax, cost or promotion semantics never silently become zero/default unless zero is an explicit authoritative value.
+- `1 MLB = 1 SKU = 1 price` is forbidden as an assumption. User Products, legacy variations and multiple sale conditions are supported.
+- All seller/account-scoped rows carry `tenant_id`; all ML marketplace rows also carry `ml_account_id`.
 - OAuth credentials/tokens are encrypted at rest, access-restricted and never logged.
-- All timestamps are stored in UTC; API responses include ISO-8601 UTC timestamps.
-- All currency values are stored as decimal amounts, never binary floats.
+- Timestamps are UTC. Money is decimal, never binary float.
+- Permanent runtime jobs are deterministic; no recurring paid AI dependency.
 
 ## 3. Compliance boundary
 
-The application is a value-added seller-management and profitability product, not a generic resale/proxy of Mercado Livre's API.
+This product is a value-added seller-management/profitability application, not a generic resale/proxy of the Mercado Livre API.
 
-Before any public/commercial multi-customer launch, a dedicated compliance gate is mandatory because current Mercado Livre Developer Terms include restrictions on scraping, redistribution/sublicensing of the API, applications that operate substantially like the API, and publication/use of certain derived performance statistics without express authorization.
+Current Mercado Livre Developer Terms require, among other things, that marketplace content embedded in applications be refreshed at least every 24 hours and item listings at least every 6 hours; they restrict scraping, redistribution/sublicensing, applications that operate substantially like the API, and some derived marketplace/performance statistics without express authorization.
 
-V1 development rules:
+Therefore V1 follows these rules:
 
-- no scraping of Mercado Livre for facts already available through the Developer Program;
-- no bypass of API rate limits or technical restrictions;
-- refresh Mercado Livre content at least within the freshness required by current Developer Terms (general content <=24h, item listings <=6h), while operational data should normally be substantially fresher;
-- no third-party exposure of raw ML credentials/tokens;
-- no raw pass-through endpoint whose primary product is simply redistributing Mercado Livre API responses;
-- public/commercial reporting of derived marketplace statistics is blocked until Partner/Developer compliance is reviewed and, where required, explicit authorization is obtained.
+- no scraping for facts available through the Developer Program;
+- no bypass of API/rate-limit/security controls;
+- no raw third-party token exposure;
+- no generic pass-through API whose product is redistribution of ML responses;
+- data minimization for buyer/personal information;
+- public multi-customer commercialization and publication of derived marketplace statistics remain behind a Partner/Developer compliance review gate.
 
 Reference: https://developers.mercadolivre.com.br/pt_br/termos-e-condicoes
 
-## 4. Clean-room parity strategy
+## 4. Clean-room parity rule
 
-Observed Mercado Turbo behavior may be used to define black-box test expectations for seller-owned cases. The implementation itself must be derived from:
+Mercado Turbo may be used only to compare visible behavior for seller-owned cases.
+
+Implementation sources are:
 
 - official Mercado Livre documentation and responses;
 - seller-owned Olist/Tiny/cost/tax data;
-- deterministic formulas defined in this specification;
-- independently written adapters and tests.
+- formulas and domain rules defined in this specification;
+- independently written adapters/tests.
 
-Allowed benchmark comparison:
+Allowed benchmark:
 
-`same seller case -> Mercado Turbo visible result vs our result vs official Mercado Livre source facts`
+`same seller case -> Mercado Turbo result vs our result vs official ML source facts`
 
-If Mercado Turbo differs from official source facts, official Mercado Livre data and documented semantics win, and the discrepancy becomes a regression fixture with an explanation.
+If Mercado Turbo differs from official ML source facts or current documented semantics, the official source wins and the discrepancy becomes a classified regression fixture.
 
 ## 5. Source hierarchy
 
-### 5.1 Marketplace facts
+### Pre-sale estimate
 
-For a pre-sale estimate:
+`ML_PRICE_API + seller-promotions + listing_prices + shipping_options + seller cost/tax profiles`
 
-`ML_PRICE_API / seller-promotions / listing_prices / shipping_options > item fallback metadata`
+### Post-sale actual
 
-For a completed sale:
+`ORDER + ORDER_ITEMS + ORDER_DISCOUNTS + actual order sale_fee + SHIPMENT_COSTS + historical seller cost/tax profiles`
 
-`ORDER + ORDER_DISCOUNTS + SHIPMENT_COSTS > pre-sale quote`
+### Financial reconciliation
 
-For financial reconciliation:
+`BILLING_INTEGRATION / official billing adjustments > operational estimates`
 
-`BILLING_INTEGRATION > operational estimate`
+### Seller-owned costs
 
-### 5.2 Seller-owned cost facts
+`approved manual override > validated Olist/Tiny profile > missing`
 
-`explicit approved internal override > validated Olist/Tiny synchronization > missing`
+Cost/tax profiles are effective-dated. A cost changed tomorrow never rewrites yesterday's margin.
 
-Historical calculations select the cost profile effective at the economic event timestamp; later cost changes never rewrite old margin history.
+## 6. Official Mercado Livre contracts targeted by V1
 
-### 5.3 Tax facts
+- seller items: `GET /users/{USER_ID}/items/search`
+- item bulk detail: `GET /items/bulk?ids=...`
+- price contexts: `GET /items/{ITEM_ID}/prices` and current sale-price resources
+- price notifications: topic `items_prices`
+- selling-cost quote: `GET /sites/MLB/listing_prices`
+- shipping quote: `GET /users/{USER_ID}/shipping_options/free`
+- promotions: `/seller-promotions`
+- pricing automation discovery: `/pricing-automation/...`
+- orders: `/orders` and `/orders/{ORDER_ID}`
+- order discounts: `GET /orders/{ORDER_ID}/discounts`
+- actual shipment cost: `GET /shipments/{SHIPMENT_ID}/costs`
+- notifications: `orders_v2`, `items`, `shipments`, `items_prices` where applicable
+- missed notification recovery: `/missed_feeds`
+- billing reconciliation: `/billing/integration/...`
 
-Tax is seller-owned configuration and is not presented as legal/tax advice. A versioned tax profile defines its rate and calculation basis. If the profile is absent, tax completeness is `MISSING`; the engine does not invent a default rate.
+The new service does not use old multi-get `/items?ids=` or `/users?ids=`. Current ML documentation requires migration to `/items/bulk?ids=` and `/users/bulk?ids=` by 2026-10-25.
 
-## 6. Relevant official Mercado Livre APIs
+## 7. Key 2026 ML semantics incorporated
 
-V1 adapters are designed around current 2026 contracts:
+### Selling fees
 
-- Seller items: `GET /users/{USER_ID}/items/search`
-- Bulk item detail: `GET /items/bulk?ids=...`
-- Price contexts: `GET /items/{ITEM_ID}/prices` and current sale-price resources
-- Price notifications: topic `items_prices`
-- Selling fee quote: `GET /sites/MLB/listing_prices` with category, price, currency, listing type, `logistic_type` and shipping mode
-- Shipping quote: `GET /users/{USER_ID}/shipping_options/free`
-- Promotions: `/seller-promotions`
-- Pricing automation discovery: `/pricing-automation/users/{USER_ID}/items` and item automation resources
-- Orders: `/orders` and `/orders/{ORDER_ID}`
-- Order discounts: `GET /orders/{ORDER_ID}/discounts`
-- Shipment actual cost: `GET /shipments/{SHIPMENT_ID}/costs`
-- Notifications: `orders_v2`, `items`, `shipments`, `items_prices` as applicable
-- Missed notifications recovery: `/missed_feeds`
-- Billing reconciliation: `/billing/integration/...`
+For MLB, current `listing_prices` needs the relevant logistics context. The fixed fee now depends on logistics; missing `logistic_type` / shipping mode can make the quote differ from the real charge.
 
-The old multi-get `/items?ids=` and `/users?ids=` are not used. Current ML documentation requires migration to `/items/bulk?ids=` and `/users/bulk?ids=` by 2026-10-25.
+`sale_fee_amount` is the total selling cost returned by ML. Any `fixed_fee` shown in details is already included and must never be added again.
 
-## 7. Architecture decision
+Reference: https://developers.mercadolivre.com.br/pt_br/comissao-por-vender
 
-Use an isolated modular monolith, not a microservice fleet and not an extension-first product.
+### Promotion boosts
+
+Applicable campaigns can return:
+
+- `boosted_offer`
+- `discount_meli_boosted_percentage`
+- `discount_meli_boost_amount`
+- `total_price_for_boosted_offer`
+
+ML documents the boost as an equivalent reduction in selling costs. The engine models that benefit as fee reduction, not fabricated revenue.
+
+Reference: https://developers.mercadolivre.com.br/pt_br/gerenciar-ofertas
+
+### Price automation
+
+Items with dynamic pricing automation require the pricing-automation contract for future price changes. A generic price PUT loop is not an acceptable V2 design.
+
+### User Products / variations
+
+The data model stores item, User Product and legacy variation identifiers independently. Profitability is resolved at the narrowest available sale condition.
+
+## 8. Architecture decision
+
+Use a new isolated modular monolith, not a microservice fleet and not an extension-first product.
 
 ```text
-                    +---------------------------+
-                    | Mercado Livre OAuth 2.0   |
-                    +-------------+-------------+
-                                  |
-                    +-------------v-------------+
-                    | MercadoLivre Adapter      |
-                    | HTTP / retry / rate limit |
-                    +-------------+-------------+
-                                  |
-             +--------------------+--------------------+
-             |                    |                    |
-      +------v------+      +------v------+      +------v------+
-      | Sync        |      | Webhook     |      | Cost/Tax    |
-      | Orchestrator|      | Ingestion   |      | Providers   |
-      +------+------+      +------+------+      +------+------+ 
-             |                    |                    |
-             +--------------------+--------------------+
-                                  |
-                        +---------v---------+
-                        | Canonical Store   |
-                        | snapshots/events  |
-                        +---------+---------+
-                                  |
-                        +---------v---------+
-                        | Pricing Engine    |
-                        | deterministic     |
-                        +---------+---------+
-                                  |
-              +-------------------+-------------------+
-              |                   |                   |
-       +------v------+      +-----v------+      +-----v------+
-       | REST API    |      | Reports    |      | Reconcile  |
-       | seller ops  |      | summaries  |      | billing    |
-       +-------------+      +------------+      +------------+
+Mercado Livre OAuth
+        |
+        v
++-----------------------+
+| MercadoLivre Adapter  |
+| auth/http/retry/limit |
++----------+------------+
+           |
+   +-------+--------+----------------+
+   |                |                |
+   v                v                v
+Listing/Promo    Order/Webhook     Cost/Tax
+Sync             Ingestion         Providers
+   |                |                |
+   +----------------+----------------+
+                    |
+                    v
+           +------------------+
+           | Canonical Store  |
+           | events/snapshots |
+           +--------+---------+
+                    |
+                    v
+           +------------------+
+           | Pricing Engine   |
+           | pure/deterministic|
+           +--------+---------+
+                    |
+          +---------+---------+
+          |         |         |
+          v         v         v
+        REST      Reports   Reconcile
 ```
 
-### Why this shape
+Why:
 
-- isolated enough to become a SaaS later;
-- simple enough to deploy and debug on the existing Oracle infrastructure;
-- one transactional database makes snapshots, event ingestion, idempotency and margin calculation auditable;
-- bounded modules can later be extracted only if traffic/ownership justifies it;
-- no browser DOM dependency for the core product.
+- isolated enough for future SaaS;
+- simple enough for existing Oracle infrastructure;
+- one transactionally consistent store supports idempotency, audit and snapshots;
+- browser DOM is not part of the financial truth;
+- modules can later be extracted only if measured load justifies it.
 
-## 8. Technology stack
+## 9. Technology stack
 
-Planned new service baseline:
+Planned service baseline:
 
 - PHP 8.3+
-- Symfony 7.4 LTS components/application structure
+- Symfony 7.4 LTS
 - MySQL 8.0+ dedicated logical database
-- Doctrine DBAL/ORM migrations
-- Symfony HttpClient for Mercado Livre/Olist/Tiny adapters
-- Symfony Messenger with a database-backed durable transport in V1
-- PHPUnit for unit/integration/contract tests
+- Doctrine migrations/DBAL/ORM
+- Symfony HttpClient
+- Symfony Messenger with database-backed durable transport in V1
+- PHPUnit
+- OpenAPI 3.1 contract validation
 - Nginx + PHP-FPM
-- systemd worker service for Messenger consumers
-- systemd timer or bounded cron entry for reconciliation/scheduled sync
-- OpenAPI 3.1 generated/validated from the HTTP contract
+- dedicated systemd worker
+- bounded systemd timer/cron jobs for repair sync/reconciliation
 
-Redis is intentionally not mandatory in V1. Add it only if measured queue/cache load makes the database transport insufficient.
+Redis is deliberately not required initially. Add it only after measured queue/cache demand warrants it.
 
-The service repository is separate from `site-shopvivaliz`; the existing site may later consume it through its REST API. There are no cross-repository database joins and no foreign keys into the legacy ShopVivaLiz schema.
+The service is a separate repository and database. There are no cross-repository database joins or foreign keys into the legacy ShopVivaLiz schema.
 
-## 9. Existing ShopVivaLiz code: reuse and retirement boundary
+## 10. Existing ShopVivaLiz reuse/retirement boundary
 
-Current useful assets:
+Useful concepts to reuse:
 
-- existing Mercado Livre OAuth/PKCE concepts;
-- known runtime secret/deploy mechanisms;
+- current ML OAuth/PKCE experience;
+- runtime secret/deploy mechanisms;
 - current `orders_v2` webhook knowledge;
-- existing Olist/Tiny integration knowledge and credentials pipeline.
+- existing Olist/Tiny integration knowledge.
 
-Current code that must not become the new core:
+Must not become the new core:
 
-- duplicated ML auth/client implementations in `api/ml/client.php` and `api/ml/_bootstrap.php`;
-- JSON-file token persistence as the long-term multi-account token store;
-- synchronous business processing inside the webhook request;
-- `storage/orders/*.json` as the canonical profitability database;
-- local fallback product catalogs as an ML listing source.
+- duplicated ML clients/auth in `api/ml/client.php` and `api/ml/_bootstrap.php`;
+- JSON-file token persistence as long-term multi-account storage;
+- synchronous business work inside webhook requests;
+- `storage/orders/*.json` as canonical profitability storage;
+- fallback product JSON as source of ML listings.
 
-The new service gets one authentication implementation, one ML transport, one canonical database and a durable event-processing path.
+The new service has one auth implementation, one ML transport, one canonical DB and one durable event path.
 
-## 10. Module boundaries
+## 11. Module boundaries
 
 ### `Identity/Tenant`
-Owns tenants, API clients and account scoping. No business query may execute without an explicit `tenant_id` boundary.
+Owns tenants, API clients and account scoping. Every repository query is tenant-scoped.
 
 ### `MercadoLivreAuth`
-Owns OAuth authorization code + PKCE, token refresh, encrypted token persistence and per-account authorization status.
+Owns OAuth authorization-code + PKCE, token refresh, encrypted persistence and authorization status.
 
 ### `MercadoLivreClient`
-Owns HTTP transport only:
+Owns provider transport only:
 
-- base URL allowlist;
-- Authorization header;
+- fixed allowlisted API base;
+- authorization header;
 - timeouts;
 - retry classification;
-- exponential backoff with jitter for retryable failures/429;
-- concurrency budget;
-- request/response telemetry with secrets and sensitive fields redacted.
+- exponential backoff with jitter;
+- concurrency budgets;
+- redacted telemetry.
 
-Business modules never call arbitrary ML URLs directly.
+Business modules cannot pass arbitrary absolute URLs.
 
 ### `ListingSync`
-Discovers seller items, fetches bulk details, User Product identifiers, listing/shipping metadata, current price contexts and pricing-automation status.
+Discovers seller items and normalizes item, User Product/variation, logistics, price contexts and pricing-automation state.
 
 ### `PromotionSync`
-Normalizes `/seller-promotions` and per-item offers, including seller contribution and ML-funded/boost fields.
+Normalizes `/seller-promotions` and per-item offers, including seller/ML funding and boost fields.
 
 ### `OrderSync`
-Normalizes orders, packs where applicable, order items, applied discounts and shipment IDs.
+Normalizes orders, packs, order items, effective prices, sale fees, discounts and shipment links.
 
 ### `ShippingService`
-Provides two explicit contracts:
+Two contracts:
 
-- `quote()` -> pre-sale shipping estimate;
-- `actual()` -> seller charge from `/shipments/{id}/costs`, using `senders[].cost` as the actual seller shipping charge.
+- `quote()` = pre-sale estimate from official shipping quote API;
+- `actual()` = post-sale sender charge from `/shipments/{id}/costs`.
 
 ### `FeeService`
-Calls current `listing_prices` with the full relevant logistics context. `sale_fee_amount` is treated as a total official selling-cost result; fixed and percentage components may be stored when explicitly returned but are never double-counted.
+Calls `listing_prices` with complete price/category/listing/logistics context. It treats `sale_fee_amount` as the total official selling cost and prevents fixed-fee double counting.
 
 ### `CostCatalog`
-Owns SKU cost profiles, packaging/other seller costs and effective dating. Olist/Tiny is an adapter feeding this module, not a direct dependency of the Pricing Engine.
+Owns SKU cost/packaging/other-variable-cost profiles and effective dating. Olist/Tiny adapters feed this module.
 
 ### `TaxCatalog`
-Owns versioned seller tax profiles and taxable-basis policy.
+Owns versioned seller tax profiles and basis rules. It does not embed tax-law assumptions into the listing adapter.
 
 ### `PricingEngine`
-Pure deterministic domain engine. It receives normalized inputs and emits a complete calculation result; it performs no network or database calls.
+Pure deterministic function. No network/database calls.
 
 ### `Reconciliation`
-Matches post-sale billing adjustments to order/order-item economics without rewriting original `ESTIMATED` or `ACTUAL` snapshots.
+Adds verified billing adjustments to post-sale economics without rewriting previous snapshots.
 
 ### `WebhookIngestion`
-Persists notification envelope first, returns HTTP 200 after durable acceptance, and processes the resource asynchronously. Duplicate deliveries are idempotent.
+Persists notification envelope first, returns after durable acceptance, processes asynchronously and idempotently.
 
 ### `Audit`
-Records configuration changes, internal writes, source versions and calculation versions. Raw tokens/secrets are never audit payloads.
+Append-only business/configuration audit. Never stores secrets/tokens.
 
-## 11. Canonical data model
+## 12. Canonical data model
 
-All business tables include `tenant_id`, and marketplace-owned rows also include `ml_account_id`.
+All business tables include `tenant_id`; marketplace-owned rows also include `ml_account_id`.
 
 ### `tenants`
-- `id BINARY(16) PRIMARY KEY`
-- `name VARCHAR(160)`
-- `status VARCHAR(24)`
-- `created_at`, `updated_at`
+`id`, `name`, `status`, timestamps.
 
 ### `api_clients`
-- `id`, `tenant_id`, `name`
-- `token_hash` or public-key reference
-- `scopes_json`
-- `last_used_at`, `revoked_at`, timestamps
+`id`, `tenant_id`, `name`, `token_hash`, `scopes_json`, `last_used_at`, `revoked_at`, timestamps.
 
 ### `ml_accounts`
-- `id`, `tenant_id`
-- `seller_id BIGINT`
-- `site_id VARCHAR(8) DEFAULT 'MLB'`
-- `nickname`
-- `token_ciphertext`, `refresh_token_ciphertext`
-- `token_expires_at`
-- `oauth_status`
-- `metadata_json`
-- timestamps
-Unique `(tenant_id, seller_id, site_id)`.
+`id`, `tenant_id`, `seller_id`, `site_id`, `nickname`, encrypted access/refresh token fields, expiry/status, metadata, timestamps. Unique `(tenant_id,seller_id,site_id)`.
 
 ### `ml_listings`
-- `id`, `tenant_id`, `ml_account_id`
-- `item_id VARCHAR(32)`
-- `user_product_id VARCHAR(64) NULL`
-- `family_id VARCHAR(64) NULL`
-- `catalog_product_id VARCHAR(64) NULL`
-- `catalog_listing BOOLEAN`
-- `category_id VARCHAR(32)`
-- `listing_type_id VARCHAR(32)`
-- `status VARCHAR(32)`
-- `condition_code VARCHAR(24)`
-- `seller_sku VARCHAR(191) NULL`
-- `currency_id VARCHAR(8)`
-- `shipping_mode VARCHAR(32) NULL`
-- `logistic_type VARCHAR(64) NULL`
-- `free_shipping BOOLEAN`
-- `dimensions_raw VARCHAR(128) NULL`
-- `source_updated_at`, `synced_at`, timestamps
-Unique `(ml_account_id, item_id)`.
+`id`, tenant/account, `item_id`, `user_product_id`, `family_id`, `catalog_product_id`, `category_id`, `listing_type_id`, status/condition, `seller_sku`, currency, `shipping_mode`, `logistic_type`, `free_shipping`, dimensions, ML update timestamp, sync timestamp. Unique `(ml_account_id,item_id)`.
 
 ### `ml_listing_variants`
-Supports legacy variation IDs and future condition-specific association without assuming one SKU per item.
-
-- `id`, `listing_id`
-- `variation_id VARCHAR(64) NULL`
-- `user_product_id VARCHAR(64) NULL`
-- `seller_sku VARCHAR(191) NULL`
-- `attributes_json`
-- timestamps
+Listing reference, `variation_id`, `user_product_id`, `seller_sku`, attributes JSON.
 
 ### `price_snapshots`
-- `id`, `listing_id`
-- `context_key VARCHAR(191)`
-- `amount DECIMAL(14,2)`
-- `regular_amount DECIMAL(14,2) NULL`
-- `currency_id`
-- `promotion_id NULL`
-- `source VARCHAR(32)`
-- `source_observed_at`
-- `payload_hash CHAR(64)`
-- `created_at`
-Unique on a source/payload idempotency key rather than timestamp alone.
+Listing/sale-condition reference, context key, `amount`, `regular_amount`, currency, promotion reference, source, observed timestamp, payload hash, created timestamp.
 
 ### `pricing_automation_snapshots`
-- listing reference
-- `status`
-- `rule_id`
-- `min_price`, `max_price`
-- `status_cause`
-- `observed_at`
+Listing reference, status, automation/rule ID, min/max price if supplied, status cause, observed timestamp.
 
 ### `sku_cost_profiles`
-- `id`, `tenant_id`
-- `sku VARCHAR(191)`
-- `unit_cost DECIMAL(14,4)`
-- `packaging_cost DECIMAL(14,4) DEFAULT 0`
-- `other_variable_cost DECIMAL(14,4) DEFAULT 0`
-- `currency_id`
-- `source VARCHAR(32)` (`MANUAL`, `OLIST`, `TINY`)
-- `source_reference NULL`
-- `valid_from DATETIME`
-- `valid_to DATETIME NULL`
-- `approved_at`, `approved_by NULL`
-- timestamps
-No overlapping effective periods for the same tenant/SKU/source precedence layer.
+Tenant, SKU, unit/packaging/other variable cost, currency, source (`MANUAL|OLIST|TINY`), source reference, `valid_from`, `valid_to`, approval metadata, timestamps. Effective periods cannot overlap inside the same precedence layer.
 
 ### `tax_profiles`
-- `id`, `tenant_id`
-- `profile_key`
-- `rate DECIMAL(9,6)`
-- `basis VARCHAR(32)` (`GROSS_REVENUE` initially)
-- `valid_from`, `valid_to`
-- `source`, audit metadata
+Tenant, profile key, rate, basis (`GROSS_REVENUE` initially), effective dates, source/audit metadata.
 
 ### `listing_tax_assignments`
-Maps listing/SKU to the effective tax profile without embedding tax into listing metadata.
+Listing/SKU -> tax-profile mapping.
 
 ### `promotion_snapshots`
-- `id`, `listing_id`
-- `promotion_id`, `promotion_type`, `status`
-- seller offer price fields
-- `meli_percentage NULL`
-- `seller_percentage NULL`
-- `boosted_offer BOOLEAN`
-- `discount_meli_boosted_percentage NULL`
-- `discount_meli_boost_amount DECIMAL(14,2) NULL`
-- `total_price_for_boosted_offer DECIMAL(14,2) NULL`
-- start/end timestamps
-- source payload hash, observed timestamp
+Listing reference, promotion ID/type/status, seller offer fields, ML/seller participation fields, boost fields, validity window, observed timestamp, payload hash.
 
 ### `fee_quotes`
-Stores the official input context and returned selling cost:
-
-- listing/category/listing type
-- quoted price
-- shipping mode/logistic type
-- `sale_fee_amount DECIMAL(14,2)`
-- optional returned breakdown JSON
-- observed timestamp
-- source payload hash
+Listing/category/listing type, quoted buyer-facing price, shipping/logistics context, official `sale_fee_amount`, optional returned details, observed timestamp, payload hash.
 
 ### `shipping_quotes`
-- listing reference
-- price/listing/logistics/dimensions input fingerprint
-- seller estimated cost
-- source response hash
-- observed timestamp
+Listing/sale-condition reference, price/logistics/dimensions fingerprint, seller estimated cost, observed timestamp, payload hash.
 
 ### `orders`
-- `order_id BIGINT`
-- tenant/account
-- status
-- pack id where applicable
-- total amount/currency
-- date created/closed/last updated
-- shipment id where applicable
-- source timestamps
-Unique `(ml_account_id, order_id)`.
+Tenant/account, ML order ID, pack ID, status, currency, effective total, creation/close/update timestamps, source timestamps.
 
 ### `order_items`
-- order reference
-- `item_id`, `variation_id`, `user_product_id`, `seller_sku`
-- quantity
-- unit price
-- official sale fee when present
-- seller-funded discount amount
-- ML-funded discount amount when determinable
-- source payload hash
+Order reference, item/variation/User Product/SKU identifiers, quantity, `unit_price` (effective amount charged per unit when supplied by ML), optional reconstructed pre-discount/gross amount, actual order-item `sale_fee`, promotion/discount funding metadata, payload hash.
+
+### `shipments`
+Tenant/account, shipment ID, status/logistic type, observed timestamps. Unique `(ml_account_id,shipment_id)`.
+
+### `order_shipment_links`
+Prevents shipment-cost double counting across packs/multi-order shipments.
 
 ### `shipment_cost_snapshots`
-- shipment id/order reference
-- seller cost from `senders[].cost`
-- receiver cost
-- gross amount
-- discounts JSON
-- observed timestamp
+Shipment reference, official gross shipment amount, sender final cost, receiver final cost, discount metadata, observed timestamp, payload hash.
 
 ### `billing_adjustments`
-- tenant/account/order/order-item references when resolvable
-- external document/charge/credit identity
-- adjustment type
-- amount/currency
-- occurred_at
-- source payload hash/idempotency key
+Tenant/account, order/order-item references when resolvable, official billing identity, adjustment type, amount/currency, occurred timestamp, idempotency key/payload hash.
 
 ### `margin_snapshots`
-Immutable calculation result:
+Append-only result containing:
 
-- `id`, tenant/account
-- `subject_type` (`LISTING`, `PROMOTION`, `ORDER`, `ORDER_ITEM`)
-- `subject_id`
-- `state` (`ESTIMATED`, `ACTUAL`, `RECONCILED`)
-- `quantity`
-- `gross_revenue`
-- `product_cost`
-- `packaging_cost`
-- `other_variable_cost`
-- `tax_amount`
-- `sale_fee_gross`
-- `meli_fee_reduction`
-- `sale_fee_net`
-- `seller_shipping_cost`
-- `seller_discount_cost`
-- `billing_adjustment_net`
-- `contribution_margin`
-- `contribution_margin_pct`
-- `completeness_status`
-- `missing_inputs_json`
-- `source_refs_json`
-- `calculation_version`
-- `calculated_at`
-
-Snapshots are append-only. Recalculation creates a new snapshot.
+- subject (`LISTING|PROMOTION|ORDER|ORDER_ITEM`);
+- state (`ESTIMATED|ACTUAL|RECONCILED`);
+- quantity;
+- `reference_price_before_discount` when known;
+- `effective_revenue`;
+- product/packaging/other variable cost;
+- tax amount;
+- gross/official sale fee;
+- ML documented fee reduction where applicable;
+- net sale fee used by the estimate;
+- seller shipping cost;
+- seller-funded and ML-funded discount amounts as **memo/attribution fields**, not automatically additive/subtractive accounting lines;
+- billing adjustment net;
+- contribution margin and percentage;
+- allocation method/confidence for allocated shipment cost;
+- completeness status/missing inputs;
+- source refs;
+- calculation version/timestamp.
 
 ### `webhook_events`
-- ML notification identity or deterministic hash
-- topic/resource/user/application/attempt timestamps
-- raw sanitized envelope JSON
-- status (`ACCEPTED`, `PROCESSING`, `SUCCEEDED`, `FAILED`, `DEAD_LETTER`)
-- attempts/next_attempt_at/last_error
-- created/updated timestamps
+Deterministic idempotency key, topic/resource/user/application, sanitized envelope, status, retry fields, timestamps.
 
 ### `sync_cursors`
-Per tenant/account/source high-water marks, including periodic reconciliation cursors and missed-feed recovery.
+Per account/source/topic high-water marks and repair-sync state.
 
 ### `audit_log`
-Append-only administrative/business audit entries with actor, action, target, reason, before/after hashes and timestamp.
+Actor/action/target/reason/before-after hashes/timestamp.
 
-## 12. Margin semantics
+## 13. Revenue and discount semantics
 
-### 12.1 Canonical percentage
+This section is normative because it prevents a major double-counting class of bugs.
 
-`contribution_margin_pct = contribution_margin / gross_revenue * 100`
+### 13.1 Buyer-facing effective revenue
 
-If `gross_revenue <= 0`, percentage is `null`, not zero.
+For `ACTUAL`, when the order returns `unit_price` already reflecting the applied sale discount, revenue is:
 
-### 12.2 Estimated margin
+`effective_revenue = unit_price * quantity`
 
-Conceptually:
+The seller-funded discount must **not** then be subtracted again from this already-discounted revenue.
 
-`gross_revenue`
+Discount endpoint data is retained for attribution/explanation and later reconciliation, not blindly treated as another expense line.
+
+### 13.2 Estimated promotion revenue
+
+For `ESTIMATED`, use the buyer-facing final price for the selected promotion/context as `effective_revenue`.
+
+If an ML boost reduces selling costs, record that benefit in the fee side of the calculation. Do not add it to revenue.
+
+### 13.3 Reconstructed reference price
+
+When a reliable regular/pre-discount price is available, store it only for explanation:
+
+`reference_price_before_discount`
+
+It is not the revenue basis for `ACTUAL` unless official transaction semantics explicitly require it.
+
+### 13.4 Funding ambiguity
+
+When ML exposes promotional funding metadata but the economic treatment cannot be proven from current official transaction/billing facts, set an explicit completeness flag such as `PROMOTION_FUNDING_RECONCILIATION_REQUIRED` rather than guessing.
+
+## 14. Margin formulas
+
+### `ESTIMATED`
+
+`effective_revenue`
 `- product_cost`
 `- packaging_cost`
 `- other_variable_cost`
 `- tax_amount`
-`- sale_fee_net`
-`- seller_shipping_cost`
-`- seller_discount_cost`
-`= contribution_margin`
+`- estimated_net_sale_fee`
+`- estimated_seller_shipping_cost`
+`= estimated_contribution_margin`
 
 Where:
 
-`sale_fee_net = max(0, sale_fee_gross - documented_meli_fee_reduction)` for pre-sale boost cases unless an official source explicitly defines a different net treatment.
+`estimated_net_sale_fee = max(0, official_sale_fee_amount - documented_meli_fee_reduction)` only when current official promotion semantics explicitly represent that benefit as a selling-cost reduction.
 
-The engine must prevent double counting when an ML endpoint already returns a net cost.
+If the benefit appears to exceed the gross selling cost, clamp the estimate to zero selling fee and mark `REQUIRES_ACTUAL_RECONCILIATION`; never invent a negative fee/credit.
 
-### 12.3 Promotion boost rule
+### `ACTUAL`
 
-Current ML promotion APIs may return `boosted_offer`, `discount_meli_boosted_percentage`, `discount_meli_boost_amount` and `total_price_for_boosted_offer` for applicable campaign types.
+`effective_order_revenue`
+`- historical_product_cost`
+`- historical_packaging_cost`
+`- historical_other_variable_cost`
+`- tax_amount`
+`- actual_order_sale_fee`
+`- actual_sender_shipping_cost`
+`= actual_contribution_margin`
 
-The ML-funded boost is represented as a selling-cost reduction, not additional sales revenue. The estimate therefore preserves buyer-facing revenue and records the ML benefit in `meli_fee_reduction`.
+Use actual order sale fee when supplied by the order/transaction contract; do not recompute an old sale with today's `listing_prices`.
 
-If the documented benefit exceeds the gross sale fee, the pre-sale engine clamps net fee to zero and marks the quote `REQUIRES_ACTUAL_RECONCILIATION`; it does not invent a negative fee/credit. A later confirmed credit can exist only through `ACTUAL`/`RECONCILED` official facts.
+### `RECONCILED`
 
-### 12.4 Tax basis
+`actual_contribution_margin + verified_billing_adjustment_net = reconciled_contribution_margin`
 
-V1 supports `GROSS_REVENUE` as the initial basis, but the basis is a profile attribute so the formula is explicit and versioned. The engine does not encode Brazilian tax law implicitly.
+Credits are positive; debits are negative. Only official, matched adjustments enter this state.
 
-### 12.5 Completeness
+### Percentage
 
-Possible statuses:
+`contribution_margin_pct = contribution_margin / effective_revenue * 100`
+
+If effective revenue <= 0, percentage is `null`.
+
+## 15. Multi-item shipment allocation
+
+Shipment sender cost is authoritative at shipment level. It must be counted once.
+
+For order-level margin, use the full unique shipment sender cost directly.
+
+For order-item margin:
+
+1. use an official per-item shipping allocation if ML explicitly supplies one;
+2. otherwise allocate the shipment sender cost proportionally by each item's effective revenue within the unique shipment;
+3. if total effective revenue is zero, fall back to quantity allocation;
+4. store `allocation_method` and mark item-level shipping as derived.
+
+Allocation never changes the exact order/shipment total.
+
+## 16. Completeness model
+
+Representative statuses:
 
 - `COMPLETE`
 - `MISSING_COST`
@@ -523,16 +474,17 @@ Possible statuses:
 - `MISSING_SHIPPING_QUOTE`
 - `MISSING_FEE_QUOTE`
 - `STALE_MARKETPLACE_DATA`
+- `PROMOTION_FUNDING_RECONCILIATION_REQUIRED`
 - `REQUIRES_ACTUAL_RECONCILIATION`
 - `UNSUPPORTED_CONTEXT`
 
-A quote may contain a partial breakdown but must never label an incomplete result as a reliable final margin.
+Partial results may expose known components, but an incomplete quote cannot be presented as a reliable final margin.
 
-## 13. API contract V1
+## 17. API contract V1
 
-All endpoints are versioned under `/v1`. JSON only. Monetary values are serialized as decimal strings to preserve precision.
+JSON only under `/v1`. Monetary values serialize as decimal strings.
 
-### Health and account
+### Health/accounts
 
 - `GET /v1/health`
 - `GET /v1/accounts`
@@ -552,33 +504,24 @@ All endpoints are versioned under `/v1`. JSON only. Monetary values are serializ
 - `GET /v1/tax-profiles`
 - `PUT /v1/listings/{item_id}/tax-profile`
 
-These mutate only our internal configuration and require an audit reason and privileged scope.
+Internal writes require privileged scope and audit reason.
 
-### Quotes
+### Pricing
 
 - `POST /v1/pricing/quote`
 - `POST /v1/pricing/quotes/batch`
+- `POST /v1/pricing/promotion-quote`
 
-Single quote request supports item/UP/variation context, quantity, optional candidate price and optional promotion identity.
-
-Response includes:
-
-- requested/effective price;
-- every cost component;
-- source and `observed_at` per marketplace-derived component;
-- completeness and missing inputs;
-- `calculation_version`;
-- `ESTIMATED` state.
+Responses include price context, every cost component, source/observed-at metadata, completeness, missing inputs and `calculation_version`.
 
 ### Promotions
 
 - `GET /v1/ml/promotions`
 - `GET /v1/ml/listings/{item_id}/promotions`
-- `POST /v1/pricing/promotion-quote`
 
-No promotion write endpoint in V1.
+No promotion mutation endpoint.
 
-### Orders and actual margin
+### Orders/margins
 
 - `GET /v1/ml/orders`
 - `GET /v1/ml/orders/{order_id}`
@@ -590,22 +533,22 @@ No promotion write endpoint in V1.
 - `GET /v1/reports/margins`
 - `GET /v1/reports/summary`
 
-Reports are tenant/account scoped and return our derived business results, not raw wholesale redistribution of ML API payloads.
+These expose our value-added results, not wholesale raw ML payloads.
 
-### Sync and webhooks
+### Webhooks/sync
 
 - `POST /v1/webhooks/mercadolivre`
-- `POST /v1/admin/sync/ml` (bounded manual sync trigger)
+- `POST /v1/admin/sync/ml`
 - `GET /v1/admin/sync/status`
 
-## 14. Authentication and authorization
+## 18. API authentication and authorization
 
-Two separate trust domains:
+Two trust domains remain separate:
 
-1. Mercado Livre OAuth for access to a seller account.
-2. Our API authentication for users/services consuming the Pricing API.
+1. Mercado Livre OAuth for seller-account access.
+2. Our API credentials for clients consuming this service.
 
-V1 API uses opaque high-entropy client tokens stored only as hashes, with scopes such as:
+V1 client tokens are high-entropy opaque secrets stored only as hashes. Example scopes:
 
 - `pricing:read`
 - `orders:read`
@@ -613,143 +556,108 @@ V1 API uses opaque high-entropy client tokens stored only as hashes, with scopes
 - `costs:write`
 - `admin:sync`
 
-All authorization checks include tenant scope. A valid token from tenant A can never select tenant B through an object identifier.
+Every object lookup is tenant-scoped. Object IDs never override tenant identity.
 
-## 15. Token security
+## 19. Mercado Livre token security
 
-Mercado Livre credentials follow current official security guidance:
-
-- encrypt Client Secret/access/refresh tokens at rest;
-- encryption key comes from protected runtime secret storage, not the database/repository;
-- never log `Authorization`, refresh tokens or raw credential payloads;
-- refresh under a per-account lock to avoid refresh-token races;
-- fail closed on token-account mismatch;
-- token health endpoint exposes status/expiry only, never secret material.
+- OAuth authorization code + PKCE.
+- Access/refresh tokens encrypted at rest.
+- Encryption key from protected runtime secret storage, never DB/repo.
+- Per-account lock around refresh to avoid refresh-token races.
+- Authorization/token fields redacted from logs/errors/fixtures.
+- Token-health endpoints expose status/expiry only.
+- Fail closed on account/token mismatch.
 
 Reference: https://developers.mercadolivre.com.br/pt_br/publicacao-de-produtos/gestao-de-identidades-e-acessos-oauth-e-tokens
 
-## 16. Webhook/event processing
+## 20. Webhook/event processing
 
-Webhook request path:
+1. Validate topic/resource syntax.
+2. Persist sanitized notification and idempotency key transactionally.
+3. Return HTTP 200 after durable acceptance.
+4. Async worker parses the resource into an allowlisted resource type/ID.
+5. Rebuild the request against the fixed ML API base; never concatenate a user-controlled absolute URL.
+6. Fetch authoritative resource.
+7. Normalize/update snapshots.
+8. Enqueue dependent calculation/reconciliation jobs.
+9. Bounded retry for retryable failures; exhausted work goes to dead-letter state/alerts.
 
-1. validate envelope shape and allowlisted topic/resource syntax;
-2. persist sanitized event/idempotency key transactionally;
-3. return HTTP 200 after durable acceptance;
-4. Messenger consumer fetches the authoritative resource through `MercadoLivreClient`;
-5. normalize/upsert snapshots;
-6. enqueue dependent calculation/reconciliation work;
-7. mark event success or schedule bounded retry;
-8. exhausted events become dead letters and alertable.
+Missed-feed repair uses persistent cursors and deterministic scheduled execution.
 
-No access token is ever attached to a user-controlled absolute URL. `resource` is parsed into known resource types/IDs and rebuilt against the allowlisted ML API base.
+## 21. Rate limiting and resilience
 
-Missed-feed recovery runs as a bounded scheduled job and uses per-topic cursors. It is deterministic and uses no paid AI.
+Implement endpoint/account budgets rather than uncontrolled global concurrency.
 
-## 17. Rate limiting and resilience
-
-Implement per-endpoint and per-account concurrency budgets, not one unbounded global retry loop.
-
-Retryable:
+Retry only:
 
 - 429;
-- selected 5xx/network timeouts where request semantics are safe.
+- selected 5xx/network failures where semantics are safe.
 
 Policy:
 
 - exponential backoff with jitter;
-- honor `Retry-After` when supplied;
+- honor `Retry-After` when present;
 - bounded attempts;
-- no retry of ordinary 4xx business/authorization errors;
-- circuit-break noisy endpoints after repeated provider failure;
-- request coalescing/cache where semantics permit;
-- use official bulk endpoints when available.
+- ordinary business/auth 4xx are not blindly retried;
+- provider failures can open a circuit breaker;
+- use official bulk resources and request coalescing where appropriate.
 
 Reference: https://developers.mercadolivre.com.br/pt_br/usuarios-e-aplicativos/rate-limit-erro-429
 
-## 18. Cache and freshness
+## 22. Freshness targets
 
-The database stores source snapshots; it is not a license to serve indefinitely stale marketplace facts.
+Initial operational targets:
 
-Initial freshness targets:
+- listing core/status <=60 min, hard maximum <=6h;
+- price event-driven + repair, target <=15 min;
+- promotions target <=30 min while active;
+- pricing automation <=60 min and always refreshed before any future mutation;
+- orders/shipments event-driven + repair sync;
+- fee/shipping quote cache keyed by complete input fingerprint, short target TTL ~15 min;
+- billing scheduled for post-sale reconciliation, not real-time quoting.
 
-- listing core/status: <= 60 minutes during active operation, hard maximum <= 6 hours;
-- current price: event-driven via `items_prices` plus periodic repair, target <= 15 minutes;
-- promotions: target <= 30 minutes while active;
-- pricing automation status: <= 60 minutes and refreshed before any future price mutation;
-- order/shipment changes: event-driven plus repair sync;
-- fee/shipping quote: cached only by complete input fingerprint and short TTL (target 15 minutes) because price/logistics changes alter the answer;
-- billing: scheduled post-sale reconciliation, not a real-time operational source.
+Every returned marketplace-derived object exposes `observed_at`/`synced_at`.
 
-Every API object includes `observed_at`/`synced_at` sufficient to assess staleness.
+## 23. Olist/Tiny cost synchronization
 
-## 19. Pricing automation guard
+Olist/Tiny is a seller-owned cost/SKU provider, not another marketplace in V1.
 
-Even though V1 is read-only, automation state is collected now because it changes the meaning and future mutability of price.
+Adapter rules:
 
-Current ML documentation states that since 2026-03-18 price updates via `/items/{id}` are rejected for items with dynamic pricing automation active.
+- official authenticated ERP API only;
+- normalize SKU identity;
+- do not overwrite higher-precedence approved manual override;
+- changed cost creates a new effective-dated profile;
+- retain source reference/observed timestamp;
+- duplicate/unmatched SKU mapping becomes explicit review data, never an automatic guess.
 
-Future mutation code must therefore have a hard pre-write gate:
+The Pricing Engine only sees `CostCatalog`, not ERP transport.
 
-`discover automation -> discover promotion constraints -> simulate -> review/approval -> write through the correct ML contract -> verify read-after-write`
-
-A generic `PUT /items price` loop is explicitly forbidden.
-
-References:
-- https://developers.mercadolivre.com.br/pt_br/guia-para-produtos/automatizacoes-de-precos
-- https://developers.mercadolivre.com.br/pt_br/automatizacoes-de-precos
-
-## 20. User Products / variation compatibility
-
-Current ML migration enables different sale conditions for variants through User Products. The service therefore resolves profitability at the narrowest available sale condition:
-
-`tenant -> ML account -> listing/item -> User Product / variation -> SKU -> price/promotion context`
-
-The canonical model stores nullable identifiers rather than assuming legacy or new model exclusively.
-
-Reference: https://developers.mercadolivre.com.br/pt_br/guia-para-produtos/preco-variacao
-
-## 21. Olist/Tiny cost synchronization
-
-Olist/Tiny is not a second marketplace in V1; it is an optional seller-owned source for cost/SKU metadata.
-
-Adapter responsibilities:
-
-- fetch product/SKU cost data through official authenticated ERP API;
-- normalize SKU identifiers;
-- never overwrite a higher-precedence approved manual override;
-- open a new effective-dated cost profile when a value changes;
-- retain source reference and observed timestamp;
-- report unmatched/duplicate SKU mappings instead of guessing.
-
-Pricing Engine sees only `CostCatalog`, never an Olist/Tiny HTTP client.
-
-## 22. Observability
+## 24. Observability
 
 Structured logs:
 
-- request/correlation ID;
-- tenant/account ID (non-secret internal ID);
+- correlation ID;
+- internal tenant/account ID;
 - ML endpoint family;
-- HTTP status, latency, retry count;
-- sync/event IDs;
-- calculation snapshot ID/version.
+- status/latency/retry count;
+- event/sync ID;
+- margin snapshot/version.
 
 Metrics:
 
-- ML request rate/status/latency by endpoint;
-- 429 count and backoff time;
-- OAuth refresh success/failure;
-- webhook accepted/duplicate/failed/dead-letter count;
+- provider request rate/status/latency;
+- 429/backoff;
+- token-refresh failures;
+- webhook accepted/duplicate/failed/dead-letter;
 - source freshness lag;
 - queue depth/oldest age;
 - quote completeness rate;
 - estimated-vs-actual and actual-vs-reconciled deltas.
 
-Alerts are deterministic. No recurring paid AI process is part of runtime monitoring.
+No recurring paid AI monitoring process.
 
-## 23. Error contract
-
-REST errors use a stable envelope:
+## 25. Stable error contract
 
 ```json
 {
@@ -761,8 +669,6 @@ REST errors use a stable envelope:
   }
 }
 ```
-
-Provider errors are translated into our domain codes; raw provider bodies are not blindly exposed to API clients.
 
 Representative codes:
 
@@ -777,232 +683,244 @@ Representative codes:
 - `QUOTE_INCOMPLETE`
 - `TENANT_SCOPE_VIOLATION`
 
-## 24. Determinism and calculation versioning
+Raw provider bodies are not blindly exposed.
 
-`PricingEngine` is a pure function over a normalized input object.
+## 26. Determinism, decimal arithmetic and versioning
 
-The result stores:
+`PricingEngine` is a pure function over normalized input.
+
+Persist:
 
 - all numeric inputs;
 - semantic source references;
-- `calculation_version` such as `mlb-margin-v1`;
+- calculation version, e.g. `mlb-margin-v1`;
+- allocation method;
 - rounding policy;
-- output components.
+- all outputs/completeness state.
 
-Rounding:
+Arithmetic uses decimal precision >=4 fractional places internally. BRL presentation/final monetary boundaries use a documented half-up rounding policy. Formula changes create new versions; historical snapshots remain unchanged.
 
-- internal arithmetic uses decimal precision >=4 fractional places;
-- official monetary source amounts are preserved at their returned precision;
-- public BRL totals round to 2 decimals using a single documented half-up policy only at presentation/final monetary boundaries;
-- no intermediate binary float arithmetic.
-
-A formula change creates a new version. Historical snapshots are not mutated.
-
-## 25. Testing strategy
+## 27. Testing strategy
 
 ### Unit tests
 
-Pure engine fixtures for:
+Fixtures include:
 
-- positive/zero/negative margins;
+- positive/zero/negative margin;
 - quantity >1;
 - missing cost/tax;
-- fixed/percentage selling cost returned by ML;
-- seller shipping zero/non-zero;
-- promotion with no ML funding;
-- co-funded promotion;
-- boosted offer where benefit < fee;
-- boosted benefit >= fee clamp/reconciliation flag;
+- fee with fixed component without double counting;
+- zero/non-zero sender freight;
+- standard promotion;
+- ML-funded/boosted promotion;
+- boost >= sale fee clamp/reconciliation flag;
 - historical cost selection;
-- rounding boundaries.
+- actual order where `unit_price` already includes discount, proving no second seller-discount subtraction;
+- multi-item shipment allocation;
+- decimal/rounding boundaries.
 
 ### Contract tests
 
-Saved sanitized official ML fixtures for:
+Sanitized official ML fixtures for:
 
 - `/items/bulk`;
-- `/items/{id}/prices`;
+- item price resources;
 - `listing_prices`;
 - `shipping_options/free`;
 - `seller-promotions`;
 - `pricing-automation`;
 - orders/discounts;
 - shipments/costs;
-- notification envelopes;
+- webhook notifications;
 - billing integration.
 
-Fixtures contain no access tokens, buyer private data or unnecessary personal information.
+No tokens or unnecessary buyer personal data in fixtures.
 
 ### Integration tests
 
-Real database transactions verify tenant isolation, idempotency, queue retries, token refresh locking, cursor behavior and append-only snapshots.
+Real DB tests for:
+
+- tenant isolation;
+- webhook idempotency;
+- queue/dead-letter behavior;
+- token refresh locking;
+- effective-dated costs;
+- shipment-cost deduplication/allocation;
+- append-only snapshots/cursors.
 
 ### Live read-only smoke tests
 
 Against the authorized seller account:
 
-- authenticate `/users/me` equivalent through the new client;
-- list items and bulk detail;
-- fetch at least one price, fee, shipping quote and promotion context;
-- fetch recent order/discount/shipment data where available;
-- generate an `ESTIMATED` and an `ACTUAL` snapshot without marketplace writes.
+- OAuth/account identity;
+- list + bulk item detail;
+- current price;
+- fee quote with logistics context;
+- shipping quote;
+- promotion context;
+- recent order/discount/shipment data where available;
+- one `ESTIMATED` and one `ACTUAL` snapshot;
+- zero marketplace writes.
 
 ### Mercado Turbo parity matrix
 
-Use seller-owned examples across:
+Representative cases:
 
 - Classic/Premium;
 - catalog/non-catalog;
 - Full/Flex/drop-off/other observed logistics;
-- free and seller-paid shipping;
+- free/non-free seller shipping;
 - positive/near-zero/negative margin;
-- regular price and promotion;
-- ML-funded/boosted offer;
-- multi-unit/order pack;
-- dynamic pricing automation;
-- legacy item and User Product when available.
+- normal/promotional/boosted price;
+- multi-unit/multi-item pack;
+- pricing automation;
+- legacy variation/User Product when available.
 
-Acceptance is not "equal to Mercado Turbo at any cost". Each mismatch must be classified as:
+Each mismatch is classified as:
 
 - our bug;
 - stale/different inputs;
-- different documented semantics;
+- documented semantic difference;
 - Mercado Turbo discrepancy;
 - unsupported/unverifiable.
 
-## 26. Security tests
+Parity means explained economics, not blind numerical imitation.
 
-Mandatory tests include:
+## 28. Security tests
 
-- tenant A cannot enumerate/read tenant B objects;
-- webhook `resource` cannot cause SSRF or arbitrary-path authenticated requests;
-- log redaction for Authorization/access/refresh tokens;
+Mandatory:
+
+- tenant A cannot read/enumerate tenant B;
+- webhook resource cannot cause SSRF/arbitrary authenticated request;
+- token/log redaction;
 - encrypted token-at-rest assertion;
-- API client tokens only hashed;
-- idempotent duplicate webhook delivery;
-- bounded retries and no retry storm;
-- invalid `item_id`, order ID, SKU and pagination inputs rejected;
-- cost/tax writes require privileged scope and audit reason;
-- no Mercado Livre mutation routes exist in V1.
+- API client secrets stored hashed;
+- duplicate webhook idempotency;
+- bounded retries/no retry storm;
+- invalid item/order/SKU/pagination rejected;
+- cost/tax writes require privileged scope + audit reason;
+- no ML mutation routes exist in V1.
 
-## 27. Data retention and privacy minimization
+## 29. Data retention/privacy minimization
 
-Store only marketplace/seller fields needed for pricing, reconciliation and audit. Buyer personal/contact/billing identity is not required for the pricing engine and should not be persisted by default.
+Buyer contact/identity fields are not needed for pricing and are not persisted by default.
 
-Raw source payload retention is minimized. Where full payload retention is useful for audit, store sanitized payloads or content hashes with explicit retention rather than indefinite unbounded logs.
+Raw provider payload retention is minimized. When payload evidence is useful, store sanitized content or hashes with explicit retention rather than unbounded logs.
 
-## 28. Deployment topology
+## 30. Deployment topology
 
-Initial deployment may share the existing Oracle VM/control plane, but it is operationally isolated:
+Initial deployment may share existing Oracle infrastructure but remains operationally isolated:
 
 - separate repository;
-- separate application directory/release artifact;
-- separate environment file/secret namespace;
+- separate release/application directory;
+- separate secret namespace/environment;
 - separate database/schema;
-- separate PHP-FPM pool/service where practical;
-- dedicated worker systemd unit;
+- separate worker/service;
 - independent health endpoint;
-- reverse-proxy hostname such as `pricing-api.shopvivaliz.com.br` only after implementation review.
+- dedicated reverse-proxy hostname only after implementation review.
 
-The service must support immutable releases and rollback without modifying the currently active release directory, consistent with ShopVivaLiz repository governance.
+Use immutable releases/rollback consistent with ShopVivaLiz governance. No production deployment occurs during the design phase.
 
-No production deployment occurs as part of this design phase.
-
-## 29. Migration/cutover from legacy ML code
+## 31. Legacy migration/cutover
 
 No big-bang replacement.
 
-1. New service starts read-only and independently syncs ML.
-2. Shadow compare OAuth/account identity, listings and recent orders with legacy data.
+1. New service syncs read-only independently.
+2. Shadow-compare account/listing/order identity with legacy data.
 3. Generate margin snapshots without affecting storefront/order flows.
-4. Validate parity and data completeness.
-5. Let existing ShopVivaLiz consume selected read endpoints only after stability.
-6. Retire duplicate legacy ML transport/token paths only in a separately reviewed migration.
+4. Validate source completeness and parity.
+5. Allow ShopVivaLiz to consume selected read endpoints only after stability.
+6. Retire duplicate legacy ML transport/token code only under a separate reviewed cutover.
 
-The existing checkout/order integration remains untouched by V1 until an explicit cutover spec is approved.
+Existing checkout/order behavior remains untouched by V1.
 
-## 30. Acceptance criteria for V1
+## 32. V1 acceptance criteria
 
-V1 is complete only when all of the following are evidenced:
+V1 is complete only when evidence shows:
 
-- one authorized MLB seller account connects through secure OAuth and refreshes tokens correctly;
-- all active seller listings can be synchronized through current official endpoints;
-- User Product/variation identifiers are retained when present;
-- current price contexts are synchronized without relying on deprecated `/items.price` as the canonical source;
-- fee quotes include the required logistics context;
-- shipping estimates are sourced from official ML quote API;
-- promotion offers including 2026 boost fields are normalized;
-- cost/tax profile effective dating works;
-- deterministic quote API returns a complete explainable breakdown;
-- recent confirmed orders can produce `ACTUAL` snapshots from order/discount/shipment facts;
-- billing reconciliation can create a later immutable `RECONCILED` snapshot for at least one testable case when billing data exists;
-- webhook delivery is durably persisted/idempotent and processed asynchronously;
-- missed-feed repair path is tested;
-- rate-limit backoff is bounded and tested;
-- tenant-isolation tests pass;
-- no ML write endpoint is present/enabled;
-- Mercado Turbo parity matrix has representative cases and every discrepancy is classified;
-- OpenAPI contract, unit tests, integration tests and live read-only smoke tests pass;
-- secrets/tokens do not appear in repository, test fixtures or logs.
+- secure OAuth + refresh for one authorized MLB seller;
+- all active listings synchronize through current official endpoints;
+- User Product/variation IDs persist when present;
+- current price contexts do not rely on deprecated item-price fields as canonical truth;
+- fee quote uses required logistics context and cannot double-count fixed fee;
+- shipping estimates use official quote API;
+- promotions including 2026 boost fields normalize correctly;
+- cost/tax effective dating works;
+- deterministic quote API returns explainable breakdown/completeness;
+- recent confirmed orders produce `ACTUAL` snapshots from actual order/sale-fee/shipment facts;
+- discount attribution cannot double-count revenue reduction;
+- unique shipment cost cannot be counted twice in packs/multi-item orders;
+- at least one testable billing case can create immutable `RECONCILED` snapshot when billing data exists;
+- webhook ingestion is durable/idempotent/asynchronous;
+- missed-feed repair works;
+- rate-limit backoff is bounded/tested;
+- tenant-isolation/security tests pass;
+- no ML mutation route is present/enabled;
+- parity matrix exists and every discrepancy is classified;
+- OpenAPI/unit/integration/live read-only smoke tests pass;
+- repository/logs/fixtures contain no secrets/tokens.
 
-## 31. Explicit non-goals for V1
+## 33. Explicit V1 non-goals
 
 - changing ML prices;
 - joining/leaving/editing promotions;
-- creating/editing ML ads;
+- creating/editing ads;
 - stock mutation;
 - creating pricing automations;
 - browser extension;
 - Shopee/Amazon/other marketplace support;
 - AI-driven pricing decisions;
-- public multi-tenant commercial SaaS launch;
+- public commercial multi-tenant SaaS launch;
 - replacing ShopVivaLiz checkout/order storage;
-- reproducing all Mercado Turbo features.
+- reproducing all Mercado Turbo features;
+- full returns/claims subsystem.
 
-## 32. Future phases after V1
+Refund/reversal effects that appear as official billing adjustments can affect `RECONCILED`, but comprehensive returns management remains another domain.
 
-### V2 — Safe price/promotion actions
-Only after parity and read-model reliability are proven. Requires a separate design with simulation, min/max guardrails, dynamic-pricing detection, human approval/review, idempotent ML writes and read-after-write verification.
+## 34. Future phases
+
+### V2 — Safe ML mutations
+Separate design required. Must include simulation, dynamic-pricing/promotion constraints, min/max guardrails, review/approval, idempotent writes and read-after-write verification.
 
 ### V3 — Decision policies
-Rules such as margin floors/targets can propose actions. Initially proposals only; action execution remains approval-gated.
+Margin-floor/target rules propose actions first; execution remains separately governed.
 
-### V4 — SaaS commercialization
-Multi-customer onboarding, tenant billing/roles, Partner/Developer compliance review, retention/privacy controls and commercial observability.
+### V4 — Commercial SaaS
+Multi-customer onboarding, roles/billing, retention/privacy and Mercado Livre Partner/Developer compliance review.
 
 ### V5 — Optional browser companion
-A thin extension may display our own API results inside Seller Central, but it remains a presentation layer and never becomes the financial source of truth.
+Thin UI layer consuming our own API; never the financial source of truth.
 
-## 33. Official reference set used for the design
+## 35. Official reference set
 
-- Selling costs / `listing_prices`: https://developers.mercadolivre.com.br/pt_br/comissao-por-vender
+- Selling costs: https://developers.mercadolivre.com.br/pt_br/comissao-por-vender
 - Product prices: https://developers.mercadolivre.com.br/pt_br/api-de-precos
-- Shipping costs: https://developers.mercadolivre.com.br/pt_br/guia-para-produtos/custos-de-envio
-- Shipping FAQs/cost semantics: https://developers.mercadolivre.com.br/pt_br/mercadolideres-lojas-oficiais/mercado-envios-custos-e-cotacoes
+- Shipping quote/cost semantics: https://developers.mercadolivre.com.br/pt_br/mercadolideres-lojas-oficiais/mercado-envios-custos-e-cotacoes
+- Shipment actual costs: https://developers.mercadolivre.com.br/pt_br/gerenciamento-de-envios
 - Promotions: https://developers.mercadolivre.com.br/pt_br/gerenciar-ofertas
 - Price automation: https://developers.mercadolivre.com.br/pt_br/guia-para-produtos/automatizacoes-de-precos
-- Seller automation listing: https://developers.mercadolivre.com.br/pt_br/atributos/automatizacoes-de-precos
-- User Products / price by variation: https://developers.mercadolivre.com.br/pt_br/guia-para-produtos/preco-variacao
-- Items and bulk migration: https://developers.mercadolivre.com.br/pt_br/convivencia-me1-me2/itens-e-buscas
+- User Products/variation price: https://developers.mercadolivre.com.br/pt_br/guia-para-produtos/preco-variacao
+- Items/bulk migration: https://developers.mercadolivre.com.br/pt_br/convivencia-me1-me2/itens-e-buscas
 - Orders/discounts: https://developers.mercadolivre.com.br/pt_br/busca-de-produtos-por-vendedor/gerenciamento-de-vendas
-- Shipments actual cost: https://developers.mercadolivre.com.br/pt_br/gerenciamento-de-envios
 - Notifications: https://developers.mercadolivre.com.br/produto-receba-notificacoes
 - OAuth/token security: https://developers.mercadolivre.com.br/pt_br/publicacao-de-produtos/gestao-de-identidades-e-acessos-oauth-e-tokens
-- Rate limit: https://developers.mercadolivre.com.br/pt_br/usuarios-e-aplicativos/rate-limit-erro-429
-- Billing report consumption: https://developers.mercadolivre.com.br/pt_br/boas-praticas-para-o-consumo-das-apis-de-relatorios-de-faturamento
+- Rate limits: https://developers.mercadolivre.com.br/pt_br/usuarios-e-aplicativos/rate-limit-erro-429
+- Billing practices: https://developers.mercadolivre.com.br/pt_br/boas-praticas-para-o-consumo-das-apis-de-relatorios-de-faturamento
 - Developer Terms: https://developers.mercadolivre.com.br/pt_br/termos-e-condicoes
 
-## 34. Design self-review checklist
+## 36. Design self-review
 
 - No `TBD`/`TODO` placeholders.
-- V1 scope is Mercado Livre only and read-only against marketplace state.
-- Architecture does not depend on Mercado Turbo runtime services.
-- Official 2026 ML migrations (price API, bulk endpoints, User Products, logistics-aware fees, price automation) are represented.
-- Estimated/Actual/Reconciled semantics are distinct and immutable.
-- Missing data cannot silently become zero/default margin.
-- Tenant/account isolation exists from the first schema.
-- OAuth/token and webhook SSRF boundaries are explicit.
-- Queue/retry behavior is bounded and deterministic.
-- No paid AI is required by permanent runtime jobs.
-- Legacy ShopVivaLiz cutover is explicitly outside V1.
-- Public commercialization remains behind a compliance review gate.
+- V1 is Mercado Livre only and read-only against marketplace state.
+- Runtime has no Mercado Turbo dependency.
+- Current 2026 ML price/bulk/User Product/logistics fee/promotion boost/pricing-automation semantics are represented.
+- `ESTIMATED`, `ACTUAL`, `RECONCILED` are distinct and immutable.
+- Seller discounts cannot be subtracted twice from already-discounted order revenue.
+- Shipment cost cannot be counted twice across packs/orders.
+- Missing data cannot silently become a reliable margin.
+- Tenant/account isolation is present from first schema.
+- OAuth/token/webhook SSRF boundaries are explicit.
+- Queue/retry behavior is bounded/deterministic.
+- No recurring paid AI dependency.
+- Legacy cutover is outside V1.
+- Public commercialization remains behind compliance review.
