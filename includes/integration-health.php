@@ -609,7 +609,7 @@ function svih_google_ads(): array
         'POST',
         'https://googleads.googleapis.com/v25/customers/' . $customerId . '/googleAds:search',
         $headers,
-        ['query' => 'SELECT customer.id FROM customer LIMIT 1', 'page_size' => 1]
+        ['query' => 'SELECT customer.id FROM customer LIMIT 1']
     );
     if (!$api['ok']) {
         return [

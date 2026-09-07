@@ -33,6 +33,17 @@ def _text() -> str:
 # ---------------------------------------------------------------------------
 
 
+def test_deploy_accepts_git_worktree_gitfile() -> None:
+    """A valid git worktree uses a .git file and must be accepted."""
+    text = _text()
+    assert '[ ! -d "$REPO_DIR/.git" ]' not in text, (
+        "deploy script incorrectly rejects valid git worktrees with a .git file"
+    )
+    assert 'git -C "$REPO_DIR" rev-parse --is-inside-work-tree' in text, (
+        "deploy script must validate the repository using git itself"
+    )
+
+
 def test_deploy_script_bash_syntax() -> None:
     """The script must have valid bash syntax."""
     result = subprocess.run(
@@ -228,3 +239,21 @@ def test_cleanup_uses_find_not_ls_pipe() -> None:
         "Release cleanup does not use 'find'; "
         "using 'ls | tail' is unsafe and risks removing the wrong directory"
     )
+
+
+def test_deploy_runtime_services_do_not_require_retired_agent_unit() -> None:
+    text = _text()
+    assert '"shopvivaliz-agent.service"' not in text, (
+        "deploy must not fail because retired shopvivaliz-agent.service is absent"
+    )
+
+
+def test_deploy_internal_health_uses_site_origin_8080() -> None:
+    text = _text()
+    assert "http://127.0.0.1:8080/api/health/version.php" in text
+    assert "http://127.0.0.1:8080/api/orders/health.php" in text
+    assert "http://127.0.0.1:8080/api/olist/webhook-health.php" in text
+
+
+def test_deploy_has_no_policy_banned_or_true_bypass() -> None:
+    assert '|| true' not in _text(), 'deploy script must not suppress failures with policy-banned || true'

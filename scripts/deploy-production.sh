@@ -17,7 +17,6 @@ readonly RETENTION_COUNT=5
 readonly -a RUNTIME_SERVICES=(
   "shopvivaliz-token-renewer.service"
   "shopvivaliz-shopee-token-renewer.service"
-  "shopvivaliz-agent.service"
   "shopvivaliz-queue-worker.service"
 )
 
@@ -74,8 +73,8 @@ assert_managed_release_path() {
   local releases_root canonical_path current_target
 
   releases_root="$(readlink -f "$RELEASES_DIR")"
-  canonical_path="$(readlink -f "$release_path" 2>/dev/null || true)"
-  current_target="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
+  if ! canonical_path="$(readlink -f "$release_path" 2>/dev/null)"; then canonical_path=''; fi
+  if ! current_target="$(readlink -f "$CURRENT_LINK" 2>/dev/null)"; then current_target=''; fi
 
   if [ -z "$canonical_path" ] || [ ! -d "$release_path" ]; then
     log ERROR "Caminho de release invalido para cleanup: $release_path"
@@ -130,8 +129,8 @@ ensure_release_tree_cleanup_safe() {
     return 1
   fi
 
-  owner_drift="$(find -P "$release_path" \( -type d -o -type f \) ! -user ubuntu -print -quit 2>/dev/null || true)"
-  mode_drift="$(find -P "$release_path" -type d ! -perm -u+w -print -quit 2>/dev/null || true)"
+  if ! owner_drift="$(find -P "$release_path" \( -type d -o -type f \) ! -user ubuntu -print -quit 2>/dev/null)"; then log ERROR "Falha ao auditar ownership da release"; return 1; fi
+  if ! mode_drift="$(find -P "$release_path" -type d ! -perm -u+w -print -quit 2>/dev/null)"; then log ERROR "Falha ao auditar permissoes da release"; return 1; fi
 
   if [ -z "$owner_drift$mode_drift" ]; then
     return 0
@@ -269,7 +268,7 @@ verify_local_release() {
       --connect-timeout 5 --max-time 15 \
       -H 'Host: shopvivaliz.com.br' \
       -o "$body" \
-      'http://127.0.0.1/api/health/version.php'; then
+      'http://127.0.0.1:8080/api/health/version.php'; then
       if python3 - "$body" "$expected_sha" <<'PY'
 from __future__ import annotations
 
@@ -323,7 +322,7 @@ reconcile_runtime_secrets() {
     return 1
   fi
 
-  runtime_target="$(readlink -f "$runtime_link" 2>/dev/null || true)"
+  if ! runtime_target="$(readlink -f "$runtime_link" 2>/dev/null)"; then runtime_target=''; fi
   if [ "$runtime_target" != "$runtime" ]; then
     if ! rm -f -- "$runtime_link"; then
       log ERROR "Nao foi possivel remover o runtime link anterior"
@@ -334,7 +333,9 @@ reconcile_runtime_secrets() {
       return 1
     fi
   fi
-  if [ "$(readlink -f "$runtime_link" 2>/dev/null || true)" != "$runtime" ]; then
+  local runtime_resolved
+  if ! runtime_resolved="$(readlink -f "$runtime_link" 2>/dev/null)"; then runtime_resolved=''; fi
+  if [ "$runtime_resolved" != "$runtime" ]; then
     log ERROR "Symlink de runtime secrets invalido"
     return 1
   fi
@@ -357,8 +358,8 @@ verify_runtime_health() {
   orders_body="$(mktemp)"
   olist_body="$(mktemp)"
 
-  orders_code="$(curl --silent --show-error --output "$orders_body" --max-time 15 -H 'Host: shopvivaliz.com.br' --write-out '%{http_code}' 'http://127.0.0.1/api/orders/health.php' || true)"
-  olist_code="$(curl --silent --show-error --output "$olist_body" --max-time 15 -H 'Host: shopvivaliz.com.br' --write-out '%{http_code}' 'http://127.0.0.1/api/olist/webhook-health.php' || true)"
+  if ! orders_code="$(curl --silent --show-error --output "$orders_body" --max-time 15 -H 'Host: shopvivaliz.com.br' --write-out '%{http_code}' 'http://127.0.0.1:8080/api/orders/health.php')"; then orders_code='000'; fi
+  if ! olist_code="$(curl --silent --show-error --output "$olist_body" --max-time 15 -H 'Host: shopvivaliz.com.br' --write-out '%{http_code}' 'http://127.0.0.1:8080/api/olist/webhook-health.php')"; then olist_code='000'; fi
 
   if python3 - "$orders_code" "$olist_code" "$orders_body" "$olist_body" <<'PY'
 from __future__ import annotations
@@ -393,8 +394,8 @@ PY
   return 1
 }
 
-if [ ! -d "$REPO_DIR/.git" ]; then
-  log FATAL "Clone Git nao existe: $REPO_DIR"
+if ! git -C "$REPO_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  log FATAL "Clone Git nao existe ou e invalido: $REPO_DIR"
   exit 1
 fi
 

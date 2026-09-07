@@ -25,3 +25,6 @@ monitor = (ROOT / "scripts/google_ads_30day_real_monitor.py").read_text(encoding
 for synthetic in ("BUDGET_DAILY", "Simularia fazer chamada a GA4 API", "RESULTADO REAL"):
     assert synthetic not in monitor, f"synthetic Google Ads monitor remains: {synthetic}"
 assert "google_ads_real_readiness.py" in monitor, "legacy monitor must delegate to the real readiness probe"
+
+google_ads_block = health[health.index("function svih_google_ads"):health.index("function svih_check_all")]
+assert "page_size" not in google_ads_block, "Google Ads v25 rejects page_size with PAGE_SIZE_NOT_SUPPORTED"
