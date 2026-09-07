@@ -17,6 +17,7 @@ jobs:
       - name: Apply tested deterministic patches
         shell: bash
         run: |
+          python3 -m pip install -q pytest
           python3 - <<'PY'
           from pathlib import Path
 
