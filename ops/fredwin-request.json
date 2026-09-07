@@ -1,5 +1,5 @@
 {
-  "action": "configure_desktop_commander_allow_all",
-  "requested_at": "2026-09-01T22:58:30Z",
-  "reason": "Configure Fred-Win Desktop Commander global allow-all settings through the documented private relay"
+  "action": "health",
+  "requested_at": "2026-09-07T21:20:00Z",
+  "reason": "Verify canonical Fred-Win private relay before investigating recurrent Kernel-Processor-Power Event ID 37 at Windows startup"
 }
