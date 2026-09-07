@@ -34,6 +34,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - name: Checkout push revision for production impact
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Classify production impact
+        id: production_impact
+        if: ${{ github.event_name == 'push' }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" > /tmp/production-impact-paths.txt
+          should_deploy="$(bash scripts/should-deploy-production.sh < /tmp/production-impact-paths.txt)"
+          echo "should_deploy=$should_deploy" >> "$GITHUB_OUTPUT"
+
       - name: Configure verified SSH host
         shell: bash
         env:
@@ -53,7 +70,7 @@ jobs:
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
       - name: Wait for exact production release
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name == 'push' && steps.production_impact.outputs.should_deploy == 'true' }}
         shell: bash
         run: |
           set -Eeuo pipefail

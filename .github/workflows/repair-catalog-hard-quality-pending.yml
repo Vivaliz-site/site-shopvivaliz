@@ -34,7 +34,33 @@ jobs:
           [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::Invalid target SHA'; exit 1; }
           echo "target_release_sha=$TARGET_SHA"
 
+      - name: Checkout target revision for production impact
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Classify production impact
+        id: production_impact
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ "${{ github.event_name }}" == 'workflow_dispatch' ]]; then
+            should_deploy=true
+          else
+            git diff-tree --no-commit-id --name-only -r "$TARGET_SHA" > /tmp/production-impact-paths.txt
+            should_deploy="$(bash scripts/should-deploy-production.sh < /tmp/production-impact-paths.txt)"
+          fi
+          echo "should_deploy=$should_deploy" >> "$GITHUB_OUTPUT"
+
+      - name: No production repair required
+        if: ${{ steps.production_impact.outputs.should_deploy != 'true' }}
+        shell: bash
+        run: echo 'No production repair required'
+
       - name: Configure verified production SSH
+        if: ${{ steps.production_impact.outputs.should_deploy == 'true' }}
         shell: bash
         env:
           PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
@@ -53,6 +79,7 @@ jobs:
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
       - name: Wait for production release containing target
+        if: ${{ steps.production_impact.outputs.should_deploy == 'true' }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -98,6 +125,7 @@ jobs:
           fi
 
       - name: Repair existing hard-failed pending drafts
+        if: ${{ steps.production_impact.outputs.should_deploy == 'true' }}
         shell: bash
         run: |
           set -Eeuo pipefail
