@@ -19,4 +19,15 @@ console.log('policy-engine-visual-proof-workflow-test: ok');
 assert(workflow.includes('Detect visual proof requirement'), 'Policy workflow must determine whether the PR has visual changes before materializing proof');
 assert(workflow.includes("steps.visual_scope.outputs.required == 'true'"), 'Visual artifact download must run only when visual proof is required');
 assert(workflow.includes("path.startswith('includes/amazon-returns/')"), 'Visual scope preflight must preserve backend-only exemptions');
+const backendOnly = [
+  'includes/account-schema.php',
+  'includes/integration-health.php',
+  'includes/order-request-context.php',
+  'includes/order-transaction-evidence.php',
+  'includes/webhook-job-dispatcher.php',
+];
+for (const path of backendOnly) {
+  assert(workflow.includes(`'${path}'`), `Visual scope preflight must exempt backend-only ${path}`);
+}
+
 assert(workflow.includes("re.match(r'^(?:public|includes|templates|views|pages)/'"), 'Visual scope preflight must restrict visual paths');
