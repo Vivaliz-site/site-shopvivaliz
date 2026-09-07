@@ -1,4 +1,4 @@
 {
-  "requested_at": "2026-09-06T22:45:00-03:00",
-  "reason": "Diagnose HTTP 403 for sitemap.xml from GitHub Actions by reading Cloudflare WAF rulesets; read-only, no configuration changes"
+  "requested_at": "2026-09-06T22:51:00-03:00",
+  "reason": "Confirm whether Super Bot Fight Mode is the source of the sitemap.xml HTTP 403 seen only from GitHub Actions; read-only"
 }
