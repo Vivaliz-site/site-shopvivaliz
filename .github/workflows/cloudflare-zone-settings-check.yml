@@ -50,6 +50,8 @@ jobs:
             resp=$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones/$zone_id/rulesets/phases/$phase/entrypoint")
             echo "PHASE[$phase]=$resp"
           done
+          bot_config=$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones/$zone_id/bot_management")
+          echo "BOT_MANAGEMENT=$bot_config"
           echo 'WAF_RULESET_SUMMARY_END'
 
       - name: No changes applied

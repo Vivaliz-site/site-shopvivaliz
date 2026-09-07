@@ -1,4 +1,4 @@
 {
-  "requested_at": "2026-09-06T22:51:00-03:00",
-  "reason": "Confirm whether Super Bot Fight Mode is the source of the sitemap.xml HTTP 403 seen only from GitHub Actions; read-only"
+  "requested_at": "2026-09-06T22:55:00-03:00",
+  "reason": "Read Cloudflare Bot Management config to identify the sitemap.xml GitHub Actions 403 source; read-only"
 }
