@@ -108,14 +108,9 @@ jobs:
           test -f "$env_file" || { echo '{"ok":false,"critical":[{"key":"__file__","reason":"env_file_missing"}]}'; exit 2; }
           test -r "$current/scripts/maintenance/runtime_token_audit.py" || { echo '{"ok":false,"critical":[{"key":"__script__","reason":"audit_script_missing"}]}'; exit 2; }
 
-          if ! sudo -u "$php_user" test -r "$env_file"; then
-            env_group="$(id -gn "$php_user")"
-            sudo chown ubuntu:"$env_group" "$env_file"
-            sudo chmod 0640 "$env_file"
-          fi
           sudo -u "$php_user" test -r "$env_file" || { echo '{"ok":false,"critical":[{"key":"__file__","reason":"php_cannot_read_env"}]}'; exit 2; }
 
-          if python3 "$current/scripts/maintenance/runtime_token_audit.py" \
+          if sudo python3 "$current/scripts/maintenance/runtime_token_audit.py" \
             "$env_file" --php-user "$php_user" --json-output "$report" >/dev/null; then
             status=0
           else
@@ -141,7 +136,7 @@ jobs:
             echo '{"ok":false,"critical":[{"key":"__script__","reason":"reference_audit_script_missing"}]}'
             exit 2
           }
-          if python3 "$current/scripts/maintenance/token_reference_audit.py" \
+          if sudo python3 "$current/scripts/maintenance/token_reference_audit.py" \
             "$current" "$env_file" --json-output "$report" >/dev/null; then
             status=0
           else

@@ -124,7 +124,7 @@ jobs:
           set -Eeuo pipefail
           guard=/home/ubuntu/shopvivaliz-deploy/current/scripts/env_keyset_guard.py
           test -r "$guard"
-          test -r "$VM_ENV"
+          sudo test -r "$VM_ENV"
 
           sudo install -d -m 0755 -o root -g root "$(dirname "$VM_LOCK")"
 

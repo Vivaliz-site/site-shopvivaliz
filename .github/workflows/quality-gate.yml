@@ -38,6 +38,7 @@ jobs:
           php tests/asset-source-dist-parity-test.php
           php tests/claude-workflow-cost-guard-test.php
           php tests/nondeploy-release-wait-cost-guard-test.php
+          php tests/runtime-audit-env-permissions-test.php
           php scripts/quality/validate-asset-manifest.php
           python3 -m py_compile scripts/seo-integrity-audit.py
           node --check scripts/public-layout-audit.mjs
