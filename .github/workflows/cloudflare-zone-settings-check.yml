@@ -43,5 +43,14 @@ jobs:
             echo "SETTING[$setting]=$resp"
           done
 
+          echo 'WAF_RULESET_SUMMARY_BEGIN'
+          rulesets=$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones/$zone_id/rulesets")
+          echo "$rulesets" | python3 -c 'import json,sys; d=json.load(sys.stdin); rows=d.get("result") or []; [print("RULESET", r.get("id",""), r.get("name",""), r.get("kind",""), r.get("phase","")) for r in rows]'
+          for phase in http_request_firewall_custom http_request_firewall_managed; do
+            resp=$(curl -sS -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/zones/$zone_id/rulesets/phases/$phase/entrypoint")
+            echo "PHASE[$phase]=$resp"
+          done
+          echo 'WAF_RULESET_SUMMARY_END'
+
       - name: No changes applied
-        run: echo 'READ_ONLY_CHECK_COMPLETE — nenhuma configuracao foi alterada'
+        run: echo 'READ_ONLY_CHECK_COMPLETE - nenhuma configuracao foi alterada'
