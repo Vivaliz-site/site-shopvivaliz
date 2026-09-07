@@ -18,6 +18,16 @@ foreach ([
 }
 
 foreach ([
+    "report='/tmp/shopvivaliz-runtime-token-audit.json'",
+    "report='/tmp/shopvivaliz-token-reference-audit.json'",
+    '--json-output "$report"',
+] as $remoteWrite) {
+    if (str_contains($runtime, $remoteWrite)) {
+        $errors[] = 'runtime_audit_writes_remote_report:' . $remoteWrite;
+    }
+}
+
+foreach ([
     'sudo chown ubuntu:"$env_group" "$env_file"',
     'sudo chmod 0640 "$env_file"',
 ] as $forbidden) {
