@@ -58,6 +58,19 @@ def duplicates(values: list[str]) -> list[str]:
     return dupes
 
 
+
+def cross_group_keyword_duplicates(ad_groups: list[dict]) -> list[str]:
+    owners: dict[str, str] = {}
+    repeated: set[str] = set()
+    for group in ad_groups:
+        owner = norm(group.get("name", ""))
+        for text in {norm(item.get("text", "")) for item in group.get("keywords", []) if norm(item.get("text", ""))}:
+            if text in owners and owners[text] != owner:
+                repeated.add(text)
+            else:
+                owners[text] = owner
+    return sorted(repeated)
+
 def validate_ad_group(group: dict, guardrails: dict) -> list[str]:
     errors: list[str] = []
     name = str(group.get("name", "")).strip() or "unnamed"
@@ -107,16 +120,11 @@ def validate_ad_group(group: dict, guardrails: dict) -> list[str]:
     if duplicates(descriptions):
         errors.append(f"{prefix}:duplicate_descriptions")
 
-    name_norm = norm(name)
-    if "carrinho" in name_norm:
-        relevance_tokens = ("carrinho", "fercar", "ferramentas")
-        url_keyword = "carrinho"
-    elif "caixa" in name_norm:
-        relevance_tokens = ("caixa", "fercar", "ferramentas")
-        url_keyword = "caixa"
-    else:
-        relevance_tokens = ("fercar", "ferramentas")
-        url_keyword = "fercar"
+    token_source = norm(name + " " + str(group.get("tracking_content", "")).replace("_", " ").replace("-", " "))
+    relevance_tokens = tuple(dict.fromkeys(
+        token for token in token_source.split()
+        if len(token) >= 4 and token not in {"shopvivaliz", "vivaliz", "linha"}
+    ))
 
     relevant_headlines = [
         text for text in headlines
@@ -124,7 +132,7 @@ def validate_ad_group(group: dict, guardrails: dict) -> list[str]:
     ]
     if len(relevant_headlines) < 7:
         errors.append(f"{prefix}:needs_more_keyword_relevant_headlines")
-    if sum("comprar" in norm(text) or "compre" in norm(text) for text in headlines) < 2:
+    if sum(any(term in norm(text) for term in ("comprar", "compre", "compra")) for text in headlines) < 2:
         errors.append(f"{prefix}:needs_more_purchase_intent_headlines")
     if sum(any(token in norm(text) for token in relevance_tokens) for text in descriptions) < 3:
         errors.append(f"{prefix}:needs_more_relevant_descriptions")
@@ -133,7 +141,7 @@ def validate_ad_group(group: dict, guardrails: dict) -> list[str]:
     split = urlsplit(final_url)
     if split.scheme != "https" or split.hostname != ALLOWED_HOST:
         errors.append(f"{prefix}:final_url_must_use_shopvivaliz_https")
-    if url_keyword not in norm(final_url.replace("%20", " ")):
+    if not any(token in norm(final_url.replace("%20", " ")) for token in relevance_tokens):
         errors.append(f"{prefix}:final_url_not_specific_to_group")
 
     tracking_content = norm(group.get("tracking_content", ""))
@@ -200,7 +208,7 @@ def main() -> int:
     for group in ad_groups:
         errors.extend(validate_ad_group(group, guardrails))
         all_keyword_texts.extend(norm(item.get("text", "")) for item in group.get("keywords", []))
-    if duplicates(all_keyword_texts):
+    if cross_group_keyword_duplicates(ad_groups):
         errors.append("same_positive_keyword_used_across_ad_groups")
 
     campaign_negatives = [norm(value) for value in config.get("negative_keywords", [])]
