@@ -29,7 +29,7 @@ sv_purchase_tracking_assert(
     'Provider-approved return should retry server confirmation instead of immediately counting revenue.'
 );
 sv_purchase_tracking_assert(
-    str_contains($source, "min(4, max(0, (int)(\$_GET['confirm_check'] ?? 0)))"),
+    str_contains($source, "min(10, max(0, (int)(\$_GET['confirm_check'] ?? 0)))"),
     'Confirmation retry loop must have a hard upper bound.'
 );
 sv_purchase_tracking_assert(

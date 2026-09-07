@@ -78,8 +78,10 @@ if (function_exists('pcntl_signal') && function_exists('pcntl_async_signals')) {
 }
 
 queue_worker_log("starting limit={$limit} idle_sleep={$idleSleep}s once=" . ($once ? 'yes' : 'no'));
+sv_queue_touch_worker_heartbeat();
 
 while (true) {
+    sv_queue_touch_worker_heartbeat();
     if ($shuttingDown) {
         queue_worker_log('graceful shutdown after signal (idle)');
         exit(0);

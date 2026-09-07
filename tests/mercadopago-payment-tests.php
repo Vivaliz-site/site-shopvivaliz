@@ -145,11 +145,13 @@ mp_test('endpoints legados nao criam pagamentos arbitrarios', function (): void 
     }
 });
 
-mp_test('webhook consulta recurso antes de atualizar pedido', function (): void {
-    $source = (string)file_get_contents(dirname(__DIR__) . '/api/webhook-mercadopago.php');
-    mp_assert(str_contains($source, "'/v1/orders/'"), 'consulta de order ausente');
-    mp_assert(str_contains($source, "'/v1/payments/'"), 'consulta de payment ausente');
-    mp_assert(str_contains($source, 'svmp_validate_webhook_signature'), 'validação de assinatura ausente');
+mp_test('webhook autentica na borda e dispatcher consulta recurso antes de atualizar pedido', function (): void {
+    $edge = (string)file_get_contents(dirname(__DIR__) . '/api/webhook-mercadopago.php');
+    $dispatcher = (string)file_get_contents(dirname(__DIR__) . '/includes/webhook-job-dispatcher.php');
+    mp_assert(str_contains($dispatcher, "'/v1/orders/'"), 'consulta de order ausente no dispatcher');
+    mp_assert(str_contains($dispatcher, "'/v1/payments/'"), 'consulta de payment ausente no dispatcher');
+    mp_assert(str_contains($edge, 'svmp_validate_webhook_signature'), 'validação de assinatura ausente na borda');
+    mp_assert(str_contains($edge, "sv_webhook_enqueue('mercadopago'"), 'webhook autenticado deve enfileirar para o dispatcher');
 });
 
 echo "RESULT passed=$passed failed=$failed\n";

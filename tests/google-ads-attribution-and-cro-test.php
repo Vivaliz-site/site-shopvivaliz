@@ -26,6 +26,9 @@ $_COOKIE = [
 svorc_set([
     'funnel_client_id' => 'random-first-party-id',
     'gclid' => '',
+    'utm_source' => 'google',
+    'utm_medium' => 'cpc',
+    'utm_campaign' => 'sale-campaign',
 ], [['sku' => 'TEST-1']]);
 $body = svorc_body();
 $packedIdentity = '123456789.1700000000|' . $sessionCookie;
@@ -37,6 +40,9 @@ sv_test_assert(
     ($body['gclid'] ?? '') === 'TestClick_123-ABC',
     'gclid should be recovered from the consented _gcl_aw cookie when missing from the request.'
 );
+sv_test_assert(($body['attribution']['gclid'] ?? '') === 'TestClick_123-ABC', 'canonical attribution must include consented gclid.');
+sv_test_assert(($body['attribution']['utm_source'] ?? '') === 'google', 'canonical attribution must include allowlisted UTM source.');
+sv_test_assert(($body['attribution']['utm_medium'] ?? '') === 'cpc', 'canonical attribution must include allowlisted UTM medium.');
 
 $identity = svga4_order_client_id([
     'order_number' => 'SVTEST001',
@@ -73,11 +79,13 @@ $_COOKIE = [
 ];
 svorc_set([
     'funnel_client_id' => 'fallback-id',
-    'gclid' => '',
+    'gclid' => 'ShouldNotBePersisted',
+    'utm_source' => 'google',
 ], [['sku' => 'TEST-2']]);
 $rejected = svorc_body();
 sv_test_assert(($rejected['funnel_client_id'] ?? '') === 'fallback-id', 'Rejected consent must not read GA cookies.');
 sv_test_assert(($rejected['gclid'] ?? '') === '', 'Rejected consent must not read the _gcl_aw cookie.');
+sv_test_assert(($rejected['attribution'] ?? []) === [], 'Rejected consent must not persist paid-media attribution.');
 
 // Browser ecommerce tracking must cover checkout milestones without ever
 // treating order creation as revenue. Purchase is canonical only after payment
@@ -113,3 +121,9 @@ sv_test_assert(str_contains($sanitized, '/produto/disponivel'), 'In-stock recomm
 
 $_COOKIE = $originalCookies;
 fwrite(STDOUT, "PASS: Google Ads attribution and product CRO tests.\n");
+
+$schemaSource = (string)file_get_contents(dirname(__DIR__) . '/includes/account-schema.php');
+$validatedOrderSource = (string)file_get_contents(dirname(__DIR__) . '/api/orders/process-validated.php');
+sv_test_assert(str_contains($schemaSource, 'attribution_json'), 'orders schema must persist consented attribution JSON.');
+sv_test_assert(str_contains($validatedOrderSource, 'attribution_json'), 'validated checkout must mirror attribution into MySQL.');
+sv_test_assert(str_contains($validatedOrderSource, "'attribution' => \$attribution"), 'order JSON must carry the canonical attribution object.');

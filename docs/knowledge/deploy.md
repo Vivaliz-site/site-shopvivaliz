@@ -2,11 +2,13 @@
 
 ## Fluxo principal
 
-O fluxo esperado é:
+O fluxo canônico é:
 
-`push/merge em main → GitHub Actions → validações → deploy FTP → HostGator → verificação pós-deploy`
+`push/merge em main → GitHub Actions → validações → release imutável na VM → troca atômica de current → smoke test → verificação pós-deploy`
 
-O merge no GitHub não comprova que a versão chegou ao servidor. Sempre verifique o workflow e o endpoint publicado.
+A produção usa `/home/ubuntu/shopvivaliz-deploy/releases/<release>` e o symlink `/home/ubuntu/shopvivaliz-deploy/current`. Nunca edite a release ativa nem `current` diretamente. O deploy manual revisado usa `repo/scripts/deploy-production.sh <SHA>` sob `/var/lock/shopvivaliz-deploy.lock`.
+
+O merge no GitHub não comprova que a versão chegou ao servidor. Só considere deploy comprovado quando `origin/main`, `current/.release-sha`, o endpoint `/api/health/version.php` e o smoke test concordarem com o SHA esperado.
 
 ## Teste via curl
 
@@ -100,4 +102,6 @@ Não deve ser necessário abrir URLs manuais para concluir SQL, migration ou rep
 
 ## Observações
 
-Arquivos de upload, logs, relatórios e credenciais podem ser excluídos do deploy conforme a configuração do workflow. Confirme os `paths-ignore` e exclusões FTP antes de concluir que um arquivo deveria ter sido publicado.
+Arquivos persistentes, uploads, logs, relatórios e credenciais devem permanecer em `shared/` ou em outro storage persistente previsto pelo deploy; não devem ser gravados dentro de releases imutáveis. Confirme o workflow, os scripts de deploy e os symlinks de persistência antes de concluir que um arquivo deveria estar dentro da release.
+
+O `.env` de produção é persistente em `shared/.env`. Nunca o imprima. Atualizações devem preservar permissões/ownership e remover somente linhas malformadas que não sejam comentário, linha vazia ou atribuição `KEY=VALUE` válida.

@@ -95,3 +95,26 @@ def test_merge_env_accepts_mercadopago_runtime_keys(tmp_path: Path) -> None:
     assert "MERCADOPAGO_ACCESS_TOKEN=access-token" in content
     assert "MERCADOPAGO_PUBLIC_KEY=public-key" in content
     assert "MERCADOPAGO_WEBHOOK_SECRET=webhook-secret" in content
+
+
+def test_merge_env_sanitizes_malformed_existing_lines_even_without_updates(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "# keep comment\n"
+        "symlink ../../shared/.env .env\n"
+        "VALID_EXISTING=value\n"
+        "stray-token-without-equals\n"
+        "\n",
+        encoding="utf-8",
+    )
+    env_file.chmod(0o640)
+
+    changed = merge_env(env_file, {})
+    content = env_file.read_text(encoding="utf-8")
+
+    assert changed == []
+    assert "# keep comment" in content
+    assert "VALID_EXISTING=value" in content
+    assert "symlink ../../shared/.env .env" not in content
+    assert "stray-token-without-equals" not in content
+    assert stat.S_IMODE(env_file.stat().st_mode) == 0o640

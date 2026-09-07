@@ -13,6 +13,7 @@ require_once __DIR__ . '/webhook-queue.php';
 // require-once em outros pontos, entao repetir aqui e seguro (idempotente).
 require_once __DIR__ . '/pdo-database.php';
 require_once __DIR__ . '/account-schema.php';
+require_once __DIR__ . '/order-transaction-evidence.php';
 require_once __DIR__ . '/../scripts/mailer.php';
 
 function sv_webhook_job_dispatch(array $job): array
@@ -251,6 +252,15 @@ function sv_webhook_job_dispatch_mercadopago(array $payload): array
         ];
         $mappedStatus = $orderStatusMap[$localStatus] ?? 'aguardando_pagamento';
         $pdo = sv_pdo();
+        svote_record_payment($pdo, $externalReference, [
+            'provider' => 'mercado_pago',
+            'status' => $providerStatus,
+            'provider_id' => (string)($payment['id'] ?? $dataId),
+            'status_detail' => (string)($payment['status_detail'] ?? $resource['status_detail'] ?? ''),
+            'amount' => (string)round((float)($payment['transaction_amount'] ?? $order['total'] ?? 0), 2),
+            'currency' => 'BRL',
+            'topic' => $isOrder ? 'order' : 'payment',
+        ]);
         $stmt = $pdo->prepare(
             'UPDATE orders SET order_status = :status, olist_order_id = COALESCE(:olist_order_id, olist_order_id), updated_at = NOW()
              WHERE order_number = :order_number'
@@ -260,6 +270,12 @@ function sv_webhook_job_dispatch_mercadopago(array $payload): array
             ':olist_order_id' => $order['tiny_order_id'] ?? null,
             ':order_number' => $externalReference,
         ]);
+        if (!empty($order['tiny_order_id'])) {
+            svote_record_reconciliation($pdo, $externalReference, 'olist_tiny', 'open', [
+                'erp_order_id' => (string)$order['tiny_order_id'],
+                'erp_status' => 'open',
+            ]);
+        }
     } catch (Throwable $e) {
         error_log('[MercadoPago] MySQL orders mirror failed: order=' . $externalReference . ' ' . $e->getMessage());
     }
@@ -506,6 +522,13 @@ function sv_webhook_job_dispatch_infinitepay(array $payload): array
         ];
         $mappedStatus = $orderStatusMap[$localStatus] ?? 'aguardando_pagamento';
         $pdo = sv_pdo();
+        svote_record_payment($pdo, $orderNumber, [
+            'provider' => 'infinitepay',
+            'status' => $providerStatus,
+            'provider_id' => $paymentId,
+            'currency' => 'BRL',
+            'topic' => 'payment',
+        ]);
         $stmt = $pdo->prepare(
             'UPDATE orders SET order_status = :status, olist_order_id = COALESCE(:olist_order_id, olist_order_id), updated_at = NOW()
              WHERE order_number = :order_number'
@@ -515,6 +538,12 @@ function sv_webhook_job_dispatch_infinitepay(array $payload): array
             ':olist_order_id' => $order['tiny_order_id'] ?? null,
             ':order_number' => $orderNumber,
         ]);
+        if (!empty($order['tiny_order_id'])) {
+            svote_record_reconciliation($pdo, $orderNumber, 'olist_tiny', 'open', [
+                'erp_order_id' => (string)$order['tiny_order_id'],
+                'erp_status' => 'open',
+            ]);
+        }
     } catch (Throwable $e) {
         error_log('[InfinitePay] MySQL orders mirror failed: order=' . $orderNumber . ' ' . $e->getMessage());
     }

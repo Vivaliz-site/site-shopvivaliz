@@ -104,6 +104,25 @@ function svorc_gclid_from_cookie(): string {
     return $gclid;
 }
 
+function svorc_attribution_from_body(array $body): array {
+    if (!hash_equals('accepted', (string)($_COOKIE['sv_privacy_consent'] ?? ''))) {
+        return [];
+    }
+    $limits = [
+        'gclid' => 255, 'gbraid' => 255, 'wbraid' => 255, 'dclid' => 255,
+        'utm_source' => 255, 'utm_medium' => 255, 'utm_campaign' => 255,
+        'utm_content' => 255,
+    ];
+    $out = [];
+    foreach ($limits as $key => $limit) {
+        $value = trim((string)($body[$key] ?? ''));
+        if ($value === '' || strlen($value) > $limit) continue;
+        if (preg_match('/^[A-Za-z0-9._~+\-:% ]+$/', $value) !== 1) continue;
+        $out[$key] = $value;
+    }
+    return $out;
+}
+
 function svorc_set(array $body, array $resolvedItems): void {
     // The checkout historically sent a random first-party funnel id in this
     // field. For paid-media attribution, the approved purchase must use the
@@ -118,12 +137,19 @@ function svorc_set(array $body, array $resolvedItems): void {
         );
     }
 
-    if (trim((string)($body['gclid'] ?? '')) === '') {
+    $consentAccepted = hash_equals('accepted', (string)($_COOKIE['sv_privacy_consent'] ?? ''));
+    if ($consentAccepted && trim((string)($body['gclid'] ?? '')) === '') {
         $cookieGclid = svorc_gclid_from_cookie();
         if ($cookieGclid !== '') {
             $body['gclid'] = $cookieGclid;
         }
     }
+    if (!$consentAccepted) {
+        foreach (['gclid','gbraid','wbraid','dclid','utm_source','utm_medium','utm_campaign','utm_content'] as $key) {
+            $body[$key] = '';
+        }
+    }
+    $body['attribution'] = svorc_attribution_from_body($body);
 
     $GLOBALS['shopvivaliz_order_body'] = $body;
     $GLOBALS['shopvivaliz_order_items'] = $resolvedItems;
