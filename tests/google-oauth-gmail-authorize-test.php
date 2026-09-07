@@ -10,9 +10,9 @@ $checks = [
     "gmail readonly scope" => str_contains($authorize, 'https://www.googleapis.com/auth/gmail.readonly'),
     "gmail send scope" => str_contains($authorize, 'https://www.googleapis.com/auth/gmail.send'),
     "gmail combined scopes" => str_contains($authorize, "'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send'"),
-    "gmail disables granted scope union" => str_contains($authorize, "'include_granted_scopes' => $purpose === 'gmail_read_send' ? 'false' : 'true'"),
-    "purpose signed into state" => str_contains($authorize, "'purpose' => $purpose"),
-    "callback identifies gmail purpose" => str_contains($callback, "$googleOauthPurpose === 'gmail_read_send'"),
+    "gmail disables granted scope union" => str_contains($authorize, "'include_granted_scopes' => \$purpose === 'gmail_read_send' ? 'false' : 'true'"),
+    "purpose signed into state" => str_contains($authorize, "'purpose' => \$purpose"),
+    "callback identifies gmail purpose" => str_contains($callback, "\$googleOauthPurpose === 'gmail_read_send'"),
     "callback keeps refresh token capture" => str_contains($callback, 'sv_google_ads_write_pending_refresh_token($adsJob, $refreshToken)'),
 ];
 
