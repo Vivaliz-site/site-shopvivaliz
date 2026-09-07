@@ -123,7 +123,7 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
             ubuntu@163.176.103.253 \
-            "curl -fsS --connect-timeout 5 --max-time 30 -H 'Host: shopvivaliz.com.br' http://127.0.0.1/sitemap.xml" \
+            "curl -fsS --connect-timeout 5 --max-time 30 -H 'Host: shopvivaliz.com.br' http://127.0.0.1:8080/sitemap.xml" \
             > reports/google-search-console-sitemap.xml
           grep -q '<urlset' reports/google-search-console-sitemap.xml
           test "$(grep -o '<loc>' reports/google-search-console-sitemap.xml | wc -l)" -gt 0
