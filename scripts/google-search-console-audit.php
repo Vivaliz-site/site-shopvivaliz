@@ -24,6 +24,9 @@ $constants = $root . '/config/constants.php';
 if (is_file($constants)) {
     require_once $constants; // Loads release .env and deploy shared/.env.
 }
+$sitemapHelper = $root . '/scripts/lib/google_search_console_sitemap.php';
+require_once $sitemapHelper;
+
 
 $autoload = $root . '/vendor/autoload.php';
 if (is_file($autoload)) {
@@ -300,6 +303,7 @@ try {
     $baseHost = gsc_base_host($baseUrl);
     $preferredSiteUrl = trim((string)(gsc_option($argv, 'site-url', getenv('GOOGLE_SEARCH_CONSOLE_SITE_URL') ?: '') ?: ''));
     $sitemapUrl = trim((string)(gsc_option($argv, 'sitemap', getenv('GOOGLE_SEARCH_CONSOLE_SITEMAP_URL') ?: ($baseUrl . '/sitemap.xml')) ?: ''));
+    $sitemapFile = trim((string)(gsc_option($argv, 'sitemap-file', '') ?: ''));
     $maxUrls = max(1, min(1900, (int)(gsc_option($argv, 'max-urls', getenv('GOOGLE_SEARCH_CONSOLE_AUDIT_MAX_URLS') ?: '100') ?: '100')));
     $offset = max(0, (int)(gsc_option($argv, 'offset', '0') ?: '0'));
     $output = trim((string)(gsc_option($argv, 'output', '') ?: ''));
@@ -337,7 +341,10 @@ try {
     $urlSource = 'sitemap';
     $sitemapFetchError = '';
     try {
-        $allUrls = gsc_sitemap_urls(gsc_http_get($sitemapUrl), $baseHost);
+        $sitemapXml = $sitemapFile !== ''
+            ? shopvivaliz_gsc_read_sitemap_file($root, $sitemapFile)
+            : gsc_http_get($sitemapUrl);
+        $allUrls = gsc_sitemap_urls($sitemapXml, $baseHost);
         if ($allUrls === []) {
             $sitemapFetchError = 'The public sitemap did not contain any valid production HTTPS <loc> URLs.';
         }
