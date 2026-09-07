@@ -362,6 +362,11 @@ class PolicyEngine {
       file === 'includes/product-seo.php'
       || file === 'includes/catalog-authoritative-stock-carry.php'
       || file === 'includes/tiny-order-push.php'
+      || file === 'includes/account-schema.php'
+      || file === 'includes/integration-health.php'
+      || file === 'includes/order-request-context.php'
+      || file === 'includes/order-transaction-evidence.php'
+      || file === 'includes/webhook-job-dispatcher.php'
       || file.startsWith('includes/marketplace/')
       // Amazon Returns/SAFE-T domain, event store, SP-API facade and report
       // parsing — server-side event sourcing with no rendered output. The

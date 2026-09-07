@@ -177,6 +177,7 @@ $utmSource = trim((string)($body['utm_source'] ?? ''));
 $utmMedium = trim((string)($body['utm_medium'] ?? ''));
 $utmCampaign = trim((string)($body['utm_campaign'] ?? ''));
 $utmContent = trim((string)($body['utm_content'] ?? ''));
+$attribution = is_array($body['attribution'] ?? null) ? $body['attribution'] : [];
 
 if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen($address) > 300 || strlen($streetName) > 300 || strlen($streetNumber) > 30 || strlen($complement) > 120 || strlen($neighborhood) > 120 || strlen($city) > 120 || strlen($state) > 2 || strlen($notes) > 1000 || strlen($deviceId) > 255 || strlen($cpf) > 14 || strlen($companyLegalName) > 180 || strlen($companyTradeName) > 180 || strlen($customerRegistrationDate) > 60 || strlen($customerId) > 120 || strlen($funnelClientId) > 128 || strlen($gclid) > 255 || strlen($gbraid) > 255 || strlen($wbraid) > 255 || strlen($dclid) > 255 || strlen($utmSource) > 255 || strlen($utmMedium) > 255 || strlen($utmCampaign) > 255 || strlen($utmContent) > 255) {
     svoi_release($idempotencyKey);
@@ -324,6 +325,7 @@ $record = [
     'idempotency_key_hash' => hash('sha256', $idempotencyKey),
     'payment_session_hash' => $paymentSessionToken !== '' ? hash('sha256', $paymentSessionToken) : '',
     'funnel_client_id' => $funnelClientId,
+    'attribution' => $attribution,
     'gclid' => $gclid,
     'gbraid' => $gbraid,
     'wbraid' => $wbraid,
@@ -357,8 +359,8 @@ try {
 
     $pdo = sv_pdo();
     $stmt = $pdo->prepare(
-        'INSERT INTO orders (user_id, order_number, olist_order_id, email, order_total, order_status, payment_method, items_json, created_at)
-         VALUES (:user_id, :order_number, :olist_order_id, :email, :total, :status, :payment_method, :items_json, NOW())'
+        'INSERT INTO orders (user_id, order_number, olist_order_id, email, order_total, order_status, payment_method, items_json, attribution_json, created_at)
+         VALUES (:user_id, :order_number, :olist_order_id, :email, :total, :status, :payment_method, :items_json, :attribution_json, NOW())'
     );
     $stmt->execute([
         ':user_id' => $sessionUserId,
@@ -369,6 +371,7 @@ try {
         ':status' => 'aguardando_pagamento',
         ':payment_method' => $paymentMethod,
         ':items_json' => json_encode($cleanItems, JSON_UNESCAPED_UNICODE),
+        ':attribution_json' => json_encode($attribution, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
     ]);
 } catch (Throwable $e) {
     error_log('[OrderValidated] MySQL orders mirror failed: ' . $e->getMessage());

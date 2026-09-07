@@ -562,6 +562,75 @@ function svih_config_only(string $name, string $key, array $envKeys, string $rem
     ];
 }
 
+function svih_google_ads(): array
+{
+    $clientId = svih_env('GOOGLE_OAUTH_CLIENT_ID');
+    $clientSecret = svih_env('GOOGLE_OAUTH_CLIENT_SECRET');
+    $refreshToken = svih_env('GOOGLE_OAUTH_REFRESH_TOKEN', 'GOOGLE_ADS_REFRESH_TOKEN');
+    $developerToken = svih_env('GOOGLE_ADS_DEVELOPER_TOKEN');
+    $customerId = preg_replace('/\D+/', '', svih_env('GOOGLE_ADS_CUSTOMER_ID')) ?: '';
+    $loginCustomerId = preg_replace('/\D+/', '', svih_env('GOOGLE_ADS_LOGIN_CUSTOMER_ID')) ?: '';
+    $conversionId = trim(svih_env('GOOGLE_ADS_ID'));
+    $conversionLabel = trim(svih_env('GOOGLE_ADS_CONVERSION_LABEL'));
+
+    $required = [$clientId, $clientSecret, $refreshToken, $developerToken, $customerId];
+    if (in_array('', $required, true) || strlen($customerId) !== 10) {
+        return [
+            'name' => 'Google Ads', 'key' => 'google_ads', 'status' => 'not_configured',
+            'message' => 'Credenciais OAuth/API incompletas.',
+            'remediation' => 'Configure OAuth, developer token e customer ID validos.',
+            'provider_status' => 0, 'conversion_configured' => false,
+        ];
+    }
+
+    $oauth = svih_http('POST', 'https://oauth2.googleapis.com/token', [], [
+        'client_id' => $clientId,
+        'client_secret' => $clientSecret,
+        'refresh_token' => $refreshToken,
+        'grant_type' => 'refresh_token',
+    ]);
+    $accessToken = is_array($oauth['data'] ?? null) ? trim((string)($oauth['data']['access_token'] ?? '')) : '';
+    if (!$oauth['ok'] || $accessToken === '') {
+        return [
+            'name' => 'Google Ads', 'key' => 'google_ads', 'status' => 'failed',
+            'message' => 'OAuth do Google Ads rejeitado.',
+            'remediation' => 'Reautorize o OAuth do Google Ads.',
+            'provider_status' => (int)($oauth['status'] ?? 0), 'conversion_configured' => false,
+        ];
+    }
+
+    $headers = [
+        'Authorization: Bearer ' . $accessToken,
+        'developer-token: ' . $developerToken,
+        'Accept: application/json',
+    ];
+    if ($loginCustomerId !== '') $headers[] = 'login-customer-id: ' . $loginCustomerId;
+    $api = svih_http_json(
+        'POST',
+        'https://googleads.googleapis.com/v25/customers/' . $customerId . '/googleAds:search',
+        $headers,
+        ['query' => 'SELECT customer.id FROM customer LIMIT 1', 'page_size' => 1]
+    );
+    if (!$api['ok']) {
+        return [
+            'name' => 'Google Ads', 'key' => 'google_ads', 'status' => 'failed',
+            'message' => 'Google Ads API rejeitou a consulta read-only.',
+            'remediation' => 'Valide developer token, customer ID, login customer ID e permissoes OAuth.',
+            'provider_status' => (int)($api['status'] ?? 0), 'conversion_configured' => false,
+        ];
+    }
+
+    $conversionConfigured = $conversionId !== '' && $conversionLabel !== '';
+    return [
+        'name' => 'Google Ads', 'key' => 'google_ads',
+        'status' => $conversionConfigured ? 'connected' : 'attention',
+        'message' => $conversionConfigured ? 'API e conversao direta configuradas.' : 'API conectada, mas a conversao de compra nao esta configurada.',
+        'remediation' => $conversionConfigured ? null : 'Configure GOOGLE_ADS_ID e GOOGLE_ADS_CONVERSION_LABEL com a acao de compra verificada.',
+        'provider_status' => (int)($api['status'] ?? 0),
+        'conversion_configured' => $conversionConfigured,
+    ];
+}
+
 function svih_check_all(bool $fix = false): array
 {
     $integrations = [
@@ -576,12 +645,7 @@ function svih_check_all(bool $fix = false): array
         ),
         svih_melhor_envio($fix),
         svih_config_only('Facebook CAPI', 'facebook_capi', ['FACEBOOK_ACCESS_TOKEN'], 'Configurar FACEBOOK_ACCESS_TOKEN.'),
-        svih_config_only(
-            'Google Ads',
-            'google_ads',
-            ['GOOGLE_OAUTH_REFRESH_TOKEN', 'GOOGLE_ADS_REFRESH_TOKEN'],
-            'Conectar OAuth do Google Ads.'
-        ),
+        svih_google_ads(),
         svih_config_only('TikTok Pixel', 'tiktok_pixel', ['TIKTOK_PIXEL_TOKEN'], 'Configurar TIKTOK_PIXEL_TOKEN.'),
         svih_config_only('SMTP / E-mail', 'smtp', ['SMTP_PASS', 'EMAIL_PASSWORD', 'MAIL_PASS'], 'Configurar credencial SMTP.'),
     ];

@@ -40,6 +40,11 @@ code=$(request GET "$BASE_URL/api/orders/health.php" "" "$TMPDIR/orders.json")
 json_assert "$TMPDIR/orders.json" 'd.get("ok") is True' orders_health
 pass orders_health 'ok=true'
 
+code=$(request GET "$BASE_URL/api/health/payment-queue.php" "" "$TMPDIR/payment-queue.json")
+[[ "$code" == 200 ]] || fail payment_queue "http=$code body=$(cat "$TMPDIR/payment-queue.json")"
+json_assert "$TMPDIR/payment-queue.json" 'd.get("ok") is True and d.get("worker_ok") is True and int(d.get("stale") or 0) == 0 and int(d.get("failed") or 0) == 0' payment_queue
+pass payment_queue 'worker_ok=true stale=0 failed=0 oldest_queued_age_seconds validated'
+
 code=$(request GET "$BASE_URL/api/catalog/products.php?limit=10&available=1" "" "$TMPDIR/products.json")
 [[ "$code" == 200 ]] || fail catalog "http=$code"
 python3 - "$TMPDIR/products.json" "$TMPDIR/item.json" <<'PY' || fail catalog 'no auditable product'

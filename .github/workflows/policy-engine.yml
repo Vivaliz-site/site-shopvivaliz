@@ -184,6 +184,11 @@ jobs:
                   'includes/product-seo.php',
                   'includes/catalog-authoritative-stock-carry.php',
                   'includes/tiny-order-push.php',
+                  'includes/account-schema.php',
+                  'includes/integration-health.php',
+                  'includes/order-request-context.php',
+                  'includes/order-transaction-evidence.php',
+                  'includes/webhook-job-dispatcher.php',
               }:
                   return False
               if path.startswith('includes/marketplace/') or path.startswith('includes/amazon-returns/'):

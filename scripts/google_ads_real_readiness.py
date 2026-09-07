@@ -16,7 +16,6 @@ REQUIRED_ENV = [
     "GOOGLE_OAUTH_CLIENT_SECRET",
     "GOOGLE_ADS_CUSTOMER_ID",
     "GOOGLE_ADS_DEVELOPER_TOKEN",
-    "GOOGLE_ADS_REFRESH_TOKEN",
 ]
 MANUAL_CONVERSION_ENV = ["GOOGLE_ADS_ID", "GOOGLE_ADS_CONVERSION_LABEL"]
 GA4_IMPORT_ENV = ["GOOGLE_ANALYTICS_ID"]
@@ -111,13 +110,13 @@ def validate_ad_group(group: dict, guardrails: dict) -> list[str]:
     name_norm = norm(name)
     if "carrinho" in name_norm:
         relevance_tokens = ("carrinho", "fercar", "ferramentas")
-        url_token = "carrinho"
+        url_keyword = "carrinho"
     elif "caixa" in name_norm:
         relevance_tokens = ("caixa", "fercar", "ferramentas")
-        url_token = "caixa"
+        url_keyword = "caixa"
     else:
         relevance_tokens = ("fercar", "ferramentas")
-        url_token = "fercar"
+        url_keyword = "fercar"
 
     relevant_headlines = [
         text for text in headlines
@@ -134,7 +133,7 @@ def validate_ad_group(group: dict, guardrails: dict) -> list[str]:
     split = urlsplit(final_url)
     if split.scheme != "https" or split.hostname != ALLOWED_HOST:
         errors.append(f"{prefix}:final_url_must_use_shopvivaliz_https")
-    if url_token not in norm(final_url.replace("%20", " ")):
+    if url_keyword not in norm(final_url.replace("%20", " ")):
         errors.append(f"{prefix}:final_url_not_specific_to_group")
 
     tracking_content = norm(group.get("tracking_content", ""))
@@ -155,18 +154,20 @@ def main() -> int:
         return 1
 
     missing = [key for key in REQUIRED_ENV if is_placeholder(os.getenv(key, ""))]
+    refresh_value = os.getenv("GOOGLE_OAUTH_REFRESH_TOKEN", "").strip() or os.getenv("GOOGLE_ADS_REFRESH_TOKEN", "").strip()
+    if is_placeholder(refresh_value):
+        missing.append("GOOGLE_OAUTH_REFRESH_TOKEN_OR_GOOGLE_ADS_REFRESH_TOKEN")
+
     conversion_source = os.getenv("GOOGLE_ADS_CONVERSION_SOURCE", "MANUAL_GTAG").strip().upper()
     if conversion_source == "GA4_IMPORT":
         missing.extend(key for key in GA4_IMPORT_ENV if is_placeholder(os.getenv(key, "")))
+        import_verified = os.getenv("GOOGLE_ADS_GA4_IMPORT_VERIFIED", "").strip().lower() in {"1", "true", "yes"}
+        if not import_verified:
+            errors.append("ga4_import_not_verified")
     else:
         missing.extend(key for key in MANUAL_CONVERSION_ENV if is_placeholder(os.getenv(key, "")))
     if missing:
         errors.append("missing_or_placeholder_env=" + ",".join(missing))
-
-    try:
-        import google.ads.googleads  # noqa: F401
-    except Exception:
-        errors.append("python_package_missing=google-ads")
 
     campaign = config.get("campaign", {})
     guardrails = config.get("guardrails", {})

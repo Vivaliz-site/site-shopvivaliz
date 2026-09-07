@@ -402,3 +402,79 @@ if (sv_queue_uses_file_backend()) {
         $stmt->execute(['+' . max(0, $delaySeconds) . ' seconds', $error, $id]);
     }
 }
+
+function sv_queue_worker_heartbeat_path(): string
+{
+    $override = trim((string)(getenv('SHOPVIVALIZ_QUEUE_HEARTBEAT_FILE') ?: ''));
+    if ($override !== '') return $override;
+    return dirname(sv_queue_file_path()) . '/queue-worker-heartbeat.json';
+}
+
+function sv_queue_touch_worker_heartbeat(): void
+{
+    $path = sv_queue_worker_heartbeat_path();
+    @mkdir(dirname($path), 0775, true);
+    $payload = json_encode(['checked_at' => gmdate('c'), 'pid' => getmypid()], JSON_UNESCAPED_SLASHES);
+    if (is_string($payload)) {
+        @file_put_contents($path, $payload . PHP_EOL, LOCK_EX);
+    }
+}
+
+function sv_queue_worker_age_seconds(): ?int
+{
+    $path = sv_queue_worker_heartbeat_path();
+    if (!is_file($path)) return null;
+    $data = json_decode((string)@file_get_contents($path), true);
+    $timestamp = strtotime((string)($data['checked_at'] ?? '')) ?: 0;
+    return $timestamp > 0 ? max(0, time() - $timestamp) : null;
+}
+
+function sv_queue_health(int $staleSeconds = 300): array
+{
+    $staleSeconds = max(30, $staleSeconds);
+    $counts = ['queued'=>0, 'running'=>0, 'done'=>0, 'failed'=>0, 'total'=>0];
+    $stale = 0;
+    $oldestQueuedAge = 0;
+    $now = time();
+
+    if (sv_queue_uses_file_backend()) {
+        $data = sv_queue_file_bootstrap();
+        foreach (($data['tasks'] ?? []) as $task) {
+            $type = (string)($task['job_type'] ?? '');
+            if (!in_array($type, ['webhook:mercadopago', 'webhook:infinitepay'], true)) continue;
+            $status = (string)($task['status'] ?? 'queued');
+            if (!isset($counts[$status])) $counts[$status] = 0;
+            $counts[$status]++;
+            $counts['total']++;
+            $reference = $status === 'running' ? ($task['started_at'] ?? '') : ($task['available_at'] ?? $task['created_at'] ?? '');
+            $ts = strtotime((string)$reference) ?: 0;
+            $age = $ts > 0 ? max(0, $now - $ts) : 0;
+            if ($status === 'queued') $oldestQueuedAge = max($oldestQueuedAge, $age);
+            if (in_array($status, ['queued','running'], true) && $age > $staleSeconds) $stale++;
+        }
+    } else {
+        $pdo = sv_queue_db();
+        $rows = $pdo->query("SELECT status, available_at, started_at, created_at FROM queue_jobs WHERE job_type IN ('webhook:mercadopago','webhook:infinitepay')")->fetchAll();
+        foreach ($rows as $task) {
+            $status = (string)($task['status'] ?? 'queued');
+            if (!isset($counts[$status])) $counts[$status] = 0;
+            $counts[$status]++;
+            $counts['total']++;
+            $reference = $status === 'running' ? ($task['started_at'] ?? '') : ($task['available_at'] ?? $task['created_at'] ?? '');
+            $ts = strtotime((string)$reference) ?: 0;
+            $age = $ts > 0 ? max(0, $now - $ts) : 0;
+            if ($status === 'queued') $oldestQueuedAge = max($oldestQueuedAge, $age);
+            if (in_array($status, ['queued','running'], true) && $age > $staleSeconds) $stale++;
+        }
+    }
+
+    $workerAge = sv_queue_worker_age_seconds();
+    $workerOk = $workerAge !== null && $workerAge <= $staleSeconds;
+    return array_merge($counts, [
+        'ok' => $workerOk && $stale === 0 && $counts['failed'] === 0,
+        'stale' => $stale,
+        'oldest_queued_age_seconds' => $oldestQueuedAge,
+        'worker_ok' => $workerOk,
+        'worker_age_seconds' => $workerAge,
+    ]);
+}

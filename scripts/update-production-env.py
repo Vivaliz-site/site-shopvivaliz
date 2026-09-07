@@ -91,15 +91,18 @@ def merge_env(path: Path, incoming: dict[str, object]) -> list[str]:
         for key, value in incoming.items()
         if key in ALLOWED_KEYS and value is not None and str(value) != ""
     }
-    if not updates:
-        return []
-
     original = path.read_text(encoding="utf-8") if path.exists() else ""
     lines = original.splitlines()
     seen: set[str] = set()
     output: list[str] = []
     for line in lines:
-        key = line.split("=", 1)[0] if "=" in line else ""
+        stripped = line.strip()
+        if stripped == "" or stripped.startswith("#"):
+            output.append(line)
+            continue
+        if "=" not in line:
+            continue
+        key = line.split("=", 1)[0].strip()
         if key in updates:
             output.append(f"{key}={updates[key]}")
             seen.add(key)
@@ -109,7 +112,8 @@ def merge_env(path: Path, incoming: dict[str, object]) -> list[str]:
         if key not in seen:
             output.append(f"{key}={updates[key]}")
 
-    mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o640
+    existing_stat = path.stat() if path.exists() else None
+    mode = stat.S_IMODE(existing_stat.st_mode) if existing_stat is not None else 0o640
     fd, temp_name = tempfile.mkstemp(prefix=".env.", dir=path.parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
@@ -117,6 +121,8 @@ def merge_env(path: Path, incoming: dict[str, object]) -> list[str]:
             handle.flush()
             os.fsync(handle.fileno())
         os.chmod(temp_name, mode)
+        if existing_stat is not None:
+            os.chown(temp_name, existing_stat.st_uid, existing_stat.st_gid)
         os.replace(temp_name, path)
     finally:
         if os.path.exists(temp_name):
