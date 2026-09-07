@@ -253,3 +253,7 @@ def test_deploy_internal_health_uses_site_origin_8080() -> None:
     assert "http://127.0.0.1:8080/api/health/version.php" in text
     assert "http://127.0.0.1:8080/api/orders/health.php" in text
     assert "http://127.0.0.1:8080/api/olist/webhook-health.php" in text
+
+
+def test_deploy_has_no_policy_banned_or_true_bypass() -> None:
+    assert '|| true' not in _text(), 'deploy script must not suppress failures with policy-banned || true'
