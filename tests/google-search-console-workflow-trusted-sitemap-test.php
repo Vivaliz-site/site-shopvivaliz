@@ -16,6 +16,7 @@ $required = [
     '--sitemap-file=reports/google-search-console-sitemap.xml',
     'timeout-minutes: 45',
     'Maximum URLs to inspect in this batch (1-200)',
+    'google-search-console-audit-${{ github.event.inputs.offset || \'scheduled\' }}',
 ];
 foreach ($required as $needle) {
     if (strpos($yaml, $needle) === false) {

@@ -35,7 +35,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: google-search-console-audit
+  group: google-search-console-audit-${{ github.event.inputs.offset || 'scheduled' }}
   cancel-in-progress: false
 
 jobs:
