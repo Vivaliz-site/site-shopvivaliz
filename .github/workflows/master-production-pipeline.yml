@@ -102,7 +102,7 @@ jobs:
             test -n "${!name:-}" || { echo "::error::Required Mercado Livre secret missing: $name"; exit 1; }
           done
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" scripts/update-production-env.py ubuntu@163.176.103.253:/tmp/shopvivaliz-update-production-env.py
-          python3 - <<'PY' | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'cd /home/ubuntu/shopvivaliz-deploy/shared && python3 /tmp/shopvivaliz-update-production-env.py'
+          python3 - <<'PY' | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'cd /home/ubuntu/shopvivaliz-deploy/shared && sudo python3 /tmp/shopvivaliz-update-production-env.py'
           import json, os
           keys = ('ML_CLIENT_ID', 'ML_CLIENT_SECRET', 'ML_REDIRECT_URI')
           print(json.dumps({key: os.environ[key + '_VALUE'] for key in keys}))
