@@ -58,6 +58,33 @@ jobs:
           echo "ml_runtime_token_file=$state"
           test "$state" = present
 
+      - name: Probe isolated-smoke runtime capabilities
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          for tool in php composer docker mysql git; do
+            if command -v "$tool" >/dev/null 2>&1; then
+              echo "$tool=present"
+            else
+              echo "$tool=missing"
+            fi
+          done
+          if docker info >/dev/null 2>&1; then
+            echo 'docker_daemon=usable'
+          else
+            echo 'docker_daemon=unavailable'
+          fi
+          if php -r 'exit(version_compare(PHP_VERSION, "8.3.0", ">=") ? 0 : 1);' >/dev/null 2>&1; then
+            echo 'php83plus=true'
+          else
+            echo 'php83plus=false'
+          fi
+          REMOTE
+
       - name: Remove SSH material
         if: always()
         run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
