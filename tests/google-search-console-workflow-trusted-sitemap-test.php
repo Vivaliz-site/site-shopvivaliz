@@ -14,6 +14,8 @@ $required = [
     'http://127.0.0.1:8080/sitemap.xml',
     'reports/google-search-console-sitemap.xml',
     '--sitemap-file=reports/google-search-console-sitemap.xml',
+    'timeout-minutes: 45',
+    'Maximum URLs to inspect in this batch (1-200)',
 ];
 foreach ($required as $needle) {
     if (strpos($yaml, $needle) === false) {

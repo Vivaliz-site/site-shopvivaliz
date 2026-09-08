@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       max_urls:
-        description: Maximum URLs to inspect in this batch (1-1900)
+        description: Maximum URLs to inspect in this batch (1-200)
         required: false
         default: '25'
       offset:
@@ -42,7 +42,7 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     environment: Production
-    timeout-minutes: 20
+    timeout-minutes: 45
     env:
       GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
       GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
