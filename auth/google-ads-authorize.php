@@ -10,7 +10,7 @@ if (!sv_social_google_is_configured()) {
 
 $job = strtolower(trim((string)($_GET['job'] ?? '')));
 $purpose = strtolower(trim((string)($_GET['purpose'] ?? 'google_ads')));
-if (!in_array($purpose, ['google_ads', 'gmail_readonly', 'gmail_read_send'], true)) {
+if (!in_array($purpose, ['google_ads', 'gmail_readonly'], true)) {
     http_response_code(400);
     exit('Invalid authorization purpose.');
 }
@@ -38,14 +38,12 @@ $url = 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
     'client_id' => sv_social_env('GOOGLE_OAUTH_CLIENT_ID'),
     'redirect_uri' => sv_social_callback_url('google'),
     'response_type' => 'code',
-    'scope' => $purpose === 'gmail_read_send'
+    'scope' => $purpose === 'gmail_readonly'
         ? 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send'
-        : ($purpose === 'gmail_readonly'
-            ? 'https://www.googleapis.com/auth/gmail.readonly'
-            : 'https://www.googleapis.com/auth/adwords'),
+        : 'https://www.googleapis.com/auth/adwords',
     'state' => $state,
     'access_type' => 'offline',
-    'include_granted_scopes' => $purpose === 'gmail_read_send' ? 'false' : ($purpose === 'gmail_readonly' ? 'false' : 'true'),
+    'include_granted_scopes' => $purpose === 'gmail_readonly' ? 'false' : 'true',
     'prompt' => 'consent',
 ]);
 
