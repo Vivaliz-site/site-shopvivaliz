@@ -23,11 +23,14 @@ if (!preg_match('/audit_fredwin_runtime\)\s*\n(?<block>.*?)(?=\n\s*;;)/s', $work
         'ConvertTo-Json',
         'FREDWIN_RUNTIME_AUDIT_BEGIN',
         'FREDWIN_RUNTIME_AUDIT_END',
-        '$ownerPid=',
     ] as $needle) {
         if (!str_contains($block, $needle)) {
             $errors[] = 'runtime audit missing read-only inventory primitive: ' . $needle;
         }
+    }
+
+    if (!preg_match('/\\\\?\$ownerPid=/', $block)) {
+        $errors[] = 'runtime audit must use ownerPid instead of PowerShell automatic PID variable';
     }
 
     foreach ([
@@ -38,11 +41,13 @@ if (!preg_match('/audit_fredwin_runtime\)\s*\n(?<block>.*?)(?=\n\s*;;)/s', $work
         'Remove-Item',
         'Set-ItemProperty',
         'Remove-ItemProperty',
-        '$pid=',
     ] as $forbidden) {
         if (str_contains($block, $forbidden)) {
             $errors[] = 'runtime audit must stay read-only/safe; forbidden primitive: ' . $forbidden;
         }
+    }
+    if (preg_match('/\\\\?\$pid=/', $block)) {
+        $errors[] = 'runtime audit must not assign PowerShell automatic PID variable';
     }
 }
 
