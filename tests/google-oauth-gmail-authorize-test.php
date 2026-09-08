@@ -6,13 +6,13 @@ $authorize = (string)file_get_contents($root . '/auth/google-ads-authorize.php')
 $callback = (string)file_get_contents($root . '/auth/google-callback.php');
 
 $checks = [
-    "purpose gmail_read_send" => str_contains($authorize, "'gmail_read_send'"),
+    "purpose gmail_readonly" => str_contains($authorize, "'gmail_readonly'"),
     "gmail readonly scope" => str_contains($authorize, 'https://www.googleapis.com/auth/gmail.readonly'),
     "gmail send scope" => str_contains($authorize, 'https://www.googleapis.com/auth/gmail.send'),
     "gmail combined scopes" => str_contains($authorize, "'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send'"),
-    "gmail disables granted scope union" => str_contains($authorize, "'include_granted_scopes' => \$purpose === 'gmail_read_send' ? 'false' : 'true'"),
+    "gmail disables granted scope union" => str_contains($authorize, "'include_granted_scopes' => \$purpose === 'gmail_readonly' ? 'false' : 'true'"),
     "purpose signed into state" => str_contains($authorize, "'purpose' => \$purpose"),
-    "callback identifies gmail purpose" => str_contains($callback, "\$googleOauthPurpose === 'gmail_read_send'"),
+    "callback identifies gmail purpose" => str_contains($callback, "\$googleOauthPurpose === 'gmail_readonly'"),
     "callback keeps refresh token capture" => str_contains($callback, 'sv_google_ads_write_pending_refresh_token($adsJob, $refreshToken)'),
 ];
 
