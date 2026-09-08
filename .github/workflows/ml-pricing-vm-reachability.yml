@@ -1,0 +1,63 @@
+name: ML Pricing VM Reachability
+
+on:
+  push:
+    branches:
+      - chore/ml-pricing-live-validation
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Configure verified SSH host
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::SSH key missing'; exit 1; }
+          test -n "$known_hosts" || { echo '::error::known_hosts missing'; exit 1; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Probe private repository reachability from VM
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          result="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@163.176.103.253 \
+            'if GIT_TERMINAL_PROMPT=0 timeout 20s git ls-remote -q https://github.com/Vivaliz-site/ml-pricing-api.git HEAD >/dev/null 2>&1; then printf reachable; else printf unavailable; fi')"
+          echo "ml_pricing_repo_from_vm=$result"
+          test "$result" = reachable
+
+      - name: Verify runtime token file presence without reading it
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          state="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@163.176.103.253 \
+            'if test -s /home/ubuntu/shopvivaliz-deploy/shared/storage/private/ml-tokens.json; then printf present; else printf missing; fi')"
+          echo "ml_runtime_token_file=$state"
+          test "$state" = present
+
+      - name: Remove SSH material
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
