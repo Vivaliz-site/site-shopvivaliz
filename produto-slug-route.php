@@ -13,6 +13,7 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/includes/catalog-runtime.php';
+require_once __DIR__ . '/includes/product-historical-aliases.php';
 
 function sv_product_route_normalize(string $value): string
 {
@@ -237,6 +238,18 @@ $aliasRow = sv_product_route_catalog_row_by_alias_slug($requestedSlug);
 $aliasSlug = sv_product_route_row_slug($aliasRow);
 if ($aliasSlug !== null) {
     sv_product_route_redirect($aliasSlug);
+}
+
+// Search Console-proven historical aliases must land on the exact current
+// product, but only while that target still exists in the live catalog.
+$provenLegacyTarget = sv_product_historical_alias_target($requestedSlug);
+if ($provenLegacyTarget !== null) {
+    $provenLegacyRow = sv_product_route_catalog_row_by_slug($provenLegacyTarget);
+    $provenLegacySlug = sv_product_route_row_slug($provenLegacyRow);
+    if ($provenLegacySlug !== null) {
+        sv_product_route_redirect($provenLegacySlug);
+    }
+    sv_product_route_not_found();
 }
 
 // Historical numeric IDs resolve only against the current catalog. When no
