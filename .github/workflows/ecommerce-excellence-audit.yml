@@ -39,6 +39,9 @@ jobs:
         with:
           php-version: '8.3'
 
+      - name: Validate deployment evidence retry contract
+        run: python3 tests/test_ecommerce_excellence_deploy_wait_retry.py
+
       - name: Install verified Gitleaks CLI
         shell: bash
         run: |
@@ -194,8 +197,9 @@ jobs:
               -H 'Accept: application/vnd.github.raw+json' \
               "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json?ref=deployment-evidence" \
               > /tmp/deployment-latest.json 2>/tmp/deployment-error.txt; then
+              evidence_ready=0
               if [ -n "$EXPECTED_SHA" ]; then
-                python3 - "$EXPECTED_SHA" /tmp/deployment-latest.json <<'PY'
+                if python3 - "$EXPECTED_SHA" /tmp/deployment-latest.json <<'PY'; then
           import json, sys
           expected = sys.argv[1].lower()
           data = json.load(open(sys.argv[2], encoding='utf-8'))
@@ -203,16 +207,22 @@ jobs:
           assert data.get('status') == 'PRODUCTION_UPDATED'
           assert all((data.get('jobs') or {}).get(name) == 'success' for name in ('validate', 'deploy', 'smoke_test'))
           PY
+                  evidence_ready=1
+                fi
               else
-                python3 - /tmp/deployment-latest.json <<'PY'
+                if python3 - /tmp/deployment-latest.json <<'PY'; then
           import json, sys
           data = json.load(open(sys.argv[1], encoding='utf-8'))
           assert data.get('status') == 'PRODUCTION_UPDATED'
           assert all((data.get('jobs') or {}).get(name) == 'success' for name in ('validate', 'deploy', 'smoke_test'))
           PY
+                  evidence_ready=1
+                fi
               fi
-              ready=1
-              break
+              if [ "$evidence_ready" = '1' ]; then
+                ready=1
+                break
+              fi
             fi
             sleep 20
           done
