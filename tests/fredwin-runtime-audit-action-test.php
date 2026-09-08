@@ -33,6 +33,13 @@ if (!preg_match('/audit_fredwin_runtime\)\s*\n(?<block>.*?)(?=\n\s*;;)/s', $work
         $errors[] = 'runtime audit must use ownerPid instead of PowerShell automatic PID variable';
     }
 
+    foreach (['LastRunTime', 'NextRunTime'] as $taskDateProperty) {
+        $nullGuard = '\\$null -ne \\$info.' . $taskDateProperty;
+        if (!str_contains($block, $nullGuard)) {
+            $errors[] = 'runtime audit must null-guard scheduled task date before ToString: ' . $taskDateProperty;
+        }
+    }
+
     foreach ([
         'Stop-Process',
         'Stop-Service',
