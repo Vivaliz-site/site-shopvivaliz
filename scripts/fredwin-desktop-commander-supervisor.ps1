@@ -272,7 +272,7 @@ function Install-Task {
     $arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $script + '" -Mode Ensure'
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arguments -WorkingDirectory $Repo
     $startup = New-ScheduledTaskTrigger -AtStartup
-    $watchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)
+    $watchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5) -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 3650)
     $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType S4U -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
     $settings.Hidden = $true
@@ -281,9 +281,9 @@ function Install-Task {
     $guardianArguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $GuardianScript + '"'
     $guardianAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $guardianArguments -WorkingDirectory $Repo
     $guardianStartup = New-ScheduledTaskTrigger -AtStartup
-    $guardianWatchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)
+    $guardianWatchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(15) -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration (New-TimeSpan -Days 3650)
     Register-ScheduledTask -TaskName $GuardianTaskName -Action $guardianAction -Trigger @($guardianStartup,$guardianWatchdog) -Principal $principal -Settings $settings -Description 'Re-enables the official Desktop Commander watchdog if maintenance or a test disables it.' -Force | Out-Null
-    Log ('Scheduled task installed user=' + $user + ' logon=S4U watchdog=1m guardian=1m')
+    Log ('Scheduled task installed user=' + $user + ' logon=S4U watchdog=5m guardian=15m')
     Write-Output 'TASK_INSTALLED=true'
     Write-Output 'GUARDIAN_TASK_INSTALLED=true'
 }
