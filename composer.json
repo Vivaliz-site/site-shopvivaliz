@@ -4,7 +4,7 @@
     "type": "project",
     "license": "proprietary",
     "require": {
-        "php": "^7.4|^8.0",
+        "php": "^8.3",
         "mercadopago/dx-php": "^3.0"
     },
     "require-dev": {
@@ -19,5 +19,10 @@
         "post-install-cmd": [
             "echo 'Mercado Pago SDK instalado com sucesso!'"
         ]
+    },
+    "config": {
+        "platform": {
+            "php": "8.3.6"
+        }
     }
 }
