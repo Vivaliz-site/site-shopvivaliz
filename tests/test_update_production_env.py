@@ -118,3 +118,9 @@ def test_merge_env_sanitizes_malformed_existing_lines_even_without_updates(tmp_p
     assert "symlink ../../shared/.env .env" not in content
     assert "stray-token-without-equals" not in content
     assert stat.S_IMODE(env_file.stat().st_mode) == 0o640
+
+
+def test_master_production_pipeline_runs_env_update_with_privilege() -> None:
+    workflow = SCRIPT.parents[1] / ".github" / "workflows" / "master-production-pipeline.yml"
+    text = workflow.read_text(encoding="utf-8")
+    assert "sudo python3 /tmp/shopvivaliz-update-production-env.py" in text
