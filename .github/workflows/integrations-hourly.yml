@@ -149,26 +149,33 @@ jobs:
           print('failed=', summary.get('failed', 0))
           print('attention=', summary.get('attention', 0))
 
-          olist = None
+          critical_keys = {'olist_tiny', 'mercado_livre', 'mercado_pago', 'melhor_envio'}
+          seen_critical = set()
+          critical_issues = []
           for item in data.get('integrations', []):
-              print(f"{item.get('name')}: {item.get('status')} - {item.get('message')}")
-              if item.get('key') == 'olist_tiny':
-                  olist = item
+              key = str(item.get('key') or '')
+              status = str(item.get('status') or '')
+              print(f"{item.get('name')}: {status} - {item.get('message')}")
+              if key not in critical_keys:
+                  continue
+              seen_critical.add(key)
+              if status != 'connected':
+                  critical_issues.append(f"{key}={status or 'missing_status'}")
 
-          if olist is None:
-              raise SystemExit('Olist/Tiny integration is missing from the central monitor response.')
+          missing_critical = sorted(critical_keys - seen_critical)
+          if missing_critical:
+              critical_issues.extend(f"{key}=missing" for key in missing_critical)
+          if critical_issues:
+              raise SystemExit('Critical integration health failed: ' + ', '.join(sorted(critical_issues)))
 
-          status = str(olist.get('status') or '')
-          message = str(olist.get('message') or '')
-          remediation = str(olist.get('remediation') or '')
-          combined = (message + ' ' + remediation).lower()
-
-          if any(code in combined for code in ('invalid_grant', 'invalid_client', 'unauthorized_client')):
-              raise SystemExit('Olist/Tiny OAuth credentials were revoked or invalidated; reauthorization is required.')
-          if status != 'connected':
-              raise SystemExit('Olist/Tiny is not connected; inspect the Admin integration monitor remediation.')
-          if not data.get('ok', False):
-              raise SystemExit('Integration health is degraded; inspect the Admin dashboard remediation.')
+          optional_attention = [
+              str(item.get('key') or item.get('name') or 'unknown')
+              for item in data.get('integrations', [])
+              if str(item.get('key') or '') not in critical_keys
+              and str(item.get('status') or '') in {'attention', 'not_configured', 'failed'}
+          ]
+          if optional_attention:
+              print('optional_attention=', ','.join(sorted(optional_attention)))
           PY
 
       - name: Upload masked health evidence
