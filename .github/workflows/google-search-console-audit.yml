@@ -13,7 +13,10 @@ on:
       - 'scripts/google_oauth_token_helper.py'
       - 'scripts/lib/google_oauth.py'
       - 'scripts/lib/google_search_console_sitemap.php'
+      - 'scripts/lib/google_search_console_retry.php'
       - 'tests/google-search-console-local-sitemap-test.php'
+      - 'tests/google-search-console-transient-retry-test.php'
+      - 'tests/google-search-console-transient-retry-wiring-test.php'
       - 'tests/google-search-console-workflow-trusted-sitemap-test.php'
       - 'src/Google/OAuthTokenProvider.php'
       - 'src/Google/GoogleApiClient.php'
@@ -66,7 +69,10 @@ jobs:
           php -l scripts/google-cloud-service-enable.php
           php -l scripts/google-search-console-audit.php
           php -l scripts/lib/google_search_console_sitemap.php
+          php -l scripts/lib/google_search_console_retry.php
           php tests/google-search-console-local-sitemap-test.php
+          php tests/google-search-console-transient-retry-test.php
+          php tests/google-search-console-transient-retry-wiring-test.php
           php tests/google-search-console-workflow-trusted-sitemap-test.php
           php -l scripts/google-search-console-sitemap-cleanup.php
           php -l scripts/google-api-health.php
