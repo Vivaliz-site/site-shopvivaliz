@@ -22,7 +22,7 @@ GUARDIAN_TIMER='shopvivaliz-desktop-commander-guardian.timer'
 LEGACY_SERVICE='desktop-commander.service'
 LEGACY_UNIT_TARGET='/etc/systemd/system/desktop-commander.service'
 TARGET_USER='ubuntu'
-CANONICAL_SIGNATURE='@wonderwhy-er/desktop-commander@0.2.47 remote --persist-session'
+CANONICAL_SIGNATURE='@wonderwhy-er/desktop-commander@0.2.48 remote --persist-session'
 
 kill_tree() {
   local root="$1" child

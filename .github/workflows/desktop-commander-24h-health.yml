@@ -33,6 +33,7 @@ on:
       - ".github/workflows/desktopkocepsv-desktop-commander-action.yml"
       - "tests/desktop-commander-health-restart-contract-test.php"
       - "tests/fredwin-desktop-commander-stale-transport-contract-test.php"
+      - "tests/vm-desktop-commander-version-contract-test.php"
       - "tests/vm-desktop-commander-auth-classification-contract-test.php"
       - "tests/fredwin-desktop-commander-duplicate-owner-contract-test.php"
       - "tests/windows-desktop-commander-pre-mutex-fastpath-contract-test.php"
@@ -72,6 +73,7 @@ on:
       - ".github/workflows/desktopkocepsv-desktop-commander-action.yml"
       - "tests/desktop-commander-health-restart-contract-test.php"
       - "tests/fredwin-desktop-commander-stale-transport-contract-test.php"
+      - "tests/vm-desktop-commander-version-contract-test.php"
       - "tests/vm-desktop-commander-auth-classification-contract-test.php"
       - "tests/fredwin-desktop-commander-duplicate-owner-contract-test.php"
       - "tests/windows-desktop-commander-pre-mutex-fastpath-contract-test.php"
@@ -97,6 +99,7 @@ jobs:
           php tests/desktop-commander-persist-session-contract-test.php
           php tests/desktop-commander-health-restart-contract-test.php
           php tests/fredwin-desktop-commander-stale-transport-contract-test.php
+          php tests/vm-desktop-commander-version-contract-test.php
           php tests/vm-desktop-commander-auth-classification-contract-test.php
           php tests/fredwin-desktop-commander-duplicate-owner-contract-test.php
           php tests/windows-desktop-commander-pre-mutex-fastpath-contract-test.php
@@ -314,7 +317,7 @@ jobs:
           while IFS= read -r line; do
             test -z "$line" && continue
             case "$line" in
-              *"@wonderwhy-er/desktop-commander@0.2.47"*" remote "*"--persist-session"*) canonical=$((canonical+1));;
+              *"@wonderwhy-er/desktop-commander@0.2.48"*" remote "*"--persist-session"*) canonical=$((canonical+1));;
               *) noncanonical=$((noncanonical+1));;
             esac
           done < <(pgrep -af '[n]pm exec @wonderwhy-er/desktop-commander@.* remote' 2>/dev/null || true)
