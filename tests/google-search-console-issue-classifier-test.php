@@ -21,12 +21,31 @@ gsc_classifier_assert([
     'googleCanonical' => 'https://shopvivaliz.com.br/produto/a',
     'userCanonical' => 'https://shopvivaliz.com.br/produto/a',
 ], [], 'NEUTRAL with healthy technical signals must not fail the audit');
+
 gsc_classifier_assert([
     'verdict' => 'NEUTRAL',
     'indexingState' => 'INDEXING_STATE_UNSPECIFIED',
     'pageFetchState' => 'PAGE_FETCH_STATE_UNSPECIFIED',
     'robotsTxtState' => 'ROBOTS_TXT_STATE_UNSPECIFIED',
 ], [], 'Unspecified pre-crawl states must remain observations, not technical failures');
+
+gsc_classifier_assert([
+    'verdict' => 'NEUTRAL',
+    'indexingState' => 'INDEXING_ALLOWED',
+    'pageFetchState' => 'SUCCESSFUL',
+    'robotsTxtState' => 'ALLOWED',
+    'googleCanonical' => 'https://shopvivaliz.com.br/produto/massa-f12-para-calafetar-madeira-400g-castanho-viapol',
+    'userCanonical' => 'https://shopvivaliz.com.br/produto/massa-f12-para-calafetar-madeira-400g-castanho-viapol-castanhodba',
+], [], 'A proven historical canonical that now redirects to the user canonical must not remain a technical failure');
+
+gsc_classifier_assert([
+    'verdict' => 'NEUTRAL',
+    'indexingState' => 'INDEXING_ALLOWED',
+    'pageFetchState' => 'SUCCESSFUL',
+    'robotsTxtState' => 'ALLOWED',
+    'googleCanonical' => 'https://www.shopvivaliz.com.br/produto/vaso-antique-44-70l-cimento-queimado-japi-546',
+    'userCanonical' => 'https://shopvivaliz.com.br/produto/vaso-antique-44-70l-cimento-queimado-japi-jvaqcq44',
+], [], 'A proven www historical canonical that now redirects to the current product must not fail');
 
 gsc_classifier_assert([
     'verdict' => 'FAIL',
