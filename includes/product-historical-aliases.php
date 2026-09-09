@@ -15,8 +15,10 @@ function sv_product_historical_alias_target(string $requestedSlug): ?string
         : strtolower($normalized);
 
     $aliases = [
+        'massa-f12-para-calafetar-madeira-400g-castanho-viapol'
+            => 'massa-f12-para-calafetar-madeira-400g-castanho-viapol-castanhodba',
         'massa-f12-para-calafetar-madeira-400g-mogno-viapol-411'
-            => 'massa-f12-de-calafetar-e-correção-madeira-viapol-400g-mogno-v0210691',
+            => rawurldecode('massa-f12-de-calafetar-e-corre%C3%A7%C3%A3o-madeira-viapol-400g-mogno-v0210691'),
         'casinha-cachorro-52x41x40-astra-pet-azul-504'
             => 'casinha-cachorro-52x41x40-astra-pet-azul-astrapetcasinhacachorroazul',
         'vaso-antique-44-70l-cimento-queimado-japi-546'
