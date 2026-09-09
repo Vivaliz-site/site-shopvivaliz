@@ -413,26 +413,7 @@ try {
             $googleCanonical = trim((string)($index['googleCanonical'] ?? ''));
             $userCanonical = trim((string)($index['userCanonical'] ?? ''));
 
-            $issues = [];
-            if ($verdict !== '' && $verdict !== 'PASS') {
-                $issues[] = 'INDEX_VERDICT_' . preg_replace('/[^A-Z0-9_]+/', '_', strtoupper($verdict));
-            }
-            if ($indexingState !== '' && $indexingState !== 'INDEXING_ALLOWED') {
-                $issues[] = 'INDEXING_NOT_ALLOWED';
-            }
-            if ($pageFetchState !== '' && $pageFetchState !== 'SUCCESSFUL') {
-                $issues[] = 'PAGE_FETCH_' . preg_replace('/[^A-Z0-9_]+/', '_', strtoupper($pageFetchState));
-            }
-            if ($robotsTxtState !== '' && $robotsTxtState !== 'ALLOWED') {
-                $issues[] = 'ROBOTS_' . preg_replace('/[^A-Z0-9_]+/', '_', strtoupper($robotsTxtState));
-            }
-            if (
-                $googleCanonical !== ''
-                && $userCanonical !== ''
-                && gsc_normalize_url($googleCanonical) !== gsc_normalize_url($userCanonical)
-            ) {
-                $issues[] = 'CANONICAL_MISMATCH';
-            }
+            $issues = gsc_classify_index_issues($index);
 
             $entry = [
                 'url' => $url,
