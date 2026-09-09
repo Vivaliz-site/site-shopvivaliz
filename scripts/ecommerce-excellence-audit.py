@@ -144,7 +144,7 @@ def validate_static(files: list[pathlib.Path] | None = None, *, scope: str = "fu
         re.I,
     )
     secret_literal_pattern = re.compile(
-        r"(?:ghp_|github_pat_|sk-proj-|AKIA[0-9A-Z]{16}|-----BEGIN (?:RSA |OPENSSH )?PRIVATE KEY-----)"
+        r"(?:ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{30,}|sk-proj-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN (?:RSA |OPENSSH )?PRIVATE KEY-----)"
     )
 
     for path in files:
