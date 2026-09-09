@@ -271,19 +271,20 @@ function Install-Task {
     $script = Join-Path $Repo 'scripts\fredwin-desktop-commander-supervisor.ps1'
     $arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $script + '" -Mode Ensure'
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arguments -WorkingDirectory $Repo
-    $startup = New-ScheduledTaskTrigger -AtStartup
+    $logon = New-ScheduledTaskTrigger -AtLogOn -User $user
     $watchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5) -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 3650)
-    $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType S4U -RunLevel Highest
+    $interactivePrincipal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Highest
+    $guardianPrincipal = New-ScheduledTaskPrincipal -UserId $user -LogonType S4U -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
     $settings.Hidden = $true
     if (-not (Test-Path -LiteralPath $GuardianScript)) { throw 'Desktop Commander task guardian script missing' }
-    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($startup,$watchdog) -Principal $principal -Settings $settings -Description 'Keeps official Remote Desktop Commander online under the persistent user profile without interactive startup.' -Force | Out-Null
+    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($logon,$watchdog) -Principal $interactivePrincipal -Settings $settings -Description 'Keeps official Remote Desktop Commander online in the logged-in user session.' -Force | Out-Null
     $guardianArguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $GuardianScript + '"'
     $guardianAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $guardianArguments -WorkingDirectory $Repo
     $guardianStartup = New-ScheduledTaskTrigger -AtStartup
     $guardianWatchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(15) -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration (New-TimeSpan -Days 3650)
-    Register-ScheduledTask -TaskName $GuardianTaskName -Action $guardianAction -Trigger @($guardianStartup,$guardianWatchdog) -Principal $principal -Settings $settings -Description 'Re-enables the official Desktop Commander watchdog if maintenance or a test disables it.' -Force | Out-Null
-    Log ('Scheduled task installed user=' + $user + ' logon=S4U watchdog=5m guardian=15m')
+    Register-ScheduledTask -TaskName $GuardianTaskName -Action $guardianAction -Trigger @($guardianStartup,$guardianWatchdog) -Principal $guardianPrincipal -Settings $settings -Description 'Re-enables the official Desktop Commander watchdog if maintenance or a test disables it.' -Force | Out-Null
+    Log ('Scheduled task installed user=' + $user + ' logon=Interactive watchdog=5m guardian=S4U/15m')
     Write-Output 'TASK_INSTALLED=true'
     Write-Output 'GUARDIAN_TASK_INSTALLED=true'
 }
