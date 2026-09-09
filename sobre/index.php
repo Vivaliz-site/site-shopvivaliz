@@ -5,14 +5,17 @@ $svNavCurrent = 'sobre';
 $company = @include __DIR__ . '/../config/company-profile.php';
 $fantasyName = is_array($company) ? (string)($company['fantasy_name'] ?? 'ShopVivaliz') : 'ShopVivaliz';
 $email = is_array($company) ? (string)($company['email'] ?? 'atendimento@shopvivaliz.com.br') : 'atendimento@shopvivaliz.com.br';
+$svSeoTitle = 'Quem somos | ' . $fantasyName;
+$svSeoDescription = 'Conheça a ShopVivaliz: loja online de utilidades, decoração, ferramentas e soluções para casa, com atendimento direto e compra segura.';
+$svSeoImage = 'https://shopvivaliz.com.br/images/logo-vivaliz-square-v2.png';
+$svSeoUrl = '/sobre/';
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Conheça a ShopVivaliz: loja online de utilidades, decoração, ferramentas e soluções para casa, com atendimento direto e compra segura.">
-    <link rel="canonical" href="https://shopvivaliz.com.br/sobre/">
+    <?php include __DIR__ . '/../includes/seo-meta.php'; ?>
     <title>Quem somos | <?= htmlspecialchars($fantasyName, ENT_QUOTES, 'UTF-8') ?></title>
     <link rel="stylesheet" href="/css/responsive.css">
     <style>
@@ -35,7 +38,7 @@ $email = is_array($company) ? (string)($company['email'] ?? 'atendimento@shopviv
         </div>
       </div>
       <div class="sv-about-logo" aria-label="Marca ShopVivaliz">
-        <img src="/images/logo-vivaliz.png" alt="ShopVivaliz" onerror="this.src='/images/logo-vivaliz-square.png'">
+        <img src="/images/logo-vivaliz.png" alt="ShopVivaliz" onerror="this.src='/images/logo-vivaliz-square-v2.png'">
       </div>
     </section>
     <section class="sv-about-grid" aria-label="Diferenciais da ShopVivaliz">

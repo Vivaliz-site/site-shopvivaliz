@@ -161,7 +161,7 @@ jobs:
           rm -f "$release/config/runtime-secrets.php"
           ln -s '../../../shared/runtime-secrets.php' "$release/config/runtime-secrets.php"
           php -l "$release/sitemap.php" >/dev/null
-          sudo a2enmod rewrite >/dev/null
+          sudo a2enmod rewrite headers >/dev/null
           sudo apache2ctl configtest
 
           catalog_service_changed=true

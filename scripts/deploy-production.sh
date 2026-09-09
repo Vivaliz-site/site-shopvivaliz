@@ -607,7 +607,7 @@ if ! restart_runtime_services; then
 fi
 
 # SEO routing invariant: friendly canonical URLs require mod_rewrite.
-if ! sudo a2enmod rewrite >/dev/null || ! sudo apache2ctl configtest; then
+if ! sudo a2enmod rewrite headers >/dev/null || ! sudo apache2ctl configtest; then
   rollback_to "$ACTIVE_RELEASE"
   write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "Apache SEO routing preflight failed"
   exit 1
