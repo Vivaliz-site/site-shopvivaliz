@@ -27,6 +27,7 @@ if (is_file($constants)) {
 $sitemapHelper = $root . '/scripts/lib/google_search_console_sitemap.php';
 require_once $sitemapHelper;
 require_once $root . '/includes/google-search-console-issue-classifier.php';
+require_once $root . '/scripts/lib/google_search_console_retry.php';
 
 
 $autoload = $root . '/vendor/autoload.php';
@@ -385,14 +386,16 @@ try {
         if (!gsc_is_shopvivaliz_url($url, $baseHost)) {
             continue;
         }
-        $response = $api->request(
-            'POST',
-            'https://searchconsole.googleapis.com/v1/urlInspection/index:inspect',
-            [
-                'inspectionUrl' => $url,
-                'siteUrl' => $siteUrl,
-                'languageCode' => 'pt-BR',
-            ]
+        $response = gsc_url_inspection_request_with_retry(
+            static fn(): array => $api->request(
+                'POST',
+                'https://searchconsole.googleapis.com/v1/urlInspection/index:inspect',
+                [
+                    'inspectionUrl' => $url,
+                    'siteUrl' => $siteUrl,
+                    'languageCode' => 'pt-BR',
+                ]
+            )
         );
 
         if ($response['status'] < 200 || $response['status'] >= 300 || !is_array($response['body'])) {
