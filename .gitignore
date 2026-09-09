@@ -193,3 +193,6 @@ scratch/*.jpg
 
 # Isolated agent worktrees
 .worktrees/
+
+# Editor extension packages are local tooling, never production artifacts.
+*.vsix
