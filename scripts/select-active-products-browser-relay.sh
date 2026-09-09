@@ -12,8 +12,7 @@ probe_relay() {
   local expected_environment="$2"
   local health rc
 
-  set +e
-  health="$("$SSH_BIN" \
+  if ! health="$("$SSH_BIN" \
     -o BatchMode=yes \
     -o StrictHostKeyChecking=yes \
     -o "UserKnownHostsFile=$KNOWN_HOSTS_FILE" \
@@ -21,11 +20,9 @@ probe_relay() {
     -i "$IDENTITY_FILE" \
     "$VM_USER@$VM_HOST" \
     "curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:$port/health" \
-    2>/dev/null)"
-  rc=$?
-  set -e
-
-  [[ "$rc" -eq 0 ]] || return 1
+    2>/dev/null)"; then
+    return 1
+  fi
   EXPECTED_ENVIRONMENT="$expected_environment" python3 -c '
 import json, os, sys
 payload = json.load(sys.stdin)
@@ -35,15 +32,14 @@ assert payload.get("mcp_version") == "1.0.0"
 ' <<<"$health" >/dev/null 2>&1
 }
 
+selected_port=""
 if probe_relay 5557 fred-win; then
-  printf '%s\n' 5557
-  exit 0
+  selected_port=5557
+elif probe_relay 5558 desktop-kocepsv; then
+  selected_port=5558
+else
+  echo 'No healthy allowlisted Windows browser relay is available' >&2
+  exit 7
 fi
 
-if probe_relay 5558 desktop-kocepsv; then
-  printf '%s\n' 5558
-  exit 0
-fi
-
-echo 'No healthy allowlisted Windows browser relay is available' >&2
-exit 7
+printf '%s\n' "$selected_port"
