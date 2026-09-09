@@ -26,6 +26,7 @@ if (is_file($constants)) {
 }
 $sitemapHelper = $root . '/scripts/lib/google_search_console_sitemap.php';
 require_once $sitemapHelper;
+require_once $root . '/includes/google-search-console-issue-classifier.php';
 
 
 $autoload = $root . '/vendor/autoload.php';
