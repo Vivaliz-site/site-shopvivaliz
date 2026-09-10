@@ -23,6 +23,10 @@ function sv_product_historical_alias_target(string $requestedSlug): ?string
             => 'casinha-cachorro-52x41x40-astra-pet-azul-astrapetcasinhacachorroazul',
         'vaso-antique-44-70l-cimento-queimado-japi-546'
             => 'vaso-antique-44-70l-cimento-queimado-japi-jvaqcq44',
+        'vaso-antique-55-75l-macchiato-japi-brown'
+            => 'vaso-antique-55-75l-macchiato-japi-jvaqma55',
+        'vaso-decor-plantas-cilin-decore-34-28l-aco-corten-japi-168'
+            => rawurldecode('vaso-decore-34-28l-a%C3%A7o-corten-japi-jvcdac34'),
     ];
 
     return $aliases[$normalized] ?? null;
