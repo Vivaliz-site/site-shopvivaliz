@@ -90,6 +90,7 @@ def image(p):
  if not a['authenticated']:return {'authenticated':False,'path':a['path'],'status':s,'navigation_slow':slow}
  base=p.evaluate("""()=>({wrap:document.querySelectorAll('.ais-wrap').length>0,form:document.querySelectorAll('.ais-form form[method=get]').length>0,target:!!document.querySelector('#target_channel'),provider:!!document.querySelector('#provider'),model:!!document.querySelector('#model'),pageSize:!!document.querySelector('#page_size'),overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth)})
 """)
+ base['debug_url']=p.url;base['debug_h2']=p.locator('h2').all_inner_texts()[:8];base['debug_forms']=p.locator('form').evaluate_all("els=>els.map(e=>({method:e.method,action:e.action,html:e.outerHTML.slice(0,240)}))");base['debug_alerts']=p.locator('.ais-alert').all_inner_texts()[:8]
  ps,pslow=nav(p,'/admin/ai-image-studio/admin_dashboard.php?preview=1&target_channel=site&provider=openai&model=gpt-image-1&page_size=25',3200);slow=slow or pslow;pa=auth(p)
  try:p.wait_for_selector('.ais-preview-list,.ais-alert.note',timeout=12000)
  except T:pass
@@ -106,7 +107,7 @@ def image(p):
    cleared=p.evaluate("()=>[...document.querySelectorAll('[data-product-check]')].every(x=>!x.checked)&&!!document.querySelector('#ais-submit')?.disabled")
    selection=bool(picked and cleared)
  previewReady=bool((preview['checks']>0 and preview['list'] and preview['selectAll'] and preview['clearAll'] and preview['submit'] and selection) or preview['emptyNote'])
- return {'authenticated':True,'status':s,'navigation_slow':slow,'wrap':base['wrap'],'form':base['form'],'fields':all((base['target'],base['provider'],base['model'],base['pageSize'])),'preview_authenticated':pa.get('authenticated',False),'preview_status':ps,'preview_items':preview['items'],'preview_checks':preview['checks'],'preview_ready':previewReady,'selection_local':selection,'overflow':max(base['overflow'],preview['overflow'])}
+ return {'authenticated':True,'status':s,'navigation_slow':slow,'wrap':base['wrap'],'form':base['form'],'fields':all((base['target'],base['provider'],base['model'],base['pageSize'])),'preview_authenticated':pa.get('authenticated',False),'preview_status':ps,'preview_items':preview['items'],'preview_checks':preview['checks'],'preview_ready':previewReady,'selection_local':selection,'overflow':max(base['overflow'],preview['overflow']),'debug_base_url':base['debug_url'],'debug_base_h2':base['debug_h2'],'debug_base_forms':base['debug_forms'],'debug_base_alerts':base['debug_alerts'],'debug_preview_url':p.url,'debug_preview_h2':p.locator('h2').all_inner_texts()[:8],'debug_preview_alerts':p.locator('.ais-alert').all_inner_texts()[:8]}
 def main():
  ch=chrome();sid=os.environ.get('SV_ADMIN_SESSION_ID','');sn=os.environ.get('SV_ADMIN_SESSION_NAME','PHPSESSID');r={'schema':4,'started_at':ts(),'login':{},'session_source':'ephemeral-audit-session','authenticated_profile':None,'home':{},'catalog':{},'image':{},'blocked_mutations':[],'errors':[]}
  if not sid or not sn:emit({**r,'overall':False,'failures':['ephemeral_session_missing'],'finished_at':ts()},8)
