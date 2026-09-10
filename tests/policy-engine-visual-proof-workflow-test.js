@@ -31,3 +31,10 @@ for (const path of backendOnly) {
 }
 
 assert(workflow.includes("re.match(r'^(?:public|includes|templates|views|pages)/'"), 'Visual scope preflight must restrict visual paths');
+
+assert(workflow.includes('storefront-browser-audit.yml/runs'), 'Policy workflow must discover Storefront Browser Audit runs dynamically');
+assert(workflow.includes('POLICY_HEAD_SHA'), 'Policy workflow must bind visual proof to the exact PR head SHA');
+assert(workflow.includes('head_sha'), 'Policy workflow must query browser evidence by head SHA');
+assert(workflow.includes('for attempt in'), 'Policy workflow must wait for concurrently generated browser evidence');
+assert(workflow.includes("Path('visual-proof.json').write_text"), 'Policy workflow must write fresh runtime visual-proof metadata');
+assert(workflow.includes('visual_proof_head_sha'), 'Policy workflow must record the exact visual proof head SHA');
