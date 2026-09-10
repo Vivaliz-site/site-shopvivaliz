@@ -88,25 +88,13 @@ def catalog(p):
 def image(p):
  s,slow=nav(p,'/admin/ai-image-studio/admin_dashboard.php',2200);a=auth(p)
  if not a['authenticated']:return {'authenticated':False,'path':a['path'],'status':s,'navigation_slow':slow}
- base=p.evaluate("""()=>({wrap:document.querySelectorAll('.ais-wrap').length>0,form:document.querySelectorAll('.ais-form form[method=get]').length>0,target:!!document.querySelector('#target_channel'),provider:!!document.querySelector('#provider'),model:!!document.querySelector('#model'),pageSize:!!document.querySelector('#page_size'),overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth)})
-""")
- ps,pslow=nav(p,'/admin/ai-image-studio/admin_dashboard.php?preview=1&target_channel=site&provider=openai&model=gpt-image-1&page_size=25',3200);slow=slow or pslow;pa=auth(p)
- try:p.wait_for_selector('.ais-preview-list,.ais-alert.note',timeout=12000)
+ try:p.wait_for_selector('#iv-channel',timeout=12000)
  except T:pass
- preview=p.evaluate("""()=>({items:document.querySelectorAll('.ais-preview-item').length,checks:document.querySelectorAll('[data-product-check]').length,list:document.querySelectorAll('.ais-preview-list').length>0,emptyNote:[...document.querySelectorAll('.ais-alert.note')].some(n=>/nenhum produto pendente/i.test(n.textContent||'')),selectAll:!!document.querySelector('#ais-select-all'),clearAll:!!document.querySelector('#ais-clear-all'),submit:!!document.querySelector('#ais-submit'),overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth)})
-""")
- selection=True
- if preview['checks']>0:
-  selection=False
-  sa=p.locator('#ais-select-all');ca=p.locator('#ais-clear-all')
-  if sa.count() and ca.count():
-   sa.first.click();p.wait_for_timeout(160)
-   picked=p.evaluate("()=>[...document.querySelectorAll('[data-product-check]')].every(x=>x.checked)&&!document.querySelector('#ais-submit')?.disabled")
-   ca.first.click();p.wait_for_timeout(160)
-   cleared=p.evaluate("()=>[...document.querySelectorAll('[data-product-check]')].every(x=>!x.checked)&&!!document.querySelector('#ais-submit')?.disabled")
-   selection=bool(picked and cleared)
- previewReady=bool((preview['checks']>0 and preview['list'] and preview['selectAll'] and preview['clearAll'] and preview['submit'] and selection) or preview['emptyNote'])
- return {'authenticated':True,'status':s,'navigation_slow':slow,'wrap':base['wrap'],'form':base['form'],'fields':all((base['target'],base['provider'],base['model'],base['pageSize'])),'preview_authenticated':pa.get('authenticated',False),'preview_status':ps,'preview_items':preview['items'],'preview_checks':preview['checks'],'preview_ready':previewReady,'selection_local':selection,'overflow':max(base['overflow'],preview['overflow'])}
+ try:p.wait_for_function("()=>{let n=document.querySelector('#iv-list');return n&&!/Carregando produtos/i.test(n.textContent||'')}",timeout=16000)
+ except T:pass
+ x=p.evaluate("""()=>{let ch=document.querySelector('#iv-channel'),pr=document.querySelector('#iv-provider'),model=document.querySelector('#iv-model'),lim=document.querySelector('#iv-limit'),list=document.querySelector('#iv-list'),run=document.querySelector('#iv-run'),text=list?.textContent||'';return{wrap:document.querySelectorAll('.ais-wrap').length>0,workflow:!!document.querySelector('.iv-panel'),fields:!!(ch&&pr&&model&&lim),channel_options:ch?.options?.length||0,provider_options:pr?.options?.length||0,list:!!list,items:document.querySelectorAll('#iv-list .iv-item').length,loading:/Carregando produtos/i.test(text),error:/erro|falha|indisponível/i.test(text),run:!!run,run_initially_disabled:!!run?.disabled,overflow:Math.max(0,document.documentElement.scrollWidth-innerWidth)}}""")
+ ready=bool(x['list'] and not x['loading'] and not x['error'])
+ return {'authenticated':True,'status':s,'navigation_slow':slow,'wrap':x['wrap'],'workflow':x['workflow'],'fields':x['fields'],'channel_options':x['channel_options'],'provider_options':x['provider_options'],'candidates_ready':ready,'candidate_items':x['items'],'run_control':x['run'],'selection_local':x['run_initially_disabled'],'overflow':x['overflow']}
 def main():
  ch=chrome();sid=os.environ.get('SV_ADMIN_SESSION_ID','');sn=os.environ.get('SV_ADMIN_SESSION_NAME','PHPSESSID');r={'schema':4,'started_at':ts(),'login':{},'session_source':'ephemeral-audit-session','authenticated_profile':None,'home':{},'catalog':{},'image':{},'blocked_mutations':[],'errors':[]}
  if not sid or not sn:emit({**r,'overall':False,'failures':['ephemeral_session_missing'],'finished_at':ts()},8)
@@ -123,7 +111,7 @@ def main():
     try:active.close()
     except:pass
    c.close();b.close()
- l=r['login'];h=r['home'];c=r['catalog'];m=r['image'];mn=h.get('mobile_nav',{});nb=h.get('navbar') or {};checks={'login_google':l.get('google_visible') and l.get('google_canonical'),'authenticated_profile':bool(r['authenticated_profile']),'admin_load':h.get('status')==200 and not h.get('navigation_slow',True),'home':all((h.get('authenticated'),h.get('details',0)>0,h.get('opened'),h.get('closed'),h.get('saved'),h.get('actions'),h.get('dock'),h.get('padding',0)>=70,h.get('overflow',999)<=4)),'admin_mobile_nav':all((mn.get('flex_direction')=='row',mn.get('menu_transparent'),mn.get('nav_dark'),mn.get('borderless'),mn.get('shadowless'),mn.get('height_reasonable'),mn.get('main_not_compressed'),mn.get('css_cache_busted'))),'navbar_mobile':all((nb.get('menuFlex')=='row',nb.get('menuBg') in ('rgba(0, 0, 0, 0)','transparent'),nb.get('menuShadow')=='none',nb.get('navBg')=='rgb(17, 24, 39)',nb.get('navShadow')=='none',0<nb.get('height',999)<=60,nb.get('viewportWidth')==390,nb.get('contentWidth',0)>=360)),'catalog':all((c.get('authenticated'),c.get('sort'),c.get('options'),c.get('product'),c.get('urgent'),c.get('overflow',999)<=4)),'image':all((m.get('authenticated'),m.get('status')==200,m.get('wrap'),m.get('form'),m.get('fields'),m.get('preview_authenticated'),m.get('preview_status')==200,m.get('preview_ready'),m.get('selection_local'),m.get('overflow',999)<=4)),'errors':not r['errors']};r['checks']=checks;r['failures']=[k for k,v in checks.items() if not v];r['overall']=not r['failures'];r['finished_at']=ts();emit(r,0 if r['overall'] else 7)
+ l=r['login'];h=r['home'];c=r['catalog'];m=r['image'];mn=h.get('mobile_nav',{});nb=h.get('navbar') or {};checks={'login_google':l.get('google_visible') and l.get('google_canonical'),'authenticated_profile':bool(r['authenticated_profile']),'admin_load':h.get('status')==200 and not h.get('navigation_slow',True),'home':all((h.get('authenticated'),h.get('details',0)>0,h.get('opened'),h.get('closed'),h.get('saved'),h.get('actions'),h.get('dock'),h.get('padding',0)>=70,h.get('overflow',999)<=4)),'admin_mobile_nav':all((mn.get('flex_direction')=='row',mn.get('menu_transparent'),mn.get('nav_dark'),mn.get('borderless'),mn.get('shadowless'),mn.get('height_reasonable'),mn.get('main_not_compressed'),mn.get('css_cache_busted'))),'navbar_mobile':all((nb.get('menuFlex')=='row',nb.get('menuBg') in ('rgba(0, 0, 0, 0)','transparent'),nb.get('menuShadow')=='none',nb.get('navBg')=='rgb(17, 24, 39)',nb.get('navShadow')=='none',0<nb.get('height',999)<=60,nb.get('viewportWidth')==390,nb.get('contentWidth',0)>=360)),'catalog':all((c.get('authenticated'),c.get('sort'),c.get('options'),c.get('product'),c.get('urgent'),c.get('overflow',999)<=4)),'image':all((m.get('authenticated'),m.get('status')==200,m.get('wrap'),m.get('workflow'),m.get('fields'),m.get('channel_options',0)>0,m.get('provider_options',0)>0,m.get('candidates_ready'),m.get('run_control'),m.get('selection_local'),m.get('overflow',999)<=4)),'errors':not r['errors']};r['checks']=checks;r['failures']=[k for k,v in checks.items() if not v];r['overall']=not r['failures'];r['finished_at']=ts();emit(r,0 if r['overall'] else 7)
 if __name__=='__main__':
  try:main()
  except SystemExit:raise

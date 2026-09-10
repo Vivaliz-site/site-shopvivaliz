@@ -63,6 +63,7 @@ jobs:
           test "$GITHUB_REPOSITORY" = 'Vivaliz-site/site-shopvivaliz'
           test "$GITHUB_ACTOR" = 'fredmourao-ai'
           python3 -m py_compile tests/fredwin-admin-mobile-smoke.py
+          php tests/fredwin-image-studio-modern-smoke-regression.php
           grep -Fq "MUTATING_METHODS={'POST','PUT','PATCH','DELETE'}" tests/fredwin-admin-mobile-smoke.py
           grep -Fq 'service_workers="block"' tests/fredwin-admin-mobile-smoke.py
           grep -Fq 'SV_ADMIN_SESSION_ID' tests/fredwin-admin-mobile-smoke.py
