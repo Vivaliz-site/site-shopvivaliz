@@ -25,7 +25,7 @@ foreach ([
 // fine while the device showed offline server-side).
 $health = (string) file_get_contents($root . '/.github/workflows/desktop-commander-24h-health.yml');
 if ($health === '') { fwrite(STDERR, "missing health workflow\n"); exit(1); }
-if (!preg_match('/def win_healthy\(values\):.*?\n\s*\)\n/s', $health, $match)) {
+if (!preg_match('/def win_healthy\([^)]*\):.*?\n\s*\)\n/s', $health, $match)) {
     fwrite(STDERR, "could not locate win_healthy() body\n");
     exit(1);
 }
