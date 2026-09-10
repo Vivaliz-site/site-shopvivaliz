@@ -57,6 +57,7 @@ jobs:
           bash tests/apache-security-headers-module-regression.sh
           php tests/sobre-open-graph-regression.php
           bash tests/repository-editor-artifacts-regression.sh
+          bash tests/master-production-runtime-restart-regression.sh
           bash tests/catalog-single-mobile-nav-regression.sh
           bash tests/product-modal-image-regression.sh
           bash -n scripts/deploy-production.sh
