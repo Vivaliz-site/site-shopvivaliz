@@ -42,4 +42,10 @@ foreach ($iterator as $file) {
     }
 }
 
+$loginSource = file_get_contents($root . '/auth/login.php');
+if (!is_string($loginSource) || str_contains($loginSource, '/auth/google-mock-login.php')) {
+    fwrite(STDERR, "FAIL: login still references forbidden mock authentication route\n");
+    exit(1);
+}
+
 echo "no-public-mock-auth: ok\n";

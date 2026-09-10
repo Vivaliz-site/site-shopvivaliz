@@ -40,6 +40,8 @@ jobs:
           php tests/nondeploy-release-wait-cost-guard-test.php
           php tests/runtime-audit-env-permissions-test.php
           php tests/fredwin-runtime-audit-action-test.php
+          php tests/no-public-mock-auth-test.php
+          php tests/mercadopago-legacy-success-route-regression.php
           php scripts/quality/validate-asset-manifest.php
           python3 -m py_compile scripts/seo-integrity-audit.py
           python3 tests/test_ecommerce_excellence_credential_literals.py
