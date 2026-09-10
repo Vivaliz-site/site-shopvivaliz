@@ -211,26 +211,37 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          POLICY_HEAD_SHA: ${{ github.event.pull_request.head.sha || inputs.head_sha }}
         run: |
           set -Eeuo pipefail
-          eval "$(python3 - <<'PY'
-          import json, shlex
-          from pathlib import Path
-          data = json.loads(Path('visual-proof.json').read_text(encoding='utf-8'))
-          evidence = data.get('evidence') or {}
-          required = ('workflow_run', 'workflow_artifact_id', 'workflow_artifact_name', 'workflow_artifact_digest')
-          missing = [key for key in required if not evidence.get(key)]
-          if missing:
-              raise SystemExit('visual proof GitHub evidence missing: ' + ','.join(missing))
-          for key, value in {
-              'VISUAL_RUN_ID': evidence['workflow_run'],
-              'VISUAL_ARTIFACT_ID': evidence['workflow_artifact_id'],
-              'VISUAL_ARTIFACT_NAME': evidence['workflow_artifact_name'],
-              'VISUAL_ARTIFACT_DIGEST': evidence['workflow_artifact_digest'],
-          }.items():
-              print(f'{key}={shlex.quote(str(value))}')
-          PY
-          )"
+          VISUAL_RUN_ID=''
+          VISUAL_RUN_ATTEMPT=''
+          VISUAL_ARTIFACT_ID=''
+          VISUAL_ARTIFACT_NAME=''
+          VISUAL_ARTIFACT_DIGEST=''
+          for attempt in $(seq 1 24); do
+            runs="$(gh api -X GET "repos/$GH_REPO/actions/workflows/storefront-browser-audit.yml/runs"               -f event=pull_request -f head_sha="$POLICY_HEAD_SHA" -f status=success -f per_page=20)"
+            VISUAL_RUN_ID="$(jq -r --arg sha "$POLICY_HEAD_SHA"               '[.workflow_runs[] | select(.head_sha == $sha and .conclusion == "success")] | sort_by(.created_at) | last | .id // empty' <<<"$runs")"
+            if [[ -n "$VISUAL_RUN_ID" ]]; then
+              run_meta="$(gh api "repos/$GH_REPO/actions/runs/$VISUAL_RUN_ID")"
+              test "$(jq -r '.head_sha // empty' <<<"$run_meta")" = "$POLICY_HEAD_SHA"
+              VISUAL_RUN_ATTEMPT="$(jq -r '.run_attempt // empty' <<<"$run_meta")"
+              VISUAL_ARTIFACT_NAME="storefront-browser-audit-${VISUAL_RUN_ID}-${VISUAL_RUN_ATTEMPT}"
+              artifacts="$(gh api -X GET "repos/$GH_REPO/actions/runs/$VISUAL_RUN_ID/artifacts" -f per_page=100)"
+              VISUAL_ARTIFACT_ID="$(jq -r --arg name "$VISUAL_ARTIFACT_NAME"                 '[.artifacts[] | select(.name == $name and .expired == false)] | last | .id // empty' <<<"$artifacts")"
+              VISUAL_ARTIFACT_DIGEST="$(jq -r --arg name "$VISUAL_ARTIFACT_NAME"                 '[.artifacts[] | select(.name == $name and .expired == false)] | last | .digest // empty' <<<"$artifacts")"
+              if [[ -n "$VISUAL_ARTIFACT_ID" && -n "$VISUAL_ARTIFACT_DIGEST" ]]; then
+                break
+              fi
+            fi
+            sleep 5
+          done
+          test -n "$VISUAL_RUN_ID"
+          test -n "$VISUAL_RUN_ATTEMPT"
+          test -n "$VISUAL_ARTIFACT_ID"
+          test -n "$VISUAL_ARTIFACT_NAME"
+          test -n "$VISUAL_ARTIFACT_DIGEST"
+
           metadata="$(gh api "repos/$GH_REPO/actions/artifacts/$VISUAL_ARTIFACT_ID")"
           actual_name="$(jq -r '.name // empty' <<<"$metadata")"
           actual_digest="$(jq -r '.digest // empty' <<<"$metadata")"
@@ -241,11 +252,43 @@ jobs:
           dest=".policy-artifacts/$VISUAL_ARTIFACT_NAME"
           rm -rf -- "$dest"
           mkdir -p -- "$dest"
-          gh run download "$VISUAL_RUN_ID" -n "$VISUAL_ARTIFACT_NAME" -D "$dest"
+          gh run download "$VISUAL_RUN_ID" -R "$GH_REPO" -n "$VISUAL_ARTIFACT_NAME" -D "$dest"
           test -s "$dest/desktop-produto.png"
           test -s "$dest/desktop-checkout.png"
           test -s "$dest/fast-3g-produto.png"
           test -s "$dest/slow-4g-checkout.png"
+
+          python3 - "$POLICY_HEAD_SHA" "$VISUAL_RUN_ID" "$VISUAL_ARTIFACT_ID" "$VISUAL_ARTIFACT_NAME" "$VISUAL_ARTIFACT_DIGEST" "$dest" <<'PY'
+          import json
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          head_sha, run_id, artifact_id, artifact_name, artifact_digest, dest = sys.argv[1:]
+          files = [
+              f'{dest}/desktop-produto.png',
+              f'{dest}/desktop-checkout.png',
+              f'{dest}/fast-3g-produto.png',
+              f'{dest}/slow-4g-checkout.png',
+          ]
+          payload = {
+              'validated': True,
+              'reviewer': 'Storefront Browser Audit (current PR head)',
+              'timestamp': datetime.now(timezone.utc).isoformat(),
+              'artifacts': files,
+              'evidence': {
+                  'workflow_run': int(run_id),
+                  'workflow_artifact_id': int(artifact_id),
+                  'workflow_artifact_name': artifact_name,
+                  'workflow_artifact_digest': artifact_digest,
+                  'visual_proof_head_sha': head_sha,
+                  'result': 'CURRENT HEAD VISUAL AUDIT PASS',
+              },
+          }
+          Path('visual-proof.json').write_text(json.dumps(payload, indent=2) + '\n', encoding='utf-8')
+          print(f'visual_proof_head_sha={head_sha}')
+          print(f'visual_proof_run={run_id}')
+          PY
 
       - name: Run fail-closed Policy Engine
         env:
