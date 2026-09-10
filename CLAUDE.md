@@ -464,3 +464,7 @@ que parece já ter sido corrigido.
 - Se o deploy falhar, investigar a causa raiz, corrigir, revalidar, repetir commit/push/PR/merge quando necessario e tentar o deploy novamente; nao encerrar em estado intermediario.
 - Antes de qualquer resposta final, comparar pedido original x estado real e registrar evidencias de: validacao, commit, push, PR, checks, merge, deploy e pós-deploy, conforme aplicavel.
 - So e permitido encerrar sem deploy bem-sucedido diante de bloqueio externo genuino e incontornavel com os acessos/ferramentas disponiveis; nesse caso o estado e BLOCKED/INCONCLUSIVO, nunca sucesso.
+
+## CLI session isolation policy
+
+Antes de qualquer operacao CLI, leia e cumpra `AGENTS.md` e `AI-TO-CLI-PROTOCOL.md`. Um chat nunca pode reutilizar a sessao CLI de outro chat.
