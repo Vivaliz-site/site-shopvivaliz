@@ -128,7 +128,7 @@ if (!$publicKey) {
             }
 
             // Redirecionar para confirmação
-            window.location.href = '/checkout/success?payment_id=' + encodeURIComponent(data.payment_id) + '&order_id=' + encodeURIComponent(orderId);
+            window.location.href = '/checkout/retorno?result=success&payment_id=' + encodeURIComponent(data.payment_id) + '&order_id=' + encodeURIComponent(orderId);
         } catch (error) {
             console.error('Payment processing error:', error);
             alert('Erro ao processar pagamento');
