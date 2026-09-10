@@ -284,7 +284,7 @@ function Install-Task {
     $guardianStartup = New-ScheduledTaskTrigger -AtStartup
     $guardianWatchdog = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(15) -RepetitionInterval (New-TimeSpan -Minutes 15) -RepetitionDuration (New-TimeSpan -Days 3650)
     Register-ScheduledTask -TaskName $GuardianTaskName -Action $guardianAction -Trigger @($guardianStartup,$guardianWatchdog) -Principal $guardianPrincipal -Settings $settings -Description 'Re-enables the official Desktop Commander watchdog if maintenance or a test disables it.' -Force | Out-Null
-    Log ('Scheduled task installed user=' + $user + ' logon=S4U watchdog=5m guardian=15m')
+    Log ('Scheduled task installed user=' + $user + ' primary_logon=Interactive guardian_logon=S4U watchdog=5m guardian=15m')
     Write-Output 'TASK_INSTALLED=true'
     Write-Output 'GUARDIAN_TASK_INSTALLED=true'
 }

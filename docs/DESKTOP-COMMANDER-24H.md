@@ -9,8 +9,9 @@ Manter o Desktop Commander oficial disponível de forma autônoma em `LAPTOP-NIG
 - Supervisor: `scripts/fredwin-desktop-commander-supervisor.ps1`.
 - Runner sanitizado: `scripts/fredwin-desktop-commander-runner.ps1`.
 - Tarefa: `ShopVivaliz Desktop Commander 24h`.
-- Startup: `AtStartup`, `LogonType S4U`, `RunLevel Highest`.
-- Watchdog: a cada 1 minuto, `MultipleInstances IgnoreNew`, `StartWhenAvailable`.
+- Tarefa primaria: `AtLogOn`, `LogonType Interactive`, `RunLevel Highest`, porque o provider do Fred-Win precisa da sessao interativa do usuario ja autenticado.
+- Watchdog primario: a cada 5 minutos, `MultipleInstances IgnoreNew`, `StartWhenAvailable`.
+- Guardian independente: `AtStartup` e a cada 15 minutos, `LogonType S4U`, `RunLevel Highest`; ele recupera a tarefa primaria sem assumir a sessao do provider.
 - Recovery independente: relay privado GitHub Actions -> Oracle VM -> reverse SSH -> Fred-Win.
 
 O runner descarta a saída bruta do provedor. Se detectar solicitação de device authorization, registra somente `AUTH_REQUIRED`, cria cooldown de 6 horas e evita gerar códigos repetidamente.
@@ -56,7 +57,7 @@ O diagnóstico esperado inclui `CANONICAL_AGENT_COUNT=1`, `NONCANONICAL_AGENT_CO
 ## Regra de propriedade única
 - Nunca iniciar manualmente um Desktop Commander em host já gerenciado. Windows permanece fixado em `0.2.47`; as VMs Ubuntu usam `0.2.48`. Um processo manual reutiliza o mesmo Device ID e pode disputar presença com a sessão 24h.
 - `ShopVivaliz Auto Sync` não inicia, repara nem reinstala Desktop Commander ou relay. Ele somente sincroniza o repositório e executa guards próprios; DC e relay pertencem exclusivamente aos watchdogs dedicados.
-- Em Windows, a tarefa S4U de 1 minuto é o único supervisor persistente. Em Linux, `shopvivaliz-desktop-commander.service` é o único owner do provider e o guardian apenas remove launchers fora do cgroup e recupera o serviço quando necessário.
+- No Fred-Win, a tarefa primaria e `Interactive`/`AtLogOn` com watchdog de 5 minutos; o guardian e `S4U`/`AtStartup` com watchdog de 15 minutos. No DESKTOP-KOCEPSV, a tarefa primaria permanece `S4U`. Em Linux, `shopvivaliz-desktop-commander.service` e o unico owner do provider e o guardian apenas remove launchers fora do cgroup e recupera o servico quando necessario.
 - Chamadas `Ensure` em Windows usam fast-path read-only antes do mutex somente quando existe exatamente 1 launcher canônico, 0 não canônicos, marker fresco e nenhum cooldown. Qualquer duplicata, marker stale, cooldown ou ambiguidade continua passando pelo mutex e pela convergência seletiva.
 - O monitor recorrente canônico é `.github/workflows/desktop-commander-24h-health.yml`, cobrindo quatro hosts. O antigo control plane de três hosts permanece apenas para uso manual/push, sem `schedule` recorrente.
 ## Diagnóstico seguro

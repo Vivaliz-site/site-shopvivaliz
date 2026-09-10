@@ -99,6 +99,7 @@ jobs:
           php tests/desktop-commander-persist-session-contract-test.php
           php tests/desktop-commander-health-restart-contract-test.php
           php tests/fredwin-desktop-commander-stale-transport-contract-test.php
+          php tests/fredwin-desktop-commander-interactive-session-contract-test.php
           php tests/vm-desktop-commander-version-contract-test.php
           php tests/vm-desktop-commander-auth-classification-contract-test.php
           php tests/fredwin-desktop-commander-duplicate-owner-contract-test.php
@@ -209,19 +210,19 @@ jobs:
           def is_true(value):
               return str(value).strip().lower() == 'true'
 
-          def win_healthy(values):
+          def win_healthy(values, expected_logon):
               return (
                   is_true(values.get('DEVICE_STATE_EXISTS'))
                   and values.get('CANONICAL_AGENT_COUNT') == '1'
                   and values.get('NONCANONICAL_AGENT_COUNT') == '0'
                   and is_true(values.get('TASK_EXISTS'))
-                  and values.get('TASK_LOGON_TYPE', '').lower() == 's4u'
+                  and values.get('TASK_LOGON_TYPE', '').lower() == expected_logon
                   and values.get('TASK_RUN_LEVEL', '').lower() == 'highest'
                   and not is_true(values.get('AUTH_REQUIRED'))
                   and is_true(values.get('PROVIDER_CONNECTED'))
               )
 
-          def win_probe(name, port, status_script, supervisor_script, bootstrap_script):
+          def win_probe(name, port, status_script, supervisor_script, bootstrap_script, expected_logon):
               status_command = (
                   'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass '
                   f'-File "C:\\site-shopvivaliz\\scripts\\{status_script}"'
@@ -233,10 +234,10 @@ jobs:
                       'canonical': '—', 'auth': 'unknown', 'recovery': 'relay_unreachable'
                   }
               values = parse_safe(output)
-              if win_healthy(values):
+              if win_healthy(values, expected_logon):
                   return {
                       'host': name, 'state': 'healthy',
-                      'watchdog': 'S4U/Highest', 'canonical': '1',
+                      'watchdog': f'{expected_logon}/Highest', 'canonical': '1',
                       'auth': 'false', 'recovery': 'not_needed'
                   }
               auth = is_true(values.get('AUTH_REQUIRED'))
@@ -254,7 +255,7 @@ jobs:
                   and values.get('CANONICAL_AGENT_COUNT') == '1'
                   and values.get('NONCANONICAL_AGENT_COUNT') == '0'
                   and is_true(values.get('TASK_EXISTS'))
-                  and values.get('TASK_LOGON_TYPE', '').lower() == 's4u'
+                  and values.get('TASK_LOGON_TYPE', '').lower() == expected_logon
                   and values.get('TASK_RUN_LEVEL', '').lower() == 'highest'
               )
               if auth:
@@ -418,13 +419,15 @@ jobs:
                   'LAPTOP-NIG4IFUU', 5557,
                   'fredwin-desktop-commander-status.ps1',
                   'fredwin-desktop-commander-supervisor.ps1',
-                  'fredwin-remote-bootstrap.ps1'
+                  'fredwin-remote-bootstrap.ps1',
+                  expected_logon='interactive'
               ),
               win_probe(
                   'DESKTOP-KOCEPSV', 5558,
                   'desktopkocepsv-desktop-commander-status.ps1',
                   'desktopkocepsv-desktop-commander-supervisor.ps1',
-                  'desktopkocepsv-remote-bootstrap.ps1'
+                  'desktopkocepsv-remote-bootstrap.ps1',
+                  expected_logon='s4u'
               ),
               vm_probe('shopvivaliz-a1-backend', peer=False),
               vm_probe('shopvivaliz-free-a1', peer=True),

@@ -8,6 +8,7 @@ $checks = [
     '-Principal $primaryPrincipal',
     '-Principal $guardianPrincipal',
     '-LogonType S4U -RunLevel Highest',
+    'primary_logon=Interactive guardian_logon=S4U',
 ];
 foreach ($checks as $needle) {
     if (strpos($s, $needle) === false) { fwrite(STDERR, "missing: {$needle}\n"); exit(1); }
