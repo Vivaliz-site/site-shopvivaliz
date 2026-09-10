@@ -144,9 +144,6 @@ $isProduction = strtolower((string)(getenv('APP_ENV') ?: ($_ENV['APP_ENV'] ?? 'p
     </a>
     <p class="oauth-help">O botão permanece visível. A configuração é validada somente quando você inicia o acesso.</p>
 
-    <?php if (!$isProduction && !sv_social_google_is_configured()): ?>
-        <div class="footer-link"><a href="/auth/google-mock-login.php?redirect=<?= urlencode($redirectTo) ?>">Usar conta de teste local</a></div>
-    <?php endif; ?>
     <div class="footer-link">Não tem conta? <a href="/auth/register.php">Cadastre-se aqui</a></div>
 </main>
 <script>
