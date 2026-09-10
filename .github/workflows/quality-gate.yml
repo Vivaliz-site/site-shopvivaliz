@@ -42,6 +42,8 @@ jobs:
           php tests/fredwin-runtime-audit-action-test.php
           php scripts/quality/validate-asset-manifest.php
           python3 -m py_compile scripts/seo-integrity-audit.py
+          python3 tests/test_ecommerce_excellence_credential_literals.py
+          python3 tests/test_ecommerce_excellence_reference_resolution.py
           node --check scripts/public-layout-audit.mjs
           node --check scripts/lib/audit-concurrency.mjs
           node --check js/catalog-conversion-v4.js

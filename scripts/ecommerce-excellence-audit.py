@@ -121,6 +121,44 @@ def add(findings: list[Finding], severity: str, code: str, message: str, path: p
     findings.append(Finding(severity, code, message, relative))
 
 
+def reference_is_resolved(
+    reference: str,
+    source_rel: str,
+    relative_set: set[str],
+    rewrite_text: str,
+) -> bool:
+    candidate = reference.lstrip("/")
+    if source_rel.startswith(("tests/", "includes/PHPMailer/")):
+        return True
+    if any(token in candidate for token in ("<?=", "<?php", "${", "{{", "*", "<", ">")):
+        return True
+    if candidate.endswith("/"):
+        return True
+    if candidate in relative_set or (ROOT / candidate).exists():
+        return True
+    if pathlib.PurePosixPath(candidate).suffix == "":
+        if candidate + ".php" in relative_set or candidate + "/index.php" in relative_set:
+            return True
+    if source_rel.startswith("web/") and "web/" + candidate in relative_set:
+        return True
+    for raw_line in rewrite_text.splitlines():
+        line = raw_line.strip()
+        if not line.startswith("RewriteRule "):
+            continue
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        pattern = parts[1]
+        if pattern in {"^", "^(.*)$", "^.*$"} or ".*" in pattern:
+            continue
+        try:
+            if re.search(pattern, candidate):
+                return True
+        except re.error:
+            continue
+    return False
+
+
 def validate_static(files: list[pathlib.Path] | None = None, *, scope: str = "full") -> dict[str, Any]:
     findings: list[Finding] = []
     all_files = tracked_files()
@@ -132,6 +170,8 @@ def validate_static(files: list[pathlib.Path] | None = None, *, scope: str = "fu
     validated = collections.Counter()
 
     relative_set = {str(path.relative_to(ROOT)).replace("\\", "/") for path in all_files}
+    htaccess_path = ROOT / ".htaccess"
+    rewrite_text = htaccess_path.read_text(encoding="utf-8") if htaccess_path.is_file() else ""
     if scope == "full":
         for required in sorted(REQUIRED_FILES):
             if required not in relative_set:
@@ -159,7 +199,8 @@ def validate_static(files: list[pathlib.Path] | None = None, *, scope: str = "fu
         extension_counts[path.suffix.lower() or "[none]"] += 1
         if size == 0:
             empty_files += 1
-            if path.suffix.lower() in PRODUCTION_EXTENSIONS:
+            is_package_marker = path.name == "__init__.py"
+            if path.suffix.lower() in PRODUCTION_EXTENSIONS and not is_package_marker:
                 add(findings, "warning", "empty_runtime_file", "Empty tracked runtime file", path)
             continue
         if size > 10 * 1024 * 1024 and not rel.startswith(("storage/", "uploads/", "public/")):
@@ -209,12 +250,7 @@ def validate_static(files: list[pathlib.Path] | None = None, *, scope: str = "fu
             for reference in sorted(set(references)):
                 if reference.startswith(IGNORE_REFERENCE_PREFIXES):
                     continue
-                candidate = reference.lstrip("/")
-                if any(token in candidate for token in ("<?=", "<?php", "${", "{{", "*")):
-                    continue
-                if candidate.endswith("/"):
-                    continue
-                if candidate not in relative_set and not (ROOT / candidate).exists():
+                if not reference_is_resolved(reference, rel, relative_set, rewrite_text):
                     add(findings, "warning", "missing_local_asset", f"Referenced local asset not found: {reference}", path)
 
     duplicate_groups: list[list[str]] = []

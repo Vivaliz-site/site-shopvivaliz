@@ -42,6 +42,11 @@ jobs:
       - name: Validate deployment evidence retry contract
         run: python3 tests/test_ecommerce_excellence_deploy_wait_retry.py
 
+      - name: Validate static scanner precision contracts
+        run: |
+          python3 tests/test_ecommerce_excellence_credential_literals.py
+          python3 tests/test_ecommerce_excellence_reference_resolution.py
+
       - name: Install verified Gitleaks CLI
         shell: bash
         run: |
