@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKFLOW="$ROOT/.github/workflows/master-production-pipeline.yml"
 
 restart_line='sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-shopee-token-renewer.service shopvivaliz-mercadolivre-token-renewer.service shopvivaliz-queue-worker.service'
-count="$(grep -Fc "$restart_line" "$WORKFLOW" || true)"
+count="$(awk -v needle="$restart_line" 'index($0, needle) { count++ } END { print count + 0 }' "$WORKFLOW")"
 if [ "$count" -lt 2 ]; then
   echo "Master production deploy must restart all long-running runtime services after activation and rollback; found $count restart points" >&2
   exit 1
