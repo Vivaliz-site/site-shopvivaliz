@@ -170,7 +170,9 @@ jobs:
             if cmp -s "$release/scripts/install-catalog-sync-service.sh" "$previous/scripts/install-catalog-sync-service.sh" \
               && cmp -s "$release/deploy/systemd/shopvivaliz-token-renewer.service" "$previous/deploy/systemd/shopvivaliz-token-renewer.service" \
               && cmp -s "$release/deploy/systemd/shopvivaliz-shopee-token-renewer.service" "$previous/deploy/systemd/shopvivaliz-shopee-token-renewer.service" \
-              && cmp -s "$release/deploy/systemd/shopvivaliz-mercadolivre-token-renewer.service" "$previous/deploy/systemd/shopvivaliz-mercadolivre-token-renewer.service"; then
+              && cmp -s "$release/deploy/systemd/shopvivaliz-mercadolivre-token-renewer.service" "$previous/deploy/systemd/shopvivaliz-mercadolivre-token-renewer.service" \
+              && cmp -s "$release/deploy/systemd/shopvivaliz-catalog-reconcile.service" "$previous/deploy/systemd/shopvivaliz-catalog-reconcile.service" \
+              && cmp -s "$release/deploy/systemd/shopvivaliz-catalog-reconcile.timer" "$previous/deploy/systemd/shopvivaliz-catalog-reconcile.timer"; then
               catalog_service_changed=false
             fi
             if cmp -s "$release/scripts/install-amazon-returns-service.sh" "$previous/scripts/install-amazon-returns-service.sh" \
@@ -200,6 +202,7 @@ jobs:
           sudo systemctl is-active --quiet shopvivaliz-shopee-token-renewer.service || fail=1
           sudo systemctl is-active --quiet shopvivaliz-mercadolivre-token-renewer.service || fail=1
           sudo systemctl is-active --quiet shopvivaliz-queue-worker.service || fail=1
+          sudo systemctl is-active --quiet shopvivaliz-catalog-reconcile.timer || fail=1
           sudo systemctl restart apache2
           sudo systemctl is-active --quiet apache2
 
