@@ -183,6 +183,11 @@ jobs:
 
           ln -sfn "releases/$(basename "$release")" "$root/current.next"
           mv -Tf "$root/current.next" "$current"
+          fail=0
+          if ! sudo bash "$current/scripts/install-abandoned-cart-recovery-service.sh" "$current"; then
+            echo 'abandoned_cart_recovery_install_failed=true' >&2
+            fail=1
+          fi
           if [ "$catalog_service_changed" = true ]; then
             sudo bash "$current/scripts/install-catalog-sync-service.sh"
           else
@@ -193,7 +198,6 @@ jobs:
           else
             echo 'amazon_returns_service_unchanged=true'
           fi
-          fail=0
           if ! sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-shopee-token-renewer.service shopvivaliz-mercadolivre-token-renewer.service shopvivaliz-queue-worker.service; then
             echo 'runtime_service_restart_failed=true' >&2
             fail=1
@@ -203,6 +207,8 @@ jobs:
           sudo systemctl is-active --quiet shopvivaliz-mercadolivre-token-renewer.service || fail=1
           sudo systemctl is-active --quiet shopvivaliz-queue-worker.service || fail=1
           sudo systemctl is-active --quiet shopvivaliz-catalog-reconcile.timer || fail=1
+          sudo systemctl is-active --quiet shopvivaliz-abandoned-cart-recovery.timer || fail=1
+          sudo systemctl is-enabled --quiet shopvivaliz-abandoned-cart-recovery.timer || fail=1
           sudo systemctl restart apache2
           sudo systemctl is-active --quiet apache2
 
@@ -223,6 +229,13 @@ jobs:
             if [ -n "$previous" ] && [ -d "$previous" ]; then
               ln -sfn "releases/$(basename "$previous")" "$root/current.rollback"
               mv -Tf "$root/current.rollback" "$current"
+              if [ -f "$current/scripts/install-abandoned-cart-recovery-service.sh" ]; then
+                sudo bash "$current/scripts/install-abandoned-cart-recovery-service.sh" "$current"
+              else
+                if ! sudo systemctl disable --now shopvivaliz-abandoned-cart-recovery.timer >/dev/null 2>&1; then echo 'abandoned_cart_timer_already_disabled=true'; fi
+                sudo rm -f /etc/systemd/system/shopvivaliz-abandoned-cart-recovery.service /etc/systemd/system/shopvivaliz-abandoned-cart-recovery.timer
+                sudo systemctl daemon-reload
+              fi
               sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-shopee-token-renewer.service shopvivaliz-mercadolivre-token-renewer.service shopvivaliz-queue-worker.service
               sudo systemctl is-active --quiet shopvivaliz-token-renewer.service
               sudo systemctl is-active --quiet shopvivaliz-shopee-token-renewer.service
@@ -265,6 +278,8 @@ jobs:
           served_sha="$(cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha)"
           echo "release_sha -> $served_sha"
           test "$served_sha" = "$sha"
+          sudo systemctl is-active --quiet shopvivaliz-abandoned-cart-recovery.timer
+          sudo systemctl is-enabled --quiet shopvivaliz-abandoned-cart-recovery.timer
           for path in / /sitemap.xml /catalogo/ /termos/ /politica-entrega/ /politica-devolucoes/; do
             code="$(curl -sS -o /tmp/body -w '%{http_code}' -H 'Cache-Control: no-cache' --max-time 20 "https://shopvivaliz.com.br${path}")"
             echo "$path -> $code"
