@@ -30,6 +30,33 @@ class SitewideAuditContractTest(unittest.TestCase):
             MODULE.sitemap_inventory("https://shopvivaliz.com.br", sitemap),
         )
 
+    def test_sitemap_page_locations_ignore_image_locations(self):
+        sitemap = b'''<?xml version="1.0" encoding="UTF-8"?>
+        <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+          <url>
+            <loc>https://shopvivaliz.com.br/blog/guia</loc>
+            <image:image><image:loc>https://cdn.example.com/guia.jpg</image:loc></image:image>
+          </url>
+          <url>
+            <loc>https://shopvivaliz.com.br/produto/item</loc>
+            <image:image><image:loc>https://shopvivaliz.com.br/public/item.jpg</image:loc></image:image>
+          </url>
+        </urlset>'''
+        self.assertEqual(
+            [
+                "https://shopvivaliz.com.br/blog/guia",
+                "https://shopvivaliz.com.br/produto/item",
+            ],
+            MODULE.sitemap_page_locations(sitemap),
+        )
+        self.assertEqual(
+            [
+                "https://shopvivaliz.com.br/blog/guia",
+                "https://shopvivaliz.com.br/produto/item",
+            ],
+            MODULE.sitemap_inventory("https://shopvivaliz.com.br", sitemap),
+        )
+
     def test_cross_page_findings_detect_duplicate_metadata(self):
         pages = [
             {
