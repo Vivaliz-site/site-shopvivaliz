@@ -1,0 +1,17 @@
+[Unit]
+Description=ShopVivaliz abandoned cart recovery sender
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/current
+ExecStart=/usr/bin/flock -n /home/ubuntu/shopvivaliz-deploy/shared/locks/abandoned-cart-recovery.lock /usr/bin/php /home/ubuntu/shopvivaliz-deploy/current/scripts/send-abandoned-cart-emails.php
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/ubuntu/shopvivaliz-deploy/shared

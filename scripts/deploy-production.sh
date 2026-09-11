@@ -112,6 +112,64 @@ reconcile_runtime_service_units() {
   fi
 }
 
+
+reconcile_abandoned_cart_recovery_units() {
+  local release_path="$1"
+  local service="shopvivaliz-abandoned-cart-recovery.service"
+  local timer="shopvivaliz-abandoned-cart-recovery.timer"
+  local source_service="$release_path/deploy/systemd/$service"
+  local source_timer="$release_path/deploy/systemd/$timer"
+  local target_service="/etc/systemd/system/$service"
+  local target_timer="/etc/systemd/system/$timer"
+
+  if [ ! -f "$source_service" ] || [ ! -f "$source_timer" ]; then
+    log ERROR "Units de recuperacao de carrinho ausentes na release"
+    return 1
+  fi
+  if [ ! -f "$release_path/scripts/send-abandoned-cart-emails.php" ]; then
+    log ERROR "Sender de recuperacao de carrinho ausente na release"
+    return 1
+  fi
+  if ! sudo install -d -o ubuntu -g www-data -m 0770 "$SHARED_DIR/locks"; then
+    log ERROR "Falha ao preparar diretorio de lock da recuperacao de carrinho"
+    return 1
+  fi
+  if ! sudo install -o root -g root -m 0644 "$source_service" "$target_service"; then
+    log ERROR "Falha ao instalar service de recuperacao de carrinho"
+    return 1
+  fi
+  if ! sudo install -o root -g root -m 0644 "$source_timer" "$target_timer"; then
+    log ERROR "Falha ao instalar timer de recuperacao de carrinho"
+    return 1
+  fi
+  if ! sudo systemd-analyze verify "$target_service" "$target_timer" >> "$LOG_FILE" 2>&1; then
+    log ERROR "Units de recuperacao de carrinho invalidas"
+    return 1
+  fi
+  if ! sudo systemctl daemon-reload; then
+    log ERROR "systemd daemon-reload falhou para recuperacao de carrinho"
+    return 1
+  fi
+  if ! sudo systemctl enable --now "$timer" >> "$LOG_FILE" 2>&1; then
+    log ERROR "Falha ao habilitar timer de recuperacao de carrinho"
+    return 1
+  fi
+  if ! sudo systemctl is-active --quiet "$timer"; then
+    log ERROR "Timer de recuperacao de carrinho nao ficou ativo"
+    return 1
+  fi
+}
+
+disable_abandoned_cart_recovery_timer() {
+  local timer="shopvivaliz-abandoned-cart-recovery.timer"
+  if sudo systemctl cat "$timer" >/dev/null 2>&1; then
+    if ! sudo systemctl disable --now "$timer" >> "$LOG_FILE" 2>&1; then
+      log ERROR "Falha ao desabilitar timer de recuperacao de carrinho no rollback"
+      return 1
+    fi
+  fi
+}
+
 assert_managed_release_path() {
   local release_path="$1"
   local releases_root canonical_path current_target
@@ -229,6 +287,14 @@ rollback_to() {
       log ERROR "Rollback nao conseguiu reconciliar a unit Mercado Livre"
       return 1
     fi
+  fi
+  if [ -f "$RELEASES_DIR/$previous_release/deploy/systemd/shopvivaliz-abandoned-cart-recovery.service" ] && [ -f "$RELEASES_DIR/$previous_release/deploy/systemd/shopvivaliz-abandoned-cart-recovery.timer" ]; then
+    if ! reconcile_abandoned_cart_recovery_units "$RELEASES_DIR/$previous_release"; then
+      log ERROR "Rollback nao conseguiu reconciliar recuperacao de carrinho"
+      return 1
+    fi
+  elif ! disable_abandoned_cart_recovery_timer; then
+    return 1
   fi
   if ! restart_runtime_services; then
     log ERROR "Rollback restaurou o symlink, mas nao reiniciou as integracoes"
@@ -595,6 +661,14 @@ if ! reconcile_runtime_service_units "$NEW_RELEASE_PATH"; then
     log ERROR "Rollback apos falha ao instalar unit Mercado Livre tambem falhou"
   fi
   write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "reconciliacao da unit Mercado Livre falhou"
+  exit 1
+fi
+
+if ! reconcile_abandoned_cart_recovery_units "$NEW_RELEASE_PATH"; then
+  if ! rollback_to "$ACTIVE_RELEASE"; then
+    log ERROR "Rollback apos falha ao instalar recuperacao de carrinho tambem falhou"
+  fi
+  write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "reconciliacao da recuperacao de carrinho falhou"
   exit 1
 fi
 

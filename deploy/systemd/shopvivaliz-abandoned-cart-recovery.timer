@@ -1,0 +1,12 @@
+[Unit]
+Description=Run ShopVivaliz abandoned cart recovery every 30 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=30min
+AccuracySec=1min
+Persistent=true
+Unit=shopvivaliz-abandoned-cart-recovery.service
+
+[Install]
+WantedBy=timers.target
