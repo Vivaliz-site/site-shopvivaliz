@@ -91,6 +91,16 @@ foreach ($products as $product) {
     echo '<g:availability>' . ($stock > 0 ? 'in_stock' : 'out_of_stock') . '</g:availability>' . "\n";
     echo '<g:price>' . svgf_xml(number_format($price, 2, '.', '')) . ' BRL</g:price>' . "\n";
     echo '<g:condition>new</g:condition>' . "\n";
+    echo '<g:returns>' . "\n";
+    echo '<g:country>BR</g:country>' . "\n";
+    echo '<g:item_condition>NEW</g:item_condition>' . "\n";
+    echo '<g:item_condition>LIKE_NEW</g:item_condition>' . "\n";
+    echo '<g:window_days>7</g:window_days>' . "\n";
+    echo '<g:window_type>FINITE_RETURN_WINDOW</g:window_type>' . "\n";
+    echo '<g:method>BY_MAIL</g:method>' . "\n";
+    echo '<g:outcome>REFUND</g:outcome>' . "\n";
+    echo '<g:policy_url>https://shopvivaliz.com.br/politica-devolucoes/</g:policy_url>' . "\n";
+    echo '</g:returns>' . "\n";
 
     if ($brand !== '') {
         echo '<g:brand>' . svgf_xml($brand) . '</g:brand>' . "\n";

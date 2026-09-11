@@ -808,8 +808,9 @@ $defaultPaymentMethod = $mercadoPagoAvailable ? 'mercado_pago' : ($infinitePayAv
     function updatePaymentFields() {
         var group = document.getElementById('boleto-cpf-field');
         var input = document.getElementById('cpf-input');
-        if (group) group.hidden = false;
-        if (input) input.required = true;
+        var requiresDocument = selectedPaymentMethod() === 'boleto';
+        if (group) group.hidden = !requiresDocument;
+        if (input) input.required = requiresDocument;
     }
     document.querySelectorAll('input[name="payment_method"]').forEach(function(input) {
         input.addEventListener('change', updatePaymentFields);
