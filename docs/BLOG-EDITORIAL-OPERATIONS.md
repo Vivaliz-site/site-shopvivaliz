@@ -6,6 +6,8 @@ O módulo editorial mantém o blog disponível com fallback estático e usa MySQ
 
 O agendador `api/blog/publish-scheduled.php` também mantém a fila futura abastecida automaticamente antes de publicar. O padrão operacional é `3 artigos por semana`, com `9` publicações futuras mantidas na fila, ajustáveis por `BLOG_AUTOMATION_QUEUE_DEPTH`.
 
+A geração automática é determinística e classifica cada pauta pela intenção editorial (comparativo, guia de compra, manutenção, tutorial ou projeto). O quality gate rejeita o boilerplate legado e artigos automáticos com conteúdo insuficiente ou repetitivo. A automação não deve inventar preço, estoque, medida, especificação ou compatibilidade de produto.
+
 ## Pré-requisitos
 
 - backup recente do banco;
@@ -30,10 +32,50 @@ O agendador `api/blog/publish-scheduled.php` também mantém a fila futura abast
 7. Executar manualmente o workflow `Blog Publish Scheduled` e verificar resposta HTTP 200.
 8. Validar `/blog`, um artigo publicado, `/sitemap.php` e `/api/knowledge/search`.
 
+## Reparo de conteúdo automático legado
+
+O deploy da aplicação **não** executa reparo de dados silenciosamente. Quando uma versão do contrato editorial substituir artigos gerados automaticamente no passado, use `scripts/repair-blog-editorial-content.php` depois do novo release estar ativo.
+
+1. Faça o dry-run. Este é também o modo padrão quando nenhuma opção de aplicação é informada:
+
+   ```bash
+   php scripts/repair-blog-editorial-content.php --dry-run
+   ```
+
+   Registre `agenda_targets`, `database_targets`, `changed`, `unchanged` e `missing_from_database`. O comando só considera slugs derivados da agenda automática; artigos editoriais manuais ficam fora do escopo.
+
+2. Crie ou escolha um diretório de backup **fora da árvore pública da aplicação**, em armazenamento persistente e com acesso restrito. Não use `public/`, a raiz do release ou diretórios servidos pelo Apache.
+
+3. Execute a aplicação somente depois de revisar o dry-run:
+
+   ```bash
+   php scripts/repair-blog-editorial-content.php --apply --backup-dir=/caminho/privado/backup-blog
+   ```
+
+   Antes de abrir a transação de atualização, o script salva os registros-alvo em JSON com permissão `0600`. Se não conseguir gravar ou restringir o backup, nenhuma atualização é feita.
+
+4. Faça read-back do blog e confira pelo menos um artigo de cada intenção editorial, além de `/blog/`, sitemap, busca de conhecimento e contexto da Liz.
+
+5. Execute o mesmo comando de aplicação uma segunda vez:
+
+   ```bash
+   php scripts/repair-blog-editorial-content.php --apply --backup-dir=/caminho/privado/backup-blog
+   ```
+
+   A segunda execução deve informar `changed: 0`. Qualquer alteração recorrente indica divergência e deve bloquear a conclusão.
+
+O reparo preserva `id`, `slug`, `status`, datas de publicação/agendamento, comentários e tabelas não relacionadas. Apenas os campos editoriais dos slugs automáticos reconhecidos são atualizados.
+
+### Restauração do reparo
+
+Se o read-back revelar conteúdo inválido, não apague a tabela. Use o arquivo `blog-editorial-before-*.json` produzido antes da aplicação para restaurar os campos editoriais dos mesmos IDs/slugs, dentro de uma transação, preservando status, datas e comentários. Valide a restauração por leitura independente antes de remover qualquer backup.
+
 ## Evidências mínimas de QA
 
 - todos os arquivos PHP passam em `php -l`;
 - `php tests/blog-editorial-smoke.php` retorna `OK blog editorial smoke`;
+- `php tests/blog-editorial-autopilot-smoke.php` retorna `OK blog editorial autopilot smoke`;
+- `php tests/blog-editorial-repair-smoke.php` retorna `OK blog editorial repair smoke`;
 - workflows YAML passam no yamllint;
 - rascunho não aparece em `/blog`, sitemap, busca ou Liz;
 - artigo agendado para o futuro não aparece publicamente;
@@ -68,4 +110,5 @@ DROP TABLE blog_articles;
 - rotacionar o token após qualquer suspeita de exposição;
 - não transformar o preview em rota pública;
 - não publicar HTML bruto fornecido pelo editor; o preview e o artigo devem escapar o conteúdo estruturado;
-- manter consultas preparadas e validação de status no servidor.
+- manter consultas preparadas e validação de status no servidor;
+- não guardar os backups de reparo editorial dentro da árvore pública da aplicação.
