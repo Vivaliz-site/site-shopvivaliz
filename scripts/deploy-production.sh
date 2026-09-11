@@ -115,51 +115,17 @@ reconcile_runtime_service_units() {
 
 reconcile_abandoned_cart_recovery_units() {
   local release_path="$1"
-  local service="shopvivaliz-abandoned-cart-recovery.service"
-  local timer="shopvivaliz-abandoned-cart-recovery.timer"
-  local source_service="$release_path/deploy/systemd/$service"
-  local source_timer="$release_path/deploy/systemd/$timer"
-  local target_service="/etc/systemd/system/$service"
-  local target_timer="/etc/systemd/system/$timer"
+  local installer="$release_path/scripts/install-abandoned-cart-recovery-service.sh"
 
-  if [ ! -f "$source_service" ] || [ ! -f "$source_timer" ]; then
-    log ERROR "Units de recuperacao de carrinho ausentes na release"
+  if [ ! -f "$installer" ]; then
+    log ERROR "Instalador de recuperacao de carrinho ausente na release"
     return 1
   fi
-  if [ ! -f "$release_path/scripts/send-abandoned-cart-emails.php" ]; then
-    log ERROR "Sender de recuperacao de carrinho ausente na release"
-    return 1
-  fi
-  if ! sudo install -d -o ubuntu -g www-data -m 0770 "$SHARED_DIR/locks"; then
-    log ERROR "Falha ao preparar diretorio de lock da recuperacao de carrinho"
-    return 1
-  fi
-  if ! sudo install -o root -g root -m 0644 "$source_service" "$target_service"; then
-    log ERROR "Falha ao instalar service de recuperacao de carrinho"
-    return 1
-  fi
-  if ! sudo install -o root -g root -m 0644 "$source_timer" "$target_timer"; then
-    log ERROR "Falha ao instalar timer de recuperacao de carrinho"
-    return 1
-  fi
-  if ! sudo systemd-analyze verify "$target_service" "$target_timer" >> "$LOG_FILE" 2>&1; then
-    log ERROR "Units de recuperacao de carrinho invalidas"
-    return 1
-  fi
-  if ! sudo systemctl daemon-reload; then
-    log ERROR "systemd daemon-reload falhou para recuperacao de carrinho"
-    return 1
-  fi
-  if ! sudo systemctl enable --now "$timer" >> "$LOG_FILE" 2>&1; then
-    log ERROR "Falha ao habilitar timer de recuperacao de carrinho"
-    return 1
-  fi
-  if ! sudo systemctl is-active --quiet "$timer"; then
-    log ERROR "Timer de recuperacao de carrinho nao ficou ativo"
+  if ! sudo bash "$installer" "$release_path" >> "$LOG_FILE" 2>&1; then
+    log ERROR "Falha ao reconciliar recuperacao de carrinho pelo instalador compartilhado"
     return 1
   fi
 }
-
 disable_abandoned_cart_recovery_timer() {
   local timer="shopvivaliz-abandoned-cart-recovery.timer"
   if sudo systemctl cat "$timer" >/dev/null 2>&1; then

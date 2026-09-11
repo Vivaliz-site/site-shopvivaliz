@@ -12,8 +12,9 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
         self.assertIn('ref: ${{ env.DEPLOY_SHA }}', text)
         self.assertIn('test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"', text)
-        self.assertIn('tar --exclude=.git -czf /tmp/shopvivaliz-release.tgz .', text)
-        self.assertIn('/tmp/shopvivaliz-release-${DEPLOY_SHA}.tgz', text)
+        self.assertIn('rsync -a --checksum --delete --link-dest=', text)
+        self.assertIn('release_dir="/home/ubuntu/shopvivaliz-deploy/releases/', text)
+        self.assertIn('"ubuntu@163.176.103.253:$release_dir/"', text)
 
     def test_master_pipeline_activates_an_immutable_release_atomically(self) -> None:
         text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
