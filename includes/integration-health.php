@@ -562,6 +562,25 @@ function svih_config_only(string $name, string $key, array $envKeys, string $rem
     ];
 }
 
+function svih_google_ads_ga4_purchase_configured(array $payload): bool
+{
+    foreach (($payload['results'] ?? []) as $row) {
+        $action = is_array($row['conversionAction'] ?? null) ? $row['conversionAction'] : [];
+        $ga4 = is_array($action['googleAnalytics4Settings'] ?? null) ? $action['googleAnalytics4Settings'] : [];
+        $eventName = strtolower(trim((string)($ga4['eventName'] ?? '')));
+        if (
+            (string)($action['status'] ?? '') === 'ENABLED'
+            && (string)($action['type'] ?? '') === 'GOOGLE_ANALYTICS_4_PURCHASE'
+            && (bool)($action['primaryForGoal'] ?? false)
+            && $eventName === 'purchase'
+            && trim((string)($ga4['propertyId'] ?? '')) !== ''
+        ) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function svih_google_ads(): array
 {
     $clientId = svih_env('GOOGLE_OAUTH_CLIENT_ID');
@@ -572,6 +591,9 @@ function svih_google_ads(): array
     $loginCustomerId = preg_replace('/\D+/', '', svih_env('GOOGLE_ADS_LOGIN_CUSTOMER_ID')) ?: '';
     $conversionId = trim(svih_env('GOOGLE_ADS_ID'));
     $conversionLabel = trim(svih_env('GOOGLE_ADS_CONVERSION_LABEL'));
+    $conversionSource = strtoupper(trim(svih_env('GOOGLE_ADS_CONVERSION_SOURCE')));
+    $ga4ImportVerified = in_array(strtolower(trim(svih_env('GOOGLE_ADS_GA4_IMPORT_VERIFIED'))), ['1', 'true', 'yes'], true);
+    $analyticsId = trim(svih_env('GOOGLE_ANALYTICS_ID', 'GA4_ID'));
 
     $required = [$clientId, $clientSecret, $refreshToken, $developerToken, $customerId];
     if (in_array('', $required, true) || strlen($customerId) !== 10) {
@@ -620,14 +642,44 @@ function svih_google_ads(): array
         ];
     }
 
-    $conversionConfigured = $conversionId !== '' && $conversionLabel !== '';
+    $directConversionConfigured = $conversionId !== '' && $conversionLabel !== '';
+    $ga4ImportDeclared = $conversionSource === 'GA4_IMPORT'
+        && $ga4ImportVerified
+        && $analyticsId !== '';
+    $ga4ImportConfigured = false;
+    $conversionProbeStatus = (int)($api['status'] ?? 0);
+
+    if (!$directConversionConfigured && $ga4ImportDeclared) {
+        $conversionApi = svih_http_json(
+            'POST',
+            'https://googleads.googleapis.com/v25/customers/' . $customerId . '/googleAds:search',
+            $headers,
+            ['query' => 'SELECT conversion_action.status, conversion_action.type, conversion_action.primary_for_goal, conversion_action.google_analytics_4_settings.event_name, conversion_action.google_analytics_4_settings.property_id FROM conversion_action WHERE conversion_action.status = ENABLED']
+        );
+        $conversionProbeStatus = (int)($conversionApi['status'] ?? 0);
+        if ($conversionApi['ok']) {
+            $ga4ImportConfigured = svih_google_ads_ga4_purchase_configured(
+                is_array($conversionApi['data'] ?? null) ? $conversionApi['data'] : []
+            );
+        }
+    }
+
+    $conversionConfigured = $directConversionConfigured || $ga4ImportConfigured;
+    $conversionMode = $directConversionConfigured ? 'direct_tag' : ($ga4ImportConfigured ? 'ga4_import' : 'none');
     return [
         'name' => 'Google Ads', 'key' => 'google_ads',
         'status' => $conversionConfigured ? 'connected' : 'attention',
-        'message' => $conversionConfigured ? 'API e conversao direta configuradas.' : 'API conectada, mas a conversao de compra nao esta configurada.',
-        'remediation' => $conversionConfigured ? null : 'Configure GOOGLE_ADS_ID e GOOGLE_ADS_CONVERSION_LABEL com a acao de compra verificada.',
-        'provider_status' => (int)($api['status'] ?? 0),
+        'message' => $directConversionConfigured
+            ? 'API e conversao direta configuradas.'
+            : ($ga4ImportConfigured
+                ? 'API conectada e conversao de compra importada do GA4 verificada.'
+                : 'API conectada, mas a conversao de compra nao esta verificada.'),
+        'remediation' => $conversionConfigured
+            ? null
+            : 'Verifique a acao de compra no Google Ads ou configure uma conversao direta validada.',
+        'provider_status' => $conversionProbeStatus,
         'conversion_configured' => $conversionConfigured,
+        'conversion_mode' => $conversionMode,
     ];
 }
 
