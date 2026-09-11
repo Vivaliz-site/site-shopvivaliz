@@ -25,6 +25,8 @@ const profiles = [
 const routes = [
   { name: 'home', url: '/', expected: [200] },
   { name: 'catalogo', url: '/catalogo', expected: [200] },
+  { name: 'blog', url: '/blog/', expected: [200] },
+  { name: 'blog-article', url: '/blog/acessorios-que-ajudam-na-rotina-de-limpeza-e-manutencao', expected: [200] },
   { name: 'produto', url: '/produto/chave-teste-140mm-100500v', expected: [200, 404] },
   { name: 'carrinho', url: '/carrinho', expected: [200] },
   { name: 'checkout', url: '/checkout', expected: [200] },
