@@ -35,15 +35,24 @@ $legacyPatterns = [
     'Como escolher com equilíbrio',
 ];
 $cases = [
-    ['Rodízio com trava ou sem trava: quando usar cada modelo', 'monday'],
-    ['Como limpar ferragens sem danificar o acabamento', 'wednesday'],
-    ['Como montar uma caixa de ferramentas para apartamento', 'friday'],
-    ['Comparativo entre caixas plásticas, cestos e organizadores', 'monday'],
-    ['Erros comuns ao instalar ganchos e suportes', 'wednesday'],
+    ['Rodízio com trava ou sem trava: quando usar cada modelo', 'monday', 'comparison'],
+    ['Como escolher uma caixa organizadora para cada ambiente', 'monday', 'buying_guide'],
+    ['Como limpar ferragens sem danificar o acabamento', 'wednesday', 'maintenance'],
+    ['Erros comuns ao instalar ganchos e suportes', 'wednesday', 'tutorial'],
+    ['Ideias de organização para garagem e área de serviço', 'friday', 'project'],
 ];
 $signatures = [];
-foreach ($cases as [$title, $weekday]) {
+foreach ($cases as [$title, $weekday, $expectedIntent]) {
+    if (sv_blog_editorial_intent($title) !== $expectedIntent) {
+        fwrite(STDERR, "Intent editorial incorreto para {$title}.\n");
+        exit(1);
+    }
     $candidate = sv_blog_editorial_build_article($title, $weekday);
+    $candidateErrors = sv_blog_editorial_validate_article($candidate);
+    if ($candidateErrors !== []) {
+        fwrite(STDERR, "Artigo {$expectedIntent} invalido: " . implode(',', $candidateErrors) . "\n");
+        exit(1);
+    }
     $haystack = (string)($candidate['excerpt'] ?? '') . ' ' . implode(' ', array_column($candidate['content'] ?? [], 'heading'));
     foreach ($legacyPatterns as $pattern) {
         if (str_contains($haystack, $pattern)) {
@@ -53,7 +62,7 @@ foreach ($cases as [$title, $weekday]) {
     }
     $signatures[] = implode('|', array_column($candidate['content'] ?? [], 'heading'));
 }
-if (count(array_unique($signatures)) < 4) {
+if (count(array_unique($signatures)) !== count($cases)) {
     fwrite(STDERR, "Estruturas editoriais pouco variadas.\n");
     exit(1);
 }
