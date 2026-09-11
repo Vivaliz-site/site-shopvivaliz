@@ -22,6 +22,26 @@ function lzr_lower(string $value): string
     return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
 }
 
+function lzr_is_simple_greeting(string $message): bool
+{
+    $normalized = lzr_lower(trim($message));
+    $normalized = preg_replace('/[.!?,;:]+$/u', '', $normalized) ?? $normalized;
+    $normalized = trim(preg_replace('/\s+/u', ' ', $normalized) ?? $normalized);
+
+    return in_array($normalized, [
+        'oi',
+        'olá',
+        'ola',
+        'bom dia',
+        'boa tarde',
+        'boa noite',
+        'e ai',
+        'e aí',
+        'tudo bem',
+        'tudo bom',
+    ], true);
+}
+
 function lzr_request_header(string $name): string
 {
     $serverKey = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
@@ -145,7 +165,8 @@ if ($message === '') {
 
 $commercePattern = '/\b(produto|produtos|pre[cç]o|estoque|comprar|compra|pedido|entrega|frete|cupom|desconto|troca|devolu[cç][aã]o|garantia|pagamento|pix|cart[aã]o|boleto|carrinho|rod[ií]zio|rod[ií]zios|puxador|puxadores|dobradi[cç]a|dobradi[cç]as|corredi[cç]a|corredi[cç]as|fechadura|fechaduras|ferramenta|ferramentas|shopvivaliz|vivaliz|atendente|whatsapp)\b/u';
 $isCommerce = preg_match($commercePattern, $message) === 1;
-$target = $isCommerce ? '/api/liz-intelligent.php' : '/api/liz-general.php';
+$isSimpleGreeting = lzr_is_simple_greeting($message);
+$target = ($isCommerce || $isSimpleGreeting) ? '/api/liz-intelligent.php' : '/api/liz-general.php';
 
 // Encaminhamento somente para o próprio servidor. Não use HTTP_HOST do cliente,
 // evitando que um cabeçalho Host manipulado transforme o roteador em proxy SSRF.
