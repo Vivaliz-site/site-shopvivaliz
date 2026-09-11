@@ -26,4 +26,36 @@ if ($errors !== []) {
     exit(1);
 }
 
+$legacyPatterns = [
+    'Entenda o que avaliar em',
+    'Aprenda um passo a passo simples para',
+    'Veja ideias objetivas para',
+    'O que observar antes de decidir',
+    'Onde esse tipo de solução ajuda',
+    'Como escolher com equilíbrio',
+];
+$cases = [
+    ['Rodízio com trava ou sem trava: quando usar cada modelo', 'monday'],
+    ['Como limpar ferragens sem danificar o acabamento', 'wednesday'],
+    ['Como montar uma caixa de ferramentas para apartamento', 'friday'],
+    ['Comparativo entre caixas plásticas, cestos e organizadores', 'monday'],
+    ['Erros comuns ao instalar ganchos e suportes', 'wednesday'],
+];
+$signatures = [];
+foreach ($cases as [$title, $weekday]) {
+    $candidate = sv_blog_editorial_build_article($title, $weekday);
+    $haystack = (string)($candidate['excerpt'] ?? '') . ' ' . implode(' ', array_column($candidate['content'] ?? [], 'heading'));
+    foreach ($legacyPatterns as $pattern) {
+        if (str_contains($haystack, $pattern)) {
+            fwrite(STDERR, "Boilerplate editorial detectado: {$pattern}\n");
+            exit(1);
+        }
+    }
+    $signatures[] = implode('|', array_column($candidate['content'] ?? [], 'heading'));
+}
+if (count(array_unique($signatures)) < 4) {
+    fwrite(STDERR, "Estruturas editoriais pouco variadas.\n");
+    exit(1);
+}
+
 fwrite(STDOUT, "OK blog editorial autopilot smoke\n");
