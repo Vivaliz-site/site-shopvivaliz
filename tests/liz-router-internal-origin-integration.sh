@@ -19,10 +19,33 @@ free_port() {
   php -r '$s=stream_socket_server("tcp://127.0.0.1:0",$e,$m);$n=stream_socket_get_name($s,false);echo substr(strrchr($n,":"),1);fclose($s);'
 }
 
+assert_route() {
+  local message="$1"
+  local expected="$2"
+  local body="$TMP_DIR/response.json"
+  local payload
+  local code
+
+  payload="$(php -r 'echo json_encode(["message" => $argv[1]], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);' "$message")"
+  code="$(curl --silent --show-error --output "$body" --write-out '%{http_code}' \
+    --header 'Content-Type: application/json' \
+    --data "$payload" \
+    "http://127.0.0.1:$FRONTEND_PORT/api/liz-router.php")"
+
+  php -r '
+$data=json_decode(file_get_contents($argv[1]),true);
+if ($argv[2] !== "200" || !is_array($data) || ($data["answer"] ?? "") !== $argv[3]) {
+    fwrite(STDERR, "FAIL: Liz router returned an unexpected route. HTTP ".$argv[2]." expected=".$argv[3]." body=".file_get_contents($argv[1]).PHP_EOL);
+    exit(1);
+}
+' "$body" "$code" "$expected"
+}
+
 BACKEND_PORT="$(free_port)"
 FRONTEND_PORT="$(free_port)"
 mkdir -p "$TMP_DIR/backend/api" "$TMP_DIR/runtime"
-printf '%s\n' '<?php header("Content-Type: application/json"); echo json_encode(["ok" => true, "answer" => "backend-reached"]);' > "$TMP_DIR/backend/api/liz-general.php"
+printf '%s\n' '<?php header("Content-Type: application/json"); echo json_encode(["ok" => true, "answer" => "general-reached"]);' > "$TMP_DIR/backend/api/liz-general.php"
+printf '%s\n' '<?php header("Content-Type: application/json"); echo json_encode(["ok" => true, "answer" => "intelligent-reached"]);' > "$TMP_DIR/backend/api/liz-intelligent.php"
 
 php -S "127.0.0.1:$BACKEND_PORT" -t "$TMP_DIR/backend" >"$TMP_DIR/backend.log" 2>&1 &
 BACKEND_PID=$!
@@ -39,18 +62,7 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 
-BODY="$TMP_DIR/response.json"
-CODE="$(curl --silent --show-error --output "$BODY" --write-out '%{http_code}' \
-  --header 'Content-Type: application/json' \
-  --data '{"message":"me passe uma receita de bolo"}' \
-  "http://127.0.0.1:$FRONTEND_PORT/api/liz-router.php")"
+assert_route "me passe uma receita de bolo" "general-reached"
+assert_route "bom dia" "intelligent-reached"
 
-php -r '
-$data=json_decode(file_get_contents($argv[1]),true);
-if ($argv[2] !== "200" || !is_array($data) || ($data["answer"] ?? "") !== "backend-reached") {
-    fwrite(STDERR, "FAIL: Liz router did not reach configured loopback backend. HTTP ".$argv[2]." body=".file_get_contents($argv[1]).PHP_EOL);
-    exit(1);
-}
-' "$BODY" "$CODE"
-
-echo "PASS: Liz router reaches the configured private loopback backend."
+echo "PASS: Liz router reaches the configured backend and keeps simple greetings on the intelligent assistant."
