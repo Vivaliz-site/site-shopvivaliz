@@ -348,17 +348,34 @@ def same_site_host(base_url: str, candidate_url: str) -> bool:
     )
 
 
-def sitemap_inventory(base_url: str, sitemap_body: bytes) -> list[str]:
+def _xml_local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1].lower()
+
+
+def sitemap_page_locations(sitemap_body: bytes) -> list[str]:
     try:
         root = ET.fromstring(sitemap_body)
     except ET.ParseError:
         return []
+    if _xml_local_name(root.tag) != "urlset":
+        return []
+    locations: list[str] = []
+    for url_node in list(root):
+        if _xml_local_name(url_node.tag) != "url":
+            continue
+        for child in list(url_node):
+            if _xml_local_name(child.tag) == "loc" and child.text:
+                raw = child.text.strip()
+                if raw:
+                    locations.append(raw)
+                break
+    return locations
+
+
+def sitemap_inventory(base_url: str, sitemap_body: bytes) -> list[str]:
     inventory: list[str] = []
     seen: set[str] = set()
-    for node in root.iter():
-        if not node.tag.lower().endswith("loc") or not node.text:
-            continue
-        raw = node.text.strip()
+    for raw in sitemap_page_locations(sitemap_body):
         if not same_site_host(base_url, raw):
             continue
         normalized = normalize_public_url(raw)
@@ -624,8 +641,8 @@ def validate_live(base_url: str) -> dict[str, Any]:
         add(findings, "blocker", "sitemap_http_status", f"Sitemap returned HTTP {status}", "/sitemap.xml")
     else:
         try:
-            root = ET.fromstring(sitemap_body)
-            raw_sitemap_urls = [node.text.strip() for node in root.iter() if node.tag.lower().endswith("loc") and node.text]
+            ET.fromstring(sitemap_body)
+            raw_sitemap_urls = sitemap_page_locations(sitemap_body)
             sitewide_urls = sitemap_inventory(base_url, sitemap_body)
             if len(raw_sitemap_urls) < 50:
                 add(findings, "warning", "sitemap_small", f"Sitemap contains only {len(raw_sitemap_urls)} URLs", "/sitemap.xml")
