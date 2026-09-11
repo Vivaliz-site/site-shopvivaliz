@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Incident guard: a crashed live crawl must never upload a previous /tmp report.
 workflow='.github/workflows/ecommerce-excellence-audit.yml'
 needle='rm -f /tmp/ecommerce-live.json /tmp/ecommerce-live.md /tmp/google-commerce-config.json'
 
