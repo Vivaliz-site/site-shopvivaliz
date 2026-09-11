@@ -1,5 +1,5 @@
 {
   "action": "install_or_repair",
-  "requested_at": "2026-09-01T20:15:01-03:00",
-  "reason": "deploy robust Fred-Win provider health marker and eliminate false stale-transport restarts"
+  "requested_at": "2026-09-11T17:09:43Z",
+  "reason": "reapply validated Fred-Win interactive-session Desktop Commander runtime after device/relay regression"
 }
