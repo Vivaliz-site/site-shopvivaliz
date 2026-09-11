@@ -102,6 +102,33 @@ class RecurringAiPolicyGuardTests(unittest.TestCase):
             violations = guard.scan_repository(root)
             self.assertTrue(any(v.code == "broad_paid_ai_event" for v in violations))
 
+    def test_plugin_name_does_not_count_as_human_opt_in(self):
+        guard = load_guard()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workflows = root / ".github" / "workflows"
+            workflows.mkdir(parents=True)
+            (workflows / "review.yml").write_text(
+                textwrap.dedent(
+                    """
+                    name: review
+                    on:
+                      pull_request:
+                        types: [opened, synchronize]
+                    jobs:
+                      review:
+                        runs-on: ubuntu-latest
+                        steps:
+                          - uses: anthropics/claude-code-action@v1
+                            with:
+                              plugins: code-review@claude-code-plugins
+                    """
+                ),
+                encoding="utf-8",
+            )
+            violations = guard.scan_repository(root)
+            self.assertTrue(any(v.code == "broad_paid_ai_event" for v in violations))
+
     def test_free_local_recurring_ai_is_allowed(self):
         guard = load_guard()
         with tempfile.TemporaryDirectory() as tmp:
