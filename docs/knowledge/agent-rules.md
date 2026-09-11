@@ -1,5 +1,13 @@
 # Regras para Agentes
 
+## Bootstrap obrigatório de nova sessão
+
+- Antes de qualquer diagnóstico, alteração ou validação, ler `docs/knowledge/host-access.md`.
+- Identificar o host correto pelo papel atual; não assumir que IP/nome histórico ainda é produção.
+- Preferir Desktop Commander quando o dispositivo correspondente estiver conectado; usar SSH com secret/chave protegida como fallback.
+- Confirmar acesso com evidência (`hostname`, `whoami`, diretório e estado Git quando aplicável).
+- Nunca versionar, imprimir ou copiar para documentação o conteúdo de chave privada, senha, token ou secret.
+
 ## Fonte de conhecimento
 
 - Sempre usar `/docs/knowledge/` como base inicial para diagnóstico e operação.
