@@ -34,6 +34,7 @@ jobs:
           php -l includes/blog-article-repository.php >/dev/null
           php -l blog/content.php >/dev/null
           php -l includes/blog-editorial-autopilot.php >/dev/null
+          php tests/blog-editorial-autopilot-smoke.php
           php tests/google-indexing-canonical-regression-test.php
           php tests/asset-source-dist-parity-test.php
           php tests/claude-workflow-cost-guard-test.php
