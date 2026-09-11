@@ -3,8 +3,8 @@
 
 Static mode inventories every tracked file and validates common formats,
 local references and production-risk markers. Live mode validates SEO,
-sitemap, Merchant feed, security headers and representative public URLs.
-No secret values are read or printed.
+sitemap, Merchant feed, security headers and every same-origin public URL
+listed in the canonical sitemap. No secret values are read or printed.
 """
 from __future__ import annotations
 
@@ -35,6 +35,12 @@ REQUIRED_FILES = {
     "api/emails/send-order-notification.php", "includes/head-analytics.php",
 }
 IGNORE_REFERENCE_PREFIXES = ("http://", "https://", "//", "data:", "mailto:", "tel:", "#", "${", "{{")
+VISIBLE_TEXT_IGNORED_TAGS = {"script", "style", "noscript", "template", "svg"}
+SAFE_LINK_SKIP_PREFIXES = (
+    "/api/", "/admin/", "/login", "/logout", "/conta/", "/checkout/",
+    "/carrinho/adicionar", "/carrinho/remover", "/carrinho/atualizar",
+)
+MAX_INTERNAL_LINK_TARGETS = 1000
 
 
 @dataclass
@@ -53,40 +59,65 @@ class HeadParser(html.parser.HTMLParser):
         self.h1 = 0
         self.meta: dict[str, str] = {}
         self.links: list[dict[str, str]] = []
+        self.anchors: list[str] = []
         self.jsonld: list[str] = []
+        self.visible_text: list[str] = []
+        self.main_text: list[str] = []
         self._script_type = ""
         self._script_buffer: list[str] = []
+        self._ignored_depth = 0
+        self._main_depth = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
         values = {k.lower(): (v or "") for k, v in attrs}
-        if tag.lower() == "title":
+        if tag in VISIBLE_TEXT_IGNORED_TAGS:
+            self._ignored_depth += 1
+        if tag == "main":
+            self._main_depth += 1
+        if tag == "title":
             self.in_title = True
-        elif tag.lower() == "h1":
+        elif tag == "h1":
             self.h1 += 1
-        elif tag.lower() == "meta":
+        elif tag == "meta":
             key = values.get("name") or values.get("property")
             if key:
                 self.meta[key.lower()] = values.get("content", "")
-        elif tag.lower() == "link":
+        elif tag == "link":
             self.links.append(values)
-        elif tag.lower() == "script":
+        elif tag == "a":
+            href = values.get("href", "").strip()
+            if href:
+                self.anchors.append(href)
+        elif tag == "script":
             self._script_type = values.get("type", "").lower()
             self._script_buffer = []
 
     def handle_endtag(self, tag: str) -> None:
-        if tag.lower() == "title":
+        tag = tag.lower()
+        if tag == "title":
             self.in_title = False
-        elif tag.lower() == "script":
+        elif tag == "script":
             if self._script_type == "application/ld+json":
                 self.jsonld.append("".join(self._script_buffer).strip())
             self._script_type = ""
             self._script_buffer = []
+        if tag == "main" and self._main_depth:
+            self._main_depth -= 1
+        if tag in VISIBLE_TEXT_IGNORED_TAGS and self._ignored_depth:
+            self._ignored_depth -= 1
 
     def handle_data(self, data: str) -> None:
         if self.in_title:
             self.title += data
         if self._script_type == "application/ld+json":
             self._script_buffer.append(data)
+        if self._ignored_depth == 0:
+            normalized = " ".join(data.split())
+            if normalized:
+                self.visible_text.append(normalized)
+                if self._main_depth > 0:
+                    self.main_text.append(normalized)
 
 
 def tracked_files() -> list[pathlib.Path]:
@@ -282,7 +313,7 @@ def fetch(url: str, timeout: int = 25) -> tuple[int, dict[str, str], bytes, str]
     request = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "ShopVivaliz-Ecommerce-Excellence-Audit/1.0",
+            "User-Agent": "ShopVivaliz-Ecommerce-Excellence-Audit/2.0",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
     )
@@ -293,27 +324,105 @@ def fetch(url: str, timeout: int = 25) -> tuple[int, dict[str, str], bytes, str]
         return exc.code, {k.lower(): v for k, v in exc.headers.items()}, exc.read(), exc.geturl()
 
 
-def validate_page(url: str, body: bytes, headers: dict[str, str], findings: list[Finding]) -> None:
+def normalize_public_url(url: str) -> str:
+    parts = urllib.parse.urlsplit(url.strip())
+    scheme = parts.scheme.lower()
+    hostname = (parts.hostname or "").lower()
+    if not scheme or not hostname:
+        return ""
+    port = parts.port
+    default_port = (scheme == "https" and port == 443) or (scheme == "http" and port == 80)
+    netloc = hostname if port is None or default_port else f"{hostname}:{port}"
+    path = parts.path or "/"
+    return urllib.parse.urlunsplit((scheme, netloc, path, parts.query, ""))
+
+
+def same_site_host(base_url: str, candidate_url: str) -> bool:
+    base = urllib.parse.urlsplit(base_url)
+    candidate = urllib.parse.urlsplit(candidate_url)
+    return (
+        candidate.scheme.lower() in {"http", "https"}
+        and bool(candidate.hostname)
+        and (candidate.hostname or "").lower() == (base.hostname or "").lower()
+    )
+
+
+def sitemap_inventory(base_url: str, sitemap_body: bytes) -> list[str]:
+    try:
+        root = ET.fromstring(sitemap_body)
+    except ET.ParseError:
+        return []
+    inventory: list[str] = []
+    seen: set[str] = set()
+    for node in root.iter():
+        if not node.tag.lower().endswith("loc") or not node.text:
+            continue
+        raw = node.text.strip()
+        if not same_site_host(base_url, raw):
+            continue
+        normalized = normalize_public_url(raw)
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            inventory.append(normalized)
+    return inventory
+
+
+def page_path(url: str) -> str:
+    return urllib.parse.urlsplit(url).path or "/"
+
+
+def _canonical_from_parser(parser: HeadParser, final_url: str) -> str:
+    for item in parser.links:
+        rel_tokens = {token.lower() for token in item.get("rel", "").split()}
+        href = item.get("href", "").strip()
+        if "canonical" in rel_tokens and href:
+            return normalize_public_url(urllib.parse.urljoin(final_url, href))
+    return ""
+
+
+def _normalized_visible_text(parts: list[str]) -> str:
+    return " ".join(" ".join(parts).split())
+
+
+def inspect_page_document(
+    base_url: str,
+    requested_url: str,
+    status: int,
+    headers: dict[str, str],
+    body: bytes,
+    final_url: str,
+) -> tuple[dict[str, Any], list[Finding]]:
+    findings: list[Finding] = []
     parser = HeadParser()
     text = body.decode("utf-8", errors="replace")
     parser.feed(text)
-    path = urllib.parse.urlsplit(url).path or "/"
-    if not parser.title.strip():
-        add(findings, "blocker", "missing_title", "HTML page has no title", path)
-    elif len(parser.title.strip()) > 65:
-        add(findings, "warning", "long_title", f"Title has {len(parser.title.strip())} characters", path)
+    normalized_final = normalize_public_url(final_url) or final_url
+    path = page_path(normalized_final)
+    title = parser.title.strip()
     description = parser.meta.get("description", "").strip()
-    if path not in ("/carrinho", "/checkout") and not description:
+    robots = parser.meta.get("robots", "").strip().lower()
+    canonical = _canonical_from_parser(parser, normalized_final)
+    is_transaction = path.rstrip("/") in ("/carrinho", "/checkout")
+    is_indexable = "noindex" not in robots and not is_transaction
+    visible_text = _normalized_visible_text(parser.visible_text)
+    main_text = _normalized_visible_text(parser.main_text) or visible_text
+
+    if not title:
+        add(findings, "blocker", "missing_title", "HTML page has no title", path)
+    elif len(title) > 65:
+        add(findings, "warning", "long_title", f"Title has {len(title)} characters", path)
+    if is_indexable and not description:
         add(findings, "warning", "missing_meta_description", "Indexable page has no meta description", path)
     if description and len(description) > 170:
         add(findings, "warning", "long_meta_description", f"Meta description has {len(description)} characters", path)
-    canonical = [item.get("href", "") for item in parser.links if item.get("rel", "").lower() == "canonical"]
-    if path not in ("/carrinho", "/checkout") and not canonical:
+    if is_indexable and not canonical:
         add(findings, "blocker", "missing_canonical", "Indexable page has no canonical", path)
-    if parser.h1 != 1 and path not in ("/carrinho", "/checkout"):
+    if is_indexable and canonical and normalize_public_url(canonical) != normalize_public_url(normalized_final):
+        add(findings, "blocker", "canonical_mismatch", f"Canonical points to {canonical} instead of final URL {normalized_final}", path)
+    if parser.h1 != 1 and is_indexable:
         add(findings, "warning", "h1_count", f"Expected one H1, found {parser.h1}", path)
     for required in ("og:title", "og:description", "og:image"):
-        if path not in ("/carrinho", "/checkout") and not parser.meta.get(required):
+        if is_indexable and not parser.meta.get(required):
             add(findings, "warning", "missing_open_graph", f"Missing {required}", path)
     for payload in parser.jsonld:
         if not payload:
@@ -322,16 +431,118 @@ def validate_page(url: str, body: bytes, headers: dict[str, str], findings: list
             json.loads(payload)
         except json.JSONDecodeError as exc:
             add(findings, "blocker", "invalid_jsonld", f"JSON-LD parse error: {exc}", path)
-    if path in ("/carrinho", "/checkout"):
-        robots = parser.meta.get("robots", "").lower()
-        if "noindex" not in robots:
-            add(findings, "warning", "transaction_page_indexable", "Cart/checkout should be noindex", path)
+    if is_transaction and "noindex" not in robots:
+        add(findings, "warning", "transaction_page_indexable", "Cart/checkout should be noindex", path)
     for header in ("content-security-policy", "strict-transport-security", "x-content-type-options"):
         if header not in headers:
             add(findings, "warning", "missing_security_header", f"Missing response header {header}", path)
 
+    if "�" in visible_text or "Ã" in visible_text or "Â" in visible_text:
+        add(findings, "warning", "visible_encoding_issue", "Visible text contains a probable encoding/mojibake marker", path)
+    if is_indexable and path.startswith("/blog/") and path.rstrip("/") != "/blog" and len(main_text) < 900:
+        add(findings, "warning", "thin_editorial_content", f"Editorial main content is only {len(main_text)} normalized characters", path)
 
-def catalog_sample_product_path(base_url: str) -> string:
+    page = {
+        "url": requested_url,
+        "path": path,
+        "status": status,
+        "final_url": normalized_final,
+        "title": title,
+        "description": description,
+        "canonical": canonical,
+        "robots": robots,
+        "h1": parser.h1,
+        "body_text_length": len(main_text),
+        "is_indexable": is_indexable,
+    }
+    return page, findings
+
+
+def validate_page(url: str, body: bytes, headers: dict[str, str], findings: list[Finding]) -> None:
+    parts = urllib.parse.urlsplit(url)
+    base_url = urllib.parse.urlunsplit((parts.scheme, parts.netloc, "", "", ""))
+    _, page_findings = inspect_page_document(base_url, url, 200, headers, body, url)
+    findings.extend(page_findings)
+
+
+def cross_page_findings(pages: list[dict[str, Any]]) -> list[Finding]:
+    findings: list[Finding] = []
+    title_groups: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+    description_groups: dict[str, list[dict[str, Any]]] = collections.defaultdict(list)
+
+    for page in pages:
+        if page.get("status") != 200 or not page.get("is_indexable"):
+            continue
+        canonical = normalize_public_url(str(page.get("canonical") or page.get("final_url") or page.get("url") or ""))
+        if not canonical:
+            continue
+        title = " ".join(str(page.get("title") or "").split()).casefold()
+        description = " ".join(str(page.get("description") or "").split()).casefold()
+        if title:
+            title_groups[title].append(page)
+        if description:
+            description_groups[description].append(page)
+
+    for code, groups, label in (
+        ("duplicate_title", title_groups, "title"),
+        ("duplicate_meta_description", description_groups, "meta description"),
+    ):
+        for grouped_pages in groups.values():
+            distinct: dict[str, dict[str, Any]] = {}
+            for page in grouped_pages:
+                canonical = normalize_public_url(str(page.get("canonical") or page.get("final_url") or page.get("url") or ""))
+                if canonical:
+                    distinct[canonical] = page
+            if len(distinct) < 2:
+                continue
+            paths = [page_path(url) for url in list(distinct)[:8]]
+            findings.append(Finding(
+                "warning",
+                code,
+                f"Duplicate {label} across {len(distinct)} indexable URLs: " + ", ".join(paths),
+                paths[0] if paths else "",
+            ))
+    return findings
+
+
+def extract_internal_links(base_url: str, page_url: str, body: bytes) -> list[str]:
+    parser = HeadParser()
+    parser.feed(body.decode("utf-8", errors="replace"))
+    links: list[str] = []
+    seen: set[str] = set()
+    for href in parser.anchors:
+        lowered = href.strip().lower()
+        if not lowered or lowered.startswith(("#", "mailto:", "tel:", "javascript:", "data:")):
+            continue
+        absolute = normalize_public_url(urllib.parse.urljoin(page_url, href))
+        if not absolute or not same_site_host(base_url, absolute):
+            continue
+        parts = urllib.parse.urlsplit(absolute)
+        path = parts.path or "/"
+        if path.startswith(SAFE_LINK_SKIP_PREFIXES):
+            continue
+        query = urllib.parse.parse_qs(parts.query, keep_blank_values=True)
+        if any(key.lower() in {"token", "action", "add", "remove", "delete", "logout"} for key in query):
+            continue
+        if absolute not in seen:
+            seen.add(absolute)
+            links.append(absolute)
+    return links
+
+
+def _dedupe_findings(findings: list[Finding]) -> list[Finding]:
+    output: list[Finding] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for item in findings:
+        key = (item.severity, item.code, item.path, item.message)
+        if key in seen:
+            continue
+        seen.add(key)
+        output.append(item)
+    return output
+
+
+def catalog_sample_product_path(base_url: str) -> str:
     """Return one currently available public product route from the live catalog API."""
     status, _, body, _ = fetch(base_url.rstrip("/") + "/api/catalog/products.php?limit=1&available=1")
     if status != 200:
@@ -369,6 +580,19 @@ def validate_live(base_url: str) -> dict[str, Any]:
     base_url = base_url.rstrip("/")
     findings: list[Finding] = []
     checked: list[dict[str, Any]] = []
+    fetch_cache: dict[str, tuple[int, dict[str, str], bytes, str]] = {}
+    inspected_pages: dict[str, dict[str, Any]] = {}
+
+    def cached_fetch(url: str, timeout: int = 25) -> tuple[int, dict[str, str], bytes, str]:
+        key = normalize_public_url(url) or url
+        if key in fetch_cache:
+            return fetch_cache[key]
+        result = fetch(url, timeout=timeout)
+        fetch_cache[key] = result
+        final_key = normalize_public_url(result[3]) or result[3]
+        fetch_cache.setdefault(final_key, result)
+        return result
+
     endpoints = ["/", "/catalogo", "/sobre", "/contato", "/faq", "/blog", "/carrinho", "/checkout"]
     sample_product = catalog_sample_product_path(base_url)
     if sample_product:
@@ -378,38 +602,102 @@ def validate_live(base_url: str) -> dict[str, Any]:
 
     for endpoint in endpoints:
         url = base_url + endpoint
-        status, headers, body, final_url = fetch(url)
+        status, headers, body, final_url = cached_fetch(url)
         checked.append({"url": url, "status": status, "final_url": final_url, "bytes": len(body)})
         if status != 200:
             add(findings, "blocker", "public_http_status", f"Expected HTTP 200, received {status}", endpoint)
             continue
-        validate_page(final_url, body, headers, findings)
+        page, page_findings = inspect_page_document(base_url, url, status, headers, body, final_url)
+        findings.extend(page_findings)
+        inspected_pages[normalize_public_url(final_url) or final_url] = page
 
-    status, _, robots_body, _ = fetch(base_url + "/robots.txt")
+    status, _, robots_body, _ = cached_fetch(base_url + "/robots.txt")
     robots_text = robots_body.decode("utf-8", errors="replace")
     if status != 200 or "Sitemap:" not in robots_text or "User-agent:" not in robots_text:
         add(findings, "blocker", "robots_invalid", "robots.txt is unavailable or incomplete", "/robots.txt")
 
-    status, _, sitemap_body, _ = fetch(base_url + "/sitemap.xml")
-    sitemap_urls: list[str] = []
+    status, _, sitemap_body, _ = cached_fetch(base_url + "/sitemap.xml")
+    raw_sitemap_urls: list[str] = []
+    sitewide_urls: list[str] = []
     if status != 200:
         add(findings, "blocker", "sitemap_http_status", f"Sitemap returned HTTP {status}", "/sitemap.xml")
     else:
         try:
             root = ET.fromstring(sitemap_body)
-            namespace = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
-            sitemap_urls = [node.text.strip() for node in root.findall(".//sm:loc", namespace) if node.text]
-            if len(sitemap_urls) < 50:
-                add(findings, "warning", "sitemap_small", f"Sitemap contains only {len(sitemap_urls)} URLs", "/sitemap.xml")
-            if len(sitemap_urls) != len(set(sitemap_urls)):
+            raw_sitemap_urls = [node.text.strip() for node in root.iter() if node.tag.lower().endswith("loc") and node.text]
+            sitewide_urls = sitemap_inventory(base_url, sitemap_body)
+            if len(raw_sitemap_urls) < 50:
+                add(findings, "warning", "sitemap_small", f"Sitemap contains only {len(raw_sitemap_urls)} URLs", "/sitemap.xml")
+            if len(raw_sitemap_urls) != len(set(raw_sitemap_urls)):
                 add(findings, "blocker", "sitemap_duplicates", "Sitemap contains duplicate URLs", "/sitemap.xml")
-            query_urls = [url for url in sitemap_urls if urllib.parse.urlsplit(url).query]
+            query_urls = [url for url in raw_sitemap_urls if urllib.parse.urlsplit(url).query]
             if query_urls:
                 add(findings, "warning", "sitemap_query_urls", f"Sitemap contains {len(query_urls)} query-string URLs", "/sitemap.xml")
+            external_urls = [url for url in raw_sitemap_urls if not same_site_host(base_url, url)]
+            if external_urls:
+                add(findings, "blocker", "sitemap_external_urls", f"Sitemap contains {len(external_urls)} external URLs", "/sitemap.xml")
         except ET.ParseError as exc:
             add(findings, "blocker", "sitemap_xml_invalid", f"Sitemap XML parse error: {exc}", "/sitemap.xml")
 
-    status, _, feed_body, _ = fetch(base_url + "/google-merchant-feed.php", timeout=60)
+    sitewide_pages: list[dict[str, Any]] = []
+    internal_sources: dict[str, set[str]] = collections.defaultdict(set)
+    for sitemap_url in sitewide_urls:
+        status, headers, body, final_url = cached_fetch(sitemap_url)
+        final_normalized = normalize_public_url(final_url) or final_url
+        if status != 200:
+            add(findings, "blocker", "sitemap_page_http_status", f"Sitemap URL returned HTTP {status}", page_path(sitemap_url))
+            sitewide_pages.append({
+                "url": sitemap_url,
+                "path": page_path(sitemap_url),
+                "status": status,
+                "final_url": final_normalized,
+                "title": "",
+                "description": "",
+                "canonical": "",
+                "robots": "",
+                "h1": 0,
+                "body_text_length": 0,
+                "is_indexable": False,
+            })
+            continue
+        if not same_site_host(base_url, final_normalized):
+            add(findings, "blocker", "unexpected_external_redirect", f"Sitemap URL redirected outside the site to {final_normalized}", page_path(sitemap_url))
+            continue
+
+        page_key = normalize_public_url(final_normalized) or final_normalized
+        if page_key in inspected_pages:
+            page = dict(inspected_pages[page_key])
+            page["url"] = sitemap_url
+        else:
+            page, page_findings = inspect_page_document(base_url, sitemap_url, status, headers, body, final_normalized)
+            findings.extend(page_findings)
+            inspected_pages[page_key] = page
+        sitewide_pages.append(page)
+
+        for target in extract_internal_links(base_url, final_normalized, body):
+            internal_sources[target].add(page_path(sitemap_url))
+
+    findings.extend(cross_page_findings(sitewide_pages))
+
+    sitewide_set = set(sitewide_urls)
+    link_targets = sorted(internal_sources)
+    truncated_links = len(link_targets) > MAX_INTERNAL_LINK_TARGETS
+    if truncated_links:
+        add(findings, "info", "internal_link_check_bounded", f"Internal-link verification limited to first {MAX_INTERNAL_LINK_TARGETS} of {len(link_targets)} unique safe targets", "/sitemap.xml")
+        link_targets = link_targets[:MAX_INTERNAL_LINK_TARGETS]
+    broken_links = 0
+    for target in link_targets:
+        if target in sitewide_set:
+            continue
+        status, _, _, final_url = cached_fetch(target)
+        if status >= 400:
+            broken_links += 1
+            sources = sorted(internal_sources[target])
+            add(findings, "warning", "broken_internal_link", f"Internal link returned HTTP {status}: {target}; referenced from {', '.join(sources[:4])}", sources[0] if sources else page_path(target))
+        elif not same_site_host(base_url, final_url):
+            add(findings, "warning", "internal_link_external_redirect", f"Internal link redirects outside the site: {target} -> {final_url}", page_path(target))
+
+    status, _, feed_body, _ = cached_fetch(base_url + "/google-merchant-feed.php", timeout=60)
     feed_items = 0
     if status != 200:
         add(findings, "blocker", "merchant_feed_http_status", f"Merchant feed returned HTTP {status}", "/google-merchant-feed.php")
@@ -445,13 +733,19 @@ def validate_live(base_url: str) -> dict[str, Any]:
         except ET.ParseError as exc:
             add(findings, "blocker", "merchant_xml_invalid", f"Merchant XML parse error: {exc}", "/google-merchant-feed.php")
 
+    findings = _dedupe_findings(findings)
     severity_counts = collections.Counter(item.severity for item in findings)
     return {
         "mode": "live",
         "base_url": base_url,
         "generated_at": int(time.time()),
         "checked": checked,
-        "sitemap_urls": len(sitemap_urls),
+        "sitemap_urls": len(raw_sitemap_urls),
+        "sitewide_checked": len(sitewide_pages),
+        "sitewide_pages": sitewide_pages,
+        "internal_link_targets": len(internal_sources),
+        "internal_link_targets_checked": len(link_targets),
+        "broken_internal_links": broken_links,
         "merchant_items": feed_items,
         "severity": dict(severity_counts),
         "findings": [asdict(item) for item in findings],
@@ -469,6 +763,9 @@ def write_report(report: dict[str, Any], output: pathlib.Path) -> None:
         f"- Scope: `{report.get('scope', 'n/a')}`",
         f"- Generated: `{report.get('generated_at')}`",
         f"- Scanned files: `{report.get('scanned_files', 'n/a')}`",
+        f"- Sitemap URLs: `{report.get('sitemap_urls', 'n/a')}`",
+        f"- Sitewide pages checked: `{report.get('sitewide_checked', 'n/a')}`",
+        f"- Internal link targets: `{report.get('internal_link_targets', 'n/a')}`",
         f"- Blockers: `{report.get('severity', {}).get('blocker', 0)}`",
         f"- Warnings: `{report.get('severity', {}).get('warning', 0)}`",
         f"- Informational: `{report.get('severity', {}).get('info', 0)}`",
@@ -508,7 +805,7 @@ def main() -> int:
     else:
         report = validate_live(args.base_url)
     write_report(report, pathlib.Path(args.output))
-    print(json.dumps({k: v for k, v in report.items() if k != "findings"}, ensure_ascii=False, indent=2))
+    print(json.dumps({k: v for k, v in report.items() if k not in {"findings", "sitewide_pages"}}, ensure_ascii=False, indent=2))
     counts = report.get("severity", {})
     if args.fail_on == "blocker" and counts.get("blocker", 0):
         return 1

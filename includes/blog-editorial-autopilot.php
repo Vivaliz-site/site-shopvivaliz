@@ -101,11 +101,12 @@ function sv_blog_editorial_topic_slug(string $title): string
 function sv_blog_editorial_build_article(string $title, string $weekdayKey): array
 {
     $profile = sv_blog_editorial_topic_profile($title);
+    $intent = sv_blog_editorial_intent($title);
     $slug = sv_blog_editorial_topic_slug($title);
-    $excerpt = sv_blog_editorial_excerpt($title, $profile['category'], $weekdayKey);
+    $excerpt = sv_blog_editorial_excerpt_for_intent($title, $profile, $intent);
     $metaTitle = sv_blog_editorial_truncate($title . ' | ShopVivaliz', 60);
     $metaDescription = sv_blog_editorial_truncate(
-        $excerpt . ' Veja critérios de escolha, uso seguro e produtos relacionados na ShopVivaliz.',
+        $excerpt . ' Confira critérios práticos e cuidados antes de decidir.',
         155
     );
 
@@ -116,15 +117,15 @@ function sv_blog_editorial_build_article(string $title, string $weekdayKey): arr
         'category' => $profile['category'],
         'image_url' => '/public/assets/blog/' . $slug . '.jpg',
         'image_alt' => $title,
-        'content' => sv_blog_editorial_sections($title, $profile, $weekdayKey),
-        'faq' => sv_blog_editorial_faq($title, $profile, $weekdayKey),
+        'content' => sv_blog_editorial_sections_for_intent($title, $profile, $intent),
+        'faq' => sv_blog_editorial_faq_for_intent($title, $profile, $intent),
         'keywords' => sv_blog_editorial_keywords($title, $profile),
         'meta_title' => $metaTitle,
         'meta_description' => $metaDescription,
         'related_products_url' => '/catalogo/?q=' . rawurlencode($profile['search_term']),
         'author' => 'Equipe ShopVivaliz',
         'featured' => false,
-        'reading_time' => $weekdayKey === 'monday' ? 6 : 5,
+        'reading_time' => in_array($intent, ['comparison', 'buying_guide'], true) ? 7 : 6,
     ];
 }
 
@@ -141,10 +142,60 @@ function sv_blog_editorial_validate_article(array $article): array
     $content = $article['content'] ?? [];
     if (!is_array($content) || count($content) < 3) {
         $errors[] = 'invalid_content_sections';
+    } else {
+        $headings = [];
+        $paragraphs = [];
+        $body = '';
+        foreach ($content as $section) {
+            $heading = trim((string)($section['heading'] ?? ''));
+            if ($heading === '') {
+                $errors[] = 'empty_content_heading';
+            } else {
+                $headings[] = sv_blog_editorial_lower($heading);
+            }
+            foreach (($section['paragraphs'] ?? []) as $paragraph) {
+                $normalizedParagraph = trim((string)$paragraph);
+                if ($normalizedParagraph !== '') {
+                    $paragraphs[] = sv_blog_editorial_lower($normalizedParagraph);
+                    $body .= ' ' . $normalizedParagraph;
+                }
+            }
+            foreach (($section['list'] ?? []) as $item) {
+                $body .= ' ' . trim((string)$item);
+            }
+        }
+        if (count($headings) !== count(array_unique($headings))) {
+            $errors[] = 'duplicate_content_headings';
+        }
+        if (count($paragraphs) !== count(array_unique($paragraphs))) {
+            $errors[] = 'duplicate_content_paragraphs';
+        }
+        if (sv_blog_editorial_length(trim($body)) < 650) {
+            $errors[] = 'content_too_short';
+        }
     }
 
-    $metaTitleLength = function_exists('mb_strlen') ? mb_strlen((string)($article['meta_title'] ?? ''), 'UTF-8') : strlen((string)($article['meta_title'] ?? ''));
-    $metaDescriptionLength = function_exists('mb_strlen') ? mb_strlen((string)($article['meta_description'] ?? ''), 'UTF-8') : strlen((string)($article['meta_description'] ?? ''));
+    $legacyPatterns = [
+        'Entenda o que avaliar em',
+        'Aprenda um passo a passo simples para',
+        'Veja ideias objetivas para',
+        'O que observar antes de decidir',
+        'Onde esse tipo de solução ajuda',
+        'Como escolher com equilíbrio',
+    ];
+    $qualityText = (string)($article['excerpt'] ?? '') . ' ' . implode(' ', is_array($content) ? array_map(
+        static fn(array $section): string => (string)($section['heading'] ?? ''),
+        $content
+    ) : []);
+    foreach ($legacyPatterns as $pattern) {
+        if (str_contains($qualityText, $pattern)) {
+            $errors[] = 'legacy_boilerplate';
+            break;
+        }
+    }
+
+    $metaTitleLength = sv_blog_editorial_length((string)($article['meta_title'] ?? ''));
+    $metaDescriptionLength = sv_blog_editorial_length((string)($article['meta_description'] ?? ''));
     if ($metaTitleLength > 60) $errors[] = 'meta_title_too_long';
     if ($metaDescriptionLength < 110) $errors[] = 'meta_description_too_short';
     if ($metaDescriptionLength > 155) $errors[] = 'meta_description_too_long';
@@ -152,9 +203,40 @@ function sv_blog_editorial_validate_article(array $article): array
     $faq = $article['faq'] ?? [];
     if (!is_array($faq) || count($faq) < 2) {
         $errors[] = 'invalid_faq';
+    } else {
+        foreach ($faq as $entry) {
+            if (sv_blog_editorial_length(trim((string)($entry['question'] ?? ''))) < 20 || trim((string)($entry['answer'] ?? '')) === '') {
+                $errors[] = 'faq_not_informative';
+                break;
+            }
+        }
     }
 
-    return $errors;
+    if (!str_starts_with((string)($article['related_products_url'] ?? ''), '/catalogo/?q=')) {
+        $errors[] = 'invalid_related_products_url';
+    }
+
+    return array_values(array_unique($errors));
+}
+
+function sv_blog_editorial_intent(string $title): string
+{
+    $haystack = sv_blog_editorial_lower($title);
+
+    if (preg_match('/comparativo|com trava ou sem trava|entre .+ e /u', $haystack) === 1) {
+        return 'comparison';
+    }
+    if (preg_match('/como escolher|guia de compra|guia rápido/u', $haystack) === 1) {
+        return 'buying_guide';
+    }
+    if (preg_match('/limpar|conservar|durabilidade|ferrugem|revisão|revisao|trocar|desgast/u', $haystack) === 1) {
+        return 'maintenance';
+    }
+    if (preg_match('/como guardar|como evitar|como medir|erros comuns|como reduzir|como montar/u', $haystack) === 1) {
+        return 'tutorial';
+    }
+
+    return 'project';
 }
 
 function sv_blog_editorial_topic_profile(string $title): array
@@ -218,140 +300,192 @@ function sv_blog_editorial_topic_profile(string $title): array
     ];
 }
 
-function sv_blog_editorial_excerpt(string $title, string $category, string $weekdayKey): string
+function sv_blog_editorial_excerpt_for_intent(string $title, array $profile, string $intent): string
 {
-    return match ($weekdayKey) {
-        'monday' => "Entenda o que avaliar em {$title}, compare opções com segurança e escolha soluções adequadas na categoria {$category}.",
-        'wednesday' => "Aprenda um passo a passo simples para {$title}, evitando erros comuns e preservando segurança e praticidade na rotina.",
-        default => "Veja ideias objetivas para {$title}, com foco em uso real, organização da casa e produtos relacionados da ShopVivaliz.",
+    return match ($intent) {
+        'comparison' => "Compare {$title} pelos critérios que realmente mudam o uso: aplicação, instalação, ambiente e manutenção.",
+        'buying_guide' => "Use este guia para decidir {$title} com critérios de medida, compatibilidade, segurança e frequência de uso.",
+        'maintenance' => "Veja como cuidar de {$title}, reconhecer sinais de desgaste e saber quando a manutenção simples deixa de ser suficiente.",
+        'tutorial' => "Siga uma sequência prática para {$title}, com preparação, execução, conferência do resultado e erros que vale evitar.",
+        default => "Planeje {$title} a partir do espaço disponível, da rotina e do que realmente precisa ficar acessível no dia a dia.",
     };
 }
 
-function sv_blog_editorial_sections(string $title, array $profile, string $weekdayKey): array
+function sv_blog_editorial_sections_for_intent(string $title, array $profile, string $intent): array
 {
-    return match ($weekdayKey) {
-        'monday' => [
+    $category = (string)$profile['category'];
+
+    return match ($intent) {
+        'comparison' => [
             [
-                'heading' => 'O que observar antes de decidir',
+                'heading' => 'Diferenças que mudam a escolha',
                 'paragraphs' => [
-                    "Antes de aplicar {$title}, vale medir o espaço, entender a rotina de uso e confirmar o tipo de material ou ambiente envolvido.",
-                    "Na categoria {$profile['category']}, a compra costuma funcionar melhor quando a escolha parte da necessidade real, não apenas do preço ou da aparência.",
+                    "Em {$title}, a comparação útil começa pela aplicação. Observe onde a peça será usada, quanto esforço recebe, como será instalada e se ficará exposta a umidade, poeira ou circulação intensa.",
+                    "Dentro de {$category}, duas opções visualmente parecidas podem se comportar de forma diferente. Material, formato de fixação, manutenção e limite informado pelo fabricante pesam mais do que uma diferença pequena de aparência.",
                 ],
             ],
             [
-                'heading' => 'Como comparar opções com segurança',
+                'heading' => 'Qual opção faz sentido em cada cenário',
                 'paragraphs' => [
-                    'Compare capacidade, acabamento, forma de instalação, resistência esperada e facilidade de manutenção antes de fechar a escolha.',
-                    'Quando houver dúvida sobre carga, fixação, ambiente úmido ou uso frequente, siga a especificação do fabricante e evite adaptações improvisadas.',
+                    'Escolha a alternativa mais simples quando ela atender completamente ao uso previsto. Recursos extras só valem a pena quando resolvem uma necessidade concreta, como imobilização, exposição externa, limpeza frequente ou manuseio diário.',
+                    'Se houver carga, fixação estrutural ou risco de queda, confirme a especificação do fabricante e a capacidade do conjunto completo, não apenas de uma peça isolada.',
                 ],
                 'list' => [
-                    'verificar medidas e tipo de aplicação',
-                    'conferir material e acabamento',
-                    'validar compatibilidade com o ambiente',
-                    'confirmar cuidados básicos de instalação e uso',
+                    'defina primeiro o ambiente e a frequência de uso',
+                    'compare medidas e forma de instalação',
+                    'considere limpeza, desgaste e reposição',
+                    'confirme limites técnicos antes de improvisar adaptações',
                 ],
             ],
             [
-                'heading' => 'Quando vale buscar ajuda técnica',
+                'heading' => 'Checklist antes de comprar',
                 'paragraphs' => [
-                    "Se {$title} envolver risco estrutural, elétrica, peso elevado ou fixação crítica, o mais seguro é contar com instalação qualificada.",
-                    'A orientação profissional evita danos no produto, no ambiente e reduz risco de acidentes em situações que pedem validação técnica.',
+                    'Anote medidas, tire uma foto do ponto de instalação e confira o material onde a peça será fixada. Esses três dados evitam boa parte das compras incompatíveis.',
+                    'No catálogo, use o termo relacionado como ponto de partida e abra a página de cada produto para conferir dimensões, indicação de uso e demais características oficiais antes da decisão.',
                 ],
             ],
         ],
-        'wednesday' => [
+        'buying_guide' => [
             [
-                'heading' => 'Por que esse cuidado faz diferença',
+                'heading' => 'Defina a aplicação primeiro',
                 'paragraphs' => [
-                    "Aplicar {$title} de forma consistente ajuda a reduzir desgaste, bagunça e retrabalho no dia a dia.",
-                    "Pequenos ajustes frequentes costumam ser mais eficientes do que correções grandes depois que o problema já apareceu.",
+                    "Para {$title}, comece descrevendo o problema em uma frase: o que precisa ser apoiado, protegido, movimentado, organizado ou fixado e em qual ambiente. Isso elimina opções que não servem ao uso real.",
+                    "Meça o espaço e o ponto de instalação antes de comparar produtos de {$category}. Quando existir peça antiga, leve também as medidas e o tipo de encaixe para não depender apenas da semelhança visual.",
                 ],
             ],
             [
-                'heading' => 'Passo a passo prático',
+                'heading' => 'Critérios para comparar',
                 'paragraphs' => [
-                    'Comece separando os itens envolvidos, conferindo medidas e observando se há sujeira, folga, umidade ou esforço excessivo no uso atual.',
-                    'Depois ajuste, limpe ou reorganize de forma simples, sempre respeitando o tipo de material e a recomendação do fabricante quando houver.',
+                    'Priorize compatibilidade, material, instalação e manutenção. Depois compare ergonomia, acabamento e conveniência. Preço só faz sentido depois que as alternativas incompatíveis foram descartadas.',
+                    'Em aplicações com carga, eletricidade, corte ou fixação crítica, respeite a indicação do fabricante e procure instalação qualificada quando a segurança depender da montagem correta.',
                 ],
                 'list' => [
-                    'identificar a causa principal do incômodo',
-                    'organizar ou limpar antes de substituir peças',
-                    'testar a solução em uso real',
-                    'repetir a revisão periodicamente',
+                    'medidas e compatibilidade com o local',
+                    'material adequado ao ambiente',
+                    'forma de instalação e ferramentas necessárias',
+                    'frequência de uso e facilidade de manutenção',
                 ],
             ],
             [
-                'heading' => 'Erros comuns para evitar',
+                'heading' => 'Sinais de uma escolha inadequada',
                 'paragraphs' => [
-                    'Forçar encaixes, usar produto inadequado, ignorar limites de peso ou limpar com material abrasivo são falhas recorrentes.',
-                    "Se {$title} não resolver com um ajuste simples, interrompa a tentativa improvisada e reavalie a necessidade com mais cuidado.",
+                    'Folga, esforço excessivo, necessidade de adaptação improvisada ou dificuldade para manter a peça estável são sinais de que vale interromper a instalação e rever o modelo escolhido.',
+                    'Antes de concluir a compra, compare a descrição oficial do produto com suas anotações. Se uma característica importante não estiver informada, não presuma compatibilidade.',
+                ],
+            ],
+        ],
+        'maintenance' => [
+            [
+                'heading' => 'O que causa desgaste',
+                'paragraphs' => [
+                    "No tema {$title}, desgaste costuma acelerar quando há umidade, poeira, sobrecarga, atrito fora do normal ou armazenamento inadequado. Identificar a causa evita tratar só o sintoma.",
+                    "Peças de {$category} também podem perder desempenho por fixação frouxa, limpeza agressiva ou uso fora da aplicação indicada. Observe mudanças de ruído, movimento, acabamento e resistência durante o uso.",
+                ],
+            ],
+            [
+                'heading' => 'Rotina de cuidado',
+                'paragraphs' => [
+                    'Comece com inspeção visual e limpeza compatível com o material. Aperte somente fixações que deveriam estar firmes e não aplique lubrificante ou produto químico sem orientação do fabricante.',
+                    'Depois da manutenção, teste em condição leve antes de retornar ao uso normal. Se o problema reaparecer rapidamente, investigue desalinhamento, carga, ambiente ou peça incompatível.',
+                ],
+                'list' => [
+                    'remova sujeira sem abrasivos desnecessários',
+                    'observe folgas, trincas, oxidação e deformações',
+                    'confira a fixação sem forçar roscas ou encaixes',
+                    'registre recorrências para decidir entre manutenção e troca',
+                ],
+            ],
+            [
+                'heading' => 'Quando substituir ou chamar um profissional',
+                'paragraphs' => [
+                    'Interrompa o uso se houver quebra, deformação, ferrugem profunda, aquecimento, falha de trava ou perda de capacidade de sustentar a aplicação. Manutenção cosmética não corrige dano estrutural.',
+                    'Quando a desmontagem envolver eletricidade, carga elevada ou fixação de segurança, a avaliação de um profissional é mais segura do que insistir em uma correção improvisada.',
+                ],
+            ],
+        ],
+        'tutorial' => [
+            [
+                'heading' => 'Prepare antes de começar',
+                'paragraphs' => [
+                    "Para {$title}, reúna os itens envolvidos, limpe a área e confira medidas, encaixes e pontos de fixação. Preparação simples evita parar no meio do trabalho por falta de espaço ou ferramenta.",
+                    "Se o procedimento envolver produtos de {$category}, leia a orientação do fabricante antes de desmontar, apertar ou aplicar qualquer produto de limpeza.",
+                ],
+            ],
+            [
+                'heading' => 'Faça nesta ordem',
+                'paragraphs' => [
+                    'Primeiro identifique a causa ou a necessidade principal. Em seguida faça a menor intervenção capaz de resolver o problema e teste o resultado. Só avance para desmontagem ou substituição se o passo anterior não for suficiente.',
+                    'Trabalhar em sequência ajuda a descobrir o que realmente produziu a melhora e reduz o risco de criar novas folgas, misturar peças ou perder a referência de montagem.',
+                ],
+                'list' => [
+                    'registre como estava antes da intervenção',
+                    'execute uma mudança por vez',
+                    'teste em condição segura e controlada',
+                    'pare se surgir resistência, aquecimento ou instabilidade inesperada',
+                ],
+            ],
+            [
+                'heading' => 'Erros que comprometem o resultado',
+                'paragraphs' => [
+                    'Forçar encaixes, escolher ferramenta de tamanho incorreto, ignorar o material da superfície e pular a conferência final são erros frequentes. Eles podem transformar um ajuste simples em dano permanente.',
+                    'Se a tarefa exigir conhecimento elétrico, estrutural ou de carga que você não consegue verificar, não improvise. Use suporte qualificado e retome somente com a aplicação segura.',
                 ],
             ],
         ],
         default => [
             [
-                'heading' => 'Onde esse tipo de solução ajuda',
+                'heading' => 'Mapeie o espaço e a rotina',
                 'paragraphs' => [
-                    "No contexto de {$title}, produtos simples podem melhorar organização, praticidade e acesso aos itens usados com frequência.",
-                    'A melhor escolha costuma ser a que resolve um problema específico da rotina sem adicionar volume ou complexidade desnecessária.',
+                    "Em {$title}, observe primeiro onde os itens ficam hoje, quais são usados todos os dias e o que costuma gerar perda de tempo. A organização deve reduzir movimentos e facilitar a devolução de cada coisa ao lugar.",
+                    "Meça prateleiras, nichos, bancadas e circulação antes de escolher acessórios de {$category}. Deixe margem para abrir tampas, retirar caixas e limpar o ambiente sem desmontar o sistema.",
                 ],
             ],
             [
-                'heading' => 'Como escolher com equilíbrio',
+                'heading' => 'Escolha só o que resolve o problema',
                 'paragraphs' => [
-                    "Antes de comprar, confirme o espaço disponível, o volume de uso e a compatibilidade com a categoria {$profile['category']}.",
-                    'Prefira soluções fáceis de manter, com instalação proporcional ao ambiente e utilidade clara para a casa.',
+                    'Agrupe por função e frequência. Itens de uso diário ficam acessíveis; reposições e objetos sazonais podem ocupar áreas mais altas ou profundas. Isso reduz a necessidade de comprar organizadores apenas para preencher espaço.',
+                    'Prefira soluções laváveis, simples de identificar e proporcionais ao volume real. Se um acessório cria uma etapa extra toda vez que algo é usado, provavelmente não será mantido na rotina.',
                 ],
                 'list' => [
-                    'priorizar uso real e frequência',
-                    'evitar excesso de acessórios',
-                    'buscar produtos compatíveis com o ambiente',
-                    'combinar organização com manutenção simples',
+                    'separe o que precisa ficar à mão',
+                    'meça antes de escolher caixas ou suportes',
+                    'evite duplicar recipientes para a mesma função',
+                    'deixe espaço para manutenção e limpeza',
                 ],
             ],
             [
-                'heading' => 'Produtos relacionados que costumam combinar',
+                'heading' => 'Monte um sistema fácil de manter',
                 'paragraphs' => [
-                    "Quem busca {$title} normalmente também se beneficia de acessórios complementares, desde que façam sentido para a rotina e para o espaço disponível.",
-                    'Usar o catálogo como referência ajuda a comparar opções próximas sem depender de improvisos ou compras por impulso.',
+                    'Teste a organização por alguns dias antes de expandir. Ajustes pequenos revelam se o local escolhido realmente acompanha a rotina da casa e evitam compras por impulso.',
+                    'Quando precisar complementar, procure no catálogo pelo tipo de solução e confirme na página do produto as medidas e características oficiais. O objetivo é encaixar o produto no sistema, não reorganizar tudo por causa dele.',
                 ],
             ],
         ],
     };
 }
 
-function sv_blog_editorial_faq(string $title, array $profile, string $weekdayKey): array
+function sv_blog_editorial_faq_for_intent(string $title, array $profile, string $intent): array
 {
-    return match ($weekdayKey) {
-        'monday' => [
-            [
-                'question' => "Como saber se {$title} é a escolha certa?",
-                'answer' => 'Confirme medidas, tipo de uso, ambiente e limites do produto antes da compra. Quando houver risco técnico, procure instalação qualificada.',
-            ],
-            [
-                'question' => 'Vale escolher apenas pelo menor preço?',
-                'answer' => "Nao. Em {$profile['category']}, durabilidade, compatibilidade e seguranca costumam pesar mais do que uma economia imediata.",
-            ],
+    return match ($intent) {
+        'comparison' => [
+            ['question' => 'Qual critério devo comparar primeiro entre as opções?', 'answer' => 'Comece pela aplicação e pela compatibilidade com o local. Depois compare instalação, material, manutenção e recursos adicionais.'],
+            ['question' => 'Quando um recurso extra realmente vale a pena?', 'answer' => 'Quando ele resolve uma necessidade verificável do uso, como trava, exposição externa, limpeza frequente ou maior frequência de manuseio.'],
         ],
-        'wednesday' => [
-            [
-                'question' => "Com que frequência devo revisar {$title}?",
-                'answer' => 'Depende do uso e do ambiente, mas revisões rápidas e recorrentes ajudam a detectar sujeira, desgaste e folgas antes de um problema maior.',
-            ],
-            [
-                'question' => 'Quando é melhor parar e pedir ajuda?',
-                'answer' => 'Se houver risco estrutural, elétrica, carga elevada, ferrugem avançada ou peça danificada, interrompa a tentativa caseira e procure suporte qualificado.',
-            ],
+        'buying_guide' => [
+            ['question' => 'Quais medidas devo levar antes de escolher o produto?', 'answer' => 'Meça o espaço disponível, o ponto de fixação ou encaixe e, se existir, a peça que será substituída. Confira a ficha oficial do produto antes da compra.'],
+            ['question' => 'Como evitar comprar um modelo aparentemente compatível, mas errado?', 'answer' => "Compare aplicação, medidas, material e instalação. Em {$profile['category']}, não presuma compatibilidade apenas pela aparência."],
+        ],
+        'maintenance' => [
+            ['question' => 'Como saber se manutenção simples ainda é suficiente?', 'answer' => 'Se limpeza e conferência de fixação devolvem o funcionamento normal sem folga, deformação ou dano, a manutenção pode bastar. Problemas recorrentes pedem nova avaliação.'],
+            ['question' => 'Quais sinais indicam que é melhor substituir a peça?', 'answer' => 'Trincas, deformação, ferrugem profunda, falha de trava, aquecimento ou perda de capacidade são sinais para interromper o uso e avaliar a substituição.'],
+        ],
+        'tutorial' => [
+            ['question' => 'Qual é a melhor forma de evitar retrabalho durante o processo?', 'answer' => 'Registre o estado inicial, faça uma mudança por vez e teste antes de avançar. Assim fica claro qual etapa resolveu ou agravou o problema.'],
+            ['question' => 'Quando devo interromper o procedimento e procurar ajuda?', 'answer' => 'Pare diante de resistência inesperada, dano, instabilidade, risco elétrico, carga elevada ou qualquer etapa cuja segurança você não consiga verificar.'],
         ],
         default => [
-            [
-                'question' => "Preciso comprar tudo de uma vez para {$title}?",
-                'answer' => 'Nao. O melhor resultado costuma vir da compra do que realmente resolve a necessidade atual, sem excesso de itens pouco usados.',
-            ],
-            [
-                'question' => 'Como encontrar produtos relacionados no catálogo?',
-                'answer' => "Use a busca da ShopVivaliz com termos da categoria {$profile['category']} e compare aplicacao, medidas e facilidade de uso antes de decidir.",
-            ],
+            ['question' => 'Como saber se um organizador ou acessório realmente será útil?', 'answer' => 'Ele deve resolver um problema recorrente, caber com folga no espaço medido e facilitar o acesso ou a devolução dos itens ao lugar.'],
+            ['question' => 'Vale reorganizar tudo de uma vez ou testar primeiro?', 'answer' => 'Teste uma área pequena por alguns dias. Ajuste o sistema antes de comprar novos acessórios para evitar excesso e retrabalho.'],
         ],
     };
 }

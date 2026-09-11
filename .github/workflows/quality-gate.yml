@@ -34,6 +34,13 @@ jobs:
           php -l includes/blog-article-repository.php >/dev/null
           php -l blog/content.php >/dev/null
           php -l includes/blog-editorial-autopilot.php >/dev/null
+          php -l scripts/repair-blog-editorial-content.php >/dev/null
+          php -l blog/index.php >/dev/null
+          php -l blog/artigo.php >/dev/null
+          php tests/blog-editorial-autopilot-smoke.php
+          php tests/blog-editorial-repair-smoke.php
+          php tests/blog-index-experience-regression.php
+          php tests/blog-article-experience-regression.php
           php tests/google-indexing-canonical-regression-test.php
           php tests/asset-source-dist-parity-test.php
           php tests/claude-workflow-cost-guard-test.php
@@ -44,8 +51,10 @@ jobs:
           php tests/mercadopago-legacy-success-route-regression.php
           php scripts/quality/validate-asset-manifest.php
           python3 -m py_compile scripts/seo-integrity-audit.py
+          python3 -m py_compile scripts/ecommerce-excellence-audit.py
           python3 tests/test_ecommerce_excellence_credential_literals.py
           python3 tests/test_ecommerce_excellence_reference_resolution.py
+          python3 tests/test_ecommerce_excellence_sitewide.py
           node --check scripts/public-layout-audit.mjs
           node --check scripts/lib/audit-concurrency.mjs
           node --check js/catalog-conversion-v4.js

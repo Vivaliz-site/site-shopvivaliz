@@ -116,6 +116,9 @@ if (count($related) < 3) {
         if (count($related) >= 3) break;
     }
 }
+$contentSections = array_values(array_filter((array)($article['content'] ?? []), static fn($section): bool =>
+    is_array($section) && trim((string)($section['heading'] ?? '')) !== ''
+));
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -135,7 +138,7 @@ if (count($related) < 3) {
     <meta property="og:locale" content="pt_BR">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="stylesheet" href="/css/responsive.css">
-    <link rel="stylesheet" href="/public/assets/blog/blog.css?v=2026-07-28-comments-1">
+    <link rel="stylesheet" href="/public/assets/blog/blog.css?v=2026-09-11-knowledge-1">
     <style>
         .article-comments-list{display:grid;gap:18px;margin:24px 0}.article-comment{border:1px solid #e5e7eb;border-radius:14px;padding:18px;background:#fff}.article-comment-head{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}.article-comment-name{font-weight:800}.article-comment-date{font-size:13px;color:#6b7280}.article-comment-message{margin:12px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}.article-comment-replies{display:grid;gap:12px;margin:16px 0 0 18px}.article-comment-reply{border-left:4px solid #173B63;background:#f5f8fc;border-radius:0 12px 12px 0;padding:14px;overflow:visible;min-height:0}.article-comment-reply--liz{border-left-color:#059669}.article-comment-reply-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.article-comment-reply-head strong{flex:1 1 auto;min-width:0}.article-comment-reply p{margin:10px 0 0;white-space:pre-wrap;display:block!important;overflow:visible!important;max-height:none!important;text-overflow:clip!important;-webkit-line-clamp:unset!important;-webkit-box-orient:initial!important;overflow-wrap:anywhere;word-break:break-word}.article-comment-badge{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;background:#dcfce7;color:#166534;border-radius:999px;padding:3px 8px}.article-comments-empty{color:#6b7280;padding:14px 0}.article-comments-note{font-size:13px;color:#6b7280}.article-comments-form button[disabled]{opacity:.65;cursor:wait}@media(max-width:640px){.article-comments{padding:20px 16px}.article-comment{padding:16px}.article-comment-replies{margin-left:0}.article-comment-reply{padding:12px 12px 14px}.article-comment-message,.article-comment-reply p{font-size:1rem;line-height:1.72}}
     </style>
@@ -148,7 +151,7 @@ if (count($related) < 3) {
 <?php $svNavCurrent = 'blog'; include __DIR__ . '/../includes/navbar.php'; ?>
 <main class="article-shell">
     <nav class="article-breadcrumb" aria-label="Navegação estrutural">
-        <a href="/">Início</a> / <a href="/blog">Central de Conhecimento</a> / <?= sv_blog_escape((string)$article['category']) ?>
+        <a href="/">Início</a> / <a href="/blog/">Central de Conhecimento</a> / <?= sv_blog_escape((string)$article['category']) ?>
     </nav>
     <article>
         <header class="article-header">
@@ -157,16 +160,35 @@ if (count($related) < 3) {
             <p class="article-lead"><?= sv_blog_escape((string)$article['excerpt']) ?></p>
             <div class="knowledge-meta"><span>Por <?= sv_blog_escape((string)$article['author']) ?></span><span>Publicado em <?= sv_blog_escape(sv_blog_date((string)$article['published_at'])) ?></span><span><?= (int)$article['reading_time'] ?> min de leitura</span></div>
         </header>
-        <?php if ($image !== ''): ?><img class="article-cover" src="<?= sv_blog_escape($image) ?>" alt="<?= sv_blog_escape((string)$article['image_alt']) ?>" loading="eager"><?php endif; ?>
+        <?php if ($image !== ''): ?><img class="article-cover" src="<?= sv_blog_escape($image) ?>" alt="<?= sv_blog_escape((string)$article['image_alt']) ?>" loading="eager" fetchpriority="high" decoding="async"><?php endif; ?>
+
+        <?php if (count($contentSections) >= 3): ?>
+            <nav class="article-toc" aria-labelledby="article-toc-title">
+                <span class="knowledge-eyebrow">Neste guia</span>
+                <h2 id="article-toc-title">Vá direto ao que precisa</h2>
+                <ol>
+                    <?php foreach ($contentSections as $index => $section): ?>
+                        <li><a href="#secao-<?= $index + 1 ?>"><?= sv_blog_escape((string)$section['heading']) ?></a></li>
+                    <?php endforeach; ?>
+                </ol>
+            </nav>
+        <?php endif; ?>
+
         <div class="article-content">
-            <?php foreach ($article['content'] as $section): ?>
-                <section><h2><?= sv_blog_escape((string)($section['heading'] ?? '')) ?></h2>
+            <?php foreach ($contentSections as $index => $section): ?>
+                <section id="secao-<?= $index + 1 ?>"><h2><?= sv_blog_escape((string)($section['heading'] ?? '')) ?></h2>
                     <?php foreach (($section['paragraphs'] ?? []) as $paragraph): ?><p><?= sv_blog_escape((string)$paragraph) ?></p><?php endforeach; ?>
                     <?php if (!empty($section['list'])): ?><ul><?php foreach ($section['list'] as $item): ?><li><?= sv_blog_escape((string)$item) ?></li><?php endforeach; ?></ul><?php endif; ?>
                 </section>
             <?php endforeach; ?>
         </div>
-        <aside class="article-cta"><h2>Encontre produtos para o seu projeto</h2><p>Explore o catálogo da ShopVivaliz e compare as opções disponíveis para a sua necessidade.</p><a href="<?= sv_blog_escape((string)$article['related_products_url']) ?>">Ver produtos relacionados</a></aside>
+        <aside class="article-cta" aria-labelledby="catalog-cta-title">
+            <span class="knowledge-eyebrow">Próximo passo</span>
+            <h2 id="catalog-cta-title">Compare opções relacionadas a este guia</h2>
+            <p>O catálogo abaixo já abre a busca relacionada a este assunto. Use o guia como critério de comparação e confirme as informações de cada item antes de decidir.</p>
+            <a href="<?= sv_blog_escape((string)$article['related_products_url']) ?>">Ver opções no catálogo</a>
+            <p class="article-cta-note">Confira medidas, aplicação, material e demais especificações diretamente na página do produto.</p>
+        </aside>
         <section class="article-comments" id="comentarios" aria-labelledby="comments-title">
             <div class="article-comments-head">
                 <h2 id="comments-title">Perguntas e comentários</h2>
@@ -235,12 +257,12 @@ if (count($related) < 3) {
                 <p class="article-comments-note">Seu e-mail não será exibido publicamente. Evite inserir dados pessoais, número de pedido, documentos ou informações bancárias no comentário.</p>
                 <div class="article-comments-actions">
                     <button type="submit">Enviar comentário</button>
-                    <a href="/contato">Abrir atendimento completo</a>
+                    <a href="/contato/">Abrir atendimento completo</a>
                 </div>
             </form>
         </section>
         <?php if ($faqItems !== []): ?><section class="article-faq" aria-labelledby="faq-title"><h2 id="faq-title">Perguntas frequentes</h2><?php foreach ($faqItems as $faq): ?><details><summary><?= sv_blog_escape((string)$faq['question']) ?></summary><p><?= sv_blog_escape((string)$faq['answer']) ?></p></details><?php endforeach; ?></section><?php endif; ?>
-        <?php if ($related !== []): ?><section class="article-related" aria-labelledby="related-title"><h2>Continue aprendendo</h2><div class="knowledge-grid"><?php foreach ($related as $item): ?><article class="knowledge-card"><div class="knowledge-card-body"><span class="knowledge-chip"><?= sv_blog_escape((string)$item['category']) ?></span><h3><a href="/blog/<?= rawurlencode((string)$item['slug']) ?>"><?= sv_blog_escape((string)$item['title']) ?></a></h3><p><?= sv_blog_escape((string)$item['excerpt']) ?></p><div class="knowledge-meta"><span><?= (int)$item['reading_time'] ?> min</span></div></div></article><?php endforeach; ?></div></section><?php endif; ?>
+        <?php if ($related !== []): ?><section class="article-related" aria-labelledby="related-title"><h2 id="related-title">Continue aprendendo</h2><div class="knowledge-grid"><?php foreach ($related as $item): ?><article class="knowledge-card"><div class="knowledge-card-body"><span class="knowledge-chip"><?= sv_blog_escape((string)$item['category']) ?></span><h3><a href="/blog/<?= rawurlencode((string)$item['slug']) ?>"><?= sv_blog_escape((string)$item['title']) ?></a></h3><p><?= sv_blog_escape((string)$item['excerpt']) ?></p><div class="knowledge-meta"><span><?= (int)$item['reading_time'] ?> min</span></div><a class="knowledge-card-cta" href="/blog/<?= rawurlencode((string)$item['slug']) ?>">Ler guia <span aria-hidden="true">→</span></a></div></article><?php endforeach; ?></div></section><?php endif; ?>
     </article>
 </main>
 <script>
