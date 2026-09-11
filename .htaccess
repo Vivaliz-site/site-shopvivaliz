@@ -28,6 +28,7 @@ AddCharset UTF-8 .html .txt .php .json
 
 <IfModule mod_setenvif.c>
     SetEnvIf Request_URI "^/api/olist/refresh-token\.php(?:\?|$)" SVRT_SENSITIVE=1
+    SetEnvIf Request_URI "^/auth/" SVRT_NOINDEX=1
 </IfModule>
 
 <IfModule mod_headers.c>
@@ -56,6 +57,7 @@ AddCharset UTF-8 .html .txt .php .json
     Header always set Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://connect.facebook.net https://analytics.tiktok.com https://sdk.mercadopago.com https://www.mercadopago.com https://http2.mlstatic.com https://checkout.infinitepay.io https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https:; frame-src 'self' https://sdk.mercadopago.com https://checkout.infinitepay.io; frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
     Header always set Cache-Control "no-store, max-age=0" env=SVRT_SENSITIVE
     Header always set Pragma "no-cache" env=SVRT_SENSITIVE
+    Header always set X-Robots-Tag "noindex, nofollow, noarchive" env=SVRT_NOINDEX
 
     # Rodada 6 (2026-08-19): R4-10 pediu a remocao do X-XSS-Protection (header
     # legado, removido dos navegadores modernos, e que em alguns casos antigos
@@ -129,7 +131,7 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^checkout-v2(?:/.*)?$ - [F,L,NC]
     RewriteRule ^api/orders/create-v2\.php$ - [F,L,NC]
 
-    RewriteRule ^p/termos-e-condicoes/?$ /termos [R=301,L,NE,QSD]
+    RewriteRule ^p/termos-e-condicoes/?$ /termos/ [R=301,L,NE,QSD]
 
     # Consolidacao do admin: entradas sem barra e index.php apontam para /admin/.
     RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
@@ -295,11 +297,68 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteCond %{THE_REQUEST} \s/checkout\.php[\s?]
     RewriteRule ^checkout\.php$ /checkout [R=301,L]
 
-    # Compatibilidade de landing pages legadas usadas em campanhas Google Ads.
-    # Resolve diretamente pelos IDs atuais do catalogo, preservando query strings
-    # de tracking e sem alterar preco, estoque ou cadastro dos produtos.
-    RewriteRule ^produto/vaso-antique-55-75l-macchiato-japi-brown/?$ produto.php?id=341533994 [L,QSA,NC]
-    RewriteRule ^produto/vaso-decor-plantas-cilin-decore-34-28l-aco-corten-japi-168/?$ produto.php?id=350509721 [L,QSA,NC]
+    # Landings historicas de Google Ads tambem passam pelo guard canonico abaixo.
+    # O helper de aliases prova o produto atual e o redirect preserva apenas
+    # parametros de atribuicao permitidos, evitando 200 com canonical diferente.
+
+    # Consolida entradas historicas ainda observadas no Search Console.
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^busca/?$ /catalogo/ [R=301,L,NE]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^p/quem-somos/?$ /sobre/ [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^p/ajuda/?$ /faq/ [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^p/trocas/?$ /politica-devolucoes/ [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^p/entrega/?$ /politica-entrega/ [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^p/termos/?$ /termos/ [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^p/politica-privacidade/?$ /politica-privacidade/ [R=301,L,NE,QSD]
+
+    # Rotas virtuais publicadas no sitemap usam barra final como forma canonica.
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^termos$ /termos/ [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^politica-devolucoes$ /politica-devolucoes/ [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteRule ^politica-entrega$ /politica-entrega/ [R=301,L,NE,QSD]
+
+    # Arquivos de implementacao nao devem competir com as URLs publicas canonicas.
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteCond %{THE_REQUEST} \s/+index\.php(?:[?\s]) [NC]
+    RewriteRule ^index\.php$ / [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteCond %{THE_REQUEST} \s/+catalogo\.php(?:[?\s]) [NC]
+    RewriteRule ^catalogo\.php$ /catalogo/ [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteCond %{THE_REQUEST} \s/+catalogo/index\.php(?:[?\s]) [NC]
+    RewriteRule ^catalogo/index\.php$ /catalogo/ [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteCond %{THE_REQUEST} \s/+sobre/index\.php(?:[?\s]) [NC]
+    RewriteRule ^sobre/index\.php$ /sobre/ [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteCond %{THE_REQUEST} \s/+contato/index\.php(?:[?\s]) [NC]
+    RewriteRule ^contato/index\.php$ /contato/ [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteCond %{THE_REQUEST} \s/+faq/index\.php(?:[?\s]) [NC]
+    RewriteRule ^faq/index\.php$ /faq/ [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteCond %{THE_REQUEST} \s/+blog/index\.php(?:[?\s]) [NC]
+    RewriteRule ^blog/index\.php$ /blog/ [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteCond %{THE_REQUEST} \s/+politica-privacidade/index\.php(?:[?\s]) [NC]
+    RewriteRule ^politica-privacidade/index\.php$ /politica-privacidade/ [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteCond %{THE_REQUEST} \s/+termos\.php(?:[?\s]) [NC]
+    RewriteRule ^termos\.php$ /termos/ [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteCond %{THE_REQUEST} \s/+politica-devolucoes\.php(?:[?\s]) [NC]
+    RewriteRule ^politica-devolucoes\.php$ /politica-devolucoes/ [R=301,L,NE,QSD]
+    RewriteCond %{REQUEST_METHOD} ^(?:GET|HEAD)$ [NC]
+    RewriteCond %{THE_REQUEST} \s/+politica-entrega\.php(?:[?\s]) [NC]
+    RewriteRule ^politica-entrega\.php$ /politica-entrega/ [R=301,L,NE,QSD]
 
     # Nao reescrever arquivos e diretorios reais
     RewriteCond %{REQUEST_FILENAME} -f [OR]
@@ -357,8 +416,6 @@ AddCharset UTF-8 .html .txt .php .json
     RewriteRule ^google-merchant\.xml$ google-merchant-feed.php [L]
     RewriteRule ^google-shopping\.xml$ google-shopping-feed.php [L]
     RewriteRule ^termos/?$ termos.php [L]
-    RewriteRule ^p/termos/?$ termos.php [L]
-    RewriteRule ^p/politica-privacidade/?$ politica-privacidade/index.php [L]
     RewriteRule ^politica-privacidade/?$ politica-privacidade/index.php [L]
     RewriteRule ^politica-devolucoes/?$ politica-devolucoes.php [L]
     RewriteRule ^politica-entrega/?$ politica-entrega.php [L]
