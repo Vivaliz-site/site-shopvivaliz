@@ -4,6 +4,7 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 
 ## Documentos principais
 
+- [`host-access.md`](host-access.md) — **bootstrap obrigatório de hosts, papéis, Desktop Commander, SSH e repositório para toda nova sessão/agente.**
 - [`project.md`](project.md) — visão geral, objetivo e módulos do sistema.
 - [`squad-chat.md`](squad-chat.md) — contrato, health check e providers do Squad Chat.
 - [`troubleshooting.md`](troubleshooting.md) — diagnóstico de erros HTTP, rede, integrações e deploy.
@@ -29,15 +30,27 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 
 Outros documentos existentes na pasta podem registrar versões, dispositivos, decisões históricas e referências específicas.
 
+## Bootstrap obrigatório de nova sessão
+
+Antes de qualquer diagnóstico ou alteração, toda nova sessão deve ler, nesta ordem:
+
+1. `host-access.md` — descobrir o host e o método de acesso corretos;
+2. `agent-rules.md` — aplicar regras de evidência e segurança;
+3. `project.md` — entender o sistema e seus módulos;
+4. o documento específico da rotina afetada.
+
+Nunca recuperar credenciais de arquivos versionados. Use apenas secrets/runtime autorizado, chave local protegida ou Desktop Commander conectado.
+
 ## Ordem recomendada para diagnóstico
 
 1. Identifique o sintoma e o erro real.
-2. Consulte `troubleshooting.md`.
-3. Valide o módulo correspondente no código.
-4. Use `testing.md` para reproduzir.
-5. Consulte `deploy.md` quando houver diferença entre repositório e produção.
-6. Consulte `official-site.md` quando a dúvida envolver conteúdo institucional, termos, categorias ou meios de pagamento.
-7. Consulte `repository-index.md` e `structure-policy.md` antes de mover arquivos ou alterar automações.
-8. Registre lacunas na documentação ao encontrar comportamento novo.
+2. Consulte `host-access.md` para confirmar ambiente e host.
+3. Consulte `troubleshooting.md`.
+4. Valide o módulo correspondente no código.
+5. Use `testing.md` para reproduzir.
+6. Consulte `deploy.md` quando houver diferença entre repositório e produção.
+7. Consulte `official-site.md` quando a dúvida envolver conteúdo institucional, termos, categorias ou meios de pagamento.
+8. Consulte `repository-index.md` e `structure-policy.md` antes de mover arquivos ou alterar automações.
+9. Registre lacunas na documentação ao encontrar comportamento novo.
 
 A documentação não substitui evidência do código, logs, banco, workflow ou resposta do servidor.
