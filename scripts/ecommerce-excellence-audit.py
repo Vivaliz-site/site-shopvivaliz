@@ -333,8 +333,9 @@ def normalize_public_url(url: str) -> str:
     port = parts.port
     default_port = (scheme == "https" and port == 443) or (scheme == "http" and port == 80)
     netloc = hostname if port is None or default_port else f"{hostname}:{port}"
-    path = parts.path or "/"
-    return urllib.parse.urlunsplit((scheme, netloc, path, parts.query, ""))
+    path = urllib.parse.quote(parts.path or "/", safe="/%:@!$&'()*+,;=-._~")
+    query = urllib.parse.quote(parts.query, safe="%=&;:+,/?@!$'()*-._~")
+    return urllib.parse.urlunsplit((scheme, netloc, path, query, ""))
 
 
 def same_site_host(base_url: str, candidate_url: str) -> bool:

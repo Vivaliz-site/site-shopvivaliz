@@ -94,6 +94,23 @@ class SitewideAuditContractTest(unittest.TestCase):
             ),
         )
 
+    def test_internal_links_percent_encode_unicode_before_fetch(self):
+        body = '''<html><body>
+        <a href="/catalogo/?q=acessório">Busca com acento</a>
+        <a href="/blog/guia-de-organização">Guia com acento</a>
+        </body></html>'''.encode("utf-8")
+        self.assertEqual(
+            [
+                "https://shopvivaliz.com.br/catalogo/?q=acess%C3%B3rio",
+                "https://shopvivaliz.com.br/blog/guia-de-organiza%C3%A7%C3%A3o",
+            ],
+            MODULE.extract_internal_links(
+                "https://shopvivaliz.com.br",
+                "https://shopvivaliz.com.br/blog/guia",
+                body,
+            ),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
