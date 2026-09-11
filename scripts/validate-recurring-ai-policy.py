@@ -33,10 +33,17 @@ def _uses_paid_ai(text: str) -> bool:
 
 
 def _has_explicit_human_opt_in(text: str) -> bool:
-    lowered = text.lower()
-    has_explicit_command = any(marker in lowered for marker in ("@claude", "@codex", "@gpt", "allow_paid_ai"))
-    rejects_bots = "[bot]" in lowered or "github.actor" not in lowered
-    return has_explicit_command and rejects_bots
+    explicit_command = re.search(
+        r"contains\s*\([^,\n]+,\s*['\"]@(?:claude|codex|gpt)['\"]\s*\)",
+        text,
+        re.IGNORECASE,
+    ) is not None or re.search(r"\ballow_paid_ai\b", text, re.IGNORECASE) is not None
+    rejects_bots = re.search(
+        r"!\s*endsWith\s*\(\s*github\.actor\s*,\s*['\"]\[bot\]['\"]\s*\)",
+        text,
+        re.IGNORECASE,
+    ) is not None
+    return explicit_command and rejects_bots
 
 
 def scan_repository(root: Path) -> list[Violation]:
