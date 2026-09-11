@@ -58,6 +58,7 @@ jobs:
           bash tests/public-layout-proxy-route-discovery-regression.sh
           bash tests/public-layout-audit-concurrency-regression.sh
           bash tests/active-products-browser-relay-fallback-regression.sh
+          php tests/browser-smoke-relay-failover-regression.php
           bash tests/apache-security-headers-module-regression.sh
           php tests/sobre-open-graph-regression.php
           bash tests/repository-editor-artifacts-regression.sh

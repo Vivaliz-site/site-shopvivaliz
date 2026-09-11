@@ -1,10 +1,12 @@
-﻿name: Image Run Browser Smoke
+name: Image Run Browser Smoke
 
 on:
   push:
     branches: [main]
     paths:
       - '.github/workflows/image-run-browser-smoke.yml'
+      - 'scripts/select-active-products-browser-relay.sh'
+      - 'tests/browser-smoke-relay-failover-regression.php'
       - 'tests/image-run-browser-smoke.py'
       - 'admin/ai-image-studio/admin_dashboard.php'
       - 'admin/assets/image-generation-workflow.js'
@@ -14,6 +16,8 @@ on:
   pull_request:
     paths:
       - '.github/workflows/image-run-browser-smoke.yml'
+      - 'scripts/select-active-products-browser-relay.sh'
+      - 'tests/browser-smoke-relay-failover-regression.php'
       - 'tests/image-run-browser-smoke.py'
       - 'admin/ai-image-studio/admin_dashboard.php'
       - 'admin/assets/image-generation-workflow.js'
@@ -46,6 +50,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 -m py_compile tests/image-run-browser-smoke.py
+          php tests/browser-smoke-relay-failover-regression.php
+          bash -n scripts/select-active-products-browser-relay.sh
           grep -Fq 'SV_IMAGE_BROWSER_SMOKE_B64=' tests/image-run-browser-smoke.py
           grep -Fq "route.fulfill(status=200" tests/image-run-browser-smoke.py
           grep -Fq "method in {'POST', 'PUT', 'PATCH', 'DELETE'}" tests/image-run-browser-smoke.py
@@ -69,14 +75,14 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Verify private relay health
+      - name: Select healthy private Windows relay
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" ubuntu@144.22.157.209 \
-            'curl -fsS --connect-timeout 5 --max-time 12 http://127.0.0.1:5557/health'
+          relay_port="$(bash scripts/select-active-products-browser-relay.sh)"
+          case "$relay_port" in 5557|5558) ;; *) echo "Invalid relay selection" >&2; exit 7 ;; esac
+          printf 'SV_BROWSER_RELAY_PORT=%s\n' "$relay_port" >> "$GITHUB_ENV"
+          echo "Selected allowlisted browser relay port: $relay_port"
 
       - name: Provision ephemeral admin audit session
         shell: bash
@@ -151,10 +157,12 @@ jobs:
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" ubuntu@144.22.157.209 \
-            "BODY_B64='$body_b64' python3 - <<'PY'
+            "BODY_B64='$body_b64' RELAY_PORT='$SV_BROWSER_RELAY_PORT' python3 - <<'PY'
           import base64,json,os,urllib.request
           body=base64.b64decode(os.environ['BODY_B64'])
-          req=urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
+          port=os.environ.get('RELAY_PORT','')
+          if port not in {'5557','5558'}: raise SystemExit('invalid relay port')
+          req=urllib.request.Request(f'http://127.0.0.1:{port}/mcp/tool/execute_command',data=body,headers={'Content-Type':'application/json'},method='POST')
           with urllib.request.urlopen(req,timeout=520) as response: relay=json.loads(response.read().decode())
           result=relay.get('result') or {}; output=str(result.get('output') or ''); error=str(result.get('error') or '')
           marker=''
