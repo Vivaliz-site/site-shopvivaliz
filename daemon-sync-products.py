@@ -19,7 +19,7 @@ API_BASE = "https://api.tiny.com.br/public-api/v3"
 CACHE_PATH = Path("storage/products-cache-ativos.json")
 _RATE_LOCK = threading.Lock()
 _LAST_REQUEST = 0.0
-_MIN_REQUEST_INTERVAL = 0.55
+_MIN_REQUEST_INTERVAL = 1.10
 
 
 def public_product(item: dict[str, Any]) -> dict[str, Any]:
@@ -78,6 +78,8 @@ def public_product(item: dict[str, Any]) -> dict[str, Any]:
         "keywords": seo.get("keywords") if isinstance(seo.get("keywords"), list) else (item.get("keywords", []) if isinstance(item.get("keywords"), list) else []),
         "slug": str(seo.get("slug") or item.get("slug") or ""),
         "video_url": str(seo.get("linkVideo") or item.get("video_url") or "").strip(),
+        "sync_source": "tiny_v3",
+        "_olist_updated_at": str(item.get("_olist_updated_at") or "").strip(),
         "_detail_synced_at": str(item.get("_detail_synced_at") or datetime.now(timezone.utc).isoformat()),
     }
 
@@ -188,24 +190,34 @@ def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 
     previous = load_previous_cache()
     enriched: dict[str, dict[str, Any]] = {}
     failures = 0
+    pending: list[dict[str, Any]] = []
+
+    for summary in summaries:
+        product_id = str(summary.get("id", ""))
+        if not product_id:
+            failures += 1
+            continue
+        cached = previous.get(product_id)
+        current_marker = str(summary.get("dataAlteracao") or "").strip()
+        cached_marker = str(cached.get("_olist_updated_at") or "").strip() if isinstance(cached, dict) else ""
+        if isinstance(cached, dict) and current_marker and cached_marker == current_marker:
+            enriched[product_id] = dict(cached)
+            continue
+        pending.append(summary)
+
+    reused = len(summaries) - len(pending) - failures
+    if reused:
+        print(f"[+] Detalhes reaproveitados do cache: {reused}; pendentes={len(pending)}")
 
     def fetch(summary: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         product_id = str(summary.get("id", ""))
         if not product_id:
-            return product_id, summary
+            raise RuntimeError("product_id_missing")
         detail = api_get(f"produtos/{product_id}", token)
         merged = dict(summary)
         merged.update(detail)
         stock = merged.get("estoque") if isinstance(merged.get("estoque"), dict) else {}
         quantity = max(0, int(stock.get("quantidade") or 0))
-
-        # O endpoint /estoque/{id} calcula "disponivel" no lado da Tiny
-        # (saldo - reservado, considerando composicao de kits automaticamente
-        # e depositos que devem ser desconsiderados) -- mais confiavel que
-        # estoque.quantidade do /produtos/{id}, que para kits fica sempre 0
-        # ou desatualizado. Usa disponivel quando o endpoint responde; cai
-        # para estoque.quantidade se a chamada falhar (produto raramente
-        # controla estoque, ou instabilidade pontual da API).
         try:
             stock_detail = api_get(f"estoque/{product_id}", token, attempts=2)
             if "disponivel" in stock_detail:
@@ -214,28 +226,34 @@ def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 
             pass
 
         merged["estoque_disponivel"] = quantity
+        marker = str(summary.get("dataAlteracao") or merged.get("dataAlteracao") or "").strip()
+        if marker:
+            merged["_olist_updated_at"] = marker
         merged["_detail_synced_at"] = datetime.now(timezone.utc).isoformat()
         return product_id, public_product(merged)
 
-    with ThreadPoolExecutor(max_workers=max(1, min(workers, 8))) as executor:
-        future_map = {executor.submit(fetch, summary): summary for summary in summaries}
-        for index, future in enumerate(as_completed(future_map), 1):
-            summary = future_map[future]
-            product_id = str(summary.get("id", ""))
-            try:
-                key, product = future.result()
-                enriched[key] = product
-            except Exception as exc:
-                failures += 1
-                cached = previous.get(product_id)
-                enriched[product_id] = public_product(cached if isinstance(cached, dict) else summary)
-                print(f"[!] Detalhe {product_id} falhou; cache anterior preservado ({type(exc).__name__})")
-            if index % 25 == 0 or index == len(summaries):
-                print(f"[+] Detalhes processados: {index}/{len(summaries)}; falhas={failures}")
+    if pending:
+        with ThreadPoolExecutor(max_workers=max(1, min(workers, 8))) as executor:
+            future_map = {executor.submit(fetch, summary): summary for summary in pending}
+            for index, future in enumerate(as_completed(future_map), 1):
+                summary = future_map[future]
+                product_id = str(summary.get("id", ""))
+                try:
+                    key, product = future.result()
+                    enriched[key] = product
+                except Exception as exc:
+                    failures += 1
+                    cached = previous.get(product_id)
+                    if isinstance(cached, dict):
+                        enriched[product_id] = dict(cached)
+                        print(f"[!] Detalhe {product_id} falhou; cache anterior preservado ({type(exc).__name__})")
+                    else:
+                        print(f"[!] Produto novo {product_id} adiado apos falha de detalhe ({type(exc).__name__})")
+                if index % 25 == 0 or index == len(pending):
+                    print(f"[+] Detalhes processados: {index}/{len(pending)}; falhas={failures}")
 
     ordered = [enriched[str(item.get("id", ""))] for item in summaries if str(item.get("id", "")) in enriched]
     return ordered, failures
-
 
 def apply_kit_stock(products: list[dict[str, Any]]) -> int:
     """Produtos tipo kit (tipo == "K") nao tem estoque proprio confiavel na

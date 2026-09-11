@@ -69,6 +69,15 @@ function svtnf_extract_status(array $data): string
         '6' => 'entregue',
         '2' => 'cancelado',
         '9' => 'nao_entregue',
+        'aberto' => 'aguardando_pagamento',
+        'aprovado' => 'pagamento_aprovado',
+        'preparando_envio' => 'pronto_para_enviar',
+        'faturado' => 'nota_fiscal_enviada',
+        'pronto_envio' => 'pronto_para_enviar',
+        'enviado' => 'enviado',
+        'entregue' => 'entregue',
+        'nao_entregue' => 'nao_entregue',
+        'cancelado' => 'cancelado',
         'dados incompletos' => 'dados_incompletos',
         'aberta' => 'aguardando_pagamento',
         'aprovada' => 'pagamento_aprovado',
@@ -92,7 +101,6 @@ function svtnf_extract_tracking(array $data): string
     return svtnf_first_non_empty_string([
         $dados['codigoRastreio'] ?? '',
         $dados['tracking'] ?? '',
-        $dados['urlRastreio'] ?? '',
         $data['tracking_number'] ?? '',
         $data['tracking'] ?? '',
     ]);
@@ -102,6 +110,7 @@ function svtnf_extract_tracking_url(array $data): string
 {
     $dados = svtnf_extract_payload($data);
     return svtnf_first_non_empty_string([
+        $dados['urlRastreio'] ?? '',
         $dados['urlRastreamento'] ?? '',
         $dados['linkRastreamento'] ?? '',
         $dados['trackingUrl'] ?? '',
@@ -169,21 +178,32 @@ if ($auth_header !== '' && str_starts_with($auth_header, 'Bearer ')) {
     $provided_token = (string)$_GET['token'];
 }
 
-if (empty($webhook_token) || $provided_token === '') {
-    http_response_code(401);
-    echo json_encode(['error' => 'Unauthorized']);
-    exit;
+$internalAuthenticated = defined('SV_OLIST_INTERNAL_AUTHENTICATED') && SV_OLIST_INTERNAL_AUTHENTICATED === true;
+if (!$internalAuthenticated) {
+    if (empty($webhook_token) || $provided_token === '') {
+        http_response_code(401);
+        echo json_encode(['error' => 'Unauthorized']);
+        exit;
+    }
+
+    if (!hash_equals($webhook_token, $provided_token)) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Forbidden']);
+        exit;
+    }
 }
 
-if (!hash_equals($webhook_token, $provided_token)) {
-    http_response_code(403);
-    echo json_encode(['error' => 'Forbidden']);
-    exit;
+if ($internalAuthenticated) {
+    require_once __DIR__ . '/../../includes/olist-erp-webhook.php';
 }
 
-// Obter payload
-$json = file_get_contents('php://input');
-$data = json_decode($json, true);
+// Obter payload. No despacho interno, reutiliza o JSON ja validado pelo endpoint canonico.
+if ($internalAuthenticated && is_array($GLOBALS['SV_OLIST_INTERNAL_PAYLOAD'] ?? null)) {
+    $data = $GLOBALS['SV_OLIST_INTERNAL_PAYLOAD'];
+} else {
+    $json = file_get_contents('php://input');
+    $data = json_decode($json, true);
+}
 
 if (!is_array($data)) {
     http_response_code(400);
@@ -242,7 +262,7 @@ try {
 
     // Buscar pedido
     $stmt = $db->prepare(
-        'SELECT p.id, p.user_id, p.email, p.order_status, p.order_number, p.tracking_number, p.tracking_url, p.estimated_delivery, u.email as user_email, u.name
+        'SELECT p.id, p.user_id, p.email, p.order_status, p.order_number, p.olist_order_id, p.nf_id, p.tracking_number, p.tracking_url, p.estimated_delivery, u.email as user_email, u.name
          FROM orders p
          LEFT JOIN users u ON u.id = p.user_id
          WHERE p.olist_order_id = ? OR p.order_number = ? LIMIT 1'
@@ -263,6 +283,58 @@ try {
         exit;
     }
 
+    if ($internalAuthenticated) {
+        $token = svtop_tiny_get_token();
+        if ($token === '') {
+            http_response_code(503);
+            echo json_encode(['error' => 'ERP token unavailable']);
+            exit;
+        }
+        $storedErpOrderId = trim((string)($order['olist_order_id'] ?? ''));
+        $incomingErpOrderId = trim((string)($data['dados']['idVendaTiny'] ?? ''));
+        if ($storedErpOrderId !== '' && $incomingErpOrderId !== '' && $storedErpOrderId !== $incomingErpOrderId) {
+            http_response_code(409);
+            echo json_encode(['error' => 'ERP order mismatch']);
+            exit;
+        }
+        $erpOrderId = $incomingErpOrderId !== '' ? $incomingErpOrderId : $storedErpOrderId;
+        if ($erpOrderId === '') {
+            http_response_code(503);
+            echo json_encode(['error' => 'ERP order id unavailable']);
+            exit;
+        }
+        $erpOrderResponse = svtop_tiny_get_order($erpOrderId, $token);
+        if ((int)($erpOrderResponse['status'] ?? 0) !== 200 || !is_array($erpOrderResponse['json'] ?? null)) {
+            http_response_code(503);
+            echo json_encode(['error' => 'ERP order read-back failed']);
+            exit;
+        }
+        $canonicalOrderState = svoei_order_state_from_v3($erpOrderResponse['json']);
+        if ($canonicalOrderState['status'] !== '') {
+            $status = svtnf_extract_status(['dados' => ['situacao' => $canonicalOrderState['status']]]);
+        }
+        $tracking = $canonicalOrderState['tracking'];
+        $tracking_url = $canonicalOrderState['tracking_url'];
+        $estimated_delivery = $canonicalOrderState['estimated_delivery'];
+        $canonicalInvoiceId = $canonicalOrderState['invoice_id'];
+        if ($tipo === 'nota_fiscal') {
+            if ($canonicalInvoiceId === '') {
+                http_response_code(503);
+                echo json_encode(['error' => 'ERP invoice read-back incomplete']);
+                exit;
+            }
+            if ($invoiceId !== '' && $invoiceId !== $canonicalInvoiceId) {
+                http_response_code(409);
+                echo json_encode(['error' => 'ERP invoice mismatch']);
+                exit;
+            }
+            $invoiceId = $canonicalInvoiceId;
+        } elseif ($invoiceId === '' && $canonicalInvoiceId !== '') {
+            $invoiceId = $canonicalInvoiceId;
+        }
+        $normalized_status = $status_map[$status] ?? $status;
+    }
+
     $orderNumber = trim((string)($order['order_number'] ?? ''));
     $orderPath = $orderNumber !== '' ? svmp_find_order_path($orderNumber) : '';
     $orderId = (int)$order['id'];
@@ -270,12 +342,13 @@ try {
     $trackingChanged = $tracking !== '' && $tracking !== (string)($order['tracking_number'] ?? '');
     $trackingUrlChanged = $tracking_url !== '' && $tracking_url !== (string)($order['tracking_url'] ?? '');
     $deliveryChanged = $estimated_delivery !== '' && substr($estimated_delivery, 0, 10) !== substr((string)($order['estimated_delivery'] ?? ''), 0, 10);
+    $invoiceChanged = $invoiceId !== '' && $invoiceId !== (string)($order['nf_id'] ?? '');
 
     $shouldPersist = $statusChanged
         || $trackingChanged
         || $trackingUrlChanged
         || $deliveryChanged
-        || $invoiceId !== '';
+        || $invoiceChanged;
 
     // Atualizar status/dados se houve mudanca ou se o webhook trouxe NF/rastreio novos.
     if ($shouldPersist) {
@@ -296,7 +369,7 @@ try {
 
         if ($update) {
             $nfDataEmissao = '';
-            if ($invoiceId !== '' && svtop_tiny_credentials_configured()) {
+            if ($invoiceChanged && svtop_tiny_credentials_configured()) {
                 try {
                     $token = svtop_tiny_get_token();
                     if ($token !== '') {
@@ -360,7 +433,7 @@ try {
             // Quando a NF vem do ERP, enviar um aviso específico com link seguro
             // para a área do cliente. O XML oficial continua sendo buscado do
             // ERP/Tiny API v3 pelo endpoint autenticado /api/account/invoice.php.
-            if ($normalized_status === 'nota_fiscal_enviada' && $customer_email && $nfId !== '') {
+            if ($invoiceChanged && $normalized_status === 'nota_fiscal_enviada' && $customer_email && $nfId !== '') {
                 send_order_invoice_email(
                     email: $customer_email,
                     name: $order['name'] ?? 'Cliente',
@@ -378,7 +451,7 @@ try {
             // fato emitida -- essa URL (?type=invoice) ja esta cadastrada no
             // painel Tiny (Configuracoes > API do ERP > Notificacoes > URL
             // para envio da nota fiscal), so faltava agir sobre o evento.
-            if ($normalized_status === 'nota_fiscal_enviada') {
+            if ($invoiceChanged && $normalized_status === 'nota_fiscal_enviada') {
                 if ($orderPath !== '') {
                     $labelCmd = 'php ' . escapeshellarg(dirname(__DIR__) . '/melhorenvio/generate-label-background.php') . ' ' .
                                 escapeshellarg($orderPath);

@@ -31,9 +31,9 @@ function sv_webhook_secrets_expected(string $provider = ''): array
 {
     $keys = [];
     if (stripos($provider, 'tiny') !== false) {
-        $keys = ['TINY_WEBHOOK_SECRET', 'OLIST_WEBHOOK_SECRET', 'SHOPVIVALIZ_AGENT_KEY'];
+        $keys = ['TINY_WEBHOOK_SECRET', 'OLIST_WEBHOOK_SECRET'];
     } else {
-        $keys = ['OLIST_WEBHOOK_SECRET', 'TINY_WEBHOOK_SECRET', 'SHOPVIVALIZ_AGENT_KEY'];
+        $keys = ['OLIST_WEBHOOK_SECRET', 'TINY_WEBHOOK_SECRET'];
     }
 
     $secrets = [];
