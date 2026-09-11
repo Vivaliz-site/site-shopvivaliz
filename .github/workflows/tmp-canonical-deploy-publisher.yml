@@ -1,0 +1,47 @@
+name: Temporary Canonical Deploy Publisher
+on:
+  push:
+    branches: [fix/canonical-production-deploy]
+    paths: [.github/workflows/tmp-canonical-deploy-publisher.yml]
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/canonical-production-deploy
+          fetch-depth: 0
+      - name: Apply tested patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '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' | base64 -d | gzip -d > /tmp/canonical.patch
+          git apply --index /tmp/canonical.patch
+      - name: Verify patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/abandoned-cart-recovery-scheduler-test.php
+          php tests/catalog-reconcile-pipeline-contract-test.php
+          php tests/catalog-reconcile-runtime-gate-test.php
+          php tests/amazon-returns-runtime-test.php
+          bash tests/production-runtime-reconciliation-regression.sh
+          bash tests/apache-security-headers-module-regression.sh
+          bash tests/master-production-runtime-restart-regression.sh
+          bash tests/master-production-monitor-regression.sh
+          python3 -m unittest tests.unit.test_runtime_deploy_reconciliation
+          python3 tests/test_master_pipeline_ml_static_runtime.py
+          php scripts/quality/run-all.php
+          bash -n scripts/deploy-production.sh
+          bash -n scripts/install-abandoned-cart-recovery-service.sh
+          git diff --cached --check
+      - name: Commit and push
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'ShopVivaliz Agent'
+          git config user.email 'agent@shopvivaliz.local'
+          git commit -m 'fix(deploy): reconcile revenue recovery in master pipeline'
+          git push origin HEAD:fix/canonical-production-deploy
