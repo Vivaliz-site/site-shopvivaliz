@@ -228,6 +228,16 @@ foreach ($products as $product) {
         echo '<g:sale_price>' . gm_xml(number_format($salePrice, 2, '.', '') . ' BRL') . '</g:sale_price>' . PHP_EOL;
     }
     echo '<g:condition>new</g:condition>' . PHP_EOL;
+    echo '<g:returns>' . PHP_EOL;
+    echo '<g:country>BR</g:country>' . PHP_EOL;
+    echo '<g:item_condition>NEW</g:item_condition>' . PHP_EOL;
+    echo '<g:item_condition>LIKE_NEW</g:item_condition>' . PHP_EOL;
+    echo '<g:window_days>7</g:window_days>' . PHP_EOL;
+    echo '<g:window_type>FINITE_RETURN_WINDOW</g:window_type>' . PHP_EOL;
+    echo '<g:method>BY_MAIL</g:method>' . PHP_EOL;
+    echo '<g:outcome>REFUND</g:outcome>' . PHP_EOL;
+    echo '<g:policy_url>https://shopvivaliz.com.br/politica-devolucoes/</g:policy_url>' . PHP_EOL;
+    echo '</g:returns>' . PHP_EOL;
     if ($brand !== '') echo '<g:brand>' . gm_xml($brand) . '</g:brand>' . PHP_EOL;
     echo '<g:product_type>' . gm_xml($productType) . '</g:product_type>' . PHP_EOL;
     if ($googleCategory !== '') echo '<g:google_product_category>' . gm_xml($googleCategory) . '</g:google_product_category>' . PHP_EOL;

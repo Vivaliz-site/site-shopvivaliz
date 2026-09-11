@@ -8,6 +8,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once dirname(__DIR__, 2) . '/includes/order-request-context.php';
 require_once dirname(__DIR__, 2) . '/includes/order-idempotency.php';
 require_once dirname(__DIR__, 2) . '/includes/mercadopago-gateway.php';
+require_once dirname(__DIR__, 2) . '/includes/checkout-document-policy.php';
 require_once dirname(__DIR__, 2) . '/api/emails/send-order-notification.php';
 require_once dirname(__DIR__, 2) . '/includes/tiny-order-push.php';
 
@@ -184,14 +185,11 @@ if (strlen($name) > 120 || strlen($email) > 160 || strlen($phone) > 40 || strlen
     svop_json(422, ['ok' => false, 'error' => 'field_too_long']);
 }
 
-$validDocument = false;
-if ($documentType === 'cnpj' || strlen($cpf) === 14) {
-    $validDocument = svmp_validate_cnpj($cpf);
-    $documentType = 'cnpj';
-} else {
-    $validDocument = svmp_validate_cpf($cpf);
-    $documentType = 'cpf';
-}
+$documentPolicy = sv_checkout_document_policy($paymentMethod, $cpf, $documentType);
+$validDocument = (bool)$documentPolicy['valid'];
+$documentRequired = (bool)$documentPolicy['required'];
+$cpf = (string)$documentPolicy['digits'];
+$documentType = (string)$documentPolicy['type'];
 
 if (
     $name === ''
@@ -210,7 +208,9 @@ if (
     svop_json(422, [
         'ok' => false,
         'error' => 'customer_fields_invalid',
-        'message' => 'Preencha CPF/CNPJ e endereco completo para finalizar o pedido.',
+        'message' => $documentRequired
+            ? 'Preencha CPF/CNPJ e endereco completo para finalizar o pedido.'
+            : 'Preencha seus dados de contato e endereco completo para finalizar o pedido.',
     ]);
 }
 
