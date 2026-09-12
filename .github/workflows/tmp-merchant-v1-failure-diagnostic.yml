@@ -1,0 +1,59 @@
+name: Temporary Merchant v1 Failure Diagnostic
+on:
+  push:
+    branches: [diag/merchant-v1-failure-20260911]
+    paths: [.github/workflows/tmp-merchant-v1-failure-diagnostic.yml]
+permissions:
+  actions: read
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: Production
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+    steps:
+      - name: Capture failed run excerpt and live policy read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run view 34667674468 --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/failed.log 2>&1 || true
+          python3 - <<'PY'
+          import json, os, re, urllib.error, urllib.parse, urllib.request
+          out = {}
+          raw = open('/tmp/failed.log', encoding='utf-8', errors='replace').read()
+          safe=[]
+          for line in raw.splitlines():
+              if any(key in line for key in ('MERCHANT_', 'HTTPError', 'RuntimeError', 'Traceback', 'Error:', 'error:')):
+                  line=re.sub(r'Bearer\s+[A-Za-z0-9._-]+','Bearer [redacted]',line)
+                  line=re.sub(r'ya29\.[A-Za-z0-9._-]+','[redacted]',line)
+                  safe.append(line[-1800:])
+          out['failed_log_excerpt']=safe[-80:]
+          data=urllib.parse.urlencode({
+              'client_id': os.environ['GOOGLE_OAUTH_CLIENT_ID'],
+              'client_secret': os.environ['GOOGLE_OAUTH_CLIENT_SECRET'],
+              'refresh_token': os.environ['GOOGLE_ADS_REFRESH_TOKEN'],
+              'grant_type':'refresh_token',
+          }).encode()
+          req=urllib.request.Request('https://oauth2.googleapis.com/token',data=data,headers={'Content-Type':'application/x-www-form-urlencoded'},method='POST')
+          with urllib.request.urlopen(req,timeout=30) as r:
+              access=json.loads(r.read().decode()).get('access_token','')
+          url='https://merchantapi.googleapis.com/accounts/v1/accounts/5381803710/onlineReturnPolicies'
+          req=urllib.request.Request(url,headers={'Authorization':'Bearer '+access,'Accept':'application/json'})
+          with urllib.request.urlopen(req,timeout=30) as r:
+              payload=json.loads(r.read().decode() or '{}')
+          fields=('name','returnPolicyId','label','countries','policy','restockingFee','returnMethods','itemConditions','returnShippingFee','returnPolicyUri','returnLabelSource','processRefundDays','acceptExchange','acceptDefectiveOnly')
+          out['v1_http']=200
+          out['policies']=[{k:p.get(k) for k in fields if k in p} for p in (payload.get('onlineReturnPolicies') or [])]
+          open('/tmp/merchant-v1-failure-diagnostic.json','w',encoding='utf-8').write(json.dumps(out,indent=2,ensure_ascii=False))
+          print('diagnostic_written=true')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: merchant-v1-failure-diagnostic
+          path: /tmp/merchant-v1-failure-diagnostic.json
+          retention-days: 1
