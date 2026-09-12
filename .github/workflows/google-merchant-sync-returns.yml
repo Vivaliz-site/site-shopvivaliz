@@ -6,6 +6,7 @@ on:
     paths:
       - "politica-devolucoes.php"
       - "scripts/google_merchant_sync_returns.py"
+      - "tests/test_google_merchant_sync_returns.py"
       - ".github/workflows/google-merchant-sync-returns.yml"
   workflow_dispatch:
 
@@ -29,10 +30,14 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile scripts/google_merchant_sync_returns.py
+          python3 -m unittest tests.test_google_merchant_sync_returns
+          grep -q 'merchantapi.googleapis.com/accounts/v1' scripts/google_merchant_sync_returns.py
+          ! grep -q 'accounts/v1beta' scripts/google_merchant_sync_returns.py
           grep -q '7 dias corridos' politica-devolucoes.php
           grep -q 'não paga o frete de devolução' politica-devolucoes.php
           grep -q 'NUMBER_OF_DAYS_AFTER_DELIVERY' scripts/google_merchant_sync_returns.py
           grep -q 'MERCHANT_RETURN_SHIPPING_COST=0 BRL' scripts/google_merchant_sync_returns.py
+          grep -q 'MERCHANT_RETURN_LABEL_SOURCE=DOWNLOAD_AND_PRINT' scripts/google_merchant_sync_returns.py
 
       - name: Sync Merchant Center return cost and window
         run: python3 scripts/google_merchant_sync_returns.py
