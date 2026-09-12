@@ -48,8 +48,10 @@ jobs:
                       with urllib.request.urlopen(req,timeout=30) as r:
                           payload=json.loads(r.read().decode() or '{}')
                           policies=payload.get('onlineReturnPolicies') or []
+                          fields=('name','returnPolicyId','label','countries','policy','restockingFee','returnMethods','itemConditions','returnShippingFee','returnPolicyUri','returnLabelSource','processRefundDays','acceptExchange','acceptDefectiveOnly')
+                          summaries=[{k:p.get(k) for k in fields if k in p} for p in policies]
                           defaults=[p for p in policies if str(p.get('label') or '').lower()=='default' and 'BR' in (p.get('countries') or [])]
-                          out[version]={'http':r.status,'count':len(policies),'default_br_count':len(defaults),'default_br':[{k:p.get(k) for k in ('name','returnPolicyId','label','countries','policy','returnMethods','itemConditions','returnShippingFee','returnPolicyUri')} for p in defaults[:2]]}
+                          out[version]={'http':r.status,'count':len(policies),'default_br_count':len(defaults),'policies':summaries}
                   except urllib.error.HTTPError as e:
                       out[version]=error_detail(e)
           open('/tmp/merchant-returns-diagnostic.json','w',encoding='utf-8').write(json.dumps(out,indent=2,ensure_ascii=False))
