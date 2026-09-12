@@ -12,6 +12,7 @@ $phone = $company['phone'] ?? '(37) 99937-4112';
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="Consulte a política de entrega da ShopVivaliz: cálculo do frete, prazos, rastreamento, tentativas de entrega e orientações para receber o pedido com segurança.">
 <link rel="canonical" href="https://shopvivaliz.com.br/politica-entrega/"><title>Política de Entrega | <?= htmlspecialchars($fantasyName) ?></title>
+<meta property="og:title" content="Política de Entrega | <?= htmlspecialchars($fantasyName, ENT_QUOTES, 'UTF-8') ?>"><meta property="og:description" content="Consulte a política de entrega da ShopVivaliz: cálculo do frete, prazos, rastreamento, tentativas de entrega e orientações para receber o pedido com segurança."><meta property="og:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square-v2.png"><meta property="og:url" content="https://shopvivaliz.com.br/politica-entrega/"><meta property="og:type" content="website">
 <link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/footer-pages.css?v=20260728-1">
 </head><body>
 <?php $svNavCurrent = 'entrega'; include __DIR__ . '/includes/navbar.php'; ?>

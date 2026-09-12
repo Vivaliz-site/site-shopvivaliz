@@ -163,19 +163,51 @@ function svseo_google_product_category(array $product): string
     return str_contains($candidate, ' > ') ? svseo_trim_words($candidate, 750) : '';
 }
 
+function svseo_variant_id(array $product): string
+{
+    $sku = trim((string)($product['sku'] ?? $product['olist_product_id'] ?? $product['id'] ?? ''));
+    if ($sku === '' || preg_match('/^PRODUTO_\d+$/i', $sku) === 1) {
+        return '';
+    }
+    return svseo_trim_words($sku, 40);
+}
+
+function svseo_with_required_suffix(string $text, string $suffix, int $width, string $identity = ''): string
+{
+    $text = trim($text);
+    $suffix = trim($suffix);
+    if ($suffix === '') {
+        return svseo_trim_words($text, $width);
+    }
+    $identity = $identity !== '' ? $identity : $suffix;
+    $trimmed = svseo_trim_words($text, $width);
+    if ($identity !== '' && stripos($trimmed, $identity) !== false) {
+        return $trimmed;
+    }
+    $suffix = ' ' . $suffix;
+    $suffixWidth = function_exists('mb_strwidth') ? mb_strwidth($suffix, 'UTF-8') : strlen($suffix);
+    $baseWidth = max(0, $width - $suffixWidth);
+    $base = $baseWidth > 0 ? rtrim(svseo_trim_words($text, $baseWidth)) : '';
+    return trim($base . $suffix);
+}
+
 function svseo_title(array $product, int $width = 150): string
 {
     // A pagina publica de produto usa historicamente width=70 e acrescenta
     // " | Vivaliz" fora desta funcao. Reserva os 10 caracteres do sufixo
     // e mantem o <title> completo em ate 60 caracteres. Outros consumidores,
     // como o Merchant Feed (150), preservam seus limites proprios.
-    if ($width === 70) {
+    $storefrontTitle = $width === 70;
+    if ($storefrontTitle) {
         $width = 50;
     }
+    $variantId = svseo_variant_id($product);
 
     $approvedMetaTitle = trim((string)($product['meta_title'] ?? ''));
     if ($approvedMetaTitle !== '') {
-        return svseo_trim_words($approvedMetaTitle, $width);
+        return $storefrontTitle && $variantId !== ''
+            ? svseo_with_required_suffix($approvedMetaTitle, $variantId, $width, $variantId)
+            : svseo_trim_words($approvedMetaTitle, $width);
     }
 
     $name = svseo_human_name($product);
@@ -198,6 +230,9 @@ function svseo_title(array $product, int $width = 150): string
     }
 
     $title = preg_replace('/\b(\w[\wÀ-ÿ-]{2,})(?:\s+\1\b)+/iu', '$1', implode(' ', array_filter($parts))) ?: '';
+    if ($storefrontTitle && $variantId !== '') {
+        return svseo_with_required_suffix($title, $variantId, $width, $variantId);
+    }
     return svseo_trim_words($title, $width);
 }
 
@@ -231,10 +266,14 @@ function svseo_description(array $product, int $width = 5000): string
 function svseo_meta_description(array $product): string
 {
     $approvedMetaDescription = trim((string)($product['meta_description'] ?? ''));
-    if ($approvedMetaDescription !== '') {
-        return svseo_trim_words(svseo_plain_text($approvedMetaDescription), 155);
+    $description = $approvedMetaDescription !== ''
+        ? svseo_plain_text($approvedMetaDescription)
+        : svseo_description($product, 155);
+    $variantId = svseo_variant_id($product);
+    if ($variantId !== '') {
+        return svseo_with_required_suffix($description, 'Código ' . $variantId . '.', 155, $variantId);
     }
-    return svseo_description($product, 155);
+    return svseo_trim_words($description, 155);
 }
 
 function svseo_price_band(float $price): string

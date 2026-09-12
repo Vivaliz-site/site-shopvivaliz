@@ -89,6 +89,23 @@ $merchantTitle = svseo_title($seoFixture, 150);
 sv_audit_expect(sv_audit_strlen($storefrontTitle) <= 60, 'Title completo de produto excede 60 caracteres.');
 sv_audit_expect(sv_audit_strlen($merchantTitle) > 56, 'Limite do storefront vazou para o titulo do Merchant Feed.');
 
+$variantA = [
+    'name' => 'Massa F12 De Calafetar E Correcao Madeira Viapol 400g Mogno',
+    'brand' => 'Viapol',
+    'sku' => 'V0210691',
+    'meta_description' => 'Massa F12 De Calafetar E Correcao Madeira Viapol 400g Cores',
+];
+$variantB = [
+    'name' => 'Massa F12 De Calafetar E Correcao Madeira Viapol 400g Angelim',
+    'brand' => 'Viapol',
+    'sku' => 'V0217760',
+    'meta_description' => 'Massa F12 De Calafetar E Correcao Madeira Viapol 400g Cores',
+];
+sv_audit_expect(svseo_title($variantA, 70) !== svseo_title($variantB, 70), 'Variantes de produto colapsaram no mesmo title SEO.');
+sv_audit_expect(str_contains(svseo_title($variantA, 70), 'V0210691'), 'Title SEO do storefront nao preserva identificador da variante A.');
+sv_audit_expect(str_contains(svseo_title($variantB, 70), 'V0217760'), 'Title SEO do storefront nao preserva identificador da variante B.');
+sv_audit_expect(svseo_meta_description($variantA) !== svseo_meta_description($variantB), 'Variantes de produto colapsaram na mesma meta description.');
+
 if ($failures !== []) {
     foreach ($failures as $failure) {
         fwrite(STDERR, "FAIL: {$failure}\n");
