@@ -39,6 +39,7 @@ VISIBLE_TEXT_IGNORED_TAGS = {"script", "style", "noscript", "template", "svg"}
 SAFE_LINK_SKIP_PREFIXES = (
     "/api/", "/admin/", "/login", "/logout", "/conta/", "/checkout/",
     "/carrinho/adicionar", "/carrinho/remover", "/carrinho/atualizar",
+    "/cdn-cgi/",
 )
 MAX_INTERNAL_LINK_TARGETS = 1000
 
@@ -402,6 +403,12 @@ def _normalized_visible_text(parts: list[str]) -> str:
     return " ".join(" ".join(parts).split())
 
 
+def _has_probable_mojibake(text: str) -> bool:
+    # A bare Ã/Â/â can be legitimate Portuguese. Mojibake instead pairs the
+    # UTF-8 lead byte rendered as Latin-1 with a continuation-byte glyph.
+    return bool(re.search(r"(?:\ufffd|Ã[\u0080-\u00BF]|Â[\u0080-\u00BF]|â[€\u0080-\u00BF]|ðŸ)", text))
+
+
 def inspect_page_document(
     base_url: str,
     requested_url: str,
@@ -455,7 +462,7 @@ def inspect_page_document(
         if header not in headers:
             add(findings, "warning", "missing_security_header", f"Missing response header {header}", path)
 
-    if "�" in visible_text or "Ã" in visible_text or "Â" in visible_text:
+    if _has_probable_mojibake(visible_text):
         add(findings, "warning", "visible_encoding_issue", "Visible text contains a probable encoding/mojibake marker", path)
     if is_indexable and path.startswith("/blog/") and path.rstrip("/") != "/blog" and len(main_text) < 900:
         add(findings, "warning", "thin_editorial_content", f"Editorial main content is only {len(main_text)} normalized characters", path)

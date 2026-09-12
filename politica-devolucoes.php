@@ -8,6 +8,7 @@ $phone = $company['phone'] ?? '(37) 99937-4112';
 ?>
 <!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="Consulte a política de trocas, devoluções e reembolsos da ShopVivaliz, com prazos, condições, orientações de atendimento e procedimentos após a compra."><link rel="canonical" href="https://shopvivaliz.com.br/politica-devolucoes/"><title>Trocas e Devoluções | <?= htmlspecialchars($fantasyName) ?></title>
+<meta property="og:title" content="Trocas e Devoluções | <?= htmlspecialchars($fantasyName, ENT_QUOTES, 'UTF-8') ?>"><meta property="og:description" content="Consulte a política de trocas, devoluções e reembolsos da ShopVivaliz, com prazos, condições, orientações de atendimento e procedimentos após a compra."><meta property="og:image" content="https://shopvivaliz.com.br/images/logo-vivaliz-square-v2.png"><meta property="og:url" content="https://shopvivaliz.com.br/politica-devolucoes/"><meta property="og:type" content="website">
 <link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/footer-pages.css?v=20260728-1"></head><body>
 <?php $svNavCurrent = 'devolucoes'; include __DIR__ . '/includes/navbar.php'; ?>
 <main class="legal-container"><header class="legal-header"><h1>Trocas e Devoluções</h1><p>Saiba como solicitar atendimento em caso de arrependimento, defeito, avaria ou item divergente.</p></header><section class="legal-body">

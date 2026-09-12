@@ -105,6 +105,26 @@ class SitewideAuditContractTest(unittest.TestCase):
         self.assertIn("visible_encoding_issue", codes)
         self.assertIn("thin_editorial_content", codes)
 
+    def test_page_inspection_does_not_flag_valid_portuguese_tilde_as_mojibake(self):
+        body = """<!doctype html><html><head>
+        <title>Colecao de teste</title>
+        <meta name="description" content="Descricao suficientemente clara para o teste.">
+        <meta property="og:title" content="Colecao de teste">
+        <meta property="og:description" content="Descricao suficientemente clara para o teste.">
+        <meta property="og:image" content="/imagem.jpg">
+        <link rel="canonical" href="/colecao">
+        </head><body><h1>COLEÇÃO</h1><main>COLEÇÃO exclusiva para organização.</main></body></html>""".encode("utf-8")
+        _, findings = MODULE.inspect_page_document(
+            "https://shopvivaliz.com.br",
+            "https://shopvivaliz.com.br/colecao",
+            200,
+            {},
+            body,
+            "https://shopvivaliz.com.br/colecao",
+        )
+        codes = {item.code for item in findings}
+        self.assertNotIn("visible_encoding_issue", codes)
+
     def test_internal_links_are_same_origin_and_deduplicated(self):
         body = b'''<html><body>
         <a href="/catalogo/">Catalogo</a>
@@ -117,6 +137,20 @@ class SitewideAuditContractTest(unittest.TestCase):
             MODULE.extract_internal_links(
                 "https://shopvivaliz.com.br",
                 "https://shopvivaliz.com.br/blog/guia",
+                body,
+            ),
+        )
+
+    def test_internal_links_ignore_cloudflare_email_protection_endpoint(self):
+        body = b"""<html><body>
+        <a href="/cdn-cgi/l/email-protection">email protected</a>
+        <a href="/contato">Contato</a>
+        </body></html>"""
+        self.assertEqual(
+            ["https://shopvivaliz.com.br/contato"],
+            MODULE.extract_internal_links(
+                "https://shopvivaliz.com.br",
+                "https://shopvivaliz.com.br/sobre/",
                 body,
             ),
         )
