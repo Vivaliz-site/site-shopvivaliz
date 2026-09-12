@@ -1,0 +1,45 @@
+name: Temporary Merchant v1 Publisher
+on:
+  push:
+    branches: [fix/merchant-returns-v1]
+    paths: [.github/workflows/tmp-merchant-v1-publisher.yml]
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/merchant-returns-v1
+          fetch-depth: 2
+      - name: Apply exact tested code patch
+        shell: bash
+        env:
+          PATCH_B64: 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
+        run: |
+          set -euo pipefail
+          printf '%s' "$PATCH_B64" | base64 -d | gzip -d > /tmp/merchant-v1.patch
+          git apply --index /tmp/merchant-v1.patch
+          git diff --cached --check
+      - name: Verify full branch state
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/google_merchant_sync_returns.py
+          python3 -m unittest tests.test_google_merchant_sync_returns
+          grep -q 'merchantapi.googleapis.com/accounts/v1' scripts/google_merchant_sync_returns.py
+          ! grep -q 'accounts/v1beta' scripts/google_merchant_sync_returns.py
+          grep -q 'tests/test_google_merchant_sync_returns.py' .github/workflows/google-merchant-sync-returns.yml
+          php scripts/quality/run-all.php
+          git update-index --force-remove .github/workflows/tmp-merchant-v1-publisher.yml
+          test "$(git write-tree)" = 'a651b136481bcb5e9776efe61fbd0a70cef9d14f'
+          git reset HEAD -- .github/workflows/tmp-merchant-v1-publisher.yml
+      - name: Commit and push non-workflow files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'ShopVivaliz Agent'
+          git config user.email 'agent@shopvivaliz.local'
+          git commit -m 'fix(merchant): migrate return policy sync to v1'
+          git push origin HEAD:fix/merchant-returns-v1
