@@ -17,13 +17,40 @@ jobs:
       GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
       GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
     steps:
+      - uses: actions/checkout@v4
+      - name: Restore missing policy with create-only guard
+        id: restore
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp scripts/google_merchant_sync_returns.py /tmp/merchant-restore.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/merchant-restore.py')
+          s=p.read_text(encoding='utf-8')
+          old='        "returnPolicyUri": POLICY_URL,\n        "returnLabelSource": "DOWNLOAD_AND_PRINT",'
+          new='        "returnPolicyUri": POLICY_URL,\n        "processRefundDays": 1,\n        "returnLabelSource": "DOWNLOAD_AND_PRINT",'
+          assert old in s
+          s=s.replace(old,new,1)
+          old='    policies = list_policies(access, list_url)\n    target = find_default_policy(policies, "BR")'
+          new='    policies = list_policies(access, list_url)\n    if policies:\n        print("MERCHANT_EMERGENCY_RESTORE=SKIPPED_EXISTING")\n        return 0\n    target = find_default_policy(policies, "BR")'
+          assert old in s
+          s=s.replace(old,new,1)
+          p.write_text(s,encoding='utf-8')
+          PY
+          python3 -m py_compile /tmp/merchant-restore.py
+          grep -q '"processRefundDays": 1' /tmp/merchant-restore.py
+          grep -q 'MERCHANT_EMERGENCY_RESTORE=SKIPPED_EXISTING' /tmp/merchant-restore.py
+          python3 /tmp/merchant-restore.py
       - name: Capture failed run excerpt and live policy read-only
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
           gh run view 34667674468 --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/failed.log 2>&1 || true
           python3 - <<'PY'
-          import json, os, re, urllib.error, urllib.parse, urllib.request
+          import json, os, re, urllib.parse, urllib.request
           out = {}
           raw = open('/tmp/failed.log', encoding='utf-8', errors='replace').read()
           safe=[]
@@ -50,9 +77,27 @@ jobs:
           out['v1_http']=200
           out['policies']=[{k:p.get(k) for k in fields if k in p} for p in (payload.get('onlineReturnPolicies') or [])]
           open('/tmp/merchant-v1-failure-diagnostic.json','w',encoding='utf-8').write(json.dumps(out,indent=2,ensure_ascii=False))
-          print('diagnostic_written=true')
+          print('diagnostic_written=true policies=' + str(len(out['policies'])))
+          PY
+      - name: Require policy restored
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/merchant-v1-failure-diagnostic.json',encoding='utf-8'))
+          p=d.get('policies') or []
+          assert len(p) == 1, p
+          x=p[0]
+          assert x.get('countries') == ['BR'], x
+          assert (x.get('policy') or {}).get('type') == 'NUMBER_OF_DAYS_AFTER_DELIVERY', x
+          assert str((x.get('policy') or {}).get('days')) == '7', x
+          assert x.get('processRefundDays') == 1, x
+          assert x.get('returnLabelSource') == 'DOWNLOAD_AND_PRINT', x
+          print('merchant_policy_restored=true')
           PY
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: merchant-v1-failure-diagnostic
           path: /tmp/merchant-v1-failure-diagnostic.json
