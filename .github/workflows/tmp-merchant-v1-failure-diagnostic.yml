@@ -19,8 +19,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Restore missing policy with create-only guard
-        id: restore
-        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -37,29 +35,22 @@ jobs:
           new='    policies = list_policies(access, list_url)\n    if policies:\n        print("MERCHANT_EMERGENCY_RESTORE=SKIPPED_EXISTING")\n        return 0\n    target = find_default_policy(policies, "BR")'
           assert old in s
           s=s.replace(old,new,1)
+          old='''    else:\n        result = request_json(access, "POST", list_url, desired)\n        readback = find_default_policy(list_policies(access, list_url), "BR")\n        if readback is None or not policy_matches(readback, desired):\n            if readback is not None:\n                delete_policy(access, parent, readback)\n            raise RuntimeError("POLICY_CREATE_READBACK_MISMATCH")\n        result = readback or result\n        action = "CREATED"\n'''
+          new='''    else:\n        result = request_json(access, "POST", list_url, desired)\n        action = "CREATED"\n'''
+          assert old in s
+          s=s.replace(old,new,1)
           p.write_text(s,encoding='utf-8')
           PY
           python3 -m py_compile /tmp/merchant-restore.py
           grep -q '"processRefundDays": 1' /tmp/merchant-restore.py
-          grep -q 'MERCHANT_EMERGENCY_RESTORE=SKIPPED_EXISTING' /tmp/merchant-restore.py
+          ! grep -q 'POLICY_CREATE_READBACK_MISMATCH' /tmp/merchant-restore.py
           python3 /tmp/merchant-restore.py
-      - name: Capture failed run excerpt and live policy read-only
-        if: always()
+      - name: Read live policy independently
         shell: bash
         run: |
           set -euo pipefail
-          gh run view 34667674468 --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/failed.log 2>&1 || true
           python3 - <<'PY'
-          import json, os, re, urllib.parse, urllib.request
-          out = {}
-          raw = open('/tmp/failed.log', encoding='utf-8', errors='replace').read()
-          safe=[]
-          for line in raw.splitlines():
-              if any(key in line for key in ('MERCHANT_', 'HTTPError', 'RuntimeError', 'Traceback', 'Error:', 'error:')):
-                  line=re.sub(r'Bearer\s+[A-Za-z0-9._-]+','Bearer [redacted]',line)
-                  line=re.sub(r'ya29\.[A-Za-z0-9._-]+','[redacted]',line)
-                  safe.append(line[-1800:])
-          out['failed_log_excerpt']=safe[-80:]
+          import json, os, urllib.parse, urllib.request
           data=urllib.parse.urlencode({
               'client_id': os.environ['GOOGLE_OAUTH_CLIENT_ID'],
               'client_secret': os.environ['GOOGLE_OAUTH_CLIENT_SECRET'],
@@ -74,13 +65,11 @@ jobs:
           with urllib.request.urlopen(req,timeout=30) as r:
               payload=json.loads(r.read().decode() or '{}')
           fields=('name','returnPolicyId','label','countries','policy','restockingFee','returnMethods','itemConditions','returnShippingFee','returnPolicyUri','returnLabelSource','processRefundDays','acceptExchange','acceptDefectiveOnly')
-          out['v1_http']=200
-          out['policies']=[{k:p.get(k) for k in fields if k in p} for p in (payload.get('onlineReturnPolicies') or [])]
+          out={'v1_http':200,'policies':[{k:p.get(k) for k in fields if k in p} for p in (payload.get('onlineReturnPolicies') or [])]}
           open('/tmp/merchant-v1-failure-diagnostic.json','w',encoding='utf-8').write(json.dumps(out,indent=2,ensure_ascii=False))
           print('diagnostic_written=true policies=' + str(len(out['policies'])))
           PY
       - name: Require policy restored
-        if: always()
         shell: bash
         run: |
           python3 - <<'PY'
