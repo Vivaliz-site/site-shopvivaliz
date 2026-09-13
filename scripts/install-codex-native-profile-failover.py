@@ -14,8 +14,8 @@ def render_linux_auto_launcher(real_codex: str, engine_path: str) -> str:
     real = shlex.quote(real_codex)
     engine = shlex.quote(engine_path)
     return (
-        '#!/bin/sh\n'
-        'set -eu\n'
+        '#!/bin/bash\n'
+        'set -Eeuo pipefail\n'
         f'CODEX_REAL={real}\n'
         'export CODEX_REAL\n'
         f'exec python3 {engine} "$@"\n'
@@ -26,11 +26,11 @@ def render_linux_manual_launcher(real_codex: str, profile_home: str) -> str:
     real = shlex.quote(real_codex)
     profile = shlex.quote(profile_home)
     return (
-        '#!/bin/sh\n'
-        'set -eu\n'
+        '#!/bin/bash\n'
+        'set -Eeuo pipefail\n'
         f'CODEX_HOME={profile}\n'
         'export CODEX_HOME\n'
-        'unset OPENAI_API_KEY CODEX_API_KEY || true\n'
+        'unset OPENAI_API_KEY CODEX_API_KEY\n'
         f'exec {real} "$@"\n'
     )
 
@@ -75,6 +75,20 @@ def patch_windows_scope_guard(text: str, launcher_path: str) -> str:
     if marker not in text:
         raise ValueError('Windows scope guard Codex block not found')
     return text.replace(marker, block + marker, 1)
+
+
+def patch_windows_scope_guard_file(path: Path, launcher_path: str) -> None:
+    raw = path.read_bytes()
+    has_bom = raw.startswith(b'\xef\xbb\xbf')
+    text = raw.decode('utf-8-sig')
+    newline = '\r\n' if '\r\n' in text else '\n'
+    patched = patch_windows_scope_guard(text, launcher_path)
+    if newline == '\r\n':
+        patched = patched.replace('\r\n', '\n').replace('\n', '\r\n')
+    encoded = patched.encode('utf-8')
+    if has_bom:
+        encoded = b'\xef\xbb\xbf' + encoded
+    path.write_bytes(encoded)
 
 
 def _backup_files(paths: list[Path], backup_dir: Path) -> None:
@@ -142,7 +156,7 @@ def install(
         fred_path.write_text(render_windows_manual_launcher(real_codex, str(runtime / 'fredmourao')), encoding='utf-8')
         marina_path.write_text(render_windows_manual_launcher(real_codex, str(runtime / 'marinaofaleiro')), encoding='utf-8')
         if guard.exists():
-            guard.write_text(patch_windows_scope_guard(guard.read_text(encoding='utf-8-sig'), str(auto_path)), encoding='utf-8-sig')
+            patch_windows_scope_guard_file(guard, str(auto_path))
     else:
         raise ValueError(f'unsupported platform: {platform}')
 
