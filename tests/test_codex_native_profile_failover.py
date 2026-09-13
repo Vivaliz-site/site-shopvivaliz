@@ -19,6 +19,17 @@ def load_module():
     return module
 
 
+def write_fake_executable(root: Path, name: str, posix_text: str, windows_text: str) -> Path:
+    if os.name == 'nt':
+        path = root / f'{name}.cmd'
+        path.write_text(windows_text, encoding='utf-8')
+    else:
+        path = root / name
+        path.write_text(posix_text, encoding='utf-8')
+        path.chmod(0o755)
+    return path
+
+
 class FakeProbe:
     def __init__(self, results):
         self.results = list(results)
@@ -147,12 +158,12 @@ class NativeProfileProcessTests(unittest.TestCase):
         mod = load_module()
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            exe = root / 'fake-codex'
-            exe.write_text(
+            exe = write_fake_executable(
+                root,
+                'fake-codex',
                 '#!/bin/sh\nprintf "%s\\n" "$CODEX_HOME"\nprintf "%s\\n" "$*"\n',
-                encoding='utf-8',
+                '@echo off\r\necho %CODEX_HOME%\r\necho %*\r\nexit /b 0\r\n',
             )
-            exe.chmod(0o755)
             home = root / '.codex-business' / 'fredmourao'
             home.mkdir(parents=True)
             result = mod.run_captured(str(exe), 'fredmourao', home, ['doctor', '--json'])
@@ -164,9 +175,12 @@ class NativeProfileProcessTests(unittest.TestCase):
         mod = load_module()
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            exe = root / 'slow-codex'
-            exe.write_text('#!/bin/sh\nsleep 2\n', encoding='utf-8')
-            exe.chmod(0o755)
+            exe = write_fake_executable(
+                root,
+                'slow-codex',
+                '#!/bin/sh\nsleep 2\n',
+                '@echo off\r\nping 127.0.0.1 -n 3 >nul\r\nexit /b 0\r\n',
+            )
             home = root / '.codex-business' / 'fredmourao'
             home.mkdir(parents=True)
             result = mod.run_captured(str(exe), 'fredmourao', home, ['exec'], timeout=0.05)
@@ -200,8 +214,9 @@ class NativeProfileMainTests(unittest.TestCase):
             root = Path(td)
             business = self._setup_home(root)
             log = root / 'calls.log'
-            exe = root / 'fake-codex'
-            exe.write_text(
+            exe = write_fake_executable(
+                root,
+                'fake-codex',
                 '#!/bin/sh\n'
                 'name=$(basename "$CODEX_HOME")\n'
                 'printf "%s|%s\\n" "$name" "$*" >> "$CALL_LOG"\n'
@@ -209,9 +224,18 @@ class NativeProfileMainTests(unittest.TestCase):
                 '  *PROFILE_OK*) if [ "$name" = fredmourao ]; then echo "usage limit reached" >&2; exit 1; else echo PROFILE_OK; exit 0; fi ;;\n'
                 '  *) echo "TASK:$name"; exit 0 ;;\n'
                 'esac\n',
-                encoding='utf-8',
+                '@echo off\r\n'
+                'for %%I in ("%CODEX_HOME%") do set "name=%%~nxI"\r\n'
+                '>>"%CALL_LOG%" echo %name%^|%*\r\n'
+                'echo %* | findstr /C:"PROFILE_OK" >nul\r\n'
+                'if not errorlevel 1 (\r\n'
+                '  if "%name%"=="fredmourao" (>&2 echo usage limit reached & exit /b 1)\r\n'
+                '  echo PROFILE_OK\r\n'
+                '  exit /b 0\r\n'
+                ')\r\n'
+                'echo TASK:%name%\r\n'
+                'exit /b 0\r\n',
             )
-            exe.chmod(0o755)
             old = dict(os.environ)
             try:
                 os.environ['HOME'] = str(root)
@@ -233,8 +257,9 @@ class NativeProfileMainTests(unittest.TestCase):
             root = Path(td)
             business = self._setup_home(root)
             log = root / 'calls.log'
-            exe = root / 'fake-codex'
-            exe.write_text(
+            exe = write_fake_executable(
+                root,
+                'fake-codex',
                 '#!/bin/sh\n'
                 'name=$(basename "$CODEX_HOME")\n'
                 'printf "%s|%s\\n" "$name" "$*" >> "$CALL_LOG"\n'
@@ -242,9 +267,14 @@ class NativeProfileMainTests(unittest.TestCase):
                 '  *PROFILE_OK*) echo PROFILE_OK; exit 0 ;;\n'
                 '  *) echo "usage limit reached" >&2; exit 1 ;;\n'
                 'esac\n',
-                encoding='utf-8',
+                '@echo off\r\n'
+                'for %%I in ("%CODEX_HOME%") do set "name=%%~nxI"\r\n'
+                '>>"%CALL_LOG%" echo %name%^|%*\r\n'
+                'echo %* | findstr /C:"PROFILE_OK" >nul\r\n'
+                'if not errorlevel 1 (echo PROFILE_OK & exit /b 0)\r\n'
+                '>&2 echo usage limit reached\r\n'
+                'exit /b 1\r\n',
             )
-            exe.chmod(0o755)
             old = dict(os.environ)
             try:
                 os.environ['HOME'] = str(root)
