@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import Any
 
 from .config import Settings
+from .hosted_videos import build_video_inventory
 from .mapper import map_product_video
 from .tiny_client import TinyClient
 from .token_provider import resolve_access_token
-from .video_inventory import build_video_inventory
 
 
 def write_json_atomic(destination: Path, data: Any) -> None:
