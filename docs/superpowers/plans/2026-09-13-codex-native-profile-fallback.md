@@ -18,6 +18,7 @@
 - One explicit invocation may attempt each profile at most once; no daemon, cron, watcher, scheduled task, or unbounded retry loop.
 - Network/DNS/time-out failures, ordinary command errors, Git failures, generated-task failures, and user cancellation do not switch profiles unless a native auth/capacity signature is also present.
 - Interactive availability probes are `codex exec --ephemeral`, bounded to 45 seconds, read-only, non-persistent, and run only when starting an explicit interactive invocation.
+- The selector never invokes `codex login`, device authorization, or credential collection automatically; unavailable profiles fail once with non-secret diagnostics.
 - Preserve `CHAT_CLI_SESSION_ID` isolation, existing authenticated profile directories, and the Windows `ai-cli-scope-guard.ps1` Git-scope checks.
 - All host launcher changes require timestamped local backup and rollback without deleting either authenticated `CODEX_HOME`.
 
@@ -76,7 +77,7 @@ def classify_failure(returncode: int, stderr: str, stdout: str = '') -> str:
 ```
 
 - [ ] **Step 4: Add atomic JSON state under `~/.codex-business/failover-state.json`; only profile label, UTC timestamp, result class, and attempt count may be stored.**
-- [ ] **Step 5: Add command parsing with three modes: `model` for `exec`, `e`, `review`; `admin` for known non-model subcommands such as `login`, `doctor`, `mcp`, `plugin`, `completion`, `features`, `update`; otherwise `interactive`.**
+- [ ] **Step 5: Add command parsing with three modes: `model` for `exec`, `e`, `review`; `admin` for known non-model subcommands such as `login`, `doctor`, `mcp`, `plugin`, `completion`, `features`, `update`; otherwise `interactive`. Add tests proving admin commands do not trigger model probes and persisted state contains only the allowed non-secret fields.**
 - [ ] **Step 6: Run focused unittest and `python3 -m py_compile scripts/codex-native-profile-failover.py`; both must pass.**
 - [ ] **Step 7: Commit with `git commit -m "feat(codex): add native profile selector core"`.**
 
@@ -87,7 +88,7 @@ def classify_failure(returncode: int, stderr: str, stdout: str = '') -> str:
 - Modify: `tests/test_codex_native_profile_failover.py`
 
 **Interfaces:**
-- Produces: `AttemptResult`, `run_noninteractive(...) -> int`, `probe_profile(...) -> AttemptResult`, and `run_interactive(...) -> int`.
+- Produces: `AttemptResult`, `run_noninteractive(...) -> tuple[int, str]`, `probe_profile(...) -> AttemptResult`, and `run_interactive(...) -> tuple[int, str]`; CLI `main(argv=None) -> int` returns only the final process code.
 
 - [ ] **Step 1: Add failing tests using an injected fake runner.**
 
@@ -110,7 +111,7 @@ def test_generic_error_never_retries(self):
 
 - [ ] **Step 2: Run the two new tests and verify they fail before implementation.**
 - [ ] **Step 3: Implement `AttemptResult` and subprocess execution with `CODEX_HOME=<home>/.codex-business/<profile>`; capture output only for classification and replay only the final attempt to the caller.**
-- [ ] **Step 4: Enforce exactly one attempt per profile per invocation; update preferred state only after the alternate succeeds.**
+- [ ] **Step 4: Enforce exactly one attempt per profile per invocation; update preferred state only after the alternate succeeds. A later failover-worthy failure on `marinaofaleiro` must make `fredmourao` eligible again and persist Fred only after Fred succeeds.**
 - [ ] **Step 5: Add interactive probe command exactly as a finite child process:**
 
 ```python
@@ -122,7 +123,7 @@ PROBE_ARGS = [
 PROBE_TIMEOUT_SECONDS = 45
 ```
 
-- [ ] **Step 6: Test interactive primary selection, secondary selection after a recognized failure, both unavailable with exactly two probes, and timeout/network failure with no account switch.**
+- [ ] **Step 6: Test interactive primary selection, secondary selection after a recognized failure, secondary-to-primary recovery on a later invocation, both unavailable with exactly one attempt per profile, timeout/network failure with no switch, cancellation with no switch, and proof that no path invokes `codex login`.**
 - [ ] **Step 7: Run all selector tests and compile check; commit with `git commit -m "feat(codex): add bounded native profile failover"`.**
 
 ### Task 3: Deterministic cross-platform installer and launchers
@@ -158,7 +159,7 @@ PROBE_TIMEOUT_SECONDS = 45
 
 ### Task 5: Repository validation, PR, and merge
 
-- [ ] **Step 1: Rebase by normal fetch/merge or replay only if `origin/main` advanced; never use hard reset or force-push.**
+- [ ] **Step 1: Reconcile `origin/main` by normal fetch plus non-destructive merge/replay only if it advanced; never use hard reset or force-push, and preserve unrelated concurrent work.**
 - [ ] **Step 2: Run `git diff --check`, `python3 -m unittest tests.test_codex_native_profile_failover tests.test_install_codex_native_profile_failover -v`, both Python compile checks, `tests.test_agent_docs_gate`, and `tests.test_recurring_ai_policy_guard`.**
 - [ ] **Step 3: Scan the diff for `sk-proj-`, bearer tokens, cookies, raw auth JSON, and accidental host-local files; result must be clean.**
 - [ ] **Step 4: Push `agent/codex-native-profile-fallback`, open a PR to `main`, wait for required checks, and fix any task-related failure.**
