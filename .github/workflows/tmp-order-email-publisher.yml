@@ -1,0 +1,41 @@
+name: Temporary Order Email Publisher
+on:
+  push:
+    branches: [fix/order-email-central-mailer]
+    paths: [.github/workflows/tmp-order-email-publisher.yml]
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/order-email-central-mailer
+          fetch-depth: 2
+      - name: Apply patch
+        shell: bash
+        env:
+          PATCH_B64: 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
+        run: |
+          set -euo pipefail
+          printf '%s' "$PATCH_B64" | base64 -d | gzip -d > /tmp/order-email.patch
+          git apply --index /tmp/order-email.patch
+          git diff --cached --check
+      - name: Verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l api/send-order-confirmation-email.php >/dev/null
+          php tests/order-confirmation-central-mailer-test.php
+          php scripts/quality/run-all.php
+      - name: Commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/tmp-order-email-publisher.yml
+          test "$(git write-tree)" = 'fec54f93b1f3dc02780789f538da46295913daf2'
+          git config user.name 'ShopVivaliz Agent'
+          git config user.email 'agent@shopvivaliz.local'
+          git commit -m 'fix(email): centralize order confirmation transport'
+          git push origin HEAD:fix/order-email-central-mailer
