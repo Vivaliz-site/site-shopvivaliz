@@ -8,6 +8,7 @@ from scripts.product_video_sync.config import Settings
 class FakeTinyClient:
     def __init__(self):
         self.detail_calls = []
+        self.attachment_calls = []
 
     def list_active_products(self):
         return [
@@ -17,9 +18,13 @@ class FakeTinyClient:
 
     def get_product(self, product_id):
         self.detail_calls.append(product_id)
+        return {"id": product_id, "sku": f"SKU-{product_id}"}
+
+    def get_attachments(self, product_id):
+        self.attachment_calls.append(product_id)
         if product_id == 1:
-            return {"id": 1, "sku": "SKU-1", "anexos": []}
-        return {"id": 2, "sku": "SKU-2"}
+            return [{"id": 99, "url": "https://shopvivaliz.com.br/uploads/videos-produtos/preferred.mp4", "externo": True}]
+        return []
 
 
 def settings(tmp_path):
@@ -49,6 +54,7 @@ def test_run_mapping_generates_requested_schema_and_preserves_missing(tmp_path):
     video_dir = tmp_path / "videos"
     video_dir.mkdir()
     (video_dir / "SKU-1.mp4").write_bytes(b"video")
+    (video_dir / "preferred.mp4").write_bytes(b"video")
     output = tmp_path / "produtos_videos_mapeados.json"
     client = FakeTinyClient()
     cfg = settings(tmp_path)
@@ -57,12 +63,13 @@ def test_run_mapping_generates_requested_schema_and_preserves_missing(tmp_path):
 
     data = json.loads(output.read_text(encoding="utf-8"))
     assert client.detail_calls == [1, 2]
+    assert client.attachment_calls == [1, 2]
     assert data[0] == {
         "id_tiny": "1",
         "sku": "SKU-1",
-        "url_video_completa": "https://shopvivaliz.com.br/uploads/videos-produtos/SKU-1.mp4",
-        "arquivo_video": "SKU-1.mp4",
-        "origem_match": "sku",
+        "url_video_completa": "https://shopvivaliz.com.br/uploads/videos-produtos/preferred.mp4",
+        "arquivo_video": "preferred.mp4",
+        "origem_match": "tiny_attachment",
         "status": "mapped",
     }
     assert data[1]["id_tiny"] == "2"
