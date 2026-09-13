@@ -24,10 +24,8 @@ def parse_keys(path=KEY_FILE):
 
 
 def http_response_usable(status, body):
-    if status in (401, 403):
+    if status in (401, 402, 403, 429):
         return False
-    if status == 429:
-        return 'insufficient_quota' not in (body or '')
     return True
 
 
