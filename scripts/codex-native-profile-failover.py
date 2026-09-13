@@ -109,8 +109,9 @@ ADMIN_COMMANDS = {
 }
 PROBE_TIMEOUT_SECONDS = 45
 PROBE_ARGS = [
+    '--ask-for-approval', 'never',
     'exec', '--ephemeral', '--skip-git-repo-check', '--ignore-user-config',
-    '--ignore-rules', '--sandbox', 'read-only', '--ask-for-approval', 'never',
+    '--ignore-rules', '--sandbox', 'read-only',
     'Reply exactly PROFILE_OK and do not use tools.',
 ]
 
@@ -121,8 +122,11 @@ def command_mode(argv: list[str]) -> str:
     first = argv[0]
     if first in ADMIN_FLAGS:
         return 'admin'
-    if first in MODEL_COMMANDS:
-        return 'model'
+    for token in argv:
+        if token == '--':
+            break
+        if token in MODEL_COMMANDS:
+            return 'model'
     if first in ADMIN_COMMANDS:
         return 'admin'
     return 'interactive'
@@ -134,6 +138,23 @@ def preference_after_task(selected: str, result_class: str) -> str:
     if result_class != 'failover':
         return selected
     return PROFILES[1] if selected == PROFILES[0] else PROFILES[0]
+
+
+def probe_profile(real_codex: str, profile: str, profile_home: Path) -> AttemptResult:
+    env = _profile_env(profile_home)
+    try:
+        completed = subprocess.run(
+            [real_codex, *PROBE_ARGS],
+            env=env,
+            text=True,
+            capture_output=True,
+            timeout=PROBE_TIMEOUT_SECONDS,
+            stdin=subprocess.DEVNULL,
+            check=False,
+        )
+        return AttemptResult(profile, completed.returncode, completed.stdout, completed.stderr)
+    except subprocess.TimeoutExpired:
+        return AttemptResult(profile, 124, '', 'probe timeout')
 
 
 def run_captured(
@@ -208,13 +229,7 @@ def main(argv: list[str] | None = None) -> int:
         return result.returncode
 
     def probe(profile: str) -> AttemptResult:
-        return run_captured(
-            real_codex,
-            profile,
-            business / profile,
-            PROBE_ARGS,
-            timeout=PROBE_TIMEOUT_SECONDS,
-        )
+        return probe_profile(real_codex, profile, business / profile)
 
     try:
         selected, probe_attempts = select_profile(preferred, probe)
