@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-03T12:51:10.435Z",
+  "generated_at": "2026-09-13T22:08:42.542Z",
   "assets": {
     "/js/admin-automation.js": {
       "file": "/public/dist/js/admin-automation.ba2700ea3a.min.js",
@@ -327,9 +327,9 @@
       "source_bytes": 2431
     },
     "/css/product-conversion-v5.css": {
-      "file": "/public/dist/css/product-conversion-v5.652c31c355.min.css",
-      "bytes": 10234,
-      "source_bytes": 14093
+      "file": "/public/dist/css/product-conversion-v5.b8eece7cfd.min.css",
+      "bytes": 10281,
+      "source_bytes": 14152
     },
     "/css/product-image-integrity-v63.css": {
       "file": "/public/dist/css/product-image-integrity-v63.bf38b5c5f1.min.css",
