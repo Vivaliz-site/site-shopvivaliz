@@ -26,6 +26,10 @@ class InstallerRenderTests(unittest.TestCase):
         self.assertNotIn('codex-failover.py', auto)
         self.assertIn('CODEX_HOME=/home/u/.codex-business/fredmourao', manual)
         self.assertIn('exec /real/codex', manual)
+        self.assertIn('#!/bin/bash', auto)
+        self.assertIn('set -Eeuo pipefail', auto)
+        self.assertIn('set -Eeuo pipefail', manual)
+        self.assertNotIn('|| true', manual)
 
     def test_windows_scope_guard_patch_is_idempotent(self):
         mod = load_module()
@@ -36,6 +40,18 @@ class InstallerRenderTests(unittest.TestCase):
         self.assertEqual(patched.count(mod.WINDOWS_SENTINEL_BEGIN), 1)
         self.assertIn('codex-auto.ps1', patched)
         self.assertIn("Write-Output 'old'", patched)
+
+    def test_windows_guard_file_preserves_bom_and_crlf(self):
+        mod = load_module()
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / 'guard.ps1'
+            raw = b'\xef\xbb\xbf' + b"if($Tool -eq 'codex'){\r\n  Write-Output 'old'\r\n}\r\n"
+            path.write_bytes(raw)
+            mod.patch_windows_scope_guard_file(path, 'C:\\Users\\x\\.local\\bin\\codex-auto.ps1')
+            patched = path.read_bytes()
+        self.assertTrue(patched.startswith(b'\xef\xbb\xbf'))
+        self.assertNotIn(b'\n', patched.replace(b'\r\n', b''))
+        self.assertIn(b'BEGIN SHOPVIVALIZ CODEX NATIVE PROFILE FAILOVER', patched)
 
 
 class InstallerIntegrationTests(unittest.TestCase):
