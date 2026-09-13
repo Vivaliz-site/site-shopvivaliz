@@ -82,6 +82,18 @@ def test_retries_429_and_respects_retry_after(tmp_path):
     assert len(session.calls) == 2
 
 
+def test_retries_429_uses_rate_limit_reset_when_retry_after_is_missing(tmp_path):
+    sleeps = []
+    session = FakeSession([
+        FakeResponse(status_code=429, headers={"X-RateLimit-Reset": "7"}),
+        FakeResponse(payload={"itens": [], "paginacao": {"total": 0}}),
+    ])
+    client = TinyClient(settings(tmp_path), "token", session=session, sleeper=sleeps.append)
+
+    assert client.list_active_products() == []
+    assert sleeps == [7.0]
+
+
 def test_retries_server_error_with_finite_backoff(tmp_path):
     sleeps = []
     session = FakeSession([
