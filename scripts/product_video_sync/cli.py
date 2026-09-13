@@ -57,11 +57,18 @@ def run_mapping(
 
     for product in client.list_active_products():
         product_id = product.get("id")
-        detail = client.get_product(product_id) if product_id is not None else dict(product)
+        if product_id is None:
+            detail: dict[str, Any] = dict(product)
+            attachments: list[dict[str, Any]] = []
+        else:
+            raw_detail = client.get_product(product_id)
+            detail = raw_detail if isinstance(raw_detail, dict) else {}
+            attachments = client.get_attachments(product_id)
+        source_data = {"produto": detail, "anexos": attachments}
         results.append(
             map_product_video(
                 product,
-                detail if isinstance(detail, dict) else {},
+                source_data,
                 inventory,
                 settings,
                 aliases=aliases,
