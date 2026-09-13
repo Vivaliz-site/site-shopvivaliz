@@ -36,6 +36,14 @@ class CodexFailoverTests(unittest.TestCase):
         self.assertEqual((rc, active), (0, "secondary"))
         self.assertEqual(calls, ["p", "s"])
 
+    def test_parse_keys_accepts_gmail_attachment_aliases(self):
+        from tempfile import TemporaryDirectory
+
+        with TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "openai.txt"
+            path.write_text("openai_token_1=primary-test\nopenai_token_2=secondary-test\n")
+            self.assertEqual(mod.parse_keys(path), ("primary-test", "secondary-test"))
+
 
 if __name__ == "__main__":
     unittest.main()

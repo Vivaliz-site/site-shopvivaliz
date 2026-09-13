@@ -18,7 +18,7 @@ The Linux VMs remain primary infrastructure. Windows hosts are fallback capacity
 
 ## Credential handling
 
-The two credential values come from the owner's Gmail message with subject `openai`. Their literal values must never enter Git, PRs, logs, command-line arguments, or assistant responses. Each host stores only local protected runtime copies using the canonical names `OPENAI_API_KEY_PRIMARY` and `OPENAI_API_KEY_SECONDARY`.
+The two credential values come from the owner's Gmail message with subject `openai`. Their literal values must never enter Git, PRs, logs, command-line arguments, or assistant responses. To avoid rewriting secret material, the protected runtime file may be a byte-for-byte copy of that attachment using `openai_token_1` and `openai_token_2`; the parser also remains backward compatible with `OPENAI_API_KEY_PRIMARY` and `OPENAI_API_KEY_SECONDARY`.
 On POSIX hosts the credential file is `~/.codex/api-keys.env` with mode `0600`. On Windows the equivalent file is `%USERPROFILE%\.codex\api-keys.env` with an ACL restricted to the owning user and SYSTEM where practical. Existing credential files are backed up before replacement; backups remain local and protected.
 
 ## Runtime behavior
