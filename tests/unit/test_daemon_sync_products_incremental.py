@@ -21,6 +21,7 @@ class IncrementalCatalogSyncTest(unittest.TestCase):
                 "anexos": [{"url": "https://cdn.example.test/10.jpg"}],
                 "estoque_disponivel": 4,
                 "_olist_updated_at": "2026-09-10T12:00:00Z",
+                "_detail_synced_at": "2999-09-10T12:00:00+00:00",
             }
         }
         summaries = [{"id": 10, "situacao": "A", "dataAlteracao": "2026-09-10T12:00:00Z"}]
@@ -32,6 +33,45 @@ class IncrementalCatalogSyncTest(unittest.TestCase):
         self.assertEqual(0, failures)
         self.assertEqual(previous["10"], products[0])
         self.assertEqual([{"sku": "COMP-1", "quantidade": 2}], products[0]["kit"])
+
+
+    def test_unchanged_marker_but_stale_detail_is_refetched_for_erp_media_changes(self):
+        previous = {
+            "10": {
+                "id": 10,
+                "sku": "SKU-10",
+                "video_url": "",
+                "estoque_disponivel": 4,
+                "_olist_updated_at": "2026-09-10T12:00:00Z",
+                "_detail_synced_at": "2026-09-10T12:00:00+00:00",
+            }
+        }
+        summaries = [{"id": 10, "situacao": "A", "dataAlteracao": "2026-09-10T12:00:00Z"}]
+        calls = []
+
+        def fake_api_get(path, token, **kwargs):
+            calls.append(path)
+            if path == "produtos/10":
+                return {
+                    "id": 10,
+                    "sku": "SKU-10",
+                    "situacao": "A",
+                    "precos": {"preco": 20},
+                    "estoque": {"quantidade": 4},
+                    "seo": {"linkVideo": "https://shopvivaliz.com.br/uploads/v/10.mp4"},
+                }
+            if path == "estoque/10":
+                return {"disponivel": 4}
+            raise AssertionError(path)
+
+        with patch.object(daemon, "load_previous_cache", return_value=previous), patch.object(
+            daemon, "api_get", side_effect=fake_api_get
+        ):
+            products, failures = daemon.enrich_products(summaries, "token", workers=1)
+
+        self.assertEqual(0, failures)
+        self.assertEqual(["produtos/10", "estoque/10"], calls)
+        self.assertEqual("https://shopvivaliz.com.br/uploads/v/10.mp4", products[0]["video_url"])
 
     def test_changed_product_fetches_detail_and_stock_and_updates_marker(self):
         previous = {

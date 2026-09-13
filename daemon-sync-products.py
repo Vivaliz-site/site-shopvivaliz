@@ -20,6 +20,7 @@ CACHE_PATH = Path("storage/products-cache-ativos.json")
 _RATE_LOCK = threading.Lock()
 _LAST_REQUEST = 0.0
 _MIN_REQUEST_INTERVAL = 1.10
+DETAIL_CACHE_MAX_AGE_SECONDS = 2 * 60 * 60
 
 
 def public_product(item: dict[str, Any]) -> dict[str, Any]:
@@ -186,6 +187,25 @@ def load_previous_cache() -> dict[str, dict[str, Any]]:
     return {str(item.get("id")): item for item in items if isinstance(item, dict) and item.get("id") is not None}
 
 
+
+def detail_cache_is_fresh(cached: dict[str, Any], current_marker: str, now: datetime | None = None) -> bool:
+    cached_marker = str(cached.get("_olist_updated_at") or "").strip()
+    if not current_marker or cached_marker != current_marker:
+        return False
+    raw_synced = str(cached.get("_detail_synced_at") or "").strip()
+    if not raw_synced:
+        return False
+    try:
+        synced_at = datetime.fromisoformat(raw_synced.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if synced_at.tzinfo is None:
+        synced_at = synced_at.replace(tzinfo=timezone.utc)
+    current_time = now or datetime.now(timezone.utc)
+    age = (current_time - synced_at.astimezone(timezone.utc)).total_seconds()
+    return age <= DETAIL_CACHE_MAX_AGE_SECONDS
+
+
 def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 4) -> tuple[list[dict[str, Any]], int]:
     previous = load_previous_cache()
     enriched: dict[str, dict[str, Any]] = {}
@@ -199,8 +219,7 @@ def enrich_products(summaries: list[dict[str, Any]], token: str, workers: int = 
             continue
         cached = previous.get(product_id)
         current_marker = str(summary.get("dataAlteracao") or "").strip()
-        cached_marker = str(cached.get("_olist_updated_at") or "").strip() if isinstance(cached, dict) else ""
-        if isinstance(cached, dict) and current_marker and cached_marker == current_marker:
+        if isinstance(cached, dict) and detail_cache_is_fresh(cached, current_marker):
             enriched[product_id] = dict(cached)
             continue
         pending.append(summary)

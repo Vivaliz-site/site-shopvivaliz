@@ -88,8 +88,10 @@
 }
 
 .product-detail-image img {
-    max-width: 88% !important;
-    max-height: 88% !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
     object-fit: contain !important;
     transition: transform 0.3s ease;
 }

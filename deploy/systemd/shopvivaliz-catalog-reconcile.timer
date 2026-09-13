@@ -2,8 +2,7 @@
 Description=Run ShopVivaliz catalog reconciliation every thirty minutes
 
 [Timer]
-OnBootSec=2min
-OnUnitInactiveSec=30min
+OnCalendar=*:0/30
 RandomizedDelaySec=20s
 Persistent=true
 Unit=shopvivaliz-catalog-reconcile.service

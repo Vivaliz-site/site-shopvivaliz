@@ -12,6 +12,7 @@ if ($svProductHasSessionCookie) {
 }
 require_once __DIR__ . '/includes/catalog-runtime.php';
 require_once __DIR__ . '/includes/product-seo.php';
+require_once __DIR__ . '/includes/product-media.php';
 
 /* ── helpers ── */
 function sv_product_default_image(): string
@@ -356,18 +357,9 @@ $galleryImages = array_slice($galleryImages, 0, 12);
 $related = $notFound ? [] : sv_product_enrich_many(sv_product_related($sku, $category, $name));
 $svNavCurrent = 'produto';
 $videoUrl = trim((string)($resolved['video_url'] ?? ''));
-$videoEmbedUrl = '';
-if ($videoUrl !== '') {
-    $youtubeId = '';
-    if (preg_match('%(?:youtube(?:-nocookie)?\.com/(?:[^/]+/.+/|(?:v|e(?:mbed)?)/|.*[?&]v=)|youtu\.be/)([^"&?/ ]{11})%i', $videoUrl, $match)) {
-        $youtubeId = $match[1];
-    } elseif (preg_match('%youtube\.com/shorts/([^"&?/ ]{11})%i', $videoUrl, $match)) {
-        $youtubeId = $match[1];
-    }
-    if ($youtubeId !== '') {
-        $videoEmbedUrl = 'https://www.youtube.com/embed/' . $youtubeId . '?autoplay=1&rel=0';
-    }
-}
+$videoMedia = sv_product_video_media($videoUrl);
+$videoEmbedUrl = trim((string)($videoMedia['src'] ?? ''));
+$videoMediaType = trim((string)($videoMedia['type'] ?? ''));
 
 /* ── V15: descrição automática ── */
 $description = trim((string)($resolved['description'] ?? ''));
@@ -570,7 +562,7 @@ if ($notFound) {
     <title><?= sv_esc($seoTitle) ?> | Vivaliz</title>
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/premium-theme.css?v=2026-07-11">
-    <link rel="stylesheet" href="/css/product-conversion-v5.css?v=2026-07-26-v2">
+    <link rel="stylesheet" href="/css/product-conversion-v5.css?v=2026-09-13-media1">
     <link rel="stylesheet" href="/css/first-purchase-popup-v1.css?v=2026-07-30-1">
     <link rel="stylesheet" href="/css/zoom-responsive.css?v=2026-07-26-1">
     <!-- Polimento de layout: precisa vir por ultimo para vencer na cascata. -->
@@ -634,7 +626,7 @@ if ($notFound) {
                     </button>
                     <?php endforeach; ?>
                     <?php if ($videoEmbedUrl !== ''): ?>
-                    <button type="button" class="thumb-btn thumb-video" data-type="video" data-src="<?= sv_esc($videoEmbedUrl) ?>" aria-label="Ver vídeo do produto">
+                    <button type="button" class="thumb-btn thumb-video" data-type="video" data-video-kind="<?= sv_esc($videoMediaType) ?>" data-src="<?= sv_esc($videoEmbedUrl) ?>" aria-label="Ver vídeo do produto">
                         <img src="<?= sv_esc($image) ?>" alt="<?= sv_esc('Vídeo de ' . $name) ?>" width="56" height="56" loading="lazy" decoding="async" onerror="this.src='<?= sv_product_default_image() ?>'">
                         <div class="play-icon-badge">
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="#fff"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
@@ -1030,27 +1022,45 @@ if ($notFound) {
                 const isVideo = btn.getAttribute('data-type') === 'video';
                 
                 if (isVideo && container) {
-                    let iframe = document.getElementById('main-product-video');
-                    if (!iframe) {
-                        iframe = document.createElement('iframe');
-                        iframe.id = 'main-product-video';
-                        iframe.style.width = '100%';
-                        iframe.style.height = '100%';
-                        iframe.style.border = 'none';
-                        iframe.style.position = 'absolute';
-                        iframe.style.top = '0';
-                        iframe.style.left = '0';
-                        iframe.style.zIndex = '10';
-                        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
-                        iframe.allowFullscreen = true;
-                        container.appendChild(iframe);
+                    const videoKind = btn.getAttribute('data-video-kind') || 'iframe';
+                    let media = document.getElementById('main-product-video');
+                    if (media && media.getAttribute('data-video-kind') !== videoKind) {
+                        media.remove();
+                        media = null;
                     }
-                    iframe.src = btn.getAttribute('data-src');
-                    iframe.style.display = 'block';
+                    if (!media) {
+                        media = videoKind === 'video' ? document.createElement('video') : document.createElement('iframe');
+                        media.id = 'main-product-video';
+                        media.setAttribute('data-video-kind', videoKind);
+                        media.style.width = '100%';
+                        media.style.height = '100%';
+                        media.style.border = 'none';
+                        media.style.position = 'absolute';
+                        media.style.top = '0';
+                        media.style.left = '0';
+                        media.style.zIndex = '10';
+                        if (videoKind === 'video') {
+                            media.controls = true;
+                            media.autoplay = true;
+                            media.playsInline = true;
+                            media.preload = 'metadata';
+                            media.style.objectFit = 'contain';
+                        } else {
+                            media.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+                            media.allowFullscreen = true;
+                        }
+                        container.appendChild(media);
+                    }
+                    media.src = btn.getAttribute('data-src');
+                    media.style.display = 'block';
+                    if (videoKind === 'video' && typeof media.play === 'function') {
+                        media.play().catch(function() {});
+                    }
                     if (mainImg) mainImg.style.display = 'none';
                 } else {
                     const iframe = document.getElementById('main-product-video');
                     if (iframe) {
+                        if (typeof iframe.pause === 'function') iframe.pause();
                         iframe.style.display = 'none';
                         iframe.src = '';
                     }
