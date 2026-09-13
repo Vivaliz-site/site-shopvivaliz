@@ -1,8 +1,8 @@
 from pathlib import Path
 
 from scripts.product_video_sync.config import Settings
+from scripts.product_video_sync.hosted_videos import build_video_inventory
 from scripts.product_video_sync.mapper import map_product_video
-from scripts.product_video_sync.video_inventory import build_video_inventory
 
 
 def settings(tmp_path):
