@@ -11,7 +11,7 @@ from typing import Callable
 
 PROFILES = ('fredmourao', 'marinaofaleiro')
 FAILOVER_PATTERNS = (
-    'usage limit', 'rate limit', 'quota', 'too many requests',
+    'usage limit', 'rate limit', 'quota', 'out of credits', 'too many requests',
     'authentication required', 'unauthorized', 'token expired',
     'refresh token', 'not logged in', 'limit reached',
 )
