@@ -1,6 +1,7 @@
 import importlib.util
 import pathlib
 import unittest
+from unittest import mock
 
 SCRIPT = pathlib.Path(__file__).parents[1] / "scripts" / "codex-failover.py"
 spec = importlib.util.spec_from_file_location("codex_failover", SCRIPT)
@@ -43,6 +44,22 @@ class CodexFailoverTests(unittest.TestCase):
             path = pathlib.Path(tmp) / "openai.txt"
             path.write_text("openai_token_1=primary-test\nopenai_token_2=secondary-test\n")
             self.assertEqual(mod.parse_keys(path), ("primary-test", "secondary-test"))
+
+
+    def test_main_falls_back_to_native_auth_when_both_api_keys_are_unusable(self):
+        with mock.patch.object(mod, "parse_keys", return_value=("primary-test", "secondary-test")), \
+             mock.patch.object(mod, "read_preferred", return_value="primary"), \
+             mock.patch.object(mod, "resolve_codex", return_value="/real/codex"), \
+             mock.patch.object(mod, "preflight", return_value=False), \
+             mock.patch.object(mod.subprocess, "call", return_value=0) as call:
+            rc = mod.main(["exec", "hello"])
+
+        self.assertEqual(rc, 0)
+        command = call.call_args.args[0]
+        self.assertEqual(command, ["/real/codex", "exec", "hello"])
+        env = call.call_args.kwargs["env"]
+        self.assertNotIn("OPENAI_API_KEY", env)
+        self.assertNotIn("CODEX_API_KEY", env)
 
 
 if __name__ == "__main__":

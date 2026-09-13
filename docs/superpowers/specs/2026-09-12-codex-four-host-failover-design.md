@@ -25,7 +25,7 @@ On POSIX hosts the credential file is `~/.codex/api-keys.env` with mode `0600`. 
 
 `scripts/codex-failover.py` remains the canonical failover engine. It tracks the currently preferred credential in `~/.codex/api-key-active`, tries the preferred credential first, and changes the preference only when evidence shows the credential is unusable.
 
-Failover-worthy conditions include HTTP 401/403, payment/quota exhaustion, usage/billing hard limits, and HTTP 429 responses. Network/DNS/time-out failures alone do not mark a credential bad. User interruption is never retried with the alternate credential.
+Failover-worthy conditions include HTTP 401/403, payment/quota exhaustion, usage/billing hard limits, and HTTP 429 responses. Network/DNS/time-out failures alone do not mark a credential bad. User interruption is never retried with the alternate credential. If neither configured API credential is usable, the invocation falls back to the native Codex authentication state with API-key environment variables removed, so exhausted API credits cannot disable an existing ChatGPT login.
 
 Each Linux host gets a transparent `codex` shim that invokes the canonical failover engine while preserving the real Codex executable path separately. On Windows, the existing ShopVivaLiz AI scope guard remains the entry point and delegates only Codex invocations to the failover engine while preserving its Git-scope checks and leaving Claude behavior unchanged. Both paths must avoid recursive resolution and pass arguments unchanged.
 
