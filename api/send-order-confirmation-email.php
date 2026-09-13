@@ -18,19 +18,7 @@ if (PHP_SAPI !== 'cli') {
     exit;
 }
 
-// Carregar .env
-$envFile = __DIR__ . '/../.env';
-if (is_file($envFile)) {
-    $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-        if (strpos($line, '=') !== false && !str_starts_with($line, '#')) {
-            [$key, $value] = explode('=', $line, 2);
-            if (!getenv(trim($key))) {
-                putenv(trim($key) . '=' . trim($value));
-            }
-        }
-    }
-}
+require_once __DIR__ . '/../scripts/mailer.php';
 
 // Parâmetros
 $orderNumber = $argv[1] ?? 'TEST-001';
@@ -39,13 +27,7 @@ $customerName = $argv[3] ?? 'Cliente Teste';
 $total = $argv[4] ?? '99.90';
 $items = $argv[5] ?? 'Produto 1';
 
-// Credenciais
-$smtpHost = getenv('SMTP_HOST') ?: 'smtp.gmail.com';
-$smtpPort = (int)(getenv('SMTP_PORT') ?: '587');
-$smtpUser = getenv('SMTP_USER') ?: 'fredmourao@gmail.com';
-$smtpPass = getenv('SMTP_PASS') ?: '';
-$emailFrom = getenv('EMAIL_FROM') ?: 'noreply@shopvivaliz.com.br';
-$siteBaseUrl = rtrim((string)(getenv('SHOPVIVALIZ_BASE_URL') ?: getenv('APP_URL') ?: getenv('SITE_URL') ?: 'https://shopvivaliz.com.br'), '/');
+$siteBaseUrl = sv_mailer_site_url();
 
 // Validação
 if (empty($customerEmail) || !filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
@@ -157,87 +139,10 @@ Obrigado por comprar na ShopVivaliz!
 © 2026 ShopVivaliz
 TEXT;
 
-// Tentarenviar email com diferentes métodos
-$success = false;
-$error = '';
-
-// Método 1: PHP mail() nativo (Windows)
-if (!$success) {
-    try {
-        $headers = "MIME-Version: 1.0\r\n";
-        $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-        $headers .= "From: $emailFrom\r\n";
-        $headers .= "Reply-To: $emailFrom\r\n";
-
-        if (mail($customerEmail, "Pedido Confirmado - ShopVivaliz #$orderNumber", $htmlBody, $headers)) {
-            $success = true;
-            $method = 'PHP mail() - Windows SMTP';
-        } else {
-            $error = 'PHP mail() falhou';
-        }
-    } catch (Exception $e) {
-        $error = $e->getMessage();
-    }
-}
-
-// Método 2: SwiftMailer/PHPMailer via stream (se disponível)
-if (!$success && $smtpPass) {
-    try {
-        $context = stream_context_create([
-            'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
-        ]);
-
-        $smtp = fsockopen($smtpHost, $smtpPort, $errno, $errstr, 10);
-        if ($smtp) {
-            stream_set_timeout($smtp, 10);
-
-            // EHLO
-            fgets($smtp);
-            fputs($smtp, "EHLO localhost\r\n");
-            fgets($smtp);
-
-            // STARTTLS
-            fputs($smtp, "STARTTLS\r\n");
-            fgets($smtp);
-
-            stream_socket_enable_crypto($smtp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
-
-            // AUTH
-            fputs($smtp, "AUTH LOGIN\r\n");
-            fgets($smtp);
-            fputs($smtp, base64_encode($smtpUser) . "\r\n");
-            fgets($smtp);
-            fputs($smtp, base64_encode($smtpPass) . "\r\n");
-            fgets($smtp);
-
-            // Enviar email
-            fputs($smtp, "MAIL FROM: <$emailFrom>\r\n");
-            fgets($smtp);
-            fputs($smtp, "RCPT TO: <$customerEmail>\r\n");
-            fgets($smtp);
-            fputs($smtp, "DATA\r\n");
-            fgets($smtp);
-
-            $message = "To: $customerEmail\r\n";
-            $message .= "From: $emailFrom\r\n";
-            $message .= "Subject: Pedido Confirmado - ShopVivaliz #$orderNumber\r\n";
-            $message .= "MIME-Version: 1.0\r\n";
-            $message .= "Content-Type: text/html; charset=UTF-8\r\n\r\n";
-            $message .= $htmlBody . "\r\n.\r\n";
-
-            fputs($smtp, $message);
-            fgets($smtp);
-
-            fputs($smtp, "QUIT\r\n");
-            fclose($smtp);
-
-            $success = true;
-            $method = 'SMTP via socket';
-        }
-    } catch (Exception $e) {
-        $error = $e->getMessage();
-    }
-}
+// Envio pelo transporte centralizado e validado da loja.
+$success = send_email($customerEmail, "Pedido Confirmado - ShopVivaliz #$orderNumber", $htmlBody, $textBody);
+$error = $success ? '' : 'Falha no mailer central';
+$method = $success ? 'central_mailer' : null;
 
 // Resposta
 http_response_code($success ? 200 : 400);
