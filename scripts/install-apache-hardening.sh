@@ -15,8 +15,12 @@ fi
 install -o root -g root -m 0644 \
   "${repo_dir}/deploy/apache/shopvivaliz-private-paths.conf" \
   /etc/apache2/conf-available/shopvivaliz-private-paths.conf
+install -o root -g root -m 0644 \
+  "${repo_dir}/deploy/apache/shopvivaliz-log-redaction.conf" \
+  /etc/apache2/conf-available/shopvivaliz-log-redaction.conf
 a2enmod headers expires >/dev/null
 a2enconf shopvivaliz-private-paths >/dev/null
+a2enconf shopvivaliz-log-redaction >/dev/null
 apache2ctl configtest
 systemctl reload apache2
 systemctl is-active --quiet apache2
