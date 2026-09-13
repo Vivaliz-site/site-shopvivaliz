@@ -56,8 +56,14 @@ class TinyClient:
                     raise TinyApiError(f"Tiny API unavailable after retries (HTTP {status})")
                 if status == 429:
                     retry_after = response.headers.get("Retry-After")
+                    rate_limit_reset = response.headers.get("X-RateLimit-Reset")
                     try:
-                        delay = float(retry_after) if retry_after is not None else float(2**attempt)
+                        if retry_after is not None:
+                            delay = float(retry_after)
+                        elif rate_limit_reset is not None:
+                            delay = float(rate_limit_reset)
+                        else:
+                            delay = float(2**attempt)
                     except (TypeError, ValueError):
                         delay = float(2**attempt)
                 else:
