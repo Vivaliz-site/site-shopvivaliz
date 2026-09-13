@@ -228,11 +228,14 @@ class NativeProfileMainTests(unittest.TestCase):
                 'for %%I in ("%CODEX_HOME%") do set "name=%%~nxI"\r\n'
                 '>>"%CALL_LOG%" echo %name%^|%*\r\n'
                 'echo %* | findstr /C:"PROFILE_OK" >nul\r\n'
-                'if not errorlevel 1 (\r\n'
-                '  if "%name%"=="fredmourao" (>&2 echo usage limit reached & exit /b 1)\r\n'
-                '  echo PROFILE_OK\r\n'
-                '  exit /b 0\r\n'
-                ')\r\n'
+                'if errorlevel 1 goto task\r\n'
+                'if "%name%"=="fredmourao" goto fredfail\r\n'
+                'echo PROFILE_OK\r\n'
+                'exit /b 0\r\n'
+                ':fredfail\r\n'
+                '>&2 echo usage limit reached\r\n'
+                'exit /b 1\r\n'
+                ':task\r\n'
                 'echo TASK:%name%\r\n'
                 'exit /b 0\r\n',
             )
@@ -272,7 +275,10 @@ class NativeProfileMainTests(unittest.TestCase):
                 'for %%I in ("%CODEX_HOME%") do set "name=%%~nxI"\r\n'
                 '>>"%CALL_LOG%" echo %name%^|%*\r\n'
                 'echo %* | findstr /C:"PROFILE_OK" >nul\r\n'
-                'if not errorlevel 1 (echo PROFILE_OK & exit /b 0)\r\n'
+                'if errorlevel 1 goto taskfail\r\n'
+                'echo PROFILE_OK\r\n'
+                'exit /b 0\r\n'
+                ':taskfail\r\n'
                 '>&2 echo usage limit reached\r\n'
                 'exit /b 1\r\n',
             )
