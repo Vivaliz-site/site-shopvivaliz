@@ -107,12 +107,13 @@ def test_401_fails_without_retry_and_does_not_echo_token(tmp_path):
     assert "very-secret-token" not in str(exc.value)
 
 
-def test_get_attachments_reads_attachment_collection_from_product_detail(tmp_path):
+def test_get_attachments_uses_official_product_attachments_endpoint(tmp_path):
     session = FakeSession([
-        FakeResponse(payload={"id": 10, "anexos": [{"url": "https://example.com/video.mp4"}]})
+        FakeResponse(payload=[{"id": 99, "url": "https://example.com/video.mp4", "externo": True}])
     ])
     client = TinyClient(settings(tmp_path), "token", session=session, sleeper=lambda _: None)
 
     attachments = client.get_attachments(10)
 
-    assert attachments == [{"url": "https://example.com/video.mp4"}]
+    assert attachments == [{"id": 99, "url": "https://example.com/video.mp4", "externo": True}]
+    assert session.calls[0][0].endswith("/produtos/10/anexos")
