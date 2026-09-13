@@ -41,11 +41,19 @@ Para informar um diretório de vídeo diferente:
 python3 scripts/map-product-videos.py --video-dir /caminho/uploads/videos-produtos
 ```
 
+## Dados consultados no Tiny
+
+A rotina usa exclusivamente leitura na API v3:
+
+- `GET /produtos?situacao=A&limit=...&offset=...` para listar produtos ativos;
+- `GET /produtos/{idProduto}` para inspecionar o detalhe/campos do produto;
+- `GET /produtos/{idProduto}/anexos` para obter a lista oficial de anexos e imagens (`id`, `url`, `externo`).
+
 ## Matching
 
 A ordem é deliberadamente determinística:
 
-1. referência/anexo de vídeo explícito retornado no detalhe do produto Tiny;
+1. referência de vídeo encontrada no detalhe ou no endpoint oficial de anexos do produto;
 2. nome de arquivo com stem igual ao SKU;
 3. nome de arquivo com stem igual ao ID Tiny;
 4. alias manual opcional.
@@ -91,7 +99,8 @@ Status possíveis: `mapped`, `missing`, `ambiguous`.
 - Somente chamadas GET na API Tiny nesta etapa.
 - Produtos filtrados com `situacao=A`.
 - Paginação por `limit/offset` e proteção contra página repetida.
-- Retry finito para `429`/`5xx`, respeitando `Retry-After`.
+- Retry finito para `429`/`5xx`.
+- Em `429`, respeita primeiro `Retry-After` e depois `X-RateLimit-Reset` quando disponível.
 - `401`/`403` falham imediatamente.
 - O JSON é escrito de forma atômica para evitar arquivo parcial.
 - `requests` e `python-dotenv` já pertencem ao `requirements.txt` do projeto.
