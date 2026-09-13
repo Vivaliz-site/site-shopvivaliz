@@ -239,6 +239,7 @@ class NativeProfileMainTests(unittest.TestCase):
             old = dict(os.environ)
             try:
                 os.environ['HOME'] = str(root)
+                os.environ['USERPROFILE'] = str(root)
                 os.environ['CODEX_REAL'] = str(exe)
                 os.environ['CALL_LOG'] = str(log)
                 rc = mod.main(['exec', 'do-work'])
@@ -278,6 +279,7 @@ class NativeProfileMainTests(unittest.TestCase):
             old = dict(os.environ)
             try:
                 os.environ['HOME'] = str(root)
+                os.environ['USERPROFILE'] = str(root)
                 os.environ['CODEX_REAL'] = str(exe)
                 os.environ['CALL_LOG'] = str(log)
                 rc = mod.main(['exec', 'do-work'])
