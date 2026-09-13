@@ -50,7 +50,7 @@ def render_windows_manual_launcher(real_codex: str, profile_home: str) -> str:
     real = real_codex.replace("'", "''")
     profile = profile_home.replace("'", "''")
     return (
-        "$ErrorActionPreference='Stop'\n"
+        "$ErrorActionPreference='Continue'\n"
         f"$env:CODEX_HOME='{profile}'\n"
         "Remove-Item Env:OPENAI_API_KEY -ErrorAction SilentlyContinue\n"
         "Remove-Item Env:CODEX_API_KEY -ErrorAction SilentlyContinue\n"
