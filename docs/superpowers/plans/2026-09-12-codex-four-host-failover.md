@@ -109,6 +109,7 @@ class CodexFailoverTests(unittest.TestCase):
 - [ ] **Step 2: Run `python .../codex-failover.py --check` or the equivalent non-secret status check; output may contain only `primary=usable|unavailable` and `secondary=usable|unavailable`.**
 - [ ] **Step 3: Validate controlled failover with injected test credentials/checkers, never by corrupting the approved stored values.**
 - [ ] **Step 4: Confirm `api-key-active` changes to `secondary` only after a proven primary-unusable case and can later return to `primary`.**
+- [ ] **Step 5: Confirm that when both API credentials are unavailable, the real Codex CLI is invoked through native authentication without `OPENAI_API_KEY` or `CODEX_API_KEY` in its environment.**
 ### Task 5: Merge and post-merge verification
 
 - [ ] **Step 1: Run `git diff --check`, the focused unittest, Python compile check, and the repository policy/doc tests relevant to agent governance.**

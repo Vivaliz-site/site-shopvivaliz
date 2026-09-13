@@ -133,8 +133,11 @@ def main(argv=None):
     try:
         rc, active = run_with_failover(primary, secondary, preferred, preflight, runner)
     except RuntimeError as exc:
-        print(f'Codex failover: {exc}', file=sys.stderr)
-        return 3
+        print(f'Codex failover: {exc}; falling back to native authentication.', file=sys.stderr)
+        native_env = dict(os.environ)
+        native_env.pop('OPENAI_API_KEY', None)
+        native_env.pop('CODEX_API_KEY', None)
+        return subprocess.call([real, *argv], env=native_env)
     write_preferred(active)
     return rc
 
