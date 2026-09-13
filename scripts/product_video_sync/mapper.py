@@ -5,7 +5,7 @@ from typing import Any
 from urllib.parse import quote, urlparse
 
 from .config import Settings
-from .video_inventory import VIDEO_EXTENSIONS, VideoInventory
+from .hosted_videos import VIDEO_EXTENSIONS, VideoInventory
 
 
 def _video_filename(value: str) -> str | None:
