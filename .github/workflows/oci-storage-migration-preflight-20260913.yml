@@ -1,0 +1,92 @@
+name: OCI storage migration preflight 2026-09-13
+
+on:
+  push:
+    branches:
+      - ops/oci-storage-readonly-20260913
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+      OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+      OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+      OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+      OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+    steps:
+      - name: Install OCI CLI and create ephemeral config
+        shell: bash
+        run: |
+          set -euo pipefail
+          for v in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            [ -n "${!v:-}" ] || { echo "missing_secret=$v"; exit 1; }
+          done
+          python3 -m pip install --quiet oci-cli
+          mkdir -p "$RUNNER_TEMP/oci"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$RUNNER_TEMP/oci/key.pem"
+          chmod 600 "$RUNNER_TEMP/oci/key.pem"
+          cat > "$RUNNER_TEMP/oci/config" <<EOF
+          [DEFAULT]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$RUNNER_TEMP/oci/key.pem
+          EOF
+          chmod 600 "$RUNNER_TEMP/oci/config"
+
+      - name: Read migration preflight inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          CFG="$RUNNER_TEMP/oci/config"
+          COMP="$OCI_CLI_TENANCY"
+          NAME=shopvivaliz-free-a1
+          IID=$(oci --config-file "$CFG" compute instance list --compartment-id "$COMP" --all --query "data[?\"display-name\"=='$NAME']|[?\"lifecycle-state\"=='RUNNING']|[0].id" --raw-output)
+          [ -n "$IID" ] && [ "$IID" != null ] || { echo instance_not_found; exit 1; }
+          echo "=== INSTANCE ==="
+          oci --config-file "$CFG" compute instance get --instance-id "$IID" \
+            --query 'data.{name:"display-name",state:"lifecycle-state",shape:shape,shape_config:"shape-config",ad:"availability-domain",fd:"fault-domain",image_id:"image-id",compartment_id:"compartment-id"}'
+          echo "=== IMAGE ==="
+          IMAGE=$(oci --config-file "$CFG" compute instance get --instance-id "$IID" --query 'data."image-id"' --raw-output)
+          oci --config-file "$CFG" compute image get --image-id "$IMAGE" \
+            --query 'data.{name:"display-name",os:"operating-system",version:"operating-system-version",size_mb:"size-in-mbs",state:"lifecycle-state"}'
+          echo "=== VNIC ATTACHMENT ==="
+          VNIC=$(oci --config-file "$CFG" compute vnic-attachment list --compartment-id "$COMP" --instance-id "$IID" --all --query 'data[?"lifecycle-state"==`ATTACHED`]|[0]."vnic-id"' --raw-output)
+          oci --config-file "$CFG" compute vnic-attachment list --compartment-id "$COMP" --instance-id "$IID" --all \
+            --query 'data[].{state:"lifecycle-state",vnic_id:"vnic-id",ad:"availability-domain",display_name:"display-name"}' --output table
+          echo "=== VNIC ==="
+          oci --config-file "$CFG" network vnic get --vnic-id "$VNIC" \
+            --query 'data.{private_ip:"private-ip",public_ip:"public-ip",subnet_id:"subnet-id",hostname:"hostname-label",nsg_ids:"nsg-ids",skip_source_dest_check:"skip-source-dest-check",state:"lifecycle-state"}'
+          SUBNET=$(oci --config-file "$CFG" network vnic get --vnic-id "$VNIC" --query 'data."subnet-id"' --raw-output)
+          echo "=== SUBNET ==="
+          oci --config-file "$CFG" network subnet get --subnet-id "$SUBNET" \
+            --query 'data.{name:"display-name",cidr:"cidr-block",vcn_id:"vcn-id",route_table_id:"route-table-id",dhcp_options_id:"dhcp-options-id",security_list_ids:"security-list-ids",prohibit_public_ip:"prohibit-public-ip-on-vnic",state:"lifecycle-state"}'
+          echo "=== PUBLIC IPS IN REGION ==="
+          oci --config-file "$CFG" network public-ip list --scope REGION --compartment-id "$COMP" --all \
+            --query 'data[].{ip:"ip-address",lifetime:lifetime,state:"lifecycle-state",assigned_entity_id:"assigned-entity-id"}' --output table
+          echo "=== BOOT ATTACHMENT ==="
+          AD=$(oci --config-file "$CFG" compute instance get --instance-id "$IID" --query 'data."availability-domain"' --raw-output)
+          BVID=$(oci --config-file "$CFG" compute boot-volume-attachment list --compartment-id "$COMP" --availability-domain "$AD" --instance-id "$IID" --all --query 'data[?"lifecycle-state"==`ATTACHED`]|[0]."boot-volume-id"' --raw-output)
+          oci --config-file "$CFG" bv boot-volume get --boot-volume-id "$BVID" \
+            --query 'data.{name:"display-name",size_gb:"size-in-gbs",state:"lifecycle-state",vpus:"vpus-per-gb",ad:"availability-domain"}'
+          echo "=== BOOT VOLUME BACKUPS ==="
+          oci --config-file "$CFG" bv boot-volume-backup list --compartment-id "$COMP" --all \
+            --query 'data[].{name:"display-name",state:"lifecycle-state",type:type,size_gb:"size-in-gbs",time_created:"time-created",source_boot_volume_id:"boot-volume-id"}' --output table
+          echo "=== SHAPE AVAILABILITY ==="
+          oci --config-file "$CFG" compute shape list --compartment-id "$COMP" --availability-domain "$AD" \
+            --query 'data[?shape==`VM.Standard.A1.Flex`].{shape:shape,ocpus:ocpus,memory_gb:"memory-in-gbs"}' --output table
+
+      - name: Remove ephemeral OCI credentials
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          shred -u "$RUNNER_TEMP/oci/key.pem" "$RUNNER_TEMP/oci/config" 2>/dev/null || rm -rf "$RUNNER_TEMP/oci"
+          echo "ephemeral_credentials_removed=yes"
