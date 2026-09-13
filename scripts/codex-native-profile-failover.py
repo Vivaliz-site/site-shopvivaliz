@@ -98,7 +98,9 @@ def run_model_command(
     result_class = classify_failure(result.returncode, result.stderr, result.stdout)
     return result.returncode, profile, result_class
 
+
 MODEL_COMMANDS = {'exec', 'e', 'review'}
+ADMIN_FLAGS = {'--version', '-V', '--help', '-h'}
 ADMIN_COMMANDS = {
     'login', 'logout', 'doctor', 'mcp', 'plugin', 'completion', 'features',
     'update', 'agents', 'remote-control', 'cloud', 'debug', 'sandbox', 'apply',
@@ -117,6 +119,8 @@ def command_mode(argv: list[str]) -> str:
     if not argv:
         return 'interactive'
     first = argv[0]
+    if first in ADMIN_FLAGS:
+        return 'admin'
     if first in MODEL_COMMANDS:
         return 'model'
     if first in ADMIN_COMMANDS:
