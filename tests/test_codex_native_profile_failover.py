@@ -3,6 +3,7 @@ import json
 import os
 import tempfile
 import unittest
+from unittest import mock
 import sys
 from pathlib import Path
 
@@ -113,6 +114,7 @@ class NativeProfileCliContractTests(unittest.TestCase):
         self.assertEqual(mod.command_mode(['exec', 'x']), 'model')
         self.assertEqual(mod.command_mode(['e', 'x']), 'model')
         self.assertEqual(mod.command_mode(['review']), 'model')
+        self.assertEqual(mod.command_mode(['--ask-for-approval', 'never', 'exec', 'x']), 'model')
         self.assertEqual(mod.command_mode(['doctor', '--json']), 'admin')
         self.assertEqual(mod.command_mode(['login', 'status']), 'admin')
         self.assertEqual(mod.command_mode(['--version']), 'admin')
@@ -125,6 +127,7 @@ class NativeProfileCliContractTests(unittest.TestCase):
     def test_probe_contract_is_ephemeral_read_only_and_bounded(self):
         mod = load_module()
         self.assertEqual(mod.PROBE_TIMEOUT_SECONDS, 45)
+        self.assertEqual(mod.PROBE_ARGS[:3], ['--ask-for-approval', 'never', 'exec'])
         self.assertIn('--ephemeral', mod.PROBE_ARGS)
         self.assertIn('--skip-git-repo-check', mod.PROBE_ARGS)
         self.assertIn('--ignore-user-config', mod.PROBE_ARGS)
@@ -169,6 +172,19 @@ class NativeProfileProcessTests(unittest.TestCase):
             result = mod.run_captured(str(exe), 'fredmourao', home, ['exec'], timeout=0.05)
         self.assertEqual(result.returncode, 124)
         self.assertEqual(mod.classify_failure(result.returncode, result.stderr), 'terminal')
+
+    def test_probe_closes_stdin_to_avoid_waiting_for_piped_input(self):
+        mod = load_module()
+        completed = type('Completed', (), {
+            'returncode': 0, 'stdout': 'PROFILE_OK\n', 'stderr': ''
+        })()
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td) / 'fredmourao'
+            home.mkdir()
+            with mock.patch.object(mod.subprocess, 'run', return_value=completed) as run:
+                result = mod.probe_profile('/real/codex', 'fredmourao', home)
+        self.assertEqual(result.returncode, 0)
+        self.assertIs(run.call_args.kwargs['stdin'], mod.subprocess.DEVNULL)
 
 
 class NativeProfileMainTests(unittest.TestCase):
