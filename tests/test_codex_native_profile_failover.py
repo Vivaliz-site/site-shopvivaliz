@@ -115,6 +115,10 @@ class NativeProfileCliContractTests(unittest.TestCase):
         self.assertEqual(mod.command_mode(['review']), 'model')
         self.assertEqual(mod.command_mode(['doctor', '--json']), 'admin')
         self.assertEqual(mod.command_mode(['login', 'status']), 'admin')
+        self.assertEqual(mod.command_mode(['--version']), 'admin')
+        self.assertEqual(mod.command_mode(['-V']), 'admin')
+        self.assertEqual(mod.command_mode(['--help']), 'admin')
+        self.assertEqual(mod.command_mode(['-h']), 'admin')
         self.assertEqual(mod.command_mode([]), 'interactive')
         self.assertEqual(mod.command_mode(['explain this repo']), 'interactive')
 
