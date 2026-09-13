@@ -33,7 +33,7 @@ class TinyClient:
             "Accept": "application/json",
         }
 
-    def _get_json(self, path: str, *, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _get_json(self, path: str, *, params: dict[str, Any] | None = None) -> dict[str, Any] | list[Any]:
         url = f"{self.settings.tiny_api_base_url.rstrip('/')}/{path.lstrip('/')}"
         attempts = self.settings.max_retries + 1
         for attempt in range(attempts):
@@ -74,7 +74,7 @@ class TinyClient:
                 payload = response.json()
             except (ValueError, TypeError) as exc:
                 raise TinyApiError("Tiny API returned invalid JSON") from exc
-            if not isinstance(payload, dict):
+            if not isinstance(payload, (dict, list)):
                 raise TinyApiError("Tiny API returned an unexpected JSON structure")
             return payload
 
@@ -91,6 +91,8 @@ class TinyClient:
                 "/produtos",
                 params={"situacao": "A", "limit": limit, "offset": offset},
             )
+            if not isinstance(payload, dict):
+                raise TinyApiError("Tiny API product listing returned an unexpected JSON structure")
             items = payload.get("itens") or []
             if not isinstance(items, list) or not items:
                 break
@@ -121,11 +123,13 @@ class TinyClient:
         return products
 
     def get_product(self, product_id: int | str) -> dict[str, Any]:
-        return self._get_json(f"/produtos/{product_id}")
+        payload = self._get_json(f"/produtos/{product_id}")
+        if not isinstance(payload, dict):
+            raise TinyApiError("Tiny API product detail returned an unexpected JSON structure")
+        return payload
 
     def get_attachments(self, product_id: int | str) -> list[dict[str, Any]]:
-        detail = self.get_product(product_id)
-        attachments = detail.get("anexos") or []
-        if not isinstance(attachments, list):
-            return []
-        return [item for item in attachments if isinstance(item, dict)]
+        payload = self._get_json(f"/produtos/{product_id}/anexos")
+        if not isinstance(payload, list):
+            raise TinyApiError("Tiny API product attachments returned an unexpected JSON structure")
+        return [item for item in payload if isinstance(item, dict)]
