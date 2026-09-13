@@ -83,7 +83,7 @@ class CodexFailoverTests(unittest.TestCase):
 
 **Interfaces:**
 - `CODEX_REAL` points to the preserved original Codex executable.
-- `~/.codex/api-keys.env` contains the two canonical key names.
+- `~/.codex/api-keys.env` may contain the original Gmail attachment names `openai_token_1` and `openai_token_2`, or the backward-compatible canonical key names.
 - `~/.codex/api-key-active` contains only `primary` or `secondary`.
 - [ ] **Step 1: Audit real launcher paths on all four hosts without changing them.**
 - [ ] **Step 2: For each host, create a timestamped backup of the existing launcher/config and any `api-keys.env`; do not print contents.**

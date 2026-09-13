@@ -20,7 +20,9 @@ def parse_keys(path=KEY_FILE):
             continue
         name, value = raw.split('=', 1)
         values[name.strip()] = value.strip()
-    return values.get('OPENAI_API_KEY_PRIMARY'), values.get('OPENAI_API_KEY_SECONDARY')
+    primary = values.get('OPENAI_API_KEY_PRIMARY') or values.get('openai_token_1')
+    secondary = values.get('OPENAI_API_KEY_SECONDARY') or values.get('openai_token_2')
+    return primary, secondary
 
 
 def http_response_usable(status, body):
