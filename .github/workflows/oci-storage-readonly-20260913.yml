@@ -1,0 +1,88 @@
+name: OCI storage read-only inventory 2026-09-13
+
+on:
+  push:
+    branches:
+      - ops/oci-storage-readonly-20260913
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+      OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+      OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+      OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+      OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+    steps:
+      - name: Validate secret presence without printing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          for v in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            if [ -z "${!v:-}" ]; then
+              echo "missing_secret=$v"
+              exit 1
+            fi
+          done
+          echo "oci_secrets_present=yes"
+
+      - name: Install OCI CLI and create ephemeral config
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet oci-cli
+          mkdir -p "$RUNNER_TEMP/oci"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$RUNNER_TEMP/oci/key.pem"
+          chmod 600 "$RUNNER_TEMP/oci/key.pem"
+          cat > "$RUNNER_TEMP/oci/config" <<EOF
+          [DEFAULT]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$RUNNER_TEMP/oci/key.pem
+          EOF
+          chmod 600 "$RUNNER_TEMP/oci/config"
+          echo "oci_config_ready=yes"
+
+      - name: Read OCI compute and block-volume inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          CFG="$RUNNER_TEMP/oci/config"
+          COMP="$OCI_CLI_TENANCY"
+          echo "=== INSTANCES ==="
+          oci --config-file "$CFG" compute instance list --compartment-id "$COMP" --all \
+            --query 'data[].{name:"display-name",state:"lifecycle-state",shape:shape,id:id,ad:"availability-domain",fd:"fault-domain"}' \
+            --output table
+          echo "=== AVAILABILITY DOMAINS ==="
+          mapfile -t ADS < <(oci --config-file "$CFG" iam availability-domain list --compartment-id "$COMP" --query 'data[].name' --raw-output | jq -r '.[]')
+          printf '%s\n' "${ADS[@]}"
+          for ad in "${ADS[@]}"; do
+            echo "=== BOOT VOLUMES AD: $ad ==="
+            oci --config-file "$CFG" bv boot-volume list --compartment-id "$COMP" --availability-domain "$ad" --all \
+              --query 'data[].{name:"display-name",size_gb:"size-in-gbs",state:"lifecycle-state",id:id,vpus:"vpus-per-gb"}' \
+              --output table
+            echo "=== BOOT ATTACHMENTS AD: $ad ==="
+            oci --config-file "$CFG" compute boot-volume-attachment list --compartment-id "$COMP" --availability-domain "$ad" --all \
+              --query 'data[].{state:"lifecycle-state",instance_id:"instance-id",boot_volume_id:"boot-volume-id",id:id}' \
+              --output table
+          done
+          echo "=== BLOCK VOLUMES ==="
+          oci --config-file "$CFG" bv volume list --compartment-id "$COMP" --all \
+            --query 'data[].{name:"display-name",size_gb:"size-in-gbs",state:"lifecycle-state",id:id,ad:"availability-domain"}' \
+            --output table
+
+      - name: Remove ephemeral OCI credentials
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          shred -u "$RUNNER_TEMP/oci/key.pem" "$RUNNER_TEMP/oci/config" 2>/dev/null || rm -rf "$RUNNER_TEMP/oci"
+          echo "ephemeral_credentials_removed=yes"
