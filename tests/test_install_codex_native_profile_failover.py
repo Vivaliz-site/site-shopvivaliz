@@ -244,6 +244,87 @@ class InstallerIntegrationTests(unittest.TestCase):
                     (sessions / f'{profile}.jsonl').read_text(), expected[profile]
                 )
 
+    def test_install_shares_only_sessions_and_preserves_forbidden_profile_state(self):
+        mod = load_module()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            home = self._home(root)
+            fixtures = {
+                'auth.json': 'SUPER_SECRET_TOKEN',
+                'state_5.sqlite': 'state-db',
+                'state_5.sqlite-wal': 'state-wal',
+                'state_5.sqlite-shm': 'state-shm',
+                'models_cache.json': 'models',
+                'history.jsonl': 'history-index',
+                'memories_1.sqlite': 'memory-db',
+            }
+            before = {}
+            for profile in mod.PROFILES:
+                profile_home = home / '.codex-business' / profile
+                for name, content in fixtures.items():
+                    path = profile_home / name
+                    path.write_text(f'{profile}:{content}')
+                    before[(profile, name)] = path.read_bytes()
+                for dirname in ('log', 'plugins', 'secrets'):
+                    directory = profile_home / dirname
+                    directory.mkdir()
+                    (directory / 'sentinel.txt').write_text(f'{profile}:{dirname}')
+                sessions = profile_home / 'sessions'
+                sessions.mkdir()
+                (sessions / f'{profile}.jsonl').write_text(f'{profile}-session\n')
+            real = root / 'real-codex'
+            real.write_text('#!/bin/sh\nexit 0\n')
+            real.chmod(0o755)
+            engine = root / 'engine.py'
+            engine.write_text('print("engine")\n')
+
+            result = mod.install(home, 'linux', str(real), engine)
+            shared = Path(result['shared_sessions'])
+            for profile in mod.PROFILES:
+                profile_home = home / '.codex-business' / profile
+                self.assertEqual((profile_home / 'sessions').resolve(), shared.resolve())
+                for name in fixtures:
+                    path = profile_home / name
+                    self.assertFalse(path.is_symlink())
+                    self.assertEqual(path.read_bytes(), before[(profile, name)])
+                for dirname in ('log', 'plugins', 'secrets'):
+                    directory = profile_home / dirname
+                    self.assertFalse(directory.is_symlink())
+                    self.assertEqual(
+                        (directory / 'sentinel.txt').read_text(), f'{profile}:{dirname}'
+                    )
+
+    def test_session_manifest_contains_metadata_only(self):
+        mod = load_module()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            home = self._home(root)
+            for profile in mod.PROFILES:
+                (home / '.codex-business' / profile / 'auth.json').write_text(
+                    f'{profile}:SUPER_SECRET_TOKEN'
+                )
+            legacy = home / '.codex' / 'sessions' / 'one.jsonl'
+            legacy.parent.mkdir(parents=True)
+            legacy.write_text('session-content-that-must-not-enter-manifest\n')
+            result = mod._prepare_shared_sessions(
+                home, 'linux', home / '.codex-business' / 'backups' / 'case'
+            )
+            manifest = json.loads(Path(result['session_manifest']).read_text())
+            serialized = json.dumps(manifest)
+            self.assertNotIn('SUPER_SECRET_TOKEN', serialized)
+            self.assertNotIn('session-content-that-must-not-enter-manifest', serialized)
+            self.assertEqual(
+                set(manifest),
+                {
+                    'version', 'created_at', 'shared_sessions',
+                    'session_count', 'files', 'profile_backups',
+                },
+            )
+            for item in manifest['files']:
+                self.assertEqual(
+                    set(item), {'relative_path', 'sha256', 'size', 'source_paths'}
+                )
+
     def test_install_returns_shared_session_metadata(self):
         mod = load_module()
         with tempfile.TemporaryDirectory() as td:
