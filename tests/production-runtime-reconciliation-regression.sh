@@ -25,9 +25,9 @@ if grep -Fq 'sleep 2' "$pipeline"; then
   echo 'production activation still uses fixed two-second sleep' >&2
   exit 1
 fi
-grep -Fq "grep -q '163.176.103.253' .github/workflows/master-production-pipeline.yml" "$gate"
+grep -Fq "grep -q '127.0.0.1' .github/workflows/master-production-pipeline.yml" "$gate"
 grep -Fq "php tests/retired-e2-endpoints-contract-test.php" "$gate"
-if grep -Fq "! grep -q '163.176.103.253' .github/workflows/master-production-pipeline.yml" "$gate"; then
+if grep -Fq "! grep -q '127.0.0.1' .github/workflows/master-production-pipeline.yml" "$gate"; then
   echo 'quality gate contains self-contradictory A1 target check' >&2
   exit 1
 fi

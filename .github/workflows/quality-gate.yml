@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -92,7 +92,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q '163.176.103.253' .github/workflows/master-production-pipeline.yml
+          grep -q '127.0.0.1' .github/workflows/master-production-pipeline.yml
           php tests/retired-e2-endpoints-contract-test.php
           grep -q 'SEO routing invariant' scripts/deploy-production.sh
           test -f .github/workflows/public-layout-audit.yml

@@ -432,13 +432,13 @@ Regras:
 3. Validar estado atual do MCP antes de declarar disponibilidade; se nao houver ferramenta/evidencia atual, reportar `INCONCLUSIVO`.
 4. MCP remoto nao amplia permissoes: continuam proibidos force-push, bypass de protecoes, exposicao de secrets e alteracoes de preco/estoque/pedido fora do escopo aprovado.
 
-### Se Tiver Que SSH à VM
+### Se Tiver Que Acessar a VM
 
 ```bash
-# Use a chave baseada no perfil ativo (FRED ou user)
-ssh -i "C:\Users\user\Downloads\ssh-key-2026-07-04.key" ubuntu@163.176.103.253
-# ou
-ssh -i "C:\Users\FRED\Downloads\ssh-key-2026-07-04.key" ubuntu@163.176.103.253
+# SSH publico direto esta desabilitado.
+# Prefira Remote Desktop Commander; no runner self-hosted da VM do site:
+ssh -i ~/.ssh/id_rsa ubuntu@127.0.0.1
+# Fora da VCN, use uma sessao OCI Bastion.
 
 # Monitorar deploy (a cada 2 min, cron roda)
 tail -f /var/log/shopvivaliz-deploy.log

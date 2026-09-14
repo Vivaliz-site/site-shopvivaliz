@@ -15,7 +15,7 @@ concurrency:
 jobs:
   audit:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 20
     permissions:
       contents: read
@@ -37,9 +37,9 @@ jobs:
           install -m 700 -d "$HOME/.ssh"
           printf '%s\n' "$KEY" > "$HOME/.ssh/id_rsa"
           chmod 600 "$HOME/.ssh/id_rsa"
-          printf '%s %s\n' '163.176.103.253' 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICPXjLoakI7MkHQrhQF1jaCF8VTtY1SbDiffx8gNeSxw' > "$HOME/.ssh/known_hosts"
+          printf '%s %s\n' '127.0.0.1' 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICPXjLoakI7MkHQrhQF1jaCF8VTtY1SbDiffx8gNeSxw' > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
-          ssh -f -N -D 127.0.0.1:1080 -o BatchMode=yes -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253
+          ssh -f -N -D 127.0.0.1:1080 -o BatchMode=yes -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1
           code="$(curl -sS --proxy socks5h://127.0.0.1:1080 -o /dev/null -w '%{http_code}' --max-time 20 https://shopvivaliz.com.br/)"
           test "$code" = 200
       - name: Audit all public layouts

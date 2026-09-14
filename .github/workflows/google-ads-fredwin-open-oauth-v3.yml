@@ -1,11 +1,6 @@
 name: Google Ads Fred-Win Open OAuth V3
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "ops/google-ads-open-oauth.json"
-      - ".github/workflows/google-ads-fredwin-open-oauth-v3.yml"
   workflow_dispatch:
 
 permissions:

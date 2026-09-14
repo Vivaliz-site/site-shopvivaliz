@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   restore-m365-cron:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     environment: Production
     timeout-minutes: 8
     steps:
@@ -34,7 +34,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa")
-          ssh "${ssh_opts[@]}" ubuntu@144.22.157.209 'bash -s' <<'REMOTE'
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
           expected_host='always-free-arm-1787907847-26'
           [ "$(hostname)" = "$expected_host" ] || { echo 'backend_identity_mismatch'; exit 20; }

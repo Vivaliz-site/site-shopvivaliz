@@ -18,10 +18,10 @@ concurrency:
 
 jobs:
   audit:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 12
     env:
-      SITE_A1_HOST: 163.176.103.253
+      SITE_A1_HOST: 127.0.0.1
       REMOTE_STAGE: /tmp/google-ads-readonly-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Checkout exact audit revision

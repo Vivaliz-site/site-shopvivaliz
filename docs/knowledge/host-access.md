@@ -16,8 +16,8 @@ Antes de diagnosticar, alterar ou validar qualquer ambiente, o agente deve:
 
 | Host | IP | Papel | Desktop Commander |
 |---|---:|---|---|
-| `shopvivaliz-free-a1` | `163.176.103.253` | site/web/deploy de produção | dispositivo `shopvivaliz-free-a1` |
-| `always-free-arm-1787907847-26` | `144.22.157.209` | backend, MEI, M365 e relay Fred-Win | dispositivo `always-free-arm-1787907847-26` |
+| `shopvivaliz-free-a1` | origin `137.131.149.55`, privado `10.0.1.112` | site/web/deploy de produção | dispositivo `shopvivaliz-free-a1` |
+| `always-free-arm-1787907847-26` | privado `10.0.1.38`, sem IP publico | backend, MEI, M365 e relay Fred-Win | dispositivo `always-free-arm-1787907847-26` |
 | `shopvivaliz-ai` | `137.131.156.17` | DEV legado / e-mail / testes; **não tratar como produção web** | pode aparecer offline/legado |
 
 A arquitetura atual deve ser confirmada no código e nos hosts antes de qualquer intervenção. Se houver divergência entre este arquivo e evidência ao vivo, pare a hipótese e atualize a documentação com a evidência encontrada.
@@ -43,6 +43,8 @@ Nunca editar diretamente `current/` nem `releases/<ativa>/`.
 
 ## SSH
 
+SSH publico direto esta desabilitado. GitHub Actions administrativos usam o runner `shopvivaliz-a1-deploy`: site por `127.0.0.1` e backend por `10.0.1.38`. Operadores externos usam OCI Bastion ou Remote Desktop Commander.
+
 Usuário padrão das VMs Oracle:
 
 ```text
@@ -62,15 +64,15 @@ Ambiente de agente/projeto: SHOPVIVALIZ_VM_SSH_KEY (quando fornecido pelo runtim
 Exemplos:
 
 ```bash
-ssh -i ~/.ssh/id_rsa ubuntu@163.176.103.253
-ssh -i ~/.ssh/id_rsa ubuntu@144.22.157.209
+ssh -i ~/.ssh/id_rsa ubuntu@127.0.0.1  # somente no runner self-hosted do site
+ssh -i ~/.ssh/id_rsa ubuntu@10.0.1.38  # somente dentro da VCN
 ssh -i ~/.ssh/id_rsa ubuntu@137.131.156.17
 ```
 
 No Windows:
 
 ```powershell
-ssh -i "C:\Users\FRED\Downloads\ssh-key-2026-07-04.key" ubuntu@163.176.103.253
+Use Remote Desktop Commander ou OCI Bastion; SSH publico direto esta desabilitado.
 ```
 
 ## Desktop Commander

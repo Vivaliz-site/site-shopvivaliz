@@ -43,7 +43,7 @@ concurrency:
 
 jobs:
   audit:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     environment: Production
     timeout-minutes: 45
     env:
@@ -128,7 +128,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@163.176.103.253 \
+            ubuntu@127.0.0.1 \
             "curl -fsS --connect-timeout 5 --max-time 30 -H 'Host: shopvivaliz.com.br' http://127.0.0.1:8080/sitemap.xml" \
             > reports/google-search-console-sitemap.xml
           grep -q '<urlset' reports/google-search-console-sitemap.xml

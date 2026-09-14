@@ -9,7 +9,7 @@
 
 ```text
 GitHub Actions
-  -> SSH para backend A1 144.22.157.209
+  -> runner self-hosted do site -> SSH privado para backend A1 10.0.1.38
   -> VM 127.0.0.1:5557
   -> reverse SSH tunnel
   -> Fred-Win 127.0.0.1:5557
@@ -30,7 +30,7 @@ Componentes canônicos:
 O túnel esperado no Windows usa `ssh.exe` com reverse forward equivalente a:
 
 ```text
--R 5557:127.0.0.1:5557 ubuntu@144.22.157.209
+-R 5557:127.0.0.1:5557 ubuntu@${SHOPVIVALIZ_BACKEND_SSH_HOST}
 ```
 
 ## Endpoint antigo — proibido para diagnóstico atual
@@ -130,7 +130,7 @@ Nesses casos, a classificação correta é **INCONCLUSIVO** até que a rota ofic
 ```text
 FRED_WIN_STATUS=COMPROVADO|FALHOU|INCONCLUSIVO
 CHECKED_AT=<timestamp absoluto>
-CANONICAL_PATH=GitHub Actions -> backend A1 144.22.157.209 -> 127.0.0.1:5557 -> reverse SSH -> Fred-Win
+CANONICAL_PATH=GitHub Actions -> backend A1 10.0.1.38 -> 127.0.0.1:5557 -> reverse SSH -> Fred-Win
 WORKFLOW=.github/workflows/fred-win-remote-action.yml
 REQUEST_ACTION=health
 HTTP_STATUS=<status observado>

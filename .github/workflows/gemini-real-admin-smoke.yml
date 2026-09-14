@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   smoke:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 15
     environment: production
     steps:
@@ -40,7 +40,7 @@ jobs:
           set -Eeuo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
+            -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
           cd /home/ubuntu/shopvivaliz-deploy/current
 
@@ -95,7 +95,7 @@ jobs:
           set -Eeuo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
+            -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
           cd /home/ubuntu/shopvivaliz-deploy/current
           php <<'PHP'

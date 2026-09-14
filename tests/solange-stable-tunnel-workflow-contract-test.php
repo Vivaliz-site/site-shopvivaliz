@@ -10,7 +10,7 @@ foreach ([$workflow, $script] as $path) {
 }
 $yaml = file_get_contents($workflow);
 $sh = file_get_contents($script);
-foreach (['workflow_dispatch:', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_DNS_EDIT_TOKEN', 'ORACLE_VM_SSH_KEY', '144.22.157.209'] as $needle) {
+foreach (['workflow_dispatch:', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_DNS_EDIT_TOKEN', 'ORACLE_VM_SSH_KEY', '10.0.1.38'] as $needle) {
     if (stripos($yaml, $needle) === false) {
         fwrite(STDERR, "FALHOU: workflow sem {$needle}\n");
         exit(1);

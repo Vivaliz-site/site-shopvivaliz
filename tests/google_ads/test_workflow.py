@@ -16,7 +16,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn("googleAds:searchStream", self.text)
 
     def test_targets_only_new_site_a1(self):
-        self.assertIn("163.176.103.253", self.text)
+        self.assertIn("127.0.0.1", self.text)
         self.assertNotIn("136.248.69.116", self.text)
         self.assertNotIn("137.131.156.17", self.text)
 

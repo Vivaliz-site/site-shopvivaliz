@@ -15,13 +15,13 @@ concurrency:
 jobs:
   functional:
     name: Prove production actually works
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 12
     environment: production
     env:
       BASE_URL: https://shopvivaliz.com.br
       SHOPVIVALIZ_AGENT_KEY: ${{ secrets.SHOPVIVALIZ_AGENT_KEY != '' && secrets.SHOPVIVALIZ_AGENT_KEY || secrets.AGENT_KEY }}
-      SITE_A1_HOST: 163.176.103.253
+      SITE_A1_HOST: 127.0.0.1
       REMOTE_STAGE: /tmp/production-functional-audit-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7

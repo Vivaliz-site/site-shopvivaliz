@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     environment: Production
     timeout-minutes: 10
     steps:
@@ -37,7 +37,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@163.176.103.253 'bash -s' <<'REMOTE'
+            ubuntu@127.0.0.1 'bash -s' <<'REMOTE'
           set -euo pipefail
           current='/home/ubuntu/shopvivaliz-deploy/current'
           test -r "$current/tests/ecommerce-excellence-regression-test.php"
