@@ -1,0 +1,89 @@
+name: Amazon Returns SAFE-T Recovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: amazon-returns-safet-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover-and-verify:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 40
+    steps:
+      - name: Configure verified Oracle SSH
+        env:
+          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ORACLE_VM_SSH_KEY:-}"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          ssh-keyscan -T 10 -t ed25519 137.131.149.55 > "$HOME/.ssh/known_hosts"
+          actual="$(ssh-keygen -lf "$HOME/.ssh/known_hosts" | awk '{print $2}')"
+          expected='SHA256:gC6IaM0/Du1ApfuPr2jBdaTD+fSxNkNRdV7b4cv4KAY'
+          test "$actual" = "$expected"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Recover Seller Central cycle and verify SAFE-T runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh_opts=(
+            -o BatchMode=yes
+            -o ConnectTimeout=10
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -i "$HOME/.ssh/id_rsa"
+          )
+          ssh "${ssh_opts[@]}" ubuntu@137.131.149.55 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          test "$(hostname)" = 'shopvivaliz-free-a1'
+          sudo -n true
+
+          repo=/home/ubuntu/amazon-returns-deploy-source
+          deploy=/home/ubuntu/amazon-returns-deploy
+          git -C "$repo" fetch --quiet origin main
+          origin_sha="$(git -C "$repo" rev-parse origin/main)"
+          current_sha="$(cat "$deploy/current/.release-sha")"
+          printf 'origin_main=%s\ncurrent_release=%s\n' "$origin_sha" "$current_sha"
+          test "$origin_sha" = "$current_sha"
+
+          sudo -n systemctl reset-failed amazon-returns-seller-central-browser.service || true
+          sudo -n systemctl start amazon-returns-seller-central-browser.service
+
+          test "$(systemctl is-active amazon-returns-safet.service)" = active
+          test "$(systemctl is-active amazon-returns-seller-central-browser.timer)" = active
+          test "$(systemctl show -p Result --value amazon-returns-seller-central-browser.service)" = success
+
+          processing="$(sudo -n mysql --protocol=socket -uroot --batch --skip-column-names amazon_returns_safet -e "SELECT COUNT(*) FROM amazon_return_outbox WHERE status='PROCESSING' AND locked_at>DATE_SUB(UTC_TIMESTAMP(),INTERVAL 300 SECOND)")"
+          stale="$(sudo -n mysql --protocol=socket -uroot --batch --skip-column-names amazon_returns_safet -e "SELECT COUNT(*) FROM amazon_return_outbox WHERE status='PROCESSING' AND (locked_at IS NULL OR locked_at<=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 300 SECOND))")"
+          pending="$(sudo -n mysql --protocol=socket -uroot --batch --skip-column-names amazon_returns_safet -e "SELECT COUNT(*) FROM amazon_return_outbox WHERE status IN ('PENDING','PROCESSING')")"
+          dead="$(sudo -n mysql --protocol=socket -uroot --batch --skip-column-names amazon_returns_safet -e "SELECT COUNT(*) FROM amazon_return_dead_letters")"
+          printf 'processing_jobs=%s\nstale_processing_jobs=%s\npending_outbox=%s\ndead_letters=%s\n' "$processing" "$stale" "$pending" "$dead"
+          test "$processing" -eq 0
+          test "$stale" -eq 0
+
+          systemctl show amazon-returns-seller-central-browser.service \
+            -p CPUQuotaPerSecUSec -p MemoryHigh -p MemoryMax -p TasksMax -p Result
+          sudo -n journalctl -u amazon-returns-seller-central-browser.service -n 120 --no-pager
+          REMOTE
+
+      - name: Verify public SAFE-T health
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(curl -fsS --connect-timeout 5 --max-time 20 https://returns.shopvivaliz.com.br/api/health.php)"
+          printf '%s\n' "$body"
+          python3 - "$body" <<'PY'
+          import json, sys
+          data = json.loads(sys.argv[1])
+          assert data == {"service": "amazon-returns-safet", "status": "OK"}, data
+          PY
