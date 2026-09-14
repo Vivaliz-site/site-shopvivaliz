@@ -1,7 +1,9 @@
 import importlib.util
+import json
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -98,6 +100,251 @@ class InstallerIntegrationTests(unittest.TestCase):
             engine.write_text('x')
             with self.assertRaises(FileNotFoundError):
                 mod.install(home, 'linux', str(real), engine)
+
+    def test_session_inventory_is_session_only_and_deduplicates_identical_files(self):
+        mod = load_module()
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td) / 'home'
+            shared = home / '.codex-business' / 'shared-session-state' / 'sessions'
+            legacy = home / '.codex' / 'sessions' / '2026' / '09' / '13'
+            fred = home / '.codex-business' / 'fredmourao' / 'sessions' / '2026' / '09' / '13'
+            legacy.mkdir(parents=True); fred.mkdir(parents=True)
+            (home / '.codex-business' / 'fredmourao' / 'auth.json').write_text('SUPER_SECRET')
+            (legacy / 'a.jsonl').write_text('same\n')
+            (fred / 'a.jsonl').write_text('same\n')
+            inv = mod._build_session_inventory(mod._session_source_dirs(home, shared), shared)
+            self.assertEqual(set(inv), {'2026/09/13/a.jsonl'})
+            self.assertNotIn('SUPER_SECRET', repr(inv))
+
+    def test_session_inventory_rejects_conflicting_same_path(self):
+        mod = load_module()
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td) / 'home'
+            shared = home / '.codex-business' / 'shared-session-state' / 'sessions'
+            a = home / '.codex' / 'sessions' / 'x.jsonl'
+            b = home / '.codex-business' / 'fredmourao' / 'sessions' / 'x.jsonl'
+            a.parent.mkdir(parents=True); b.parent.mkdir(parents=True)
+            a.write_text('one'); b.write_text('two')
+            with self.assertRaises(mod.SessionConflictError):
+                mod._build_session_inventory(mod._session_source_dirs(home, shared), shared)
+            self.assertFalse(shared.exists())
+
+    def test_shared_session_migration_preserves_auth_and_links_profiles(self):
+        mod = load_module()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            home = self._home(root)
+            legacy = home / '.codex' / 'sessions' / 'old.jsonl'
+            legacy.parent.mkdir(parents=True)
+            legacy.write_text('history\n')
+            for profile in mod.PROFILES:
+                (home / '.codex-business' / profile / 'auth.json').write_text(f'auth-{profile}')
+            backup = home / '.codex-business' / 'backups' / 'case'
+            result = mod._prepare_shared_sessions(home, 'linux', backup)
+            shared = Path(result['shared_sessions'])
+            self.assertEqual((shared / 'old.jsonl').read_text(), 'history\n')
+            for profile in mod.PROFILES:
+                p = home / '.codex-business' / profile
+                self.assertEqual((p / 'sessions').resolve(), shared.resolve())
+                self.assertEqual((p / 'auth.json').read_text(), f'auth-{profile}')
+            second = mod._prepare_shared_sessions(home, 'linux', backup / 'second')
+            self.assertEqual(second['session_count'], 1)
+            self.assertEqual(Path(second['shared_sessions']).resolve(), shared.resolve())
+
+    def test_windows_directory_link_uses_junction_command(self):
+        mod = load_module()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            link = root / 'profile' / 'sessions'
+            target = root / 'shared' / 'sessions'
+            target.mkdir(parents=True)
+            with mock.patch.object(mod.subprocess, 'run') as run:
+                mod._create_directory_link(link, target, 'windows')
+            self.assertEqual(
+                run.call_args.args[0][:5],
+                ['cmd.exe', '/d', '/c', 'mklink', '/J'],
+            )
+            self.assertEqual(run.call_args.args[0][5:], [str(link), str(target)])
+            self.assertTrue(run.call_args.kwargs['check'])
+
+    def test_rollback_restores_profile_sessions_and_preserves_shared_store(self):
+        mod = load_module()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            home = self._home(root)
+            fred_sessions = home / '.codex-business' / 'fredmourao' / 'sessions'
+            fred_sessions.mkdir(parents=True)
+            (fred_sessions / 'fred.jsonl').write_text('fred-history\n')
+            backup = home / '.codex-business' / 'backups' / 'case'
+            result = mod._prepare_shared_sessions(home, 'linux', backup)
+            shared = Path(result['shared_sessions'])
+            self.assertTrue((shared / 'fred.jsonl').is_file())
+            rolled = mod.rollback_shared_sessions(home, backup)
+            self.assertTrue((home / '.codex-business' / 'fredmourao' / 'sessions').is_dir())
+            self.assertFalse((home / '.codex-business' / 'fredmourao' / 'sessions').is_symlink())
+            self.assertEqual(
+                (home / '.codex-business' / 'fredmourao' / 'sessions' / 'fred.jsonl').read_text(),
+                'fred-history\n',
+            )
+            self.assertTrue((shared / 'fred.jsonl').is_file())
+            self.assertEqual(rolled['shared_sessions'], str(shared))
+
+    def test_reinstall_ignores_stale_legacy_after_profiles_share_store(self):
+        mod = load_module()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            home = self._home(root)
+            legacy = home / '.codex' / 'sessions' / 'old.jsonl'
+            legacy.parent.mkdir(parents=True)
+            legacy.write_text('history\n')
+            first = mod._prepare_shared_sessions(
+                home, 'linux', home / '.codex-business' / 'backups' / 'first'
+            )
+            shared_file = Path(first['shared_sessions']) / 'old.jsonl'
+            shared_file.write_text('history\ncontinued\n')
+            second = mod._prepare_shared_sessions(
+                home, 'linux', home / '.codex-business' / 'backups' / 'second'
+            )
+            self.assertEqual(second['session_count'], 1)
+            self.assertEqual(shared_file.read_text(), 'history\ncontinued\n')
+
+    def test_link_failure_rolls_back_profile_session_paths(self):
+        mod = load_module()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            home = self._home(root)
+            expected = {}
+            for profile in mod.PROFILES:
+                sessions = home / '.codex-business' / profile / 'sessions'
+                sessions.mkdir(parents=True)
+                content = f'{profile}-history\n'
+                (sessions / f'{profile}.jsonl').write_text(content)
+                expected[profile] = content
+            backup = home / '.codex-business' / 'backups' / 'case'
+            original = mod._create_directory_link
+            calls = []
+
+            def flaky(link, target, platform):
+                calls.append(str(link))
+                if len(calls) == 2:
+                    raise OSError('synthetic second-link failure')
+                return original(link, target, platform)
+
+            with mock.patch.object(mod, '_create_directory_link', side_effect=flaky):
+                with self.assertRaisesRegex(OSError, 'synthetic second-link failure'):
+                    mod._prepare_shared_sessions(home, 'linux', backup)
+
+            shared = home / '.codex-business' / mod.SESSION_STORE_DIR / 'sessions'
+            self.assertTrue(shared.is_dir())
+            for profile in mod.PROFILES:
+                sessions = home / '.codex-business' / profile / 'sessions'
+                self.assertTrue(sessions.is_dir())
+                self.assertFalse(sessions.is_symlink())
+                self.assertEqual(
+                    (sessions / f'{profile}.jsonl').read_text(), expected[profile]
+                )
+
+    def test_install_shares_only_sessions_and_preserves_forbidden_profile_state(self):
+        mod = load_module()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            home = self._home(root)
+            fixtures = {
+                'auth.json': 'SUPER_SECRET_TOKEN',
+                'state_5.sqlite': 'state-db',
+                'state_5.sqlite-wal': 'state-wal',
+                'state_5.sqlite-shm': 'state-shm',
+                'models_cache.json': 'models',
+                'history.jsonl': 'history-index',
+                'memories_1.sqlite': 'memory-db',
+            }
+            before = {}
+            for profile in mod.PROFILES:
+                profile_home = home / '.codex-business' / profile
+                for name, content in fixtures.items():
+                    path = profile_home / name
+                    path.write_text(f'{profile}:{content}')
+                    before[(profile, name)] = path.read_bytes()
+                for dirname in ('log', 'plugins', 'secrets'):
+                    directory = profile_home / dirname
+                    directory.mkdir()
+                    (directory / 'sentinel.txt').write_text(f'{profile}:{dirname}')
+                sessions = profile_home / 'sessions'
+                sessions.mkdir()
+                (sessions / f'{profile}.jsonl').write_text(f'{profile}-session\n')
+            real = root / 'real-codex'
+            real.write_text('#!/bin/sh\nexit 0\n')
+            real.chmod(0o755)
+            engine = root / 'engine.py'
+            engine.write_text('print("engine")\n')
+
+            result = mod.install(home, 'linux', str(real), engine)
+            shared = Path(result['shared_sessions'])
+            for profile in mod.PROFILES:
+                profile_home = home / '.codex-business' / profile
+                self.assertEqual((profile_home / 'sessions').resolve(), shared.resolve())
+                for name in fixtures:
+                    path = profile_home / name
+                    self.assertFalse(path.is_symlink())
+                    self.assertEqual(path.read_bytes(), before[(profile, name)])
+                for dirname in ('log', 'plugins', 'secrets'):
+                    directory = profile_home / dirname
+                    self.assertFalse(directory.is_symlink())
+                    self.assertEqual(
+                        (directory / 'sentinel.txt').read_text(), f'{profile}:{dirname}'
+                    )
+
+    def test_session_manifest_contains_metadata_only(self):
+        mod = load_module()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            home = self._home(root)
+            for profile in mod.PROFILES:
+                (home / '.codex-business' / profile / 'auth.json').write_text(
+                    f'{profile}:SUPER_SECRET_TOKEN'
+                )
+            legacy = home / '.codex' / 'sessions' / 'one.jsonl'
+            legacy.parent.mkdir(parents=True)
+            legacy.write_text('session-content-that-must-not-enter-manifest\n')
+            result = mod._prepare_shared_sessions(
+                home, 'linux', home / '.codex-business' / 'backups' / 'case'
+            )
+            manifest = json.loads(Path(result['session_manifest']).read_text())
+            serialized = json.dumps(manifest)
+            self.assertNotIn('SUPER_SECRET_TOKEN', serialized)
+            self.assertNotIn('session-content-that-must-not-enter-manifest', serialized)
+            self.assertEqual(
+                set(manifest),
+                {
+                    'version', 'created_at', 'shared_sessions',
+                    'session_count', 'files', 'profile_backups',
+                },
+            )
+            for item in manifest['files']:
+                self.assertEqual(
+                    set(item), {'relative_path', 'sha256', 'size', 'source_paths'}
+                )
+
+    def test_install_returns_shared_session_metadata(self):
+        mod = load_module()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            home = self._home(root)
+            legacy = home / '.codex' / 'sessions' / 'one.jsonl'
+            legacy.parent.mkdir(parents=True)
+            legacy.write_text('one\n')
+            real = root / 'real-codex'
+            real.write_text('#!/bin/sh\nexit 0\n')
+            real.chmod(0o755)
+            engine = root / 'engine.py'
+            engine.write_text('print("engine")\n')
+            result = mod.install(home, 'linux', str(real), engine)
+            self.assertEqual(result['session_count'], 1)
+            self.assertTrue(Path(result['shared_sessions']).is_dir())
+            manifest = Path(result['session_manifest'])
+            self.assertTrue(manifest.is_file())
+            data = json.loads(manifest.read_text())
+            self.assertEqual(data['session_count'], 1)
 
 
 if __name__ == '__main__':
