@@ -117,7 +117,9 @@ jobs:
           set -euo pipefail
           ssh_cmd="ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -i $HOME/.ssh/id_rsa"
           release_dir="/home/ubuntu/shopvivaliz-deploy/releases/$(date -u +%Y%m%d-%H%M%S)-${DEPLOY_SHA:0:8}"
-          previous="$($ssh_cmd ubuntu@127.0.0.1 'readlink -f /home/ubuntu/shopvivaliz-deploy/current 2>/dev/null || true')"
+          if ! previous="$($ssh_cmd ubuntu@127.0.0.1 'readlink -f /home/ubuntu/shopvivaliz-deploy/current 2>/dev/null')"; then
+            previous=''
+          fi
           $ssh_cmd ubuntu@127.0.0.1 "command -v rsync >/dev/null && mkdir -p '$release_dir'"
           rsync -a --checksum --delete --link-dest="${previous:-/nonexistent}" \
             --exclude=.git \
@@ -149,7 +151,9 @@ jobs:
           releases="$root/releases"
           shared="$root/shared"
           current="$root/current"
-          previous="$(readlink -f "$current" 2>/dev/null || true)"
+          if ! previous="$(readlink -f "$current" 2>/dev/null)"; then
+            previous=''
+          fi
           case "$release" in
             "$releases"/*) ;;
             *) echo "invalid release directory: $release" >&2; exit 2 ;;
@@ -217,14 +221,18 @@ jobs:
 
           served_sha=''
           for attempt in 1 2 3 4 5 6 7 8; do
-            served_sha="$(curl -fsS -H 'Cache-Control: no-cache' --max-time 5 "https://shopvivaliz.com.br/api/health/version.php?deploy=${sha}" | php -r '$j=json_decode(stream_get_contents(STDIN), true); echo is_array($j) ? ($j["release_sha"] ?? "") : "";' || true)"
+            if ! served_sha="$(curl -fsS -H 'Cache-Control: no-cache' --max-time 5 "https://shopvivaliz.com.br/api/health/version.php?deploy=${sha}" | php -r '$j=json_decode(stream_get_contents(STDIN), true); echo is_array($j) ? ($j["release_sha"] ?? "") : "";')"; then
+              served_sha=''
+            fi
             [ "$served_sha" = "$sha" ] && break
             sleep 0.25
           done
           echo "release_sha -> $served_sha"
           [ "$served_sha" = "$sha" ] || fail=1
           for path in / /sitemap.xml /catalogo/ /termos/ /politica-entrega/ /politica-devolucoes/; do
-            code="$(curl -sS -o /tmp/smoke-body -w '%{http_code}' -H 'Cache-Control: no-cache' --max-time 20 "https://shopvivaliz.com.br${path}" || true)"
+            if ! code="$(curl -sS -o /tmp/smoke-body -w '%{http_code}' -H 'Cache-Control: no-cache' --max-time 20 "https://shopvivaliz.com.br${path}")"; then
+              code='000'
+            fi
             echo "$path -> $code"
             [ "$code" = 200 ] || fail=1
           done
