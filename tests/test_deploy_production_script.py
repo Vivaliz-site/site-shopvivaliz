@@ -257,3 +257,16 @@ def test_deploy_internal_health_uses_site_origin_8080() -> None:
 
 def test_deploy_has_no_policy_banned_or_true_bypass() -> None:
     assert '|| true' not in _text(), 'deploy script must not suppress failures with policy-banned || true'
+
+
+def test_deploy_enforces_shared_runtime_group_write_contract() -> None:
+    """Apache-written shared state must stay writable after every deploy."""
+    text = _text()
+    assert "reconcile_shared_runtime_permissions()" in text
+    assert 'local -a runtime_dirs=("uploads" "logs" "cache" "sessions" "storage")' in text
+    assert 'sudo chgrp -R www-data "$shared_path"' in text
+    assert 'sudo chmod -R g+rwX "$shared_path"' in text
+    assert 'sudo find "$shared_path" -type d -exec chmod g+s {} +' in text
+    assert 'sudo chgrp www-data "$SHARED_DIR/tasks-queue.json"' in text
+    assert 'sudo chmod g+rw "$SHARED_DIR/tasks-queue.json"' in text
+    assert re.search(r"^\s*if ! reconcile_shared_runtime_permissions; then\s*$", text, re.MULTILINE)

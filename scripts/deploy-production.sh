@@ -376,6 +376,22 @@ PY
   return 1
 }
 
+reconcile_shared_runtime_permissions() {
+  local -a runtime_dirs=("uploads" "logs" "cache" "sessions" "storage")
+  local name shared_path
+
+  for name in "${runtime_dirs[@]}"; do
+    shared_path="$SHARED_DIR/$name"
+    mkdir -p "$shared_path"
+    sudo chgrp -R www-data "$shared_path"
+    sudo chmod -R g+rwX "$shared_path"
+    sudo find "$shared_path" -type d -exec chmod g+s {} +
+  done
+
+  sudo chgrp www-data "$SHARED_DIR/tasks-queue.json"
+  sudo chmod g+rw "$SHARED_DIR/tasks-queue.json"
+}
+
 reconcile_runtime_secrets() {
   local release_path="$1"
   local materializer="$release_path/scripts/materialize-runtime-secrets.php"
@@ -575,6 +591,11 @@ for name in "${SYMLINKS[@]}"; do
     exit 1
   fi
 done
+
+if ! reconcile_shared_runtime_permissions; then
+  log ERROR "Falha ao reconciliar permissoes dos caminhos compartilhados de runtime"
+  exit 1
+fi
 
 if [ -f "$NEW_RELEASE_PATH/scripts/apply-storefront-hardening-migration.php" ]; then
   log INFO "Aplicando migracao idempotente de estoque e newsletter"
