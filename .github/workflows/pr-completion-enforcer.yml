@@ -29,11 +29,11 @@ concurrency:
 jobs:
   enforce:
     name: Repair failures now and merge every current fully-green PR
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 20
     env:
       REPO: ${{ github.repository }}
-      VM_HOST: 163.176.103.253
+      VM_HOST: 127.0.0.1
       VM_USER: ubuntu
       GH_TOKEN: ${{ github.token }}
 
@@ -58,18 +58,15 @@ jobs:
         env:
           PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
           LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
-          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
-          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
           set -Eeuo pipefail
           key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
-          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
           test -n "$key" || { echo '::error::Oracle SSH key missing'; exit 1; }
-          test -n "$known_hosts" || { echo '::error::Oracle known_hosts missing'; exit 1; }
           install -m 700 -d "$HOME/.ssh"
           printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
-          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa"
+          printf '%s %s\n' '127.0.0.1' 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICPXjLoakI7MkHQrhQF1jaCF8VTtY1SbDiffx8gNeSxw' > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
 
       - name: Ensure immediate-repair label exists
         shell: bash
