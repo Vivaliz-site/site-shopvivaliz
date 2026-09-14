@@ -29,6 +29,8 @@ REQUIRED = {
         "workflow_run:",
         "schedule:",
         "cancel-in-progress: true",
+        "runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]",
+        "VM_HOST: 127.0.0.1",
         "SHOPVIVALIZ_VM_SSH_KEY",
         "ORACLE_VM_SSH_KEY",
         "github.token",
@@ -147,6 +149,7 @@ FORBIDDEN = {
     ".github/workflows/pr-completion-enforcer.yml": [
         "GH_REPO_TOKEN",
         "gh pr merge",
+        "VM_HOST: 163.176.103.253",
         GIT_PUSH,
     ],
 }
