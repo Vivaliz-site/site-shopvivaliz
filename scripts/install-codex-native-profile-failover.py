@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import hashlib
 import shutil
 import shlex
 from datetime import datetime, timezone
 from pathlib import Path
 
 PROFILES = ('fredmourao', 'marinaofaleiro')
+SESSION_STORE_DIR = 'shared-session-state'
+
+
+class SessionConflictError(RuntimeError):
+    pass
 WINDOWS_SENTINEL_BEGIN = '# BEGIN SHOPVIVALIZ CODEX NATIVE PROFILE FAILOVER'
 WINDOWS_SENTINEL_END = '# END SHOPVIVALIZ CODEX NATIVE PROFILE FAILOVER'
 
@@ -89,6 +95,92 @@ def patch_windows_scope_guard_file(path: Path, launcher_path: str) -> None:
     if has_bom:
         encoded = b'\xef\xbb\xbf' + encoded
     path.write_bytes(encoded)
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open('rb') as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _same_location(left: Path, right: Path) -> bool:
+    try:
+        return left.resolve() == right.resolve()
+    except OSError:
+        return False
+
+
+def _session_source_dirs(home: Path, shared_sessions: Path) -> tuple[Path, ...]:
+    home = Path(home)
+    shared_sessions = Path(shared_sessions)
+    candidates = [home / '.codex' / 'sessions']
+    for profile in PROFILES:
+        candidate = home / '.codex-business' / profile / 'sessions'
+        if not _same_location(candidate, shared_sessions):
+            candidates.append(candidate)
+    candidates.append(shared_sessions)
+    return tuple(candidates)
+
+
+def _build_session_inventory(
+    sources: tuple[Path, ...], shared_sessions: Path
+) -> dict[str, dict]:
+    del shared_sessions
+    inventory: dict[str, dict] = {}
+    for source in sources:
+        source = Path(source)
+        if not source.is_dir():
+            continue
+        for path in sorted(source.rglob('*')):
+            if not path.is_file():
+                continue
+            relative = path.relative_to(source).as_posix()
+            file_hash = _sha256_file(path)
+            size = path.stat().st_size
+            existing = inventory.get(relative)
+            if existing is None:
+                inventory[relative] = {
+                    'sha256': file_hash,
+                    'size': size,
+                    'source_paths': [str(path)],
+                }
+                continue
+            if existing['sha256'] != file_hash or existing['size'] != size:
+                raise SessionConflictError(
+                    f'conflicting session file for relative path: {relative}'
+                )
+            existing['source_paths'].append(str(path))
+    return inventory
+
+
+def _copy_inventory_to_shared(
+    inventory: dict[str, dict], shared_sessions: Path
+) -> dict[str, int]:
+    shared_sessions = Path(shared_sessions)
+    copied = 0
+    for relative, entry in sorted(inventory.items()):
+        destination = shared_sessions / Path(relative)
+        if destination.exists():
+            if (
+                not destination.is_file()
+                or _sha256_file(destination) != entry['sha256']
+                or destination.stat().st_size != entry['size']
+            ):
+                raise SessionConflictError(
+                    f'conflicting destination session file: {relative}'
+                )
+            continue
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(Path(entry['source_paths'][0]), destination)
+        if (
+            _sha256_file(destination) != entry['sha256']
+            or destination.stat().st_size != entry['size']
+        ):
+            raise OSError(f'copied session verification failed: {relative}')
+        copied += 1
+    return {'session_count': len(inventory), 'copied': copied}
 
 
 def _backup_files(paths: list[Path], backup_dir: Path) -> None:

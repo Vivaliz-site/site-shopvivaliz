@@ -99,6 +99,34 @@ class InstallerIntegrationTests(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 mod.install(home, 'linux', str(real), engine)
 
+    def test_session_inventory_is_session_only_and_deduplicates_identical_files(self):
+        mod = load_module()
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td) / 'home'
+            shared = home / '.codex-business' / 'shared-session-state' / 'sessions'
+            legacy = home / '.codex' / 'sessions' / '2026' / '09' / '13'
+            fred = home / '.codex-business' / 'fredmourao' / 'sessions' / '2026' / '09' / '13'
+            legacy.mkdir(parents=True); fred.mkdir(parents=True)
+            (home / '.codex-business' / 'fredmourao' / 'auth.json').write_text('SUPER_SECRET')
+            (legacy / 'a.jsonl').write_text('same\n')
+            (fred / 'a.jsonl').write_text('same\n')
+            inv = mod._build_session_inventory(mod._session_source_dirs(home, shared), shared)
+            self.assertEqual(set(inv), {'2026/09/13/a.jsonl'})
+            self.assertNotIn('SUPER_SECRET', repr(inv))
+
+    def test_session_inventory_rejects_conflicting_same_path(self):
+        mod = load_module()
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td) / 'home'
+            shared = home / '.codex-business' / 'shared-session-state' / 'sessions'
+            a = home / '.codex' / 'sessions' / 'x.jsonl'
+            b = home / '.codex-business' / 'fredmourao' / 'sessions' / 'x.jsonl'
+            a.parent.mkdir(parents=True); b.parent.mkdir(parents=True)
+            a.write_text('one'); b.write_text('two')
+            with self.assertRaises(mod.SessionConflictError):
+                mod._build_session_inventory(mod._session_source_dirs(home, shared), shared)
+            self.assertFalse(shared.exists())
+
 
 if __name__ == '__main__':
     unittest.main()
