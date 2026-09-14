@@ -1,3 +1,5 @@
+> SSH publico direto esta desabilitado. Os exemplos `127.0.0.1` valem no runner self-hosted da VM; acesso externo deve usar OCI Bastion ou Remote Desktop Commander.
+
 # Acesso SSH à VM de produção (Oracle Cloud)
 
 > ⚠️ **Este arquivo documenta o processo de acesso, sem reproduzir material de chave.**
@@ -9,7 +11,7 @@
 
 | Item | Valor |
 |---|---|
-| IP da VM | `163.176.103.253` |
+| IP da VM | origin reservado `137.131.149.55`; privado `10.0.1.112` |
 | Usuário | `ubuntu` |
 | Domínio servido | `shopvivaliz.com.br` (produção real; `dev.shopvivaliz.com.br` é host legado/inativo para dependências web) |
 | Diretório ativo da app na VM | `/home/ubuntu/shopvivaliz-deploy/current` |
@@ -62,7 +64,7 @@ gh secret list
     mkdir -p ~/.ssh
     printf '%s\n' "${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}" > ~/.ssh/shopvivaliz_vm_agent
     chmod 600 ~/.ssh/shopvivaliz_vm_agent
-    ssh -o StrictHostKeyChecking=no -i ~/.ssh/shopvivaliz_vm_agent ubuntu@163.176.103.253 "comando aqui"
+    ssh -o StrictHostKeyChecking=no -i ~/.ssh/shopvivaliz_vm_agent ubuntu@127.0.0.1 "comando aqui"
 ```
 
 O arquivo criado no runner é efêmero e deve ser descartado ao fim do job.
@@ -77,7 +79,7 @@ Secret do GitHub Actions.
 ## Como usar a partir de uma sessão autorizada
 
 ```powershell
-ssh -i CAMINHO_LOCAL_DA_CHAVE -o StrictHostKeyChecking=no ubuntu@163.176.103.253 "comando aqui"
+ssh -i CAMINHO_LOCAL_DA_CHAVE -o StrictHostKeyChecking=no ubuntu@127.0.0.1 "comando aqui"
 ```
 
 Toolkit local preferencial quando disponível:
@@ -109,7 +111,7 @@ Use este contexto quando um agente autorizado precisar acessar a VM:
 
 ```text
 VM de produção ShopVivaliz:
-- Host: 163.176.103.253
+- Host privado: 10.0.1.112; origin HTTPS: 137.131.149.55
 - Usuário: ubuntu
 - Chave SSH: GitHub Secret SHOPVIVALIZ_VM_SSH_KEY ou chave local autorizada
 - Diretório de deploy ativo: /home/ubuntu/shopvivaliz-deploy/current/

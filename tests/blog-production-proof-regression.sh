@@ -20,7 +20,7 @@ fi
 required=(
   'paths:'
   '.github/workflows/blog-editorial-repair-once.yml'
-  '163.176.103.253'
+  '127.0.0.1'
   'scripts/repair-blog-editorial-content.php --dry-run'
   'scripts/repair-blog-editorial-content.php --apply --backup-dir='
   'blog-editorial-repair-evidence.json'

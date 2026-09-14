@@ -61,7 +61,8 @@
                      },
     "triad_sync":  {
                        "ubuntu_server":  {
-                                             "host":  "163.176.103.253",
+                                             "host":  "10.0.1.112",
+                                             "transport":  "private-vcn-or-remote-desktop-commander",
                                              "user":  "ubuntu",
                                              "repo_path":  "/home/ubuntu/shopvivaliz-deploy/repo",
                                              "ssh_key_windows":  "C:\\Users\\FRED\\Downloads\\ssh-key-2026-07-04.key"

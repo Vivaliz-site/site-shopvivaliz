@@ -2,12 +2,6 @@ name: Google Ads Fred-Win OAuth Repair
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "ops/google-ads-oauth-repair-request.json"
-      - ".github/workflows/google-ads-fredwin-oauth-repair.yml"
-      - "scripts/google_ads_oauth_candidate_repair.py"
 
 permissions:
   contents: read

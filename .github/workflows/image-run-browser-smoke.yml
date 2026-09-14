@@ -1,29 +1,6 @@
 name: Image Run Browser Smoke
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/image-run-browser-smoke.yml'
-      - 'scripts/select-active-products-browser-relay.sh'
-      - 'tests/browser-smoke-relay-failover-regression.php'
-      - 'tests/image-run-browser-smoke.py'
-      - 'admin/ai-image-studio/admin_dashboard.php'
-      - 'admin/assets/image-generation-workflow.js'
-      - 'admin/assets/image-professional-ops.js'
-      - 'admin/assets/image-generation-usability-v2.js'
-      - 'includes/admin-guard.php'
-  pull_request:
-    paths:
-      - '.github/workflows/image-run-browser-smoke.yml'
-      - 'scripts/select-active-products-browser-relay.sh'
-      - 'tests/browser-smoke-relay-failover-regression.php'
-      - 'tests/image-run-browser-smoke.py'
-      - 'admin/ai-image-studio/admin_dashboard.php'
-      - 'admin/assets/image-generation-workflow.js'
-      - 'admin/assets/image-professional-ops.js'
-      - 'admin/assets/image-generation-usability-v2.js'
-      - 'includes/admin-guard.php'
   workflow_dispatch:
 
 permissions:
@@ -36,7 +13,7 @@ concurrency:
 jobs:
   browser-smoke:
     if: github.repository == 'Vivaliz-site/site-shopvivaliz' && github.actor == 'fredmourao-ai'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 15
     environment: production
     steps:
@@ -93,7 +70,7 @@ jobs:
           session_name="$({
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-              -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
+              -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1 \
               'bash -s' -- "$session_id" <<'REMOTE'
           set -Eeuo pipefail
           sid="$1"
@@ -156,7 +133,7 @@ jobs:
           set +e
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" ubuntu@144.22.157.209 \
+            -i "$HOME/.ssh/id_rsa" ubuntu@10.0.1.38 \
             "BODY_B64='$body_b64' RELAY_PORT='$SV_BROWSER_RELAY_PORT' python3 - <<'PY'
           import base64,json,os,urllib.request
           body=base64.b64decode(os.environ['BODY_B64'])
@@ -200,7 +177,7 @@ jobs:
           if [[ -n "${SV_ADMIN_SESSION_ID:-}" && -f "$HOME/.ssh/id_rsa" ]]; then
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-              -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
+              -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1 \
               'bash -s' -- "$SV_ADMIN_SESSION_ID" <<'REMOTE'
           set -Eeuo pipefail
           cd /home/ubuntu/shopvivaliz-deploy/current

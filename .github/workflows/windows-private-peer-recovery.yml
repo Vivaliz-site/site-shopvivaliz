@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   recover:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 8
     steps:
       - name: Configure verified VM SSH
@@ -27,7 +27,7 @@ jobs:
       - name: Recover Windows peers through VM private network when available
         run: |
           set -Eeuo pipefail
-          SSH_VM=(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@144.22.157.209)
+          SSH_VM=(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@10.0.1.38)
           cat > /tmp/peer-discover.py <<'PY'
           import json,sys
           try:
@@ -66,7 +66,7 @@ jobs:
               return 0
             fi
             printf '%s_SSH22=reachable\n' "$label" >> /tmp/windows-peer-safe.txt
-            ssh -fNT -o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" -L "$localport:$ip:22" ubuntu@144.22.157.209
+            ssh -fNT -o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" -L "$localport:$ip:22" ubuntu@10.0.1.38
             sleep 2
             ssh-keyscan -T 5 -p "$localport" 127.0.0.1 2>/dev/null > "/tmp/${label}.hosts"
             if [ ! -s "/tmp/${label}.hosts" ]; then

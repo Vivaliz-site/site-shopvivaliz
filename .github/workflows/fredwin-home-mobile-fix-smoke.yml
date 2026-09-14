@@ -1,25 +1,14 @@
 ﻿name: Fred-Win Home Mobile Fix Smoke
 
 on:
-  push:
-    branches:
-      - fix/home-mobile-categories-liz-20260814
-    paths:
-      - 'js/auto-image-carousel.js'
-      - 'css/home-mobile-corrections-v1.css'
-      - 'includes/asset-bundle-manifest.php'
-      - 'includes/liz-assistant-assets.php'
-      - 'public/assets/liz-assistant/liz-assistant-corrections-v1.*'
-      - 'tests/home-mobile-category-liz-contract-test.php'
-      - 'tests/fredwin-home-mobile-fix-smoke.py'
-      - '.github/workflows/fredwin-home-mobile-fix-smoke.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   smoke:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 10
     steps:
       - name: Checkout for static contract
@@ -67,7 +56,7 @@ jobs:
           PY
           BODY_B64="$(base64 -w0 /tmp/fredwin-command.json)"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-            -i "$HOME/.ssh/vmkey" ubuntu@144.22.157.209 \
+            -i "$HOME/.ssh/vmkey" ubuntu@10.0.1.38 \
             "BODY_B64='$BODY_B64' python3 - <<'PY'
           import base64, json, os, urllib.request
           body=base64.b64decode(os.environ['BODY_B64'])

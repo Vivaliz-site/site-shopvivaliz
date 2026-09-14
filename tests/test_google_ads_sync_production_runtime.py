@@ -8,7 +8,7 @@ WORKFLOW = ROOT / ".github/workflows/google-ads-sync-production-runtime.yml"
 class GoogleAdsSyncProductionRuntimeTests(unittest.TestCase):
     def test_production_a1_host_has_safe_fallback_when_secret_is_missing(self):
         text = WORKFLOW.read_text(encoding="utf-8")
-        expected = "VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST || " + chr(39) + "163.176.103.253" + chr(39) + " }}"
+        expected = "VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST || " + chr(39) + "127.0.0.1" + chr(39) + " }}"
         self.assertIn(expected, text)
 
 

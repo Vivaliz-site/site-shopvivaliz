@@ -2,18 +2,13 @@
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "ops/fredwin-observe-request.json"
-      - ".github/workflows/fred-win-health-observable.yml"
 
 permissions:
   contents: read
 
 jobs:
   health:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 5
     steps:
       - name: Checkout request
@@ -47,7 +42,7 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -o ConnectTimeout=10 -o ServerAliveInterval=10 \
             -o ServerAliveCountMax=2 -i "$HOME/.ssh/vmkey" \
-            ubuntu@144.22.157.209 \
+            ubuntu@10.0.1.38 \
             'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health' \
             > /tmp/fredwin-health-output.txt 2>&1; then
             code=0
@@ -119,13 +114,13 @@ jobs:
               'trigger_sha': os.environ.get('GITHUB_SHA'),
               'private_relay': {
                   'architecture': (
-                      'GitHub Actions -> Oracle VM 144.22.157.209 via SSH -> '
+                      'GitHub Actions -> Oracle VM 10.0.1.38 via SSH -> '
                       'VM 127.0.0.1:5557 -> reverse SSH tunnel -> '
                       'Fred-Win 127.0.0.1:5557 -> MCP'
                   ),
                   'endpoint_checked_from_vm': 'http://127.0.0.1:5557/health',
                   'cloudflare_endpoint_used': False,
-                  'ssh_target': 'ubuntu@144.22.157.209',
+                  'ssh_target': 'ubuntu@10.0.1.38',
               },
               'health': {
                   'exit_code': exit_code,

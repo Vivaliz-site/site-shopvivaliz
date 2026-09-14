@@ -17,10 +17,10 @@ jobs:
       matrix:
         include:
           - name: always-free-arm
-            host: 144.22.157.209
+            host: 10.0.1.38
           - name: shopvivaliz-free-a1
-            host: 163.176.103.253
-    runs-on: ubuntu-latest
+            host: 127.0.0.1
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4

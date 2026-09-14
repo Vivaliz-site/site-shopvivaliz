@@ -4,10 +4,10 @@ Instrucao operacional obrigatoria para agentes que precisem executar comandos na
 
 ## VMs atuais
 
-| Alias | Instancia OCI | SSH no Fred-Win | IP publico observado em 2026-09-06 |
+| Alias | Instancia OCI | Endereco operacional | Exposicao publica |
 | --- | --- | --- | --- |
-| `vm1` | `shopvivaliz-free-a1` | `shopvivaliz-a1-site-raw` | `163.176.103.253` |
-| `vm2` | `always-free-arm-1787907847-26` | `shopvivaliz-a1-backend-raw` | `144.22.157.209` |
+| `vm1` | `shopvivaliz-free-a1` | privado `10.0.1.112`; loopback CI `127.0.0.1` | origin reservado `137.131.149.55`, HTTPS Cloudflare somente |
+| `vm2` | `always-free-arm-1787907847-26` | privado `10.0.1.38` | sem IP publico |
 
 - Regiao OCI: `sa-saopaulo-1`.
 - Controlador canonico: Fred-Win (`LAPTOP-NIG4IFUU`).
@@ -20,9 +20,10 @@ Instrucao operacional obrigatoria para agentes que precisem executar comandos na
 ## Ordem obrigatoria de acesso
 
 1. **Remote Desktop Commander** diretamente pelo `device_name`, quando online, para operacao comum sem privilegio elevado.
-2. **SSH administrativo pelo Fred-Win**, usando o SSH do Git e os aliases ja cadastrados, quando a tarefa exigir `sudo`/root.
-3. **OCI Compute Instance Run Command**, via perfil `AGENTS`, como shell de fallback independente de SSH e de porta de entrada.
-4. **OCI serial console** somente como ultimo recurso de recuperacao quando acesso privilegiado e SSH estiverem indisponiveis.
+2. **Runner self-hosted/VCN privada** para automacoes: site via `127.0.0.1`, backend via `10.0.1.38`.
+3. **OCI Bastion** para SSH administrativo vindo de fora da VCN; SSH publico direto permanece fechado.
+4. **OCI Compute Instance Run Command**, via perfil `AGENTS`, como shell de fallback independente de SSH e de porta de entrada.
+5. **OCI serial console** somente como ultimo recurso de recuperacao quando acesso privilegiado e SSH estiverem indisponiveis.
 
 Nao enfraquecer os bloqueios de `sudo`/`NoNewPrivileges` do Remote Desktop Commander para conseguir root.
 

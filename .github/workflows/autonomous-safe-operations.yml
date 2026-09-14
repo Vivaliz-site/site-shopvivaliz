@@ -20,7 +20,7 @@ permissions:
 jobs:
   catalog-snapshot:
     if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 */2 * * *'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 20
     steps:
       - name: Initialize catalog evidence
@@ -43,8 +43,8 @@ jobs:
       - name: Copy catalog snapshot from the active production release
         run: |
           set -euo pipefail
-          release_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha')"
-          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253:/home/ubuntu/shopvivaliz-deploy/current/storage/products-cache-ativos.json artifacts/catalog-snapshot/products-cache-ativos.json
+          release_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1 'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha')"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1:/home/ubuntu/shopvivaliz-deploy/current/storage/products-cache-ativos.json artifacts/catalog-snapshot/products-cache-ativos.json
           test -s artifacts/catalog-snapshot/products-cache-ativos.json
           python3 -m json.tool artifacts/catalog-snapshot/products-cache-ativos.json >/dev/null
           printf 'run_id=%s\nexecution_path=oracle-active-release\nrelease_sha=%s\n' "$GITHUB_RUN_ID" "$release_sha" > artifacts/catalog-snapshot/context.txt
@@ -68,7 +68,7 @@ jobs:
         github.event.issue.title == '[ops] verify orders health 2026-08-02' &&
         contains(github.event.issue.body, 'authorization_nonce=orders-health-20260802-v1')
       )
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 10
     steps:
       - name: Initialize health evidence
@@ -99,7 +99,7 @@ jobs:
             -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -i "$HOME/.ssh/id_rsa" \
-            ubuntu@163.176.103.253 \
+            ubuntu@127.0.0.1 \
             'set -euo pipefail
              failures=0
              endpoints=(

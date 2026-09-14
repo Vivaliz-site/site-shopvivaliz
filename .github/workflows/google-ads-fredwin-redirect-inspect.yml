@@ -2,11 +2,6 @@ name: Google Ads Fred-Win Redirect Inspect
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "ops/google-ads-fredwin-redirect-inspect.json"
-      - ".github/workflows/google-ads-fredwin-redirect-inspect.yml"
 
 permissions:
   contents: read

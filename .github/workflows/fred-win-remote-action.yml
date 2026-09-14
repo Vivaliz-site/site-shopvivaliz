@@ -2,17 +2,13 @@ name: Fred-Win Remote Action
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "ops/fredwin-request.json"
 
 permissions:
   contents: read
 
 jobs:
   execute:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 8
     steps:
       - name: Checkout
@@ -76,14 +72,14 @@ jobs:
 
       - name: Check private MCP path through VM
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 \
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@10.0.1.38 \
             'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health'
 
       - name: Execute allowlisted action
         if: steps.action.outputs.action != 'health'
         run: |
           CMD_B64="$(cat /tmp/fredwin-command.b64)"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 \
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@10.0.1.38 \
             "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
           import base64, json, os, urllib.error, urllib.request
           command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')

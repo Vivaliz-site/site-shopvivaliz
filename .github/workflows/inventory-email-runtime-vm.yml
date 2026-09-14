@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   inventory:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 5
     steps:
       - name: Configure VM key
@@ -20,7 +20,7 @@ jobs:
           chmod 600 ~/.ssh/vmkey
       - name: Inventory VM
         run: |
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@144.22.157.209 <<'EOF'
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/vmkey ubuntu@10.0.1.38 <<'EOF'
           set -u
           echo 'HOST'; hostname; date -Is
           echo 'HOME'; find /home/ubuntu -maxdepth 3 -type d \( -iname '*mei*' -o -iname '*email*' -o -iname '*shopvivaliz*' \) 2>/dev/null | head -100

@@ -9,7 +9,7 @@ permissions:
   contents: read
 jobs:
   restore:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 10
     steps:
       - name: Configure VM key
@@ -21,7 +21,7 @@ jobs:
           chmod 600 ~/.ssh/vmkey
       - name: Restore missing featured product images and validate
         run: |
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@163.176.103.253 <<'EOF'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=20 -o ServerAliveCountMax=3 -i ~/.ssh/vmkey ubuntu@127.0.0.1 <<'EOF'
           set -euo pipefail
           BASE=/home/ubuntu/shopvivaliz-deploy
           SHARED="$BASE/shared/uploads"

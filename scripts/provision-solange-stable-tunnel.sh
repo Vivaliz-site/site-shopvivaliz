@@ -9,7 +9,7 @@ set -Eeuo pipefail
 ZONE_NAME="${ZONE_NAME:-shopvivaliz.com.br}"
 PUBLIC_HOSTNAME="${PUBLIC_HOSTNAME:-solange-staging.shopvivaliz.com.br}"
 TUNNEL_NAME="${TUNNEL_NAME:-solange-staging-shopvivaliz}"
-REMOTE_HOST="${REMOTE_HOST:-144.22.157.209}"
+REMOTE_HOST="${REMOTE_HOST:-10.0.1.38}"
 REMOTE_USER="${REMOTE_USER:-ubuntu}"
 REMOTE_ROOT="${REMOTE_ROOT:-/home/ubuntu/solange-client-demo}"
 API='https://api.cloudflare.com/client/v4'

@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   provision:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -36,7 +36,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_DNS_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
           PUBLIC_HOSTNAME: solange-staging.shopvivaliz.com.br
-          REMOTE_HOST: 144.22.157.209
+          REMOTE_HOST: 10.0.1.38
         run: |
           set -Eeuo pipefail
           export SSH_KEY_FILE="$HOME/.ssh/solange-vm"

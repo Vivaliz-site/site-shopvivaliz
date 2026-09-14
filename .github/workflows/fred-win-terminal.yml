@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   terminal:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 8
     steps:
       - name: Checkout
@@ -61,7 +61,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 \
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@10.0.1.38 \
             'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health'
 
       - name: Execute terminal command through Fred-Win MCP
@@ -73,7 +73,7 @@ jobs:
           set -uo pipefail
           mkdir -p reports
           CMD_B64="$(cat /tmp/fredwin-terminal-command.b64)"
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@144.22.157.209 \
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@10.0.1.38 \
             "FREDWIN_CMD_B64='$CMD_B64' FREDWIN_TIMEOUT='$FREDWIN_TIMEOUT' python3 - <<'PY'
           import base64, json, os, urllib.request
           command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')

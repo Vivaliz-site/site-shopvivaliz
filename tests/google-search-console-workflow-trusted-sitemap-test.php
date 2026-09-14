@@ -10,7 +10,7 @@ if ($yaml === false) {
 $required = [
     'ORACLE_VM_SSH_KEY',
     'ORACLE_VM_KNOWN_HOSTS',
-    'ubuntu@163.176.103.253',
+    'ubuntu@127.0.0.1',
     'http://127.0.0.1:8080/sitemap.xml',
     'reports/google-search-console-sitemap.xml',
     '--sitemap-file=reports/google-search-console-sitemap.xml',
