@@ -48,7 +48,7 @@ def render_windows_auto_launcher(real_codex: str, engine_path: str) -> str:
     real = real_codex.replace("'", "''")
     engine = engine_path.replace("'", "''")
     return (
-        "$ErrorActionPreference='Stop'\n"
+        "$ErrorActionPreference='Continue'\n"
         f"$env:CODEX_REAL='{real}'\n"
         f"& python.exe '{engine}' @args\n"
         'exit $LASTEXITCODE\n'

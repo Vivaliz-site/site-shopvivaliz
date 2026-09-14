@@ -27,5 +27,16 @@ class WindowsManualLauncherStderrTests(unittest.TestCase):
         self.assertIn('exit $LASTEXITCODE', manual)
 
 
+    def test_auto_launcher_does_not_promote_native_stderr(self):
+        mod = load_module()
+        auto = mod.render_windows_auto_launcher(
+            r'C:\Codex\codex.exe',
+            r'C:\Users\x\.codex-business\codex-native-profile-failover.py',
+        )
+        self.assertIn("$ErrorActionPreference='Continue'", auto)
+        self.assertNotIn("$ErrorActionPreference='Stop'", auto)
+        self.assertIn('exit $LASTEXITCODE', auto)
+
+
 if __name__ == '__main__':
     unittest.main()
