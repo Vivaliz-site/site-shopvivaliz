@@ -2,12 +2,6 @@ name: Google Ads Fred-Win Import Client Fast
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "ops/google-ads-fredwin-import-client-fast.json"
-      - ".github/workflows/google-ads-fredwin-import-client-fast.yml"
-      - "scripts/fredwin_google_ads_oauth_import.py"
 
 permissions:
   contents: read

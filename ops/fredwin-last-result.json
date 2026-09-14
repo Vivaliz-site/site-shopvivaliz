@@ -12,10 +12,10 @@
     "run_url":  null,
     "trigger_sha":  null,
     "private_relay":  {
-                          "architecture":  "Backend A1 144.22.157.209 -\u003e localhost:5557 -\u003e reverse tunnel -\u003e Fred-Win MCP",
+                          "architecture":  "Backend A1 10.0.1.38 -\u003e localhost:5557 -\u003e reverse tunnel -\u003e Fred-Win MCP",
                           "endpoint_checked_from_vm":  "http://127.0.0.1:5557/health",
                           "cloudflare_endpoint_used":  false,
-                          "ssh_target":  "ubuntu@144.22.157.209",
+                          "ssh_target":  "ubuntu@10.0.1.38",
                           "backend_hostname":  "always-free-arm-1787907847-26"
                       },
     "health":  {

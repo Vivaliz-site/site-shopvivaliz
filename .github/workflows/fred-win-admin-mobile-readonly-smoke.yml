@@ -1,43 +1,6 @@
 name: Fred-Win Admin Mobile Read-Only Smoke
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/fred-win-admin-mobile-readonly-smoke.yml'
-      - 'scripts/select-active-products-browser-relay.sh'
-      - 'tests/browser-smoke-relay-failover-regression.php'
-      - 'tests/fredwin-admin-mobile-smoke.py'
-      - 'admin/index.php'
-      - 'admin/admin-sections.php'
-      - 'admin/catalog-optimization/admin_catalog.php'
-      - 'admin/ai-image-studio/admin_dashboard.php'
-      - 'admin/assets/admin-mobile-completion.js'
-      - 'admin/assets/catalog-effective-results.js'
-      - 'admin/assets/image-generation-usability-v2.js'
-      - 'auth/login.php'
-      - 'auth/google-start.php'
-      - 'css/admin-zoom-responsive.css'
-      - 'includes/admin-guard.php'
-      - 'tests/admin-mobile-ai-ux-test.php'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/fred-win-admin-mobile-readonly-smoke.yml'
-      - 'scripts/select-active-products-browser-relay.sh'
-      - 'tests/browser-smoke-relay-failover-regression.php'
-      - 'tests/fredwin-admin-mobile-smoke.py'
-      - 'admin/index.php'
-      - 'admin/admin-sections.php'
-      - 'admin/catalog-optimization/admin_catalog.php'
-      - 'admin/ai-image-studio/admin_dashboard.php'
-      - 'admin/assets/admin-mobile-completion.js'
-      - 'admin/assets/catalog-effective-results.js'
-      - 'admin/assets/image-generation-usability-v2.js'
-      - 'auth/login.php'
-      - 'auth/google-start.php'
-      - 'css/admin-zoom-responsive.css'
-      - 'includes/admin-guard.php'
-      - 'tests/admin-mobile-ai-ux-test.php'
   workflow_dispatch:
 
 permissions:
@@ -51,7 +14,7 @@ jobs:
   smoke:
     if: github.repository == 'Vivaliz-site/site-shopvivaliz' && github.actor == 'fredmourao-ai'
     name: Authenticated mobile smoke with mutations blocked
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 15
     environment: production
     steps:
@@ -111,7 +74,7 @@ jobs:
           session_name="$({
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-              -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
+              -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1 \
               'bash -s' -- "$session_id" <<'REMOTE'
           set -Eeuo pipefail
           sid="$1"
@@ -191,7 +154,7 @@ jobs:
           set +e
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/id_rsa" ubuntu@144.22.157.209 \
+            -i "$HOME/.ssh/id_rsa" ubuntu@10.0.1.38 \
             "BODY_B64='$body_b64' RELAY_PORT='$SV_BROWSER_RELAY_PORT' python3 - <<'PY'
           import base64
           import json
@@ -293,7 +256,7 @@ jobs:
           if [[ -n "${SV_ADMIN_SESSION_ID:-}" && -f "$HOME/.ssh/id_rsa" ]]; then
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-              -i "$HOME/.ssh/id_rsa" ubuntu@163.176.103.253 \
+              -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1 \
               'bash -s' -- "$SV_ADMIN_SESSION_ID" <<'REMOTE'
           set -Eeuo pipefail
           cd /home/ubuntu/shopvivaliz-deploy/current

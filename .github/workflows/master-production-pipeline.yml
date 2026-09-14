@@ -16,7 +16,7 @@ concurrency:
   group: production-deploy-a1
   cancel-in-progress: false
 
-# Inventory only: public A1 address 163.176.103.253 is not used for deploy transport.
+# Inventory only: the reserved public A1 origin is not used for deploy transport.
 # Deploy and monitor run on the production ARM runner and use loopback SSH.
 
 permissions:

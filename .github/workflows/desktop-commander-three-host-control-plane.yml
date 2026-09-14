@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   diagnose:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +68,7 @@ jobs:
               '-o', 'StrictHostKeyChecking=yes',
               '-o', 'UserKnownHostsFile=' + os.path.expanduser('~/.ssh/known_hosts'),
               '-i', os.path.expanduser('~/.ssh/vmkey'),
-              'ubuntu@144.22.157.209'
+              'ubuntu@10.0.1.38'
           ]
 
           SAFE = {

@@ -38,7 +38,7 @@ def test() -> None:
     required_workflow_markers = [
         "SHOPVIVALIZ_VM_SSH_KEY",
         "SHOPVIVALIZ_VM_KNOWN_HOSTS",
-        "SITE_A1_HOST: 163.176.103.253",
+        "SITE_A1_HOST: 127.0.0.1",
         "StrictHostKeyChecking=yes",
         "shopvivaliz-free-a1",
         "production-functional-audit.sh",

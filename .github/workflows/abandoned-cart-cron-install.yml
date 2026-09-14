@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   install-cron:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 4
     steps:
       - name: Configure VM key
@@ -32,12 +32,12 @@ jobs:
         run: |
           set -euo pipefail
           # Corrigido 2026-08-27: apontava para retired-backend-E2 (VM1, retired-backend-E2,
-          # dev.shopvivaliz.com.br) em vez da VM2 (163.176.103.253, retired-site-E2),
+          # dev.shopvivaliz.com.br) em vez da VM2 (127.0.0.1, retired-site-E2),
           # que e a producao real desde antes de 2026-08-26 (ver CLAUDE.md). Resultado:
           # o cron de recuperacao de carrinho abandonado nunca foi instalado em producao
           # -- confirmado ao vivo via `crontab -l` na VM2, sem nenhuma entrada de
           # send-abandoned-cart-emails.php nem log em disco.
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@163.176.103.253 'bash -s' <<'SH'
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@127.0.0.1 'bash -s' <<'SH'
           set -euo pipefail
 
           SCRIPT='/home/ubuntu/shopvivaliz-deploy/current/scripts/send-abandoned-cart-emails.php'

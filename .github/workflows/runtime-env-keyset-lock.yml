@@ -30,10 +30,10 @@ jobs:
   seal-and-verify:
     name: Seal monotonic production env keyset
     if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 20
     env:
-      VM_HOST: 163.176.103.253
+      VM_HOST: 127.0.0.1
       VM_USER: ubuntu
       VM_ENV: /home/ubuntu/shopvivaliz-deploy/shared/.env
       VM_LOCK: /etc/shopvivaliz/env-keyset.lock.json

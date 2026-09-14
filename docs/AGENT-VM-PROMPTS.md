@@ -1,10 +1,12 @@
+> SSH publico direto esta desabilitado. Use Remote Desktop Commander; dentro da VCN use `10.0.1.112`, e no runner do site prefira `127.0.0.1`. Fora da VCN, use OCI Bastion.
+
 # Instruções de acesso à VM de produção para agentes
 
 ## Escopo
 
 Este documento define o procedimento oficial para tarefas na VM de produção ShopVivaliz.
 
-- Host: `163.176.103.253`
+- Host: `10.0.1.112`
 - Usuário: `ubuntu`
 - Diretório operacional: `/home/ubuntu/shopvivaliz-deploy`
 - Repositório: `Vivaliz-site/site-shopvivaliz`
@@ -38,10 +40,10 @@ Esse caminho é apenas referência local. O arquivo nunca deve ser enviado ao ch
 ## Prompt padrão para agentes
 
 ```text
-Você tem acesso à VM de produção ShopVivaliz (163.176.103.253) via SSH.
+Você tem acesso à VM de produção ShopVivaliz (10.0.1.112) via SSH.
 
 Credenciais:
-- Host: 163.176.103.253
+- Host: 10.0.1.112
 - Usuário: ubuntu
 - Chave no GitHub Actions: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
 
@@ -51,7 +53,7 @@ Execução:
 1. Configure ~/.ssh/id_rsa a partir do secret protegido, com permissão 600.
 2. Valide o host por known_hosts e StrictHostKeyChecking=yes.
 3. Conecte com:
-   ssh -i ~/.ssh/id_rsa ubuntu@163.176.103.253
+   ssh -i ~/.ssh/id_rsa ubuntu@10.0.1.112
 4. Entre em:
    cd /home/ubuntu/shopvivaliz-deploy
 5. Execute somente os comandos necessários.
@@ -76,14 +78,14 @@ ssh \
   -o StrictHostKeyChecking=yes \
   -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
   -i "$HOME/.ssh/id_rsa" \
-  ubuntu@163.176.103.253 \
+  ubuntu@10.0.1.112 \
   'cd /home/ubuntu/shopvivaliz-deploy && <COMANDO>'
 ```
 
 ## Acesso local no Windows
 
 ```powershell
-ssh -i "C:\Users\FRED\Downloads\ssh-key-2026-07-04.key" ubuntu@163.176.103.253
+ssh -i "C:\Users\FRED\Downloads\ssh-key-2026-07-04.key" ubuntu@10.0.1.112
 ```
 
 Depois da conexão:

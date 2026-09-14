@@ -43,8 +43,14 @@ $KnownHostsCandidates = @(
 ) | Where-Object { $_ }
 $KeyPath = $KeyCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 $KnownHostsPath = $KnownHostsCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-$VMHost = '144.22.157.209'
+$VMHost = $env:SHOPVIVALIZ_BACKEND_SSH_HOST
+$VMPortRaw = $env:SHOPVIVALIZ_BACKEND_SSH_PORT
 $VMUser = 'ubuntu'
+if ([string]::IsNullOrWhiteSpace($VMHost) -or [string]::IsNullOrWhiteSpace($VMPortRaw)) {
+    Log 'ERROR Bastion endpoint missing; set SHOPVIVALIZ_BACKEND_SSH_HOST and SHOPVIVALIZ_BACKEND_SSH_PORT'
+    exit 5
+}
+$VMPort = [int]$VMPortRaw
 if (-not $KeyPath) { Log ('ERROR private key missing; checked: ' + ($KeyCandidates -join ' | ')); exit 2 }
 if (-not $KnownHostsPath) { Log ('ERROR known_hosts missing; checked: ' + ($KnownHostsCandidates -join ' | ')); exit 3 }
 Log ('Resolved key=' + $KeyPath + ' known_hosts=' + $KnownHostsPath)
@@ -55,7 +61,7 @@ while ($true) {
     $attempt++
     Log ("Connecting attempt=$attempt forward=5558->127.0.0.1:5557")
     try {
-        & ssh -i $KeyPath `
+        & ssh -i $KeyPath -p $VMPort `
             -R 5558:127.0.0.1:5557 `
             -o 'BatchMode=yes' `
             -o 'ServerAliveInterval=30' `

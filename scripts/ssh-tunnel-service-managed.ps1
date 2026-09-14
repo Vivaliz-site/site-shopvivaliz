@@ -1,4 +1,4 @@
-# ShopVivaliz managed reverse SSH tunnel (Fred-Win -> Oracle VM)
+﻿# ShopVivaliz managed reverse SSH tunnel (Fred-Win -> Oracle VM)
 # Keeps maintenance paths private on VM loopback. No key material or command output is logged.
 
 $ErrorActionPreference = 'Continue'
@@ -7,8 +7,14 @@ if ($env:COMPUTERNAME -ne 'LAPTOP-NIG4IFUU') {
 }
 $KeyPath = 'C:\Users\FRED\Downloads\ssh-key-2026-07-04.key'
 $KnownHostsPath = 'C:\Users\FRED\.ssh\known_hosts'
-$VMHost = '144.22.157.209'
+$VMHost = $env:SHOPVIVALIZ_BACKEND_SSH_HOST
+$VMPortRaw = $env:SHOPVIVALIZ_BACKEND_SSH_PORT
 $VMUser = 'ubuntu'
+if ([string]::IsNullOrWhiteSpace($VMHost) -or [string]::IsNullOrWhiteSpace($VMPortRaw)) {
+    Write-Error 'Bastion endpoint missing: set SHOPVIVALIZ_BACKEND_SSH_HOST and SHOPVIVALIZ_BACKEND_SSH_PORT'
+    exit 5
+}
+$VMPort = [int]$VMPortRaw
 $SshExe = 'C:\Program Files\Git\usr\bin\ssh.exe'
 $LogDir = 'C:\site-shopvivaliz\logs'
 $LogFile = Join-Path $LogDir 'fredwin-managed-tunnel.log'
@@ -39,7 +45,7 @@ while ($true) {
     $attempt++
     Write-TunnelLog ("Connecting attempt=$attempt private-forwards=2222,5557")
     try {
-        & $SshExe -i $KeyPath `
+        & $SshExe -i $KeyPath -p $VMPort `
             -R 2222:127.0.0.1:22 `
             -R 5557:127.0.0.1:5557 `
             -o 'BatchMode=yes' `

@@ -15,10 +15,10 @@ concurrency:
 jobs:
   rotate:
     name: Rotate agent key transactionally
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 10
     env:
-      VM_HOST: 163.176.103.253
+      VM_HOST: 127.0.0.1
       VM_USER: ubuntu
       REPO_DIR: /home/ubuntu/shopvivaliz-deploy/shared
     steps:
