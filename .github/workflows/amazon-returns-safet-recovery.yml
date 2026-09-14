@@ -12,42 +12,22 @@ concurrency:
 
 jobs:
   recover-and-verify:
-    runs-on: ubuntu-latest
-    environment: Production
+    runs-on: self-hosted
     timeout-minutes: 40
     steps:
-      - name: Configure verified Oracle SSH
-        env:
-          ORACLE_VM_SSH_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+      - name: Verify local production identity
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${ORACLE_VM_SSH_KEY:-}"
-          install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "$ORACLE_VM_SSH_KEY" > "$HOME/.ssh/id_rsa"
-          chmod 600 "$HOME/.ssh/id_rsa"
-          ssh-keyscan -T 10 -t ed25519 137.131.149.55 > "$HOME/.ssh/known_hosts"
-          actual="$(ssh-keygen -lf "$HOME/.ssh/known_hosts" | awk '{print $2}')"
-          expected='SHA256:gC6IaM0/Du1ApfuPr2jBdaTD+fSxNkNRdV7b4cv4KAY'
-          test "$actual" = "$expected"
-          chmod 600 "$HOME/.ssh/known_hosts"
+          test "$(hostname)" = 'shopvivaliz-free-a1'
+          test "$(id -un)" = 'ubuntu'
+          sudo -n true
+          test -r /home/ubuntu/amazon-returns-deploy/current/.release-sha
 
       - name: Recover Seller Central cycle and verify SAFE-T runtime
         shell: bash
         run: |
-          set -euo pipefail
-          ssh_opts=(
-            -o BatchMode=yes
-            -o ConnectTimeout=10
-            -o StrictHostKeyChecking=yes
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
-            -i "$HOME/.ssh/id_rsa"
-          )
-          ssh "${ssh_opts[@]}" ubuntu@137.131.149.55 'bash -s' <<'REMOTE'
           set -Eeuo pipefail
-          test "$(hostname)" = 'shopvivaliz-free-a1'
-          sudo -n true
-
           repo=/home/ubuntu/amazon-returns-deploy-source
           deploy=/home/ubuntu/amazon-returns-deploy
           git -C "$repo" fetch --quiet origin main
@@ -73,8 +53,7 @@ jobs:
 
           systemctl show amazon-returns-seller-central-browser.service \
             -p CPUQuotaPerSecUSec -p MemoryHigh -p MemoryMax -p TasksMax -p Result
-          sudo -n journalctl -u amazon-returns-seller-central-browser.service -n 120 --no-pager
-          REMOTE
+          sudo -n journalctl -u amazon-returns-seller-central-browser.service -n 140 --no-pager
 
       - name: Verify public SAFE-T health
         shell: bash
