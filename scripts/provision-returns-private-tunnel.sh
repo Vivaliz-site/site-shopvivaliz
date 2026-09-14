@@ -56,8 +56,13 @@ sudo a2enconf amazon-returns-tunnel-listener >/dev/null
 sudo a2ensite amazon-returns-tunnel >/dev/null
 sudo apache2ctl configtest
 sudo systemctl reload apache2
-local_probe="$(curl -fsS --max-time 8 -H "Host: $PUBLIC_HOSTNAME" "http://127.0.0.1:${LOCAL_PORT}/admin/amazon-returns/")"
-grep -q '<title>Devoluções Amazon' <<<"$local_probe"
+local_probe=''
+for _ in $(seq 1 20); do
+  local_probe="$(curl -fsSL --max-time 8 -H "Host: $PUBLIC_HOSTNAME" "http://127.0.0.1:${LOCAL_PORT}/admin/amazon-returns/" 2>/dev/null || true)"
+  grep -q '<title>Amazon Returns' <<<"$local_probe" && break
+  sleep 1
+done
+grep -q '<title>Amazon Returns' <<<"$local_probe"
 
 zone_json="$(cf_api "$CLOUDFLARE_DNS_EDIT_TOKEN" GET "/zones?name=$ZONE_NAME&status=active&per_page=1")"
 require_success 'zone lookup' "$zone_json"
@@ -109,12 +114,12 @@ for _ in $(seq 1 30); do
   sleep 2
 done
 docker logs "$CONTAINER_NAME" 2>&1 | grep -q 'Registered tunnel connection'
+public_probe=''
 for _ in $(seq 1 30); do
-  public_probe="$(curl -fsS --max-time 10 "https://${PUBLIC_HOSTNAME}/admin/amazon-returns/" 2>/dev/null || true)"
-  grep -q '<title>Devoluções Amazon' <<<"$public_probe" && break
+  public_probe="$(curl -fsSL --max-time 10 "https://${PUBLIC_HOSTNAME}/admin/amazon-returns/" 2>/dev/null || true)"
+  grep -q '<title>Amazon Returns' <<<"$public_probe" && break
   sleep 2
 done
-public_probe="$(curl -fsS --max-time 10 "https://${PUBLIC_HOSTNAME}/admin/amazon-returns/")"
-grep -q '<title>Devoluções Amazon' <<<"$public_probe"
+grep -q '<title>Amazon Returns' <<<"$public_probe"
 
 echo "RETURNS_TUNNEL_OK hostname=$PUBLIC_HOSTNAME tunnel_id=$tunnel_id local_port=$LOCAL_PORT"

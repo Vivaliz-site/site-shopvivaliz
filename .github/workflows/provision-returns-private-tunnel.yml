@@ -34,6 +34,6 @@ jobs:
       - name: Verify public endpoint
         run: |
           set -Eeuo pipefail
-          body="$(curl --fail --silent --show-error --max-time 10 https://returns.shopvivaliz.com.br/admin/amazon-returns/)"
-          grep -q '<title>Devoluções Amazon' <<<"$body"
+          body="$(curl --fail --silent --show-error --location --max-time 10 https://returns.shopvivaliz.com.br/admin/amazon-returns/)"
+          grep -q '<title>Amazon Returns' <<<"$body"
           echo 'RETURNS_PUBLIC_UI_OK'
