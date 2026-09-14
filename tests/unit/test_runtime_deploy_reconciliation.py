@@ -17,6 +17,7 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('\"ubuntu@127.0.0.1:$release_dir/\"', text)
         self.assertEqual(text.count('runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]'), 2)
         self.assertNotIn('ubuntu@163.176.103.253', text)
+        self.assertNotIn('|| true', text)
 
     def test_master_pipeline_activates_an_immutable_release_atomically(self) -> None:
         text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
@@ -28,7 +29,7 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
 
     def test_master_pipeline_rolls_back_a_failed_release(self) -> None:
         text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
-        self.assertIn('previous="$(readlink -f "$current" 2>/dev/null || true)"', text)
+        self.assertIn('previous="$(readlink -f "$current" 2>/dev/null)"', text)
         self.assertIn('[ "$served_sha" = "$sha" ] || fail=1', text)
         self.assertIn('ln -sfn "releases/$(basename "$previous")" "$root/current.rollback"', text)
         self.assertIn('mv -Tf "$root/current.rollback" "$current"', text)
