@@ -11,7 +11,7 @@ LOCAL_PORT="${LOCAL_PORT:-18080}"
 API='https://api.cloudflare.com/client/v4'
 TOKEN_ROOT="${TOKEN_ROOT:-/home/ubuntu/.local/share/amazon-returns-cloudflared}"
 CONTAINER_NAME="${CONTAINER_NAME:-amazon-returns-cloudflared}"
-IMAGE="${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:latest}"
+IMAGE="${CLOUDFLARED_IMAGE:-cloudflare/cloudflared@sha256:0aa26e284f05e6c77ae375b8c9c11d9eb6a448fb7bcd8d40f31cb6176189eb38}"
 
 cf_api() {
   local token="$1" method="$2" path="$3" body="${4:-}"
@@ -56,7 +56,8 @@ sudo a2enconf amazon-returns-tunnel-listener >/dev/null
 sudo a2ensite amazon-returns-tunnel >/dev/null
 sudo apache2ctl configtest
 sudo systemctl reload apache2
-curl -fsS --max-time 8 -H "Host: $PUBLIC_HOSTNAME" "http://127.0.0.1:${LOCAL_PORT}/" >/dev/null
+local_probe="$(curl -fsS --max-time 8 -H "Host: $PUBLIC_HOSTNAME" "http://127.0.0.1:${LOCAL_PORT}/admin/amazon-returns/")"
+grep -q '<title>Devoluções Amazon' <<<"$local_probe"
 
 zone_json="$(cf_api "$CLOUDFLARE_DNS_EDIT_TOKEN" GET "/zones?name=$ZONE_NAME&status=active&per_page=1")"
 require_success 'zone lookup' "$zone_json"
@@ -109,9 +110,11 @@ for _ in $(seq 1 30); do
 done
 docker logs "$CONTAINER_NAME" 2>&1 | grep -q 'Registered tunnel connection'
 for _ in $(seq 1 30); do
-  curl -fsS --max-time 10 "https://${PUBLIC_HOSTNAME}/" >/dev/null && break
+  public_probe="$(curl -fsS --max-time 10 "https://${PUBLIC_HOSTNAME}/admin/amazon-returns/" 2>/dev/null || true)"
+  grep -q '<title>Devoluções Amazon' <<<"$public_probe" && break
   sleep 2
 done
-curl -fsS --max-time 10 "https://${PUBLIC_HOSTNAME}/" >/dev/null
+public_probe="$(curl -fsS --max-time 10 "https://${PUBLIC_HOSTNAME}/admin/amazon-returns/")"
+grep -q '<title>Devoluções Amazon' <<<"$public_probe"
 
 echo "RETURNS_TUNNEL_OK hostname=$PUBLIC_HOSTNAME tunnel_id=$tunnel_id local_port=$LOCAL_PORT"
