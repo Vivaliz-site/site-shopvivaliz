@@ -1,0 +1,39 @@
+name: Provision Returns Private Tunnel
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: returns-private-cloudflare-tunnel
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Provision private returns tunnel
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_DNS_EDIT_TOKEN: ${{ secrets.CLOUDFLARE_DNS_EDIT_TOKEN }}
+          PUBLIC_HOSTNAME: returns.shopvivaliz.com.br
+          TUNNEL_NAME: amazon-returns-safet-a1
+          LOCAL_PORT: '18080'
+        run: |
+          set -Eeuo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_DNS_EDIT_TOKEN"
+          bash scripts/provision-returns-private-tunnel.sh
+
+      - name: Verify public endpoint
+        run: |
+          set -Eeuo pipefail
+          body="$(curl --fail --silent --show-error --max-time 10 https://returns.shopvivaliz.com.br/admin/amazon-returns/)"
+          grep -q '<title>Devoluções Amazon' <<<"$body"
+          echo 'RETURNS_PUBLIC_UI_OK'
