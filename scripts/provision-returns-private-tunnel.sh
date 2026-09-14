@@ -106,6 +106,7 @@ chmod 0600 "$TOKEN_ROOT/token"
 
 docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 docker run -d --name "$CONTAINER_NAME" --restart unless-stopped --network host \
+  --user "$(id -u):$(id -g)" \
   -v "$TOKEN_ROOT/token:/run/secrets/cloudflared-token:ro" \
   "$IMAGE" tunnel --no-autoupdate run --token-file /run/secrets/cloudflared-token >/dev/null
 
