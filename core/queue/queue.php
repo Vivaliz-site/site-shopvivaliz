@@ -433,6 +433,7 @@ function sv_queue_health(int $staleSeconds = 300): array
 {
     $staleSeconds = max(30, $staleSeconds);
     $counts = ['queued'=>0, 'running'=>0, 'done'=>0, 'failed'=>0, 'total'=>0];
+    $failedTotal = 0;
     $stale = 0;
     $oldestQueuedAge = 0;
     $now = time();
@@ -443,9 +444,15 @@ function sv_queue_health(int $staleSeconds = 300): array
             $type = (string)($task['job_type'] ?? '');
             if (!in_array($type, ['webhook:mercadopago', 'webhook:infinitepay'], true)) continue;
             $status = (string)($task['status'] ?? 'queued');
+            $counts['total']++;
+            if ($status === 'failed') {
+                $failedTotal++;
+                $failureTs = strtotime((string)($task['finished_at'] ?? $task['created_at'] ?? '')) ?: 0;
+                if ($failureTs > 0 && max(0, $now - $failureTs) <= $staleSeconds) $counts['failed']++;
+                continue;
+            }
             if (!isset($counts[$status])) $counts[$status] = 0;
             $counts[$status]++;
-            $counts['total']++;
             $reference = $status === 'running' ? ($task['started_at'] ?? '') : ($task['available_at'] ?? $task['created_at'] ?? '');
             $ts = strtotime((string)$reference) ?: 0;
             $age = $ts > 0 ? max(0, $now - $ts) : 0;
@@ -454,12 +461,18 @@ function sv_queue_health(int $staleSeconds = 300): array
         }
     } else {
         $pdo = sv_queue_db();
-        $rows = $pdo->query("SELECT status, available_at, started_at, created_at FROM queue_jobs WHERE job_type IN ('webhook:mercadopago','webhook:infinitepay')")->fetchAll();
+        $rows = $pdo->query("SELECT status, available_at, started_at, created_at, finished_at FROM queue_jobs WHERE job_type IN ('webhook:mercadopago','webhook:infinitepay')")->fetchAll();
         foreach ($rows as $task) {
             $status = (string)($task['status'] ?? 'queued');
+            $counts['total']++;
+            if ($status === 'failed') {
+                $failedTotal++;
+                $failureTs = strtotime((string)($task['finished_at'] ?? $task['created_at'] ?? '')) ?: 0;
+                if ($failureTs > 0 && max(0, $now - $failureTs) <= $staleSeconds) $counts['failed']++;
+                continue;
+            }
             if (!isset($counts[$status])) $counts[$status] = 0;
             $counts[$status]++;
-            $counts['total']++;
             $reference = $status === 'running' ? ($task['started_at'] ?? '') : ($task['available_at'] ?? $task['created_at'] ?? '');
             $ts = strtotime((string)$reference) ?: 0;
             $age = $ts > 0 ? max(0, $now - $ts) : 0;
@@ -471,6 +484,7 @@ function sv_queue_health(int $staleSeconds = 300): array
     $workerAge = sv_queue_worker_age_seconds();
     $workerOk = $workerAge !== null && $workerAge <= $staleSeconds;
     return array_merge($counts, [
+        'failed_total' => $failedTotal,
         'ok' => $workerOk && $stale === 0 && $counts['failed'] === 0,
         'stale' => $stale,
         'oldest_queued_age_seconds' => $oldestQueuedAge,

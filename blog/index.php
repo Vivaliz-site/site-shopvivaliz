@@ -68,6 +68,19 @@ if (!$isFiltered && $allPublished !== []) {
     }
 }
 
+$remainingArticles = [];
+if (!$isFiltered && $allPublished !== []) {
+    $renderedSlugs = [];
+    if ($featuredArticle !== null) $renderedSlugs[(string)($featuredArticle['slug'] ?? '')] = true;
+    foreach (array_merge($guideArticles, $recentArticles) as $renderedArticle) {
+        $renderedSlugs[(string)($renderedArticle['slug'] ?? '')] = true;
+    }
+    foreach ($allPublished as $candidate) {
+        $candidateSlug = (string)($candidate['slug'] ?? '');
+        if ($candidateSlug !== '' && !isset($renderedSlugs[$candidateSlug])) $remainingArticles[] = $candidate;
+    }
+}
+
 $pageTitle = 'Central de Conhecimento | ShopVivaliz';
 $pageDescription = 'Guias de compra, organização, manutenção e cuidados para escolher melhor produtos para casa, jardim e projetos.';
 $pageUrl = 'https://shopvivaliz.com.br/blog/';
@@ -154,7 +167,6 @@ $renderCard = static function (array $article): void {
     <meta name="twitter:image" content="<?= sv_blog_escape($socialImage) ?>">
     <link rel="stylesheet" href="/css/responsive.css">
     <link rel="stylesheet" href="/public/assets/blog/blog.css?v=2026-09-11-knowledge-1">
-    <!-- Rodada 10 (2026-08-19): JSON_HEX_TAG|JSON_HEX_AMP -- ver R10-1 em catalogo.php -->
     <script type="application/ld+json"><?= json_encode($blogSchema, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
     <?php include __DIR__ . '/../includes/head-analytics.php'; ?>
 </head>
@@ -267,6 +279,15 @@ $renderCard = static function (array $article): void {
                 </div>
                 <div class="knowledge-grid knowledge-grid--recent">
                     <?php foreach ($recentArticles as $article) { $renderCard($article); } ?>
+                </div>
+            </section>
+        <?php endif; ?>
+
+        <?php if ($remainingArticles !== []): ?>
+            <section class="container knowledge-all-content" aria-labelledby="all-content-title">
+                <div class="knowledge-section-head"><div><span class="knowledge-eyebrow">Biblioteca</span><h2 id="all-content-title">Todos os conte&uacute;dos</h2></div></div>
+                <div class="knowledge-grid knowledge-grid--results">
+                    <?php foreach ($remainingArticles as $article) { $renderCard($article); } ?>
                 </div>
             </section>
         <?php endif; ?>
