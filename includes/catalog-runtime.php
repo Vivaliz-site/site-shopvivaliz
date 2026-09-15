@@ -241,8 +241,6 @@ function svcr_filter_storefront_rows(array $rows): array
 
 function svcr_fallback_products(string $root): array
 {
-    // ERP-only cadastro rule: legacy fallback snapshots cannot publish or
-    // enrich product registrations. The function remains for compatibility.
     return [];
 }
 
@@ -259,10 +257,18 @@ function svcr_has_available_product(array $products): bool
 
 function svcr_select_catalog_products(array $products, array $fallbackProducts): array
 {
-    // Regra fail-closed: snapshots/fallbacks antigos nao comprovam o
-    // status atual no ERP. Somente a fonte canonica pode alimentar a
-    // vitrine, inclusive quando todos os itens ativos estao sem estoque.
-    return $products;
+    $selected = [];
+    $seen = [];
+    foreach ($products as $product) {
+        if (!is_array($product)) continue;
+        $sku = svcr_content_key($product['sku'] ?? '');
+        $id = svcr_content_key($product['id'] ?? $product['olist_product_id'] ?? '');
+        $key = $sku !== '' ? 'sku:' . $sku : 'id:' . $id;
+        if ($key !== 'id:' && isset($seen[$key])) continue;
+        if ($key !== 'id:') $seen[$key] = true;
+        $selected[] = $product;
+    }
+    return $selected;
 }
 
 function svcr_content_key(mixed $value): string
@@ -270,20 +276,8 @@ function svcr_content_key(mixed $value): string
     return svcr_lower(trim((string)$value));
 }
 
-/**
- * Conteudo editorial indexado por SKU/ID.
- *
- * Estes arquivos sao snapshots historicos e, portanto, nunca podem fornecer
- * preco, estoque, status ou qualquer outro dado comercial. Eles sao usados
- * somente para completar o conteudo da fonte canonica de itens ativos.
- *
- * @return array<string, array<string, mixed>>
- */
 function svcr_content_index(string $root): array
 {
-    // ERP-only cadastro rule: do not read historical product snapshots or
-    // legacy fallback snapshots to complete product name, category,
-    // description, media or SEO. These files are historical snapshots.
     return [];
 }
 
@@ -343,15 +337,12 @@ function svcr_first_positive_number(array $sources): float
 function svcr_products(): array
 {
     static $cachedProducts = null;
-    if ($cachedProducts !== null) {
-        return $cachedProducts;
-    }
+    if ($cachedProducts !== null) return $cachedProducts;
 
     $root = dirname(__DIR__);
     $cache = $root . '/storage/products-cache-ativos.json';
     $payload = is_file($cache) ? json_decode((string)file_get_contents($cache), true) : [];
     $items = [];
-
     if (is_array($payload)) {
         foreach (['itens', 'items', 'produtos', 'products', 'data'] as $key) {
             if (isset($payload[$key]) && is_array($payload[$key])) {
@@ -364,213 +355,124 @@ function svcr_products(): array
         }
         if ($items === [] && array_is_list($payload)) $items = $payload;
     }
-
     if ($items === []) {
         $erpSnapshot = $root . '/api/catalog/fallback-products.json';
         $snapshotPayload = is_file($erpSnapshot) ? json_decode((string)file_get_contents($erpSnapshot), true) : [];
         if (is_array($snapshotPayload) && array_is_list($snapshotPayload)) {
             $allTinyV3 = true;
             foreach ($snapshotPayload as $candidateItem) {
-                if (!is_array($candidateItem)) {
-                    $allTinyV3 = false;
-                    break;
-                }
+                if (!is_array($candidateItem)) { $allTinyV3 = false; break; }
                 $source = strtolower(trim((string)($candidateItem['sync_source'] ?? '')));
-                if ($source !== 'tiny_v3') {
-                    $allTinyV3 = false;
-                    break;
-                }
+                if ($source !== 'tiny_v3') { $allTinyV3 = false; break; }
             }
-            if ($allTinyV3) {
-                $items = $snapshotPayload;
-            }
+            if ($allTinyV3) $items = $snapshotPayload;
         }
     }
-
-    if ($items === []) {
-        // Sem snapshot canonico de ativos nao existe evidencia suficiente
-        // para publicar produtos. Falhar fechado evita ressuscitar itens
-        // inativos/excluidos por meio de um fallback historico.
-        return [];
-    }
+    if ($items === []) return [];
 
     $contentIndex = svcr_content_index($root);
     $products = [];
     foreach ($items as $item) {
         if (!is_array($item) || !svcr_is_active_product($item) || svcr_is_preorder($item) || svcr_is_excluded_product($item)) continue;
-
         $content = svcr_content_for_item($item, $contentIndex);
-
-        $imagesList = svcr_collect_image_urls($item);
-        $imagesList = array_slice($imagesList, 0, 12);
+        $imagesList = array_slice(svcr_collect_image_urls($item), 0, 12);
         $image = trim((string)($item['imagem_principal_url'] ?? $item['primary_image_url'] ?? $item['image_url'] ?? $item['imagem'] ?? ''));
         if ($image === '') $image = svcr_first_text([$imagesList[0] ?? '']);
-
         $stockInfo = is_array($item['estoque'] ?? null) ? $item['estoque'] : (is_array($item['stock_detail'] ?? null) ? $item['stock_detail'] : []);
         $category = is_array($item['categoria'] ?? null) ? $item['categoria'] : [];
         $dimensions = is_array($item['dimensoes'] ?? null) ? $item['dimensoes'] : (is_array($item['dimensions'] ?? null) ? $item['dimensions'] : []);
         $contentDimensions = is_array($content['dimensions'] ?? null) ? $content['dimensions'] : [];
         $sku = trim((string)($item['sku'] ?? $item['codigo'] ?? $item['code'] ?? ''));
         if ($sku === '') continue;
-
         $name = trim((string)($item['descricao'] ?? $item['nome'] ?? $item['name'] ?? $sku));
         $contentName = svcr_first_text([$content['name'] ?? '', $content['nome'] ?? '']);
         if (($name === '' || svcr_lower($name) === svcr_lower($sku)) && $contentName !== '') $name = $contentName;
         $price = svcr_item_price($item);
         if ($price <= 0) continue;
-
         $description = svcr_first_text([$item['descricaoComplementar'] ?? '', $item['descricao_complementar'] ?? '', $item['description'] ?? '']);
         $contentDescription = svcr_first_text([$content['description'] ?? '', $content['descricaoComplementar'] ?? '', $content['descricao_complementar'] ?? '']);
-        if (svcr_is_weak_description($description, $name) && !svcr_is_weak_description($contentDescription, $name)) {
-            $description = $contentDescription;
-        }
-
+        if (svcr_is_weak_description($description, $name) && !svcr_is_weak_description($contentDescription, $name)) $description = $contentDescription;
         $categoryName = trim((string)($category['nome'] ?? $category['caminhoCompleto'] ?? $item['category'] ?? ''));
         if ($categoryName === '') $categoryName = svcr_first_text([$content['category'] ?? '', $content['categoria'] ?? '']);
         if ($categoryName === '') $categoryName = svcr_infer_category($name, $description);
-
         $bulletPoints = svcr_string_list($item['bullet_points'] ?? $item['bullet_points_json'] ?? $content['bullet_points'] ?? []);
         $seoKeywords = svcr_string_list($item['seo_keywords'] ?? $item['seo_keywords_json'] ?? $content['seo_keywords'] ?? $content['keywords'] ?? []);
         $marketingHooks = svcr_string_list($item['marketing_hooks'] ?? $item['marketing_hooks_json'] ?? $content['marketing_hooks'] ?? []);
         $existingTags = svcr_string_list($item['tags'] ?? $content['tags'] ?? []);
         $brandValue = $item['brand'] ?? $item['marca'] ?? $content['brand'] ?? $content['marca'] ?? '';
-        if (is_array($brandValue)) {
-            $brandValue = $brandValue['nome'] ?? $brandValue['name'] ?? '';
-        }
+        if (is_array($brandValue)) $brandValue = $brandValue['nome'] ?? $brandValue['name'] ?? '';
         $brand = is_scalar($brandValue) ? trim((string)$brandValue) : '';
-
         $products[] = [
-            'id' => (string)($item['id'] ?? $sku),
-            'sku' => $sku,
-            'olist_product_id' => (string)($item['id'] ?? $item['olist_product_id'] ?? ''),
-            'name' => $name,
-            'slug' => svcr_slug($name, $sku),
-            'description' => svcr_clean_description($description),
-            'price' => $price,
-            'stock' => max(0, (int)($item['estoque_disponivel'] ?? $stockInfo['quantidade'] ?? $stockInfo['stock'] ?? $item['stock'] ?? 0)),
-            'image_url' => $image,
-            'images' => $imagesList,
-            'images_count' => count($imagesList),
-            'category' => $categoryName,
-            'brand' => $brand,
-            'bullet_points' => $bulletPoints,
-            'seo_keywords' => $seoKeywords,
-            'marketing_hooks' => $marketingHooks,
-            'meta_title' => svcr_first_text([$item['meta_title'] ?? '', $item['seo_title'] ?? '', $content['meta_title'] ?? '', $content['seo_title'] ?? '']),
-            'meta_description' => svcr_first_text([$item['meta_description'] ?? '', $item['seo_description'] ?? '', $content['meta_description'] ?? '', $content['seo_description'] ?? '']),
-            'tags' => array_slice(array_values(array_unique(array_merge($existingTags, $seoKeywords))), 0, 20),
-            'gtin' => preg_replace('/\D+/', '', svcr_first_text([$item['gtin'] ?? '', $item['ean'] ?? '', $item['barcode'] ?? '', $content['gtin'] ?? '', $content['ean'] ?? ''])) ?: '',
-            'ncm' => svcr_first_text([$item['ncm'] ?? '', $content['ncm'] ?? '']),
-            'warranty' => svcr_first_text([$item['warranty'] ?? '', $item['garantia'] ?? '', $content['warranty'] ?? '', $content['garantia'] ?? '']),
-            'weight' => svcr_first_positive_number([$dimensions['pesoLiquido'] ?? null, $dimensions['peso_liquido'] ?? null, $dimensions['net_weight'] ?? null, $item['peso'] ?? null, $item['weight'] ?? null, $contentDimensions['net_weight'] ?? null]),
-            'gross_weight' => svcr_first_positive_number([$dimensions['pesoBruto'] ?? null, $dimensions['peso_bruto'] ?? null, $dimensions['gross_weight'] ?? null, $contentDimensions['gross_weight'] ?? null]),
-            'width' => svcr_first_positive_number([$dimensions['largura'] ?? null, $dimensions['width'] ?? null, $item['width'] ?? null, $contentDimensions['width'] ?? null]),
-            'height' => svcr_first_positive_number([$dimensions['altura'] ?? null, $dimensions['height'] ?? null, $item['height'] ?? null, $contentDimensions['height'] ?? null]),
-            'length' => svcr_first_positive_number([$dimensions['comprimento'] ?? null, $dimensions['length'] ?? null, $item['length'] ?? null, $contentDimensions['length'] ?? null]),
-            'video_url' => svcr_first_text([$item['video_url'] ?? '', $item['linkVideo'] ?? '', is_array($item['seo'] ?? null) ? ($item['seo']['linkVideo'] ?? '') : '', is_array($item['seo'] ?? null) ? ($item['seo']['urlVideo'] ?? '') : '', $content['video_url'] ?? '']),
-            'status' => 'active',
+            'id'=>(string)($item['id'] ?? $sku), 'sku'=>$sku, 'olist_product_id'=>(string)($item['id'] ?? $item['olist_product_id'] ?? ''),
+            'name'=>$name, 'slug'=>svcr_slug($name,$sku), 'description'=>svcr_clean_description($description), 'price'=>$price,
+            'stock'=>max(0,(int)($item['estoque_disponivel'] ?? $stockInfo['quantidade'] ?? $stockInfo['stock'] ?? $item['stock'] ?? 0)),
+            'image_url'=>$image, 'images'=>$imagesList, 'images_count'=>count($imagesList), 'category'=>$categoryName, 'brand'=>$brand,
+            'bullet_points'=>$bulletPoints, 'seo_keywords'=>$seoKeywords, 'marketing_hooks'=>$marketingHooks,
+            'meta_title'=>svcr_first_text([$item['meta_title'] ?? '',$item['seo_title'] ?? '',$content['meta_title'] ?? '',$content['seo_title'] ?? '']),
+            'meta_description'=>svcr_first_text([$item['meta_description'] ?? '',$item['seo_description'] ?? '',$content['meta_description'] ?? '',$content['seo_description'] ?? '']),
+            'tags'=>array_slice(array_values(array_unique(array_merge($existingTags,$seoKeywords))),0,20),
+            'gtin'=>preg_replace('/\D+/','',svcr_first_text([$item['gtin'] ?? '',$item['ean'] ?? '',$item['barcode'] ?? '',$content['gtin'] ?? '',$content['ean'] ?? ''])) ?: '',
+            'ncm'=>svcr_first_text([$item['ncm'] ?? '',$content['ncm'] ?? '']), 'warranty'=>svcr_first_text([$item['warranty'] ?? '',$item['garantia'] ?? '',$content['warranty'] ?? '',$content['garantia'] ?? '']),
+            'weight'=>svcr_first_positive_number([$dimensions['pesoLiquido'] ?? null,$dimensions['peso_liquido'] ?? null,$dimensions['net_weight'] ?? null,$item['peso'] ?? null,$item['weight'] ?? null,$contentDimensions['net_weight'] ?? null]),
+            'gross_weight'=>svcr_first_positive_number([$dimensions['pesoBruto'] ?? null,$dimensions['peso_bruto'] ?? null,$dimensions['gross_weight'] ?? null,$contentDimensions['gross_weight'] ?? null]),
+            'width'=>svcr_first_positive_number([$dimensions['largura'] ?? null,$dimensions['width'] ?? null,$item['width'] ?? null,$contentDimensions['width'] ?? null]),
+            'height'=>svcr_first_positive_number([$dimensions['altura'] ?? null,$dimensions['height'] ?? null,$item['height'] ?? null,$contentDimensions['height'] ?? null]),
+            'length'=>svcr_first_positive_number([$dimensions['comprimento'] ?? null,$dimensions['length'] ?? null,$item['length'] ?? null,$contentDimensions['length'] ?? null]),
+            'video_url'=>svcr_first_text([$item['video_url'] ?? '',$item['linkVideo'] ?? '',is_array($item['seo'] ?? null) ? ($item['seo']['linkVideo'] ?? '') : '',is_array($item['seo'] ?? null) ? ($item['seo']['urlVideo'] ?? '') : '',$content['video_url'] ?? '']),
+            'status'=>'active',
         ];
     }
-
     $cachedProducts = svcr_select_catalog_products($products, svcr_fallback_products($root));
     return $cachedProducts;
 }
 
 function svcr_collect_image_urls(array $item): array
 {
-    $images = [];
-    $push = static function (string $candidate) use (&$images): void {
-        $candidate = trim($candidate);
-        if ($candidate !== '' && preg_match('~^https?://~i', $candidate) && !in_array($candidate, $images, true)) $images[] = $candidate;
-    };
-
-    foreach (['images', 'imagens', 'gallery', 'galeria', 'fotos', 'photos', 'attachments', 'anexos'] as $field) {
-        $value = $item[$field] ?? null;
-        if (is_string($value)) {
-            $push($value);
-            continue;
-        }
+    $images=[];
+    $push=static function(string $candidate) use (&$images): void { $candidate=trim($candidate); if ($candidate!=='' && preg_match('~^https?://~i',$candidate) && !in_array($candidate,$images,true)) $images[]=$candidate; };
+    foreach (['images','imagens','gallery','galeria','fotos','photos','attachments','anexos'] as $field) {
+        $value=$item[$field] ?? null;
+        if (is_string($value)) { $push($value); continue; }
         if (!is_array($value)) continue;
         foreach ($value as $entry) {
-            if (is_string($entry)) {
-                $push($entry);
-                continue;
-            }
+            if (is_string($entry)) { $push($entry); continue; }
             if (!is_array($entry)) continue;
-            foreach (['url', 'link', 'src', 'image', 'imagem', 'image_url'] as $key) {
-                $candidate = trim((string)($entry[$key] ?? ''));
-                if ($candidate !== '') $push($candidate);
-            }
+            foreach (['url','link','src','image','imagem','image_url'] as $key) { $candidate=trim((string)($entry[$key] ?? '')); if ($candidate!=='') $push($candidate); }
         }
     }
-
-    for ($i = 1; $i <= 12; $i++) {
-        foreach (["imagem{$i}", "image{$i}", "foto{$i}", "photo{$i}"] as $key) {
-            $candidate = trim((string)($item[$key] ?? ''));
-            if ($candidate !== '') $push($candidate);
-        }
-    }
-
-    return array_slice($images, 0, 12);
+    for ($i=1;$i<=12;$i++) foreach (["imagem{$i}","image{$i}","foto{$i}","photo{$i}"] as $key) { $candidate=trim((string)($item[$key] ?? '')); if ($candidate!=='') $push($candidate); }
+    return array_slice($images,0,12);
 }
 
-// Rodada 5 (2026-08-19): movida de index.php para catalog-runtime.php.
-// facebook-shop-feed.php chamava sv_home_catalog_source_rows() sem nunca
-// incluir index.php (so includes/catalog-runtime.php), causando fatal error
-// "Call to undefined function" e feed do Facebook/Instagram Shop sempre
-// vazio. Guardada com function_exists() por seguranca, caso algum ponto
-// ainda inclua index.php diretamente. Ver R5-4 no relatorio da Rodada 5.
 if (!function_exists('sv_home_catalog_source_rows')) {
 function sv_home_catalog_source_rows(): array
 {
-    static $localCache = null;
-    if ($localCache !== null) {
-        return $localCache;
-    }
-
-    $apcu = function_exists('apcu_fetch') && function_exists('apcu_store');
-    $apcuKey = 'sv_home_catalog_source_rows_v1';
-    $fileCache = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'shopvivaliz-home-catalog-source-v1.json';
-    if (!$apcu && is_file($fileCache) && (time() - (int)@filemtime($fileCache)) <= 30) {
-        $cached = json_decode((string)@file_get_contents($fileCache), true);
-        if (is_array($cached) && $cached !== []) {
-            $localCache = $cached;
-            return $localCache;
-        }
+    static $localCache=null;
+    if ($localCache!==null) return $localCache;
+    $apcu=function_exists('apcu_fetch') && function_exists('apcu_store');
+    $apcuKey='sv_home_catalog_source_rows_v1';
+    $fileCache=rtrim(sys_get_temp_dir(),DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.'shopvivaliz-home-catalog-source-v1.json';
+    if (!$apcu && is_file($fileCache) && (time()-(int)@filemtime($fileCache))<=30) {
+        $cached=json_decode((string)@file_get_contents($fileCache),true);
+        if (is_array($cached) && $cached!==[]) { $localCache=$cached; return $localCache; }
     }
     if ($apcu) {
-        $ok = false;
-        $stored = apcu_fetch($apcuKey, $ok);
-        if ($ok && is_array($stored)) {
-            $localCache = $stored;
-            return $localCache;
-        }
+        $ok=false; $stored=apcu_fetch($apcuKey,$ok);
+        if ($ok && is_array($stored)) { $localCache=$stored; return $localCache; }
     }
-
-    $runtime = svcr_products();
-
-
-    if ($runtime !== []) {
-        $localCache = $runtime;
-        if ($apcu) {
-            apcu_store($apcuKey, $localCache, 300);
-        } else {
-            $encoded = json_encode($localCache, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $runtime=svcr_products();
+    if ($runtime!==[]) {
+        $localCache=$runtime;
+        if ($apcu) apcu_store($apcuKey,$localCache,300);
+        else {
+            $encoded=json_encode($localCache,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
             if (is_string($encoded)) {
-                $tmpCache = $fileCache . '.' . getmypid() . '.tmp';
-                if (@file_put_contents($tmpCache, $encoded, LOCK_EX) !== false) {
-                    @rename($tmpCache, $fileCache);
-                } else {
-                    @unlink($tmpCache);
-                }
+                $tmpCache=$fileCache.'.'.getmypid().'.tmp';
+                if (@file_put_contents($tmpCache,$encoded,LOCK_EX)!==false) @rename($tmpCache,$fileCache); else @unlink($tmpCache);
             }
         }
         return $localCache;
     }
-
-    // Sem a fonte canonica de produtos ativos, a vitrine falha fechada. CSV e
-    // snapshots historicos podem enriquecer imagem/conteudo, nunca provar que
-    // um item ainda pode ser vendido.
     return [];
 }
 }

@@ -43,6 +43,7 @@ on:
       - "tests/desktop-commander-four-host-monitor-contract-test.php"
       - "tests/desktop-commander-persist-session-contract-test.php"
       - "tests/desktop-commander-three-host-action-contract-test.php"
+      - "tests/desktop-commander-critical-health-contract-test.php"
   push:
     branches: [main]
     paths:
@@ -83,6 +84,7 @@ on:
       - "tests/desktop-commander-four-host-monitor-contract-test.php"
       - "tests/desktop-commander-persist-session-contract-test.php"
       - "tests/desktop-commander-three-host-action-contract-test.php"
+      - "tests/desktop-commander-critical-health-contract-test.php"
 
 permissions:
   contents: read
@@ -110,6 +112,7 @@ jobs:
           php tests/desktop-commander-four-host-monitor-contract-test.php
           php tests/desktop-commander-three-host-action-contract-test.php
           php tests/desktop-commander-provider-connected-health-contract-test.php
+          php tests/desktop-commander-critical-health-contract-test.php
           php tests/desktopkocepsv-recoverable-channel-contract-test.php
           php tests/desktopkocepsv-runner-hardening-contract-test.php
           php tests/desktopkocepsv-desktop-commander-supervisor-contract-test.php
@@ -158,13 +161,10 @@ jobs:
           MAX_REPAIR_ATTEMPTS = 1 if os.environ.get('ALLOW_REPAIR') == '1' else 0
           VM_TARGET = 'ubuntu@10.0.1.38'
           SSH = [
-              'ssh',
-              '-o', 'StrictHostKeyChecking=yes',
+              'ssh', '-o', 'StrictHostKeyChecking=yes',
               '-o', 'UserKnownHostsFile=' + os.path.expanduser('~/.ssh/known_hosts'),
-              '-o', 'BatchMode=yes',
-              '-o', 'ConnectTimeout=10',
-              '-i', os.path.expanduser('~/.ssh/vmkey'),
-              VM_TARGET,
+              '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10',
+              '-i', os.path.expanduser('~/.ssh/vmkey'), VM_TARGET,
           ]
           SAFE_KEYS = {
               'DEVICE_STATE_EXISTS', 'CANONICAL_AGENT_COUNT',
@@ -176,10 +176,7 @@ jobs:
 
           def ssh_run(command, timeout=180, stdin=None):
               try:
-                  cp = subprocess.run(
-                      SSH + [command], input=stdin, text=True,
-                      capture_output=True, timeout=timeout, check=False
-                  )
+                  cp = subprocess.run(SSH + [command], input=stdin, text=True, capture_output=True, timeout=timeout, check=False)
                   return cp.returncode == 0, cp.stdout or ''
               except Exception:
                   return False, ''
@@ -229,27 +226,12 @@ jobs:
               )
               ok, output = relay_exec(port, status_command, want_output=True)
               if not ok:
-                  return {
-                      'host': name, 'state': 'unreachable', 'watchdog': 'unreachable',
-                      'canonical': '—', 'auth': 'unknown', 'recovery': 'relay_unreachable'
-                  }
+                  return {'host': name, 'state': 'unreachable', 'watchdog': 'unreachable', 'canonical': '—', 'auth': 'unknown', 'recovery': 'relay_unreachable'}
               values = parse_safe(output)
               if win_healthy(values, expected_logon):
-                  return {
-                      'host': name, 'state': 'healthy',
-                      'watchdog': f'{expected_logon}/Highest', 'canonical': '1',
-                      'auth': 'false', 'recovery': 'not_needed'
-                  }
+                  return {'host': name, 'state': 'healthy', 'watchdog': f'{expected_logon}/Highest', 'canonical': '1', 'auth': 'false', 'recovery': 'not_needed'}
               auth = is_true(values.get('AUTH_REQUIRED'))
               provider_connected = is_true(values.get('PROVIDER_CONNECTED'))
-              # Windows structural health: process/task fields only. The
-              # SERVICE_* keys below belong to vm_probe's systemd-based
-              # check (see the near-identical block further down in this
-              # file) and Windows status scripts never emit them, so this
-              # was always False here regardless of actual health --
-              # confirmed present on main before this PR, not introduced
-              # by it, but this PR's own repair_mode/recovery labeling now
-              # depends on it being correct.
               structurally_healthy = (
                   is_true(values.get('DEVICE_STATE_EXISTS'))
                   and values.get('CANONICAL_AGENT_COUNT') == '1'
@@ -280,7 +262,7 @@ jobs:
                   ok2, output2 = relay_exec(port, status_command, want_output=True)
                   if ok2:
                       values = parse_safe(output2)
-              healthy = win_healthy(values)
+              healthy = win_healthy(values, expected_logon)
               if healthy:
                   state = 'healthy'
                   canonical = '1'
@@ -296,10 +278,7 @@ jobs:
                   f"logon={values.get('TASK_LOGON_TYPE','unknown')},"
                   f"runlevel={values.get('TASK_RUN_LEVEL','unknown')}"
               )
-              return {
-                  'host': name, 'state': state, 'watchdog': watchdog,
-                  'canonical': canonical, 'auth': auth_text, 'recovery': recovery
-              }
+              return {'host': name, 'state': state, 'watchdog': watchdog, 'canonical': canonical, 'auth': auth_text, 'recovery': recovery}
 
           def vm_status(peer=False):
               command = r'''set -Eeuo pipefail
@@ -325,14 +304,11 @@ jobs:
           printf 'DEVICE_STATE_EXISTS=%s\nSERVICE_ENABLED=%s\nSERVICE_ACTIVE=%s\nSERVICE_USER=%s\nSERVICE_MAINPID=%s\nCANONICAL_AGENT_COUNT=%s\nNONCANONICAL_AGENT_COUNT=%s\nAUTH_REQUIRED=%s\nPROVIDER_CONNECTED=%s\n' "$device" "${enabled:-unknown}" "${active:-unknown}" "${user:-unknown}" "${mainpid:-0}" "$canonical" "$noncanonical" "$auth" "$provider"
           '''
               if peer:
-                  peer_ssh = [
-                      'ssh', '-i', '/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor',
-                      '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes',
-                      '-o', 'ConnectTimeout=8', 'ubuntu@10.0.1.112', command,
-                  ]
+                  peer_ssh = ['ssh', '-i', '/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', '-o', 'ConnectTimeout=8', 'ubuntu@10.0.1.112', command]
                   command = ' '.join(shlex.quote(part) for part in peer_ssh)
               ok, out = ssh_run(command, timeout=120)
               return ok, parse_safe(out)
+
           def vm_healthy(values):
               return (
                   is_true(values.get('DEVICE_STATE_EXISTS'))
@@ -348,17 +324,9 @@ jobs:
           def vm_probe(name, peer=False):
               ok, values = vm_status(peer=peer)
               if not ok:
-                  return {
-                      'host': name, 'state': 'unreachable',
-                      'watchdog': 'unreachable', 'canonical': '—',
-                      'auth': 'unknown', 'recovery': 'vm_ssh_unreachable'
-                  }
+                  return {'host': name, 'state': 'unreachable', 'watchdog': 'unreachable', 'canonical': '—', 'auth': 'unknown', 'recovery': 'vm_ssh_unreachable'}
               if vm_healthy(values):
-                  return {
-                      'host': name, 'state': 'healthy',
-                      'watchdog': 'systemd=enabled/active', 'canonical': '1',
-                      'auth': 'false', 'recovery': 'not_needed'
-                  }
+                  return {'host': name, 'state': 'healthy', 'watchdog': 'systemd=enabled/active', 'canonical': '1', 'auth': 'false', 'recovery': 'not_needed'}
               auth = is_true(values.get('AUTH_REQUIRED'))
               provider_connected = is_true(values.get('PROVIDER_CONNECTED'))
               structurally_healthy = (
@@ -382,11 +350,7 @@ jobs:
                       'sudo bash /home/ubuntu/shopvivaliz-deploy/repo/scripts/install-vm-desktop-commander-service.sh'
                   )
                   if peer:
-                      peer_ssh = [
-                          'ssh', '-i', '/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor',
-                          '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes',
-                          '-o', 'ConnectTimeout=8', 'ubuntu@10.0.1.112', repair,
-                      ]
+                      peer_ssh = ['ssh', '-i', '/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', '-o', 'ConnectTimeout=8', 'ubuntu@10.0.1.112', repair]
                       repair = ' '.join(shlex.quote(part) for part in peer_ssh)
                   repair_ok, _ = ssh_run(repair, timeout=260)
                   recovery = 'repair_requested' if repair_ok else 'repair_failed'
@@ -399,54 +363,30 @@ jobs:
                   state = 'healthy'
                   canonical = '1'
                   auth_text = 'false'
-                  if recovery != 'not_attempted':
-                      recovery = 'recovered'
+                  if recovery != 'not_attempted': recovery = 'recovered'
               else:
                   state = 'degraded'
                   canonical = values.get('CANONICAL_AGENT_COUNT', '0')
                   auth_text = 'true' if is_true(values.get('AUTH_REQUIRED')) else 'false'
-              watchdog = (
-                  f"systemd={values.get('SERVICE_ENABLED','unknown')}/"
-                  f"{values.get('SERVICE_ACTIVE','unknown')}"
-              )
-              return {
-                  'host': name, 'state': state,
-                  'watchdog': watchdog, 'canonical': canonical,
-                  'auth': auth_text, 'recovery': recovery
-              }
+              watchdog = f"systemd={values.get('SERVICE_ENABLED','unknown')}/{values.get('SERVICE_ACTIVE','unknown')}"
+              return {'host': name, 'state': state, 'watchdog': watchdog, 'canonical': canonical, 'auth': auth_text, 'recovery': recovery}
+
           results = [
-              win_probe(
-                  'LAPTOP-NIG4IFUU', 5557,
-                  'fredwin-desktop-commander-status.ps1',
-                  'fredwin-desktop-commander-supervisor.ps1',
-                  'fredwin-remote-bootstrap.ps1',
-                  expected_logon='interactive'
-              ),
-              win_probe(
-                  'DESKTOP-KOCEPSV', 5558,
-                  'desktopkocepsv-desktop-commander-status.ps1',
-                  'desktopkocepsv-desktop-commander-supervisor.ps1',
-                  'desktopkocepsv-remote-bootstrap.ps1',
-                  expected_logon='s4u'
-              ),
+              win_probe('LAPTOP-NIG4IFUU', 5557, 'fredwin-desktop-commander-status.ps1', 'fredwin-desktop-commander-supervisor.ps1', 'fredwin-remote-bootstrap.ps1', expected_logon='interactive'),
+              win_probe('DESKTOP-KOCEPSV', 5558, 'desktopkocepsv-desktop-commander-status.ps1', 'desktopkocepsv-desktop-commander-supervisor.ps1', 'desktopkocepsv-remote-bootstrap.ps1', expected_logon='s4u'),
               vm_probe('shopvivaliz-a1-backend', peer=False),
               vm_probe('shopvivaliz-free-a1', peer=True),
           ]
           now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
           run_id = os.environ.get('RUN_ID', 'unknown')
           lines = [
-              '# Desktop Commander 24h Control Plane Status',
-              '',
-              'Sanitized four-host health only. Provider credentials, session data, private keys and device-state contents are never published here.',
-              '',
+              '# Desktop Commander 24h Control Plane Status', '',
+              'Sanitized four-host health only. Provider credentials, session data, private keys and device-state contents are never published here.', '',
               '| Host | State | Watchdog | Canonical agents | Auth required | Last check | Recovery |',
               '|---|---|---|---:|---|---|---|',
           ]
           for item in results:
-              lines.append(
-                  f"| {item['host']} | {item['state']} | {item['watchdog']} | "
-                  f"{item['canonical']} | {item['auth']} | {now} | {item['recovery']} |"
-              )
+              lines.append(f"| {item['host']} | {item['state']} | {item['watchdog']} | {item['canonical']} | {item['auth']} | {now} | {item['recovery']} |")
           lines += ['', f'Source workflow run: {run_id}']
           pathlib.Path('/tmp/dc-control-plane-status.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
           pathlib.Path('/tmp/dc-control-plane-status.json').write_text(json.dumps(results), encoding='utf-8')
@@ -479,7 +419,8 @@ jobs:
           python3 - <<'PY'
           import json
           data=json.load(open('/tmp/dc-control-plane-status.json',encoding='utf-8'))
-          if any(item.get('state') != 'healthy' for item in data):
+          critical_hosts = {'shopvivaliz-a1-backend', 'shopvivaliz-free-a1'}
+          if any(item.get('host') in critical_hosts and item.get('state') != 'healthy' for item in data):
               raise SystemExit(1)
           PY
 
