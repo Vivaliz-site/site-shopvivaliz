@@ -1,0 +1,61 @@
+name: Free A1 Desktop Commander Recovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ops/free-a1-desktop-commander-request.json"
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Execute allowlisted local recovery
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          action="$(jq -r '.action // "status"' ops/free-a1-desktop-commander-request.json)"
+          case "$action" in
+            status)
+              ;;
+            restart_if_disconnected)
+              if test -f "$HOME/.desktop-commander-device/auth-required.cooldown"; then
+                echo "AUTH_REQUIRED=true"
+                exit 2
+              fi
+              active="$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true)"
+              if test "$active" != active || ! test -f "$HOME/.desktop-commander-device/provider-connected.marker"; then
+                sudo systemctl restart shopvivaliz-desktop-commander.service
+                sleep 20
+              fi
+              ;;
+            *)
+              echo "Action not allowlisted: $action"
+              exit 3
+              ;;
+          esac
+          enabled="$(systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null || true)"
+          active="$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true)"
+          auth=false
+          test -f "$HOME/.desktop-commander-device/auth-required.cooldown" && auth=true
+          provider=false
+          test -f "$HOME/.desktop-commander-device/provider-connected.marker" && provider=true
+          canonical=0
+          while IFS= read -r line; do
+            test -z "$line" && continue
+            case "$line" in
+              *"@wonderwhy-er/desktop-commander@0.2.48"*" remote "*"--persist-session"*) canonical=$((canonical+1));;
+            esac
+          done < <(pgrep -af '[n]pm exec @wonderwhy-er/desktop-commander@.* remote' 2>/dev/null || true)
+          printf 'SERVICE_ENABLED=%s\nSERVICE_ACTIVE=%s\nCANONICAL_AGENT_COUNT=%s\nAUTH_REQUIRED=%s\nPROVIDER_CONNECTED=%s\n' "$enabled" "$active" "$canonical" "$auth" "$provider"
+          test "$enabled" = enabled
+          test "$active" = active
+          test "$canonical" = 1
+          test "$auth" = false
+          test "$provider" = true
