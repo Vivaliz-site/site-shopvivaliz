@@ -27,6 +27,16 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertNotIn('/var/lock/shopvivaliz-deploy.lock', text)
         self.assertNotIn('expected_runner_blob=', text)
 
+    def test_master_pipeline_reconciles_runtime_permissions_and_sqlite_dependency(self) -> None:
+        text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
+        self.assertIn("php8.3-sqlite3", text)
+        self.assertIn('sudo chgrp -R www-data "$shared/$name"', text)
+        self.assertIn('sudo chmod -R g+rwX "$shared/$name"', text)
+        self.assertIn('sudo find "$shared/$name" -type d -exec chmod g+s {} +', text)
+        self.assertIn('sudo chgrp www-data "$shared/tasks-queue.json"', text)
+        self.assertIn('sudo chmod g+rw "$shared/tasks-queue.json"', text)
+        self.assertIn("pdo_sqlite", text)
+
     def test_master_pipeline_rolls_back_a_failed_release(self) -> None:
         text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
         self.assertIn('previous="$(readlink -f "$current" 2>/dev/null)"', text)

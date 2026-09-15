@@ -171,6 +171,21 @@ jobs:
           sudo a2enmod rewrite headers >/dev/null
           sudo apache2ctl configtest
 
+          # Keep the existing ViaCEP SQLite cache dependency available on the host.
+          if ! php -m | grep -Fxq pdo_sqlite; then
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y php8.3-sqlite3
+          fi
+          php -m | grep -Fxq pdo_sqlite
+
+          # Shared runtime paths are written by Apache (www-data) and background jobs (ubuntu).
+          for name in uploads logs cache sessions storage; do
+            sudo chgrp -R www-data "$shared/$name"
+            sudo chmod -R g+rwX "$shared/$name"
+            sudo find "$shared/$name" -type d -exec chmod g+s {} +
+          done
+          sudo chgrp www-data "$shared/tasks-queue.json"
+          sudo chmod g+rw "$shared/tasks-queue.json"
+
           catalog_service_changed=true
           amazon_service_changed=true
           if [ -n "$previous" ] && [ -d "$previous" ]; then
