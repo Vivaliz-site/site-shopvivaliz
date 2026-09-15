@@ -29,7 +29,12 @@ jobs:
                 echo "AUTH_REQUIRED=true"
                 exit 2
               fi
-              active="$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true)"
+              active=unknown
+              if active_value="$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null)"; then
+                active="$active_value"
+              else
+                active="${active_value:-unknown}"
+              fi
               if test "$active" != active || ! test -f "$HOME/.desktop-commander-device/provider-connected.marker"; then
                 sudo systemctl restart shopvivaliz-desktop-commander.service
                 sleep 20
@@ -40,19 +45,40 @@ jobs:
               exit 3
               ;;
           esac
-          enabled="$(systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null || true)"
-          active="$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true)"
+          enabled=unknown
+          if enabled_value="$(systemctl is-enabled shopvivaliz-desktop-commander.service 2>/dev/null)"; then
+            enabled="$enabled_value"
+          else
+            enabled="${enabled_value:-unknown}"
+          fi
+          active=unknown
+          if active_value="$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null)"; then
+            active="$active_value"
+          else
+            active="${active_value:-unknown}"
+          fi
           auth=false
-          test -f "$HOME/.desktop-commander-device/auth-required.cooldown" && auth=true
+          if test -f "$HOME/.desktop-commander-device/auth-required.cooldown"; then
+            auth=true
+          fi
           provider=false
-          test -f "$HOME/.desktop-commander-device/provider-connected.marker" && provider=true
+          if test -f "$HOME/.desktop-commander-device/provider-connected.marker"; then
+            provider=true
+          fi
           canonical=0
           while IFS= read -r line; do
             test -z "$line" && continue
             case "$line" in
               *"@wonderwhy-er/desktop-commander@0.2.48"*" remote "*"--persist-session"*) canonical=$((canonical+1));;
             esac
-          done < <(pgrep -af '[n]pm exec @wonderwhy-er/desktop-commander@.* remote' 2>/dev/null || true)
+          done < <(
+            if pgrep -af '[n]pm exec @wonderwhy-er/desktop-commander@.* remote' 2>/dev/null; then
+              :
+            else
+              rc=$?
+              test "$rc" -eq 1
+            fi
+          )
           printf 'SERVICE_ENABLED=%s\nSERVICE_ACTIVE=%s\nCANONICAL_AGENT_COUNT=%s\nAUTH_REQUIRED=%s\nPROVIDER_CONNECTED=%s\n' "$enabled" "$active" "$canonical" "$auth" "$provider"
           test "$enabled" = enabled
           test "$active" = active
