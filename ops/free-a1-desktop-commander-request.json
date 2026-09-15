@@ -1,0 +1,5 @@
+{
+  "action": "restart_if_disconnected",
+  "requested_at": "2026-09-14T22:00:00-03:00",
+  "reason": "Recover shopvivaliz-free-a1 Desktop Commander after broker disconnect detected by post-merge health validation"
+}
