@@ -1,0 +1,48 @@
+name: Temporary DESKTOP-KOCEPSV Relay Recovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/windows-peer-emergency-recovery.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 8
+    steps:
+      - name: Recover DESKTOP-KOCEPSV relay
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${VM_KEY:-}"
+          test -n "${VM_HOSTS:-}"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/recovery-key"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/recovery-hosts"
+          chmod 600 "$HOME/.ssh/recovery-key" "$HOME/.ssh/recovery-hosts"
+          SSH_VM=(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/recovery-hosts" -i "$HOME/.ssh/recovery-key" ubuntu@10.0.1.38)
+          peer_json="$(${SSH_VM[@]} 'tailscale status --json')"
+          desk_ip="$(printf '%s' "$peer_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); peers=d.get("Peer") or {}; out=""; [None for p in peers.values() if not ("DESKTOP-KOCEPSV" in str(p.get("HostName") or p.get("DNSName") or "").upper()) or (globals().__setitem__("out", next((x for x in (p.get("TailscaleIPs") or []) if ":" not in x), "")))); print(out)')"
+          test -n "$desk_ip"
+          ${SSH_VM[@]} "timeout 5 bash -c '</dev/tcp/$desk_ip/22'"
+          ssh -fNT -o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/recovery-hosts" -i "$HOME/.ssh/recovery-key" -L "32224:$desk_ip:22" ubuntu@10.0.1.38
+          sleep 2
+          ssh-keyscan -T 5 -p 32224 127.0.0.1 2>/dev/null > /tmp/desktop-recovery.hosts
+          test -s /tmp/desktop-recovery.hosts
+          chmod 600 /tmp/desktop-recovery.hosts
+          cmd="& { \$ErrorActionPreference='Stop'; Set-Location 'C:\site-shopvivaliz'; git fetch origin main | Out-Null; git merge --ff-only origin/main | Out-Null; & 'C:\site-shopvivaliz\scripts\desktopkocepsv-desktop-commander-supervisor.ps1' -Mode InstallTask; & 'C:\site-shopvivaliz\scripts\desktopkocepsv-remote-bootstrap.ps1' -Mode InstallTask }"
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/tmp/desktop-recovery.hosts -p 32224 -i "$HOME/.ssh/recovery-key" user@127.0.0.1 "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$cmd\""
+          sleep 15
+          ${SSH_VM[@]} 'curl -fsS --connect-timeout 4 --max-time 8 http://127.0.0.1:5558/health'
+          echo DESKTOP_KOCEPSV_RECOVERY_OK=true
+      - name: Cleanup
+        if: always()
+        run: |
+          pkill -f '32224:' || true
+          rm -f "$HOME/.ssh/recovery-key" "$HOME/.ssh/recovery-hosts" /tmp/desktop-recovery.hosts
