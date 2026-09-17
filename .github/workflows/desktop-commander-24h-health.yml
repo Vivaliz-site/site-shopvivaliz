@@ -380,8 +380,8 @@ jobs:
           now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
           run_id = os.environ.get('RUN_ID', 'unknown')
           lines = [
-              '# Desktop Commander 24h Control Plane Status', '',
-              'Sanitized four-host health only. Provider credentials, session data, private keys and device-state contents are never published here.', '',
+              '# Desktop Commander fallback/provider health', '',
+              'Desktop Commander fallback/provider health only. Sanitized four-host provider status; this is not the primary host reachability gate. Provider credentials, session data, private keys and device-state contents are never published here.', '',
               '| Host | State | Watchdog | Canonical agents | Auth required | Last check | Recovery |',
               '|---|---|---|---:|---|---|---|',
           ]
@@ -399,7 +399,7 @@ jobs:
           set -Eeuo pipefail
           mkdir -p artifacts/desktop-commander-24h-health
           if [ ! -s /tmp/dc-control-plane-status.md ] || [ ! -s /tmp/dc-control-plane-status.json ]; then
-            printf '# Desktop Commander 24h Control Plane Status\n\nCONTROL_PLANE_EVIDENCE=fallback\nprobe_failed_before_status_materialization\n' > /tmp/dc-control-plane-status.md
+            printf '# Desktop Commander fallback/provider health\n\nCONTROL_PLANE_EVIDENCE=fallback\nprobe_failed_before_status_materialization\n' > /tmp/dc-control-plane-status.md
             printf '[{"host":"control-plane","state":"degraded","watchdog":"unknown","canonical":"—","auth":"unknown","recovery":"probe_failed_before_status_materialization"}]\n' > /tmp/dc-control-plane-status.json
           fi
           cp /tmp/dc-control-plane-status.md artifacts/desktop-commander-24h-health/status.md
