@@ -1,0 +1,110 @@
+name: Remote Control Plane Health
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/remote-control-plane-health.yml'
+      - 'tests/remote-control-plane-primary-contract-test.php'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: remote-control-plane-health-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify remote control plane contract
+        run: php tests/remote-control-plane-primary-contract-test.php
+
+  health:
+    if: github.event_name == 'workflow_dispatch'
+    needs: contract
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate site runner identity
+        run: |
+          set -Eeuo pipefail
+          echo "SITE_HOST=$(hostname)"
+          echo "SITE_USER=$(id -un)"
+          test -d /home/ubuntu/shopvivaliz-deploy
+          echo "SITE_ADMIN_PATH=ok"
+
+      - name: Configure verified backend SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${VM_KEY:-}" || { echo 'VM SSH key missing'; exit 2; }
+          test -n "${VM_HOSTS:-}" || { echo 'VM known_hosts missing'; exit 2; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+
+      - name: Validate backend administration path
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/vmkey" ubuntu@10.0.1.38 \
+            'set -Eeuo pipefail; printf "BACKEND_HOST=%s\nBACKEND_USER=%s\n" "$(hostname)" "$(id -un)"'
+
+      - name: Validate Windows private relays
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/vmkey" ubuntu@10.0.1.38 'python3 -' <<'PY'
+          import json
+          import urllib.request
+
+          targets = [
+              (5557, 'fred-win'),
+              (5558, 'desktop-kocepsv'),
+          ]
+
+          for port, expected_environment in targets:
+              url = f'http://127.0.0.1:{port}/health'
+              try:
+                  with urllib.request.urlopen(url, timeout=10) as response:
+                      status_code = response.status
+                      raw = response.read().decode('utf-8')
+              except Exception as exc:
+                  raise SystemExit(f'REMOTE_CONTROL_PLANE_STATUS=INCONCLUSIVE relay={port} error={type(exc).__name__}')
+
+              if status_code != 200:
+                  raise SystemExit(f'REMOTE_CONTROL_PLANE_STATUS=INCONCLUSIVE relay={port} http={status_code}')
+
+              try:
+                  payload = json.loads(raw)
+              except json.JSONDecodeError:
+                  raise SystemExit(f'REMOTE_CONTROL_PLANE_STATUS=INCONCLUSIVE relay={port} invalid_json')
+
+              status = str(payload.get('status') or payload.get('ok') or '').lower()
+              environment = str(payload.get('environment') or '').lower()
+              mcp_version = str(payload.get('mcp_version') or payload.get('version') or '').strip()
+
+              if status not in {'ok', 'true'}:
+                  raise SystemExit(f'REMOTE_CONTROL_PLANE_STATUS=INCONCLUSIVE relay={port} status={status or "missing"}')
+              if environment != expected_environment:
+                  raise SystemExit(f'REMOTE_CONTROL_PLANE_STATUS=INCONCLUSIVE relay={port} environment={environment or "missing"}')
+              if not mcp_version:
+                  raise SystemExit(f'REMOTE_CONTROL_PLANE_STATUS=INCONCLUSIVE relay={port} mcp_version=missing')
+
+              print(f'environment={expected_environment}')
+              print(f'mcp_version={mcp_version}')
+              print(f'RELAY_{port}=ok')
+
+          print('REMOTE_CONTROL_PLANE_STATUS=COMPROVADO')
+          PY
+
+      - name: Cleanup SSH material
+        if: always()
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
