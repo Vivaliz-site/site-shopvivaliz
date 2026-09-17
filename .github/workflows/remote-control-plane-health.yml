@@ -12,6 +12,11 @@ on:
       - 'ops/fredwin-request.json'
       - 'ops/desktopkocepsv-remote-request.json'
       - 'ops/remote-host-request.json'
+      - 'docs/knowledge/host-access.md'
+      - 'docs/knowledge/README.md'
+      - 'docs/FRED-WIN-PRIVATE-RELAY.md'
+      - 'docs/DESKTOP-KOCEPSV-PRIVATE-RELAY.md'
+      - 'docs/DESKTOP-COMMANDER-24H.md'
       - 'tests/remote-control-plane-primary-contract-test.php'
       - 'tests/fredwin-remote-primary-contract-test.php'
       - 'tests/fredwin-desktop-commander-relay-contract-test.php'
@@ -19,6 +24,7 @@ on:
       - 'tests/desktopkocepsv-private-relay-contract-test.php'
       - 'tests/remote-host-action-contract-test.php'
       - 'tests/remote-control-plane-monitor-separation-contract-test.php'
+      - 'tests/remote-control-plane-docs-contract-test.php'
       - 'tests/desktop-commander-four-host-monitor-contract-test.php'
       - 'tests/desktop-commander-critical-health-contract-test.php'
 
@@ -45,6 +51,7 @@ jobs:
           php tests/desktopkocepsv-private-relay-contract-test.php
           php tests/remote-host-action-contract-test.php
           php tests/remote-control-plane-monitor-separation-contract-test.php
+          php tests/remote-control-plane-docs-contract-test.php
           php tests/desktop-commander-four-host-monitor-contract-test.php
           php tests/desktop-commander-critical-health-contract-test.php
 
