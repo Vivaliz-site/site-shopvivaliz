@@ -9,6 +9,7 @@ on:
       - '.github/workflows/desktopkocepsv-remote-action.yml'
       - '.github/workflows/remote-host-action.yml'
       - '.github/workflows/desktop-commander-24h-health.yml'
+      - '.github/workflows/remote-pc-tunnel-health.yml'
       - 'ops/fredwin-request.json'
       - 'ops/desktopkocepsv-remote-request.json'
       - 'ops/remote-host-request.json'
@@ -25,6 +26,7 @@ on:
       - 'tests/remote-host-action-contract-test.php'
       - 'tests/remote-control-plane-monitor-separation-contract-test.php'
       - 'tests/remote-control-plane-docs-contract-test.php'
+      - 'tests/remote-control-plane-no-public-mcp-contract-test.php'
       - 'tests/desktop-commander-four-host-monitor-contract-test.php'
       - 'tests/desktop-commander-critical-health-contract-test.php'
 
@@ -52,6 +54,7 @@ jobs:
           php tests/remote-host-action-contract-test.php
           php tests/remote-control-plane-monitor-separation-contract-test.php
           php tests/remote-control-plane-docs-contract-test.php
+          php tests/remote-control-plane-no-public-mcp-contract-test.php
           php tests/desktop-commander-four-host-monitor-contract-test.php
           php tests/desktop-commander-critical-health-contract-test.php
 
