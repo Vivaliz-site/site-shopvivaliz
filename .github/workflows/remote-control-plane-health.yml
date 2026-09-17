@@ -27,6 +27,7 @@ on:
       - 'tests/remote-control-plane-monitor-separation-contract-test.php'
       - 'tests/remote-control-plane-docs-contract-test.php'
       - 'tests/remote-control-plane-no-public-mcp-contract-test.php'
+      - 'tests/windows-relay-site-ingress-contract-test.php'
       - 'tests/desktop-commander-four-host-monitor-contract-test.php'
       - 'tests/desktop-commander-critical-health-contract-test.php'
 
@@ -55,6 +56,7 @@ jobs:
           php tests/remote-control-plane-monitor-separation-contract-test.php
           php tests/remote-control-plane-docs-contract-test.php
           php tests/remote-control-plane-no-public-mcp-contract-test.php
+          php tests/windows-relay-site-ingress-contract-test.php
           php tests/desktop-commander-four-host-monitor-contract-test.php
           php tests/desktop-commander-critical-health-contract-test.php
 
