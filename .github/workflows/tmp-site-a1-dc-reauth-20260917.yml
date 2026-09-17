@@ -6,6 +6,9 @@ on:
       - docs/remote-control-plane-migration-20260917
     paths:
       - '.github/workflows/tmp-site-a1-dc-reauth-20260917.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/tmp-site-a1-dc-reauth-20260917.yml'
 
 permissions:
   contents: read
