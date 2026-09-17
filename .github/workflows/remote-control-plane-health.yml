@@ -98,7 +98,7 @@ jobs:
       - name: Validate Windows private relays
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/vmkey" ubuntu@10.0.1.38 'python3 -' <<'PY'
+          python3 - <<'PY'
           import json
           import urllib.request
 
