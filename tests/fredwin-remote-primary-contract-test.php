@@ -9,18 +9,20 @@ foreach ([$workflow, $request] as $path) {
 $yml = (string) file_get_contents($workflow);
 $required = [
     'ops/fredwin-request.json',
+    'runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]',
     'health)',
     'runtime_identity)',
     'http://127.0.0.1:5557/health',
+    'http://127.0.0.1:5557/mcp/tool/execute_command',
     'environment=fred-win',
     'COMPUTERNAME',
     'Action not allowlisted',
-    'StrictHostKeyChecking=yes',
 ];
 foreach ($required as $needle) {
     if (strpos($yml, $needle) === false) { fwrite(STDERR, "missing {$needle}\n"); exit(1); }
 }
 $forbidden = [
+    'ubuntu@10.0.1.38',
     'configure_desktop_commander_allow_all',
     'desktop-commander remote',
     'device.json',
