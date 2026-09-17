@@ -14,7 +14,7 @@ if ($scheduled !== ['desktop-commander-24h-health.yml']) {
     exit(1);
 }
 $health = (string) file_get_contents($root . '/.github/workflows/desktop-commander-24h-health.yml');
-foreach (['LAPTOP-NIG4IFUU','DESKTOP-KOCEPSV','shopvivaliz-a1-backend','shopvivaliz-free-a1','shopvivaliz-free-a1-monitor','Sanitized four-host health only.'] as $needle) {
+foreach (['LAPTOP-NIG4IFUU','DESKTOP-KOCEPSV','shopvivaliz-a1-backend','shopvivaliz-free-a1','shopvivaliz-free-a1-monitor','Desktop Commander fallback/provider health','DC_FALLBACK_PROVIDER_HEALTH'] as $needle) {
     if (strpos($health, $needle) === false) {
         fwrite(STDERR, "four-host monitor missing {$needle}\n");
         exit(1);
