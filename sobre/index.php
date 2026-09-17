@@ -48,7 +48,7 @@ $svSeoUrl = '/sobre/';
     </section>
     <section class="sv-about-strip">
       <div><strong>Precisa de ajuda para escolher?</strong><p>Envie sua dúvida com o nome do produto ou SKU. Nosso atendimento responde com orientação objetiva, sem pressão.</p></div>
-      <a href="mailto:<?= htmlspecialchars($email, ENT_QUOTES, 'UTF-8') ?>">Enviar e-mail</a>
+      <!--email_off--><a href="mailto:<?= htmlspecialchars($email, ENT_QUOTES, 'UTF-8') ?>">Enviar e-mail</a><!--/email_off-->
     </section>
   </div>
 </main>
