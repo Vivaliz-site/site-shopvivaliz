@@ -1,4 +1,4 @@
-name: Remote PC Tunnel Health
+name: Remote PC Tunnel Compatibility Guard
 
 on:
   workflow_dispatch:
@@ -6,41 +6,27 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/remote-pc-tunnel-health.yml"
+      - ".github/workflows/remote-control-plane-health.yml"
 
 permissions:
   contents: read
 
 jobs:
-  validate:
+  validate-private-control-plane:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Check Fred-Win health endpoint
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --max-time 20 \
-            https://rce-shopvivaliz.trycloudflare.com/health \
-            | tee /tmp/health.json
-          python - <<'PY'
-          import json
-          data=json.load(open('/tmp/health.json', encoding='utf-8'))
-          assert data.get('status') == 'ok', data
-          print('REMOTE_PC_HEALTH_OK')
-          print('environment=' + str(data.get('environment')))
-          print('mcp_version=' + str(data.get('mcp_version')))
-          PY
+      - uses: actions/checkout@v4
 
-      - name: Check MCP tool discovery
+      - name: Verify canonical private relay contract
         run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --max-time 20 \
-            https://rce-shopvivaliz.trycloudflare.com/mcp/tools \
-            | tee /tmp/tools.json
-          python - <<'PY'
-          import json
-          data=json.load(open('/tmp/tools.json', encoding='utf-8'))
-          names={t.get('name') for t in data.get('tools', [])}
-          print('tools=' + ','.join(sorted(n for n in names if n)))
-          assert 'execute_command' in names, names
-          print('REMOTE_PC_MCP_DISCOVERY_OK')
-          PY
+          set -Eeuo pipefail
+          canonical=.github/workflows/remote-control-plane-health.yml
+          test -f "$canonical"
+          grep -F "127.0.0.1:5557/health" "$canonical" >/dev/null
+          grep -F "127.0.0.1:5558/health" "$canonical" >/dev/null
+          grep -F "REMOTE_CONTROL_PLANE_STATUS=COMPROVADO" "$canonical" >/dev/null
+          echo "REMOTE_PC_COMPATIBILITY=private-control-plane-only"
+          echo "CANONICAL_WORKFLOW=remote-control-plane-health.yml"
+          echo "FRED_RELAY=127.0.0.1:5557"
+          echo "KOCEPSV_RELAY=127.0.0.1:5558"
