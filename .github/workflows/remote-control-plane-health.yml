@@ -9,6 +9,7 @@ on:
       - 'ops/desktopkocepsv-remote-request.json'
       - 'tests/remote-control-plane-primary-contract-test.php'
       - 'tests/desktopkocepsv-remote-action-contract-test.php'
+      - 'tests/desktopkocepsv-private-relay-contract-test.php'
 
 permissions:
   contents: read
@@ -28,6 +29,7 @@ jobs:
           set -Eeuo pipefail
           php tests/remote-control-plane-primary-contract-test.php
           php tests/desktopkocepsv-remote-action-contract-test.php
+          php tests/desktopkocepsv-private-relay-contract-test.php
 
   health:
     if: github.event_name == 'workflow_dispatch'
