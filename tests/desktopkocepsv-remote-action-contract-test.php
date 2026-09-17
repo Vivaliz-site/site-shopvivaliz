@@ -9,6 +9,7 @@ foreach ([$workflow, $request] as $path) {
 $yml = (string) file_get_contents($workflow);
 $required = [
     'ops/desktopkocepsv-remote-request.json',
+    'runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]',
     'health)',
     'runtime_identity)',
     'http://127.0.0.1:5558/health',
@@ -16,12 +17,11 @@ $required = [
     'COMPUTERNAME',
     'whoami',
     'Action not allowlisted',
-    'StrictHostKeyChecking=yes',
 ];
 foreach ($required as $needle) {
     if (strpos($yml, $needle) === false) { fwrite(STDERR, "missing {$needle}\n"); exit(1); }
 }
-$forbidden = ['access_token','refresh_token','auth_token','device code','verification_uri','trycloudflare.com','inputs:\n      command:'];
+$forbidden = ['ubuntu@10.0.1.38','access_token','refresh_token','auth_token','device code','verification_uri','trycloudflare.com','inputs:\n      command:'];
 foreach ($forbidden as $needle) {
     if (stripos($yml, $needle) !== false) { fwrite(STDERR, "forbidden {$needle}\n"); exit(1); }
 }
