@@ -1,4 +1,4 @@
-﻿param(
+param(
     [ValidateSet('Ensure','InstallTask','Restart','KillForRecoveryTest','Status')]
     [string]$Mode = 'Ensure'
 )
@@ -16,7 +16,7 @@ $SupervisorLog = Join-Path $LogDir 'desktop-commander-supervisor.log'
 $CooldownFile = Join-Path $LogDir 'desktop-commander-auth-required.cooldown'
 $ConnectedMarker = Join-Path $LogDir 'desktop-commander-provider-connected.marker'
 $DeviceFile = $null
-$Package = '@wonderwhy-er/desktop-commander@0.2.47'
+$Package = '@wonderwhy-er/desktop-commander@0.2.48'
 $MarkerStaleSeconds = 240
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 

@@ -1,7 +1,7 @@
 param()
 $ErrorActionPreference = 'Stop'
 $Repo = 'C:\site-shopvivaliz'
-$Package = '@wonderwhy-er/desktop-commander@0.2.47'
+$Package = '@wonderwhy-er/desktop-commander@0.2.48'
 $MaxLogBytes = 5MB
 $AuthPattern = 'Persisted session invalid|Authenticating with Remote MCP server|Please complete authentication|Starting device authorization flow|device code|Authorization required'
 $ConnectedPattern = 'Device ready'
