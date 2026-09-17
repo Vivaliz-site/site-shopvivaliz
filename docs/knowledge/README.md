@@ -4,7 +4,7 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 
 ## Documentos principais
 
-- [`host-access.md`](host-access.md) — **bootstrap obrigatório de hosts, papéis, Desktop Commander, SSH e repositório para toda nova sessão/agente.**
+- [`host-access.md`](host-access.md) — **bootstrap obrigatório de hosts, papéis, GitHub Actions/private relay, OCI Bastion, Desktop Commander fallback, SSH e repositório para toda nova sessão/agente.**
 - [`project.md`](project.md) — visão geral, objetivo e módulos do sistema.
 - [`squad-chat.md`](squad-chat.md) — contrato, health check e providers do Squad Chat.
 - [`troubleshooting.md`](troubleshooting.md) — diagnóstico de erros HTTP, rede, integrações e deploy.
@@ -39,12 +39,18 @@ Antes de qualquer diagnóstico ou alteração, toda nova sessão deve ler, nesta
 3. `project.md` — entender o sistema e seus módulos;
 4. o documento específico da rotina afetada.
 
-Nunca recuperar credenciais de arquivos versionados. Use apenas secrets/runtime autorizado, chave local protegida ou Desktop Commander conectado.
+A ordem canônica de acesso a hosts é:
+
+1. **GitHub Actions/private relay**;
+2. **OCI Bastion** quando shell OCI direto for necessário;
+3. **Desktop Commander fallback** somente quando quota/provider estiverem disponíveis.
+
+Nunca recuperar credenciais de arquivos versionados. Use apenas secrets/runtime autorizado, chave local protegida, OCI Bastion ou transporte autenticado aprovado.
 
 ## Ordem recomendada para diagnóstico
 
 1. Identifique o sintoma e o erro real.
-2. Consulte `host-access.md` para confirmar ambiente e host.
+2. Consulte `host-access.md` para confirmar ambiente, host e rota canônica.
 3. Consulte `troubleshooting.md`.
 4. Valide o módulo correspondente no código.
 5. Use `testing.md` para reproduzir.
