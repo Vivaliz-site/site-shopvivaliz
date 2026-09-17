@@ -1,5 +1,10 @@
 # 🤖 Agentes Autônomos — Memória Consolidada
 
+<!-- SHOPVIVALIZ_HOST_BOOTSTRAP_V1 -->
+> 🔴 **BOOTSTRAP DE HOSTS OBRIGATÓRIO:** a fonte operacional canônica é [`knowledge/host-access.md`](knowledge/host-access.md), junto de [`knowledge/README.md`](knowledge/README.md) e [`knowledge/agent-rules.md`](knowledge/agent-rules.md).
+> Estado atual: `shopvivaliz-free-a1` = produção web/deploy (`137.131.149.55`, privado `10.0.1.112`); `always-free-arm-1787907847-26` = backend/MEI/M365/relay (`10.0.1.38`, sem IP público); `shopvivaliz-ai` / `137.131.156.17` = legado DEV/e-mail/testes, nunca produção web. O papel web das antigas E2 está aposentado; referências históricas abaixo não são destinos operacionais atuais. Prefira Remote Desktop Commander por nome do dispositivo.
+
+
 > **🔴 LEIA ISTO ANTES DE COMEÇAR**
 >
 > Múltiplos agentes diferentes (Claude, GPT, Gemini, etc) trabalham aqui em sessões isoladas **sem memória compartilhada**. Sem um lugar único, o mesmo bug é redescoberto do zero repetidas vezes.
