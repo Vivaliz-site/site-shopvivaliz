@@ -17,7 +17,11 @@ foreach ([
     'ShopVivaliz DESKTOP-KOCEPSV Relay 24h',
     'New-ScheduledTaskTrigger -AtStartup',
     'LogonType S4U',
-    'RunLevel Highest'
+    'RunLevel Highest',
+    "DefaultIngressHost = '137.131.149.55'",
+    "DefaultIngressPort = '22'",
+    'SHOPVIVALIZ_BACKEND_SSH_HOST',
+    'SHOPVIVALIZ_BACKEND_SSH_PORT'
 ] as $needle) {
     if (stripos($all, $needle) === false) { fwrite(STDERR, "FALHOU: relay sem {$needle}\n"); exit(1); }
 }
