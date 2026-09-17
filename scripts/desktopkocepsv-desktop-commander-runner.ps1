@@ -72,7 +72,7 @@ function Install-SessionRefreshPatch {
             if ((Test-Path -LiteralPath $candidateManifest) -and (Test-Path -LiteralPath $candidateEntry)) {
                 try {
                     $candidateIdentity = Get-Content -LiteralPath $candidateManifest -Raw | ConvertFrom-Json
-                    if ($candidateIdentity.name -eq '@wonderwhy-er/desktop-commander' -and $candidateIdentity.version -eq '0.2.47') {
+                    if ($candidateIdentity.name -eq '@wonderwhy-er/desktop-commander' -and $candidateIdentity.version -eq '0.2.48') {
                         $packageRoot = $candidate
                         Log 'PACKAGE_RESOLUTION=verified_hint'
                     }
@@ -102,7 +102,7 @@ function Install-SessionRefreshPatch {
         $entryPoint = Join-Path $packageRoot 'dist\index.js'
         if (-not (Test-Path -LiteralPath $packageManifest) -or -not (Test-Path -LiteralPath $entryPoint)) { throw 'Desktop Commander package root incomplete' }
         $manifest = Get-Content -LiteralPath $packageManifest -Raw | ConvertFrom-Json
-        if ($manifest.name -ne '@wonderwhy-er/desktop-commander' -or $manifest.version -ne '0.2.47') { throw 'Desktop Commander package identity mismatch' }
+        if ($manifest.name -ne '@wonderwhy-er/desktop-commander' -or $manifest.version -ne '0.2.48') { throw 'Desktop Commander package identity mismatch' }
         $packageRoot | Out-File -FilePath $PackageRootHint -Force -Encoding ascii
         Log 'PACKAGE_RESOLUTION=npx_then_hint_saved'
     }

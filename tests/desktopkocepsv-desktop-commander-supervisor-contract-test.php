@@ -13,7 +13,7 @@ $all = implode("\n", array_map('file_get_contents', $files));
 $runner = (string) file_get_contents($runnerPath);
 foreach ([
     'ShopVivaliz DESKTOP-KOCEPSV Desktop Commander 24h',
-    '@wonderwhy-er/desktop-commander@0.2.47',
+    '@wonderwhy-er/desktop-commander@0.2.48',
     'New-ScheduledTaskTrigger -AtStartup',
     'LogonType S4U',
     'RunLevel Highest',
