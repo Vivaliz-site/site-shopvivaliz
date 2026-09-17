@@ -1,0 +1,37 @@
+name: Temporary Site A1 Desktop Commander Reauth
+
+on:
+  push:
+    branches:
+      - docs/remote-control-plane-migration-20260917
+    paths:
+      - '.github/workflows/tmp-site-a1-dc-reauth-20260917.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  authorize:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 11
+    steps:
+      - name: Confirm site A1 identity
+        run: |
+          set -Eeuo pipefail
+          echo "HOST=$(hostname)"
+          echo "USER=$(id -un)"
+          test "$(hostname)" = "shopvivaliz-free-a1"
+
+      - name: Start official Desktop Commander device authorization
+        run: |
+          set -Eeuo pipefail
+          export HOME=/home/ubuntu
+          export XDG_CONFIG_HOME=/home/ubuntu/.config
+          export XDG_CACHE_HOME=/home/ubuntu/.cache
+          echo 'AUTH_WINDOW=600_SECONDS'
+          set +e
+          timeout 600s npx -y @wonderwhy-er/desktop-commander@0.2.48 remote --persist-session
+          rc=$?
+          set -e
+          echo "AUTH_CLIENT_RC=$rc"
+          exit 0
