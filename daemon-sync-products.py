@@ -17,6 +17,7 @@ from typing import Any
 
 API_BASE = "https://api.tiny.com.br/public-api/v3"
 CACHE_PATH = Path("storage/products-cache-ativos.json")
+VIDEO_SOURCES_PATH = Path("storage/product-video-sources.json")
 _RATE_LOCK = threading.Lock()
 _LAST_REQUEST = 0.0
 _MIN_REQUEST_INTERVAL = 1.10
@@ -178,6 +179,32 @@ def fetch_products_active(token: str) -> list[dict[str, Any]]:
     return products
 
 
+def load_video_sources() -> dict[str, dict[str, Any]]:
+    try:
+        payload = json.loads(VIDEO_SOURCES_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def merge_video_sources(product: dict[str, Any], registry: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    merged = dict(product)
+    product_id = str(merged.get("id") or merged.get("olist_product_id") or "").strip()
+    sku = str(merged.get("sku") or "").strip()
+    extra = registry.get(product_id) if product_id else None
+    if not isinstance(extra, dict) and sku:
+        extra = registry.get(f"sku:{sku}")
+    if not isinstance(extra, dict):
+        return merged
+    direct = str(extra.get("direct_url") or "").strip()
+    youtube = str(extra.get("youtube_url") or "").strip()
+    if not str(merged.get("video_url") or "").strip() and direct:
+        merged["video_url"] = direct
+    if youtube:
+        merged["youtube_url"] = youtube
+    return merged
+
+
 def load_previous_cache() -> dict[str, dict[str, Any]]:
     try:
         payload = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
@@ -307,6 +334,8 @@ def apply_kit_stock(products: list[dict[str, Any]]) -> int:
 
 
 def save_products(products: list[dict[str, Any]]) -> Path:
+    registry = load_video_sources()
+    products = [merge_video_sources(item, registry) for item in products]
     payload = {"total": len(products), "timestamp": datetime.now(timezone.utc).isoformat(), "itens": products}
     CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
     temporary = CACHE_PATH.with_suffix(".json.tmp")

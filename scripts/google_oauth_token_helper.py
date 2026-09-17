@@ -36,6 +36,7 @@ OPTIONAL_SCOPE_GROUPS = {
     ],
     "analytics": ["https://www.googleapis.com/auth/analytics.readonly"],
     "indexing": ["https://www.googleapis.com/auth/indexing"],
+    "youtube-upload": ["https://www.googleapis.com/auth/youtube.upload"],
 }
 SENSITIVE_TOKEN_KEYS = {"access_token", "refresh_token", "id_token"}
 

@@ -419,6 +419,7 @@ function svcr_products(): array
             'height'=>svcr_first_positive_number([$dimensions['altura'] ?? null,$dimensions['height'] ?? null,$item['height'] ?? null,$contentDimensions['height'] ?? null]),
             'length'=>svcr_first_positive_number([$dimensions['comprimento'] ?? null,$dimensions['length'] ?? null,$item['length'] ?? null,$contentDimensions['length'] ?? null]),
             'video_url'=>svcr_first_text([$item['video_url'] ?? '',$item['linkVideo'] ?? '',is_array($item['seo'] ?? null) ? ($item['seo']['linkVideo'] ?? '') : '',is_array($item['seo'] ?? null) ? ($item['seo']['urlVideo'] ?? '') : '',$content['video_url'] ?? '']),
+            'youtube_url'=>svcr_first_text([$item['youtube_url'] ?? '',$content['youtube_url'] ?? '']),
             'status'=>'active',
         ];
     }

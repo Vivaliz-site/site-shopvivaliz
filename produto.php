@@ -357,7 +357,8 @@ $galleryImages = array_slice($galleryImages, 0, 12);
 $related = $notFound ? [] : sv_product_enrich_many(sv_product_related($sku, $category, $name));
 $svNavCurrent = 'produto';
 $videoUrl = trim((string)($resolved['video_url'] ?? ''));
-$videoMedia = sv_product_video_media($videoUrl);
+$youtubeUrl = trim((string)($resolved['youtube_url'] ?? ''));
+$videoMedia = sv_product_video_choice(['video_url' => $videoUrl, 'youtube_url' => $youtubeUrl]);
 $videoEmbedUrl = trim((string)($videoMedia['src'] ?? ''));
 $videoMediaType = trim((string)($videoMedia['type'] ?? ''));
 

@@ -20,6 +20,14 @@ if (!is_file($mediaHelper)) {
         if (($youtube['type'] ?? '') !== 'iframe' || !str_contains((string)($youtube['src'] ?? ''), 'youtube.com/embed/dQw4w9WgXcQ')) {
             $failures[] = 'YouTube URLs must remain iframe embeds';
         }
+        if (!function_exists('sv_product_video_choice')) {
+            $failures[] = 'sv_product_video_choice() must exist';
+        } else {
+            $choice = sv_product_video_choice(['video_url' => 'https://shopvivaliz.com.br/a.mp4', 'youtube_url' => 'https://youtu.be/dQw4w9WgXcQ']);
+            if (($choice['src'] ?? '') !== 'https://shopvivaliz.com.br/a.mp4') $failures[] = 'direct video must win over YouTube';
+            $fallback = sv_product_video_choice(['video_url' => '', 'youtube_url' => 'https://youtu.be/dQw4w9WgXcQ']);
+            if (($fallback['type'] ?? '') !== 'iframe') $failures[] = 'YouTube must be used when direct video is absent';
+        }
     }
 }
 

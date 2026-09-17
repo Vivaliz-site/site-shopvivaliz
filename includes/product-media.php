@@ -27,3 +27,14 @@ function sv_product_video_media(string $videoUrl): array
 
     return [];
 }
+
+function sv_product_video_choice(array $product): array
+{
+    foreach (['video_url', 'youtube_url'] as $field) {
+        $url = trim((string)($product[$field] ?? ''));
+        if ($url === '') continue;
+        $media = sv_product_video_media($url);
+        if ($media !== []) return $media + ['source_field' => $field];
+    }
+    return [];
+}
