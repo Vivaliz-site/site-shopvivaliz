@@ -66,11 +66,11 @@ jobs:
           import urllib.request
 
           targets = [
-              ('http://127.0.0.1:5557/health', 5557, 'fred-win'),
-              ('http://127.0.0.1:5558/health', 5558, 'desktop-kocepsv'),
+              ('http://127.0.0.1:5557/health', 5557, 'fred-win', 'environment=fred-win'),
+              ('http://127.0.0.1:5558/health', 5558, 'desktop-kocepsv', 'environment=desktop-kocepsv'),
           ]
 
-          for url, port, expected_environment in targets:
+          for url, port, expected_environment, evidence_marker in targets:
               try:
                   with urllib.request.urlopen(url, timeout=10) as response:
                       status_code = response.status
@@ -97,7 +97,7 @@ jobs:
               if not mcp_version:
                   raise SystemExit(f'REMOTE_CONTROL_PLANE_STATUS=INCONCLUSIVE relay={port} mcp_version=missing')
 
-              print(f'environment={expected_environment}')
+              print(evidence_marker)
               print(f'mcp_version={mcp_version}')
               print(f'RELAY_{port}=ok')
 
