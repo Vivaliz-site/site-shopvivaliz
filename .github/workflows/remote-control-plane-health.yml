@@ -7,13 +7,16 @@ on:
       - '.github/workflows/remote-control-plane-health.yml'
       - '.github/workflows/fred-win-remote-action.yml'
       - '.github/workflows/desktopkocepsv-remote-action.yml'
+      - '.github/workflows/remote-host-action.yml'
       - 'ops/fredwin-request.json'
       - 'ops/desktopkocepsv-remote-request.json'
+      - 'ops/remote-host-request.json'
       - 'tests/remote-control-plane-primary-contract-test.php'
       - 'tests/fredwin-remote-primary-contract-test.php'
       - 'tests/fredwin-desktop-commander-relay-contract-test.php'
       - 'tests/desktopkocepsv-remote-action-contract-test.php'
       - 'tests/desktopkocepsv-private-relay-contract-test.php'
+      - 'tests/remote-host-action-contract-test.php'
 
 permissions:
   contents: read
@@ -36,6 +39,7 @@ jobs:
           php tests/fredwin-desktop-commander-relay-contract-test.php
           php tests/desktopkocepsv-remote-action-contract-test.php
           php tests/desktopkocepsv-private-relay-contract-test.php
+          php tests/remote-host-action-contract-test.php
 
   health:
     if: github.event_name == 'workflow_dispatch'
