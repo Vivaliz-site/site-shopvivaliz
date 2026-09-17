@@ -74,6 +74,17 @@ try {
         if ($LASTEXITCODE -ne 0) { Log "WARNING SMTP guard exit=$LASTEXITCODE" }
     }
 
+    if ($HostKey -eq 'DESKTOP-KOCEPSV') {
+        $DcSupervisor = Join-Path $Repo 'scripts\desktopkocepsv-desktop-commander-supervisor.ps1'
+        $DcCooldown = Join-Path $env:LOCALAPPDATA 'ShopVivaliz\DesktopCommander\logs\desktopkocepsv-desktop-commander-auth-required.cooldown'
+        if (Test-Path $DcSupervisor) {
+            Remove-Item $DcCooldown -Force -ErrorAction SilentlyContinue
+            Log 'Forcing DESKTOP-KOCEPSV Desktop Commander recovery'
+            & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $DcSupervisor -Mode Restart 2>&1 |
+                ForEach-Object { Log "desktop-commander-recovery: $_" }
+            if ($LASTEXITCODE -ne 0) { Log "WARNING Desktop Commander recovery exit=$LASTEXITCODE" }
+        }
+    }
 
     Log "DC_AND_RELAY_OWNED_BY_DEDICATED_WATCHDOGS=true"
 
