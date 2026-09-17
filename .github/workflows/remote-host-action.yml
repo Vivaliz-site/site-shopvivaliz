@@ -1,0 +1,79 @@
+name: Remote Host Action
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  execute:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve allowlisted target and action
+        id: request
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          TARGET="$(jq -r '.target // empty' ops/remote-host-request.json)"
+          ACTION="$(jq -r '.action // empty' ops/remote-host-request.json)"
+          case "$TARGET" in
+            shopvivaliz-free-a1|always-free-arm-1787907847-26) ;;
+            *) echo "Target not allowlisted: $TARGET" >&2; exit 3 ;;
+          esac
+          case "$ACTION" in
+            identity|repo_status) ;;
+            *) echo "Action not allowlisted: $ACTION" >&2; exit 4 ;;
+          esac
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+          echo "action=$ACTION" >> "$GITHUB_OUTPUT"
+
+      - name: Configure verified backend SSH
+        if: steps.request.outputs.target == 'always-free-arm-1787907847-26'
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${VM_KEY:-}" || { echo 'VM SSH key missing'; exit 2; }
+          test -n "${VM_HOSTS:-}" || { echo 'VM known_hosts missing'; exit 2; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+
+      - name: Site host identity
+        if: steps.request.outputs.target == 'shopvivaliz-free-a1' && steps.request.outputs.action == 'identity'
+        run: |
+          set -Eeuo pipefail
+          hostname
+          whoami
+          pwd
+
+      - name: Site host repo status
+        if: steps.request.outputs.target == 'shopvivaliz-free-a1' && steps.request.outputs.action == 'repo_status'
+        run: |
+          set -Eeuo pipefail
+          cd /home/ubuntu/shopvivaliz-deploy/repo
+          git branch --show-current
+          git status --porcelain
+          git rev-parse HEAD
+
+      - name: Backend host identity
+        if: steps.request.outputs.target == 'always-free-arm-1787907847-26' && steps.request.outputs.action == 'identity'
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/vmkey" ubuntu@10.0.1.38 'set -Eeuo pipefail; hostname; whoami; pwd'
+
+      - name: Backend host repo status
+        if: steps.request.outputs.target == 'always-free-arm-1787907847-26' && steps.request.outputs.action == 'repo_status'
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/vmkey" ubuntu@10.0.1.38 'set -Eeuo pipefail; cd /home/ubuntu/shopvivaliz-deploy/repo 2>/dev/null || cd /home/ubuntu/amazon-returns-deploy/repo 2>/dev/null || cd /home/ubuntu; git branch --show-current 2>/dev/null || true; git status --porcelain 2>/dev/null || true; git rev-parse HEAD 2>/dev/null || true'
+
+      - name: Cleanup SSH material
+        if: always()
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
