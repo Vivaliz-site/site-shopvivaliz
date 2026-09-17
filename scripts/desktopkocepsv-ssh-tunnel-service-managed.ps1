@@ -43,13 +43,25 @@ $KnownHostsCandidates = @(
 ) | Where-Object { $_ }
 $KeyPath = $KeyCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 $KnownHostsPath = $KnownHostsCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-$VMHost = $env:SHOPVIVALIZ_BACKEND_SSH_HOST
-$VMPortRaw = $env:SHOPVIVALIZ_BACKEND_SSH_PORT
-$VMUser = 'ubuntu'
-if ([string]::IsNullOrWhiteSpace($VMHost) -or [string]::IsNullOrWhiteSpace($VMPortRaw)) {
-    Log 'ERROR Bastion endpoint missing; set SHOPVIVALIZ_BACKEND_SSH_HOST and SHOPVIVALIZ_BACKEND_SSH_PORT'
-    exit 5
+
+# The Windows hosts can reach the site A1 SSH ingress directly. Keep machine
+# environment variables as an explicit override, but do not let a missing
+# variable permanently disable the watchdog after reboot or account changes.
+$DefaultIngressHost = '137.131.149.55'
+$DefaultIngressPort = '22'
+$VMHost = [string][Environment]::GetEnvironmentVariable('SHOPVIVALIZ_BACKEND_SSH_HOST', 'Machine')
+$VMPortRaw = [string][Environment]::GetEnvironmentVariable('SHOPVIVALIZ_BACKEND_SSH_PORT', 'Machine')
+$VMHost = $VMHost.Trim()
+$VMPortRaw = $VMPortRaw.Trim()
+if ([string]::IsNullOrWhiteSpace($VMHost)) {
+    $VMHost = $DefaultIngressHost
+    Log 'SSH ingress host override missing; using canonical site A1 ingress'
 }
+if ([string]::IsNullOrWhiteSpace($VMPortRaw)) {
+    $VMPortRaw = $DefaultIngressPort
+    Log 'SSH ingress port override missing; using canonical site A1 ingress port'
+}
+$VMUser = 'ubuntu'
 $VMPort = [int]$VMPortRaw
 if (-not $KeyPath) { Log ('ERROR private key missing; checked: ' + ($KeyCandidates -join ' | ')); exit 2 }
 if (-not $KnownHostsPath) { Log ('ERROR known_hosts missing; checked: ' + ($KnownHostsCandidates -join ' | ')); exit 3 }
