@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   repair:
-    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy, production]
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 5
     steps:
       - name: Repair VM2 persistent Desktop Commander identity

@@ -39,6 +39,12 @@ jobs:
             runtime_identity)
               echo 'action=runtime_identity' >> "$GITHUB_OUTPUT"
               ;;
+            audit_fredwin_runtime)
+              echo 'action=audit_fredwin_runtime' >> "$GITHUB_OUTPUT"
+              FIXED_COMMAND="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"\$ErrorActionPreference='Stop'; Write-Output 'FREDWIN_RUNTIME_AUDIT_BEGIN'; Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,LastBootUpTime | ConvertTo-Json -Compress; Get-CimInstance Win32_Process | ForEach-Object { \$ownerPid=\$_.ProcessId; [pscustomobject]@{ProcessId=\$ownerPid; Name=\$_.Name; Path=\$_.ExecutablePath} } | ConvertTo-Json -Compress; Get-CimInstance Win32_Service | Where-Object { \$_.Name -like 'shopvivaliz*' } | Select-Object Name,State,StartMode | ConvertTo-Json -Compress; Get-ScheduledTask | Where-Object { \$_.TaskName -like 'ShopVivaliz*' } | ForEach-Object { \$info = Get-ScheduledTaskInfo -TaskName \$_.TaskName; \$last = if (\$null -ne \$info.LastRunTime) { \$info.LastRunTime.ToString('o') } else { '' }; \$next = if (\$null -ne \$info.NextRunTime) { \$info.NextRunTime.ToString('o') } else { '' }; [pscustomobject]@{Task=\$_.TaskName; State=\$_.State; LastRunTime=\$last; NextRunTime=\$next} } | ConvertTo-Json -Compress; Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run' -ErrorAction SilentlyContinue | ConvertTo-Json -Compress; Get-NetTCPConnection -LocalPort 5557 -ErrorAction SilentlyContinue | Select-Object LocalAddress,LocalPort,State,OwningProcess | ConvertTo-Json -Compress; Write-Output 'FREDWIN_RUNTIME_AUDIT_END'\""
+              CMD_B64="$(printf '%s' "$FIXED_COMMAND" | base64 -w0)"
+              echo "command_b64=$CMD_B64" >> "$GITHUB_OUTPUT"
+              ;;
             *)
               echo "Action not allowlisted: $ACTION" >&2
               exit 3
@@ -107,6 +113,37 @@ jobs:
               raise SystemExit('FRED_WIN_RUNTIME_IDENTITY=invalid_output')
           print('\n'.join(allowed))
           print('FRED_WIN_RUNTIME_IDENTITY=ok')
+          PY"
+
+      - name: Execute fixed runtime audit action
+        if: steps.action.outputs.action == 'audit_fredwin_runtime'
+        run: |
+          set -Eeuo pipefail
+          CMD_B64="${{ steps.action.outputs.command_b64 }}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/vmkey" ubuntu@10.0.1.38 "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
+          import base64
+          import json
+          import os
+          import urllib.request
+
+          fixed = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
+          body = json.dumps({'params': {'command': fixed, 'timeout': 60}}).encode('utf-8')
+          request = urllib.request.Request(
+              'http://127.0.0.1:5557/mcp/tool/execute_command',
+              data=body,
+              headers={'Content-Type': 'application/json'},
+              method='POST',
+          )
+          with urllib.request.urlopen(request, timeout=70) as response:
+              payload = json.loads(response.read().decode('utf-8'))
+          result = payload.get('result') or {}
+          output = str(result.get('output') or '')
+          if result.get('success') is not True:
+              raise SystemExit('FRED_WIN_RUNTIME_AUDIT=failed')
+          if 'FREDWIN_RUNTIME_AUDIT_BEGIN' not in output or 'FREDWIN_RUNTIME_AUDIT_END' not in output:
+              raise SystemExit('FRED_WIN_RUNTIME_AUDIT=invalid_output')
+          print(output)
+          print('FRED_WIN_RUNTIME_AUDIT=ok')
           PY"
 
       - name: Cleanup SSH material
