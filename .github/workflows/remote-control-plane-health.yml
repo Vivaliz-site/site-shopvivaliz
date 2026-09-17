@@ -5,7 +5,10 @@ on:
   pull_request:
     paths:
       - '.github/workflows/remote-control-plane-health.yml'
+      - '.github/workflows/desktopkocepsv-remote-action.yml'
+      - 'ops/desktopkocepsv-remote-request.json'
       - 'tests/remote-control-plane-primary-contract-test.php'
+      - 'tests/desktopkocepsv-remote-action-contract-test.php'
 
 permissions:
   contents: read
@@ -20,8 +23,11 @@ jobs:
     timeout-minutes: 4
     steps:
       - uses: actions/checkout@v4
-      - name: Verify remote control plane contract
-        run: php tests/remote-control-plane-primary-contract-test.php
+      - name: Verify remote control plane contracts
+        run: |
+          set -Eeuo pipefail
+          php tests/remote-control-plane-primary-contract-test.php
+          php tests/desktopkocepsv-remote-action-contract-test.php
 
   health:
     if: github.event_name == 'workflow_dispatch'
