@@ -1,5 +1,5 @@
 {
   "action": "health",
-  "requested_at": "2026-09-08T17:43:35Z",
-  "reason": "Restore default Fred-Win health check after completed runtime audit"
+  "requested_at": "2026-09-17T00:00:00Z",
+  "reason": "Primary private-relay health check"
 }
