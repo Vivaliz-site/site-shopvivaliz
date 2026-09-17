@@ -1,0 +1,73 @@
+name: Temporary KOCEPSV DC npm repair
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tmp-kocepsv-npm-repair-20260917.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 8
+    steps:
+      - name: Configure verified VM SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+
+      - name: Repair KOCEPSV through Tailscale peer
+        run: |
+          set -Eeuo pipefail
+          SSH_VM=(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@10.0.1.38)
+          desk_ip="$(${SSH_VM[@]} 'tailscale status --json' | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next((next((x for x in (p.get("TailscaleIPs") or []) if ":" not in x), "") for p in (d.get("Peer") or {}).values() if "DESKTOP-KOCEPSV" in str(p.get("HostName") or "").upper()), ""))')"
+          test -n "$desk_ip"
+          ${SSH_VM[@]} "timeout 4 bash -c '</dev/tcp/$desk_ip/22'"
+          ssh -fNT -o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" -L "32224:$desk_ip:22" ubuntu@10.0.1.38
+          sleep 2
+          ssh-keyscan -T 5 -p 32224 127.0.0.1 2>/dev/null > /tmp/kocepsv.hosts
+          test -s /tmp/kocepsv.hosts
+          chmod 600 /tmp/kocepsv.hosts
+          cat > /tmp/repair.ps1 <<'PS'
+          $ErrorActionPreference='Stop'
+          $env:USERPROFILE='C:\Users\user'
+          $env:HOME='C:\Users\user'
+          $env:APPDATA='C:\Users\user\AppData\Roaming'
+          $env:LOCALAPPDATA='C:\Users\user\AppData\Local'
+          Set-Location 'C:\site-shopvivaliz'
+          schtasks /End /TN 'ShopVivaliz DESKTOP-KOCEPSV Desktop Commander 24h' 2>$null | Out-Null
+          Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match '@wonderwhy-er/desktop-commander@0\.2\.(47|48).*remote' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+          Start-Sleep -Seconds 2
+          $npxRoot=Join-Path $env:LOCALAPPDATA 'npm-cache\_npx'
+          if (Test-Path $npxRoot) { Remove-Item $npxRoot -Recurse -Force -ErrorAction Stop }
+          Remove-Item 'C:\site-shopvivaliz\logs\desktopkocepsv-desktop-commander-auth-required.cooldown' -Force -ErrorAction SilentlyContinue
+          schtasks /Run /TN 'ShopVivaliz DESKTOP-KOCEPSV Desktop Commander 24h' | Out-Null
+          Start-Sleep -Seconds 20
+          & 'C:\site-shopvivaliz\scripts\desktopkocepsv-desktop-commander-status.ps1'
+          Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match '@wonderwhy-er/desktop-commander@0\.2\.(47|48).*remote' } | ForEach-Object { if ($_.CommandLine -match '@wonderwhy-er/desktop-commander@(0\.2\.\d+)') { 'ACTIVE_VERSION=' + $Matches[1] } }
+          PS
+          enc="$(iconv -f UTF-8 -t UTF-16LE /tmp/repair.ps1 | base64 -w0)"
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/tmp/kocepsv.hosts -p 32224 -i "$HOME/.ssh/vmkey" user@127.0.0.1 "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $enc" | tee /tmp/kocepsv-repair.txt
+
+      - name: Upload repair evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kocepsv-dc-repair-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/kocepsv-repair.txt
+          if-no-files-found: warn
+
+      - name: Cleanup
+        if: always()
+        run: |
+          pkill -f '32224:' || true
+          rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts" /tmp/kocepsv.hosts /tmp/repair.ps1

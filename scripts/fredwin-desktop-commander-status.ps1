@@ -35,7 +35,7 @@ function Get-LauncherRoots([object[]]$Launchers) {
 function Get-CanonicalRemoteLaunchers {
     $matches = @(Get-DesktopCommanderRemoteLaunchers | Where-Object {
         $cmd = [string]$_.CommandLine
-        ($cmd -match '@wonderwhy-er/desktop-commander@0\.2\.47.*\bremote\b.*--persist-session') -or
+        ($cmd -match '@wonderwhy-er/desktop-commander@0\.2\.48.*\bremote\b.*--persist-session') -or
         ($cmd -match '@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js.*\bremote\b.*--persist-session')
     })
     return @(Get-LauncherRoots $matches)
@@ -44,7 +44,7 @@ function Get-NonCanonicalRemoteLaunchers {
     $all = @(Get-DesktopCommanderRemoteLaunchers)
     $canonicalProcesses = @($all | Where-Object {
         $cmd = [string]$_.CommandLine
-        ($cmd -match '@wonderwhy-er/desktop-commander@0\.2\.47.*\bremote\b.*--persist-session') -or
+        ($cmd -match '@wonderwhy-er/desktop-commander@0\.2\.48.*\bremote\b.*--persist-session') -or
         ($cmd -match '@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js.*\bremote\b.*--persist-session')
     })
     $canonicalIds = @($canonicalProcesses.ProcessId)

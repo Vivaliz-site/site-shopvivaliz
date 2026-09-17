@@ -1,0 +1,73 @@
+name: Temporary Windows DC version fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/tmp-windows-dc-version-fix-20260917.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: RED - prove stale Windows DC matcher is caught
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if php tests/windows-desktop-commander-version-contract-test.php > /tmp/red.out 2>&1; then
+            cat /tmp/red.out
+            echo 'Expected RED test to fail before implementation' >&2
+            exit 1
+          fi
+          cat /tmp/red.out
+          grep -q 'stale Windows DC 0.2.47 pin remains' /tmp/red.out
+
+      - name: GREEN - update active Windows DC version matchers
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          files = [
+              Path('scripts/fredwin-desktop-commander-supervisor.ps1'),
+              Path('scripts/fredwin-desktop-commander-status.ps1'),
+              Path('scripts/desktopkocepsv-desktop-commander-supervisor.ps1'),
+              Path('scripts/desktopkocepsv-desktop-commander-status.ps1'),
+              Path('tests/fredwin-desktop-commander-supervisor-contract-test.php'),
+              Path('tests/desktopkocepsv-desktop-commander-supervisor-contract-test.php'),
+          ]
+          for path in files:
+              text = path.read_text(encoding='utf-8-sig')
+              updated = text.replace('0.2.47', '0.2.48').replace(r'0\.2\.47', r'0\.2\.48')
+              if updated == text:
+                  raise SystemExit(f'expected stale Windows DC matcher not found in {path}')
+              path.write_text(updated, encoding='utf-8')
+          PY
+          php tests/windows-desktop-commander-version-contract-test.php
+          php tests/fredwin-desktop-commander-supervisor-contract-test.php
+          php tests/desktopkocepsv-desktop-commander-supervisor-contract-test.php
+
+      - name: Commit implementation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'shopvivaliz-ops'
+          git config user.email 'shopvivaliz@gmail.com'
+          git add \
+            scripts/fredwin-desktop-commander-supervisor.ps1 \
+            scripts/fredwin-desktop-commander-status.ps1 \
+            scripts/desktopkocepsv-desktop-commander-supervisor.ps1 \
+            scripts/desktopkocepsv-desktop-commander-status.ps1 \
+            tests/fredwin-desktop-commander-supervisor-contract-test.php \
+            tests/desktopkocepsv-desktop-commander-supervisor-contract-test.php
+          git commit -m 'fix: align Windows Desktop Commander matcher to 0.2.48'
+          git push origin HEAD:main

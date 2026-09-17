@@ -1,0 +1,80 @@
+name: Temporary DC Windows Recovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/tmp-dc-windows-recover-20260917.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  recover:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Update Windows Desktop Commander pin
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          files = [
+              Path('scripts/fredwin-desktop-commander-runner.ps1'),
+              Path('scripts/fredwin-desktop-commander-supervisor.ps1'),
+              Path('scripts/desktopkocepsv-desktop-commander-runner.ps1'),
+              Path('scripts/desktopkocepsv-desktop-commander-supervisor.ps1'),
+          ]
+          old='@wonderwhy-er/desktop-commander@0.2.47'
+          new='@wonderwhy-er/desktop-commander@0.2.48'
+          for p in files:
+              text=p.read_text(encoding='utf-8-sig')
+              if old not in text and new not in text:
+                  raise SystemExit(f'package pin not found in {p}')
+              p.write_text(text.replace(old,new), encoding='utf-8')
+          PY
+          if ! git diff --quiet; then
+            git config user.name 'shopvivaliz-ops'
+            git config user.email 'shopvivaliz@gmail.com'
+            git add scripts/fredwin-desktop-commander-runner.ps1 scripts/fredwin-desktop-commander-supervisor.ps1 scripts/desktopkocepsv-desktop-commander-runner.ps1 scripts/desktopkocepsv-desktop-commander-supervisor.ps1
+            git commit -m 'fix: update Windows Desktop Commander to 0.2.48'
+            git push origin HEAD:main
+          fi
+      - name: Configure verified VM SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+      - name: Recover Windows agents through private relays
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import base64, json, os, subprocess
+          ssh=['ssh','-o','BatchMode=yes','-o','ConnectTimeout=10','-o','StrictHostKeyChecking=yes','-o','UserKnownHostsFile='+os.path.expanduser('~/.ssh/known_hosts'),'-i',os.path.expanduser('~/.ssh/vmkey'),'ubuntu@10.0.1.38']
+          targets=[
+            (5557,"powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"& { $ErrorActionPreference='Stop'; Set-Location 'C:\\site-shopvivaliz'; git fetch origin main | Out-Null; git restore --source=origin/main -- scripts/fredwin-desktop-commander-runner.ps1 scripts/fredwin-desktop-commander-supervisor.ps1; Remove-Item 'C:\\site-shopvivaliz\\logs\\desktop-commander-auth-required.cooldown' -Force -ErrorAction SilentlyContinue; & 'C:\\site-shopvivaliz\\scripts\\fredwin-desktop-commander-supervisor.ps1' -Mode Restart }\""),
+            (5558,"powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"& { $ErrorActionPreference='Stop'; Set-Location 'C:\\site-shopvivaliz'; git fetch origin main | Out-Null; git restore --source=origin/main -- scripts/desktopkocepsv-desktop-commander-runner.ps1 scripts/desktopkocepsv-desktop-commander-supervisor.ps1; Remove-Item 'C:\\site-shopvivaliz\\logs\\desktopkocepsv-desktop-commander-auth-required.cooldown' -Force -ErrorAction SilentlyContinue; & 'C:\\site-shopvivaliz\\scripts\\desktopkocepsv-desktop-commander-supervisor.ps1' -Mode Restart }\""),
+          ]
+          for port,cmd in targets:
+              enc=base64.b64encode(cmd.encode()).decode()
+              code=f'''import base64,json,urllib.request\ncmd=base64.b64decode("{enc}").decode()\nbody=json.dumps({{"params":{{"command":cmd,"timeout":240}}}}).encode()\nreq=urllib.request.Request("http://127.0.0.1:{port}/mcp/tool/execute_command",data=body,headers={{"Content-Type":"application/json"}},method="POST")\ntry:\n  with urllib.request.urlopen(req,timeout=250) as r: payload=json.loads(r.read().decode())\n  result=payload.get("result") or {{}}\n  print(json.dumps({{"ok":result.get("success") is True,"output":str(result.get("output") or "")[:1200]}}))\nexcept Exception as e:\n  print(json.dumps({{"ok":False,"error":type(e).__name__,"message":str(e)}}))\n'''
+              cp=subprocess.run(ssh+['python3 -'],input=code,text=True,capture_output=True,timeout=270)
+              print(f'PORT={port} RC={cp.returncode}')
+              print(cp.stdout[-2000:])
+          PY
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"

@@ -1,4 +1,4 @@
-﻿param(
+param(
     [ValidateSet('Ensure','InstallTask','Restart','KillForRecoveryTest','Status')]
     [string]$Mode = 'Ensure'
 )
@@ -16,7 +16,7 @@ $SupervisorLog = Join-Path $LogDir 'desktop-commander-supervisor.log'
 $CooldownFile = Join-Path $LogDir 'desktop-commander-auth-required.cooldown'
 $ConnectedMarker = Join-Path $LogDir 'desktop-commander-provider-connected.marker'
 $DeviceFile = $null
-$Package = '@wonderwhy-er/desktop-commander@0.2.47'
+$Package = '@wonderwhy-er/desktop-commander@0.2.48'
 $MarkerStaleSeconds = 240
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
@@ -99,7 +99,7 @@ function Get-LauncherRoots([object[]]$Launchers) {
 }
 function Test-CanonicalRemoteLauncher([object]$Launcher) {
     $cmd = [string]$Launcher.CommandLine
-    if ($cmd -match '@wonderwhy-er/desktop-commander@0\.2\.47.*\bremote\b.*--persist-session') { return $true }
+    if ($cmd -match '@wonderwhy-er/desktop-commander@0\.2\.48.*\bremote\b.*--persist-session') { return $true }
     return ($Launcher.Name -eq 'node.exe' -and
         $cmd -match '@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js"?\s+remote\b.*--persist-session' -and
         (Test-LauncherOwnedByRunner $Launcher))
