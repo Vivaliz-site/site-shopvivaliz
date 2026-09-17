@@ -5,6 +5,14 @@
 
 > **REGRA CRÍTICA:** o estado do Fred-Win só pode ser classificado pela rota privada canônica descrita neste documento. Falha em endpoint histórico, ausência de conector direto na sessão ou falta de evidência não significam que o Fred-Win está inativo.
 
+## Prioridade operacional
+
+1. **GitHub Actions/private relay** — caminho primário para health e ações allowlisted.
+2. **OCI Bastion** — quando for necessário shell direto em um host OCI da rota.
+3. **Desktop Commander fallback** — somente quando quota/provider estiverem disponíveis.
+
+O Desktop Commander não é a fonte autoritativa de reachability do Fred-Win.
+
 ## Arquitetura oficial
 
 ```text
