@@ -84,6 +84,14 @@ try {
                 ForEach-Object { Log "desktop-commander-recovery: $_" }
             if ($LASTEXITCODE -ne 0) { Log "WARNING Desktop Commander recovery exit=$LASTEXITCODE" }
         }
+
+        $RelayBootstrap = Join-Path $Repo 'scripts\desktopkocepsv-remote-bootstrap.ps1'
+        if (Test-Path $RelayBootstrap) {
+            Log 'Ensuring DESKTOP-KOCEPSV private relay after sync'
+            & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $RelayBootstrap -Mode Ensure 2>&1 |
+                ForEach-Object { Log "private-relay-recovery: $_" }
+            if ($LASTEXITCODE -ne 0) { Log "WARNING private relay recovery exit=$LASTEXITCODE" }
+        }
     }
 
     Log "DC_AND_RELAY_OWNED_BY_DEDICATED_WATCHDOGS=true"
