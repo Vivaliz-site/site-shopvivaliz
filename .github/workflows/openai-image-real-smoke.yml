@@ -1,12 +1,8 @@
 name: OpenAI Image Real Smoke
 
+# Manual-only: this workflow spends OpenAI image tokens and must never run from push/schedule.
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/openai-image-real-smoke.yml'
   workflow_dispatch:
-
 permissions:
   contents: read
 
