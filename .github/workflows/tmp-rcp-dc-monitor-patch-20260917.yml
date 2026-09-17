@@ -1,0 +1,42 @@
+name: Temporary RCP DC monitor semantic patch
+
+on:
+  push:
+    branches:
+      - tmp/rcp-dc-monitor-patch-20260917-run2
+    paths:
+      - '.github/workflows/tmp-rcp-dc-monitor-patch-20260917.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: tmp/rcp-dc-monitor-patch-20260917-run2
+      - name: Apply exact semantic patch
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/desktop-commander-24h-health.yml')
+          s = p.read_text()
+          old1 = '# Desktop Commander 24h Control Plane Status'
+          old2 = 'Sanitized four-host health only. Provider credentials, session data, private keys and device-state contents are never published here.'
+          if old1 not in s or old2 not in s:
+              raise SystemExit('expected semantic anchors missing')
+          s = s.replace(old1, '# Desktop Commander fallback/provider health')
+          s = s.replace(old2, 'Desktop Commander fallback/provider health only. Sanitized four-host provider status; this is not the primary host reachability gate. Provider credentials, session data, private keys and device-state contents are never published here.')
+          p.write_text(s)
+          PY
+          rm -f .github/workflows/tmp-rcp-dc-monitor-patch-20260917.yml
+          git diff --check
+          git config user.name 'fredmourao-ai'
+          git config user.email 'fredmourao@gmail.com'
+          git add .github/workflows/desktop-commander-24h-health.yml .github/workflows/tmp-rcp-dc-monitor-patch-20260917.yml
+          git commit -m 'refactor: mark dc monitor as fallback provider health'
+          git push origin HEAD:docs/remote-control-plane-migration-20260917
