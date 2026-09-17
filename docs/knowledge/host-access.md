@@ -10,17 +10,27 @@ Antes de diagnosticar, alterar ou validar qualquer ambiente, o agente deve:
 2. identificar o host correto pelo papel atual;
 3. confirmar o acesso com evidência (`hostname`, `whoami`, diretório e, quando aplicável, `git status`);
 4. nunca assumir que um IP antigo continua sendo produção;
-5. preferir Desktop Commander quando o dispositivo estiver conectado; usar SSH como fallback autorizado.
+5. seguir a ordem canônica de acesso abaixo e nunca transformar indisponibilidade do Desktop Commander em indisponibilidade do host.
+
+## Ordem canônica de acesso
+
+1. **GitHub Actions/private relay** — primeira opção para automação, health e ações allowlisted.
+2. **OCI Bastion** — usar quando for necessário shell operacional direto em host OCI.
+3. **Desktop Commander fallback** — usar somente quando quota/provider estiverem disponíveis e quando esse transporte for realmente necessário.
+
+O Desktop Commander não é mais o plano de controle primário da ShopVivaliz. Falha de quota, provider disconnect ou `AUTH_REQUIRED` do DC não significa, por si só, que o host esteja indisponível.
 
 ## Hosts operacionais atuais
 
-| Host | IP | Papel | Desktop Commander |
+| Host | IP | Papel | Controle primário |
 |---|---:|---|---|
-| `shopvivaliz-free-a1` | origin `137.131.149.55`, privado `10.0.1.112` | site/web/deploy de produção | dispositivo `shopvivaliz-free-a1` |
-| `always-free-arm-1787907847-26` | privado `10.0.1.38`, sem IP publico | backend, MEI, M365 e relay Fred-Win | dispositivo `always-free-arm-1787907847-26` |
-| `shopvivaliz-ai` | `137.131.156.17` | DEV legado / e-mail / testes; **não tratar como produção web** | pode aparecer offline/legado |
+| `shopvivaliz-free-a1` | origin `137.131.149.55`, privado `10.0.1.112` | site/web/deploy de produção | runner `shopvivaliz-a1-deploy` / GitHub Actions |
+| `always-free-arm-1787907847-26` | privado `10.0.1.38`, sem IP público | backend, MEI, M365 e relays Windows | GitHub Actions + SSH privado |
+| `LAPTOP-NIG4IFUU` | sem IP público canônico | Fred-Win | backend A1 -> `127.0.0.1:5557` -> reverse SSH -> Windows |
+| `DESKTOP-KOCEPSV` | sem IP público canônico | desktop Windows | backend A1 -> `127.0.0.1:5558` -> reverse SSH -> Windows |
+| `shopvivaliz-ai` | `137.131.156.17` | DEV legado / e-mail / testes; **não tratar como produção web** | legado |
 
-A arquitetura atual deve ser confirmada no código e nos hosts antes de qualquer intervenção. Se houver divergência entre este arquivo e evidência ao vivo, pare a hipótese e atualize a documentação com a evidência encontrada.
+A arquitetura atual deve ser confirmada no código e nos hosts antes de qualquer intervenção. Se houver divergência entre este arquivo e evidência ao vivo, trate o estado como inconclusivo e atualize a documentação com a evidência encontrada.
 
 ## Produção web/deploy
 
@@ -41,9 +51,69 @@ shared/     estado/segredos/runtime persistentes
 
 Nunca editar diretamente `current/` nem `releases/<ativa>/`.
 
-## SSH
+## Administração das duas VMs OCI
 
-SSH publico direto esta desabilitado. GitHub Actions administrativos usam o runner `shopvivaliz-a1-deploy`: site por `127.0.0.1` e backend por `10.0.1.38`. Operadores externos usam OCI Bastion ou Remote Desktop Commander.
+O caminho versionado e allowlisted é `.github/workflows/remote-host-action.yml` com request em `ops/remote-host-request.json`.
+
+Targets aceitos:
+
+```text
+shopvivaliz-free-a1
+always-free-arm-1787907847-26
+```
+
+Ações aceitas:
+
+```text
+identity
+repo_status
+```
+
+`shopvivaliz-free-a1` é administrado localmente pelo runner `shopvivaliz-a1-deploy`. `always-free-arm-1787907847-26` é alcançado por SSH privado em `10.0.1.38` com `StrictHostKeyChecking=yes`. Nenhuma dessas ações deve aceitar comando arbitrário ou editar `/home/ubuntu/shopvivaliz-deploy/current`.
+
+## Relays Windows privados
+
+### Fred-Win
+
+Rota canônica:
+
+```text
+GitHub Actions -> shopvivaliz-a1-deploy -> SSH privado 10.0.1.38 -> 127.0.0.1:5557 -> reverse SSH -> LAPTOP-NIG4IFUU
+```
+
+Health esperado:
+
+```text
+status=ok
+environment=fred-win
+mcp_version=<não vazio>
+```
+
+Referência: `docs/FRED-WIN-PRIVATE-RELAY.md`.
+
+### DESKTOP-KOCEPSV
+
+Rota canônica:
+
+```text
+GitHub Actions -> shopvivaliz-a1-deploy -> SSH privado 10.0.1.38 -> 127.0.0.1:5558 -> reverse SSH -> DESKTOP-KOCEPSV
+```
+
+Health esperado:
+
+```text
+status=ok
+environment=desktop-kocepsv
+mcp_version=<não vazio>
+```
+
+Referência: `docs/DESKTOP-KOCEPSV-PRIVATE-RELAY.md`.
+
+Os relays são privados. Não reativar `trycloudflare.com`, não expor MCP em `0.0.0.0` e não substituir reverse SSH privado por endpoint público.
+
+## SSH e OCI Bastion
+
+SSH público direto está desabilitado para os hosts de produção. GitHub Actions administrativos usam o runner `shopvivaliz-a1-deploy`: site localmente e backend por `10.0.1.38`. Operadores externos usam **OCI Bastion** quando shell direto for necessário.
 
 Usuário padrão das VMs Oracle:
 
@@ -61,36 +131,36 @@ GitHub Actions: ORACLE_VM_SSH_KEY
 Ambiente de agente/projeto: SHOPVIVALIZ_VM_SSH_KEY (quando fornecido pelo runtime)
 ```
 
-Exemplos:
+No runner/VCN:
 
 ```bash
-ssh -i ~/.ssh/id_rsa ubuntu@127.0.0.1  # somente no runner self-hosted do site
-ssh -i ~/.ssh/id_rsa ubuntu@10.0.1.38  # somente dentro da VCN
-ssh -i ~/.ssh/id_rsa ubuntu@137.131.156.17
+ssh -i ~/.ssh/id_rsa ubuntu@10.0.1.38
 ```
 
-No Windows:
+No Windows, quando shell OCI for necessário, usar OCI Bastion. Não reabilitar SSH público direto apenas para facilitar operação.
 
-```powershell
-Use Remote Desktop Commander ou OCI Bastion; SSH publico direto esta desabilitado.
-```
+## Desktop Commander fallback
 
-## Desktop Commander
+O Desktop Commander continua suportado como transporte de fallback e possui monitor próprio de provider. Ele não é a fonte autoritativa de reachability dos hosts.
 
-Quando houver dispositivos conectados, preferir o acesso por nome do dispositivo em vez de depender de IP/chave manual:
+Dispositivos conhecidos podem incluir:
 
 ```text
 shopvivaliz-free-a1
 always-free-arm-1787907847-26
+LAPTOP-NIG4IFUU
+DESKTOP-KOCEPSV
 ```
 
-Antes de operar, execute ping/listagem do dispositivo e depois valide:
+Se for utilizado, validar o dispositivo e depois executar evidência básica:
 
 ```bash
 hostname
 whoami
 pwd
 ```
+
+Quota esgotada, `AUTH_REQUIRED` ou provider desconectado devem ser classificados como problema do transporte DC, não como prova de host offline.
 
 ## Repositório principal
 
@@ -123,15 +193,18 @@ providers presente
 
 `configured=true` sozinho não prova autenticação do provider.
 
+Para o novo plano de controle remoto, o health autoritativo é `.github/workflows/remote-control-plane-health.yml`. Ele não deve inspecionar `PROVIDER_CONNECTED`, `AUTH_REQUIRED` nem quota do Desktop Commander para decidir reachability.
+
 ## Onde esta informação deve aparecer
 
 - `docs/knowledge/host-access.md` — fonte canônica;
 - `docs/knowledge/README.md` — índice;
+- `docs/FRED-WIN-PRIVATE-RELAY.md` — contrato do relay 5557;
+- `docs/DESKTOP-KOCEPSV-PRIVATE-RELAY.md` — contrato do relay 5558;
+- `docs/DESKTOP-COMMANDER-24H.md` — saúde do transporte/provider DC como fallback;
 - `AGENTS.md` — regra de bootstrap para qualquer agente;
 - `CLAUDE.md` — bootstrap para Claude;
-- `README.md` — ponte para a Knowledge Base;
-- instruções de projeto/assistente — devem apontar para este documento e para `docs/knowledge/`;
-- memória do produto, quando habilitada — guardar apenas o mapa não secreto de hosts e a regra de consultar a Knowledge Base; nunca guardar chave privada ou token.
+- `README.md` — ponte para a Knowledge Base.
 
 ## Segurança
 
