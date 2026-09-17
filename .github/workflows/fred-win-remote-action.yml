@@ -11,91 +11,104 @@ jobs:
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 8
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Configure VM key
+      - name: Configure verified backend SSH
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
           VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
-          test -n "$VM_KEY" || { echo "VM SSH key missing"; exit 2; }
-          test -n "$VM_HOSTS" || { echo "VM known_hosts missing"; exit 2; }
-          mkdir -p ~/.ssh
-          printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
-          printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
+          set -Eeuo pipefail
+          test -n "${VM_KEY:-}" || { echo 'VM SSH key missing'; exit 2; }
+          test -n "${VM_HOSTS:-}" || { echo 'VM known_hosts missing'; exit 2; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
 
       - name: Resolve allowlisted action
         id: action
         shell: bash
         run: |
+          set -Eeuo pipefail
           ACTION="$(jq -r '.action // "health"' ops/fredwin-request.json)"
           case "$ACTION" in
             health)
-              COMMAND=""
+              echo 'action=health' >> "$GITHUB_OUTPUT"
               ;;
-            audit_fredwin_runtime)
-              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"\$ErrorActionPreference='Stop'; \$now=Get-Date; \$os=Get-CimInstance Win32_OperatingSystem; \$procById=@{}; Get-Process -IncludeUserName -ErrorAction SilentlyContinue | ForEach-Object { \$procById[[int]\$_.Id]=\$_ }; \$processes=@(Get-CimInstance Win32_Process | ForEach-Object { \$gp=\$procById[[int]\$_.ProcessId]; [pscustomobject]@{ pid=[int]\$_.ProcessId; ppid=[int]\$_.ParentProcessId; name=\$_.Name; user=if(\$gp){\$gp.UserName}else{\$null}; session_id=[int]\$_.SessionId; cpu_seconds=if(\$gp -and \$null -ne \$gp.CPU){[math]::Round([double]\$gp.CPU,3)}else{\$null}; working_set_mb=if(\$gp){[math]::Round([double]\$gp.WorkingSet64/1MB,2)}else{[math]::Round([double]\$_.WorkingSetSize/1MB,2)}; created_at=if(\$_.CreationDate){([datetime]\$_.CreationDate).ToString('o')}else{\$null}; executable_path=\$_.ExecutablePath; command_line=\$_.CommandLine } }); \$tasks=@(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { \$_.State -ne 'Disabled' } | ForEach-Object { \$t=\$_; \$info=Get-ScheduledTaskInfo -TaskName \$t.TaskName -TaskPath \$t.TaskPath -ErrorAction SilentlyContinue; [pscustomobject]@{ task_path=\$t.TaskPath; task_name=\$t.TaskName; state=[string]\$t.State; last_run=if(\$info -and \$null -ne \$info.LastRunTime){\$info.LastRunTime.ToString('o')}else{\$null}; next_run=if(\$info -and \$null -ne \$info.NextRunTime){\$info.NextRunTime.ToString('o')}else{\$null}; last_result=if(\$info){\$info.LastTaskResult}else{\$null}; principal_user=\$t.Principal.UserId; logon_type=[string]\$t.Principal.LogonType; run_level=[string]\$t.Principal.RunLevel; actions=@(\$t.Actions | ForEach-Object { [pscustomobject]@{ execute=\$_.Execute; arguments=\$_.Arguments; working_directory=\$_.WorkingDirectory } }); triggers=@(\$t.Triggers | ForEach-Object { [pscustomobject]@{ type=\$_.CimClass.CimClassName; enabled=\$_.Enabled; start_boundary=\$_.StartBoundary; end_boundary=\$_.EndBoundary; repetition_interval=\$_.Repetition.Interval; repetition_duration=\$_.Repetition.Duration } }) } }); \$services=@(Get-CimInstance Win32_Service | Where-Object { \$_.StartMode -ne 'Disabled' } | ForEach-Object { [pscustomobject]@{ name=\$_.Name; display_name=\$_.DisplayName; state=\$_.State; start_mode=\$_.StartMode; start_name=\$_.StartName; process_id=[int]\$_.ProcessId; path_name=\$_.PathName } }); \$startupRegistry=@(); foreach(\$rk in @('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run','HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce','HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run','HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce','HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run')){ if(Test-Path \$rk){ \$item=Get-ItemProperty -Path \$rk -ErrorAction SilentlyContinue; foreach(\$prop in \$item.PSObject.Properties){ if(\$prop.Name -notmatch '^PS(Path|ParentPath|ChildName|Drive|Provider)$'){ \$startupRegistry += [pscustomobject]@{ location=\$rk; name=\$prop.Name; command=[string]\$prop.Value } } } } }; \$startupCommands=@(Get-CimInstance Win32_StartupCommand -ErrorAction SilentlyContinue | ForEach-Object { [pscustomobject]@{ name=\$_.Name; command=\$_.Command; location=\$_.Location; user=\$_.User } }); \$listeners=@(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | ForEach-Object { \$ownerPid=[int]\$_.OwningProcess; \$ownerProc=\$procById[\$ownerPid]; [pscustomobject]@{ local_address=\$_.LocalAddress; local_port=[int]\$_.LocalPort; owning_pid=\$ownerPid; process_name=if(\$ownerProc){\$ownerProc.ProcessName}else{\$null}; applied_setting=[string]\$_.AppliedSetting } }); \$audit=[ordered]@{ schema='fredwin-runtime-audit-v1'; generated_at=\$now.ToString('o'); computer=\$env:COMPUTERNAME; user=[System.Security.Principal.WindowsIdentity]::GetCurrent().Name; os=[ordered]@{ caption=\$os.Caption; version=\$os.Version; build_number=\$os.BuildNumber; last_boot=\$os.LastBootUpTime.ToString('o'); uptime_seconds=[math]::Round((\$now-\$os.LastBootUpTime).TotalSeconds) }; counts=[ordered]@{ processes=\$processes.Count; scheduled_tasks=\$tasks.Count; services=\$services.Count; startup_registry=\$startupRegistry.Count; startup_commands=\$startupCommands.Count; listeners=\$listeners.Count }; processes=\$processes; scheduled_tasks=\$tasks; services=\$services; startup_registry=\$startupRegistry; startup_commands=\$startupCommands; listeners=\$listeners }; Write-Output 'FREDWIN_RUNTIME_AUDIT_BEGIN'; \$audit | ConvertTo-Json -Depth 8 -Compress; Write-Output 'FREDWIN_RUNTIME_AUDIT_END'\""
-              ;;
-            configure_desktop_commander_allow_all)
-              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"\$ErrorActionPreference='Stop'; \$dcDir=Join-Path \$env:USERPROFILE '.claude-server-commander'; \$dcConfig=Join-Path \$dcDir 'config.json'; New-Item -ItemType Directory -Force -Path \$dcDir | Out-Null; if(Test-Path \$dcConfig){ try { \$cfg=Get-Content -LiteralPath \$dcConfig -Raw -Encoding UTF8 | ConvertFrom-Json } catch { \$cfg=[pscustomobject]@{} } } else { \$cfg=[pscustomobject]@{} }; \$cfg | Add-Member -NotePropertyName allowedDirectories -NotePropertyValue @() -Force; \$cfg | Add-Member -NotePropertyName blockedCommands -NotePropertyValue @() -Force; \$cfg | Add-Member -NotePropertyName defaultShell -NotePropertyValue 'powershell.exe' -Force; \$cfg | Add-Member -NotePropertyName telemetryEnabled -NotePropertyValue \$false -Force; \$cfg | Add-Member -NotePropertyName fileReadLineLimit -NotePropertyValue 5000 -Force; \$cfg | Add-Member -NotePropertyName fileWriteLineLimit -NotePropertyValue 500 -Force; \$cfg | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath \$dcConfig -Encoding UTF8; \$verify=Get-Content -LiteralPath \$dcConfig -Raw -Encoding UTF8 | ConvertFrom-Json; if(\$verify.allowedDirectories.Count -ne 0){throw 'allowedDirectories not empty'}; if(\$verify.blockedCommands.Count -ne 0){throw 'blockedCommands not empty'}; if(\$verify.defaultShell -ne 'powershell.exe'){throw 'defaultShell mismatch'}; if(\$verify.telemetryEnabled -ne \$false){throw 'telemetryEnabled mismatch'}; \$dcProcs=Get-CimInstance Win32_Process | Where-Object { \$_.CommandLine -match '@wonderwhy-er/desktop-commander|desktop-commander remote|claude-server-commander' }; \$dcTasks=Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { \$_.TaskName -match 'Desktop Commander|ShopVivaliz.*Commander|DesktopCommander' }; foreach(\$p in \$dcProcs){ try { Stop-Process -Id \$p.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }; foreach(\$t in \$dcTasks){ try { Start-ScheduledTask -TaskName \$t.TaskName -TaskPath \$t.TaskPath -ErrorAction SilentlyContinue } catch {} }; Start-Sleep -Seconds 5; Write-Output ('CONFIG_PATH=' + \$dcConfig); Write-Output ('COMPUTER=' + \$env:COMPUTERNAME); Write-Output ('USER=' + \$env:USERNAME); Write-Output 'CONFIG_JSON_BEGIN'; Get-Content -LiteralPath \$dcConfig -Raw -Encoding UTF8; Write-Output 'CONFIG_JSON_END'; Write-Output 'TASKS_BEGIN'; \$dcTasks | Select-Object TaskPath,TaskName,State | ConvertTo-Json -Depth 4; Write-Output 'TASKS_END'; Write-Output 'PROCESSES_BEGIN'; Get-CimInstance Win32_Process | Where-Object { \$_.CommandLine -match '@wonderwhy-er/desktop-commander|desktop-commander remote|claude-server-commander' } | Select-Object ProcessId,Name,CommandLine | ConvertTo-Json -Depth 4; Write-Output 'PROCESSES_END'; Write-Output 'FREDWIN_DESKTOP_COMMANDER_CONFIG_OK'\""
-              ;;
-            read_shopvivaliz_analysis_docs)
-              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"\$downloads=[Environment]::GetFolderPath('UserProfile') + '\\Downloads'; if(!(Test-Path \$downloads)){throw 'Downloads folder not found'}; \$patterns=@('*Analise*shopvivaliz*melhorias*.md','*Resumo*executivo*vivaliz*.htm*','*Guia*tecnico*implementacao*.md'); \$seen=@{}; \$sb=New-Object System.Text.StringBuilder; foreach(\$p in \$patterns){ Get-ChildItem -Path \$downloads -File -Filter \$p -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | ForEach-Object { if(-not \$seen.ContainsKey(\$_.FullName)){ \$seen[\$_.FullName]=\$true; [void]\$sb.AppendLine('===FILE_BEGIN===' + \$_.Name); [void]\$sb.AppendLine('PATH=' + \$_.FullName); [void]\$sb.AppendLine('SIZE=' + \$_.Length); [void]\$sb.AppendLine('MODIFIED=' + \$_.LastWriteTime.ToString('o')); [void]\$sb.AppendLine((Get-Content -LiteralPath \$_.FullName -Raw -Encoding UTF8)); [void]\$sb.AppendLine('===FILE_END===' + \$_.Name) } } }; if(\$seen.Count -eq 0){ [void]\$sb.AppendLine('NO_MATCHING_DOCS'); Get-ChildItem -Path \$downloads -File | Where-Object { \$_.Name -match 'shopvivaliz|vivaliz|implementa|analise|executivo' } | Sort-Object LastWriteTime -Descending | Select-Object -First 30 | ForEach-Object { [void]\$sb.AppendLine(('CANDIDATE=' + \$_.Name + '|SIZE=' + \$_.Length + '|MODIFIED=' + \$_.LastWriteTime.ToString('o'))) } }; [Console]::Error.WriteLine(\$sb.ToString()); exit 17\""
-              ;;
-            open_shopvivaliz)
-              COMMAND="powershell -NoProfile -Command \"\$task='ShopVivalizOpenSite'; \$user=[System.Security.Principal.WindowsIdentity]::GetCurrent().Name; \$args='-NoProfile -WindowStyle Hidden -Command \\\"Start-Process ''''https://shopvivaliz.com.br/''''\\\"'; \$action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument \$args; \$trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1); \$principal=New-ScheduledTaskPrincipal -UserId \$user -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName \$task -Action \$action -Trigger \$trigger -Principal \$principal -Force | Out-Null; Start-ScheduledTask -TaskName \$task; Start-Sleep -Seconds 5; Unregister-ScheduledTask -TaskName \$task -Confirm:\$false\""
-              ;;
-            open_exchange_admin)
-              COMMAND="powershell -NoProfile -Command \"Start-Process 'https://admin.exchange.microsoft.com/'\""
-              ;;
-            open_microsoft_365)
-              COMMAND="powershell -NoProfile -Command \"Start-Process 'https://portal.office.com/'\""
-              ;;
-            open_email_login_pair)
-              COMMAND="powershell -NoProfile -Command \"\$task='ShopVivalizOpenEmailLogin'; \$user=[System.Security.Principal.WindowsIdentity]::GetCurrent().Name; \$args='-NoProfile -WindowStyle Hidden -Command \\\"Start-Process ''''https://admin.exchange.microsoft.com/''''; Start-Sleep -Seconds 1; Start-Process ''''https://admin.microsoft.com/''''\\\"'; \$action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument \$args; \$trigger=New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1); \$principal=New-ScheduledTaskPrincipal -UserId \$user -LogonType Interactive -RunLevel Limited; Register-ScheduledTask -TaskName \$task -Action \$action -Trigger \$trigger -Principal \$principal -Force | Out-Null; Start-ScheduledTask -TaskName \$task; Start-Sleep -Seconds 5; Unregister-ScheduledTask -TaskName \$task -Confirm:\$false\""
-              ;;
-            verify_auto_sync)
-              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"\$repo='C:\\site-shopvivaliz'; Write-Output '=== TASKS ==='; Get-ScheduledTask | Where-Object { \$_.Actions.Execute -match 'powershell|pwsh|cmd' -and ((\$_.Actions.Arguments -join ' ') -match 'local-auto-sync|site-shopvivaliz') } | ForEach-Object { \$info=Get-ScheduledTaskInfo -TaskName \$_.TaskName -TaskPath \$_.TaskPath; Write-Output ('TASK=' + \$_.TaskName); Write-Output ('STATE=' + \$_.State); Write-Output ('LAST_RUN=' + \$info.LastRunTime); Write-Output ('LAST_RESULT=' + \$info.LastTaskResult); Write-Output ('NEXT_RUN=' + \$info.NextRunTime); Write-Output ('ACTION=' + ((\$_.Actions | ForEach-Object { \$_.Execute + ' ' + \$_.Arguments }) -join ' || ')); Write-Output '---' }; Write-Output '=== REPO ==='; Set-Location \$repo; Write-Output ('BRANCH=' + (git rev-parse --abbrev-ref HEAD)); Write-Output ('HEAD=' + (git rev-parse HEAD)); Write-Output ('ORIGIN_MAIN=' + (git rev-parse origin/main)); Write-Output ('STATUS=' + ((git status --porcelain) -join ';')); Write-Output '=== LOG ==='; \$log=Get-ChildItem (Join-Path \$repo 'logs') -Filter 'local-sync-*.log' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if(\$log){Write-Output ('LOGFILE=' + \$log.FullName); Get-Content \$log.FullName -Tail 80}else{Write-Output 'NO_LOCAL_SYNC_LOG'}\""
-              ;;
-            email_retention_validate)
-              COMMAND="powershell -NoProfile -ExecutionPolicy Bypass -Command \"\$repo='C:\\mei-mg-email'; if(!(Test-Path \$repo)){throw 'C:\\mei-mg-email not found'}; Set-Location \$repo; git fetch origin; if(git status --porcelain){throw 'working tree is dirty'}; git merge --ff-only origin/main; if(\$LASTEXITCODE -ne 0){throw 'git sync failed'}; Write-Output ('EMAIL_REPO_HEAD=' + (git rev-parse HEAD)); \$py=Join-Path \$repo '.venv\\Scripts\\python.exe'; if(!(Test-Path \$py)){throw 'python venv not found'}; & \$py -m pytest -q tests\\test_retention_policy.py; if(\$LASTEXITCODE -ne 0){throw 'retention pytest failed'}; docker compose up -d db; if(\$LASTEXITCODE -ne 0){throw 'database start failed'}; docker compose run --rm flyway -connectRetries=30 migrate; if(\$LASTEXITCODE -ne 0){throw 'flyway migrate failed'}; docker compose run --rm flyway -connectRetries=30 info; if(\$LASTEXITCODE -ne 0){throw 'flyway info failed'}; & \$py '.\\scripts\\purgar_base_operacional.py' --batch-size 50; if(\$LASTEXITCODE -ne 0){throw 'purge dry-run failed'}; Write-Output 'EMAIL_RETENTION_VALIDATE_OK'\""
+            runtime_identity)
+              echo 'action=runtime_identity' >> "$GITHUB_OUTPUT"
               ;;
             *)
-              echo "Action not allowlisted: $ACTION"
+              echo "Action not allowlisted: $ACTION" >&2
               exit 3
               ;;
           esac
-          echo "action=$ACTION" >> "$GITHUB_OUTPUT"
-          printf '%s' "$COMMAND" | base64 -w0 > /tmp/fredwin-command.b64
 
-      - name: Check private MCP path through VM
+      - name: Validate Fred-Win private relay health
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@10.0.1.38 \
-            'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health'
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/vmkey" ubuntu@10.0.1.38 'python3 -' <<'PY'
+          import json
+          import urllib.request
 
-      - name: Execute allowlisted action
-        if: steps.action.outputs.action != 'health'
+          url = 'http://127.0.0.1:5557/health'
+          try:
+              with urllib.request.urlopen(url, timeout=10) as response:
+                  status_code = response.status
+                  payload = json.loads(response.read().decode('utf-8'))
+          except Exception as exc:
+              raise SystemExit(f'FRED_WIN_STATUS=INCONCLUSIVE error={type(exc).__name__}')
+
+          status = str(payload.get('status') or payload.get('ok') or '').lower()
+          environment = str(payload.get('environment') or '').lower()
+          mcp_version = str(payload.get('mcp_version') or payload.get('version') or '').strip()
+          if status_code != 200 or status not in {'ok', 'true'}:
+              raise SystemExit('FRED_WIN_STATUS=INCONCLUSIVE status_invalid')
+          if environment != 'fred-win':
+              raise SystemExit('FRED_WIN_STATUS=INCONCLUSIVE environment_invalid')
+          if not mcp_version:
+              raise SystemExit('FRED_WIN_STATUS=INCONCLUSIVE mcp_version_missing')
+
+          print('status=ok')
+          print('environment=fred-win')
+          print(f'mcp_version={mcp_version}')
+          print('FRED_WIN_STATUS=ok')
+          PY
+
+      - name: Execute fixed runtime identity action
+        if: steps.action.outputs.action == 'runtime_identity'
         run: |
-          CMD_B64="$(cat /tmp/fredwin-command.b64)"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@10.0.1.38 \
-            "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
-          import base64, json, os, urllib.error, urllib.request
-          command = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
-          body = json.dumps({'params': {'command': command, 'timeout': 180}}).encode('utf-8')
-          req = urllib.request.Request('http://127.0.0.1:5557/mcp/tool/execute_command', data=body, headers={'Content-Type':'application/json'}, method='POST')
-          with urllib.request.urlopen(req, timeout=190) as response:
-              payload=json.loads(response.read().decode('utf-8'))
-          print(json.dumps(payload, ensure_ascii=False))
-          action=os.environ.get('FREDWIN_ACTION','')
-          result=payload.get('result') or {}
-          if result.get('success') is not True and action != 'read_shopvivaliz_analysis_docs':
-              raise SystemExit('Fred-Win action failed')
+          set -Eeuo pipefail
+          FIXED_COMMAND="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"Write-Output ('COMPUTER=' + \$env:COMPUTERNAME); Write-Output ('USER=' + [System.Security.Principal.WindowsIdentity]::GetCurrent().Name); Write-Output ('PWD=' + (Get-Location).Path)\""
+          CMD_B64="$(printf '%s' "$FIXED_COMMAND" | base64 -w0)"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/vmkey" ubuntu@10.0.1.38 "FREDWIN_CMD_B64='$CMD_B64' python3 - <<'PY'
+          import base64
+          import json
+          import os
+          import urllib.request
+
+          fixed = base64.b64decode(os.environ['FREDWIN_CMD_B64']).decode('utf-8')
+          body = json.dumps({'params': {'command': fixed, 'timeout': 60}}).encode('utf-8')
+          request = urllib.request.Request(
+              'http://127.0.0.1:5557/mcp/tool/execute_command',
+              data=body,
+              headers={'Content-Type': 'application/json'},
+              method='POST',
+          )
+          with urllib.request.urlopen(request, timeout=70) as response:
+              payload = json.loads(response.read().decode('utf-8'))
+          result = payload.get('result') or {}
+          output = str(result.get('output') or '')
+          if result.get('success') is not True:
+              raise SystemExit('FRED_WIN_RUNTIME_IDENTITY=failed')
+          allowed = [line for line in output.splitlines() if line.startswith(('COMPUTER=', 'USER=', 'PWD='))]
+          if len(allowed) != 3:
+              raise SystemExit('FRED_WIN_RUNTIME_IDENTITY=invalid_output')
+          print('\n'.join(allowed))
+          print('FRED_WIN_RUNTIME_IDENTITY=ok')
           PY"
-        env:
-          FREDWIN_ACTION: ${{ steps.action.outputs.action }}
 
-      - name: Cleanup
+      - name: Cleanup SSH material
         if: always()
-        run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts /tmp/fredwin-command.b64
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
