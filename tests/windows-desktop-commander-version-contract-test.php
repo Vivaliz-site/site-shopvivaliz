@@ -15,11 +15,12 @@ foreach ($files as $relative) {
         exit(1);
     }
     $text = (string) file_get_contents($path);
-    if (strpos($text, '0.2.47') !== false) {
+    $normalized = str_replace('\\.', '.', $text);
+    if (strpos($normalized, '0.2.47') !== false) {
         fwrite(STDERR, "stale Windows DC 0.2.47 pin remains: {$relative}\n");
         exit(1);
     }
-    if (strpos($text, '0.2.48') === false) {
+    if (strpos($normalized, '0.2.48') === false) {
         fwrite(STDERR, "Windows DC surface not pinned to 0.2.48: {$relative}\n");
         exit(1);
     }
