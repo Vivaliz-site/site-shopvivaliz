@@ -74,6 +74,8 @@ jobs:
           php tests/browser-smoke-relay-failover-regression.php
           bash tests/apache-security-headers-module-regression.sh
           php tests/csp-mercadopago-frame-regression.php
+          php tests/popup-coupon-navigation-abort-regression.php
+          php tests/production-runtime-parity-contract.php
           php tests/sobre-open-graph-regression.php
           bash tests/repository-editor-artifacts-regression.sh
           bash tests/master-production-runtime-restart-regression.sh

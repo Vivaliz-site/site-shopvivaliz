@@ -83,6 +83,9 @@ function sv_popup_cupons_html(): string {
 </style>
 
 <script>
+let sv_popup_cupons_page_exiting=false;
+window.addEventListener('pagehide',()=>{sv_popup_cupons_page_exiting=true;});
+window.addEventListener('pageshow',()=>{sv_popup_cupons_page_exiting=false;});
 function sv_popup_cupons_close(){
   const modal=document.getElementById('popup-cupons-modal');
   if(!modal)return;
@@ -126,7 +129,7 @@ function sv_popup_cupons_load(){
   const list=document.getElementById('popup-cupons-list');
   const count=document.getElementById('popup-cupons-count');
   if(!list)return Promise.resolve(false);
-  return fetch('/api/coupons/active.php',{cache:'no-store'})
+  return fetch('/api/coupons/active.php',{cache:'no-store',keepalive:true})
     .then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
     .then(coupons=>{
       if(!Array.isArray(coupons)||coupons.length===0){
@@ -143,6 +146,7 @@ function sv_popup_cupons_load(){
       return true;
     })
     .catch(err=>{
+      if(sv_popup_cupons_page_exiting||document.visibilityState==='hidden')return false;
       console.error('[popup-cupons] load error:',err);
       if(count)count.textContent='Não foi possível consultar as ofertas agora.';
       list.innerHTML='<div class="popup-cupons-loading">Tente novamente em alguns instantes.</div>';

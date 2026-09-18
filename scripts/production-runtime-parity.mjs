@@ -17,6 +17,32 @@ function fail(name, detail) {
   throw new Error(name + ': ' + detail);
 }
 
+function expectedConsoleErrorReason({ text, url }) {
+  let parsed = null;
+  try { parsed = url ? new URL(url) : null; } catch {}
+  const analyticsProxy = (parsed?.origin === new URL(baseUrl).origin && parsed.pathname.startsWith('/0fb1/')) || text.includes(baseUrl + '/0fb1/');
+  if (analyticsProxy && (text.includes('ERR_NETWORK_CHANGED') || text.includes("MIME type ('text/plain')"))) return 'analytics-proxy-transient';
+  if (parsed?.hostname === 'fonts.gstatic.com' && text.includes('ERR_NETWORK_CHANGED')) return 'external-font-network-change';
+  return '';
+}
+
+function expectedRequestFailureReason({ url, error, resourceType }) {
+  let parsed;
+  try { parsed = new URL(url); } catch { return ''; }
+  const sameOrigin = parsed.origin === new URL(baseUrl).origin;
+  if (error === 'net::ERR_NETWORK_CHANGED' && resourceType === 'font' && parsed.hostname === 'fonts.gstatic.com') return 'external-font-network-change';
+  if (error === 'net::ERR_ABORTED') {
+    if (resourceType === 'image' && parsed.hostname === 's3.amazonaws.com' && parsed.pathname.startsWith('/tiny-anexos-us/erp/')) return 'navigation-aborted-product-image';
+    if (['www.google-analytics.com', 'www.googletagmanager.com'].includes(parsed.hostname)) return 'navigation-aborted-analytics';
+    if (sameOrigin && (parsed.pathname.startsWith('/0fb1/') || parsed.pathname === '/cdn-cgi/rum')) return 'navigation-aborted-analytics-proxy';
+    if (parsed.hostname === 'api.mercadopago.com' && ['/v1/payment_methods/search', '/v1/device_sessions/web_device', '/v1/devices/widgets'].includes(parsed.pathname)) return 'checkout-reload-aborted-mercadopago-probe';
+    if (parsed.hostname === 'api.mercadolibre.com' && parsed.pathname === '/tracks') return 'checkout-navigation-aborted-tracking';
+    if (['www.mercadolibre.com', 'www.mercadopago.com.br'].includes(parsed.hostname) && parsed.pathname.startsWith('/jms/lgz/')) return 'checkout-reload-aborted-fingerprint';
+  }
+  if (error === 'net::ERR_BLOCKED_BY_ORB' && parsed.hostname === 'www.mercadopago.com.br' && parsed.pathname.startsWith('/jms/lgz/')) return 'headless-fingerprint-orb';
+  return '';
+}
+
 await fs.mkdir(outDir, { recursive: true });
 const browser = await chromium.launch({
   headless: true,
@@ -26,10 +52,16 @@ const context = await browser.newContext({ viewport: { width: 1365, height: 900 
 const page = await context.newPage();
 page.on('pageerror', error => evidence.pageErrors.push(String(error)));
 page.on('console', message => {
-  if (message.type() === 'error') evidence.consoleErrors.push(message.text());
+  if (message.type() !== 'error') return;
+  const location = message.location();
+  const item = { text: message.text(), url: location?.url || '' };
+  const expectedReason = expectedConsoleErrorReason(item);
+  evidence.consoleErrors.push({ ...item, expected: expectedReason !== '', expectedReason });
 });
 page.on('requestfailed', request => {
-  evidence.requestFailures.push({ url: request.url(), error: request.failure()?.errorText || '' });
+  const item = { url: request.url(), error: request.failure()?.errorText || '', resourceType: request.resourceType() };
+  const expectedReason = expectedRequestFailureReason(item);
+  evidence.requestFailures.push({ ...item, expected: expectedReason !== '', expectedReason });
 });
 page.on('response', response => {
   if (response.status() >= 500) evidence.serverErrors.push({ url: response.url(), status: response.status() });
@@ -86,16 +118,21 @@ try {
   pass('checkout_reload_persistence', { items: persisted.cart.length });
 
   const payment = page.locator('input[name="payment_method"][value="mercado_pago"]').first();
-  if (await payment.count()) {
-    await payment.check({ force: true });
-    pass('payment_option_visible_no_submit');
-  }
+  if (!(await payment.count())) fail('payment_option_visible', 'mercado_pago option missing');
+  await payment.check({ force: true });
+  pass('payment_option_visible_no_submit');
 
   await page.screenshot({ path: path.join(outDir, 'runtime-parity-checkout.png'), fullPage: true });
+  const unexpectedConsoleErrors = evidence.consoleErrors.filter(item => !item.expected);
+  const unexpectedRequestFailures = evidence.requestFailures.filter(item => !item.expected);
   if (evidence.pageErrors.length) fail('pageerror', evidence.pageErrors.join(' | '));
-  if (evidence.consoleErrors.length) fail('console_error', evidence.consoleErrors.join(' | '));
-  if (evidence.requestFailures.length) fail('requestfailed', JSON.stringify(evidence.requestFailures));
+  if (unexpectedConsoleErrors.length) fail('console_error', JSON.stringify(unexpectedConsoleErrors));
+  if (unexpectedRequestFailures.length) fail('requestfailed', JSON.stringify(unexpectedRequestFailures));
   if (evidence.serverErrors.length) fail('server_5xx', JSON.stringify(evidence.serverErrors));
+  pass('browser_runtime_errors', {
+    expectedConsoleErrors: evidence.consoleErrors.filter(item => item.expected).length,
+    expectedRequestAborts: evidence.requestFailures.filter(item => item.expected).length,
+  });
   console.log('PRODUCTION_RUNTIME_PARITY=PASS');
 } catch (error) {
   evidence.fatal = String(error?.stack || error);
