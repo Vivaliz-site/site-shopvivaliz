@@ -44,7 +44,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\site-shopvivaliz\scri
 O diagnóstico esperado inclui `CANONICAL_AGENT_COUNT=1`, `NONCANONICAL_AGENT_COUNT=0`, `MONITOR_HEALTHY=True`, `TASK_ACTION_SECURE=True`, `INSTALL_ROOT_ACL_PRIVATE=True`, `DEVICE_STATE_ACL_PRIVATE=True` e `LEGACY_RAW_CAPTURE_COUNT=0`.
 
 ## VMs Ubuntu
-- Canal oficial Linux: `@wonderwhy-er/desktop-commander@0.2.48 remote --persist-session`, sob usuário `ubuntu`.
+- Canal oficial Linux: `@wonderwhy-er/desktop-commander@0.2.51 remote --persist-session`, sob usuário `ubuntu`.
 - Perfil persistente: `/home/ubuntu/.desktop-commander-device/device.json`.
 - Unit: `shopvivaliz-desktop-commander.service`.
 - `HOME=/home/ubuntu`, XDG e npm cache fixos.
@@ -55,7 +55,7 @@ O diagnóstico esperado inclui `CANONICAL_AGENT_COUNT=1`, `NONCANONICAL_AGENT_CO
 - Deploy Linux canônico: `.github/workflows/vm-desktop-commander-action.yml` com `install_or_repair`. O fluxo cria o checkout de deploy se ele ainda não existir; quando já existe, faz `fetch` e restaura somente os artefatos do Desktop Commander a partir de `origin/main`, sem reset/merge amplo, e só então reinstala serviço/guardian. O workflow antigo `vm-desktop-commander-secure-recovery.yml.disabled` não é caminho operacional.
 
 ## Regra de propriedade única
-- Nunca iniciar manualmente um Desktop Commander em host já gerenciado. Windows permanece fixado em `0.2.47`; as VMs Ubuntu usam `0.2.48`. Um processo manual reutiliza o mesmo Device ID e pode disputar presença com a sessão 24h.
+- Nunca iniciar manualmente um Desktop Commander em host já gerenciado. Windows permanece fixado em `0.2.47`; as VMs Ubuntu usam `0.2.51`. Um processo manual reutiliza o mesmo Device ID e pode disputar presença com a sessão 24h.
 - `ShopVivaliz Auto Sync` não inicia, repara nem reinstala Desktop Commander ou relay. Ele somente sincroniza o repositório e executa guards próprios; DC e relay pertencem exclusivamente aos watchdogs dedicados.
 - No Fred-Win, a tarefa primaria e `Interactive`/`AtLogOn` com watchdog de 5 minutos; o guardian e `S4U`/`AtStartup` com watchdog de 15 minutos. No DESKTOP-KOCEPSV, a tarefa primaria permanece `S4U`. Em Linux, `shopvivaliz-desktop-commander.service` e o unico owner do provider e o guardian apenas remove launchers fora do cgroup e recupera o servico quando necessario.
 - Chamadas `Ensure` em Windows usam fast-path read-only antes do mutex somente quando existe exatamente 1 launcher canônico, 0 não canônicos, marker fresco e nenhum cooldown. Qualquer duplicata, marker stale, cooldown ou ambiguidade continua passando pelo mutex e pela convergência seletiva.
