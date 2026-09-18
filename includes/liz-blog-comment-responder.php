@@ -81,22 +81,20 @@ PROMPT;
         $payload = [
             'model' => $this->modelFor('openrouter'),
             'messages' => [
-                ['role' => 'system', 'content' => 'Você é Liz, assistente virtual oficial da ShopVivaliz.'],
+                ['role' => 'system', 'content' => 'Voc? ? Liz, assistente virtual oficial da ShopVivaliz.'],
                 ['role' => 'user', 'content' => $prompt],
             ],
             'max_tokens' => 500,
             'temperature' => 0.25,
         ];
-        $data = $this->postJson(rtrim($this->env('OPENROUTER_API_BASE_URL') ?: 'https://openrouter.ai/api/v1', '/') . '/chat/completions', $payload, ['Authorization: Bearer ' . $key, 'HTTP-Referer: https://shopvivaliz.com.br', 'X-OpenRouter-Title: ShopVivaliz Liz']);
+        $headers = ['Authorization: Bearer ' . $key];
+        $referer = $this->env('OPENROUTER_HTTP_REFERER');
+        $title = $this->env('OPENROUTER_APP_TITLE');
+        if ($referer !== '') $headers[] = 'HTTP-Referer: ' . $referer;
+        if ($title !== '') $headers[] = 'X-OpenRouter-Title: ' . $title;
+        $baseUrl = rtrim($this->env('OPENROUTER_API_BASE_URL') ?: 'https://openrouter.ai/api/v1', '/');
+        $data = $this->postJson($baseUrl . '/chat/completions', $payload, $headers);
         $answer = $data['choices'][0]['message']['content'] ?? null;
-        return is_string($answer) && trim($answer) !== '' ? trim($answer) : null;
-    }
-
-    private function claude(string $prompt, string $key): ?string
-    {
-        $payload = ['model' => $this->modelFor('claude'), 'max_tokens' => 500, 'messages' => [['role' => 'user', 'content' => $prompt]]];
-        $data = $this->postJson('https://api.anthropic.com/v1/messages', $payload, ['x-api-key: ' . $key, 'anthropic-version: 2023-06-01']);
-        $answer = $data['content'][0]['text'] ?? null;
         return is_string($answer) && trim($answer) !== '' ? trim($answer) : null;
     }
 
@@ -128,9 +126,8 @@ PROMPT;
     private function modelFor(string $provider): string
     {
         return match ($provider) {
-            'gemini' => $this->env('GEMINI_MODEL') ?: 'gemini-1.5-flash',
+            'gemini' => $this->env('GEMINI_MODEL') ?: 'gemini-3.1-flash-lite',
             'openrouter' => $this->env('OPENROUTER_TEXT_MODEL') ?: 'google/gemini-2.5-flash-lite',
-            'claude' => $this->env('ANTHROPIC_MODEL') ?: 'claude-3-5-haiku-20241022',
             default => '',
         };
     }

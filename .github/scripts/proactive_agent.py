@@ -1,7 +1,7 @@
 """
 Agente Proativo Autonomo Vivaliz
-Orquestrador: Anthropic -> OpenAI -> Gemini
-Roda a cada 4h via GitHub Actions
+Orquestrador aprovado para automacao: Gemini -> OpenRouter
+Nao usa OpenAI/Anthropic diretamente em execucao autonoma
 """
 import json, os, subprocess, sys, shlex
 from pathlib import Path
@@ -18,56 +18,49 @@ BLOCKED_PATHS = [
 
 
 def call_llm(prompt: str) -> str:
-    """Orquestrador: tenta Anthropic -> OpenAI -> Gemini ate funcionar."""
+    """Orquestrador autonomo: tenta somente Gemini -> OpenRouter."""
 
-    # 1. Anthropic Claude Haiku
-    key = os.getenv("ANTHROPIC_API_KEY", "")
-    if key:
-        try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=key)
-            msg = client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=4096,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            print("Provider: Anthropic Claude Haiku")
-            return msg.content[0].text.strip()
-        except Exception as e:
-            print(f"Anthropic falhou: {e}")
-
-    # 2. OpenAI GPT-4o-mini
-    key = os.getenv("OPENAI_API_KEY", "")
-    if key:
-        try:
-            from openai import OpenAI
-            client = OpenAI(api_key=key)
-            resp = client.chat.completions.create(
-                model="gpt-4o-mini",
-                max_tokens=4096,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            print("Provider: OpenAI GPT-4o-mini")
-            return resp.choices[0].message.content.strip()
-        except Exception as e:
-            print(f"OpenAI falhou: {e}")
-
-    # 3. Google Gemini Flash
     key = os.getenv("GEMINI_API_KEY", "")
     if key:
         try:
             import google.generativeai as genai
             genai.configure(api_key=key)
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            model = genai.GenerativeModel(os.getenv("GEMINI_MODEL") or "gemini-3.1-flash-lite")
             resp = model.generate_content(prompt)
-            print("Provider: Google Gemini Flash")
-            return resp.text.strip()
+            print("Provider: Google Gemini")
+            if getattr(resp, "text", None):
+                return resp.text.strip()
         except Exception as e:
             print(f"Gemini falhou: {e}")
 
-    print("AVISO: Todos os providers AI falharam ou chaves ausentes — sem acao nesta execucao.")
-    return ""
+    key = os.getenv("OPENROUTER_API_KEY", "")
+    if key:
+        try:
+            import urllib.request
+            base = (os.getenv("OPENROUTER_API_BASE_URL") or "https://openrouter.ai/api/v1").rstrip("/")
+            payload = json.dumps({
+                "model": os.getenv("OPENROUTER_TEXT_MODEL") or "google/gemini-2.5-flash-lite",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 4096,
+            }).encode("utf-8")
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + key,
+                "HTTP-Referer": os.getenv("OPENROUTER_HTTP_REFERER") or "https://shopvivaliz.com.br",
+                "X-OpenRouter-Title": os.getenv("OPENROUTER_APP_TITLE") or "ShopVivaliz",
+            }
+            req = urllib.request.Request(base + "/chat/completions", data=payload, headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=60) as response:
+                data = json.loads(response.read().decode("utf-8"))
+            text = data.get("choices", [{}])[0].get("message", {}).get("content")
+            if text:
+                print("Provider: OpenRouter")
+                return str(text).strip()
+        except Exception as e:
+            print(f"OpenRouter falhou: {e}")
 
+    print("AVISO: Gemini/OpenRouter falharam ou nao estao configurados; sem acao nesta execucao.")
+    return ""
 
 def read_file(path: str, max_chars: int = 2000) -> str:
     try:
@@ -256,7 +249,7 @@ def run_agent():
     print(f"Arquivo escrito: {file_path} ({len(content)} chars)")
 
     # Commit
-    subprocess.run(["git", "config", "user.name", "Claude Autonomo"])
+    subprocess.run(["git", "config", "user.name", "ShopVivaliz Automation"])
     subprocess.run(["git", "config", "user.email", "fredmourao@gmail.com"])
     subprocess.run(["git", "add", file_path])
 
@@ -269,7 +262,7 @@ def run_agent():
     full_msg = (
         f"{commit_msg}\n\n"
         f"Agente proativo Vivaliz — orquestrador Anthropic/OpenAI/Gemini\n"
-        f"Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>"
+        f"Automacao aprovada: Gemini/OpenRouter"
     )
     subprocess.run(["git", "commit", "-m", full_msg], check=True)
     pull_result = subprocess.run(["git", "pull", "--rebase", "origin", "main"], capture_output=True)
