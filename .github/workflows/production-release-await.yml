@@ -1,0 +1,105 @@
+name: Production Release Await
+
+on:
+  workflow_call:
+    inputs:
+      expected_sha:
+        description: Commit that must be live before the caller may reserve the Oracle runner
+        required: false
+        type: string
+        default: ''
+      allow_descendant:
+        description: Accept a deployed descendant of expected_sha
+        required: false
+        type: boolean
+        default: false
+      attempts:
+        required: false
+        type: number
+        default: 36
+      sleep_seconds:
+        required: false
+        type: number
+        default: 20
+    outputs:
+      production_sha:
+        description: Production SHA observed in immutable deployment evidence
+        value: ${{ jobs.wait.outputs.production_sha }}
+
+permissions:
+  contents: read
+
+jobs:
+  wait:
+    name: Wait for production evidence on hosted runner
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    outputs:
+      production_sha: ${{ steps.await.outputs.production_sha }}
+    steps:
+      - name: Checkout history when descendant acceptance is required
+        if: ${{ inputs.expected_sha != '' && inputs.allow_descendant }}
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Wait for immutable production evidence
+        id: await
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          ALLOW_DESCENDANT: ${{ inputs.allow_descendant }}
+          ATTEMPTS: ${{ inputs.attempts }}
+          SLEEP_SECONDS: ${{ inputs.sleep_seconds }}
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "$EXPECTED_SHA" ]]; then
+            echo 'production_sha=' >> "$GITHUB_OUTPUT"
+            echo 'production_wait_required=false'
+            exit 0
+          fi
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::Invalid expected production SHA'; exit 2; }
+
+          for attempt in $(seq 1 "$ATTEMPTS"); do
+            if gh api -H 'Accept: application/vnd.github.raw+json' \
+              "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json?ref=deployment-evidence" \
+              > /tmp/deployment-latest.json 2>/tmp/deployment-error.txt; then
+              read -r deployed_sha status validate deploy smoke < <(python3 - /tmp/deployment-latest.json <<'PY'
+          import json, sys
+          data=json.load(open(sys.argv[1], encoding='utf-8'))
+          jobs=data.get('jobs') or {}
+          print(
+              str(data.get('sha','')).lower(),
+              str(data.get('status','')),
+              str(jobs.get('validate','')),
+              str(jobs.get('deploy','')),
+              str(jobs.get('smoke_test','')),
+          )
+          PY
+              )
+              evidence_ok=false
+              if [[ "$status" == 'PRODUCTION_UPDATED' && "$validate" == 'success' && "$deploy" == 'success' && "$smoke" == 'success' && "$deployed_sha" =~ ^[0-9a-f]{40}$ ]]; then
+                evidence_ok=true
+              fi
+              if [[ "$evidence_ok" == true && "$deployed_sha" == "$EXPECTED_SHA" ]]; then
+                echo "production_sha=$deployed_sha" >> "$GITHUB_OUTPUT"
+                echo 'production_release_relation=exact'
+                exit 0
+              fi
+              if [[ "$evidence_ok" == true && "$ALLOW_DESCENDANT" == 'true' ]]; then
+                git cat-file -e "${EXPECTED_SHA}^{commit}" 2>/dev/null || git fetch --no-tags origin "$EXPECTED_SHA"
+                git cat-file -e "${deployed_sha}^{commit}" 2>/dev/null || git fetch --no-tags origin "$deployed_sha"
+                if git merge-base --is-ancestor "$EXPECTED_SHA" "$deployed_sha"; then
+                  echo "production_sha=$deployed_sha" >> "$GITHUB_OUTPUT"
+                  echo 'production_release_relation=descendant'
+                  exit 0
+                fi
+              fi
+            fi
+            echo "deployment_wait_attempt=$attempt"
+            sleep "$SLEEP_SECONDS"
+          done
+          echo '::error::Expected production release was not observed before timeout'
+          exit 1

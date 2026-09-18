@@ -27,7 +27,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  preflight:
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      expected_sha: ${{ steps.production_impact.outputs.expected_sha }}
+    steps:
+      - name: Checkout push revision for production impact
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Classify production impact
+        id: production_impact
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          expected_sha=''
+          if [[ "${{ github.event_name }}" == 'push' ]]; then
+            git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" > /tmp/production-impact-paths.txt
+            should_deploy="$(bash scripts/should-deploy-production.sh < /tmp/production-impact-paths.txt)"
+            [[ "$should_deploy" == 'true' ]] && expected_sha="$GITHUB_SHA"
+          fi
+          echo "expected_sha=$expected_sha" >> "$GITHUB_OUTPUT"
+
+  await-release:
+    needs: preflight
+    uses: ./.github/workflows/production-release-await.yml
+    with:
+      expected_sha: ${{ needs.preflight.outputs.expected_sha }}
+      allow_descendant: true
+      attempts: 30
+      sleep_seconds: 20
+
   seal-and-verify:
+    needs: await-release
     name: Seal monotonic production env keyset
     if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
@@ -39,23 +74,6 @@ jobs:
       VM_LOCK: /etc/shopvivaliz/env-keyset.lock.json
 
     steps:
-      - name: Checkout push revision for production impact
-        if: ${{ github.event_name == 'push' }}
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 2
-          persist-credentials: false
-
-      - name: Classify production impact
-        id: production_impact
-        if: ${{ github.event_name == 'push' }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" > /tmp/production-impact-paths.txt
-          should_deploy="$(bash scripts/should-deploy-production.sh < /tmp/production-impact-paths.txt)"
-          echo "should_deploy=$should_deploy" >> "$GITHUB_OUTPUT"
-
       - name: Configure verified SSH host
         shell: bash
         env:
@@ -73,46 +91,6 @@ jobs:
           printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
-
-      - name: Wait for protected release or descendant on push
-        if: ${{ github.event_name == 'push' && steps.production_impact.outputs.should_deploy == 'true' }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          ready=0
-          for attempt in $(seq 1 30); do
-            state="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              "${VM_USER}@${VM_HOST}" 'bash -s' -- "$GITHUB_SHA" <<'REMOTE'
-          set -euo pipefail
-          protected_sha="$1"
-          repo=/home/ubuntu/shopvivaliz-deploy/repo
-          current=/home/ubuntu/shopvivaliz-deploy/current
-          deployed_sha="$(cat "$current/.release-sha" 2>/dev/null || true)"
-          relation=none
-          if [[ -n "$deployed_sha" && "$deployed_sha" == "$protected_sha" ]]; then
-            relation=exact
-          elif [[ -n "$deployed_sha" ]] \
-            && git -C "$repo" cat-file -e "${protected_sha}^{commit}" 2>/dev/null \
-            && git -C "$repo" cat-file -e "${deployed_sha}^{commit}" 2>/dev/null \
-            && git -C "$repo" merge-base --is-ancestor "$protected_sha" "$deployed_sha"; then
-            relation=descendant
-          fi
-          printf 'deployed_sha=%s\nrelation=%s\n' "$deployed_sha" "$relation"
-          REMOTE
-            )"
-            deployed_sha="$(printf '%s\n' "$state" | sed -n 's/^deployed_sha=//p' | head -n 1)"
-            relation="$(printf '%s\n' "$state" | sed -n 's/^relation=//p' | head -n 1)"
-            if [[ "$relation" == exact || "$relation" == descendant ]]; then
-              ready=1
-              echo "protected_release_relation=$relation"
-              echo "deployed_sha=$deployed_sha"
-              break
-            fi
-            echo "deployment_wait_attempt=$attempt"
-            sleep 20
-          done
-          test "$ready" = 1 || { echo '::error::Protected release or descendant did not reach production'; exit 1; }
 
       - name: Seal current key names and block reductions
         shell: bash

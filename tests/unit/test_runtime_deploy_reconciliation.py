@@ -44,16 +44,25 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('ln -sfn "releases/$(basename "$previous")" "$root/current.rollback"', text)
         self.assertIn('mv -Tf "$root/current.rollback" "$current"', text)
 
-    def test_runtime_checks_wait_for_exact_release_on_push(self) -> None:
-        for relative in (
-            ".github/workflows/runtime-env-guard.yml",
-            ".github/workflows/runtime-token-security.yml",
-        ):
-            text = (ROOT / relative).read_text(encoding="utf-8")
-            self.assertIn("github.event_name == 'push'", text)
-            self.assertIn('deployed_sha', text)
-            self.assertIn('GITHUB_SHA', text)
-            self.assertIn('.release-sha', text)
+    def test_runtime_checks_wait_off_the_oracle_runner(self) -> None:
+        reusable = (ROOT / ".github/workflows/production-release-await.yml").read_text(encoding="utf-8")
+        self.assertIn("workflow_call:", reusable)
+        self.assertIn("runs-on: ubuntu-latest", reusable)
+        self.assertIn("deployment/latest.json?ref=deployment-evidence", reusable)
+        self.assertIn("production_release_relation=exact", reusable)
+
+        env_guard = (ROOT / ".github/workflows/runtime-env-guard.yml").read_text(encoding="utf-8")
+        self.assertIn("runs-on: ubuntu-latest", env_guard)
+        self.assertIn("deployment/latest.json?ref=deployment-evidence", env_guard)
+        self.assertIn("needs: await-release", env_guard)
+        guard_job = env_guard.split("  guard:\n", 1)[1]
+        self.assertNotIn("deployment_wait_attempt", guard_job)
+
+        token = (ROOT / ".github/workflows/runtime-token-security.yml").read_text(encoding="utf-8")
+        self.assertIn("uses: ./.github/workflows/production-release-await.yml", token)
+        self.assertIn("expected_sha: ${{ needs.preflight.outputs.expected_sha }}", token)
+        audit_job = token.split("  audit:\n", 1)[1]
+        self.assertNotIn("deployment_wait_attempt", audit_job)
 
     def test_runtime_env_guard_smokes_local_release(self) -> None:
         text = (ROOT / ".github/workflows/runtime-env-guard.yml").read_text(encoding="utf-8")
