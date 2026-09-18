@@ -56,6 +56,7 @@ jobs:
           python3 tests/test_ecommerce_excellence_reference_resolution.py
           python3 tests/test_ecommerce_excellence_sitewide.py
           node --check scripts/public-layout-audit.mjs
+          node --check scripts/production-runtime-parity.mjs
           node --check scripts/lib/audit-concurrency.mjs
           node --check js/catalog-conversion-v4.js
           node --check js/product-conversion-v5.js
@@ -72,6 +73,7 @@ jobs:
           php tests/php-router-blog-contract-test.php
           php tests/browser-smoke-relay-failover-regression.php
           bash tests/apache-security-headers-module-regression.sh
+          php tests/csp-mercadopago-frame-regression.php
           php tests/sobre-open-graph-regression.php
           bash tests/repository-editor-artifacts-regression.sh
           bash tests/master-production-runtime-restart-regression.sh
