@@ -239,7 +239,7 @@ $contentSections = array_values(array_filter((array)($article['content'] ?? []),
                 <input type="hidden" name="artigo" value="<?= sv_blog_escape((string)$article['title']) ?>">
                 <input type="hidden" name="slug" value="<?= sv_blog_escape((string)$article['slug']) ?>">
                 <input type="hidden" name="url" value="<?= sv_blog_escape($canonical) ?>">
-                <input type="text" name="website" value="" autocomplete="off" tabindex="-1" style="position:absolute;left:-9999px;height:1px;width:1px;opacity:0" aria-hidden="true">
+                <input type="text" name="website" value="" autocomplete="off" tabindex="-1" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0;opacity:0;pointer-events:none" aria-hidden="true">
                 <div class="article-comments-grid">
                     <label>
                         <span>Seu nome</span>

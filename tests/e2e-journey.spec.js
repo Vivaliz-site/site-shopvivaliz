@@ -78,7 +78,7 @@ test.describe('E2E Journey - Compra Completa', () => {
 
     expect(page.url()).toContain('/carrinho');
     await expect(page.locator('.sv-navbar')).toBeVisible();
-    await expect(page.getByRole('heading', { name: /meu carrinho/i }).or(page.getByText(/seu carrinho .* vazio/i))).toBeVisible();
+    await expect(page.getByRole('heading', { name: /meu carrinho/i })).toBeVisible();
   });
 
   test('Checkout está acessível', async ({ page }) => {
