@@ -22,6 +22,13 @@ readonly -a RUNTIME_SERVICES=(
 )
 
 mkdir -p "$RELEASES_DIR" "$SHARED_DIR" "$LOG_DIR" "$SHARED_DIR/logs"
+# Deploys run as ubuntu (GitHub runner and safe-sync service) and require sudo
+# later for systemd/Apache reconciliation. Repair historical root-owned log
+# state before the first log() call without truncating existing evidence.
+sudo install -d -o ubuntu -g ubuntu -m 0755 "$LOG_DIR"
+sudo touch "$LOG_FILE"
+sudo chown ubuntu:ubuntu "$LOG_FILE"
+sudo chmod 0644 "$LOG_FILE"
 
 log() {
   local level="$1"

@@ -26,7 +26,7 @@ const routes = [
   { name: 'home', url: '/', expected: [200] },
   { name: 'catalogo', url: '/catalogo', expected: [200] },
   { name: 'blog', url: '/blog/', expected: [200] },
-  { name: 'blog-article', url: '/blog/acessorios-que-ajudam-na-rotina-de-limpeza-e-manutencao', expected: [200] },
+  { name: 'blog-article', url: '/blog/como-escolher-ferramentas-para-casa', expected: [200] },
   { name: 'produto', url: '/produto/chave-teste-140mm-100500v', expected: [200, 404] },
   { name: 'carrinho', url: '/carrinho', expected: [200] },
   { name: 'checkout', url: '/checkout', expected: [200] },
@@ -162,6 +162,12 @@ async function collectInitialMetrics(page) {
       if (!(node instanceof Element)) continue;
       const rect = node.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) continue;
+
+      const style = window.getComputedStyle(node);
+      const intentionallyOffscreen = style.position === 'absolute'
+        && (rect.right <= -100 || rect.left >= viewportWidth + 100)
+        && (style.opacity === '0' || node.getAttribute('aria-hidden') === 'true' || node.tabIndex === -1);
+      if (intentionallyOffscreen) continue;
 
       const intentionalScroller = node.closest(allowedScrollerSelector);
       if (intentionalScroller) {
