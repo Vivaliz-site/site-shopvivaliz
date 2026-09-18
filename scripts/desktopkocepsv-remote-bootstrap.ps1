@@ -66,6 +66,11 @@ function Install-Task {
     Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($startup,$watchdog) -Principal $principal -Settings $settings -Description 'Keeps DESKTOP-KOCEPSV private loopback maintenance relay available without interactive logon.' -Force | Out-Null
     Write-Output 'TASK_INSTALLED=true'
 }
+function Ensure-Task {
+    $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    if (-not $task) { Install-Task }
+}
 
 if ($Mode -eq 'InstallTask') { Install-Task }
+Ensure-Task
 Ensure-Relay
