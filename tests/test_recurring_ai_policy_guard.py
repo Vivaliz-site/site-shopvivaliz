@@ -49,6 +49,39 @@ class RecurringAiPolicyGuardTests(unittest.TestCase):
             violations = guard.scan_repository(root)
             self.assertTrue(any(v.code == "scheduled_paid_ai" for v in violations))
 
+
+    def test_scheduled_wrapper_calling_paid_script_is_rejected(self):
+        guard = load_guard()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            workflows = root / ".github" / "workflows"
+            scripts = root / "scripts"
+            workflows.mkdir(parents=True)
+            scripts.mkdir(parents=True)
+            (scripts / "worker.py").write_text(
+                "import openai\nclient = openai.OpenAI(api_key='x')\n",
+                encoding="utf-8",
+            )
+            (workflows / "bad-wrapper.yml").write_text(
+                textwrap.dedent(
+                    """
+                    name: bad-wrapper
+                    on:
+                      schedule:
+                        - cron: '0 * * * *'
+                    jobs:
+                      paid:
+                        runs-on: ubuntu-latest
+                        steps:
+                          - run: python3 scripts/worker.py
+                    """
+                ),
+                encoding="utf-8",
+            )
+            violations = guard.scan_repository(root)
+            self.assertTrue(any(v.code == "scheduled_paid_ai" for v in violations))
+            self.assertTrue(any("scripts" in v.message and "worker.py" in v.message for v in violations))
+
     def test_explicit_human_claude_trigger_is_allowed(self):
         guard = load_guard()
         with tempfile.TemporaryDirectory() as tmp:
