@@ -89,6 +89,19 @@ def test_log_dir_variable_covered_by_mkdir() -> None:
     raise AssertionError("No mkdir -p line references $LOG_DIR")
 
 
+def test_deploy_log_permissions_self_heal_for_ubuntu_runner() -> None:
+    text = _text()
+    required = (
+        'sudo install -d -o ubuntu -g ubuntu -m 0755 "$LOG_DIR"',
+        'sudo touch "$LOG_FILE"',
+        'sudo chown ubuntu:ubuntu "$LOG_FILE"',
+        'sudo chmod 0644 "$LOG_FILE"',
+    )
+    for fragment in required:
+        assert fragment in text, f"deploy log bootstrap missing: {fragment}"
+    assert text.index('sudo chown ubuntu:ubuntu "$LOG_FILE"') < text.index('log() {')
+
+
 # ---------------------------------------------------------------------------
 # Fix 2: runtime-secrets materialization preserved
 # ---------------------------------------------------------------------------
