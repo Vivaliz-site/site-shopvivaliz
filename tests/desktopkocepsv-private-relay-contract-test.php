@@ -17,7 +17,11 @@ foreach ([
     'ShopVivaliz DESKTOP-KOCEPSV Relay 24h',
     'New-ScheduledTaskTrigger -AtStartup',
     'LogonType S4U',
-    'RunLevel Highest'
+    'RunLevel Highest',
+    'function Ensure-Task',
+    'Get-ScheduledTask -TaskName $TaskName',
+    'if (-not $task) { Install-Task }',
+    'Ensure-Task'
 ] as $needle) {
     if (stripos($all, $needle) === false) { fwrite(STDERR, "FALHOU: relay sem {$needle}\n"); exit(1); }
 }
