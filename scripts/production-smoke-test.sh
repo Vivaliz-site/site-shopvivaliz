@@ -114,10 +114,17 @@ if [ ! -r "$installer" ]; then
 fi
 ROOT="$repo" SHARED_ROOT="$shared" CURRENT_ROOT="$current_root" \
   /usr/bin/bash "$installer"
-crontab -l > "$tmpdir/crontab.txt"
-grep -F "/usr/bin/bash $current_root/scripts/auto-sync-oracle.sh" \
-  "$tmpdir/crontab.txt" >/dev/null
-echo "OK Oracle repository sync cron installed"
+if command -v crontab >/dev/null 2>&1; then
+  crontab -l > "$tmpdir/crontab.txt"
+  grep -F "/usr/bin/bash $current_root/scripts/auto-sync-oracle.sh" \
+    "$tmpdir/crontab.txt" >/dev/null
+  echo "OK Oracle repository sync cron installed"
+else
+  systemctl is-enabled --quiet shopvivaliz-sync-safe.timer
+  systemctl is-active --quiet shopvivaliz-sync-safe.timer
+  systemctl cat shopvivaliz-sync-safe.service | grep -F '/usr/local/lib/shopvivaliz/safe-repo-sync.sh' >/dev/null
+  echo "OK Oracle repository sync systemd timer installed"
+fi
 
 check_http() {
   local label="$1"
