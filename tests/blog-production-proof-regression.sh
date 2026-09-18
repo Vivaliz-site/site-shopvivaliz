@@ -4,7 +4,10 @@ set -euo pipefail
 browser_audit='tests/storefront-screenshot-audit.mjs'
 php_router='tests/php-router.php'
 repair_workflow='.github/workflows/blog-editorial-repair-once.yml'
-article_path='/blog/acessorios-que-ajudam-na-rotina-de-limpeza-e-manutencao'
+# The production-only repaired article is validated live by the extreme audit; the isolated
+# screenshot audit uses the static fallback fixture so it does not depend on a database.
+production_article_path='/blog/acessorios-que-ajudam-na-rotina-de-limpeza-e-manutencao'
+representative_article_path='/blog/como-escolher-ferramentas-para-casa'
 
 for expected_router_rule in "'/blog/' => 'blog/index.php'" "^/blog/([a-z0-9][a-z0-9-]*)/?$"; do
   if ! grep -Fq "$expected_router_rule" "$php_router"; then
@@ -13,7 +16,12 @@ for expected_router_rule in "'/blog/' => 'blog/index.php'" "^/blog/([a-z0-9][a-z
   fi
 done
 
-for route in "{ name: 'blog', url: '/blog/'" "{ name: 'blog-article', url: '${article_path}'"; do
+if ! grep -Fq "'como-escolher-ferramentas-para-casa'" blog/content.php; then
+  echo 'Representative static blog article fixture is missing.' >&2
+  exit 1
+fi
+
+for route in "{ name: 'blog', url: '/blog/'" "{ name: 'blog-article', url: '${representative_article_path}'"; do
   if ! grep -Fq "$route" "$browser_audit"; then
     echo "Storefront browser audit is missing required blog route: $route" >&2
     exit 1
