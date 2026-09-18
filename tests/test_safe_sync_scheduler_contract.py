@@ -15,4 +15,12 @@ assert "NoNewPrivileges=false" in service
 assert "NoNewPrivileges=true" not in service
 assert 'chown ubuntu:ubuntu "$DEPLOY_LOG_FILE"' in systemd_installer
 assert 'chmod 0644 "$DEPLOY_LOG_FILE"' in systemd_installer
+
+assert 'systemctl show --property=Result --value "$SERVICE_NAME"' in systemd_installer
+assert "if [[ \"$service_result\" != 'success' ]]" in systemd_installer
+assert 'systemctl is-active --quiet "$TIMER_NAME"' in systemd_installer
+assert 'systemctl is-enabled --quiet "$TIMER_NAME"' in systemd_installer
+assert 'systemctl show "$SERVICE_NAME" --property=ActiveState,SubState,Result --no-pager' in systemd_installer
+assert 'SAFE_SYNC_INSTALL=PASS' in systemd_installer
 print("safe sync scheduler contract: ok")
+assert '|| true' not in systemd_installer

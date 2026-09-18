@@ -43,9 +43,24 @@ chown ubuntu:ubuntu "$DEPLOY_LOG_FILE"
 chmod 0644 "$DEPLOY_LOG_FILE"
 
 systemctl daemon-reload
-systemctl disable --now shopvivaliz-sync.service 2>/dev/null || true
+if systemctl cat shopvivaliz-sync.service >/dev/null 2>&1; then
+  systemctl disable --now shopvivaliz-sync.service
+fi
 systemctl enable --now "$TIMER_NAME"
 systemctl start "$SERVICE_NAME"
 
-systemctl status "$SERVICE_NAME" --no-pager
-systemctl status "$TIMER_NAME" --no-pager
+# Type=oneshot termina em inactive (dead) apos sucesso. `systemctl status`
+# devolve rc=3 nesse estado e nao pode ser usado como gate sob `set -e`.
+service_result="$(systemctl show --property=Result --value "$SERVICE_NAME")"
+if [[ "$service_result" != 'success' ]]; then
+  echo "Safe sync oneshot terminou com Result=$service_result" >&2
+  systemctl show "$SERVICE_NAME" --property=ActiveState,SubState,Result --no-pager
+  exit 4
+fi
+systemctl is-active --quiet "$TIMER_NAME"
+systemctl is-enabled --quiet "$TIMER_NAME"
+
+# Diagnostico somente: o oneshot pode aparecer inactive mesmo apos sucesso.
+systemctl show "$SERVICE_NAME" --property=ActiveState,SubState,Result --no-pager
+systemctl show "$TIMER_NAME" --property=ActiveState,SubState,Result --no-pager
+echo 'SAFE_SYNC_INSTALL=PASS'
