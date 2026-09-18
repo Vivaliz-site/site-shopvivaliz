@@ -1,6 +1,6 @@
 name: Sync AI provider keys to VM (one-time)
 
-# Traz OPENAI_API_KEY, ANTHROPIC_API_KEY e GEMINI_API_KEY dos GitHub Secrets
+# Traz OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY e OPENROUTER_API_KEY dos GitHub Secrets
 # do repositorio para o shared/.env real da VM Oracle, sem NUNCA imprimir o
 # valor do segredo em nenhum log do Actions. Segue exatamente o mesmo padrao
 # ja usado por one-time-olist-refresh.yml e refresh-olist-token-2h.yml:
@@ -46,7 +46,7 @@ concurrency:
 
 jobs:
   sync:
-    name: Escrever OPENAI_API_KEY/ANTHROPIC_API_KEY/GEMINI_API_KEY no shared/.env da VM
+    name: Escrever chaves AI aprovadas no shared/.env da VM
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 10
     env:
@@ -57,6 +57,7 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     steps:
       - name: Confirmar execucao manual
         shell: bash
@@ -83,9 +84,14 @@ jobs:
             echo '::error::GEMINI_API_KEY ausente nos GitHub Secrets deste repositorio.'
             exit 1
           fi
+          if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
+            echo '::error::OPENROUTER_API_KEY ausente nos GitHub Secrets deste repositorio.'
+            exit 1
+          fi
           echo "::add-mask::$OPENAI_API_KEY"
           echo "::add-mask::$ANTHROPIC_API_KEY"
           echo "::add-mask::$GEMINI_API_KEY"
+          echo "::add-mask::$OPENROUTER_API_KEY"
 
       - name: Configurar SSH autenticado (host fixado)
         shell: bash
@@ -119,7 +125,8 @@ jobs:
           Path('/tmp/ai-keys-payload').write_text(
               'OPENAI_API_KEY=' + os.environ['OPENAI_API_KEY'] + '\n'
               'ANTHROPIC_API_KEY=' + os.environ['ANTHROPIC_API_KEY'] + '\n'
-              'GEMINI_API_KEY=' + os.environ['GEMINI_API_KEY'] + '\n',
+              'GEMINI_API_KEY=' + os.environ['GEMINI_API_KEY'] + '\n'
+              'OPENROUTER_API_KEY=' + os.environ['OPENROUTER_API_KEY'] + '\n',
               encoding='utf-8',
           )
           PY
@@ -152,7 +159,7 @@ jobs:
               if '=' in raw:
                   key, value = raw.split('=', 1)
                   payload[key] = value
-          required_keys = ('OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY')
+          required_keys = ('OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'OPENROUTER_API_KEY')
           if any(not payload.get(k) for k in required_keys):
               raise SystemExit('payload de chaves incompleto')
           if not env_path.is_file():
@@ -230,29 +237,35 @@ jobs:
           ])
           anthropic_code = probe([
               'curl', '-sS', '-o', '/dev/null', '-w', '%{http_code}',
-              '--max-time', '15', 'https://api.anthropic.com/v1/messages',
+              '--max-time', '15', 'https://api.anthropic.com/v1/models',
               '-H', 'x-api-key: ' + payload['ANTHROPIC_API_KEY'],
               '-H', 'anthropic-version: 2023-06-01',
-              '-H', 'content-type: application/json',
-              '-d', '{"model":"claude-3-5-haiku-20241022","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}',
           ])
           gemini_code = probe([
               'curl', '-sS', '-o', '/dev/null', '-w', '%{http_code}',
               '--max-time', '15',
               'https://generativelanguage.googleapis.com/v1beta/models?key=' + payload['GEMINI_API_KEY'],
           ])
+          openrouter_code = probe([
+              'curl', '-sS', '-o', '/dev/null', '-w', '%{http_code}',
+              '--max-time', '15', 'https://openrouter.ai/api/v1/models',
+              '-H', 'Authorization: Bearer ' + payload['OPENROUTER_API_KEY'],
+          ])
 
           print('openai_api_key_present=true')
           print('anthropic_api_key_present=true')
           print('gemini_api_key_present=true')
+          print('openrouter_api_key_present=true')
           print('openai_live_probe_http_code=' + openai_code)
           print('anthropic_live_probe_http_code=' + anthropic_code)
           print('gemini_live_probe_http_code=' + gemini_code)
+          print('openrouter_live_probe_http_code=' + openrouter_code)
 
           checks = (
               ('OpenAI', openai_code, ('200', '201')),
               ('Anthropic', anthropic_code, ('200', '201')),
               ('Gemini', gemini_code, ('200', '201')),
+              ('OpenRouter', openrouter_code, ('200', '201')),
           )
           for name, code, ok_codes in checks:
               if code not in ok_codes:

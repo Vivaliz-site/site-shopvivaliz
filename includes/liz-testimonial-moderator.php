@@ -20,8 +20,7 @@ final class LizTestimonialModerator
             $prompt = $this->prompt($review);
             $providers = [
                 ['name' => 'gemini', 'key' => $this->env('GEMINI_API_KEY') ?: $this->env('GOOGLE_GEMINI_API_KEY')],
-                ['name' => 'openai', 'key' => $this->env('OPENAI_API_KEY')],
-                ['name' => 'claude', 'key' => $this->env('ANTHROPIC_API_KEY')],
+                ['name' => 'openrouter', 'key' => $this->env('OPENROUTER_API_KEY')],
             ];
 
             foreach ($providers as $provider) {
@@ -30,8 +29,7 @@ final class LizTestimonialModerator
                 }
                 $answer = match ($provider['name']) {
                     'gemini' => $this->gemini($prompt, $provider['key']),
-                    'openai' => $this->openai($prompt, $provider['key']),
-                    'claude' => $this->claude($prompt, $provider['key']),
+                    'openrouter' => $this->openrouter($prompt, $provider['key']),
                     default => null,
                 };
                 $decision = $this->parseDecision($answer);
@@ -170,33 +168,26 @@ PROMPT;
         return $answer !== '' ? $answer : null;
     }
 
-    private function openai(string $prompt, string $key): ?string
+    private function openrouter(string $prompt, string $key): ?string
     {
         $payload = [
-            'model' => $this->modelFor('openai'),
+            'model' => $this->modelFor('openrouter'),
             'messages' => [
-                ['role' => 'system', 'content' => 'Você é Liz, moderadora de avaliações da ShopVivaliz. Retorne somente JSON válido.'],
+                ['role' => 'system', 'content' => 'Voc? ? Liz, moderadora de avalia??es da ShopVivaliz. Retorne somente JSON v?lido.'],
                 ['role' => 'user', 'content' => $prompt],
             ],
             'max_tokens' => 180,
             'temperature' => 0.0,
             'response_format' => ['type' => 'json_object'],
         ];
-        $data = $this->postJson('https://api.openai.com/v1/chat/completions', $payload, ['Authorization: Bearer ' . $key]);
+        $headers = ['Authorization: Bearer ' . $key];
+        $referer = $this->env('OPENROUTER_HTTP_REFERER');
+        $title = $this->env('OPENROUTER_APP_TITLE');
+        if ($referer !== '') $headers[] = 'HTTP-Referer: ' . $referer;
+        if ($title !== '') $headers[] = 'X-OpenRouter-Title: ' . $title;
+        $baseUrl = rtrim($this->env('OPENROUTER_API_BASE_URL') ?: 'https://openrouter.ai/api/v1', '/');
+        $data = $this->postJson($baseUrl . '/chat/completions', $payload, $headers);
         $answer = $data['choices'][0]['message']['content'] ?? null;
-        return is_string($answer) && trim($answer) !== '' ? trim($answer) : null;
-    }
-
-    private function claude(string $prompt, string $key): ?string
-    {
-        $payload = [
-            'model' => $this->modelFor('claude'),
-            'max_tokens' => 180,
-            'temperature' => 0.0,
-            'messages' => [['role' => 'user', 'content' => $prompt]],
-        ];
-        $data = $this->postJson('https://api.anthropic.com/v1/messages', $payload, ['x-api-key: ' . $key, 'anthropic-version: 2023-06-01']);
-        $answer = $data['content'][0]['text'] ?? null;
         return is_string($answer) && trim($answer) !== '' ? trim($answer) : null;
     }
 
@@ -228,9 +219,8 @@ PROMPT;
     private function modelFor(string $provider): string
     {
         return match ($provider) {
-            'gemini' => $this->env('GEMINI_MODEL') ?: 'gemini-1.5-flash',
-            'openai' => $this->env('OPENAI_MODEL') ?: 'gpt-4o-mini',
-            'claude' => $this->env('ANTHROPIC_MODEL') ?: 'claude-3-5-haiku-20241022',
+            'gemini' => $this->env('GEMINI_MODEL') ?: 'gemini-3.1-flash-lite',
+            'openrouter' => $this->env('OPENROUTER_TEXT_MODEL') ?: 'google/gemini-2.5-flash-lite',
             default => '',
         };
     }

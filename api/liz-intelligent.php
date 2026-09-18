@@ -82,8 +82,7 @@ function liz_provider_status(): array
 {
     return [
         'gemini' => liz_env('GEMINI_API_KEY') !== '' || liz_env('GOOGLE_GEMINI_API_KEY') !== '',
-        'openai' => liz_env('OPENAI_API_KEY') !== '',
-        'claude' => liz_env('ANTHROPIC_API_KEY') !== '',
+        'openrouter' => liz_env('OPENROUTER_API_KEY') !== '',
     ];
 }
 
@@ -296,11 +295,9 @@ $geminiKey = liz_env('GEMINI_API_KEY') ?: liz_env('GOOGLE_GEMINI_API_KEY');
 if ($geminiKey !== '') {
     $providers[] = ['name' => 'gemini', 'key' => $geminiKey];
 }
-if (liz_env('OPENAI_API_KEY') !== '') {
-    $providers[] = ['name' => 'gpt', 'key' => liz_env('OPENAI_API_KEY')];
-}
-if (liz_env('ANTHROPIC_API_KEY') !== '') {
-    $providers[] = ['name' => 'claude', 'key' => liz_env('ANTHROPIC_API_KEY')];
+$openRouterKey = liz_env('OPENROUTER_API_KEY');
+if ($openRouterKey !== '') {
+    $providers[] = ['name' => 'openrouter', 'key' => $openRouterKey];
 }
 
 // 6. Busca de Produtos Local Hardened
@@ -743,31 +740,38 @@ function liz_call_gemini(string $message, array $history, array $products, strin
     return null;
 }
 
-function liz_call_gpt(string $message, array $history, array $products, string $apiKey, array $knowledge = [], array $orderContext = [], array $state = []): ?string
+function liz_call_openrouter(string $message, array $history, array $products, string $apiKey, array $knowledge = [], array $orderContext = [], array $state = []): ?string
 {
     $messages = [['role' => 'system', 'content' => liz_system_prompt($products, $knowledge, $orderContext, $state)]];
     $messages = array_merge($messages, liz_normalized_history($history, 'assistant', $message));
     $messages[] = ['role' => 'user', 'content' => $message];
 
     $payload = [
-        'model' => liz_env('OPENAI_MODEL') ?: 'gpt-4o-mini',
+        'model' => liz_env('OPENROUTER_TEXT_MODEL') ?: 'google/gemini-2.5-flash-lite',
         'messages' => $messages,
         'max_tokens' => 1000,
-        'temperature' => 0.35
+        'temperature' => 0.35,
     ];
 
-    $ch = curl_init('https://api.openai.com/v1/chat/completions');
+    $baseUrl = rtrim(liz_env('OPENROUTER_API_BASE_URL') ?: 'https://openrouter.ai/api/v1', '/');
+    $headers = ['Content-Type: application/json', 'Authorization: Bearer ' . $apiKey];
+    $referer = liz_env('OPENROUTER_HTTP_REFERER');
+    $title = liz_env('OPENROUTER_APP_TITLE');
+    if ($referer !== '') $headers[] = 'HTTP-Referer: ' . $referer;
+    if ($title !== '') $headers[] = 'X-OpenRouter-Title: ' . $title;
+
+    $ch = curl_init($baseUrl . '/chat/completions');
     if ($ch === false) {
         return null;
     }
 
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $apiKey],
+        CURLOPT_HTTPHEADER => $headers,
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
         CURLOPT_CONNECTTIMEOUT => 5,
-        CURLOPT_TIMEOUT => 30
+        CURLOPT_TIMEOUT => 30,
     ]);
 
     $response = curl_exec($ch);
@@ -789,7 +793,7 @@ function liz_call_gpt(string $message, array $history, array $products, string $
         } elseif ($httpCode >= 500) {
             $internalCode = 'provider_unavailable';
         }
-        liz_log_provider_error('OpenAI', $httpCode, $curlError, is_string($response) ? $response : '', $internalCode);
+        liz_log_provider_error('OpenRouter', $httpCode, $curlError, is_string($response) ? $response : '', $internalCode);
         return null;
     }
 
@@ -798,71 +802,12 @@ function liz_call_gpt(string $message, array $history, array $products, string $
     return is_string($answer) && trim($answer) !== '' ? trim($answer) : null;
 }
 
-function liz_call_claude(string $message, array $history, array $products, string $apiKey, array $knowledge = [], array $orderContext = [], array $state = []): ?string
-{
-    $messages = liz_normalized_history($history, 'assistant', $message);
-    $messages[] = ['role' => 'user', 'content' => $message];
-
-    $payload = [
-        'model' => liz_env('ANTHROPIC_MODEL') ?: 'claude-3-5-haiku-20241022',
-        'max_tokens' => 1000,
-        'system' => liz_system_prompt($products, $knowledge, $orderContext, $state),
-        'messages' => $messages
-    ];
-
-    $ch = curl_init('https://api.anthropic.com/v1/messages');
-    if ($ch === false) {
-        return null;
-    }
-
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-            'x-api-key: ' . $apiKey,
-            'anthropic-version: 2023-06-01'
-        ],
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
-        CURLOPT_CONNECTTIMEOUT => 5,
-        CURLOPT_TIMEOUT => 30
-    ]);
-
-    $response = curl_exec($ch);
-    $curlError = curl_error($ch);
-    $curlErrno = curl_errno($ch);
-    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($httpCode !== 200 || !is_string($response) || $response === '') {
-        $internalCode = 'network_error';
-        if ($curlErrno === CURLE_OPERATION_TIMEDOUT) {
-            $internalCode = 'timeout';
-        } elseif ($httpCode === 400) {
-            $internalCode = 'invalid_request';
-        } elseif ($httpCode === 401 || $httpCode === 403) {
-            $internalCode = 'authentication_error';
-        } elseif ($httpCode === 429) {
-            $internalCode = 'rate_limit';
-        } elseif ($httpCode >= 500) {
-            $internalCode = 'provider_unavailable';
-        }
-        liz_log_provider_error('Claude', $httpCode, $curlError, is_string($response) ? $response : '', $internalCode);
-        return null;
-    }
-
-    $data = json_decode($response, true);
-    $answer = $data['content'][0]['text'] ?? null;
-    return is_string($answer) && trim($answer) !== '' ? trim($answer) : null;
-}
-
 function liz_call_with_fallback(string $message, array $history, array $products, array $providers, array $knowledge = [], array $orderContext = [], array $state = []): array
 {
     foreach ($providers as $provider) {
         $answer = match ($provider['name']) {
             'gemini' => liz_call_gemini($message, $history, $products, $provider['key'], $knowledge, $orderContext, $state),
-            'gpt' => liz_call_gpt($message, $history, $products, $provider['key'], $knowledge, $orderContext, $state),
-            'claude' => liz_call_claude($message, $history, $products, $provider['key'], $knowledge, $orderContext, $state),
+            'openrouter' => liz_call_openrouter($message, $history, $products, $provider['key'], $knowledge, $orderContext, $state),
             default => null,
         };
         if ($answer !== null) {
