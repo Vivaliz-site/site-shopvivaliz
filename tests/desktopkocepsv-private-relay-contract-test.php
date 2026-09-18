@@ -3,7 +3,8 @@ $root = dirname(__DIR__);
 $bootstrap = $root . '/scripts/desktopkocepsv-remote-bootstrap.ps1';
 $tunnel = $root . '/scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1';
 foreach ([$bootstrap,$tunnel] as $p) {
-    if (!is_file($p)) { fwrite(STDERR, "FALHOU: ausente {$p}\n"); exit(1); }
+    if (!is_file($p)) { fwrite(STDERR, "FALHOU: ausente {$p}
+"); exit(1); }
 }
 $all = file_get_contents($bootstrap) . "\n" . file_get_contents($tunnel);
 foreach ([
@@ -18,14 +19,17 @@ foreach ([
     'New-ScheduledTaskTrigger -AtStartup',
     'LogonType S4U',
     'RunLevel Highest',
-    "DefaultIngressHost = '137.131.149.55'",
-    "DefaultIngressPort = '22'",
-    'SHOPVIVALIZ_BACKEND_SSH_HOST',
-    'SHOPVIVALIZ_BACKEND_SSH_PORT'
+    'function Ensure-Task',
+    'Get-ScheduledTask -TaskName $TaskName',
+    'if (-not $task) { Install-Task }',
+    'Ensure-Task'
 ] as $needle) {
-    if (stripos($all, $needle) === false) { fwrite(STDERR, "FALHOU: relay sem {$needle}\n"); exit(1); }
+    if (stripos($all, $needle) === false) { fwrite(STDERR, "FALHOU: relay sem {$needle}
+"); exit(1); }
 }
 foreach (['StrictHostKeyChecking=no','StrictHostKeyChecking=accept-new','0.0.0.0:5557','-R 0.0.0.0:5558'] as $needle) {
-    if (stripos($all, $needle) !== false) { fwrite(STDERR, "FALHOU: relay inseguro {$needle}\n"); exit(1); }
+    if (stripos($all, $needle) !== false) { fwrite(STDERR, "FALHOU: relay inseguro {$needle}
+"); exit(1); }
 }
-echo "desktopkocepsv-private-relay-contract: ok\n";
+echo "desktopkocepsv-private-relay-contract: ok
+";
