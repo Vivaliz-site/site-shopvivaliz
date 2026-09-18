@@ -22,8 +22,44 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  guard:
+  await-release:
+    name: Wait for production release without reserving Oracle runner
     if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Wait for exact push SHA in immutable deployment evidence
+        if: ${{ github.event_name == 'push' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          ready=0
+          for attempt in $(seq 1 30); do
+            if gh api -H 'Accept: application/vnd.github.raw+json' \
+              "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json?ref=deployment-evidence" \
+              > /tmp/deployment-latest.json 2>/dev/null \
+              && python3 - "$GITHUB_SHA" /tmp/deployment-latest.json <<'PYEOF'
+          import json, sys
+          expected=sys.argv[1].lower()
+          data=json.load(open(sys.argv[2], encoding='utf-8'))
+          assert str(data.get('sha','')).lower() == expected
+          assert data.get('status') == 'PRODUCTION_UPDATED'
+          assert all((data.get('jobs') or {}).get(name) == 'success' for name in ('validate','deploy','smoke_test'))
+          PYEOF
+            then
+              ready=1
+              break
+            fi
+            echo "deployment_wait_attempt=$attempt"
+            sleep 20
+          done
+          test "$ready" = 1 || { echo '::error::A release exata do push nao chegou a producao em 10 minutos.'; exit 1; }
+
+  guard:
+    needs: await-release
+    if: ${{ vars.ENABLE_GITHUB_HOSTED_RUNNERS == 'true' && needs.await-release.result == 'success' }}
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 20
     env:
@@ -50,27 +86,6 @@ jobs:
           printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
-
-      - name: Aguardar release exata em producao
-        if: ${{ github.event_name == 'push' }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          ready=0
-          for attempt in $(seq 1 30); do
-            deployed_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              "${VM_USER}@${VM_HOST}" \
-              'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha 2>/dev/null || true')"
-            if [[ "$deployed_sha" == "$GITHUB_SHA" ]]; then
-              ready=1
-              echo "deployed_sha=$deployed_sha"
-              break
-            fi
-            echo "deployment_wait_attempt=$attempt"
-            sleep 20
-          done
-          test "$ready" = 1 || { echo '::error::A release exata do push nao chegou a producao em 10 minutos.'; exit 1; }
 
       - name: Reparar e validar permissoes do shared/.env
         shell: bash

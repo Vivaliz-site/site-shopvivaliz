@@ -108,12 +108,7 @@ ADMIN_COMMANDS = {
     'fork', 'app-server', 'exec-server', 'help',
 }
 PROBE_TIMEOUT_SECONDS = 45
-PROBE_ARGS = [
-    '--ask-for-approval', 'never',
-    'exec', '--ephemeral', '--skip-git-repo-check', '--ignore-user-config',
-    '--ignore-rules', '--sandbox', 'read-only',
-    'Reply exactly PROFILE_OK and do not use tools.',
-]
+PROBE_ARGS = ['login', 'status']
 
 
 def command_mode(argv: list[str]) -> str:

@@ -176,19 +176,14 @@ jobs:
             should_deploy=true
           fi
           echo "should_deploy=$should_deploy" >> "$GITHUB_OUTPUT"
-  live-production-audit:
-    name: Validate real production from Oracle
+
+  await-production-evidence:
+    name: Wait for production evidence without reserving Oracle runner
     needs: classify-production-impact
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.pr_replay != true) || (github.event_name == 'push' && needs.classify-production-impact.outputs.should_deploy == 'true')
-    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
-    timeout-minutes: 25
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
     steps:
-      - name: Checkout exact commit
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-          fetch-depth: 1
-
       - name: Wait for exact SHA production evidence
         shell: bash
         env:
@@ -198,33 +193,19 @@ jobs:
           set -euo pipefail
           ready=0
           for _ in $(seq 1 36); do
-            if gh api \
-              -H 'Accept: application/vnd.github.raw+json' \
+            if gh api -H 'Accept: application/vnd.github.raw+json' \
               "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json?ref=deployment-evidence" \
               > /tmp/deployment-latest.json 2>/tmp/deployment-error.txt; then
-              evidence_ready=0
-              if [ -n "$EXPECTED_SHA" ]; then
-                if python3 - "$EXPECTED_SHA" /tmp/deployment-latest.json <<'PY'; then
+              if python3 - "$EXPECTED_SHA" /tmp/deployment-latest.json <<'PYEOF'
           import json, sys
-          expected = sys.argv[1].lower()
-          data = json.load(open(sys.argv[2], encoding='utf-8'))
-          assert str(data.get('sha', '')).lower() == expected
+          expected=sys.argv[1].lower()
+          data=json.load(open(sys.argv[2], encoding='utf-8'))
+          if expected:
+              assert str(data.get('sha','')).lower() == expected
           assert data.get('status') == 'PRODUCTION_UPDATED'
-          assert all((data.get('jobs') or {}).get(name) == 'success' for name in ('validate', 'deploy', 'smoke_test'))
-          PY
-                  evidence_ready=1
-                fi
-              else
-                if python3 - /tmp/deployment-latest.json <<'PY'; then
-          import json, sys
-          data = json.load(open(sys.argv[1], encoding='utf-8'))
-          assert data.get('status') == 'PRODUCTION_UPDATED'
-          assert all((data.get('jobs') or {}).get(name) == 'success' for name in ('validate', 'deploy', 'smoke_test'))
-          PY
-                  evidence_ready=1
-                fi
-              fi
-              if [ "$evidence_ready" = '1' ]; then
+          assert all((data.get('jobs') or {}).get(name) == 'success' for name in ('validate','deploy','smoke_test'))
+          PYEOF
+              then
                 ready=1
                 break
               fi
@@ -232,6 +213,19 @@ jobs:
             sleep 20
           done
           test "$ready" = '1'
+
+  live-production-audit:
+    name: Validate real production from Oracle
+    needs: [classify-production-impact, await-production-evidence]
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.pr_replay != true) || (github.event_name == 'push' && needs.classify-production-impact.outputs.should_deploy == 'true')
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 1
 
       - name: Configure verified SSH host
         shell: bash

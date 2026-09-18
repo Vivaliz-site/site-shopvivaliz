@@ -9,59 +9,49 @@ from pathlib import Path
 from datetime import datetime
 
 def get_agent_response(user_message):
-    """Obter resposta real de um agente IA"""
+    """Obter resposta real usando apenas os provedores aprovados para automa??o."""
 
-    # Tentar OpenAI primeiro para manter o modo 24/7 mais economico.
-    try:
-        import openai
-        api_key = os.getenv('OPENAI_API_KEY')
-        if api_key:
-            client = openai.OpenAI(api_key=api_key)
-            response = client.chat.completions.create(
-                model=os.getenv('OPENAI_MODEL') or 'gpt-4o-mini',
-                messages=[{
-                    'role': 'user',
-                    'content': f'Voce eh um agente de ecommerce da ShopVivaliz. Usuario: {user_message}\n\nResponda brevemente:'
-                }],
-                max_tokens=150
-            )
-            return response.choices[0].message.content, 'GPT'
-    except Exception as e:
-        print(f'[GPT error] {str(e)[:80]}', file=sys.stderr)
+    prompt = f'Voce eh um agente de ecommerce da ShopVivaliz. Usuario: {user_message}\n\nResponda brevemente:'
 
-    # Tentar Gemini
     try:
         import google.genai
         api_key = os.getenv('GEMINI_API_KEY')
         if api_key:
             client = google.genai.Client(api_key=api_key)
             response = client.models.generate_content(
-                model=os.getenv('GEMINI_MODEL') or 'gemini-2.5-flash',
-                contents=f'Voce eh um agente de ecommerce da ShopVivaliz. Usuario: {user_message}\n\nResponda brevemente:'
+                model=os.getenv('GEMINI_MODEL') or 'gemini-3.1-flash-lite',
+                contents=prompt,
             )
-            return response.text, 'Gemini'
+            if getattr(response, 'text', None):
+                return response.text, 'Gemini'
     except Exception as e:
         print(f'[Gemini error] {str(e)[:80]}', file=sys.stderr)
 
-    # Claude fica como ultimo fallback economico.
     try:
-        from anthropic import Anthropic
-        api_key = os.getenv('ANTHROPIC_API_KEY')
+        import urllib.request
+        api_key = os.getenv('OPENROUTER_API_KEY')
         if api_key:
-            client = Anthropic()
-            response = client.messages.create(
-                model=os.getenv('ANTHROPIC_MODEL') or 'claude-haiku-4-5-20251001',
-                max_tokens=150,
-                messages=[{
-                    'role': 'user',
-                    'content': f'Voce eh um agente de ecommerce da ShopVivaliz. Usuario: {user_message}\n\nResponda brevemente (1-2 linhas):'
-                }]
-            )
-            return response.content[0].text, 'Claude'
+            base = (os.getenv('OPENROUTER_API_BASE_URL') or 'https://openrouter.ai/api/v1').rstrip('/')
+            payload = json.dumps({
+                'model': os.getenv('OPENROUTER_TEXT_MODEL') or 'google/gemini-2.5-flash-lite',
+                'messages': [{'role': 'user', 'content': prompt}],
+                'max_tokens': 150,
+            }).encode('utf-8')
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + api_key,
+                'HTTP-Referer': os.getenv('OPENROUTER_HTTP_REFERER') or 'https://shopvivaliz.com.br',
+                'X-OpenRouter-Title': os.getenv('OPENROUTER_APP_TITLE') or 'ShopVivaliz',
+            }
+            req = urllib.request.Request(base + '/chat/completions', data=payload, headers=headers, method='POST')
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+            text = data.get('choices', [{}])[0].get('message', {}).get('content')
+            if text:
+                return str(text), 'OpenRouter'
     except Exception as e:
-        print(f'[Claude error] {str(e)[:80]}', file=sys.stderr)
+        print(f'[OpenRouter error] {str(e)[:80]}', file=sys.stderr)
 
-    # Fallback
     return 'Agentes offline. Tente novamente em alguns minutos.', 'System'
 
 def respond_to_messages():

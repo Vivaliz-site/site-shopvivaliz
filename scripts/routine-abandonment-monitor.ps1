@@ -37,7 +37,6 @@ $Allowlist = @(
     'ShopVivaliz Desktop Commander Task Guardian'
     'ShopVivaliz Fred-Win Relay 24h'
     'ShopVivaliz Amazon Returns Seller Central Bridge'
-    'ShopVivaliz Auto Sync'
     'ShopVivaliz DESKTOP-KOCEPSV Desktop Commander 24h'
 )
 

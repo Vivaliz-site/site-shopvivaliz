@@ -36,8 +36,8 @@ Status: ✅ Deve funcionar (usa Squad API)
 ```
 Script: scripts/chat-responder-real.py
 Workflow: monitor-chat-responses.yml
-Usa: GEMINI_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY
-Status: 🟡 Testa APIs, mas responde "offline" se não tiver módulos
+Usa: GEMINI_API_KEY, OPENROUTER_API_KEY
+Status: ✅ Automação restrita a Gemini/OpenRouter; sem fallback direto para GPT/Claude
 ```
 
 ### 4. Task Executor (NOVO)

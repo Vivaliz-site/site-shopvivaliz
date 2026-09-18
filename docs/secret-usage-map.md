@@ -7,7 +7,7 @@ Nao inclui valores reais.
 
 | Grupo | Secretos | Consumidores principais | Status |
 |---|---|---|---|
-| IA / LLM | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` | [api/liz-intelligent.php](../api/liz-intelligent.php), [claude/api/agent/squad-chat.php](../claude/api/agent/squad-chat.php), [ai_collaboration.py](../ai_collaboration.py), [scripts/chat-responder-real.py](../scripts/chat-responder-real.py), [scripts/generate-ai-images.py](../scripts/generate-ai-images.py), [scripts/ia/image_generator.py](../scripts/ia/image_generator.py) | ativo |
+| IA / automação | `GEMINI_API_KEY`, `OPENROUTER_API_KEY` | [api/liz-intelligent.php](../api/liz-intelligent.php), [api/liz-general.php](../api/liz-general.php), [scripts/chat-responder-real.py](../scripts/chat-responder-real.py), [.github/scripts/proactive_agent.py](../.github/scripts/proactive_agent.py) | ativo; automação restrita a Gemini/OpenRouter |
 | IA / utilitarios | `OPENAI_API_KEY` e aliases | [admin/ai-image-studio](../admin/ai-image-studio/), [admin/catalog-optimization](../admin/catalog-optimization/), [scripts/ecommerce-multi-ai-builder.py](../scripts/ecommerce-multi-ai-builder.py), [scripts/llm-log-analyzer.php](../scripts/llm-log-analyzer.php) | ativo |
 | Tiny / Olist | `OLIST_CLIENT_ID`, `OLIST_CLIENT_SECRET` | [olist/connect.php](../olist/connect.php), [olist/callback.php](../olist/callback.php) | bootstrap OAuth canônico |
 | Tiny / Olist runtime | access/refresh tokens rotativos no storage privado | [daemon-token-renewer.py](../daemon-token-renewer.py), [deploy/systemd/shopvivaliz-token-renewer.service](../deploy/systemd/shopvivaliz-token-renewer.service), [includes/marketplace/TinyV3Runtime.php](../includes/marketplace/TinyV3Runtime.php) | daemon único escritor; consumidores somente leitura |
@@ -21,6 +21,9 @@ Nao inclui valores reais.
 | Remote MCP | `REMOTE_MCP_ENABLED`, `REMOTE_MCP_PROVIDER`, `REMOTE_MCP_VERIFY_URL`, `REMOTE_MCP_AUTH_FLOW`, `REMOTE_MCP_DEVICE_NAME`, `REMOTE_MCP_AUTH_USER_EMAIL`, `REMOTE_MCP_DEVICE_ID`, `REMOTE_MCP_ACCESS_TOKEN` | [.env.example](../.env.example), [docs/AGENT-MCP-REMOTE.md](AGENT-MCP-REMOTE.md), [docs/agent-access.md](agent-access.md), [docs/github-actions-diagnostico.md](github-actions-diagnostico.md) | local-only; nao materializar em `shared/.env` nem em `runtime-secrets.php` |
 
 ## Observacoes
+
+- Claude/GPT/Codex exigem gatilho humano explicito; nao sao fallback de automacao.
+- `ai_collaboration.py` foi aposentado em modo fail-closed.
 
 - `scripts/materialize-runtime-secrets.php` materializa apenas o subconjunto aprovado para runtime.
 - `shared/.env` e `runtime-secrets.php` sao a referencia da VM; o checkout local pode conter chaves apenas para desenvolvimento.

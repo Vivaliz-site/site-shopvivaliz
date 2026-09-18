@@ -56,20 +56,21 @@ if ($message === '' || mb_strlen($message, 'UTF-8') > 2000) {
     lizg_reply(400, ['ok' => false, 'error' => 'Pergunta ausente ou muito longa.']);
 }
 
-$key = trim((string)(getenv('GEMINI_API_KEY') ?: getenv('GOOGLE_GEMINI_API_KEY') ?: ''));
-if ($key === '') {
-    lizg_reply(503, ['ok' => false, 'error' => 'A pesquisa da Liz está temporariamente indisponível.']);
+$geminiKey = trim((string)(getenv('GEMINI_API_KEY') ?: getenv('GOOGLE_GEMINI_API_KEY') ?: ''));
+$openRouterKey = trim((string)(getenv('OPENROUTER_API_KEY') ?: ''));
+if ($geminiKey === '' && $openRouterKey === '') {
+    lizg_reply(503, ['ok' => false, 'error' => 'A pesquisa da Liz est? temporariamente indispon?vel.']);
 }
 
 $model = trim((string)(getenv('GEMINI_MODEL') ?: 'gemini-3.1-flash-lite'));
 $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent';
 $system = <<<'TXT'
-Você é Liz, assistente virtual da ShopVivaliz. Também pode conversar de forma simpática sobre assuntos gerais, para tornar o atendimento mais humano.
-Quando a pergunta não for sobre a loja, responda em português do Brasil, de forma breve, clara e correta.
-Use a pesquisa Google fornecida pela API quando o assunto puder ter mudado, exigir informação atual ou quando a pergunta pedir pesquisa.
-Para receitas, ciência básica, curiosidades e conhecimento estável, responda diretamente.
-Não invente fatos. Em temas médicos, jurídicos ou financeiros, dê apenas informação geral e recomende orientação profissional quando necessário.
-Não transforme toda resposta em oferta comercial e não force o retorno ao assunto da loja.
+Voc? ? Liz, assistente virtual da ShopVivaliz. Tamb?m pode conversar de forma simp?tica sobre assuntos gerais, para tornar o atendimento mais humano.
+Quando a pergunta n?o for sobre a loja, responda em portugu?s do Brasil, de forma breve, clara e correta.
+Use a pesquisa Google fornecida pela API quando o assunto puder ter mudado, exigir informa??o atual ou quando a pergunta pedir pesquisa.
+Para receitas, ci?ncia b?sica, curiosidades e conhecimento est?vel, responda diretamente.
+N?o invente fatos. Em temas m?dicos, jur?dicos ou financeiros, d? apenas informa??o geral e recomende orienta??o profissional quando necess?rio.
+N?o transforme toda resposta em oferta comercial e n?o force o retorno ao assunto da loja.
 TXT;
 
 $groundingRequested = lizg_needs_web_grounding($message);
@@ -100,54 +101,106 @@ function lizg_request(string $url, string $key, array $payload, int $timeoutSeco
     return [$status, is_string($body) ? $body : ''];
 }
 
+function lizg_openrouter_request(string $key, string $system, string $message): array
+{
+    $baseUrl = rtrim(trim((string)(getenv('OPENROUTER_API_BASE_URL') ?: 'https://openrouter.ai/api/v1')), '/');
+    $model = trim((string)(getenv('OPENROUTER_TEXT_MODEL') ?: 'google/gemini-2.5-flash-lite'));
+    $headers = ['Content-Type: application/json', 'Authorization: Bearer ' . $key];
+    $referer = trim((string)(getenv('OPENROUTER_HTTP_REFERER') ?: 'https://shopvivaliz.com.br'));
+    $title = trim((string)(getenv('OPENROUTER_APP_TITLE') ?: 'ShopVivaliz'));
+    if ($referer !== '') $headers[] = 'HTTP-Referer: ' . $referer;
+    if ($title !== '') $headers[] = 'X-OpenRouter-Title: ' . $title;
+    $payload = [
+        'model' => $model,
+        'messages' => [
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user', 'content' => $message],
+        ],
+        'max_tokens' => 900,
+        'temperature' => 0.35,
+    ];
+    $ch = curl_init($baseUrl . '/chat/completions');
+    if ($ch === false) return [0, ''];
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT => 18,
+    ]);
+    $body = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    return [$status, is_string($body) ? $body : ''];
+}
+
 $status = 0;
 $body = '';
+$answer = '';
+$provider = null;
 $groundingUsed = false;
 
-// Grounding é opcional e consome cota separada. Faça no máximo uma tentativa
-// de pesquisa web; se ela falhar, preserve a conversa usando o modelo sem web.
-if ($groundingRequested) {
-    [$status, $body] = lizg_request($url, $key, $payload, 12);
-    $groundingUsed = $status === 200;
+if ($geminiKey !== '') {
+    if ($groundingRequested) {
+        [$status, $body] = lizg_request($url, $geminiKey, $payload, 12);
+        $groundingUsed = $status === 200;
+        if (!$groundingUsed) {
+            unset($payload['tools']);
+            $payload['system_instruction']['parts'][0]['text'] .= "\nA pesquisa web n?o est? dispon?vel nesta execu??o. N?o diga que pesquisou; avise quando uma informa??o atual n?o puder ser confirmada.";
+        }
+    }
+
     if (!$groundingUsed) {
-        unset($payload['tools']);
-        $payload['system_instruction']['parts'][0]['text'] .= "\nA pesquisa web não está disponível nesta execução. Não diga que pesquisou; avise quando uma informação atual não puder ser confirmada.";
+        for ($attempt = 1; $attempt <= lizg_plain_max_attempts(); $attempt++) {
+            [$status, $body] = lizg_request($url, $geminiKey, $payload, 18);
+            if ($status === 200 || !lizg_should_retry_plain($status)) {
+                break;
+            }
+            if ($attempt < lizg_plain_max_attempts()) {
+                usleep(250000 * $attempt);
+            }
+        }
+    }
+
+    $data = json_decode($body, true);
+    $parts = $data['candidates'][0]['content']['parts'] ?? [];
+    $texts = [];
+    foreach (is_array($parts) ? $parts : [] as $part) {
+        if (is_array($part) && empty($part['thought']) && is_string($part['text'] ?? null)) {
+            $texts[] = trim($part['text']);
+        }
+    }
+    $answer = trim(implode("\n", array_filter($texts)));
+    if ($status === 200 && $answer !== '') {
+        $provider = 'gemini';
+    } else {
+        error_log('Liz Gemini request failed; HTTP ' . $status . ', model=' . $model . '. Trying OpenRouter if configured.');
+        $answer = '';
     }
 }
 
-// A API Gemini pode ocasionalmente responder 503 ou estourar timeout mesmo
-// com credencial/modelo saudáveis. Para perguntas sem grounding (ou após a
-// queda controlada do grounding), faça até três tentativas curtas com backoff.
-if (!$groundingUsed) {
-    for ($attempt = 1; $attempt <= lizg_plain_max_attempts(); $attempt++) {
-        [$status, $body] = lizg_request($url, $key, $payload, 18);
-        if ($status === 200 || !lizg_should_retry_plain($status)) {
-            break;
-        }
-        if ($attempt < lizg_plain_max_attempts()) {
-            usleep(250000 * $attempt);
-        }
+if ($answer === '' && $openRouterKey !== '') {
+    [$routerStatus, $routerBody] = lizg_openrouter_request($openRouterKey, $system, $message);
+    $routerData = json_decode($routerBody, true);
+    $routerAnswer = $routerData['choices'][0]['message']['content'] ?? null;
+    if ($routerStatus === 200 && is_string($routerAnswer) && trim($routerAnswer) !== '') {
+        $answer = trim($routerAnswer);
+        $provider = 'openrouter';
+        $groundingUsed = false;
+    } else {
+        error_log('Liz OpenRouter request failed; HTTP ' . $routerStatus);
     }
 }
 
-$data = json_decode($body, true);
-$parts = $data['candidates'][0]['content']['parts'] ?? [];
-$texts = [];
-foreach (is_array($parts) ? $parts : [] as $part) {
-    if (is_array($part) && empty($part['thought']) && is_string($part['text'] ?? null)) {
-        $texts[] = trim($part['text']);
-    }
-}
-$answer = trim(implode("\n", array_filter($texts)));
-if ($status !== 200 || $answer === '') {
-    error_log('Liz Gemini request failed after fallback; HTTP ' . $status . ', model=' . $model);
-    lizg_reply(503, ['ok' => false, 'error' => 'Não consegui pesquisar ou responder agora. Tente novamente em instantes.']);
+if ($answer === '' || $provider === null) {
+    lizg_reply(503, ['ok' => false, 'error' => 'N?o consegui pesquisar ou responder agora. Tente novamente em instantes.']);
 }
 
 lizg_reply(200, [
     'ok' => true,
     'answer' => $answer,
-    'provider' => 'gemini',
+    'provider' => $provider,
     'web_grounding_requested' => $groundingUsed,
     'timestamp' => (new DateTimeImmutable('now', new DateTimeZone('America/Sao_Paulo')))->format(DateTime::ATOM),
 ]);

@@ -62,20 +62,14 @@ def test_retired_executor_never_claims_external_operation(tmp_path, capsys):
     assert payload["external_operation_performed"] is False
 
 
-def test_ai_collaboration_returns_blocked_when_all_providers_fail(monkeypatch):
+def test_ai_collaboration_is_retired_fail_closed(tmp_path, capsys, monkeypatch):
     module = load_ai_module()
-
-    class RaisingClient:
-        def __init__(self, *args, **kwargs):
-            raise RuntimeError("quota exceeded")
-
-    monkeypatch.setenv("GEMINI_API_KEY", "test-gemini")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-anthropic")
-    monkeypatch.setattr(module, "genai", type("FakeGenai", (), {"Client": RaisingClient}))
-    monkeypatch.setattr(module, "OpenAI", RaisingClient)
-    monkeypatch.setattr(module, "Anthropic", RaisingClient)
+    retired = load_retired_module()
+    monkeypatch.setattr(retired, "REPORT_DIR", tmp_path)
 
     result = module.iniciar_super_agente_trio(modo="diagnostico", tarefa="teste")
 
     assert result == 2
+    payload = json.loads(capsys.readouterr().err)
+    assert payload["status"] == "blocked"
+    assert payload["external_operation_performed"] is False

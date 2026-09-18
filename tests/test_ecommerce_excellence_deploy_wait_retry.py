@@ -7,8 +7,32 @@ import tempfile
 WORKFLOW = Path('.github/workflows/ecommerce-excellence-audit.yml')
 text = WORKFLOW.read_text(encoding='utf-8')
 
+hosted = re.search(
+    r"  await-production-evidence:\n(?P<body>.*?)(?=\n  [a-zA-Z0-9_-]+:)",
+    text,
+    re.S,
+)
+if not hosted:
+    raise SystemExit('hosted production-evidence wait job not found')
+hosted_body = hosted.group('body')
+if 'runs-on: ubuntu-latest' not in hosted_body:
+    raise SystemExit('production evidence wait must run on ubuntu-latest')
+
+live = re.search(
+    r"  live-production-audit:\n(?P<body>.*?)(?=\n  [a-zA-Z0-9_-]+:|\Z)",
+    text,
+    re.S,
+)
+if not live:
+    raise SystemExit('live production audit job not found')
+live_body = live.group('body')
+if 'shopvivaliz-a1-deploy' not in live_body:
+    raise SystemExit('live production audit must still run on Oracle production runner')
+if 'Wait for exact SHA production evidence' in live_body or 'sleep 20' in live_body:
+    raise SystemExit('Oracle production runner must not be reserved while waiting for deployment evidence')
+
 match = re.search(
-    r"      - name: Wait for exact SHA production evidence\n(?P<body>.*?)(?=\n      - name: )",
+    r"      - name: Wait for exact SHA production evidence\n(?P<body>.*?)(?=\n  live-production-audit:)",
     text,
     re.S,
 )
@@ -19,10 +43,8 @@ body = match.group('body')
 required = [
     'set -euo pipefail',
     'for _ in $(seq 1 36); do',
-    'if gh api \\',
-    'if python3 - "$EXPECTED_SHA" /tmp/deployment-latest.json <<\'PY\'; then',
-    "if python3 - /tmp/deployment-latest.json <<'PY'; then",
-    "if [ \"$evidence_ready\" = '1' ]; then",
+    "if gh api -H 'Accept: application/vnd.github.raw+json' \\",
+    'if python3 - "$EXPECTED_SHA" /tmp/deployment-latest.json <<\'PYEOF\'',
     'sleep 20',
     'test "$ready" = \'1\'',
 ]
@@ -74,4 +96,4 @@ with tempfile.TemporaryDirectory() as td:
     if attempts != 2:
         raise SystemExit(f'expected exactly 2 evidence attempts, got {attempts}')
 
-print('ecommerce excellence deployment wait retry contract: PASS')
+print('ecommerce excellence hosted deployment wait retry contract: PASS')

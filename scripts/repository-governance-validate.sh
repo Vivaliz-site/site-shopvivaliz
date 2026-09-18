@@ -5,6 +5,7 @@ phase="${1:-manual}"
 
 bash -n .githooks/pre-commit .githooks/pre-push scripts/repository-governance-validate.sh
 python3 scripts/validate-recurring-ai-policy.py
+python3 scripts/validate-retired-windows-tasks.py
 python3 scripts/validate-final-response-deploy-gate.py
 
 if command -v composer >/dev/null 2>&1; then
