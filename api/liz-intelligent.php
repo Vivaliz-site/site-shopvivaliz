@@ -82,8 +82,7 @@ function liz_provider_status(): array
 {
     return [
         'gemini' => liz_env('GEMINI_API_KEY') !== '' || liz_env('GOOGLE_GEMINI_API_KEY') !== '',
-        'openai' => liz_env('OPENAI_API_KEY') !== '',
-        'claude' => liz_env('ANTHROPIC_API_KEY') !== '',
+        'openrouter' => liz_env('OPENROUTER_API_KEY') !== '',
     ];
 }
 
@@ -296,11 +295,8 @@ $geminiKey = liz_env('GEMINI_API_KEY') ?: liz_env('GOOGLE_GEMINI_API_KEY');
 if ($geminiKey !== '') {
     $providers[] = ['name' => 'gemini', 'key' => $geminiKey];
 }
-if (liz_env('OPENAI_API_KEY') !== '') {
-    $providers[] = ['name' => 'gpt', 'key' => liz_env('OPENAI_API_KEY')];
-}
-if (liz_env('ANTHROPIC_API_KEY') !== '') {
-    $providers[] = ['name' => 'claude', 'key' => liz_env('ANTHROPIC_API_KEY')];
+if (liz_env('OPENROUTER_API_KEY') !== '') {
+    $providers[] = ['name' => 'openrouter', 'key' => liz_env('OPENROUTER_API_KEY')];
 }
 
 // 6. Busca de Produtos Local Hardened
@@ -798,6 +794,50 @@ function liz_call_gpt(string $message, array $history, array $products, string $
     return is_string($answer) && trim($answer) !== '' ? trim($answer) : null;
 }
 
+
+function liz_call_openrouter(string $message, array $history, array $products, string $apiKey, array $knowledge = [], array $orderContext = [], array $state = []): ?string
+{
+    $messages = [['role' => 'system', 'content' => liz_system_prompt($products, $knowledge, $orderContext, $state)]];
+    $messages = array_merge($messages, liz_normalized_history($history, 'assistant', $message));
+    $messages[] = ['role' => 'user', 'content' => $message];
+
+    $payload = [
+        'model' => liz_env('OPENROUTER_TEXT_MODEL') ?: 'google/gemini-2.5-flash-lite',
+        'messages' => $messages,
+        'max_tokens' => 1000,
+        'temperature' => 0.35,
+    ];
+    $base = rtrim(liz_env('OPENROUTER_API_BASE_URL') ?: 'https://openrouter.ai/api/v1', '/');
+    $ch = curl_init($base . '/chat/completions');
+    if ($ch === false) return null;
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $apiKey,
+            'HTTP-Referer: https://shopvivaliz.com.br',
+            'X-OpenRouter-Title: ShopVivaliz Liz',
+        ],
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT => 30,
+    ]);
+    $response = curl_exec($ch);
+    $curlError = curl_error($ch);
+    $curlErrno = curl_errno($ch);
+    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($httpCode !== 200 || !is_string($response) || $response === '') {
+        $internalCode = $curlErrno === CURLE_OPERATION_TIMEDOUT ? 'timeout' : ($httpCode === 429 ? 'rate_limit' : ($httpCode >= 500 ? 'provider_unavailable' : 'network_error'));
+        liz_log_provider_error('OpenRouter', $httpCode, $curlError, is_string($response) ? $response : '', $internalCode);
+        return null;
+    }
+    $data = json_decode($response, true);
+    $answer = $data['choices'][0]['message']['content'] ?? null;
+    return is_string($answer) && trim($answer) !== '' ? trim($answer) : null;
+}
+
 function liz_call_claude(string $message, array $history, array $products, string $apiKey, array $knowledge = [], array $orderContext = [], array $state = []): ?string
 {
     $messages = liz_normalized_history($history, 'assistant', $message);
@@ -861,8 +901,7 @@ function liz_call_with_fallback(string $message, array $history, array $products
     foreach ($providers as $provider) {
         $answer = match ($provider['name']) {
             'gemini' => liz_call_gemini($message, $history, $products, $provider['key'], $knowledge, $orderContext, $state),
-            'gpt' => liz_call_gpt($message, $history, $products, $provider['key'], $knowledge, $orderContext, $state),
-            'claude' => liz_call_claude($message, $history, $products, $provider['key'], $knowledge, $orderContext, $state),
+            'openrouter' => liz_call_openrouter($message, $history, $products, $provider['key'], $knowledge, $orderContext, $state),
             default => null,
         };
         if ($answer !== null) {
