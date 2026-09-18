@@ -120,6 +120,9 @@ test.describe('E2E Journey - Compra Completa', () => {
 
   test('Mobile: WhatsApp fica à esquerda e Liz à direita sem sobreposição', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript(() => {
+      localStorage.setItem('shopvivaliz_privacy_consent_v1', JSON.stringify({ value: 'essential', updated_at: new Date().toISOString() }));
+    });
     await page.goto(BASE_URL + '/', { waitUntil: 'domcontentloaded' });
 
     const essentialOnly = page.getByRole('button', { name: /somente essenciais/i });
