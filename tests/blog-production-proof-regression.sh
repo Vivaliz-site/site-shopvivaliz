@@ -2,8 +2,16 @@
 set -euo pipefail
 
 browser_audit='tests/storefront-screenshot-audit.mjs'
+php_router='tests/php-router.php'
 repair_workflow='.github/workflows/blog-editorial-repair-once.yml'
 article_path='/blog/acessorios-que-ajudam-na-rotina-de-limpeza-e-manutencao'
+
+for expected_router_rule in "'/blog/' => 'blog/index.php'" "^/blog/([a-z0-9][a-z0-9-]*)/?$"; do
+  if ! grep -Fq "$expected_router_rule" "$php_router"; then
+    echo "blog test router missing canonical route: $expected_router_rule" >&2
+    exit 1
+  fi
+done
 
 for route in "{ name: 'blog', url: '/blog/'" "{ name: 'blog-article', url: '${article_path}'"; do
   if ! grep -Fq "$route" "$browser_audit"; then
