@@ -11,7 +11,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  await-release:
+    uses: ./.github/workflows/production-release-await.yml
+    with:
+      expected_sha: ${{ github.sha }}
+      attempts: 150
+      sleep_seconds: 10
+
   refresh-production:
+    needs: await-release
     if: github.repository == 'Vivaliz-site/site-shopvivaliz'
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 30
@@ -34,26 +42,6 @@ jobs:
           printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
-
-      - name: Wait until this exact SHA is live on Oracle
-        shell: bash
-        env:
-          EXPECTED_SHA: ${{ github.sha }}
-        run: |
-          set -Eeuo pipefail
-          for attempt in $(seq 1 150); do
-            live="$(ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 \
-              -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-              -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1 \
-              'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha 2>/dev/null || true' | tr -d '\r\n')"
-            if [ "$live" = "$EXPECTED_SHA" ]; then
-              echo "Exact SHA is live on Oracle: $live"
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "Expected SHA did not become live within 25 minutes" >&2
-          exit 1
 
       - name: Refresh canonical active products and authoritative stock
         shell: bash
