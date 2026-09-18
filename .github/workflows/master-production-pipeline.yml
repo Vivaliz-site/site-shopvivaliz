@@ -210,6 +210,10 @@ jobs:
             echo 'abandoned_cart_recovery_install_failed=true' >&2
             fail=1
           fi
+          if ! sudo env ROOT="$root/repo" bash "$root/repo/scripts/install-safe-sync-service.sh"; then
+            echo 'safe_repo_sync_install_failed=true' >&2
+            fail=1
+          fi
           if [ "$catalog_service_changed" = true ]; then
             sudo bash "$current/scripts/install-catalog-sync-service.sh"
           else
