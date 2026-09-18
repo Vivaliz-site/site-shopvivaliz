@@ -120,7 +120,7 @@ test.describe('E2E Journey - Compra Completa', () => {
 
   test('Mobile: WhatsApp fica à esquerda e Liz à direita sem sobreposição', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(BASE_URL + '/', { waitUntil: 'networkidle' });
+    await page.goto(BASE_URL + '/', { waitUntil: 'domcontentloaded' });
 
     const essentialOnly = page.getByRole('button', { name: /somente essenciais/i });
     const consentVisible = await essentialOnly.waitFor({ state: 'visible', timeout: 1500 }).then(() => true).catch(() => false);
