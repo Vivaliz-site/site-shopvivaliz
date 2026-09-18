@@ -36,10 +36,10 @@ jobs:
           printf 'deploy_target_sha=%s\ndeploy_current_sha=%s\n' "$origin_sha" "$current_sha"
 
           if [[ "$origin_sha" != "$current_sha" ]]; then
-            sudo -n systemctl reset-failed amazon-returns-deploy.service || true
+            sudo -n systemctl reset-failed amazon-returns-deploy.service
             if ! sudo -n systemctl start amazon-returns-deploy.service; then
-              sudo -n systemctl status amazon-returns-deploy.service --no-pager -l || true
-              sudo -n journalctl -u amazon-returns-deploy.service -n 160 --no-pager || true
+              if ! sudo -n systemctl status amazon-returns-deploy.service --no-pager -l; then :; fi
+              if ! sudo -n journalctl -u amazon-returns-deploy.service -n 160 --no-pager; then :; fi
               exit 1
             fi
           fi
@@ -50,16 +50,16 @@ jobs:
               printf 'deploy_reconciled_sha=%s\n' "$current_sha"
               exit 0
             fi
-            if [[ "$(systemctl is-failed amazon-returns-deploy.service 2>/dev/null || true)" == "failed" ]]; then
-              sudo -n systemctl status amazon-returns-deploy.service --no-pager -l || true
-              sudo -n journalctl -u amazon-returns-deploy.service -n 160 --no-pager || true
+            if systemctl is-failed --quiet amazon-returns-deploy.service; then
+              if ! sudo -n systemctl status amazon-returns-deploy.service --no-pager -l; then :; fi
+              if ! sudo -n journalctl -u amazon-returns-deploy.service -n 160 --no-pager; then :; fi
               exit 1
             fi
             sleep 5
           done
 
           printf 'deploy_reconcile_failed target=%s current=%s\n' "$origin_sha" "$current_sha" >&2
-          sudo -n systemctl status amazon-returns-deploy.service --no-pager -l || true
+          if ! sudo -n systemctl status amazon-returns-deploy.service --no-pager -l; then :; fi
           exit 1
 
       - name: Recover Seller Central cycle and verify SAFE-T runtime
@@ -74,7 +74,7 @@ jobs:
           printf 'origin_main=%s\ncurrent_release=%s\n' "$origin_sha" "$current_sha"
           test "$origin_sha" = "$current_sha"
 
-          sudo -n systemctl reset-failed amazon-returns-seller-central-browser.service || true
+          sudo -n systemctl reset-failed amazon-returns-seller-central-browser.service
           sudo -n systemctl start amazon-returns-seller-central-browser.service
 
           test "$(systemctl is-active amazon-returns-safet.service)" = active

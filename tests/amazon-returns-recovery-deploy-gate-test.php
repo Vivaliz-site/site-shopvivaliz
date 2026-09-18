@@ -25,5 +25,6 @@ ardgAssert(str_contains($text,'deploy_reconciled_sha=%s'),'Recovery must emit ex
 ardgAssert(str_contains($text,'test "$origin_sha" = "$current_sha"'),'Runtime verification must still require exact origin/current SHA equality.');
 ardgAssert(!str_contains($text,'ln -sfn') && !str_contains($text,'rm -rf /home/ubuntu/amazon-returns-deploy/current'),'Recovery workflow must never rewrite current directly.');
 ardgAssert(!str_contains($text,'deploy-production.sh'),'Recovery workflow must not bypass the canonical amazon-returns-deploy.service gate.');
+ardgAssert(!str_contains($text,'|| true'),'Recovery workflow must not suppress operational failures with unconditional true fallbacks.');
 
 echo "amazon-returns-recovery-deploy-gate-test: OK\n";
