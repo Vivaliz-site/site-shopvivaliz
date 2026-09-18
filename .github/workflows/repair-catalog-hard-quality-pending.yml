@@ -9,23 +9,21 @@ on:
 permissions:
   contents: read
 
-# Fila v2: a fila anterior pode conter uma execucao antiga de push esperando
-# um SHA intermediario que foi corretamente superado por um descendente. A nova
-# fila e serial e nao cancelavel, mas nao fica bloqueada por esse legado.
 concurrency:
   group: production-catalog-hard-quality-repair-v2
   cancel-in-progress: false
 
 jobs:
-  repair:
+  preflight:
     if: >-
       ${{ github.event_name != 'workflow_run' ||
           (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
-    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
-    timeout-minutes: 40
-    environment: production
+    runs-on: ubuntu-latest
     env:
       TARGET_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+    outputs:
+      should_deploy: ${{ steps.production_impact.outputs.should_deploy }}
+      target_sha: ${{ env.TARGET_SHA }}
     steps:
       - name: Validate target production SHA
         shell: bash
@@ -53,14 +51,28 @@ jobs:
             should_deploy="$(bash scripts/should-deploy-production.sh < /tmp/production-impact-paths.txt)"
           fi
           echo "should_deploy=$should_deploy" >> "$GITHUB_OUTPUT"
+          echo "production_repair_required=$should_deploy"
 
-      - name: No production repair required
-        if: ${{ steps.production_impact.outputs.should_deploy != 'true' }}
-        shell: bash
-        run: echo 'No production repair required'
+  await-release:
+    needs: preflight
+    if: ${{ needs.preflight.outputs.should_deploy == 'true' }}
+    uses: ./.github/workflows/production-release-await.yml
+    with:
+      expected_sha: ${{ needs.preflight.outputs.target_sha }}
+      allow_descendant: true
+      attempts: 120
+      sleep_seconds: 15
 
+  repair:
+    needs: [preflight, await-release]
+    if: ${{ needs.preflight.outputs.should_deploy == 'true' && needs.await-release.result == 'success' }}
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 40
+    environment: production
+    env:
+      TARGET_SHA: ${{ needs.preflight.outputs.target_sha }}
+    steps:
       - name: Configure verified production SSH
-        if: ${{ steps.production_impact.outputs.should_deploy == 'true' }}
         shell: bash
         env:
           PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
@@ -78,54 +90,7 @@ jobs:
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
 
-      - name: Wait for production release containing target
-        if: ${{ steps.production_impact.outputs.should_deploy == 'true' }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          relation='other'
-          for attempt in $(seq 1 120); do
-            relation="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-              -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 \
-              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              ubuntu@127.0.0.1 'bash -s' -- "$TARGET_SHA" <<'REMOTE'
-          set -Eeuo pipefail
-          target="$1"
-          repo='/home/ubuntu/shopvivaliz-deploy/repo'
-          marker='/home/ubuntu/shopvivaliz-deploy/current/.release-sha'
-          if [[ ! -r "$marker" ]]; then
-            printf 'missing'
-            exit 0
-          fi
-          deployed="$(cat "$marker")"
-          if [[ "$deployed" == "$target" ]]; then
-            printf 'exact'
-            exit 0
-          fi
-          if [[ "$deployed" =~ ^[0-9a-f]{40}$ ]] \
-            && git -C "$repo" cat-file -e "${target}^{commit}" 2>/dev/null \
-            && git -C "$repo" cat-file -e "${deployed}^{commit}" 2>/dev/null \
-            && git -C "$repo" merge-base --is-ancestor "$target" "$deployed"; then
-            printf 'descendant'
-            exit 0
-          fi
-          printf 'other'
-          REMOTE
-          )"
-            if [[ "$relation" == 'exact' || "$relation" == 'descendant' ]]; then
-              echo "production_release_relation=$relation"
-              break
-            fi
-            echo "waiting_for_production_release_attempt=${attempt}"
-            sleep 15
-          done
-          if [[ "$relation" != 'exact' && "$relation" != 'descendant' ]]; then
-            echo '::error::A deployed release containing the target SHA was not observed before timeout.'
-            exit 4
-          fi
-
       - name: Repair existing hard-failed pending drafts
-        if: ${{ steps.production_impact.outputs.should_deploy == 'true' }}
         shell: bash
         run: |
           set -Eeuo pipefail

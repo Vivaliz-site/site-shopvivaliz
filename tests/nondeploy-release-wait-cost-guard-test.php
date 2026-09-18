@@ -2,22 +2,41 @@
 $root = dirname(__DIR__);
 $errors = [];
 
+$await = (string)file_get_contents($root . '/.github/workflows/production-release-await.yml');
+foreach (['workflow_call:', 'runs-on: ubuntu-latest', 'if [[ -z "$EXPECTED_SHA" ]]', 'production_wait_required=false'] as $fragment) {
+    if (!str_contains($await, $fragment)) {
+        $errors[] = "release_await_missing:$fragment";
+    }
+}
+
 $cases = [
     '.github/workflows/runtime-token-security.yml' => [
         'id: production_impact',
         'bash scripts/should-deploy-production.sh',
-        "github.event_name == 'push' && steps.production_impact.outputs.should_deploy == 'true'",
+        '[[ "$should_deploy" == \'true\' ]] && expected_sha="$GITHUB_SHA"',
+        'uses: ./.github/workflows/production-release-await.yml',
+        'expected_sha: ${{ needs.preflight.outputs.expected_sha }}',
+        'audit:',
+        'needs: await-release',
     ],
     '.github/workflows/runtime-env-keyset-lock.yml' => [
         'id: production_impact',
         'bash scripts/should-deploy-production.sh',
-        "github.event_name == 'push' && steps.production_impact.outputs.should_deploy == 'true'",
+        '[[ "$should_deploy" == \'true\' ]] && expected_sha="$GITHUB_SHA"',
+        'uses: ./.github/workflows/production-release-await.yml',
+        'expected_sha: ${{ needs.preflight.outputs.expected_sha }}',
+        'allow_descendant: true',
+        'seal-and-verify:',
+        'needs: await-release',
     ],
     '.github/workflows/repair-catalog-hard-quality-pending.yml' => [
         'id: production_impact',
         'bash scripts/should-deploy-production.sh',
-        "steps.production_impact.outputs.should_deploy == 'true'",
-        'No production repair required',
+        'should_deploy: ${{ steps.production_impact.outputs.should_deploy }}',
+        'uses: ./.github/workflows/production-release-await.yml',
+        'if: ${{ needs.preflight.outputs.should_deploy == \'true\' }}',
+        'allow_descendant: true',
+        'if: ${{ needs.preflight.outputs.should_deploy == \'true\' && needs.await-release.result == \'success\' }}',
     ],
 ];
 
@@ -36,16 +55,14 @@ foreach ($cases as $relative => $required) {
 }
 
 $repair = (string)file_get_contents($root . '/.github/workflows/repair-catalog-hard-quality-pending.yml');
-foreach (['Configure verified production SSH', 'Wait for production release containing target', 'Repair existing hard-failed pending drafts'] as $step) {
-    $pos = strpos($repair, "- name: $step");
-    if ($pos === false) {
+$repairJob = strstr($repair, "  repair:\n") ?: '';
+foreach (['Configure verified production SSH', 'Repair existing hard-failed pending drafts'] as $step) {
+    if (!str_contains($repairJob, "- name: $step")) {
         $errors[] = "repair_step_missing:$step";
-        continue;
     }
-    $slice = substr($repair, $pos, 350);
-    if (!str_contains($slice, 'if: ${{ steps.production_impact.outputs.should_deploy == \'true\' }}')) {
-        $errors[] = "repair_step_not_guarded:$step";
-    }
+}
+if (str_contains($repairJob, 'sleep 15') || str_contains($repairJob, 'Wait for production release containing target')) {
+    $errors[] = 'repair_oracle_job_must_not_wait_for_release';
 }
 
 $quality = (string)file_get_contents($root . '/.github/workflows/quality-gate.yml');
