@@ -21,6 +21,7 @@ ardgAssert(str_contains($text,'repo=/home/ubuntu/amazon-returns-deploy-source'),
 ardgAssert(str_contains($text,'deploy=/home/ubuntu/amazon-returns-deploy'),'Recovery must use the immutable Amazon Returns deploy root.');
 ardgAssert(str_contains($text,'git -C "$repo" fetch --quiet origin main'),'Recovery must refresh origin/main before deciding whether to deploy.');
 ardgAssert(str_contains($text,'sudo -n systemctl start amazon-returns-deploy.service'),'Recovery must trigger the canonical root auto-deploy service rather than mutate current directly.');
+ardgAssert(!str_contains($text,'if [[ "$origin_sha" != "$current_sha" ]]'),'Recovery must always run the canonical gate so staged runtime credentials are consumed even when code is already current.');
 ardgAssert(str_contains($text,'deploy_reconciled_sha=%s'),'Recovery must emit exact-SHA deployment evidence.');
 ardgAssert(str_contains($text,'test "$origin_sha" = "$current_sha"'),'Runtime verification must still require exact origin/current SHA equality.');
 ardgAssert(!str_contains($text,'ln -sfn') && !str_contains($text,'rm -rf /home/ubuntu/amazon-returns-deploy/current'),'Recovery workflow must never rewrite current directly.');

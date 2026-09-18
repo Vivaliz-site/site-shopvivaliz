@@ -35,13 +35,14 @@ jobs:
           current_sha="$(cat "$deploy/current/.release-sha")"
           printf 'deploy_target_sha=%s\ndeploy_current_sha=%s\n' "$origin_sha" "$current_sha"
 
-          if [[ "$origin_sha" != "$current_sha" ]]; then
-            sudo -n systemctl reset-failed amazon-returns-deploy.service
-            if ! sudo -n systemctl start amazon-returns-deploy.service; then
-              if ! sudo -n systemctl status amazon-returns-deploy.service --no-pager -l; then :; fi
-              if ! sudo -n journalctl -u amazon-returns-deploy.service -n 160 --no-pager; then :; fi
-              exit 1
-            fi
+          # Always run the canonical gate. It consumes protected staged runtime
+          # credentials before its already-current early exit, so an exact-SHA
+          # release can still require a reconciliation pass.
+          sudo -n systemctl reset-failed amazon-returns-deploy.service
+          if ! sudo -n systemctl start amazon-returns-deploy.service; then
+            if ! sudo -n systemctl status amazon-returns-deploy.service --no-pager -l; then :; fi
+            if ! sudo -n journalctl -u amazon-returns-deploy.service -n 160 --no-pager; then :; fi
+            exit 1
           fi
 
           for _ in $(seq 1 24); do
