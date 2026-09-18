@@ -23,6 +23,16 @@ def main() -> None:
     ]
     email_values = MODULE.parse_payload_fields(fields, scope="email")
     assert set(email_values) == {"BREVO_API_KEY", "EMAIL_USER", "EMAIL_PASSWORD"}
+    melhorenvio_fields = [
+        b"MELHORENVIO_CLIENTE_ID", b"26364-valid-client-id",
+        b"MELHORENVIO_CLIENTE_SECRET", b"valid-melhorenvio-client-secret",
+        b"MELHORENVIO_REDIRECT_URI", b"https://shopvivaliz.com.br/api/melhorenvio/webhook.php",
+        b"OLIST_CLIENT_SECRET", b"bad",
+    ]
+    melhorenvio_values = MODULE.parse_payload_fields(melhorenvio_fields, scope="melhorenvio")
+    assert set(melhorenvio_values) == {
+        "MELHORENVIO_CLIENTE_ID", "MELHORENVIO_CLIENTE_SECRET", "MELHORENVIO_REDIRECT_URI",
+    }
     amazon_fields = [
         b"AMAZON_LWA_CLIENT_ID", b"amzn-client-id-valid",
         b"AMAZON_LWA_CLIENT_SECRET", b"amzn-client-secret-valid",
@@ -53,15 +63,17 @@ def main() -> None:
 
     workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
     assert "scope:" in workflow
-    assert "- all" in workflow and "- email" in workflow and "- amazon" in workflow and "- amazon_returns" in workflow
+    assert "- all" in workflow and "- email" in workflow and "- melhorenvio" in workflow and "- amazon" in workflow and "- amazon_returns" in workflow
     assert "SCOPE: ${{ github.event.inputs.scope || 'all' }}" in workflow
     assert r'--scope \"$SCOPE\"' in workflow
     assert "EMAIL_SCOPE_VALIDATED=true" in workflow
+    assert "MELHORENVIO_SCOPE_VALIDATED=true" in workflow
     assert "AMAZON_SCOPE_VALIDATED=true" in workflow
     assert "AMAZON_RETURNS_SCOPE_VALIDATED=true" in workflow
     assert "SELLER_CENTRAL_BRIDGE_TOKEN_VALUE: ${{ secrets.SELLER_CENTRAL_BRIDGE_TOKEN }}" in workflow
     assert "SELLER_CENTRAL_BRIDGE_TOKEN" in workflow
     assert "if [ \"$SCOPE\" = email ]; then" in workflow
+    assert "if [ \"$SCOPE\" = melhorenvio ]; then" in workflow
 
     print("merge_runtime_credential_scope_tests=passed")
 
