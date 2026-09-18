@@ -47,6 +47,11 @@ jobs:
           E2E_BASE_URL: https://shopvivaliz.com.br
           E2E_PROXY_SERVER: socks5://127.0.0.1:1080
         run: node scripts/public-layout-audit.mjs
+      - name: Prove stateful production runtime parity
+        env:
+          E2E_BASE_URL: https://shopvivaliz.com.br
+          E2E_PROXY_SERVER: socks5://127.0.0.1:1080
+        run: node scripts/production-runtime-parity.mjs
       - name: Upload visual evidence
         if: always()
         uses: actions/upload-artifact@v4

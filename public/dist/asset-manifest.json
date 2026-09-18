@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-13T22:08:42.542Z",
+  "generated_at": "2026-09-18T03:36:07.492Z",
   "assets": {
     "/js/admin-automation.js": {
       "file": "/public/dist/js/admin-automation.ba2700ea3a.min.js",
@@ -247,9 +247,9 @@
       "source_bytes": 8190
     },
     "/css/cls-stability-v1.css": {
-      "file": "/public/dist/css/cls-stability-v1.26c65a735f.min.css",
-      "bytes": 957,
-      "source_bytes": 1596
+      "file": "/public/dist/css/cls-stability-v1.45e332855f.min.css",
+      "bytes": 1065,
+      "source_bytes": 1956
     },
     "/css/dazzle-v1.css": {
       "file": "/public/dist/css/dazzle-v1.591c98589d.min.css",

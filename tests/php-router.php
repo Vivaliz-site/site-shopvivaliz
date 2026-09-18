@@ -59,6 +59,8 @@ $routes = [
     '/catalogo' => 'catalogo.php',
     '/carrinho' => 'carrinho.php',
     '/checkout' => 'checkout.php',
+    '/blog' => 'blog/index.php',
+    '/blog/' => 'blog/index.php',
     '/termos' => 'termos.php',
     '/blog/' => 'blog/index.php',
     '/blog/feed.xml' => 'blog/feed.php',
@@ -70,6 +72,13 @@ $routes = [
 
 if (isset($routes[$path])) {
     $_SERVER['SCRIPT_FILENAME'] = $root . '/' . $routes[$path];
+    require $_SERVER['SCRIPT_FILENAME'];
+    return true;
+}
+
+if (preg_match('~^/blog/([a-z0-9][a-z0-9-]*)$~', $path, $match) === 1) {
+    $_GET['slug'] = rawurldecode($match[1]);
+    $_SERVER['SCRIPT_FILENAME'] = $root . '/blog/artigo.php';
     require $_SERVER['SCRIPT_FILENAME'];
     return true;
 }
