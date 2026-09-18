@@ -10,6 +10,7 @@ HTACCESS="$ROOT/.htaccess"
 # therefore enable mod_headers before Apache is config-tested/reloaded.
 grep -Fq 'Content-Security-Policy' "$HTACCESS"
 grep -F 'Header always set Content-Security-Policy ' "$HTACCESS" | grep -Fq 'https://www.mercadopago.com'
+grep -F 'Header always set Content-Security-Policy ' "$HTACCESS" | grep -Fq "frame-src 'self' https://sdk.mercadopago.com https://www.mercadolibre.com"
 grep -F 'Header always set Content-Security-Policy ' "$HTACCESS" | grep -Fq 'https://fonts.googleapis.com'
 grep -F 'Header always set Content-Security-Policy ' "$HTACCESS" | grep -Fq 'https://fonts.gstatic.com'
 grep -Eq 'a2enmod[[:space:]]+rewrite[[:space:]]+headers' "$MASTER"
