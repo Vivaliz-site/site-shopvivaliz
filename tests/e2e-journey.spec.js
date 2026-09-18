@@ -95,7 +95,7 @@ test.describe('E2E Journey - Compra Completa', () => {
   });
 
   test('Footer contém dados da empresa', async ({ page }) => {
-    await page.goto(BASE_URL + '/');
+    await page.goto(BASE_URL + '/', { waitUntil: 'domcontentloaded' });
 
     const footerText = await page.locator('footer').textContent();
     const hasCNPJ = footerText.includes('49.903.300/0001-70') || footerText.includes('CNPJ');
