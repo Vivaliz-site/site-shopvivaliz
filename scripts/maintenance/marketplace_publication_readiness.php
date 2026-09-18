@@ -80,6 +80,7 @@ $mlTokenState = svmpr_token_state(
 $shopeeTokenState = svmpr_token_state(
     array_values(array_filter([
         svmpr_env('SHOPEE_TOKEN_FILE'),
+        '/home/ubuntu/shopvivaliz-deploy/shared/shopee-tokens.json',
         $root . '/storage/private/shopee-tokens.json',
     ])),
     ['SHOPEE_ACCESS_TOKEN'],
