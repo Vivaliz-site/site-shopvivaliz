@@ -64,6 +64,7 @@ jobs:
           test -s css/cls-stability-v1.css
           grep -Fq 'sv_emit_prepaint_page_state' includes/load-custom-css.php
           grep -Fq 'overflow-x: clip' css/cls-stability-v1.css
+          grep -Fq 'html.sv-cart-empty #cart-items-list' css/cls-stability-v1.css
           grep -Fq '.home-scroller > .home-scroller-arrow' css/cls-stability-v1.css
           php -l includes/load-custom-css.php
           php tests/storefront-hardening-test.php

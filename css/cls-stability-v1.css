@@ -31,6 +31,13 @@ html.sv-home-page .hero-content {
     }
 }
 
+/* O estado vazio do carrinho e conhecido no <head> antes do primeiro paint.
+   Reserve a mesma altura do empty-state antes do JS preencher #cart-items-list,
+   evitando que cart-layout/footer saltem em redes lentas. */
+html.sv-cart-empty #cart-items-list {
+    min-height: 240px;
+}
+
 .home-scroller,
 .home-scroller-track {
     min-width: 0;
@@ -38,6 +45,10 @@ html.sv-home-page .hero-content {
 }
 
 @media (max-width: 820px) {
+    html.sv-cart-empty #cart-items-list {
+        min-height: 210px;
+    }
+
     /* No toque, as setas laterais consomem largura e criam overflow da raiz.
        A faixa continua rolavel por gesto e preserva scroll-snap. */
     .home-scroller {
