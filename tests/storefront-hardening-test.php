@@ -21,12 +21,14 @@ svh_assert(str_contains($clsCss, 'overflow-x: clip'), 'root overflow containment
 svh_assert(str_contains($clsCss, '.home-scroller > .home-scroller-arrow'), 'mobile side arrows must stay disabled');
 svh_assert(str_contains($clsCss, 'overflow-x: auto !important'), 'internal carousel scrolling must remain available');
 $visualPolishJs = (string)file_get_contents($root . '/js/visual-polish-v4.js');
+$visualPolishCss = (string)file_get_contents($root . '/css/visual-polish-v4.css');
 svh_assert(!str_contains($visualPolishJs, 'innerHTML ='), 'visual polish must not rewrite purchase state DOM after paint');
 $customCssLoader = (string)file_get_contents($root . '/includes/load-custom-css.php');
 svh_assert(str_contains($customCssLoader, 'sv_emit_prepaint_page_state'), 'prepaint page state must be emitted in head');
 svh_assert(str_contains($customCssLoader, 'catch(error){empty=false;}'), 'storage errors must not render a false empty cart');
 svh_assert(str_contains($customCssLoader, '/css/accessibility-hardening-v1.css'), 'main accessibility hardening must be preserved');
 svh_assert(str_contains($customCssLoader, '/css/cls-stability-v1.css'), 'CLS stability CSS must load last');
+svh_assert(str_contains($visualPolishCss, 'html.sv-cart-empty #cart-items-list'), 'empty cart must reserve hydration height to prevent mobile CLS');
 
 $shippingResilience = (string)file_get_contents($root . '/js/checkout-resilience-v1.js');
 svh_assert(str_contains($shippingResilience, 'shippingRequestsInFlight'), 'shipping requests must use an in-flight counter');

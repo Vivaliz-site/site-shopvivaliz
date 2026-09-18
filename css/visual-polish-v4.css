@@ -68,6 +68,19 @@ html.sv-cart-empty .cart-empty {
     padding: 0;
 }
 
+/* Reserve the empty-cart body before JS hydration so the footer does not jump
+   on constrained mobile networks. The rendered empty state uses the same
+   effective minimum heights in public-experience-v1.css. */
+html.sv-cart-empty #cart-items-list {
+    min-height: 240px;
+}
+
+@media (max-width: 820px) {
+    html.sv-cart-empty #cart-items-list {
+        min-height: 210px;
+    }
+}
+
 .sv-empty-cart-state,
 .sv-empty-checkout-state {
     display: grid;

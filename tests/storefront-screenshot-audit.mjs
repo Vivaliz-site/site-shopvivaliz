@@ -176,12 +176,20 @@ async function collectInitialMetrics(page) {
         continue;
       }
 
+      const style = window.getComputedStyle(node);
+      const intentionallyVisuallyHidden = (
+        (style.position === 'absolute' || style.position === 'fixed')
+        && Number.parseFloat(style.opacity || '1') === 0
+        && node.getAttribute('aria-hidden') === 'true'
+        && (rect.right <= 0 || rect.left >= viewportWidth)
+      );
+      if (intentionallyVisuallyHidden) continue;
+
       const leftOverflow = Math.max(0, -rect.left);
       const rightOverflow = Math.max(0, rect.right - viewportWidth);
       const visualOverflow = Math.max(leftOverflow, rightOverflow);
       if (visualOverflow <= 4) continue;
 
-      const style = window.getComputedStyle(node);
       overflowElements.push({
         selector: selectorFor(node),
         left: Math.round(rect.left * 10) / 10,
