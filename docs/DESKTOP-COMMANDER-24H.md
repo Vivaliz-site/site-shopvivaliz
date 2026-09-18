@@ -4,7 +4,7 @@
 Manter o Desktop Commander oficial disponível de forma autônoma em `LAPTOP-NIG4IFUU`, `DESKTOP-KOCEPSV`, `always-free-arm-1787907847-26` e `shopvivaliz-free-a1`, sem depender de terminal aberto, sessão SSH interativa ou logon manual enquanto a sessão persistente aceita pelo provedor continuar válida.
 
 ## Fred-Win
-- Canal oficial: `@wonderwhy-er/desktop-commander@0.2.47 remote`.
+- Canal oficial: `@wonderwhy-er/desktop-commander@0.2.48 remote --persist-session`.
 - Perfil persistente: usuário Windows que contém `%USERPROFILE%\.desktop-commander-device\device.json`.
 - Supervisor: `scripts/fredwin-desktop-commander-supervisor.ps1`.
 - Runner sanitizado: `scripts/fredwin-desktop-commander-runner.ps1`.
@@ -17,7 +17,7 @@ Manter o Desktop Commander oficial disponível de forma autônoma em `LAPTOP-NIG
 O runner descarta a saída bruta do provedor. Se detectar solicitação de device authorization, registra somente `AUTH_REQUIRED`, cria cooldown de 6 horas e evita gerar códigos repetidamente.
 
 ## DESKTOP-KOCEPSV
-- Canal oficial fixado: `@wonderwhy-er/desktop-commander@0.2.47 remote --persist-session`.
+- Canal oficial fixado: `@wonderwhy-er/desktop-commander@0.2.51 remote --persist-session`.
 - Fontes versionadas: `scripts/desktopkocepsv-desktop-commander-*.ps1` e `scripts/patch-desktop-commander-session-persistence.mjs`.
 - Instalação operacional privada: `%LOCALAPPDATA%\ShopVivaliz\DesktopCommander`.
 - Tarefa: `ShopVivaliz DESKTOP-KOCEPSV Desktop Commander 24h`.
@@ -33,7 +33,7 @@ O runner descarta a saída bruta do provedor. Se detectar solicitação de devic
 - A tarefa habilita o log operacional `Microsoft-Windows-TaskScheduler/Operational` quando a política local permite.
 
 ### Persistência de renovação de sessão
-O pacote 0.2.47 reautoriza o canal em memória quando recebe `TOKEN_REFRESHED`, mas não grava automaticamente a sessão rotacionada no arquivo usado pelo próximo boot. O patch local adiciona essa gravação e emite somente o marcador seguro `SESSION_REFRESH_PERSIST_ATTEMPTED`. O runner confirma a alteração por `mtime` de `device.json`, sem ler ou imprimir seu conteúdo, e registra `SESSION_REFRESH_PERSISTED=true`.
+O pacote 0.2.51 reautoriza o canal em memória quando recebe `TOKEN_REFRESHED`, mas não grava automaticamente a sessão rotacionada no arquivo usado pelo próximo boot. O patch local adiciona essa gravação e emite somente o marcador seguro `SESSION_REFRESH_PERSIST_ATTEMPTED`. O runner confirma a alteração por `mtime` de `device.json`, sem ler ou imprimir seu conteúdo, e registra `SESSION_REFRESH_PERSISTED=true`.
 
 ### Instalação e diagnóstico
 ```powershell
@@ -55,8 +55,8 @@ O diagnóstico esperado inclui `CANONICAL_AGENT_COUNT=1`, `NONCANONICAL_AGENT_CO
 - Deploy Linux canônico: `.github/workflows/vm-desktop-commander-action.yml` com `install_or_repair`. O fluxo cria o checkout de deploy se ele ainda não existir; quando já existe, faz `fetch` e restaura somente os artefatos do Desktop Commander a partir de `origin/main`, sem reset/merge amplo, e só então reinstala serviço/guardian. O workflow antigo `vm-desktop-commander-secure-recovery.yml.disabled` não é caminho operacional.
 
 ## Regra de propriedade única
-- Nunca iniciar manualmente um Desktop Commander em host já gerenciado. Windows permanece fixado em `0.2.47`; as VMs Ubuntu usam `0.2.48`. Um processo manual reutiliza o mesmo Device ID e pode disputar presença com a sessão 24h.
-- `ShopVivaliz Auto Sync` não inicia, repara nem reinstala Desktop Commander ou relay. Ele somente sincroniza o repositório e executa guards próprios; DC e relay pertencem exclusivamente aos watchdogs dedicados.
+- Nunca iniciar manualmente um Desktop Commander em host já gerenciado. Fred-Win permanece em `0.2.48`, DESKTOP-KOCEPSV usa `0.2.51` e as VMs Ubuntu usam `0.2.48`. Um processo manual reutiliza o mesmo Device ID e pode disputar presença com a sessão 24h.
+- `ShopVivaliz Auto Sync` não é o owner do Desktop Commander nem do relay; após sincronizar, ele pode solicitar recuperação host-específica. A propriedade contínua permanece nos watchdogs dedicados.
 - No Fred-Win, a tarefa primaria e `Interactive`/`AtLogOn` com watchdog de 5 minutos; o guardian e `S4U`/`AtStartup` com watchdog de 15 minutos. No DESKTOP-KOCEPSV, a tarefa primaria permanece `S4U`. Em Linux, `shopvivaliz-desktop-commander.service` e o unico owner do provider e o guardian apenas remove launchers fora do cgroup e recupera o servico quando necessario.
 - Chamadas `Ensure` em Windows usam fast-path read-only antes do mutex somente quando existe exatamente 1 launcher canônico, 0 não canônicos, marker fresco e nenhum cooldown. Qualquer duplicata, marker stale, cooldown ou ambiguidade continua passando pelo mutex e pela convergência seletiva.
 - O monitor recorrente canônico é `.github/workflows/desktop-commander-24h-health.yml`, cobrindo quatro hosts. O antigo control plane de três hosts permanece apenas para uso manual/push, sem `schedule` recorrente.

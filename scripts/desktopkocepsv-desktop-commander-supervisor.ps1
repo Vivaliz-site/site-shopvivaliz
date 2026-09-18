@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $Repo = 'C:\site-shopvivaliz'
 $TaskName = 'ShopVivaliz DESKTOP-KOCEPSV Desktop Commander 24h'
 $LegacyStartupName = 'desktop-commander-remote.vbs'
-$Package = '@wonderwhy-er/desktop-commander@0.2.48'
+$Package = '@wonderwhy-er/desktop-commander@0.2.51'
 $MarkerStaleSeconds = 240
 $MaxLogBytes = 5MB
 $DeviceFile = $null
@@ -172,7 +172,7 @@ function Get-LauncherRoots([object[]]$Launchers) {
 function Get-CanonicalRemoteLaunchers {
     $matches = @(Get-DesktopCommanderRemoteLaunchers | Where-Object {
         $command = [string]$_.CommandLine
-        ($command -match '@wonderwhy-er/desktop-commander@0\.2\.48.*\bremote\b.*--persist-session') -or
+        ($command -match '@wonderwhy-er/desktop-commander@0\.2\.51.*\bremote\b.*--persist-session') -or
         ($command -match '@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js.*\bremote\b.*--persist-session')
     })
     return @(Get-LauncherRoots $matches)
@@ -182,7 +182,7 @@ function Get-NonCanonicalRemoteLaunchers {
     $all = @(Get-DesktopCommanderRemoteLaunchers)
     $canonicalProcesses = @($all | Where-Object {
         $command = [string]$_.CommandLine
-        ($command -match '@wonderwhy-er/desktop-commander@0\.2\.48.*\bremote\b.*--persist-session') -or
+        ($command -match '@wonderwhy-er/desktop-commander@0\.2\.51.*\bremote\b.*--persist-session') -or
         ($command -match '@wonderwhy-er[\\/]desktop-commander[\\/]dist[\\/]index\.js.*\bremote\b.*--persist-session')
     })
     $canonicalIds = @($canonicalProcesses.ProcessId)

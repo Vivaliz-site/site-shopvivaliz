@@ -79,8 +79,8 @@ try {
         $DcCooldown = Join-Path $env:LOCALAPPDATA 'ShopVivaliz\DesktopCommander\logs\desktopkocepsv-desktop-commander-auth-required.cooldown'
         if (Test-Path $DcSupervisor) {
             Remove-Item $DcCooldown -Force -ErrorAction SilentlyContinue
-            Log 'Forcing DESKTOP-KOCEPSV Desktop Commander recovery'
-            & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $DcSupervisor -Mode Restart 2>&1 |
+            Log 'Reinstalling DESKTOP-KOCEPSV canonical Desktop Commander task and runtime'
+            & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $DcSupervisor -Mode InstallTask 2>&1 |
                 ForEach-Object { Log "desktop-commander-recovery: $_" }
             if ($LASTEXITCODE -ne 0) { Log "WARNING Desktop Commander recovery exit=$LASTEXITCODE" }
         }

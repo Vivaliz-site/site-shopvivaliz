@@ -1,4 +1,5 @@
 name: Temporary DESKTOP-KOCEPSV Relay Recovery
+# recovery-trigger: 2026-09-17-kocepsv-unattended
 
 on:
   push:
@@ -46,7 +47,7 @@ jobs:
                   wanted['DESKTOP-KOCEPSV']=next((x for x in ips if ':' not in x), ips[0] if ips else '')
           print('DESKTOP-KOCEPSV='+wanted['DESKTOP-KOCEPSV'])
           PY
-          if ! peer_info="$(${SSH_VM[@]} 'tailscale status --json 2>/dev/null' | python3 /tmp/peer-discover.py 2>/dev/null)"; then
+          if ! peer_info="$("${SSH_VM[@]}" 'tailscale status --json 2>/dev/null' | python3 /tmp/peer-discover.py 2>/dev/null)"; then
             printf 'PRIVATE_NETWORK=unavailable\nDESKTOP_PEER=unknown\n' > /tmp/windows-peer-safe.txt
             exit 4
           fi
@@ -57,7 +58,7 @@ jobs:
             exit 0
           fi
           printf 'DESKTOP_PEER=found\n' >> /tmp/windows-peer-safe.txt
-          if ! ${SSH_VM[@]} "timeout 4 bash -c '</dev/tcp/$desk_ip/22'" >/dev/null 2>&1; then
+          if ! "${SSH_VM[@]}" "timeout 4 bash -c '</dev/tcp/$desk_ip/22'" >/dev/null 2>&1; then
             printf 'DESKTOP_SSH22=unreachable\n' >> /tmp/windows-peer-safe.txt
             exit 0
           fi
@@ -74,7 +75,7 @@ jobs:
           if ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/tmp/DESKTOP.hosts -p 32224 -i "$HOME/.ssh/vmkey" user@127.0.0.1 "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$cmd\"" >/dev/null 2>&1; then
             printf 'DESKTOP_RECOVERY=executed\n' >> /tmp/windows-peer-safe.txt
             sleep 15
-            if ${SSH_VM[@]} 'curl -fsS --connect-timeout 4 --max-time 8 http://127.0.0.1:5558/health >/dev/null' 2>/dev/null; then
+            if "${SSH_VM[@]}" 'curl -fsS --connect-timeout 4 --max-time 8 http://127.0.0.1:5558/health >/dev/null' 2>/dev/null; then
               printf 'DESKTOP_RELAY=reachable\n' >> /tmp/windows-peer-safe.txt
             else
               printf 'DESKTOP_RELAY=unreachable\n' >> /tmp/windows-peer-safe.txt
