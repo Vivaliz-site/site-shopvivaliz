@@ -3,7 +3,7 @@ set -euo pipefail
 
 browser_audit='tests/storefront-screenshot-audit.mjs'
 repair_workflow='.github/workflows/blog-editorial-repair-once.yml'
-article_path='/blog/acessorios-que-ajudam-na-rotina-de-limpeza-e-manutencao'
+article_path='/blog/como-escolher-ferramentas-para-casa'
 
 for route in "{ name: 'blog', url: '/blog/'" "{ name: 'blog-article', url: '${article_path}'"; do
   if ! grep -Fq "$route" "$browser_audit"; then

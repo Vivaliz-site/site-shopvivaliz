@@ -10,6 +10,8 @@ SERVICE_TARGET="/etc/systemd/system/$SERVICE_NAME"
 TIMER_TARGET="/etc/systemd/system/$TIMER_NAME"
 RUNNER_PATH="$ROOT/scripts/safe-repo-sync.sh"
 RUNNER_TARGET="/usr/local/lib/shopvivaliz/safe-repo-sync.sh"
+DEPLOY_LOG_DIR="/home/ubuntu/shopvivaliz-deploy/logs"
+DEPLOY_LOG_FILE="$DEPLOY_LOG_DIR/deploy.log"
 
 if [[ ${EUID} -ne 0 ]]; then
   echo "Execute com sudo: sudo bash $ROOT/scripts/install-safe-sync-service.sh" >&2
@@ -32,6 +34,13 @@ install -d -o root -g root -m 0755 /usr/local/lib/shopvivaliz
 install -o root -g root -m 0755 "$RUNNER_PATH" "$RUNNER_TARGET"
 install -o root -g root -m 0644 "$SERVICE_SOURCE" "$SERVICE_TARGET"
 install -o root -g root -m 0644 "$TIMER_SOURCE" "$TIMER_TARGET"
+
+# safe-repo-sync runs as ubuntu and may hand off to deploy-production.sh.
+# Keep deploy evidence appendable by that operational user without truncation.
+install -d -o ubuntu -g ubuntu -m 0755 "$DEPLOY_LOG_DIR"
+touch "$DEPLOY_LOG_FILE"
+chown ubuntu:ubuntu "$DEPLOY_LOG_FILE"
+chmod 0644 "$DEPLOY_LOG_FILE"
 
 systemctl daemon-reload
 systemctl disable --now shopvivaliz-sync.service 2>/dev/null || true

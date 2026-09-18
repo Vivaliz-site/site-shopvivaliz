@@ -27,6 +27,18 @@ if ($path === '/api/liz-intelligent.php') {
     return true;
 }
 
+if ($path === '/blog' || $path === '/blog/') {
+    $_SERVER['SCRIPT_FILENAME'] = $root . '/blog/index.php';
+    require $_SERVER['SCRIPT_FILENAME'];
+    return true;
+}
+if (preg_match('~^/blog/([a-z0-9][a-z0-9-]*)/?$~', $path, $match) === 1) {
+    $_GET['slug'] = rawurldecode($match[1]);
+    $_SERVER['SCRIPT_FILENAME'] = $root . '/blog/artigo.php';
+    require $_SERVER['SCRIPT_FILENAME'];
+    return true;
+}
+
 $redirects = [
     '/remote-index.html' => '/',
     '/temp_homepage.html' => '/',

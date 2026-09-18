@@ -69,6 +69,7 @@ jobs:
           bash tests/active-products-browser-relay-fallback-regression.sh
           bash tests/ecommerce-live-stale-evidence-regression.sh
           bash tests/blog-production-proof-regression.sh
+          php tests/php-router-blog-contract-test.php
           php tests/browser-smoke-relay-failover-regression.php
           bash tests/apache-security-headers-module-regression.sh
           php tests/sobre-open-graph-regression.php

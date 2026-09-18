@@ -27,6 +27,16 @@ fi
 
 mkdir -p "$LOG_DIR"
 
+if ! command -v crontab >/dev/null 2>&1; then
+  if systemctl is-enabled --quiet shopvivaliz-sync-safe.timer \
+    && systemctl is-active --quiet shopvivaliz-sync-safe.timer; then
+    echo "Auto sync Oracle ativo via shopvivaliz-sync-safe.timer (systemd)."
+    exit 0
+  fi
+  echo "crontab indisponivel e shopvivaliz-sync-safe.timer nao esta ativo; execute o instalador systemd no deploy." >&2
+  exit 3
+fi
+
 if ! crontab -l > "$CRON_FILE" 2>/dev/null; then
   : > "$CRON_FILE"
 fi
