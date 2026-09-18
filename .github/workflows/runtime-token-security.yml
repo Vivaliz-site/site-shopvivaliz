@@ -29,10 +29,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  audit:
-    name: Audit production runtime credentials
-    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
-    timeout-minutes: 20
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      expected_sha: ${{ steps.production_impact.outputs.expected_sha }}
     steps:
       - name: Checkout push revision for production impact
         if: ${{ github.event_name == 'push' }}
@@ -40,17 +40,33 @@ jobs:
         with:
           fetch-depth: 2
           persist-credentials: false
-
       - name: Classify production impact
         id: production_impact
-        if: ${{ github.event_name == 'push' }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" > /tmp/production-impact-paths.txt
-          should_deploy="$(bash scripts/should-deploy-production.sh < /tmp/production-impact-paths.txt)"
-          echo "should_deploy=$should_deploy" >> "$GITHUB_OUTPUT"
+          expected_sha=''
+          if [[ "${{ github.event_name }}" == 'push' ]]; then
+            git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" > /tmp/production-impact-paths.txt
+            should_deploy="$(bash scripts/should-deploy-production.sh < /tmp/production-impact-paths.txt)"
+            [[ "$should_deploy" == 'true' ]] && expected_sha="$GITHUB_SHA"
+          fi
+          echo "expected_sha=$expected_sha" >> "$GITHUB_OUTPUT"
 
+  await-release:
+    needs: preflight
+    uses: ./.github/workflows/production-release-await.yml
+    with:
+      expected_sha: ${{ needs.preflight.outputs.expected_sha }}
+      attempts: 30
+      sleep_seconds: 20
+
+  audit:
+    needs: await-release
+    name: Audit production runtime credentials
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 20
+    steps:
       - name: Configure verified SSH host
         shell: bash
         env:
@@ -68,27 +84,6 @@ jobs:
           printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
-
-      - name: Wait for exact production release
-        if: ${{ github.event_name == 'push' && steps.production_impact.outputs.should_deploy == 'true' }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          ready=0
-          for attempt in $(seq 1 30); do
-            deployed_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              ubuntu@127.0.0.1 \
-              'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha 2>/dev/null || true')"
-            if [[ "$deployed_sha" == "$GITHUB_SHA" ]]; then
-              ready=1
-              echo "deployed_sha=$deployed_sha"
-              break
-            fi
-            echo "deployment_wait_attempt=$attempt"
-            sleep 20
-          done
-          test "$ready" = 1 || { echo '::error::Exact push SHA was not deployed within 10 minutes'; exit 1; }
 
       - name: Audit all populated runtime tokens without exposing values
         shell: bash

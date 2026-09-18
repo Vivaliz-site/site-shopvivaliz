@@ -35,10 +35,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  smoke-matrix:
-    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
-    timeout-minutes: 80
-    environment: production
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      run_image: ${{ steps.scope.outputs.run_image }}
+      run_catalog: ${{ steps.scope.outputs.run_catalog }}
     steps:
       - name: Checkout for diff detection
         uses: actions/checkout@v4
@@ -71,6 +72,22 @@ jobs:
           echo "run_image=$run_image" >> "$GITHUB_OUTPUT"
           echo "run_catalog=$run_catalog" >> "$GITHUB_OUTPUT"
 
+
+  await-release:
+    needs: preflight
+    uses: ./.github/workflows/production-release-await.yml
+    with:
+      expected_sha: ${{ github.sha }}
+      allow_descendant: true
+      attempts: 36
+      sleep_seconds: 20
+
+  smoke-matrix:
+    needs: [preflight, await-release]
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 80
+    environment: production
+    steps:
       - name: Configure verified production SSH
         env:
           SHOPVIVALIZ_VM_SSH_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
@@ -86,44 +103,12 @@ jobs:
           printf '%s\n' "$SHOPVIVALIZ_VM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
-      - name: Wait for production release containing target commit
-        id: release
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          ready=0
-          deployed_sha=''
-          target_sha="$GITHUB_SHA"
-          for attempt in $(seq 1 36); do
-            deployed_sha="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              ubuntu@127.0.0.1 \
-              'cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha 2>/dev/null || true')"
-            if [[ "$deployed_sha" =~ ^[0-9a-f]{40}$ ]]; then
-              if ! git cat-file -e "${deployed_sha}^{commit}" 2>/dev/null; then
-                git fetch --no-tags origin "$deployed_sha" || true
-              fi
-              if [[ "$deployed_sha" == "$target_sha" ]] || \
-                 (git cat-file -e "${deployed_sha}^{commit}" 2>/dev/null && git merge-base --is-ancestor "$target_sha" "$deployed_sha"); then
-                ready=1
-                echo "production_release_ready=true"
-                echo "production_sha=$deployed_sha" >> "$GITHUB_OUTPUT"
-                echo "target_sha=$target_sha"
-                echo "production_sha=$deployed_sha"
-                break
-              fi
-            fi
-            echo "deployment_wait_attempt=$attempt production_sha=${deployed_sha:-none}"
-            sleep 20
-          done
-          test "$ready" = 1 || { echo '::error::No production release containing the target commit was observed'; exit 1; }
-
       - name: Run only the smoke combinations for what changed
         shell: bash
         env:
-          RUN_IMAGE: ${{ steps.scope.outputs.run_image }}
-          RUN_CATALOG: ${{ steps.scope.outputs.run_catalog }}
-          PRODUCTION_SHA: ${{ steps.release.outputs.production_sha }}
+          RUN_IMAGE: ${{ needs.preflight.outputs.run_image }}
+          RUN_CATALOG: ${{ needs.preflight.outputs.run_catalog }}
+          PRODUCTION_SHA: ${{ needs.await-release.outputs.production_sha }}
         run: |
           set -Eeuo pipefail
           echo "run_image=$RUN_IMAGE run_catalog=$RUN_CATALOG production_sha=$PRODUCTION_SHA"

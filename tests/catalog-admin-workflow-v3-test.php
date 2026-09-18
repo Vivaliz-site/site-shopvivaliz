@@ -24,6 +24,7 @@ $textServices = file_get_contents($root . '/admin/catalog-optimization/src/TextA
 $normalizer = file_get_contents($root . '/admin/catalog-optimization/src/CatalogGeneratedDataNormalizer.php');
 $repair = file_get_contents($root . '/admin/catalog-optimization/repair_hard_quality_pending.php');
 $repairWorkflow = file_get_contents($root . '/.github/workflows/repair-catalog-hard-quality-pending.yml');
+$releaseAwaitWorkflow = file_get_contents($root . '/.github/workflows/production-release-await.yml');
 
 sv_catalog_v3_assert(is_string($guard) && $guard !== '', 'admin-guard.php precisa existir');
 sv_catalog_v3_assert(is_string($ui) && $ui !== '', 'workflow unificado precisa existir');
@@ -37,6 +38,7 @@ sv_catalog_v3_assert(is_string($textServices) && $textServices !== '', 'servicos
 sv_catalog_v3_assert(is_string($normalizer) && $normalizer !== '', 'normalizador deterministico precisa existir');
 sv_catalog_v3_assert(is_string($repair) && $repair !== '', 'reparo de pendencias hard precisa existir');
 sv_catalog_v3_assert(is_string($repairWorkflow) && $repairWorkflow !== '', 'workflow de reparo pos-deploy precisa existir');
+sv_catalog_v3_assert(is_string($releaseAwaitWorkflow) && $releaseAwaitWorkflow !== '', 'workflow reutilizavel de espera de release precisa existir');
 
 sv_catalog_v3_assert(
     str_contains($guard, 'catalog-optimization-workflow.js')
@@ -200,8 +202,10 @@ sv_catalog_v3_assert(
     && !str_contains($repairWorkflow, "\n  push:")
     && str_contains($repairWorkflow, 'TARGET_SHA:')
     && str_contains($repairWorkflow, 'production-catalog-hard-quality-repair-v2')
-    && str_contains($repairWorkflow, 'merge-base --is-ancestor "$target" "$deployed"')
-    && str_contains($repairWorkflow, "production_release_relation=\$relation")
+    && str_contains($repairWorkflow, 'uses: ./.github/workflows/production-release-await.yml')
+    && str_contains($repairWorkflow, 'allow_descendant: true')
+    && str_contains($releaseAwaitWorkflow, 'git merge-base --is-ancestor "$EXPECTED_SHA" "$deployed_sha"')
+    && str_contains($releaseAwaitWorkflow, "production_release_relation=descendant")
     && str_contains($repairWorkflow, 'cancel-in-progress: false')
     && str_contains($repairWorkflow, 'ServerAliveInterval=30')
     && str_contains($repairWorkflow, 'ServerAliveCountMax=6')
