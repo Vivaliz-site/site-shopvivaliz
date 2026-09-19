@@ -1,0 +1,52 @@
+name: MLRR Shadow One-Shot Dispatcher
+
+on:
+  push:
+    branches:
+      - ops/mlrr-shadow-once-20260919
+    paths:
+      - ".github/workflows/mlrr-shadow-once.yml"
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: mlrr-shadow-once-20260919
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Dispatch shadow and validate sequentially
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          dispatch_and_wait() {
+            local operation="$1"
+            local before run_id
+            before="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow mlrr-production-ops-bridge.yml --event workflow_dispatch --branch main --limit 1 --json databaseId --jq '.[0].databaseId // 0')"
+            gh workflow run mlrr-production-ops-bridge.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              -f operation="$operation"
+
+            run_id=""
+            for _ in $(seq 1 30); do
+              run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow mlrr-production-ops-bridge.yml --event workflow_dispatch --branch main --limit 10 --json databaseId --jq ".[] | select(.databaseId != $before) | .databaseId" | head -1)"
+              test -n "$run_id" && break
+              sleep 2
+            done
+            test -n "$run_id" || { echo "::error::MLRR $operation run was not created"; exit 1; }
+            echo "MLRR_${operation^^}_RUN_ID=$run_id"
+            gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status --interval 5
+          }
+
+          dispatch_and_wait shadow
+          dispatch_and_wait validate
+          echo "MLRR_SHADOW_SEQUENCE=PASS"
