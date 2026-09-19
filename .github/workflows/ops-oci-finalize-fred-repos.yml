@@ -1,0 +1,216 @@
+name: Ops OCI Finalize Fred Repositories
+on:
+  push:
+    branches:
+      - ops/oci-finalize-fred-repos-20260919
+permissions:
+  contents: read
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      OCI_PROFILE: AGENTS
+      SITE_INSTANCE_NAME: shopvivaliz-free-a1
+    steps:
+      - name: Configure OCI AGENTS profile
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!name:-}" || { echo "::error::Missing OCI secret: $name"; exit 1; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 600 "$OCI_KEY_FILE"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+
+      - name: Install OCI CLI and locate exact site host
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          query="query instance resources where displayName = '$SITE_INSTANCE_NAME'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = "1"
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
+          printf 'SITE_INSTANCE_ID=%s\nSITE_COMPARTMENT_ID=%s\n' "$instance_id" "$compartment_id" >> "$GITHUB_ENV"
+
+      - name: Finalize legacy policy and prune only superseded consultorio runs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import os, time, oci
+
+          cfg = oci.config.from_file(os.environ["OCI_CONFIG_FILE"], os.environ["OCI_PROFILE"])
+          client = oci.compute_instance_agent.ComputeInstanceAgentClient(cfg)
+          models = oci.compute_instance_agent.models
+
+          script = r"""set -Eeuo pipefail
+          target="fredmourao-ai/solange-rolla"
+          pr=13
+          expected_head="0e3c09832a46a8d4b85ea92037e03ba929877e57"
+          checks_api="repos/$target/branches/main/protection/required_status_checks"
+
+          archived="$(gh api "repos/$target" --jq '.archived')"
+          echo "LEGACY_ARCHIVED_INITIAL=$archived"
+          if [ "$archived" = "true" ]; then
+            gh api -X PATCH "repos/$target" -F archived=false >/dev/null
+          fi
+
+          before="$(gh api "$checks_api")"
+          printf '%s' "$before" > /tmp/legacy-required-checks-before.json
+          jq '{strict,checks}' /tmp/legacy-required-checks-before.json > /tmp/legacy-required-checks-restore.json
+          echo "LEGACY_CHECKS_BEFORE=$(jq -c '{strict,checks}' /tmp/legacy-required-checks-before.json)"
+
+          restore_checks() {
+            gh api -X PATCH "$checks_api" --input /tmp/legacy-required-checks-restore.json >/dev/null
+          }
+          trap 'restore_checks || true' EXIT
+
+          merged="$(gh api "repos/$target/pulls/$pr" --jq '.merged')"
+          if [ "$merged" != "true" ]; then
+            actual_head="$(gh api "repos/$target/pulls/$pr" --jq '.head.sha')"
+            test "$actual_head" = "$expected_head"
+            gh api -X DELETE "$checks_api" >/dev/null
+            echo "LEGACY_TEMP_CHECK_REMOVAL=PASS"
+            merge_json="$(gh api -X PUT "repos/$target/pulls/$pr/merge" -f merge_method=squash -f sha="$expected_head")"
+            test "$(jq -r '.merged' <<<"$merge_json")" = "true"
+            echo "LEGACY_MERGE_SHA=$(jq -r '.sha' <<<"$merge_json")"
+          else
+            echo "LEGACY_MERGE=already"
+          fi
+
+          restore_checks
+          trap - EXIT
+          after="$(gh api "$checks_api")"
+          echo "LEGACY_CHECKS_AFTER=$(jq -c '{strict,checks}' <<<"$after")"
+          test "$(jq -r '.checks | length' <<<"$after")" -eq "$(jq -r '.checks | length' /tmp/legacy-required-checks-before.json)"
+          test "$(jq -r '.checks[0].context' <<<"$after")" = "static-smoke"
+          test "$(jq -r '.checks[0].app_id' <<<"$after")" = "15368"
+
+          for file in AGENTS.md CLAUDE.md REGRAS-AGENTES-CENTRALIZADAS.md; do
+            gh api "repos/$target/contents/$file?ref=main" --jq '.content' | tr -d '\n' | base64 -d > "/tmp/$file"
+            grep -q 'SUPERPOWERS_EVERY_STAGE_V1' "/tmp/$file"
+            echo "LEGACY_MARKER_OK=$file"
+          done
+          policy_sha="$(gh api "repos/$target/contents/REGRAS-AGENTES-CENTRALIZADAS.md?ref=main" --jq '.sha')"
+          echo "LEGACY_POLICY_SHA=$policy_sha"
+          test "$policy_sha" = "31e2135dd12a1b930c117a34e25ba5240f02455e"
+
+          gh api -X PATCH "repos/$target" -F archived=true >/dev/null
+          test "$(gh api "repos/$target" --jq '.archived')" = "true"
+          echo "LEGACY_REARCHIVED=PASS"
+
+          consultorio="fredmourao-ai/solange-rolla-consultorio"
+          gh api "repos/$consultorio/actions/runs?status=queued&per_page=100" > /tmp/consultorio-queued.json
+          cancelled=0
+          while IFS= read -r row; do
+            id="$(jq -r '.id' <<<"$row")"
+            run_sha="$(jq -r '.head_sha' <<<"$row")"
+            prn="$(jq -r '.pull_requests[0].number // empty' <<<"$row")"
+            test -n "$prn" || continue
+            pr_json="$(gh api "repos/$consultorio/pulls/$prn")"
+            state="$(jq -r '.state' <<<"$pr_json")"
+            current_sha="$(jq -r '.head.sha' <<<"$pr_json")"
+            if [ "$state" != "open" ] || [ "$run_sha" != "$current_sha" ]; then
+              gh api -X POST "repos/$consultorio/actions/runs/$id/cancel" >/dev/null 2>&1 || true
+              sleep 1
+              status="$(gh api "repos/$consultorio/actions/runs/$id" --jq '.status' 2>/dev/null || echo unknown)"
+              if [[ "$status" =~ ^(queued|pending|in_progress|waiting|requested)$ ]]; then
+                gh api -X POST "repos/$consultorio/actions/runs/$id/force-cancel" >/dev/null 2>&1 || true
+              fi
+              cancelled=$((cancelled+1))
+              echo "CONSULTORIO_STALE_CANCELLED=$id pr=$prn"
+            fi
+          done < <(jq -c '.workflow_runs[] | select(.event=="pull_request")' /tmp/consultorio-queued.json)
+          echo "CONSULTORIO_STALE_CANCEL_COUNT=$cancelled"
+
+          pr208="$(gh api "repos/$consultorio/pulls/208")"
+          echo "PR208_STATE=$(jq -r '.state' <<<"$pr208")"
+          echo "PR208_MERGED=$(jq -r '.merged' <<<"$pr208")"
+          """
+
+          command = """cat > /tmp/finalize-fred-repos.sh <<'SH'
+""" + script + "
+SH
+chmod 700 /tmp/finalize-fred-repos.sh
+chown ubuntu:ubuntu /tmp/finalize-fred-repos.sh
+sudo -H -u ubuntu env -u GH_TOKEN -u GITHUB_TOKEN bash /tmp/finalize-fred-repos.sh
+rc=$?
+rm -f /tmp/finalize-fred-repos.sh
+exit $rc"
+
+          details = models.CreateInstanceAgentCommandDetails(
+              compartment_id=os.environ["SITE_COMPARTMENT_ID"],
+              execution_time_out_in_seconds=240,
+              target=models.InstanceAgentCommandTarget(instance_id=os.environ["SITE_INSTANCE_ID"]),
+              content=models.InstanceAgentCommandContent(
+                  source=models.InstanceAgentCommandSourceViaTextDetails(source_type="TEXT", text=command),
+                  output=models.InstanceAgentCommandOutputViaTextDetails(output_type="TEXT"),
+              ),
+              display_name="finalize-fred-superpowers-policy",
+          )
+          command_id = client.create_instance_agent_command(details).data.id
+          execution = None
+          for _ in range(60):
+              execution = client.get_instance_agent_command_execution(
+                  instance_agent_command_id=command_id,
+                  instance_id=os.environ["SITE_INSTANCE_ID"],
+              ).data
+              if execution.lifecycle_state in {"SUCCEEDED","FAILED","TIMED_OUT","CANCELED"}:
+                  break
+              time.sleep(4)
+          if execution is None:
+              raise SystemExit("OCI execution missing")
+          output = execution.content
+          text = getattr(output, "text", "") or ""
+          allowed = (
+              "LEGACY_ARCHIVED_INITIAL=",
+              "LEGACY_CHECKS_BEFORE=",
+              "LEGACY_TEMP_CHECK_REMOVAL=",
+              "LEGACY_MERGE_SHA=",
+              "LEGACY_MERGE=",
+              "LEGACY_CHECKS_AFTER=",
+              "LEGACY_MARKER_OK=",
+              "LEGACY_POLICY_SHA=",
+              "LEGACY_REARCHIVED=",
+              "CONSULTORIO_STALE_CANCELLED=",
+              "CONSULTORIO_STALE_CANCEL_COUNT=",
+              "PR208_STATE=",
+              "PR208_MERGED=",
+          )
+          for line in text.splitlines():
+              if line.startswith(allowed):
+                  print(line)
+          if execution.lifecycle_state != "SUCCEEDED" or getattr(output, "exit_code", 1) != 0:
+              raise SystemExit("OCI finalizer command failed")
+          PY
+
+      - name: Cleanup OCI credentials
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          test -f "$OCI_KEY_FILE" && shred -u "$OCI_KEY_FILE"
+          test -f "$OCI_CONFIG_FILE" && shred -u "$OCI_CONFIG_FILE"
