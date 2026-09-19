@@ -36,7 +36,9 @@ jobs:
             const fs = require('fs');
             const path = require('path');
             const workflow_id = 'agents-hourly-deep-audit.yml';
-            const maximumAgeMinutes = 105;
+            // GitHub Actions scheduled workflows are best-effort and may be delayed for hours.
+            // Detect a genuinely missing cadence without treating provider-side schedule lag as a repository failure.
+            const maximumAgeMinutes = 390;
             const response = await github.rest.actions.listWorkflowRuns({
               owner: context.repo.owner,
               repo: context.repo.repo,
