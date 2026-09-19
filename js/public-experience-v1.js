@@ -128,10 +128,16 @@ function fetchAllCatalogRows() {
 }
 function markCategoryFallback(image, categoryName, preferredFallback) {
   if (!(image instanceof HTMLImageElement)) return;
-  var fallback = isValidCatalogImage(preferredFallback)
-    ? String(preferredFallback)
-    : localCategoryFallback(categoryName);
-  image.onerror = null;
+  var localFallback = localCategoryFallback(categoryName);
+  var failedSrc = String(image.currentSrc || image.src || '').trim();
+  var preferred = isValidCatalogImage(preferredFallback) ? String(preferredFallback).trim() : '';
+  var fallback = preferred && preferred !== failedSrc ? preferred : localFallback;
+  image.onerror = fallback !== localFallback ? function () {
+    image.onerror = null;
+    image.src = localFallback;
+    image.dataset.svCategorySource = 'local-fallback';
+    delete image.dataset.svProductSku;
+  } : null;
   image.src = fallback;
   image.alt = 'Produto da categoria ' + categoryName;
   image.dataset.svCategorySource = 'local-fallback';
