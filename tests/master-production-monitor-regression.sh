@@ -18,6 +18,11 @@ grep -Fq 'test "$served_sha" = "$sha"' <<<"$monitor"
 grep -Fq 'https://shopvivaliz.com.br${path}' <<<"$monitor"
 grep -Fq 'sitemap_body="$(curl -sS' <<<"$monitor"
 grep -Fq '[[ "$sitemap_body" == *'\''<urlset'\''* ]]' <<<"$monitor"
+grep -Fq 'https://shopvivaliz.com.br/api/health.php?health=1' <<<"$monitor"
+if grep -Fq 'https://shopvivaliz.com.br/api/health/' <<<"$monitor"; then
+  echo 'monitor must use the canonical reachable health.php endpoint' >&2
+  exit 1
+fi
 
 # mod_php keeps OPcache in the long-lived Apache parent process. A graceful
 # reload is insufficient after the stable `current` symlink changes targets.
