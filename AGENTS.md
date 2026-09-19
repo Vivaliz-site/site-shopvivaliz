@@ -525,3 +525,6 @@ Para operações OCI, use somente a identidade dedicada `AGENTS`; nunca use como
 ## Isolamento obrigatorio de sessao CLI por chat
 
 Antes de qualquer operacao em terminal/CLI, leia e cumpra a secao `Isolamento obrigatorio de sessao CLI por chat` de `AI-TO-CLI-PROTOCOL.md`. Cada chat deve usar sessao/namespace CLI exclusivo; reutilizacao de sessao entre chats e proibida. Estado necessario para retomada deve ser persistido fora da memoria do shell.
+
+## Auditoria Extrema - arquitetura e deploy
+Nos gatilhos de `AUDIT_POLICY.md`, execute tambem `docs/quality/ARCHITECTURE_DEPLOY_AUDIT_V1.md`. A auditoria inclui gargalos de CI/deploy, arquitetura/codigo, ownership, contratos cross-repo e melhorias seguras de velocidade sem reduzir cobertura.

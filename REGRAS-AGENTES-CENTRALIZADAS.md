@@ -547,3 +547,6 @@ git commit -m "fix: sincronizar secrets desincronizados (SOURCE: GitHub)"
 - Ao terminar a tarefa, feche ou marque a sessao interativa do chat como concluida. Sessao concluida nunca pode ser reatribuida a outro chat.
 
 Regra principal: **um chat = um namespace de sessao CLI isolado; nunca reutilizar sessao entre chats.**
+
+## AUDITORIA_ARQUITETURA_DEPLOY_V1
+Toda Auditoria Extrema deve incluir `docs/quality/ARCHITECTURE_DEPLOY_AUDIT_V1.md` e tratar melhorias arquiteturais materiais como parte da auditoria, inclusive tempo de deploy, runners, artifacts, cache, provisionamento, restarts, contratos cross-repo, hotspots, rollback e blast radius.
