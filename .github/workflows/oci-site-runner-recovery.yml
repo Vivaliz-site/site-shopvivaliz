@@ -158,7 +158,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for run_id in 35468055206 35472803679; do
+          head_sha="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq .commit.sha)"
+          mapfile -t stale_ids < <(
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow master-production-pipeline.yml \
+              --event workflow_dispatch \
+              --branch main \
+              --limit 100 \
+              --json databaseId,headSha,status \
+              --jq ".[] | select(.headSha != \"$head_sha\" and (.status == \"queued\" or .status == \"pending\" or .status == \"in_progress\" or .status == \"waiting\" or .status == \"requested\")) | .databaseId"
+          )
+          echo "OBSOLETE_DEPLOY_RUN_COUNT=${#stale_ids[@]}"
+          for run_id in "${stale_ids[@]}"; do
+            test -n "$run_id" || continue
             status="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq .status 2>/dev/null || true)"
             case "$status" in
               queued|pending|in_progress|waiting|requested)
