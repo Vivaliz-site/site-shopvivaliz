@@ -49,3 +49,10 @@ def test_production_services_follow_main_and_run_detail_sync() -> None:
         encoding="utf-8"
     )
     assert "daemon-token-renewer.py --interval 300 --retry-interval 300" in token_sync
+
+
+def test_default_health_url_matches_reachable_production_endpoint() -> None:
+    assert sync.HEALTH_URL == "https://shopvivaliz.com.br/api/health.php?health=1"
+    assert not sync.HEALTH_URL.startswith("http://127.0.0.1")
+    source = MODULE_PATH.read_text(encoding="utf-8")
+    assert "ShopVivaliz-Safe-Sync/1.0" in source
