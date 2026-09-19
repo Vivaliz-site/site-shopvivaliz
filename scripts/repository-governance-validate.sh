@@ -8,6 +8,7 @@ python3 scripts/validate-recurring-ai-policy.py
 python3 scripts/validate-retired-windows-tasks.py
 python3 scripts/validate-final-response-deploy-gate.py
 python3 scripts/validate-audit-governance.py
+python3 scripts/validate-global-audit-policy.py
 
 if command -v composer >/dev/null 2>&1; then
   composer validate --no-check-publish --strict
