@@ -15,7 +15,8 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    # Pure repository CI: keep the production deploy runner free for deploy/live validation.
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
