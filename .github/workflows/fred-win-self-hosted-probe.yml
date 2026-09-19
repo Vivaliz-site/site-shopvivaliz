@@ -12,15 +12,19 @@ permissions:
 
 jobs:
   probe:
-    runs-on: self-hosted
+    runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 3
     steps:
-      - name: Report runner identity
+      - name: Report and verify Fred-Win runner identity
         shell: powershell
         run: |
+          $ErrorActionPreference = 'Stop'
           Write-Host "HOSTNAME=$env:COMPUTERNAME"
           Write-Host "USERNAME=$env:USERNAME"
           Get-Date -Format o
+          if ($env:COMPUTERNAME -ne 'LAPTOP-NIG4IFUU') {
+            throw "Unexpected Windows self-hosted runner: $env:COMPUTERNAME"
+          }
           Get-Process -Name opera* -ErrorAction SilentlyContinue | Select-Object -First 5 ProcessName,Id,Path
 
       - name: Audit local OpenAI credential presence without values
@@ -75,3 +79,57 @@ jobs:
           }
           $sha.Dispose()
           Write-Host ('local_openai_distinct_key_count=' + (@($fingerprints | Select-Object -Unique).Count))
+
+      - name: Inspect M365 backend runtime through canonical Fred-Win SSH
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ssh = 'C:\Program Files\Git\usr\bin\ssh.exe'
+          if (-not (Test-Path -LiteralPath $ssh)) { throw 'Git SSH executable is missing' }
+          $remote = @'
+          set -Eeuo pipefail
+          test "$(hostname)" = "always-free-arm-1787907847-26"
+          echo "backend_host=$(hostname)"
+          echo "backend_user=$(id -un)"
+          test -d /opt/m365
+          echo "m365_dir=present"
+          if test -d /opt/m365/.git; then
+            current_sha="$(git -C /opt/m365 rev-parse HEAD)"
+            echo "current_sha=$current_sha"
+            echo "branch=$(git -C /opt/m365 branch --show-current)"
+            test -z "$(git -C /opt/m365 status --porcelain)"
+            echo "working_tree=clean"
+            remote_url="$(git -C /opt/m365 remote get-url origin)"
+            case "$remote_url" in
+              *Vivaliz-site/shopvivaliz-m365*) echo "origin=canonical" ;;
+              *) echo "origin=unexpected"; exit 3 ;;
+            esac
+            remote_sha="$(git -C /opt/m365 ls-remote origin refs/heads/main | awk '{print $1}')"
+            test -n "$remote_sha"
+            echo "remote_main_sha=$remote_sha"
+            if test "$current_sha" = "$remote_sha"; then
+              echo "runtime_git_sync=PASS"
+            else
+              echo "runtime_git_sync=STALE"
+            fi
+          else
+            echo "git_checkout=missing"
+            exit 4
+          fi
+          test -s /opt/m365/.env
+          echo "env_file=present"
+          test -x /opt/m365/venv/bin/python
+          echo "venv=present"
+          /opt/m365/venv/bin/python --version
+          test -f /opt/m365/python/m365_config.py
+          echo "config_module=present"
+          if crontab -l 2>/dev/null | grep -q '/opt/m365/run_automation.sh'; then
+            echo "cron=present"
+          else
+            echo "cron=missing"
+          fi
+          '@
+          $remote | & $ssh -o BatchMode=yes shopvivaliz-a1-backend-raw 'bash -se'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Backend M365 inspection failed with SSH exit $LASTEXITCODE"
+          }
