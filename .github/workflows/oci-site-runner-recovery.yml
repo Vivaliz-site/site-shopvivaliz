@@ -130,7 +130,7 @@ jobs:
           set -euo pipefail
           ready=false
           for attempt in $(seq 1 72); do
-            if curl -fsS --max-time 10 https://shopvivaliz.com.br/api/health/version.php > "$RUNNER_TEMP/version-after.json" 2>/dev/null \
+            if curl -fsS -A "ShopVivaliz-Safe-Sync/1.0" --max-time 10 https://shopvivaliz.com.br/api/health/version.php > "$RUNNER_TEMP/version-after.json" 2>/dev/null \
               && jq -e '.ok == true and (.release_sha | type == "string")' "$RUNNER_TEMP/version-after.json" >/dev/null 2>&1; then
               ready=true
               break
