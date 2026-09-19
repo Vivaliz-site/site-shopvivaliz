@@ -8,6 +8,7 @@ permissions:
 jobs:
   unarchive:
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 3
     env:
       GH_TOKEN: ${{ secrets.GH_PAT || secrets.GH_REPO_TOKEN }}
