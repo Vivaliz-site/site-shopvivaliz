@@ -299,7 +299,7 @@ jobs:
 
           served_sha=''
           for attempt in 1 2 3 4 5 6 7 8; do
-            if ! served_sha="$(curl -fsS -H 'Cache-Control: no-cache' --max-time 5 "https://shopvivaliz.com.br/api/health.php?health=1version.php?deploy=${sha}" | php -r '$j=json_decode(stream_get_contents(STDIN), true); echo is_array($j) ? ($j["release_sha"] ?? "") : "";')"; then
+            if ! served_sha="$(curl -fsS -H 'Cache-Control: no-cache' --max-time 5 "https://shopvivaliz.com.br/api/health/version.php?deploy=${sha}" | php -r '$j=json_decode(stream_get_contents(STDIN), true); echo is_array($j) ? ($j["release_sha"] ?? "") : "";')"; then
               served_sha=''
             fi
             [ "$served_sha" = "$sha" ] && break
@@ -376,7 +376,7 @@ jobs:
           sitemap_body="$(curl -sS -H 'Cache-Control: no-cache' --max-time 20 https://shopvivaliz.com.br/sitemap.xml)"
           [[ "$sitemap_body" == *'<urlset'* ]]
 
-          health_json="$(curl -fsS -A 'ShopVivaliz-Safe-Sync/1.0' -H 'Accept: application/json' -H 'Cache-Control: no-cache' --max-time 20 https://shopvivaliz.com.br/api/health.php)"
+          health_json="$(curl -fsS -A 'ShopVivaliz-Safe-Sync/1.0' -H 'Accept: application/json' -H 'Cache-Control: no-cache' --max-time 20 https://shopvivaliz.com.br/api/health.php?health=1)"
           printf '%s' "$health_json" | php -r '$j=json_decode(stream_get_contents(STDIN), true); if (!is_array($j) || ($j["ok"] ?? null) !== true || (float)($j["health_score_percent"] ?? -1) !== 100.0) { fwrite(STDERR, "health_not_100\n"); exit(1); }'
           echo 'health_score_percent -> 100'
 
