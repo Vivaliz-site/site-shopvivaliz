@@ -2,29 +2,26 @@
 
 **Status:** NÃO APTO (mantido — aguardando validação de mutações stateful em produção)
 
-## Rodada 2026-09-19 RDC — acesso real à VM produção (sessão 2)
+## Rodada 2026-09-19 RDC — sessão 2 (acesso real à VM produção)
 
-**Ambiente:** Remote Desktop Commander `shopvivaliz-free-a1` (`137.131.149.55`). SHA main HEAD e produção: `f32bdf55a52031abc4cb22c64735aeed8e4838d4`.
+**Ambiente:** Remote Desktop Commander `shopvivaliz-free-a1` (`137.131.149.55`). SHA main HEAD: `f32bdf55a52031abc4cb22c64735aeed8e4838d4`.
 
 ### Parity SHA — PASS
-- Produção (`current` symlink): `20260919-205351-bc14c204` — alinhado funcionalmente com `origin/main`.
+- Produção (`current` symlink): `20260919-205351-bc14c204`.
 - Delta `bc14c204..f32bdf55`: apenas docs (`docs/quality/AUDIT_STATUS.md`, `docs/AGENTS.md`). **Sem deploy drift de código operacional.**
 
 ### Storefront — PASS
 - `https://shopvivaliz.com.br/` → HTTP 200, TTFB 0.158s ✅
-- Conteúdo HTML válido retornado ✅
 
 ### Catálogo API — PASS
 - `GET /api/catalog/products.php?limit=5` → HTTP 200, 179 produtos disponíveis ✅
-- Preços corretos (ex.: R$51.47 produto de referência) ✅
+- Preços corretos (ex.: R$51.47) ✅
 
 ### Carrinho — PASS
-- `POST /api/cart/add.php` com produto real → HTTP 200 ✅
-- Preço retornado autoritativo pelo servidor (R$51.47) ✅
+- `POST /api/cart/add.php` → HTTP 200, preço autoritativo do servidor (R$51.47) ✅
 
 ### CEP / Endereço — PASS
-- `GET /api/viacep-proxy.php?cep=01310100` → HTTP 200, JSON `{cep, logradouro, bairro, localidade, uf}` correto ✅
-- Av. Paulista / Bela Vista / São Paulo / SP ✅
+- `GET /api/viacep-proxy.php?cep=01310100` → HTTP 200, Av. Paulista / Bela Vista / SP ✅
 
 ### Health Check — ATENÇÃO
 - Score: **94.74%** (`status: attention`)
@@ -43,23 +40,21 @@
 | **amazon-returns-deploy.service** | **FAILED** ❌ |
 
 ### Achados operacionais (ação necessária do Fred)
-
-1. **Disco 93% cheio** em `shopvivaliz-free-a1` — único check com falha no health. Risco de indisponibilidade se não houver limpeza.
-2. **`amazon-returns-deploy.service` FAILED** — `playwright-core` não instalado no host. Timer ativo, falha a cada execução. Desabilitar timer ou instalar playwright.
+1. **Disco 93%** em `shopvivaliz-free-a1` — único check com falha no health. Risco de indisponibilidade se não houver limpeza.
+2. **`amazon-returns-deploy.service` FAILED** — `playwright-core` não instalado. Timer ativo, falha a cada execução.
 3. **Backend `always-free-arm-1787907847-26`**: disco 91%, load alto (4–6), serviços `shopvivaliz-24x7`/`agent-bridge`/`shopvivaliz-mcp` inativos (rodada anterior).
 
 ### Operações stateful — NÃO VALIDADO
-- Checkout completo com pagamento real: **não executado** (envolve cobrança real).
+- Checkout completo com pagamento: **não executado** (envolve cobrança real).
 - Mutações admin de catálogo/preço/estoque via UI: **não executadas**.
-- PHPUnit: **não executado** (sem `vendor/` neste ambiente).
-- Playwright E2E: **não executado**.
+- PHPUnit / Playwright E2E: **não executados**.
 
 ### Veredito desta rodada
 **NÃO APTO** mantido. Parity SHA, storefront, catálogo, carrinho e CEP confirmados OK em produção real. Health 94.74% (disco). O único bloqueio remanescente para APTO é a execução de mutações stateful (checkout + admin) em produção ou ambiente staging equivalente.
 
 ---
 
-## Rodada 2026-09-19 RDC — acesso real às VMs de produção (sessão 1)
+## Rodada 2026-09-19 RDC — sessão 1 (acesso real às VMs de produção)
 
 **Ambiente:** Remote Desktop Commander conectado a `shopvivaliz-free-a1` e `always-free-arm-1787907847-26`. SHA na época: `bc14c204ff9dc94d64070ff1278447f461beab27`.
 
@@ -68,7 +63,7 @@
 
 ### Site / Health — PASS parcial
 - `https://shopvivaliz.com.br/` → HTTP 200 ✅
-- Health interno: score 94.74%, status attention — 1 check falhou (disco).
+- Health score 94.74%, status attention — 1 check falhou (disco). Detalhe identificado na sessão 2.
 
 ### Serviços shopvivaliz-free-a1 — PASS parcial
 - queue-worker, shopee-token-renewer, token-renewer, sync-safe.timer, apache2: ativos ✅
@@ -88,9 +83,7 @@ NÃO APTO mantido. Evidências de parity e serviços coletadas; mutações state
 - Ambiente: worktree isolado sem SSH/RDC. **Nenhuma evidência de produção coletada.**
 - Lint PHP (`php -l`) 100% dos `.php`: **zero erros**.
 - `validate-health-output.php`: COMPROVADO. `validate-asset-manifest.php`: COMPROVADO (89 entradas).
-- PHPUnit: NÃO EXECUTADO (`vendor/` ausente).
-- QA browser/Playwright: NÃO EXECUTADO.
-- PR aberta na branch: nenhuma.
+- PHPUnit: NÃO EXECUTADO. QA browser/Playwright: NÃO EXECUTADO.
 - **Veredito:** NÃO APTO mantido.
 
 ---
