@@ -52,6 +52,16 @@ if grep -Fq 'ubuntu@127.0.0.1' <<<"$activation"; then
   exit 1
 fi
 
+for marker in \
+  'exec 8>"$shared/locks/repo-sync.lock"' \
+  'if ! flock -w 120 8; then' \
+  'SAFE_SYNC_RUN_ON_INSTALL=false SOURCE_ROOT="$current" SEED_REPO="$root/repo" SYNC_ROOT="$root/sync-repo"'; do
+  grep -Fq "$marker" "$WORKFLOW" || {
+    echo "Canonical production deploy must serialize against Safe Sync: $marker" >&2
+    exit 1
+  }
+done
+
 grep -Fq "php -r 'exit(extension_loaded(\"pdo_sqlite\") ? 0 : 1);'" "$WORKFLOW" || {
   echo 'Production activation must probe pdo_sqlite without a pipefail/SIGPIPE-prone grep -q pipeline' >&2
   exit 1
