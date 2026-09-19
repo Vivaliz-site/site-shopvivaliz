@@ -1,5 +1,5 @@
-name: Temporary DESKTOP-KOCEPSV Relay Recovery
-# recovery-trigger: 2026-09-17-kocepsv-unattended-2
+name: Temporary Windows Peer Desktop Commander Recovery
+# recovery-trigger: 2026-09-19-fredwin-kocepsv-unattended
 
 on:
   push:
@@ -28,7 +28,7 @@ jobs:
           printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
 
-      - name: Recover DESKTOP through VM private network
+      - name: Recover Windows peers through VM private network
         run: |
           set -Eeuo pipefail
           SSH_VM=(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" ubuntu@10.0.1.38)
@@ -39,50 +39,70 @@ jobs:
           except Exception:
               raise SystemExit(2)
           peers=d.get('Peer') or {}
-          wanted={'DESKTOP-KOCEPSV':''}
+          wanted={'LAPTOP-NIG4IFUU':'','DESKTOP-KOCEPSV':''}
           for p in peers.values():
               host=str(p.get('HostName') or p.get('DNSName') or '').rstrip('.').upper()
-              if 'DESKTOP-KOCEPSV' in host:
-                  ips=p.get('TailscaleIPs') or []
-                  wanted['DESKTOP-KOCEPSV']=next((x for x in ips if ':' not in x), ips[0] if ips else '')
-          print('DESKTOP-KOCEPSV='+wanted['DESKTOP-KOCEPSV'])
+              for name in list(wanted):
+                  if name in host:
+                      ips=p.get('TailscaleIPs') or []
+                      wanted[name]=next((x for x in ips if ':' not in x), ips[0] if ips else '')
+          for name,ip in wanted.items():
+              print(name+'='+ip)
           PY
           if ! peer_info="$("${SSH_VM[@]}" 'tailscale status --json 2>/dev/null' | python3 /tmp/peer-discover.py 2>/dev/null)"; then
-            printf 'PRIVATE_NETWORK=unavailable\nDESKTOP_PEER=unknown\n' > /tmp/windows-peer-safe.txt
+            printf 'PRIVATE_NETWORK=unavailable\nFRED_PEER=unknown\nDESKTOP_PEER=unknown\n' > /tmp/windows-peer-safe.txt
             exit 4
           fi
+          fred_ip="$(printf '%s\n' "$peer_info" | awk -F= '$1=="LAPTOP-NIG4IFUU"{print $2}')"
           desk_ip="$(printf '%s\n' "$peer_info" | awk -F= '$1=="DESKTOP-KOCEPSV"{print $2}')"
           printf 'PRIVATE_NETWORK=available\n' > /tmp/windows-peer-safe.txt
-          if [ -z "$desk_ip" ]; then
-            printf 'DESKTOP_PEER=not_found\n' >> /tmp/windows-peer-safe.txt
-            exit 0
-          fi
-          printf 'DESKTOP_PEER=found\n' >> /tmp/windows-peer-safe.txt
-          if ! "${SSH_VM[@]}" "timeout 4 bash -c '</dev/tcp/$desk_ip/22'" >/dev/null 2>&1; then
-            printf 'DESKTOP_SSH22=unreachable\n' >> /tmp/windows-peer-safe.txt
-            exit 0
-          fi
-          printf 'DESKTOP_SSH22=reachable\n' >> /tmp/windows-peer-safe.txt
-          ssh -fNT -o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" -L "32224:$desk_ip:22" ubuntu@10.0.1.38
-          sleep 2
-          ssh-keyscan -T 5 -p 32224 127.0.0.1 2>/dev/null > /tmp/DESKTOP.hosts
-          if [ ! -s /tmp/DESKTOP.hosts ]; then
-            printf 'DESKTOP_HOSTKEY=unavailable\n' >> /tmp/windows-peer-safe.txt
-            exit 0
-          fi
-          chmod 600 /tmp/DESKTOP.hosts
-          cmd="& { \$ErrorActionPreference='Stop'; Set-Location 'C:\site-shopvivaliz'; git fetch origin main | Out-Null; if (\$LASTEXITCODE -ne 0) { throw 'fetch failed' }; git merge --ff-only origin/main | Out-Null; if (\$LASTEXITCODE -ne 0) { throw 'sync failed' }; & 'C:\site-shopvivaliz\scripts\desktopkocepsv-desktop-commander-supervisor.ps1' -Mode InstallTask; & 'C:\site-shopvivaliz\scripts\desktopkocepsv-remote-bootstrap.ps1' -Mode InstallTask }"
-          if ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/tmp/DESKTOP.hosts -p 32224 -i "$HOME/.ssh/vmkey" user@127.0.0.1 "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$cmd\"" >/dev/null 2>&1; then
-            printf 'DESKTOP_RECOVERY=executed\n' >> /tmp/windows-peer-safe.txt
-            sleep 15
-            if "${SSH_VM[@]}" 'curl -fsS --connect-timeout 4 --max-time 8 http://127.0.0.1:5558/health >/dev/null' 2>/dev/null; then
-              printf 'DESKTOP_RELAY=reachable\n' >> /tmp/windows-peer-safe.txt
-            else
-              printf 'DESKTOP_RELAY=unreachable\n' >> /tmp/windows-peer-safe.txt
+
+          recover_peer() {
+            label="$1"
+            ip="$2"
+            user="$3"
+            localport="$4"
+            prefix="$5"
+            relayport="$6"
+            if [ -z "$ip" ]; then
+              printf '%s_PEER=not_found\n' "$label" >> /tmp/windows-peer-safe.txt
+              return 0
             fi
-          else
-            printf 'DESKTOP_RECOVERY=ssh_auth_or_command_failed\n' >> /tmp/windows-peer-safe.txt
-          fi
+            printf '%s_PEER=found\n' "$label" >> /tmp/windows-peer-safe.txt
+            if ! "${SSH_VM[@]}" "timeout 4 bash -c '</dev/tcp/$ip/22'" >/dev/null 2>&1; then
+              printf '%s_SSH22=unreachable\n' "$label" >> /tmp/windows-peer-safe.txt
+              return 0
+            fi
+            printf '%s_SSH22=reachable\n' "$label" >> /tmp/windows-peer-safe.txt
+            ssh -fNT -o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" -L "$localport:$ip:22" ubuntu@10.0.1.38
+            sleep 2
+            ssh-keyscan -T 5 -p "$localport" 127.0.0.1 2>/dev/null > "/tmp/${label}.hosts"
+            if [ ! -s "/tmp/${label}.hosts" ]; then
+              printf '%s_HOSTKEY=unavailable\n' "$label" >> /tmp/windows-peer-safe.txt
+              return 0
+            fi
+            chmod 600 "/tmp/${label}.hosts"
+            if [ "$prefix" = fredwin ]; then
+              bootstrap='fredwin-remote-bootstrap.ps1'
+            else
+              bootstrap='desktopkocepsv-remote-bootstrap.ps1'
+            fi
+            cmd="& { \\$ErrorActionPreference='Stop'; Set-Location 'C:\\site-shopvivaliz'; git fetch origin main | Out-Null; if (\\$LASTEXITCODE -ne 0) { throw 'fetch failed' }; git merge --ff-only origin/main | Out-Null; if (\\$LASTEXITCODE -ne 0) { throw 'sync failed' }; & 'C:\\site-shopvivaliz\\scripts\\${prefix}-desktop-commander-supervisor.ps1' -Mode InstallTask; & 'C:\\site-shopvivaliz\\scripts\\${bootstrap}' -Mode InstallTask }"
+            if ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="/tmp/${label}.hosts" -p "$localport" -i "$HOME/.ssh/vmkey" "$user@127.0.0.1" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$cmd\"" >/dev/null 2>&1; then
+              printf '%s_RECOVERY=executed\n' "$label" >> /tmp/windows-peer-safe.txt
+              sleep 15
+              if "${SSH_VM[@]}" "curl -fsS --connect-timeout 4 --max-time 8 http://127.0.0.1:${relayport}/health >/dev/null" 2>/dev/null; then
+                printf '%s_RELAY=reachable\n' "$label" >> /tmp/windows-peer-safe.txt
+              else
+                printf '%s_RELAY=unreachable\n' "$label" >> /tmp/windows-peer-safe.txt
+              fi
+            else
+              printf '%s_RECOVERY=ssh_auth_or_command_failed\n' "$label" >> /tmp/windows-peer-safe.txt
+            fi
+          }
+
+          recover_peer FRED "$fred_ip" FRED 32223 fredwin 5557
+          recover_peer DESKTOP "$desk_ip" user 32224 desktopkocepsv 5558
 
       - name: Stage sanitized recovery evidence
         if: always()
@@ -102,5 +122,6 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
+          pkill -f '32223:' || true
           pkill -f '32224:' || true
-          rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts" /tmp/peer-discover.py /tmp/DESKTOP.hosts /tmp/windows-peer-safe.txt
+          rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts" /tmp/peer-discover.py /tmp/FRED.hosts /tmp/DESKTOP.hosts /tmp/windows-peer-safe.txt
