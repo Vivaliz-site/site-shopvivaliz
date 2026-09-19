@@ -1,0 +1,82 @@
+name: Recover Solange GitHub Runners
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/recover-solange-runners.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recover-solange-runners
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 8
+    steps:
+      - name: Configure verified VM SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${VM_KEY:-}"
+          test -n "${VM_HOSTS:-}"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+
+      - name: Restart only installed Solange runner services on backend VM
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" \
+            ubuntu@10.0.1.38 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          mapfile -t dirs < <(find /home/ubuntu -maxdepth 1 -mindepth 1 -type d -name 'actions-runner-solange*' -print | sort)
+          [ "${#dirs[@]}" -gt 0 ] || { echo 'SOLANGE_RUNNERS_FOUND=0'; exit 21; }
+          healthy=0
+          for dir in "${dirs[@]}"; do
+            case "$dir" in
+              /home/ubuntu/actions-runner-solange|/home/ubuntu/actions-runner-solange-*) ;;
+              *) echo 'RUNNER_PATH_REJECTED=true'; exit 22 ;;
+            esac
+            [ -f "$dir/.runner" ] || continue
+            unit=''
+            while IFS= read -r candidate; do
+              [ -n "$candidate" ] || continue
+              workdir="$(systemctl show -p WorkingDirectory --value "$candidate")"
+              execstart="$(systemctl show -p ExecStart --value "$candidate")"
+              if [ "$workdir" = "$dir" ] || [[ "$execstart" == *"$dir/runsvc.sh"* ]]; then
+                unit="$candidate"
+                break
+              fi
+            done < <(systemctl list-unit-files --type=service --no-legend 'actions.runner.*.service' 2>/dev/null | awk '{print $1}')
+            [ -n "$unit" ] || { echo 'RUNNER_SERVICE_MISSING=true'; exit 23; }
+            sudo systemctl restart "$unit"
+            for _ in $(seq 1 20); do
+              if systemctl is-active --quiet "$unit"; then break; fi
+              sleep 1
+            done
+            if ! systemctl is-active --quiet "$unit"; then
+              echo 'RUNNER_SERVICE_ACTIVE=false'
+              exit 24
+            fi
+            mainpid="$(systemctl show -p MainPID --value "$unit")"
+            [[ "$mainpid" =~ ^[1-9][0-9]*$ ]] || { echo 'RUNNER_MAINPID_VALID=false'; exit 25; }
+            healthy=$((healthy+1))
+          done
+          [ "$healthy" -gt 0 ] || { echo 'SOLANGE_RUNNERS_HEALTHY=0'; exit 26; }
+          echo "SOLANGE_RUNNERS_HEALTHY=$healthy"
+          REMOTE
+
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
