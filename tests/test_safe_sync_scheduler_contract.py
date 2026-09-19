@@ -6,6 +6,7 @@ smoke = (ROOT / "scripts/production-smoke-test.sh").read_text(encoding="utf-8")
 workflow = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
 service = (ROOT / "deploy/systemd/shopvivaliz-sync-safe.service").read_text(encoding="utf-8")
 systemd_installer = (ROOT / "scripts/install-safe-sync-service.sh").read_text(encoding="utf-8")
+safe_sync = (ROOT / "scripts/safe-repo-sync.sh").read_text(encoding="utf-8")
 assert "command -v crontab" in installer
 assert "shopvivaliz-sync-safe.timer" in installer
 assert "shopvivaliz-sync-safe.timer" in smoke
@@ -22,5 +23,10 @@ assert 'systemctl is-active --quiet "$TIMER_NAME"' in systemd_installer
 assert 'systemctl is-enabled --quiet "$TIMER_NAME"' in systemd_installer
 assert 'systemctl show "$SERVICE_NAME" --property=ActiveState,SubState,Result --no-pager' in systemd_installer
 assert 'SAFE_SYNC_INSTALL=PASS' in systemd_installer
+assert 'DEPLOY_CLASSIFIER="${DEPLOY_CLASSIFIER:-$ROOT/scripts/should-deploy-production.sh}"' in safe_sync
+assert 'git -C "$ROOT" diff --name-only "$active_sha" "$repo_sha" | bash "$DEPLOY_CLASSIFIER"' in safe_sync
+assert 'if [ "$should_deploy" = false ]' in safe_sync
+assert 'nao exige deploy; release preservada' in safe_sync
+assert 'if [ "$should_deploy" != true ]' in safe_sync
 print("safe sync scheduler contract: ok")
 assert '|| true' not in systemd_installer

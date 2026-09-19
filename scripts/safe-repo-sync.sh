@@ -12,6 +12,7 @@ SHARED_STATUS="$SHARED_LOG_DIR/tri-environment-sync.json"
 SHARED_LEGACY_STATUS="$SHARED_LOG_DIR/autonomous-sync.json"
 CURRENT_ROOT="${CURRENT_ROOT:-/home/ubuntu/shopvivaliz-deploy/current}"
 DEPLOY_RUNNER="$ROOT/scripts/deploy-production.sh"
+DEPLOY_CLASSIFIER="${DEPLOY_CLASSIFIER:-$ROOT/scripts/should-deploy-production.sh}"
 SYNC_LOCK="$SHARED_LOCK_DIR/repo-sync.lock"
 INDEX_LOCK="$ROOT/.git/index.lock"
 TMP_OUTPUT="$(mktemp)"
@@ -92,5 +93,27 @@ if [ ! -x "$DEPLOY_RUNNER" ]; then
   exit 8
 fi
 
-echo "Clone sincronizado em $repo_sha; publicando release imutavel correspondente"
+if [ ! -f "$DEPLOY_CLASSIFIER" ]; then
+  echo "Classificador canonico de impacto ausente: $DEPLOY_CLASSIFIER" >&2
+  exit 9
+fi
+
+should_deploy=true
+if [[ "$active_sha" =~ ^[0-9a-f]{40}$ ]] \
+  && git -C "$ROOT" cat-file -e "${active_sha}^{commit}" 2>/dev/null \
+  && git -C "$ROOT" merge-base --is-ancestor "$active_sha" "$repo_sha"; then
+  should_deploy="$(git -C "$ROOT" diff --name-only "$active_sha" "$repo_sha" | bash "$DEPLOY_CLASSIFIER")"
+fi
+
+if [ "$should_deploy" = false ]; then
+  echo "Clone sincronizado em $repo_sha, mas delta desde a release ativa $active_sha nao exige deploy; release preservada"
+  exit 0
+fi
+
+if [ "$should_deploy" != true ]; then
+  echo "Classificador canonico retornou valor invalido: $should_deploy" >&2
+  exit 10
+fi
+
+echo "Clone sincronizado em $repo_sha; delta exige producao; publicando release imutavel correspondente"
 exec "$DEPLOY_RUNNER" main
