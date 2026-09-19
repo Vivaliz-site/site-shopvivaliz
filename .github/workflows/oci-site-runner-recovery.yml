@@ -22,6 +22,7 @@ jobs:
     env:
       OCI_PROFILE: AGENTS
       SITE_INSTANCE_NAME: shopvivaliz-free-a1
+      RECOVERY_USER_AGENT: ShopVivaliz-OCI-Recovery/1.0
     steps:
       - name: Configure protected OCI AGENTS profile
         env:
@@ -83,6 +84,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsS --retry 3 --retry-delay 2 --max-time 15 \
+            -A "$RECOVERY_USER_AGENT" -H 'Accept: application/json' \
             https://shopvivaliz.com.br/api/health/version.php > "$RUNNER_TEMP/version-before.json"
           jq -e '.ok == true and (.release_sha | type == "string")' "$RUNNER_TEMP/version-before.json" >/dev/null
           jq -r '"PUBLIC_RELEASE_BEFORE=" + .release_sha' "$RUNNER_TEMP/version-before.json"
@@ -130,7 +132,9 @@ jobs:
           set -euo pipefail
           ready=false
           for attempt in $(seq 1 72); do
-            if curl -fsS --max-time 10 https://shopvivaliz.com.br/api/health/version.php > "$RUNNER_TEMP/version-after.json" 2>/dev/null \
+            if curl -fsS --max-time 10 \
+              -A "$RECOVERY_USER_AGENT" -H 'Accept: application/json' \
+              https://shopvivaliz.com.br/api/health/version.php > "$RUNNER_TEMP/version-after.json" 2>/dev/null \
               && jq -e '.ok == true and (.release_sha | type == "string")' "$RUNNER_TEMP/version-after.json" >/dev/null 2>&1; then
               ready=true
               break
