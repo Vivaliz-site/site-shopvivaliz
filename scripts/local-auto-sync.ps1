@@ -75,16 +75,8 @@ try {
     }
 
     if ($HostKey -eq 'DESKTOP-KOCEPSV') {
-        $DcSupervisor = Join-Path $Repo 'scripts\desktopkocepsv-desktop-commander-supervisor.ps1'
-        $DcCooldown = Join-Path $env:LOCALAPPDATA 'ShopVivaliz\DesktopCommander\logs\desktopkocepsv-desktop-commander-auth-required.cooldown'
-        if (Test-Path $DcSupervisor) {
-            Remove-Item $DcCooldown -Force -ErrorAction SilentlyContinue
-            Log 'Reinstalling DESKTOP-KOCEPSV canonical Desktop Commander task and runtime'
-            & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $DcSupervisor -Mode InstallTask 2>&1 |
-                ForEach-Object { Log "desktop-commander-recovery: $_" }
-            if ($LASTEXITCODE -ne 0) { Log "WARNING Desktop Commander recovery exit=$LASTEXITCODE" }
-        }
-
+        # Desktop Commander 24h is owned exclusively by its dedicated watchdog.
+        # Auto-sync may recover only the independent private relay.
         $RelayBootstrap = Join-Path $Repo 'scripts\desktopkocepsv-remote-bootstrap.ps1'
         if (Test-Path $RelayBootstrap) {
             Log 'Ensuring DESKTOP-KOCEPSV private relay after sync'
