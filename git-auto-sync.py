@@ -40,7 +40,7 @@ SANITIZED_HISTORY_MARKER = ".security/sanitized-history.json"
 LEGACY_AGENT_BRANCH_PREFIX = "patch/agente-"
 HEALTH_URL = os.getenv(
     "SHOPVIVALIZ_HEALTH_URL",
-    "http://127.0.0.1/api/health.php?health=1",
+    "https://shopvivaliz.com.br/api/health.php?health=1",
 )
 MINIMUM_HEALTH_SCORE = float(os.getenv("SHOPVIVALIZ_SYNC_MIN_HEALTH_SCORE", "85"))
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -143,7 +143,13 @@ def write_status(payload: dict[str, object]) -> None:
 
 def check_local_health() -> dict[str, Any]:
     """Valida o runtime local antes de qualquer fetch ou realinhamento Git."""
-    req = urllib.request.Request(HEALTH_URL, headers={"Accept": "application/json"})
+    req = urllib.request.Request(
+        HEALTH_URL,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "ShopVivaliz-Safe-Sync/1.0",
+        },
+    )
     try:
         with urllib.request.urlopen(req, timeout=10) as response:
             body = response.read().decode("utf-8", "replace")
