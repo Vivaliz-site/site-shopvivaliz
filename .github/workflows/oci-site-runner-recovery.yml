@@ -72,20 +72,64 @@ jobs:
           instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
           display_name="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."display-name"' --raw-output)"
           lifecycle="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."lifecycle-state"' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
           test "$display_name" = "$SITE_INSTANCE_NAME" || { echo "::error::OCI site identity mismatch"; exit 3; }
           test "$lifecycle" = "RUNNING" || { echo "::error::Site instance is not RUNNING: $lifecycle"; exit 4; }
-          printf 'SITE_INSTANCE_ID=%s\n' "$instance_id" >> "$GITHUB_ENV"
+          printf 'SITE_INSTANCE_ID=%s\nSITE_COMPARTMENT_ID=%s\n' "$instance_id" "$compartment_id" >> "$GITHUB_ENV"
           echo "OCI_SITE_IDENTITY=PASS"
           echo "OCI_SITE_LIFECYCLE=RUNNING"
 
-      - name: Confirm storefront is healthy before recovery
+      - name: Verify OS through OCI Run Command before recovery
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS --retry 3 --retry-delay 2 --max-time 15 \
-            https://shopvivaliz.com.br/api/health/version.php > "$RUNNER_TEMP/version-before.json"
-          jq -e '.ok == true and (.release_sha | type == "string")' "$RUNNER_TEMP/version-before.json" >/dev/null
-          jq -r '"PUBLIC_RELEASE_BEFORE=" + .release_sha' "$RUNNER_TEMP/version-before.json"
+          python3 - <<'PY'
+          import os
+          import time
+          import oci
+
+          cfg = oci.config.from_file(os.environ["OCI_CONFIG_FILE"], os.environ["OCI_PROFILE"])
+          client = oci.compute_instance_agent.ComputeInstanceAgentClient(cfg)
+          models = oci.compute_instance_agent.models
+          details = models.CreateInstanceAgentCommandDetails(
+              compartment_id=os.environ["SITE_COMPARTMENT_ID"],
+              execution_time_out_in_seconds=90,
+              target=models.InstanceAgentCommandTarget(instance_id=os.environ["SITE_INSTANCE_ID"]),
+              content=models.InstanceAgentCommandContent(
+                  source=models.InstanceAgentCommandSourceViaTextDetails(
+                      source_type="TEXT",
+                      text=(
+                          "echo OS_ALIVE=1; "
+                          "if pgrep -x Runner.Listener >/dev/null; then echo RUNNER_LISTENER=present; "
+                          "else echo RUNNER_LISTENER=absent; fi; "
+                          "if pgrep -x Runner.Worker >/dev/null; then echo RUNNER_WORKER=present; "
+                          "else echo RUNNER_WORKER=absent; fi"
+                      ),
+                  ),
+                  output=models.InstanceAgentCommandOutputViaTextDetails(output_type="TEXT"),
+              ),
+              display_name="shopvivaliz-runner-recovery-precheck",
+          )
+          command_id = client.create_instance_agent_command(details).data.id
+          execution = None
+          for _ in range(36):
+              execution = client.get_instance_agent_command_execution(
+                  instance_agent_command_id=command_id,
+                  instance_id=os.environ["SITE_INSTANCE_ID"],
+              ).data
+              if execution.lifecycle_state in {"SUCCEEDED", "FAILED", "TIMED_OUT", "CANCELED"}:
+                  break
+              time.sleep(5)
+          if execution is None or execution.lifecycle_state != "SUCCEEDED":
+              raise SystemExit("OCI Run Command precheck failed")
+          output = execution.content
+          text = getattr(output, "text", "") or ""
+          if getattr(output, "exit_code", 1) != 0 or "OS_ALIVE=1" not in text:
+              raise SystemExit("OCI Run Command precheck did not prove OS responsiveness")
+          print("OCI_RUN_COMMAND_PRECHECK=PASS")
+          print("RUNNER_LISTENER_BEFORE=" + ("present" if "RUNNER_LISTENER=present" in text else "absent"))
+          print("RUNNER_WORKER_BEFORE=" + ("present" if "RUNNER_WORKER=present" in text else "absent"))
+          PY
 
       - name: Cancel obsolete production pipeline reservations
         env:
@@ -124,21 +168,55 @@ jobs:
             --max-wait-seconds 900 >/dev/null
           echo "OCI_SOFTRESET=PASS"
 
-      - name: Wait for storefront after reboot
+      - name: Wait for Oracle agent after reboot
         shell: bash
         run: |
           set -euo pipefail
-          ready=false
-          for attempt in $(seq 1 72); do
-            if curl -fsS -A "ShopVivaliz-Safe-Sync/1.0" --max-time 10 https://shopvivaliz.com.br/api/health/version.php > "$RUNNER_TEMP/version-after.json" 2>/dev/null \
-              && jq -e '.ok == true and (.release_sha | type == "string")' "$RUNNER_TEMP/version-after.json" >/dev/null 2>&1; then
-              ready=true
-              break
-            fi
-            sleep 5
-          done
-          test "$ready" = true || { echo "::error::Storefront did not recover after OCI soft reset"; exit 5; }
-          jq -r '"PUBLIC_RELEASE_AFTER_REBOOT=" + .release_sha' "$RUNNER_TEMP/version-after.json"
+          sleep 20
+          python3 - <<'PY'
+          import os
+          import time
+          import oci
+
+          cfg = oci.config.from_file(os.environ["OCI_CONFIG_FILE"], os.environ["OCI_PROFILE"])
+          client = oci.compute_instance_agent.ComputeInstanceAgentClient(cfg)
+          models = oci.compute_instance_agent.models
+          details = models.CreateInstanceAgentCommandDetails(
+              compartment_id=os.environ["SITE_COMPARTMENT_ID"],
+              execution_time_out_in_seconds=120,
+              target=models.InstanceAgentCommandTarget(instance_id=os.environ["SITE_INSTANCE_ID"]),
+              content=models.InstanceAgentCommandContent(
+                  source=models.InstanceAgentCommandSourceViaTextDetails(
+                      source_type="TEXT",
+                      text=(
+                          "echo OS_ALIVE_AFTER=1; "
+                          "if pgrep -x Runner.Listener >/dev/null; then echo RUNNER_LISTENER_AFTER=present; "
+                          "else echo RUNNER_LISTENER_AFTER=absent; fi"
+                      ),
+                  ),
+                  output=models.InstanceAgentCommandOutputViaTextDetails(output_type="TEXT"),
+              ),
+              display_name="shopvivaliz-runner-recovery-postcheck",
+          )
+          command_id = client.create_instance_agent_command(details).data.id
+          execution = None
+          for _ in range(48):
+              execution = client.get_instance_agent_command_execution(
+                  instance_agent_command_id=command_id,
+                  instance_id=os.environ["SITE_INSTANCE_ID"],
+              ).data
+              if execution.lifecycle_state in {"SUCCEEDED", "FAILED", "TIMED_OUT", "CANCELED"}:
+                  break
+              time.sleep(5)
+          if execution is None or execution.lifecycle_state != "SUCCEEDED":
+              raise SystemExit("OCI Run Command postcheck failed")
+          output = execution.content
+          text = getattr(output, "text", "") or ""
+          if getattr(output, "exit_code", 1) != 0 or "OS_ALIVE_AFTER=1" not in text:
+              raise SystemExit("OCI Run Command postcheck did not prove OS responsiveness")
+          print("OCI_RUN_COMMAND_POSTCHECK=PASS")
+          print("RUNNER_LISTENER_AFTER=" + ("present" if "RUNNER_LISTENER_AFTER=present" in text else "absent"))
+          PY
 
       - name: Dispatch exactly one canonical production deploy
         env:
