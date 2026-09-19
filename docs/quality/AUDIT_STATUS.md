@@ -1,6 +1,53 @@
 # Estado da Auditoria
 
-**Status:** NÃO APTO (mantido — ver rodada 2026-09-19)
+**Status:** NÃO APTO (mantido — ver rodada 2026-09-19 RDC)
+
+## Rodada 2026-09-19 (RDC) — acesso real às VMs de produção
+
+**Ambiente:** Remote Desktop Commander conectado a `shopvivaliz-free-a1` (137.131.149.55) e `always-free-arm-1787907847-26` (10.0.1.38). SHA main HEAD e produção: `bc14c204ff9dc94d64070ff1278447f461beab27`.
+
+### Parity SHA — PASS
+- Produção (`current` symlink): `20260919-205351-bc14c204` — alinhado com `origin/main` HEAD `bc14c204`.
+- **Sem deploy drift**. Sistema de deploy (`shopvivaliz-sync-safe.timer`, ativo e disparando a cada ~5min) está sincronizado.
+
+### Site / Health — PASS parcial
+- `https://shopvivaliz.com.br/` → HTTP 200 ✅
+- `https://shopvivaliz.com.br/api/health/` → 301 (redireciona); resposta interna do `git-auto-sync.py` indica `score=94.74; failed_checks=sem detalhe de checks` — endpoint unhealthy internamente mas site operacional.
+- Apache DocumentRoot apontando para `current` ✅
+
+### Serviços shopvivaliz-free-a1 — PASS parcial
+| Serviço | Estado |
+|---|---|
+| shopvivaliz-desktop-commander | active/running ✅ |
+| shopvivaliz-queue-worker | active/running ✅ |
+| shopvivaliz-shopee-token-renewer | active/running ✅ |
+| shopvivaliz-token-renewer | active/running ✅ |
+| shopvivaliz-sync-safe.timer | active/waiting ✅ |
+| **amazon-returns-deploy.service** | **FAILED** ❌ |
+
+### Achado crítico — amazon-returns-deploy FAILED
+`amazon-returns-deploy.service` falha com exit 69/UNAVAILABLE: `playwright-core runtime not installed on host`. Timer ativo, disparando hora em hora, mas serviço falha a cada execução. **Ação necessária:** instalar playwright ou desabilitar o timer se o serviço não for mais necessário.
+
+### Achados críticos — backend always-free-arm-1787907847-26
+1. **Disco 91% cheio** (87G/96G usados). Principais consumidores de espaço não operacionais:
+   - `chat-workspaces/`: 8.5G (workspaces de chat/agentes — cleanup seguro após confirmação)
+   - `solange-rolla-consultorio/`: 6.0G
+   - `actions-runner-solange/`: 2.9G
+   - Múltiplos dirs `solange-*` worktree/escopo: ~4G agregado
+   - `shopvivaliz-revenue-recovery-20260911/`: 506M
+   - `recovery-two-a1/`: 502M, `worktrees/`: 502M
+   - **Risco imediato de disco cheio** se não houver cleanup.
+2. **Load average alto**: 4.13/6.42/6.61 em VM com 2 OCPUs.
+3. **Serviços inativos**: `shopvivaliz-24x7`, `agent-bridge`, `shopvivaliz-mcp` — todos `inactive`. Verificar se foram migrados para `shopvivaliz-free-a1` ou se estão parados indevidamente.
+
+### Operações stateful — NÃO VALIDADO (herdado)
+- Checkout/pagamento, mutações admin de catálogo/preço/estoque: **não executados** nesta rodada. Bloqueio para APTO permanece.
+- PHPUnit e Playwright E2E: **não executados** (sem infraestrutura local disponível).
+
+### Veredito desta rodada
+**NÃO APTO** mantido. Parity SHA e site UP resolvidos; três novos achados operacionais (`amazon-returns-deploy` FAILED, disco 91%, serviços inativos no backend) adicionados à lista de ação. Operações stateful ainda sem evidência produção-equivalente.
+
+---
 
 Nova auditoria formal executada em 2026-09-16 segundo `EXTREME_AUDIT_PROTOCOL.md`, `AUDIT_RUNTIME_PARITY_V1.md`, matriz de transições/dados históricos e overlay do projeto.
 
