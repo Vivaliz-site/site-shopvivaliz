@@ -1,0 +1,42 @@
+name: Ops Validate Fred Solange Rolla
+on:
+  push:
+    branches:
+      - ops/validate-fred-solange-rolla-20260919
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout target repository branch
+        uses: actions/checkout@v4
+        with:
+          repository: fredmourao-ai/solange-rolla
+          ref: chore/superpowers-every-stage-20260919
+          path: target
+          persist-credentials: false
+      - name: Run target repository CI contract
+        shell: bash
+        working-directory: target
+        run: |
+          set -Eeuo pipefail
+          bash scripts/agent-continuity-validate.sh
+          node tests/workflow-continuity.test.mjs
+          node --check app.js
+          python3 -m http.server 4173 > server.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in 1 2 3 4 5; do
+            if curl -fsS http://127.0.0.1:4173/ > homepage.html; then
+              break
+            fi
+            sleep 2
+          done
+          grep -q "<title>Sistema Solange</title>" homepage.html
+          grep -q "Operacao, cliente e fiscal em um unico lugar." homepage.html
+          grep -q "app.js" homepage.html
+          grep -q "styles.css" homepage.html
+          curl -fsS http://127.0.0.1:4173/app.js | grep -q 'const STORAGE_KEY = "solange-mvp-v1";'
+          curl -fsS http://127.0.0.1:4173/styles.css | grep -q "\.app-shell"
