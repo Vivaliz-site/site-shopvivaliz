@@ -27,7 +27,13 @@ Além dos invariantes de domínio, o overlay deve identificar:
 - quais falhas críticas dependem de alerta/watchdog/dead-letter e como serão exercitadas;
 - quais jobs/workers/webhooks precisam ser observados após deploy;
 - qual estratégia segura de rollback/restore é aplicável;
-- quais classes do `AUDIT_ESCAPE_REGISTER.md` se aplicam ao projeto.
+- quais classes do `AUDIT_ESCAPE_REGISTER.md` se aplicam ao projeto;
+- quais classes de `AUDIT_ERROR_TAXONOMY_V1` são materiais e quais são `N/A` com justificativa;
+- quais boundaries, negativos e combinações de ambiente alteram o risco;
+- quais reconciliações quantitativas/órfãos precisam ser provados;
+- quais baselines operacionais devem ser comparados;
+- qual evidence artifact/manifest será produzido;
+- como o self-test dos gates será exercitado quando aplicável.
 
 Esses itens passam a integrar o Gate Final quando materiais ao domínio.
 
