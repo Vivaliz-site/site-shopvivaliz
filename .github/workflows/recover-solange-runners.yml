@@ -18,7 +18,7 @@ jobs:
   recover:
     runs-on: ubuntu-latest
     environment: Production
-    timeout-minutes: 12
+    timeout-minutes: 18
     env:
       OCI_PROFILE: AGENTS
       BACKEND_INSTANCE_NAME: always-free-arm-1787907847-26
@@ -52,96 +52,70 @@ jobs:
           key_file=$OCI_KEY_FILE
           EOF
           chmod 600 "$OCI_CONFIG_FILE"
-          echo "OCI_PROFILE_READY=true"
 
-      - name: Install OCI CLI
+      - name: Install OCI CLI and resolve exact backend
         shell: bash
         run: |
           set -Eeuo pipefail
           python3 -m pip install --disable-pip-version-check --quiet oci-cli
-          oci --version
-
-      - name: Resolve exact backend instance and Run Command plugin
-        shell: bash
-        run: |
-          set -Eeuo pipefail
           OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
           "${OCI[@]}" iam region list >/dev/null
           query="query instance resources where displayName = '$BACKEND_INSTANCE_NAME'"
           count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
-          test "$count" = "1" || { echo "::error::Expected exactly one backend instance, found $count"; exit 2; }
+          test "$count" = 1 || { echo "::error::Expected one backend instance, found $count"; exit 2; }
           instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
-          display_name="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."display-name"' --raw-output)"
-          lifecycle="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."lifecycle-state"' --raw-output)"
           compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
-          test "$display_name" = "$BACKEND_INSTANCE_NAME" || { echo "::error::OCI backend identity mismatch"; exit 3; }
-          test "$lifecycle" = "RUNNING" || { echo "::error::Backend instance is not RUNNING: $lifecycle"; exit 4; }
+          lifecycle="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."lifecycle-state"' --raw-output)"
+          test "$lifecycle" = RUNNING || { echo "::error::Backend is not RUNNING"; exit 3; }
           plugin="$("${OCI[@]}" instance-agent plugin list --compartment-id "$compartment_id" --instanceagent-id "$instance_id" --query 'data[?name==`Compute Instance Run Command`].status | [0]' --raw-output)"
-          test "$plugin" = "RUNNING" || { echo "::error::Compute Instance Run Command plugin is not RUNNING"; exit 5; }
+          test "$plugin" = RUNNING || { echo "::error::Run Command plugin is not RUNNING"; exit 4; }
           printf 'BACKEND_INSTANCE_ID=%s\nBACKEND_COMPARTMENT_ID=%s\n' "$instance_id" "$compartment_id" >> "$GITHUB_ENV"
           echo "OCI_BACKEND_IDENTITY=PASS"
-          echo "OCI_RUN_COMMAND_PLUGIN=RUNNING"
 
-      - name: Inspect Solange runner listeners without mutation
+      - name: Inspect runner services fail-closed
         id: precheck
         shell: bash
         run: |
           set -Eeuo pipefail
           OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
-          script="$RUNNER_TEMP/solange-runner-precheck.sh"
-          content="$RUNNER_TEMP/solange-runner-precheck-content.json"
-          target="$RUNNER_TEMP/solange-runner-target.json"
+          script="$RUNNER_TEMP/runner-precheck.sh"
           cat > "$script" <<'REMOTE'
-          set -Eeuo pipefail
-          mapfile -t dirs < <(find /home/ubuntu -maxdepth 1 -mindepth 1 -type d -name 'actions-runner-solange*' -print | sort)
-          echo "SOLANGE_RUNNERS_FOUND=${#dirs[@]}"
-          [ "${#dirs[@]}" -gt 0 ] || exit 21
+          set -u
           configured=0
           healthy=0
-          total_workers=0
-          for dir in "${dirs[@]}"; do
-            case "$dir" in
-              /home/ubuntu/actions-runner-solange|/home/ubuntu/actions-runner-solange-*) ;;
-              *) echo 'RUNNER_PATH_REJECTED=true'; exit 22 ;;
+          workers="$(ps -eo args= 2>/dev/null | grep -c '[R]unner.Worker' || true)"
+          while read -r unit state _; do
+            [ -n "$unit" ] || continue
+            case "$unit" in
+              actions.runner.*solange*.service)
+                configured=$((configured+1))
+                active="$(systemctl is-active "$unit" 2>/dev/null || true)"
+                pid="$(systemctl show -p MainPID --value "$unit" 2>/dev/null || true)"
+                enabled="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
+                printf 'SOLANGE_UNIT=%s enabled=%s active=%s mainpid=%s\n' "$unit" "$enabled" "$active" "$pid"
+                case "$enabled" in enabled|enabled-runtime) ;; *) echo 'SOLANGE_RUNNER_SERVICE_ENABLED=false'; exit 29 ;; esac
+                if [ "$active" = active ] && [[ "$pid" =~ ^[1-9][0-9]*$ ]]; then
+                  healthy=$((healthy+1))
+                fi
+                ;;
             esac
-            [ -f "$dir/.runner" ] || continue
-            configured=$((configured+1))
-            worker_count="$(ps -eo args= | awk -v prefix="$dir/bin/Runner.Worker" 'index($0,prefix)==1 {count++} END {print count+0}')"
-            total_workers=$((total_workers+worker_count))
-            unit=''
-            while IFS= read -r candidate; do
-              [ -n "$candidate" ] || continue
-              workdir="$(systemctl show -p WorkingDirectory --value "$candidate" 2>/dev/null || true)"
-              execstart="$(systemctl show -p ExecStart --value "$candidate" 2>/dev/null || true)"
-              if [ "$workdir" = "$dir" ] || [[ "$execstart" == *"$dir/runsvc.sh"* ]]; then
-                unit="$candidate"
-                break
-              fi
-            done < <(systemctl list-unit-files --type=service --no-legend 'actions.runner.*.service' | awk '{print $1}')
-            [ -n "$unit" ] || { echo 'RUNNER_SERVICE_MISSING=true'; exit 23; }
-            enabled="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
-            case "$enabled" in enabled|enabled-runtime) ;; *) echo 'RUNNER_SERVICE_ENABLED=false'; exit 29 ;; esac
-            active="$(systemctl is-active "$unit" 2>/dev/null || true)"
-            mainpid="$(systemctl show -p MainPID --value "$unit" 2>/dev/null || true)"
-            if [ "$active" = active ] && [[ "$mainpid" =~ ^[1-9][0-9]*$ ]]; then
-              healthy=$((healthy+1))
-            fi
-          done
-          [ "$configured" -gt 0 ] || exit 26
+          done < <(systemctl list-unit-files --type=service --no-legend 'actions.runner.*.service' 2>/dev/null)
           echo "SOLANGE_RUNNERS_CONFIGURED=$configured"
           echo "SOLANGE_RUNNERS_HEALTHY=$healthy"
-          echo "SOLANGE_RUNNER_WORKERS=$total_workers"
+          echo "SOLANGE_RUNNER_WORKERS=$workers"
+          [ "$configured" -gt 0 ] || exit 21
           if [ "$healthy" -eq "$configured" ]; then
             echo 'RUNNER_RECOVERY_NEEDED=false'
             exit 0
           fi
-          [ "$total_workers" -eq 0 ] || { echo 'RUNNER_RESCUE=refused_worker_active'; exit 27; }
+          [ "$workers" -eq 0 ] || { echo 'RUNNER_RESCUE=refused_worker_active'; exit 27; }
           echo 'RUNNER_RECOVERY_NEEDED=true'
           REMOTE
+          content="$RUNNER_TEMP/precheck-content.json"
+          target="$RUNNER_TEMP/precheck-target.json"
           jq -n --rawfile text "$script" '{source:{sourceType:"TEXT",text:$text},output:{outputType:"TEXT"}}' > "$content"
           jq -n --arg instanceId "$BACKEND_INSTANCE_ID" '{instanceId:$instanceId}' > "$target"
-          command_id="$("${OCI[@]}" instance-agent command create             --compartment-id "$BACKEND_COMPARTMENT_ID"             --display-name "Inspect Solange GitHub runners"             --content "file://$content"             --target "file://$target"             --timeout-in-seconds 180             --query 'data.id' --raw-output)"
-          test -n "$command_id"
+          command_id="$("${OCI[@]}" instance-agent command create --compartment-id "$BACKEND_COMPARTMENT_ID" --display-name "Inspect Solange runner services" --content "file://$content" --target "file://$target" --timeout-in-seconds 150 --query 'data.id' --raw-output)"
           execution=''
           for _ in $(seq 1 48); do
             execution="$("${OCI[@]}" instance-agent command-execution get --command-id "$command_id" --instance-id "$BACKEND_INSTANCE_ID")"
@@ -149,80 +123,63 @@ jobs:
             case "$state" in
               SUCCEEDED|FAILED|TIMED_OUT|CANCELED) break ;;
               ACCEPTED|IN_PROGRESS) sleep 5 ;;
-              *) echo "::error::Unexpected OCI Run Command state: $state"; exit 32 ;;
+              *) exit 31 ;;
             esac
           done
           state="$(jq -r '.data."lifecycle-state"' <<<"$execution")"
-          exit_code="$(jq -r '.data.content."exit-code"' <<<"$execution")"
+          code="$(jq -r '.data.content."exit-code"' <<<"$execution")"
           output="$(jq -r '.data.content.text // ""' <<<"$execution")"
-          printf '%s\n' "$output" | grep -E '^(SOLANGE_RUNNERS_|RUNNER_)' || true
-          test "$state" = SUCCEEDED || { echo "::error::Runner precheck ended in $state"; exit 31; }
-          test "$exit_code" = 0 || { echo "::error::Runner precheck exit code was $exit_code"; exit 34; }
-          recovery_needed="$(printf '%s\n' "$output" | awk -F= '$1=="RUNNER_RECOVERY_NEEDED"{print $2}' | tail -1)"
-          case "$recovery_needed" in true|false) ;; *) echo "::error::Runner precheck did not return recovery decision"; exit 35 ;; esac
-          echo "recovery_needed=$recovery_needed" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$output" | grep -E '^(SOLANGE_|RUNNER_)' || true
+          test "$state" = SUCCEEDED && test "$code" = 0 || { echo "::error::Runner precheck failed"; exit 32; }
+          needed="$(awk -F= '$1=="RUNNER_RECOVERY_NEEDED"{print $2}' <<<"$output" | tail -1)"
+          case "$needed" in true|false) ;; *) exit 33 ;; esac
+          echo "recovery_needed=$needed" >> "$GITHUB_OUTPUT"
 
-      - name: Soft-reset backend only when idle runner listeners are unhealthy
+      - name: Soft-reset backend only for idle unhealthy runner service
         if: steps.precheck.outputs.recovery_needed == 'true'
         shell: bash
         run: |
           set -Eeuo pipefail
           OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
-          "${OCI[@]}" compute instance action             --instance-id "$BACKEND_INSTANCE_ID"             --action SOFTRESET             --wait-for-state RUNNING             --wait-interval-seconds 15             --max-wait-seconds 900 >/dev/null
+          "${OCI[@]}" compute instance action --instance-id "$BACKEND_INSTANCE_ID" --action SOFTRESET             --wait-for-state RUNNING --wait-interval-seconds 15 --max-wait-seconds 900 >/dev/null
           echo "OCI_BACKEND_SOFTRESET=PASS"
 
-      - name: Verify all Solange runner listeners after recovery
+      - name: Verify runner listener after optional recovery
         shell: bash
         run: |
           set -Eeuo pipefail
+          if [ "${{ steps.precheck.outputs.recovery_needed }}" = true ]; then sleep 30; fi
           OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
-          if [ "${{ steps.precheck.outputs.recovery_needed }}" = true ]; then
-            sleep 25
-          fi
-          script="$RUNNER_TEMP/solange-runner-postcheck.sh"
-          content="$RUNNER_TEMP/solange-runner-postcheck-content.json"
-          target="$RUNNER_TEMP/solange-runner-postcheck-target.json"
+          script="$RUNNER_TEMP/runner-postcheck.sh"
           cat > "$script" <<'REMOTE'
-          set -Eeuo pipefail
-          mapfile -t dirs < <(find /home/ubuntu -maxdepth 1 -mindepth 1 -type d -name 'actions-runner-solange*' -print | sort)
+          set -u
           configured=0
           healthy=0
-          total_workers=0
-          for dir in "${dirs[@]}"; do
-            [ -f "$dir/.runner" ] || continue
-            configured=$((configured+1))
-            worker_count="$(ps -eo args= | awk -v prefix="$dir/bin/Runner.Worker" 'index($0,prefix)==1 {count++} END {print count+0}')"
-            total_workers=$((total_workers+worker_count))
-            unit=''
-            while IFS= read -r candidate; do
-              [ -n "$candidate" ] || continue
-              workdir="$(systemctl show -p WorkingDirectory --value "$candidate" 2>/dev/null || true)"
-              execstart="$(systemctl show -p ExecStart --value "$candidate" 2>/dev/null || true)"
-              if [ "$workdir" = "$dir" ] || [[ "$execstart" == *"$dir/runsvc.sh"* ]]; then
-                unit="$candidate"
-                break
-              fi
-            done < <(systemctl list-unit-files --type=service --no-legend 'actions.runner.*.service' | awk '{print $1}')
+          while read -r unit _; do
             [ -n "$unit" ] || continue
-            active="$(systemctl is-active "$unit" 2>/dev/null || true)"
-            mainpid="$(systemctl show -p MainPID --value "$unit" 2>/dev/null || true)"
-            if [ "$active" = active ] && [[ "$mainpid" =~ ^[1-9][0-9]*$ ]]; then
-              healthy=$((healthy+1))
-            fi
-          done
+            case "$unit" in
+              actions.runner.*solange*.service)
+                configured=$((configured+1))
+                active="$(systemctl is-active "$unit" 2>/dev/null || true)"
+                pid="$(systemctl show -p MainPID --value "$unit" 2>/dev/null || true)"
+                [ "$active" = active ] && [[ "$pid" =~ ^[1-9][0-9]*$ ]] && healthy=$((healthy+1))
+                ;;
+            esac
+          done < <(systemctl list-unit-files --type=service --no-legend 'actions.runner.*.service' 2>/dev/null)
           echo "SOLANGE_RUNNERS_CONFIGURED=$configured"
           echo "SOLANGE_RUNNERS_HEALTHY=$healthy"
-          echo "SOLANGE_RUNNER_WORKERS=$total_workers"
           [ "$configured" -gt 0 ] && [ "$healthy" -eq "$configured" ]
           REMOTE
+          content="$RUNNER_TEMP/postcheck-content.json"
+          target="$RUNNER_TEMP/postcheck-target.json"
           jq -n --rawfile text "$script" '{source:{sourceType:"TEXT",text:$text},output:{outputType:"TEXT"}}' > "$content"
           jq -n --arg instanceId "$BACKEND_INSTANCE_ID" '{instanceId:$instanceId}' > "$target"
           success=false
-          for attempt in $(seq 1 10); do
-            command_id="$("${OCI[@]}" instance-agent command create               --compartment-id "$BACKEND_COMPARTMENT_ID"               --display-name "Verify Solange GitHub runners"               --content "file://$content"               --target "file://$target"               --timeout-in-seconds 120               --query 'data.id' --raw-output 2>/dev/null || true)"
-            if [ -z "$command_id" ]; then sleep 10; continue; fi
+          for attempt in $(seq 1 8); do
+            command_id="$("${OCI[@]}" instance-agent command create --compartment-id "$BACKEND_COMPARTMENT_ID" --display-name "Verify Solange runner services" --content "file://$content" --target "file://$target" --timeout-in-seconds 120 --query 'data.id' --raw-output 2>/dev/null || true)"
+            [ -n "$command_id" ] || { sleep 10; continue; }
             execution=''
-            for _ in $(seq 1 30); do
+            for _ in $(seq 1 36); do
               execution="$("${OCI[@]}" instance-agent command-execution get --command-id "$command_id" --instance-id "$BACKEND_INSTANCE_ID" 2>/dev/null || true)"
               state="$(jq -r '.data."lifecycle-state" // empty' <<<"$execution" 2>/dev/null || true)"
               case "$state" in
@@ -232,16 +189,13 @@ jobs:
               esac
             done
             state="$(jq -r '.data."lifecycle-state" // empty' <<<"$execution" 2>/dev/null || true)"
-            exit_code="$(jq -r '.data.content."exit-code" // empty' <<<"$execution" 2>/dev/null || true)"
+            code="$(jq -r '.data.content."exit-code" // empty' <<<"$execution" 2>/dev/null || true)"
             output="$(jq -r '.data.content.text // ""' <<<"$execution" 2>/dev/null || true)"
-            printf '%s\n' "$output" | grep -E '^SOLANGE_RUNNERS_' || true
-            if [ "$state" = SUCCEEDED ] && [ "$exit_code" = 0 ] && printf '%s\n' "$output" | grep -Eq '^SOLANGE_RUNNERS_HEALTHY=[1-9][0-9]*$'; then
-              success=true
-              break
-            fi
+            printf '%s\n' "$output" | grep '^SOLANGE_RUNNERS_' || true
+            if [ "$state" = SUCCEEDED ] && [ "$code" = 0 ]; then success=true; break; fi
             sleep 10
           done
-          test "$success" = true || { echo "::error::Solange runner listeners did not recover"; exit 41; }
+          test "$success" = true || { echo "::error::Solange runner service verification failed"; exit 41; }
           echo "SOLANGE_RUNNER_RECOVERY=PASS"
 
       - name: Cleanup OCI credentials
@@ -249,11 +203,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          if [ -n "${OCI_KEY_FILE:-}" ] && [ -f "$OCI_KEY_FILE" ]; then
-            shred -u "$OCI_KEY_FILE"
-          fi
-          if [ -n "${OCI_CONFIG_FILE:-}" ] && [ -f "$OCI_CONFIG_FILE" ]; then
-            shred -u "$OCI_CONFIG_FILE"
-          fi
+          test -n "${OCI_KEY_FILE:-}" && test -f "$OCI_KEY_FILE" && shred -u "$OCI_KEY_FILE"
+          test -n "${OCI_CONFIG_FILE:-}" && test -f "$OCI_CONFIG_FILE" && shred -u "$OCI_CONFIG_FILE"
 
-# recovery-trigger: 2026-09-19T23:04Z
+# recovery-trigger: 2026-09-19T23:30Z

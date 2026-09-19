@@ -126,9 +126,11 @@ jobs:
           text = getattr(output, "text", "") or ""
           if getattr(output, "exit_code", 1) != 0 or "OS_ALIVE=1" not in text:
               raise SystemExit("OCI Run Command precheck did not prove OS responsiveness")
+          if "RUNNER_WORKER=present" in text:
+              raise SystemExit("Runner.Worker active; refusing site runner recovery")
           print("OCI_RUN_COMMAND_PRECHECK=PASS")
           print("RUNNER_LISTENER_BEFORE=" + ("present" if "RUNNER_LISTENER=present" in text else "absent"))
-          print("RUNNER_WORKER_BEFORE=" + ("present" if "RUNNER_WORKER=present" in text else "absent"))
+          print("RUNNER_WORKER_BEFORE=absent")
           PY
 
       - name: Cancel obsolete production pipeline reservations
@@ -245,4 +247,4 @@ jobs:
           set +e
           test -f "$OCI_KEY_FILE" && shred -u "$OCI_KEY_FILE"
           test -f "$OCI_CONFIG_FILE" && shred -u "$OCI_CONFIG_FILE"
-# recovery-trigger: 2026-09-19T22:21Z
+# recovery-trigger: 2026-09-19T23:04Z
