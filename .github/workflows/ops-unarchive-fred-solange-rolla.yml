@@ -1,0 +1,28 @@
+name: Ops Unarchive Fred Solange Rolla
+on:
+  push:
+    branches:
+      - ops/unarchive-fred-solange-rolla-20260919
+permissions:
+  contents: read
+jobs:
+  unarchive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      GH_TOKEN: ${{ secrets.GH_PAT || secrets.GH_REPO_TOKEN }}
+    steps:
+      - name: Unarchive only target repository
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$GH_TOKEN"
+          repo="fredmourao-ai/solange-rolla"
+          before="$(gh api "repos/$repo" --jq '.archived')"
+          echo "ARCHIVED_BEFORE=$before"
+          if [ "$before" = "true" ]; then
+            gh api -X PATCH "repos/$repo" -F archived=false >/dev/null
+          fi
+          after="$(gh api "repos/$repo" --jq '.archived')"
+          echo "ARCHIVED_AFTER=$after"
+          test "$after" = "false"
