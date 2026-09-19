@@ -43,6 +43,8 @@ Exceções só podem existir em allowlist **estreita, versionada e justificada**
 
 Respostas `4xx` só são sucesso quando o próprio caso de teste é negativo e comprova que aquele `4xx` é o comportamento esperado.
 
+HTTP 2xx/3xx também não é sucesso quando a pós-condição estiver errada, ausente, stale ou parcialmente aplicada. Falha silenciosa bloqueia o fluxo da mesma forma que uma exceção explícita.
+
 ## 4. Paridade local × ambiente publicado
 
 Antes do veredito, gere inventário dos testes/fluxos operacionais locais e compare com os realmente executados em staging/preview/publicação.
@@ -67,6 +69,8 @@ Para cada fluxo crítico registre, quando tecnicamente aplicável:
 - resultado da reexecução contraditória.
 
 “Não encontrei erro” sem essa trilha não é evidência de correção.
+
+Aplique `AUDIT_EVIDENCE_FRESHNESS_V1`: a evidência deve corresponder ao mesmo SHA/build/digest, ambiente e configuração material do release certificado. Evidência stale, de outro ambiente ou sem timestamp/proveniência é dívida de evidência.
 
 ## 6. Projetos sem UI
 
@@ -102,7 +106,16 @@ Um projeto não pode receber `APTO` quando existir qualquer uma destas condiçõ
 - automação assíncrona crítica não observada no release certificado quando material ao fluxo;
 - efeito externo sem reconciliação independente;
 - proteção de observabilidade crítica existente apenas no papel, sem prova de detecção equivalente quando tecnicamente viável;
-- rollback/restore necessário ao risco da mudança sem evidência compatível.
+- rollback/restore necessário ao risco da mudança sem evidência compatível;
+- evidência crítica stale, de SHA/ambiente diferente ou sem proveniência;
+- fluxo material sem negativos/boundaries aplicáveis exercitados;
+- reconciliação de dados com diferença inexplicada;
+- entidade órfã/estado eterno material sem owner e recuperação;
+- teste flaky/falso-verde sustentando conclusão;
+- regressão material de baseline não investigada;
+- classe material da taxonomia universal marcada `NÃO VALIDADO`;
+- rodada de unknown unknowns omitida em auditoria extrema;
+- self-test obrigatório do mecanismo de auditoria ausente ou falhando.
 
 O veredito deve continuar sendo `NÃO APTO` ou `APTO COM RESSALVAS` conforme risco e evidência, nunca mascarando dívida de validação.
 
@@ -121,5 +134,14 @@ Mudança crítica que possa exigir reversão deve ter caminho de rollback/restor
 
 ## 13. Legado e duplicidade no runtime
 Compare o release certificado com processos realmente ativos. Procure serviço, cron, timer, workflow, runner, consumer, bridge, script ou automação antiga que ainda possa executar a mesma responsabilidade, produzir efeito concorrente ou mascarar a validação do caminho novo.
+
+## 14. Falha silenciosa e ausência de produção
+Runtime parity deve verificar não só erros emitidos, mas também trabalho que deixou de acontecer. Compare contagens/efeitos esperados, freshness de dados, consumo de fila, produção de eventos, atualizações de timestamp e reconciliação. Ausência inesperada de evento/efeito é falha mesmo com zero exceções.
+
+## 15. Negativos, boundaries e ambientes
+Para operações críticas, a evidência publicada deve cobrir os negativos/boundaries materiais e combinações de ambiente que possam mudar o comportamento. A seleção pode ser risk-based, mas deve estar explícita.
+
+## 16. Baseline operacional
+Quando a mudança puder afetar capacidade/custo, compare métricas do release com baseline válido. Aumento material de erro, latência, memória, filas, chamadas externas ou custo deve ser investigado antes do veredito.
 
 **Marker de governança:** `AUDIT_RUNTIME_PARITY_V1`

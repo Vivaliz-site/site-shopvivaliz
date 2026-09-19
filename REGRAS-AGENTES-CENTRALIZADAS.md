@@ -85,6 +85,12 @@ Esta política é vinculante para **todos os projetos, hosts, workflows, serviç
 
 **Regra de ouro:** concluir a tarefa não significa deixar o agente rodando. O estado final correto de Claude/GPT/Codex é **processo encerrado** após a tarefa; continuidade operacional pertence a software determinístico ou IA gratuita/local com limites.
 
+## AUDITORIA_EXTREMA_UNIVERSAL_V4 — regra obrigatória para todos os agentes
+
+Auditoria extrema não é uma lista fechada de checks. Nos gatilhos definidos em `AUDIT_POLICY.md`, executar o conjunto canônico de `docs/quality/`: protocolo extremo, runtime parity, cobertura universal, self-test quando aplicável e overlay. Procurar erros explícitos e silenciosos, classes conhecidas e unknown unknowns, reconciliar dados/efeitos e corrigir achados SAFE antes de concluir.
+
+A política não promete excluir matematicamente todos os erros possíveis; ela exige cobertura de todas as classes materiais conhecidas, busca adversarial por classes desconhecidas e declaração explícita de qualquer dívida de evidência.
+
 ## 🎯 PRINCÍPIOS FUNDAMENTAIS (4 REGRAS INVIOLÁVEIS)
 
 ### 1. NUNCA declare sucesso sem evidência INDEPENDENTE
