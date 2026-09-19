@@ -1,0 +1,47 @@
+name: MLRR Production Operations Bridge
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: MLRR production operation
+        required: true
+        type: choice
+        options:
+          - prepare
+          - cutover
+          - validate
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mlrr-production-operations
+  cancel-in-progress: false
+
+jobs:
+  operate:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 30
+    environment: production
+    steps:
+      - name: Execute canonical MLRR operation
+        shell: bash
+        env:
+          CHAT_CLI_SESSION_ID: gha-mlrr-production-bridge
+          MLRR_OPERATION: ${{ inputs.operation }}
+        run: |
+          set -Eeuo pipefail
+          repo=/home/ubuntu/mercadolivre-returns-recovery
+          cd "$repo"
+          test -z "$(git status --porcelain)"
+          git fetch origin main --quiet
+          git switch main
+          git merge --ff-only origin/main
+          sha="$(git rev-parse HEAD)"
+          test "$sha" = "$(git rev-parse origin/main)"
+          export GITHUB_WORKSPACE="$repo"
+          export GITHUB_SHA="$sha"
+          export GITHUB_REF_NAME=main
+          test -x scripts/mlrr-production-ops.sh
+          scripts/mlrr-production-ops.sh "$MLRR_OPERATION"
