@@ -13,6 +13,8 @@ for (const [needle, label] of [
   ["value === '/index.php'", 'suporte a /index.php'],
   ['fetchCatalogPage(page)', 'paginacao do catalogo'],
   ['image.onerror = function', 'fallback para imagem quebrada'],
+  ["fallback !== localFallback ? function", 'fallback local de segundo estagio'],
+  ["preferred !== failedSrc ? preferred : localFallback", 'nao repetir imagem que acabou de falhar'],
   ['Nunca reutiliza deliberadamente', 'fallback quando imagem real ja foi usada'],
 ]) {
   if (!source.includes(needle)) throw new Error(`source_guard_missing:${label}`);
