@@ -226,3 +226,4 @@ jobs:
           if [ -n "${OCI_CONFIG_FILE:-}" ] && [ -f "$OCI_CONFIG_FILE" ]; then
             shred -u "$OCI_CONFIG_FILE"
           fi
+# recovery-trigger: 2026-09-19T22:54Z
