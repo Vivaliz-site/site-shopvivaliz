@@ -1,7 +1,7 @@
 # Protocolo Universal de Auditoria Extrema — Zero Blind Spots
 
 ## Missão
-Atue sob três lentes obrigatórias: **Auditor** (conformidade, segurança, integridade e regras), **Consultor** (risco, negócio, UX, custo e produtividade) e **Operador** (reprodução, correção, testes e validação real). O objetivo é: **MAPEAR → QUESTIONAR → REPRODUZIR → PROVAR → CORRIGIR → TESTAR → REGREDIR → REAUDITAR**.
+Atue sob três lentes obrigatórias: **Auditor** (conformidade, segurança, integridade e regras), **Consultor** (risco, negócio, UX, custo e produtividade) e **Operador** (reprodução, correção, testes e validação real). O objetivo é: **MAPEAR → QUESTIONAR → REPRODUZIR → PROVAR → CLASSIFICAR → CORRIGIR → BUSCAR EQUIVALENTES → TESTAR → DEPLOYAR → OBSERVAR → RECONCILIAR → REGREDIR → REAUDITAR → META-AUDITAR**.
 
 ## Regras fundamentais
 - Não presuma que documentação, nome de função, teste verde, HTTP 200, botão visível, migration, worker configurado ou serviço `active` provam comportamento correto.
@@ -38,15 +38,39 @@ Determine o primeiro recurso a saturar: CPU, RAM, disco, pool, fila, quota, rate
 Avalie abuso de funcionalidade legítima, escalada horizontal/vertical, manipulação de IDs/tenant/owner, mass assignment, fraude interna/externa e matriz de autorização. Priorize perda financeira, cobrança/reembolso duplicado, prazo perdido, ação externa indevida, dado não reconciliado, indisponibilidade, retrabalho e desperdício comprovado de polling/API/storage/logs/recursos.
 
 ## Formato dos achados
-Registre ID, severidade `P0–P4`, probabilidade, blast radius, detectabilidade, confiança/evidência, arquivo/componente, visão Auditor, Consultor e Operador, reprodução, causa raiz, correção, teste antes/depois e risco de regressão. P0 = perda/corrupção/segurança crítica/indisponibilidade grave atual; P1 = alto impacto provável; P2 = falha relevante contornável; P3 = impacto limitado/dívida/UX/observabilidade; P4 = melhoria sem defeito atual.
+Registre ID, severidade `P0–P4`, probabilidade, blast radius, detectabilidade, confiança/evidência, arquivo/componente, visão Auditor, Consultor e Operador, reprodução, causa raiz, correção, teste antes/depois e risco de regressão. P0 = perda/corrupção/segurança crítica/indisponibilidade grave atual; P1 = alto impacto provável; P2 = falha relevante contornável; P3 = impacto limitado/dívida/UX/observabilidade; P4 = melhoria sem defeito ativo.
 
-Antes de alterar, classifique a correção como `SAFE`, `REVIEW`, `MIGRATION` ou `DESTRUCTIVE`; ação destrutiva exige autorização explícita. Sempre pergunte se o achado é isolado ou classe sistêmica e faça busca global por equivalentes.
+Além da severidade, classifique a natureza como `DEFECT`, `IMPROVEMENT_REQUIRED` ou `IMPROVEMENT_OPTIONAL`. Uma melhoria é `REQUIRED` quando fecha risco material de segurança, integridade, recuperação, observabilidade, idempotência, prevenção de recorrência ou operação crítica; caso contrário pode ser `OPTIONAL`.
+
+Antes de alterar, classifique a correção como `SAFE`, `REVIEW`, `MIGRATION` ou `DESTRUCTIVE`; ação destrutiva exige autorização explícita.
+
+## Remediação obrigatória e zero pendência crítica
+Auditoria extrema não é um relatório de defeitos. Todo achado `SAFE` P0–P2 deve ser corrigido durante a própria auditoria, com reprodução antes, correção, teste depois, regressão e reauditoria. Achado `REVIEW/MIGRATION/DESTRUCTIVE` precisa de plano executável, owner, pré-condições, risco e evidência concreta do bloqueio.
+
+`APTO` exige `P0=0`, `P1=0`, nenhum P2 material em fluxo crítico, nenhuma área crítica `NÃO VALIDADO`, nenhum `AUDIT_ESCAPE` aplicável sem reauditoria e nenhum `IMPROVEMENT_REQUIRED` que seja condição de segurança/integridade/recuperação. Não use `APTO COM RESSALVAS` para esconder pendência crítica.
+
+## Busca sistêmica por equivalentes
+Para cada achado confirmado, execute e registre `Achado → Classe de falha → Busca global → Ocorrências equivalentes → Correções → Testes → Reauditoria`. Corrigir somente o exemplo que revelou o defeito é insuficiente quando a classe puder se repetir em outras rotas, entidades, tenants, workers, integrações ou estados históricos.
+
+## Observabilidade comprovada
+Healthcheck, log, alerta, watchdog, dead-letter e dashboard só contam como proteção quando a auditoria prova que detectam a classe de falha relevante. Quando seguro, faça fault injection controlada e valide detecção, diagnóstico, alerta/encaminhamento e recuperação. Se não puder injetar a falha, registre dívida de evidência e use a prova operacional equivalente mais forte disponível.
+
+## Pós-deploy: observar e reconciliar
+Quando houver publicação, valide `commit → build → artefato → release → deploy → processo ativo → operação real → observação → efeito durável → reconciliação`. Para workers, filas, schedulers, webhooks e integrações críticas, prove ao menos uma execução produção-equivalente no release certificado por ciclo natural ou disparo controlado seguro. Erro assíncrono posterior invalida o veredito incompatível.
+
+## Rollback, restore e retomada
+Para mudança crítica, prove compatibilidade de recuperação entre aplicação, schema, eventos, filas, caches e dados. Quando aplicável, ensaie `deploy → mutação → rollback/restore → validação → retomada` em ambiente seguro apropriado. Não faça ação destrutiva em produção apenas para satisfazer o protocolo.
+
+## Legado, duplicidade e concorrência operacional
+Inventarie serviços, processos, timers, cron, schedulers, workflows, runners, scripts, consumers, bridges e automações que possam cumprir responsabilidade equivalente. Procure legado ainda ativo, jobs duplicados, polling redundante, concorrência, consumers órfãos, hotfixes fora do fluxo versionado e caminhos alternativos que ainda produzam efeitos.
 
 ## Reauditoria contraditória e cobertura
 Após correções, execute regressão e nova rodada tentando provar que as conclusões estão erradas. Registre matriz `Auditada | Problemas | Corrigidos | Pendentes | Evidência` para backend, frontend, banco, APIs, jobs, queues, cron, webhooks, integrações, segurança, permissões, testes, CI/CD, infraestrutura, logs, monitoramento, backup/restore, UX, performance, dependências e documentação. Área não auditada deve aparecer com motivo.
 
 ## Gate Final de Completude
-Não use “100%”, “pronto” ou “apto” apenas por build/test/health verde. Valide, conforme aplicável: código; dados; happy/edge/failure paths; retry/idempotência; integrações; operação; segurança; produção; backup/restore/rollback. Veredito: `NÃO APTO`, `APTO COM RESSALVAS` ou `APTO`, acompanhado de **confiança 0–100%**, **risco residual** e **dívida de evidência**. Nunca use 100% de confiança com área crítica não validada.
+Não use “100%”, “pronto” ou “apto” apenas por build/test/health verde. Antes do veredito, confirme o `AUDIT_DEFINITION_OF_DONE_V1`: release identificado; classes históricas materiais exercitadas; correções SAFE executadas; zero pendência crítica; busca por equivalentes concluída; testes de prevenção presentes; runtime parity comprovada; efeitos externos reconciliados; observabilidade crítica demonstrada; automações assíncronas observadas; recuperação/rollback validados conforme risco; legado/duplicidade inventariados; reauditoria contraditória e meta-auditoria concluídas.
+
+Veredito: `NÃO APTO`, `APTO COM RESSALVAS` ou `APTO`, acompanhado de **confiança 0–100%**, **risco residual** e **dívida de evidência**. Nunca use 100% de confiança com área crítica não validada e nunca emita `APTO` com P0/P1, P2 crítico, AUDIT_ESCAPE pendente ou IMPROVEMENT_REQUIRED crítico.
 
 ## Meta-auditoria final
-Antes de encerrar, investigue: que classe inteira de falha foi esquecida? quais conclusões dependem de suposição? se o relatório estiver errado, onde? o que ainda pode causar perda financeira, perda de dados, efeito externo incorreto, indisponibilidade ou trabalho manual evitável? Somente então atualize `docs/quality/AUDIT_STATUS.md` com o SHA/release coberto.
+Antes de encerrar, investigue: que classe inteira de falha foi esquecida? quais conclusões dependem de suposição? se o relatório estiver errado, onde? o que ainda pode causar perda financeira, perda de dados, efeito externo incorreto, indisponibilidade ou trabalho manual evitável? Somente então atualize `docs/quality/AUDIT_STATUS.md` com o SHA/release coberto e registre qualquer `AUDIT_ESCAPE` em `docs/quality/AUDIT_ESCAPE_REGISTER.md`.
