@@ -87,7 +87,7 @@ Esta política é vinculante para **todos os projetos, hosts, workflows, serviç
 
 ## AUDITORIA_EXTREMA_UNIVERSAL_V4 — regra obrigatória para todos os agentes
 
-Auditoria extrema não é uma lista fechada de checks. Nos gatilhos definidos em `AUDIT_POLICY.md`, executar o conjunto canônico de `docs/quality/`: protocolo extremo, runtime parity, cobertura universal, self-test quando aplicável e overlay. Procurar erros explícitos e silenciosos, classes conhecidas e unknown unknowns, reconciliar dados/efeitos e corrigir achados SAFE antes de concluir.
+Auditoria extrema não é uma lista fechada de checks. Nos gatilhos definidos em `AUDIT_POLICY.md`, executar o conjunto canônico de `docs/quality/`: protocolo extremo, runtime parity, cobertura universal, auditoria de arquitetura/deploy, self-test quando aplicável e overlay. Procurar erros explícitos e silenciosos, classes conhecidas e unknown unknowns, reconciliar dados/efeitos e corrigir achados SAFE antes de concluir.
 
 A política não promete excluir matematicamente todos os erros possíveis; ela exige cobertura de todas as classes materiais conhecidas, busca adversarial por classes desconhecidas e declaração explícita de qualquer dívida de evidência.
 
