@@ -31,16 +31,19 @@ $products = [
 ];
 
 $result = svcie_apply_image_map($products, [
-    'C06PT' => 'https://mirror.example/c06pt.jpg',
-    'KEEP' => 'https://mirror.example/should-not-replace.jpg',
+    'C06PT' => ['https://erp.example/c06pt.jpg'],
+    'KEEP' => [
+        'https://erp.example/keep-primary.jpg',
+        'https://erp.example/keep-secondary.jpg',
+    ],
 ]);
 
 svcie_test_assert(
-    ($result[0]['image_url'] ?? '') === 'https://mirror.example/c06pt.jpg',
-    'Missing ERP image should be filled from the local mirror.'
+    ($result[0]['image_url'] ?? '') === 'https://erp.example/c06pt.jpg',
+    'Missing storefront image should be filled from the ERP product media map.'
 );
 svcie_test_assert(
-    ($result[0]['images'][0] ?? '') === 'https://mirror.example/c06pt.jpg',
+    ($result[0]['images'][0] ?? '') === 'https://erp.example/c06pt.jpg',
     'Filled primary image should also seed the gallery used by catalog cards.'
 );
 svcie_test_assert(
@@ -48,8 +51,16 @@ svcie_test_assert(
     'Image enrichment must not change ERP-authoritative price or stock.'
 );
 svcie_test_assert(
-    ($result[1]['image_url'] ?? '') === 'https://erp.example/original.jpg',
-    'Existing ERP image must never be overwritten by the mirror.'
+    ($result[1]['image_url'] ?? '') === 'https://erp.example/keep-primary.jpg',
+    'ERP product media map must remain authoritative for the storefront primary image.'
+);
+
+svcie_test_assert(
+    ($result[1]['images'] ?? []) === [
+        'https://erp.example/keep-primary.jpg',
+        'https://erp.example/keep-secondary.jpg',
+    ],
+    'ERP product media map must preserve the synchronized gallery order.'
 );
 
 fwrite(STDOUT, "PASS: catalog image enrichment tests.\n");
