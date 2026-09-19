@@ -21,8 +21,6 @@ jobs:
     timeout-minutes: 25
     env:
       OCI_PROFILE: AGENTS
-      OCI_CONFIG_FILE: ${{ runner.temp }}/oci-agents/config
-      OCI_KEY_FILE: ${{ runner.temp }}/oci-agents/key.pem
       SITE_INSTANCE_NAME: shopvivaliz-free-a1
     steps:
       - name: Configure protected OCI AGENTS profile
@@ -38,6 +36,9 @@ jobs:
           for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
             test -n "${!name:-}" || { echo "::error::Required OCI recovery secret missing: $name"; exit 1; }
           done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
           install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
           printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
           chmod 600 "$OCI_KEY_FILE"
