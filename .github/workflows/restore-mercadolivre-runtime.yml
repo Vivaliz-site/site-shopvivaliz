@@ -72,7 +72,34 @@ jobs:
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1 \
             'set -euo pipefail; shared=/home/ubuntu/shopvivaliz-deploy/shared; sudo chown ubuntu:www-data "$shared/.env"; chmod 600 "$shared/.env"; SHOPVIVALIZ_SHARED_ENV="$shared/.env" SHOPVIVALIZ_RUNTIME_SECRETS="$shared/runtime-secrets.php" SHOPVIVALIZ_SHARED_GROUP=www-data php /tmp/shopvivaliz-materialize-runtime-secrets.php; sudo chown ubuntu:www-data "$shared/runtime-secrets.php"; chmod 640 "$shared/runtime-secrets.php"'
 
-      - name: Backup and refresh Mercado Livre OAuth
+      - name: Resolve Mercado Livre credential ownership
+        id: ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="$(
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1               'php -r '''$p="/home/ubuntu/shopvivaliz-deploy/shared/runtime-secrets.php"; $v=is_file($p)?require $p:[]; $o=strtolower(trim((string)($v["ML_TOKEN_OWNER"]??"legacy"))); echo $o==="mlrr"?"mlrr":"legacy";''''
+          )"
+          test "$owner" = legacy -o "$owner" = mlrr
+          echo "owner=$owner" >> "$GITHUB_OUTPUT"
+
+      - name: Verify MLRR-owned Mercado Livre runtime
+        if: steps.ownership.outputs.owner == 'mlrr'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          sudo systemctl start mlrr-oauth-maintenance.service
+          runtime=/home/ubuntu/mercadolivre-returns-recovery-deploy/shared/runtime-web.php
+          connection_id="$(php -r '$v=require $argv[1]; echo (string)($v["ML_LEGACY_SNAPSHOT_CONNECTION_ID"]??"");' "$runtime")"
+          test -n "$connection_id"
+          php /home/ubuntu/mercadolivre-returns-recovery-deploy/current/bin/ml-runtime-status --connection="$connection_id"
+          curl --fail --silent --show-error https://shopvivaliz.com.br/api/ml/me >/dev/null
+          REMOTE
+
+      - name: Backup and refresh legacy Mercado Livre OAuth
+        if: steps.ownership.outputs.owner == 'legacy'
         shell: bash
         run: |
           set -euo pipefail

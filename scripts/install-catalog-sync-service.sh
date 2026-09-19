@@ -24,6 +24,16 @@ if [[ ${repo_dir} != /home/ubuntu/shopvivaliz-deploy/* ]]; then
   exit 2
 fi
 
+shared_ml_token_owner() {
+  local runtime=/home/ubuntu/shopvivaliz-deploy/shared/runtime-secrets.php
+  if [[ ! -f "$runtime" ]]; then
+    printf '%s
+' legacy
+    return
+  fi
+  php -r '$v=require $argv[1]; $o=strtolower(trim((string)($v["ML_TOKEN_OWNER"]??"legacy"))); echo $o==="mlrr"?"mlrr":"legacy";' "$runtime"
+}
+
 if [[ -f "$shared_env" ]]; then
   chown ubuntu:www-data "$shared_env"
   chmod 0640 "$shared_env"
@@ -37,17 +47,26 @@ systemd-analyze verify "${token_unit_target}" "${shopee_unit_target}" "${ml_unit
 systemctl daemon-reload
 systemctl enable shopvivaliz-token-renewer.service
 systemctl enable shopvivaliz-shopee-token-renewer.service
-systemctl enable shopvivaliz-mercadolivre-token-renewer.service
+ml_owner="$(shared_ml_token_owner)"
+if [ "$ml_owner" = "mlrr" ]; then
+  if systemctl list-unit-files shopvivaliz-mercadolivre-token-renewer.service --no-legend 2>/dev/null | grep -q '^shopvivaliz-mercadolivre-token-renewer\.service'; then
+    systemctl disable --now shopvivaliz-mercadolivre-token-renewer.service
+  fi
+else
+  systemctl enable shopvivaliz-mercadolivre-token-renewer.service
+  systemctl restart shopvivaliz-mercadolivre-token-renewer.service
+fi
 systemctl restart shopvivaliz-token-renewer.service
 systemctl restart shopvivaliz-shopee-token-renewer.service
-systemctl restart shopvivaliz-mercadolivre-token-renewer.service
 systemctl enable --now shopvivaliz-catalog-reconcile.timer
 if systemctl list-unit-files shopvivaliz-sync-products.service --no-legend 2>/dev/null | grep -q '^shopvivaliz-sync-products\.service'; then
   systemctl disable --now shopvivaliz-sync-products.service
 fi
 systemctl is-active --quiet shopvivaliz-token-renewer.service
 systemctl is-active --quiet shopvivaliz-shopee-token-renewer.service
-systemctl is-active --quiet shopvivaliz-mercadolivre-token-renewer.service
+if [ "$ml_owner" != "mlrr" ]; then
+  systemctl is-active --quiet shopvivaliz-mercadolivre-token-renewer.service
+fi
 systemctl is-active --quiet shopvivaliz-catalog-reconcile.timer
 systemctl is-enabled --quiet shopvivaliz-catalog-reconcile.timer
 echo "servicos OAuth ativos; reconciliacao automatica de catalogo habilitada; daemon legado desabilitado"

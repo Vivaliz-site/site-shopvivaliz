@@ -14,6 +14,7 @@ readonly LOG_FILE="$LOG_DIR/deploy.log"
 readonly STATUS_FILE="$SHARED_DIR/logs/deploy-status.json"
 readonly RUNNER_PATH="$REPO_DIR/scripts/deploy-production.sh"
 readonly RETENTION_COUNT=5
+readonly ML_RENEWER_SERVICE="shopvivaliz-mercadolivre-token-renewer.service"
 readonly -a RUNTIME_SERVICES=(
   "shopvivaliz-token-renewer.service"
   "shopvivaliz-shopee-token-renewer.service"
@@ -62,11 +63,49 @@ path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 PY
 }
 
+# Quem detem as credenciais do Mercado Livre. A leitura vem do runtime protegido
+# ja materializado (reconcile_runtime_secrets roda antes), nunca de um `source`
+# do .env -- fazer source executaria conteudo de configuracao como shell.
+# Um runtime ausente/ilegivel significa pre-cutover, ou seja, `legacy`; o daemon
+# legado ainda assim roda em modo somente leitura (ver ml_token_owner() no PHP).
+shared_ml_token_owner() {
+  local runtime="$SHARED_DIR/runtime-secrets.php"
+  local owner=""
+  if [ -r "$runtime" ]; then
+    owner="$(php -r '
+      $values = @include $argv[1];
+      $owner = is_array($values) ? strtolower(trim((string)($values["ML_TOKEN_OWNER"] ?? ""))) : "";
+      echo $owner === "mlrr" ? "mlrr" : "legacy";
+    ' "$runtime" 2>/dev/null)" || owner=""
+  fi
+  if [ "$owner" = "mlrr" ]; then
+    printf '%s\n' "mlrr"
+  else
+    printf '%s\n' "legacy"
+  fi
+}
+
+# Servicos de runtime aplicaveis ao estado atual de propriedade compartilhada.
+# Com owner=mlrr o renovador legado sai da lista -- inclusive no rollback, que
+# reusa esta mesma funcao e por isso nao consegue ressuscita-lo.
+active_runtime_services() {
+  local owner service
+  owner="$(shared_ml_token_owner)"
+  for service in "${RUNTIME_SERVICES[@]}"; do
+    if [ "$service" = "$ML_RENEWER_SERVICE" ] && [ "$owner" = "mlrr" ]; then
+      continue
+    fi
+    printf '%s\n' "$service"
+  done
+}
+
 restart_runtime_services() {
   local service
   local -a services=()
-  for service in "${RUNTIME_SERVICES[@]}"; do
-    if [ "$service" = "shopvivaliz-mercadolivre-token-renewer.service" ] && [ ! -f "$CURRENT_LINK/daemon-mercadolivre-token-renewer.php" ]; then
+  local -a candidates=()
+  mapfile -t candidates < <(active_runtime_services)
+  for service in "${candidates[@]}"; do
+    if [ "$service" = "$ML_RENEWER_SERVICE" ] && [ ! -f "$CURRENT_LINK/daemon-mercadolivre-token-renewer.php" ]; then
       if sudo systemctl cat "$service" >/dev/null 2>&1; then
         if ! sudo systemctl stop "$service"; then
           log ERROR "Nao foi possivel parar o renovador Mercado Livre ausente na release ativa"
@@ -91,9 +130,23 @@ restart_runtime_services() {
 
 reconcile_runtime_service_units() {
   local release_path="$1"
-  local service="shopvivaliz-mercadolivre-token-renewer.service"
+  local service="$ML_RENEWER_SERVICE"
   local source="$release_path/deploy/systemd/$service"
   local target="/etc/systemd/system/$service"
+  local owner
+  owner="$(shared_ml_token_owner)"
+  # Propriedade MLRR: o renovador legado do Mercado Livre nunca pode ficar
+  # habilitado, nem em deploy nem em rollback para uma release antiga.
+  if [ "$owner" = "mlrr" ]; then
+    if sudo systemctl cat "$ML_RENEWER_SERVICE" >/dev/null 2>&1; then
+      if ! sudo systemctl disable --now "$ML_RENEWER_SERVICE" >> "$LOG_FILE" 2>&1; then
+        log ERROR "Falha ao desabilitar o renovador Mercado Livre sob propriedade do MLRR"
+        return 1
+      fi
+      log INFO "Renovador Mercado Livre desabilitado: credenciais pertencem ao MLRR"
+    fi
+    return 0
+  fi
   if [ ! -f "$source" ]; then
     if [ -f "$release_path/daemon-mercadolivre-token-renewer.php" ]; then
       log ERROR "Unit do renovador Mercado Livre ausente na release: $source"
@@ -113,7 +166,7 @@ reconcile_runtime_service_units() {
     log ERROR "systemd daemon-reload falhou"
     return 1
   fi
-  if ! sudo systemctl enable "$service" >> "$LOG_FILE" 2>&1; then
+  if ! sudo systemctl enable "$ML_RENEWER_SERVICE" >> "$LOG_FILE" 2>&1; then
     log ERROR "Falha ao habilitar renovador Mercado Livre"
     return 1
   fi
@@ -255,7 +308,10 @@ rollback_to() {
     log ERROR "Rollback falhou ao restaurar o symlink current"
     return 1
   fi
-  if [ -f "$RELEASES_DIR/$previous_release/deploy/systemd/shopvivaliz-mercadolivre-token-renewer.service" ]; then
+  # A reconciliacao usa a propriedade compartilhada ATUAL, nao a da release
+  # antiga: com owner=mlrr o renovador legado permanece desabilitado.
+  if [ "$(shared_ml_token_owner)" = "mlrr" ] \
+    || [ -f "$RELEASES_DIR/$previous_release/deploy/systemd/$ML_RENEWER_SERVICE" ]; then
     if ! reconcile_runtime_service_units "$RELEASES_DIR/$previous_release"; then
       log ERROR "Rollback nao conseguiu reconciliar a unit Mercado Livre"
       return 1

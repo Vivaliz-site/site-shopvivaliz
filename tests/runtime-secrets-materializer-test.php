@@ -88,6 +88,67 @@ try {
         rsm_assert((fileperms($source) & 0777) === 0640, 'shared env mode should be 0640');
     }
 
+    // Task 9 (propriedade MLRR): com owner=mlrr o runtime protegido carrega a
+    // metadata de propriedade e nenhum valor de token legado do Mercado Livre.
+    $mlrrTarget = $root . '/mlrr-runtime-secrets.php';
+    $snapshotPath = '/home/ubuntu/shopvivaliz-deploy/shared/storage/private/ml-access-token.json';
+    file_put_contents($source, implode("\n", [
+        'DB_HOST=db.internal',
+        'DB_PORT=3307',
+        'DB_NAME=shopvivaliz',
+        'DB_USER=shop_runtime',
+        'DB_PASS=database-password',
+        'SHOPVIVALIZ_AGENT_KEY=' . $signingKey,
+        'ML_TOKEN_OWNER=mlrr',
+        'ML_ACCESS_SNAPSHOT_FILE=' . $snapshotPath,
+        'ML_CLIENT_ID=4695185185661070',
+        'ML_CLIENT_SECRET=static-app-secret',
+        'ML_SELLER_ID=112962856',
+        'ML_ACCESS_TOKEN=legacy-access',
+        'ML_REFRESH_TOKEN=legacy-refresh',
+        'MERCADO_LIVRE_ACCESS_TOKEN=legacy-access-alias',
+        'MERCADO_LIVRE_REFRESH_TOKEN=legacy-refresh-alias',
+        '',
+    ]));
+
+    $mlrr = rsm_run($script, $source, $mlrrTarget);
+    rsm_assert($mlrr['exit'] === 0, 'MLRR-owned materialization should succeed');
+    $mlrrValues = require $mlrrTarget;
+    rsm_assert(is_array($mlrrValues), 'MLRR runtime should return an array');
+    rsm_assert(($mlrrValues['ML_TOKEN_OWNER'] ?? '') === 'mlrr', 'owner metadata should be materialized');
+    rsm_assert(($mlrrValues['ML_ACCESS_SNAPSHOT_FILE'] ?? '') === $snapshotPath, 'snapshot path should be materialized');
+    rsm_assert(($mlrrValues['ML_CLIENT_ID'] ?? '') === '4695185185661070', 'static app id must be kept');
+    rsm_assert(($mlrrValues['ML_CLIENT_SECRET'] ?? '') === 'static-app-secret', 'static app secret must be kept');
+    rsm_assert(($mlrrValues['ML_SELLER_ID'] ?? '') === '112962856', 'static seller id must be kept');
+    foreach (['ML_ACCESS_TOKEN', 'ML_REFRESH_TOKEN', 'MERCADO_LIVRE_ACCESS_TOKEN', 'MERCADO_LIVRE_REFRESH_TOKEN'] as $legacyKey) {
+        rsm_assert(!array_key_exists($legacyKey, $mlrrValues), "legacy {$legacyKey} must not be materialized under MLRR ownership");
+    }
+    rsm_assert(!str_contains(file_get_contents($mlrrTarget), 'legacy-refresh'), 'legacy refresh value must never reach the runtime file');
+    rsm_assert(!str_contains($mlrr['stdout'] . $mlrr['stderr'], 'legacy-refresh'), 'legacy refresh value must never be logged');
+    rsm_assert(str_contains(file_get_contents($source), 'ML_REFRESH_TOKEN='), 'materializer must not delete env key names');
+
+    // Com owner legacy (padrao pre-cutover) o comportamento historico continua.
+    $legacyTarget = $root . '/legacy-runtime-secrets.php';
+    file_put_contents($source, implode("\n", [
+        'DB_HOST=db.internal',
+        'DB_PORT=3307',
+        'DB_NAME=shopvivaliz',
+        'DB_USER=shop_runtime',
+        'DB_PASS=database-password',
+        'SHOPVIVALIZ_AGENT_KEY=' . $signingKey,
+        'ML_TOKEN_OWNER=legacy',
+        'ML_CLIENT_ID=4695185185661070',
+        'ML_ACCESS_TOKEN=legacy-access',
+        'ML_REFRESH_TOKEN=legacy-refresh',
+        '',
+    ]));
+    $legacy = rsm_run($script, $source, $legacyTarget);
+    rsm_assert($legacy['exit'] === 0, 'legacy materialization should succeed');
+    $legacyValues = require $legacyTarget;
+    rsm_assert(($legacyValues['ML_TOKEN_OWNER'] ?? '') === 'legacy', 'legacy owner metadata should be materialized');
+    rsm_assert(($legacyValues['ML_ACCESS_TOKEN'] ?? '') === 'legacy-access', 'legacy access token must be preserved before cutover');
+    rsm_assert(($legacyValues['ML_REFRESH_TOKEN'] ?? '') === 'legacy-refresh', 'legacy refresh token must be preserved before cutover');
+
     file_put_contents($source, implode("\n", [
         'DB_NAME=shopvivaliz',
         'DB_USER=root',
@@ -100,6 +161,8 @@ try {
 
     echo "OK: runtime secrets materializer\n";
 } finally {
+    @unlink($root . '/mlrr-runtime-secrets.php');
+    @unlink($root . '/legacy-runtime-secrets.php');
     @unlink($invalidTarget);
     @unlink($target);
     @unlink($source);

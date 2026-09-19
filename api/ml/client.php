@@ -44,6 +44,68 @@ function ml_env(string ...$keys): string {
     return '';
 }
 
+/**
+ * Propriedade das credenciais Mercado Livre.
+ *
+ * `legacy` mantem o comportamento historico (ShopVivaLiz detem refresh token e
+ * renova sozinho). `mlrr` delega a propriedade ao servico MLRR: ShopVivaLiz
+ * apenas consome o snapshot access-only publicado por ele e nenhum caminho de
+ * codigo pode renovar ou persistir credencial de refresh.
+ * O padrao continua `legacy` ate o cutover de producao.
+ */
+function ml_token_owner(): string {
+    $owner = strtolower(trim(ml_env('ML_TOKEN_OWNER')));
+    return $owner === 'mlrr' ? 'mlrr' : 'legacy';
+}
+
+function ml_access_snapshot_path(): string {
+    return ml_env('ML_ACCESS_SNAPSHOT_FILE')
+        ?: '/home/ubuntu/shopvivaliz-deploy/shared/storage/private/ml-access-token.json';
+}
+
+/**
+ * Le o snapshot access-only do MLRR. O retorno nunca contem refresh token,
+ * client secret ou qualquer outro material de renovacao.
+ */
+function ml_read_access_snapshot(bool $throw = true): ?array {
+    $path = ml_access_snapshot_path();
+    if (!is_file($path) || !is_readable($path)) {
+        if ($throw) {
+            throw new RuntimeException('Snapshot de acesso do MLRR ausente; as credenciais do Mercado Livre pertencem ao MLRR.');
+        }
+        return null;
+    }
+
+    $decoded = json_decode((string)file_get_contents($path), true);
+    if (!is_array($decoded)) {
+        if ($throw) {
+            throw new RuntimeException('Snapshot de acesso do MLRR ilegivel; as credenciais do Mercado Livre pertencem ao MLRR.');
+        }
+        return null;
+    }
+
+    $access = trim((string)($decoded['access_token'] ?? ''));
+    if ($access === '') {
+        if ($throw) {
+            throw new RuntimeException('Snapshot de acesso do MLRR sem access token; as credenciais do Mercado Livre pertencem ao MLRR.');
+        }
+        return null;
+    }
+
+    $tokens = [
+        'access_token'  => $access,
+        'token_type'    => (string)($decoded['token_type'] ?? 'Bearer'),
+        'expires_at_ms' => (int)($decoded['expires_at_ms'] ?? 0),
+        'token_owner'   => 'mlrr',
+    ];
+    foreach (['provider_user_id' => 'user_id', 'site_id' => 'site_id', 'scopes' => 'scopes', 'published_at' => 'published_at'] as $from => $to) {
+        if (array_key_exists($from, $decoded) && $decoded[$from] !== null) {
+            $tokens[$to] = $decoded[$from];
+        }
+    }
+    return $tokens;
+}
+
 function ml_base64url(string $data): string {
     return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
 }
@@ -79,6 +141,9 @@ function ml_token_path(): string {
 }
 
 function ml_save_tokens(array $data): array {
+    if (ml_token_owner() === 'mlrr') {
+        throw new RuntimeException('Mercado Livre credentials are owned by MLRR.');
+    }
     $existing = ml_read_tokens(false) ?? [];
     $expires_at_ms = isset($data['expires_in'])
         ? (int)(microtime(true) * 1000) + ((int)$data['expires_in'] * 1000)
@@ -93,6 +158,9 @@ function ml_save_tokens(array $data): array {
 }
 
 function ml_read_tokens(bool $throw = true): ?array {
+    if (ml_token_owner() === 'mlrr') {
+        return ml_read_access_snapshot($throw);
+    }
     $path = ml_token_path();
     if (!is_file($path)) {
         if ($throw) throw new RuntimeException('Nenhum token ML salvo. Acesse /api/ml/login primeiro.');
@@ -102,6 +170,14 @@ function ml_read_tokens(bool $throw = true): ?array {
 }
 
 function ml_refresh_if_needed(): array {
+    if (ml_token_owner() === 'mlrr') {
+        $snapshot = ml_read_access_snapshot();
+        if ((int)($snapshot['expires_at_ms'] ?? 0) <= (int)(microtime(true) * 1000)) {
+            throw new RuntimeException('Snapshot de acesso do MLRR expirado; somente o MLRR pode renovar as credenciais do Mercado Livre.');
+        }
+        return $snapshot;
+    }
+
     $tokens = ml_read_tokens();
     $ten_min = 10 * 60 * 1000;
     $now_ms  = (int)(microtime(true) * 1000);
