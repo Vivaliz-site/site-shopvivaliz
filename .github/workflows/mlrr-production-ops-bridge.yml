@@ -11,6 +11,7 @@ on:
           - prepare
           - cutover
           - validate
+          - shadow
 
 permissions:
   contents: read

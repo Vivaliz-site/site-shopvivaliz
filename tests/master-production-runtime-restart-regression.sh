@@ -71,4 +71,14 @@ if grep -Fq 'php -m | grep -Fxq pdo_sqlite' "$WORKFLOW"; then
   exit 1
 fi
 
+monitor="$(sed -n '/^  monitor:/,/^  publish_evidence:/p' "$WORKFLOW")"
+grep -Fq 'https://shopvivaliz.com.br/api/health.php' <<<"$monitor" || {
+  echo 'Production monitor must use the public health.php endpoint' >&2
+  exit 1
+}
+if grep -Fq 'https://shopvivaliz.com.br/api/health/)' <<<"$monitor"; then
+  echo 'Production monitor must not use the protected /api/health/ route' >&2
+  exit 1
+fi
+
 echo MASTER_PRODUCTION_RUNTIME_RESTART_OK
