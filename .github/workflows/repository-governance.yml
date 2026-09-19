@@ -39,7 +39,8 @@ jobs:
             artifacts/system-health \
             artifacts/reorganization-final \
             artifacts/secret-references \
-            artifacts/generated-index
+            artifacts/generated-index \
+            artifacts/audit-governance-self-test
           {
             echo "run_id=${GITHUB_RUN_ID}"
             echo "event=${GITHUB_EVENT_NAME}"
@@ -86,6 +87,7 @@ jobs:
             scripts/maintenance/compare_secret_audit_reports.py \
             scripts/maintenance/system_health_check.py \
             scripts/maintenance/finalize_reorganization.py \
+            scripts/validate-audit-governance.py \
             scripts/generate_repository_index.py \
             scripts/all-documented-agents.py \
             scripts/heartbeat-executor.py \
@@ -126,6 +128,11 @@ jobs:
             tests.unit.test_repository_governance_secret_debt \
             tests.unit.test_shopee_legacy_credentials_safe \
             -v
+
+      - name: Self-test extreme audit governance
+        run: |
+          set -euo pipefail
+          python scripts/validate-audit-governance.py --output-dir artifacts/audit-governance-self-test
 
       - name: Generate repository inventory snapshot
         run: |
@@ -222,6 +229,8 @@ jobs:
           test -s artifacts/reorganization-final/report.md
           test -s artifacts/generated-index/repository-file-index.md
           test -s artifacts/generated-index/repository-hygiene.md
+          test -s artifacts/audit-governance-self-test/report.json
+          test -s artifacts/audit-governance-self-test/report.md
 
       - name: Upload governance evidence
         if: always()
@@ -236,5 +245,6 @@ jobs:
             artifacts/reorganization-final/
             artifacts/disabled-executors/
             artifacts/generated-index/
+            artifacts/audit-governance-self-test/
           if-no-files-found: error
           retention-days: 90
