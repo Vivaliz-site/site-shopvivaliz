@@ -97,7 +97,7 @@ if (!is_file($agentWorkflow)) {
         '/home/ubuntu/shopvivaliz-deploy/current',
         'api/agent/real-work-orchestrator.php',
         'includes/production-agent-registry.php',
-        'StrictHostKeyChecking=yes',
+        'execution_path=oracle-active-release-local',
         'flock -w 120',
         'execution_accepted',
         'work_evidence_count',
@@ -106,6 +106,16 @@ if (!is_file($agentWorkflow)) {
         'agent_evidence_stale',
         'actions/upload-artifact@v4',
     ];
+    foreach ([
+        'ubuntu@127.0.0.1',
+        'SHOPVIVALIZ_VM_SSH_KEY',
+        'SHOPVIVALIZ_VM_KNOWN_HOSTS',
+        'scp -q',
+    ] as $forbiddenTransport) {
+        if (str_contains($agent, $forbiddenTransport)) {
+            $errors[] = 'agent_workflow_local_transport_regression:' . $forbiddenTransport;
+        }
+    }
     foreach ($requiredAgentFragments as $fragment) {
         if (!str_contains($agent, $fragment)) {
             $errors[] = 'agent_workflow_missing:' . $fragment;
