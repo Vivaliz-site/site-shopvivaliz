@@ -7,7 +7,7 @@ ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safa
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
-repo='/home/ubuntu/shopvivaliz-deploy/repo'
+repo='/home/ubuntu/shopvivaliz-deploy/sync-repo'
 shared='/home/ubuntu/shopvivaliz-deploy/shared'
 current_root='/home/ubuntu/shopvivaliz-deploy/current'
 script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -25,88 +25,48 @@ if [ ! -r "$sync_script" ]; then
   exit 1
 fi
 
-# Fetching the canonical ref is read-only with respect to the active working
-# tree. The operational clone can legitimately be checked out on a clean
-# patch/* branch while an autonomous agent owns that checkout. In that case the
-# deploy smoke must not switch branches underneath the agent; it validates the
-# canonical remote ref and defers the mutating sync safely instead.
+# The safe-sync checkout is dedicated to the canonical branch and must never be
+# borrowed by agents or operational feature branches.
 git -C "$repo" fetch --prune --no-tags origin main >/dev/null 2>&1
 current_branch="$(git -C "$repo" branch --show-current)"
 repo_sha="$(git -C "$repo" rev-parse HEAD)"
 remote_sha="$(git -C "$repo" rev-parse origin/main)"
+test "$current_branch" = main
 git -C "$repo" cat-file -e "${expected_sha}^{commit}"
 if ! git -C "$repo" merge-base --is-ancestor "$expected_sha" "$remote_sha"; then
   echo "FAIL deployed commit $expected_sha is not reachable from canonical main $remote_sha" >&2
   exit 1
 fi
 
-if [[ "$current_branch" == 'main' ]]; then
-  ROOT="$repo" SHARED_ROOT="$shared" /usr/bin/bash "$sync_script"
-
-  repo_sha="$(git -C "$repo" rev-parse HEAD)"
-  remote_sha="$(git -C "$repo" rev-parse origin/main)"
-  test "$repo_sha" = "$remote_sha"
-  test -s "$sync_status"
-  python3 - "$sync_status" "$remote_sha" <<'PY'
+ROOT="$repo" SHARED_ROOT="$shared" /usr/bin/bash "$sync_script"
+repo_sha="$(git -C "$repo" rev-parse HEAD)"
+remote_sha="$(git -C "$repo" rev-parse origin/main)"
+test "$repo_sha" = "$remote_sha"
+test -s "$sync_status"
+python3 - "$sync_status" "$remote_sha" <<'PYSTATUS'
 from __future__ import annotations
-
 import json
 import sys
 from pathlib import Path
-
 payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 expected_canonical = sys.argv[2].lower()
-
-# The canonical git-auto-sync.py currently reports success with
-# status="completed" and SHA fields, while older sync runners also emitted
-# ok=true/action. Accept both schemas so a successful repository sync does not
-# become a false-negative deployment failure.
 ok_value = payload.get("ok")
 if ok_value is None:
     ok_value = payload.get("status") == "completed"
 if ok_value is not True:
     raise SystemExit("sync report is not successful")
-
 local_before = str(payload.get("local_sha_before") or "").lower()
-local_after = str(
-    payload.get("local_sha_after")
-    or payload.get("final_sha")
-    or payload.get("local_sha")
-    or ""
-).lower()
+local_after = str(payload.get("local_sha_after") or payload.get("final_sha") or payload.get("local_sha") or "").lower()
 remote = str(payload.get("remote_sha") or "").lower()
-
 if local_after != expected_canonical or remote != expected_canonical:
-    raise SystemExit(
-        "sync report SHA mismatch: "
-        f"local={local_after} remote={remote} canonical={expected_canonical}"
-    )
-
+    raise SystemExit(f"sync report SHA mismatch: local={local_after} remote={remote} canonical={expected_canonical}")
 action = str(payload.get("action") or "")
 if not action:
     action = "noop" if local_before == expected_canonical else "fast-forward-to-canonical"
-
-allowed = {
-    "noop",
-    "fast-forward-to-canonical",
-    "realigned-to-verified-sanitized-history",
-}
-if action not in allowed:
+if action not in {"noop", "fast-forward-to-canonical", "realigned-to-verified-sanitized-history"}:
     raise SystemExit(f"unexpected sync action: {action}")
-PY
-  echo "OK Oracle repository sync: canonical=$repo_sha deployed=$expected_sha"
-elif [[ "$current_branch" == patch/* ]]; then
-  tracked_changes="$(git -C "$repo" status --porcelain --untracked-files=no)"
-  if [[ -n "$tracked_changes" ]]; then
-    echo "FAIL active agent checkout has tracked working-tree changes; refusing to treat repository state as safe" >&2
-    exit 1
-  fi
-  echo "OK Oracle canonical ref: remote=$remote_sha deployed=$expected_sha"
-  echo "INFO repository sync deferred safely while active checkout is $current_branch"
-else
-  echo "FAIL Oracle repository is on unexpected branch: ${current_branch:-detached}" >&2
-  exit 1
-fi
+PYSTATUS
+echo "OK dedicated Oracle repository sync: canonical=$repo_sha deployed=$expected_sha"
 
 if [ ! -r "$installer" ]; then
   echo "FAIL Oracle sync installer is unreadable: $installer" >&2

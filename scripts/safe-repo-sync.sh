@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="${ROOT:-/home/ubuntu/shopvivaliz-deploy/repo}"
+ROOT="${ROOT:-/home/ubuntu/shopvivaliz-deploy/sync-repo}"
 SHARED_ROOT="${SHARED_ROOT:-/home/ubuntu/shopvivaliz-deploy/shared}"
 PYTHON_BIN="${PYTHON_BIN:-/usr/bin/python3}"
 RUNNER_PATH="${SYNC_RUNNER_PATH:-$ROOT/git-auto-sync.py}"
@@ -116,4 +116,4 @@ if [ "$should_deploy" != true ]; then
 fi
 
 echo "Clone sincronizado em $repo_sha; delta exige producao; publicando release imutavel correspondente"
-exec "$DEPLOY_RUNNER" main
+exec env SHOPVIVALIZ_DEPLOY_REPO_DIR="$ROOT" "$DEPLOY_RUNNER" main
