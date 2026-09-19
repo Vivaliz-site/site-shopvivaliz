@@ -154,6 +154,45 @@ jobs:
           releases="$root/releases"
           shared="$root/shared"
           current="$root/current"
+          ml_service='shopvivaliz-mercadolivre-token-renewer.service'
+
+          shared_ml_token_owner() {
+            local owner=''
+            if [ -r "$shared/runtime-secrets.php" ]; then
+              owner="$(php -r '$v=@include $argv[1]; $o=is_array($v)?strtolower(trim((string)($v["ML_TOKEN_OWNER"]??""))):""; echo $o==="mlrr"?"mlrr":"legacy";' "$shared/runtime-secrets.php" 2>/dev/null)" || owner=''
+            fi
+            if [ "$owner" = "mlrr" ]; then
+              printf '%s\n' mlrr
+            else
+              printf '%s\n' legacy
+            fi
+          }
+
+          restart_runtime_services() {
+            local owner service
+            local -a services=(
+              shopvivaliz-token-renewer.service
+              shopvivaliz-shopee-token-renewer.service
+              shopvivaliz-queue-worker.service
+            )
+            owner="$(shared_ml_token_owner)"
+            if [ "$owner" = "legacy" ]; then
+              services+=("$ml_service")
+            else
+              if sudo systemctl cat "$ml_service" >/dev/null 2>&1; then
+                sudo systemctl disable --now "$ml_service"
+              fi
+            fi
+            sudo systemctl restart "${services[@]}" || return 1
+            for service in "${services[@]}"; do
+              sudo systemctl is-active --quiet "$service" || return 1
+            done
+            if [ "$owner" = "mlrr" ]; then
+              ! sudo systemctl is-active --quiet "$ml_service" || return 1
+              ! sudo systemctl is-enabled --quiet "$ml_service" || return 1
+            fi
+          }
+
           if ! previous="$(readlink -f "$current" 2>/dev/null)"; then
             previous=''
           fi
@@ -227,14 +266,10 @@ jobs:
           else
             echo 'amazon_returns_service_unchanged=true'
           fi
-          if ! sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-shopee-token-renewer.service shopvivaliz-mercadolivre-token-renewer.service shopvivaliz-queue-worker.service; then
+          if ! restart_runtime_services; then
             echo 'runtime_service_restart_failed=true' >&2
             fail=1
           fi
-          sudo systemctl is-active --quiet shopvivaliz-token-renewer.service || fail=1
-          sudo systemctl is-active --quiet shopvivaliz-shopee-token-renewer.service || fail=1
-          sudo systemctl is-active --quiet shopvivaliz-mercadolivre-token-renewer.service || fail=1
-          sudo systemctl is-active --quiet shopvivaliz-queue-worker.service || fail=1
           sudo systemctl is-active --quiet shopvivaliz-catalog-reconcile.timer || fail=1
           sudo systemctl is-active --quiet shopvivaliz-abandoned-cart-recovery.timer || fail=1
           sudo systemctl is-enabled --quiet shopvivaliz-abandoned-cart-recovery.timer || fail=1
@@ -269,11 +304,7 @@ jobs:
                 sudo rm -f /etc/systemd/system/shopvivaliz-abandoned-cart-recovery.service /etc/systemd/system/shopvivaliz-abandoned-cart-recovery.timer
                 sudo systemctl daemon-reload
               fi
-              sudo systemctl restart shopvivaliz-token-renewer.service shopvivaliz-shopee-token-renewer.service shopvivaliz-mercadolivre-token-renewer.service shopvivaliz-queue-worker.service
-              sudo systemctl is-active --quiet shopvivaliz-token-renewer.service
-              sudo systemctl is-active --quiet shopvivaliz-shopee-token-renewer.service
-              sudo systemctl is-active --quiet shopvivaliz-mercadolivre-token-renewer.service
-              sudo systemctl is-active --quiet shopvivaliz-queue-worker.service
+              restart_runtime_services || fail=1
               sudo systemctl restart apache2
               sudo systemctl is-active --quiet apache2
             fi
