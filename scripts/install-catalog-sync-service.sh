@@ -49,7 +49,9 @@ systemctl enable shopvivaliz-token-renewer.service
 systemctl enable shopvivaliz-shopee-token-renewer.service
 ml_owner="$(shared_ml_token_owner)"
 if [ "$ml_owner" = "mlrr" ]; then
-  systemctl disable --now shopvivaliz-mercadolivre-token-renewer.service || true
+  if systemctl list-unit-files shopvivaliz-mercadolivre-token-renewer.service --no-legend 2>/dev/null | grep -q '^shopvivaliz-mercadolivre-token-renewer\.service'; then
+    systemctl disable --now shopvivaliz-mercadolivre-token-renewer.service
+  fi
 else
   systemctl enable shopvivaliz-mercadolivre-token-renewer.service
   systemctl restart shopvivaliz-mercadolivre-token-renewer.service
