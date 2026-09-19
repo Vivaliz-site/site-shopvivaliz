@@ -1,4 +1,4 @@
 {
   "action": "install_or_repair",
-  "reason": "deploy proactive refresh v4 and repair private A1 peer after auth expiry"
+  "reason": "recover backend RDC to execute validated 2026-09-19 operational handoff"
 }
