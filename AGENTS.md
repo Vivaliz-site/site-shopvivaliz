@@ -4,6 +4,9 @@
 > 🔴 **BOOTSTRAP DE HOSTS OBRIGATÓRIO:** antes de qualquer diagnóstico, alteração ou validação, leia [`docs/knowledge/host-access.md`](docs/knowledge/host-access.md), [`docs/knowledge/README.md`](docs/knowledge/README.md) e [`docs/knowledge/agent-rules.md`](docs/knowledge/agent-rules.md).
 > Estado canônico atual: produção web/deploy = `shopvivaliz-free-a1` (origin `137.131.149.55`, privado `10.0.1.112`); backend/MEI/M365/relay = `always-free-arm-1787907847-26` (privado `10.0.1.38`, sem IP público); `shopvivaliz-ai` / `137.131.156.17` é legado DEV/e-mail/testes e **não é produção web**. Prefira Remote Desktop Commander por nome do dispositivo; SSH público direto está desabilitado. Se qualquer seção histórica abaixo divergir, a Knowledge Base canônica prevalece até nova evidência ao vivo.
 
+<!-- SUPERPOWERS_EVERY_STAGE_V1 -->
+> 🧭 **@Superpowers CONTÍNUO E OBRIGATÓRIO:** toda conversa, sessão, agente e retomada de tarefa ShopVivaliz deve usar @Superpowers **em cada etapa material**, não apenas no início. Reaplique a disciplina adequada ao passar por planejamento, investigação, implementação, debugging, TDD/testes, revisão, correção, PR/merge, deploy, pós-deploy e auditoria. Em `retome/continue/prossiga`, continue do último checkpoint comprovado sob @Superpowers. Fonte central: `REGRAS-AGENTES-CENTRALIZADAS.md`.
+
 
 **Efetivo:** 2026-07-15  
 **Responsável:** Todos os agentes (Claude, Codex, Gemini, GPT, etc.)  
