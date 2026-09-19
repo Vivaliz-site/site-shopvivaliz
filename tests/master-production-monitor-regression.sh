@@ -15,6 +15,11 @@ grep -Fq "'bash -s' -- \"\$DEPLOY_SHA\" <<'REMOTE'" <<<"$monitor"
 grep -Fq 'sha="$1"' <<<"$monitor"
 grep -Fq '/home/ubuntu/shopvivaliz-deploy/current/.release-sha' <<<"$monitor"
 grep -Fq 'test "$served_sha" = "$sha"' <<<"$monitor"
+grep -Fq 'https://shopvivaliz.com.br/api/health/version.php?deploy=${sha}' <<<"$deploy"
+if grep -Fq 'health.php?health=1version.php' <<<"$deploy"; then
+  echo 'deploy version URL was corrupted by an imprecise health endpoint replacement' >&2
+  exit 1
+fi
 grep -Fq 'https://shopvivaliz.com.br${path}' <<<"$monitor"
 grep -Fq 'sitemap_body="$(curl -sS' <<<"$monitor"
 grep -Fq '[[ "$sitemap_body" == *'\''<urlset'\''* ]]' <<<"$monitor"
