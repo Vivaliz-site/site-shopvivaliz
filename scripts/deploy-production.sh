@@ -4,7 +4,7 @@
 
 set -Eeuo pipefail
 
-readonly REPO_DIR="/home/ubuntu/shopvivaliz-deploy/repo"
+readonly REPO_DIR="${SHOPVIVALIZ_DEPLOY_REPO_DIR:-/home/ubuntu/shopvivaliz-deploy/repo}"
 readonly RELEASES_DIR="/home/ubuntu/shopvivaliz-deploy/releases"
 readonly SHARED_DIR="/home/ubuntu/shopvivaliz-deploy/shared"
 readonly CURRENT_LINK="/home/ubuntu/shopvivaliz-deploy/current"
