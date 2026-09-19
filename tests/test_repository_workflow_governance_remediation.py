@@ -64,6 +64,21 @@ class RepositoryWorkflowGovernanceRemediationTests(unittest.TestCase):
         self.assertNotRegex(triggers, r"(?m)^  push:\s*$")
 
 
+    def test_windows_peer_emergency_recovery_covers_both_windows_hosts(self):
+        text = self.text("windows-peer-emergency-recovery.yml")
+        for needle in (
+            "LAPTOP-NIG4IFUU",
+            "DESKTOP-KOCEPSV",
+            "fredwin-desktop-commander-supervisor.ps1",
+            "fredwin-remote-bootstrap.ps1",
+            "desktopkocepsv-desktop-commander-supervisor.ps1",
+            "desktopkocepsv-remote-bootstrap.ps1",
+            "127.0.0.1:5557",
+            "127.0.0.1:5558",
+        ):
+            self.assertIn(needle, text)
+
+
     def test_failure_paths_do_not_hide_errors(self):
         for name in (
             "fred-win-terminal.yml",
