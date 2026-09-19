@@ -1,0 +1,27 @@
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+WF = ROOT / ".github" / "workflows" / "mlrr-production-ops-bridge.yml"
+
+
+def test_bridge_is_manual_fail_closed_and_uses_canonical_mlrr() -> None:
+    text = WF.read_text(encoding="utf-8")
+    trigger = text.split("permissions:", 1)[0]
+    assert "workflow_dispatch:" in trigger
+    assert "push:" not in trigger
+    assert "schedule:" not in trigger
+    assert "environment: production" in text
+    assert "runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]" in text
+    assert "repo=/home/ubuntu/mercadolivre-returns-recovery" in text
+    assert "git merge --ff-only origin/main" in text
+    assert 'test -z "$(git status --porcelain)"' in text
+    assert 'export GITHUB_REF_NAME=main' in text
+    assert 'scripts/mlrr-production-ops.sh "$MLRR_OPERATION"' in text
+    assert "ML_CLIENT_SECRET" not in text
+    assert "return-review" not in text
+    assert "SRF7" not in text
+
+
+if __name__ == "__main__":
+    test_bridge_is_manual_fail_closed_and_uses_canonical_mlrr()
+    print("MLRR production operations bridge contract: PASS")
