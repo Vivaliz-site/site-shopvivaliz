@@ -83,6 +83,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsS --retry 3 --retry-delay 2 --max-time 15 \
+            -A "ShopVivaliz-Safe-Sync/1.0" \
             https://shopvivaliz.com.br/api/health/version.php > "$RUNNER_TEMP/version-before.json"
           jq -e '.ok == true and (.release_sha | type == "string")' "$RUNNER_TEMP/version-before.json" >/dev/null
           jq -r '"PUBLIC_RELEASE_BEFORE=" + .release_sha' "$RUNNER_TEMP/version-before.json"
