@@ -1,8 +1,21 @@
 # Estado da Auditoria
 
-**Status:** NÃO APTO
+**Status:** NÃO APTO (mantido — ver rodada 2026-09-19)
 
 Nova auditoria formal executada em 2026-09-16 segundo `EXTREME_AUDIT_PROTOCOL.md`, `AUDIT_RUNTIME_PARITY_V1.md`, matriz de transições/dados históricos e overlay do projeto.
+
+## Rodada 2026-09-19 — cobertura estática, sem acesso a produção
+- Commit/SHA: branch `claude/auditoria-extrema-v5-97gu15` == `origin/main` == `1f8e2ca9a0a3f39c9d2106fec133f58c004d1686` (fetch confirmou branch atualizada; sem commits pendentes de merge).
+- Ambiente de execução: worktree isolado sem SSH às A1 (`shopvivaliz-free-a1`, `always-free-arm-1787907847-26`), sem Remote Desktop Commander conectado a essas VMs e sem browser contra `shopvivaliz.com.br`. **Nenhuma evidência de produção/runtime foi coletada nesta rodada** — o veredito `NÃO APTO` de 2026-09-16 permanece o estado vigente porque a lacuna que o causou (paridade produção↔SHA candidato, mutações críticas via UI real) não foi e não pôde ser fechada aqui.
+- Cobertura estática executada e resultado:
+  - Lint de sintaxe PHP (`php -l`) em 100% dos `.php` versionados fora de `vendor/`/`node_modules`: **zero erros**.
+  - `php scripts/quality/validate-health-output.php`: `COMPROVADO` (health.php válido, sem metadados sensíveis).
+  - `php scripts/quality/validate-asset-manifest.php`: `COMPROVADO` (89 entradas válidas).
+  - PHPUnit: **NÃO EXECUTADO** — `vendor/` não estava instalado neste worktree e instalar via `composer install` estava fora do orçamento seguro desta rodada (rede/tempo); ausência registrada como dívida de evidência, não como PASS.
+  - QA de browser/Playwright: **NÃO EXECUTADO** — nenhum acesso a `shopvivaliz.com.br` nem ao ambiente candidato nesta sessão.
+  - PR aberta associada à branch: nenhuma encontrada (`search_pull_requests head:claude/auditoria-extrema-v5-97gu15` retornou 0).
+- Achados SAFE corrigíveis nesta rodada: **nenhum**. Nenhuma correção de código foi necessária nem inventada; apenas documentação da lacuna de evidência foi adicionada (este arquivo e `docs/AGENTS.md`).
+- Classificação: a lacuna de paridade de runtime/produção permanece `P1` `NÃO VALIDADO` (herdada da rodada 2026-09-16, não uma novidade desta rodada) e bloqueia `APTO` até uma sessão com acesso real à infraestrutura/produção repetir os passos 1–5 de "Saída do NO-GO" abaixo.
 
 ## Última auditoria válida
 - Data: 2026-09-16.
