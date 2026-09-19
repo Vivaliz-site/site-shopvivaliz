@@ -22,6 +22,10 @@ assert "Environment=ROOT=/home/ubuntu/shopvivaliz-deploy/sync-repo" in service
 assert "Environment=SHOPVIVALIZ_DEPLOY_REPO_DIR=/home/ubuntu/shopvivaliz-deploy/sync-repo" in service
 assert 'SYNC_ROOT="${SYNC_ROOT:-/home/ubuntu/shopvivaliz-deploy/sync-repo}"' in systemd_installer
 assert 'SEED_REPO="${SEED_REPO:-/home/ubuntu/shopvivaliz-deploy/repo}"' in systemd_installer
+assert 'SAFE_SYNC_RUN_ON_INSTALL="${SAFE_SYNC_RUN_ON_INSTALL:-true}"' in systemd_installer
+assert 'if [[ "$SAFE_SYNC_RUN_ON_INSTALL" == \'true\' ]]' in systemd_installer
+assert "SAFE_SYNC_INITIAL_RUN=DEFERRED" in systemd_installer
+assert 'SAFE_SYNC_RUN_ON_INSTALL=false SOURCE_ROOT="$current" SEED_REPO="$root/repo" SYNC_ROOT="$root/sync-repo"' in workflow
 assert 'git clone --quiet --no-tags --single-branch --branch "$SYNC_BRANCH"' in systemd_installer
 assert 'ROOT="${ROOT:-/home/ubuntu/shopvivaliz-deploy/sync-repo}"' in safe_sync
 assert 'exec env SHOPVIVALIZ_DEPLOY_REPO_DIR="$ROOT" "$DEPLOY_RUNNER" main' in safe_sync

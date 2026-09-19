@@ -5,6 +5,7 @@ SOURCE_ROOT="${SOURCE_ROOT:-${ROOT:-/home/ubuntu/shopvivaliz-deploy/repo}}"
 SEED_REPO="${SEED_REPO:-/home/ubuntu/shopvivaliz-deploy/repo}"
 SYNC_ROOT="${SYNC_ROOT:-/home/ubuntu/shopvivaliz-deploy/sync-repo}"
 SYNC_BRANCH="${SYNC_BRANCH:-main}"
+SAFE_SYNC_RUN_ON_INSTALL="${SAFE_SYNC_RUN_ON_INSTALL:-true}"
 SERVICE_NAME="shopvivaliz-sync-safe.service"
 TIMER_NAME="shopvivaliz-sync-safe.timer"
 SERVICE_SOURCE="$SOURCE_ROOT/deploy/systemd/$SERVICE_NAME"
@@ -20,6 +21,14 @@ if [[ ${EUID} -ne 0 ]]; then
   echo "Execute com sudo: sudo bash $SOURCE_ROOT/scripts/install-safe-sync-service.sh" >&2
   exit 1
 fi
+
+case "$SAFE_SYNC_RUN_ON_INSTALL" in
+  true|false) ;;
+  *)
+    echo "SAFE_SYNC_RUN_ON_INSTALL invalido: $SAFE_SYNC_RUN_ON_INSTALL (esperado true ou false)" >&2
+    exit 11
+    ;;
+esac
 
 if [[ ! -d "$SEED_REPO/.git" ]]; then
   echo "Repositorio seed Git nao encontrado em $SEED_REPO" >&2
@@ -99,15 +108,20 @@ if systemctl cat shopvivaliz-sync.service >/dev/null 2>&1; then
   systemctl disable --now shopvivaliz-sync.service
 fi
 systemctl enable --now "$TIMER_NAME"
-systemctl start "$SERVICE_NAME"
 
-# Type=oneshot termina em inactive (dead) apos sucesso. systemctl status
-# devolve rc=3 nesse estado e nao pode ser usado como gate sob set -e.
-service_result="$(systemctl show --property=Result --value "$SERVICE_NAME")"
-if [[ "$service_result" != 'success' ]]; then
-  echo "Safe sync oneshot terminou com Result=$service_result" >&2
-  systemctl show "$SERVICE_NAME" --property=ActiveState,SubState,Result --no-pager
-  exit 10
+if [[ "$SAFE_SYNC_RUN_ON_INSTALL" == 'true' ]]; then
+  systemctl start "$SERVICE_NAME"
+
+  # Type=oneshot termina em inactive (dead) apos sucesso. systemctl status
+  # devolve rc=3 nesse estado e nao pode ser usado como gate sob set -e.
+  service_result="$(systemctl show --property=Result --value "$SERVICE_NAME")"
+  if [[ "$service_result" != 'success' ]]; then
+    echo "Safe sync oneshot terminou com Result=$service_result" >&2
+    systemctl show "$SERVICE_NAME" --property=ActiveState,SubState,Result --no-pager
+    exit 10
+  fi
+else
+  echo 'SAFE_SYNC_INITIAL_RUN=DEFERRED'
 fi
 systemctl is-active --quiet "$TIMER_NAME"
 systemctl is-enabled --quiet "$TIMER_NAME"
