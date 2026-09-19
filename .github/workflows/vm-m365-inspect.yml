@@ -40,14 +40,14 @@ jobs:
           if test -d /opt/m365/.git; then
             current_sha="$(git -C /opt/m365 rev-parse HEAD)"
             echo "current_sha=$current_sha"
-            echo "branch=$(git -C /opt/m365 branch --show-current || true)"
+            echo "branch=$(git -C /opt/m365 branch --show-current)"
             if test -z "$(git -C /opt/m365 status --porcelain)"; then
               echo "working_tree=clean"
             else
               echo "working_tree=dirty"
               git -C /opt/m365 status --short | sed -n '1,40p'
             fi
-            remote_url="$(git -C /opt/m365 remote get-url origin 2>/dev/null || true)"
+            remote_url="$(git -C /opt/m365 remote get-url origin)"
             case "$remote_url" in
               *Vivaliz-site/shopvivaliz-m365*) echo "origin=canonical" ;;
               *) echo "origin=unexpected"; exit 3 ;;
