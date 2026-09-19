@@ -92,7 +92,23 @@ jobs:
           target="$RUNNER_TEMP/solange-runner-target.json"
           cat > "$script" <<'REMOTE'
           set -Eeuo pipefail
+          trap 'rc=$?; echo "RUNNER_REMOTE_ERROR_LINE=$LINENO"; exit "$rc"' ERR
+          remote_uid="$(id -u)"
+          echo "RUNNER_REMOTE_UID=$remote_uid"
+          sudo_cmd=()
+          if [ "$remote_uid" -ne 0 ]; then
+            if sudo -n true 2>/dev/null; then
+              sudo_cmd=(sudo -n)
+              echo 'RUNNER_SUDO_AVAILABLE=true'
+            else
+              echo 'RUNNER_SUDO_AVAILABLE=false'
+              exit 28
+            fi
+          else
+            echo 'RUNNER_SUDO_AVAILABLE=root'
+          fi
           mapfile -t dirs < <(find /home/ubuntu -maxdepth 1 -mindepth 1 -type d -name 'actions-runner-solange*' -print | sort)
+          echo "SOLANGE_RUNNERS_FOUND=${#dirs[@]}"
           if [ "${#dirs[@]}" -eq 0 ]; then
             echo 'SOLANGE_RUNNERS_FOUND=0'
             exit 21
@@ -123,7 +139,7 @@ jobs:
               echo 'RUNNER_SERVICE_MISSING=true'
               exit 23
             fi
-            systemctl restart "$unit"
+            "${sudo_cmd[@]}" systemctl restart "$unit"
             active=false
             for _ in $(seq 1 20); do
               if systemctl is-active --quiet "$unit"; then
@@ -158,13 +174,9 @@ jobs:
             execution="$("${OCI[@]}" instance-agent command-execution get               --command-id "$command_id" --instance-id "$BACKEND_INSTANCE_ID")"
             state="$(jq -r '.data."lifecycle-state"' <<<"$execution")"
             case "$state" in
-              SUCCEEDED)
+              SUCCEEDED|FAILED|TIMED_OUT|CANCELED)
                 terminal=true
                 break
-                ;;
-              FAILED|TIMED_OUT|CANCELED)
-                echo "::error::OCI Run Command ended in $state"
-                exit 31
                 ;;
               ACCEPTED|IN_PROGRESS)
                 sleep 5
@@ -178,9 +190,29 @@ jobs:
           test "$terminal" = true || { echo "::error::OCI Run Command did not reach terminal success"; exit 33; }
           exit_code="$(jq -r '.data.content."exit-code"' <<<"$execution")"
           output="$(jq -r '.data.content.text // ""' <<<"$execution")"
-          printf '%s\n' "$output" | grep -E '^(SOLANGE_RUNNERS_(FOUND|HEALTHY)=[0-9]+|RUNNER_[A-Z_]+=.*|RUNNER_RESCUE=.*)$' || :
+          while IFS= read -r line; do
+            case "$line" in
+              SOLANGE_RUNNERS_FOUND=*|SOLANGE_RUNNERS_HEALTHY=*|RUNNER_[A-Z_]*=*|RUNNER_RESCUE=*)
+                printf '%s\n' "$line"
+                ;;
+            esac
+          done <<<"$output"
+          test "$state" = "SUCCEEDED" || { echo "::error::OCI Run Command ended in $state"; exit 31; }
           test "$exit_code" = "0" || { echo "::error::Remote runner recovery exit code was $exit_code"; exit 34; }
-          printf '%s\n' "$output" | grep -Eq '^SOLANGE_RUNNERS_HEALTHY=[1-9][0-9]*$'
+          printf '%s\n' "$output" | grep -Eq '^SOLANGE_RUNNERS_HEALTHY=[1-9][0-9]*
+
+      - name: Cleanup OCI credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [ -n "${OCI_KEY_FILE:-}" ] && [ -f "$OCI_KEY_FILE" ]; then
+            shred -u "$OCI_KEY_FILE"
+          fi
+          if [ -n "${OCI_CONFIG_FILE:-}" ] && [ -f "$OCI_CONFIG_FILE" ]; then
+            shred -u "$OCI_CONFIG_FILE"
+          fi
+
           echo "OCI_RUN_COMMAND_RECOVERY=PASS"
 
       - name: Cleanup OCI credentials
