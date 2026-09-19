@@ -16,13 +16,21 @@ for ($i = 1, $count = count($argv); $i < $count; $i++) {
     }
 }
 
+// Task 8 (propriedade MLRR): defesa em profundidade. Se este daemon legado for
+// iniciado por engano enquanto o MLRR detem as credenciais, ele roda em modo
+// somente leitura -- nenhum refresh, nenhuma escrita de token.
+$owner = ml_token_owner();
+$allowFix = $owner !== 'mlrr';
+
 do {
-    $result = svih_ml(true);
+    $result = svih_ml(ml_token_owner() !== 'mlrr');
     $status = (string)($result['status'] ?? 'failed');
     $providerStatus = (int)($result['provider_status'] ?? 0);
     $fixCount = count((array)($result['fixes'] ?? []));
     echo json_encode([
         'component' => 'mercado_livre_token_renewer',
+        'token_owner' => $owner,
+        'auto_fix_enabled' => $allowFix,
         'status' => $status,
         'provider_status' => $providerStatus,
         'refreshes' => $fixCount,

@@ -120,6 +120,122 @@ def test_merge_env_sanitizes_malformed_existing_lines_even_without_updates(tmp_p
     assert stat.S_IMODE(env_file.stat().st_mode) == 0o640
 
 
+# ---------------------------------------------------------------------------
+# Mercado Livre credential ownership (MLRR OAuth ownership plan, Task 9).
+# ---------------------------------------------------------------------------
+
+SNAPSHOT = "/home/ubuntu/shopvivaliz-deploy/shared/storage/private/ml-access-token.json"
+LEGACY_TOKEN_LINES = (
+    "ML_ACCESS_TOKEN=legacy-access\n"
+    "ML_REFRESH_TOKEN=legacy-refresh\n"
+    "MERCADO_LIVRE_ACCESS_TOKEN=legacy-access-alias\n"
+    "MERCADO_LIVRE_REFRESH_TOKEN=legacy-refresh-alias\n"
+)
+
+
+def test_merge_env_accepts_only_the_two_non_secret_ownership_keys(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text("ML_CLIENT_ID=app\n", encoding="utf-8")
+
+    changed = merge_env(
+        env_file,
+        {"ML_TOKEN_OWNER": "mlrr", "ML_ACCESS_SNAPSHOT_FILE": SNAPSHOT},
+    )
+
+    assert changed == ["ML_ACCESS_SNAPSHOT_FILE", "ML_TOKEN_OWNER"]
+    content = env_file.read_text(encoding="utf-8")
+    assert "ML_TOKEN_OWNER=mlrr" in content
+    assert f"ML_ACCESS_SNAPSHOT_FILE={SNAPSHOT}" in content
+    # Static application metadata is still required by publishing endpoints.
+    assert "ML_CLIENT_ID=app" in content
+
+
+def test_merge_env_drops_legacy_token_lines_when_ownership_becomes_mlrr(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        LEGACY_TOKEN_LINES + "ML_CLIENT_ID=app\nML_CLIENT_SECRET=app-secret\nUNRELATED=keep\n",
+        encoding="utf-8",
+    )
+
+    merge_env(env_file, {"ML_TOKEN_OWNER": "mlrr", "ML_ACCESS_SNAPSHOT_FILE": SNAPSHOT})
+
+    content = env_file.read_text(encoding="utf-8")
+    for key in ("ML_ACCESS_TOKEN", "ML_REFRESH_TOKEN", "MERCADO_LIVRE_ACCESS_TOKEN", "MERCADO_LIVRE_REFRESH_TOKEN"):
+        assert f"{key}=" not in content
+    assert "legacy-refresh" not in content
+    assert "ML_CLIENT_ID=app" in content
+    assert "ML_CLIENT_SECRET=app-secret" in content
+    assert "UNRELATED=keep" in content
+
+
+def test_merge_env_drops_legacy_token_lines_when_owner_is_already_mlrr(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text("ML_TOKEN_OWNER=mlrr\n" + LEGACY_TOKEN_LINES, encoding="utf-8")
+
+    changed = merge_env(env_file, {})
+
+    assert changed == []
+    content = env_file.read_text(encoding="utf-8")
+    assert "ML_TOKEN_OWNER=mlrr" in content
+    assert "legacy-access" not in content
+    assert "legacy-refresh" not in content
+
+
+def test_merge_env_preserves_legacy_token_lines_while_owner_is_legacy(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text("ML_TOKEN_OWNER=legacy\n" + LEGACY_TOKEN_LINES, encoding="utf-8")
+
+    merge_env(env_file, {"ML_CLIENT_ID": "app"})
+
+    content = env_file.read_text(encoding="utf-8")
+    assert "ML_ACCESS_TOKEN=legacy-access" in content
+    assert "ML_REFRESH_TOKEN=legacy-refresh" in content
+    assert "MERCADO_LIVRE_ACCESS_TOKEN=legacy-access-alias" in content
+    assert "MERCADO_LIVRE_REFRESH_TOKEN=legacy-refresh-alias" in content
+
+
+def test_merge_env_preserves_legacy_token_lines_when_no_owner_is_declared(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(LEGACY_TOKEN_LINES, encoding="utf-8")
+
+    merge_env(env_file, {"ML_CLIENT_ID": "app"})
+
+    content = env_file.read_text(encoding="utf-8")
+    assert "ML_ACCESS_TOKEN=legacy-access" in content
+    assert "ML_REFRESH_TOKEN=legacy-refresh" in content
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "ML_ACCESS_TOKEN",
+        "ML_REFRESH_TOKEN",
+        "MERCADO_LIVRE_ACCESS_TOKEN",
+        "MERCADO_LIVRE_REFRESH_TOKEN",
+    ],
+)
+def test_merge_env_still_refuses_incoming_mercado_livre_token_values(tmp_path: Path, key: str) -> None:
+    env_file = tmp_path / ".env"
+    original = "ML_TOKEN_OWNER=mlrr\n" + LEGACY_TOKEN_LINES
+    env_file.write_text(original, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="managed OAuth keys"):
+        merge_env(env_file, {"ML_TOKEN_OWNER": "mlrr", key: "must-not-be-written"})
+
+    assert env_file.read_text(encoding="utf-8") == original
+
+
+def test_merge_env_rejects_an_unknown_ownership_value(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+    original = "ML_TOKEN_OWNER=legacy\n"
+    env_file.write_text(original, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="ML_TOKEN_OWNER"):
+        merge_env(env_file, {"ML_TOKEN_OWNER": "shopvivaliz"})
+
+    assert env_file.read_text(encoding="utf-8") == original
+
+
 def test_master_production_pipeline_runs_env_update_with_privilege() -> None:
     workflow = SCRIPT.parents[1] / ".github" / "workflows" / "master-production-pipeline.yml"
     text = workflow.read_text(encoding="utf-8")

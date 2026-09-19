@@ -8,6 +8,14 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../includes/admin-guard.php';
 require_once __DIR__ . '/client.php';
 
+// Task 8 (propriedade MLRR): depois do cutover o MLRR e a unica autoridade de
+// credencial do Mercado Livre. ShopVivaLiz nao pode abrir um segundo fluxo de
+// autorizacao nem gravar um grant concorrente.
+if (ml_token_owner() === 'mlrr') {
+    http_response_code(409);
+    exit('Mercado Livre OAuth is managed by the MLRR service.');
+}
+
 $clientId   = ml_env('ML_CLIENT_ID');
 $redirectUri = ml_env('ML_REDIRECT_URI');
 

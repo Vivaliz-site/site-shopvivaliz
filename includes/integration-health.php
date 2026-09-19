@@ -7,6 +7,9 @@ declare(strict_types=1);
  */
 require_once __DIR__ . '/../config/constants.php';
 require_once __DIR__ . '/melhorenvio-oauth.php';
+// Task 8 (propriedade MLRR): ml_token_owner()/ml_access_snapshot_path() moram no
+// cliente Mercado Livre e definem se este health pode renovar credencial.
+require_once __DIR__ . '/../api/ml/client.php';
 
 function svih_env(string ...$keys): string
 {
@@ -351,8 +354,62 @@ function svih_olist(bool $fix): array
     ], $action);
 }
 
+/**
+ * Mercado Livre sob propriedade do MLRR: ShopVivaLiz apenas consome o snapshot
+ * access-only publicado pelo MLRR. Nenhum refresh e nenhuma escrita de
+ * credencial acontece aqui, mesmo com $fix=true.
+ */
+function svih_ml_mlrr(): array
+{
+    $snapshot = svih_read_json(ml_access_snapshot_path());
+    $access = svih_strip_bearer((string)($snapshot['access_token'] ?? ''));
+    $expiresAtMs = (int)($snapshot['expires_at_ms'] ?? 0);
+    $expiresAt = $expiresAtMs > 0 ? intdiv($expiresAtMs, 1000) : null;
+    $clientId = svih_env('ML_CLIENT_ID');
+    $clientSecret = svih_env('ML_CLIENT_SECRET');
+    $tokens = [
+        'access_token' => svih_token_meta($access, 'mlrr-snapshot', $expiresAt),
+        'refresh_token' => svih_token_meta('', 'mlrr-delegated'),
+        'client_id' => svih_token_meta($clientId, $clientId !== '' ? 'environment' : 'missing'),
+        'client_secret' => svih_token_meta($clientSecret, $clientSecret !== '' ? 'environment' : 'missing'),
+    ];
+    $base = [
+        'name' => 'Mercado Livre', 'key' => 'mercado_livre', 'token_owner' => 'mlrr',
+        'tokens' => $tokens, 'fixes' => [],
+    ];
+
+    if ($access === '' || ($expiresAtMs > 0 && $expiresAtMs <= (int)(microtime(true) * 1000))) {
+        return $base + [
+            'status' => 'failed',
+            'message' => $access === ''
+                ? 'Snapshot de acesso do MLRR ausente.'
+                : 'Snapshot de acesso do MLRR expirado.',
+            'remediation' => 'Executar a manutencao OAuth do MLRR para republicar o snapshot.',
+            'provider_status' => 0,
+        ];
+    }
+
+    $api = svih_http('GET', 'https://api.mercadolibre.com/users/me', [
+        'Authorization: Bearer ' . $access,
+        'Accept: application/json',
+    ]);
+
+    return $base + [
+        'status' => $api['ok'] ? 'connected' : 'failed',
+        'message' => $api['ok']
+            ? 'Conta autenticada respondeu com o snapshot do MLRR.'
+            : 'Snapshot do MLRR nao autenticou no Mercado Livre.',
+        'remediation' => $api['ok'] ? null : 'Executar a manutencao OAuth do MLRR para republicar o snapshot.',
+        'provider_status' => $api['status'],
+    ];
+}
+
 function svih_ml(bool $fix): array
 {
+    if (ml_token_owner() === 'mlrr') {
+        return svih_ml_mlrr();
+    }
+
     $path = BASE_PATH . '/storage/private/ml-tokens.json';
     $stored = svih_read_json($path);
     $access = svih_strip_bearer(svih_env('ML_ACCESS_TOKEN') ?: (string)($stored['access_token'] ?? ''));
@@ -394,7 +451,8 @@ function svih_ml(bool $fix): array
     }
     if ($access === '') {
         return [
-            'name' => 'Mercado Livre', 'key' => 'mercado_livre', 'status' => 'failed',
+            'name' => 'Mercado Livre', 'key' => 'mercado_livre', 'token_owner' => 'legacy',
+            'status' => 'failed',
             'message' => 'OAuth nao configurado.', 'remediation' => 'Conectar OAuth do Mercado Livre.',
             'tokens' => $tokens, 'fixes' => $fixes,
         ];
@@ -414,7 +472,7 @@ function svih_ml(bool $fix): array
     }
     $tokens['access_token'] = svih_token_meta($access, 'private-file', $expiresAt);
     return [
-        'name' => 'Mercado Livre', 'key' => 'mercado_livre',
+        'name' => 'Mercado Livre', 'key' => 'mercado_livre', 'token_owner' => 'legacy',
         'status' => $api['ok'] ? 'connected' : 'failed',
         'message' => $api['ok'] ? 'Conta autenticada respondeu.' : 'OAuth do Mercado Livre falhou.',
         'remediation' => $api['ok'] ? null : 'Renovar ou refazer OAuth.',

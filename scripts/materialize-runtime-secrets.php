@@ -34,6 +34,8 @@ $allowedKeys = [
     'MERCADOPAGO_WEBHOOK_SECRET',
     'OLIST_WEBHOOK_SECRET',
 
+    'ML_TOKEN_OWNER',
+    'ML_ACCESS_SNAPSHOT_FILE',
     'ML_CLIENT_ID',
     'ML_CLIENT_SECRET',
     'ML_ACCESS_TOKEN',
@@ -237,6 +239,17 @@ if ($databaseName === '' || $databaseUser === '' || strtolower($databaseUser) ==
 }
 if (strlen($signingKey) < 32) {
     throw new RuntimeException('quote_signing_key_missing');
+}
+
+// Task 9 (propriedade MLRR): quando o MLRR detem as credenciais do Mercado
+// Livre, o runtime protegido carrega apenas a metadata de propriedade e a
+// configuracao estatica do app. Nenhum valor de token legado e materializado --
+// assim nenhum caminho do ShopVivaLiz consegue renovar ou reusar o grant antigo.
+$owner = strtolower(trim((string)($values['ML_TOKEN_OWNER'] ?? 'legacy')));
+if ($owner === 'mlrr') {
+    foreach (['ML_ACCESS_TOKEN', 'ML_REFRESH_TOKEN', 'MERCADO_LIVRE_ACCESS_TOKEN', 'MERCADO_LIVRE_REFRESH_TOKEN'] as $key) {
+        unset($values[$key]);
+    }
 }
 
 ksort($values);

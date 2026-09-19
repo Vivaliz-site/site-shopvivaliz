@@ -31,7 +31,24 @@ MANAGED_OAUTH_KEYS = {
     "GOOGLE_ADS_DEVELOPER_TOKEN",
     "GOOGLE_API_KEY",
     "GEMINI_API_KEY",
+    # Mercado Livre credentials are owned by the MLRR OAuth service. This
+    # generic updater only flips the non-secret ownership keys below.
+    "ML_ACCESS_TOKEN",
+    "ML_REFRESH_TOKEN",
+    "MERCADO_LIVRE_ACCESS_TOKEN",
+    "MERCADO_LIVRE_REFRESH_TOKEN",
 }
+
+# Legacy Mercado Livre token lines that must disappear from the shared .env once
+# ownership moves to MLRR. Static application metadata (ML_CLIENT_ID, secret,
+# redirect URI, seller id) stays: publishing endpoints still need it.
+ML_LEGACY_TOKEN_KEYS = (
+    "ML_ACCESS_TOKEN",
+    "ML_REFRESH_TOKEN",
+    "MERCADO_LIVRE_ACCESS_TOKEN",
+    "MERCADO_LIVRE_REFRESH_TOKEN",
+)
+ML_TOKEN_OWNERS = ("legacy", "mlrr")
 
 ALLOWED_KEYS = {
     "MELHORENVIO_ACCESS_TOKEN",
@@ -44,6 +61,8 @@ ALLOWED_KEYS = {
     "ML_CLIENT_ID",
     "ML_CLIENT_SECRET",
     "ML_REDIRECT_URI",
+    "ML_TOKEN_OWNER",
+    "ML_ACCESS_SNAPSHOT_FILE",
     "SHOPVIVALIZ_BASE_URL",
     "APP_URL",
     "SITE_URL",
@@ -91,8 +110,27 @@ def merge_env(path: Path, incoming: dict[str, object]) -> list[str]:
         for key, value in incoming.items()
         if key in ALLOWED_KEYS and value is not None and str(value) != ""
     }
+    owner_update = updates.get("ML_TOKEN_OWNER", "").strip().lower()
+    if "ML_TOKEN_OWNER" in updates:
+        if owner_update not in ML_TOKEN_OWNERS:
+            raise ValueError(
+                "ML_TOKEN_OWNER must be one of: " + ", ".join(ML_TOKEN_OWNERS)
+            )
+        updates["ML_TOKEN_OWNER"] = owner_update
+
     original = path.read_text(encoding="utf-8") if path.exists() else ""
     lines = original.splitlines()
+
+    # The merged owner is the incoming value when present, otherwise whatever the
+    # shared .env already declares. Under MLRR ownership the legacy Mercado Livre
+    # token lines are dropped instead of being carried forward.
+    merged_owner = owner_update
+    if not merged_owner:
+        for line in lines:
+            if "=" in line and line.split("=", 1)[0].strip() == "ML_TOKEN_OWNER":
+                merged_owner = line.split("=", 1)[1].strip().strip("\"'").lower()
+    drop_keys = set(ML_LEGACY_TOKEN_KEYS) if merged_owner == "mlrr" else set()
+
     seen: set[str] = set()
     output: list[str] = []
     for line in lines:
@@ -103,6 +141,8 @@ def merge_env(path: Path, incoming: dict[str, object]) -> list[str]:
         if "=" not in line:
             continue
         key = line.split("=", 1)[0].strip()
+        if key in drop_keys:
+            continue
         if key in updates:
             output.append(f"{key}={updates[key]}")
             seen.add(key)
