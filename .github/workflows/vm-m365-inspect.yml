@@ -13,7 +13,7 @@ permissions:
 jobs:
   inspect:
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - name: Configure verified VM SSH
         env:
@@ -21,13 +21,90 @@ jobs:
           VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
         run: |
           set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_HOSTS"
           install -m 700 -d ~/.ssh
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
-      - name: Inspect targeted MEI diffs read only
+
+      - name: Inspect M365 runtime read only
         run: |
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@10.0.1.38 'set -Eeuo pipefail; cd /home/ubuntu/mei-mg-email; echo ===WORKER_DIFF===; git diff -- worker/worker_queue_first.py | head -500; echo ===RECOVERY_DIFF===; git diff -- app/queue_recovery.py | head -500; echo ===TEST_DIFF===; git diff -- tests/test_worker_partial_lot_invariant.py tests/test_dispatch_replay_guard.py tests/test_queue_recovery_and_autorepair.py | head -500; echo ===RECENT_COMMITS===; git log --oneline -12'
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@10.0.1.38 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          echo "host=$(hostname)"
+          echo "user=$(id -un)"
+          test -d /opt/m365
+          echo "m365_dir=present"
+          if test -d /opt/m365/.git; then
+            current_sha="$(git -C /opt/m365 rev-parse HEAD)"
+            echo "current_sha=$current_sha"
+            echo "branch=$(git -C /opt/m365 branch --show-current)"
+            if test -z "$(git -C /opt/m365 status --porcelain)"; then
+              echo "working_tree=clean"
+            else
+              echo "working_tree=dirty"
+              git -C /opt/m365 status --short | sed -n '1,40p'
+            fi
+            remote_url="$(git -C /opt/m365 remote get-url origin)"
+            case "$remote_url" in
+              *Vivaliz-site/shopvivaliz-m365*) echo "origin=canonical" ;;
+              *) echo "origin=unexpected"; exit 3 ;;
+            esac
+            remote_sha="$(git -C /opt/m365 ls-remote origin refs/heads/main 2>/dev/null | awk '{print $1}')"
+            test -n "$remote_sha"
+            echo "remote_main_sha=$remote_sha"
+            if test "$current_sha" = "$remote_sha"; then
+              echo "runtime_git_sync=PASS"
+            else
+              echo "runtime_git_sync=STALE"
+            fi
+          else
+            echo "git_checkout=missing"
+          fi
+
+          test -s /opt/m365/.env
+          echo "env_file=present"
+          python3 - <<'PY'
+          from pathlib import Path
+          import shlex
+          env = {}
+          for line in Path("/opt/m365/.env").read_text(encoding="utf-8").splitlines():
+              if not line or line.lstrip().startswith("#") or "=" not in line:
+                  continue
+              key, raw = line.split("=", 1)
+              parts = shlex.split(raw, posix=True)
+              env[key.strip()] = parts[0] if len(parts) == 1 else raw.strip()
+          required = [
+              "M365_TENANT_ID",
+              "M365_CLIENT_ID",
+              "M365_CERT_PATH",
+              "M365_TEST_SENDER",
+              "M365_TEST_RECIPIENT",
+          ]
+          missing = [key for key in required if not env.get(key)]
+          if missing:
+              raise SystemExit("missing_env_keys=" + ",".join(missing))
+          cert = Path(env["M365_CERT_PATH"])
+          print("required_env_keys=present")
+          print("certificate=present" if cert.is_file() and cert.stat().st_size > 0 else "certificate=missing")
+          if not cert.is_file() or cert.stat().st_size == 0:
+              raise SystemExit(4)
+          PY
+
+          test -x /opt/m365/venv/bin/python
+          echo "venv=present"
+          /opt/m365/venv/bin/python --version
+          test -f /opt/m365/python/m365_config.py
+          echo "config_module=present"
+          if crontab -l 2>/dev/null | grep -q '/opt/m365/run_automation.sh'; then
+            echo "cron=present"
+          else
+            echo "cron=missing"
+          fi
+          REMOTE
+
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts
