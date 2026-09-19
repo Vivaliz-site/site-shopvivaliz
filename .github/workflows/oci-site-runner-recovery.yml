@@ -80,6 +80,7 @@ jobs:
           echo "OCI_SITE_LIFECYCLE=RUNNING"
 
       - name: Verify OS through OCI Run Command before recovery
+        id: precheck
         shell: bash
         run: |
           set -euo pipefail
@@ -141,18 +142,41 @@ jobs:
                   raw = line.split("=", 1)[1].strip()
                   if raw.isdigit():
                       worker_age = int(raw)
+          recovery_required = False
+          recovery_reason = "healthy_listener"
           if worker_present:
               if listener_present:
                   raise SystemExit("Runner.Worker active with live listener; refusing site runner recovery")
               if worker_age is None or worker_age < 900:
                   raise SystemExit("Runner.Worker orphan is recent or age unknown; refusing site runner recovery")
+              recovery_required = True
+              recovery_reason = "stale_orphan_worker"
               print(f"STALE_RUNNER_WORKER=confirmed age_seconds={worker_age}")
+          elif not listener_present:
+              recovery_required = True
+              recovery_reason = "listener_absent"
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
+              handle.write(f"recovery_required={'true' if recovery_required else 'false'}\n")
+              handle.write(f"recovery_reason={recovery_reason}\n")
+
           print("OCI_RUN_COMMAND_PRECHECK=PASS")
           print("RUNNER_LISTENER_BEFORE=" + ("present" if listener_present else "absent"))
           print("RUNNER_WORKER_BEFORE=" + ("stale_orphan" if worker_present else "absent"))
+          print("RECOVERY_REQUIRED=" + ("true" if recovery_required else "false"))
+          print("RECOVERY_REASON=" + recovery_reason)
           PY
 
+      - name: Record healthy runner no-op
+        if: steps.precheck.outputs.recovery_required != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "OCI_RUNNER_RECOVERY=SKIPPED_HEALTHY"
+          echo "RECOVERY_REASON=${{ steps.precheck.outputs.recovery_reason }}"
+
       - name: Cancel obsolete production pipeline reservations
+        if: steps.precheck.outputs.recovery_required == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -190,6 +214,7 @@ jobs:
           done
 
       - name: Gracefully reboot site A1 through OCI
+        if: steps.precheck.outputs.recovery_required == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -203,6 +228,7 @@ jobs:
           echo "OCI_SOFTRESET=PASS"
 
       - name: Wait for Oracle agent after reboot
+        if: steps.precheck.outputs.recovery_required == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -253,6 +279,7 @@ jobs:
           PY
 
       - name: Dispatch exactly one canonical production deploy
+        if: steps.precheck.outputs.recovery_required == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
