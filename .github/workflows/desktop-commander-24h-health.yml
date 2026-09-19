@@ -27,6 +27,7 @@ on:
       - "ops/systemd/shopvivaliz-desktop-commander-guardian.service"
       - "ops/systemd/shopvivaliz-desktop-commander-guardian.timer"
       - ".github/workflows/desktop-commander-24h-health.yml"
+      - ".github/workflows/production-runner-rescue.yml"
       - ".github/workflows/desktop-commander-three-host-control-plane.yml"
       - ".github/workflows/fred-win-desktop-commander-action.yml"
       - ".github/workflows/vm-desktop-commander-action.yml"
@@ -44,6 +45,7 @@ on:
       - "tests/desktop-commander-persist-session-contract-test.php"
       - "tests/desktop-commander-three-host-action-contract-test.php"
       - "tests/desktop-commander-critical-health-contract-test.php"
+      - "tests/production-runner-rescue-contract-test.php"
   push:
     branches: [main]
     paths:
@@ -68,6 +70,7 @@ on:
       - "ops/systemd/shopvivaliz-desktop-commander-guardian.service"
       - "ops/systemd/shopvivaliz-desktop-commander-guardian.timer"
       - ".github/workflows/desktop-commander-24h-health.yml"
+      - ".github/workflows/production-runner-rescue.yml"
       - ".github/workflows/desktop-commander-three-host-control-plane.yml"
       - ".github/workflows/fred-win-desktop-commander-action.yml"
       - ".github/workflows/vm-desktop-commander-action.yml"
@@ -85,6 +88,7 @@ on:
       - "tests/desktop-commander-persist-session-contract-test.php"
       - "tests/desktop-commander-three-host-action-contract-test.php"
       - "tests/desktop-commander-critical-health-contract-test.php"
+      - "tests/production-runner-rescue-contract-test.php"
 
 permissions:
   contents: read
@@ -113,6 +117,7 @@ jobs:
           php tests/desktop-commander-three-host-action-contract-test.php
           php tests/desktop-commander-provider-connected-health-contract-test.php
           php tests/desktop-commander-critical-health-contract-test.php
+          php tests/production-runner-rescue-contract-test.php
           php tests/desktopkocepsv-recoverable-channel-contract-test.php
           php tests/desktopkocepsv-runner-hardening-contract-test.php
           php tests/desktopkocepsv-desktop-commander-supervisor-contract-test.php

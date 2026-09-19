@@ -1,0 +1,94 @@
+name: Production Runner Breakglass Rescue
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  rescue:
+    if: >-
+      ${{
+        github.repository == 'Vivaliz-site/site-shopvivaliz' &&
+        github.event.issue.title == '[production-runner-rescue]' &&
+        github.event.issue.user.login == 'fredmourao-ai' &&
+        github.event.issue.body == 'action=restart-idle-listener'
+      }}
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 8
+    env:
+      VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
+      VM_USER: ${{ secrets.SHOPVIVALIZ_VM_USER || 'ubuntu' }}
+
+    steps:
+      - name: Configure pinned production SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "${VM_KEY:-}"
+          test -n "${VM_HOST:-}"
+          test -n "${VM_USER:-}"
+          test -n "${VM_HOSTS:-}"
+          [[ "$VM_HOST" =~ ^[A-Za-z0-9._:-]+$ ]]
+          [[ "$VM_USER" =~ ^[A-Za-z0-9._-]+$ ]]
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+
+      - name: Restart idle production runner listener
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=2 \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/vmkey" \
+            "$VM_USER@$VM_HOST" 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          service='shopvivaliz-actions-runner.service'
+          worker_pattern='^/home/ubuntu/actions-runner-shopvivaliz/bin/Runner\.Worker( |$)'
+          worker_count="$(ps -eo args= | awk -v pattern="$worker_pattern" '$0 ~ pattern { count++ } END { print count + 0 }')"
+          printf 'RUNNER_WORKER_COUNT=%s\n' "$worker_count"
+          if [ "$worker_count" -ne 0 ]; then
+            echo 'RUNNER_RESCUE=refused_worker_active'
+            exit 23
+          fi
+
+          uid="$(id -u)"
+          export XDG_RUNTIME_DIR="/run/user/$uid"
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          test -S "$XDG_RUNTIME_DIR/bus"
+          systemctl --user is-enabled --quiet "$service"
+          systemctl --user restart "$service"
+
+          active=false
+          for _ in $(seq 1 12); do
+            if systemctl --user is-active --quiet "$service"; then
+              active=true
+              break
+            fi
+            sleep 2
+          done
+          test "$active" = true
+          mainpid="$(systemctl --user show -p MainPID --value "$service")"
+          [[ "$mainpid" =~ ^[0-9]+$ ]]
+          test "$mainpid" -gt 1
+          echo 'RUNNER_RESCUE=listener_restarted'
+          echo 'RUNNER_SERVICE_ACTIVE=true'
+          REMOTE
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"

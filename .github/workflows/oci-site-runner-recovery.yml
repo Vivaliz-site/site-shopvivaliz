@@ -1,0 +1,170 @@
+name: OCI Site Runner Recovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/oci-site-runner-recovery.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: oci-site-runner-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      OCI_PROFILE: AGENTS
+      SITE_INSTANCE_NAME: shopvivaliz-free-a1
+    steps:
+      - name: Configure protected OCI AGENTS profile
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!name:-}" || { echo "::error::Required OCI recovery secret missing: $name"; exit 1; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 600 "$OCI_KEY_FILE"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+          echo "OCI_PROFILE_READY=true"
+
+      - name: Install OCI CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          oci --version
+
+      - name: Verify OCI identity and exact site instance
+        shell: bash
+        run: |
+          set -euo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          "${OCI[@]}" iam region list >/dev/null
+          query="query instance resources where displayName = '$SITE_INSTANCE_NAME'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = "1" || { echo "::error::Expected exactly one site instance, found $count"; exit 2; }
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          display_name="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."display-name"' --raw-output)"
+          lifecycle="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."lifecycle-state"' --raw-output)"
+          test "$display_name" = "$SITE_INSTANCE_NAME" || { echo "::error::OCI site identity mismatch"; exit 3; }
+          test "$lifecycle" = "RUNNING" || { echo "::error::Site instance is not RUNNING: $lifecycle"; exit 4; }
+          printf 'SITE_INSTANCE_ID=%s\n' "$instance_id" >> "$GITHUB_ENV"
+          echo "OCI_SITE_IDENTITY=PASS"
+          echo "OCI_SITE_LIFECYCLE=RUNNING"
+
+      - name: Confirm storefront is healthy before recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --retry 3 --retry-delay 2 --max-time 15 \
+            https://shopvivaliz.com.br/api/health/version.php > "$RUNNER_TEMP/version-before.json"
+          jq -e '.ok == true and (.release_sha | type == "string")' "$RUNNER_TEMP/version-before.json" >/dev/null
+          jq -r '"PUBLIC_RELEASE_BEFORE=" + .release_sha' "$RUNNER_TEMP/version-before.json"
+
+      - name: Cancel obsolete production pipeline reservations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for run_id in 35468055206 35472803679; do
+            status="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq .status 2>/dev/null || true)"
+            case "$status" in
+              queued|pending|in_progress|waiting|requested)
+                gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/cancel" >/dev/null 2>&1 || true
+                sleep 2
+                status="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq .status 2>/dev/null || true)"
+                if [[ "$status" =~ ^(queued|pending|in_progress|waiting|requested)$ ]]; then
+                  gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/force-cancel" >/dev/null
+                fi
+                echo "OBSOLETE_RUN_${run_id}=CANCEL_REQUESTED"
+                ;;
+              *)
+                echo "OBSOLETE_RUN_${run_id}=NO_ACTION status=${status:-unknown}"
+                ;;
+            esac
+          done
+
+      - name: Gracefully reboot site A1 through OCI
+        shell: bash
+        run: |
+          set -euo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          "${OCI[@]}" compute instance action \
+            --instance-id "$SITE_INSTANCE_ID" \
+            --action SOFTRESET \
+            --wait-for-state RUNNING \
+            --wait-interval-seconds 15 \
+            --max-wait-seconds 900 >/dev/null
+          echo "OCI_SOFTRESET=PASS"
+
+      - name: Wait for storefront after reboot
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=false
+          for attempt in $(seq 1 72); do
+            if curl -fsS -A "ShopVivaliz-Safe-Sync/1.0" --max-time 10 https://shopvivaliz.com.br/api/health/version.php > "$RUNNER_TEMP/version-after.json" 2>/dev/null \
+              && jq -e '.ok == true and (.release_sha | type == "string")' "$RUNNER_TEMP/version-after.json" >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            sleep 5
+          done
+          test "$ready" = true || { echo "::error::Storefront did not recover after OCI soft reset"; exit 5; }
+          jq -r '"PUBLIC_RELEASE_AFTER_REBOOT=" + .release_sha' "$RUNNER_TEMP/version-after.json"
+
+      - name: Dispatch exactly one canonical production deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          head_sha="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq .commit.sha)"
+          gh workflow run master-production-pipeline.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f confirmation=DEPLOY
+          run_id=""
+          for attempt in $(seq 1 30); do
+            run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow master-production-pipeline.yml --event workflow_dispatch --branch main --limit 20 --json databaseId,headSha,status --jq ".[] | select(.headSha == \"$head_sha\") | .databaseId" | head -1)"
+            test -n "$run_id" && break
+            sleep 2
+          done
+          test -n "$run_id" || { echo "::error::Canonical production deploy was not created"; exit 6; }
+          echo "CANONICAL_DEPLOY_RUN_ID=$run_id"
+
+      - name: Cleanup OCI credentials
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          test -f "$OCI_KEY_FILE" && shred -u "$OCI_KEY_FILE"
+          test -f "$OCI_CONFIG_FILE" && shred -u "$OCI_CONFIG_FILE"
+# recovery-trigger: 2026-09-19T22:21Z
