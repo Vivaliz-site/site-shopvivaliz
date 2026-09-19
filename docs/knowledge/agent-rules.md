@@ -8,6 +8,15 @@
 - Confirmar acesso com evidência (`hostname`, `whoami`, diretório e estado Git quando aplicável).
 - Nunca versionar, imprimir ou copiar para documentação o conteúdo de chave privada, senha, token ou secret.
 
+
+## Credenciais, MFA e fontes seguras já provisionadas
+
+- Em projetos ShopVivaliz com autenticação já provisionada, o agente deve primeiro usar as fontes seguras existentes (env/arquivo protegido/systemd/secret/host autenticador) e **não pedir ao usuário novamente usuário, senha ou OTP** sem antes provar que a fonte existente está ausente ou inválida.
+- Para Amazon Returns / Seller Central, o browser/bridge roda em `shopvivaliz-free-a1` e o TOTP é fornecido de forma restrita por `always-free-arm-1787907847-26`. O agente deve usar esse caminho automático e nunca depender de o usuário transcrever OTP rotineiramente.
+- Antes de reportar `AUTH_REQUIRED`, verificar o runbook do projeto, referências de credencial e canal de MFA já configurados, sem revelar valores secretos.
+- Pedir intervenção humana apenas para credencial realmente revogada/ausente, CAPTCHA, recovery, consentimento novo ou outro desafio que tecnicamente não possa ser resolvido pelo fluxo seguro existente.
+- Nunca registrar em Git, docs, logs ou chat o conteúdo de senhas, tokens, chaves, seeds TOTP, OTPs ou cookies; documentar somente a localização segura e o procedimento.
+
 ## Fonte de conhecimento
 
 - Sempre usar `/docs/knowledge/` como base inicial para diagnóstico e operação.
