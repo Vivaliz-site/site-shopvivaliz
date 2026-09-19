@@ -14,6 +14,7 @@ const outDir = process.env.PLAYWRIGHT_ARTIFACTS_DIR || join(process.cwd(), 'arti
 const mandatoryRoutes = ['/', '/catalogo/', '/carrinho/', '/contato/', '/faq/', '/politica-privacidade/', '/politica-devolucoes/', '/politica-entrega/', '/termos/', '/sobre/', '/blog/', '/avaliacoes.php'];
 const explicitRoutes = (process.env.PUBLIC_AUDIT_ROUTES || '').split(',').map((value) => value.trim()).filter(Boolean);
 const auditConcurrency = resolveAuditConcurrency();
+const screenshotTimeoutMs = Number.parseInt(process.env.PUBLIC_AUDIT_SCREENSHOT_TIMEOUT_MS || '10000', 10);
 
 const auditFetch = async (url, options = {}) => {
   if (!proxyServer) return fetch(url, options);
@@ -81,7 +82,11 @@ for (const profile of profiles) {
       const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
       const status = response?.status() ?? 0;
       await page.waitForTimeout(1000);
-      await page.screenshot({ path: join(outDir, `${profile.name}-${slug || 'page'}.png`), fullPage: true });
+      try {
+        await page.screenshot({ path: join(outDir, `${profile.name}-${slug || 'page'}.png`), fullPage: true, timeout: screenshotTimeoutMs });
+      } catch (error) {
+        console.warn(`Screenshot evidence skipped for ${profile.name} ${route}: ${error.message}`);
+      }
       const metrics = await page.evaluate(({ isMobile }) => {
         const doc = document.documentElement;
         const body = document.body;
