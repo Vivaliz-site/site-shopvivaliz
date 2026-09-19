@@ -17,6 +17,10 @@
 >
 > `docs/AGENTS.md` é o **único lugar centralizado** onde erros não-óbvios são registrados. **Leia antes de começar. Adicione uma entrada ao terminar se aprendeu algo.**
 
+## 🔴 Auditoria Extrema — obrigatória para Claude
+
+Em auditoria completa/extrema, validação de release/apto ou demais gatilhos de `AUDIT_POLICY.md`, leia e execute o conjunto completo: `AUDIT_POLICY.md`, `docs/quality/EXTREME_AUDIT_PROTOCOL.md`, `docs/quality/AUDIT_RUNTIME_PARITY_V1.md`, `docs/quality/AUDIT_UNIVERSAL_COVERAGE_V1.md`, `docs/quality/AUDIT_SELF_TEST_V1.md` quando aplicável e `docs/quality/AUDIT_OVERLAY.md`. Inclua falhas silenciosas, reconciliação, órfãos, negativos/boundaries, false-green, drift e rodada adversarial de unknown unknowns. Corrija achados SAFE executáveis e reaudite.
+
 ## 🔴 Regra de conclusão Git — obrigatória para Claude
 
 **Nunca encerre uma tarefa versionada no commit.** Commit, push de branch e PR aberta são checkpoints intermediários, não entrega concluída.
