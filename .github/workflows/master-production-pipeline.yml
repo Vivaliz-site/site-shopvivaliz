@@ -144,7 +144,9 @@ jobs:
         run: |
           set -euo pipefail
           release_dir="$(cat /tmp/shopvivaliz-release-dir)"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1 'bash -s' -- "$DEPLOY_SHA" "$release_dir" <<'REMOTE'
+          # The deploy job already runs on the production A1 runner. Keep the
+          # activation local so localhost SSH cannot invalidate a healthy release.
+          bash -s -- "$DEPLOY_SHA" "$release_dir" <<'REMOTE'
           set -euo pipefail
           sha="$1"
           release="$2"
