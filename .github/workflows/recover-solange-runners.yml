@@ -16,32 +16,44 @@ concurrency:
 
 jobs:
   recover:
-    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    runs-on: ubuntu-latest
+    environment: Production
     timeout-minutes: 8
+    env:
+      VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
+      VM_USER: ${{ secrets.SHOPVIVALIZ_VM_USER || 'ubuntu' }}
     steps:
-      - name: Configure verified VM SSH
+      - name: Configure pinned SSH material
         env:
-          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
-          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
         run: |
           set -Eeuo pipefail
           test -n "${VM_KEY:-}"
+          test -n "${VM_HOST:-}"
+          test -n "${VM_USER:-}"
           test -n "${VM_HOSTS:-}"
+          [[ "$VM_HOST" =~ ^[A-Za-z0-9._:-]+$ ]]
+          [[ "$VM_USER" =~ ^[A-Za-z0-9._-]+$ ]]
           install -m 700 -d "$HOME/.ssh"
           printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
           printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
 
-      - name: Restart only installed Solange runner services on backend VM
+      - name: Restart only idle installed Solange runner listeners
         shell: bash
         run: |
           set -Eeuo pipefail
+          proxy="ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -i $HOME/.ssh/vmkey -W %h:%p $VM_USER@$VM_HOST"
           ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" \
-            ubuntu@10.0.1.38 'bash -se' <<'REMOTE'
+            -o ProxyCommand="$proxy" ubuntu@10.0.1.38 'bash -se' <<'REMOTE'
           set -Eeuo pipefail
           mapfile -t dirs < <(find /home/ubuntu -maxdepth 1 -mindepth 1 -type d -name 'actions-runner-solange*' -print | sort)
-          [ "${#dirs[@]}" -gt 0 ] || { echo 'SOLANGE_RUNNERS_FOUND=0'; exit 21; }
+          if [ "${#dirs[@]}" -eq 0 ]; then
+            echo 'SOLANGE_RUNNERS_FOUND=0'
+            exit 21
+          fi
           healthy=0
           for dir in "${dirs[@]}"; do
             case "$dir" in
@@ -49,6 +61,11 @@ jobs:
               *) echo 'RUNNER_PATH_REJECTED=true'; exit 22 ;;
             esac
             [ -f "$dir/.runner" ] || continue
+            worker_count="$(ps -eo args= | awk -v prefix="$dir/bin/Runner.Worker" 'index($0,prefix)==1 {count++} END {print count+0}')"
+            if [ "$worker_count" -ne 0 ]; then
+              echo 'RUNNER_RESCUE=refused_worker_active'
+              exit 27
+            fi
             unit=''
             while IFS= read -r candidate; do
               [ -n "$candidate" ] || continue
@@ -58,25 +75,38 @@ jobs:
                 unit="$candidate"
                 break
               fi
-            done < <(systemctl list-unit-files --type=service --no-legend 'actions.runner.*.service' 2>/dev/null | awk '{print $1}')
-            [ -n "$unit" ] || { echo 'RUNNER_SERVICE_MISSING=true'; exit 23; }
+            done < <(systemctl list-unit-files --type=service --no-legend 'actions.runner.*.service' | awk '{print $1}')
+            if [ -z "$unit" ]; then
+              echo 'RUNNER_SERVICE_MISSING=true'
+              exit 23
+            fi
             sudo systemctl restart "$unit"
+            active=false
             for _ in $(seq 1 20); do
-              if systemctl is-active --quiet "$unit"; then break; fi
+              if systemctl is-active --quiet "$unit"; then
+                active=true
+                break
+              fi
               sleep 1
             done
-            if ! systemctl is-active --quiet "$unit"; then
+            if [ "$active" != true ]; then
               echo 'RUNNER_SERVICE_ACTIVE=false'
               exit 24
             fi
             mainpid="$(systemctl show -p MainPID --value "$unit")"
-            [[ "$mainpid" =~ ^[1-9][0-9]*$ ]] || { echo 'RUNNER_MAINPID_VALID=false'; exit 25; }
+            if ! [[ "$mainpid" =~ ^[1-9][0-9]*$ ]]; then
+              echo 'RUNNER_MAINPID_VALID=false'
+              exit 25
+            fi
             healthy=$((healthy+1))
           done
-          [ "$healthy" -gt 0 ] || { echo 'SOLANGE_RUNNERS_HEALTHY=0'; exit 26; }
+          if [ "$healthy" -eq 0 ]; then
+            echo 'SOLANGE_RUNNERS_HEALTHY=0'
+            exit 26
+          fi
           echo "SOLANGE_RUNNERS_HEALTHY=$healthy"
           REMOTE
 
-      - name: Cleanup
+      - name: Cleanup SSH material
         if: always()
         run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
