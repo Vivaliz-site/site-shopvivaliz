@@ -55,6 +55,7 @@ jobs:
           php tests/nondeploy-release-wait-cost-guard-test.php
           php tests/runtime-audit-env-permissions-test.php
           php tests/fredwin-runtime-audit-action-test.php
+          php tests/production-runner-rescue-contract-test.php
           php tests/no-public-mock-auth-test.php
           php tests/mercadopago-legacy-success-route-regression.php
           php scripts/quality/validate-asset-manifest.php
@@ -63,6 +64,7 @@ jobs:
           python3 tests/test_ecommerce_excellence_credential_literals.py
           python3 tests/test_ecommerce_excellence_reference_resolution.py
           python3 tests/test_ecommerce_excellence_sitewide.py
+          python3 -m unittest tests.unit.test_runtime_deploy_reconciliation
           node --check scripts/public-layout-audit.mjs
           node --check scripts/production-runtime-parity.mjs
           node --check scripts/lib/audit-concurrency.mjs
