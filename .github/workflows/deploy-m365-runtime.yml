@@ -43,12 +43,28 @@ jobs:
           echo "sha=$target" >> "$GITHUB_OUTPUT"
           echo "m365_target_sha=$target"
 
+      - name: Validate cross-repository credential presence
+        shell: bash
+        env:
+          GH_PAT_PRESENT: ${{ secrets.GH_PAT != '' }}
+          GH_REPO_TOKEN_PRESENT: ${{ secrets.GH_REPO_TOKEN != '' }}
+        run: |
+          set -Eeuo pipefail
+          if [ "$GH_PAT_PRESENT" = true ]; then
+            echo "cross_repo_credential=GH_PAT"
+          elif [ "$GH_REPO_TOKEN_PRESENT" = true ]; then
+            echo "cross_repo_credential=GH_REPO_TOKEN"
+          else
+            echo "No approved cross-repository GitHub credential is configured" >&2
+            exit 2
+          fi
+
       - name: Checkout exact private M365 revision
         uses: actions/checkout@v4
         with:
           repository: Vivaliz-site/shopvivaliz-m365
           ref: ${{ steps.target.outputs.sha }}
-          token: ${{ secrets.GH_REPO_TOKEN }}
+          token: ${{ secrets.GH_PAT || secrets.GH_REPO_TOKEN }}
           path: m365-source
           persist-credentials: false
           fetch-depth: 1
