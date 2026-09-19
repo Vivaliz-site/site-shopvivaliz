@@ -11,6 +11,7 @@ def test_bridge_is_manual_fail_closed_and_uses_canonical_mlrr() -> None:
     assert "push:" not in trigger
     assert "schedule:" not in trigger
     assert "environment: production" in text
+    assert "- shadow" in text
     assert "runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]" in text
     assert "repo=/home/ubuntu/mercadolivre-returns-recovery" in text
     assert "git merge --ff-only origin/main" in text
