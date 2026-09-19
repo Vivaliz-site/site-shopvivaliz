@@ -85,15 +85,17 @@ jobs:
             if [ "$prefix" = fredwin ]; then
               supervisor='fredwin-desktop-commander-supervisor.ps1'
               bootstrap='fredwin-remote-bootstrap.ps1'
+              health_url='http://127.0.0.1:5557/health'
             else
               supervisor='desktopkocepsv-desktop-commander-supervisor.ps1'
               bootstrap='desktopkocepsv-remote-bootstrap.ps1'
+              health_url='http://127.0.0.1:5558/health'
             fi
             cmd="& { \\$ErrorActionPreference='Stop'; Set-Location 'C:\\site-shopvivaliz'; git fetch origin main | Out-Null; if (\\$LASTEXITCODE -ne 0) { throw 'fetch failed' }; git merge --ff-only origin/main | Out-Null; if (\\$LASTEXITCODE -ne 0) { throw 'sync failed' }; & 'C:\\site-shopvivaliz\\scripts\\${supervisor}' -Mode InstallTask; & 'C:\\site-shopvivaliz\\scripts\\${bootstrap}' -Mode InstallTask }"
             if ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="/tmp/${label}.hosts" -p "$localport" -i "$HOME/.ssh/vmkey" "$user@127.0.0.1" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$cmd\"" >/dev/null 2>&1; then
               printf '%s_RECOVERY=executed\n' "$label" >> /tmp/windows-peer-safe.txt
               sleep 15
-              if "${SSH_VM[@]}" "curl -fsS --connect-timeout 4 --max-time 8 http://127.0.0.1:${relayport}/health >/dev/null" 2>/dev/null; then
+              if "${SSH_VM[@]}" "curl -fsS --connect-timeout 4 --max-time 8 ${health_url} >/dev/null" 2>/dev/null; then
                 printf '%s_RELAY=reachable\n' "$label" >> /tmp/windows-peer-safe.txt
               else
                 printf '%s_RELAY=unreachable\n' "$label" >> /tmp/windows-peer-safe.txt
