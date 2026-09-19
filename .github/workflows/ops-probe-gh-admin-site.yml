@@ -1,4 +1,4 @@
-name: Ops Finalize Archived Solange Policy
+name: Ops Repair Legacy Solange State
 on:
   push:
     branches:
@@ -6,11 +6,11 @@ on:
 permissions:
   contents: read
 jobs:
-  finalize:
+  repair:
     runs-on: [self-hosted]
     timeout-minutes: 5
     steps:
-      - name: Merge validated policy, restore protection, and rearchive
+      - name: Restore protection, validate policy, and rearchive
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -22,51 +22,32 @@ jobs:
           gh auth status --hostname github.com >/dev/null 2>&1
 
           target="fredmourao-ai/solange-rolla"
-          pr=13
-          expected_head="0e3c09832a46a8d4b85ea92037e03ba929877e57"
-          checks_api="repos/$target/branches/main/protection/required_status_checks"
-
           archived="$(gh api "repos/$target" --jq '.archived')"
-          echo "ARCHIVED_INITIAL=$archived"
+          echo "ARCHIVED_BEFORE=$archived"
           if [ "$archived" = "true" ]; then
             gh api -X PATCH "repos/$target" -F archived=false >/dev/null
           fi
 
-          before="$(gh api "$checks_api")"
-          printf '%s' "$before" > /tmp/solange-required-checks-before.json
-          echo "CHECKS_BEFORE=$(jq -c '{strict,checks}' /tmp/solange-required-checks-before.json)"
-
-          restore_checks() {
-            jq '{strict,checks}' /tmp/solange-required-checks-before.json > /tmp/solange-required-checks-restore.json
-            gh api -X PATCH "$checks_api" --input /tmp/solange-required-checks-restore.json >/dev/null
-          }
-          trap restore_checks EXIT
-
-          pr_state="$(gh api "repos/$target/pulls/$pr" --jq '.state')"
-          merged="$(gh api "repos/$target/pulls/$pr" --jq '.merged')"
-          if [ "$merged" != "true" ]; then
-            actual_head="$(gh api "repos/$target/pulls/$pr" --jq '.head.sha')"
-            test "$actual_head" = "$expected_head"
-
-            gh api -X DELETE "$checks_api" >/dev/null
-            echo "TEMP_REQUIRED_CHECKS_REMOVED=yes"
-
-            merge_json="$(gh api -X PUT "repos/$target/pulls/$pr/merge" -f merge_method=squash -f sha="$expected_head")"
-            echo "MERGED=$(jq -r '.merged' <<<"$merge_json")"
-            echo "MERGE_SHA=$(jq -r '.sha' <<<"$merge_json")"
-            test "$(jq -r '.merged' <<<"$merge_json")" = "true"
+          checks_api="repos/$target/branches/main/protection/required_status_checks"
+          if current="$(gh api "$checks_api" 2>/dev/null)"; then
+            echo "CHECKS_FOUND=yes"
           else
-            echo "MERGED=already"
+            current='{}'
+            echo "CHECKS_FOUND=no"
           fi
 
-          restore_checks
-          trap - EXIT
+          has_static="$(jq -r '[.checks[]? | select(.context=="static-smoke" and .app_id==15368)] | length' <<<"$current")"
+          if [ "$has_static" != "1" ]; then
+            jq -n '{strict:true,checks:[{context:"static-smoke",app_id:15368}]}' >/tmp/legacy-checks.json
+            gh api -X PATCH "$checks_api" --input /tmp/legacy-checks.json >/dev/null
+            echo "CHECKS_RESTORED=yes"
+          else
+            echo "CHECKS_RESTORED=not_needed"
+          fi
 
           after="$(gh api "$checks_api")"
           echo "CHECKS_AFTER=$(jq -c '{strict,checks}' <<<"$after")"
-          test "$(jq -r '.checks | length' <<<"$after")" -eq "$(jq -r '.checks | length' /tmp/solange-required-checks-before.json)"
-          test "$(jq -r '.checks[0].context' <<<"$after")" = "static-smoke"
-          test "$(jq -r '.checks[0].app_id' <<<"$after")" = "15368"
+          test "$(jq -r '[.checks[]? | select(.context=="static-smoke" and .app_id==15368)] | length' <<<"$after")" = "1"
 
           for file in AGENTS.md CLAUDE.md REGRAS-AGENTES-CENTRALIZADAS.md; do
             gh api "repos/$target/contents/$file?ref=main" --jq '.content' | tr -d '\n' | base64 -d > "/tmp/$file"
@@ -74,11 +55,16 @@ jobs:
             echo "MARKER_OK=$file"
           done
 
-          policy_sha="$(gh api "repos/$target/contents/REGRAS-AGENTES-CENTRALIZADAS.md?ref=main" --jq '.sha')"
-          echo "POLICY_SHA=$policy_sha"
-          test "$policy_sha" = "31e2135dd12a1b930c117a34e25ba5240f02455e"
+          gh api "repos/Vivaliz-site/site-shopvivaliz/contents/REGRAS-AGENTES-CENTRALIZADAS.md?ref=main" --jq '.content' | tr -d '\n' | base64 -d >/tmp/canonical-policy.md
+          cmp -s /tmp/REGRAS-AGENTES-CENTRALIZADAS.md /tmp/canonical-policy.md
+          echo "POLICY_CANONICAL_MATCH=yes"
+
+          pr="$(gh api "repos/$target/pulls/13")"
+          test "$(jq -r '.merged' <<<"$pr")" = "true"
+          echo "PR13_MERGED=yes"
+          echo "PR13_MERGE_SHA=$(jq -r '.merge_commit_sha' <<<"$pr")"
 
           gh api -X PATCH "repos/$target" -F archived=true >/dev/null
-          final_archived="$(gh api "repos/$target" --jq '.archived')"
-          echo "ARCHIVED_FINAL=$final_archived"
-          test "$final_archived" = "true"
+          final="$(gh api "repos/$target" --jq '.archived')"
+          echo "ARCHIVED_FINAL=$final"
+          test "$final" = "true"
