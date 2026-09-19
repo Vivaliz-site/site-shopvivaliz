@@ -43,12 +43,37 @@ jobs:
           echo "sha=$target" >> "$GITHUB_OUTPUT"
           echo "m365_target_sha=$target"
 
+      - name: Fail closed on runner disk pressure
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          available_kb="$(df -Pk "$GITHUB_WORKSPACE" | awk 'NR==2 {print $4}')"
+          [[ "$available_kb" =~ ^[0-9]+$ ]]
+          echo "runner_available_kb=$available_kb"
+          test "$available_kb" -ge 262144
+
+      - name: Validate cross-repository credential presence
+        shell: bash
+        env:
+          GH_PAT_PRESENT: ${{ secrets.GH_PAT != '' }}
+          GH_REPO_TOKEN_PRESENT: ${{ secrets.GH_REPO_TOKEN != '' }}
+        run: |
+          set -Eeuo pipefail
+          if [ "$GH_PAT_PRESENT" = true ]; then
+            echo "cross_repo_credential=GH_PAT"
+          elif [ "$GH_REPO_TOKEN_PRESENT" = true ]; then
+            echo "cross_repo_credential=GH_REPO_TOKEN"
+          else
+            echo "No approved cross-repository GitHub credential is configured" >&2
+            exit 2
+          fi
+
       - name: Checkout exact private M365 revision
         uses: actions/checkout@v4
         with:
           repository: Vivaliz-site/shopvivaliz-m365
           ref: ${{ steps.target.outputs.sha }}
-          token: ${{ secrets.GH_REPO_TOKEN }}
+          token: ${{ secrets.GH_PAT || secrets.GH_REPO_TOKEN }}
           path: m365-source
           persist-credentials: false
           fetch-depth: 1
@@ -269,6 +294,11 @@ jobs:
           echo "deployed_sha=$TARGET_SHA"
           echo "m365_runtime_postdeploy=PASS"
           REMOTE
+
+      - name: Cleanup runner temporary M365 source
+        if: always()
+        shell: bash
+        run: rm -rf -- "$GITHUB_WORKSPACE/m365-source"
 
       - name: Cleanup SSH material
         if: always()
