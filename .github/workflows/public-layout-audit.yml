@@ -16,7 +16,7 @@ jobs:
   audit:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
-    timeout-minutes: 20
+    timeout-minutes: 35
     permissions:
       contents: read
     steps:
@@ -59,4 +59,5 @@ jobs:
           name: public-layout-audit-${{ github.run_id }}
           path: artifacts/public-layout-audit
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 1
+          compression-level: 0
