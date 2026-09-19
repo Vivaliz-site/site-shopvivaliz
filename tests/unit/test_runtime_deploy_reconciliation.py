@@ -36,6 +36,8 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('sudo chgrp www-data "$shared/tasks-queue.json"', text)
         self.assertIn('sudo chmod g+rw "$shared/tasks-queue.json"', text)
         self.assertIn("pdo_sqlite", text)
+        self.assertIn("extension_loaded(\"pdo_sqlite\")", text)
+        self.assertNotIn("php -m | grep -Fxq pdo_sqlite", text)
 
     def test_master_pipeline_rolls_back_a_failed_release(self) -> None:
         text = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
