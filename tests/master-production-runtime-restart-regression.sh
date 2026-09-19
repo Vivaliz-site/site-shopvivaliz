@@ -23,4 +23,15 @@ grep -Fq 'cmp -s "$release/deploy/systemd/shopvivaliz-mercadolivre-token-renewer
   exit 1
 }
 
+
+activation="$(sed -n '/      - name: Activate release atomically/,/^  monitor:/p' "$WORKFLOW")"
+grep -Fq "bash -s -- \"\$DEPLOY_SHA\" \"\$release_dir\" <<'REMOTE'" <<<"$activation" || {
+  echo 'Production activation must execute locally on the A1 runner' >&2
+  exit 1
+}
+if grep -Fq 'ubuntu@127.0.0.1' <<<"$activation"; then
+  echo 'Production activation must not depend on localhost SSH' >&2
+  exit 1
+fi
+
 echo MASTER_PRODUCTION_RUNTIME_RESTART_OK
