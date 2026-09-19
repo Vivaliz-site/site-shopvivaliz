@@ -151,15 +151,7 @@ jobs:
           echo "PR208_MERGED=$(jq -r '.merged' <<<"$pr208")"
           """
 
-          command = """cat > /tmp/finalize-fred-repos.sh <<'SH'
-""" + script + "
-SH
-chmod 700 /tmp/finalize-fred-repos.sh
-chown ubuntu:ubuntu /tmp/finalize-fred-repos.sh
-sudo -H -u ubuntu env -u GH_TOKEN -u GITHUB_TOKEN bash /tmp/finalize-fred-repos.sh
-rc=$?
-rm -f /tmp/finalize-fred-repos.sh
-exit $rc"
+          command = "cat > /tmp/finalize-fred-repos.sh <<'SH'\\n" + script + "\\nSH\\nchmod 700 /tmp/finalize-fred-repos.sh\\nchown ubuntu:ubuntu /tmp/finalize-fred-repos.sh\\nsudo -H -u ubuntu env -u GH_TOKEN -u GITHUB_TOKEN bash /tmp/finalize-fred-repos.sh\\nrc=$?\\nrm -f /tmp/finalize-fred-repos.sh\\nexit $rc"
 
           details = models.CreateInstanceAgentCommandDetails(
               compartment_id=os.environ["SITE_COMPARTMENT_ID"],
