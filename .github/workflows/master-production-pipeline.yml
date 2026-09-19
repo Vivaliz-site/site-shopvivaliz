@@ -280,6 +280,18 @@ jobs:
             fail=1
           fi
           sudo systemctl is-active --quiet shopvivaliz-catalog-reconcile.timer || fail=1
+          # Validate Safe Sync after releasing the activation lock. Starting the
+          # oneshot while fd 8 is held would make it wait on our own lock.
+          flock -u 8
+          if ! sudo systemctl start shopvivaliz-sync-safe.service; then
+            echo 'safe_repo_sync_postdeploy_start_failed=true' >&2
+            fail=1
+          fi
+          safe_sync_result="$(sudo systemctl show --property=Result --value shopvivaliz-sync-safe.service 2>/dev/null || true)"
+          echo "safe_sync_result -> $safe_sync_result"
+          [ "$safe_sync_result" = success ] || fail=1
+          sudo systemctl is-active --quiet shopvivaliz-sync-safe.timer || fail=1
+          sudo systemctl is-enabled --quiet shopvivaliz-sync-safe.timer || fail=1
           sudo systemctl is-active --quiet shopvivaliz-abandoned-cart-recovery.timer || fail=1
           sudo systemctl is-enabled --quiet shopvivaliz-abandoned-cart-recovery.timer || fail=1
           sudo systemctl restart apache2
@@ -353,6 +365,9 @@ jobs:
           test "$served_sha" = "$sha"
           sudo systemctl is-active --quiet shopvivaliz-abandoned-cart-recovery.timer
           sudo systemctl is-enabled --quiet shopvivaliz-abandoned-cart-recovery.timer
+          test "$(sudo systemctl show --property=Result --value shopvivaliz-sync-safe.service)" = success
+          sudo systemctl is-active --quiet shopvivaliz-sync-safe.timer
+          sudo systemctl is-enabled --quiet shopvivaliz-sync-safe.timer
           for path in / /sitemap.xml /catalogo/ /termos/ /politica-entrega/ /politica-devolucoes/; do
             code="$(curl -sS -o /tmp/body -w '%{http_code}' -H 'Cache-Control: no-cache' --max-time 20 "https://shopvivaliz.com.br${path}")"
             echo "$path -> $code"
@@ -360,6 +375,21 @@ jobs:
           done
           sitemap_body="$(curl -sS -H 'Cache-Control: no-cache' --max-time 20 https://shopvivaliz.com.br/sitemap.xml)"
           [[ "$sitemap_body" == *'<urlset'* ]]
+
+          health_json="$(curl -fsS -A 'ShopVivaliz-Safe-Sync/1.0' -H 'Accept: application/json' -H 'Cache-Control: no-cache' --max-time 20 https://shopvivaliz.com.br/api/health/)"
+          printf '%s' "$health_json" | php -r '$j=json_decode(stream_get_contents(STDIN), true); if (!is_array($j) || ($j["ok"] ?? null) !== true || (float)($j["health_score_percent"] ?? -1) !== 100.0) { fwrite(STDERR, "health_not_100\n"); exit(1); }'
+          echo 'health_score_percent -> 100'
+
+          # Activation deliberately defers the Safe Sync one-shot while holding
+          # repo-sync.lock. Prove it after activation, when the lock must be free.
+          sudo systemctl start shopvivaliz-sync-safe.service
+          test "$(sudo systemctl show --property=Result --value shopvivaliz-sync-safe.service)" = success
+          sudo systemctl is-active --quiet shopvivaliz-sync-safe.timer
+          sudo systemctl is-enabled --quiet shopvivaliz-sync-safe.timer
+          exec 9>/home/ubuntu/shopvivaliz-deploy/shared/locks/repo-sync.lock
+          flock -n 9
+          flock -u 9
+          echo 'safe_sync_postdeploy -> success'
           REMOTE
 
   publish_evidence:
