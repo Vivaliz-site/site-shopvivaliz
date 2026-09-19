@@ -20,7 +20,6 @@ jobs:
     environment: Production
     timeout-minutes: 8
     env:
-      VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
       VM_USER: ${{ secrets.SHOPVIVALIZ_VM_USER || 'ubuntu' }}
 
     steps:
@@ -32,15 +31,35 @@ jobs:
         run: |
           set -Eeuo pipefail
           test -n "${VM_KEY:-}"
-          test -n "${VM_HOST:-}"
           test -n "${VM_USER:-}"
           test -n "${VM_HOSTS:-}"
-          [[ "$VM_HOST" =~ ^[A-Za-z0-9._:-]+$ ]]
           [[ "$VM_USER" =~ ^[A-Za-z0-9._-]+$ ]]
           install -m 700 -d "$HOME/.ssh"
           printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
           printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+
+          derived_host="$(
+            awk '
+              $0 !~ /^[[:space:]]*#/ && NF >= 2 {
+                count = split($1, hosts, ",")
+                for (i = 1; i <= count; i++) {
+                  host = hosts[i]
+                  if (host ~ /^\|/) continue
+                  sub(/^\[/, "", host)
+                  sub(/\]:[0-9]+$/, "", host)
+                  if (host == "localhost" || host ~ /^127\./ || host ~ /^10\./ || host ~ /^192\.168\./ || host ~ /^169\.254\./) continue
+                  if (host ~ /^172\.(1[6-9]|2[0-9]|3[01])\./) continue
+                  if (host ~ /^[A-Za-z0-9._-]+$/) {
+                    print host
+                    exit
+                  }
+                }
+              }
+            ' "$HOME/.ssh/known_hosts"
+          )"
+          test -n "$derived_host"
+          printf 'VM_HOST=%s\n' "$derived_host" >> "$GITHUB_ENV"
 
       - name: Restart idle production runner listener
         shell: bash
