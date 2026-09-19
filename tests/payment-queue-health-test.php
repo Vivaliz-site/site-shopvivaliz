@@ -13,6 +13,7 @@ $tmp = sys_get_temp_dir() . '/sv-queue-health-' . getmypid();
 @mkdir($tmp, 0700, true);
 $queueFile = $tmp . '/queue.json';
 $heartbeatFile = $tmp . '/worker-heartbeat.json';
+putenv('SHOPVIVALIZ_QUEUE_DSN=invalid:force-file-backend');
 putenv('SHOPVIVALIZ_QUEUE_FILE=' . $queueFile);
 putenv('SHOPVIVALIZ_QUEUE_HEARTBEAT_FILE=' . $heartbeatFile);
 
@@ -45,6 +46,7 @@ pqh_assert(is_file($endpoint), 'public payment queue health endpoint must exist'
 @unlink($queueFile);
 @unlink($heartbeatFile);
 @rmdir($tmp);
+putenv('SHOPVIVALIZ_QUEUE_DSN');
 putenv('SHOPVIVALIZ_QUEUE_FILE');
 putenv('SHOPVIVALIZ_QUEUE_HEARTBEAT_FILE');
 fwrite(STDOUT, "PASS: payment queue health contract.\n");

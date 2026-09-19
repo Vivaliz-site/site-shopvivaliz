@@ -17,6 +17,7 @@ function svh_assert(bool $condition, string $message): void
 $root = dirname(__DIR__);
 svh_assert(!is_file($root . '/js/home-mobile-layout.js'), 'late DOM reordering script must stay removed');
 $clsCss = (string)file_get_contents($root . '/css/cls-stability-v1.css');
+svh_assert(str_contains($clsCss, 'html.sv-cart-empty #cart-items-list'), 'empty cart must reserve hydration height to prevent mobile CLS');
 svh_assert(str_contains($clsCss, 'overflow-x: clip'), 'root overflow containment must remain enabled');
 svh_assert(str_contains($clsCss, '.home-scroller > .home-scroller-arrow'), 'mobile side arrows must stay disabled');
 svh_assert(str_contains($clsCss, 'overflow-x: auto !important'), 'internal carousel scrolling must remain available');
