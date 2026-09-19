@@ -107,7 +107,7 @@ Sempre que a política ou os gates mudarem materialmente, execute `docs/quality/
 O objetivo é maximizar cobertura e reduzir pontos cegos, não afirmar onisciência. É proibido declarar que “qualquer erro possível” foi matematicamente excluído. O que pode ser declarado é que todas as classes materiais conhecidas foram exercitadas, que houve caça adversarial a classes desconhecidas e que a dívida de evidência residual foi explicitada.
 
 ## Quando a auditoria extrema é obrigatória
-Execute integralmente `docs/quality/EXTREME_AUDIT_PROTOCOL.md` **e** `docs/quality/AUDIT_RUNTIME_PARITY_V1.md` quando houver qualquer uma destas condições:
+Execute integralmente o conjunto obrigatório de `docs/quality/EXTREME_AUDIT_PROTOCOL.md`, `docs/quality/AUDIT_RUNTIME_PARITY_V1.md`, `docs/quality/AUDIT_UNIVERSAL_COVERAGE_V1.md`, `docs/quality/AUDIT_SELF_TEST_V1.md` quando aplicável e `docs/quality/AUDIT_OVERLAY.md` quando houver qualquer uma destas condições:
 - projeto, módulo ou release declarado "pronto", "finalizado", "100%", "apto para produção" ou equivalente;
 - solicitação explícita de auditoria, validação completa, revisão extrema ou investigação sistêmica;
 - mudança material em autenticação/autorização, schema, regras financeiras, máquina de estados, multi-tenant, integrações externas, workers, filas, cron/scheduler, infraestrutura, deploy, backup/restore ou regras críticas de negócio;
