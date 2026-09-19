@@ -96,12 +96,30 @@ Um projeto não pode receber `APTO` quando existir qualquer uma destas condiçõ
 - mutação sem confirmação após reload/revisita;
 - efeito externo sem confirmação/reconciliação;
 - versão realmente publicada não comprovada;
-- área crítica marcada `NÃO VALIDADO`.
+- área crítica marcada `NÃO VALIDADO`;
+- P0/P1, P2 crítico ou `IMPROVEMENT_REQUIRED` crítico pendente;
+- classe de `AUDIT_ESCAPE` aplicável ainda sem correção/prevenção/reauditoria;
+- automação assíncrona crítica não observada no release certificado quando material ao fluxo;
+- efeito externo sem reconciliação independente;
+- proteção de observabilidade crítica existente apenas no papel, sem prova de detecção equivalente quando tecnicamente viável;
+- rollback/restore necessário ao risco da mudança sem evidência compatível.
 
 O veredito deve continuar sendo `NÃO APTO` ou `APTO COM RESSALVAS` conforme risco e evidência, nunca mascarando dívida de validação.
 
 ## 9. Reauditoria contraditória
 
 Depois das correções, repita os fluxos tentando quebrá-los com outro registro/estado, edge/failure path e nova navegação. O objetivo não é provar que o patch passa; é tentar provar que a conclusão de correção está errada.
+
+## 10. Observação pós-deploy e reconciliação
+Para release publicado, valide também o comportamento que acontece depois da ativação inicial. Workers, filas, schedulers, webhooks e integrações críticas devem ter ao menos uma execução produção-equivalente comprovada no mesmo SHA/release, por ciclo natural ou disparo controlado seguro. Registre início, término, estado antes/depois, efeito durável e reconciliação.
+
+## 11. Prova da observabilidade
+Quando uma classe de falha crítica depende de healthcheck, watchdog, alerta, dead-letter, métrica ou log para ser detectada, prove o detector com falha controlada segura ou evidência operacional equivalente. Detector configurado mas nunca exercitado é dívida de evidência.
+
+## 12. Recuperação e rollback
+Mudança crítica que possa exigir reversão deve ter caminho de rollback/restore compatível com schema, eventos, filas, caches e dados. Prefira ensaio em staging/preview/clone consistente quando a reversão real em produção for arriscada ou destrutiva.
+
+## 13. Legado e duplicidade no runtime
+Compare o release certificado com processos realmente ativos. Procure serviço, cron, timer, workflow, runner, consumer, bridge, script ou automação antiga que ainda possa executar a mesma responsabilidade, produzir efeito concorrente ou mascarar a validação do caminho novo.
 
 **Marker de governança:** `AUDIT_RUNTIME_PARITY_V1`
