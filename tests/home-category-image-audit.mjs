@@ -4,6 +4,10 @@ import { chromium } from 'playwright';
 
 const baseUrl = (process.env.BASE_URL || 'https://shopvivaliz.com.br').replace(/\/$/, '');
 const outputDir = process.env.OUTPUT_DIR || 'test-results/production-image-audit';
+const htaccessSource = fs.readFileSync('.htaccess', 'utf8');
+if (!htaccessSource.includes('RewriteRule ^api/catalog/fallback-products\\.json - [F,L,NC]')) {
+  throw new Error('catalog_fallback_dump_must_remain_publicly_denied');
+}
 const loopbackBase = /^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(baseUrl);
 const injectBranchScript = process.env.GITHUB_EVENT_NAME === 'pull_request' && !loopbackBase;
 fs.mkdirSync(outputDir, { recursive: true });
@@ -40,6 +44,7 @@ async function catalogDiagnostics() {
     availableCount: 0,
     imageCount: 0,
     fallbackStatus: 0,
+    fallbackProtected: false,
     fallbackJsonValid: false,
     fallbackRows: 0,
     fallbackAvailable: 0,
@@ -64,13 +69,20 @@ async function catalogDiagnostics() {
   try {
     const response = await fetch(`${baseUrl}/api/catalog/fallback-products.json`, { headers: { Accept: 'application/json' } });
     diagnostic.fallbackStatus = response.status;
-    const text = await response.text();
-    const payload = JSON.parse(text);
-    diagnostic.fallbackJsonValid = !!payload && typeof payload === 'object';
-    const rows = Array.isArray(payload) ? payload : Object.values(payload || {}).filter((row) => row && typeof row === 'object' && !Array.isArray(row));
-    diagnostic.fallbackRows = rows.length;
-    diagnostic.fallbackAvailable = rows.filter((row) => Number(row?.stock || 0) > 0 && Number(row?.price || 0) > 0).length;
-    diagnostic.fallbackWithImage = rows.filter((row) => String(row?.image_url || '').trim() !== '').length;
+    diagnostic.fallbackProtected = response.status === 403;
+    if (response.status === 403) {
+      // Production intentionally blocks this internal dump because it contains
+      // cost/supplier data. The isolated PR server may serve it as static JSON.
+    } else if (response.ok) {
+      const payload = await response.json();
+      diagnostic.fallbackJsonValid = !!payload && typeof payload === 'object';
+      const rows = Array.isArray(payload) ? payload : Object.values(payload || {}).filter((row) => row && typeof row === 'object' && !Array.isArray(row));
+      diagnostic.fallbackRows = rows.length;
+      diagnostic.fallbackAvailable = rows.filter((row) => Number(row?.stock || 0) > 0 && Number(row?.price || 0) > 0).length;
+      diagnostic.fallbackWithImage = rows.filter((row) => String(row?.image_url || '').trim() !== '').length;
+    } else {
+      diagnostic.fallbackError = `unexpected_http_${response.status}`;
+    }
   } catch (error) {
     diagnostic.fallbackError = error instanceof Error ? error.message : String(error);
   }
