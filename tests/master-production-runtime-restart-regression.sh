@@ -34,4 +34,14 @@ if grep -Fq 'ubuntu@127.0.0.1' <<<"$activation"; then
   exit 1
 fi
 
+
+grep -Fq "php -r 'exit(extension_loaded(\"pdo_sqlite\") ? 0 : 1);'" "$WORKFLOW" || {
+  echo 'Production activation must probe pdo_sqlite without a pipefail/SIGPIPE-prone grep -q pipeline' >&2
+  exit 1
+}
+if grep -Fq 'php -m | grep -Fxq pdo_sqlite' "$WORKFLOW"; then
+  echo 'Production activation must not use php -m | grep -q under pipefail' >&2
+  exit 1
+fi
+
 echo MASTER_PRODUCTION_RUNTIME_RESTART_OK

@@ -175,10 +175,10 @@ jobs:
           sudo apache2ctl configtest
 
           # Keep the existing ViaCEP SQLite cache dependency available on the host.
-          if ! php -m | grep -Fxq pdo_sqlite; then
+          if ! php -r 'exit(extension_loaded("pdo_sqlite") ? 0 : 1);'; then
             sudo DEBIAN_FRONTEND=noninteractive apt-get install -y php8.3-sqlite3
           fi
-          php -m | grep -Fxq pdo_sqlite
+          php -r 'exit(extension_loaded("pdo_sqlite") ? 0 : 1);'
 
           # Shared runtime paths are written by Apache (www-data) and background jobs (ubuntu).
           for name in uploads logs cache sessions storage; do
