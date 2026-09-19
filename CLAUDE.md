@@ -479,3 +479,6 @@ que parece já ter sido corrigido.
 ## CLI session isolation policy
 
 Antes de qualquer operacao CLI, leia e cumpra `AGENTS.md` e `AI-TO-CLI-PROTOCOL.md`. Um chat nunca pode reutilizar a sessao CLI de outro chat.
+
+## Auditoria Extrema - arquitetura e deploy
+Em auditoria completa/extrema, validacao de release/apto ou gatilho de `AUDIT_POLICY.md`, execute tambem `docs/quality/ARCHITECTURE_DEPLOY_AUDIT_V1.md`. Inclua arquitetura, codigo, caminho critico de CI/deploy, runners, artifacts, cache, provisionamento, restarts, migrations, contratos cross-repo, rollback e unknown unknowns.
