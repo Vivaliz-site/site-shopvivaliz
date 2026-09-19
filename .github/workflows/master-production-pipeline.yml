@@ -54,6 +54,7 @@ jobs:
           grep -Fq 'api/health/version.php' .github/workflows/master-production-pipeline.yml
           grep -Fq 'served_sha' .github/workflows/master-production-pipeline.yml
           bash tests/should-deploy-production-test.sh
+          bash tests/safe-repo-sync-production-classifier-test.sh
       - name: Classify production impact
         id: production_impact
         shell: bash
