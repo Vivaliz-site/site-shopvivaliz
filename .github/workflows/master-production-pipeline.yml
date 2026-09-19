@@ -156,6 +156,15 @@ jobs:
           current="$root/current"
           ml_service='shopvivaliz-mercadolivre-token-renewer.service'
 
+          # Serialize the canonical activation against the timer-driven Safe Sync.
+          # The lock is held for the lifetime of this activation shell.
+          mkdir -p "$shared/locks"
+          exec 8>"$shared/locks/repo-sync.lock"
+          if ! flock -w 120 8; then
+            echo "Timeout aguardando lock exclusivo de sincronizacao: $shared/locks/repo-sync.lock" >&2
+            exit 3
+          fi
+
           shared_ml_token_owner() {
             local owner=''
             if [ -r "$shared/runtime-secrets.php" ]; then
@@ -252,7 +261,7 @@ jobs:
             echo 'abandoned_cart_recovery_install_failed=true' >&2
             fail=1
           fi
-          if ! sudo env SOURCE_ROOT="$current" SEED_REPO="$root/repo" SYNC_ROOT="$root/sync-repo" bash "$current/scripts/install-safe-sync-service.sh"; then
+          if ! sudo env SAFE_SYNC_RUN_ON_INSTALL=false SOURCE_ROOT="$current" SEED_REPO="$root/repo" SYNC_ROOT="$root/sync-repo" bash "$current/scripts/install-safe-sync-service.sh"; then
             echo 'safe_repo_sync_install_failed=true' >&2
             fail=1
           fi
