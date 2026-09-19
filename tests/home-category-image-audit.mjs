@@ -4,7 +4,8 @@ import { chromium } from 'playwright';
 
 const baseUrl = (process.env.BASE_URL || 'https://shopvivaliz.com.br').replace(/\/$/, '');
 const outputDir = process.env.OUTPUT_DIR || 'test-results/production-image-audit';
-const injectBranchScript = process.env.GITHUB_EVENT_NAME === 'pull_request';
+const loopbackBase = /^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(baseUrl);
+const injectBranchScript = process.env.GITHUB_EVENT_NAME === 'pull_request' && !loopbackBase;
 fs.mkdirSync(outputDir, { recursive: true });
 
 const source = fs.readFileSync('js/public-experience-v1.js', 'utf8');
@@ -129,7 +130,20 @@ async function audit(name, viewport, isMobile = false, route = '/') {
       return img instanceof HTMLImageElement && img.complete;
     });
   }, { timeout: 45_000 });
-  await page.waitForTimeout(800);
+
+  // img.complete is also true after a failed network load. Give the existing
+  // onerror fallback time to replace a failed ERP/S3 image, but keep the final
+  // metrics strict so a genuinely broken image still fails the audit.
+  await page.waitForFunction(() => {
+    const images = Array.from(document.querySelectorAll('.home-categories img.category-slide-img'));
+    return images.length >= 5 && images.every((img) => (
+      img instanceof HTMLImageElement
+      && img.complete
+      && img.naturalWidth > 1
+      && img.naturalHeight > 1
+    ));
+  }, { timeout: 12_000 }).catch(() => {});
+  await page.waitForTimeout(250);
 
   const metrics = await page.evaluate(() => {
     const cards = Array.from(document.querySelectorAll('.home-categories .category-slide')).map((card) => {
