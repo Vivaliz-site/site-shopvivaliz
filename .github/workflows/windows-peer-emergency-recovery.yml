@@ -74,7 +74,9 @@ jobs:
               return 0
             fi
             printf '%s_SSH22=reachable\n' "$label" >> /tmp/windows-peer-safe.txt
-            ssh -fNT -o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" -L "$localport:$ip:22" ubuntu@10.0.1.38
+            control_path="/tmp/${label}.ctl"
+            rm -f "$control_path"
+            ssh -fNT -o BatchMode=yes -o ConnectTimeout=10 -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ControlMaster=yes -o ControlPath="$control_path" -i "$HOME/.ssh/vmkey" -L "$localport:$ip:22" ubuntu@10.0.1.38
             sleep 2
             ssh-keyscan -T 5 -p "$localport" 127.0.0.1 2>/dev/null > "/tmp/${label}.hosts"
             if [ ! -s "/tmp/${label}.hosts" ]; then
@@ -126,6 +128,14 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          pkill -f '32223:' || true
-          pkill -f '32224:' || true
-          rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts" /tmp/peer-discover.py /tmp/FRED.hosts /tmp/DESKTOP.hosts /tmp/windows-peer-safe.txt
+          set -Eeuo pipefail
+          for control_path in /tmp/FRED.ctl /tmp/DESKTOP.ctl; do
+            if [ -S "$control_path" ]; then
+              if ssh -S "$control_path" -O exit ubuntu@10.0.1.38 >/dev/null 2>&1; then
+                :
+              else
+                exit 1
+              fi
+            fi
+          done
+          rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts" /tmp/peer-discover.py /tmp/FRED.hosts /tmp/DESKTOP.hosts /tmp/FRED.ctl /tmp/DESKTOP.ctl /tmp/windows-peer-safe.txt
