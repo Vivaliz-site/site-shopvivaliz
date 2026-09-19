@@ -5,9 +5,78 @@ on:
     types: [opened]
 
 permissions:
+  actions: write
   contents: read
 
 jobs:
+  drain-stale-production-deploys:
+    if: >-
+      ${{
+        github.repository == 'Vivaliz-site/site-shopvivaliz' &&
+        github.event.issue.title == '[production-runner-rescue]' &&
+        github.event.issue.user.login == 'fredmourao-ai' &&
+        github.event.issue.body == 'action=drain-stale-production-deploys'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Cancel only obsolete non-running production deploys
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          repo="$GITHUB_REPOSITORY"
+          workflow='master-production-pipeline.yml'
+          main_sha="$(gh api "repos/$repo/commits/main" --jq '.sha')"
+          runs_file="$(mktemp)"
+          trap 'rm -f "$runs_file"' EXIT
+          gh api "repos/$repo/actions/workflows/$workflow/runs?per_page=100" > "$runs_file"
+
+          current_waiting="$(jq --arg main "$main_sha" '[
+            .workflow_runs[]
+            | select(.head_sha == $main)
+            | select(.status == "requested" or .status == "waiting" or .status == "pending" or .status == "queued" or .status == "in_progress")
+          ] | length' "$runs_file")"
+          echo "CURRENT_MAIN_SHA=$main_sha"
+          echo "CURRENT_PIPELINE_COUNT=$current_waiting"
+          if [ "$current_waiting" -lt 1 ]; then
+            echo 'QUEUE_DRAIN=no_current_main_pipeline'
+            exit 0
+          fi
+
+          cancelled=0
+          while IFS=$'\t' read -r run_id head_sha status; do
+            [ -n "$run_id" ] || continue
+            echo "CANCEL_OBSOLETE_RUN=$run_id head=$head_sha status=$status"
+            if gh api -X POST "repos/$repo/actions/runs/$run_id/cancel" >/dev/null 2>&1; then
+              cancelled=$((cancelled + 1))
+              continue
+            fi
+            state="$(gh api "repos/$repo/actions/runs/$run_id" --jq '.status')"
+            case "$state" in
+              completed) ;;
+              requested|waiting|pending|queued)
+                gh api -X POST "repos/$repo/actions/runs/$run_id/force-cancel" >/dev/null
+                cancelled=$((cancelled + 1))
+                ;;
+              *)
+                echo "Refusing to cancel run $run_id after it entered state=$state" >&2
+                exit 24
+                ;;
+            esac
+          done < <(
+            jq -r --arg main "$main_sha" '
+              .workflow_runs[]
+              | select(.head_sha != $main)
+              | select(.status == "requested" or .status == "waiting" or .status == "pending" or .status == "queued")
+              | [.id, .head_sha, .status]
+              | @tsv
+            ' "$runs_file"
+          )
+          echo 'QUEUE_DRAIN=success'
+          echo "CANCELLED_OBSOLETE_RUNS=$cancelled"
+
   rescue:
     if: >-
       ${{
@@ -22,7 +91,6 @@ jobs:
     env:
       VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
       VM_USER: ${{ secrets.SHOPVIVALIZ_VM_USER || 'ubuntu' }}
-
     steps:
       - name: Configure pinned production SSH
         env:
