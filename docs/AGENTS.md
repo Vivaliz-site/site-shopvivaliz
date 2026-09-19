@@ -13,6 +13,14 @@
 
 ---
 
+## 2026-09-19 — Auditoria extrema v5 executada sem acesso a produção/infra (escopo estático)
+**Sistema/arquivo:** repositório inteiro (código, lint, validadores de qualidade), branch `claude/auditoria-extrema-v5-97gu15`.
+**O que descobri:** rodei o conjunto obrigatório (`AUDIT_POLICY.md`, `EXTREME_AUDIT_PROTOCOL.md`, `AUDIT_RUNTIME_PARITY_V1.md`, `AUDIT_UNIVERSAL_COVERAGE_V1.md`, `AUDIT_OVERLAY.md`) a partir de um worktree isolado, **sem SSH às VMs Oracle, sem acesso ao Remote Desktop Commander configurado para as A1 de produção e sem browser contra `shopvivaliz.com.br`**. Nesse escopo: `git fetch` confirmou a branch já sincronizada com `origin/main` (mesmo SHA `1f8e2ca9a`); lint PHP (`php -l`) em 100% dos `.php` do repo (fora `vendor`/`node_modules`) não encontrou erro de sintaxe; `php scripts/quality/validate-health-output.php` e `php scripts/quality/validate-asset-manifest.php` passaram (`COMPROVADO`); não havia PR aberta associada à branch. Não rodei PHPUnit (sem `vendor/` instalado neste worktree) nem Playwright/QA de browser. `docs/quality/AUDIT_STATUS.md` já registrava, de 2026-09-16, `NÃO APTO` por falta de paridade produção↔SHA candidato e mutações críticas (checkout, catálogo) não exercitadas pela UI real — essa lacuna **continua sem evidência nova** nesta sessão, porque exige acesso a infraestrutura/produção que este ambiente de execução não fornece.
+**Por quê importa:** o protocolo v5 exige evidência de runtime parity e mutação real via UI contra o release publicado para emitir `APTO`; um agente sem acesso às VMs/produção **não pode fechar essas classes**, só a camada estática (sintaxe, validadores locais, integridade do repo/branch/PR). Registrar isso evita que uma futura sessão leia "auditoria concluída" e presuma cobertura de produção que nunca foi provada.
+**Ver também:** `docs/quality/AUDIT_STATUS.md` (entrada 2026-09-16, ainda vigente), `docs/quality/EXTREME_AUDIT_PROTOCOL.md`.
+
+---
+
 ## 🔴 2026-08-29 — Recuperação pós-E2 e arquitetura obrigatória de 2 A1
 
 **Estado vinculante:** produção passa a operar somente nas duas A1 sobreviventes: `always-free-arm-1787907847-26` (backend/dados/serviços) e `shopvivaliz-free-a1` (site/web/deploy). As E2 `shopvivaliz-ai` (`137.131.156.17`) e `shopvivaliz-micro-2` (`136.248.69.116`) foram encerradas e são **alvos aposentados**.
