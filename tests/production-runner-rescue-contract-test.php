@@ -14,9 +14,9 @@ $required = [
     "github.event.issue.title == '[production-runner-rescue]'",
     "github.event.issue.user.login == 'fredmourao-ai'",
     "github.event.issue.body == 'action=restart-idle-listener'",
-    "SHOPVIVALIZ_VM_HOST",
-    "SHOPVIVALIZ_VM_SSH_KEY",
+    "derived_host=",
     "SHOPVIVALIZ_VM_KNOWN_HOSTS",
+    "SHOPVIVALIZ_VM_SSH_KEY",
     "StrictHostKeyChecking=yes",
     "shopvivaliz-actions-runner.service",
     "worker_pattern=",
@@ -38,6 +38,9 @@ $forbidden = [
     "contents: write",
     "actions: write",
     "eval ",\n    "|| true",
+    "137.131.",
+    "136.248.",
+    "SHOPVIVALIZ_VM_HOST",
 ];
 foreach ($forbidden as $needle) {
     if (strpos($text, $needle) !== false) {
