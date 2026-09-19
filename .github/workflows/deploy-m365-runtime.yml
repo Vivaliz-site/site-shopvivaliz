@@ -43,6 +43,15 @@ jobs:
           echo "sha=$target" >> "$GITHUB_OUTPUT"
           echo "m365_target_sha=$target"
 
+      - name: Fail closed on runner disk pressure
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          available_kb="$(df -Pk "$GITHUB_WORKSPACE" | awk 'NR==2 {print $4}')"
+          [[ "$available_kb" =~ ^[0-9]+$ ]]
+          echo "runner_available_kb=$available_kb"
+          test "$available_kb" -ge 262144
+
       - name: Validate cross-repository credential presence
         shell: bash
         env:
@@ -285,6 +294,11 @@ jobs:
           echo "deployed_sha=$TARGET_SHA"
           echo "m365_runtime_postdeploy=PASS"
           REMOTE
+
+      - name: Cleanup runner temporary M365 source
+        if: always()
+        shell: bash
+        run: rm -rf -- "$GITHUB_WORKSPACE/m365-source"
 
       - name: Cleanup SSH material
         if: always()
