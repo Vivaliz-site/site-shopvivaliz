@@ -83,11 +83,13 @@ jobs:
             fi
             chmod 600 "/tmp/${label}.hosts"
             if [ "$prefix" = fredwin ]; then
+              supervisor='fredwin-desktop-commander-supervisor.ps1'
               bootstrap='fredwin-remote-bootstrap.ps1'
             else
+              supervisor='desktopkocepsv-desktop-commander-supervisor.ps1'
               bootstrap='desktopkocepsv-remote-bootstrap.ps1'
             fi
-            cmd="& { \\$ErrorActionPreference='Stop'; Set-Location 'C:\\site-shopvivaliz'; git fetch origin main | Out-Null; if (\\$LASTEXITCODE -ne 0) { throw 'fetch failed' }; git merge --ff-only origin/main | Out-Null; if (\\$LASTEXITCODE -ne 0) { throw 'sync failed' }; & 'C:\\site-shopvivaliz\\scripts\\${prefix}-desktop-commander-supervisor.ps1' -Mode InstallTask; & 'C:\\site-shopvivaliz\\scripts\\${bootstrap}' -Mode InstallTask }"
+            cmd="& { \\$ErrorActionPreference='Stop'; Set-Location 'C:\\site-shopvivaliz'; git fetch origin main | Out-Null; if (\\$LASTEXITCODE -ne 0) { throw 'fetch failed' }; git merge --ff-only origin/main | Out-Null; if (\\$LASTEXITCODE -ne 0) { throw 'sync failed' }; & 'C:\\site-shopvivaliz\\scripts\\${supervisor}' -Mode InstallTask; & 'C:\\site-shopvivaliz\\scripts\\${bootstrap}' -Mode InstallTask }"
             if ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="/tmp/${label}.hosts" -p "$localport" -i "$HOME/.ssh/vmkey" "$user@127.0.0.1" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$cmd\"" >/dev/null 2>&1; then
               printf '%s_RECOVERY=executed\n' "$label" >> /tmp/windows-peer-safe.txt
               sleep 15
