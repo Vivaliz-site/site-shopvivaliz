@@ -299,7 +299,7 @@ jobs:
 
           served_sha=''
           for attempt in 1 2 3 4 5 6 7 8; do
-            if ! served_sha="$(curl -fsS -H 'Cache-Control: no-cache' --max-time 5 "https://shopvivaliz.com.br/api/health/version.php?deploy=${sha}" | php -r '$j=json_decode(stream_get_contents(STDIN), true); echo is_array($j) ? ($j["release_sha"] ?? "") : "";')"; then
+            if ! served_sha="$(curl -fsS -H 'Cache-Control: no-cache' --max-time 5 "https://shopvivaliz.com.br/api/health.php?health=1version.php?deploy=${sha}" | php -r '$j=json_decode(stream_get_contents(STDIN), true); echo is_array($j) ? ($j["release_sha"] ?? "") : "";')"; then
               served_sha=''
             fi
             [ "$served_sha" = "$sha" ] && break
