@@ -166,3 +166,4 @@ jobs:
           set +e
           test -f "$OCI_KEY_FILE" && shred -u "$OCI_KEY_FILE"
           test -f "$OCI_CONFIG_FILE" && shred -u "$OCI_CONFIG_FILE"
+# recovery-trigger: 2026-09-19T22:21Z
