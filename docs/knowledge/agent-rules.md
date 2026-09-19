@@ -9,6 +9,15 @@
 - Nunca versionar, imprimir ou copiar para documentação o conteúdo de chave privada, senha, token ou secret.
 
 
+<!-- SUPERPOWERS_EVERY_STAGE_V1 -->
+## @Superpowers obrigatório em cada etapa
+
+- Todo chat, conversa, sessão, agente e retomada de tarefa relacionada aos projetos ShopVivaliz deve usar **@Superpowers em cada etapa material**, do primeiro diagnóstico à validação final.
+- Não considerar uma única invocação no início como suficiente. Reaplicar o workflow/skill apropriado ao mudar de fase: planejamento, investigação, implementação, debugging, TDD/testes, revisão, correção, PR/merge, deploy, pós-deploy e auditoria.
+- Em `retome`, `continue` ou `prossiga`, recuperar o último checkpoint comprovado e continuar sob @Superpowers, sem reiniciar desnecessariamente.
+- Se @Superpowers não estiver exposto pelo runtime, não simular a chamada: registrar `SUPERPOWERS_UNAVAILABLE` e aplicar a metodologia equivalente até que a capacidade esteja disponível.
+- A fonte central desta regra é `REGRAS-AGENTES-CENTRALIZADAS.md`.
+
 ## Credenciais, MFA e fontes seguras já provisionadas
 
 - Em projetos ShopVivaliz com autenticação já provisionada, o agente deve primeiro usar as fontes seguras existentes (env/arquivo protegido/systemd/secret/host autenticador) e **não pedir ao usuário novamente usuário, senha ou OTP** sem antes provar que a fonte existente está ausente ou inválida.
