@@ -121,6 +121,10 @@ if [[ "$SAFE_SYNC_RUN_ON_INSTALL" == 'true' ]]; then
     exit 10
   fi
 else
+  # Canonical activation holds repo-sync.lock, so the one-shot must run only
+  # after that lock is released. Clear any stale failed state now; monitor
+  # performs the post-activation run and proves Result=success.
+  systemctl reset-failed "$SERVICE_NAME" >/dev/null 2>&1 || true
   echo 'SAFE_SYNC_INITIAL_RUN=DEFERRED'
 fi
 systemctl is-active --quiet "$TIMER_NAME"
