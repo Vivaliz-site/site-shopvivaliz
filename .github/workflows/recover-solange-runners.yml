@@ -18,36 +18,79 @@ jobs:
   recover:
     runs-on: ubuntu-latest
     environment: Production
-    timeout-minutes: 8
+    timeout-minutes: 12
     env:
-      VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
-      VM_USER: ${{ secrets.SHOPVIVALIZ_VM_USER || 'ubuntu' }}
-    steps:
-      - name: Configure pinned SSH material
-        env:
-          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
-          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
-        run: |
-          set -Eeuo pipefail
-          test -n "${VM_KEY:-}"
-          test -n "${VM_HOST:-}"
-          test -n "${VM_USER:-}"
-          test -n "${VM_HOSTS:-}"
-          [[ "$VM_HOST" =~ ^[A-Za-z0-9._:-]+$ ]]
-          [[ "$VM_USER" =~ ^[A-Za-z0-9._-]+$ ]]
-          install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
-          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+      OCI_PROFILE: AGENTS
+      BACKEND_INSTANCE_NAME: always-free-arm-1787907847-26
 
-      - name: Restart only idle installed Solange runner listeners
+    steps:
+      - name: Configure protected OCI AGENTS profile
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          proxy="ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -i $HOME/.ssh/vmkey -W %h:%p $VM_USER@$VM_HOST"
-          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" \
-            -o ProxyCommand="$proxy" ubuntu@10.0.1.38 'bash -se' <<'REMOTE'
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!name:-}" || { echo "::error::Required OCI recovery secret missing: $name"; exit 1; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 600 "$OCI_KEY_FILE"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+          echo "OCI_PROFILE_READY=true"
+
+      - name: Install OCI CLI
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          oci --version
+
+      - name: Resolve exact backend instance and Run Command plugin
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          "${OCI[@]}" iam region list >/dev/null
+          query="query instance resources where displayName = '$BACKEND_INSTANCE_NAME'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = "1" || { echo "::error::Expected exactly one backend instance, found $count"; exit 2; }
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          display_name="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."display-name"' --raw-output)"
+          lifecycle="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."lifecycle-state"' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
+          test "$display_name" = "$BACKEND_INSTANCE_NAME" || { echo "::error::OCI backend identity mismatch"; exit 3; }
+          test "$lifecycle" = "RUNNING" || { echo "::error::Backend instance is not RUNNING: $lifecycle"; exit 4; }
+          plugin="$("${OCI[@]}" instance-agent plugin list --compartment-id "$compartment_id" --instanceagent-id "$instance_id" --query 'data[?name==`Compute Instance Run Command`].status | [0]' --raw-output)"
+          test "$plugin" = "RUNNING" || { echo "::error::Compute Instance Run Command plugin is not RUNNING"; exit 5; }
+          printf 'BACKEND_INSTANCE_ID=%s\nBACKEND_COMPARTMENT_ID=%s\n' "$instance_id" "$compartment_id" >> "$GITHUB_ENV"
+          echo "OCI_BACKEND_IDENTITY=PASS"
+          echo "OCI_RUN_COMMAND_PLUGIN=RUNNING"
+
+      - name: Restart only idle installed Solange runner listeners through OCI Run Command
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          script="$RUNNER_TEMP/solange-runner-rescue.sh"
+          content="$RUNNER_TEMP/solange-runner-content.json"
+          target="$RUNNER_TEMP/solange-runner-target.json"
+          cat > "$script" <<'REMOTE'
           set -Eeuo pipefail
           mapfile -t dirs < <(find /home/ubuntu -maxdepth 1 -mindepth 1 -type d -name 'actions-runner-solange*' -print | sort)
           if [ "${#dirs[@]}" -eq 0 ]; then
@@ -80,7 +123,7 @@ jobs:
               echo 'RUNNER_SERVICE_MISSING=true'
               exit 23
             fi
-            sudo systemctl restart "$unit"
+            systemctl restart "$unit"
             active=false
             for _ in $(seq 1 20); do
               if systemctl is-active --quiet "$unit"; then
@@ -106,7 +149,48 @@ jobs:
           fi
           echo "SOLANGE_RUNNERS_HEALTHY=$healthy"
           REMOTE
+          jq -n --rawfile text "$script" '{source:{sourceType:"TEXT",text:$text},output:{outputType:"TEXT"}}' > "$content"
+          jq -n --arg instanceId "$BACKEND_INSTANCE_ID" '{instanceId:$instanceId}' > "$target"
+          command_id="$("${OCI[@]}" instance-agent command create             --compartment-id "$BACKEND_COMPARTMENT_ID"             --display-name "Recover idle Solange GitHub runners"             --content "file://$content"             --target "file://$target"             --timeout-in-seconds 300             --query 'data.id' --raw-output)"
+          test -n "$command_id"
+          terminal=false
+          for _ in $(seq 1 60); do
+            execution="$("${OCI[@]}" instance-agent command-execution get               --command-id "$command_id" --instance-id "$BACKEND_INSTANCE_ID")"
+            state="$(jq -r '.data."lifecycle-state"' <<<"$execution")"
+            case "$state" in
+              SUCCEEDED)
+                terminal=true
+                break
+                ;;
+              FAILED|TIMED_OUT|CANCELED)
+                echo "::error::OCI Run Command ended in $state"
+                exit 31
+                ;;
+              ACCEPTED|IN_PROGRESS)
+                sleep 5
+                ;;
+              *)
+                echo "::error::Unexpected OCI Run Command state: $state"
+                exit 32
+                ;;
+            esac
+          done
+          test "$terminal" = true || { echo "::error::OCI Run Command did not reach terminal success"; exit 33; }
+          exit_code="$(jq -r '.data.content."exit-code"' <<<"$execution")"
+          output="$(jq -r '.data.content.text // ""' <<<"$execution")"
+          printf '%s\n' "$output" | grep -E '^(SOLANGE_RUNNERS_(FOUND|HEALTHY)=[0-9]+|RUNNER_[A-Z_]+=.*|RUNNER_RESCUE=.*)$' || :
+          test "$exit_code" = "0" || { echo "::error::Remote runner recovery exit code was $exit_code"; exit 34; }
+          printf '%s\n' "$output" | grep -Eq '^SOLANGE_RUNNERS_HEALTHY=[1-9][0-9]*$'
+          echo "OCI_RUN_COMMAND_RECOVERY=PASS"
 
-      - name: Cleanup SSH material
+      - name: Cleanup OCI credentials
         if: always()
-        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [ -n "${OCI_KEY_FILE:-}" ] && [ -f "$OCI_KEY_FILE" ]; then
+            shred -u "$OCI_KEY_FILE"
+          fi
+          if [ -n "${OCI_CONFIG_FILE:-}" ] && [ -f "$OCI_CONFIG_FILE" ]; then
+            shred -u "$OCI_CONFIG_FILE"
+          fi
