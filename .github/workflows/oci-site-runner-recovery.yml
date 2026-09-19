@@ -65,7 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
-          "${OCI[@]}" iam region list --limit 1 >/dev/null
+          "${OCI[@]}" iam region list >/dev/null
           query="query instance resources where displayName = '$SITE_INSTANCE_NAME'"
           count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
           test "$count" = "1" || { echo "::error::Expected exactly one site instance, found $count"; exit 2; }
