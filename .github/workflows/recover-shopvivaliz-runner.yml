@@ -63,10 +63,20 @@ jobs:
           before_kb="$(df -Pk /home/ubuntu | awk 'NR==2 {print $4}')"
           [[ "$before_kb" =~ ^[0-9]+$ ]]
           echo "disk_available_before_kb=$before_kb"
-          du -sk "$runner/_work" /home/ubuntu/.cache/shopvivaliz-pr-healer 2>/dev/null | sed 's#^#ephemeral_usage_kb=#' || true
+          for ephemeral in "$runner/_work" /home/ubuntu/.cache/shopvivaliz-pr-healer; do
+            if [ -e "$ephemeral" ]; then
+              size_kb="$(du -sk "$ephemeral" | awk '{print $1}')"
+              echo "ephemeral_usage_path=$ephemeral kb=$size_kb"
+            fi
+          done
 
           if [ "$before_kb" -lt 1048576 ]; then
-            rm -rf -- "$runner/_work/site-shopvivaliz"
+            workspace="$runner/_work/site-shopvivaliz"
+            case "$workspace" in
+              /home/ubuntu/actions-runner-shopvivaliz/_work/site-shopvivaliz) ;;
+              *) echo "unsafe_workspace_path=true"; exit 28 ;;
+            esac
+            rm -rf -- "$workspace"
             if [ -d "$runner/_work/_temp" ]; then
               find "$runner/_work/_temp" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
             fi
