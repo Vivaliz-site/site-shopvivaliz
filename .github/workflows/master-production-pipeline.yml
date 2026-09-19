@@ -41,7 +41,7 @@ jobs:
         with:
           ref: ${{ env.DEPLOY_SHA }}
           persist-credentials: false
-          fetch-depth: 2
+          fetch-depth: 0
       - name: Verify deployable revision
         shell: bash
         run: |
@@ -58,14 +58,42 @@ jobs:
       - name: Classify production impact
         id: production_impact
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = workflow_dispatch ]; then
             should_deploy=true
             echo 'manual deploy requested -> production deploy required'
           else
-            git diff-tree --no-commit-id --name-only -r "$DEPLOY_SHA" | tee /tmp/shopvivaliz-changed-paths.txt
-            should_deploy="$(bash scripts/should-deploy-production.sh < /tmp/shopvivaliz-changed-paths.txt)"
+            evidence_file="$(mktemp)"
+            evidence_sha=''
+            if gh api -H 'Accept: application/vnd.github.raw+json'               "repos/${GITHUB_REPOSITORY}/contents/deployment/latest.json?ref=deployment-evidence"               > "$evidence_file" 2>/dev/null; then
+              evidence_sha="$(python3 - "$evidence_file" <<'PY'
+          import json
+          import re
+          import sys
+          data = json.load(open(sys.argv[1], encoding='utf-8'))
+          sha = str(data.get('sha') or '').strip().lower()
+          print(sha if re.fullmatch(r'[0-9a-f]{40}', sha) else '')
+          PY
+              )"
+            fi
+            rm -f "$evidence_file"
+
+            if [ -n "$evidence_sha" ]               && git cat-file -e "${evidence_sha}^{commit}" 2>/dev/null               && git merge-base --is-ancestor "$evidence_sha" "$DEPLOY_SHA"; then
+              echo "deployment evidence base -> $evidence_sha"
+              if [ "$evidence_sha" = "$DEPLOY_SHA" ]; then
+                should_deploy=false
+                : > /tmp/shopvivaliz-changed-paths.txt
+              else
+                git diff --name-only "$evidence_sha" "$DEPLOY_SHA" | tee /tmp/shopvivaliz-changed-paths.txt
+                should_deploy="$(bash scripts/should-deploy-production.sh < /tmp/shopvivaliz-changed-paths.txt)"
+              fi
+            else
+              should_deploy=true
+              echo 'deployment evidence base unavailable or non-ancestor -> conservative deploy required'
+            fi
           fi
           echo "should_deploy=$should_deploy" >> "$GITHUB_OUTPUT"
           echo "production deploy required -> $should_deploy"
