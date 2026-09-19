@@ -37,7 +37,7 @@ jobs:
           [[ "$VM_USER" =~ ^[A-Za-z0-9._-]+$ ]]
           install -m 700 -d "$HOME/.ssh"
           printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
-          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
 
       - name: Recover idle site runner from ephemeral disk pressure
