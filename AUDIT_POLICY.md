@@ -2,7 +2,7 @@
 
 Esta política é obrigatória para qualquer agente humano ou automatizado que trabalhe neste repositório.
 
-**Versão global:** `2026-09-16-historical-state-transition-v2`
+**Versão global:** `2026-09-19-remediation-observability-v3`
 
 ## Regra permanente
 Nenhuma implementação, feature, release ou projeto pode ser declarado concluído apenas porque código foi escrito, build passou ou testes ficaram verdes. Antes da conclusão, devem ser validados comportamento, regressões, integrações afetadas, dados, estados, rotinas automáticas e riscos operacionais pertinentes.
@@ -29,6 +29,56 @@ Quando código atual consome JSON persistido, snapshots, eventos ou estruturas v
 
 Qualquer mutação operacional que produza 5xx, tela genérica de erro, `This page couldn’t load`, blank state ou error boundary bloqueia `APTO` até causa raiz, classe de dados afetada, correção e regressão serem comprovadas.
 
+## AUDIT_REMEDIATION_COMPLETENESS_V1 — remediação obrigatória
+Auditoria extrema não termina no diagnóstico. Todo achado deve ser classificado quanto à severidade (`P0–P4`), natureza (`DEFECT`, `IMPROVEMENT_REQUIRED` ou `IMPROVEMENT_OPTIONAL`) e modo de correção (`SAFE`, `REVIEW`, `MIGRATION` ou `DESTRUCTIVE`).
+
+- Achado `SAFE` de severidade `P0`, `P1` ou `P2` deve ser corrigido na própria auditoria, com teste antes/depois, regressão e reauditoria. É proibido encerrar apenas registrando problema corrigível.
+- Achado `REVIEW`, `MIGRATION` ou `DESTRUCTIVE` deve ter causa raiz, plano executável, pré-condições, owner, risco, evidência do bloqueio e critério de validação. A classificação não pode ser usada para estacionar correção segura.
+- `IMPROVEMENT_REQUIRED` é melhoria sem defeito ativo que fecha risco material, lacuna de prevenção, observabilidade, recuperação, idempotência, segurança ou recorrência. Ela integra o gate aplicável.
+- `IMPROVEMENT_OPTIONAL` é otimização sem risco material atual e pode permanecer como backlog sem mascarar o estado real.
+
+### Gate de zero pendência crítica
+`APTO` exige simultaneamente: `P0=0`; `P1=0`; nenhum `P2` material em fluxo crítico; nenhuma área crítica `NÃO VALIDADO`; nenhum `AUDIT_ESCAPE` aplicável ainda sem causa do falso-negativo, correção e reauditoria; nenhum `IMPROVEMENT_REQUIRED` que seja condição de segurança, integridade, recuperação ou prevenção de recorrência.
+
+`APTO COM RESSALVAS` só pode ser usado para risco residual não crítico e claramente delimitado. Nunca converta `P0/P1`, `P2` crítico, falha de runtime, dívida de evidência crítica ou efeito externo não reconciliado em mera ressalva.
+
+## AUDIT_SYSTEMIC_SEARCH_V1 — busca obrigatória por equivalentes
+Para cada defeito confirmado, registre e execute a cadeia `Achado → Classe de falha → Busca global → Ocorrências equivalentes → Correções → Testes → Reauditoria`. Corrigir somente o registro, endpoint, tela ou caso que revelou o problema não encerra o achado quando a mesma classe puder existir em componentes equivalentes.
+
+## AUDIT_OBSERVABILITY_PROOF_V1 — provar que a falha é detectável
+Existência de healthcheck, log, alerta, watchdog, dead-letter ou métrica não prova observabilidade. Quando seguro e autorizado, provoque uma falha controlada e demonstre detecção, diagnóstico e recuperação/encaminhamento. Se a injeção não puder ser feita com segurança, registre a limitação como dívida de evidência e use a evidência operacional equivalente mais forte disponível.
+
+## AUDIT_POST_DEPLOY_OBSERVATION_V1 — observar e reconciliar o release real
+Quando houver deploy/publicação, a validação não termina no instante em que o release fica ativo. Prove `deploy → processo ativo → operação real → observação → efeito durável → reconciliação`. Workers, filas, schedulers, webhooks e integrações críticas devem ter pelo menos uma execução produção-equivalente comprovada no release certificado, por ciclo natural ou disparo controlado seguro. Falha assíncrona posterior invalida a conclusão incompatível.
+
+## AUDIT_RECOVERY_ROLLBACK_V1 — recuperação e rollback
+Quando aplicável, valide compatibilidade de rollback e recuperação: aplicação, schema, filas, eventos, caches e dados persistidos. Mudança crítica deve demonstrar `deploy → operação/mutação → rollback ou restore ensaiado → validação → retomada` em ambiente seguro apropriado. Não execute rollback destrutivo em produção apenas para satisfazer a auditoria; use staging/preview/clone consistente quando o risco assim exigir.
+
+## AUDIT_LEGACY_DUPLICATION_V1 — legado e concorrência operacional
+Toda auditoria extrema deve inventariar serviços, processos, timers, cron jobs, schedulers, workflows, runners, scripts operacionais, consumers, bridges e automações que possam executar a mesma responsabilidade. Procure legado ativo, duplicidade, concorrência, polling redundante, job órfão e hotfix fora do fluxo versionado. Um caminho novo correto não é suficiente se um caminho antigo ainda puder produzir efeitos.
+
+## AUDIT_ESCAPE_REGISTER_V1 — memória institucional de falhas escapadas
+Todo `AUDIT_ESCAPE` deve ser registrado em `docs/quality/AUDIT_ESCAPE_REGISTER.md` com classe de falha, causa funcional, causa do falso-negativo, superfícies afetadas, prevenção adicionada, projetos onde a classe é aplicável e evidência de reauditoria. Auditorias futuras devem consultar esse registro e testar as classes históricas aplicáveis.
+
+## AUDIT_DEFINITION_OF_DONE_V1 — conclusão objetiva da auditoria
+Antes de encerrar uma auditoria formal, prove conforme aplicável:
+1. SHA/release/ambiente identificados e artefato publicado comprovado;
+2. fluxos críticos e classes históricas materiais inventariados;
+3. achados reproduzidos e classificados;
+4. correções `SAFE` executadas, sem `P0/P1` ou `P2` crítico pendente;
+5. busca sistêmica por equivalentes concluída;
+6. testes de prevenção/regressão adicionados ou reforçados;
+7. runtime parity e persistência após reload/reopen comprovadas;
+8. efeitos externos reconciliados;
+9. observabilidade demonstrada para falhas críticas;
+10. workers/schedulers/filas/webhooks relevantes observados no release;
+11. backup/restore/rollback validados conforme risco;
+12. legado/duplicidade operacional inventariados e saneados ou explicitamente classificados;
+13. reauditoria contraditória e meta-auditoria concluídas;
+14. `AUDIT_STATUS.md` e, quando aplicável, `AUDIT_ESCAPE_REGISTER.md` atualizados.
+
+Se qualquer item crítico aplicável não tiver evidência, o estado é `NÃO APTO` ou `APTO COM RESSALVAS` conforme esta política, nunca conclusão silenciosa.
+
 ## Quando a auditoria extrema é obrigatória
 Execute integralmente `docs/quality/EXTREME_AUDIT_PROTOCOL.md` **e** `docs/quality/AUDIT_RUNTIME_PARITY_V1.md` quando houver qualquer uma destas condições:
 - projeto, módulo ou release declarado "pronto", "finalizado", "100%", "apto para produção" ou equivalente;
@@ -42,7 +92,7 @@ Execute integralmente `docs/quality/EXTREME_AUDIT_PROTOCOL.md` **e** `docs/quali
 3. Procure não apenas código incorreto, mas também rotinas ausentes, estados sem saída, produtor sem consumidor, consumidor sem produtor, dados sem reconciliação e operações sem recuperação.
 4. Não declare 100% auditado se qualquer área crítica permanecer não validada.
 5. Toda auditoria deve estar ligada a um commit/release identificável. Mudança material posterior invalida a cobertura correspondente.
-6. Achados críticos devem ser reproduzidos e, quando seguro/autorizado, corrigidos, testados, regredidos e reauditados.
+6. Achados críticos devem ser reproduzidos e, quando seguro/autorizado, corrigidos na própria auditoria, testados, regredidos e reauditados; relatório sem remediação não encerra achado corrigível.
 7. Produção só é considerada validada quando houver evidência de que o artefato/release auditado é o que realmente está executando.
 8. Não faça mudança destrutiva apenas para satisfazer a auditoria; classifique a correção como SAFE, REVIEW, MIGRATION ou DESTRUCTIVE.
 9. Happy path em dados recém-criados não certifica compatibilidade histórica nem cobertura de transições.
@@ -54,7 +104,7 @@ Execute integralmente `docs/quality/EXTREME_AUDIT_PROTOCOL.md` **e** `docs/quali
 ## Prompt curto de ativação
 Use:
 
-> Execute integralmente `docs/quality/EXTREME_AUDIT_PROTOCOL.md`, `docs/quality/AUDIT_RUNTIME_PARITY_V1.md` e `docs/quality/AUDIT_OVERLAY.md`. Assuma Auditor + Consultor + Operador. Reconstrua o sistema real, inventarie dados atuais/legados/migrados, compare cobertura local e publicada, execute operações críticas pela interface canônica no release certificado, trate erros inesperados de runtime como gate, confirme persistência após reload/reopen, corrija o seguro, execute regressão e reauditoria contraditória e só conclua após o Gate Final de Completude. Diferencie COMPROVADO, INFERIDO, HIPÓTESE A VALIDAR e NÃO VALIDADO.
+> Execute integralmente `docs/quality/EXTREME_AUDIT_PROTOCOL.md`, `docs/quality/AUDIT_RUNTIME_PARITY_V1.md` e `docs/quality/AUDIT_OVERLAY.md`. Assuma Auditor + Consultor + Operador. MAPEAR → QUESTIONAR → REPRODUZIR → PROVAR → CLASSIFICAR → CORRIGIR → BUSCAR EQUIVALENTES → TESTAR → DEPLOYAR → OBSERVAR → RECONCILIAR → REGREDIR → REAUDITAR → META-AUDITAR. Corrija todo achado SAFE executável, prove runtime parity no release certificado, teste observabilidade e recuperação conforme risco, inventarie legado/duplicidade e só conclua após o gate de zero pendência crítica e o AUDIT_DEFINITION_OF_DONE_V1. Diferencie COMPROVADO, INFERIDO, HIPÓTESE A VALIDAR e NÃO VALIDADO.
 
 ## EXECUTION_OWNERSHIP_FAILOVER_V1 — supervisao global de subagentes
 Toda delegacao para subagente e uma execucao supervisionada. O agente controlador continua sendo o dono da conclusao e deve monitorar a tarefa desde o disparo, registrando identidade da sessao/processo, inicio, estado/commit de base, artefatos esperados e evidencias objetivas de progresso.
