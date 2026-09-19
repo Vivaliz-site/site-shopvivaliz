@@ -1,0 +1,139 @@
+name: Ops Verify And Release Stuck Monitor
+on:
+  push:
+    branches:
+      - ops/verify-stuck-monitor-20260919
+permissions:
+  actions: write
+  contents: read
+jobs:
+  verify-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      OCI_PROFILE: AGENTS
+      SITE_INSTANCE_NAME: shopvivaliz-free-a1
+      EXPECTED_SHA: 35fa132047b207e00bef37863a158725cf68dac6
+      STUCK_RUN_ID: "35474925244"
+    steps:
+      - name: Configure OCI AGENTS profile
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!name:-}" || exit 1
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 600 "$OCI_KEY_FILE"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+
+      - name: Verify active release and health through OCI
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          python3 - <<'PY'
+          import os, time, oci
+          cfg = oci.config.from_file(os.environ["OCI_CONFIG_FILE"], os.environ["OCI_PROFILE"])
+          search = oci.resource_search.ResourceSearchClient(cfg)
+          compute = oci.core.ComputeClient(cfg)
+          q = f"query instance resources where displayName = '{os.environ['SITE_INSTANCE_NAME']}'"
+          items = search.search_resources(oci.resource_search.models.StructuredSearchDetails(query=q)).data.items
+          if len(items) != 1:
+              raise SystemExit(f"expected one site instance, got {len(items)}")
+          instance_id = items[0].identifier
+          inst = compute.get_instance(instance_id).data
+          if inst.lifecycle_state != "RUNNING":
+              raise SystemExit("site instance not RUNNING")
+          client = oci.compute_instance_agent.ComputeInstanceAgentClient(cfg)
+          models = oci.compute_instance_agent.models
+          command_text = r"""set -Eeuo pipefail
+          served="$(cat /home/ubuntu/shopvivaliz-deploy/current/.release-sha)"
+          echo "RELEASE_SHA=$served"
+          health="$(curl -fsS -A 'ShopVivaliz-Monitor-Proof/1.0' -H 'Accept: application/json' -H 'Cache-Control: no-cache' --max-time 20 https://shopvivaliz.com.br/api/health/)"
+          HEALTH="$health" python3 - <<'PY2'
+          import json, os
+          d=json.loads(os.environ["HEALTH"])
+          if d.get("ok") is not True or float(d.get("health_score_percent",-1)) != 100.0:
+              raise SystemExit("health_not_100")
+          print("HEALTH_100=PASS")
+          PY2
+          """
+          details = models.CreateInstanceAgentCommandDetails(
+              compartment_id=inst.compartment_id,
+              execution_time_out_in_seconds=90,
+              target=models.InstanceAgentCommandTarget(instance_id=instance_id),
+              content=models.InstanceAgentCommandContent(
+                  source=models.InstanceAgentCommandSourceViaTextDetails(source_type="TEXT", text=command_text),
+                  output=models.InstanceAgentCommandOutputViaTextDetails(output_type="TEXT"),
+              ),
+              display_name="verify-stuck-production-monitor",
+          )
+          cid = client.create_instance_agent_command(details).data.id
+          execution=None
+          for _ in range(30):
+              execution=client.get_instance_agent_command_execution(instance_agent_command_id=cid,instance_id=instance_id).data
+              if execution.lifecycle_state in {"SUCCEEDED","FAILED","TIMED_OUT","CANCELED"}:
+                  break
+              time.sleep(3)
+          if execution is None or execution.lifecycle_state!="SUCCEEDED":
+              raise SystemExit("OCI verification did not succeed")
+          out=execution.content
+          text=getattr(out,"text","") or ""
+          for line in text.splitlines():
+              if line.startswith(("RELEASE_SHA=","HEALTH_100=")):
+                  print(line)
+          if getattr(out,"exit_code",1)!=0:
+              raise SystemExit("remote verification failed")
+          expected=os.environ["EXPECTED_SHA"]
+          got=next((x.split("=",1)[1] for x in text.splitlines() if x.startswith("RELEASE_SHA=")),None)
+          if got != expected or "HEALTH_100=PASS" not in text:
+              raise SystemExit("release or health proof mismatch")
+          PY
+
+      - name: Cancel stale monitor reservation after independent proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          status="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STUCK_RUN_ID" --jq '.status')"
+          echo "MONITOR_STATUS_BEFORE=$status"
+          if [ "$status" = "in_progress" ] || [ "$status" = "queued" ]; then
+            gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$STUCK_RUN_ID/cancel" >/dev/null || true
+            sleep 5
+            status="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STUCK_RUN_ID" --jq '.status')"
+            if [ "$status" = "in_progress" ] || [ "$status" = "queued" ]; then
+              gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$STUCK_RUN_ID/force-cancel" >/dev/null
+              sleep 3
+              status="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$STUCK_RUN_ID" --jq '.status')"
+            fi
+          fi
+          echo "MONITOR_STATUS_AFTER=$status"
+          test "$status" = "completed"
+
+      - name: Cleanup OCI credentials
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          test -f "$OCI_KEY_FILE" && shred -u "$OCI_KEY_FILE"
+          test -f "$OCI_CONFIG_FILE" && shred -u "$OCI_CONFIG_FILE"
