@@ -39,6 +39,9 @@ Antes de qualquer diagnóstico ou alteração, toda nova sessão deve ler, nesta
 3. `project.md` — entender o sistema e seus módulos;
 4. o documento específico da rotina afetada.
 
+
+> **Regra contínua de execução:** toda sessão/agente deve usar **@Superpowers em cada etapa material** (planejamento, investigação, implementação, debugging, testes, revisão, correção, PR/merge, deploy, pós-deploy, auditoria e retomadas). Uma única invocação no início não é suficiente. A regra completa está em `agent-rules.md` e `../../REGRAS-AGENTES-CENTRALIZADAS.md`.
+
 Nunca recuperar credenciais de arquivos versionados. Use apenas secrets/runtime autorizado, chave local protegida ou Desktop Commander conectado.
 
 ## Ordem recomendada para diagnóstico
