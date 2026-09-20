@@ -32,6 +32,7 @@ ChatGPT / agente
 - `disk`
 - `runtime_status`
 - `repo_status`
+- `mlrr_preflight_rollout` — exclusivo de `shopvivaliz-free-a1`; executa o rollout MLRR assinado `prepare -> shadow -> validate -> preflight`, sem business write no Mercado Livre.
 
 O comando não aceita shell arbitrário. Para adicionar uma operação nova, altere o workflow ou adicione um script versionado e revisável.
 
@@ -41,6 +42,12 @@ No issue `#1586`, publique um comentário de uma única linha:
 
 ```text
 /remote target=fred-win action=identity reason=diagnostico operacional
+```
+
+Para o preflight MLRR read-only em produção:
+
+```text
+/remote target=shopvivaliz-free-a1 action=mlrr_preflight_rollout reason=validar preflight SRF7 read-only do MLRR
 ```
 
 O workflow `.github/workflows/shopvivaliz-remote-access.yml` aceita somente comentários criados nesse issue pelo usuário autorizado `fredmourao-ai`. Também pode ser acionado manualmente por `workflow_dispatch` com inputs tipados.
