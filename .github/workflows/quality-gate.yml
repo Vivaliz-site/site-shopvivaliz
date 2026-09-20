@@ -54,6 +54,7 @@ jobs:
           php tests/claude-workflow-cost-guard-test.php
           php tests/nondeploy-release-wait-cost-guard-test.php
           php tests/runtime-audit-env-permissions-test.php
+          php tests/remote-mlrr-preflight-rollout-contract-test.php
           php tests/fredwin-runtime-audit-action-test.php
           php tests/no-public-mock-auth-test.php
           php tests/mercadopago-legacy-success-route-regression.php
