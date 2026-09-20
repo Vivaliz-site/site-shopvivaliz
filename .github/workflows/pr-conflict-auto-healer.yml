@@ -144,7 +144,6 @@ jobs:
           [[ "$remote_base" =~ ^/home/ubuntu/\.cache/shopvivaliz-pr-healer/run-[A-Za-z0-9._-]+/healer$ ]]
 
           cleanup() {
-            set +e
             cleanup_file="$RUNNER_TEMP/cleanup-healer.sh"
             printf 'rm -rf -- %q\n' "${remote_base%/*}" > "$cleanup_file"
             if ! run_remote "Cleanup trusted PR healer" "$cleanup_file" >/dev/null 2>&1; then\n              echo "cleanup_remote_healer=best_effort_failed" >&2\n            fi
@@ -186,9 +185,13 @@ jobs:
         if: always()
         shell: bash
         run: |
-          set +e
-          test -n "${OCI_KEY_FILE:-}" && test -f "$OCI_KEY_FILE" && shred -u "$OCI_KEY_FILE"
-          test -n "${OCI_CONFIG_FILE:-}" && test -f "$OCI_CONFIG_FILE" && shred -u "$OCI_CONFIG_FILE"
+          set -Eeuo pipefail
+          if [[ -n "${OCI_KEY_FILE:-}" && -f "$OCI_KEY_FILE" ]]; then
+            shred -u "$OCI_KEY_FILE"
+          fi
+          if [[ -n "${OCI_CONFIG_FILE:-}" && -f "$OCI_CONFIG_FILE" ]]; then
+            shred -u "$OCI_CONFIG_FILE"
+          fi
 
       - name: Security invariant
         if: always()
