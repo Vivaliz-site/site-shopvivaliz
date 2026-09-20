@@ -15,4 +15,3 @@ if ($task.State -eq 'Disabled') {
 } else {
     Write-Output 'TASK_GUARDIAN_HEALTHY=true'
 }
-exit 0
