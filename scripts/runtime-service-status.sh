@@ -18,7 +18,11 @@ unit_value() {
   local unit="$1"
   local prop="$2"
   local value
-  value="$(systemctl show "$unit" -p "$prop" --value 2>/dev/null || true)"
+  if value="$(systemctl show "$unit" -p "$prop" --value 2>/dev/null)"; then
+    :
+  else
+    value=""
+  fi
   if [[ -z "$value" && "$prop" == "LoadState" ]]; then
     value="not-found"
   fi
@@ -31,7 +35,11 @@ report_required_active() {
   load="$(unit_value "$unit" LoadState)"
   active="$(unit_value "$unit" ActiveState)"
   sub="$(unit_value "$unit" SubState)"
-  enabled="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
+  if enabled="$(systemctl is-enabled "$unit" 2>/dev/null)"; then
+    :
+  else
+    enabled="unknown"
+  fi
   printf 'UNIT=%s LOAD=%s ACTIVE=%s SUB=%s ENABLED=%s EXPECTED=active\n'     "$unit" "$load" "$active" "$sub" "${enabled:-unknown}"
   if [[ "$load" != "loaded" || "$active" != "active" ]]; then
     degrade
