@@ -1,0 +1,43 @@
+name: Backend Browser Host CI
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/backend-browser-host-control.yml"
+      - ".github/workflows/backend-browser-host-ci.yml"
+      - "ops/browser-host/**"
+      - "scripts/install-backend-browser-host.sh"
+      - "scripts/backend-browser-host-action.sh"
+      - "tests/backend-browser-host-contract-test.php"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Validate browser host control plane
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash -n scripts/install-backend-browser-host.sh
+          bash -n scripts/backend-browser-host-action.sh
+          bash -n ops/browser-host/browser-session.sh
+          bash -n ops/browser-host/browser-cleanup.sh
+          node --check ops/browser-host/browser-smoke.mjs
+          php tests/backend-browser-host-contract-test.php
+          python3 - <<'PY'
+          import pathlib, yaml
+          for path in [
+              pathlib.Path('.github/workflows/backend-browser-host-control.yml'),
+              pathlib.Path('.github/workflows/backend-browser-host-ci.yml'),
+          ]:
+              yaml.safe_load(path.read_text(encoding='utf-8'))
+          print('workflow-yaml-parse: ok')
+          PY
