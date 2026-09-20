@@ -80,7 +80,7 @@ jobs:
           test -n "$backend_ip"
 
           bastions="$("${OCI[@]}" bastion bastion list --compartment-id "$compartment_id" --all)"
-          bastion_id="$(jq -r '.data[] | select(."lifecycle-state"=="ACTIVE") | .id' <<<"$bastions" | head -1)"
+          bastion_id="$(jq -r '[.data[] | select(."lifecycle-state"=="ACTIVE")] | .[0].id // empty' <<<"$bastions")"
           test -n "$bastion_id"
           bastion_count="$(jq '[.data[] | select(."lifecycle-state"=="ACTIVE")] | length' <<<"$bastions")"
           test "$bastion_count" -ge 1
@@ -106,13 +106,15 @@ jobs:
           OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
 
           runner_ip="$(curl -fsS --connect-timeout 5 --max-time 10 https://api.ipify.org)"
-          python3 - "$runner_ip" <<'PY'
+          runner_cidr="$(python3 - "$runner_ip" <<'PY'
           import ipaddress, sys
-          ipaddress.ip_address(sys.argv[1])
+          ip=ipaddress.ip_address(sys.argv[1])
+          print(f"{ip}/{32 if ip.version == 4 else 128}")
           PY
+          )"
 
           original_cidrs="$(printf '%s' "$ORIGINAL_BASTION_CIDRS_B64" | base64 -d)"
-          updated_cidrs="$(jq -cn --argjson current "$original_cidrs" --arg cidr "$runner_ip/32" '$current + [$cidr] | unique')"
+          updated_cidrs="$(jq -cn --argjson current "$original_cidrs" --arg cidr "$runner_cidr" '$current + [$cidr] | unique')"
           "${OCI[@]}" bastion bastion update             --bastion-id "$BASTION_ID"             --client-cidr-list "$updated_cidrs"             --force             --wait-for-state SUCCEEDED             --wait-interval-seconds 5             --max-wait-seconds 180 >/dev/null
 
           echo "BASTION_ALLOWLIST_UPDATED=true" >> "$GITHUB_ENV"
@@ -213,7 +215,7 @@ jobs:
             rm -f /tmp/shopvivaliz-tailscale-status.json /tmp/shopvivaliz-tailscale-error.txt
             exit 0
           fi
-          if systemctl list-unit-files tailscaled.service --no-legend | grep -q '^tailscaled.service'; then
+          if systemctl cat tailscaled.service >/dev/null 2>&1; then
             sudo -n systemctl restart tailscaled
             sleep 3
             tailscale status --json
