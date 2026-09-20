@@ -173,6 +173,20 @@ reconcile_runtime_service_units() {
 }
 
 
+reconcile_ai_squad_codex_bridge_unit() {
+  local release_path="$1"
+  local installer="$release_path/ops/ai-squad/install-codex-bridge-user-service.sh"
+
+  if [ ! -f "$installer" ]; then
+    log ERROR "Instalador do bridge Codex ausente na release: $installer"
+    return 1
+  fi
+  if ! XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" bash "$installer" >> "$LOG_FILE" 2>&1; then
+    log ERROR "Falha ao reconciliar bridge Codex"
+    return 1
+  fi
+}
+
 reconcile_ai_squad_claude_bridge_unit() {
   local release_path="$1"
   local service="shopvivaliz-squad-claude-bridge.service"
@@ -388,6 +402,10 @@ rollback_to() {
       log ERROR "Rollback nao conseguiu reconciliar a unit Mercado Livre"
       return 1
     fi
+  fi
+  if ! reconcile_ai_squad_codex_bridge_unit "$RELEASES_DIR/$previous_release"; then
+    log ERROR "Rollback nao conseguiu reconciliar o bridge Codex"
+    return 1
   fi
   if ! reconcile_ai_squad_claude_bridge_unit "$RELEASES_DIR/$previous_release"; then
     log ERROR "Rollback nao conseguiu reconciliar o bridge Claude"
@@ -787,6 +805,14 @@ if ! reconcile_runtime_service_units "$NEW_RELEASE_PATH"; then
     log ERROR "Rollback apos falha ao instalar unit Mercado Livre tambem falhou"
   fi
   write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "reconciliacao da unit Mercado Livre falhou"
+  exit 1
+fi
+
+if ! reconcile_ai_squad_codex_bridge_unit "$NEW_RELEASE_PATH"; then
+  if ! rollback_to "$ACTIVE_RELEASE"; then
+    log ERROR "Rollback apos falha ao instalar bridge Codex tambem falhou"
+  fi
+  write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "reconciliacao do bridge Codex falhou"
   exit 1
 fi
 

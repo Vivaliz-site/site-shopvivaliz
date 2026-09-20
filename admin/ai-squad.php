@@ -278,10 +278,11 @@ async function loadHealth(){
       let detail=(names[id]||id)+': '+p.model+' · '+p.reasoning;
       if(id==='openai'&&Array.isArray(p.transport_order)){
         detail+=' · '+p.transport_order.map(transportLabel).join(' → ');
+        if(p.codex_web_search_mode){detail+=' · web '+p.codex_web_search_mode;}
       }
       models.push(detail);
     }
-    document.getElementById('models').textContent=models.join('  |  ')+'  |  Claude: Opus 5 primário, sem Fable';
+    document.getElementById('models').textContent=models.join('  |  ')+'  |  Fable: desabilitado';
   }catch(err){
     document.getElementById('models').textContent='Não foi possível consultar o health do AI Squad.';
   }

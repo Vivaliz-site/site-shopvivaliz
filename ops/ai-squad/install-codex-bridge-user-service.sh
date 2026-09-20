@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
 service="shopvivaliz-squad-codex-bridge.service"
 service_dir="$HOME/.config/systemd/user"
 unit="$service_dir/$service"
@@ -33,6 +35,7 @@ Environment=AI_SQUAD_CODEX_BRIDGE_PORT=17656
 Environment=AI_SQUAD_CODEX_REAL=$codex_real
 Environment=AI_SQUAD_CODEX_BUSINESS_HOME=$business_home
 Environment=AI_SQUAD_CODEX_WORKDIR=$workspace
+Environment=AI_SQUAD_CODEX_WEB_SEARCH_MODE=cached
 Environment=PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
 Restart=always
 RestartSec=5

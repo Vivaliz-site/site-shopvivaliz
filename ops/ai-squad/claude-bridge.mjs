@@ -50,11 +50,27 @@ export function sanitizeBridgeError(value) {
 export function classifyClaudeError(value) {
   const text = String(value || '').toLowerCase();
   if (text.includes('oauth') || text.includes('authenticate') || text.includes('authentication') || text.includes('token expired')) return 'auth';
-  if (text.includes('quota') || text.includes('usage limit') || text.includes('rate limit') || text.includes('credit balance')) return 'quota';
+  if (text.includes('quota') || text.includes('usage limit') || text.includes('session limit') || text.includes('rate limit') || text.includes('credit balance')) return 'quota';
   if (text.includes('timed out') || text.includes('timeout')) return 'timeout';
   if (text.includes('model')) return 'model';
   if (text.includes('not configured') || text.includes('missing token')) return 'not_configured';
   return 'transport';
+}
+
+export function claudeFailureDetail(result) {
+  let detail = String(result?.stderr || '').trim();
+  if (!detail) {
+    const stdout = String(result?.stdout || '').trim();
+    if (stdout) {
+      try {
+        const parsed = JSON.parse(stdout);
+        detail = String(parsed?.result || parsed?.error?.message || parsed?.message || stdout);
+      } catch {
+        detail = stdout;
+      }
+    }
+  }
+  return sanitizeBridgeError(detail || ('claude_exit_' + String(result?.code ?? 'unknown')));
 }
 
 export function buildClaudeArgs(request) {
@@ -197,7 +213,7 @@ async function answer(request) {
   const timeoutMs = Math.max(30000, Math.min(300000, Number(process.env.AI_SQUAD_CLAUDE_REQUEST_TIMEOUT_MS || DEFAULT_TIMEOUT_MS)));
   const result = await runClaude(buildClaudeArgs(request), request.prompt, timeoutMs, token);
   if (result.code !== 0) {
-    const detail = sanitizeBridgeError(result.stderr || result.stdout || ('claude_exit_' + result.code));
+    const detail = claudeFailureDetail(result);
     throw new Error(detail || 'claude_transport_error');
   }
   let data;

@@ -42,7 +42,7 @@ Para cada fase, o agente OpenAI usa esta ordem, preservando exatamente o modelo 
 2. `direct` — OpenAI Responses API quando `OPENAI_API_KEY` tem créditos/cota;
 3. `manual` — evento explícito `agent_manual_required`, com prompt copiável para a sessão ChatGPT já autenticada na VM/RDP.
 
-Uma falha do Codex coloca esse transporte em cooldown pelo restante do ciclo PHP, evitando repetir um timeout conhecido em cada fase. O fallback manual não conta como resposta válida nem como moderador.
+Quando `web_search=true`, o bridge Codex usa `cached` por padrão. Esse modo foi validado com o Codex App Server/ChatGPT Business e evita o bloqueio observado com `live`; `live` só deve ser habilitado explicitamente por `AI_SQUAD_CODEX_WEB_SEARCH_MODE=live` após probe real. Uma falha do Codex coloca esse transporte em cooldown pelo restante do ciclo PHP, evitando repetir um timeout conhecido em cada fase. O fallback manual não conta como resposta válida nem como moderador.
 
 ## Cadeias Claude e Gemini
 
@@ -74,7 +74,7 @@ systemctl --user status shopvivaliz-squad-codex-bridge.service
 curl -fsS http://127.0.0.1:17656/health
 ```
 
-O health do bridge publica apenas estado agregado de autenticação/cota e allowlist de modelos; não publica conta, e-mail, token ou nome de perfil.
+O health do bridge publica apenas estado agregado de autenticação/cota, allowlist de modelos e o modo de pesquisa Web (`cached`/`live`); não publica conta, e-mail, token ou nome de perfil.
 
 ## Perfis
 
@@ -82,10 +82,10 @@ O health do bridge publica apenas estado agregado de autenticação/cota e allow
 
 Preset para pesquisas aprofundadas e debates com evidência atual:
 
-- OpenAI: `gpt-5.6-sol`, effort `xhigh`;
-- Anthropic: `claude-opus-5`, effort `xhigh`;
-- Gemini: `gemini-3.1-pro-preview`, thinking `HIGH`;
-- web search habilitado para os três.
+- OpenAI: `gpt-5.6-terra`, effort `medium`;
+- Anthropic: `claude-sonnet-5`, effort `medium`;
+- Gemini: `gemini-3.5-flash`, thinking `MEDIUM`;
+- web search habilitado para os três; no transporte Codex, usa `cached` por padrão.
 
 Por decisão operacional, Fable não faz parte de nenhum preset do AI Squad.
 
@@ -123,7 +123,8 @@ Configuração opcional do bridge OpenAI:
 
 - `AI_SQUAD_CODEX_ENABLED=0` desabilita o transporte Codex;
 - `AI_SQUAD_CODEX_BRIDGE_URL` sobrescreve o padrão `http://127.0.0.1:17656`;
-- `AI_SQUAD_CODEX_HTTP_TIMEOUT` controla o timeout PHP→bridge, limitado a 30–300 segundos.
+- `AI_SQUAD_CODEX_HTTP_TIMEOUT` controla o timeout PHP→bridge, limitado a 30–300 segundos;
+- `AI_SQUAD_CODEX_WEB_SEARCH_MODE` controla a pesquisa hospedada do Codex; o padrão operacional é `cached`; `live` é opt-in e exige validação real antes de produção.
 
 Configuração opcional do bridge Claude:
 
@@ -150,7 +151,7 @@ O health esperado contém:
 - `endpoint=ai-squad`
 - `providers` com OpenAI, Anthropic e Gemini;
 - modelo e esforço de cada provider;
-- para OpenAI, `transport_order`, `codex_chatgpt_authenticated`, `codex_chatgpt_available`, `direct_configured` e `manual_fallback`;
+- para OpenAI, `transport_order`, `codex_chatgpt_authenticated`, `codex_chatgpt_available`, `codex_web_search_mode`, `direct_configured` e `manual_fallback`;
 - para Anthropic, `transport_order`, `claude_code_oauth_configured`, `claude_code_authenticated`, `claude_code_available`, `direct_configured` e `vertex_oauth_configured`;
 - para Gemini, `transport_order`, `vertex_oauth_configured` e `direct_configured`;
 - somente estado/booleanos agregados, nunca credenciais nem identidade da conta ChatGPT.
