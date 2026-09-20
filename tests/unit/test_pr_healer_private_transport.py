@@ -37,7 +37,8 @@ class PrHealerPrivateTransportTest(unittest.TestCase):
         self.assertNotIn('VM_HOST: 127.0.0.1', text)
         self.assertIn('BASTION_TUNNEL_RETRY_MAX=6', text)
         self.assertIn('bastion_tunnel_ready_attempt=', text)
-        self.assertIn('wait "$tunnel_pid" 2>/dev/null || true', text)
+        self.assertIn('bastion_tunnel_attempt_exit=', text)
+        self.assertNotIn('wait "$tunnel_pid" 2>/dev/null || true', text)
 
     def test_bastion_jobs_serialize_without_losing_workflow_deduplication(self):
         healer = WORKFLOW.read_text(encoding='utf-8')
