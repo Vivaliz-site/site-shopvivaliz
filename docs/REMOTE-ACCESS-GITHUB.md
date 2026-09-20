@@ -63,12 +63,12 @@ Se o runner privado estiver indisponível ou congestionado, use o fallback indep
 /recover-windows-oci reason=recuperar relays Windows sem depender do runner privado
 ```
 
-O fallback executa em `ubuntu-latest`, usa OCI Compute Instance Run Command para entrar na backend VM e, de lá, alcança os PCs pela rede Tailscale. Assim, a recuperação não depende nem do Desktop Commander nem do runner `shopvivaliz-a1-deploy`.
+O fallback executa em `ubuntu-latest` e usa **OCI Bastion** para abrir um túnel SSH temporário até a backend VM. Ele gera um par SSH efêmero exclusivo para autenticar a sessão Bastion; a chave ShopVivaliz permanece separada e é usada somente para autenticar backend/Windows via agent forwarding. Nenhuma chave privada é enviada em OCI Run Command, issue, artifact ou log. O workflow acrescenta somente o IP `/32` do runner à allowlist do Bastion durante a sessão, restaura a lista original no cleanup, usa SSH agent forwarding até a backend e alcança Fred-Win/KOCEPSV pela rede Tailscale. Assim, a recuperação não depende nem do Desktop Commander nem do runner `shopvivaliz-a1-deploy`.
 
 ## Segurança
 
 - Nenhuma chave, token, senha ou OTP é gravada no comentário.
-- SSH usa secrets do GitHub e `known_hosts` verificado.
+- SSH usa secrets do GitHub e `known_hosts` verificado. O fallback OCI usa Bastion com sessão temporária e nunca copia chave privada para OCI Run Command ou para as VMs.
 - Windows permanece loopback-only atrás dos relays privados já existentes.
 - Toda execução fica associada ao issue/comment, workflow run, target, action e motivo.
 - O canal não autoriza bypass de branch protection, exposição pública de RCE ou leitura de secrets.
