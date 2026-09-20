@@ -1,10 +1,8 @@
 name: MLRR Production Operations Bridge
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/mlrr-production-ops-bridge.yml"
+  issue_comment:
+    types: [created]
   workflow_dispatch:
     inputs:
       operation:
@@ -16,6 +14,8 @@ on:
           - cutover
           - validate
           - shadow
+          - preflight
+          - rollout
 
 permissions:
   contents: read
@@ -26,16 +26,58 @@ concurrency:
 
 jobs:
   operate:
+    if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && startsWith(github.event.comment.body, '/mlrr '))
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
-    timeout-minutes: 30
+    timeout-minutes: 45
     environment: production
     steps:
+      - name: Resolve MLRR request
+        id: req
+        shell: bash
+        env:
+          DISPATCH_OPERATION: ${{ inputs.operation }}
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
+          if os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch":
+              operation = os.environ.get("DISPATCH_OPERATION", "").strip()
+              reason = "workflow_dispatch"
+          else:
+              comment = event.get("comment") or {}
+              body = str(comment.get("body") or "").strip()
+              match = re.fullmatch(
+                  r"/mlrr\s+operation=(prepare|cutover|validate|shadow|preflight|rollout)\s+reason=(.{3,500})",
+                  body,
+              )
+              if not match:
+                  raise SystemExit("Invalid MLRR command format")
+              operation = match.group(1)
+              reason = match.group(2).strip()
+
+          allowed = {"prepare", "cutover", "validate", "shadow", "preflight", "rollout"}
+          if operation not in allowed:
+              raise SystemExit(f"Unsupported MLRR operation: {operation}")
+          if not reason:
+              raise SystemExit("Reason is required")
+
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              output.write(f"operation={operation}\n")
+          print(f"MLRR_REQUEST operation={operation}")
+          print(f"MLRR_REASON={reason}")
+          PY
+
       - name: Execute canonical MLRR operation
         shell: bash
         env:
-          CHAT_CLI_SESSION_ID: gha-mlrr-production-bridge
-          MLRR_OPERATION: ${{ inputs.operation }}
-          EXECUTION_AGENT: chatgpt-gpt-5.6-sol
+          CHAT_CLI_SESSION_ID: gha-mlrr-production-bridge-${{ github.run_id }}
+          MLRR_OPERATION: ${{ steps.req.outputs.operation }}
+          EXECUTION_AGENT: github-actions-mlrr-bridge
         run: |
           set -Eeuo pipefail
           test "$(hostname)" = shopvivaliz-free-a1
@@ -59,7 +101,10 @@ jobs:
 
           provenance() {
             local result="$1" code="$2"
-            EXECUTION_RESULT="$result" EXECUTION_EXIT_CODE="$code"               python3 "$site_repo/scripts/emit-execution-provenance.py"                 mlrr_production_bridge --target shopvivaliz-free-a1                 >> "$state_dir/execution-provenance.jsonl"
+            EXECUTION_RESULT="$result" EXECUTION_EXIT_CODE="$code" \
+              python3 "$site_repo/scripts/emit-execution-provenance.py" \
+                mlrr_production_bridge --target shopvivaliz-free-a1 \
+              >> "$state_dir/execution-provenance.jsonl"
           }
 
           cleanup() {
@@ -94,10 +139,11 @@ jobs:
           export GITHUB_REF_NAME=main
           test -x scripts/mlrr-production-ops.sh
 
-          if [ "$GITHUB_EVENT_NAME" = push ]; then
+          if [ "$MLRR_OPERATION" = rollout ]; then
             scripts/mlrr-production-ops.sh prepare
             scripts/mlrr-production-ops.sh shadow
             scripts/mlrr-production-ops.sh validate
+            scripts/mlrr-production-ops.sh preflight
           else
             scripts/mlrr-production-ops.sh "$MLRR_OPERATION"
           fi
