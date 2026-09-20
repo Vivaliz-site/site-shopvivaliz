@@ -31,6 +31,10 @@ ais_assert(
 );
 putenv('AI_SQUAD_TEST_ANTHROPIC_MODEL');
 
+ais_assert(svais_openrouter_model_slug('openai', 'gpt-5.6-sol') === 'openai/gpt-5.6-sol', 'OpenRouter OpenAI slug mismatch');
+ais_assert(svais_openrouter_model_slug('anthropic', 'claude-opus-5') === 'anthropic/claude-opus-5', 'OpenRouter Anthropic slug mismatch');
+ais_assert(svais_openrouter_model_slug('gemini', 'gemini-3.1-pro-preview') === 'google/gemini-3.1-pro-preview', 'OpenRouter Gemini slug mismatch');
+
 $openaiFixture = [
     'output' => [[
         'type' => 'message',
