@@ -2,7 +2,16 @@
 
 ## Objetivo
 
-Executar testes e automações de navegador na VM `always-free-arm-1787907847-26` sem depender de Fred-Win, KOCEPSV ou Desktop Commander.
+Executar testes, navegação e automações de navegador na VM `always-free-arm-1787907847-26`, que é o host canônico de browser dos agentes.
+
+## Regra global de host
+
+<!-- GLOBAL_BROWSER_VM_POLICY_V2 -->
+
+- Fred-Win (`LAPTOP-NIG4IFUU`) e `DESKTOP-KOCEPSV` não devem ser usados para navegação, automação browser, MFA/CAPTCHA ou validação visual.
+- Não existe fallback automático para Windows. Em falha, reparar o Browser Worker, reverse tunnel ou OCI Bastion.
+- A interface humana canônica é `https://shopvivaliz.com.br/admin/browser-worker.php`.
+- Windows permanece disponível para tarefas não-browser que dependam especificamente dele.
 
 ## Arquitetura
 
