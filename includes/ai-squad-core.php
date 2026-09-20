@@ -101,19 +101,23 @@ function svais_profile(string $name): array
 
 function svais_provider_state(array $profile): array
 {
+    $openRouterConfigured = trim((string)(getenv('OPENROUTER_API_KEY') ?: '')) !== '';
     return [
         'openai' => [
             'configured' => trim((string)(getenv('OPENAI_API_KEY') ?: '')) !== '',
+            'openrouter_fallback_configured' => $openRouterConfigured,
             'model' => (string)$profile['openai']['model'],
             'reasoning' => (string)$profile['openai']['effort'],
         ],
         'anthropic' => [
             'configured' => trim((string)(getenv('ANTHROPIC_API_KEY') ?: '')) !== '',
+            'openrouter_fallback_configured' => $openRouterConfigured,
             'model' => (string)$profile['anthropic']['model'],
             'reasoning' => (string)$profile['anthropic']['effort'],
         ],
         'gemini' => [
             'configured' => trim((string)(getenv('GEMINI_API_KEY') ?: getenv('GOOGLE_API_KEY') ?: '')) !== '',
+            'openrouter_fallback_configured' => $openRouterConfigured,
             'model' => (string)$profile['gemini']['model'],
             'reasoning' => strtolower((string)$profile['gemini']['thinking_level']),
         ],
@@ -381,18 +385,93 @@ function svais_gemini_call(array $cfg, string $system, string $prompt, bool $web
     ];
 }
 
+function svais_openrouter_model_slug(string $provider, string $model): string
+{
+    if (str_contains($model, '/')) {
+        return $model;
+    }
+    return match ($provider) {
+        'openai' => 'openai/' . $model,
+        'anthropic' => 'anthropic/' . $model,
+        'gemini' => 'google/' . $model,
+        default => $model,
+    };
+}
+
+function svais_openrouter_call(string $provider, array $cfg, string $system, string $prompt, bool $webSearch): array
+{
+    $key = trim((string)(getenv('OPENROUTER_API_KEY') ?: ''));
+    if ($key === '') {
+        throw new RuntimeException('OPENROUTER_API_KEY_not_configured');
+    }
+
+    $effort = (string)($cfg['effort'] ?? strtolower((string)($cfg['thinking_level'] ?? 'high')));
+    $maxTokens = (int)($cfg['max_output_tokens'] ?? $cfg['max_tokens'] ?? 5000);
+    $payload = [
+        'model' => svais_openrouter_model_slug($provider, (string)$cfg['model']),
+        'messages' => [
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user', 'content' => $prompt],
+        ],
+        'max_tokens' => $maxTokens,
+        'reasoning' => ['effort' => strtolower($effort)],
+    ];
+    if ($webSearch) {
+        $payload['tools'] = [['type' => 'openrouter:web_search']];
+    }
+
+    $data = svais_http_json('https://openrouter.ai/api/v1/chat/completions', [
+        'Content-Type: application/json',
+        'Authorization: Bearer ' . $key,
+        'HTTP-Referer: https://shopvivaliz.com.br',
+        'X-Title: ShopVivaliz AI Squad',
+    ], $payload, 240);
+
+    $text = trim((string)($data['choices'][0]['message']['content'] ?? ''));
+    $urls = [];
+    svais_collect_urls($data, $urls);
+    return [
+        'text' => $text,
+        'sources' => array_keys($urls),
+        'usage' => $data['usage'] ?? [],
+        'model' => (string)($data['model'] ?? $payload['model']),
+        'transport' => 'openrouter',
+    ];
+}
+
 function svais_call_provider(string $provider, array $profile, string $phase, string $prompt): array
 {
     $webSearch = (bool)($profile['web_search'] ?? false);
     $system = svais_base_system($provider, $phase);
 
     $started = microtime(true);
-    $result = match ($provider) {
-        'openai' => svais_openai_call($profile['openai'], $system, $prompt, $webSearch),
-        'anthropic' => svais_anthropic_call($profile['anthropic'], $system, $prompt, $webSearch),
-        'gemini' => svais_gemini_call($profile['gemini'], $system, $prompt, $webSearch),
-        default => throw new InvalidArgumentException('unknown_provider'),
-    };
+    $cfg = $profile[$provider] ?? null;
+    if (!is_array($cfg)) {
+        throw new InvalidArgumentException('unknown_provider');
+    }
+
+    try {
+        $result = match ($provider) {
+            'openai' => svais_openai_call($profile['openai'], $system, $prompt, $webSearch),
+            'anthropic' => svais_anthropic_call($profile['anthropic'], $system, $prompt, $webSearch),
+            'gemini' => svais_gemini_call($profile['gemini'], $system, $prompt, $webSearch),
+            default => throw new InvalidArgumentException('unknown_provider'),
+        };
+        $result['transport'] = 'direct';
+    } catch (Throwable $directError) {
+        if (trim((string)(getenv('OPENROUTER_API_KEY') ?: '')) === '') {
+            throw $directError;
+        }
+        try {
+            $result = svais_openrouter_call($provider, $cfg, $system, $prompt, $webSearch);
+            $result['direct_error'] = svais_safe_error($directError);
+        } catch (Throwable $fallbackError) {
+            throw new RuntimeException(
+                'direct_failed: ' . svais_safe_error($directError)
+                . ' | openrouter_failed: ' . svais_safe_error($fallbackError)
+            );
+        }
+    }
 
     if (trim((string)($result['text'] ?? '')) === '') {
         throw new RuntimeException('provider_empty_response');
