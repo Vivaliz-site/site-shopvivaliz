@@ -12,8 +12,8 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: pr-conflict-auto-healer-${{ github.event.pull_request.number || 'sweep' }}
-  cancel-in-progress: true
+  group: shopvivaliz-bastion-access
+  cancel-in-progress: false
 
 jobs:
   heal:
