@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: shopvivaliz-windows-relay-oci-recovery
+  cancel-in-progress: false
+
 jobs:
   recover:
     if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && startsWith(github.event.comment.body, '/recover-windows-oci '))
@@ -78,15 +82,31 @@ jobs:
           vnic_id="$("${OCI[@]}" compute vnic-attachment list --compartment-id "$compartment_id" --instance-id "$instance_id" --query 'data[0]."vnic-id"' --raw-output)"
           test -n "$vnic_id"
           backend_ip="$("${OCI[@]}" network vnic get --vnic-id "$vnic_id" --query 'data."private-ip"' --raw-output)"
+          backend_subnet_id="$("${OCI[@]}" network vnic get --vnic-id "$vnic_id" --query 'data."subnet-id"' --raw-output)"
           test -n "$backend_ip"
+          test -n "$backend_subnet_id"
+          backend_vcn_id="$("${OCI[@]}" network subnet get --subnet-id "$backend_subnet_id" --query 'data."vcn-id"' --raw-output)"
+          test -n "$backend_vcn_id"
 
           bastions="$("${OCI[@]}" bastion bastion list --compartment-id "$compartment_id" --all)"
-          bastion_id="$(jq -r '[.data[] | select(."lifecycle-state"=="ACTIVE")] | .[0].id // empty' <<<"$bastions")"
+          matching_bastion_count="$(jq --arg vcn "$backend_vcn_id" '[.data[] | select(."lifecycle-state"=="ACTIVE" and ."target-vcn-id"==$vcn)] | length' <<<"$bastions")"
+          test "$matching_bastion_count" -ge 1
+          bastion_id="$(jq -r --arg vcn "$backend_vcn_id" --arg subnet "$backend_subnet_id" '
+            [.data[] | select(."lifecycle-state"=="ACTIVE" and ."target-vcn-id"==$vcn)] as $c
+            | (($c | map(select(."target-subnet-id"==$subnet)) | .[0].id) // ($c[0].id) // empty)
+          ' <<<"$bastions")"
           test -n "$bastion_id"
-          bastion_count="$(jq '[.data[] | select(."lifecycle-state"=="ACTIVE")] | length' <<<"$bastions")"
-          test "$bastion_count" -ge 1
 
           details="$("${OCI[@]}" bastion bastion get --bastion-id "$bastion_id")"
+          selected_vcn="$(jq -r '.data."target-vcn-id"' <<<"$details")"
+          selected_subnet="$(jq -r '.data."target-subnet-id"' <<<"$details")"
+          test "$selected_vcn" = "$backend_vcn_id"
+          if [ "$selected_subnet" = "$backend_subnet_id" ]; then
+            echo "BASTION_BACKEND_SUBNET_MATCH=true"
+          else
+            echo "BASTION_BACKEND_SUBNET_MATCH=false"
+          fi
+          echo "BASTION_BACKEND_VCN_MATCH=PASS"
           original_cidrs="$(jq -c '.data."client-cidr-block-allow-list"' <<<"$details")"
           test "$original_cidrs" != null
           original_cidrs_b64="$(printf '%s' "$original_cidrs" | base64 -w0)"
@@ -127,7 +147,7 @@ jobs:
           set -Eeuo pipefail
           OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
 
-          session_id="$("${OCI[@]}" bastion session create-port-forwarding             --bastion-id "$BASTION_ID"             --ssh-public-key-file "$HOME/.ssh/vmkey.pub"             --target-private-ip "$BACKEND_PRIVATE_IP"             --target-port 22             --session-ttl 1800             --display-name "shopvivaliz-windows-relay-recovery"             --query 'data.id'             --raw-output)"
+          session_id="$("${OCI[@]}" bastion session create-port-forwarding             --bastion-id "$BASTION_ID"             --ssh-public-key-file "$HOME/.ssh/bastion_session_key.pub"             --target-private-ip "$BACKEND_PRIVATE_IP"             --target-port 22             --session-ttl 1800             --display-name "shopvivaliz-windows-relay-recovery"             --query 'data.id'             --raw-output)"
           test -n "$session_id"
           echo "BASTION_SESSION_ID=$session_id" >> "$GITHUB_ENV"
 
@@ -182,6 +202,8 @@ jobs:
             ExitOnForwardFailure yes
             StrictHostKeyChecking yes
             UserKnownHostsFile $HOME/.ssh/bastion_known_hosts
+            HostKeyAlgorithms +ssh-rsa
+            PubkeyAcceptedAlgorithms +ssh-rsa
           EOF
           chmod 600 "$HOME/.ssh/config"
 
@@ -201,6 +223,7 @@ jobs:
             sleep 2
           done
           test "$tunnel_ready" = true
+          echo "BASTION_LOCAL_TUNNEL=PASS"
 
           BACKEND_SSH=(
             ssh -A
@@ -215,29 +238,50 @@ jobs:
 
           identity="$("${BACKEND_SSH[@]}" 'printf "%s/%s" "$(hostname)" "$(id -un)"')"
           test "$identity" = "$EXPECTED_BACKEND_HOST/ubuntu"
+          echo "BACKEND_SSH_IDENTITY=PASS"
 
           tailscale_json="$("${BACKEND_SSH[@]}" 'bash -se' <<'REMOTE'
           set -Eeuo pipefail
-          command -v tailscale >/dev/null
+          if command -v tailscale >/dev/null; then
+            echo "TAILSCALE_BINARY=present" >&2
+          else
+            echo "TAILSCALE_BINARY=missing" >&2
+            exit 31
+          fi
+
           if tailscale status --json >/tmp/shopvivaliz-tailscale-status.json 2>/tmp/shopvivaliz-tailscale-error.txt; then
+            echo "TAILSCALE_STATUS=ok" >&2
             cat /tmp/shopvivaliz-tailscale-status.json
             rm -f /tmp/shopvivaliz-tailscale-status.json /tmp/shopvivaliz-tailscale-error.txt
           elif systemctl cat tailscaled.service >/dev/null 2>&1; then
+            echo "TAILSCALE_STATUS=restart_required" >&2
             sudo -n systemctl restart tailscaled
             sleep 3
             tailscale status --json
+            echo "TAILSCALE_STATUS=ok_after_restart" >&2
             rm -f /tmp/shopvivaliz-tailscale-status.json /tmp/shopvivaliz-tailscale-error.txt
           else
+            echo "TAILSCALE_SERVICE=missing" >&2
             rm -f /tmp/shopvivaliz-tailscale-status.json /tmp/shopvivaliz-tailscale-error.txt
-            exit 31
+            exit 32
           fi
           REMOTE
           )"
 
           fred_ip="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(next((ip for p in (d.get("Peer") or {}).values() if "LAPTOP-NIG4IFUU" in str(p.get("HostName") or p.get("DNSName") or "").upper() for ip in (p.get("TailscaleIPs") or []) if ":" not in ip), ""))' <<<"$tailscale_json")"
           desk_ip="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(next((ip for p in (d.get("Peer") or {}).values() if "DESKTOP-KOCEPSV" in str(p.get("HostName") or p.get("DNSName") or "").upper() for ip in (p.get("TailscaleIPs") or []) if ":" not in ip), ""))' <<<"$tailscale_json")"
-          test -n "$fred_ip"
-          test -n "$desk_ip"
+          if [ -n "$fred_ip" ]; then
+            echo "FRED_PEER=found"
+          else
+            echo "FRED_PEER=not_found"
+            exit 33
+          fi
+          if [ -n "$desk_ip" ]; then
+            echo "DESKTOP_PEER=found"
+          else
+            echo "DESKTOP_PEER=not_found"
+            exit 34
+          fi
 
           "${BACKEND_SSH[@]}" "FRED_IP='$fred_ip' DESK_IP='$desk_ip' bash -se" <<'REMOTE'
           set -Eeuo pipefail

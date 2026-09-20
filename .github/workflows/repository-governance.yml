@@ -127,6 +127,7 @@ jobs:
             tests.unit.test_olist_entrypoints_safe \
             tests.unit.test_repository_governance_secret_debt \
             tests.unit.test_shopee_legacy_credentials_safe \
+            tests.unit.test_workflow_private_transport \
             -v
 
       - name: Self-test extreme audit governance
