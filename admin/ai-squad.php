@@ -168,7 +168,7 @@ function addMessage(e){
   div.className='msg '+(e.provider||'')+(e.ok===false?' error':'');
   const sources=(e.sources||[]).slice(0,12);
   div.innerHTML='<div class="msg-head"><div class="agent">'+esc(names[e.provider]||e.provider||'Agente')+
-    '<small>'+esc(e.model||phaseName(e.phase||''))+'</small></div>'+
+    '<small>'+esc(e.model||phaseName(e.phase||''))+(e.transport==='openrouter'?' · via OpenRouter':' · direto')+'</small></div>'+
     '<div class="latency">'+(e.latency_ms?fmtMs(e.latency_ms):'')+'</div></div>'+
     '<div class="msg-body">'+esc(e.text||e.error||'Sem resposta.')+'</div>'+
     (sources.length?'<div class="sources"><b>Fontes detectadas</b>'+sources.map(linkSource).join('')+'</div>':'');
