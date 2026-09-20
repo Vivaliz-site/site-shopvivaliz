@@ -262,7 +262,6 @@ jobs:
         if: always()
         shell: bash
         run: |
-          set +e
           if [ -n "${BASTION_TUNNEL_PID:-}" ] && kill -0 "$BASTION_TUNNEL_PID" 2>/dev/null; then
             kill "$BASTION_TUNNEL_PID"
           fi
