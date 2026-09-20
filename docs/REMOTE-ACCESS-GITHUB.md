@@ -9,7 +9,7 @@ Fluxo canônico:
 ```text
 ChatGPT / agente
   -> GitHub connector
-  -> commit em ops/remote-access-request.json
+  -> comentario auditavel no issue #1586
   -> GitHub Actions
   -> runner self-hosted shopvivaliz-free-a1
      -> execução local no site VM
@@ -33,29 +33,28 @@ ChatGPT / agente
 - `runtime_status`
 - `repo_status`
 
-O request não aceita shell arbitrário. Para adicionar uma operação nova, altere o workflow ou adicione um script versionado e revisável.
+O comando não aceita shell arbitrário. Para adicionar uma operação nova, altere o workflow ou adicione um script versionado e revisável.
 
 ## Como acionar
 
-Atualize `ops/remote-access-request.json` no branch `main` com:
+No issue `#1586`, publique um comentário de uma única linha:
 
-```json
-{
-  "target": "fred-win",
-  "action": "identity",
-  "requested_at": "2026-09-19T21:25:00-03:00",
-  "reason": "diagnostico operacional"
-}
+```text
+/remote target=fred-win action=identity reason=diagnostico operacional
 ```
 
-O commit dispara `.github/workflows/shopvivaliz-remote-access.yml`.
+O workflow `.github/workflows/shopvivaliz-remote-access.yml` aceita somente comentários criados nesse issue pelo usuário autorizado `fredmourao-ai`. Também pode ser acionado manualmente por `workflow_dispatch` com inputs tipados.
+
+O arquivo `ops/remote-access-request.json` permanece temporariamente apenas como registro legado para não interromper execuções concorrentes. Ele não é mais gatilho do canal canônico.
+
+Esse modelo evita commits operacionais repetitivos e não dispara os demais pipelines de `push` do repositório.
 
 ## Segurança
 
-- Nenhuma chave, token, senha ou OTP é gravada no request.
+- Nenhuma chave, token, senha ou OTP é gravada no comentário.
 - SSH usa secrets do GitHub e `known_hosts` verificado.
 - Windows permanece loopback-only atrás dos relays privados já existentes.
-- Toda execução fica associada a commit, workflow run, target, action e motivo.
+- Toda execução fica associada ao issue/comment, workflow run, target, action e motivo.
 - O canal não autoriza bypass de branch protection, exposição pública de RCE ou leitura de secrets.
 
 ## Relação com Desktop Commander
