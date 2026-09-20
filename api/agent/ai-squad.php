@@ -36,10 +36,13 @@ function svais_api_is_admin_session(): bool
     return !empty($_SESSION['user_id']) && !empty($_SESSION['is_admin']);
 }
 
-function svais_api_authorized(): bool
+function svais_api_auth_mode(): string
 {
-    if (PHP_SAPI === 'cli' || svais_api_is_admin_session()) {
-        return true;
+    if (PHP_SAPI === 'cli') {
+        return 'cli';
+    }
+    if (svais_api_is_admin_session()) {
+        return 'session';
     }
 
     $candidates = [];
@@ -50,7 +53,7 @@ function svais_api_authorized(): bool
         }
     }
     if ($candidates === []) {
-        return false;
+        return 'none';
     }
 
     $provided = svais_api_header('X-Agent-Key');
@@ -66,10 +69,10 @@ function svais_api_authorized(): bool
 
     foreach ($candidates as $expected) {
         if ($provided !== '' && hash_equals($expected, $provided)) {
-            return true;
+            return 'key';
         }
     }
-    return false;
+    return 'none';
 }
 
 function svais_api_json(int $status, array $payload): never
@@ -131,8 +134,16 @@ if ($method !== 'POST') {
     svais_api_json(405, ['ok' => false, 'error' => 'method_not_allowed']);
 }
 
-if (!svais_api_authorized()) {
+$authMode = svais_api_auth_mode();
+if ($authMode === 'none') {
     svais_api_json(401, ['ok' => false, 'error' => 'unauthorized']);
+}
+if ($authMode === 'session') {
+    $csrf = svais_api_header('X-CSRF-Token');
+    $expectedCsrf = (string)($_SESSION['ai_squad_csrf'] ?? '');
+    if ($csrf === '' || $expectedCsrf === '' || !hash_equals($expectedCsrf, $csrf)) {
+        svais_api_json(403, ['ok' => false, 'error' => 'csrf_failed']);
+    }
 }
 
 if (!svorl_allow(6, 600, 'ai-squad')) {
