@@ -43,6 +43,22 @@ foreach ([
 if (!str_contains($workflow, 'bash scripts/runtime-service-status.sh site')) {
     $errors[] = 'site remote runtime_status must use canonical runtime inventory';
 }
+
+foreach ([
+    '- mlrr_rollout',
+    '"mlrr_rollout"',
+    'scripts/mlrr-production-ops.sh prepare',
+    'scripts/mlrr-production-ops.sh shadow',
+    'scripts/mlrr-production-ops.sh validate',
+    'scripts/mlrr-production-ops.sh preflight',
+] as $needle) {
+    if (!str_contains($workflow, $needle)) {
+        $errors[] = "MLRR production bridge contract missing: {$needle}";
+    }
+}
+if (!str_contains($workflow, "target != 'shopvivaliz-free-a1' && steps.req.outputs.action != 'mlrr_rollout'")) {
+    $errors[] = 'MLRR rollout must never trigger backend SSH setup';
+}
 if (!str_contains($workflow, "bash -s -- backend") || !str_contains($workflow, '< scripts/runtime-service-status.sh')) {
     $errors[] = 'backend remote runtime_status must use canonical runtime inventory';
 }
