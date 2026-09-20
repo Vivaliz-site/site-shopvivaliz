@@ -32,7 +32,6 @@ ChatGPT / agente
 - `disk`
 - `runtime_status`
 - `repo_status`
-- `mlrr_rollout` — somente em `shopvivaliz-free-a1`; promove o `main` de `Vivaliz-site/mercadolivre-returns-recovery` pela sequência fixa `prepare -> shadow -> validate -> preflight`, com provenance assinado no host.
 
 O comando não aceita shell arbitrário. Para adicionar uma operação nova, altere o workflow ou adicione um script versionado e revisável.
 
@@ -42,12 +41,6 @@ No issue `#1586`, publique um comentário de uma única linha:
 
 ```text
 /remote target=fred-win action=identity reason=diagnostico operacional
-```
-
-Para o rollout MLRR no runner canônico, use:
-
-```text
-/remote target=shopvivaliz-free-a1 action=mlrr_rollout reason=promover e validar MLRR main
 ```
 
 O workflow `.github/workflows/shopvivaliz-remote-access.yml` aceita somente comentários criados nesse issue pelo usuário autorizado `fredmourao-ai`. Também pode ser acionado manualmente por `workflow_dispatch` com inputs tipados.
