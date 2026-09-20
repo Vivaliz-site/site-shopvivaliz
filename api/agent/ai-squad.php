@@ -227,6 +227,10 @@ foreach ($phases as $phase) {
 
     $phaseBaseTranscript = $transcript;
     foreach ($providers as $provider) {
+        if (($providerStatus[$provider] ?? '') === 'manual_required') {
+            continue;
+        }
+
         $prompt = svais_round_prompt($topic, $phase, $phase === 'research' ? [] : $phaseBaseTranscript);
         svais_api_emit([
             'type' => 'agent_started',
@@ -252,6 +256,21 @@ foreach ($phases as $phase) {
             ];
             $transcript[] = $entry;
             $providerStatus[$provider] = 'ok';
+            svais_api_emit($entry, $stream, $events);
+        } catch (SvaisManualInterventionRequired $manual) {
+            $providerStatus[$provider] = 'manual_required';
+            $entry = [
+                'type' => 'agent_manual_required',
+                'cycle_id' => $cycleId,
+                'phase' => $phase,
+                'provider' => $provider,
+                'model' => $manual->model,
+                'prompt' => $manual->manualPrompt,
+                'attempts' => $manual->attempts,
+                'transport' => 'manual',
+                'ok' => false,
+            ];
+            $transcript[] = $entry;
             svais_api_emit($entry, $stream, $events);
         } catch (Throwable $e) {
             $providerStatus[$provider] = 'error';
