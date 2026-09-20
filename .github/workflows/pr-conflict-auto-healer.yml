@@ -228,8 +228,6 @@ jobs:
             ssh "${SSH_OPTS[@]}" ubuntu@127.0.0.1 "rm -rf -- '${remote_dir}'" >/dev/null 2>&1 || true
           }
           trap 'cleanup_remote; cleanup_local' EXIT
-
-          scp "${SSH_OPTS[@]/#/-o }" /dev/null >/dev/null 2>&1 || true
           scp -q -P "$local_port"             -o BatchMode=yes -o ConnectTimeout=10             -o HostKeyAlias="$SITE_PRIVATE_IP"             -o StrictHostKeyChecking=yes             -o UserKnownHostsFile="$HOME/.ssh/known_hosts"             -i "$HOME/.ssh/vmkey"             trusted/scripts/pr_conflict_gemini_healer.py             "ubuntu@127.0.0.1:${remote_base}.py"
           scp -q -P "$local_port"             -o BatchMode=yes -o ConnectTimeout=10             -o HostKeyAlias="$SITE_PRIVATE_IP"             -o StrictHostKeyChecking=yes             -o UserKnownHostsFile="$HOME/.ssh/known_hosts"             -i "$HOME/.ssh/vmkey"             trusted/scripts/pr_conflict_vm_heal.sh             "ubuntu@127.0.0.1:${remote_base}.sh"
           ssh "${SSH_OPTS[@]}" ubuntu@127.0.0.1             "chmod 700 '${remote_base}.py' '${remote_base}.sh' && GEMINI_ENV_FILE=/home/ubuntu/shopvivaliz-deploy/shared/.env python3 '${remote_base}.py' --credential-preflight"
