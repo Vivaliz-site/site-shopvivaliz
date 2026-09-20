@@ -12,14 +12,15 @@ SITE_KEY="${SHOPVIVALIZ_BROWSER_SITE_KEY:-/home/ubuntu/.ssh/shopvivaliz-free-a1-
 SITE_REMOTE_PORT="${SHOPVIVALIZ_BROWSER_SITE_REMOTE_PORT:-17777}"
 
 mkdir -p "$PID_DIR" "$LOG_DIR"
-chmod 700 "$ROOT" "$PID_DIR" "$LOG_DIR" 2>/dev/null || true
+if ! chmod 700 "$ROOT" "$PID_DIR" "$LOG_DIR" 2>/dev/null; then :; fi
 exec 9>"$ROOT/.supervisor.lock"
 flock -w 15 9
 
 pid_alive() {
   local file="$1" needle="$2" pid
   test -s "$file" || return 1
-  pid="$(cat "$file" 2>/dev/null || true)"
+  pid=""
+  if value="$(cat "$file" 2>/dev/null)"; then pid="$value"; fi
   [[ "$pid" =~ ^[0-9]+$ ]] || return 1
   kill -0 "$pid" 2>/dev/null || return 1
   tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null | grep -Fq "$needle"
@@ -29,12 +30,12 @@ stop_pid() {
   local file="$1" needle="$2" pid
   if pid_alive "$file" "$needle"; then
     pid="$(cat "$file")"
-    kill "$pid" 2>/dev/null || true
+    if ! kill "$pid" 2>/dev/null; then :; fi
     for _ in $(seq 1 20); do
       kill -0 "$pid" 2>/dev/null || break
       sleep 0.25
     done
-    kill -9 "$pid" 2>/dev/null || true
+    if ! kill -9 "$pid" 2>/dev/null; then :; fi
   fi
   rm -f "$file"
 }
@@ -81,7 +82,7 @@ start_tunnel() {
   if pid_alive "$pf" "127.0.0.1:$SITE_REMOTE_PORT:127.0.0.1:$PORT"; then return 0; fi
   rm -f "$pf"
   test -f "$SITE_KEY"
-  chmod 600 "$SITE_KEY" 2>/dev/null || true
+  if ! chmod 600 "$SITE_KEY" 2>/dev/null; then :; fi
   nohup ssh -NT     -i "$SITE_KEY"     -o BatchMode=yes     -o IdentitiesOnly=yes     -o ExitOnForwardFailure=yes     -o ServerAliveInterval=30     -o ServerAliveCountMax=3     -o StrictHostKeyChecking=yes     -R "127.0.0.1:$SITE_REMOTE_PORT:127.0.0.1:$PORT"     "$SITE_USER@$SITE_HOST" >>"$LOG_DIR/tunnel.log" 2>&1 9>&- &
   echo $! >"$pf"
   sleep 2
@@ -106,7 +107,9 @@ status_all() {
   pid_alive "$PID_DIR/worker.pid" "server.mjs" && w=true
   pid_alive "$PID_DIR/tunnel.pid" "127.0.0.1:$SITE_REMOTE_PORT:127.0.0.1:$PORT" && t=true
   curl -fsS --connect-timeout 2 --max-time 5 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1 && local_health=true
-  if test -f "$SITE_KEY"; then verify_remote >/dev/null 2>&1 && remote_health=true || true; fi
+  if test -f "$SITE_KEY"; then
+    if verify_remote >/dev/null 2>&1; then remote_health=true; fi
+  fi
   printf 'XVFB_ACTIVE=%s\nWORKER_ACTIVE=%s\nTUNNEL_ACTIVE=%s\nLOCAL_HEALTH=%s\nREMOTE_HEALTH=%s\n'     "$x" "$w" "$t" "$local_health" "$remote_health"
   "$local_health" && "$remote_health"
 }
