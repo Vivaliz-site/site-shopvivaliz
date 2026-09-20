@@ -279,8 +279,8 @@ jobs:
             fi
           fi
 
-          for file in "$HOME/.ssh/vmkey" "$HOME/.ssh/bastion_session_key" "$OCI_KEY_FILE"; do
-            [ -n "${file:-}" ] && [ -f "$file" ] && shred -u "$file"
+          for file in "$HOME/.ssh/vmkey" "$HOME/.ssh/bastion_session_key" "${OCI_KEY_FILE:-}"; do
+            [ -n "$file" ] && [ -f "$file" ] && shred -u "$file"
           done
           rm -f "$HOME/.ssh/bastion_session_key.pub" "$HOME/.ssh/known_hosts" "$HOME/.ssh/bastion_known_hosts" "$HOME/.ssh/config" "$RUNNER_TEMP/bastion-command.b64"
           if [ -n "${OCI_CONFIG_FILE:-}" ] && [ -f "$OCI_CONFIG_FILE" ]; then shred -u "$OCI_CONFIG_FILE"; fi
