@@ -24,6 +24,7 @@ on:
           - disk
           - runtime_status
           - repo_status
+          - mlrr_preflight_rollout
       reason:
         description: Audit reason
         required: true
@@ -80,11 +81,13 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "runtime_status", "repo_status"}
+          actions = {"health", "identity", "disk", "runtime_status", "repo_status", "mlrr_preflight_rollout"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
               raise SystemExit(f"Unsupported action: {action}")
+          if action == "mlrr_preflight_rollout" and target != "shopvivaliz-free-a1":
+              raise SystemExit("mlrr_preflight_rollout is restricted to shopvivaliz-free-a1")
           if not reason:
               raise SystemExit("Reason is required")
 
@@ -149,6 +152,9 @@ jobs:
               git status --porcelain
               git rev-parse HEAD
               echo "REMOTE_REPO_STATUS_END"
+              ;;
+            mlrr_preflight_rollout)
+              bash scripts/remote-mlrr-preflight-rollout.sh
               ;;
           esac
 
