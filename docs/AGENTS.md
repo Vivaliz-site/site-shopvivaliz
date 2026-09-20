@@ -789,6 +789,7 @@ email/telefone antes do hash, sem nenhum efeito em layout renderizado).
 - Quando existir alvo de deploy para o repositorio, e obrigatorio acompanhar o deploy ate o SHA correto estar ativo e executar validacao pós-deploy real e reproduzivel.
 - Se o deploy falhar, investigar a causa raiz, corrigir, revalidar, repetir commit/push/PR/merge quando necessario e tentar o deploy novamente; nao encerrar em estado intermediario.
 - Antes de qualquer resposta final, comparar pedido original x estado real e registrar evidencias de: validacao, commit, push, PR, checks, merge, deploy e pós-deploy, conforme aplicavel.
+- No `site-shopvivaliz`, qualquer commit que chegue a `origin/main` exige paridade exata antes da resposta final: `origin/main` = `/home/ubuntu/shopvivaliz-deploy/current/.release-sha` = `release_sha` de `https://shopvivaliz.com.br/api/health/version.php`. O `Master Production Pipeline` deve publicar o SHA mesmo para mudancas somente de documentacao, politica, workflow ou teste. Se o fluxo automatico nao publicar o SHA, o agente deve acionar o `Master Production Pipeline` com `confirmation=DEPLOY` e aguardar deploy + monitor `SUCCESS`; nunca concluir com producao atrasada.
 - So e permitido encerrar sem deploy bem-sucedido diante de bloqueio externo genuino e incontornavel com os acessos/ferramentas disponiveis; nesse caso o estado e BLOCKED/INCONCLUSIVO, nunca sucesso.
 
 ## Amazon Returns & SAFE-T Recovery

@@ -1,23 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-saw_path=0
-while IFS= read -r path; do
-  [ -n "$path" ] || continue
-  saw_path=1
-  case "$path" in
-    *.md|docs/*|.codex/*|.github/*|tests/*)
-      ;;
-    *)
-      printf '%s\n' true
-      exit 0
-      ;;
-  esac
-done
-
-# Empty/unknown change sets deploy conservatively.
-if [ "$saw_path" -eq 0 ]; then
-  printf '%s\n' true
-else
-  printf '%s\n' false
-fi
+# Production parity is mandatory for every revision that reaches main.
+#
+# This repository's deployed release records an exact .release-sha. Treating
+# documentation-, policy-, workflow-, or test-only commits as "no deploy"
+# leaves production behind origin/main and lets agents stop in an intermediate
+# state. The Master Production Pipeline may still exclude non-runtime paths
+# from rsync, but it must create/activate a release for the exact main SHA.
+#
+# Empty/unknown change sets also deploy conservatively.
+printf '%s\n' true
