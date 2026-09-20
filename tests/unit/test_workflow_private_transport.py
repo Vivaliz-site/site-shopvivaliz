@@ -44,7 +44,7 @@ class WorkflowPrivateTransportTests(unittest.TestCase):
             head = text.split('jobs:', 1)[0]
             found = [event[:-1] for event in automatic if event in head]
             if found:
-                offenders.append(f'{path}:{"/".join(found)}')
+                offenders.append(f'{path}:{"/" .join(found)}')
         self.assertEqual(offenders, [], 'legacy relay workflows still auto-trigger: ' + ', '.join(offenders))
 
     def test_private_vm_ssh_jobs_use_verified_private_transport(self):
