@@ -225,7 +225,9 @@ jobs:
           [[ "$remote_dir" =~ ^/home/ubuntu/\.cache/shopvivaliz-pr-healer/run-[A-Za-z0-9._-]+$ ]]
           remote_base="$remote_dir/healer"
           cleanup_remote() {
-            ssh "${SSH_OPTS[@]}" ubuntu@127.0.0.1 "rm -rf -- '${remote_dir}'" >/dev/null 2>&1 || true
+            if ! ssh "${SSH_OPTS[@]}" ubuntu@127.0.0.1 "rm -rf -- '${remote_dir}'" >/dev/null 2>&1; then
+              echo "remote_healer_cleanup=best_effort_failed" >&2
+            fi
           }
           trap 'cleanup_remote; cleanup_local' EXIT
           scp -q -P "$local_port"             -o BatchMode=yes -o ConnectTimeout=10             -o HostKeyAlias="$SITE_PRIVATE_IP"             -o StrictHostKeyChecking=yes             -o UserKnownHostsFile="$HOME/.ssh/known_hosts"             -i "$HOME/.ssh/vmkey"             trusted/scripts/pr_conflict_gemini_healer.py             "ubuntu@127.0.0.1:${remote_base}.py"
