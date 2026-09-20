@@ -77,6 +77,16 @@ class WorkflowPrivateTransportTests(unittest.TestCase):
             'OCI Bastion hop must allow RSA public-key authentication on modern OpenSSH',
         )
         self.assertIn(
+            'PubkeyAcceptedKeyTypes +ssh-rsa',
+            text,
+            'OCI Bastion troubleshooting requires the legacy RSA key-type alias for public-key auth failures',
+        )
+        self.assertIn(
+            'Host *',
+            text,
+            'OCI Bastion troubleshooting requires the RSA compatibility stanza to apply to the Bastion connection',
+        )
+        self.assertIn(
             '--ssh-public-key-file "$HOME/.ssh/bastion_session_key.pub"',
             text,
             'OCI Bastion session must be created with the public half of its ephemeral session key',
