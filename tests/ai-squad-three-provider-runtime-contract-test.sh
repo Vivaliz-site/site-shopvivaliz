@@ -6,6 +6,7 @@ workflow="$root/.github/workflows/sync-ai-keys-to-vm.yml"
 unit="$root/deploy/systemd/shopvivaliz-squad-claude-bridge.service"
 deploy="$root/scripts/deploy-production.sh"
 docs="$root/docs/knowledge/ai-squad.md"
+admin="$root/admin/ai-squad.php"
 
 grep -q 'CLAUDE_CODE_OAUTH_TOKEN:.*secrets.CLAUDE_CODE_OAUTH_TOKEN' "$workflow"
 grep -q "'CLAUDE_CODE_OAUTH_TOKEN='" "$workflow"
@@ -17,9 +18,20 @@ grep -q 'claude-bridge.mjs' "$unit"
 grep -q 'AI_SQUAD_CLAUDE_BRIDGE_PORT=17657' "$unit"
 grep -q 'AI_SQUAD_CLAUDE_ENV_PATH=/home/ubuntu/shopvivaliz-deploy/shared/.env' "$unit"
 
+grep -q 'reconcile_ai_squad_codex_bridge_unit' "$deploy"
+grep -q 'install-codex-bridge-user-service.sh' "$deploy"
 grep -q 'reconcile_ai_squad_claude_bridge_unit' "$deploy"
 grep -q 'shopvivaliz-squad-claude-bridge.service' "$deploy"
 grep -q 'claude_code' "$docs"
 grep -q 'vertex_oauth' "$docs"
+grep -Fq 'OpenAI: `gpt-5.6-terra`, effort `medium`;' "$docs"
+grep -Fq 'Anthropic: `claude-sonnet-5`, effort `medium`;' "$docs"
+grep -Fq 'Gemini: `gemini-3.5-flash`, thinking `MEDIUM`;' "$docs"
+grep -Fq '`AI_SQUAD_CODEX_WEB_SEARCH_MODE`' "$docs"
+grep -q 'Fable: desabilitado' "$admin"
+if grep -q 'Opus 5 primário' "$admin"; then
+  echo 'FAIL: admin UI contains stale hard-coded Anthropic model label' >&2
+  exit 1
+fi
 
 echo "AI_SQUAD_THREE_PROVIDER_RUNTIME_CONTRACT_TEST=PASS"
