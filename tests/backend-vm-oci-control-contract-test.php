@@ -53,6 +53,7 @@ $forbidden = [
     'tailscale funnel',
     'shell_command',
     '|| true',
+    'set +e',
 ];
 foreach ($forbidden as $needle) {
     if (str_contains($text, $needle)) {
