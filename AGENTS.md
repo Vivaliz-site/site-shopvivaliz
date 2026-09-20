@@ -527,6 +527,7 @@ Para operações OCI, use somente a identidade dedicada `AGENTS`; nunca use como
 - Quando existir alvo de deploy para o repositorio, e obrigatorio acompanhar o deploy ate o SHA correto estar ativo e executar validacao pós-deploy real e reproduzivel.
 - Se o deploy falhar, investigar a causa raiz, corrigir, revalidar, repetir commit/push/PR/merge quando necessario e tentar o deploy novamente; nao encerrar em estado intermediario.
 - Antes de qualquer resposta final, comparar pedido original x estado real e registrar evidencias de: validacao, commit, push, PR, checks, merge, deploy e pós-deploy, conforme aplicavel.
+- No `site-shopvivaliz`, qualquer commit que chegue a `origin/main` exige paridade exata antes da resposta final: `origin/main` = `/home/ubuntu/shopvivaliz-deploy/current/.release-sha` = `release_sha` de `https://shopvivaliz.com.br/api/health/version.php`. O `Master Production Pipeline` deve publicar o SHA mesmo para mudancas somente de documentacao, politica, workflow ou teste. Se o fluxo automatico nao publicar o SHA, o agente deve acionar o `Master Production Pipeline` com `confirmation=DEPLOY` e aguardar deploy + monitor `SUCCESS`; nunca concluir com producao atrasada.
 - So e permitido encerrar sem deploy bem-sucedido diante de bloqueio externo genuino e incontornavel com os acessos/ferramentas disponiveis; nesse caso o estado e BLOCKED/INCONCLUSIVO, nunca sucesso.
 
 ## Isolamento obrigatorio de sessao CLI por chat
@@ -543,5 +544,5 @@ Antes de qualquer acao material, leia e cumpra EXECUTION-PROVENANCE-POLICY.md. T
 
 
 <!-- BROWSER_SESSION_POLICY_V1 -->
-## Navegador: escolha de host e cleanup obrigatorio
-Antes de browser interativo/remoto, se o host nao estiver explicitamente definido na tarefa, pergunte qual maquina usar. Sessoes invisiveis/headless transitorias devem ter ownership + TTL padrao de 2h renovavel por heartbeat e cleanup ao final/boot. Orfaos podem ser limpos antes; sessoes visiveis e bridges persistentes documentadas devem ser preservadas. Nunca matar navegador globalmente por nome de processo. Leia a politica completa em `REGRAS-AGENTES-CENTRALIZADAS.md` (BROWSER_SESSION_POLICY_V1).
+## Navegador: VM backend obrigatoria e cleanup obrigatorio
+Para browser interativo/remoto, automacao grafica, MFA, CAPTCHA ou validacao visual, use obrigatoriamente a VM backend `always-free-arm-1787907847-26` e o Browser Worker privado. Fred-Win e DESKTOP-KOCEPSV nao sao destinos nem fallback para navegacao, salvo ordem explicita do proprietario na tarefa atual. Sessoes invisiveis/headless transitorias devem ter ownership + TTL padrao de 2h renovavel por heartbeat e cleanup ao final/boot. Orfaos podem ser limpos antes; sessoes visiveis e bridges persistentes documentadas devem ser preservadas. Nunca matar navegador globalmente por nome de processo. Leia a politica completa em `REGRAS-AGENTES-CENTRALIZADAS.md` (GLOBAL_BROWSER_VM_POLICY_V2).
