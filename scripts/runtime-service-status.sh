@@ -109,8 +109,11 @@ case "$role" in
     sender_block="/var/lib/mei-mg-email/sender_blocked.pause"
     if [[ -f "$sender_block" ]]; then
       printf 'UNIT=%s LOAD=%s ACTIVE=%s EXPECTED=inactive-sender-block\n'         "$worker_unit" "$worker_load" "$worker_active"
+      echo "SENDER_BLOCK=active"
       if [[ "$worker_load" != "loaded" || "$worker_active" != "inactive" ]]; then
         degrade
+      else
+        attention
       fi
     else
       printf 'UNIT=%s LOAD=%s ACTIVE=%s EXPECTED=active-no-sender-block\n'         "$worker_unit" "$worker_load" "$worker_active"
