@@ -15,12 +15,12 @@ $catalog = svais_profile_catalog();
 ais_assert(isset($catalog['deep_research'], $catalog['balanced'], $catalog['fast']), 'expected profiles missing');
 
 $deep = $catalog['deep_research'];
-ais_assert(($deep['openai']['model'] ?? '') === (getenv('AI_SQUAD_OPENAI_MODEL') ?: 'gpt-5.6-sol'), 'deep OpenAI model mismatch');
-ais_assert(($deep['openai']['effort'] ?? '') === 'xhigh', 'deep OpenAI effort must be xhigh');
-ais_assert(($deep['anthropic']['model'] ?? '') === svais_non_fable_model('AI_SQUAD_ANTHROPIC_MODEL', 'claude-opus-5'), 'deep Anthropic model mismatch');
-ais_assert(($deep['anthropic']['effort'] ?? '') === 'xhigh', 'deep Anthropic effort must be xhigh');
-ais_assert(($deep['gemini']['model'] ?? '') === (getenv('AI_SQUAD_GEMINI_MODEL') ?: 'gemini-3.1-pro-preview'), 'deep Gemini model mismatch');
-ais_assert(($deep['gemini']['thinking_level'] ?? '') === 'HIGH', 'deep Gemini thinking must be HIGH');
+ais_assert(($deep['openai']['model'] ?? '') === (getenv('AI_SQUAD_OPENAI_MODEL') ?: 'gpt-5.6-terra'), 'deep OpenAI model mismatch');
+ais_assert(($deep['openai']['effort'] ?? '') === 'medium', 'deep OpenAI effort must be medium');
+ais_assert(($deep['anthropic']['model'] ?? '') === svais_non_fable_model('AI_SQUAD_ANTHROPIC_MODEL', 'claude-sonnet-5'), 'deep Anthropic model mismatch');
+ais_assert(($deep['anthropic']['effort'] ?? '') === 'medium', 'deep Anthropic effort must be medium');
+ais_assert(($deep['gemini']['model'] ?? '') === (getenv('AI_SQUAD_GEMINI_MODEL') ?: 'gemini-3.5-flash'), 'deep Gemini model mismatch');
+ais_assert(($deep['gemini']['thinking_level'] ?? '') === 'MEDIUM', 'deep Gemini thinking must be MEDIUM');
 
 $serialized = strtolower(json_encode($catalog, JSON_UNESCAPED_SLASHES) ?: '');
 ais_assert(!str_contains($serialized, 'fable'), 'Fable must not appear in any AI Squad preset');
@@ -222,7 +222,7 @@ try {
                     'text' => 'wrong-model',
                     'sources' => [],
                     'usage' => [],
-                    'model' => 'gpt-5.6-terra',
+                    'model' => 'gpt-5.6-sol',
                     'transport' => 'codex_chatgpt',
                 ];
             }
