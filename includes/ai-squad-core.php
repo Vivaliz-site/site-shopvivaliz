@@ -35,6 +35,16 @@ function svais_openai_transport_order(): array
     return ['codex_chatgpt', 'direct', 'manual'];
 }
 
+function svais_anthropic_transport_order(): array
+{
+    return ['claude_code', 'direct', 'vertex_oauth', 'openrouter'];
+}
+
+function svais_gemini_transport_order(): array
+{
+    return ['vertex_oauth', 'direct', 'openrouter'];
+}
+
 function svais_failure_class(Throwable $e): string
 {
     $message = strtolower($e->getMessage());
@@ -44,6 +54,7 @@ function svais_failure_class(Throwable $e): string
     if (str_contains($message, 'quota')
         || str_contains($message, 'rate limit')
         || str_contains($message, 'usage_limit')
+        || str_contains($message, 'credit balance')
         || str_contains($message, 'weighted tokens')
         || str_contains($message, 'provider_http_429')) return 'quota';
     if (str_contains($message, 'auth')
@@ -185,11 +196,68 @@ function svais_codex_bridge_health(): array
     ];
 }
 
+function svais_claude_bridge_url(): string
+{
+    $url = trim((string)(getenv('AI_SQUAD_CLAUDE_BRIDGE_URL') ?: 'http://127.0.0.1:17657'));
+    return rtrim($url, '/');
+}
+
+function svais_claude_bridge_health(): array
+{
+    static $cached = null;
+    if ($cached !== null) return $cached;
+    if ((string)(getenv('AI_SQUAD_CLAUDE_CODE_ENABLED') ?: '1') === '0') {
+        return $cached = ['configured' => false, 'authenticated' => false, 'available' => false];
+    }
+
+    $ch = curl_init(svais_claude_bridge_url() . '/health');
+    if ($ch === false) {
+        return $cached = ['configured' => false, 'authenticated' => false, 'available' => false];
+    }
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT_MS => 1500,
+        CURLOPT_CONNECTTIMEOUT_MS => 300,
+        CURLOPT_PROXY => '',
+    ]);
+    $body = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if (!is_string($body) || $status !== 200) {
+        return $cached = ['configured' => false, 'authenticated' => false, 'available' => false];
+    }
+    $data = json_decode($body, true);
+    if (!is_array($data)) {
+        return $cached = ['configured' => false, 'authenticated' => false, 'available' => false];
+    }
+    return $cached = [
+        'configured' => ($data['token_configured'] ?? false) === true,
+        'authenticated' => ($data['authenticated'] ?? false) === true,
+        'available' => ($data['ok'] ?? false) === true && ($data['authenticated'] ?? false) === true,
+    ];
+}
+
+function svais_google_vertex_configured(): bool
+{
+    $clientId = trim((string)(getenv('GOOGLE_OAUTH_CLIENT_ID') ?: ''));
+    $clientSecret = trim((string)(getenv('GOOGLE_OAUTH_CLIENT_SECRET') ?: ''));
+    $refreshToken = trim((string)(getenv('GOOGLE_OAUTH_REFRESH_TOKEN') ?: ''));
+    $project = trim((string)(getenv('AI_SQUAD_GOOGLE_CLOUD_PROJECT') ?: ''));
+    if ($project === '' && preg_match('/^(\\d+)-/', $clientId, $match)) {
+        $project = (string)$match[1];
+    }
+    return $clientId !== '' && $clientSecret !== '' && $refreshToken !== '' && $project !== '';
+}
+
 function svais_provider_state(array $profile): array
 {
     $openRouterConfigured = trim((string)(getenv('OPENROUTER_API_KEY') ?: '')) !== '';
     $openAiDirectConfigured = trim((string)(getenv('OPENAI_API_KEY') ?: '')) !== '';
+    $anthropicDirectConfigured = trim((string)(getenv('ANTHROPIC_API_KEY') ?: '')) !== '';
+    $geminiDirectConfigured = trim((string)(getenv('GEMINI_API_KEY') ?: getenv('GOOGLE_API_KEY') ?: '')) !== '';
+    $vertexConfigured = svais_google_vertex_configured();
     $codex = svais_codex_bridge_health();
+    $claude = svais_claude_bridge_health();
     return [
         'openai' => [
             'configured' => $codex['available'] || $openAiDirectConfigured,
@@ -202,14 +270,23 @@ function svais_provider_state(array $profile): array
             'reasoning' => (string)$profile['openai']['effort'],
         ],
         'anthropic' => [
-            'configured' => trim((string)(getenv('ANTHROPIC_API_KEY') ?: '')) !== '',
+            'configured' => $claude['available'] || $anthropicDirectConfigured || $vertexConfigured || $openRouterConfigured,
+            'claude_code_oauth_configured' => $claude['configured'],
+            'claude_code_authenticated' => $claude['authenticated'],
+            'claude_code_available' => $claude['available'],
+            'direct_configured' => $anthropicDirectConfigured,
+            'vertex_oauth_configured' => $vertexConfigured,
             'openrouter_fallback_configured' => $openRouterConfigured,
+            'transport_order' => svais_anthropic_transport_order(),
             'model' => (string)$profile['anthropic']['model'],
             'reasoning' => (string)$profile['anthropic']['effort'],
         ],
         'gemini' => [
-            'configured' => trim((string)(getenv('GEMINI_API_KEY') ?: getenv('GOOGLE_API_KEY') ?: '')) !== '',
+            'configured' => $vertexConfigured || $geminiDirectConfigured || $openRouterConfigured,
+            'vertex_oauth_configured' => $vertexConfigured,
+            'direct_configured' => $geminiDirectConfigured,
             'openrouter_fallback_configured' => $openRouterConfigured,
+            'transport_order' => svais_gemini_transport_order(),
             'model' => (string)$profile['gemini']['model'],
             'reasoning' => strtolower((string)$profile['gemini']['thinking_level']),
         ],
@@ -326,6 +403,60 @@ function svais_codex_bridge_call(array $cfg, string $system, string $prompt, boo
     ];
 }
 
+function svais_claude_bridge_call(array $cfg, string $system, string $prompt, bool $webSearch): array
+{
+    if ((string)(getenv('AI_SQUAD_CLAUDE_CODE_ENABLED') ?: '1') === '0') {
+        throw new RuntimeException('claude_bridge_not_configured');
+    }
+
+    $payload = [
+        'model' => (string)$cfg['model'],
+        'effort' => (string)$cfg['effort'],
+        'system' => $system,
+        'prompt' => $prompt,
+        'web_search' => $webSearch,
+    ];
+    $ch = curl_init(svais_claude_bridge_url() . '/v1/respond');
+    if ($ch === false) {
+        throw new RuntimeException('claude_bridge_transport_error');
+    }
+    $timeout = max(30, min(300, (int)(getenv('AI_SQUAD_CLAUDE_HTTP_TIMEOUT') ?: 240)));
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_CONNECTTIMEOUT => 1,
+        CURLOPT_TIMEOUT => $timeout,
+        CURLOPT_PROXY => '',
+    ]);
+    $body = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if (!is_string($body) || $curlError !== '') {
+        throw new RuntimeException('claude_bridge_transport_error');
+    }
+    $data = json_decode($body, true);
+    if (!is_array($data)) {
+        throw new RuntimeException('claude_bridge_invalid_json');
+    }
+    if ($status !== 200 || ($data['ok'] ?? false) !== true) {
+        $class = (string)($data['error_class'] ?? 'unavailable');
+        if (!preg_match('/^[a-z_]+$/', $class)) $class = 'unavailable';
+        throw new RuntimeException('claude_bridge_' . $class);
+    }
+
+    return [
+        'text' => trim((string)($data['text'] ?? '')),
+        'sources' => array_values(array_filter((array)($data['sources'] ?? []), 'is_string')),
+        'usage' => is_array($data['usage'] ?? null) ? $data['usage'] : [],
+        'model' => (string)($data['model'] ?? ''),
+        'transport' => 'claude_code',
+    ];
+}
+
 function svais_collect_urls(mixed $value, array &$urls): void
 {
     if (is_array($value)) {
@@ -403,6 +534,155 @@ function svais_base_system(string $provider, string $phase): string
         . "quando usar a web, inclua URLs ou referências verificáveis no texto final. "
         . "Não revele raciocínio privado nem chain-of-thought: entregue apenas conclusões, evidências, checagens e justificativas resumidas. "
         . "Responda em português do Brasil.";
+}
+
+function svais_google_oauth_context(): array
+{
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    $clientId = trim((string)(getenv('GOOGLE_OAUTH_CLIENT_ID') ?: ''));
+    $clientSecret = trim((string)(getenv('GOOGLE_OAUTH_CLIENT_SECRET') ?: ''));
+    $refreshToken = trim((string)(getenv('GOOGLE_OAUTH_REFRESH_TOKEN') ?: ''));
+    $project = trim((string)(getenv('AI_SQUAD_GOOGLE_CLOUD_PROJECT') ?: ''));
+    if ($project === '' && preg_match('/^(\d+)-/', $clientId, $match)) {
+        $project = (string)$match[1];
+    }
+    if ($clientId === '' || $clientSecret === '' || $refreshToken === '' || $project === '') {
+        throw new RuntimeException('google_vertex_oauth_not_configured');
+    }
+
+    $ch = curl_init('https://oauth2.googleapis.com/token');
+    if ($ch === false) {
+        throw new RuntimeException('google_vertex_oauth_transport_error');
+    }
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => http_build_query([
+            'client_id' => $clientId,
+            'client_secret' => $clientSecret,
+            'refresh_token' => $refreshToken,
+            'grant_type' => 'refresh_token',
+        ]),
+        CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded'],
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
+        CURLOPT_PROXY => '',
+    ]);
+    $body = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+    if (!is_string($body) || $curlError !== '') {
+        throw new RuntimeException('google_vertex_oauth_transport_error');
+    }
+    $data = json_decode($body, true);
+    if (!is_array($data) || $status < 200 || $status >= 300) {
+        throw new RuntimeException('google_vertex_oauth_http_' . $status);
+    }
+    $accessToken = trim((string)($data['access_token'] ?? ''));
+    if ($accessToken === '') {
+        throw new RuntimeException('google_vertex_oauth_invalid_response');
+    }
+
+    return $cached = ['access_token' => $accessToken, 'project' => $project];
+}
+
+function svais_gemini_vertex_call(array $cfg, string $system, string $prompt, bool $webSearch): array
+{
+    $oauth = svais_google_oauth_context();
+    $payload = [
+        'system_instruction' => ['parts' => [['text' => $system]]],
+        'contents' => [[
+            'role' => 'user',
+            'parts' => [['text' => $prompt]],
+        ]],
+        'generationConfig' => [
+            'maxOutputTokens' => (int)$cfg['max_output_tokens'],
+            'thinkingConfig' => ['thinkingLevel' => (string)$cfg['thinking_level']],
+        ],
+    ];
+    if ($webSearch) {
+        $payload['tools'] = [['googleSearch' => new stdClass()]];
+    }
+
+    $model = rawurlencode((string)$cfg['model']);
+    $project = rawurlencode((string)$oauth['project']);
+    $data = svais_http_json(
+        'https://aiplatform.googleapis.com/v1/projects/' . $project
+            . '/locations/global/publishers/google/models/' . $model . ':generateContent',
+        [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . (string)$oauth['access_token'],
+        ],
+        $payload,
+        240
+    );
+
+    $urls = [];
+    svais_collect_urls($data, $urls);
+    return [
+        'text' => svais_text_from_gemini($data),
+        'sources' => array_keys($urls),
+        'usage' => $data['usageMetadata'] ?? [],
+        'model' => (string)$cfg['model'],
+        'transport' => 'vertex_oauth',
+    ];
+}
+
+function svais_anthropic_vertex_call(array $cfg, string $system, string $prompt, bool $webSearch): array
+{
+    $oauth = svais_google_oauth_context();
+    $maxTokens = max(1025, (int)$cfg['max_tokens']);
+    $budget = match ((string)($cfg['effort'] ?? 'high')) {
+        'xhigh' => 6000,
+        'high' => 3500,
+        'medium' => 2000,
+        default => 1024,
+    };
+    $budget = min($budget, $maxTokens - 1);
+
+    $payload = [
+        'anthropic_version' => 'vertex-2023-10-16',
+        'max_tokens' => $maxTokens,
+        'stream' => false,
+        'system' => $system,
+        'messages' => [['role' => 'user', 'content' => $prompt]],
+        'thinking' => ['type' => 'enabled', 'budget_tokens' => $budget],
+    ];
+    if ($webSearch && (int)($cfg['web_search_max_uses'] ?? 0) > 0) {
+        $payload['tools'] = [[
+            'type' => 'web_search_20250305',
+            'name' => 'web_search',
+            'max_uses' => (int)$cfg['web_search_max_uses'],
+        ]];
+    }
+
+    $model = rawurlencode((string)$cfg['model']);
+    $project = rawurlencode((string)$oauth['project']);
+    $data = svais_http_json(
+        'https://aiplatform.googleapis.com/v1/projects/' . $project
+            . '/locations/global/publishers/anthropic/models/' . $model . ':rawPredict',
+        [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . (string)$oauth['access_token'],
+        ],
+        $payload,
+        240
+    );
+
+    $urls = [];
+    svais_collect_urls($data, $urls);
+    return [
+        'text' => svais_text_from_anthropic($data),
+        'sources' => array_keys($urls),
+        'usage' => $data['usage'] ?? [],
+        'model' => (string)$cfg['model'],
+        'transport' => 'vertex_oauth',
+    ];
 }
 
 function svais_openai_call(array $cfg, string $system, string $prompt, bool $webSearch): array
@@ -589,6 +869,111 @@ function svais_openrouter_call(string $provider, array $cfg, string $system, str
     ];
 }
 
+function svais_provider_model_matches(string $provider, string $requested, string $actual): bool
+{
+    if ($requested === $actual) return true;
+    if ($actual === '') return false;
+    return $actual === svais_openrouter_model_slug($provider, $requested);
+}
+
+function svais_transport_exhausted(string $provider, array $attempts): RuntimeException
+{
+    $parts = [];
+    foreach ($attempts as $attempt) {
+        $transport = preg_replace('/[^a-z_]/', '', (string)($attempt['transport'] ?? 'unknown'));
+        $class = preg_replace('/[^a-z_]/', '', (string)($attempt['class'] ?? 'transport'));
+        $parts[] = $transport . '=' . $class;
+    }
+    return new RuntimeException($provider . '_transports_exhausted:' . implode(',', $parts));
+}
+
+function svais_anthropic_dispatch(
+    array $cfg,
+    string $system,
+    string $prompt,
+    bool $webSearch,
+    ?callable $invoke = null
+): array {
+    $invoke ??= static function (
+        string $transport,
+        array $cfg,
+        string $system,
+        string $prompt,
+        bool $webSearch
+    ): array {
+        return match ($transport) {
+            'claude_code' => svais_claude_bridge_call($cfg, $system, $prompt, $webSearch),
+            'direct' => svais_anthropic_call($cfg, $system, $prompt, $webSearch),
+            'vertex_oauth' => svais_anthropic_vertex_call($cfg, $system, $prompt, $webSearch),
+            'openrouter' => svais_openrouter_call('anthropic', $cfg, $system, $prompt, $webSearch),
+            default => throw new InvalidArgumentException('unknown_anthropic_transport'),
+        };
+    };
+
+    $attempts = [];
+    foreach (svais_anthropic_transport_order() as $transport) {
+        try {
+            $result = $invoke($transport, $cfg, $system, $prompt, $webSearch);
+            if (trim((string)($result['text'] ?? '')) === '') {
+                throw new RuntimeException('provider_empty_response');
+            }
+            if (!svais_provider_model_matches('anthropic', (string)$cfg['model'], (string)($result['model'] ?? ''))) {
+                throw new RuntimeException('model_mismatch');
+            }
+            $result['transport'] = $transport;
+            $result['transport_attempts'] = $attempts;
+            return $result;
+        } catch (Throwable $e) {
+            $attempts[] = ['transport' => $transport, 'class' => svais_failure_class($e)];
+        }
+    }
+
+    throw svais_transport_exhausted('anthropic', $attempts);
+}
+
+function svais_gemini_dispatch(
+    array $cfg,
+    string $system,
+    string $prompt,
+    bool $webSearch,
+    ?callable $invoke = null
+): array {
+    $invoke ??= static function (
+        string $transport,
+        array $cfg,
+        string $system,
+        string $prompt,
+        bool $webSearch
+    ): array {
+        return match ($transport) {
+            'vertex_oauth' => svais_gemini_vertex_call($cfg, $system, $prompt, $webSearch),
+            'direct' => svais_gemini_call($cfg, $system, $prompt, $webSearch),
+            'openrouter' => svais_openrouter_call('gemini', $cfg, $system, $prompt, $webSearch),
+            default => throw new InvalidArgumentException('unknown_gemini_transport'),
+        };
+    };
+
+    $attempts = [];
+    foreach (svais_gemini_transport_order() as $transport) {
+        try {
+            $result = $invoke($transport, $cfg, $system, $prompt, $webSearch);
+            if (trim((string)($result['text'] ?? '')) === '') {
+                throw new RuntimeException('provider_empty_response');
+            }
+            if (!svais_provider_model_matches('gemini', (string)$cfg['model'], (string)($result['model'] ?? ''))) {
+                throw new RuntimeException('model_mismatch');
+            }
+            $result['transport'] = $transport;
+            $result['transport_attempts'] = $attempts;
+            return $result;
+        } catch (Throwable $e) {
+            $attempts[] = ['transport' => $transport, 'class' => svais_failure_class($e)];
+        }
+    }
+
+    throw svais_transport_exhausted('gemini', $attempts);
+}
+
 function svais_openai_dispatch(
     array $cfg,
     string $system,
@@ -688,27 +1073,11 @@ function svais_call_provider(string $provider, array $profile, string $phase, st
             throw $manual;
         }
     } else {
-        try {
-            $result = match ($provider) {
-                'anthropic' => svais_anthropic_call($profile['anthropic'], $system, $prompt, $webSearch),
-                'gemini' => svais_gemini_call($profile['gemini'], $system, $prompt, $webSearch),
-                default => throw new InvalidArgumentException('unknown_provider'),
-            };
-            $result['transport'] = 'direct';
-        } catch (Throwable $directError) {
-            if (trim((string)(getenv('OPENROUTER_API_KEY') ?: '')) === '') {
-                throw $directError;
-            }
-            try {
-                $result = svais_openrouter_call($provider, $cfg, $system, $prompt, $webSearch);
-                $result['direct_error'] = svais_safe_error($directError);
-            } catch (Throwable $fallbackError) {
-                throw new RuntimeException(
-                    'direct_failed: ' . svais_safe_error($directError)
-                    . ' | openrouter_failed: ' . svais_safe_error($fallbackError)
-                );
-            }
-        }
+        $result = match ($provider) {
+            'anthropic' => svais_anthropic_dispatch($profile['anthropic'], $system, $prompt, $webSearch),
+            'gemini' => svais_gemini_dispatch($profile['gemini'], $system, $prompt, $webSearch),
+            default => throw new InvalidArgumentException('unknown_provider'),
+        };
     }
 
     if (trim((string)($result['text'] ?? '')) === '') {
