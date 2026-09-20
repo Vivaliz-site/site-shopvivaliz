@@ -1,0 +1,101 @@
+name: TEMP DC Recover Both VMs
+
+on:
+  push:
+    branches:
+      - ops/dc-backend-persistence-check-20260919
+    paths:
+      - .github/workflows/temp-dc-recover-both-vms.yml
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 10
+    steps:
+      - name: Configure backend SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s
+' "$VM_KEY" > "$HOME/.ssh/shopvivaliz_vmkey"
+          printf '%s
+' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
+
+      - name: Recover site DC locally
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$(hostname)" = "shopvivaliz-free-a1"
+          svc=shopvivaliz-desktop-commander.service
+          sudo systemctl daemon-reload
+          sudo systemctl enable "$svc"
+          sudo systemctl restart "$svc"
+          ok=false
+          for i in $(seq 1 45); do
+            if systemctl is-active --quiet "$svc" && journalctl -u "$svc" -n 60 --no-pager | grep -q 'REMOTE_CONNECTED=true'; then
+              ok=true
+              break
+            fi
+            sleep 2
+          done
+          echo SITE_ENABLED=$(systemctl is-enabled "$svc")
+          echo SITE_ACTIVE=$(systemctl is-active "$svc")
+          echo SITE_RESTART=$(systemctl show "$svc" -p Restart --value)
+          echo SITE_RESTART_SEC=$(systemctl show "$svc" -p RestartUSec --value)
+          echo SITE_AUTH_REQUIRED=$(test -f "$HOME/.desktop-commander-device/auth-required.cooldown" && echo true || echo false)
+          echo SITE_CONNECTED=$ok
+          journalctl -u "$svc" -n 50 --no-pager | grep -E 'REMOTE_CONNECTED|AUTH_REQUIRED|REMOTE_OWNER|SESSION_REFRESH' | tail -12 || true
+          test "$ok" = true
+          test "$(systemctl is-enabled "$svc")" = enabled
+          test "$(systemctl is-active "$svc")" = active
+          test "$(systemctl show "$svc" -p Restart --value)" = always
+          test ! -f "$HOME/.desktop-commander-device/auth-required.cooldown"
+
+      - name: Recover backend DC over private SSH
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/shopvivaliz_vmkey")
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 'bash -s' <<'REMOTE'
+          set -Eeuo pipefail
+          test "$(hostname)" = "always-free-arm-1787907847-26"
+          svc=shopvivaliz-desktop-commander.service
+          sudo systemctl daemon-reload
+          sudo systemctl enable "$svc"
+          sudo systemctl restart "$svc"
+          ok=false
+          for i in $(seq 1 45); do
+            if systemctl is-active --quiet "$svc" && journalctl -u "$svc" -n 60 --no-pager | grep -q 'REMOTE_CONNECTED=true'; then
+              ok=true
+              break
+            fi
+            sleep 2
+          done
+          echo BACKEND_ENABLED=$(systemctl is-enabled "$svc")
+          echo BACKEND_ACTIVE=$(systemctl is-active "$svc")
+          echo BACKEND_RESTART=$(systemctl show "$svc" -p Restart --value)
+          echo BACKEND_RESTART_SEC=$(systemctl show "$svc" -p RestartUSec --value)
+          echo BACKEND_AUTH_REQUIRED=$(test -f "$HOME/.desktop-commander-device/auth-required.cooldown" && echo true || echo false)
+          echo BACKEND_CONNECTED=$ok
+          journalctl -u "$svc" -n 50 --no-pager | grep -E 'REMOTE_CONNECTED|AUTH_REQUIRED|REMOTE_OWNER|SESSION_REFRESH' | tail -12 || true
+          test "$ok" = true
+          test "$(systemctl is-enabled "$svc")" = enabled
+          test "$(systemctl is-active "$svc")" = active
+          test "$(systemctl show "$svc" -p Restart --value)" = always
+          test ! -f "$HOME/.desktop-commander-device/auth-required.cooldown"
+          REMOTE
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
