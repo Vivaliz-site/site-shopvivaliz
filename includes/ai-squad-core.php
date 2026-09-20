@@ -15,6 +15,51 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/config/bootstrap-env.php';
 
+final class SvaisManualInterventionRequired extends RuntimeException
+{
+    public string $model;
+    public string $manualPrompt;
+    public array $attempts;
+
+    public function __construct(string $model, string $manualPrompt, array $attempts)
+    {
+        parent::__construct('manual_intervention_required');
+        $this->model = $model;
+        $this->manualPrompt = $manualPrompt;
+        $this->attempts = $attempts;
+    }
+}
+
+function svais_openai_transport_order(): array
+{
+    return ['codex_chatgpt', 'direct', 'openrouter', 'manual'];
+}
+
+function svais_failure_class(Throwable $e): string
+{
+    $message = strtolower($e->getMessage());
+    if (str_contains($message, 'model_mismatch')) return 'model';
+    if (str_contains($message, 'timeout')) return 'timeout';
+    if (str_contains($message, 'not_configured')) return 'not_configured';
+    if (str_contains($message, 'quota')
+        || str_contains($message, 'rate limit')
+        || str_contains($message, 'usage_limit')
+        || str_contains($message, 'weighted tokens')
+        || str_contains($message, 'provider_http_429')) return 'quota';
+    if (str_contains($message, 'auth')
+        || str_contains($message, 'unauthorized')
+        || str_contains($message, 'token expired')) return 'auth';
+    return 'transport';
+}
+
+function svais_manual_openai_prompt(array $cfg, string $system, string $prompt): string
+{
+    return "AI SQUAD — INTERVENÇÃO MANUAL OPENAI\n"
+        . "Modelo solicitado: " . (string)$cfg['model'] . "\n\n"
+        . "INSTRUÇÕES DO AGENTE:\n{$system}\n\n"
+        . "TAREFA DESTA FASE:\n{$prompt}";
+}
+
 function svais_non_fable_model(string $envName, string $default): string
 {
     $candidate = trim((string)(getenv($envName) ?: ''));
@@ -99,13 +144,61 @@ function svais_profile(string $name): array
     return $catalog[$name] ?? $catalog['deep_research'];
 }
 
+function svais_codex_bridge_url(): string
+{
+    $url = trim((string)(getenv('AI_SQUAD_CODEX_BRIDGE_URL') ?: 'http://127.0.0.1:17656'));
+    return rtrim($url, '/');
+}
+
+function svais_codex_bridge_health(): array
+{
+    static $cached = null;
+    if ($cached !== null) return $cached;
+    if ((string)(getenv('AI_SQUAD_CODEX_ENABLED') ?: '1') === '0') {
+        return $cached = ['authenticated' => false, 'available' => false];
+    }
+
+    $ch = curl_init(svais_codex_bridge_url() . '/health');
+    if ($ch === false) {
+        return $cached = ['authenticated' => false, 'available' => false];
+    }
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT_MS => 1500,
+        CURLOPT_CONNECTTIMEOUT_MS => 300,
+        CURLOPT_PROXY => '',
+    ]);
+    $body = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if (!is_string($body) || $status !== 200) {
+        return $cached = ['authenticated' => false, 'available' => false];
+    }
+    $data = json_decode($body, true);
+    if (!is_array($data)) {
+        return $cached = ['authenticated' => false, 'available' => false];
+    }
+    return $cached = [
+        'authenticated' => ($data['auth_mode'] ?? '') === 'chatgpt',
+        'available' => ($data['ok'] ?? false) === true
+            && (int)($data['available_profile_count'] ?? 0) > 0,
+    ];
+}
+
 function svais_provider_state(array $profile): array
 {
     $openRouterConfigured = trim((string)(getenv('OPENROUTER_API_KEY') ?: '')) !== '';
+    $openAiDirectConfigured = trim((string)(getenv('OPENAI_API_KEY') ?: '')) !== '';
+    $codex = svais_codex_bridge_health();
     return [
         'openai' => [
-            'configured' => trim((string)(getenv('OPENAI_API_KEY') ?: '')) !== '',
+            'configured' => $codex['available'] || $openAiDirectConfigured || $openRouterConfigured,
+            'codex_chatgpt_authenticated' => $codex['authenticated'],
+            'codex_chatgpt_available' => $codex['available'],
+            'direct_configured' => $openAiDirectConfigured,
             'openrouter_fallback_configured' => $openRouterConfigured,
+            'manual_fallback' => true,
+            'transport_order' => svais_openai_transport_order(),
             'model' => (string)$profile['openai']['model'],
             'reasoning' => (string)$profile['openai']['effort'],
         ],
@@ -174,6 +267,64 @@ function svais_http_json(string $url, array $headers, array $payload, int $timeo
     }
 
     return $decoded;
+}
+
+function svais_codex_bridge_call(array $cfg, string $system, string $prompt, bool $webSearch): array
+{
+    if ((string)(getenv('AI_SQUAD_CODEX_ENABLED') ?: '1') === '0') {
+        throw new RuntimeException('codex_bridge_not_configured');
+    }
+
+    $payload = [
+        'model' => (string)$cfg['model'],
+        'effort' => (string)$cfg['effort'],
+        'prompt' => "SYSTEM:\n{$system}\n\nUSER:\n{$prompt}",
+        'web_search' => $webSearch,
+    ];
+    $ch = curl_init(svais_codex_bridge_url() . '/v1/respond');
+    if ($ch === false) {
+        throw new RuntimeException('codex_bridge_transport_error');
+    }
+    $timeout = max(30, min(300, (int)(getenv('AI_SQUAD_CODEX_HTTP_TIMEOUT') ?: 240)));
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_CONNECTTIMEOUT => 1,
+        CURLOPT_TIMEOUT => $timeout,
+        CURLOPT_PROXY => '',
+    ]);
+    $body = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if (!is_string($body) || $curlError !== '') {
+        throw new RuntimeException('codex_bridge_transport_error');
+    }
+    $data = json_decode($body, true);
+    if (!is_array($data)) {
+        throw new RuntimeException('codex_bridge_invalid_json');
+    }
+    if ($status !== 200 || ($data['ok'] ?? false) !== true) {
+        $classes = [];
+        foreach ((array)($data['attempts'] ?? []) as $class) {
+            if (is_string($class) && preg_match('/^[a-z_]+$/', $class)) {
+                $classes[$class] = true;
+            }
+        }
+        $suffix = $classes !== [] ? implode('_', array_keys($classes)) : 'unavailable';
+        throw new RuntimeException('codex_bridge_' . $suffix);
+    }
+
+    return [
+        'text' => trim((string)($data['text'] ?? '')),
+        'sources' => array_values(array_filter((array)($data['sources'] ?? []), 'is_string')),
+        'usage' => is_array($data['usage'] ?? null) ? $data['usage'] : [],
+        'model' => (string)($data['model'] ?? ''),
+        'transport' => 'codex_chatgpt',
+    ];
 }
 
 function svais_collect_urls(mixed $value, array &$urls): void
@@ -439,8 +590,80 @@ function svais_openrouter_call(string $provider, array $cfg, string $system, str
     ];
 }
 
+function svais_openai_dispatch(
+    array $cfg,
+    string $system,
+    string $prompt,
+    bool $webSearch,
+    ?callable $invoke = null,
+    bool $skipCodex = false
+): array {
+    $invoke ??= static function (
+        string $transport,
+        array $cfg,
+        string $system,
+        string $prompt,
+        bool $webSearch
+    ): array {
+        return match ($transport) {
+            'codex_chatgpt' => svais_codex_bridge_call($cfg, $system, $prompt, $webSearch),
+            'direct' => svais_openai_call($cfg, $system, $prompt, $webSearch),
+            'openrouter' => svais_openrouter_call('openai', $cfg, $system, $prompt, $webSearch),
+            default => throw new InvalidArgumentException('unknown_openai_transport'),
+        };
+    };
+
+    $attempts = [];
+    foreach (svais_openai_transport_order() as $transport) {
+        if ($transport === 'manual') break;
+        if ($skipCodex && $transport === 'codex_chatgpt') continue;
+
+        try {
+            $result = $invoke($transport, $cfg, $system, $prompt, $webSearch);
+            $text = trim((string)($result['text'] ?? ''));
+            if ($text === '') {
+                throw new RuntimeException('provider_empty_response');
+            }
+
+            $requestedModel = (string)$cfg['model'];
+            $expectedModel = $transport === 'openrouter'
+                ? svais_openrouter_model_slug('openai', $requestedModel)
+                : $requestedModel;
+            $actualModel = (string)($result['model'] ?? '');
+            if ($actualModel !== $expectedModel) {
+                throw new RuntimeException('model_mismatch');
+            }
+
+            $result['transport'] = $transport;
+            $result['transport_attempts'] = $attempts;
+            return $result;
+        } catch (Throwable $e) {
+            $attempts[] = [
+                'transport' => $transport,
+                'class' => svais_failure_class($e),
+            ];
+        }
+    }
+
+    throw new SvaisManualInterventionRequired(
+        (string)$cfg['model'],
+        svais_manual_openai_prompt($cfg, $system, $prompt),
+        $attempts
+    );
+}
+
+function svais_attempts_include_codex_failure(array $attempts): bool
+{
+    foreach ($attempts as $attempt) {
+        if (($attempt['transport'] ?? '') === 'codex_chatgpt') return true;
+    }
+    return false;
+}
+
 function svais_call_provider(string $provider, array $profile, string $phase, string $prompt, ?bool $webSearchOverride = null): array
 {
+    static $codexUnavailableForRequest = false;
+
     $webSearch = $webSearchOverride ?? (bool)($profile['web_search'] ?? false);
     $system = svais_base_system($provider, $phase);
 
@@ -450,26 +673,46 @@ function svais_call_provider(string $provider, array $profile, string $phase, st
         throw new InvalidArgumentException('unknown_provider');
     }
 
-    try {
-        $result = match ($provider) {
-            'openai' => svais_openai_call($profile['openai'], $system, $prompt, $webSearch),
-            'anthropic' => svais_anthropic_call($profile['anthropic'], $system, $prompt, $webSearch),
-            'gemini' => svais_gemini_call($profile['gemini'], $system, $prompt, $webSearch),
-            default => throw new InvalidArgumentException('unknown_provider'),
-        };
-        $result['transport'] = 'direct';
-    } catch (Throwable $directError) {
-        if (trim((string)(getenv('OPENROUTER_API_KEY') ?: '')) === '') {
-            throw $directError;
-        }
+    if ($provider === 'openai') {
         try {
-            $result = svais_openrouter_call($provider, $cfg, $system, $prompt, $webSearch);
-            $result['direct_error'] = svais_safe_error($directError);
-        } catch (Throwable $fallbackError) {
-            throw new RuntimeException(
-                'direct_failed: ' . svais_safe_error($directError)
-                . ' | openrouter_failed: ' . svais_safe_error($fallbackError)
+            $result = svais_openai_dispatch(
+                $cfg,
+                $system,
+                $prompt,
+                $webSearch,
+                null,
+                $codexUnavailableForRequest
             );
+            if (svais_attempts_include_codex_failure((array)($result['transport_attempts'] ?? []))) {
+                $codexUnavailableForRequest = true;
+            }
+        } catch (SvaisManualInterventionRequired $manual) {
+            if (svais_attempts_include_codex_failure($manual->attempts)) {
+                $codexUnavailableForRequest = true;
+            }
+            throw $manual;
+        }
+    } else {
+        try {
+            $result = match ($provider) {
+                'anthropic' => svais_anthropic_call($profile['anthropic'], $system, $prompt, $webSearch),
+                'gemini' => svais_gemini_call($profile['gemini'], $system, $prompt, $webSearch),
+                default => throw new InvalidArgumentException('unknown_provider'),
+            };
+            $result['transport'] = 'direct';
+        } catch (Throwable $directError) {
+            if (trim((string)(getenv('OPENROUTER_API_KEY') ?: '')) === '') {
+                throw $directError;
+            }
+            try {
+                $result = svais_openrouter_call($provider, $cfg, $system, $prompt, $webSearch);
+                $result['direct_error'] = svais_safe_error($directError);
+            } catch (Throwable $fallbackError) {
+                throw new RuntimeException(
+                    'direct_failed: ' . svais_safe_error($directError)
+                    . ' | openrouter_failed: ' . svais_safe_error($fallbackError)
+                );
+            }
         }
     }
 
