@@ -1,0 +1,190 @@
+name: TEMP DC Backend Persistence Check
+
+on:
+  push:
+    branches:
+      - ops/dc-backend-persistence-check-20260919
+    paths:
+      - .github/workflows/temp-dc-backend-persistence-check.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      OCI_PROFILE: AGENTS
+      TARGET_INSTANCE_NAME: always-free-arm-1787907847-26
+    steps:
+      - name: Configure OCI
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!name:-}" || { echo "::error::missing OCI secret: $name"; exit 1; }
+          done
+          dir="$RUNNER_TEMP/oci-agents"
+          install -m 700 -d "$dir"
+          key="$dir/key.pem"
+          cfg="$dir/config"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$key"
+          chmod 600 "$key"
+          cat > "$cfg" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$key
+          EOF
+          chmod 600 "$cfg"
+          echo "OCI_CONFIG_FILE=$cfg" >> "$GITHUB_ENV"
+          echo "OCI_KEY_FILE=$key" >> "$GITHUB_ENV"
+
+      - name: Install OCI SDK
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci
+
+      - name: Resolve exact backend instance
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import os, oci
+          cfg = oci.config.from_file(os.environ["OCI_CONFIG_FILE"], os.environ["OCI_PROFILE"])
+          search = oci.resource_search.ResourceSearchClient(cfg)
+          compute = oci.core.ComputeClient(cfg)
+          q = f"query instance resources where displayName = '{os.environ['TARGET_INSTANCE_NAME']}'"
+          items = search.search_resources(oci.resource_search.models.StructuredSearchDetails(query=q)).data.items
+          if len(items) != 1:
+              raise SystemExit(f"expected exactly one target instance, found {len(items)}")
+          inst = compute.get_instance(items[0].identifier).data
+          if inst.display_name != os.environ["TARGET_INSTANCE_NAME"]:
+              raise SystemExit("instance identity mismatch")
+          if inst.lifecycle_state != "RUNNING":
+              raise SystemExit(f"instance not RUNNING: {inst.lifecycle_state}")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              f.write(f"TARGET_INSTANCE_ID={inst.id}\n")
+              f.write(f"TARGET_COMPARTMENT_ID={inst.compartment_id}\n")
+          print("OCI_TARGET_IDENTITY=PASS")
+          print("OCI_TARGET_LIFECYCLE=RUNNING")
+          PY
+
+      - name: Verify and enforce Desktop Commander persistence
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import os, time, oci
+
+          cfg = oci.config.from_file(os.environ["OCI_CONFIG_FILE"], os.environ["OCI_PROFILE"])
+          client = oci.compute_instance_agent.ComputeInstanceAgentClient(cfg)
+          models = oci.compute_instance_agent.models
+          script = r"""
+          set -Eeuo pipefail
+          expected='always-free-arm-1787907847-26'
+          test "$(hostname)" = "$expected" || { echo "HOST_IDENTITY=FAIL"; exit 20; }
+          echo "HOST_IDENTITY=PASS"
+          echo "WHOAMI=$(whoami)"
+
+          svc='shopvivaliz-desktop-commander.service'
+          if ! systemctl cat "$svc" >/dev/null 2>&1; then
+            echo "SERVICE_EXISTS=false"
+            exit 21
+          fi
+          echo "SERVICE_EXISTS=true"
+
+          before_enabled="$(systemctl is-enabled "$svc" 2>/dev/null || true)"
+          before_active="$(systemctl is-active "$svc" 2>/dev/null || true)"
+          before_restart="$(systemctl show "$svc" -p Restart --value 2>/dev/null || true)"
+          echo "BEFORE_ENABLED=$before_enabled"
+          echo "BEFORE_ACTIVE=$before_active"
+          echo "BEFORE_RESTART=$before_restart"
+
+          if [ "$before_enabled" != "enabled" ]; then
+            sudo systemctl enable "$svc"
+            echo "FIX_ENABLE=applied"
+          else
+            echo "FIX_ENABLE=not_needed"
+          fi
+
+          if [ "$before_restart" != "always" ]; then
+            sudo install -d -m 755 /etc/systemd/system/shopvivaliz-desktop-commander.service.d
+            printf '[Service]\nRestart=always\nRestartSec=10\n' | sudo tee /etc/systemd/system/shopvivaliz-desktop-commander.service.d/10-persistence.conf >/dev/null
+            sudo systemctl daemon-reload
+            echo "FIX_RESTART_POLICY=applied"
+          else
+            echo "FIX_RESTART_POLICY=not_needed"
+          fi
+
+          if [ "$(systemctl is-active "$svc" 2>/dev/null || true)" != "active" ]; then
+            sudo systemctl start "$svc"
+            echo "FIX_START=applied"
+          else
+            echo "FIX_START=not_needed"
+          fi
+
+          after_enabled="$(systemctl is-enabled "$svc" 2>/dev/null || true)"
+          after_active="$(systemctl is-active "$svc" 2>/dev/null || true)"
+          after_restart="$(systemctl show "$svc" -p Restart --value 2>/dev/null || true)"
+          after_sub="$(systemctl show "$svc" -p SubState --value 2>/dev/null || true)"
+          echo "AFTER_ENABLED=$after_enabled"
+          echo "AFTER_ACTIVE=$after_active"
+          echo "AFTER_RESTART=$after_restart"
+          echo "AFTER_SUBSTATE=$after_sub"
+
+          test "$after_enabled" = "enabled"
+          test "$after_active" = "active"
+          test "$after_restart" = "always"
+          test "$after_sub" = "running"
+          echo "DC_PERSISTENCE=PASS"
+          """
+          details = models.CreateInstanceAgentCommandDetails(
+              compartment_id=os.environ["TARGET_COMPARTMENT_ID"],
+              execution_time_out_in_seconds=180,
+              target=models.InstanceAgentCommandTarget(instance_id=os.environ["TARGET_INSTANCE_ID"]),
+              content=models.InstanceAgentCommandContent(
+                  source=models.InstanceAgentCommandSourceViaTextDetails(source_type="TEXT", text=script),
+                  output=models.InstanceAgentCommandOutputViaTextDetails(output_type="TEXT"),
+              ),
+              display_name="dc-backend-persistence-check",
+          )
+          command_id = client.create_instance_agent_command(details).data.id
+          execution = None
+          for _ in range(48):
+              execution = client.get_instance_agent_command_execution(
+                  instance_agent_command_id=command_id,
+                  instance_id=os.environ["TARGET_INSTANCE_ID"],
+              ).data
+              if execution.lifecycle_state in {"SUCCEEDED","FAILED","TIMED_OUT","CANCELED"}:
+                  break
+              time.sleep(5)
+          if execution is None:
+              raise SystemExit("no execution result")
+          text = getattr(execution.content, "text", "") or ""
+          print(text)
+          if execution.lifecycle_state != "SUCCEEDED":
+              raise SystemExit(f"Run Command failed: {execution.lifecycle_state}")
+          if getattr(execution.content, "exit_code", 1) != 0:
+              raise SystemExit("Run Command nonzero exit")
+          if "DC_PERSISTENCE=PASS" not in text:
+              raise SystemExit("persistence verification missing")
+          PY
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          test -f "${OCI_KEY_FILE:-}" && shred -u "$OCI_KEY_FILE"
+          test -f "${OCI_CONFIG_FILE:-}" && shred -u "$OCI_CONFIG_FILE"
