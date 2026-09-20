@@ -190,7 +190,13 @@ jobs:
                 if [ "$rc" -eq 0 ]; then
                   provenance COMPLETED 0
                 else
-                  provenance FAILED "$rc" || true
+                  set +e
+                  provenance FAILED "$rc"
+                  provenance_rc=$?
+                  set -e
+                  if [ "$provenance_rc" -ne 0 ]; then
+                    echo "MLRR provenance failure record failed" >&2
+                  fi
                 fi
                 unset EXECUTION_PROVENANCE_HMAC_KEY
                 exit "$rc"
