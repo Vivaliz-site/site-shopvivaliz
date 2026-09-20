@@ -57,6 +57,14 @@ Se um dos relays Windows estiver indisponível, use no mesmo issue `#1586`:
 
 Esse comando aciona `.github/workflows/windows-private-peer-recovery.yml`, que tenta recuperar Fred-Win e KOCEPSV pela rede privada/Tailscale via backend VM, sem expor RCE público.
 
+Se o runner privado estiver indisponível ou congestionado, use o fallback independente:
+
+```text
+/recover-windows-oci reason=recuperar relays Windows sem depender do runner privado
+```
+
+O fallback executa em `ubuntu-latest`, usa OCI Compute Instance Run Command para entrar na backend VM e, de lá, alcança os PCs pela rede Tailscale. Assim, a recuperação não depende nem do Desktop Commander nem do runner `shopvivaliz-a1-deploy`.
+
 ## Segurança
 
 - Nenhuma chave, token, senha ou OTP é gravada no comentário.
