@@ -27,6 +27,7 @@ foreach ([
     'report_required_active shopvivaliz-catalog-reconcile.timer',
     'report_oneshot_success shopvivaliz-catalog-reconcile.service',
     'EXPECTED=inactive-sender-block',
+    'SENDER_BLOCK=active',
     'report_required_active mei-mg-email-api.service',
     'report_required_active mei-mg-email-monitor.service',
     'report_required_active mei-mg-email-brevo-reconciler.service',
