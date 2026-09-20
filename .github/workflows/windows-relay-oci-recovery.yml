@@ -272,8 +272,8 @@ jobs:
           REMOTE
           )"
 
-          fred_ip="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(next((ip for p in (d.get("Peer") or {}).values() if "LAPTOP-NIG4IFUU" in str(p.get("HostName") or p.get("DNSName") or "").upper() for ip in (p.get("TailscaleIPs") or []) if ":" not in ip), ""))' <<<"$tailscale_json")"
-          desk_ip="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(next((ip for p in (d.get("Peer") or {}).values() if "DESKTOP-KOCEPSV" in str(p.get("HostName") or p.get("DNSName") or "").upper() for ip in (p.get("TailscaleIPs") or []) if ":" not in ip), ""))' <<<"$tailscale_json")"
+          fred_ip="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(next((ip for p in (d.get("Peer") or {}).values() if "LAPTOP-NIG4IFUU" in str(p.get("HostName") or p.get("DNSName") or "").upper() for ip in (p.get("TailscaleIPs") or []) if ":" not in ip), "")' <<<"$tailscale_json")"
+          desk_ip="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(next((ip for p in (d.get("Peer") or {}).values() if "DESKTOP-KOCEPSV" in str(p.get("HostName") or p.get("DNSName") or "").upper() for ip in (p.get("TailscaleIPs") or []) if ":" not in ip), "")' <<<"$tailscale_json")"
           if [ -n "$fred_ip" ]; then
             echo "FRED_PEER=found"
           else
