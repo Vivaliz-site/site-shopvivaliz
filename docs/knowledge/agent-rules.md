@@ -4,7 +4,7 @@
 
 - Antes de qualquer diagnóstico, alteração ou validação, ler `docs/knowledge/host-access.md`.
 - Identificar o host correto pelo papel atual; não assumir que IP/nome histórico ainda é produção.
-- Preferir Desktop Commander quando o dispositivo correspondente estiver conectado; usar SSH com secret/chave protegida como fallback.
+- Para terminal e diagnóstico, preferir os canais remotos canônicos; Desktop Commander é apenas fallback operacional. Para navegador, seguir obrigatoriamente `GLOBAL_BROWSER_VM_POLICY_V2` abaixo.
 - Confirmar acesso com evidência (`hostname`, `whoami`, diretório e estado Git quando aplicável).
 - Nunca versionar, imprimir ou copiar para documentação o conteúdo de chave privada, senha, token ou secret.
 
@@ -17,6 +17,16 @@
 - Em `retome`, `continue` ou `prossiga`, recuperar o último checkpoint comprovado e continuar sob @Superpowers, sem reiniciar desnecessariamente.
 - Se @Superpowers não estiver exposto pelo runtime, não simular a chamada: registrar `SUPERPOWERS_UNAVAILABLE` e aplicar a metodologia equivalente até que a capacidade esteja disponível.
 - A fonte central desta regra é `REGRAS-AGENTES-CENTRALIZADAS.md`.
+
+<!-- GLOBAL_BROWSER_VM_POLICY_V2 -->
+## Navegação/browser: VM backend obrigatória
+
+- Para qualquer navegação web, automação browser, Playwright/Selenium/CDP, Chrome/Chromium/Edge/Opera, CAPTCHA, MFA, consentimento ou validação visual, usar a VM `always-free-arm-1787907847-26` e o Browser Worker privado.
+- Para intervenção humana, usar a interface autenticada `https://shopvivaliz.com.br/admin/browser-worker.php`.
+- **Fred-Win (`LAPTOP-NIG4IFUU`) e `DESKTOP-KOCEPSV` não podem ser usados como destino ou fallback de navegação/browser.**
+- Não perguntar qual máquina usar para browser: o padrão já está definido. Exceção somente se o proprietário pedir explicitamente, na tarefa atual, um Windows específico para aquela navegação.
+- Se a VM estiver indisponível, reparar Browser Worker/túnel/OCI Bastion ou registrar bloqueio real; nunca cair silenciosamente para Windows.
+- Windows continua permitido para tarefas não-browser que realmente dependam dele.
 
 ## Credenciais, MFA e fontes seguras já provisionadas
 
