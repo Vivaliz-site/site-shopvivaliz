@@ -119,3 +119,39 @@ O instalador `scripts/install-backend-browser-worker.sh`:
 - o worker não oferece `evaluate` arbitrário;
 - o workflow remoto não aceita shell fornecido pelo usuário;
 - sessões abandonadas expiram automaticamente.
+
+## Rota OCI hospedada — sem Desktop Commander e sem runner privado
+
+Quando o Desktop Commander estiver indisponível **ou** o runner privado `shopvivaliz-a1-deploy` não puder ser usado, existe um segundo control plane independente:
+
+```text
+GitHub-hosted ubuntu-latest
+  -> OCI Bastion temporário
+  -> SSH privado 10.0.1.38
+  -> always-free-arm-1787907847-26
+```
+
+Workflow canônico:
+
+```text
+.github/workflows/backend-vm-oci-control.yml
+```
+
+No issue operacional `#1586`:
+
+```text
+/backend-oci action=identity reason=validar acesso independente
+/backend-oci action=disk reason=verificar disco do backend
+/backend-oci action=runtime_status reason=verificar runtime do backend
+/backend-oci action=repo_status reason=verificar repositorios do backend
+/backend-oci action=browser_status reason=verificar supervisor do navegador
+/backend-oci action=browser_health reason=validar browser worker
+/backend-oci action=browser_install reason=instalar ou reparar browser worker
+/backend-oci action=browser_start reason=iniciar browser worker
+/backend-oci action=browser_restart reason=reiniciar browser worker
+/backend-oci action=browser_stop reason=parar browser worker
+```
+
+Esse workflow não aceita shell arbitrário. Ele resolve a instância exata `always-free-arm-1787907847-26`, exige o IP privado `10.0.1.38`, abre uma sessão OCI Bastion temporária, valida `hostname/user` antes da ação e restaura a allowlist original do Bastion em modo fail-closed. Credenciais temporárias são apagadas ao final.
+
+A rota foi validada de ponta a ponta com `identity` e `browser_health`, incluindo `BASTION_ALLOWLIST_RESTORED=PASS`.
