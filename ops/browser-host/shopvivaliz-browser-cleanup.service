@@ -1,0 +1,6 @@
+[Unit]
+Description=ShopVivaliz browser session TTL cleanup
+
+[Service]
+Type=oneshot
+ExecStart=/opt/shopvivaliz-browser-host/browser-cleanup.sh
