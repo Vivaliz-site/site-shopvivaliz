@@ -9,13 +9,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: shopvivaliz-bastion-access
+  group: shopvivaliz-windows-relay-oci-recovery
   cancel-in-progress: false
 
 jobs:
   recover:
     if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && startsWith(github.event.comment.body, '/recover-windows-oci '))
     runs-on: ubuntu-latest
+    concurrency:
+      group: shopvivaliz-bastion-access
+      cancel-in-progress: false
     environment: Production
     timeout-minutes: 15
     env:
