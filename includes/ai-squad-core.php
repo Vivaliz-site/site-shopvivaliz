@@ -189,10 +189,15 @@ function svais_codex_bridge_health(): array
     if (!is_array($data)) {
         return $cached = ['authenticated' => false, 'available' => false];
     }
+    $webSearchMode = (string)($data['web_search_mode'] ?? '');
+    if (!in_array($webSearchMode, ['cached', 'live', 'disabled'], true)) {
+        $webSearchMode = 'unknown';
+    }
     return $cached = [
         'authenticated' => ($data['auth_mode'] ?? '') === 'chatgpt',
         'available' => ($data['ok'] ?? false) === true
             && (int)($data['available_profile_count'] ?? 0) > 0,
+        'web_search_mode' => $webSearchMode,
     ];
 }
 
@@ -263,6 +268,7 @@ function svais_provider_state(array $profile): array
             'configured' => $codex['available'] || $openAiDirectConfigured,
             'codex_chatgpt_authenticated' => $codex['authenticated'],
             'codex_chatgpt_available' => $codex['available'],
+            'codex_web_search_mode' => (string)($codex['web_search_mode'] ?? 'unknown'),
             'direct_configured' => $openAiDirectConfigured,
             'manual_fallback' => true,
             'transport_order' => svais_openai_transport_order(),
