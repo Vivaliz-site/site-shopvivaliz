@@ -1,12 +1,33 @@
 name: ShopVivaliz Remote Access
 
 on:
+  issue_comment:
+    types: [created]
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'ops/remote-access-request.json'
-      - '.github/workflows/shopvivaliz-remote-access.yml'
+    inputs:
+      target:
+        description: Remote host
+        required: true
+        type: choice
+        options:
+          - shopvivaliz-free-a1
+          - always-free-arm-1787907847-26
+          - fred-win
+          - kocepsv
+      action:
+        description: Allowlisted action
+        required: true
+        type: choice
+        options:
+          - health
+          - identity
+          - disk
+          - runtime_status
+          - repo_status
+      reason:
+        description: Audit reason
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -17,6 +38,7 @@ concurrency:
 
 jobs:
   execute:
+    if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && startsWith(github.event.comment.body, '/remote '))
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 10
 
@@ -26,31 +48,52 @@ jobs:
 
       - name: Resolve request
         id: req
+        env:
+          DISPATCH_TARGET: ${{ inputs.target }}
+          DISPATCH_ACTION: ${{ inputs.action }}
+          DISPATCH_REASON: ${{ inputs.reason }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          TARGET="$(jq -r '.target // empty' ops/remote-access-request.json)"
-          ACTION="$(jq -r '.action // empty' ops/remote-access-request.json)"
-          REQUESTED_AT="$(jq -r '.requested_at // empty' ops/remote-access-request.json)"
-          REASON="$(jq -r '.reason // empty' ops/remote-access-request.json)"
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
 
-          case "$TARGET" in
-            shopvivaliz-free-a1|always-free-arm-1787907847-26|fred-win|kocepsv) ;;
-            *) echo "Unsupported target: $TARGET"; exit 2 ;;
-          esac
+          event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
+          if os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch":
+              target = os.environ.get("DISPATCH_TARGET", "").strip()
+              action = os.environ.get("DISPATCH_ACTION", "").strip()
+              reason = os.environ.get("DISPATCH_REASON", "").strip()
+              requested_at = "workflow_dispatch"
+          else:
+              comment = event.get("comment") or {}
+              body = str(comment.get("body") or "").strip()
+              match = re.fullmatch(
+                  r"/remote\s+target=([A-Za-z0-9._-]+)\s+action=([A-Za-z0-9._-]+)\s+reason=(.{3,500})",
+                  body,
+              )
+              if not match:
+                  raise SystemExit("Invalid remote command format")
+              target, action, reason = match.group(1), match.group(2), match.group(3).strip()
+              requested_at = str(comment.get("created_at") or "")
 
-          case "$ACTION" in
-            health|identity|disk|runtime_status|repo_status) ;;
-            *) echo "Unsupported action: $ACTION"; exit 3 ;;
-          esac
+          targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
+          actions = {"health", "identity", "disk", "runtime_status", "repo_status"}
+          if target not in targets:
+              raise SystemExit(f"Unsupported target: {target}")
+          if action not in actions:
+              raise SystemExit(f"Unsupported action: {action}")
+          if not reason:
+              raise SystemExit("Reason is required")
 
-          test -n "$REQUESTED_AT"
-          test -n "$REASON"
-
-          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
-          echo "action=$ACTION" >> "$GITHUB_OUTPUT"
-          echo "REMOTE_REQUEST target=$TARGET action=$ACTION requested_at=$REQUESTED_AT"
-          echo "REMOTE_REASON=$REASON"
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              output.write(f"target={target}\n")
+              output.write(f"action={action}\n")
+          print(f"REMOTE_REQUEST target={target} action={action} requested_at={requested_at}")
+          print(f"REMOTE_REASON={reason}")
+          PY
 
       - name: Configure backend SSH
         if: steps.req.outputs.target != 'shopvivaliz-free-a1'
