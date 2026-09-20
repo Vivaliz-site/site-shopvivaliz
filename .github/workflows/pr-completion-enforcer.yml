@@ -281,7 +281,9 @@ jobs:
               sleep 2
             done
 
-            wait "$tunnel_pid" 2>/dev/null || true
+            if ! wait "$tunnel_pid" 2>/dev/null; then
+              echo "bastion_tunnel_attempt_exit=$attempt"
+            fi
             sleep $((attempt * 2))
           done
           test "$tunnel_ready" = true
