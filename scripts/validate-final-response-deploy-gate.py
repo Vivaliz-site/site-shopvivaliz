@@ -12,7 +12,7 @@ FILES = (
     ROOT / "CLAUDE.md",
 )
 MARKER = "FINAL_RESPONSE_DEPLOY_GATE_V1"
-REQUIRED = (MARKER, "resposta final", "pós-deploy")
+REQUIRED = (\n    MARKER,\n    "resposta final",\n    "pós-deploy",\n    "origin/main",\n    "current/.release-sha",\n    "api/health/version.php",\n    "master production pipeline",\n)
 
 errors = []
 for path in FILES:
