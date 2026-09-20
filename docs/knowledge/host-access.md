@@ -77,7 +77,7 @@ Use Remote Desktop Commander ou OCI Bastion; SSH publico direto esta desabilitad
 
 ## GitHub Remote Access (canal primário)
 
-Para operações de terminal, serviços, status, disco e Git nos quatro hosts, usar `docs/REMOTE-ACCESS-GITHUB.md` e `.github/workflows/shopvivaliz-remote-access.yml`. O request versionado `ops/remote-access-request.json` dispara a execução e mantém trilha de auditoria por commit/workflow.
+Para operações de terminal, serviços, status, disco e Git nos quatro hosts, usar `docs/REMOTE-ACCESS-GITHUB.md` e `.github/workflows/shopvivaliz-remote-access.yml`. O issue canônico `#1586` dispara a execução por comentário allowlisted e mantém trilha de auditoria por comentário/workflow, sem acionar pipelines gerais de `push`.
 
 ## Desktop Commander (fallback opcional)
 
