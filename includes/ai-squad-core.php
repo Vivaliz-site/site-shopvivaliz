@@ -88,18 +88,18 @@ function svais_profile_catalog(): array
             'rounds' => 2,
             'web_search' => true,
             'openai' => [
-                'model' => getenv('AI_SQUAD_OPENAI_MODEL') ?: 'gpt-5.6-sol',
+                'model' => getenv('AI_SQUAD_OPENAI_MODEL') ?: 'gpt-5.6-terra',
                 'effort' => 'xhigh',
                 'max_output_tokens' => 7000,
             ],
             'anthropic' => [
-                'model' => svais_non_fable_model('AI_SQUAD_ANTHROPIC_MODEL', 'claude-opus-5'),
+                'model' => svais_non_fable_model('AI_SQUAD_ANTHROPIC_MODEL', 'claude-sonnet-5'),
                 'effort' => 'xhigh',
                 'max_tokens' => 7000,
                 'web_search_max_uses' => 10,
             ],
             'gemini' => [
-                'model' => getenv('AI_SQUAD_GEMINI_MODEL') ?: 'gemini-3.1-pro-preview',
+                'model' => getenv('AI_SQUAD_GEMINI_MODEL') ?: 'gemini-3.5-flash',
                 'thinking_level' => 'HIGH',
                 'max_output_tokens' => 7000,
             ],
