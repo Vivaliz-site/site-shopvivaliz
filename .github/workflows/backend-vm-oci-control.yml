@@ -1,0 +1,373 @@
+name: Backend VM OCI Control
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Allowlisted backend action
+        required: true
+        type: choice
+        options:
+          - identity
+          - disk
+          - runtime_status
+          - repo_status
+          - browser_status
+          - browser_health
+          - browser_install
+          - browser_start
+          - browser_restart
+          - browser_stop
+      reason:
+        description: Audit reason
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shopvivaliz-backend-oci-control
+  cancel-in-progress: false
+
+jobs:
+  control:
+    if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && startsWith(github.event.comment.body, '/backend-oci '))
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 25
+    env:
+      OCI_PROFILE: AGENTS
+      BACKEND_INSTANCE_NAME: always-free-arm-1787907847-26
+      EXPECTED_BACKEND_HOST: always-free-arm-1787907847-26
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Resolve allowlisted request
+        id: req
+        env:
+          DISPATCH_ACTION: ${{ inputs.action }}
+          DISPATCH_REASON: ${{ inputs.reason }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
+          if os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch":
+              action = os.environ.get("DISPATCH_ACTION", "").strip()
+              reason = os.environ.get("DISPATCH_REASON", "").strip()
+          else:
+              body = str((event.get("comment") or {}).get("body") or "").strip()
+              match = re.fullmatch(r"/backend-oci\s+action=([a-z_]+)\s+reason=(.{3,500})", body)
+              if not match:
+                  raise SystemExit("Invalid /backend-oci command")
+              action, reason = match.group(1), match.group(2).strip()
+
+          allowed = {
+              "identity", "disk", "runtime_status", "repo_status",
+              "browser_status", "browser_health", "browser_install",
+              "browser_start", "browser_restart", "browser_stop",
+          }
+          if action not in allowed:
+              raise SystemExit(f"Unsupported action: {action}")
+          if not reason:
+              raise SystemExit("Reason is required")
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as out:
+              out.write(f"action={action}\n")
+          print(f"BACKEND_OCI_REQUEST action={action}")
+          print(f"BACKEND_OCI_REASON={reason}")
+          PY
+
+      - name: Configure protected OCI and VM credentials
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT VM_KEY VM_HOSTS; do
+            test -n "${!name:-}"
+          done
+
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")" "$HOME/.ssh"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 600 "$OCI_KEY_FILE"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+
+          ssh-keygen -q -t rsa -b 2048 -N '' -f "$HOME/.ssh/bastion_session_key"
+          chmod 600 "$HOME/.ssh/bastion_session_key" "$HOME/.ssh/bastion_session_key.pub"
+
+      - name: Install OCI CLI
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          oci --version
+
+      - name: Resolve exact backend and active OCI Bastion
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          "${OCI[@]}" iam region list >/dev/null
+
+          query="query instance resources where displayName = '$BACKEND_INSTANCE_NAME'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = 1
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
+          lifecycle="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."lifecycle-state"' --raw-output)"
+          test "$lifecycle" = RUNNING
+
+          vnic_id="$("${OCI[@]}" compute vnic-attachment list --compartment-id "$compartment_id" --instance-id "$instance_id" --query 'data[0]."vnic-id"' --raw-output)"
+          backend_ip="$("${OCI[@]}" network vnic get --vnic-id "$vnic_id" --query 'data."private-ip"' --raw-output)"
+          subnet_id="$("${OCI[@]}" network vnic get --vnic-id "$vnic_id" --query 'data."subnet-id"' --raw-output)"
+          vcn_id="$("${OCI[@]}" network subnet get --subnet-id "$subnet_id" --query 'data."vcn-id"' --raw-output)"
+          test "$backend_ip" = "10.0.1.38"
+
+          bastions="$("${OCI[@]}" bastion bastion list --compartment-id "$compartment_id" --all)"
+          bastion_id="$(jq -r --arg vcn "$vcn_id" --arg subnet "$subnet_id" '
+            [.data[] | select(."lifecycle-state"=="ACTIVE" and ."target-vcn-id"==$vcn)] as $c
+            | (($c | map(select(."target-subnet-id"==$subnet)) | .[0].id) // ($c[0].id) // empty)
+          ' <<<"$bastions")"
+          test -n "$bastion_id"
+
+          details="$("${OCI[@]}" bastion bastion get --bastion-id "$bastion_id")"
+          original_cidrs="$(jq -c '.data."client-cidr-block-allow-list"' <<<"$details")"
+          test "$original_cidrs" != null
+
+          {
+            printf 'BACKEND_PRIVATE_IP=%s\n' "$backend_ip"
+            printf 'BASTION_ID=%s\n' "$bastion_id"
+            printf 'ORIGINAL_BASTION_CIDRS_B64=%s\n' "$(printf '%s' "$original_cidrs" | base64 -w0)"
+          } >> "$GITHUB_ENV"
+          echo "BACKEND_OCI_RESOLUTION=PASS"
+
+      - name: Temporarily allow this hosted runner into Bastion
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          runner_ip="$(curl -fsS --connect-timeout 5 --max-time 10 https://api.ipify.org)"
+          runner_cidr="$(python3 - "$runner_ip" <<'PY'
+          import ipaddress, sys
+          ip = ipaddress.ip_address(sys.argv[1])
+          print(f"{ip}/{32 if ip.version == 4 else 128}")
+          PY
+          )"
+          original="$(printf '%s' "$ORIGINAL_BASTION_CIDRS_B64" | base64 -d)"
+          updated="$(jq -cn --argjson current "$original" --arg cidr "$runner_cidr" '$current + [$cidr] | unique')"
+          "${OCI[@]}" bastion bastion update             --bastion-id "$BASTION_ID"             --client-cidr-list "$updated"             --force             --wait-for-state SUCCEEDED             --wait-interval-seconds 5             --max-wait-seconds 180 >/dev/null
+          echo "BASTION_ALLOWLIST_UPDATED=true" >> "$GITHUB_ENV"
+          echo "BACKEND_OCI_TEMP_ACCESS=PASS"
+
+      - name: Create temporary Bastion SSH session
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          session_id="$("${OCI[@]}" bastion session create-port-forwarding             --bastion-id "$BASTION_ID"             --ssh-public-key-file "$HOME/.ssh/bastion_session_key.pub"             --target-private-ip "$BACKEND_PRIVATE_IP"             --target-port 22             --session-ttl 1800             --display-name "shopvivaliz-backend-oci-control"             --query 'data.id'             --raw-output)"
+          test -n "$session_id"
+          echo "BASTION_SESSION_ID=$session_id" >> "$GITHUB_ENV"
+
+          active=false
+          payload=''
+          for _ in $(seq 1 60); do
+            payload="$("${OCI[@]}" bastion session get --session-id "$session_id")"
+            state="$(jq -r '.data."lifecycle-state"' <<<"$payload")"
+            if [ "$state" = ACTIVE ]; then active=true; break; fi
+            case "$state" in CREATING) sleep 5 ;; *) break ;; esac
+          done
+          test "$active" = true
+          metadata_command="$(jq -r '.data."ssh-metadata".command' <<<"$payload")"
+          test -n "$metadata_command"
+          printf '%s' "$metadata_command" | base64 -w0 > "$RUNNER_TEMP/bastion-command.b64"
+          echo "BACKEND_OCI_BASTION_SESSION=PASS"
+
+      - name: Open Bastion tunnel and verify backend identity
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          metadata_command="$(base64 -d < "$RUNNER_TEMP/bastion-command.b64")"
+          bastion_host="$(python3 - "$metadata_command" <<'PY'
+          import shlex, sys
+          tokens = shlex.split(sys.argv[1])
+          candidates = [t for t in tokens if '@' in t and not t.startswith('-')]
+          if not candidates:
+              raise SystemExit(2)
+          print(candidates[-1].rsplit('@', 1)[1])
+          PY
+          )"
+          test -n "$bastion_host"
+          ssh-keyscan -T 10 "$bastion_host" > "$HOME/.ssh/bastion_known_hosts"
+          test -s "$HOME/.ssh/bastion_known_hosts"
+
+          cat > "$HOME/.ssh/config" <<EOF
+          Host *
+            BatchMode yes
+            ExitOnForwardFailure yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile $HOME/.ssh/bastion_known_hosts
+            HostKeyAlgorithms +ssh-rsa
+            PubkeyAcceptedAlgorithms +ssh-rsa
+            PubkeyAcceptedKeyTypes +ssh-rsa
+          EOF
+          chmod 600 "$HOME/.ssh/config" "$HOME/.ssh/bastion_known_hosts"
+
+          local_port=32240
+          tunnel_command="${metadata_command//<privateKey>/$HOME/.ssh/bastion_session_key}"
+          tunnel_command="${tunnel_command//<localPort>/$local_port}"
+          eval "$tunnel_command" &
+          tunnel_pid=$!
+          echo "BASTION_TUNNEL_PID=$tunnel_pid" >> "$GITHUB_ENV"
+
+          ready=false
+          for _ in $(seq 1 20); do
+            if timeout 2 bash -c "</dev/tcp/127.0.0.1/$local_port" 2>/dev/null; then ready=true; break; fi
+            sleep 2
+          done
+          test "$ready" = true
+
+          identity="$(ssh -p "$local_port"             -o BatchMode=yes             -o ConnectTimeout=10             -o HostKeyAlias="$BACKEND_PRIVATE_IP"             -o StrictHostKeyChecking=yes             -o UserKnownHostsFile="$HOME/.ssh/known_hosts"             -i "$HOME/.ssh/vmkey"             ubuntu@127.0.0.1             'printf "%s/%s" "$(hostname)" "$(id -un)"')"
+          test "$identity" = "$EXPECTED_BACKEND_HOST/ubuntu"
+          echo "BACKEND_OCI_IDENTITY=PASS"
+
+      - name: Execute fixed backend action
+        env:
+          ACTION: ${{ steps.req.outputs.action }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          local_port=32240
+          SSH=(
+            ssh -p "$local_port"
+            -o BatchMode=yes
+            -o ConnectTimeout=10
+            -o HostKeyAlias="$BACKEND_PRIVATE_IP"
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -i "$HOME/.ssh/vmkey"
+            ubuntu@127.0.0.1
+          )
+
+          case "$ACTION" in
+            identity)
+              CMD='echo BACKEND_IDENTITY_BEGIN; hostname; whoami; pwd; uname -a; echo BACKEND_IDENTITY_END'
+              "${SSH[@]}" "$CMD"
+              ;;
+            disk)
+              CMD='echo BACKEND_DISK_BEGIN; df -h /; if [ -d /home/ubuntu/shopvivaliz-browser-worker ]; then du -sh /home/ubuntu/shopvivaliz-browser-worker; else echo BROWSER_WORKER_DIR=missing; fi; echo BACKEND_DISK_END'
+              "${SSH[@]}" "$CMD"
+              ;;
+            runtime_status)
+              "${SSH[@]}" 'bash -s -- backend' < scripts/runtime-service-status.sh
+              ;;
+            repo_status)
+              CMD='echo BACKEND_REPO_STATUS_BEGIN; for d in /home/ubuntu/*; do if [ -d "$d/.git" ]; then echo "REPO=$d"; git -C "$d" branch --show-current; git -C "$d" status --porcelain; git -C "$d" rev-parse HEAD; fi; done; echo BACKEND_REPO_STATUS_END'
+              "${SSH[@]}" "$CMD"
+              ;;
+            browser_status)
+              "${SSH[@]}" '/home/ubuntu/shopvivaliz-browser-worker/supervisor.sh status'
+              ;;
+            browser_health)
+              "${SSH[@]}" 'curl -fsS --connect-timeout 2 --max-time 5 http://127.0.0.1:17777/health'
+              ;;
+            browser_install)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/install-backend-browser-worker.sh -o "$tmp"; SHOPVIVALIZ_BROWSER_REF=main bash "$tmp"'
+              ;;
+            browser_start)
+              "${SSH[@]}" '/home/ubuntu/shopvivaliz-browser-worker/supervisor.sh start'
+              ;;
+            browser_restart)
+              "${SSH[@]}" '/home/ubuntu/shopvivaliz-browser-worker/supervisor.sh restart'
+              ;;
+            browser_stop)
+              "${SSH[@]}" '/home/ubuntu/shopvivaliz-browser-worker/supervisor.sh stop'
+              ;;
+          esac
+          echo "BACKEND_OCI_ACTION=PASS"
+
+      - name: Restore Bastion policy and erase credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cleanup_failed=0
+
+          if [ -n "${BASTION_TUNNEL_PID:-}" ] && kill -0 "$BASTION_TUNNEL_PID" 2>/dev/null; then
+            if ! kill "$BASTION_TUNNEL_PID"; then
+              echo "::error::Failed to stop Bastion tunnel"
+              cleanup_failed=1
+            fi
+          fi
+
+          if [ -n "${OCI_CONFIG_FILE:-}" ] && [ -f "$OCI_CONFIG_FILE" ]; then
+            OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+            if [ -n "${BASTION_SESSION_ID:-}" ]; then
+              if "${OCI[@]}" bastion session get --session-id "$BASTION_SESSION_ID" >/dev/null 2>&1; then
+                if ! "${OCI[@]}" bastion session delete --session-id "$BASTION_SESSION_ID" --force >/dev/null; then
+                  echo "::error::Failed to delete temporary Bastion session"
+                  cleanup_failed=1
+                fi
+              fi
+            fi
+            if [ "${BASTION_ALLOWLIST_UPDATED:-false}" = true ] && [ -n "${ORIGINAL_BASTION_CIDRS_B64:-}" ]; then
+              original="$(printf '%s' "$ORIGINAL_BASTION_CIDRS_B64" | base64 -d)"
+              if "${OCI[@]}" bastion bastion update                 --bastion-id "$BASTION_ID"                 --client-cidr-list "$original"                 --force                 --wait-for-state SUCCEEDED                 --wait-interval-seconds 5                 --max-wait-seconds 180 >/dev/null; then
+                echo "BASTION_ALLOWLIST_RESTORED=PASS"
+              else
+                echo "::error::Failed to restore Bastion allowlist"
+                cleanup_failed=1
+              fi
+            fi
+          fi
+
+          for secret_file in             "$HOME/.ssh/vmkey"             "$HOME/.ssh/bastion_session_key"             "${OCI_KEY_FILE:-}"             "${OCI_CONFIG_FILE:-}"; do
+            if [ -n "$secret_file" ] && [ -f "$secret_file" ]; then
+              if ! shred -u "$secret_file"; then
+                echo "::error::Failed to erase temporary credential file"
+                cleanup_failed=1
+              fi
+            fi
+          done
+
+          if ! rm -f             "$HOME/.ssh/bastion_session_key.pub"             "$HOME/.ssh/known_hosts"             "$HOME/.ssh/bastion_known_hosts"             "$HOME/.ssh/config"             "$RUNNER_TEMP/bastion-command.b64"; then
+            echo "::error::Failed to remove temporary SSH metadata"
+            cleanup_failed=1
+          fi
+
+          if [ "$cleanup_failed" -ne 0 ]; then
+            exit 1
+          fi
