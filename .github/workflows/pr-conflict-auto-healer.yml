@@ -147,7 +147,7 @@ jobs:
             set +e
             cleanup_file="$RUNNER_TEMP/cleanup-healer.sh"
             printf 'rm -rf -- %q\n' "${remote_base%/*}" > "$cleanup_file"
-            run_remote "Cleanup trusted PR healer" "$cleanup_file" >/dev/null 2>&1 || true
+            if ! run_remote "Cleanup trusted PR healer" "$cleanup_file" >/dev/null 2>&1; then\n              echo "cleanup_remote_healer=best_effort_failed" >&2\n            fi
           }
           trap cleanup EXIT
 
