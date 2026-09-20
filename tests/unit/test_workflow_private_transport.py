@@ -67,12 +67,12 @@ class WorkflowPrivateTransportTests(unittest.TestCase):
         path = WORKFLOWS / 'windows-relay-oci-recovery.yml'
         text = path.read_text(encoding='utf-8')
         self.assertIn(
-            '-o HostKeyAlgorithms=+ssh-rsa',
+            'HostKeyAlgorithms +ssh-rsa',
             text,
             'OCI Bastion hop must allow the RSA host-key algorithm documented by Oracle',
         )
         self.assertIn(
-            '-o PubkeyAcceptedAlgorithms=+ssh-rsa',
+            'PubkeyAcceptedAlgorithms +ssh-rsa',
             text,
             'OCI Bastion hop must allow RSA public-key authentication on modern OpenSSH',
         )
