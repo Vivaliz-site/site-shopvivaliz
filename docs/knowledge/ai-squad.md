@@ -24,7 +24,8 @@ A UI mostra a interação em fases:
 - A UI exige sessão administrativa.
 - POST da API aceita sessão administrativa com CSRF ou chave operacional já provisionada.
 - Nenhuma chave de provider é enviada ao navegador.
-- A UI identifica `via ChatGPT/Codex`, `direto` ou `manual` na perna OpenAI; fallback de transporte nunca é apresentado como troca silenciosa de modelo. OpenRouter permanece somente nos fallbacks Anthropic/Gemini.
+- A UI identifica o transporte efetivamente usado por cada perna: OpenAI pode usar `codex_chatgpt`, Claude pode usar `claude_code`, e Gemini pode usar `vertex_oauth`; fallbacks nunca são apresentados como troca silenciosa de modelo.
+- O modelo solicitado pelo perfil deve permanecer exato em todos os transportes. OpenRouter, quando alcançado, pode devolver o slug prefixado do mesmo modelo (`anthropic/...` ou `google/...`), mas não pode substituir o modelo por outro.
 - O bridge Codex escuta apenas em loopback e usa autenticação ChatGPT já gerenciada pelo Codex; PHP e navegador nunca recebem tokens do ChatGPT.
 - A ferramenta de shell e agentes delegados ficam desabilitados no App Server usado pelo AI Squad; comandos locais rodam com sandbox somente leitura e sem rede.
 - ChatGPT Web é somente fallback manual/visual. O AI Squad não raspa nem lê automaticamente a resposta da interface Web.
@@ -42,6 +43,23 @@ Para cada fase, o agente OpenAI usa esta ordem, preservando exatamente o modelo 
 3. `manual` — evento explícito `agent_manual_required`, com prompt copiável para a sessão ChatGPT já autenticada na VM/RDP.
 
 Uma falha do Codex coloca esse transporte em cooldown pelo restante do ciclo PHP, evitando repetir um timeout conhecido em cada fase. O fallback manual não conta como resposta válida nem como moderador.
+
+## Cadeias Claude e Gemini
+
+Anthropic usa, nesta ordem:
+
+1. `claude_code` — bridge local `127.0.0.1:17657` executando Claude Code com `CLAUDE_CODE_OAUTH_TOKEN` da assinatura autorizada;
+2. `direct` — Anthropic Messages API com `ANTHROPIC_API_KEY`;
+3. `vertex_oauth` — Claude on Vertex AI com OAuth Google já provisionado;
+4. `openrouter` — último fallback, somente quando a credencial OpenRouter estiver válida.
+
+Gemini usa, nesta ordem:
+
+1. `vertex_oauth` — Vertex AI com OAuth Google (`cloud-platform`), preservando o modelo do perfil;
+2. `direct` — Gemini API com `GEMINI_API_KEY`/`GOOGLE_API_KEY`;
+3. `openrouter` — último fallback, somente quando configurado e autenticado.
+
+O bridge Claude é um serviço loopback finito por chamada: não executa polling de IA paga, não persiste sessões, recebe o prompt do usuário por stdin e roda em modo restrito. O health estrutural está em `http://127.0.0.1:17657/health` e nunca expõe token, e-mail ou prompt.
 
 ## Serviço Codex
 
@@ -95,11 +113,23 @@ Fallback opcional dos outros provedores:
 
 - `OPENROUTER_API_KEY` — pode ser usado por Anthropic/Gemini após falha direta; não participa da cadeia OpenAI.
 
+Credenciais/transporte OAuth adicionais:
+
+- `CLAUDE_CODE_OAUTH_TOKEN` — token OAuth de longa duração usado pelo bridge Claude Code;
+- `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REFRESH_TOKEN` — OAuth para Vertex AI;
+- `AI_SQUAD_GOOGLE_CLOUD_PROJECT` — override opcional do projeto Vertex; quando ausente, o runtime pode usar o número do projeto embutido no client ID OAuth.
+
 Configuração opcional do bridge OpenAI:
 
 - `AI_SQUAD_CODEX_ENABLED=0` desabilita o transporte Codex;
 - `AI_SQUAD_CODEX_BRIDGE_URL` sobrescreve o padrão `http://127.0.0.1:17656`;
 - `AI_SQUAD_CODEX_HTTP_TIMEOUT` controla o timeout PHP→bridge, limitado a 30–300 segundos.
+
+Configuração opcional do bridge Claude:
+
+- `AI_SQUAD_CLAUDE_CODE_ENABLED=0` desabilita o transporte `claude_code`;
+- `AI_SQUAD_CLAUDE_BRIDGE_URL` sobrescreve `http://127.0.0.1:17657`;
+- `AI_SQUAD_CLAUDE_HTTP_TIMEOUT` controla o timeout PHP→bridge, limitado a 30–300 segundos.
 
 Overrides opcionais:
 
@@ -121,6 +151,8 @@ O health esperado contém:
 - `providers` com OpenAI, Anthropic e Gemini;
 - modelo e esforço de cada provider;
 - para OpenAI, `transport_order`, `codex_chatgpt_authenticated`, `codex_chatgpt_available`, `direct_configured` e `manual_fallback`;
+- para Anthropic, `transport_order`, `claude_code_oauth_configured`, `claude_code_authenticated`, `claude_code_available`, `direct_configured` e `vertex_oauth_configured`;
+- para Gemini, `transport_order`, `vertex_oauth_configured` e `direct_configured`;
 - somente estado/booleanos agregados, nunca credenciais nem identidade da conta ChatGPT.
 
 ## API externa
