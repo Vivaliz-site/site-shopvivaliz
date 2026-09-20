@@ -10,7 +10,15 @@ Antes de diagnosticar, alterar ou validar qualquer ambiente, o agente deve:
 2. identificar o host correto pelo papel atual;
 3. confirmar o acesso com evidência (`hostname`, `whoami`, diretório e, quando aplicável, `git status`);
 4. nunca assumir que um IP antigo continua sendo produção;
-5. preferir o canal GitHub Remote Access documentado em `docs/REMOTE-ACCESS-GITHUB.md` para terminal, serviços e diagnóstico; usar Desktop Commander apenas como fallback opcional quando houver cota/necessidade de UI; usar SSH/Bastion como fallback autorizado.
+5. preferir o canal GitHub Remote Access documentado em `docs/REMOTE-ACCESS-GITHUB.md` para terminal, serviços e diagnóstico; usar Desktop Commander apenas como fallback opcional para tarefas não-browser; usar SSH/Bastion como fallback autorizado. Navegação/browser segue a regra global abaixo e não usa Windows.
+
+## Navegação e browser — regra global
+
+<!-- GLOBAL_BROWSER_VM_POLICY_V2 -->
+
+O host canônico para navegação e automação browser é `always-free-arm-1787907847-26` (`10.0.1.38`), via Browser Worker privado. Interação humana para MFA/CAPTCHA/consentimento é feita em `https://shopvivaliz.com.br/admin/browser-worker.php`.
+
+Fred-Win (`LAPTOP-NIG4IFUU`) e `DESKTOP-KOCEPSV` **não são destinos nem fallback de navegador**. Se o Browser Worker estiver indisponível, reparar o acesso pela VCN/OCI Bastion/túnel privado; não transferir a navegação para Windows. Exceção somente por ordem explícita do proprietário na tarefa atual.
 
 ## Hosts operacionais atuais
 
