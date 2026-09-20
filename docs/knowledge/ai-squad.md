@@ -24,6 +24,7 @@ A UI mostra a interação em fases:
 - A UI exige sessão administrativa.
 - POST da API aceita sessão administrativa com CSRF ou chave operacional já provisionada.
 - Nenhuma chave de provider é enviada ao navegador.
+- A UI identifica `direto` ou `via OpenRouter`; fallback de transporte nunca é apresentado como troca silenciosa de modelo.
 - Secrets são lidos apenas por `config/bootstrap-env.php` a partir do runtime protegido.
 - O log persistente contém somente metadados do ciclo; prompt e respostas completas não são persistidos por padrão.
 - Nunca registrar `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `SQUAD_TOKEN` ou `SHOPVIVALIZ_AGENT_KEY`.
@@ -60,6 +61,10 @@ Obrigatórias para os três provedores:
 - `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
 - `GEMINI_API_KEY` ou `GOOGLE_API_KEY`
+
+Fallback opcional de transporte:
+
+- `OPENROUTER_API_KEY` — usado somente quando a chamada direta do provider falhar; o modelo original continua identificado na resposta.
 
 Overrides opcionais:
 
