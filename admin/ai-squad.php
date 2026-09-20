@@ -61,6 +61,10 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .msg.anthropic{border-left:4px solid #78573a}
 .msg.gemini{border-left:4px solid #3c6ea8}
 .msg.error{border-left:4px solid var(--bad);background:#fff7f6}
+.msg.manual{border-left:4px solid #b7791f;background:#fffaf0}
+.manual-note{font-size:.82rem;color:var(--muted);margin:8px 0}
+.manual-prompt{white-space:pre-wrap;overflow-wrap:anywhere;background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px;max-height:320px;overflow:auto}
+.manual-copy{margin-top:10px;border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer}
 .msg-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:8px}
 .agent{font-weight:850}.agent small{font-weight:500;color:var(--muted);display:block;margin-top:2px}
 .latency{font-size:.75rem;color:var(--muted);white-space:nowrap}
@@ -145,11 +149,13 @@ button:disabled{opacity:.55;cursor:not-allowed}
 const API='/api/agent/ai-squad.php';
 const CSRF=<?= json_encode($csrf, JSON_UNESCAPED_SLASHES) ?>;
 const names={openai:'OpenAI',anthropic:'Claude',gemini:'Gemini'};
+const transportNames={codex_chatgpt:'via ChatGPT/Codex',direct:'direto',openrouter:'via OpenRouter',manual:'manual'};
 let running=false;
 let count=0;
 
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function phaseName(p){return ({research:'Pesquisa independente',critique:'Contraditório',converge:'Convergência',consensus:'Síntese de consenso'}[p]||p);}
+function transportLabel(t){return transportNames[t]||String(t||'direto');}
 function fmtMs(ms){if(!Number.isFinite(ms))return '—';return ms<1000?ms+' ms':(ms/1000).toFixed(1)+' s';}
 function linkSource(url){const u=esc(url);return '<a target="_blank" rel="noopener noreferrer" href="'+u+'">'+u+'</a>';}
 
@@ -168,10 +174,61 @@ function addMessage(e){
   div.className='msg '+(e.provider||'')+(e.ok===false?' error':'');
   const sources=(e.sources||[]).slice(0,12);
   div.innerHTML='<div class="msg-head"><div class="agent">'+esc(names[e.provider]||e.provider||'Agente')+
-    '<small>'+esc(e.model||phaseName(e.phase||''))+(e.transport==='openrouter'?' · via OpenRouter':' · direto')+'</small></div>'+
+    '<small>'+esc(e.model||phaseName(e.phase||''))+' · '+esc(transportLabel(e.transport||'direct'))+'</small></div>'+
     '<div class="latency">'+(e.latency_ms?fmtMs(e.latency_ms):'')+'</div></div>'+
     '<div class="msg-body">'+esc(e.text||e.error||'Sem resposta.')+'</div>'+
     (sources.length?'<div class="sources"><b>Fontes detectadas</b>'+sources.map(linkSource).join('')+'</div>':'');
+  document.getElementById('feed').appendChild(div);
+  div.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function addManual(e){
+  document.getElementById('empty')?.remove();
+  const div=document.createElement('article');
+  div.className='msg openai manual';
+
+  const head=document.createElement('div');
+  head.className='msg-head';
+  const agent=document.createElement('div');
+  agent.className='agent';
+  agent.textContent='OpenAI — intervenção manual necessária';
+  const model=document.createElement('small');
+  model.textContent=String(e.model||'')+' · '+transportLabel('manual');
+  agent.appendChild(model);
+  head.appendChild(agent);
+  div.appendChild(head);
+
+  const note=document.createElement('div');
+  note.className='manual-note';
+  note.textContent='Abra a sessão ChatGPT autenticada da VM/RDP e envie este prompt. A resposta não será lida automaticamente pelo AI Squad.';
+  div.appendChild(note);
+
+  if(Array.isArray(e.attempts)&&e.attempts.length){
+    const attempts=document.createElement('div');
+    attempts.className='manual-note';
+    attempts.textContent='Tentativas automáticas: '+e.attempts.map(a=>(transportLabel(a.transport)+': '+String(a.class||'falha'))).join(' · ');
+    div.appendChild(attempts);
+  }
+
+  const promptNode=document.createElement('pre');
+  promptNode.className='manual-prompt';
+  promptNode.textContent=e.prompt||'';
+  div.appendChild(promptNode);
+
+  const button=document.createElement('button');
+  button.type='button';
+  button.className='manual-copy';
+  button.textContent='Copiar prompt';
+  button.addEventListener('click',async()=>{
+    try{
+      await navigator.clipboard.writeText(e.prompt||'');
+      button.textContent='Prompt copiado';
+    }catch(_){
+      button.textContent='Copie o texto acima';
+    }
+  });
+  div.appendChild(button);
+
   document.getElementById('feed').appendChild(div);
   div.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
@@ -195,6 +252,8 @@ function handleEvent(e){
     addPhase(e.phase);
   }else if(e.type==='agent_message'){
     count++;document.getElementById('messages').textContent=String(count);addMessage(e);
+  }else if(e.type==='agent_manual_required'){
+    addManual(e);
   }else if(e.type==='agent_error'||e.type==='moderator_error'){
     addMessage({...e,text:'Falha do provedor: '+(e.error||'erro não especificado'),ok:false});
   }else if(e.type==='consensus'){
@@ -216,7 +275,11 @@ async function loadHealth(){
       const pill=document.createElement('span');pill.className='pill';
       pill.innerHTML='<span class="dot '+(p.configured?'ok':'bad')+'"></span>'+esc(names[id]||id);
       health.appendChild(pill);
-      models.push((names[id]||id)+': '+p.model+' · '+p.reasoning);
+      let detail=(names[id]||id)+': '+p.model+' · '+p.reasoning;
+      if(id==='openai'&&Array.isArray(p.transport_order)){
+        detail+=' · '+p.transport_order.map(transportLabel).join(' → ');
+      }
+      models.push(detail);
     }
     document.getElementById('models').textContent=models.join('  |  ')+'  |  Claude: Opus 5 primário, sem Fable';
   }catch(err){
