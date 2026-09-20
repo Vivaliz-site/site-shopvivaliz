@@ -44,7 +44,7 @@ class WorkflowPrivateTransportTests(unittest.TestCase):
             head = text.split('jobs:', 1)[0]
             found = [event[:-1] for event in automatic if event in head]
             if found:
-                offenders.append(f'{path}:{"/".join(found)}')
+                offenders.append(f'{path}:{"/" .join(found)}')
         self.assertEqual(offenders, [], 'legacy relay workflows still auto-trigger: ' + ', '.join(offenders))
 
     def test_private_vm_ssh_jobs_run_on_site_self_hosted_runner(self):
@@ -75,6 +75,16 @@ class WorkflowPrivateTransportTests(unittest.TestCase):
             'PubkeyAcceptedAlgorithms +ssh-rsa',
             text,
             'OCI Bastion hop must allow RSA public-key authentication on modern OpenSSH',
+        )
+        self.assertIn(
+            'PubkeyAcceptedKeyTypes +ssh-rsa',
+            text,
+            'OCI Bastion troubleshooting requires the legacy RSA key-type alias for public-key auth failures',
+        )
+        self.assertIn(
+            'Host *',
+            text,
+            'OCI Bastion troubleshooting requires the RSA compatibility stanza to apply to the Bastion connection',
         )
         self.assertIn(
             '--ssh-public-key-file "$HOME/.ssh/bastion_session_key.pub"',

@@ -35,6 +35,15 @@
 
 ## Diagnóstico
 
+## Semântica de health/systemd
+
+- Nunca declarar "backend inteiro inativo" ou equivalente apenas porque `systemctl is-active` retornou `inactive` para uma lista de nomes.
+- Consultar `LoadState`, `ActiveState`, tipo da unidade e o runtime canônico em `host-access.md`.
+- `LoadState=not-found` para nome aposentado é ausência esperada, não falha.
+- Unidades `oneshot` podem ficar `inactive` após sucesso; validar timer/gatilho e `Result=success`/`ExecMainStatus=0`.
+- `mei-mg-email-worker.service` inativo com `/var/lib/mei-mg-email/sender_blocked.pause` presente é estado fail-closed deliberado; não reiniciar automaticamente.
+- Preferir `scripts/runtime-service-status.sh` ou a ação remota `runtime_status` em vez de inventários manuais de nomes históricos.
+
 - Identificar o erro antes de sugerir a solução.
 - Registrar método HTTP, URL, status, corpo da resposta e etapa do fluxo afetada.
 - Não tratar 404, 405, 500, CORS e DNS como o mesmo problema.
