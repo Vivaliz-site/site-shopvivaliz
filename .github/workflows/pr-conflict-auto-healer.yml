@@ -12,13 +12,16 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: shopvivaliz-bastion-access
-  cancel-in-progress: false
+  group: pr-conflict-auto-healer-${{ github.event.pull_request.number || 'sweep' }}
+  cancel-in-progress: true
 
 jobs:
   heal:
     name: Resolve same-repository PR conflicts with private Oracle Gemini pool
     runs-on: ubuntu-latest
+    concurrency:
+      group: shopvivaliz-bastion-access
+      cancel-in-progress: false
     environment: Production
     timeout-minutes: 30
     env:
