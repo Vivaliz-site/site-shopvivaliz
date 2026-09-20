@@ -22,6 +22,8 @@ def test_precheck_exports_fail_safe_recovery_decision() -> None:
     assert "id: precheck" in block
     assert 'recovery_required = False' in block
     assert 'recovery_reason = "healthy_listener"' in block
+    assert 'recovery_reason = "healthy_busy_worker"' in block
+    assert 'Runner.Worker active with live listener; refusing site runner recovery' not in block
     assert "elif not listener_present:" in block
     assert 'recovery_reason = "listener_absent"' in block
     assert 'recovery_reason = "stale_orphan_worker"' in block
@@ -45,3 +47,8 @@ def test_destructive_recovery_steps_require_positive_precheck() -> None:
     guard = "if: steps.precheck.outputs.recovery_required == 'true'"
     for step in guarded_steps:
         assert guard in _step_block(step), step
+
+
+def test_recovery_workflow_has_no_fail_open_shell_shortcuts() -> None:
+    assert "|| true" not in TEXT
+    assert "set +e" not in TEXT
