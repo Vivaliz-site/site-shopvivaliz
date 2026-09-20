@@ -261,13 +261,30 @@ jobs:
           local_port=32240
           tunnel_command="${metadata_command//<privateKey>/$HOME/.ssh/bastion_session_key}"
           tunnel_command="${tunnel_command//<localPort>/$local_port}"
-          eval "$tunnel_command" &
-          tunnel_pid=$!
-
+          BASTION_TUNNEL_RETRY_MAX=6
           tunnel_ready=false
-          for _ in $(seq 1 20); do
-            if timeout 2 bash -c "</dev/tcp/127.0.0.1/$local_port" 2>/dev/null; then tunnel_ready=true; break; fi
-            sleep 2
+          tunnel_pid=''
+
+          for attempt in $(seq 1 "$BASTION_TUNNEL_RETRY_MAX"); do
+            eval "$tunnel_command" &
+            tunnel_pid=$!
+
+            for _ in $(seq 1 5); do
+              if timeout 2 bash -c "</dev/tcp/127.0.0.1/$local_port" 2>/dev/null; then
+                tunnel_ready=true
+                echo "bastion_tunnel_ready_attempt=$attempt"
+                break 2
+              fi
+              if ! kill -0 "$tunnel_pid" 2>/dev/null; then
+                break
+              fi
+              sleep 2
+            done
+
+            if ! wait "$tunnel_pid" 2>/dev/null; then
+              echo "bastion_tunnel_attempt_exit=$attempt"
+            fi
+            sleep $((attempt * 2))
           done
           test "$tunnel_ready" = true
 
