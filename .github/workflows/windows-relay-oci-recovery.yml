@@ -13,29 +13,33 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && startsWith(github.event.comment.body, '/recover-windows-oci '))
     runs-on: ubuntu-latest
     environment: Production
-    timeout-minutes: 12
+    timeout-minutes: 15
     env:
       OCI_PROFILE: AGENTS
       BACKEND_INSTANCE_NAME: always-free-arm-1787907847-26
+      EXPECTED_BACKEND_HOST: always-free-arm-1787907847-26
 
     steps:
-      - name: Configure protected OCI profile
+      - name: Configure protected OCI and SSH credentials
         env:
           OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
           OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
           OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
           OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
           OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT VM_KEY VM_HOSTS; do
             test -n "${!name:-}"
           done
+
           OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
           OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
           printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
-          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")" "$HOME/.ssh"
           printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
           chmod 600 "$OCI_KEY_FILE"
           cat > "$OCI_CONFIG_FILE" <<EOF
@@ -48,13 +52,20 @@ jobs:
           EOF
           chmod 600 "$OCI_CONFIG_FILE"
 
-      - name: Install OCI CLI and resolve backend
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -f "$HOME/.ssh/vmkey" > "$HOME/.ssh/vmkey.pub"
+          chmod 600 "$HOME/.ssh/vmkey.pub"
+
+      - name: Resolve backend and active OCI Bastion
         shell: bash
         run: |
           set -Eeuo pipefail
           python3 -m pip install --disable-pip-version-check --quiet oci-cli
           OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
           "${OCI[@]}" iam region list >/dev/null
+
           query="query instance resources where displayName = '$BACKEND_INSTANCE_NAME'"
           count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
           test "$count" = 1
@@ -62,78 +73,195 @@ jobs:
           compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
           lifecycle="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."lifecycle-state"' --raw-output)"
           test "$lifecycle" = RUNNING
-          plugin="$("${OCI[@]}" instance-agent plugin list --compartment-id "$compartment_id" --instanceagent-id "$instance_id" --query 'data[?name==`Compute Instance Run Command`].status | [0]' --raw-output)"
-          test "$plugin" = RUNNING
-          printf 'BACKEND_INSTANCE_ID=%s\nBACKEND_COMPARTMENT_ID=%s\n' "$instance_id" "$compartment_id" >> "$GITHUB_ENV"
-          echo "OCI_BACKEND_READY=PASS"
 
-      - name: Recover Windows relays through backend Tailscale
-        env:
-          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          vnic_id="$("${OCI[@]}" compute vnic-attachment list --compartment-id "$compartment_id" --instance-id "$instance_id" --query 'data[0]."vnic-id"' --raw-output)"
+          test -n "$vnic_id"
+          backend_ip="$("${OCI[@]}" network vnic get --vnic-id "$vnic_id" --query 'data."private-ip"' --raw-output)"
+          test -n "$backend_ip"
+
+          bastions="$("${OCI[@]}" bastion bastion list --compartment-id "$compartment_id" --all)"
+          bastion_id="$(jq -r '.data[] | select(."lifecycle-state"=="ACTIVE") | .id' <<<"$bastions" | head -1)"
+          test -n "$bastion_id"
+          bastion_count="$(jq '[.data[] | select(."lifecycle-state"=="ACTIVE")] | length' <<<"$bastions")"
+          test "$bastion_count" -ge 1
+
+          details="$("${OCI[@]}" bastion bastion get --bastion-id "$bastion_id")"
+          original_cidrs="$(jq -c '.data."client-cidr-block-allow-list"' <<<"$details")"
+          test "$original_cidrs" != null
+          original_cidrs_b64="$(printf '%s' "$original_cidrs" | base64 -w0)"
+
+          {
+            printf 'BACKEND_INSTANCE_ID=%s\n' "$instance_id"
+            printf 'BACKEND_COMPARTMENT_ID=%s\n' "$compartment_id"
+            printf 'BACKEND_PRIVATE_IP=%s\n' "$backend_ip"
+            printf 'BASTION_ID=%s\n' "$bastion_id"
+            printf 'ORIGINAL_BASTION_CIDRS_B64=%s\n' "$original_cidrs_b64"
+          } >> "$GITHUB_ENV"
+          echo "OCI_BACKEND_AND_BASTION=PASS"
+
+      - name: Open temporary Bastion access for this hosted runner
         shell: bash
         run: |
           set -Eeuo pipefail
-          test -n "$VM_KEY"
-          key_b64="$(printf '%s' "$VM_KEY" | base64 -w0)"
-          script="$RUNNER_TEMP/windows-relay-recovery.sh"
-          cat > "$script" <<'REMOTE_HEAD'
-          set -Eeuo pipefail
-          umask 077
-          tmp="$(mktemp -d)"
-          cleanup() {
-            if [ -f "$tmp/key" ]; then shred -u "$tmp/key" 2>/dev/null || rm -f "$tmp/key"; fi
-            rm -rf "$tmp"
-          }
-          trap cleanup EXIT
-          KEY_B64='__KEY_B64__'
-          printf '%s' "$KEY_B64" | base64 -d > "$tmp/key"
-          chmod 600 "$tmp/key"
-          command -v tailscale >/dev/null
-          tailscale status --json > "$tmp/tailscale.json"
-          python3 - "$tmp/tailscale.json" > "$tmp/peers" <<'PY'
-          import json, sys
-          data=json.load(open(sys.argv[1], encoding='utf-8'))
-          wanted={"LAPTOP-NIG4IFUU":"","DESKTOP-KOCEPSV":""}
-          for peer in (data.get("Peer") or {}).values():
-              host=str(peer.get("HostName") or peer.get("DNSName") or "").rstrip(".").upper()
-              ips=peer.get("TailscaleIPs") or []
-              ip=next((x for x in ips if ":" not in x), "")
-              for name in wanted:
-                  if name in host:
-                      wanted[name]=ip
-          for name,ip in wanted.items():
-              print(f"{name}={ip}")
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+
+          runner_ip="$(curl -fsS --connect-timeout 5 --max-time 10 https://api.ipify.org)"
+          python3 - "$runner_ip" <<'PY'
+          import ipaddress, sys
+          ipaddress.ip_address(sys.argv[1])
           PY
-          fred_ip="$(awk -F= '$1=="LAPTOP-NIG4IFUU"{print $2}' "$tmp/peers")"
-          desk_ip="$(awk -F= '$1=="DESKTOP-KOCEPSV"{print $2}' "$tmp/peers")"
+
+          original_cidrs="$(printf '%s' "$ORIGINAL_BASTION_CIDRS_B64" | base64 -d)"
+          updated_cidrs="$(jq -cn --argjson current "$original_cidrs" --arg cidr "$runner_ip/32" '$current + [$cidr] | unique')"
+          "${OCI[@]}" bastion bastion update             --bastion-id "$BASTION_ID"             --client-cidr-list "$updated_cidrs"             --force             --wait-for-state SUCCEEDED             --wait-interval-seconds 5             --max-wait-seconds 180 >/dev/null
+
+          echo "BASTION_ALLOWLIST_UPDATED=true" >> "$GITHUB_ENV"
+          echo "BASTION_TEMPORARY_RUNNER_ACCESS=PASS"
+
+      - name: Create Bastion SSH port-forwarding session
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+
+          session_id="$("${OCI[@]}" bastion session create-port-forwarding             --bastion-id "$BASTION_ID"             --ssh-public-key-file "$HOME/.ssh/vmkey.pub"             --target-private-ip "$BACKEND_PRIVATE_IP"             --target-port 22             --session-ttl 1800             --display-name "shopvivaliz-windows-relay-recovery"             --query 'data.id'             --raw-output)"
+          test -n "$session_id"
+          echo "BASTION_SESSION_ID=$session_id" >> "$GITHUB_ENV"
+
+          active=false
+          session_json=''
+          for _ in $(seq 1 60); do
+            session_json="$("${OCI[@]}" bastion session get --session-id "$session_id")"
+            state="$(jq -r '.data."lifecycle-state"' <<<"$session_json")"
+            if [ "$state" = ACTIVE ]; then
+              active=true
+              break
+            fi
+            case "$state" in
+              CREATING) sleep 5 ;;
+              FAILED|DELETING|DELETED) break ;;
+              *) sleep 5 ;;
+            esac
+          done
+          test "$active" = true
+
+          metadata_command="$(jq -r '.data."ssh-metadata".command' <<<"$session_json")"
+          test -n "$metadata_command"
+          printf '%s' "$metadata_command" | base64 -w0 > "$RUNNER_TEMP/bastion-command.b64"
+          echo "BASTION_SESSION_ACTIVE=PASS"
+
+      - name: Recover Fred-Win and KOCEPSV through Bastion and Tailscale
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          eval "$(ssh-agent -s)"
+          ssh-add "$HOME/.ssh/vmkey" >/dev/null
+
+          metadata_command="$(base64 -d < "$RUNNER_TEMP/bastion-command.b64")"
+          bastion_host="$(python3 - "$metadata_command" <<'PY'
+          import shlex, sys
+          tokens=shlex.split(sys.argv[1])
+          candidates=[t for t in tokens if '@' in t and not t.startswith('-')]
+          if not candidates:
+              raise SystemExit(2)
+          print(candidates[-1].rsplit('@',1)[1])
+          PY
+          )"
+          test -n "$bastion_host"
+          ssh-keyscan -T 10 "$bastion_host" > "$HOME/.ssh/bastion_known_hosts"
+          test -s "$HOME/.ssh/bastion_known_hosts"
+          chmod 600 "$HOME/.ssh/bastion_known_hosts"
+
+          local_port=32238
+          tunnel_command="${metadata_command//<privateKey>/$HOME/.ssh/vmkey}"
+          tunnel_command="${tunnel_command//<localPort>/$local_port}"
+          tunnel_command="${tunnel_command/#ssh /ssh -o BatchMode=yes -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/bastion_known_hosts }"
+          eval "$tunnel_command" &
+          tunnel_pid=$!
+          printf 'BASTION_TUNNEL_PID=%s\n' "$tunnel_pid" >> "$GITHUB_ENV"
+
+          tunnel_ready=false
+          for _ in $(seq 1 20); do
+            if timeout 2 bash -c "</dev/tcp/127.0.0.1/$local_port" 2>/dev/null; then
+              tunnel_ready=true
+              break
+            fi
+            sleep 2
+          done
+          test "$tunnel_ready" = true
+
+          BACKEND_SSH=(
+            ssh -A
+            -p "$local_port"
+            -o BatchMode=yes
+            -o ConnectTimeout=10
+            -o HostKeyAlias="$BACKEND_PRIVATE_IP"
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            ubuntu@127.0.0.1
+          )
+
+          identity="$("${BACKEND_SSH[@]}" 'printf "%s/%s" "$(hostname)" "$(id -un)"')"
+          test "$identity" = "$EXPECTED_BACKEND_HOST/ubuntu"
+
+          tailscale_json="$("${BACKEND_SSH[@]}" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          command -v tailscale >/dev/null
+          if tailscale status --json >/tmp/shopvivaliz-tailscale-status.json 2>/tmp/shopvivaliz-tailscale-error.txt; then
+            cat /tmp/shopvivaliz-tailscale-status.json
+            rm -f /tmp/shopvivaliz-tailscale-status.json /tmp/shopvivaliz-tailscale-error.txt
+            exit 0
+          fi
+          if systemctl list-unit-files tailscaled.service --no-legend | grep -q '^tailscaled.service'; then
+            sudo -n systemctl restart tailscaled
+            sleep 3
+            tailscale status --json
+            rm -f /tmp/shopvivaliz-tailscale-status.json /tmp/shopvivaliz-tailscale-error.txt
+            exit 0
+          fi
+          rm -f /tmp/shopvivaliz-tailscale-status.json /tmp/shopvivaliz-tailscale-error.txt
+          exit 31
+          REMOTE
+          )"
+
+          fred_ip="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(next((ip for p in (d.get("Peer") or {}).values() if "LAPTOP-NIG4IFUU" in str(p.get("HostName") or p.get("DNSName") or "").upper() for ip in (p.get("TailscaleIPs") or []) if ":" not in ip), ""))' <<<"$tailscale_json")"
+          desk_ip="$(python3 -c 'import json,sys; d=json.load(sys.stdin); print(next((ip for p in (d.get("Peer") or {}).values() if "DESKTOP-KOCEPSV" in str(p.get("HostName") or p.get("DNSName") or "").upper() for ip in (p.get("TailscaleIPs") or []) if ":" not in ip), ""))' <<<"$tailscale_json")"
+          test -n "$fred_ip"
+          test -n "$desk_ip"
+
+          "${BACKEND_SSH[@]}" "FRED_IP='$fred_ip' DESK_IP='$desk_ip' bash -se" <<'REMOTE'
+          set -Eeuo pipefail
+          tmp="$(mktemp -d)"
+          cleanup() { rm -rf "$tmp"; }
+          trap cleanup EXIT
 
           repair_peer() {
             label="$1"
             ip="$2"
             user="$3"
-            bootstrap="$4"
+            script="$4"
             relay_port="$5"
-            if [ -z "$ip" ]; then
-              echo "${label}_PEER=not_found"
-              return 20
-            fi
+
             echo "${label}_PEER=found"
             if ! timeout 5 bash -c "</dev/tcp/$ip/22" 2>/dev/null; then
               echo "${label}_SSH22=unreachable"
               return 21
             fi
             echo "${label}_SSH22=reachable"
-            ssh-keyscan -T 5 "$ip" 2>/dev/null > "$tmp/${label}.hosts"
+
+            ssh-keyscan -T 5 "$ip" > "$tmp/${label}.hosts" 2>/dev/null
             test -s "$tmp/${label}.hosts"
             chmod 600 "$tmp/${label}.hosts"
-            ps="& { \\$ErrorActionPreference='Stop'; & 'C:\\site-shopvivaliz\\scripts\\$bootstrap' -Mode InstallTask }"
-            if ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$tmp/${label}.hosts" -i "$tmp/key" "$user@$ip" "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$ps\"" >/dev/null 2>&1; then
+
+            if ssh               -o BatchMode=yes               -o ConnectTimeout=10               -o StrictHostKeyChecking=yes               -o UserKnownHostsFile="$tmp/${label}.hosts"               "$user@$ip"               "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"C:\\site-shopvivaliz\\scripts\\$script\" -Mode InstallTask"               >/dev/null 2>&1; then
               echo "${label}_RECOVERY=executed"
             else
               echo "${label}_RECOVERY=ssh_auth_or_command_failed"
               return 22
             fi
-            for _ in $(seq 1 8); do
+
+            for _ in $(seq 1 12); do
               if curl -fsS --connect-timeout 3 --max-time 5 "http://127.0.0.1:${relay_port}/health" >/dev/null 2>&1; then
                 echo "${label}_RELAY=reachable"
                 return 0
@@ -145,50 +273,42 @@ jobs:
           }
 
           status=0
-          repair_peer FRED "$fred_ip" FRED fredwin-remote-bootstrap.ps1 5557 || status=1
-          repair_peer DESKTOP "$desk_ip" user desktopkocepsv-remote-bootstrap.ps1 5558 || status=1
+          repair_peer FRED "$FRED_IP" FRED fredwin-remote-bootstrap.ps1 5557 || status=1
+          repair_peer DESKTOP "$DESK_IP" user desktopkocepsv-remote-bootstrap.ps1 5558 || status=1
           exit "$status"
-          REMOTE_HEAD
-          python3 - "$script" "$key_b64" <<'PY'
-          from pathlib import Path
-          import sys
-          path=Path(sys.argv[1])
-          text=path.read_text(encoding="utf-8")
-          path.write_text(text.replace("__KEY_B64__", sys.argv[2]), encoding="utf-8")
-          PY
+          REMOTE
 
-          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
-          content="$RUNNER_TEMP/windows-relay-content.json"
-          target="$RUNNER_TEMP/windows-relay-target.json"
-          jq -n --rawfile text "$script" '{source:{sourceType:"TEXT",text:$text},output:{outputType:"TEXT"}}' > "$content"
-          jq -n --arg instanceId "$BACKEND_INSTANCE_ID" '{instanceId:$instanceId}' > "$target"
-          command_id="$("${OCI[@]}" instance-agent command create --compartment-id "$BACKEND_COMPARTMENT_ID" --display-name "Recover ShopVivaliz Windows relays" --content "file://$content" --target "file://$target" --timeout-in-seconds 300 --query 'data.id' --raw-output)"
-          execution=''
-          for _ in $(seq 1 72); do
-            execution="$("${OCI[@]}" instance-agent command-execution get --command-id "$command_id" --instance-id "$BACKEND_INSTANCE_ID")"
-            state="$(jq -r '.data."lifecycle-state"' <<<"$execution")"
-            case "$state" in
-              SUCCEEDED|FAILED|TIMED_OUT|CANCELED) break ;;
-              ACCEPTED|IN_PROGRESS) sleep 5 ;;
-              *) exit 31 ;;
-            esac
-          done
-          state="$(jq -r '.data."lifecycle-state"' <<<"$execution")"
-          code="$(jq -r '.data.content."exit-code"' <<<"$execution")"
-          output="$(jq -r '.data.content.text // ""' <<<"$execution")"
-          printf '%s\n' "$output" | awk '/^(FRED|DESKTOP)_(PEER|SSH22|RECOVERY|RELAY)=/'
-          test "$state" = SUCCEEDED
-          test "$code" = 0
-          echo "WINDOWS_OCI_RECOVERY=PASS"
+          "${BACKEND_SSH[@]}" 'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5557/health'
+          "${BACKEND_SSH[@]}" 'curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:5558/health'
+          echo "WINDOWS_BASTION_RECOVERY=PASS"
 
-      - name: Cleanup OCI credentials
+      - name: Restore Bastion policy and cleanup
         if: always()
         shell: bash
         run: |
           set -Eeuo pipefail
-          if [ -n "${OCI_KEY_FILE:-}" ] && [ -f "$OCI_KEY_FILE" ]; then
-            shred -u "$OCI_KEY_FILE"
+
+          if [ -n "${BASTION_TUNNEL_PID:-}" ] && kill -0 "$BASTION_TUNNEL_PID" 2>/dev/null; then
+            kill "$BASTION_TUNNEL_PID"
           fi
+
           if [ -n "${OCI_CONFIG_FILE:-}" ] && [ -f "$OCI_CONFIG_FILE" ]; then
-            shred -u "$OCI_CONFIG_FILE"
+            OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+
+            if [ -n "${BASTION_SESSION_ID:-}" ]; then
+              if "${OCI[@]}" bastion session get --session-id "$BASTION_SESSION_ID" >/dev/null 2>&1; then
+                "${OCI[@]}" bastion session delete --session-id "$BASTION_SESSION_ID" --force >/dev/null
+              fi
+            fi
+
+            if [ "${BASTION_ALLOWLIST_UPDATED:-false}" = true ] && [ -n "${ORIGINAL_BASTION_CIDRS_B64:-}" ] && [ -n "${BASTION_ID:-}" ]; then
+              original_cidrs="$(printf '%s' "$ORIGINAL_BASTION_CIDRS_B64" | base64 -d)"
+              "${OCI[@]}" bastion bastion update                 --bastion-id "$BASTION_ID"                 --client-cidr-list "$original_cidrs"                 --force                 --wait-for-state SUCCEEDED                 --wait-interval-seconds 5                 --max-wait-seconds 180 >/dev/null
+              echo "BASTION_ALLOWLIST_RESTORED=PASS"
+            fi
           fi
+
+          if [ -f "$HOME/.ssh/vmkey" ]; then shred -u "$HOME/.ssh/vmkey"; fi
+          rm -f "$HOME/.ssh/vmkey.pub" "$HOME/.ssh/known_hosts" "$HOME/.ssh/bastion_known_hosts" "$RUNNER_TEMP/bastion-command.b64"
+          if [ -n "${OCI_KEY_FILE:-}" ] && [ -f "$OCI_KEY_FILE" ]; then shred -u "$OCI_KEY_FILE"; fi
+          if [ -n "${OCI_CONFIG_FILE:-}" ] && [ -f "$OCI_CONFIG_FILE" ]; then shred -u "$OCI_CONFIG_FILE"; fi
