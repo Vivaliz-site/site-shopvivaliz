@@ -14,7 +14,8 @@ REQUIRED = {
     ".github/workflows/pr-conflict-auto-healer.yml": [
         "pull_request_target:",
         "schedule:",
-        "cancel-in-progress: true",
+        "group: shopvivaliz-bastion-access",
+        "cancel-in-progress: false",
         "runs-on: ubuntu-latest",
         "environment: Production",
         "SITE_INSTANCE_NAME: shopvivaliz-free-a1",
