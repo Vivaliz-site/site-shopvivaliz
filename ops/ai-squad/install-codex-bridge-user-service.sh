@@ -67,5 +67,7 @@ for _ in $(seq 1 30); do
 done
 
 printf '%s\n' "AI_SQUAD_CODEX_BRIDGE_HEALTH=FAILED" >&2
-systemctl --user --no-pager --full status "$service" >&2 || true
+if ! systemctl --user --no-pager --full status "$service" >&2; then
+  printf '%s\n' "AI_SQUAD_CODEX_BRIDGE_STATUS=UNAVAILABLE" >&2
+fi
 exit 1
