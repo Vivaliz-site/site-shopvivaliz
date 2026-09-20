@@ -2,6 +2,7 @@ from pathlib import Path
 import unittest
 
 WORKFLOW = Path('.github/workflows/pr-conflict-auto-healer.yml')
+WINDOWS_RELAY = Path('.github/workflows/windows-relay-oci-recovery.yml')
 
 
 class PrHealerPrivateTransportTest(unittest.TestCase):
@@ -20,6 +21,15 @@ class PrHealerPrivateTransportTest(unittest.TestCase):
         self.assertIn('production_deploy_runner_reserved=true', text)
         self.assertNotIn('instance-agent command create', text)
         self.assertNotIn('163.176.103.253', text)
+
+    def test_bastion_policy_mutations_are_serialized_repository_wide(self):
+        healer = WORKFLOW.read_text(encoding='utf-8')
+        relay = WINDOWS_RELAY.read_text(encoding='utf-8')
+        group = 'group: shopvivaliz-bastion-access'
+        self.assertIn(group, healer)
+        self.assertIn(group, relay)
+        self.assertIn('cancel-in-progress: false', healer)
+        self.assertIn('cancel-in-progress: false', relay)
 
 
 if __name__ == '__main__':
