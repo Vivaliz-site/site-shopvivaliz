@@ -9,5 +9,9 @@ set -euo pipefail
 # state. The Master Production Pipeline may still exclude non-runtime paths
 # from rsync, but it must create/activate a release for the exact main SHA.
 #
+# Consume the complete path stream before deciding. This avoids SIGPIPE in
+# callers that use `git diff --name-only ... | classifier` under `pipefail`.
+cat >/dev/null
+
 # Empty/unknown change sets also deploy conservatively.
 printf '%s\n' true
