@@ -10,7 +10,7 @@ Antes de diagnosticar, alterar ou validar qualquer ambiente, o agente deve:
 2. identificar o host correto pelo papel atual;
 3. confirmar o acesso com evidência (`hostname`, `whoami`, diretório e, quando aplicável, `git status`);
 4. nunca assumir que um IP antigo continua sendo produção;
-5. preferir Desktop Commander quando o dispositivo estiver conectado; usar SSH como fallback autorizado.
+5. preferir o canal GitHub Remote Access documentado em `docs/REMOTE-ACCESS-GITHUB.md` para terminal, serviços e diagnóstico; usar Desktop Commander apenas como fallback opcional quando houver cota/necessidade de UI; usar SSH/Bastion como fallback autorizado.
 
 ## Hosts operacionais atuais
 
@@ -75,9 +75,13 @@ No Windows:
 Use Remote Desktop Commander ou OCI Bastion; SSH publico direto esta desabilitado.
 ```
 
-## Desktop Commander
+## GitHub Remote Access (canal primário)
 
-Quando houver dispositivos conectados, preferir o acesso por nome do dispositivo em vez de depender de IP/chave manual:
+Para operações de terminal, serviços, status, disco e Git nos quatro hosts, usar `docs/REMOTE-ACCESS-GITHUB.md` e `.github/workflows/shopvivaliz-remote-access.yml`. O request versionado `ops/remote-access-request.json` dispara a execução e mantém trilha de auditoria por commit/workflow.
+
+## Desktop Commander (fallback opcional)
+
+Quando houver cota disponível e necessidade específica de UI, o acesso pode ser feito por nome do dispositivo em vez de depender de IP/chave manual:
 
 ```text
 shopvivaliz-free-a1
