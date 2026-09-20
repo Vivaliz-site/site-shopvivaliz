@@ -92,6 +92,53 @@ ais_assert(str_contains($consensus, 'SÍNTESE DE CONSENSO'), 'consensus prompt c
 $order = svais_openai_transport_order();
 ais_assert($order === ['codex_chatgpt', 'direct', 'manual'], 'OpenAI transport order mismatch');
 
+$anthropicOrder = svais_anthropic_transport_order();
+ais_assert($anthropicOrder === ['claude_code', 'direct', 'vertex_oauth', 'openrouter'], 'Anthropic transport order mismatch');
+$geminiOrder = svais_gemini_transport_order();
+ais_assert($geminiOrder === ['vertex_oauth', 'direct', 'openrouter'], 'Gemini transport order mismatch');
+
+$anthropicCalls = [];
+$anthropicResult = svais_anthropic_dispatch(
+    $deep['anthropic'],
+    'system',
+    'prompt',
+    true,
+    function (string $transport) use (&$anthropicCalls, $deep): array {
+        $anthropicCalls[] = $transport;
+        if ($transport !== 'claude_code') throw new RuntimeException('unexpected_transport');
+        return [
+            'text' => 'claude-oauth-ok',
+            'sources' => [],
+            'usage' => [],
+            'model' => $deep['anthropic']['model'],
+            'transport' => 'claude_code',
+        ];
+    }
+);
+ais_assert(($anthropicResult['text'] ?? '') === 'claude-oauth-ok', 'Claude Code OAuth result missing');
+ais_assert($anthropicCalls === ['claude_code'], 'Claude Code OAuth must be Anthropic primary');
+
+$geminiCalls = [];
+$geminiResult = svais_gemini_dispatch(
+    $deep['gemini'],
+    'system',
+    'prompt',
+    true,
+    function (string $transport) use (&$geminiCalls, $deep): array {
+        $geminiCalls[] = $transport;
+        if ($transport !== 'vertex_oauth') throw new RuntimeException('unexpected_transport');
+        return [
+            'text' => 'gemini-vertex-ok',
+            'sources' => [],
+            'usage' => [],
+            'model' => $deep['gemini']['model'],
+            'transport' => 'vertex_oauth',
+        ];
+    }
+);
+ais_assert(($geminiResult['text'] ?? '') === 'gemini-vertex-ok', 'Gemini Vertex OAuth result missing');
+ais_assert($geminiCalls === ['vertex_oauth'], 'Vertex OAuth must be Gemini primary');
+
 $dispatchCfg = $deep['openai'];
 $calls = [];
 $codexResult = svais_openai_dispatch(
@@ -192,5 +239,9 @@ $state = svais_provider_state($deep);
 ais_assert(($state['openai']['transport_order'] ?? []) === $order, 'health transport order missing');
 ais_assert(($state['openai']['manual_fallback'] ?? false) === true, 'health manual fallback missing');
 ais_assert(!array_key_exists('openrouter_fallback_configured', $state['openai']), 'OpenAI health must not advertise OpenRouter fallback');
+ais_assert(($state['anthropic']['transport_order'] ?? []) === $anthropicOrder, 'Anthropic health transport order missing');
+ais_assert(array_key_exists('claude_code_oauth_configured', $state['anthropic']), 'Anthropic health Claude OAuth state missing');
+ais_assert(($state['gemini']['transport_order'] ?? []) === $geminiOrder, 'Gemini health transport order missing');
+ais_assert(array_key_exists('vertex_oauth_configured', $state['gemini']), 'Gemini health Vertex OAuth state missing');
 
 echo "AI_SQUAD_CORE_TEST=PASS\n";
