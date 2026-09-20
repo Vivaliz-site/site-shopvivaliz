@@ -32,7 +32,7 @@ final class SvaisManualInterventionRequired extends RuntimeException
 
 function svais_openai_transport_order(): array
 {
-    return ['codex_chatgpt', 'direct', 'openrouter', 'manual'];
+    return ['codex_chatgpt', 'direct', 'manual'];
 }
 
 function svais_failure_class(Throwable $e): string
@@ -192,11 +192,10 @@ function svais_provider_state(array $profile): array
     $codex = svais_codex_bridge_health();
     return [
         'openai' => [
-            'configured' => $codex['available'] || $openAiDirectConfigured || $openRouterConfigured,
+            'configured' => $codex['available'] || $openAiDirectConfigured,
             'codex_chatgpt_authenticated' => $codex['authenticated'],
             'codex_chatgpt_available' => $codex['available'],
             'direct_configured' => $openAiDirectConfigured,
-            'openrouter_fallback_configured' => $openRouterConfigured,
             'manual_fallback' => true,
             'transport_order' => svais_openai_transport_order(),
             'model' => (string)$profile['openai']['model'],
@@ -608,7 +607,6 @@ function svais_openai_dispatch(
         return match ($transport) {
             'codex_chatgpt' => svais_codex_bridge_call($cfg, $system, $prompt, $webSearch),
             'direct' => svais_openai_call($cfg, $system, $prompt, $webSearch),
-            'openrouter' => svais_openrouter_call('openai', $cfg, $system, $prompt, $webSearch),
             default => throw new InvalidArgumentException('unknown_openai_transport'),
         };
     };
@@ -626,11 +624,8 @@ function svais_openai_dispatch(
             }
 
             $requestedModel = (string)$cfg['model'];
-            $expectedModel = $transport === 'openrouter'
-                ? svais_openrouter_model_slug('openai', $requestedModel)
-                : $requestedModel;
             $actualModel = (string)($result['model'] ?? '');
-            if ($actualModel !== $expectedModel) {
+            if ($actualModel !== $requestedModel) {
                 throw new RuntimeException('model_mismatch');
             }
 

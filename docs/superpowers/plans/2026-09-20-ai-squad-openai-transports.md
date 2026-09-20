@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make the OpenAI leg of AI Squad resilient without scraping ChatGPT Web: ChatGPT-authenticated Codex first when quota exists, then direct OpenAI API, then same-model OpenRouter, and finally an explicit manual-intervention state using the already-authenticated ChatGPT session.
+**Goal:** Make the OpenAI leg of AI Squad resilient without scraping ChatGPT Web: ChatGPT-authenticated Codex first when quota exists, then direct OpenAI API, and finally an explicit manual-intervention state using the already-authenticated ChatGPT session.
 
-**Architecture:** A loopback-only Node bridge runs as the `ubuntu` user and talks to the real Codex App Server over stdio with the existing ChatGPT Business auth profiles. PHP never reads ChatGPT tokens; it calls the local bridge, then falls back to existing direct API/OpenRouter transports. If every automated transport fails, the API emits a manual-required event containing only the safe prompt and failure classifications; the admin UI makes that state explicit instead of pretending the provider answered.
+**Architecture:** A loopback-only Node bridge runs as the `ubuntu` user and talks to the real Codex App Server over stdio with the existing ChatGPT Business auth profiles. PHP never reads ChatGPT tokens; it calls the local bridge, then falls back to the direct OpenAI API. If both automated transports fail, the API emits a manual-required event containing only the safe prompt and failure classifications; the admin UI makes that state explicit instead of pretending the provider answered. OpenRouter remains unchanged for Anthropic/Gemini only.
 
 **Tech Stack:** PHP 8, Node.js built-ins, Codex CLI/App Server JSONL protocol, systemd user service, existing ShopVivaliz admin UI.
 
@@ -76,7 +76,7 @@ Expected: PASS.
 
 - [ ] **Step 4: Add idempotent user-service installer**
 
-Installer must create/update `~/.config/systemd/user/shopvivaliz-ai-squad-codex-bridge.service`, point ExecStart at the current immutable release, bind loopback, rely on existing `Linger=yes`, daemon-reload/restart, and verify `/health`. It must not copy auth files or print credentials.
+Installer must create/update `~/.config/systemd/user/shopvivaliz-squad-codex-bridge.service`, point ExecStart at the current immutable release, bind loopback, rely on existing `Linger=yes`, daemon-reload/restart, and verify `/health`. It must not copy auth files or print credentials.
 
 - [ ] **Step 5: Commit**
 ```bash
@@ -92,7 +92,7 @@ git commit -m "feat(ai-squad): add ChatGPT-auth Codex bridge"
 
 **Interfaces:**
 - Consumes: bridge POST contract from Task 1 and existing `svais_openai_call` / `svais_openrouter_call`.
-- Produces: OpenAI dispatch order `codex_chatgpt -> direct -> openrouter -> manual`, with same requested model guaranteed.
+- Produces: OpenAI dispatch order `codex_chatgpt -> direct -> manual`, with same requested model guaranteed.
 
 - [ ] **Step 1: Write failing PHP tests**
 Add deterministic fake-transport tests proving:
@@ -100,8 +100,7 @@ Add deterministic fake-transport tests proving:
 ```php
 // codex success stops chain
 // codex failure -> direct success
-// codex + direct failure -> openrouter success
-// all automated failures -> SvaisManualInterventionRequired
+// codex + direct failure -> SvaisManualInterventionRequired
 // any successful response whose model does not match the requested model is rejected
 ```
 
@@ -162,7 +161,7 @@ API behavior:
 - cycle remains successful if another provider succeeds.
 
 UI behavior:
-- label transports `codex_chatgpt`, `direct`, `openrouter`, and `manual` explicitly;
+- label OpenAI transports `codex_chatgpt`, `direct`, and `manual` explicitly; keep `openrouter` labeling for Anthropic/Gemini fallback responses;
 - show a distinct OpenAI manual card;
 - render the manual prompt with DOM textContent and a "Copiar prompt" action;
 - explain that the authenticated ChatGPT VM/RDP session is the manual path;
