@@ -49,6 +49,18 @@ O arquivo `ops/remote-access-request.json` permanece temporariamente apenas como
 
 Esse modelo evita commits operacionais repetitivos e não dispara os demais pipelines de `push` do repositório.
 
+## Operações MLRR no runner canônico
+
+O runner `shopvivaliz-a1-deploy` é registrado no repositório `Vivaliz-site/site-shopvivaliz`. Portanto operações de produção do repositório `Vivaliz-site/mercadolivre-returns-recovery` devem ser disparadas pelo bridge dedicado `.github/workflows/mlrr-production-ops-bridge.yml`, e não por workflows self-hosted dentro do próprio repositório MLRR.
+
+No issue canônico `#1586`, o comando auditável é:
+
+```text
+/mlrr operation=rollout reason=promover e validar MLRR main
+```
+
+Operações permitidas: `prepare`, `cutover`, `validate`, `shadow`, `preflight` e `rollout`. `rollout` executa a sequência fixa `prepare -> shadow -> validate -> preflight`. O bridge aceita somente comentários do usuário autorizado `fredmourao-ai`, sincroniza `main` por fast-forward, exige árvore limpa e registra provenance assinado no host. Ele não aceita shell arbitrário.
+
 Se um dos relays Windows estiver indisponível, use no mesmo issue `#1586`:
 
 ```text
