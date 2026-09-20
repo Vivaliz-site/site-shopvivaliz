@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 const ALLOWED_MODELS = new Set([
   'gpt-5.6-sol',
@@ -43,6 +43,17 @@ export function remainingRequestMs(deadlineMs, nowMs = Date.now(), capMs = Infin
   const remaining = Number(deadlineMs) - Number(nowMs);
   if (!Number.isFinite(remaining) || remaining <= 0) throw new Error('request_timeout');
   return Math.max(1, Math.min(remaining, Number(capMs)));
+}
+
+export function isDirectInvocation(moduleUrl, argvPath) {
+  if (!argvPath) return false;
+  try {
+    const modulePath = fs.realpathSync(fileURLToPath(moduleUrl));
+    const invokedPath = fs.realpathSync(path.resolve(argvPath));
+    return modulePath === invokedPath;
+  } catch {
+    return false;
+  }
 }
 
 export function validateRequest(input) {
@@ -447,8 +458,7 @@ export async function startServer() {
   return server;
 }
 
-const invoked = process.argv[1]
-  && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+const invoked = isDirectInvocation(import.meta.url, process.argv[1]);
 if (invoked) {
   startServer().catch((error) => {
     console.error('AI_SQUAD_CODEX_BRIDGE_FATAL ' + sanitizeBridgeError(error));

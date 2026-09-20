@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   validateRequest,
   classifyRateLimit,
   exactModelMatches,
   sanitizeBridgeError,
   remainingRequestMs,
+  isDirectInvocation,
 } from '../ops/ai-squad/codex-bridge.mjs';
 
 const valid = validateRequest({
@@ -46,6 +51,14 @@ assert.equal(exactModelMatches('gpt-5.6-sol', 'gpt-5.6-terra'), false);
 assert.equal(remainingRequestMs(5000, 1000, 10000), 4000);
 assert.equal(remainingRequestMs(5000, 1000, 2500), 2500);
 assert.throws(() => remainingRequestMs(1000, 1000, 5000), /request_timeout/);
+
+const invocationDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-squad-invocation-'));
+const bridgeTarget = fileURLToPath(new URL('../ops/ai-squad/codex-bridge.mjs', import.meta.url));
+const bridgeLink = path.join(invocationDir, 'current-bridge.mjs');
+fs.symlinkSync(bridgeTarget, bridgeLink);
+assert.equal(isDirectInvocation(pathToFileURL(bridgeTarget).href, bridgeLink), true);
+assert.equal(isDirectInvocation(pathToFileURL(bridgeTarget).href, import.meta.filename), false);
+fs.rmSync(invocationDir, { recursive: true, force: true });
 
 const safe = sanitizeBridgeError(
   'Authorization: Bearer sk-secret-token quota reached for user@example.com'
