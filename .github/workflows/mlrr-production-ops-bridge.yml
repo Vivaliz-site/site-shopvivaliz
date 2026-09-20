@@ -1,6 +1,10 @@
 name: MLRR Production Operations Bridge
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/mlrr-production-ops-bridge.yml"
   workflow_dispatch:
     inputs:
       operation:
@@ -31,18 +35,73 @@ jobs:
         env:
           CHAT_CLI_SESSION_ID: gha-mlrr-production-bridge
           MLRR_OPERATION: ${{ inputs.operation }}
+          EXECUTION_AGENT: chatgpt-gpt-5.6-sol
         run: |
           set -Eeuo pipefail
+          test "$(hostname)" = shopvivaliz-free-a1
+
           repo=/home/ubuntu/mercadolivre-returns-recovery
+          site_repo=/home/ubuntu/shopvivaliz-deploy/repo
+          state_dir="$HOME/.local/state/shopvivaliz"
+          key_file="$HOME/.config/shopvivaliz/execution-provenance.key"
+          mkdir -p "$state_dir"
+          chmod 700 "$state_dir"
+          test -s "$key_file"
+          test -x "$site_repo/scripts/emit-execution-provenance.py"
+
+          export EXECUTION_PROVENANCE_HMAC_KEY="$(cat "$key_file")"
+          export EXECUTION_PROVENANCE_KEY_ID=shopvivaliz-host-provenance-v1
+          export EXECUTION_SESSION_ID="$CHAT_CLI_SESSION_ID"
+          export EXECUTION_REPOSITORY=Vivaliz-site/mercadolivre-returns-recovery
+          export EXECUTION_REF=refs/heads/main
+          export EXECUTION_TARGET=shopvivaliz-free-a1
+          export EXECUTION_ORIGIN_TYPE=github-actions
+
+          provenance() {
+            local result="$1" code="$2"
+            EXECUTION_RESULT="$result" EXECUTION_EXIT_CODE="$code"               python3 "$site_repo/scripts/emit-execution-provenance.py"                 mlrr_production_bridge --target shopvivaliz-free-a1                 >> "$state_dir/execution-provenance.jsonl"
+          }
+
+          cleanup() {
+            local rc=$?
+            if [ "$rc" -eq 0 ]; then
+              provenance COMPLETED 0
+            else
+              if ! provenance FAILED "$rc"; then
+                echo "Execution provenance failed during error cleanup." >&2
+                rc=1
+              fi
+            fi
+            unset EXECUTION_PROVENANCE_HMAC_KEY
+            exit "$rc"
+          }
+          trap cleanup EXIT
+          provenance STARTED ""
+
           cd "$repo"
           test -z "$(git status --porcelain)"
           git fetch origin main --quiet
+          git merge-base --is-ancestor f6f8c587e893286aa532760ee461c05b061eeaa2 origin/main
+          git merge-base --is-ancestor f28cfcdd8efe68a144b528517f230ce803774ef1 origin/main
           git switch main
           git merge --ff-only origin/main
           sha="$(git rev-parse HEAD)"
           test "$sha" = "$(git rev-parse origin/main)"
+
           export GITHUB_WORKSPACE="$repo"
           export GITHUB_SHA="$sha"
+          export EXECUTION_SHA="$sha"
           export GITHUB_REF_NAME=main
           test -x scripts/mlrr-production-ops.sh
-          scripts/mlrr-production-ops.sh "$MLRR_OPERATION"
+
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            scripts/mlrr-production-ops.sh prepare
+            scripts/mlrr-production-ops.sh shadow
+            scripts/mlrr-production-ops.sh validate
+          else
+            scripts/mlrr-production-ops.sh "$MLRR_OPERATION"
+          fi
+
+          trap - EXIT
+          provenance COMPLETED 0
+          unset EXECUTION_PROVENANCE_HMAC_KEY
