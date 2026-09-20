@@ -1,0 +1,9 @@
+{
+  "name": "shopvivaliz-backend-browser-host",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pinned Playwright runtime for the ShopVivaliz backend browser host",
+  "dependencies": {
+    "playwright": "1.63.0"
+  }
+}
