@@ -52,6 +52,7 @@ $forbidden = [
     'GatewayPorts=yes',
     'tailscale funnel',
     'shell_command',
+    '|| true',
 ];
 foreach ($forbidden as $needle) {
     if (str_contains($text, $needle)) {
