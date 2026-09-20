@@ -67,7 +67,10 @@ jobs:
             if [ "$rc" -eq 0 ]; then
               provenance COMPLETED 0
             else
-              provenance FAILED "$rc" || true
+              if ! provenance FAILED "$rc"; then
+                echo "Execution provenance failed during error cleanup." >&2
+                rc=1
+              fi
             fi
             unset EXECUTION_PROVENANCE_HMAC_KEY
             exit "$rc"
