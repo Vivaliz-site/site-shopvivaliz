@@ -47,15 +47,28 @@ class WorkflowPrivateTransportTests(unittest.TestCase):
                 offenders.append(f'{path}:{"/".join(found)}')
         self.assertEqual(offenders, [], 'legacy relay workflows still auto-trigger: ' + ', '.join(offenders))
 
-    def test_private_vm_ssh_jobs_run_on_site_self_hosted_runner(self):
+    def test_private_vm_ssh_jobs_use_verified_site_transport(self):
         offenders = []
         for path, text in workflow_texts():
             for job, block in job_blocks(text):
                 if not any(f'ubuntu@{target}' in block for target in PRIVATE_TARGETS):
                     continue
-                if SITE_RUNNER not in block:
+                if SITE_RUNNER in block:
+                    continue
+                hosted_bastion = (
+                    'runs-on: ubuntu-latest' in block
+                    and 'bastion session create-port-forwarding' in block
+                    and 'SITE_INSTANCE_NAME: shopvivaliz-free-a1' in block
+                    and 'EXPECTED_SITE_HOST: shopvivaliz-free-a1' in block
+                    and 'test "$identity" = "$EXPECTED_SITE_HOST/ubuntu"' in block
+                )
+                if not hosted_bastion:
                     offenders.append(f'{path}:{job}')
-        self.assertEqual(offenders, [], 'private VM SSH jobs not pinned to site runner: ' + ', '.join(offenders))
+        self.assertEqual(
+            offenders,
+            [],
+            'private VM SSH jobs lack verified site runner or hosted Bastion transport: ' + ', '.join(offenders),
+        )
 
 
 OPERATIONAL_PATHS = [
