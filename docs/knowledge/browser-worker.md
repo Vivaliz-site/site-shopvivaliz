@@ -13,6 +13,14 @@ Executar testes, navegação e automações de navegador na VM `always-free-arm-
 - A interface humana canônica é `https://shopvivaliz.com.br/admin/browser-worker.php`.
 - Windows permanece disponível para tarefas não-browser que dependam especificamente dele.
 
+<!-- GLOBAL_BROWSER_SESSION_PROFILE_V1 -->
+### Profile persistente canonico para ChatGPT/OpenAI
+
+- Use `persistent=true` e `profile=ai-squad-chatgpt`.
+- O profile `manual` nao e fallback para ChatGPT/OpenAI.
+- Se houver expiração de login, MFA ou CAPTCHA, reabra `ai-squad-chatgpt` pela UI autenticada e conclua a autenticacao no mesmo profile.
+- Nao crie profile novo enquanto `ai-squad-chatgpt` existir, salvo ordem explicita do proprietario.
+
 ## Arquitetura
 
 ```text
