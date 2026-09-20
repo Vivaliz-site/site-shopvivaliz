@@ -16,7 +16,7 @@ on:
       - "scripts/ssh-tunnel-service-managed.ps1"
       - "scripts/desktopkocepsv-desktop-commander-runner.ps1"
       - "scripts/desktopkocepsv-desktop-commander-status.ps1"
-      - "scripts/desktopkocepsv-desktop-commander-supervisor.ps1"
+      - "scripts/desktopkocepsv-desktop-commander-supervisor.ps1"\n      - "scripts/desktopkocepsv-desktop-commander-task-guardian.ps1"
       - "scripts/desktopkocepsv-remote-bootstrap.ps1"
       - "scripts/desktopkocepsv-ssh-tunnel-service-managed.ps1"
       - "scripts/vm-desktop-commander-supervisor.sh"
@@ -302,10 +302,10 @@ jobs:
           while IFS= read -r line; do
             test -z "$line" && continue
             case "$line" in
-              *"@wonderwhy-er/desktop-commander@0.2.48"*" remote "*"--persist-session"*) canonical=$((canonical+1));;
+              *"0.2.51"*"/node_modules/@wonderwhy-er/desktop-commander/dist/index.js"*" remote "*"--persist-session"*) canonical=$((canonical+1));;
               *) noncanonical=$((noncanonical+1));;
             esac
-          done < <(pgrep -af '[n]pm exec @wonderwhy-er/desktop-commander@.* remote' 2>/dev/null || true)
+          done < <(pgrep -af '[d]esktop-commander.*remote.*--persist-session' 2>/dev/null || true)
           printf 'DEVICE_STATE_EXISTS=%s\nSERVICE_ENABLED=%s\nSERVICE_ACTIVE=%s\nSERVICE_USER=%s\nSERVICE_MAINPID=%s\nCANONICAL_AGENT_COUNT=%s\nNONCANONICAL_AGENT_COUNT=%s\nAUTH_REQUIRED=%s\nPROVIDER_CONNECTED=%s\n' "$device" "${enabled:-unknown}" "${active:-unknown}" "${user:-unknown}" "${mainpid:-0}" "$canonical" "$noncanonical" "$auth" "$provider"
           '''
               if peer:
@@ -377,7 +377,7 @@ jobs:
               return {'host': name, 'state': state, 'watchdog': watchdog, 'canonical': canonical, 'auth': auth_text, 'recovery': recovery}
 
           results = [
-              win_probe('LAPTOP-NIG4IFUU', 5557, 'fredwin-desktop-commander-status.ps1', 'fredwin-desktop-commander-supervisor.ps1', 'fredwin-remote-bootstrap.ps1', expected_logon='interactive'),
+              win_probe('LAPTOP-NIG4IFUU', 5557, 'fredwin-desktop-commander-status.ps1', 'fredwin-desktop-commander-supervisor.ps1', 'fredwin-remote-bootstrap.ps1', expected_logon='s4u'),
               win_probe('DESKTOP-KOCEPSV', 5558, 'desktopkocepsv-desktop-commander-status.ps1', 'desktopkocepsv-desktop-commander-supervisor.ps1', 'desktopkocepsv-remote-bootstrap.ps1', expected_logon='s4u'),
               vm_probe('shopvivaliz-a1-backend', peer=False),
               vm_probe('shopvivaliz-free-a1', peer=True),
