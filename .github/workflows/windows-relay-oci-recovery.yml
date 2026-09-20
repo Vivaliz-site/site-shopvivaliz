@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: shopvivaliz-windows-relay-oci-recovery
+  group: shopvivaliz-bastion-access
   cancel-in-progress: false
 
 jobs:
