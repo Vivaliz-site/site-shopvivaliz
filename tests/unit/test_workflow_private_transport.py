@@ -54,7 +54,13 @@ class WorkflowPrivateTransportTests(unittest.TestCase):
                 if not any(f'ubuntu@{target}' in block for target in PRIVATE_TARGETS):
                     continue
                 if SITE_RUNNER not in block:
-                    offenders.append(f'{path}:{job}')
+                    bastion_local_forward = (
+                        'bastion session create-port-forwarding' in block
+                        and '--target-private-ip "$BACKEND_PRIVATE_IP"' in block
+                        and 'ubuntu@127.0.0.1' in block
+                    )
+                    if not bastion_local_forward:
+                        offenders.append(f'{path}:{job}')
         self.assertEqual(offenders, [], 'private VM SSH jobs not pinned to site runner: ' + ', '.join(offenders))
 
     def test_windows_bastion_recovery_enables_oracle_rsa_compatibility(self):
