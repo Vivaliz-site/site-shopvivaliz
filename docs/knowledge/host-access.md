@@ -22,6 +22,43 @@ Antes de diagnosticar, alterar ou validar qualquer ambiente, o agente deve:
 
 A arquitetura atual deve ser confirmada no código e nos hosts antes de qualquer intervenção. Se houver divergência entre este arquivo e evidência ao vivo, pare a hipótese e atualize a documentação com a evidência encontrada.
 
+## Inventário canônico de runtime
+
+Para status operacional, usar `scripts/runtime-service-status.sh` ou a ação remota `runtime_status`, que executa esse inventário. Não montar health checks a partir de nomes históricos memorizados.
+
+Semântica obrigatória:
+
+- `LoadState=not-found` em unidade aposentada significa **ausente como esperado**, não serviço quebrado.
+- Serviço `oneshot` pode ficar `inactive (dead)` entre execuções e continuar saudável. Para catálogo, o gate é `shopvivaliz-catalog-reconcile.timer` ativo + último `shopvivaliz-catalog-reconcile.service` com `Result=success` e `ExecMainStatus=0`.
+- No backend, `mei-mg-email-worker.service` deve permanecer inativo enquanto `/var/lib/mei-mg-email/sender_blocked.pause` existir. Reiniciar o worker nesse estado é violação do circuit breaker.
+- Uso de disco >= 85% é atenção operacional mesmo quando os serviços estão saudáveis.
+
+Runtime principal atual em `shopvivaliz-free-a1`:
+
+```text
+apache2.service
+shopvivaliz-queue-worker.service
+shopvivaliz-token-renewer.service
+shopvivaliz-shopee-token-renewer.service
+shopvivaliz-catalog-reconcile.timer
+shopvivaliz-catalog-reconcile.service   # oneshot; normalmente inactive entre execuções
+shopvivaliz-desktop-commander.service
+```
+
+Runtime principal atual em `always-free-arm-1787907847-26`:
+
+```text
+shopvivaliz-desktop-commander.service
+mei-mg-email-api.service
+mei-mg-email-monitor.service
+mei-mg-email-queue-replenisher.service
+mei-mg-email-brevo-reconciler.service
+mei-mg-email-site-tunnel.service
+mei-mg-email-worker.service             # policy-aware; pode estar intencionalmente inactive
+```
+
+Nomes como `shopvivaliz-products-active-sync.service`, `shopvivaliz-24x7.service`, `agent-bridge.service`, `shopvivaliz-mcp.service` e `mei-mg-email.service` não devem ser usados como prova de indisponibilidade do runtime atual quando estiverem `not-found`.
+
 ## Produção web/deploy
 
 Diretório operacional:
