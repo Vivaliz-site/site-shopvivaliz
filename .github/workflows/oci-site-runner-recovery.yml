@@ -100,14 +100,14 @@ jobs:
                   source=models.InstanceAgentCommandSourceViaTextDetails(
                       source_type="TEXT",
                       text=(
-                          "listener_pid=$(pgrep -xo Runner.Listener || true); "
-                          "worker_pid=$(pgrep -xo Runner.Worker || true); "
+                          "listener_pid=''; if listener_pid=$(pgrep -xo Runner.Listener 2>/dev/null); then :; fi; "
+                          "worker_pid=''; if worker_pid=$(pgrep -xo Runner.Worker 2>/dev/null); then :; fi; "
                           "echo OS_ALIVE=1; "
                           "if [ -n \"$listener_pid\" ]; then echo RUNNER_LISTENER=present; "
                           "else echo RUNNER_LISTENER=absent; fi; "
                           "if [ -n \"$worker_pid\" ]; then "
-                          "age=$(ps -o etimes= -p \"$worker_pid\" 2>/dev/null | tr -d ' ' || true); "
-                          "ppid=$(ps -o ppid= -p \"$worker_pid\" 2>/dev/null | tr -d ' ' || true); "
+                          "age=''; if age=$(ps -o etimes= -p \"$worker_pid\" 2>/dev/null | tr -d ' '); then :; fi; "
+                          "ppid=''; if ppid=$(ps -o ppid= -p \"$worker_pid\" 2>/dev/null | tr -d ' '); then :; fi; "
                           "echo RUNNER_WORKER=present; "
                           "echo RUNNER_WORKER_AGE_SECONDS=${age:-unknown}; "
                           "echo RUNNER_WORKER_PARENT_PID=${ppid:-unknown}; "
@@ -146,12 +146,13 @@ jobs:
           recovery_reason = "healthy_listener"
           if worker_present:
               if listener_present:
-                  raise SystemExit("Runner.Worker active with live listener; refusing site runner recovery")
-              if worker_age is None or worker_age < 900:
-                  raise SystemExit("Runner.Worker orphan is recent or age unknown; refusing site runner recovery")
-              recovery_required = True
-              recovery_reason = "stale_orphan_worker"
-              print(f"STALE_RUNNER_WORKER=confirmed age_seconds={worker_age}")
+                  recovery_reason = "healthy_busy_worker"
+              else:
+                  if worker_age is None or worker_age < 900:
+                      raise SystemExit("Runner.Worker orphan is recent or age unknown; refusing site runner recovery")
+                  recovery_required = True
+                  recovery_reason = "stale_orphan_worker"
+                  print(f"STALE_RUNNER_WORKER=confirmed age_seconds={worker_age}")
           elif not listener_present:
               recovery_required = True
               recovery_reason = "listener_absent"
@@ -162,7 +163,8 @@ jobs:
 
           print("OCI_RUN_COMMAND_PRECHECK=PASS")
           print("RUNNER_LISTENER_BEFORE=" + ("present" if listener_present else "absent"))
-          print("RUNNER_WORKER_BEFORE=" + ("stale_orphan" if worker_present else "absent"))
+          worker_state = "active" if worker_present and listener_present else ("stale_orphan" if worker_present else "absent")
+          print("RUNNER_WORKER_BEFORE=" + worker_state)
           print("RECOVERY_REQUIRED=" + ("true" if recovery_required else "false"))
           print("RECOVERY_REASON=" + recovery_reason)
           PY
@@ -196,12 +198,18 @@ jobs:
           echo "OBSOLETE_DEPLOY_RUN_COUNT=${#stale_ids[@]}"
           for run_id in "${stale_ids[@]}"; do
             test -n "$run_id" || continue
-            status="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq .status 2>/dev/null || true)"
+            status="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq .status)"
             case "$status" in
               queued|pending|in_progress|waiting|requested)
-                gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/cancel" >/dev/null 2>&1 || true
+                if ! gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/cancel" >/dev/null 2>&1; then
+                  status="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq .status)"
+                  case "$status" in
+                    completed) echo "OBSOLETE_RUN_${run_id}=ALREADY_COMPLETED" ;;
+                    *) echo "::error::Failed to cancel obsolete run $run_id (status=$status)"; exit 7 ;;
+                  esac
+                fi
                 sleep 2
-                status="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq .status 2>/dev/null || true)"
+                status="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq .status)"
                 if [[ "$status" =~ ^(queued|pending|in_progress|waiting|requested)$ ]]; then
                   gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/force-cancel" >/dev/null
                 fi
@@ -310,7 +318,11 @@ jobs:
         if: always()
         shell: bash
         run: |
-          set +e
-          test -f "$OCI_KEY_FILE" && shred -u "$OCI_KEY_FILE"
-          test -f "$OCI_CONFIG_FILE" && shred -u "$OCI_CONFIG_FILE"
+          set -Eeuo pipefail
+          if test -f "$OCI_KEY_FILE"; then
+            shred -u "$OCI_KEY_FILE"
+          fi
+          if test -f "$OCI_CONFIG_FILE"; then
+            shred -u "$OCI_CONFIG_FILE"
+          fi
 # recovery-trigger: 2026-09-20T01:49Z
