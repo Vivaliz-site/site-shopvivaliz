@@ -32,12 +32,6 @@ jobs:
           bash -n ops/browser-host/browser-cleanup.sh
           node --check ops/browser-host/browser-smoke.mjs
           php tests/backend-browser-host-contract-test.php
-          python3 - <<'PY'
-          import pathlib, yaml
-          for path in [
-              pathlib.Path('.github/workflows/backend-browser-host-control.yml'),
-              pathlib.Path('.github/workflows/backend-browser-host-ci.yml'),
-          ]:
-              yaml.safe_load(path.read_text(encoding='utf-8'))
-          print('workflow-yaml-parse: ok')
-          PY
+          ruby -e 'require "yaml"; ARGV.each { |f| YAML.load_file(f); puts "workflow-yaml-parse: ok #{f}" }' \\
+            .github/workflows/backend-browser-host-control.yml \\
+            .github/workflows/backend-browser-host-ci.yml
