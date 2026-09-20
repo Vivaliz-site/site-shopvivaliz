@@ -28,6 +28,7 @@ A UI mostra a interação em fases:
 - O bridge Codex escuta apenas em loopback e usa autenticação ChatGPT já gerenciada pelo Codex; PHP e navegador nunca recebem tokens do ChatGPT.
 - A ferramenta de shell e agentes delegados ficam desabilitados no App Server usado pelo AI Squad; comandos locais rodam com sandbox somente leitura e sem rede.
 - ChatGPT Web é somente fallback manual/visual. O AI Squad não raspa nem lê automaticamente a resposta da interface Web.
+- A sessão visual canônica fica em `always-free-arm-1787907847-26`, usuário `fredrdp`, perfil `/home/fredrdp/.config/shopvivaliz-chromium`, CDP `127.0.0.1:9555`; reutilizar essa sessão e nunca criar um perfil duplicado em `shopvivaliz-free-a1`.
 - Secrets são lidos apenas por `config/bootstrap-env.php` a partir do runtime protegido.
 - O log persistente contém somente metadados do ciclo; prompt e respostas completas não são persistidos por padrão.
 - Nunca registrar `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `SQUAD_TOKEN` ou `SHOPVIVALIZ_AGENT_KEY`.
