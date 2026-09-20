@@ -57,6 +57,20 @@ class WorkflowPrivateTransportTests(unittest.TestCase):
                     offenders.append(f'{path}:{job}')
         self.assertEqual(offenders, [], 'private VM SSH jobs not pinned to site runner: ' + ', '.join(offenders))
 
+    def test_windows_bastion_recovery_enables_oracle_rsa_compatibility(self):
+        path = WORKFLOWS / 'windows-relay-oci-recovery.yml'
+        text = path.read_text(encoding='utf-8')
+        self.assertIn(
+            '-o HostKeyAlgorithms=+ssh-rsa',
+            text,
+            'OCI Bastion hop must allow the RSA host-key algorithm documented by Oracle',
+        )
+        self.assertIn(
+            '-o PubkeyAcceptedAlgorithms=+ssh-rsa',
+            text,
+            'OCI Bastion hop must allow RSA public-key authentication on modern OpenSSH',
+        )
+
 
 OPERATIONAL_PATHS = [
     Path('AGENTS.md'), Path('AGENTS-VM-ACCESS.md'), Path('CLAUDE.md'),
