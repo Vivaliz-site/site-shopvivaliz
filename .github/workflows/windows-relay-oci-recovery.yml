@@ -213,17 +213,15 @@ jobs:
           if tailscale status --json >/tmp/shopvivaliz-tailscale-status.json 2>/tmp/shopvivaliz-tailscale-error.txt; then
             cat /tmp/shopvivaliz-tailscale-status.json
             rm -f /tmp/shopvivaliz-tailscale-status.json /tmp/shopvivaliz-tailscale-error.txt
-            exit 0
-          fi
-          if systemctl cat tailscaled.service >/dev/null 2>&1; then
+          elif systemctl cat tailscaled.service >/dev/null 2>&1; then
             sudo -n systemctl restart tailscaled
             sleep 3
             tailscale status --json
             rm -f /tmp/shopvivaliz-tailscale-status.json /tmp/shopvivaliz-tailscale-error.txt
-            exit 0
+          else
+            rm -f /tmp/shopvivaliz-tailscale-status.json /tmp/shopvivaliz-tailscale-error.txt
+            exit 31
           fi
-          rm -f /tmp/shopvivaliz-tailscale-status.json /tmp/shopvivaliz-tailscale-error.txt
-          exit 31
           REMOTE
           )"
 
