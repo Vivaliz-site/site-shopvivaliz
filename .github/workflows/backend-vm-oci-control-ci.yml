@@ -1,0 +1,27 @@
+name: Backend VM OCI Control CI
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/backend-vm-oci-control.yml"
+      - ".github/workflows/backend-vm-oci-control-ci.yml"
+      - "tests/backend-vm-oci-control-contract-test.php"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Validate hosted OCI backend control
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          php tests/backend-vm-oci-control-contract-test.php
+          git diff --check
