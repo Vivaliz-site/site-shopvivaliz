@@ -54,8 +54,33 @@ class WorkflowPrivateTransportTests(unittest.TestCase):
                 if not any(f'ubuntu@{target}' in block for target in PRIVATE_TARGETS):
                     continue
                 if SITE_RUNNER not in block:
-                    offenders.append(f'{path}:{job}')
+                    bastion_local_forward = (
+                        'bastion session create-port-forwarding' in block
+                        and '--target-private-ip "$BACKEND_PRIVATE_IP"' in block
+                        and 'ubuntu@127.0.0.1' in block
+                    )
+                    if not bastion_local_forward:
+                        offenders.append(f'{path}:{job}')
         self.assertEqual(offenders, [], 'private VM SSH jobs not pinned to site runner: ' + ', '.join(offenders))
+
+    def test_windows_bastion_recovery_enables_oracle_rsa_compatibility(self):
+        path = WORKFLOWS / 'windows-relay-oci-recovery.yml'
+        text = path.read_text(encoding='utf-8')
+        self.assertIn(
+            'HostKeyAlgorithms +ssh-rsa',
+            text,
+            'OCI Bastion hop must allow the RSA host-key algorithm documented by Oracle',
+        )
+        self.assertIn(
+            'PubkeyAcceptedAlgorithms +ssh-rsa',
+            text,
+            'OCI Bastion hop must allow RSA public-key authentication on modern OpenSSH',
+        )
+        self.assertIn(
+            '--ssh-public-key-file "$HOME/.ssh/bastion_session_key.pub"',
+            text,
+            'OCI Bastion session must be created with the public half of its ephemeral session key',
+        )
 
 
 OPERATIONAL_PATHS = [
