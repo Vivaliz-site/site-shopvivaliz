@@ -45,6 +45,13 @@ export function remainingRequestMs(deadlineMs, nowMs = Date.now(), capMs = Infin
   return Math.max(1, Math.min(remaining, Number(capMs)));
 }
 
+export function resolveCodexWebSearchMode(webSearch, configuredMode = process.env.AI_SQUAD_CODEX_WEB_SEARCH_MODE) {
+  if (webSearch !== true) return 'disabled';
+  const mode = String(configuredMode ?? '').trim().toLowerCase() || 'cached';
+  if (!['cached', 'live'].includes(mode)) throw new Error('invalid_web_search_mode');
+  return mode;
+}
+
 export function isDirectInvocation(moduleUrl, argvPath) {
   if (!argvPath) return false;
   try {
@@ -138,7 +145,7 @@ class AppServerClient {
   async start(deadlineMs) {
     const args = [
       'app-server', '--stdio',
-      '-c', `web_search="${this.request.web_search ? 'live' : 'disabled'}"`,
+      '-c', `web_search="${resolveCodexWebSearchMode(this.request.web_search)}"`,
       '-c', `model_reasoning_effort="${this.request.effort}"`,
       '-c', 'features.shell_tool=false',
       '-c', 'agents.enabled=false',
@@ -367,6 +374,7 @@ async function bridgeHealth() {
     available_profile_count: available,
     exhausted_profile_count: exhausted,
     model_allowlist: [...ALLOWED_MODELS],
+    web_search_mode: resolveCodexWebSearchMode(true),
   };
   healthCache = { at: now, value };
   return value;

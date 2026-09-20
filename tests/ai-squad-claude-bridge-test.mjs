@@ -7,6 +7,7 @@ import {
   validateRequest,
   sanitizeBridgeError,
   classifyClaudeError,
+  claudeFailureDetail,
   buildClaudeArgs,
   isDirectInvocation,
 } from '../ops/ai-squad/claude-bridge.mjs';
@@ -48,7 +49,19 @@ assert.equal(noWebArgs[noWebArgs.indexOf('--tools') + 1], '');
 
 assert.equal(classifyClaudeError('OAuth session expired'), 'auth');
 assert.equal(classifyClaudeError('credit balance is too low'), 'quota');
+assert.equal(classifyClaudeError("You've hit your session limit · resets 12:30am (UTC)"), 'quota');
 assert.equal(classifyClaudeError('request_timeout'), 'timeout');
+
+const sessionLimitDetail = claudeFailureDetail({
+  code: 1,
+  stderr: '',
+  stdout: JSON.stringify({
+    terminal_reason: 'api_error',
+    api_error_status: 429,
+    result: "You've hit your session limit · resets 12:30am (UTC)",
+  }),
+});
+assert.match(sessionLimitDetail, /session limit/);
 
 const safe = sanitizeBridgeError('Authorization: Bearer sk-ant-oat-secret user@example.com');
 assert(!safe.includes('sk-ant-oat-secret'));
