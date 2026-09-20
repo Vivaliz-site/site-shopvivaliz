@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-service="shopvivaliz-ai-squad-codex-bridge.service"
+service="shopvivaliz-squad-codex-bridge.service"
 service_dir="$HOME/.config/systemd/user"
 unit="$service_dir/$service"
-runtime="$HOME/.local/share/shopvivaliz-ai-squad-codex"
+runtime="$HOME/.local/share/shopvivaliz-squad-codex"
 workspace="$runtime/workspace"
 bridge="/home/ubuntu/shopvivaliz-deploy/current/ops/ai-squad/codex-bridge.mjs"
 codex_real="/home/ubuntu/.local/lib/node_modules/@openai/codex/bin/codex.js"

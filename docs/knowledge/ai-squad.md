@@ -52,7 +52,7 @@ Instalador versionado:
 Validação operacional:
 
 ```bash
-systemctl --user status shopvivaliz-ai-squad-codex-bridge.service
+systemctl --user status shopvivaliz-squad-codex-bridge.service
 curl -fsS http://127.0.0.1:17656/health
 ```
 

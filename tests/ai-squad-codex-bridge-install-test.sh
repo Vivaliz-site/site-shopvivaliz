@@ -6,7 +6,7 @@ installer="$root/ops/ai-squad/install-codex-bridge-user-service.sh"
 test -f "$installer"
 bash -n "$installer"
 
-grep -Fq 'shopvivaliz-ai-squad-codex-bridge.service' "$installer"
+grep -Fq 'shopvivaliz-squad-codex-bridge.service' "$installer"
 grep -Fq '127.0.0.1' "$root/ops/ai-squad/codex-bridge.mjs"
 grep -Fq '/health' "$installer"
 grep -Fq 'systemctl --user daemon-reload' "$installer"

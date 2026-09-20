@@ -269,7 +269,7 @@ async function runProfile(profileHome, request, deadlineMs) {
   }
 
   const cwd = process.env.AI_SQUAD_CODEX_WORKDIR
-    || path.join(os.tmpdir(), 'shopvivaliz-ai-squad-codex-empty');
+    || path.join(os.tmpdir(), 'shopvivaliz-squad-codex-empty');
   fs.mkdirSync(cwd, { recursive: true, mode: 0o700 });
 
   try {
