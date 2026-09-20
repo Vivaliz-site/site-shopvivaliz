@@ -4,6 +4,7 @@ import {
   classifyRateLimit,
   exactModelMatches,
   sanitizeBridgeError,
+  remainingRequestMs,
 } from '../ops/ai-squad/codex-bridge.mjs';
 
 const valid = validateRequest({
@@ -41,6 +42,10 @@ assert.equal(classifyRateLimit({
 
 assert.equal(exactModelMatches('gpt-5.6-sol', 'gpt-5.6-sol'), true);
 assert.equal(exactModelMatches('gpt-5.6-sol', 'gpt-5.6-terra'), false);
+
+assert.equal(remainingRequestMs(5000, 1000, 10000), 4000);
+assert.equal(remainingRequestMs(5000, 1000, 2500), 2500);
+assert.throws(() => remainingRequestMs(1000, 1000, 5000), /request_timeout/);
 
 const safe = sanitizeBridgeError(
   'Authorization: Bearer sk-secret-token quota reached for user@example.com'

@@ -38,6 +38,13 @@ export function classifyRateLimit(rateLimits) {
     ? 'exhausted'
     : 'available';
 }
+
+export function remainingRequestMs(deadlineMs, nowMs = Date.now(), capMs = Infinity) {
+  const remaining = Number(deadlineMs) - Number(nowMs);
+  if (!Number.isFinite(remaining) || remaining <= 0) throw new Error('request_timeout');
+  return Math.max(1, Math.min(remaining, Number(capMs)));
+}
+
 export function validateRequest(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new Error('invalid_request');
@@ -117,7 +124,7 @@ class AppServerClient {
     this.failed = null;
   }
 
-  async start() {
+  async start(deadlineMs) {
     const args = [
       'app-server', '--stdio',
       '-c', `web_search="${this.request.web_search ? 'live' : 'disabled'}"`,
@@ -146,7 +153,7 @@ class AppServerClient {
         title: 'ShopVivaliz AI Squad',
         version: '1.0.0',
       },
-    }, 10000);
+    }, remainingRequestMs(deadlineMs, Date.now(), 10000));
     this.proc.stdin.write(JSON.stringify({ method: 'initialized', params: {} }) + '\n');
   }
 
@@ -228,15 +235,23 @@ class AppServerClient {
   }
 }
 
-async function probeProfile(profileHome, request) {
+async function probeProfile(profileHome, request, deadlineMs) {
   const client = new AppServerClient(profileHome, request);
   try {
-    await client.start();
-    const account = await client.rpc('account/read', { refreshToken: false }, 8000);
+    await client.start(deadlineMs);
+    const account = await client.rpc(
+      'account/read',
+      { refreshToken: false },
+      remainingRequestMs(deadlineMs, Date.now(), 8000)
+    );
     if (account?.account?.type !== 'chatgpt') {
       throw new Error('authentication_required');
     }
-    const limits = await client.rpc('account/rateLimits/read', {}, 8000);
+    const limits = await client.rpc(
+      'account/rateLimits/read',
+      {},
+      remainingRequestMs(deadlineMs, Date.now(), 8000)
+    );
     const state = classifyRateLimit(limits?.rateLimits);
     return { client, state };
   } catch (error) {
@@ -244,8 +259,8 @@ async function probeProfile(profileHome, request) {
     throw error;
   }
 }
-async function runProfile(profileHome, request, timeoutMs) {
-  const { client, state } = await probeProfile(profileHome, request);
+async function runProfile(profileHome, request, deadlineMs) {
+  const { client, state } = await probeProfile(profileHome, request, deadlineMs);
   if (state === 'exhausted') {
     client.close();
     const error = new Error('usage_limit_exhausted');
@@ -265,7 +280,7 @@ async function runProfile(profileHome, request, timeoutMs) {
       sandbox: 'read-only',
       ephemeral: true,
       serviceName: 'shopvivaliz_ai_squad',
-    }, 15000);
+    }, remainingRequestMs(deadlineMs, Date.now(), 15000));
 
     const effectiveModel = String(
       threadResult?.model || threadResult?.thread?.model || ''
@@ -274,7 +289,7 @@ async function runProfile(profileHome, request, timeoutMs) {
       throw new Error('model_mismatch');
     }
 
-    const turnPromise = client.waitForTurn(timeoutMs);
+    const turnPromise = client.waitForTurn(remainingRequestMs(deadlineMs));
     await client.rpc('turn/start', {
       threadId: threadResult.thread.id,
       model: request.model,
@@ -282,7 +297,7 @@ async function runProfile(profileHome, request, timeoutMs) {
       approvalPolicy: 'never',
       sandboxPolicy: { type: 'readOnly', networkAccess: false },
       input: [{ type: 'text', text: request.prompt }],
-    }, 15000);
+    }, remainingRequestMs(deadlineMs, Date.now(), 15000));
 
     const turn = await turnPromise;
     if (turn?.status !== 'completed') {
@@ -324,7 +339,7 @@ async function bridgeHealth() {
   };
   for (const profile of profiles) {
     try {
-      const { client, state } = await probeProfile(profile, probeRequest);
+      const { client, state } = await probeProfile(profile, probeRequest, Date.now() + 20000);
       authenticated++;
       if (state === 'exhausted') exhausted++;
       else available++;
@@ -355,11 +370,12 @@ async function respond(request) {
     10000,
     Math.min(Number(process.env.AI_SQUAD_CODEX_TIMEOUT_MS || DEFAULT_TIMEOUT_MS), 300000)
   );
+  const deadlineMs = Date.now() + timeoutMs;
   const attempts = [];
 
   for (const profile of profiles) {
     try {
-      return await runProfile(profile, request, timeoutMs);
+      return await runProfile(profile, request, deadlineMs);
     } catch (error) {
       attempts.push(error?.failureClass || classifyFailure(error));
     }
