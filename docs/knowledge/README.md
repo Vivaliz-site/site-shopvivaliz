@@ -8,6 +8,7 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 - [`../REMOTE-ACCESS-GITHUB.md`](../REMOTE-ACCESS-GITHUB.md) — canal remoto primário sem dependência da cota mensal do Desktop Commander.
 - [`project.md`](project.md) — visão geral, objetivo e módulos do sistema.
 - [`squad-chat.md`](squad-chat.md) — contrato, health check e providers do Squad Chat.
+- [`ai-squad.md`](ai-squad.md) — orquestrador OpenAI + Claude + Gemini para pesquisa, contraditório e consenso.
 - [`troubleshooting.md`](troubleshooting.md) — diagnóstico de erros HTTP, rede, integrações e deploy.
 - [`deploy.md`](deploy.md) — fluxo de publicação, curl, CI e checklist.
 - [`agent-rules.md`](agent-rules.md) — regras obrigatórias para agentes.
