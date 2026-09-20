@@ -288,7 +288,7 @@ jobs:
               "${SSH[@]}" "$CMD"
               ;;
             disk)
-              CMD='echo BACKEND_DISK_BEGIN; df -h /; du -sh /home/ubuntu/shopvivaliz-browser-worker 2>/dev/null || true; echo BACKEND_DISK_END'
+              CMD='echo BACKEND_DISK_BEGIN; df -h /; if [ -d /home/ubuntu/shopvivaliz-browser-worker ]; then du -sh /home/ubuntu/shopvivaliz-browser-worker; else echo BROWSER_WORKER_DIR=missing; fi; echo BACKEND_DISK_END'
               "${SSH[@]}" "$CMD"
               ;;
             runtime_status)
