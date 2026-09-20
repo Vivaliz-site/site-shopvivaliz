@@ -70,6 +70,11 @@ class WorkflowPrivateTransportTests(unittest.TestCase):
             text,
             'OCI Bastion hop must allow RSA public-key authentication on modern OpenSSH',
         )
+        self.assertIn(
+            '--ssh-public-key-file "$HOME/.ssh/bastion_session_key.pub"',
+            text,
+            'OCI Bastion session must be created with the public half of its ephemeral session key',
+        )
 
 
 OPERATIONAL_PATHS = [
