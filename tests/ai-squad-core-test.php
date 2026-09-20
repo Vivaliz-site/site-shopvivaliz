@@ -89,4 +89,108 @@ $consensus = svais_consensus_prompt('teste', [[
 ]]);
 ais_assert(str_contains($consensus, 'SÍNTESE DE CONSENSO'), 'consensus prompt contract missing');
 
+$order = svais_openai_transport_order();
+ais_assert($order === ['codex_chatgpt', 'direct', 'manual'], 'OpenAI transport order mismatch');
+
+$dispatchCfg = $deep['openai'];
+$calls = [];
+$codexResult = svais_openai_dispatch(
+    $dispatchCfg,
+    'system',
+    'prompt',
+    false,
+    function (string $transport) use (&$calls, $dispatchCfg): array {
+        $calls[] = $transport;
+        if ($transport !== 'codex_chatgpt') {
+            throw new RuntimeException('unexpected_transport');
+        }
+        return [
+            'text' => 'codex-ok',
+            'sources' => [],
+            'usage' => [],
+            'model' => $dispatchCfg['model'],
+            'transport' => 'codex_chatgpt',
+        ];
+    }
+);
+ais_assert(($codexResult['text'] ?? '') === 'codex-ok', 'Codex transport result missing');
+ais_assert($calls === ['codex_chatgpt'], 'Codex success must stop OpenAI chain');
+
+$calls = [];
+$directResult = svais_openai_dispatch(
+    $dispatchCfg,
+    'system',
+    'prompt',
+    false,
+    function (string $transport) use (&$calls, $dispatchCfg): array {
+        $calls[] = $transport;
+        if ($transport === 'codex_chatgpt') {
+            throw new RuntimeException('usage_limit_exhausted');
+        }
+        if ($transport === 'direct') {
+            return [
+                'text' => 'direct-ok',
+                'sources' => [],
+                'usage' => [],
+                'model' => $dispatchCfg['model'],
+                'transport' => 'direct',
+            ];
+        }
+        throw new RuntimeException('unexpected_transport');
+    }
+);
+ais_assert(($directResult['text'] ?? '') === 'direct-ok', 'direct fallback failed');
+ais_assert($calls === ['codex_chatgpt', 'direct'], 'direct fallback order mismatch');
+
+$manual = null;
+try {
+    svais_openai_dispatch(
+        $dispatchCfg,
+        'system-marker',
+        'prompt-marker',
+        true,
+        static function (string $transport): array {
+            throw new RuntimeException($transport . '_unavailable');
+        }
+    );
+} catch (SvaisManualInterventionRequired $e) {
+    $manual = $e;
+}
+ais_assert($manual instanceof SvaisManualInterventionRequired, 'manual fallback exception missing');
+ais_assert($manual->model === $dispatchCfg['model'], 'manual fallback model mismatch');
+ais_assert(count($manual->attempts) === 2, 'manual fallback attempts must cover Codex and direct OpenAI only');
+ais_assert(str_contains($manual->manualPrompt, 'system-marker'), 'manual prompt missing system');
+ais_assert(str_contains($manual->manualPrompt, 'prompt-marker'), 'manual prompt missing task');
+
+$modelMismatch = null;
+try {
+    svais_openai_dispatch(
+        $dispatchCfg,
+        'system',
+        'prompt',
+        false,
+        static function (string $transport) use ($dispatchCfg): array {
+            if ($transport === 'codex_chatgpt') {
+                return [
+                    'text' => 'wrong-model',
+                    'sources' => [],
+                    'usage' => [],
+                    'model' => 'gpt-5.6-terra',
+                    'transport' => 'codex_chatgpt',
+                ];
+            }
+            throw new RuntimeException('unavailable');
+        }
+    );
+} catch (SvaisManualInterventionRequired $e) {
+    $modelMismatch = $e;
+}
+ais_assert($modelMismatch instanceof SvaisManualInterventionRequired, 'model mismatch must not be accepted');
+ais_assert(($modelMismatch->attempts[0]['class'] ?? '') === 'model', 'model mismatch class missing');
+
+$state = svais_provider_state($deep);
+ais_assert(($state['openai']['transport_order'] ?? []) === $order, 'health transport order missing');
+ais_assert(($state['openai']['manual_fallback'] ?? false) === true, 'health manual fallback missing');
+ais_assert(!array_key_exists('openrouter_fallback_configured', $state['openai']), 'OpenAI health must not advertise OpenRouter fallback');
+
 echo "AI_SQUAD_CORE_TEST=PASS\n";
