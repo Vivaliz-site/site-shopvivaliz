@@ -4,7 +4,8 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 
 ## Documentos principais
 
-- [`host-access.md`](host-access.md) — **bootstrap obrigatório de hosts, papéis, Desktop Commander, SSH e repositório para toda nova sessão/agente.**
+- [`host-access.md`](host-access.md) — **bootstrap obrigatório de hosts, papéis, GitHub Remote Access, Desktop Commander, SSH e repositório para toda nova sessão/agente.**
+- [`../REMOTE-ACCESS-GITHUB.md`](../REMOTE-ACCESS-GITHUB.md) — canal remoto primário sem dependência da cota mensal do Desktop Commander.
 - [`project.md`](project.md) — visão geral, objetivo e módulos do sistema.
 - [`squad-chat.md`](squad-chat.md) — contrato, health check e providers do Squad Chat.
 - [`troubleshooting.md`](troubleshooting.md) — diagnóstico de erros HTTP, rede, integrações e deploy.
