@@ -24,7 +24,6 @@ on:
           - disk
           - runtime_status
           - repo_status
-          - mlrr_rollout
       reason:
         description: Audit reason
         required: true
@@ -41,7 +40,7 @@ jobs:
   execute:
     if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && startsWith(github.event.comment.body, '/remote '))
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
-    timeout-minutes: 45
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -81,13 +80,11 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "runtime_status", "repo_status", "mlrr_rollout"}
+          actions = {"health", "identity", "disk", "runtime_status", "repo_status"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
               raise SystemExit(f"Unsupported action: {action}")
-          if action == "mlrr_rollout" and target != "shopvivaliz-free-a1":
-              raise SystemExit("mlrr_rollout is restricted to shopvivaliz-free-a1")
           if not reason:
               raise SystemExit("Reason is required")
 
@@ -99,7 +96,7 @@ jobs:
           PY
 
       - name: Configure backend SSH
-        if: steps.req.outputs.target != 'shopvivaliz-free-a1' && steps.req.outputs.action != 'mlrr_rollout'
+        if: steps.req.outputs.target != 'shopvivaliz-free-a1'
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
           VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
@@ -152,64 +149,6 @@ jobs:
               git status --porcelain
               git rev-parse HEAD
               echo "REMOTE_REPO_STATUS_END"
-              ;;
-            mlrr_rollout)
-              test "$(hostname)" = shopvivaliz-free-a1
-              MLRR_REPO=/home/ubuntu/mercadolivre-returns-recovery
-              STATE_DIR="$HOME/.local/state/shopvivaliz"
-              KEY_FILE="$HOME/.config/shopvivaliz/execution-provenance.key"
-              test -d "$MLRR_REPO/.git"
-              test -s "$KEY_FILE"
-              test -z "$(git -C "$MLRR_REPO" status --porcelain)"
-              git -C "$MLRR_REPO" fetch origin main --quiet
-              git -C "$MLRR_REPO" switch main
-              git -C "$MLRR_REPO" merge --ff-only origin/main
-              MLRR_SHA="$(git -C "$MLRR_REPO" rev-parse HEAD)"
-              test "$MLRR_SHA" = "$(git -C "$MLRR_REPO" rev-parse origin/main)"
-              mkdir -p "$STATE_DIR"
-              chmod 700 "$STATE_DIR"
-              export CHAT_CLI_SESSION_ID="gha-site-remote-mlrr-$GITHUB_RUN_ID"
-              export EXECUTION_PROVENANCE_HMAC_KEY="$(cat "$KEY_FILE")"
-              export EXECUTION_PROVENANCE_KEY_ID=shopvivaliz-host-provenance-v1
-              export EXECUTION_SESSION_ID="$CHAT_CLI_SESSION_ID"
-              export EXECUTION_AGENT=github-actions-site-mlrr-bridge
-              export EXECUTION_TARGET=shopvivaliz-free-a1
-              export EXECUTION_ORIGIN_TYPE=github-actions
-              export EXECUTION_REPOSITORY=Vivaliz-site/mercadolivre-returns-recovery
-              export EXECUTION_REF=refs/heads/main
-              export EXECUTION_SHA="$MLRR_SHA"
-              export GITHUB_WORKSPACE="$MLRR_REPO"
-              export GITHUB_SHA="$MLRR_SHA"
-              export GITHUB_REF_NAME=main
-              provenance() {
-                local result="$1" code="$2"
-                EXECUTION_RESULT="$result" EXECUTION_EXIT_CODE="$code"                   python3 "$MLRR_REPO/scripts/emit-execution-provenance.py"                     mlrr_site_bridge_rollout --target shopvivaliz-free-a1                   >> "$STATE_DIR/execution-provenance.jsonl"
-              }
-              cleanup_mlrr() {
-                local rc=$?
-                if [ "$rc" -eq 0 ]; then
-                  provenance COMPLETED 0
-                else
-                  set +e
-                  provenance FAILED "$rc"
-                  provenance_rc=$?
-                  set -e
-                  if [ "$provenance_rc" -ne 0 ]; then
-                    echo "MLRR provenance failure record failed" >&2
-                  fi
-                fi
-                unset EXECUTION_PROVENANCE_HMAC_KEY
-                exit "$rc"
-              }
-              trap cleanup_mlrr EXIT
-              provenance STARTED ""
-              "$MLRR_REPO/scripts/mlrr-production-ops.sh" prepare
-              "$MLRR_REPO/scripts/mlrr-production-ops.sh" shadow
-              "$MLRR_REPO/scripts/mlrr-production-ops.sh" validate
-              "$MLRR_REPO/scripts/mlrr-production-ops.sh" preflight
-              trap - EXIT
-              provenance COMPLETED 0
-              unset EXECUTION_PROVENANCE_HMAC_KEY
               ;;
           esac
 
