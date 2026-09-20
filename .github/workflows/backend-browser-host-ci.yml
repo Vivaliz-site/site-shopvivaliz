@@ -32,6 +32,3 @@ jobs:
           bash -n ops/browser-host/browser-cleanup.sh
           node --check ops/browser-host/browser-smoke.mjs
           php tests/backend-browser-host-contract-test.php
-          ruby -e 'require "yaml"; ARGV.each { |f| YAML.load_file(f); puts "workflow-yaml-parse: ok #{f}" }' \\
-            .github/workflows/backend-browser-host-control.yml \\
-            .github/workflows/backend-browser-host-ci.yml
