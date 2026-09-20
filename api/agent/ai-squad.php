@@ -247,6 +247,7 @@ foreach ($phases as $phase) {
                 'sources' => array_slice((array)$result['sources'], 0, 30),
                 'usage' => $result['usage'],
                 'latency_ms' => (int)$result['latency_ms'],
+                'transport' => (string)($result['transport'] ?? 'direct'),
                 'ok' => true,
             ];
             $transcript[] = $entry;
@@ -288,12 +289,7 @@ if ($successful !== []) {
             continue;
         }
         try {
-            $moderatorSystem = svais_base_system($moderator, 'moderate');
-            $result = match ($moderator) {
-                'openai' => svais_openai_call($profile['openai'], $moderatorSystem, $consensusPrompt, false),
-                'anthropic' => svais_anthropic_call($profile['anthropic'], $moderatorSystem, $consensusPrompt, false),
-                'gemini' => svais_gemini_call($profile['gemini'], $moderatorSystem, $consensusPrompt, false),
-            };
+            $result = svais_call_provider($moderator, $profile, 'moderate', $consensusPrompt, false);
             $consensus = [
                 'type' => 'consensus',
                 'cycle_id' => $cycleId,
@@ -302,6 +298,7 @@ if ($successful !== []) {
                 'text' => (string)$result['text'],
                 'sources' => array_slice((array)$result['sources'], 0, 30),
                 'usage' => $result['usage'],
+                'transport' => (string)($result['transport'] ?? 'direct'),
                 'ok' => true,
             ];
             svais_api_emit($consensus, $stream, $events);
