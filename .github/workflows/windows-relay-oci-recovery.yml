@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: shopvivaliz-windows-relay-oci-recovery
+  cancel-in-progress: false
+
 jobs:
   recover:
     if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && startsWith(github.event.comment.body, '/recover-windows-oci '))
@@ -127,7 +131,7 @@ jobs:
           set -Eeuo pipefail
           OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
 
-          session_id="$("${OCI[@]}" bastion session create-port-forwarding             --bastion-id "$BASTION_ID"             --ssh-public-key-file "$HOME/.ssh/vmkey.pub"             --target-private-ip "$BACKEND_PRIVATE_IP"             --target-port 22             --session-ttl 1800             --display-name "shopvivaliz-windows-relay-recovery"             --query 'data.id'             --raw-output)"
+          session_id="$("${OCI[@]}" bastion session create-port-forwarding             --bastion-id "$BASTION_ID"             --ssh-public-key-file "$HOME/.ssh/bastion_session_key.pub"             --target-private-ip "$BACKEND_PRIVATE_IP"             --target-port 22             --session-ttl 1800             --display-name "shopvivaliz-windows-relay-recovery"             --query 'data.id'             --raw-output)"
           test -n "$session_id"
           echo "BASTION_SESSION_ID=$session_id" >> "$GITHUB_ENV"
 
