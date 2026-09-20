@@ -30,6 +30,12 @@ Fred-Win (`LAPTOP-NIG4IFUU`) e `DESKTOP-KOCEPSV` **não são destinos nem fallba
 
 A arquitetura atual deve ser confirmada no código e nos hosts antes de qualquer intervenção. Se houver divergência entre este arquivo e evidência ao vivo, pare a hipótese e atualize a documentação com a evidência encontrada.
 
+### Sessão visual ChatGPT canônica do AI Squad
+
+O fallback manual/visual do AI Squad usa a sessão já autenticada em `always-free-arm-1787907847-26`, usuário `fredrdp`, perfil Chromium `/home/fredrdp/.config/shopvivaliz-chromium`, CDP local `127.0.0.1:9555`. O processo principal esperado deve usar esse mesmo `--user-data-dir` e `--remote-debugging-port=9555`.
+
+Não criar outro perfil, outro Chromium ou uma cópia dessa sessão em `shopvivaliz-free-a1`: esse host não é o dono da sessão visual. Antes de iniciar qualquer navegador, verificar o processo existente e `http://127.0.0.1:9555/json/version` no host backend; se já estiver ativo, reutilizar a sessão. Nunca registrar cookies, conteúdo de conversa ou tokens.
+
 ## Inventário canônico de runtime
 
 Para status operacional, usar `scripts/runtime-service-status.sh` ou a ação remota `runtime_status`, que executa esse inventário. Não montar health checks a partir de nomes históricos memorizados.
