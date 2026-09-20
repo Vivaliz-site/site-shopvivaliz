@@ -90,7 +90,7 @@ $consensus = svais_consensus_prompt('teste', [[
 ais_assert(str_contains($consensus, 'SÍNTESE DE CONSENSO'), 'consensus prompt contract missing');
 
 $order = svais_openai_transport_order();
-ais_assert($order === ['codex_chatgpt', 'direct', 'openrouter', 'manual'], 'OpenAI transport order mismatch');
+ais_assert($order === ['codex_chatgpt', 'direct', 'manual'], 'OpenAI transport order mismatch');
 
 $dispatchCfg = $deep['openai'];
 $calls = [];
@@ -142,29 +142,6 @@ $directResult = svais_openai_dispatch(
 ais_assert(($directResult['text'] ?? '') === 'direct-ok', 'direct fallback failed');
 ais_assert($calls === ['codex_chatgpt', 'direct'], 'direct fallback order mismatch');
 
-$calls = [];
-$routerResult = svais_openai_dispatch(
-    $dispatchCfg,
-    'system',
-    'prompt',
-    false,
-    function (string $transport) use (&$calls, $dispatchCfg): array {
-        $calls[] = $transport;
-        if ($transport === 'openrouter') {
-            return [
-                'text' => 'router-ok',
-                'sources' => [],
-                'usage' => [],
-                'model' => 'openai/' . $dispatchCfg['model'],
-                'transport' => 'openrouter',
-            ];
-        }
-        throw new RuntimeException('provider_http_429');
-    }
-);
-ais_assert(($routerResult['text'] ?? '') === 'router-ok', 'OpenRouter fallback failed');
-ais_assert($calls === ['codex_chatgpt', 'direct', 'openrouter'], 'OpenRouter fallback order mismatch');
-
 $manual = null;
 try {
     svais_openai_dispatch(
@@ -181,7 +158,7 @@ try {
 }
 ais_assert($manual instanceof SvaisManualInterventionRequired, 'manual fallback exception missing');
 ais_assert($manual->model === $dispatchCfg['model'], 'manual fallback model mismatch');
-ais_assert(count($manual->attempts) === 3, 'manual fallback attempts must cover automated transports');
+ais_assert(count($manual->attempts) === 2, 'manual fallback attempts must cover Codex and direct OpenAI only');
 ais_assert(str_contains($manual->manualPrompt, 'system-marker'), 'manual prompt missing system');
 ais_assert(str_contains($manual->manualPrompt, 'prompt-marker'), 'manual prompt missing task');
 
@@ -214,5 +191,6 @@ ais_assert(($modelMismatch->attempts[0]['class'] ?? '') === 'model', 'model mism
 $state = svais_provider_state($deep);
 ais_assert(($state['openai']['transport_order'] ?? []) === $order, 'health transport order missing');
 ais_assert(($state['openai']['manual_fallback'] ?? false) === true, 'health manual fallback missing');
+ais_assert(!array_key_exists('openrouter_fallback_configured', $state['openai']), 'OpenAI health must not advertise OpenRouter fallback');
 
 echo "AI_SQUAD_CORE_TEST=PASS\n";
