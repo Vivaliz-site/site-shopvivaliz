@@ -4,7 +4,7 @@
 
 - Antes de qualquer diagnóstico, alteração ou validação, ler `docs/knowledge/host-access.md`.
 - Identificar o host correto pelo papel atual; não assumir que IP/nome histórico ainda é produção.
-- Para terminal e diagnóstico, preferir os canais remotos canônicos; Desktop Commander é apenas fallback operacional. Para navegador, seguir obrigatoriamente `GLOBAL_BROWSER_VM_POLICY_V2` abaixo.
+- Para terminal e diagnóstico, preferir os canais remotos canônicos; Desktop Commander é apenas fallback operacional. Para navegador, seguir obrigatoriamente `GLOBAL_BROWSER_VM_POLICY_V2` abaixo. Para ChatGPT/OpenAI, a sessao deve reutilizar `persistent=true`, `profile=ai-squad-chatgpt` conforme `GLOBAL_BROWSER_SESSION_PROFILE_V1`; nao criar profile novo nem usar `manual` como fallback.
 - Confirmar acesso com evidência (`hostname`, `whoami`, diretório e estado Git quando aplicável).
 - Nunca versionar, imprimir ou copiar para documentação o conteúdo de chave privada, senha, token ou secret.
 
