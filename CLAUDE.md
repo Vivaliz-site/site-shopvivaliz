@@ -6,6 +6,8 @@
 <!-- audit-refs: AUDIT_POLICY.md docs/quality/EXTREME_AUDIT_PROTOCOL.md docs/quality/AUDIT_RUNTIME_PARITY_V1.md docs/quality/AUDIT_UNIVERSAL_COVERAGE_V1.md docs/quality/AUDIT_SELF_TEST_V1.md docs/quality/ARCHITECTURE_DEPLOY_AUDIT_V1.md -->
 <!-- gate: FINAL_RESPONSE_DEPLOY_GATE_V1 — resposta final só após validação pós-deploy completa -->
 
+> **Paridade obrigatoria antes da resposta final:** no `site-shopvivaliz`, confirme `origin/main` = `/home/ubuntu/shopvivaliz-deploy/current/.release-sha` = `release_sha` de `https://shopvivaliz.com.br/api/health/version.php`. O `Master Production Pipeline` deve publicar todo SHA de `main`, inclusive mudancas apenas de docs/politica/workflow/teste; se o fluxo automatico nao publicar, acione o `Master Production Pipeline` com `confirmation=DEPLOY` e aguarde deploy + monitor `SUCCESS`.
+
 <!-- EXECUTION_PROVENANCE_POLICY_V1 -->
 @EXECUTION-PROVENANCE-POLICY.md
 
