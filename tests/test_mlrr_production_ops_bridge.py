@@ -23,9 +23,11 @@ def test_bridge_is_manual_auditable_and_fail_closed() -> None:
     assert "startsWith(github.event.comment.body, '/mlrr ')" in text
     assert r"/mlrr\s+operation=(prepare|cutover|validate|shadow|preflight|rollout)" in text
 
-    assert "repo=/home/ubuntu/mercadolivre-returns-recovery" in text
-    assert "git merge --ff-only origin/main" in text
-    assert 'test -z "$(git status --porcelain)"' in text
+    assert "gh auth status --hostname github.com" in text
+    assert "gh repo clone Vivaliz-site/mercadolivre-returns-recovery" in text
+    assert "mktemp -d" in text
+    assert "git fetch origin main" not in text
+    assert "repo=/home/ubuntu/mercadolivre-returns-recovery" not in text
     assert "export GITHUB_REF_NAME=main" in text
 
     rollout = text.split('if [ "$MLRR_OPERATION" = rollout ]; then', 1)[1]
