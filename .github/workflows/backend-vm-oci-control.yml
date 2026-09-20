@@ -323,26 +323,51 @@ jobs:
         if: always()
         shell: bash
         run: |
-          set +e
+          set -Eeuo pipefail
+          cleanup_failed=0
 
           if [ -n "${BASTION_TUNNEL_PID:-}" ] && kill -0 "$BASTION_TUNNEL_PID" 2>/dev/null; then
-            kill "$BASTION_TUNNEL_PID"
+            if ! kill "$BASTION_TUNNEL_PID"; then
+              echo "::error::Failed to stop Bastion tunnel"
+              cleanup_failed=1
+            fi
           fi
 
           if [ -n "${OCI_CONFIG_FILE:-}" ] && [ -f "$OCI_CONFIG_FILE" ]; then
             OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
             if [ -n "${BASTION_SESSION_ID:-}" ]; then
-              "${OCI[@]}" bastion session delete --session-id "$BASTION_SESSION_ID" --force >/dev/null 2>&1
+              if "${OCI[@]}" bastion session get --session-id "$BASTION_SESSION_ID" >/dev/null 2>&1; then
+                if ! "${OCI[@]}" bastion session delete --session-id "$BASTION_SESSION_ID" --force >/dev/null; then
+                  echo "::error::Failed to delete temporary Bastion session"
+                  cleanup_failed=1
+                fi
+              fi
             fi
             if [ "${BASTION_ALLOWLIST_UPDATED:-false}" = true ] && [ -n "${ORIGINAL_BASTION_CIDRS_B64:-}" ]; then
               original="$(printf '%s' "$ORIGINAL_BASTION_CIDRS_B64" | base64 -d)"
-              "${OCI[@]}" bastion bastion update                 --bastion-id "$BASTION_ID"                 --client-cidr-list "$original"                 --force                 --wait-for-state SUCCEEDED                 --wait-interval-seconds 5                 --max-wait-seconds 180 >/dev/null
-              echo "BASTION_ALLOWLIST_RESTORED=PASS"
+              if "${OCI[@]}" bastion bastion update                 --bastion-id "$BASTION_ID"                 --client-cidr-list "$original"                 --force                 --wait-for-state SUCCEEDED                 --wait-interval-seconds 5                 --max-wait-seconds 180 >/dev/null; then
+                echo "BASTION_ALLOWLIST_RESTORED=PASS"
+              else
+                echo "::error::Failed to restore Bastion allowlist"
+                cleanup_failed=1
+              fi
             fi
           fi
 
-          test -f "$HOME/.ssh/vmkey" && shred -u "$HOME/.ssh/vmkey"
-          test -f "$HOME/.ssh/bastion_session_key" && shred -u "$HOME/.ssh/bastion_session_key"
-          test -f "${OCI_KEY_FILE:-}" && shred -u "$OCI_KEY_FILE"
-          test -f "${OCI_CONFIG_FILE:-}" && shred -u "$OCI_CONFIG_FILE"
-          rm -f "$HOME/.ssh/bastion_session_key.pub" "$HOME/.ssh/known_hosts"             "$HOME/.ssh/bastion_known_hosts" "$HOME/.ssh/config"             "$RUNNER_TEMP/bastion-command.b64"
+          for secret_file in             "$HOME/.ssh/vmkey"             "$HOME/.ssh/bastion_session_key"             "${OCI_KEY_FILE:-}"             "${OCI_CONFIG_FILE:-}"; do
+            if [ -n "$secret_file" ] && [ -f "$secret_file" ]; then
+              if ! shred -u "$secret_file"; then
+                echo "::error::Failed to erase temporary credential file"
+                cleanup_failed=1
+              fi
+            fi
+          done
+
+          if ! rm -f             "$HOME/.ssh/bastion_session_key.pub"             "$HOME/.ssh/known_hosts"             "$HOME/.ssh/bastion_known_hosts"             "$HOME/.ssh/config"             "$RUNNER_TEMP/bastion-command.b64"; then
+            echo "::error::Failed to remove temporary SSH metadata"
+            cleanup_failed=1
+          fi
+
+          if [ "$cleanup_failed" -ne 0 ]; then
+            exit 1
+          fi
