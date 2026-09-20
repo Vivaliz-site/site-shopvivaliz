@@ -1,0 +1,114 @@
+name: TEMP DC VM Recovery
+
+on:
+  push:
+    branches:
+      - ops/dc-backend-persistence-check-20260919
+    paths:
+      - .github/workflows/temp-dc-vm-recovery.yml
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      OCI_PROFILE: AGENTS
+    steps:
+      - name: Configure OCI
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          d="$RUNNER_TEMP/oci"; install -m 700 -d "$d"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$d/key.pem"; chmod 600 "$d/key.pem"
+          cat > "$d/config" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$d/key.pem
+          EOF
+          chmod 600 "$d/config"
+          echo "OCI_CONFIG_FILE=$d/config" >> "$GITHUB_ENV"
+          echo "OCI_KEY_FILE=$d/key.pem" >> "$GITHUB_ENV"
+
+      - name: Install OCI SDK
+        run: python3 -m pip install --disable-pip-version-check --quiet oci
+
+      - name: Restart and verify DC on both VMs
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os,time,oci
+          cfg=oci.config.from_file(os.environ["OCI_CONFIG_FILE"],os.environ["OCI_PROFILE"])
+          search=oci.resource_search.ResourceSearchClient(cfg)
+          compute=oci.core.ComputeClient(cfg)
+          agent=oci.compute_instance_agent.ComputeInstanceAgentClient(cfg)
+          m=oci.compute_instance_agent.models
+          names=["shopvivaliz-free-a1","always-free-arm-1787907847-26"]
+          for name in names:
+              q=f"query instance resources where displayName = '{name}'"
+              items=search.search_resources(oci.resource_search.models.StructuredSearchDetails(query=q)).data.items
+              if len(items)!=1: raise SystemExit(f"{name}: instance resolution count={len(items)}")
+              inst=compute.get_instance(items[0].identifier).data
+              if inst.lifecycle_state!="RUNNING": raise SystemExit(f"{name}: lifecycle={inst.lifecycle_state}")
+              script=r"""set -Eeuo pipefail
+          svc=shopvivaliz-desktop-commander.service
+          sudo systemctl restart "$svc"
+          for i in $(seq 1 30); do
+            if systemctl is-active --quiet "$svc" && journalctl -u "$svc" -n 30 --no-pager | grep -q 'REMOTE_CONNECTED=true'; then
+              break
+            fi
+            sleep 2
+          done
+          echo HOST=$(cat /etc/hostname)
+          echo ENABLED=$(systemctl is-enabled "$svc")
+          echo ACTIVE=$(systemctl is-active "$svc")
+          echo RESTART=$(systemctl show "$svc" -p Restart --value)
+          echo SUBSTATE=$(systemctl show "$svc" -p SubState --value)
+          echo AUTH_REQUIRED=$(test -f "$HOME/.desktop-commander-device/auth-required.cooldown" && echo true || echo false)
+          journalctl -u "$svc" -n 30 --no-pager | grep -E 'REMOTE_CONNECTED|AUTH_REQUIRED|SESSION_REFRESH|REMOTE_OWNER' | tail -10 || true
+          test "$(systemctl is-enabled "$svc")" = enabled
+          test "$(systemctl is-active "$svc")" = active
+          test "$(systemctl show "$svc" -p Restart --value)" = always
+          test ! -f "$HOME/.desktop-commander-device/auth-required.cooldown"
+          journalctl -u "$svc" -n 30 --no-pager | grep -q 'REMOTE_CONNECTED=true'
+          echo VM_DC_RECOVERY=PASS
+          """
+              det=m.CreateInstanceAgentCommandDetails(
+                  compartment_id=inst.compartment_id,
+                  execution_time_out_in_seconds=180,
+                  target=m.InstanceAgentCommandTarget(instance_id=inst.id),
+                  content=m.InstanceAgentCommandContent(
+                      source=m.InstanceAgentCommandSourceViaTextDetails(source_type="TEXT",text=script),
+                      output=m.InstanceAgentCommandOutputViaTextDetails(output_type="TEXT")),
+                  display_name=f"dc-recovery-{name}")
+              cid=agent.create_instance_agent_command(det).data.id
+              ex=None
+              for _ in range(50):
+                  ex=agent.get_instance_agent_command_execution(instance_agent_command_id=cid,instance_id=inst.id).data
+                  if ex.lifecycle_state in {"SUCCEEDED","FAILED","TIMED_OUT","CANCELED"}: break
+                  time.sleep(5)
+              txt=getattr(ex.content,"text","") or ""
+              print(f"=== {name} ===")
+              print(txt)
+              if ex.lifecycle_state!="SUCCEEDED" or getattr(ex.content,"exit_code",1)!=0 or "VM_DC_RECOVERY=PASS" not in txt:
+                  raise SystemExit(f"{name}: recovery failed")
+          PY
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          test -f "${OCI_KEY_FILE:-}" && shred -u "$OCI_KEY_FILE"
+          test -f "${OCI_CONFIG_FILE:-}" && shred -u "$OCI_CONFIG_FILE"
