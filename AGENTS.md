@@ -531,3 +531,13 @@ Antes de qualquer operacao em terminal/CLI, leia e cumpra a secao `Isolamento ob
 
 ## Auditoria Extrema - arquitetura e deploy
 Nos gatilhos de `AUDIT_POLICY.md`, execute tambem `docs/quality/ARCHITECTURE_DEPLOY_AUDIT_V1.md`. A auditoria inclui gargalos de CI/deploy, arquitetura/codigo, ownership, contratos cross-repo e melhorias seguras de velocidade sem reduzir cobertura.
+
+<!-- EXECUTION_PROVENANCE_POLICY_V1 -->
+## Assinatura e origem obrigatorias de toda execucao
+
+Antes de qualquer acao material, leia e cumpra EXECUTION-PROVENANCE-POLICY.md. Toda execucao automatizada ou operacional deve carregar identidade, origem e execution_id verificaveis; recursos temporarios devem ter owner/origin e cleanup. Use scripts/emit-execution-provenance.py como formato de referencia. Nunca registre secrets.
+
+
+<!-- BROWSER_SESSION_POLICY_V1 -->
+## Navegador: escolha de host e cleanup obrigatorio
+Antes de browser interativo/remoto, se o host nao estiver explicitamente definido na tarefa, pergunte qual maquina usar. Sessoes invisiveis/headless transitorias devem ter ownership + TTL padrao de 2h renovavel por heartbeat e cleanup ao final/boot. Orfaos podem ser limpos antes; sessoes visiveis e bridges persistentes documentadas devem ser preservadas. Nunca matar navegador globalmente por nome de processo. Leia a politica completa em `REGRAS-AGENTES-CENTRALIZADAS.md` (BROWSER_SESSION_POLICY_V1).
