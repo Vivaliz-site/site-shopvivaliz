@@ -82,7 +82,7 @@ EOF
   mfa-stop)
     systemctl stop "$MFA_SERVICE"
     if [[ "$(tailscale_state)" == "Running" ]]; then
-      if ! tailscale serve --http=6080 off >/dev/null 2>&1; then
+      if ! tailscale serve reset >/dev/null 2>&1; then
         echo "TAILSCALE_SERVE_DISABLE=not_configured"
       else
         echo "TAILSCALE_SERVE_DISABLE=PASS"
@@ -127,7 +127,7 @@ EOF
   tailscale-serve)
     [[ "$(tailscale_state)" == "Running" ]] || { echo "tailscale authentication required" >&2; exit 31; }
     systemctl is-active --quiet "$MFA_SERVICE" || { echo "mfa service not active" >&2; exit 32; }
-    tailscale serve --bg --yes --http=6080 http://127.0.0.1:6080 >/dev/null
+    tailscale serve --bg --yes --http=80 http://127.0.0.1:6080 >/dev/null
     echo "TAILSCALE_SERVE=READY"
     echo "TAILSCALE_ACCESS_SCOPE=tailnet-only"
     ;;
