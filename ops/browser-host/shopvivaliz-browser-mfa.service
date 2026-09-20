@@ -1,0 +1,25 @@
+[Unit]
+Description=ShopVivaliz isolated browser session for human MFA
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=shopbrowser
+Group=shopbrowser
+Environment=HOME=/var/lib/shopvivaliz-browser
+Environment=PLAYWRIGHT_BROWSERS_PATH=/var/lib/shopvivaliz-browser/pw-browsers
+EnvironmentFile=-/etc/shopvivaliz-browser/mfa.env
+ExecStart=/opt/shopvivaliz-browser-host/browser-session.sh
+Restart=no
+RuntimeMaxSec=2h
+TimeoutStopSec=15s
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/shopvivaliz-browser
+
+[Install]
+WantedBy=multi-user.target
