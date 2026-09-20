@@ -49,6 +49,14 @@ O arquivo `ops/remote-access-request.json` permanece temporariamente apenas como
 
 Esse modelo evita commits operacionais repetitivos e não dispara os demais pipelines de `push` do repositório.
 
+Se um dos relays Windows estiver indisponível, use no mesmo issue `#1586`:
+
+```text
+/recover-windows reason=restaurar relays privados Windows
+```
+
+Esse comando aciona `.github/workflows/windows-private-peer-recovery.yml`, que tenta recuperar Fred-Win e KOCEPSV pela rede privada/Tailscale via backend VM, sem expor RCE público.
+
 ## Segurança
 
 - Nenhuma chave, token, senha ou OTP é gravada no comentário.
