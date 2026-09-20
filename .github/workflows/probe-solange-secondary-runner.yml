@@ -1,0 +1,46 @@
+name: Probe Solange Secondary Runner
+
+on:
+  push:
+    branches:
+      - ops/probe-solange-secondary-runner-20260920
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 5
+    steps:
+      - name: Inspect secondary runner safely
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "HOST=$(hostname)"
+          echo "=== candidate dirs ==="
+          for d in /home/ubuntu/actions-runner-solange-secondary /home/ubuntu/actions-runner-solange /home/ubuntu/actions-runner-*; do
+            [ -d "$d" ] || continue
+            echo "-- $d"
+            if [ -f "$d/.runner" ]; then
+              python3 - "$d/.runner" <<'PY'
+          import json,sys
+          p=sys.argv[1]
+          try:
+              d=json.load(open(p))
+          except Exception as e:
+              print("runner_metadata_error", e)
+              raise SystemExit
+          safe={k:d.get(k) for k in ("agentId","agentName","poolId","poolName","serverUrl","gitHubUrl","workFolder") if k in d}
+          print(json.dumps(safe,sort_keys=True))
+          PY
+            fi
+          done
+          echo "=== system services ==="
+          systemctl list-units --type=service --all --no-pager 2>/dev/null | grep -Ei 'actions\.runner|runner.*solange' || true
+          echo "=== user services ==="
+          systemctl --user list-units --type=service --all --no-pager 2>/dev/null | grep -Ei 'actions\.runner|runner.*solange' || true
+          echo "=== processes ==="
+          ps -eo pid,etimes,args | grep -E 'Runner\.(Listener|Worker)' | grep -v grep || true
+          echo "=== service files ==="
+          find /etc/systemd/system /home/ubuntu/.config/systemd/user -maxdepth 2 -type f -name '*runner*service' -print 2>/dev/null | sort
