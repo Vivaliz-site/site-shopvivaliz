@@ -439,9 +439,9 @@ function svais_openrouter_call(string $provider, array $cfg, string $system, str
     ];
 }
 
-function svais_call_provider(string $provider, array $profile, string $phase, string $prompt): array
+function svais_call_provider(string $provider, array $profile, string $phase, string $prompt, ?bool $webSearchOverride = null): array
 {
-    $webSearch = (bool)($profile['web_search'] ?? false);
+    $webSearch = $webSearchOverride ?? (bool)($profile['web_search'] ?? false);
     $system = svais_base_system($provider, $phase);
 
     $started = microtime(true);
