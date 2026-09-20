@@ -58,6 +58,7 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
     steps:
       - name: Confirmar execucao manual
         shell: bash
@@ -88,10 +89,15 @@ jobs:
             echo '::error::OPENROUTER_API_KEY ausente nos GitHub Secrets deste repositorio.'
             exit 1
           fi
+          if [[ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
+            echo '::error::CLAUDE_CODE_OAUTH_TOKEN ausente nos GitHub Secrets deste repositorio.'
+            exit 1
+          fi
           echo "::add-mask::$OPENAI_API_KEY"
           echo "::add-mask::$ANTHROPIC_API_KEY"
           echo "::add-mask::$GEMINI_API_KEY"
           echo "::add-mask::$OPENROUTER_API_KEY"
+          echo "::add-mask::$CLAUDE_CODE_OAUTH_TOKEN"
 
       - name: Configurar SSH autenticado (host fixado)
         shell: bash
@@ -126,7 +132,8 @@ jobs:
               'OPENAI_API_KEY=' + os.environ['OPENAI_API_KEY'] + '\n'
               'ANTHROPIC_API_KEY=' + os.environ['ANTHROPIC_API_KEY'] + '\n'
               'GEMINI_API_KEY=' + os.environ['GEMINI_API_KEY'] + '\n'
-              'OPENROUTER_API_KEY=' + os.environ['OPENROUTER_API_KEY'] + '\n',
+              'OPENROUTER_API_KEY=' + os.environ['OPENROUTER_API_KEY'] + '\n'
+              'CLAUDE_CODE_OAUTH_TOKEN=' + os.environ['CLAUDE_CODE_OAUTH_TOKEN'] + '\n',
               encoding='utf-8',
           )
           PY
@@ -159,7 +166,7 @@ jobs:
               if '=' in raw:
                   key, value = raw.split('=', 1)
                   payload[key] = value
-          required_keys = ('OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'OPENROUTER_API_KEY')
+          required_keys = ('OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'OPENROUTER_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN')
           if any(not payload.get(k) for k in required_keys):
               raise SystemExit('payload de chaves incompleto')
           if not env_path.is_file():
@@ -256,6 +263,7 @@ jobs:
           print('anthropic_api_key_present=true')
           print('gemini_api_key_present=true')
           print('openrouter_api_key_present=true')
+          print('claude_code_oauth_token_present=true')
           print('openai_live_probe_http_code=' + openai_code)
           print('anthropic_live_probe_http_code=' + anthropic_code)
           print('gemini_live_probe_http_code=' + gemini_code)
