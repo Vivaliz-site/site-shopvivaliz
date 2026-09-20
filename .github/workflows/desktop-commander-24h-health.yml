@@ -306,7 +306,14 @@ jobs:
               *"0.2.51"*"/node_modules/@wonderwhy-er/desktop-commander/dist/index.js"*" remote "*"--persist-session"*) canonical=$((canonical+1));;
               *) noncanonical=$((noncanonical+1));;
             esac
-          done < <(pgrep -af '[d]esktop-commander.*remote.*--persist-session' 2>/dev/null || true)
+          done < <(
+            if pgrep -af '[d]esktop-commander.*remote.*--persist-session' 2>/dev/null; then
+              :
+            else
+              rc=$?
+              test "$rc" -eq 1
+            fi
+          )
           printf 'DEVICE_STATE_EXISTS=%s\nSERVICE_ENABLED=%s\nSERVICE_ACTIVE=%s\nSERVICE_USER=%s\nSERVICE_MAINPID=%s\nCANONICAL_AGENT_COUNT=%s\nNONCANONICAL_AGENT_COUNT=%s\nAUTH_REQUIRED=%s\nPROVIDER_CONNECTED=%s\n' "$device" "${enabled:-unknown}" "${active:-unknown}" "${user:-unknown}" "${mainpid:-0}" "$canonical" "$noncanonical" "$auth" "$provider"
           '''
               if peer:
