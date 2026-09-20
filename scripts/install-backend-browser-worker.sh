@@ -30,7 +30,10 @@ fi
 
 current=""
 if [ -f "$ROOT/node_modules/playwright-core/package.json" ]; then
-  current="$(node -p "require('$ROOT/node_modules/playwright-core/package.json').version" 2>/dev/null || true)"
+  current_value=""
+  if current_value="$(node -p "require('$ROOT/node_modules/playwright-core/package.json').version" 2>/dev/null)"; then
+    current="$current_value"
+  fi
 fi
 if [ "$current" != "$PW_VERSION" ]; then
   npm install --prefix "$ROOT" --no-audit --no-fund --omit=dev --save-exact "playwright-core@$PW_VERSION"
@@ -46,8 +49,18 @@ fi
 command -v Xvfb >/dev/null
 
 marker="# SHOPVIVALIZ_BROWSER_WORKER_V1"
-existing="$(crontab -l 2>/dev/null || true)"
-clean="$(printf '%s\n' "$existing" | grep -vF "$marker" | grep -vF "$ROOT/supervisor.sh ensure" | grep -vF "$ROOT/supervisor.sh start" || true)"
+existing=""
+if current_crontab="$(crontab -l 2>/dev/null)"; then
+  existing="$current_crontab"
+else
+  rc=$?
+  test "$rc" -eq 1 || exit "$rc"
+fi
+clean="$(printf '%s\n' "$existing" | awk -v marker="$marker" -v root="$ROOT" '
+  index($0, marker) == 0 &&
+  index($0, root "/supervisor.sh ensure") == 0 &&
+  index($0, root "/supervisor.sh start") == 0 { print }
+')"
 {
   printf '%s\n' "$clean"
   printf '%s\n' "$marker"
