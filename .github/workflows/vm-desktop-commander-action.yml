@@ -68,7 +68,7 @@ jobs:
               COMMAND='set -Eeuo pipefail; active=$(systemctl is-active shopvivaliz-desktop-commander.service 2>/dev/null || true); if test "$active" = active; then printf "RESTART_SKIPPED=healthy\n"; else sudo systemctl restart shopvivaliz-desktop-commander.service; sleep 5; systemctl is-active --quiet shopvivaliz-desktop-commander.service || test -f "$HOME/.desktop-commander-device/auth-required.cooldown"; fi'
               ;;
             kill_for_recovery_test)
-              COMMAND='set -Eeuo pipefail; sudo systemctl stop shopvivaliz-desktop-commander.service; if pkill -f "[n]pm exec @wonderwhy-er/desktop-commander@0.2.48 remote --persist-session" 2>/dev/null; then :; else rc=$?; test "$rc" -eq 1; fi; echo KILL_FOR_RECOVERY_TEST=true'
+              COMMAND='set -Eeuo pipefail; sudo systemctl stop shopvivaliz-desktop-commander.service; if pkill -f "[d]esktop-commander.*remote.*--persist-session" 2>/dev/null; then :; else rc=$?; test "$rc" -eq 1; fi; echo KILL_FOR_RECOVERY_TEST=true'
               ;;
             recover_session)
               COMMAND="set -Eeuo pipefail; tmp=\$(mktemp); trap 'rm -f \$tmp' EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/$GITHUB_SHA/scripts/vm-desktop-commander-recover-session.sh -o \"\$tmp\"; sudo bash \"\$tmp\""
