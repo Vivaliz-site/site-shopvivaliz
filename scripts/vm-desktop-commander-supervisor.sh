@@ -9,7 +9,7 @@ SESSION_BACKUP_FILE="$DEVICE_DIR/session-backup/device.json"
 COOLDOWN_FILE="$DEVICE_DIR/auth-required.cooldown"
 CONNECTED_MARKER="$DEVICE_DIR/provider-connected.marker"
 LOCK_FILE="$DEVICE_DIR/remote-owner.lock"
-PACKAGE='@wonderwhy-er/desktop-commander@0.2.48'
+PACKAGE='@wonderwhy-er/desktop-commander@0.2.51'
 NPX_BIN="${NPX_BIN:-npx}"
 NODE_BIN="${NODE_BIN:-node}"
 SESSION_PATCHER="${SESSION_PATCHER:-/usr/local/lib/shopvivaliz/patch-desktop-commander-session-persistence.mjs}"
@@ -42,12 +42,13 @@ if [[ ! -f "$SESSION_PATCHER" ]]; then
   exit 22
 fi
 
-DC_BIN="$("$NPX_BIN" --yes --package "$PACKAGE" sh -c 'command -v desktop-commander')"
-if [[ -z "$DC_BIN" || ! -x "$DC_BIN" ]]; then
-  echo 'SESSION_REFRESH_PATCH=false reason=package_binary_missing'
+PINNED_ROOT="${DESKTOP_COMMANDER_PINNED_ROOT:-$HOME_DIR/.local/share/shopvivaliz/desktop-commander/0.2.51}"
+DC_PACKAGE_ROOT="$PINNED_ROOT/node_modules/@wonderwhy-er/desktop-commander"
+DC_BIN="$DC_PACKAGE_ROOT/dist/index.js"
+if [[ ! -f "$DC_BIN" ]]; then
+  echo 'SESSION_REFRESH_PATCH=false reason=pinned_binary_missing'
   exit 22
 fi
-DC_PACKAGE_ROOT="$(cd "$(dirname "$(readlink -f "$DC_BIN")")/.." && pwd -P)"
 "$NODE_BIN" "$SESSION_PATCHER" "$DC_PACKAGE_ROOT"
 
 exec 9>"$LOCK_FILE"
@@ -67,7 +68,7 @@ device_state_newer_than_cooldown() {
 }
 
 find_competing_remote_sessions() {
-  pgrep -f 'npm exec @wonderwhy-er/desktop-commander@0\.2\.47 remote --persist-session' 2>/dev/null || :
+  pgrep -f 'node_modules/.bin/desktop-commander remote --persist-session|@wonderwhy-er/desktop-commander@[^ ]+ remote --persist-session|@wonderwhy-er/desktop-commander/dist/index\.js remote --persist-session' 2>/dev/null || :
 }
 
 terminate_process_tree() {
@@ -143,7 +144,7 @@ ready_is_current() {
 }
 
 echo "REMOTE_OWNER_PID=$REMOTE_OWNER_PID REMOTE_OWNER_SESSION=$REMOTE_OWNER_SESSION"
-setsid "$NPX_BIN" --yes "$PACKAGE" remote --persist-session >"$tmp" 2>&1 &
+setsid "$NODE_BIN" "$DC_BIN" remote --persist-session >"$tmp" 2>&1 &
 child=$!
 auth_required=0
 while kill -0 "$child" 2>/dev/null; do
