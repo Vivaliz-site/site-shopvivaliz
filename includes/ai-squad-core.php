@@ -15,6 +15,15 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/config/bootstrap-env.php';
 
+function svais_non_fable_model(string $envName, string $default): string
+{
+    $candidate = trim((string)(getenv($envName) ?: ''));
+    if ($candidate === '' || stripos($candidate, 'fable') !== false) {
+        return $default;
+    }
+    return $candidate;
+}
+
 function svais_profile_catalog(): array
 {
     return [
@@ -28,7 +37,7 @@ function svais_profile_catalog(): array
                 'max_output_tokens' => 7000,
             ],
             'anthropic' => [
-                'model' => getenv('AI_SQUAD_ANTHROPIC_MODEL') ?: 'claude-opus-5',
+                'model' => svais_non_fable_model('AI_SQUAD_ANTHROPIC_MODEL', 'claude-opus-5'),
                 'effort' => 'xhigh',
                 'max_tokens' => 7000,
                 'web_search_max_uses' => 10,
@@ -49,7 +58,7 @@ function svais_profile_catalog(): array
                 'max_output_tokens' => 4500,
             ],
             'anthropic' => [
-                'model' => getenv('AI_SQUAD_ANTHROPIC_BALANCED_MODEL') ?: 'claude-sonnet-5',
+                'model' => svais_non_fable_model('AI_SQUAD_ANTHROPIC_BALANCED_MODEL', 'claude-sonnet-5'),
                 'effort' => 'high',
                 'max_tokens' => 4500,
                 'web_search_max_uses' => 6,
@@ -70,7 +79,7 @@ function svais_profile_catalog(): array
                 'max_output_tokens' => 2500,
             ],
             'anthropic' => [
-                'model' => getenv('AI_SQUAD_ANTHROPIC_FAST_MODEL') ?: 'claude-haiku-4-5-20251001',
+                'model' => svais_non_fable_model('AI_SQUAD_ANTHROPIC_FAST_MODEL', 'claude-haiku-4-5-20251001'),
                 'effort' => 'low',
                 'max_tokens' => 2500,
                 'web_search_max_uses' => 0,
