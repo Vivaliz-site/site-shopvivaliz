@@ -38,8 +38,8 @@ $requiredWorkflow = [
     'create-port-forwarding',
     '--target-port 22',
     'BASTION_ALLOWLIST_RESTORED=PASS',
-    "sudo -n bash '$remote/scripts/install-backend-browser-host.sh'",
-    "sudo -n bash '$remote/scripts/backend-browser-host-action.sh'",
+    'sudo -n bash \'$remote/scripts/install-backend-browser-host.sh\'',
+    'sudo -n bash \'$remote/scripts/backend-browser-host-action.sh\'',
 ];
 foreach ($requiredWorkflow as $needle) {
     if (!str_contains($workflow, $needle)) {
