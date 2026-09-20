@@ -276,8 +276,8 @@ jobs:
               echo "BASTION_ALLOWLIST_RESTORED=PASS"
             fi
           fi
-          test -f "$HOME/.ssh/vmkey" && shred -u "$HOME/.ssh/vmkey"
-          test -f "$HOME/.ssh/bastion_session_key" && shred -u "$HOME/.ssh/bastion_session_key"
-          test -f "${OCI_KEY_FILE:-}" && shred -u "$OCI_KEY_FILE"
-          test -f "${OCI_CONFIG_FILE:-}" && shred -u "$OCI_CONFIG_FILE"
+          if [ -f "$HOME/.ssh/vmkey" ]; then shred -u "$HOME/.ssh/vmkey"; fi
+          if [ -f "$HOME/.ssh/bastion_session_key" ]; then shred -u "$HOME/.ssh/bastion_session_key"; fi
+          if [ -n "${OCI_KEY_FILE:-}" ] && [ -f "$OCI_KEY_FILE" ]; then shred -u "$OCI_KEY_FILE"; fi
+          if [ -n "${OCI_CONFIG_FILE:-}" ] && [ -f "$OCI_CONFIG_FILE" ]; then shred -u "$OCI_CONFIG_FILE"; fi
           rm -f "$HOME/.ssh/bastion_session_key.pub" "$HOME/.ssh/known_hosts"             "$HOME/.ssh/bastion_known_hosts" "$HOME/.ssh/config"             "$RUNNER_TEMP/bastion-command.b64" "$RUNNER_TEMP/browser-host.tgz"
