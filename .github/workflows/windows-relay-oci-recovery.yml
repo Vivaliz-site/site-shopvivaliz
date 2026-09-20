@@ -55,8 +55,9 @@ jobs:
           printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
           printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
-          ssh-keygen -y -f "$HOME/.ssh/vmkey" > "$HOME/.ssh/vmkey.pub"
-          chmod 600 "$HOME/.ssh/vmkey.pub"
+
+          ssh-keygen -q -t rsa -b 2048 -N '' -f "$HOME/.ssh/bastion_session_key"
+          chmod 600 "$HOME/.ssh/bastion_session_key" "$HOME/.ssh/bastion_session_key.pub"
 
       - name: Resolve backend and active OCI Bastion
         shell: bash
@@ -175,10 +176,18 @@ jobs:
           test -s "$HOME/.ssh/bastion_known_hosts"
           chmod 600 "$HOME/.ssh/bastion_known_hosts"
 
+          cat > "$HOME/.ssh/config" <<EOF
+          Host $bastion_host
+            BatchMode yes
+            ExitOnForwardFailure yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile $HOME/.ssh/bastion_known_hosts
+          EOF
+          chmod 600 "$HOME/.ssh/config"
+
           local_port=32238
-          tunnel_command="${metadata_command//<privateKey>/$HOME/.ssh/vmkey}"
+          tunnel_command="${metadata_command//<privateKey>/$HOME/.ssh/bastion_session_key}"
           tunnel_command="${tunnel_command//<localPort>/$local_port}"
-          tunnel_command="${tunnel_command/#ssh /ssh -o BatchMode=yes -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/bastion_known_hosts }"
           eval "$tunnel_command" &
           tunnel_pid=$!
           printf 'BASTION_TUNNEL_PID=%s\n' "$tunnel_pid" >> "$GITHUB_ENV"
@@ -309,6 +318,7 @@ jobs:
           fi
 
           if [ -f "$HOME/.ssh/vmkey" ]; then shred -u "$HOME/.ssh/vmkey"; fi
-          rm -f "$HOME/.ssh/vmkey.pub" "$HOME/.ssh/known_hosts" "$HOME/.ssh/bastion_known_hosts" "$RUNNER_TEMP/bastion-command.b64"
+          if [ -f "$HOME/.ssh/bastion_session_key" ]; then shred -u "$HOME/.ssh/bastion_session_key"; fi
+          rm -f "$HOME/.ssh/bastion_session_key.pub" "$HOME/.ssh/known_hosts" "$HOME/.ssh/bastion_known_hosts" "$HOME/.ssh/config" "$RUNNER_TEMP/bastion-command.b64"
           if [ -n "${OCI_KEY_FILE:-}" ] && [ -f "$OCI_KEY_FILE" ]; then shred -u "$OCI_KEY_FILE"; fi
           if [ -n "${OCI_CONFIG_FILE:-}" ] && [ -f "$OCI_CONFIG_FILE" ]; then shred -u "$OCI_CONFIG_FILE"; fi
