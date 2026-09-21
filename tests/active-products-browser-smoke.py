@@ -20,15 +20,18 @@ def emit(result, code):
 
 
 def chrome_path():
-    candidates = (
-        r'C:\Program Files\Google\Chrome\Application\chrome.exe',
-        r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
-        os.path.expandvars(r'%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe'),
-    )
-    for candidate in candidates:
-        if Path(candidate).is_file():
-            return candidate
-    raise FileNotFoundError('chrome_missing')
+    explicit = os.environ.get('SV_BROWSER_EXECUTABLE', '').strip()
+    if explicit and Path(explicit).is_file():
+        return explicit
+    roots = [Path('/home/ubuntu/.cache/ms-playwright'), Path.home() / '.cache' / 'ms-playwright']
+    candidates = []
+    for browser_root in roots:
+        if browser_root.is_dir():
+            candidates.extend(browser_root.glob('chromium-*/chrome-linux/chrome'))
+    for candidate in sorted(candidates, reverse=True):
+        if candidate.is_file():
+            return str(candidate)
+    raise FileNotFoundError('backend_vm_chromium_missing')
 
 
 def get_json(request, url):

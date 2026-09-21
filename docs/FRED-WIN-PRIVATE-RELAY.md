@@ -1,4 +1,5 @@
 # Fred-Win — relay privado canônico e protocolo de status
+> **BROWSER PROIBIDO NESTE HOST:** este relay existe para terminal, arquivos, diagnóstico e outras operações Windows não-browser. Navegação, Chrome/Edge/Opera, Playwright/Selenium/CDP, OAuth visual, MFA/CAPTCHA e validação visual devem usar exclusivamente `always-free-arm-1787907847-26` via Browser Worker.
 
 **Efetivo:** 2026-08-18  
 **Escopo:** qualquer agente, workflow ou operador que precise acessar, diagnosticar ou declarar o estado do Fred-Win/MCP.
@@ -97,7 +98,7 @@ Nenhum dos itens abaixo autoriza afirmar que o Fred-Win está inativo:
 - o conector Desktop Commander/Remote Desktop não aparecer na sessão atual;
 - a sessão do chat não enxergar diretamente a pasta Downloads do Windows;
 - não existir workflow recente;
-- o navegador não conseguir abrir `127.0.0.1:5557` diretamente;
+- a ferramenta atual não conseguir alcançar `127.0.0.1:5557` diretamente;
 - não ser possível observar o processo Windows a partir da sessão atual;
 - uma ferramenta preferida estar indisponível;
 - não ter sido executado o `health` canônico.
