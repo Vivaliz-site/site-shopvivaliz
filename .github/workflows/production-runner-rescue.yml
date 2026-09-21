@@ -20,75 +20,142 @@ jobs:
     environment: Production
     timeout-minutes: 8
     env:
-      VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
-      VM_USER: ${{ secrets.SHOPVIVALIZ_VM_USER || 'ubuntu' }}
+      OCI_PROFILE: AGENTS
+      SITE_INSTANCE_NAME: shopvivaliz-free-a1
 
     steps:
-      - name: Configure pinned production SSH
+      - name: Configure protected OCI profile
         env:
-          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
-          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          test -n "${VM_KEY:-}"
-          test -n "${VM_HOST:-}"
-          test -n "${VM_USER:-}"
-          test -n "${VM_HOSTS:-}"
-          [[ "$VM_HOST" =~ ^[A-Za-z0-9._:-]+$ ]]
-          [[ "$VM_USER" =~ ^[A-Za-z0-9._-]+$ ]]
-          install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
-          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!name:-}" || { echo "::error::Required OCI rescue secret missing: $name"; exit 1; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 600 "$OCI_KEY_FILE"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
 
-      - name: Restart idle production runner listener
+      - name: Install OCI SDK
         shell: bash
         run: |
           set -Eeuo pipefail
-          ssh \
-            -o BatchMode=yes \
-            -o ConnectTimeout=10 \
-            -o ServerAliveInterval=15 \
-            -o ServerAliveCountMax=2 \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/vmkey" \
-            "$VM_USER@$VM_HOST" 'bash -s' <<'REMOTE'
+          python3 -m pip install --disable-pip-version-check --quiet oci
+
+      - name: Restart idle production runner listener with OCI Run Command
+        shell: bash
+        run: |
           set -Eeuo pipefail
+          python3 - <<'PY'
+          import os
+          import time
+          import oci
+
+          cfg = oci.config.from_file(os.environ['OCI_CONFIG_FILE'], os.environ['OCI_PROFILE'])
+          search = oci.resource_search.ResourceSearchClient(cfg)
+          compute = oci.core.ComputeClient(cfg)
+          agent = oci.compute_instance_agent.ComputeInstanceAgentClient(cfg)
+          models = oci.compute_instance_agent.models
+
+          query = "query instance resources where displayName = '" + os.environ['SITE_INSTANCE_NAME'] + "'"
+          result = search.search_resources(
+              oci.resource_search.models.StructuredSearchDetails(query=query, type='Structured')
+          ).data.items
+          if len(result) != 1:
+              raise SystemExit(f'Expected exactly one site instance, found {len(result)}')
+          instance_id = result[0].identifier
+          instance = compute.get_instance(instance_id).data
+          if instance.display_name != os.environ['SITE_INSTANCE_NAME'] or instance.lifecycle_state != 'RUNNING':
+              raise SystemExit('OCI site identity/lifecycle mismatch')
+
+          command = r'''set -Eeuo pipefail
           service='shopvivaliz-actions-runner.service'
-          worker_pattern='^/home/ubuntu/actions-runner-shopvivaliz/bin/Runner\.Worker( |$)'
-          worker_count="$(ps -eo args= | awk -v pattern="$worker_pattern" '$0 ~ pattern { count++ } END { print count + 0 }')"
+          worker_count="$(pgrep -fc '^/home/ubuntu/actions-runner-shopvivaliz/bin/Runner.Worker( |$)')"
           printf 'RUNNER_WORKER_COUNT=%s\n' "$worker_count"
           if [ "$worker_count" -ne 0 ]; then
             echo 'RUNNER_RESCUE=refused_worker_active'
             exit 23
           fi
-
-          uid="$(id -u)"
-          export XDG_RUNTIME_DIR="/run/user/$uid"
-          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
-          test -S "$XDG_RUNTIME_DIR/bus"
-          systemctl --user is-enabled --quiet "$service"
-          systemctl --user restart "$service"
-
+          uid="$(id -u ubuntu)"
+          runtime="/run/user/$uid"
+          bus="unix:path=$runtime/bus"
+          test -S "$runtime/bus"
+          sudo -u ubuntu env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user is-enabled --quiet "$service"
+          sudo -u ubuntu env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user restart "$service"
           active=false
           for _ in $(seq 1 12); do
-            if systemctl --user is-active --quiet "$service"; then
+            if sudo -u ubuntu env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user is-active --quiet "$service"; then
               active=true
               break
             fi
             sleep 2
           done
           test "$active" = true
-          mainpid="$(systemctl --user show -p MainPID --value "$service")"
+          mainpid="$(sudo -u ubuntu env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user show -p MainPID --value "$service")"
           [[ "$mainpid" =~ ^[0-9]+$ ]]
           test "$mainpid" -gt 1
           echo 'RUNNER_RESCUE=listener_restarted'
           echo 'RUNNER_SERVICE_ACTIVE=true'
-          REMOTE
+          '''
 
-      - name: Cleanup SSH material
+          details = models.CreateInstanceAgentCommandDetails(
+              compartment_id=instance.compartment_id,
+              execution_time_out_in_seconds=120,
+              target=models.InstanceAgentCommandTarget(instance_id=instance_id),
+              content=models.InstanceAgentCommandContent(
+                  source=models.InstanceAgentCommandSourceViaTextDetails(source_type='TEXT', text=command),
+                  output=models.InstanceAgentCommandOutputViaTextDetails(output_type='TEXT'),
+              ),
+              display_name='shopvivaliz-runner-listener-breakglass',
+          )
+          command_id = agent.create_instance_agent_command(details).data.id
+          execution = None
+          for _ in range(30):
+              execution = agent.get_instance_agent_command_execution(
+                  instance_agent_command_id=command_id,
+                  instance_id=instance_id,
+              ).data
+              if execution.lifecycle_state in {'SUCCEEDED', 'FAILED', 'TIMED_OUT', 'CANCELED'}:
+                  break
+              time.sleep(4)
+          if execution is None:
+              raise SystemExit('OCI Run Command produced no execution')
+          output = execution.content
+          text = getattr(output, 'text', '') or ''
+          exit_code = int(getattr(output, 'exit_code', 1))
+          for marker in ('RUNNER_WORKER_COUNT=', 'RUNNER_RESCUE=', 'RUNNER_SERVICE_ACTIVE='):
+              for line in text.splitlines():
+                  if line.startswith(marker):
+                      print(line)
+          if 'RUNNER_RESCUE=refused_worker_active' in text:
+              raise SystemExit(23)
+          if execution.lifecycle_state != 'SUCCEEDED' or exit_code != 0:
+              raise SystemExit('OCI Run Command runner rescue failed')
+          if 'RUNNER_RESCUE=listener_restarted' not in text or 'RUNNER_SERVICE_ACTIVE=true' not in text:
+              raise SystemExit('Runner listener restart was not verified')
+          PY
+
+      - name: Cleanup OCI credentials
         if: always()
         shell: bash
-        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+        run: |
+          set +e
+          test -f "${OCI_KEY_FILE:-}" && shred -u "$OCI_KEY_FILE"
+          test -f "${OCI_CONFIG_FILE:-}" && shred -u "$OCI_CONFIG_FILE"
