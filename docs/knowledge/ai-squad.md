@@ -22,6 +22,8 @@ A UI mostra a interação em fases:
 ## Segurança
 
 - A UI exige sessão administrativa.
+- Para agentes, essa sessão administrativa deve ser criada pelo login nativo `/auth/login.php` com a credencial canônica do arquivo privado `admsite.txt` no Google Drive autorizado; não usar Google OAuth como fluxo operacional do admin.
+- Nunca versionar, imprimir ou copiar o conteúdo de `admsite.txt`; a documentação registra apenas a localização segura.
 - POST da API aceita sessão administrativa com CSRF ou chave operacional já provisionada.
 - Nenhuma chave de provider é enviada ao navegador.
 - A UI identifica `direto` ou `via OpenRouter`; fallback de transporte nunca é apresentado como troca silenciosa de modelo.
