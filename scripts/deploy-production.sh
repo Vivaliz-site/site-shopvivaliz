@@ -235,8 +235,15 @@ reconcile_ai_squad_claude_bridge_unit() {
     log ERROR "Falha ao habilitar bridge Claude"
     return 1
   fi
-  if ! sudo systemctl restart "$service"; then
-    log ERROR "Falha ao reiniciar bridge Claude"
+  # A previous unmanaged bridge can keep 17657 bound while systemd loops on
+  # EADDRINUSE. Stop the managed unit first, evict any stale listener, then
+  # start exactly one systemd-owned process.
+  sudo systemctl stop "$service" >> "$LOG_FILE" 2>&1 || true
+  if command -v fuser >/dev/null 2>&1; then
+    sudo fuser -k 17657/tcp >> "$LOG_FILE" 2>&1 || true
+  fi
+  if ! sudo systemctl start "$service"; then
+    log ERROR "Falha ao iniciar bridge Claude"
     return 1
   fi
   if ! sudo systemctl is-active --quiet "$service"; then
@@ -248,7 +255,9 @@ reconcile_ai_squad_claude_bridge_unit() {
   local body
   for _ in $(seq 1 20); do
     if body="$(curl -fsS --max-time 3 "$health_url" 2>/dev/null)"; then
-      if printf '%s' "$body" | grep -q '"endpoint":"ai-squad-claude-bridge"'; then
+      if printf '%s' "$body" | grep -q '"endpoint":"ai-squad-claude-bridge"' \
+        && printf '%s' "$body" | grep -q '"ok":true' \
+        && printf '%s' "$body" | grep -q '"authenticated":true'; then
         return 0
       fi
     fi
