@@ -41,3 +41,8 @@ grep -q 'xhost "+SI:localuser:$GUI_CONTROL_USER"' "$setup"
 grep -q 'xhost "-SI:localuser:$GUI_CONTROL_USER"' "$setup"
 grep -q 'anydesk_control_grant' "$workflow"
 grep -q 'anydesk_control_revoke' "$workflow"
+
+grep -q 'anydesk_console_unlock' "$workflow"
+grep -q 'ANYDESK_CONSOLE_UNLOCK=PASS' "$setup"
+grep -q 'loginctl unlock-session' "$setup"
+grep -q 'loginctl activate' "$setup"

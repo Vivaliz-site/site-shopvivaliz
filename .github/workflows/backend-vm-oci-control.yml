@@ -31,6 +31,9 @@ on:
           - anydesk_install
           - anydesk_status
           - anydesk_launch
+          - anydesk_control_grant
+          - anydesk_control_revoke
+          - anydesk_console_unlock
           - anydesk_native_prepare
           - anydesk_native_status
           - anydesk_password_from_clipboard
@@ -97,6 +100,7 @@ jobs:
               "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp",
               "rdp_enrollment_publish", "rdp_enrollment_cleanup",
               "anydesk_install", "anydesk_status", "anydesk_launch",
+              "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock",
               "anydesk_native_prepare", "anydesk_native_status",
               "anydesk_password_from_clipboard", "anydesk_native_cleanup",
           }
@@ -339,7 +343,11 @@ jobs:
               path_in_use() {
                 target="$1"
                 for ref in /proc/[0-9]*/cwd /proc/[0-9]*/exe /proc/[0-9]*/fd/*; do
-                  resolved="$(readlink -f "$ref" 2>/dev/null || true)"
+                  if resolved="$(readlink -f "$ref" 2>/dev/null)"; then
+                    :
+                  else
+                    continue
+                  fi
                   case "$resolved" in "$target"|"$target"/*) return 0 ;; esac
                 done
                 return 1
@@ -432,6 +440,15 @@ jobs:
               ;;
             anydesk_launch)
               "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-backend.sh -o "$tmp"; sudo -n bash "$tmp" launch'
+              ;;
+            anydesk_control_grant)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-backend.sh -o "$tmp"; sudo -n bash "$tmp" control_grant'
+              ;;
+            anydesk_control_revoke)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-backend.sh -o "$tmp"; sudo -n bash "$tmp" control_revoke'
+              ;;
+            anydesk_console_unlock)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-backend.sh -o "$tmp"; sudo -n bash "$tmp" console_unlock'
               ;;
             anydesk_native_prepare)
               "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-native-control.sh -o "$tmp"; sudo -n bash "$tmp" prepare'

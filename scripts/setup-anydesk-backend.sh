@@ -176,6 +176,28 @@ launch_gui() {
   echo "ANYDESK_LAUNCH=PASS"
 }
 
+console_unlock() {
+  local session_id locked active
+  session_id="$(loginctl list-sessions --no-legend | awk -v user="$GUI_USER" '$3 == user && $4 == "seat0" {print $1; exit}')"
+  if [ -z "$session_id" ]; then
+    echo "ANYDESK_ERROR=console_session_missing" >&2
+    exit 35
+  fi
+  loginctl unlock-session "$session_id"
+  loginctl activate "$session_id"
+  sleep 1
+  locked="$(loginctl show-session "$session_id" -p LockedHint --value 2>/dev/null)"
+  active="$(loginctl show-seat seat0 -p ActiveSession --value 2>/dev/null)"
+  echo "ANYDESK_CONSOLE_SESSION=$session_id"
+  echo "ANYDESK_CONSOLE_LOCKED=$locked"
+  echo "ANYDESK_CONSOLE_ACTIVE=$active"
+  if [ "$locked" = "yes" ] || [ "$active" != "$session_id" ]; then
+    echo "ANYDESK_ERROR=console_unlock_not_effective" >&2
+    exit 36
+  fi
+  echo "ANYDESK_CONSOLE_UNLOCK=PASS"
+}
+
 console_control() {
   local mode="${1:-grant}" tray_pid env_dump display xauthority
   if tray_pid="$(pgrep -u "$GUI_USER" -f '/usr/bin/anydesk --tray' | head -1)"; then
@@ -218,6 +240,7 @@ case "$ACTION" in
   launch) launch_gui ;;
   control_grant) console_control grant ;;
   control_revoke) console_control revoke ;;
+  console_unlock) console_unlock ;;
   *)
     echo "ANYDESK_ERROR=unsupported_action" >&2
     exit 64
