@@ -1,6 +1,9 @@
 {
   "action": "amazon_support_reply",
-  "case_ids": ["22153077391", "22153259501"],
-  "requested_at": "2026-09-21T23:10:00Z",
-  "reason": "reply to the two Seller Support cases opened by ShopVivaliz and publish sanitized read-back evidence"
+  "case_ids": [
+    "22153077391",
+    "22153259501"
+  ],
+  "requested_at": "2026-09-21T23:13:00Z",
+  "reason": "reply to the two existing Seller Support cases through the canonical Seller Central CDP and publish sanitized read-back evidence"
 }
