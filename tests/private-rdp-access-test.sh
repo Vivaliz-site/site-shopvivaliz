@@ -19,6 +19,8 @@ fi
 grep -q 'rdp_prepare' "$workflow"
 grep -q 'rdp_status' "$workflow"
 grep -q 'rdp_enable_otp' "$workflow"
+grep -q 'BASTION_TUNNEL_RETRY_MAX=6' "$workflow"
+grep -q 'bastion_tunnel_ready_attempt' "$workflow"
 grep -q 'rdp_prepare' "$private_workflow"
 grep -q 'rdp_status' "$private_workflow"
 grep -q 'rdp_otp_prepare' "$private_workflow"

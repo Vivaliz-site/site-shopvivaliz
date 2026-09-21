@@ -21,7 +21,6 @@ jobs:
           Write-Host "HOSTNAME=$env:COMPUTERNAME"
           Write-Host "USERNAME=$env:USERNAME"
           Get-Date -Format o
-          Get-Process -Name opera* -ErrorAction SilentlyContinue | Select-Object -First 5 ProcessName,Id,Path
 
       - name: Audit local OpenAI credential presence without values
         shell: powershell
