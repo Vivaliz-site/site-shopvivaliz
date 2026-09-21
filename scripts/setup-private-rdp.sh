@@ -7,6 +7,7 @@ RDP_USER="fredrdp"
 BACKEND_IP="10.0.1.38"
 STATE_DIR="/var/lib/shopvivaliz-private-rdp"
 QR_PATH="/home/ubuntu/shopvivaliz-rdp-otp-enroll.png"
+PASSWORD_PATH="/home/ubuntu/shopvivaliz-rdp-password.txt"
 PAM_FILE="/etc/pam.d/xrdp-sesman"
 XRDP_INI="/etc/xrdp/xrdp.ini"
 
@@ -54,6 +55,7 @@ print_status() {
   echo "FREDRDP_PASSWORD_STATE=${pw:-unknown}"
   echo "OTP_SECRET_READY=$([ -s "/home/$RDP_USER/.google_authenticator" ] && echo true || echo false)"
   echo "OTP_QR_READY=$([ -s "$QR_PATH" ] && echo true || echo false)"
+  echo "RDP_PASSWORD_FILE_READY=$([ -s "$PASSWORD_PATH" ] && echo true || echo false)"
   ss -ltn 2>/dev/null | awk '$4 ~ /:3389$/ {print "XRDP_LISTEN="$4}'
 }
 
@@ -77,7 +79,7 @@ prepare() {
   if ! tailscale set --operator=ubuntu >/dev/null 2>&1; then
     echo "PRIVATE_RDP_WARN=operator_not_set" >&2
   fi
-  timedatectl show -p NTPSynchronized --value | grep -qx true || {
+  timedatectl show -p NTPSynchronized --value | grep -qxE '(yes|true)' || {
     echo "PRIVATE_RDP_ERROR=time_not_synchronized" >&2
     exit 23
   }
@@ -126,7 +128,29 @@ PY
   chmod 600 "$QR_PATH"
   unset secret uri
 
+  local pw generated_password password_tmp
+  if ! pw="$(password_state)"; then
+    pw=""
+  fi
+  if [ "$pw" != "P" ] || [ ! -s "$PASSWORD_PATH" ]; then
+    generated_password="$(openssl rand -base64 24 | tr -d '\n')"
+    password_tmp="$PASSWORD_PATH.tmp.$"
+    install -m 600 -o ubuntu -g ubuntu /dev/null "$password_tmp"
+    printf '%s\n' "$generated_password" > "$password_tmp"
+    if ! printf '%s:%s\n' "$RDP_USER" "$generated_password" | chpasswd; then
+      rm -f "$password_tmp"
+      unset generated_password
+      echo "PRIVATE_RDP_ERROR=password_set_failed" >&2
+      exit 29
+    fi
+    mv -f "$password_tmp" "$PASSWORD_PATH"
+    chown ubuntu:ubuntu "$PASSWORD_PATH"
+    chmod 600 "$PASSWORD_PATH"
+    unset generated_password
+  fi
+
   echo "OTP_ENROLLMENT_QR=$QR_PATH"
+  echo "RDP_PASSWORD_FILE_READY=$([ -s "$PASSWORD_PATH" ] && echo true || echo false)"
   echo "PRIVATE_RDP_OTP_PREPARE=PASS"
 }
 
@@ -151,6 +175,10 @@ enable_otp() {
     echo "FREDRDP_PASSWORD_STATE=${pw:-unknown}"
     exit 27
   fi
+  if [ ! -s "$PASSWORD_PATH" ]; then
+    echo "PRIVATE_RDP_ERROR=password_file_missing" >&2
+    exit 28
+  fi
 
   backup_dir="$STATE_DIR/backup-$(date -u +%Y%m%dT%H%M%SZ)"
   mkdir -p "$backup_dir"
@@ -167,6 +195,20 @@ account required pam_succeed_if.so user = fredrdp
 @include common-session
 EOF
   chmod 644 "$PAM_FILE"
+
+  local secret password code auth_token
+  secret="$(head -n1 "/home/$RDP_USER/.google_authenticator")"
+  password="$(cat "$PASSWORD_PATH")"
+  code="$(oathtool --totp -b "$secret")"
+  auth_token="${password}${code}"
+  if ! printf '%s\n' "$auth_token" | pamtester xrdp-sesman "$RDP_USER" authenticate >/dev/null 2>&1; then
+    unset secret password code auth_token
+    cp -a "$backup_dir/xrdp-sesman" "$PAM_FILE"
+    echo "PRIVATE_RDP_ERROR=pam_self_test_failed" >&2
+    exit 30
+  fi
+  unset secret password code auth_token
+  echo "PRIVATE_RDP_PAM_AUTH=PASS"
 
   python3 - "$XRDP_INI" <<'PY'
 from pathlib import Path
