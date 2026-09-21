@@ -36,6 +36,7 @@ on:
           - anydesk_launch
           - anydesk_control_grant
           - anydesk_control_revoke
+          - anydesk_console_unlock
       reason:
         description: Audit reason
         required: true
@@ -88,7 +89,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -223,13 +224,14 @@ jobs:
               esac
               "${SSH[@]}" "tmp=\$(mktemp); trap 'rm -f \"\$tmp\"' EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-private-rdp.sh -o \"\$tmp\"; sudo -n bash \"\$tmp\" $MODE"
               ;;
-            anydesk_install|anydesk_status|anydesk_launch|anydesk_control_grant|anydesk_control_revoke)
+            anydesk_install|anydesk_status|anydesk_launch|anydesk_control_grant|anydesk_control_revoke|anydesk_console_unlock)
               case "$ACTION" in
                 anydesk_install) MODE=install ;;
                 anydesk_status) MODE=status ;;
                 anydesk_launch) MODE=launch ;;
                 anydesk_control_grant) MODE=control_grant ;;
                 anydesk_control_revoke) MODE=control_revoke ;;
+                anydesk_console_unlock) MODE=console_unlock ;;
               esac
               "${SSH[@]}" "tmp=\$(mktemp); trap 'rm -f \"\$tmp\"' EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-backend.sh -o \"\$tmp\"; sudo -n bash \"\$tmp\" $MODE"
               ;;
