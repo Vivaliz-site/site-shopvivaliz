@@ -28,6 +28,10 @@ on:
           - anydesk_install
           - anydesk_status
           - anydesk_launch
+          - anydesk_native_prepare
+          - anydesk_native_status
+          - anydesk_password_from_clipboard
+          - anydesk_native_cleanup
       reason:
         description: Audit reason
         required: true
@@ -89,6 +93,8 @@ jobs:
               "browser_start", "browser_restart", "browser_stop",
               "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp",
               "anydesk_install", "anydesk_status", "anydesk_launch",
+              "anydesk_native_prepare", "anydesk_native_status",
+              "anydesk_password_from_clipboard", "anydesk_native_cleanup",
           }
           if action not in allowed:
               raise SystemExit(f"Unsupported action: {action}")
@@ -367,6 +373,18 @@ jobs:
               ;;
             anydesk_launch)
               "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-backend.sh -o "$tmp"; sudo -n bash "$tmp" launch'
+              ;;
+            anydesk_native_prepare)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-native-control.sh -o "$tmp"; sudo -n bash "$tmp" prepare'
+              ;;
+            anydesk_native_status)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-native-control.sh -o "$tmp"; sudo -n bash "$tmp" status'
+              ;;
+            anydesk_password_from_clipboard)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-native-control.sh -o "$tmp"; sudo -n bash "$tmp" password_from_clipboard'
+              ;;
+            anydesk_native_cleanup)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-native-control.sh -o "$tmp"; sudo -n bash "$tmp" cleanup'
               ;;
           esac
           echo "BACKEND_OCI_ACTION=PASS"
