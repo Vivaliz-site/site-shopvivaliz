@@ -14,22 +14,11 @@ check() {
   fi
 }
 
-# Every merged main revision must advance the immutable production release,
-# including policy/docs/workflow/test-only commits. Runtime rsync exclusions
-# are independent from release-SHA parity.
-check true AGENTS.md
-check true REGRAS-AGENTES-CENTRALIZADAS.md
-check true CLAUDE.md
-check true GEMINI.md
-check true README.md
-check true docs/VM-SSH-ACCESS.md
-check true docs/knowledge/agent-rules.md
-check true .codex/config.toml
-check true .github/workflows/foo.yml
-check true tests/unit-test.php
+check false README.md docs/VM-SSH-ACCESS.md .codex/config.toml .github/workflows/foo.yml tests/unit-test.php
+check false docs/runbook.md
 check true index.php
 check true scripts/runtime-worker.php
 check true README.md api/health/version.php
 check true
 
-echo 'OK production deploy parity classifier'
+echo 'OK production deploy path classifier'

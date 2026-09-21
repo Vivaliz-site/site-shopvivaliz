@@ -83,7 +83,6 @@ function sv_admin_sections(): array
                 ['icon' => '⚡', 'title' => 'Automacoes', 'href' => '/admin/automacao-ia-multicanal/pages/automacoes.php', 'desc' => 'Criar e administrar automacoes.'],
                 ['icon' => '🧠', 'title' => 'Orchestrator', 'href' => '/admin/orchestrator.php', 'desc' => 'Orquestrar agentes e fluxos.'],
                 ['icon' => '💬', 'title' => 'Squad Chat', 'href' => '/admin/squad-chat.php', 'desc' => 'Conversar com o conjunto de agentes.'],
-                ['icon' => '🔬', 'title' => 'AI Squad — Pesquisa e Debate', 'href' => '/admin/ai-squad.php', 'desc' => 'Pesquisa multi-provider com contraditório e consenso.', 'tone' => 'sky'],
                 ['icon' => '🩺', 'title' => 'Monitor do sistema de IA', 'href' => '/admin/ai-system-monitor.php', 'desc' => 'Acompanhar saude e uso dos servicos de IA.'],
                 ['icon' => '🧪', 'title' => 'Auditoria consolidada de IA', 'href' => '/admin/ai-provider-audit.php', 'desc' => 'Saude, cooldown, falhas e eventos dos provedores.', 'tone' => 'sky'],
                 ['icon' => '🖼️', 'title' => 'AI Image Studio — Gerar imagens', 'href' => '/admin/ai-image-studio/admin_dashboard.php', 'desc' => 'Gerar imagens reais por marketplace a partir da foto do produto.', 'tone' => 'violet'],
