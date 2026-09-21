@@ -802,6 +802,101 @@ function liz_call_openrouter(string $message, array $history, array $products, s
     return is_string($answer) && trim($answer) !== '' ? trim($answer) : null;
 }
 
+function liz_call_claude(string $message, array $history, array $products, string $apiKey, array $knowledge = [], array $orderContext = [], array $state = []): ?string
+{
+    $messages = [];
+    foreach (liz_normalized_history($history, 'assistant', $message) as $entry) {
+        $messages[] = ['role' => $entry['role'], 'content' => $entry['content']];
+    }
+    $messages[] = ['role' => 'user', 'content' => $message];
+
+    $model = liz_env('ANTHROPIC_MODEL') ?: 'claude-sonnet-5';
+    $url = 'https://api.anthropic.com/v1/messages';
+
+    $payload = [
+        'model' => $model,
+        'max_tokens' => 1200,
+        'system' => liz_system_prompt($products, $knowledge, $orderContext, $state),
+        'messages' => $messages,
+    ];
+
+    $encodedPayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (!is_string($encodedPayload)) {
+        return null;
+    }
+
+    $retryable = [429, 500, 502, 503, 504];
+    $maxAttempts = 3;
+
+    for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+        if ($attempt > 0) {
+            $backoff = (int)(500000 * (2 ** ($attempt - 1)));
+            $jitter = random_int(0, 100000);
+            usleep($backoff + $jitter);
+        }
+
+        $ch = curl_init($url);
+        if ($ch === false) {
+            return null;
+        }
+
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'x-api-key: ' . $apiKey,
+                'anthropic-version: 2024-06-01',
+            ],
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $encodedPayload,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HEADER => true,
+        ]);
+
+        $response = curl_exec($ch);
+        $curlError = curl_error($ch);
+        $curlErrno = curl_errno($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode !== 200 || !is_string($response) || $response === '') {
+            $internalCode = 'network_error';
+            if ($curlErrno === CURLE_OPERATION_TIMEDOUT) {
+                $internalCode = 'timeout';
+            } elseif ($httpCode === 400) {
+                $internalCode = 'invalid_request';
+            } elseif ($httpCode === 401 || $httpCode === 403) {
+                $internalCode = 'authentication_error';
+            } elseif ($httpCode === 429) {
+                $internalCode = 'rate_limit';
+            } elseif ($httpCode >= 500) {
+                $internalCode = 'provider_unavailable';
+            }
+            liz_log_provider_error('Claude', $httpCode, $curlError, $response, $internalCode);
+
+            if (!in_array($httpCode, $retryable, true) || $attempt === ($maxAttempts - 1)) {
+                return null;
+            }
+            continue;
+        }
+
+        [$headersPart, $bodyPart] = explode("\r\n\r\n", $response, 2);
+        $body = trim($bodyPart);
+
+        $data = json_decode($body, true);
+        if (is_array($data) && isset($data['content'][0]['text'])) {
+            $answer = $data['content'][0]['text'];
+            return is_string($answer) && trim($answer) !== '' ? trim($answer) : null;
+        }
+
+        $internalCode = isset($data['error']) ? ($data['error']['type'] ?? 'unknown_error') : 'empty_response';
+        liz_log_provider_error('Claude resposta vazia', $httpCode, $curlError, $body, $internalCode);
+        return null;
+    }
+    return null;
+}
+
 function liz_call_with_fallback(string $message, array $history, array $products, array $providers, array $knowledge = [], array $orderContext = [], array $state = []): array
 {
     foreach ($providers as $provider) {
