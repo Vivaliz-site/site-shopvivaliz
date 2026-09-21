@@ -59,6 +59,7 @@ grep -Fq '`thinkingBudget: 8192`' "$docs"
 grep -Fq 'manual_chatgpt' "$docs"
 ! grep -q "getenv('OPENAI_API_KEY')" "$core"
 ! grep -q "getenv('ANTHROPIC_API_KEY')" "$core"
+! grep -q "getenv('OPENROUTER_API_KEY')" "$core"
 grep -Fq '`AI_SQUAD_CODEX_WEB_SEARCH_MODE`' "$docs"
 grep -q 'Fable: desabilitado' "$admin"
 if grep -q 'Opus 5 primário' "$admin"; then

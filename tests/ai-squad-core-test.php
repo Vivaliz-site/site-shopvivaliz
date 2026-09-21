@@ -39,9 +39,6 @@ ais_assert(
 );
 putenv('AI_SQUAD_TEST_ANTHROPIC_MODEL');
 
-ais_assert(svais_openrouter_model_slug('openai', 'gpt-5.6-sol') === 'openai/gpt-5.6-sol', 'OpenRouter OpenAI slug mismatch');
-ais_assert(svais_openrouter_model_slug('anthropic', 'claude-opus-5') === 'anthropic/claude-opus-5', 'OpenRouter Anthropic slug mismatch');
-ais_assert(svais_openrouter_model_slug('gemini', 'gemini-3.1-pro-preview') === 'google/gemini-3.1-pro-preview', 'OpenRouter Gemini slug mismatch');
 
 $openaiFixture = [
     'output' => [[
@@ -133,7 +130,7 @@ ais_assert($order === ['codex_chatgpt', 'manual_chatgpt'], 'OpenAI transport ord
 $anthropicOrder = svais_anthropic_transport_order();
 ais_assert($anthropicOrder === ['claude_code'], 'Anthropic transport must use Claude Code account login only');
 $geminiOrder = svais_gemini_transport_order();
-ais_assert($geminiOrder === ['vertex_oauth', 'direct', 'openrouter'], 'Gemini transport order mismatch');
+ais_assert($geminiOrder === ['vertex_oauth', 'direct'], 'Gemini transport order mismatch');
 
 $anthropicCalls = [];
 $anthropicResult = svais_anthropic_dispatch(
@@ -299,6 +296,7 @@ ais_assert(!array_key_exists('vertex_oauth_configured', $state['anthropic']), 'A
 ais_assert(!array_key_exists('openrouter_fallback_configured', $state['anthropic']), 'Anthropic health must not advertise OpenRouter fallback');
 ais_assert(($state['gemini']['transport_order'] ?? []) === $geminiOrder, 'Gemini health transport order missing');
 ais_assert(array_key_exists('vertex_oauth_configured', $state['gemini']), 'Gemini health Vertex OAuth state missing');
+ais_assert(!array_key_exists('openrouter_fallback_configured', $state['gemini']), 'Gemini health must not advertise broken OpenRouter fallback');
 
 foreach (['openai', 'anthropic', 'gemini'] as $providerId) {
     ais_assert(

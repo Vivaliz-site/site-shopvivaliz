@@ -42,7 +42,7 @@ function svais_anthropic_transport_order(): array
 
 function svais_gemini_transport_order(): array
 {
-    return ['vertex_oauth', 'direct', 'openrouter'];
+    return ['vertex_oauth', 'direct'];
 }
 
 function svais_failure_class(Throwable $e): string
@@ -301,7 +301,6 @@ function svais_cycle_complete_for_consensus(array $transcript, array $providers,
 
 function svais_provider_state(array $profile): array
 {
-    $openRouterConfigured = trim((string)(getenv('OPENROUTER_API_KEY') ?: '')) !== '';
     $geminiDirectConfigured = trim((string)(getenv('GEMINI_API_KEY') ?: getenv('GOOGLE_API_KEY') ?: '')) !== '';
     $vertexConfigured = svais_google_vertex_configured();
     $codex = svais_codex_bridge_health();
@@ -311,7 +310,7 @@ function svais_provider_state(array $profile): array
     $openAiConfigured = $openAiAuthenticated;
     $anthropicConfigured = ($claude['configured'] ?? false) === true;
     $anthropicVerified = ($claude['authenticated'] ?? false) === true && ($claude['available'] ?? false) === true;
-    $geminiConfigured = $vertexConfigured || $geminiDirectConfigured || $openRouterConfigured;
+    $geminiConfigured = $vertexConfigured || $geminiDirectConfigured;
     return [
         'openai' => [
             'configured' => $openAiConfigured,
@@ -346,7 +345,6 @@ function svais_provider_state(array $profile): array
             'health' => svais_health_state(false, $geminiConfigured),
             'vertex_oauth_configured' => $vertexConfigured,
             'direct_configured' => $geminiDirectConfigured,
-            'openrouter_fallback_configured' => $openRouterConfigured,
             'transport_order' => svais_gemini_transport_order(),
             'model' => (string)$profile['gemini']['model'],
             'reasoning' => strtolower((string)$profile['gemini']['thinking_level']),
@@ -754,65 +752,9 @@ function svais_gemini_call(array $cfg, string $system, string $prompt, bool $web
     ];
 }
 
-function svais_openrouter_model_slug(string $provider, string $model): string
-{
-    if (str_contains($model, '/')) {
-        return $model;
-    }
-    return match ($provider) {
-        'openai' => 'openai/' . $model,
-        'anthropic' => 'anthropic/' . $model,
-        'gemini' => 'google/' . $model,
-        default => $model,
-    };
-}
-
-function svais_openrouter_call(string $provider, array $cfg, string $system, string $prompt, bool $webSearch): array
-{
-    $key = trim((string)(getenv('OPENROUTER_API_KEY') ?: ''));
-    if ($key === '') {
-        throw new RuntimeException('OPENROUTER_API_KEY_not_configured');
-    }
-
-    $effort = (string)($cfg['effort'] ?? strtolower((string)($cfg['thinking_level'] ?? 'high')));
-    $maxTokens = (int)($cfg['max_output_tokens'] ?? $cfg['max_tokens'] ?? 5000);
-    $payload = [
-        'model' => svais_openrouter_model_slug($provider, (string)$cfg['model']),
-        'messages' => [
-            ['role' => 'system', 'content' => $system],
-            ['role' => 'user', 'content' => $prompt],
-        ],
-        'max_tokens' => $maxTokens,
-        'reasoning' => ['effort' => strtolower($effort)],
-    ];
-    if ($webSearch) {
-        $payload['tools'] = [['type' => 'openrouter:web_search']];
-    }
-
-    $data = svais_http_json('https://openrouter.ai/api/v1/chat/completions', [
-        'Content-Type: application/json',
-        'Authorization: Bearer ' . $key,
-        'HTTP-Referer: https://shopvivaliz.com.br',
-        'X-Title: ShopVivaliz AI Squad',
-    ], $payload, 240);
-
-    $text = trim((string)($data['choices'][0]['message']['content'] ?? ''));
-    $urls = [];
-    svais_collect_urls($data, $urls);
-    return [
-        'text' => $text,
-        'sources' => array_keys($urls),
-        'usage' => $data['usage'] ?? [],
-        'model' => (string)($data['model'] ?? $payload['model']),
-        'transport' => 'openrouter',
-    ];
-}
-
 function svais_provider_model_matches(string $provider, string $requested, string $actual): bool
 {
-    if ($requested === $actual) return true;
-    if ($actual === '') return false;
-    return $actual === svais_openrouter_model_slug($provider, $requested);
+    return $requested !== '' && $requested === $actual;
 }
 
 function svais_transport_exhausted(string $provider, array $attempts): RuntimeException
@@ -884,7 +826,6 @@ function svais_gemini_dispatch(
         return match ($transport) {
             'vertex_oauth' => svais_gemini_vertex_call($cfg, $system, $prompt, $webSearch),
             'direct' => svais_gemini_call($cfg, $system, $prompt, $webSearch),
-            'openrouter' => svais_openrouter_call('gemini', $cfg, $system, $prompt, $webSearch),
             default => throw new InvalidArgumentException('unknown_gemini_transport'),
         };
     };
