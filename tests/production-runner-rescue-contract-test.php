@@ -47,6 +47,7 @@ $forbidden = [
     "actions: write",
     "eval ",
     "|| true",
+    "set +e",
 ];
 foreach ($forbidden as $needle) {
     if (strpos($text, $needle) !== false) {
