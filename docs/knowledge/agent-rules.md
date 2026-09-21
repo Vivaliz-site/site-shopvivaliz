@@ -26,6 +26,15 @@
 - Pedir intervenção humana apenas para credencial realmente revogada/ausente, CAPTCHA, recovery, consentimento novo ou outro desafio que tecnicamente não possa ser resolvido pelo fluxo seguro existente.
 - Nunca registrar em Git, docs, logs ou chat o conteúdo de senhas, tokens, chaves, seeds TOTP, OTPs ou cookies; documentar somente a localização segura e o procedimento.
 
+## Navegador e pesquisa técnica
+
+- Para tarefas ShopVivaliz, navegador de agente deve executar na VM de navegação. Não usar Opera Connector nem navegador dos hosts Windows como caminho operacional.
+- Em programação, infraestrutura, APIs, bibliotecas, frameworks, cloud, segurança e integrações externas, consultar a web quando versão/comportamento atual puder alterar a solução.
+- Priorizar documentação oficial, especificações, release notes/changelogs e repositórios oficiais; complementar com issues/fóruns técnicos apenas quando necessário e deixando claro o nível de autoridade da fonte.
+- Não assumir flags CLI, endpoints, modelos, parâmetros, limites, deprecações ou comportamento de SDK/API sem verificar quando isso for material à implementação.
+- Pesquisa web não substitui validação local: confrontar a fonte externa com versão instalada, código real, testes e runtime.
+- Se a web estiver indisponível e a informação atual for necessária, marcar como não verificada em vez de adivinhar.
+
 ## Fonte de conhecimento
 
 - Sempre usar `/docs/knowledge/` como base inicial para diagnóstico e operação.
