@@ -28,6 +28,9 @@ on:
           - rdp_status
           - rdp_otp_prepare
           - rdp_enable_otp
+          - anydesk_install
+          - anydesk_status
+          - anydesk_launch
       reason:
         description: Audit reason
         required: true
@@ -91,6 +94,8 @@ jobs:
               raise SystemExit(f"Unsupported action: {action}")
           if action.startswith("rdp_") and target != "always-free-arm-1787907847-26":
               raise SystemExit("RDP actions are restricted to the backend VM")
+          if action.startswith("anydesk_") and target != "always-free-arm-1787907847-26":
+              raise SystemExit("AnyDesk actions are restricted to the backend VM")
           if not reason:
               raise SystemExit("Reason is required")
 
