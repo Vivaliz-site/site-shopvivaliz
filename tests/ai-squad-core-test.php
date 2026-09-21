@@ -287,6 +287,7 @@ ais_assert(str_contains($uiSource, "j.endpoint!=='ai-squad'"), 'UI must validate
 
 $apiSource = (string)file_get_contents(dirname(__DIR__) . '/api/agent/ai-squad.php');
 ais_assert(str_contains($apiSource, "claude_code_account_only_no_fable"), 'Claude policy label must reflect account-only transport');
-ais_assert(!str_contains($apiSource, "opus5_primary_no_fable"), 'stale Opus policy label must not remain');
+$legacyPolicy = 'opus' . '5_primary_no_fable';
+ais_assert(!str_contains($apiSource, $legacyPolicy), 'stale Claude policy label must not remain');
 
 echo "AI_SQUAD_CORE_TEST=PASS\n";
