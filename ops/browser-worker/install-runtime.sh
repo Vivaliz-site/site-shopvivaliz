@@ -12,13 +12,14 @@ fi
 
 test -f "$SOURCE_ROOT/ops/browser-worker/server.mjs"
 test -f "$SOURCE_ROOT/ops/browser-worker/package.json"
-test -x "$RUNTIME_ROOT/supervisor.sh"
+test -f "$SOURCE_ROOT/ops/browser-worker/supervisor.sh"
 
 node --check "$SOURCE_ROOT/ops/browser-worker/server.mjs"
 
 mkdir -p "$RUNTIME_ROOT" "$USER_SYSTEMD"
 install -m 600 "$SOURCE_ROOT/ops/browser-worker/server.mjs" "$RUNTIME_ROOT/server.mjs"
 install -m 600 "$SOURCE_ROOT/ops/browser-worker/package.json" "$RUNTIME_ROOT/package.json"
+install -m 700 "$SOURCE_ROOT/ops/browser-worker/supervisor.sh" "$RUNTIME_ROOT/supervisor.sh"
 
 if [ ! -d "$RUNTIME_ROOT/node_modules/playwright-core" ]; then
   npm --prefix "$RUNTIME_ROOT" install --omit=dev --no-audit --no-fund
