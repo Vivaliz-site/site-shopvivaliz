@@ -1,7 +1,5 @@
 # Host Cleanup Implementation Plan
 
-> **Registro histórico:** este documento descreve o estado de agosto de 2026 e não é inventário do runtime atual. Para diagnóstico corrente, use `docs/knowledge/host-access.md` e `scripts/runtime-service-status.sh`. Unidades citadas abaixo podem ter sido aposentadas posteriormente; `LoadState=not-found` não deve ser reportado como falha sem consultar o mapa canônico atual.
-
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Remove proven legacy runtime artifacts from Fred-Win and shopvivaliz-ai and prevent workflows/installers from recreating them.

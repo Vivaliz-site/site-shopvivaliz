@@ -1,7 +1,5 @@
 # Host Cleanup and Anti-Recreation Design
 
-> **Registro histórico:** este documento descreve o estado de agosto de 2026 e não é inventário do runtime atual. Para diagnóstico corrente, use `docs/knowledge/host-access.md` e `scripts/runtime-service-status.sh`. Unidades citadas abaixo podem ter sido aposentadas posteriormente; `LoadState=not-found` não deve ser reportado como falha sem consultar o mapa canônico atual.
-
 Date: 2026-08-24
 Scope: shopvivaliz-ai VM and LAPTOP-NIG4IFUU (Fred-Win). DESKTOP-KOCEPSV is excluded while powered off.
 
