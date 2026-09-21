@@ -42,5 +42,14 @@ Além dos invariantes de domínio, o overlay deve identificar:
 
 Esses itens passam a integrar o Gate Final quando materiais ao domínio.
 
+## Regras estruturais adicionadas por auditorias anteriores
+
+### ESC-2026-001 (2026-09-21) — endpoints em diretórios bloqueados pelo .htaccess
+Toda auditoria extrema deve:
+1. Verificar qual URL o frontend admin usa para cada componente (não assumir que segue a estrutura de diretórios).
+2. Para endpoints em diretórios bloqueados pelo `.htaccess` (ex: `claude/`), confirmar se existe exceção ativa e se o frontend aponta para o caminho real.
+3. Validar o health check (`?health=1`) de cada endpoint de agente/IA, verificando `env_loaded: true` em produção.
+4. Verificar o `dirname(__DIR__, N)` em endpoints que carregam `.env` — o N deve corresponder ao número de diretórios de profundidade do arquivo em relação à raiz do release.
+
 ## Mudança deste overlay
 Quando uma auditoria revelar uma regra estrutural e duradoura que não está adequadamente documentada em outra fonte autoritativa, atualize este overlay no mesmo fluxo de PR. Não copie detalhes temporários, secrets ou estado operacional volátil.
