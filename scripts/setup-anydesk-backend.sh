@@ -5,6 +5,7 @@ ACTION="${1:-status}"
 EXPECTED_HOST="always-free-arm-1787907847-26"
 RDP_USER="fredrdp"
 GUI_USER="fredconsole"
+GUI_CONTROL_USER="ubuntu"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "ANYDESK_ERROR=root_required" >&2
@@ -130,7 +131,7 @@ launch_gui() {
     session_remote=""
   fi
 
-  if [ -z "$display" ] || [ "$display" != ":0" ] || [ "$session_type" != "x11" ] || [ "$session_remote" != "no" ]; then
+  if [ -z "$display" ] || { [ "$display" != ":0" ] && [ "$display" != ":0.0" ]; } || [ "$session_type" != "x11" ] || [ "$session_remote" != "no" ]; then
     echo "ANYDESK_ERROR=unsupported_gui_session" >&2
     echo "ANYDESK_DISPLAY=${display:-missing}" >&2
     echo "ANYDESK_SESSION_TYPE=${session_type:-missing}" >&2
@@ -175,10 +176,42 @@ launch_gui() {
   echo "ANYDESK_LAUNCH=PASS"
 }
 
+console_control() {
+  local mode="${1:-grant}" tray_pid env_dump display xauthority
+  tray_pid="$(pgrep -u "$GUI_USER" -f '/usr/bin/anydesk --tray' | head -1 || true)"
+  if [ -z "$tray_pid" ]; then
+    echo "ANYDESK_ERROR=physical_tray_missing" >&2
+    exit 25
+  fi
+  env_dump="$(tr '\0' '\n' < "/proc/$tray_pid/environ")"
+  display="$(printf '%s\n' "$env_dump" | sed -n 's/^DISPLAY=//p' | head -1)"
+  xauthority="$(printf '%s\n' "$env_dump" | sed -n 's/^XAUTHORITY=//p' | head -1)"
+  if [ -z "$xauthority" ]; then xauthority="/home/$GUI_USER/.Xauthority"; fi
+  if [ "$display" != ":0" ] && [ "$display" != ":0.0" ]; then
+    echo "ANYDESK_ERROR=unsupported_control_display" >&2
+    exit 33
+  fi
+  case "$mode" in
+    grant)
+      runuser -u "$GUI_USER" -- env DISPLAY="$display" XAUTHORITY="$xauthority" xhost "+SI:localuser:$GUI_CONTROL_USER" >/dev/null
+      echo "ANYDESK_CONTROL=granted"
+      ;;
+    revoke)
+      runuser -u "$GUI_USER" -- env DISPLAY="$display" XAUTHORITY="$xauthority" xhost "-SI:localuser:$GUI_CONTROL_USER" >/dev/null 2>&1 || true
+      echo "ANYDESK_CONTROL=revoked"
+      ;;
+    *) echo "ANYDESK_ERROR=unsupported_control_action" >&2; exit 34 ;;
+  esac
+  echo "ANYDESK_CONTROL_USER=$GUI_CONTROL_USER"
+  echo "ANYDESK_DISPLAY=$display"
+}
+
 case "$ACTION" in
   install) install_anydesk ;;
   status) status ;;
   launch) launch_gui ;;
+  control_grant) console_control grant ;;
+  control_revoke) console_control revoke ;;
   *)
     echo "ANYDESK_ERROR=unsupported_action" >&2
     exit 64
