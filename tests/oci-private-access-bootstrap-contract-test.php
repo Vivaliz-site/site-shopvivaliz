@@ -1,14 +1,16 @@
 <?php
 declare(strict_types=1);
 
-$path = __DIR__ . '/../.github/workflows/oci-private-access-bootstrap.yml';
-$text = file_get_contents($path);
-if ($text === false) {
-    fwrite(STDERR, "workflow missing\n");
+$workflowPath = __DIR__ . '/../.github/workflows/oci-private-access-bootstrap.yml';
+$scriptPath = __DIR__ . '/../scripts/oci-private-access-bootstrap.sh';
+$workflow = file_get_contents($workflowPath);
+$script = file_get_contents($scriptPath);
+if ($workflow === false || $script === false) {
+    fwrite(STDERR, "OCI private access bootstrap files missing\n");
     exit(1);
 }
 
-$required = [
+$workflowRequired = [
     "name: OCI Private Access Bootstrap",
     "runs-on: ubuntu-latest",
     "github.event.issue.title == '[oci-private-access-bootstrap]'",
@@ -20,6 +22,16 @@ $required = [
     "OCI_CLI_KEY_CONTENT",
     "BACKEND_INSTANCE_NAME: always-free-arm-1787907847-26",
     "ComputeInstanceAgentClient",
+    "scripts/oci-private-access-bootstrap.sh",
+];
+foreach ($workflowRequired as $needle) {
+    if (strpos($workflow, $needle) === false) {
+        fwrite(STDERR, "workflow missing required contract: {$needle}\n");
+        exit(1);
+    }
+}
+
+$scriptRequired = [
     "/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor",
     "10.0.1.112",
     "setup-rustdesk-remote.sh",
@@ -30,11 +42,20 @@ $required = [
     "AGENT_SSH_SITE=PASS",
     "RUSTDESK_SERVER=PASS",
 ];
-foreach ($required as $needle) {
-    if (strpos($text, $needle) === false) {
-        fwrite(STDERR, "missing required contract: {$needle}\n");
+foreach ($scriptRequired as $needle) {
+    if (strpos($script, $needle) === false) {
+        fwrite(STDERR, "script missing required contract: {$needle}\n");
         exit(1);
     }
+}
+
+if (!preg_match("/command = r'''(.*?)'''/s", $workflow, $match)) {
+    fwrite(STDERR, "OCI Run Command payload not found\n");
+    exit(1);
+}
+if (strlen($match[1]) > 4096) {
+    fwrite(STDERR, "OCI Run Command payload exceeds 4096 bytes\n");
+    exit(1);
 }
 
 $forbidden = [
@@ -48,7 +69,7 @@ $forbidden = [
     "eval ",
 ];
 foreach ($forbidden as $needle) {
-    if (strpos($text, $needle) !== false) {
+    if (strpos($workflow, $needle) !== false || strpos($script, $needle) !== false) {
         fwrite(STDERR, "forbidden contract present: {$needle}\n");
         exit(1);
     }
