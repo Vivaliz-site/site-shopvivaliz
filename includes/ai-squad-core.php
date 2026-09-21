@@ -37,7 +37,7 @@ function svais_openai_transport_order(): array
 
 function svais_anthropic_transport_order(): array
 {
-    return ['claude_code', 'direct', 'vertex_oauth', 'openrouter'];
+    return ['claude_code'];
 }
 
 function svais_gemini_transport_order(): array
@@ -276,13 +276,11 @@ function svais_provider_state(array $profile): array
             'reasoning' => (string)$profile['openai']['effort'],
         ],
         'anthropic' => [
-            'configured' => $claude['available'] || $anthropicDirectConfigured || $vertexConfigured || $openRouterConfigured,
+            'configured' => $claude['available'],
             'claude_code_oauth_configured' => $claude['configured'],
             'claude_code_authenticated' => $claude['authenticated'],
             'claude_code_available' => $claude['available'],
-            'direct_configured' => $anthropicDirectConfigured,
-            'vertex_oauth_configured' => $vertexConfigured,
-            'openrouter_fallback_configured' => $openRouterConfigured,
+            'account_login_only' => true,
             'transport_order' => svais_anthropic_transport_order(),
             'model' => (string)$profile['anthropic']['model'],
             'reasoning' => (string)$profile['anthropic']['effort'],
