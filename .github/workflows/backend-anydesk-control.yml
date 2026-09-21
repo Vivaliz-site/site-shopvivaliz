@@ -1,0 +1,98 @@
+name: Backend AnyDesk Control
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Allowlisted AnyDesk action
+        required: true
+        type: choice
+        options:
+          - anydesk_install
+          - anydesk_status
+      reason:
+        description: Audit reason
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shopvivaliz-backend-anydesk-control
+  cancel-in-progress: false
+
+jobs:
+  execute:
+    if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && startsWith(github.event.comment.body, '/anydesk '))
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve request
+        id: req
+        env:
+          DISPATCH_ACTION: ${{ inputs.action }}
+          DISPATCH_REASON: ${{ inputs.reason }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
+          if os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch":
+              action = os.environ.get("DISPATCH_ACTION", "").strip()
+              reason = os.environ.get("DISPATCH_REASON", "").strip()
+          else:
+              body = str((event.get("comment") or {}).get("body") or "").strip()
+              match = re.fullmatch(r"/anydesk\s+action=(anydesk_install|anydesk_status)\s+reason=(.{3,500})", body)
+              if not match:
+                  raise SystemExit("Invalid /anydesk command")
+              action, reason = match.group(1), match.group(2).strip()
+          if action not in {"anydesk_install", "anydesk_status"}:
+              raise SystemExit(f"Unsupported action: {action}")
+          if not reason:
+              raise SystemExit("Reason is required")
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as out:
+              out.write(f"action={action}\n")
+          print(f"BACKEND_ANYDESK_REQUEST action={action}")
+          print(f"BACKEND_ANYDESK_REASON={reason}")
+          PY
+
+      - name: Configure backend SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/shopvivaliz_vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
+
+      - name: Execute fixed AnyDesk action
+        env:
+          ACTION: ${{ steps.req.outputs.action }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38)
+          case "$ACTION" in
+            anydesk_install) MODE=install ;;
+            anydesk_status) MODE=status ;;
+          esac
+          "${SSH[@]}" "tmp=\$(mktemp); trap 'rm -f \"\$tmp\"' EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-backend-anydesk.sh -o \"\$tmp\"; sudo -n bash \"\$tmp\" $MODE"
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
