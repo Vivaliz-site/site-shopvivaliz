@@ -335,13 +335,17 @@ if ($successful !== []) {
 }
 
 $durationMs = (int)round((microtime(true) - $startedAt) * 1000);
+$completion = svais_cycle_completion($providers, $providerStatus, is_array($consensus));
 $done = [
     'type' => 'cycle_finished',
     'cycle_id' => $cycleId,
-    'ok' => $successful !== [],
+    'ok' => $completion['ok'],
+    'degraded' => $completion['degraded'],
     'profile' => $profileName,
     'mode' => $mode,
     'provider_status' => $providerStatus,
+    'successful_providers' => $completion['successful_providers'],
+    'failed_providers' => $completion['failed_providers'],
     'message_count' => count($successful),
     'consensus_available' => is_array($consensus),
     'duration_ms' => $durationMs,
@@ -362,7 +366,8 @@ svais_api_log_cycle([
 
 if (!$stream) {
     echo json_encode([
-        'ok' => $successful !== [],
+        'ok' => $done['ok'],
+        'degraded' => $done['degraded'],
         'endpoint' => 'ai-squad',
         'cycle_id' => $cycleId,
         'events' => $events,
