@@ -38,6 +38,7 @@ on:
           - anydesk_control_revoke
           - anydesk_console_unlock
           - ai_squad_ui_audit
+          - amazon_support_reply_existing
       reason:
         description: Audit reason
         required: true
@@ -90,7 +91,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "amazon_support_reply_existing"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -101,6 +102,8 @@ jobs:
               raise SystemExit("AnyDesk actions are restricted to the backend VM")
           if action == "ai_squad_ui_audit" and target != "shopvivaliz-free-a1":
               raise SystemExit("AI Squad UI audit is restricted to production orchestration")
+          if action == "amazon_support_reply_existing" and target != "shopvivaliz-free-a1":
+              raise SystemExit("Amazon support replies are restricted to production orchestration")
           if not reason:
               raise SystemExit("Reason is required")
 
@@ -216,6 +219,18 @@ jobs:
               git status --porcelain
               git rev-parse HEAD
               echo "REMOTE_REPO_STATUS_END"
+              ;;
+            amazon_support_reply_existing)
+              sudo -n systemctl start --no-block amazon-returns-seller-central-browser.service
+              for _ in $(seq 1 60); do
+                if curl -fsS --max-time 1 http://127.0.0.1:9225/json/version >/dev/null 2>&1; then
+                  node scripts/respond-existing-amazon-support-cases.mjs
+                  exit $?
+                fi
+                sleep 0.5
+              done
+              echo "SELLER_CENTRAL_CDP_UNAVAILABLE" >&2
+              exit 1
               ;;
           esac
 
