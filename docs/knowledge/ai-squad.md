@@ -54,6 +54,8 @@ Por decisão operacional, Fable não faz parte de nenhum preset do AI Squad.
 
 Perfil de menor custo/latência para tarefas simples.
 
+Para `gemini-2.5-flash`, o nível lógico `MEDIUM` é serializado nas APIs GenerateContent/Vertex como `thinkingBudget: 8192`; `LOW` usa `thinkingBudget: 1024`. `thinkingLevel` é reservado aos modelos Gemini 3.x que suportam esse campo.
+
 ## Variáveis de ambiente
 
 As variáveis abaixo são referências de configuração. Valores nunca devem ser versionados.
@@ -62,9 +64,9 @@ Transportes operacionais atuais:
 
 - OpenAI: `codex_chatgpt` com perfis ChatGPT Business autenticados; o bridge tenta os perfis configurados em ordem e, se todos estiverem sem cota/indisponíveis, emite fallback explícito `manual_chatgpt`. O AI Squad não usa `OPENAI_API_KEY` como fallback.
 - Anthropic: `claude_code` com OAuth da conta; o runtime canônico é um `systemd --user` instalado por `ops/ai-squad/install-claude-bridge-user-service.sh`, executando sempre o bridge da release ativa; não há fallback silencioso para API direta, Vertex ou OpenRouter;
-- Gemini: `vertex_oauth` → API direta quando configurada → OpenRouter quando configurado.
+- Gemini: `vertex_oauth` → API direta quando configurada. O OpenRouter não faz parte da cadeia operacional enquanto não houver credencial validada ao vivo.
 
-Credenciais opcionais dos provedores que ainda usam API são mantidas apenas no runtime protegido. Para OpenAI, a política do AI Squad é login ChatGPT Business via Codex, sem fallback para `OPENAI_API_KEY`. Gemini pode usar `GEMINI_API_KEY`/`GOOGLE_API_KEY` ou `OPENROUTER_API_KEY` apenas conforme a ordem de transportes documentada.
+Credenciais opcionais dos provedores que ainda usam API são mantidas apenas no runtime protegido. Para OpenAI, a política do AI Squad é login ChatGPT Business via Codex, sem fallback para `OPENAI_API_KEY`. Gemini pode usar `GEMINI_API_KEY`/`GOOGLE_API_KEY` como fallback direto conforme a ordem de transportes documentada.
 
 Para OpenAI, cada identidade ChatGPT mantém `CODEX_HOME` isolado. O bridge verifica autenticação e limites de cada perfil, tenta automaticamente o próximo perfil quando encontra cota/rate-limit esgotado e só então gera o fallback `manual_chatgpt` para uso visível no ChatGPT. O health publica apenas contagens de perfis autenticados/disponíveis/esgotados, nunca tokens.
 
