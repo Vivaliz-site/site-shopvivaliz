@@ -330,7 +330,14 @@ ui_dump() {
       for f in ./*.deb; do dpkg-deb -x "$f" "$pyroot"; done
     )
   fi
-  runuser -u "$GUI_USER" -- env     DISPLAY="$display"     XDG_RUNTIME_DIR="$runtime"     DBUS_SESSION_BUS_ADDRESS="$dbus"     GI_TYPELIB_PATH="$typelib"     PYTHONPATH="$pyroot/usr/lib/python3/dist-packages"     python3 - <<'PY'
+  if ! pgrep -u "$GUI_USER" -f 'at-spi-bus-launcher' >/dev/null 2>&1; then
+    if ! runuser -u "$GUI_USER" -- env DISPLAY="$display" XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$dbus" NO_AT_BRIDGE=0 sh -lc 'nohup /usr/libexec/at-spi-bus-launcher --launch-immediately >/tmp/shopvivaliz-atspi-bus.log 2>&1 </dev/null &'; then
+      echo "ANYDESK_UI_ERROR=atspi_bus_start_failed" >&2
+      exit 42
+    fi
+    sleep 2
+  fi
+  runuser -u "$GUI_USER" -- env     DISPLAY="$display"     XDG_RUNTIME_DIR="$runtime"     DBUS_SESSION_BUS_ADDRESS="$dbus"     NO_AT_BRIDGE=0     GI_TYPELIB_PATH="$typelib"     PYTHONPATH="$pyroot/usr/lib/python3/dist-packages"     python3 - <<'PY'
 import pyatspi
 desktop = pyatspi.Registry.getDesktop(0)
 def walk(node, depth=0):
