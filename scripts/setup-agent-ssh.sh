@@ -8,6 +8,7 @@ BACKEND_HOST="always-free-arm-1787907847-26"
 AGENT_USER="shopvivaliz-agent"
 AGENT_HOME="/home/$AGENT_USER"
 AUTHORIZED_KEY="${SHOPVIVALIZ_AGENT_SSH_PUBKEY:-}"
+OPS_WRAPPER="/usr/local/sbin/shopvivaliz-agent-ops"
 
 die() { echo "AGENT_SSH_ERROR=$1" >&2; exit "${2:-1}"; }
 
@@ -22,17 +23,73 @@ assert_host() {
   esac
 }
 
+install_ops_wrapper() {
+  cat >"$OPS_WRAPPER" <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+cmd="${1:-}"
+arg="${2:-}"
+
+allowed_service() {
+  case "$1" in
+    shopvivaliz-24x7.service|agent-bridge.service|shopvivaliz-mcp.service|mei-mg-email.service|rustdesk.service|anydesk.service|apache2.service|shopvivaliz-queue-worker.service|shopvivaliz-token-renewer.service)
+      return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+case "$cmd" in
+  host-status)
+    hostname
+    uptime
+    df -h /
+    ;;
+  service-status)
+    allowed_service "$arg" || { echo "AGENT_OPS_ERROR=service_not_allowed" >&2; exit 64; }
+    SYSTEMD_PAGER=cat systemctl --no-pager status "$arg" || true
+    systemctl is-active "$arg" || true
+    ;;
+  service-restart)
+    allowed_service "$arg" || { echo "AGENT_OPS_ERROR=service_not_allowed" >&2; exit 64; }
+    systemctl restart "$arg"
+    systemctl is-active "$arg"
+    ;;
+  rustdesk-status)
+    systemctl is-active rustdesk.service 2>/dev/null || true
+    if command -v docker >/dev/null 2>&1; then
+      docker inspect -f '{{.Name}} {{.State.Status}}' shopvivaliz-rustdesk-hbbs shopvivaliz-rustdesk-hbbr 2>/dev/null || true
+    fi
+    ;;
+  browser-status)
+    curl -fsS --connect-timeout 3 --max-time 8 http://127.0.0.1:17777/health
+    ;;
+  *)
+    echo "AGENT_OPS_ERROR=unsupported_command" >&2
+    exit 64
+    ;;
+esac
+EOF
+  chown root:root "$OPS_WRAPPER"
+  chmod 0755 "$OPS_WRAPPER"
+}
+
 install_agent_ssh() {
   require_root
   assert_host
   [ -n "$AUTHORIZED_KEY" ] || die public_key_required 30
+  printf '%s' "$AUTHORIZED_KEY" | grep -Eq '^ssh-(ed25519|rsa) ' || die invalid_public_key 31
 
   if ! id "$AGENT_USER" >/dev/null 2>&1; then
     useradd --create-home --shell /bin/bash "$AGENT_USER"
   fi
+  passwd -l "$AGENT_USER" >/dev/null 2>&1 || true
 
   install -d -m 700 -o "$AGENT_USER" -g "$AGENT_USER" "$AGENT_HOME/.ssh"
-  printf '%s\n' "$AUTHORIZED_KEY" > "$AGENT_HOME/.ssh/authorized_keys"
+  {
+    printf 'from="10.0.0.0/8,100.64.0.0/10",no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-user-rc '
+    printf '%s\n' "$AUTHORIZED_KEY"
+  } > "$AGENT_HOME/.ssh/authorized_keys"
   chown "$AGENT_USER:$AGENT_USER" "$AGENT_HOME/.ssh/authorized_keys"
   chmod 600 "$AGENT_HOME/.ssh/authorized_keys"
 
@@ -40,6 +97,7 @@ install_agent_ssh() {
 Match User $AGENT_USER
     PasswordAuthentication no
     KbdInteractiveAuthentication no
+    AuthenticationMethods publickey
     PubkeyAuthentication yes
     PermitTTY yes
     X11Forwarding no
@@ -49,11 +107,11 @@ Match User $AGENT_USER
     PermitUserEnvironment no
 EOF
 
-  cat >/etc/sudoers.d/shopvivaliz-agent <<'EOF'
-Cmnd_Alias SHOPVIVALIZ_AGENT_READ = /usr/bin/hostname, /usr/bin/whoami, /usr/bin/uptime, /usr/bin/df, /usr/bin/du, /usr/bin/git, /usr/bin/journalctl, /usr/bin/systemctl status *, /usr/bin/systemctl is-active *, /usr/bin/systemctl is-enabled *, /usr/bin/ss, /usr/bin/curl
-Cmnd_Alias SHOPVIVALIZ_AGENT_OPS = /usr/bin/systemctl restart shopvivaliz-24x7.service, /usr/bin/systemctl restart agent-bridge.service, /usr/bin/systemctl restart shopvivaliz-mcp.service, /usr/bin/systemctl restart mei-mg-email.service, /usr/bin/systemctl restart rustdesk.service, /usr/bin/systemctl restart anydesk.service
-$AGENT_USER ALL=(root) NOPASSWD: SHOPVIVALIZ_AGENT_READ, SHOPVIVALIZ_AGENT_OPS
-Defaults:$AGENT_USER !authenticate,log_output
+  install_ops_wrapper
+
+  cat >/etc/sudoers.d/shopvivaliz-agent <<EOF
+$AGENT_USER ALL=(root) NOPASSWD: $OPS_WRAPPER *
+Defaults:$AGENT_USER !authenticate,use_pty,log_output
 EOF
   chmod 440 /etc/sudoers.d/shopvivaliz-agent
   visudo -cf /etc/sudoers.d/shopvivaliz-agent >/dev/null
@@ -72,25 +130,29 @@ status() {
     echo "AGENT_SSH_USER_PRESENT=true"
     if [ -s "$AGENT_HOME/.ssh/authorized_keys" ]; then
       echo "AGENT_SSH_AUTHORIZED_KEY_PRESENT=true"
+      grep -q 'from="10.0.0.0/8,100.64.0.0/10"' "$AGENT_HOME/.ssh/authorized_keys" &&
+        echo "AGENT_SSH_PRIVATE_SOURCE_RESTRICTION=true" ||
+        echo "AGENT_SSH_PRIVATE_SOURCE_RESTRICTION=false"
     else
       echo "AGENT_SSH_AUTHORIZED_KEY_PRESENT=false"
+      echo "AGENT_SSH_PRIVATE_SOURCE_RESTRICTION=false"
     fi
   else
     echo "AGENT_SSH_USER_PRESENT=false"
   fi
-  if [ -f /etc/ssh/sshd_config.d/70-shopvivaliz-agent.conf ]; then
-    echo "AGENT_SSH_POLICY_PRESENT=true"
-  else
+  [ -f /etc/ssh/sshd_config.d/70-shopvivaliz-agent.conf ] &&
+    echo "AGENT_SSH_POLICY_PRESENT=true" ||
     echo "AGENT_SSH_POLICY_PRESENT=false"
-  fi
   if [ -f /etc/sudoers.d/shopvivaliz-agent ] && visudo -cf /etc/sudoers.d/shopvivaliz-agent >/dev/null 2>&1; then
     echo "AGENT_SSH_SUDOERS_VALID=true"
   else
     echo "AGENT_SSH_SUDOERS_VALID=false"
   fi
-  sshd -T 2>/dev/null | grep -q '^permitrootlogin no$' && echo "AGENT_SSH_ROOT_LOGIN_DISABLED=true" || echo "AGENT_SSH_ROOT_LOGIN_DISABLED=unknown"
+  [ -x "$OPS_WRAPPER" ] &&
+    echo "AGENT_SSH_OPS_WRAPPER_PRESENT=true" ||
+    echo "AGENT_SSH_OPS_WRAPPER_PRESENT=false"
   if command -v tailscale >/dev/null 2>&1; then
-    if ts="$(tailscale ip -4 2>/dev/null | head -1)"; then :; else ts=""; fi
+    ts="$(tailscale ip -4 2>/dev/null | head -1 || true)"
     [ -n "$ts" ] && echo "AGENT_SSH_TAILSCALE_IP=$ts"
   fi
 }
