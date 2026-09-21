@@ -11,21 +11,17 @@ from pathlib import Path
 import sys
 
 text = Path(sys.argv[1]).read_text(encoding="utf-8")
-jobs_pos = text.index("jobs:\n")
-execute_pos = text.index("  execute:\n", jobs_pos)
-concurrency_pos = text.index("    concurrency:\n", execute_pos)
-runs_on_pos = text.index("    runs-on:", execute_pos)
 
-if concurrency_pos > runs_on_pos:
-    raise SystemExit("job concurrency must be declared before runs-on")
-if "concurrency:\n  group: shopvivaliz-remote-access" in text[:jobs_pos]:
-    raise SystemExit("workflow-level remote concurrency still present")
-if "      group: shopvivaliz-remote-access" not in text[concurrency_pos:runs_on_pos]:
-    raise SystemExit("remote job concurrency group missing")
-if "      cancel-in-progress: false" not in text[concurrency_pos:runs_on_pos]:
-    raise SystemExit("remote job concurrency policy missing")
+if "group: shopvivaliz-remote-access" in text:
+    raise SystemExit("GitHub concurrency group must not be used for remote FIFO")
+if "cancel-in-progress:" in text:
+    raise SystemExit("GitHub concurrency cancellation semantics must not govern remote FIFO")
+if "runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]" not in text:
+    raise SystemExit("dedicated ShopVivaliz deploy runner label missing")
 if "startsWith(github.event.comment.body, '/remote ')" not in text:
     raise SystemExit("remote issue-comment filter missing")
+if "storage_scan" not in text:
+    raise SystemExit("latest main storage_scan action was not preserved")
 
-print("REMOTE_ACCESS_JOB_CONCURRENCY_CONTRACT=PASS")
+print("REMOTE_ACCESS_FIFO_CONTRACT=PASS")
 PY
