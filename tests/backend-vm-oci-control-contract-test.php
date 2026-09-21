@@ -70,7 +70,7 @@ if (!str_contains($text, '"identity", "disk", "storage_scan", "runtime_status", 
     fwrite(STDERR, "backend OCI core operations allowlist missing\n");
     exit(1);
 }
-foreach (['anydesk_install', 'anydesk_status', 'anydesk_launch', 'anydesk_control_grant', 'anydesk_control_revoke', 'setup-anydesk-backend.sh'] as $needle) {
+foreach (['anydesk_install', 'anydesk_status', 'anydesk_launch', 'anydesk_control_grant', 'anydesk_control_revoke', 'anydesk_console_unlock', 'setup-anydesk-backend.sh'] as $needle) {
     if (!str_contains($text, $needle)) {
         fwrite(STDERR, "backend OCI AnyDesk contract missing: {$needle}\n");
         exit(1);
