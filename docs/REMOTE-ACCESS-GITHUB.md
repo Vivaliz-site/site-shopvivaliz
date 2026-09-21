@@ -92,3 +92,31 @@ O fallback executa em `ubuntu-latest` e usa **OCI Bastion** para abrir um túnel
 ## Relação com Desktop Commander
 
 Desktop Commander passa a ser canal opcional/fallback quando houver cota e necessidade específica. O canal GitHub Remote Access deve ser preferido para diagnóstico e operação de terminal/serviços, pois não depende da cota mensal do DC.
+
+
+## RustDesk self-hosted (acesso grafico principal)
+
+O RustDesk passa a ser o canal grafico principal das duas VMs Linux, sem depender da cota do Desktop Commander.
+
+Arquitetura:
+
+- servidor OSS `hbbs` + `hbbr`: `always-free-arm-1787907847-26`;
+- endereco interno dos clientes das VMs: `10.0.1.38`;
+- endereco Tailscale para clientes humanos: `100.66.174.74`;
+- cliente RustDesk instalado em `shopvivaliz-free-a1` e `always-free-arm-1787907847-26`;
+- chave publica gerada e persistida em `/opt/shopvivaliz-rustdesk-server/data/id_ed25519.pub`;
+- senha de acesso nao assistido gerada localmente e mantida root-only em `/etc/shopvivaliz/rustdesk-unattended-password`; ela nunca deve ser escrita em issue, workflow log ou artifact;
+- portas de web client `21118/21119` nao sao usadas e sao bloqueadas localmente;
+- Desktop Commander fica somente como fallback.
+
+Acoes auditaveis no issue #1586:
+
+```text
+/remote target=always-free-arm-1787907847-26 action=rustdesk_server_install reason=instalar servidor RustDesk self-hosted
+/remote target=always-free-arm-1787907847-26 action=rustdesk_client_install reason=configurar cliente RustDesk backend
+/remote target=shopvivaliz-free-a1 action=rustdesk_client_install reason=configurar cliente RustDesk web
+/remote target=always-free-arm-1787907847-26 action=rustdesk_status reason=validar RustDesk backend
+/remote target=shopvivaliz-free-a1 action=rustdesk_status reason=validar RustDesk web
+```
+
+A VM web deve permanecer fail-closed quanto a GUI: se nao houver sessao grafica utilizavel, a instalacao do cliente nao deve substituir nem interferir nos servicos web. Um desktop virtual dedicado deve ser provisionado separadamente e validado antes de ser promovido como acesso grafico.
