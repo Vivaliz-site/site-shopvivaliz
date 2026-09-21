@@ -10,7 +10,7 @@ Antes de diagnosticar, alterar ou validar qualquer ambiente, o agente deve:
 2. identificar o host correto pelo papel atual;
 3. confirmar o acesso com evidência (`hostname`, `whoami`, diretório e, quando aplicável, `git status`);
 4. nunca assumir que um IP antigo continua sendo produção;
-5. preferir Desktop Commander quando o dispositivo estiver conectado; usar SSH como fallback autorizado.
+5. preferir SSH privado/Tailscale para operacao de agentes; usar RustDesk para GUI; Desktop Commander fica somente como fallback.
 
 ## Hosts operacionais atuais
 
@@ -43,13 +43,21 @@ Nunca editar diretamente `current/` nem `releases/<ativa>/`.
 
 ## SSH
 
-SSH publico direto esta desabilitado. GitHub Actions administrativos usam o runner `shopvivaliz-a1-deploy`: site por `127.0.0.1` e backend por `10.0.1.38`. Operadores externos usam OCI Bastion ou Remote Desktop Commander.
+SSH publico direto continua desabilitado. Agentes devem usar o usuario dedicado `shopvivaliz-agent` por rede privada/Tailscale; GitHub Actions administrativos usam o runner `shopvivaliz-a1-deploy`: site por `127.0.0.1` e backend por `10.0.1.38`. RustDesk self-hosted e o canal grafico principal; OCI Bastion/GitHub Remote Access/Desktop Commander sao contingencia.
 
-Usuário padrão das VMs Oracle:
+Usuário administrativo legado das VMs Oracle:
 
 ```text
 ubuntu
 ```
+
+Usuário operacional de agentes:
+
+```text
+shopvivaliz-agent
+```
+
+Esse usuario aceita somente chave publica provisionada, restringida a redes privadas/Tailscale, sem senha interativa e com `sudo` limitado a comandos allowlisted.
 
 A chave privada deve vir de armazenamento local seguro ou secret de automação. **Não versionar chave privada, senha, token ou conteúdo de secret.**
 
@@ -77,7 +85,7 @@ Use Remote Desktop Commander ou OCI Bastion; SSH publico direto esta desabilitad
 
 ## Desktop Commander
 
-Quando houver dispositivos conectados, preferir o acesso por nome do dispositivo em vez de depender de IP/chave manual:
+Desktop Commander nao e canal operacional principal. Use somente como fallback quando SSH privado/RustDesk/GitHub Remote Access nao atenderem. Quando houver necessidade de usa-lo, prefira o dispositivo por nome:
 
 ```text
 shopvivaliz-free-a1

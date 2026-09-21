@@ -1,4 +1,9 @@
 {
-  "action": "install_or_repair",
-  "reason": "recover shopvivaliz-free-a1 Desktop Commander after Seller Support capture; continue two-case completion"
+  "action": "amazon_support_reply",
+  "case_ids": [
+    "22153077391",
+    "22153259501"
+  ],
+  "requested_at": "2026-09-21T23:20:00Z",
+  "reason": "reply to the two existing Seller Support cases after correcting case ID line separation; publish sanitized read-back evidence"
 }

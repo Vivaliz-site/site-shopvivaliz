@@ -11,6 +11,7 @@ import {
   buildClaudeArgs,
   isDirectInvocation,
   resolveClaudeAuthSource,
+  parseClaudeOutput,
 } from '../ops/ai-squad/claude-bridge.mjs';
 
 const valid = validateRequest({
@@ -43,6 +44,8 @@ assert(args.includes('--safe-mode'));
 assert(args.includes('--restricted'));
 assert(args.includes('--no-session-persistence'));
 assert(args.includes('WebSearch,WebFetch'));
+assert(args.includes('stream-json'));
+assert(args.includes('--verbose'));
 assert(!args.includes(valid.prompt), 'user prompt must go over stdin, not argv');
 
 const noWebArgs = buildClaudeArgs({ ...valid, web_search: false });
@@ -63,6 +66,23 @@ const sessionLimitDetail = claudeFailureDetail({
   }),
 });
 assert.match(sessionLimitDetail, /session limit/);
+
+const parsedStream = parseClaudeOutput([
+  JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'WebSearch', input: { query: 'example' } }] } }),
+  JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', content: [{ type: 'text', text: 'Source https://example.com/product?a=1' }] }] } }),
+  JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: 'Resumo final sem URL literal.', usage: { input_tokens: 10 } }),
+].join('\n'));
+assert.equal(parsedStream.result, 'Resumo final sem URL literal.');
+assert.equal(parsedStream.is_error, false);
+assert.equal(parsedStream.usage.input_tokens, 10);
+assert.deepEqual(parsedStream.sources, ['https://example.com/product?a=1']);
+
+const parsedLegacy = parseClaudeOutput(JSON.stringify({
+  is_error: false,
+  result: 'Veja https://example.org/legacy',
+  usage: { output_tokens: 4 },
+}));
+assert.deepEqual(parsedLegacy.sources, ['https://example.org/legacy']);
 
 const safe = sanitizeBridgeError('Authorization: Bearer sk-ant-oat-secret user@example.com');
 assert(!safe.includes('sk-ant-oat-secret'));

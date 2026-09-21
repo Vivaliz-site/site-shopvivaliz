@@ -5,6 +5,7 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 ## Documentos principais
 
 - [`host-access.md`](host-access.md) — **bootstrap obrigatório de hosts, papéis, Desktop Commander, SSH e repositório para toda nova sessão/agente.**
+- [`claude-vm-bootstrap.md`](claude-vm-bootstrap.md) — memória global do Claude na VM: projetos, hosts, navegador na VM, pesquisa técnica atual na web, segurança e fluxo de entrega.
 - [`project.md`](project.md) — visão geral, objetivo e módulos do sistema.
 - [`squad-chat.md`](squad-chat.md) — contrato, health check e providers do Squad Chat.
 - [`troubleshooting.md`](troubleshooting.md) — diagnóstico de erros HTTP, rede, integrações e deploy.
