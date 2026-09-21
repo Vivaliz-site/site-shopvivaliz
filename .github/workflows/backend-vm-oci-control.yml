@@ -25,6 +25,8 @@ on:
           - rdp_status
           - rdp_otp_prepare
           - rdp_enable_otp
+          - rdp_enrollment_publish
+          - rdp_enrollment_cleanup
           - anydesk_install
           - anydesk_status
           - anydesk_launch
@@ -92,6 +94,7 @@ jobs:
               "browser_status", "browser_health", "browser_install",
               "browser_start", "browser_restart", "browser_stop",
               "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp",
+              "rdp_enrollment_publish", "rdp_enrollment_cleanup",
               "anydesk_install", "anydesk_status", "anydesk_launch",
               "anydesk_native_prepare", "anydesk_native_status",
               "anydesk_password_from_clipboard", "anydesk_native_cleanup",
@@ -364,6 +367,12 @@ jobs:
               ;;
             rdp_enable_otp)
               "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-private-rdp.sh -o "$tmp"; sudo -n bash "$tmp" enable_otp'
+              ;;
+            rdp_enrollment_publish)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-private-rdp.sh -o "$tmp"; sudo -n bash "$tmp" enrollment_publish'
+              ;;
+            rdp_enrollment_cleanup)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-private-rdp.sh -o "$tmp"; sudo -n bash "$tmp" enrollment_cleanup'
               ;;
             anydesk_install)
               "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-backend.sh -o "$tmp"; sudo -n bash "$tmp" install'
