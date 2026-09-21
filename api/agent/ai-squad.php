@@ -298,8 +298,9 @@ $successful = array_values(array_filter(
     static fn(array $entry): bool => ($entry['type'] ?? '') === 'agent_message' && ($entry['ok'] ?? false) === true
 ));
 
+$completeCoverage = svais_cycle_complete_for_consensus($transcript, $providers, $phases);
 $consensus = null;
-if ($successful !== []) {
+if ($completeCoverage) {
     $consensusPrompt = svais_consensus_prompt($topic, $successful);
     svais_api_emit([
         'type' => 'phase_started',
@@ -340,14 +341,16 @@ if ($successful !== []) {
 }
 
 $durationMs = (int)round((microtime(true) - $startedAt) * 1000);
+$cycleOk = $completeCoverage && is_array($consensus);
 $done = [
     'type' => 'cycle_finished',
     'cycle_id' => $cycleId,
-    'ok' => $successful !== [],
+    'ok' => $cycleOk,
     'profile' => $profileName,
     'mode' => $mode,
     'provider_status' => $providerStatus,
     'message_count' => count($successful),
+    'complete_provider_coverage' => $completeCoverage,
     'consensus_available' => is_array($consensus),
     'duration_ms' => $durationMs,
 ];
@@ -361,13 +364,14 @@ svais_api_log_cycle([
     'topic_length' => mb_strlen($topic, 'UTF-8'),
     'provider_status' => $providerStatus,
     'message_count' => count($successful),
+    'complete_provider_coverage' => $completeCoverage,
     'consensus_available' => is_array($consensus),
     'duration_ms' => $durationMs,
 ]);
 
 if (!$stream) {
     echo json_encode([
-        'ok' => $successful !== [],
+        'ok' => $cycleOk,
         'endpoint' => 'ai-squad',
         'cycle_id' => $cycleId,
         'events' => $events,
