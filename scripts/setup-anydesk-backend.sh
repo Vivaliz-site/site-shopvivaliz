@@ -178,7 +178,11 @@ launch_gui() {
 
 console_control() {
   local mode="${1:-grant}" tray_pid env_dump display xauthority
-  tray_pid="$(pgrep -u "$GUI_USER" -f '/usr/bin/anydesk --tray' | head -1 || true)"
+  if tray_pid="$(pgrep -u "$GUI_USER" -f '/usr/bin/anydesk --tray' | head -1)"; then
+    :
+  else
+    tray_pid=""
+  fi
   if [ -z "$tray_pid" ]; then
     echo "ANYDESK_ERROR=physical_tray_missing" >&2
     exit 25
