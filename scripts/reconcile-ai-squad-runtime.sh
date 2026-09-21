@@ -31,14 +31,20 @@ else
   sudo systemd-analyze verify "$claude_target"
   sudo systemctl daemon-reload
   sudo systemctl enable "$claude_service"
-  sudo systemctl restart "$claude_service"
+  sudo systemctl stop "$claude_service" || true
+  if command -v fuser >/dev/null 2>&1; then
+    sudo fuser -k 17657/tcp >/dev/null 2>&1 || true
+  fi
+  sudo systemctl start "$claude_service"
   sudo systemctl is-active --quiet "$claude_service"
 
   health_url="http://127.0.0.1:17657/health"
   claude_health_ok=false
   for _ in $(seq 1 20); do
     if body="$(curl -fsS --max-time 3 "$health_url" 2>/dev/null)"; then
-      if printf '%s' "$body" | grep -q '"endpoint":"ai-squad-claude-bridge"'; then
+      if printf '%s' "$body" | grep -q '"endpoint":"ai-squad-claude-bridge"' \
+        && printf '%s' "$body" | grep -q '"ok":true' \
+        && printf '%s' "$body" | grep -q '"authenticated":true'; then
         claude_health_ok=true
         break
       fi
