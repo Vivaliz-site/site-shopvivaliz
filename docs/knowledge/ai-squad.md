@@ -54,6 +54,8 @@ Por decisão operacional, Fable não faz parte de nenhum preset do AI Squad.
 
 Perfil de menor custo/latência para tarefas simples.
 
+Para `gemini-2.5-flash`, o nível lógico `MEDIUM` é serializado nas APIs GenerateContent/Vertex como `thinkingBudget: 8192`; `LOW` usa `thinkingBudget: 1024`. `thinkingLevel` é reservado aos modelos Gemini 3.x que suportam esse campo.
+
 ## Variáveis de ambiente
 
 As variáveis abaixo são referências de configuração. Valores nunca devem ser versionados.

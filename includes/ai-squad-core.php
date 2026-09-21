@@ -652,6 +652,23 @@ function svais_google_oauth_context(): array
     return $cached = ['access_token' => $accessToken, 'project' => $project];
 }
 
+function svais_gemini_thinking_config(array $cfg): array
+{
+    $model = strtolower(trim((string)($cfg['model'] ?? '')));
+    $level = strtolower(trim((string)($cfg['thinking_level'] ?? 'medium')));
+
+    if (str_starts_with($model, 'gemini-2.5-')) {
+        $budget = match ($level) {
+            'minimal', 'low' => 1024,
+            'high', 'xhigh', 'max' => 24576,
+            default => 8192,
+        };
+        return ['thinkingBudget' => $budget];
+    }
+
+    return ['thinkingLevel' => $level];
+}
+
 function svais_gemini_vertex_call(array $cfg, string $system, string $prompt, bool $webSearch): array
 {
     $oauth = svais_google_oauth_context();
@@ -663,7 +680,7 @@ function svais_gemini_vertex_call(array $cfg, string $system, string $prompt, bo
         ]],
         'generationConfig' => [
             'maxOutputTokens' => (int)$cfg['max_output_tokens'],
-            'thinkingConfig' => ['thinkingLevel' => (string)$cfg['thinking_level']],
+            'thinkingConfig' => svais_gemini_thinking_config($cfg),
         ],
     ];
     if ($webSearch) {
@@ -709,7 +726,7 @@ function svais_gemini_call(array $cfg, string $system, string $prompt, bool $web
         ]],
         'generationConfig' => [
             'maxOutputTokens' => (int)$cfg['max_output_tokens'],
-            'thinkingConfig' => ['thinkingLevel' => (string)$cfg['thinking_level']],
+            'thinkingConfig' => svais_gemini_thinking_config($cfg),
         ],
     ];
     if ($webSearch) {
