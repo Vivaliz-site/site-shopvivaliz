@@ -61,10 +61,12 @@ As variáveis abaixo são referências de configuração. Valores nunca devem se
 Transportes operacionais atuais:
 
 - OpenAI: `codex_chatgpt` (login ChatGPT Business) → API direta quando configurada → fallback manual explícito;
-- Anthropic: `claude_code` com OAuth da conta; não há fallback silencioso para API direta, Vertex ou OpenRouter;
+- Anthropic: `claude_code` com OAuth da conta; o runtime canônico é um `systemd --user` instalado por `ops/ai-squad/install-claude-bridge-user-service.sh`, executando sempre o bridge da release ativa; não há fallback silencioso para API direta, Vertex ou OpenRouter;
 - Gemini: `vertex_oauth` → API direta quando configurada → OpenRouter quando configurado.
 
 Credenciais opcionais de fallback são mantidas apenas no runtime protegido. `OPENAI_API_KEY`, `GEMINI_API_KEY`/`GOOGLE_API_KEY` e `OPENROUTER_API_KEY` não são requisitos para considerar os bridges primários autenticados.
+
+Para Claude Code, o bridge aceita um `CLAUDE_CODE_OAUTH_TOKEN` já provisionado no runtime ou, preferencialmente, reutiliza o credential store refreshável da conta em `/home/ubuntu/.claude/.credentials.json`. O conteúdo dessas credenciais nunca deve ser impresso, versionado ou copiado para logs. A presença de credencial não é suficiente para health verde: o bridge executa uma inferência real e limitada antes de declarar `authenticated=true`.
 
 Overrides opcionais:
 
@@ -116,6 +118,8 @@ A resposta streaming usa NDJSON. Eventos relevantes:
 - `consensus`
 - `cycle_finished`
 
+No modo `research`, consenso válido exige cobertura completa de OpenAI, Claude e Gemini nas fases `research`, `critique` e `converge`. Erro, intervenção manual ou ausência de qualquer provider/fase bloqueia o evento de consenso e força `cycle_finished.ok=false`; respostas parciais nunca podem ser apresentadas como consenso dos três providers.
+
 ## Testes
 
 ```bash
@@ -123,6 +127,10 @@ php -l includes/ai-squad-core.php
 php -l api/agent/ai-squad.php
 php -l admin/ai-squad.php
 php tests/ai-squad-core-test.php
+node tests/ai-squad-codex-bridge-test.mjs
+node tests/ai-squad-claude-bridge-test.mjs
+bash tests/ai-squad-three-provider-runtime-contract-test.sh
+bash tests/ai-squad-ui-audit-contract-test.sh
 ```
 
 O teste também falha caso o nome `fable` apareça em qualquer preset.
