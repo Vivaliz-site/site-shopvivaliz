@@ -64,6 +64,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 - <<'PY'
+          import base64
           import json
           import os
           import time
@@ -254,31 +255,78 @@ jobs:
           "$NODE_BIN" /tmp/shopvivaliz-amazon-support-breakglass.mjs
           '''
 
-          details = models.CreateInstanceAgentCommandDetails(
-              compartment_id=instance.compartment_id,
-              execution_time_out_in_seconds=300,
-              target=models.InstanceAgentCommandTarget(instance_id=instance_id),
-              content=models.InstanceAgentCommandContent(
-                  source=models.InstanceAgentCommandSourceViaTextDetails(source_type='TEXT', text=site_script),
-                  output=models.InstanceAgentCommandOutputViaTextDetails(output_type='TEXT'),
-              ),
-              display_name='shopvivaliz-amazon-support-reply-breakglass',
+          def execute_text_command(command_text, display_name, timeout_seconds=120):
+              if not command_text or len(command_text.encode('utf-8')) > 4096:
+                  raise SystemExit('OCI text command exceeds 4096-byte limit')
+              details = models.CreateInstanceAgentCommandDetails(
+                  compartment_id=instance.compartment_id,
+                  execution_time_out_in_seconds=timeout_seconds,
+                  target=models.InstanceAgentCommandTarget(instance_id=instance_id),
+                  content=models.InstanceAgentCommandContent(
+                      source=models.InstanceAgentCommandSourceViaTextDetails(source_type='TEXT', text=command_text),
+                      output=models.InstanceAgentCommandOutputViaTextDetails(output_type='TEXT'),
+                  ),
+                  display_name=display_name,
+              )
+              command_id = agent.create_instance_agent_command(details).data.id
+              execution = None
+              polls = max(10, (timeout_seconds // 3) + 10)
+              for _ in range(polls):
+                  execution = agent.get_instance_agent_command_execution(
+                      instance_agent_command_id=command_id,
+                      instance_id=instance_id,
+                  ).data
+                  if execution.lifecycle_state in {'SUCCEEDED', 'FAILED', 'TIMED_OUT', 'CANCELED'}:
+                      break
+                  time.sleep(3)
+              if execution is None:
+                  raise SystemExit('OCI Run Command produced no execution')
+              output = execution.content
+              raw = getattr(output, 'text', '') or ''
+              exit_code = int(getattr(output, 'exit_code', 1))
+              return execution, raw, exit_code
+
+          remote_b64 = '/tmp/shopvivaliz-amazon-support-breakglass.sh.b64'
+          remote_script = '/tmp/shopvivaliz-amazon-support-breakglass.sh'
+          init_command = (
+              "set -Eeuo pipefail; umask 077; "
+              f"rm -f {remote_b64} {remote_script}; "
+              f": > {remote_b64}"
           )
-          command_id = agent.create_instance_agent_command(details).data.id
-          execution = None
-          for _ in range(100):
-              execution = agent.get_instance_agent_command_execution(
-                  instance_agent_command_id=command_id,
-                  instance_id=instance_id,
-              ).data
-              if execution.lifecycle_state in {'SUCCEEDED', 'FAILED', 'TIMED_OUT', 'CANCELED'}:
-                  break
-              time.sleep(3)
-          if execution is None:
-              raise SystemExit('OCI Run Command produced no execution')
-          output = execution.content
-          raw = getattr(output, 'text', '') or ''
-          exit_code = int(getattr(output, 'exit_code', 1))
+          init_execution, _, init_exit = execute_text_command(
+              init_command,
+              'init-amazon-support-script',
+              60,
+          )
+          if init_execution.lifecycle_state != 'SUCCEEDED' or init_exit != 0:
+              raise SystemExit('OCI Run Command script initialization failed')
+
+          encoded = base64.b64encode(site_script.encode('utf-8')).decode('ascii')
+          chunk_size = 2500
+          for index, offset in enumerate(range(0, len(encoded), chunk_size), start=1):
+              chunk = encoded[offset:offset + chunk_size]
+              append_command = f"printf '%s' '{chunk}' >> {remote_b64}"
+              chunk_execution, _, chunk_exit = execute_text_command(
+                  append_command,
+                  f'append-amazon-support-script-{index:03d}',
+                  60,
+              )
+              if chunk_execution.lifecycle_state != 'SUCCEEDED' or chunk_exit != 0:
+                  raise SystemExit(f'OCI Run Command script chunk {index} failed')
+
+          final_command = (
+              "set -Eeuo pipefail; "
+              f"base64 -d {remote_b64} > {remote_script}; "
+              f"chmod 700 {remote_script}; "
+              f"if bash {remote_script}; then rc=0; else rc=$?; fi; "
+              f"rm -f {remote_b64} {remote_script}; "
+              "exit \"$rc\""
+          )
+          execution, raw, exit_code = execute_text_command(
+              final_command,
+              'execute-amazon-support-script',
+              330,
+          )
           print('OCI_COMMAND_STATE=' + execution.lifecycle_state)
           print('OCI_COMMAND_EXIT=' + str(exit_code))
           results = []
