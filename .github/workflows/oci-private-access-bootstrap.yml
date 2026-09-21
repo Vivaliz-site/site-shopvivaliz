@@ -130,7 +130,12 @@ jobs:
             ubuntu@10.0.1.112 \
             "set -Eeuo pipefail; server_key=\$(printf '%s' '$server_key_b64' | base64 -d); agent_pub=\$(printf '%s' '$agent_pub_b64' | base64 -d); sudo -n env RUSTDESK_SERVER_KEY=\"\$server_key\" RUSTDESK_ID_SERVER=10.0.1.38 bash /tmp/setup-rustdesk-remote.sh client_install; sudo -n env SHOPVIVALIZ_AGENT_SSH_PUBKEY=\"\$agent_pub\" bash /tmp/setup-agent-ssh.sh install; rm -f /tmp/setup-rustdesk-remote.sh /tmp/setup-agent-ssh.sh"
 
-          backend_probe="$(ssh -i "$agent_key" -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 shopvivaliz-agent@10.0.1.38 'sudo -n /usr/local/sbin/shopvivaliz-agent-ops host-status')"
+          backend_known_hosts="$workdir/backend_known_hosts"
+          backend_host_key="$(sudo -n cat /etc/ssh/ssh_host_ed25519_key.pub)"
+          test -n "$backend_host_key"
+          printf '10.0.1.38 %s\n' "$backend_host_key" > "$backend_known_hosts"
+          chmod 600 "$backend_known_hosts"
+          backend_probe="$(ssh -i "$agent_key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$backend_known_hosts" -o ConnectTimeout=10 shopvivaliz-agent@10.0.1.38 'sudo -n /usr/local/sbin/shopvivaliz-agent-ops host-status')"
           printf '%s\n' "$backend_probe" | grep -q 'always-free-arm-1787907847-26'
 
           site_probe="$(ssh -i "$agent_key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$site_known_hosts" -o ConnectTimeout=10 shopvivaliz-agent@10.0.1.112 'sudo -n /usr/local/sbin/shopvivaliz-agent-ops host-status')"
