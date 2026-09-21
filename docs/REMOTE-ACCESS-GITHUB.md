@@ -32,6 +32,7 @@ ChatGPT / agente
 - `disk`
 - `runtime_status`
 - `repo_status`
+- `ai_squad_ui_audit` (somente `shopvivaliz-free-a1`; orquestra login do admin interno, browser backend e auditoria UI completa)
 
 O comando não aceita shell arbitrário. Para adicionar uma operação nova, altere o workflow ou adicione um script versionado e revisável.
 
@@ -41,6 +42,9 @@ No issue `#1586`, publique um comentário de uma única linha:
 
 ```text
 /remote target=fred-win action=identity reason=diagnostico operacional
+
+# Auditoria funcional real do AI Squad pela UI
+/remote target=shopvivaliz-free-a1 action=ai_squad_ui_audit reason=auditoria extrema AI Squad
 ```
 
 O workflow `.github/workflows/shopvivaliz-remote-access.yml` aceita somente comentários criados nesse issue pelo usuário autorizado `fredmourao-ai`. Também pode ser acionado manualmente por `workflow_dispatch` com inputs tipados.
