@@ -128,25 +128,25 @@ PY
   chmod 600 "$QR_PATH"
   unset secret uri
 
-  local pw generated_password password_tmp
+  local pw credential_value credential_tmp
   if ! pw="$(password_state)"; then
     pw=""
   fi
   if [ "$pw" != "P" ] || [ ! -s "$PASSWORD_PATH" ]; then
-    generated_password="$(openssl rand -base64 24 | tr -d '\n')"
-    password_tmp="$PASSWORD_PATH.tmp.$"
-    install -m 600 -o ubuntu -g ubuntu /dev/null "$password_tmp"
-    printf '%s\n' "$generated_password" > "$password_tmp"
-    if ! printf '%s:%s\n' "$RDP_USER" "$generated_password" | chpasswd; then
-      rm -f "$password_tmp"
-      unset generated_password
+    credential_value="$(openssl rand -base64 24 | tr -d '\n')"
+    credential_tmp="$(mktemp "${PASSWORD_PATH}.tmp.XXXXXX")"
+    install -m 600 -o ubuntu -g ubuntu /dev/null "$credential_tmp"
+    printf '%s\n' "$credential_value" > "$credential_tmp"
+    if ! printf '%s:%s\n' "$RDP_USER" "$credential_value" | chpasswd; then
+      rm -f "$credential_tmp"
+      unset credential_value
       echo "PRIVATE_RDP_ERROR=password_set_failed" >&2
       exit 29
     fi
-    mv -f "$password_tmp" "$PASSWORD_PATH"
+    mv -f "$credential_tmp" "$PASSWORD_PATH"
     chown ubuntu:ubuntu "$PASSWORD_PATH"
     chmod 600 "$PASSWORD_PATH"
-    unset generated_password
+    unset credential_value
   fi
 
   echo "OTP_ENROLLMENT_QR=$QR_PATH"
@@ -196,18 +196,18 @@ account required pam_succeed_if.so user = fredrdp
 EOF
   chmod 644 "$PAM_FILE"
 
-  local secret password code auth_token
+  local secret credential_value code auth_token
   secret="$(head -n1 "/home/$RDP_USER/.google_authenticator")"
-  password="$(cat "$PASSWORD_PATH")"
+  credential_value="$(cat "$PASSWORD_PATH")"
   code="$(oathtool --totp -b "$secret")"
-  auth_token="${password}${code}"
+  auth_token="${credential_value}${code}"
   if ! printf '%s\n' "$auth_token" | pamtester xrdp-sesman "$RDP_USER" authenticate >/dev/null 2>&1; then
-    unset secret password code auth_token
+    unset secret credential_value code auth_token
     cp -a "$backup_dir/xrdp-sesman" "$PAM_FILE"
     echo "PRIVATE_RDP_ERROR=pam_self_test_failed" >&2
     exit 30
   fi
-  unset secret password code auth_token
+  unset secret credential_value code auth_token
   echo "PRIVATE_RDP_PAM_AUTH=PASS"
 
   python3 - "$XRDP_INI" <<'PY'
