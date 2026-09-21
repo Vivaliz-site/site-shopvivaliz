@@ -11,6 +11,12 @@ function ais_assert(bool $condition, string $message): void
     }
 }
 
+$agentContext = svais_agent_context();
+ais_assert(str_contains($agentContext, 'shopvivaliz-free-a1'), 'shared AI context must include production host');
+ais_assert(str_contains($agentContext, 'always-free-arm-1787907847-26'), 'shared AI context must include backend host');
+ais_assert(str_contains($agentContext, 'mercadolivre-returns-recovery'), 'shared AI context must include related projects');
+ais_assert(str_contains($agentContext, 'pesquise a web'), 'shared AI context must require current technical web research');
+
 $catalog = svais_profile_catalog();
 ais_assert(isset($catalog['deep_research'], $catalog['balanced'], $catalog['fast']), 'expected profiles missing');
 
@@ -329,6 +335,8 @@ $coreSource = (string)file_get_contents(dirname(__DIR__) . '/includes/ai-squad-c
 ais_assert(!str_contains($coreSource, 'function svais_openai_call'), 'AI Squad core must not retain dormant OpenAI Platform API transport');
 ais_assert(!str_contains($coreSource, "getenv('OPENAI_API_KEY')"), 'AI Squad core must not read OPENAI_API_KEY');
 ais_assert(str_contains($coreSource, 'function svais_chatgpt_browser_call'), 'AI Squad core must implement ChatGPT browser transport');
+ais_assert(str_contains($coreSource, "'programming_web_research' => true"), 'ChatGPT browser payload must require technical web research');
+ais_assert(str_contains($coreSource, 'SHOPVIVALIZ CANONICAL CONTEXT'), 'ChatGPT browser payload must receive canonical project context');
 ais_assert(!str_contains($coreSource, 'function svais_anthropic_call'), 'AI Squad core must not retain dormant Anthropic API transport');
 ais_assert(!str_contains($coreSource, 'function svais_anthropic_vertex_call'), 'AI Squad core must not retain dormant Anthropic Vertex transport');
 ais_assert(!str_contains($coreSource, "getenv('ANTHROPIC_API_KEY')"), 'AI Squad core must not read ANTHROPIC_API_KEY');
