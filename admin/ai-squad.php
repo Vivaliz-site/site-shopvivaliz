@@ -149,7 +149,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 const API='/api/agent/ai-squad.php';
 const CSRF=<?= json_encode($csrf, JSON_UNESCAPED_SLASHES) ?>;
 const names={openai:'OpenAI',anthropic:'Claude',gemini:'Gemini'};
-const transportNames={codex_chatgpt:'via ChatGPT/Codex',openrouter:'via OpenRouter',manual_chatgpt:'ChatGPT manual'};
+const transportNames={codex_chatgpt:'via ChatGPT/Codex',chatgpt_browser:'via ChatGPT web',openrouter:'via OpenRouter',manual_chatgpt:'ChatGPT manual'};
 let running=false;
 let count=0;
 
@@ -213,7 +213,7 @@ function addManual(e){
 
   const note=document.createElement('div');
   note.className='manual-note';
-  note.textContent='Os perfis ChatGPT/Codex ficaram sem capacidade. Use o ChatGPT autenticado para executar este prompt sem recorrer à OpenAI Platform API.';
+  note.textContent='Codex e o fallback automático do ChatGPT web ficaram indisponíveis. Use o ChatGPT manual apenas como último recurso; a OpenAI Platform API não é utilizada.';
   div.appendChild(note);
 
   if(Array.isArray(e.attempts)&&e.attempts.length){
