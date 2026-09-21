@@ -23,11 +23,11 @@ fi
 
 print_status() {
   local pkg service lightdm local_xorg anydesk_id
-  pkg="$(dpkg-query -W -f='${Status} ${Version} ${Architecture}' anydesk 2>/dev/null || true)"
-  service="$(systemctl is-active anydesk 2>/dev/null || true)"
-  lightdm="$(systemctl is-active lightdm 2>/dev/null || true)"
+  if ! pkg="$(dpkg-query -W -f='${Status} ${Version} ${Architecture}' anydesk 2>/dev/null)"; then pkg=""; fi
+  if ! service="$(systemctl is-active anydesk 2>/dev/null)"; then service=""; fi
+  if ! lightdm="$(systemctl is-active lightdm 2>/dev/null)"; then lightdm=""; fi
   if pgrep -af '/usr/lib/xorg/Xorg :0([[:space:]]|$)' >/dev/null 2>&1; then local_xorg=true; else local_xorg=false; fi
-  anydesk_id="$(anydesk --get-id 2>/dev/null | tr -cd '0-9' | head -c 20 || true)"
+  if ! anydesk_id="$(anydesk --get-id 2>/dev/null | tr -cd '0-9' | head -c 20)"; then anydesk_id=""; fi
   echo "BACKEND_ANYDESK_STATUS=ok"
   echo "ANYDESK_PACKAGE=${pkg:-not-installed}"
   echo "ANYDESK_SERVICE=${service:-unknown}"
@@ -38,7 +38,7 @@ print_status() {
 
 launch_gui() {
   local pid display xauth runtime bus
-  pid="$(pgrep -u "$GUI_USER" -x xfce4-session | head -1 || true)"
+  if ! pid="$(pgrep -u "$GUI_USER" -x xfce4-session | head -1)"; then pid=""; fi
   if [ -z "$pid" ]; then
     echo "ANYDESK_GUI=skipped_no_active_xfce_session"
     return 0
