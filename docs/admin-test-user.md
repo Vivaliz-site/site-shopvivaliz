@@ -26,38 +26,42 @@ Script: `scripts/create-admin-test-user.php`
 
 - Idempotente: se rodado de novo, **rotaciona a senha** do mesmo usuário em
   vez de duplicar.
-- Gera senha aleatória forte (32 bytes de entropia), nunca reaproveita senha
-  fixa.
-- Hash vai pro banco via `password_hash()` (mesmo mecanismo que
-  `auth/login.php` usa para verificar) — a senha em texto plano nunca é
-  persistida, só aparece uma vez na saída da execução.
-- Pode rodar via CLI (`php scripts/create-admin-test-user.php`) na VM, ou via
-  HTTP protegido por token secreto (`SV_ADMIN_BOOTSTRAP_TOKEN`), comparado
-  com `hash_equals` (timing-safe). Sem o token certo, HTTP retorna 403 puro,
-  sem tocar no banco.
+- Gera senha aleatória forte (32 bytes de entropia), nunca reaproveita senha fixa.
+- Hash vai pro banco via `password_hash()`, como em `auth/login.php`.
+- Em CLI, a senha não é impressa: fica persistida em arquivo privado `0600`,
+  por padrão `/home/ubuntu/.config/shopvivaliz-admin-test.credentials.json`.
+- `--credential-file=/caminho/protegido.json` permite escolher outro destino
+  operacional sem colocar a senha em argv, logs, Git ou chat.
+- O modo HTTP legado continua protegido por `SV_ADMIN_BOOTSTRAP_TOKEN`; para
+  automação nova, preferir sempre o modo CLI com arquivo protegido.
 
-## Credenciais atuais
+## Credenciais da automação
 
 | Campo | Valor |
 |---|---|
 | Email | `agente-teste-interno@shopvivaliz.com.br` |
-| Senha | **preencher após rodar o script — ver seção "Execução" abaixo** |
+| Senha | **não documentar em Git** |
+| Arquivo protegido | `/home/ubuntu/.config/shopvivaliz-admin-test.credentials.json` |
+| Permissão | `0600` |
 | `is_admin` | `1` |
-| Criado em | 2026-08-14 |
 
-**A senha real gerada nesta execução deve ser colada aqui manualmente pelo
-agente que rodou o script, e em nenhum outro lugar do repo** (não em `.env`,
-não em comentário de código, não em log). Este arquivo não deve ser exposto
-publicamente — se o repo tiver alguma rota que sirva `docs/*.md` como HTML
-público, mova este arquivo para fora do webroot ou adicione ao
-`.gitignore`/regra de bloqueio de acesso direto antes de preencher a senha
-real.
+A conta real do proprietário continua separada. A fonte canônica dessa
+credencial humana permanece o arquivo privado `admsite.txt` no Google Drive
+autorizado; o usuário de automação existe justamente para a UI poder ser
+validada sem transportar ou registrar a senha pessoal.
 
 ## Execução
 
-Rodado via deploy normal (push → cron `deploy-production.sh` na VM aplica o
-código) e então disparado uma única vez via HTTP com o token de bootstrap.
-Ver histórico de execução e a senha gerada registrados por quem rodou.
+Após deploy normal, executar via CLI na VM de produção:
+
+```bash
+php scripts/create-admin-test-user.php
+```
+
+A execução cria/rotaciona a conta e grava a credencial protegida sem imprimir a
+senha. O gate `ai_squad_ui_audit` sincroniza esse arquivo com a VM de browser
+por SSH privado, mantendo `0600`, e usa o perfil persistente
+`shopvivaliz-admin-test`.
 
 ## Revogação / rotação
 
