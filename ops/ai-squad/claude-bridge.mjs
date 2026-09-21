@@ -188,9 +188,33 @@ async function probeAuth() {
     return false;
   }
   try {
-    const result = await runClaude(['auth', 'status', '--json'], '', 8000, token);
-    const data = JSON.parse(result.stdout || '{}');
-    const ok = result.code === 0 && data && data.loggedIn === true;
+    // `claude auth status` can report loggedIn=true for an OAuth token that
+    // cannot perform inference. Health must prove the same non-interactive
+    // path used by the AI Squad, otherwise the UI can go falsely green.
+    const status = await runClaude(['auth', 'status', '--json'], '', 8000, token);
+    const statusData = JSON.parse(status.stdout || '{}');
+    if (status.code !== 0 || statusData?.loggedIn !== true) {
+      authState = { checked_at: Date.now(), authenticated: false };
+      return false;
+    }
+
+    const request = {
+      model: 'claude-sonnet-5',
+      effort: 'low',
+      system: 'AI Squad authentication health probe. Reply only OK.',
+      prompt: 'OK',
+      web_search: false,
+    };
+    const result = await runClaude(buildClaudeArgs(request), request.prompt, 20000, token);
+    let data = {};
+    try {
+      data = JSON.parse(result.stdout || '{}');
+    } catch {
+      data = {};
+    }
+    const ok = result.code === 0
+      && data?.is_error !== true
+      && String(data?.result || '').trim() !== '';
     authState = { checked_at: Date.now(), authenticated: ok };
     return ok;
   } catch {

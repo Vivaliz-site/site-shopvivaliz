@@ -76,3 +76,7 @@ assert.equal(isDirectInvocation(pathToFileURL(bridgeTarget).href, import.meta.fi
 fs.rmSync(invocationDir, { recursive: true, force: true });
 
 console.log('AI_SQUAD_CLAUDE_BRIDGE_TEST=PASS');
+
+const bridgeSource = fs.readFileSync(bridgeTarget, 'utf8');
+assert.match(bridgeSource, /auth status.*cannot perform inference/s, 'health probe must reject auth-status-only false green');
+assert.match(bridgeSource, /buildClaudeArgs\(request\).*20000/s, 'health probe must execute a bounded real inference');
