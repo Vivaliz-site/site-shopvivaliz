@@ -15,6 +15,10 @@ grep -q 'launch_gui' "$setup"
 grep -q 'anydesk_install' "$workflow"
 grep -q 'anydesk_status' "$workflow"
 grep -q 'setup-backend-anydesk.sh' "$workflow"
+if grep -Fq '|| true' "$setup"; then
+  echo "dangerous || true remains in AnyDesk setup"
+  exit 1
+fi
 if grep -Eq '(PASSWORD|TOKEN|SECRET)=' "$setup" "$workflow"; then
   echo "secret-like literal assignment detected"
   exit 1
