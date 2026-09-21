@@ -118,7 +118,7 @@ install_rustdesk_firewall() {
 #!/usr/bin/env bash
 set -Eeuo pipefail
 CHAIN=SHOPVIVALIZ_RUSTDESK
-iptables -N "$CHAIN" 2>/dev/null || true
+if ! iptables -N "$CHAIN" 2>/dev/null; then iptables -F "$CHAIN"; fi
 iptables -F "$CHAIN"
 iptables -A "$CHAIN" -s 10.0.0.0/8 -j ACCEPT
 iptables -A "$CHAIN" -s 100.64.0.0/10 -j ACCEPT
