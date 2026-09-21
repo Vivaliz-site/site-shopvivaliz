@@ -820,7 +820,7 @@ function liz_call_claude(string $message, array $history, array $products, strin
         CURLOPT_HTTPHEADER => [
             'Content-Type: application/json',
             'x-api-key: ' . $apiKey,
-            'anthropic-version: 2023-06-01'
+            'anthropic-version: 2024-06-01'
         ],
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
