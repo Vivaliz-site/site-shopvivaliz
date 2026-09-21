@@ -61,3 +61,6 @@ grep -q 'QT_ACCESSIBILITY=1' "$script"
 grep -q 'DBUS_SESSION_BUS_ADDRESS="$dbus"' "$script"
 grep -q 'ui_dump)' "$script"
 grep -q 'anydesk_ui_dump' "$workflow"
+
+grep -q 'at-spi-bus-launcher' "$script"
+grep -q 'NO_AT_BRIDGE=0' "$script"
