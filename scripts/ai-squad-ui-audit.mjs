@@ -7,7 +7,7 @@ const screenshotPath = process.env.AI_SQUAD_UI_SCREENSHOT || '/tmp/ai-squad-ui-f
 const configuredBrowserPath = String(process.env.SHOPVIVALIZ_CHROMIUM_PATH || '').trim();
 const configuredProfileDir = String(process.env.AI_SQUAD_UI_PROFILE || '').trim();
 const ephemeralProfile = configuredProfileDir === '';
-const profileDir = configuredProfileDir || fs.mkdtempSync(path.join(os.tmpdir(), 'shopvivaliz-ai-squad-audit-'));
+const profileDir = configuredProfileDir || fs.mkdtempSync(path.join(os.tmpdir(), 'sv-ai-squad-audit-'));
 const playwrightCandidates = [
   String(process.env.AI_SQUAD_PLAYWRIGHT_MODULE || '').trim(),
   '/home/ubuntu/shopvivaliz-deploy/repo/node_modules/playwright/index.js',
