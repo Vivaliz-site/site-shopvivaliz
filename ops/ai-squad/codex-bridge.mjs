@@ -47,7 +47,7 @@ export function remainingRequestMs(deadlineMs, nowMs = Date.now(), capMs = Infin
 
 export function resolveCodexWebSearchMode(webSearch, configuredMode = process.env.AI_SQUAD_CODEX_WEB_SEARCH_MODE) {
   if (webSearch !== true) return 'disabled';
-  const mode = String(configuredMode ?? '').trim().toLowerCase() || 'cached';
+  const mode = String(configuredMode ?? '').trim().toLowerCase() || 'live';
   if (!['cached', 'live'].includes(mode)) throw new Error('invalid_web_search_mode');
   return mode;
 }
