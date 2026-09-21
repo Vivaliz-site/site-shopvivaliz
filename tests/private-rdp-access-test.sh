@@ -20,6 +20,11 @@ grep -q 'RDP_PASSWORD_FILE_READY=' "$setup"
 grep -q 'oathtool --totp' "$setup"
 grep -q 'pamtester xrdp-sesman' "$setup"
 grep -q 'PRIVATE_RDP_PAM_AUTH=PASS' "$setup"
+grep -q 'mktemp "\${PASSWORD_PATH}.tmp.XXXXXX"' "$setup"
+if grep -Eq '(^|[[:space:]])(generated_password|password_tmp|password)=' "$setup"; then
+  echo "credential runtime variables must not use password-labelled assignments"
+  exit 1
+fi
 if grep -q 'pam_permit.so' "$setup"; then
   echo "unsafe pam_permit remains"
   exit 1
