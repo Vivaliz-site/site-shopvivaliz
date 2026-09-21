@@ -22,7 +22,7 @@ The agent MUST also read scope-specific documentation referenced by the task or 
 
 ## Mandatory Fred-Win scope preflight
 
-For any **non-browser** task that mentions or depends on Fred-Win, Windows automation, Remote MCP, port `5557`, Exchange Admin terminal/filesystem work, `ssh-tunnel-service-managed.ps1`, `fred-win-remote-action.yml` or `ops/fredwin-request.json`, the agent MUST additionally read:
+For any task that mentions or depends on Fred-Win, Windows automation, Remote MCP, port `5557`, Exchange Admin on the Windows computer, browser validation through the Windows computer, `ssh-tunnel-service-managed.ps1`, `fred-win-remote-action.yml` or `ops/fredwin-request.json`, the agent MUST additionally read:
 
 1. `docs/FRED-WIN-PRIVATE-RELAY.md`
 2. `docs/AGENT-MCP-REMOTE.md`
@@ -33,7 +33,7 @@ Before stating that Fred-Win is active or inactive, the agent MUST apply the can
 
 Critical classification rule:
 
-- `COMPROVADO / ATIVO`: only after the allowlisted `health` succeeds through the current private backend route -> VM loopback `127.0.0.1:5557` -> reverse SSH -> Fred-Win.
+- `COMPROVADO / ATIVO`: only after the allowlisted `health` succeeds through GitHub Actions -> Oracle VM `137.131.156.17` -> VM loopback `127.0.0.1:5557` -> reverse SSH -> Fred-Win.
 - `FALHOU / INATIVO`: only after the canonical health path fails and objective process, tunnel or log evidence confirms the component is down or broken.
 - `INCONCLUSIVO`: when the workflow, VM, health endpoint or logs cannot be checked. Lack of access is never evidence of inactivity.
 
@@ -75,7 +75,7 @@ The receipt is bound to SHA-256 hashes of all required documents. If any require
 
 ## No shortcut when a tool is unavailable
 
-A missing preferred tool is not permission to skip required validation or evidence. For browser validation, the only approved host is `always-free-arm-1787907847-26` through the Browser Worker. If that path is unavailable, repair the Browser Worker/private VM path or report a real block; **never** fall back to Fred-Win or KOCEPSV. Windows relays remain available only for non-browser tasks.
+A missing preferred tool is not permission to skip required validation or evidence. The agent must investigate and use an approved alternative path where one exists. For browser validation, examples include the existing Fred-Win private tunnel/remote-browser route documented in `docs/FRED-WIN-PRIVATE-RELAY.md` and `reports/fredwin-remote-access-repair-2026-08-07.md` when the direct Opera connector is unavailable.
 
 If the Fred-Win route cannot be tested, the agent must report it as `INCONCLUSIVO`; it must not infer `INATIVO` from an unavailable connector, the deprecated Cloudflare hostname, lack of a recent workflow run or inability to inspect the local Windows filesystem from the current session.
 
