@@ -72,9 +72,6 @@ for _ in $(seq 1 50); do
     if printf '%s' "$body" | grep -q '"endpoint":"ai-squad-claude-bridge"' \
       && printf '%s' "$body" | grep -q '"ok":true' \
       && printf '%s' "$body" | grep -q '"authenticated":true'; then
-      if [ -f "$legacy_bridge" ] && [ "$legacy_bridge" != "$bridge" ]; then
-        rm -f "$legacy_bridge"
-      fi
       printf '%s\n' "AI_SQUAD_CLAUDE_BRIDGE_SERVICE=ACTIVE"
       printf '%s\n' "AI_SQUAD_CLAUDE_BRIDGE_HEALTH=VERIFIED"
       exit 0
