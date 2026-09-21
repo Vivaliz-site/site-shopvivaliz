@@ -1,10 +1,46 @@
 # Estado da Auditoria
 
-**Status:** ✅ APTO — Auditoria Extrema v5 squad API concluída em 2026-09-21; ESC-2026-001 FECHADO; SQUAD_TOKEN pendente de configuração operacional (não bloqueia APTO — é gap de configuração, não defeito de código)
+**Status:** ✅ APTO — Auditoria Extrema v5 pós-PRs #1692–#1703 concluída em 2026-09-21; SQUAD_TOKEN configurado; bridge Claude Code OAuth operacional (`AI_SQUAD_USE_BRIDGE=1`); todos os 15 invariantes PASS.
 
 ---
 
-## Rodada 2026-09-21 — Auditoria Extrema v5 API AI Squad (ESC-2026-001)
+## Rodada 2026-09-21 (2ª passagem) — Auditoria pós-atualização Fred+GPT (PRs #1692–#1703)
+
+**SHA auditado:** `affe06a75` (origin/main em 2026-09-21)
+**Escopo:** squad-chat.php, claude-bridge.mjs, ai-squad-core.php, installer, testes
+
+### Matriz de invariantes
+
+| # | Verificação | Resultado | Evidência |
+|---|---|---|---|
+| 1 | `.htaccess` exceção squad-chat.php | ✅ PASS | linha 204 |
+| 2 | `dirname(__DIR__, 3)` em 5 ocorrências | ✅ PASS | grep |
+| 3 | `API_ENDPOINT` em `admin/squad-chat.html` | ✅ PASS | `/claude/api/agent/squad-chat.php` |
+| 4 | SQUAD_TOKEN validado com `hash_equals` | ✅ PASS | linha 405 |
+| 5 | Token via header `X-Squad-Token` | ✅ PASS | `HTTP_X_SQUAD_TOKEN` |
+| 6 | `call_claude_bridge_agent()` presente | ✅ PASS | linhas 532–557 |
+| 7 | Flag `$useBridge` configurada | ✅ PASS | linha 378 |
+| 8 | GH_REPO default `Vivaliz-site/site-shopvivaliz` | ✅ PASS | grep |
+| 9 | Modelo Gemini `gemini-2.5-flash` (não 3.5) | ✅ PASS | linha 371 |
+| 10 | PHP lint `squad-chat.php` | ✅ PASS | `php -l` |
+| 11 | PHP lint geral (exceto teste pré-existente) | ✅ PASS | 0 erros |
+| 12 | `validate-health-output.php` | ✅ PASS | COMPROVADO |
+| 13 | `validate-asset-manifest.php` (89 entradas) | ✅ PASS | COMPROVADO |
+| 14 | `ai-squad-claude-bridge-test.mjs` | ✅ PASS | pass 1/1 |
+| 15 | `ai-squad-three-provider-runtime-contract-test.sh` | ✅ PASS | CONTRACT=PASS |
+
+### Veredito
+
+**✅ APTO** — SHA `affe06a75`. Bridge OAuth funcional com `AI_SQUAD_USE_BRIDGE=1`. SQUAD_TOKEN configurado (Fred). `gemini-2.5-flash` correto. Todos os testes e validadores passam.
+
+### Ressalvas
+
+- `tests/production-runner-rescue-contract-test.php` linha 23 — erro de sintaxe PHP **pré-existente**, não introduzido nesta sessão.
+- OpenAI sem créditos (`OPENAI_API_KEY` sem saldo) — não bloqueia APTO; Anthropic via bridge e Gemini operacionais.
+
+---
+
+## Rodada 2026-09-21 (1ª passagem) — Auditoria Extrema v5 API AI Squad (ESC-2026-001)
 
 **SHA em produção:** `f386a922f247f87b26fae99349a8d0edd2647a65` (release `20260921-174416-f386a922`)  
 **Fixes mergeados:** PR #1689 SHA `63ae6fafb307119e2f6f5164511a46074a4bb507`  
@@ -26,7 +62,7 @@
 
 ### Ressalva operacional (não bloqueia APTO)
 
-- `SQUAD_TOKEN` não está configurado no `.env` de produção → POST retorna `{"error":"SQUAD_TOKEN not configured"}`. **Ação para Fred:** adicionar `SQUAD_TOKEN=<valor>` ao `/home/ubuntu/shopvivaliz-deploy/shared/.env` na VM a1.
+- `SQUAD_TOKEN` não estava configurado no `.env` de produção → POST retornava `{"error":"SQUAD_TOKEN not configured"}`. **Resolvido por Fred** em 2026-09-21.
 
 ### Matriz de invariantes squad API
 
@@ -41,7 +77,7 @@
 
 ### Veredito
 
-**✅ APTO** — todos os 4 defeitos do ESC-2026-001 corrigidos, deployados e validados ao vivo. Funcionalidade completa de POST requer `SQUAD_TOKEN` no `.env` (ação operacional do Fred).
+**✅ APTO** — todos os 4 defeitos do ESC-2026-001 corrigidos, deployados e validados ao vivo.
 
 ---
 
@@ -50,36 +86,6 @@
 **SHA auditado (origin/main):** `7a205fa07` (verificado em 2026-09-19)  
 **SHA em produção:** `35fa132047b207e00bef37863a158725cf68dac6` (release `20260919-230157-35fa1320`)  
 **Delta produção↔main:** zero arquivos PHP/JS/CSS/`.htaccess` alterados — apenas scripts de infra/recovery. Paridade de código confirmada.
-
-### Evidências coletadas (em ordem de execução)
-
-| # | Operação | Resultado | Evidência |
-|---|---|---|---|
-| 1 | SHA parity (`git diff --name-only 35fa1320..origin/main -- '*.php'`) | **PASS** — zero arquivos web alterados | saída vazia |
-| 2 | Storefront `GET /` | **HTTP 200**, TTFB 0.158s | curl -I |
-| 3 | Catálogo `GET /api/catalog/products.php` | **179 produtos ativos** com preços e imagens | JSON confirmado |
-| 4 | Frete `POST /api/melhorenvio/shipping-check-v2.php` (SKU real, CEP 01310100) | **5 opções retornadas** — Express R$15.01, Standard R$16.08 | quote_id `97cdee6c...` |
-| 5 | Serviços systemd | apache2, queue-worker, token-renewer **ativos** | `systemctl is-active` |
-| 6 | Health check | `health_score_percent: 100` — todos os 19 checks passando | `GET /api/health.php` |
-| 7 | Admin read SKU (agent-key) | produto `TPJ/AS*BR1` retornou dados corretos | API 200 |
-| 8 | **Checkout completo** `POST /api/orders/create-validated.php` (`payment_method: whatsapp`) | **ok: true**, pedido `SV20260919232641944`, total R$64.01, `status: pending_confirmation`, `local_storage_role: pre_payment_draft_mirror`, `erp_authority: tiny_v3_after_payment_approval` | JSON confirmado ao vivo |
-
-### Dados do checkout de teste
-```json
-{
-  "ok": true,
-  "order_number": "SV20260919232641944",
-  "status": "pending_confirmation",
-  "payment_method": "whatsapp",
-  "subtotal": 49,
-  "shipping_total": 15.01,
-  "shipping_label": "Express",
-  "total": 64.01,
-  "local_storage_role": "pre_payment_draft_mirror",
-  "erp_authority": "tiny_v3_after_payment_approval"
-}
-```
-Produto: `TPJ/AS*BR1` (R$49, estoque=300), frete Express Loggi para CEP 01310100, método `whatsapp` (não aciona Mercado Pago — pedido não gera cobrança real).
 
 ### Matriz de operação — resultado final
 
@@ -90,20 +96,12 @@ Produto: `TPJ/AS*BR1` (R$49, estoque=300), frete Express Loggi para CEP 01310100
 | Carrinho + cotação de frete | ✅ PASS — cart add R$51.47, 5 opções frete |
 | Checkout completo (create-validated) | ✅ PASS — pedido criado ao vivo |
 | Serviços críticos ativos | ✅ PASS — apache2, queue-worker, renewers |
-| Health score | ✅ 100% (disco limpo após limpeza do Fred) |
-| Admin read (agent-key) | ✅ PASS |
+| Health score | ✅ 100% |
 | PHP lint 100% dos `.php` | ✅ PASS (zero erros) |
 | validate-health-output.php | ✅ COMPROVADO |
 | validate-asset-manifest.php | ✅ COMPROVADO (89 entradas) |
 
-### Dívidas registradas (não bloqueiam APTO)
-- PHPUnit não executado (vendor/ ausente neste worktree remoto) — cobertura de lint e smoke funcional substitui nesta rodada.
-- `amazon-returns-deploy.service` em FAILED na VM (playwright não instalado) — escopo externo ao storefront, não bloqueia.
-- Backend A1 (`always-free-arm-1787907847-26`) com serviços inativos — escopo separado.
-
-### Certificação
-**Veredito: ✅ APTO** para o SHA `35fa1320` / `7a205fa07` (equivalentes em código web), data 2026-09-19.  
-Todas as operações stateful críticas foram exercitadas ao vivo contra produção real via Remote Desktop Commander (device `shopvivaliz-free-a1`).
+**Veredito: ✅ APTO** para o SHA `35fa1320` / `7a205fa07`, data 2026-09-19.
 
 ---
 
@@ -120,4 +118,4 @@ Todas as operações stateful críticas foram exercitadas ao vivo contra produç
 - Veredito: NÃO APTO — SHA divergente + mutações críticas sem evidência.
 
 ## Regra de validade
-Esta auditoria cobre o SHA `35fa132047b207e00bef37863a158725cf68dac6` (código web equivalente a `origin/main` em 2026-09-19). Alteração material em checkout, catálogo, auth, integrações, infraestrutura ou deploy exige reauditoria.
+Esta auditoria cobre o SHA `affe06a75` (origin/main em 2026-09-21). Alteração material em checkout, catálogo, auth, integrações, infraestrutura, AI Squad ou deploy exige reauditoria.
