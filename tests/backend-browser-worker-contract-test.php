@@ -39,6 +39,8 @@ $mustContain = [
     [$workflow, 'ubuntu@10.0.1.38', 'workflow must use private backend address'],
     [$workflow, 'allowed = {"status", "health", "install", "start", "restart", "stop"}', 'workflow must be allowlisted'],
     [$install, '# SHOPVIVALIZ_BROWSER_WORKER_V1', 'persistent watchdog marker required'],
+    [$install, 'PY_PW_VERSION="${SHOPVIVALIZ_BROWSER_PY_PLAYWRIGHT_VERSION:-${PW_VERSION%.*}.0}"', 'Python Playwright version must normalize the Node patch release'],
+    [$install, '"playwright==$PY_PW_VERSION"', 'Python Playwright install must use the normalized Python version'],
 ];
 
 foreach ($mustContain as [$haystack, $needle, $message]) {
@@ -54,6 +56,7 @@ $forbidden = [
     [$admin, 'CURLOPT_URL', 'admin must not accept arbitrary proxy destinations'],
     [$workflow, 'CMD="${{', 'workflow must not execute user-provided shell'],
     [$supervisor, 'GatewayPorts=yes', 'reverse tunnel must not enable gateway ports'],
+    [$install, '"playwright==$PW_VERSION"', 'Python Playwright must not reuse the npm patch version blindly'],
 ];
 
 foreach ($forbidden as [$haystack, $needle, $message]) {
