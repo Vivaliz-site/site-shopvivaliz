@@ -5,6 +5,7 @@ ROOT="${SHOPVIVALIZ_BROWSER_ROOT:-/home/ubuntu/shopvivaliz-browser-worker}"
 REF="${SHOPVIVALIZ_BROWSER_REF:-main}"
 REPO_RAW="https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/$REF"
 PW_VERSION="1.62.1"
+PY_PW_VERSION="${SHOPVIVALIZ_BROWSER_PY_PLAYWRIGHT_VERSION:-${PW_VERSION%.*}.0}"
 
 if [ "$(id -un)" != "ubuntu" ]; then
   echo "browser worker must run as ubuntu" >&2
@@ -54,8 +55,8 @@ PYVER
 )"; then
   py_current="$py_value"
 fi
-if [ "$py_current" != "$PW_VERSION" ]; then
-  "$PY_VENV/bin/python" -m pip install --disable-pip-version-check --no-cache-dir "playwright==$PW_VERSION"
+if [ "$py_current" != "$PY_PW_VERSION" ]; then
+  "$PY_VENV/bin/python" -m pip install --disable-pip-version-check --no-cache-dir "playwright==$PY_PW_VERSION"
 fi
 
 chrome="$(find /home/ubuntu/.cache/ms-playwright -maxdepth 3 -type f -path '*/chromium-*/chrome-linux/chrome' -perm -u+x 2>/dev/null | sort -V | tail -1)"
