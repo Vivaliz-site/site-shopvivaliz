@@ -10,6 +10,7 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 - [`troubleshooting.md`](troubleshooting.md) — diagnóstico de erros HTTP, rede, integrações e deploy.
 - [`deploy.md`](deploy.md) — fluxo de publicação, curl, CI e checklist.
 - [`agent-rules.md`](agent-rules.md) — regras obrigatórias para agentes.
+- [`dev-agent-briefing.md`](dev-agent-briefing.md) — onboarding canônico do `@dev`: projetos, hosts, regras, pesquisa técnica na web e padrão de engenharia.
 - [`repository-index.md`](repository-index.md) — índice canônico de aplicação, automações e áreas alvo.
 - [`structure-policy.md`](structure-policy.md) — política de reorganização por lotes e critérios de conclusão.
 - [`updater.md`](updater.md) — atualizações cumulativas, migrations e reparos automáticos.
@@ -37,7 +38,8 @@ Antes de qualquer diagnóstico ou alteração, toda nova sessão deve ler, nesta
 1. `host-access.md` — descobrir o host e o método de acesso corretos;
 2. `agent-rules.md` — aplicar regras de evidência e segurança;
 3. `project.md` — entender o sistema e seus módulos;
-4. o documento específico da rotina afetada.
+4. para o `@dev`/agente programador adicional, `dev-agent-briefing.md`;
+5. o documento específico da rotina afetada.
 
 
 > **Regra contínua de execução:** toda sessão/agente deve usar **@Superpowers em cada etapa material** (planejamento, investigação, implementação, debugging, testes, revisão, correção, PR/merge, deploy, pós-deploy, auditoria e retomadas). Uma única invocação no início não é suficiente. A regra completa está em `agent-rules.md` e `../../REGRAS-AGENTES-CENTRALIZADAS.md`.
