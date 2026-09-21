@@ -46,12 +46,11 @@ Quando `web_search=true`, o bridge Codex usa `cached` por padrão. Esse modo foi
 
 ## Cadeias Claude e Gemini
 
-Anthropic usa, nesta ordem:
+Claude usa exclusivamente:
 
-1. `claude_code` — bridge local `127.0.0.1:17657` executando Claude Code com `CLAUDE_CODE_OAUTH_TOKEN` da assinatura autorizada;
-2. `direct` — Anthropic Messages API com `ANTHROPIC_API_KEY`;
-3. `vertex_oauth` — Claude on Vertex AI com OAuth Google já provisionado;
-4. `openrouter` — último fallback, somente quando a credencial OpenRouter estiver válida.
+1. `claude_code` — bridge local `127.0.0.1:17657` executando Claude Code autenticado pela conta Claude autorizada (OAuth da assinatura).
+
+O agente Claude do AI Squad não usa chave da Anthropic API, Vertex Anthropic nem OpenRouter como fallback. Se a sessão Claude Code estiver sem cota ou sem autenticação, a perna Claude falha explicitamente em vez de trocar silenciosamente de transporte.
 
 Gemini usa, nesta ordem:
 
@@ -106,16 +105,15 @@ As variáveis abaixo são referências de configuração. Valores nunca devem se
 Credenciais diretas, quando esse transporte for usado:
 
 - `OPENAI_API_KEY` — opcional quando `codex_chatgpt` está disponível;
-- `ANTHROPIC_API_KEY`;
 - `GEMINI_API_KEY` ou `GOOGLE_API_KEY`.
 
-Fallback opcional dos outros provedores:
+Fallback opcional do Gemini:
 
-- `OPENROUTER_API_KEY` — pode ser usado por Anthropic/Gemini após falha direta; não participa da cadeia OpenAI.
+- `OPENROUTER_API_KEY` — pode ser usado pelo Gemini quando configurado; não participa das cadeias OpenAI nem Claude.
 
 Credenciais/transporte OAuth adicionais:
 
-- `CLAUDE_CODE_OAUTH_TOKEN` — token OAuth de longa duração usado pelo bridge Claude Code;
+- `CLAUDE_CODE_OAUTH_TOKEN` — credencial OAuth derivada do login da conta Claude/Claude Code; não é uma Anthropic API key;
 - `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REFRESH_TOKEN` — OAuth para Vertex AI;
 - `AI_SQUAD_GOOGLE_CLOUD_PROJECT` — override opcional do projeto Vertex; quando ausente, o runtime pode usar o número do projeto embutido no client ID OAuth.
 
@@ -152,7 +150,7 @@ O health esperado contém:
 - `providers` com OpenAI, Anthropic e Gemini;
 - modelo e esforço de cada provider;
 - para OpenAI, `transport_order`, `codex_chatgpt_authenticated`, `codex_chatgpt_available`, `codex_web_search_mode`, `direct_configured` e `manual_fallback`;
-- para Anthropic, `transport_order`, `claude_code_oauth_configured`, `claude_code_authenticated`, `claude_code_available`, `direct_configured` e `vertex_oauth_configured`;
+- para Claude, `transport_order`, `claude_code_oauth_configured`, `claude_code_authenticated`, `claude_code_available` e `account_login_only`;
 - para Gemini, `transport_order`, `vertex_oauth_configured` e `direct_configured`;
 - somente estado/booleanos agregados, nunca credenciais nem identidade da conta ChatGPT.
 
