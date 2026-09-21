@@ -10,6 +10,11 @@ QR_PATH="/home/ubuntu/shopvivaliz-rdp-otp-enroll.png"
 PASSWORD_PATH="/home/ubuntu/shopvivaliz-rdp-password.txt"
 PAM_FILE="/etc/pam.d/xrdp-sesman"
 XRDP_INI="/etc/xrdp/xrdp.ini"
+ENROLL_DIR="/home/ubuntu/.private-rdp-enroll"
+ENROLL_PORT="18777"
+ENROLL_PID_FILE="$ENROLL_DIR/server.pid"
+ENROLL_SESSION_FILE="$ENROLL_DIR/session.id"
+BROWSER_API="http://127.0.0.1:17777"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "PRIVATE_RDP_ERROR=root_required" >&2
@@ -246,11 +251,147 @@ PY
   print_status
 }
 
+publish_enrollment() {
+  if [ ! -s "$PASSWORD_PATH" ]; then
+    echo "PRIVATE_RDP_ERROR=password_file_missing" >&2
+    exit 31
+  fi
+  if [ ! -s "$QR_PATH" ]; then
+    echo "PRIVATE_RDP_ERROR=otp_qr_missing" >&2
+    exit 32
+  fi
+  if ! curl -fsS --connect-timeout 2 --max-time 5 "$BROWSER_API/health" | python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get("ok") is True and d.get("endpoint")=="browser-worker" else 1)'; then
+    echo "PRIVATE_RDP_ERROR=browser_worker_unhealthy" >&2
+    exit 33
+  fi
+
+  install -d -m 700 -o ubuntu -g ubuntu "$ENROLL_DIR"
+  install -m 600 -o ubuntu -g ubuntu "$PASSWORD_PATH" "$ENROLL_DIR/password.txt"
+  install -m 600 -o ubuntu -g ubuntu "$QR_PATH" "$ENROLL_DIR/otp.png"
+  cat > "$ENROLL_DIR/index.html" <<'EOF'
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="referrer" content="no-referrer">
+<title>ShopVivaliz RDP Enrollment</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:32px}
+.card{max-width:780px;margin:auto;background:#111827;border:1px solid #334155;border-radius:18px;padding:28px}
+.pw{font-family:ui-monospace,monospace;font-size:22px;background:#020617;padding:14px;border-radius:10px;word-break:break-all}
+img{display:block;max-width:380px;width:100%;margin:24px auto;background:white;padding:12px;border-radius:12px}
+.note{color:#cbd5e1;line-height:1.5}
+</style>
+</head>
+<body><div class="card">
+<h1>ShopVivaliz VM - RDP Seguro</h1>
+<p>Usuario: <b>fredrdp</b></p>
+<p>Senha RDP:</p>
+<div id="pw" class="pw">carregando...</div>
+<p class="note">Cadastre o QR abaixo no Authenticator. No RDP, use a senha acima seguida imediatamente do codigo TOTP de 6 digitos.</p>
+<img src="otp.png" alt="QR TOTP">
+<p class="note">Pagina temporaria, servida apenas em 127.0.0.1 dentro da VM.</p>
+<script>
+fetch('password.txt',{cache:'no-store'})
+  .then(r=>{if(!r.ok) throw new Error('load'); return r.text()})
+  .then(t=>document.getElementById('pw').textContent=t.trim())
+  .catch(()=>document.getElementById('pw').textContent='erro ao carregar');
+</script>
+</div></body></html>
+EOF
+  chown ubuntu:ubuntu "$ENROLL_DIR/index.html"
+  chmod 600 "$ENROLL_DIR/index.html"
+
+  if [ -s "$ENROLL_SESSION_FILE" ]; then
+    local old_session
+    old_session="$(cat "$ENROLL_SESSION_FILE")"
+    if [ -n "$old_session" ]; then
+      if ! curl -fsS -X POST "$BROWSER_API/sessions/$old_session/close" >/dev/null 2>&1; then
+        echo "PRIVATE_RDP_WARN=previous_enrollment_session_close_failed" >&2
+      fi
+    fi
+    unset old_session
+  fi
+
+  if [ -s "$ENROLL_PID_FILE" ]; then
+    local old_pid
+    old_pid="$(cat "$ENROLL_PID_FILE")"
+    if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
+      if ! kill "$old_pid"; then
+        echo "PRIVATE_RDP_WARN=previous_enrollment_server_stop_failed" >&2
+      fi
+    fi
+    unset old_pid
+  fi
+
+  runuser -u ubuntu -- sh -c "nohup python3 -m http.server 18777 --bind 127.0.0.1 --directory '$ENROLL_DIR' >'$ENROLL_DIR/server.log' 2>&1 </dev/null & echo \$! > '$ENROLL_PID_FILE'"
+
+  local ready
+  ready=false
+  for _ in $(seq 1 20); do
+    if curl -fsS --connect-timeout 1 --max-time 2 "http://127.0.0.1:$ENROLL_PORT/index.html" >/dev/null; then
+      ready=true
+      break
+    fi
+    sleep 1
+  done
+  if [ "$ready" != true ]; then
+    echo "PRIVATE_RDP_ERROR=enrollment_server_not_ready" >&2
+    exit 34
+  fi
+
+  local response session_id
+  response="$(curl -fsS -X POST "$BROWSER_API/sessions" -H 'Content-Type: application/json' --data '{"url":"http://127.0.0.1:18777/index.html","label":"rdp-enrollment","origin":"rdp-secure-setup","persistent":false,"ttl_seconds":1800}')"
+  session_id="$(printf '%s' "$response" | python3 -c 'import json,sys; d=json.load(sys.stdin); s=d.get("session") or {}; print(s.get("id","") if d.get("ok") is True and s.get("label")=="rdp-enrollment" else "")')"
+  unset response
+  if [ -z "$session_id" ]; then
+    echo "PRIVATE_RDP_ERROR=enrollment_session_create_failed" >&2
+    exit 35
+  fi
+  printf '%s\n' "$session_id" > "$ENROLL_SESSION_FILE"
+  chown ubuntu:ubuntu "$ENROLL_SESSION_FILE"
+  chmod 600 "$ENROLL_SESSION_FILE"
+  unset session_id
+
+  echo "RDP_ENROLLMENT_SESSION_READY=true"
+  echo "RDP_ENROLLMENT_LABEL=rdp-enrollment"
+  echo "RDP_ENROLLMENT_TTL_SECONDS=1800"
+}
+
+cleanup_enrollment() {
+  if [ -s "$ENROLL_SESSION_FILE" ]; then
+    local session_id
+    session_id="$(cat "$ENROLL_SESSION_FILE")"
+    if [ -n "$session_id" ]; then
+      if ! curl -fsS -X POST "$BROWSER_API/sessions/$session_id/close" >/dev/null 2>&1; then
+        echo "PRIVATE_RDP_WARN=enrollment_session_close_failed" >&2
+      fi
+    fi
+    unset session_id
+  fi
+
+  if [ -s "$ENROLL_PID_FILE" ]; then
+    local server_pid
+    server_pid="$(cat "$ENROLL_PID_FILE")"
+    if [ -n "$server_pid" ] && kill -0 "$server_pid" 2>/dev/null; then
+      if ! kill "$server_pid"; then
+        echo "PRIVATE_RDP_WARN=enrollment_server_stop_failed" >&2
+      fi
+    fi
+    unset server_pid
+  fi
+
+  rm -rf "$ENROLL_DIR"
+  echo "RDP_ENROLLMENT_CLEANUP=PASS"
+}
+
 case "$ACTION" in
   prepare) prepare ;;
   status) print_status ;;
   otp_prepare) prepare_otp ;;
   enable_otp) enable_otp ;;
+  enrollment_publish) publish_enrollment ;;
+  enrollment_cleanup) cleanup_enrollment ;;
   *)
     echo "PRIVATE_RDP_ERROR=unsupported_action" >&2
     exit 64
