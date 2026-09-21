@@ -71,7 +71,8 @@ Overrides opcionais:
 - `AI_SQUAD_OPENAI_MODEL`
 - `AI_SQUAD_ANTHROPIC_MODEL`
 - `AI_SQUAD_GEMINI_MODEL`
-- equivalentes `*_BALANCED_MODEL` e `*_FAST_MODEL`.
+- equivalentes `*_BALANCED_MODEL` e `*_FAST_MODEL`;
+- `AI_SQUAD_CODEX_WEB_SEARCH_MODE` — modo de pesquisa web do bridge Codex (`live`, `cached` ou `disabled` conforme política de runtime).
 
 ## Health
 
