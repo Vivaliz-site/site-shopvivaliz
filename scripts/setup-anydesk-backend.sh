@@ -6,9 +6,6 @@ EXPECTED_HOST="always-free-arm-1787907847-26"
 RDP_USER="fredrdp"
 GUI_USER="fredconsole"
 GUI_CONTROL_USER="ubuntu"
-SECRET_BRIDGE_DIR="/home/ubuntu/.cache/shopvivaliz-secret-bridge"
-SECRET_BRIDGE_KEY="$SECRET_BRIDGE_DIR/key.pem"
-SECRET_BRIDGE_PAYLOAD="$SECRET_BRIDGE_DIR/payload.b64"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "ANYDESK_ERROR=root_required" >&2
@@ -178,38 +175,6 @@ launch_gui() {
   echo "ANYDESK_LAUNCH=PASS"
 }
 
-set_password_ephemeral() {
-  local password_bytes
-  command -v openssl >/dev/null 2>&1
-  command -v anydesk >/dev/null 2>&1
-  test -f "$SECRET_BRIDGE_KEY"
-  test -f "$SECRET_BRIDGE_PAYLOAD"
-  [ "$(stat -c '%U' "$SECRET_BRIDGE_KEY")" = "ubuntu" ]
-  [ "$(stat -c '%a' "$SECRET_BRIDGE_KEY")" = "600" ]
-  [ "$(stat -c '%U' "$SECRET_BRIDGE_PAYLOAD")" = "ubuntu" ]
-  password_bytes="$(
-    base64 -d < "$SECRET_BRIDGE_PAYLOAD" \
-      | openssl pkeyutl -decrypt \
-          -inkey "$SECRET_BRIDGE_KEY" \
-          -pkeyopt rsa_padding_mode:oaep \
-          -pkeyopt rsa_oaep_md:sha256 \
-      | sed -n '2p' \
-      | wc -c
-  )"
-  if [ "$password_bytes" -lt 9 ]; then
-    echo "ANYDESK_ERROR=decrypted_password_invalid" >&2
-    exit 37
-  fi
-  base64 -d < "$SECRET_BRIDGE_PAYLOAD" \
-    | openssl pkeyutl -decrypt \
-        -inkey "$SECRET_BRIDGE_KEY" \
-        -pkeyopt rsa_padding_mode:oaep \
-        -pkeyopt rsa_oaep_md:sha256 \
-    | sed -n '2p' \
-    | anydesk --set-password >/dev/null 2>&1
-  echo "ANYDESK_PASSWORD_EPHEMERAL=PASS"
-}
-
 admin_security() {
   local tray_pid env_dump display xauthority runtime admin_log
   if tray_pid="$(pgrep -u "$GUI_USER" -f '/usr/bin/anydesk --tray' | head -1)"; then
@@ -231,8 +196,8 @@ admin_security() {
     echo "ANYDESK_ERROR=unsupported_admin_display" >&2
     exit 38
   fi
-  admin_log="$SECRET_BRIDGE_DIR/admin-security.log"
-  install -d -m 700 -o ubuntu -g ubuntu "$SECRET_BRIDGE_DIR"
+  admin_log="/home/$GUI_USER/.local/state/shopvivaliz-anydesk-admin-security.log"
+  install -d -m 700 -o "$GUI_USER" -g "$GUI_USER" "/home/$GUI_USER/.local/state"
   nohup env \
     DISPLAY="$display" \
     XAUTHORITY="$xauthority" \
@@ -306,7 +271,6 @@ case "$ACTION" in
   install) install_anydesk ;;
   status) status ;;
   launch) launch_gui ;;
-  set_password_ephemeral) set_password_ephemeral ;;
   admin_security) admin_security ;;
   control_grant) console_control grant ;;
   control_revoke) console_control revoke ;;
