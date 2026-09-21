@@ -272,7 +272,7 @@ foreach ($phases as $phase) {
                 'model' => $manual->model,
                 'prompt' => $manual->manualPrompt,
                 'attempts' => $manual->attempts,
-                'transport' => 'manual',
+                'transport' => 'manual_chatgpt',
                 'ok' => false,
             ];
             $transcript[] = $entry;
