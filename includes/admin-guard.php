@@ -18,7 +18,7 @@ if (empty($_SESSION['user_id'])) {
     exit;
 }
 
-$sessionMaxAge = 3600;
+$sessionMaxAge = 86400 * 30;
 $sessionIssuedAt = (int)($_SESSION['issued_at'] ?? $_SESSION['login_at'] ?? 0);
 if ($sessionIssuedAt > 0 && (time() - $sessionIssuedAt) > $sessionMaxAge) {
     sv_log('admin_guard_session_expired', 'security', [
