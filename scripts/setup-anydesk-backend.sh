@@ -143,17 +143,16 @@ launch_gui() {
   if [ -z "$runtime" ]; then runtime="/run/user/$(id -u "$GUI_USER")"; fi
   if [ -z "$dbus" ]; then dbus="unix:path=$runtime/bus"; fi
 
-  if runuser -u "$GUI_USER" -- env \
+  local settings_log
+  settings_log="/home/$GUI_USER/.local/state/shopvivaliz-anydesk-settings.log"
+  install -d -m 700 -o "$GUI_USER" -g "$GUI_USER" "/home/$GUI_USER/.local/state"
+  runuser -u "$GUI_USER" -- env \
     DISPLAY="$display" \
     XAUTHORITY="$xauthority" \
     XDG_RUNTIME_DIR="$runtime" \
     DBUS_SESSION_BUS_ADDRESS="$dbus" \
     GDK_BACKEND=x11 \
-    anydesk --settings >/dev/null 2>&1; then
-    :
-  else
-    echo "ANYDESK_WARN=settings_open_returned_nonzero" >&2
-  fi
+    sh -lc "nohup anydesk --settings >'$settings_log' 2>&1 </dev/null &"
 
   sleep 2
   if window_dump="$(runuser -u "$GUI_USER" -- env DISPLAY="$display" XAUTHORITY="$xauthority" xwininfo -root -tree 2>/dev/null)"; then
@@ -174,6 +173,82 @@ launch_gui() {
   echo "ANYDESK_SESSION_TYPE=$session_type"
   echo "ANYDESK_SESSION_REMOTE=$session_remote"
   echo "ANYDESK_LAUNCH=PASS"
+}
+
+admin_security() {
+  local tray_pid env_dump display xauthority runtime dbus admin_log
+  if tray_pid="$(pgrep -u "$GUI_USER" -f '/usr/bin/anydesk --tray' | head -1)"; then
+    :
+  else
+    tray_pid=""
+  fi
+  if [ -z "$tray_pid" ]; then
+    echo "ANYDESK_ERROR=physical_tray_missing" >&2
+    exit 25
+  fi
+  env_dump="$(tr '\0' '\n' < "/proc/$tray_pid/environ")"
+  display="$(printf '%s\n' "$env_dump" | sed -n 's/^DISPLAY=//p' | head -1)"
+  xauthority="$(printf '%s\n' "$env_dump" | sed -n 's/^XAUTHORITY=//p' | head -1)"
+  runtime="$(printf '%s\n' "$env_dump" | sed -n 's/^XDG_RUNTIME_DIR=//p' | head -1)"
+  dbus="$(printf '%s\n' "$env_dump" | sed -n 's/^DBUS_SESSION_BUS_ADDRESS=//p' | head -1)"
+  if [ -z "$xauthority" ]; then xauthority="/home/$GUI_USER/.Xauthority"; fi
+  if [ -z "$runtime" ]; then runtime="/run/user/$(id -u "$GUI_USER")"; fi
+  if [ -z "$dbus" ]; then dbus="unix:path=$runtime/bus"; fi
+  if [ "$display" != ":0" ] && [ "$display" != ":0.0" ]; then
+    echo "ANYDESK_ERROR=unsupported_admin_display" >&2
+    exit 38
+  fi
+  admin_log="/home/$GUI_USER/.local/state/shopvivaliz-anydesk-admin-security.log"
+  install -d -m 700 -o "$GUI_USER" -g "$GUI_USER" "/home/$GUI_USER/.local/state"
+  nohup env \
+    DISPLAY="$display" \
+    XAUTHORITY="$xauthority" \
+    XDG_RUNTIME_DIR="$runtime" \
+    DBUS_SESSION_BUS_ADDRESS="$dbus" \
+    QT_ACCESSIBILITY=1 \
+    GDK_BACKEND=x11 \
+    anydesk --admin-settings:security >"$admin_log" 2>&1 </dev/null &
+  sleep 2
+  echo "ANYDESK_ADMIN_SECURITY=PASS"
+  echo "ANYDESK_DISPLAY=$display"
+}
+
+admin_security_rdp() {
+  local session_pid env_dump display xauthority runtime dbus admin_log
+  if session_pid="$(pgrep -n -u "$RDP_USER" -f 'xfce4-session' 2>/dev/null)"; then
+    :
+  else
+    session_pid=""
+  fi
+  if [ -z "$session_pid" ]; then
+    echo "ANYDESK_ERROR=rdp_desktop_session_missing" >&2
+    exit 39
+  fi
+  env_dump="$(tr '\0' '\n' < "/proc/$session_pid/environ")"
+  display="$(printf '%s\n' "$env_dump" | sed -n 's/^DISPLAY=//p' | head -1)"
+  xauthority="$(printf '%s\n' "$env_dump" | sed -n 's/^XAUTHORITY=//p' | head -1)"
+  runtime="$(printf '%s\n' "$env_dump" | sed -n 's/^XDG_RUNTIME_DIR=//p' | head -1)"
+  dbus="$(printf '%s\n' "$env_dump" | sed -n 's/^DBUS_SESSION_BUS_ADDRESS=//p' | head -1)"
+  case "$display" in
+    :[1-9]*|:[1-9]*.0) ;;
+    *) echo "ANYDESK_ERROR=unsupported_rdp_admin_display" >&2; exit 40 ;;
+  esac
+  if [ -z "$xauthority" ]; then xauthority="/home/$RDP_USER/.Xauthority"; fi
+  if [ -z "$runtime" ]; then runtime="/run/user/$(id -u "$RDP_USER")"; fi
+  if [ -z "$dbus" ]; then dbus="unix:path=$runtime/bus"; fi
+  admin_log="/home/$RDP_USER/.local/state/shopvivaliz-anydesk-admin-security-rdp.log"
+  install -d -m 700 -o "$RDP_USER" -g "$RDP_USER" "/home/$RDP_USER/.local/state"
+  nohup env \
+    DISPLAY="$display" \
+    XAUTHORITY="$xauthority" \
+    XDG_RUNTIME_DIR="$runtime" \
+    DBUS_SESSION_BUS_ADDRESS="$dbus" \
+    QT_ACCESSIBILITY=1 \
+    GDK_BACKEND=x11 \
+    anydesk --admin-settings:security >"$admin_log" 2>&1 </dev/null &
+  sleep 2
+  echo "ANYDESK_ADMIN_SECURITY_RDP=PASS"
+  echo "ANYDESK_RDP_DISPLAY=$display"
 }
 
 console_unlock() {
@@ -234,10 +309,65 @@ console_control() {
   echo "ANYDESK_DISPLAY=$display"
 }
 
+ui_dump() {
+  local tray_pid env_dump display runtime dbus pyroot typelib
+  if tray_pid="$(pgrep -u "$GUI_USER" -f '/usr/bin/anydesk --tray' | head -1)"; then :; else tray_pid=""; fi
+  [ -n "$tray_pid" ] || { echo "ANYDESK_UI_ERROR=physical_tray_missing" >&2; exit 41; }
+  env_dump="$(tr '\0' '\n' < "/proc/$tray_pid/environ")"
+  display="$(printf '%s\n' "$env_dump" | sed -n 's/^DISPLAY=//p' | head -1)"
+  runtime="$(printf '%s\n' "$env_dump" | sed -n 's/^XDG_RUNTIME_DIR=//p' | head -1)"
+  dbus="$(printf '%s\n' "$env_dump" | sed -n 's/^DBUS_SESSION_BUS_ADDRESS=//p' | head -1)"
+  [ -n "$runtime" ] || runtime="/run/user/$(id -u "$GUI_USER")"
+  [ -n "$dbus" ] || dbus="unix:path=$runtime/bus"
+  pyroot="/tmp/shopvivaliz-atspi"
+  typelib="$pyroot/usr/lib/$(dpkg-architecture -qDEB_HOST_MULTIARCH)/girepository-1.0"
+  if [ ! -f "$typelib/Atspi-2.0.typelib" ] || [ ! -d "$pyroot/usr/lib/python3/dist-packages/pyatspi" ]; then
+    rm -rf "$pyroot"
+    mkdir -p "$pyroot/pkg"
+    (
+      cd "$pyroot/pkg"
+      apt-get download gir1.2-atspi-2.0 python3-pyatspi >/dev/null 2>&1
+      for f in ./*.deb; do dpkg-deb -x "$f" "$pyroot"; done
+    )
+  fi
+  runuser -u "$GUI_USER" -- env     DISPLAY="$display"     XDG_RUNTIME_DIR="$runtime"     DBUS_SESSION_BUS_ADDRESS="$dbus"     GI_TYPELIB_PATH="$typelib"     PYTHONPATH="$pyroot/usr/lib/python3/dist-packages"     python3 - <<'PY'
+import pyatspi
+desktop = pyatspi.Registry.getDesktop(0)
+def walk(node, depth=0):
+    try:
+        name = (node.name or "").strip()
+        role = node.getRoleName()
+    except Exception:
+        return
+    if name or role in {"check box","push button","text","password text","page tab","label"}:
+        safe = name
+        if role in {"text","password text"} and len(safe) > 80:
+            safe = safe[:80] + "..."
+        print(f"ANYDESK_UI|{depth}|{role}|{safe}")
+    if depth >= 8:
+        return
+    try:
+        for child in node:
+            walk(child, depth+1)
+    except Exception:
+        return
+for app in desktop:
+    try:
+        if "anydesk" in (app.name or "").lower():
+            walk(app)
+    except Exception:
+        pass
+PY
+  echo "ANYDESK_UI_DUMP=PASS"
+}
+
 case "$ACTION" in
   install) install_anydesk ;;
   status) status ;;
   launch) launch_gui ;;
+  admin_security) admin_security ;;
+  admin_security_rdp) admin_security_rdp ;;
+  ui_dump) ui_dump ;;
   control_grant) console_control grant ;;
   control_revoke) console_control revoke ;;
   console_unlock) console_unlock ;;
