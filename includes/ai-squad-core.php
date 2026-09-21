@@ -175,8 +175,11 @@ function svais_codex_bridge_health(): array
     }
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT_MS => 1500,
-        CURLOPT_CONNECTTIMEOUT_MS => 300,
+        // A cold Codex health check performs live account/rate-limit probes.
+        // Keep this above the bridge's 20s per-profile deadline; the bridge
+        // probes profiles concurrently so the wall-clock bound remains ~20s.
+        CURLOPT_TIMEOUT_MS => 25000,
+        CURLOPT_CONNECTTIMEOUT_MS => 1000,
         CURLOPT_PROXY => '',
     ]);
     $body = curl_exec($ch);
@@ -260,6 +263,36 @@ function svais_health_state(bool $verified, bool $configured): string
         return 'verified';
     }
     return $configured ? 'configured_unverified' : 'unavailable';
+}
+
+function svais_cycle_complete_for_consensus(array $transcript, array $providers, array $phases): bool
+{
+    if ($providers === [] || $phases === []) {
+        return false;
+    }
+
+    $seen = [];
+    foreach ($transcript as $entry) {
+        if (!is_array($entry)
+            || ($entry['type'] ?? '') !== 'agent_message'
+            || ($entry['ok'] ?? false) !== true) {
+            continue;
+        }
+        $provider = (string)($entry['provider'] ?? '');
+        $phase = (string)($entry['phase'] ?? '');
+        if ($provider !== '' && $phase !== '') {
+            $seen[$provider][$phase] = true;
+        }
+    }
+
+    foreach ($providers as $provider) {
+        foreach ($phases as $phase) {
+            if (($seen[(string)$provider][(string)$phase] ?? false) !== true) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 function svais_provider_state(array $profile): array
