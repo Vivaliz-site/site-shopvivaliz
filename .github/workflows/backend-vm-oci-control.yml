@@ -336,8 +336,15 @@ jobs:
               CMD='set -Eeuo pipefail
               echo BACKEND_STORAGE_CLEANUP_BEGIN
               df -h /
-              freed_candidates=0
-              if ! pgrep -af "/home/ubuntu/.cache/ms-playwright" >/dev/null 2>&1; then
+              path_in_use() {
+                target="$1"
+                for ref in /proc/[0-9]*/cwd /proc/[0-9]*/exe /proc/[0-9]*/fd/*; do
+                  resolved="$(readlink -f "$ref" 2>/dev/null || true)"
+                  case "$resolved" in "$target"|"$target"/*) return 0 ;; esac
+                done
+                return 1
+              }
+              if ! path_in_use "/home/ubuntu/.cache/ms-playwright"; then
                 rm -rf /home/ubuntu/.cache/ms-playwright
                 echo CLEANED=/home/ubuntu/.cache/ms-playwright
               else
@@ -345,7 +352,7 @@ jobs:
               fi
               rm -rf /home/ubuntu/.npm/_cacache
               echo CLEANED=/home/ubuntu/.npm/_cacache
-              if ! pgrep -af "/home/ubuntu/.npm/_npx/" >/dev/null 2>&1; then
+              if ! path_in_use "/home/ubuntu/.npm/_npx"; then
                 find /home/ubuntu/.npm/_npx -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
                 echo CLEANED=/home/ubuntu/.npm/_npx_children
               else
@@ -354,7 +361,7 @@ jobs:
               for d in                 /home/ubuntu/shopvivaliz-olist-integration-20260911-vm1                 /home/ubuntu/shopvivaliz-revenue-recovery-20260911                 /home/ubuntu/shopvivaliz-me-runtime-refresh                 /home/ubuntu/site-shopvivaliz-private-runner-fix                 /home/ubuntu/site-shopvivaliz-origin-access-fix                 /home/ubuntu/site-shopvivaliz-oci-rebalance-20260913                 /home/ubuntu/shopvivaliz-pr1478-policy-red                 /home/ubuntu/shopvivaliz-pr-enforcer-red                 /home/ubuntu/shopvivaliz-evidence-fix
               do
                 [ -e "$d" ] || continue
-                if pgrep -af "$d" >/dev/null 2>&1; then
+                if path_in_use "$d"; then
                   echo SKIPPED_ACTIVE=$d
                   continue
                 fi
