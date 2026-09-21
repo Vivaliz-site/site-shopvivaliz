@@ -9,6 +9,8 @@ import {
   classifyClaudeError,
   claudeFailureDetail,
   buildClaudeArgs,
+  buildClaudeInput,
+  extractUrls,
   isDirectInvocation,
   resolveClaudeAuthSource,
 } from '../ops/ai-squad/claude-bridge.mjs';
@@ -47,6 +49,16 @@ assert(!args.includes(valid.prompt), 'user prompt must go over stdin, not argv')
 
 const noWebArgs = buildClaudeArgs({ ...valid, web_search: false });
 assert.equal(noWebArgs[noWebArgs.indexOf('--tools') + 1], '');
+
+const webInput = buildClaudeInput(valid);
+assert.match(webInput, /WEB RESEARCH EVIDENCE REQUIREMENT/);
+assert.match(webInput, /complete https:\/\/ source URL/);
+assert.match(buildClaudeInput(valid, true), /retry because the previous answer exposed no usable source URL/i);
+assert.equal(buildClaudeInput({ ...valid, web_search: false }), valid.prompt);
+assert.deepEqual(extractUrls('Fontes: https://example.com/a e https://example.org/b.'), [
+  'https://example.com/a',
+  'https://example.org/b',
+]);
 
 assert.equal(classifyClaudeError('OAuth session expired'), 'auth');
 assert.equal(classifyClaudeError('credit balance is too low'), 'quota');
@@ -103,4 +115,6 @@ const bridgeSource = fs.readFileSync(bridgeTarget, 'utf8');
 assert.match(bridgeSource, /auth status.*cannot perform inference/s, 'health probe must reject auth-status-only false green');
 assert.match(bridgeSource, /buildClaudeArgs\(request\).*20000/s, 'health probe must execute a bounded real inference');
 assert.match(bridgeSource, /credential_store_configured/, 'health must expose credential-store auth source without secrets');
+assert.match(bridgeSource, /web_search_sources_missing/, 'web research must fail closed when Claude exposes no source URL');
+assert.match(bridgeSource, /output\.sources\.length < 1/, 'web research must retry once for missing source URLs');
 console.log('AI_SQUAD_CLAUDE_BRIDGE_TEST=PASS');
