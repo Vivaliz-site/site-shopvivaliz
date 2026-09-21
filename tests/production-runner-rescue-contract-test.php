@@ -20,7 +20,8 @@ $required = [
     "StrictHostKeyChecking=yes",
     "shopvivaliz-actions-runner.service",
     "worker_pattern=",
-    "ps -eo args=",\n    "awk -v pattern=",
+    "ps -eo args=",
+    "awk -v pattern=",
     "RUNNER_RESCUE=refused_worker_active",
     "systemctl --user restart",
 ];
@@ -37,7 +38,8 @@ $forbidden = [
     "StrictHostKeyChecking=accept-new",
     "contents: write",
     "actions: write",
-    "eval ",\n    "|| true",
+    "eval ",
+    "|| true",
 ];
 foreach ($forbidden as $needle) {
     if (strpos($text, $needle) !== false) {
