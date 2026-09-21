@@ -1,0 +1,372 @@
+name: ShopVivaliz Remote Access
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Remote host
+        required: true
+        type: choice
+        options:
+          - shopvivaliz-free-a1
+          - always-free-arm-1787907847-26
+          - fred-win
+          - kocepsv
+      action:
+        description: Allowlisted action
+        required: true
+        type: choice
+        options:
+          - health
+          - identity
+          - disk
+          - storage_scan
+          - runtime_status
+          - repo_status
+          - rdp_prepare
+          - rdp_status
+          - rdp_otp_prepare
+          - rdp_enable_otp
+          - rdp_enrollment_publish
+          - rdp_enrollment_cleanup
+          - anydesk_install
+          - anydesk_status
+          - anydesk_launch
+          - anydesk_control_grant
+          - anydesk_control_revoke
+          - anydesk_console_unlock
+          - ai_squad_ui_audit
+      reason:
+        description: Audit reason
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  execute:
+    if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && startsWith(github.event.comment.body, '/remote '))
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve request
+        id: req
+        env:
+          DISPATCH_TARGET: ${{ inputs.target }}
+          DISPATCH_ACTION: ${{ inputs.action }}
+          DISPATCH_REASON: ${{ inputs.reason }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
+          if os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch":
+              target = os.environ.get("DISPATCH_TARGET", "").strip()
+              action = os.environ.get("DISPATCH_ACTION", "").strip()
+              reason = os.environ.get("DISPATCH_REASON", "").strip()
+              requested_at = "workflow_dispatch"
+          else:
+              comment = event.get("comment") or {}
+              body = str(comment.get("body") or "").strip()
+              match = re.fullmatch(
+                  r"/remote\s+target=([A-Za-z0-9._-]+)\s+action=([A-Za-z0-9._-]+)\s+reason=(.{3,500})",
+                  body,
+              )
+              if not match:
+                  raise SystemExit("Invalid remote command format")
+              target, action, reason = match.group(1), match.group(2), match.group(3).strip()
+              requested_at = str(comment.get("created_at") or "")
+
+          targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit"}
+          if target not in targets:
+              raise SystemExit(f"Unsupported target: {target}")
+          if action not in actions:
+              raise SystemExit(f"Unsupported action: {action}")
+          if action.startswith("rdp_") and target != "always-free-arm-1787907847-26":
+              raise SystemExit("RDP actions are restricted to the backend VM")
+          if action.startswith("anydesk_") and target != "always-free-arm-1787907847-26":
+              raise SystemExit("AnyDesk actions are restricted to the backend VM")
+          if action == "ai_squad_ui_audit" and target != "shopvivaliz-free-a1":
+              raise SystemExit("AI Squad UI audit is restricted to production orchestration")
+          if not reason:
+              raise SystemExit("Reason is required")
+
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              output.write(f"target={target}\n")
+              output.write(f"action={action}\n")
+          print(f"REMOTE_REQUEST target={target} action={action} requested_at={requested_at}")
+          print(f"REMOTE_REASON={reason}")
+          PY
+
+      - name: Configure backend SSH
+        if: steps.req.outputs.target != 'shopvivaliz-free-a1' || steps.req.outputs.action == 'ai_squad_ui_audit'
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/shopvivaliz_vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
+
+      - name: Execute AI Squad UI audit
+        if: steps.req.outputs.target == 'shopvivaliz-free-a1' && steps.req.outputs.action == 'ai_squad_ui_audit'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cred="/home/ubuntu/.config/shopvivaliz-admin-test.credentials.json"
+          backend_cred="/home/ubuntu/.config/shopvivaliz-admin-test.credentials.json"
+          remote_script="/tmp/ai-squad-ui-audit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.mjs"
+          remote_shot="/tmp/ai-squad-ui-audit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.png"
+          local_shot="${RUNNER_TEMP}/ai-squad-ui-audit.png"
+          ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey")
+
+          php /home/ubuntu/shopvivaliz-deploy/current/scripts/create-admin-test-user.php --credential-file="$cred"
+          test -s "$cred"
+          test "$(stat -c '%a' "$cred")" = "600"
+
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 'install -d -m 700 /home/ubuntu/.config'
+          scp "${ssh_opts[@]}" "$cred" "ubuntu@10.0.1.38:${backend_cred}.tmp"
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "chmod 600 '${backend_cred}.tmp' && mv '${backend_cred}.tmp' '${backend_cred}'"
+          scp "${ssh_opts[@]}" scripts/ai-squad-ui-audit.mjs "ubuntu@10.0.1.38:${remote_script}"
+
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "DISPLAY=:98 AI_SQUAD_ADMIN_CREDENTIAL_FILE='${backend_cred}' AI_SQUAD_UI_SCREENSHOT='${remote_shot}' node '${remote_script}'"
+          scp "${ssh_opts[@]}" "ubuntu@10.0.1.38:${remote_shot}" "$local_shot"
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "rm -f '${remote_script}' '${remote_shot}'"
+          test -s "$local_shot"
+          echo "AI_SQUAD_UI_AUDIT=PASS"
+
+      - name: Upload AI Squad UI evidence
+        if: steps.req.outputs.target == 'shopvivaliz-free-a1' && steps.req.outputs.action == 'ai_squad_ui_audit'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-squad-ui-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ai-squad-ui-audit.png
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Execute on site production host
+        if: steps.req.outputs.target == 'shopvivaliz-free-a1' && steps.req.outputs.action != 'ai_squad_ui_audit'
+        env:
+          ACTION: ${{ steps.req.outputs.action }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          case "$ACTION" in
+            health)
+              echo "REMOTE_HEALTH=ok"
+              hostname
+              whoami
+              uptime
+              ;;
+            identity)
+              echo "REMOTE_IDENTITY_BEGIN"
+              hostname
+              whoami
+              pwd
+              uname -a
+              echo "REMOTE_IDENTITY_END"
+              ;;
+            disk)
+              echo "REMOTE_DISK_BEGIN"
+              df -h /
+              if [ -d /home/ubuntu/shopvivaliz-deploy ]; then du -sh /home/ubuntu/shopvivaliz-deploy; else echo 'DEPLOY_DIR=missing'; fi
+              echo "REMOTE_DISK_END"
+              ;;
+            storage_scan)
+              echo "REMOTE_STORAGE_SCAN_BEGIN"
+              df -h /
+              echo "TOP_LEVEL"
+              sudo -n du -x -h --max-depth=1 / 2>/dev/null | sort -h | tail -n 20
+              echo "HOME_UBUNTU"
+              du -x -h --max-depth=2 /home/ubuntu 2>/dev/null | sort -h | tail -n 40
+              echo "VAR"
+              sudo -n du -x -h --max-depth=2 /var 2>/dev/null | sort -h | tail -n 40
+              echo "LARGE_OLD_FILES"
+              sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +50M -mtime +30 -printf '%s %TY-%Tm-%Td %p\n' 2>/dev/null | sort -nr | head -n 80
+              echo "DUPLICATES_BY_HASH_OVER_20M"
+              tmpf=$(mktemp); trap 'rm -f "$tmpf"' RETURN; sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +20M -printf '%s\t%p\n' 2>/dev/null | sort -n > "$tmpf"; awk -F '\t' 'NR==1{s=$1; lines=$0; n=1; next} $1==s{lines=lines ORS $0; n++; next} {if(n>1) print lines; s=$1; lines=$0; n=1} END{if(n>1) print lines}' "$tmpf" | cut -f2- | while IFS= read -r p; do sha256sum "$p"; done | sort | awk '{h=$1; $1=""; sub(/^ /,""); if (h==prev){if(!shown){print prev_line; shown=1}; print} else {shown=0} prev=h; prev_line=$0}'
+              echo "REMOTE_STORAGE_SCAN_END"
+              ;;
+            runtime_status)
+              bash scripts/runtime-service-status.sh site
+              ;;
+            repo_status)
+              echo "REMOTE_REPO_STATUS_BEGIN"
+              cd /home/ubuntu/shopvivaliz-deploy/repo
+              git remote -v
+              git branch --show-current
+              git status --porcelain
+              git rev-parse HEAD
+              echo "REMOTE_REPO_STATUS_END"
+              ;;
+          esac
+
+      - name: Execute on backend VM
+        if: steps.req.outputs.target == 'always-free-arm-1787907847-26'
+        env:
+          ACTION: ${{ steps.req.outputs.action }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38)
+          if [ "$ACTION" = "runtime_status" ]; then
+            "${SSH[@]}" 'bash -s -- backend' < scripts/runtime-service-status.sh
+            exit 0
+          fi
+          case "$ACTION" in
+            health)
+              CMD='echo REMOTE_HEALTH=ok; hostname; whoami; uptime'
+              "${SSH[@]}" "$CMD"
+              ;;
+            identity)
+              CMD='echo REMOTE_IDENTITY_BEGIN; hostname; whoami; pwd; uname -a; echo REMOTE_IDENTITY_END'
+              "${SSH[@]}" "$CMD"
+              ;;
+            disk)
+              CMD='echo REMOTE_DISK_BEGIN; df -h /; if [ -d /home/ubuntu ]; then du -sh /home/ubuntu; else echo HOME_UBUNTU=missing; fi; echo REMOTE_DISK_END'
+              "${SSH[@]}" "$CMD"
+              ;;
+            storage_scan)
+              CMD='echo REMOTE_STORAGE_SCAN_BEGIN; df -h /; echo TOP_LEVEL; sudo -n du -x -h --max-depth=1 / 2>/dev/null | sort -h | tail -n 20; echo HOME_UBUNTU; du -x -h --max-depth=2 /home/ubuntu 2>/dev/null | sort -h | tail -n 40; echo VAR; sudo -n du -x -h --max-depth=2 /var 2>/dev/null | sort -h | tail -n 40; echo LARGE_OLD_FILES; sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +50M -mtime +30 -printf "%s %TY-%Tm-%Td %p\\n" 2>/dev/null | sort -nr | head -n 80; echo DUPLICATES_BY_HASH_OVER_20M; sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +20M -print0 2>/dev/null | xargs -0 -r sha256sum 2>/dev/null | sort | awk '"'"'{h=$1; $1=""; sub(/^ /,""); if (h==prev){if(!shown){print prev_line; shown=1}; print} else {shown=0} prev=h; prev_line=$0}'"'"'; echo REMOTE_STORAGE_SCAN_END'
+              "${SSH[@]}" "$CMD"
+              ;;
+            repo_status)
+              CMD='echo REMOTE_REPO_STATUS_BEGIN; for d in /home/ubuntu/*; do if [ -d "$d/.git" ]; then echo "REPO=$d"; git -C "$d" branch --show-current; git -C "$d" status --porcelain; git -C "$d" rev-parse HEAD; fi; done; echo REMOTE_REPO_STATUS_END'
+              "${SSH[@]}" "$CMD"
+              ;;
+            rdp_prepare|rdp_status|rdp_otp_prepare|rdp_enable_otp|rdp_enrollment_publish|rdp_enrollment_cleanup)
+              case "$ACTION" in
+                rdp_prepare) MODE=prepare ;;
+                rdp_status) MODE=status ;;
+                rdp_otp_prepare) MODE=otp_prepare ;;
+                rdp_enable_otp) MODE=enable_otp ;;
+                rdp_enrollment_publish) MODE=enrollment_publish ;;
+                rdp_enrollment_cleanup) MODE=enrollment_cleanup ;;
+              esac
+              "${SSH[@]}" "tmp=\$(mktemp); trap 'rm -f \"\$tmp\"' EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-private-rdp.sh -o \"\$tmp\"; sudo -n bash \"\$tmp\" $MODE"
+              ;;
+            anydesk_install|anydesk_status|anydesk_launch|anydesk_control_grant|anydesk_control_revoke|anydesk_console_unlock)
+              case "$ACTION" in
+                anydesk_install) MODE=install ;;
+                anydesk_status) MODE=status ;;
+                anydesk_launch) MODE=launch ;;
+                anydesk_control_grant) MODE=control_grant ;;
+                anydesk_control_revoke) MODE=control_revoke ;;
+                anydesk_console_unlock) MODE=console_unlock ;;
+              esac
+              "${SSH[@]}" "tmp=\$(mktemp); trap 'rm -f \"\$tmp\"' EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-backend.sh -o \"\$tmp\"; sudo -n bash \"\$tmp\" $MODE"
+              ;;
+          esac
+
+      - name: Resolve Windows command
+        if: steps.req.outputs.target == 'fred-win' || steps.req.outputs.target == 'kocepsv'
+        id: win
+        env:
+          TARGET: ${{ steps.req.outputs.target }}
+          ACTION: ${{ steps.req.outputs.action }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [ "$TARGET" = "fred-win" ]; then
+            echo "port=5557" >> "$GITHUB_OUTPUT"
+            ENV_NAME="fred-win"
+            REPO='C:\site-shopvivaliz'
+          else
+            echo "port=5558" >> "$GITHUB_OUTPUT"
+            ENV_NAME="desktop-kocepsv"
+            REPO='C:\site-shopvivaliz'
+          fi
+          echo "environment=$ENV_NAME" >> "$GITHUB_OUTPUT"
+
+          case "$ACTION" in
+            health)
+              COMMAND=""
+              ;;
+            identity)
+              COMMAND='powershell -NoProfile -NonInteractive -Command "$ErrorActionPreference=''Stop''; Write-Output ''REMOTE_IDENTITY_BEGIN''; hostname; whoami; Write-Output ((Get-Location).Path); Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,BuildNumber,LastBootUpTime | ConvertTo-Json -Compress; Write-Output ''REMOTE_IDENTITY_END''"'
+              ;;
+            disk)
+              COMMAND='powershell -NoProfile -NonInteractive -Command "$ErrorActionPreference=''Stop''; Write-Output ''REMOTE_DISK_BEGIN''; Get-PSDrive -PSProvider FileSystem | Select-Object Name,Used,Free,Root | ConvertTo-Json -Compress; Write-Output ''REMOTE_DISK_END''"'
+              ;;
+            runtime_status)
+              COMMAND='powershell -NoProfile -NonInteractive -Command "$ErrorActionPreference=''Stop''; Write-Output ''REMOTE_RUNTIME_STATUS_BEGIN''; Get-Service | Where-Object { $_.Status -eq ''Running'' -and $_.Name -match ''ssh|tailscale|docker|print|qz|shopvivaliz'' } | Select-Object Name,DisplayName,Status | ConvertTo-Json -Compress; Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.State -ne ''Disabled'' -and $_.TaskName -match ''ShopVivaliz|Relay|Commander|Zebra|QZ|Print'' } | Select-Object TaskName,State | ConvertTo-Json -Compress; Write-Output ''REMOTE_RUNTIME_STATUS_END''"'
+              ;;
+            repo_status)
+              COMMAND="powershell -NoProfile -NonInteractive -Command \"\$ErrorActionPreference='Stop'; Set-Location '$REPO'; Write-Output 'REMOTE_REPO_STATUS_BEGIN'; git remote -v; git branch --show-current; git status --porcelain; git rev-parse HEAD; Write-Output 'REMOTE_REPO_STATUS_END'\""
+              ;;
+          esac
+          printf '%s' "$COMMAND" | base64 -w0 > /tmp/remote-windows-command.b64
+
+      - name: Check Windows private relay
+        if: steps.req.outputs.target == 'fred-win' || steps.req.outputs.target == 'kocepsv'
+        env:
+          PORT: ${{ steps.win.outputs.port }}
+          EXPECTED_ENV: ${{ steps.win.outputs.environment }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          BODY="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38 "curl -fsS --connect-timeout 5 --max-time 10 http://127.0.0.1:$PORT/health")"
+          printf '%s\n' "$BODY"
+          python3 - "$EXPECTED_ENV" "$BODY" <<'PY'
+          import json, sys
+          expected, raw = sys.argv[1], sys.argv[2]
+          data = json.loads(raw)
+          if data.get("status") != "ok":
+              raise SystemExit("relay health status is not ok")
+          if data.get("environment") != expected:
+              raise SystemExit(f"unexpected environment: {data.get('environment')!r}")
+          print("WINDOWS_RELAY_HEALTH=ok")
+          PY
+
+      - name: Execute allowlisted Windows action
+        if: (steps.req.outputs.target == 'fred-win' || steps.req.outputs.target == 'kocepsv') && steps.req.outputs.action != 'health'
+        env:
+          PORT: ${{ steps.win.outputs.port }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          CMD_B64="$(cat /tmp/remote-windows-command.b64)"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38 "REMOTE_CMD_B64='$CMD_B64' REMOTE_PORT='$PORT' python3 - <<'PY'
+          import base64, json, os, urllib.request
+          command = base64.b64decode(os.environ["REMOTE_CMD_B64"]).decode("utf-8")
+          port = os.environ["REMOTE_PORT"]
+          body = json.dumps({"params": {"command": command, "timeout": 180}}).encode("utf-8")
+          req = urllib.request.Request(
+              f"http://127.0.0.1:{port}/mcp/tool/execute_command",
+              data=body,
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(req, timeout=190) as response:
+              payload = json.loads(response.read().decode("utf-8"))
+          result = payload.get("result") or {}
+          output = str(result.get("output") or "")
+          if output:
+              print(output)
+          if result.get("success") is not True:
+              raise SystemExit("remote Windows action failed")
+          PY"
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts" /tmp/remote-windows-command.b64

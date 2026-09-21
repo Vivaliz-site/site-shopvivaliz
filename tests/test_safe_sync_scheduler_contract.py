@@ -11,11 +11,31 @@ assert "command -v crontab" in installer
 assert "shopvivaliz-sync-safe.timer" in installer
 assert "shopvivaliz-sync-safe.timer" in smoke
 assert "install-safe-sync-service.sh" in workflow
-assert 'ROOT="$root/repo"' in workflow
+assert 'SOURCE_ROOT="$current" SEED_REPO="$root/repo" SYNC_ROOT="$root/sync-repo"' in workflow
 assert "NoNewPrivileges=false" in service
 assert "NoNewPrivileges=true" not in service
 assert 'chown ubuntu:ubuntu "$DEPLOY_LOG_FILE"' in systemd_installer
 assert 'chmod 0644 "$DEPLOY_LOG_FILE"' in systemd_installer
+
+assert "WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/sync-repo" in service
+assert "Environment=ROOT=/home/ubuntu/shopvivaliz-deploy/sync-repo" in service
+assert "Environment=SHOPVIVALIZ_DEPLOY_REPO_DIR=/home/ubuntu/shopvivaliz-deploy/sync-repo" in service
+assert 'SYNC_ROOT="${SYNC_ROOT:-/home/ubuntu/shopvivaliz-deploy/sync-repo}"' in systemd_installer
+assert 'SEED_REPO="${SEED_REPO:-/home/ubuntu/shopvivaliz-deploy/repo}"' in systemd_installer
+assert 'SAFE_SYNC_RUN_ON_INSTALL="${SAFE_SYNC_RUN_ON_INSTALL:-true}"' in systemd_installer
+assert 'if [[ "$SAFE_SYNC_RUN_ON_INSTALL" == \'true\' ]]' in systemd_installer
+assert "SAFE_SYNC_INITIAL_RUN=DEFERRED" in systemd_installer
+assert 'systemctl reset-failed "$SERVICE_NAME"' in systemd_installer
+assert 'sudo systemctl start shopvivaliz-sync-safe.service' in workflow
+assert 'systemctl show --property=Result --value shopvivaliz-sync-safe.service' in workflow
+assert 'sudo systemctl is-active --quiet shopvivaliz-sync-safe.timer' in workflow
+assert 'sudo systemctl is-enabled --quiet shopvivaliz-sync-safe.timer' in workflow
+assert 'flock -n 9' in workflow
+assert 'health_score_percent -> 100' in workflow
+assert 'SAFE_SYNC_RUN_ON_INSTALL=false SOURCE_ROOT="$current" SEED_REPO="$root/repo" SYNC_ROOT="$root/sync-repo"' in workflow
+assert 'git clone --quiet --no-tags --single-branch --branch "$SYNC_BRANCH"' in systemd_installer
+assert 'ROOT="${ROOT:-/home/ubuntu/shopvivaliz-deploy/sync-repo}"' in safe_sync
+assert 'exec env SHOPVIVALIZ_DEPLOY_REPO_DIR="$ROOT" "$DEPLOY_RUNNER" main' in safe_sync
 
 assert 'systemctl show --property=Result --value "$SERVICE_NAME"' in systemd_installer
 assert "if [[ \"$service_result\" != 'success' ]]" in systemd_installer

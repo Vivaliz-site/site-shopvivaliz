@@ -13,6 +13,21 @@
 
 ---
 
+## 2026-09-21 — Auditoria extrema v5 API AI Squad: ESC-2026-001 FECHADO (com acesso real a produção via RDC)
+**Sistema/arquivo:** `claude/api/agent/squad-chat.php`, `api/agent/squad-chat.php`, `admin/squad-chat.html`, `.htaccess`, `docs/quality/AUDIT_{STATUS,ESCAPE_REGISTER,OVERLAY}.md`.
+**O que descobri:** 4 defeitos de classe `AUDIT_SILENT_FAILURE_V1` na API squad que nunca haviam sido auditados — o painel admin nunca chamava o endpoint squad real; o endpoint squad nunca carregava o `.env`; o modelo Gemini padrão estava descontinuado; GH_REPO apontava para repo antigo. Todos corrigidos em PR #1689 (merge SHA `63ae6faf`, release `20260921-174416-f386a922`).
+**Por quê importa:**
+1. **`dirname(__DIR__, N)` é crítico para endpoints em subdiretórios.** O N deve ser exatamente o número de diretórios de profundidade do arquivo em relação à raiz do release. Em `claude/api/agent/` o N correto é **3**. Com N=2, o `.env` nunca era carregado e todas as variáveis AI retornavam vazio silenciosamente.
+2. **Sempre verificar a URL que o frontend admin usa para cada componente** — não assume que segue a estrutura de diretórios. `admin/squad-chat.html` apontava para `/api/agent/squad-chat.php` (endpoint Liz público) em vez de `/claude/api/agent/squad-chat.php` (squad real). A UI completava com 200 OK mas nunca chamava o squad.
+3. **Endpoints em `claude/` exigem exceção explícita no `.htaccess`.** A regra de bloqueio bloqueia toda a árvore `claude/`; para expor um endpoint específico autenticado, adicionar `RewriteRule ^claude/api/agent/squad-chat\.php$ - [L]` ANTES da regra de bloqueio.
+4. **Health check (`?health=1`) deve ser o primeiro smoke de qualquer endpoint de agente/IA.** Verificar `env_loaded: true`, providers configurados e agentes ativos antes de declarar o endpoint funcional.
+5. **`SQUAD_TOKEN` ausente no `.env` não é bug de código — é gap de configuração.** O endpoint falha explicitamente com `{"error":"SQUAD_TOKEN not configured"}`, que é o comportamento correto. Ação pendente do Fred: adicionar `SQUAD_TOKEN=<valor>` ao `shared/.env` na VM a1.
+6. **PR #1687 (`fix/squad-chat-gemini-model-var`) foi fechado como superseded** — o mesmo fix já estava no PR #1689. Ao ver dois PRs cobrindo o mesmo arquivo, verificar diff completo do PR maior antes de mergear o menor.
+**Evidências ao vivo (2026-09-21 ~17:48 UTC):** `GET ?health=1` → HTTP 200, `env_loaded:true`, 8 agentes ativos, providers anthropic/openai/gemini configurados. POST sem token → `{"error":"SQUAD_TOKEN not configured"}` (erro explícito, não silencioso).
+**Ver também:** `docs/quality/AUDIT_STATUS.md` (rodada 2026-09-21, veredito APTO), `docs/quality/AUDIT_ESCAPE_REGISTER.md` (ESC-2026-001 CLOSED), `docs/quality/AUDIT_OVERLAY.md` (regras estruturais ESC-2026-001).
+
+---
+
 ## 2026-09-19 — Auditoria extrema v5 executada sem acesso a produção/infra (escopo estático)
 **Sistema/arquivo:** repositório inteiro (código, lint, validadores de qualidade), branch `claude/auditoria-extrema-v5-97gu15`.
 **O que descobri:** rodei o conjunto obrigatório (`AUDIT_POLICY.md`, `EXTREME_AUDIT_PROTOCOL.md`, `AUDIT_RUNTIME_PARITY_V1.md`, `AUDIT_UNIVERSAL_COVERAGE_V1.md`, `AUDIT_OVERLAY.md`) a partir de um worktree isolado, **sem SSH às VMs Oracle, sem acesso ao Remote Desktop Commander configurado para as A1 de produção e sem browser contra `shopvivaliz.com.br`**. Nesse escopo: `git fetch` confirmou a branch já sincronizada com `origin/main` (mesmo SHA `1f8e2ca9a`); lint PHP (`php -l`) em 100% dos `.php` do repo (fora `vendor`/`node_modules`) não encontrou erro de sintaxe; `php scripts/quality/validate-health-output.php` e `php scripts/quality/validate-asset-manifest.php` passaram (`COMPROVADO`); não havia PR aberta associada à branch. Não rodei PHPUnit (sem `vendor/` instalado neste worktree) nem Playwright/QA de browser. `docs/quality/AUDIT_STATUS.md` já registrava, de 2026-09-16, `NÃO APTO` por falta de paridade produção↔SHA candidato e mutações críticas (checkout, catálogo) não exercitadas pela UI real — essa lacuna **continua sem evidência nova** nesta sessão, porque exige acesso a infraestrutura/produção que este ambiente de execução não fornece.

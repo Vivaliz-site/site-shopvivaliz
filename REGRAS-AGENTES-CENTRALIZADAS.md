@@ -11,6 +11,21 @@
 
 ---
 
+<!-- SUPERPOWERS_EVERY_STAGE_V1 -->
+## 🧭 @Superpowers obrigatório em cada etapa de toda conversa/agente (2026-09-19)
+
+Esta regra é vinculante para **todos os agentes, chats, conversas, sessões e retomadas que operem projetos ShopVivaliz** (Claude, Codex, Gemini, GPT e demais agentes).
+
+- Toda tarefa deve iniciar sob **@Superpowers** e permanecer sob essa metodologia até a conclusão validada.
+- **Não basta invocar ou mencionar @Superpowers uma única vez.** Ao entrar em cada etapa material, o agente deve reaplicar o workflow/skill de Superpowers adequado à fase.
+- As etapas materiais incluem, no mínimo: bootstrap/contexto, planejamento, investigação, coleta de evidências, implementação, debugging sistemático, TDD/testes, revisão, correções, PR/checks/merge, deploy, validação pós-deploy, auditoria caso a caso e encerramento.
+- Comandos de continuidade como **“retome”, “continue”, “prossiga” ou equivalentes** devem recuperar o último checkpoint comprovado e continuar com @Superpowers; não recomeçar do zero nem abandonar a metodologia.
+- Em transições de fase, selecionar explicitamente a disciplina Superpowers aplicável (por exemplo planejamento, TDD, debugging, revisão/validação) antes de executar a próxima ação.
+- Se o runtime atual não expuser a capacidade @Superpowers, **não fingir que ela foi chamada**: registrar `SUPERPOWERS_UNAVAILABLE`, aplicar manualmente a mesma disciplina de planejamento/TDD/debugging/verificação e continuar até encontrar um runtime que a exponha, quando isso for necessário.
+- A resposta final só pode ser emitida depois que as etapas aplicáveis tiverem sido executadas e validadas com evidência independente.
+
+Esta regra é contínua e prevalece sobre hábitos de sessão que tratem Superpowers apenas como bootstrap inicial.
+
 ## ✅ AUTORIZAÇÃO OPERACIONAL DO PROPRIETÁRIO (2026-08-01)
 
 O proprietário autoriza os agentes que tenham capacidade técnica e acesso válido a:
@@ -547,3 +562,6 @@ git commit -m "fix: sincronizar secrets desincronizados (SOURCE: GitHub)"
 - Ao terminar a tarefa, feche ou marque a sessao interativa do chat como concluida. Sessao concluida nunca pode ser reatribuida a outro chat.
 
 Regra principal: **um chat = um namespace de sessao CLI isolado; nunca reutilizar sessao entre chats.**
+
+## AUDITORIA_ARQUITETURA_DEPLOY_V1
+Toda Auditoria Extrema deve incluir `docs/quality/ARCHITECTURE_DEPLOY_AUDIT_V1.md` e tratar melhorias arquiteturais materiais como parte da auditoria, inclusive tempo de deploy, runners, artifacts, cache, provisionamento, restarts, contratos cross-repo, hotspots, rollback e blast radius.

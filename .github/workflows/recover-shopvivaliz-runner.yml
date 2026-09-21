@@ -1,0 +1,125 @@
+name: Recover ShopVivaliz Production Runner
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/recover-shopvivaliz-runner.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recover-shopvivaliz-production-runner
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 8
+    env:
+      VM_HOST: ${{ secrets.SHOPVIVALIZ_VM_HOST }}
+      VM_USER: ${{ secrets.SHOPVIVALIZ_VM_USER || 'ubuntu' }}
+    steps:
+      - name: Configure pinned SSH material
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${VM_KEY:-}"
+          test -n "${VM_HOST:-}"
+          test -n "${VM_USER:-}"
+          test -n "${VM_HOSTS:-}"
+          [[ "$VM_HOST" =~ ^[A-Za-z0-9._:-]+$ ]]
+          [[ "$VM_USER" =~ ^[A-Za-z0-9._-]+$ ]]
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/vmkey"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"
+
+      - name: Recover idle site runner from ephemeral disk pressure
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/vmkey" \
+            "$VM_USER@$VM_HOST" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          test "$(hostname)" = "shopvivaliz-free-a1"
+          runner="/home/ubuntu/actions-runner-shopvivaliz"
+          test -d "$runner"
+          test -f "$runner/.runner"
+
+          worker_count="$(ps -eo args= | awk -v prefix="$runner/bin/Runner.Worker" 'index($0,prefix)==1 {count++} END {print count+0}')"
+          echo "runner_worker_count=$worker_count"
+          if [ "$worker_count" -ne 0 ]; then
+            echo "runner_recovery=refused_worker_active"
+            exit 27
+          fi
+
+          before_kb="$(df -Pk /home/ubuntu | awk 'NR==2 {print $4}')"
+          [[ "$before_kb" =~ ^[0-9]+$ ]]
+          echo "disk_available_before_kb=$before_kb"
+          for ephemeral in "$runner/_work" /home/ubuntu/.cache/shopvivaliz-pr-healer; do
+            if [ -e "$ephemeral" ]; then
+              size_kb="$(du -sk "$ephemeral" | awk '{print $1}')"
+              echo "ephemeral_usage_path=$ephemeral kb=$size_kb"
+            fi
+          done
+
+          if [ "$before_kb" -lt 1048576 ]; then
+            workspace="$runner/_work/site-shopvivaliz"
+            case "$workspace" in
+              /home/ubuntu/actions-runner-shopvivaliz/_work/site-shopvivaliz) ;;
+              *) echo "unsafe_workspace_path=true"; exit 28 ;;
+            esac
+            rm -rf -- "$workspace"
+            if [ -d "$runner/_work/_temp" ]; then
+              find "$runner/_work/_temp" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+            fi
+            if [ -d /home/ubuntu/.cache/shopvivaliz-pr-healer ]; then
+              find /home/ubuntu/.cache/shopvivaliz-pr-healer -mindepth 1 -maxdepth 1 -type d -name 'run-*' -mmin +5 -exec rm -rf -- {} +
+            fi
+            echo "ephemeral_cleanup=performed"
+          else
+            echo "ephemeral_cleanup=not_needed"
+          fi
+
+          after_kb="$(df -Pk /home/ubuntu | awk 'NR==2 {print $4}')"
+          [[ "$after_kb" =~ ^[0-9]+$ ]]
+          echo "disk_available_after_kb=$after_kb"
+          test "$after_kb" -ge 524288
+
+          unit=""
+          while IFS= read -r candidate; do
+            [ -n "$candidate" ] || continue
+            workdir="$(systemctl show -p WorkingDirectory --value "$candidate")"
+            execstart="$(systemctl show -p ExecStart --value "$candidate")"
+            if [ "$workdir" = "$runner" ] || [[ "$execstart" == *"$runner/runsvc.sh"* ]]; then
+              unit="$candidate"
+              break
+            fi
+          done < <(systemctl list-unit-files --type=service --no-legend 'actions.runner.*.service' | awk '{print $1}')
+
+          [ -n "$unit" ] || { echo "runner_service=missing"; exit 23; }
+          echo "runner_service=$unit"
+          sudo systemctl restart "$unit"
+          for _ in $(seq 1 20); do
+            if systemctl is-active --quiet "$unit"; then
+              break
+            fi
+            sleep 1
+          done
+          systemctl is-active --quiet "$unit"
+          mainpid="$(systemctl show -p MainPID --value "$unit")"
+          [[ "$mainpid" =~ ^[1-9][0-9]*$ ]]
+          echo "runner_mainpid_valid=true"
+          echo "site_runner_recovery=PASS"
+          REMOTE
+
+      - name: Cleanup SSH material
+        if: always()
+        run: rm -f "$HOME/.ssh/vmkey" "$HOME/.ssh/known_hosts"

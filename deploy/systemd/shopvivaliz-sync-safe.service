@@ -5,9 +5,11 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+Environment=ROOT=/home/ubuntu/shopvivaliz-deploy/sync-repo
+Environment=SHOPVIVALIZ_DEPLOY_REPO_DIR=/home/ubuntu/shopvivaliz-deploy/sync-repo
 User=ubuntu
 Group=ubuntu
-WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/repo
+WorkingDirectory=/home/ubuntu/shopvivaliz-deploy/sync-repo
 ExecStart=/bin/bash /usr/local/lib/shopvivaliz/safe-repo-sync.sh
 # Intentional exception: safe-repo-sync may hand off a protected-main update
 # to deploy-production.sh, which requires sudo for systemd/Apache reconciliation.

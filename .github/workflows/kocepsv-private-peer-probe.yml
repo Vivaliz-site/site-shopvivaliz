@@ -1,4 +1,5 @@
 name: KOCEPSV Private Peer Probe
+# probe-trigger: 2026-09-19-root-cause-1
 
 on:
   workflow_dispatch:

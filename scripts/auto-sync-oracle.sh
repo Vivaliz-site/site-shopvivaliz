@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="${ROOT:-/home/ubuntu/shopvivaliz-deploy/repo}"
+ROOT="${ROOT:-/home/ubuntu/shopvivaliz-deploy/sync-repo}"
 SHARED_ROOT="${SHARED_ROOT:-/home/ubuntu/shopvivaliz-deploy/shared}"
 CANONICAL_RUNNER="$ROOT/scripts/safe-repo-sync.sh"
 

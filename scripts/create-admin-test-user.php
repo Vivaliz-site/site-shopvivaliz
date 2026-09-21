@@ -19,7 +19,8 @@ declare(strict_types=1);
  * - Gera uma senha aleatoria forte (32 bytes -> base64), nunca reaproveita
  *   uma senha fixa/hardcoded.
  * - Se o usuario de teste ja existir (mesmo email), atualiza a senha (nao
- *   duplica linha) e ainda assim imprime a nova senha uma unica vez.
+ *   duplica linha) e persiste a nova credencial em arquivo protegido 0600
+ *   quando executado por CLI; a senha nao e impressa em stdout.
  * - A senha SO aparece na saida desta execucao (stdout/HTTP response) e no
  *   arquivo de doc gerado localmente por quem rodou -- nunca e gravada em
  *   log persistente, nem no banco (so o hash vai pro banco).
@@ -34,6 +35,17 @@ declare(strict_types=1);
  */
 
 $isCli = (PHP_SAPI === 'cli');
+$credentialFile = '';
+if ($isCli) {
+    foreach (array_slice($argv ?? [], 1) as $arg) {
+        if (str_starts_with((string)$arg, '--credential-file=')) {
+            $credentialFile = trim(substr((string)$arg, strlen('--credential-file=')));
+        }
+    }
+    if ($credentialFile === '') {
+        $credentialFile = '/home/ubuntu/.config/shopvivaliz-admin-test.credentials.json';
+    }
+}
 
 if (!$isCli) {
     $expectedToken = getenv('SV_ADMIN_BOOTSTRAP_TOKEN') ?: ($_ENV['SV_ADMIN_BOOTSTRAP_TOKEN'] ?? '');
@@ -105,11 +117,26 @@ try {
     ];
 
     if ($isCli) {
+        $parent = dirname($credentialFile);
+        if (!is_dir($parent) && !mkdir($parent, 0700, true) && !is_dir($parent)) {
+            throw new RuntimeException('Nao foi possivel criar diretorio de credencial.');
+        }
+        @chmod($parent, 0700);
+        $payload = json_encode([
+            'email' => SV_TEST_ADMIN_EMAIL,
+            'password' => $plainPassword,
+            'user_id' => $userId,
+            'updated_at' => gmdate('c'),
+        ], JSON_UNESCAPED_SLASHES);
+        if (!is_string($payload) || file_put_contents($credentialFile, $payload . PHP_EOL, LOCK_EX) === false) {
+            throw new RuntimeException('Nao foi possivel persistir credencial protegida.');
+        }
+        @chmod($credentialFile, 0600);
         echo "Usuario de teste {$action} com sucesso.\n";
         echo "  ID:     {$userId}\n";
         echo "  Email:  " . SV_TEST_ADMIN_EMAIL . "\n";
-        echo "  Senha:  {$plainPassword}\n";
-        echo "\nGuarde esta senha agora -- nao sera exibida novamente nesta execucao.\n";
+        echo "  Credencial: {$credentialFile} (modo 0600)\n";
+        echo "ADMIN_TEST_CREDENTIAL_PERSISTED=PASS\n";
     } else {
         echo json_encode($output, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
     }

@@ -127,13 +127,224 @@ function squad_curl_json(string $url, array $headers, array $payload): array
     return $data;
 }
 
-$root = dirname(__DIR__, 3);
-$envPath = $root . '/.env';
-squad_env_load($envPath);
+squad_env_load(dirname(__DIR__, 3) . '/.env');
+
+function squad_github_tree(): string
+{
+    $token = getenv('GH_REPO_TOKEN') ?: '';
+    $repo  = getenv('GH_REPO') ?: 'Vivaliz-site/site-shopvivaliz';
+    if ($token === '') return '';
+
+    $cacheDir  = dirname(__DIR__, 3) . '/logs/squad';
+    $cacheFile = $cacheDir . '/repo-tree.cache';
+    if (is_file($cacheFile) && (time() - filemtime($cacheFile)) < 300) {
+        return (string) file_get_contents($cacheFile);
+    }
+
+    $ch = curl_init("https://api.github.com/repos/{$repo}/git/trees/HEAD?recursive=1");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_HTTPHEADER     => [
+            "Authorization: Bearer {$token}",
+            "Accept: application/vnd.github+json",
+            "User-Agent: ShopVivaliz-Squad/1.0",
+        ],
+    ]);
+    $raw = (string) curl_exec($ch);
+    curl_close($ch);
+
+    $data = json_decode($raw, true);
+    if (!isset($data['tree'])) return '';
+
+    $keep = array_filter($data['tree'], fn($item) =>
+        $item['type'] === 'blob' &&
+        !str_contains($item['path'], 'node_modules') &&
+        preg_match('/\.(php|html|yml|yaml|json|md|txt|js|css|env\.example)$/', $item['path'])
+    );
+    $paths = implode("\n", array_column(array_values($keep), 'path'));
+    $ctx = "=== REPOSITÓRIO github.com/{$repo} ===\n{$paths}";
+
+    @mkdir($cacheDir, 0755, true);
+    @file_put_contents($cacheFile, $ctx);
+    return $ctx;
+}
+
+function squad_github_file(string $path): string
+{
+    $token = getenv('GH_REPO_TOKEN') ?: '';
+    $repo  = getenv('GH_REPO') ?: 'Vivaliz-site/site-shopvivaliz';
+    if ($token === '' || $path === '') return '';
+
+    $path = ltrim(preg_replace('/[^a-zA-Z0-9\/._\-]/', '', $path), '/');
+    $ch = curl_init("https://api.github.com/repos/{$repo}/contents/{$path}");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_HTTPHEADER     => [
+            "Authorization: Bearer {$token}",
+            "Accept: application/vnd.github+json",
+            "User-Agent: ShopVivaliz-Squad/1.0",
+        ],
+    ]);
+    $raw = (string) curl_exec($ch);
+    curl_close($ch);
+
+    $data = json_decode($raw, true);
+    if (!isset($data['content'])) return '';
+    $content = base64_decode(str_replace("\n", '', $data['content']));
+    $lines   = substr_count($content, "\n");
+    if ($lines > 300) {
+        $content = implode("\n", array_slice(explode("\n", $content), 0, 300)) . "\n... (truncado em 300 linhas)";
+    }
+    return "=== {$path} ===\n{$content}";
+}
+
+function squad_github_issues(): string
+{
+    $token = getenv('GH_REPO_TOKEN') ?: '';
+    $repo  = getenv('GH_REPO') ?: 'Vivaliz-site/site-shopvivaliz';
+    if ($token === '') return '';
+
+    $ch = curl_init("https://api.github.com/repos/{$repo}/issues?state=open&per_page=10&sort=updated");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_HTTPHEADER     => [
+            "Authorization: Bearer {$token}",
+            "Accept: application/vnd.github+json",
+            "User-Agent: ShopVivaliz-Squad/1.0",
+        ],
+    ]);
+    $raw = (string) curl_exec($ch);
+    curl_close($ch);
+
+    $items = json_decode($raw, true);
+    if (!is_array($items)) return '';
+
+    $lines = ["=== ISSUES ABERTAS ==="];
+    foreach (array_slice($items, 0, 10) as $i) {
+        $lines[] = "#{$i['number']} [{$i['state']}] {$i['title']} — {$i['html_url']}";
+    }
+    return implode("\n", $lines);
+}
+
+function squad_github_create_issue(string $title, string $body, array $labels = []): string
+{
+    $token = getenv('GH_REPO_TOKEN') ?: '';
+    $repo  = getenv('GH_REPO') ?: 'Vivaliz-site/site-shopvivaliz';
+    if ($token === '' || $title === '') return '';
+
+    $payload = json_encode(array_filter(['title' => $title, 'body' => $body, 'labels' => $labels]));
+    $ch = curl_init("https://api.github.com/repos/{$repo}/issues");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $payload,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_HTTPHEADER     => [
+            "Authorization: Bearer {$token}",
+            "Accept: application/vnd.github+json",
+            "Content-Type: application/json",
+            "User-Agent: ShopVivaliz-Squad/1.0",
+        ],
+    ]);
+    $raw  = (string) curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $data = json_decode($raw, true);
+    if ($code === 201 && isset($data['html_url'])) {
+        return "✅ Issue criada: #{$data['number']} — {$data['html_url']}";
+    }
+    return "⚠️ Erro ao criar issue: HTTP {$code}";
+}
+
+function squad_github_commit(string $path, string $content, string $message): string
+{
+    $token = getenv('GH_REPO_TOKEN') ?: '';
+    $repo  = getenv('GH_REPO') ?: 'Vivaliz-site/site-shopvivaliz';
+    if ($token === '' || $path === '') return '';
+
+    $path = ltrim(preg_replace('/[^a-zA-Z0-9\/._\-]/', '', $path), '/');
+
+    // Bloqueio de segurança: só permite caminhos seguros
+    $blocked = ['login_config', '.env', 'secret', 'password', 'senha', 'token', '.duck', '.sql'];
+    foreach ($blocked as $b) {
+        if (stripos($path, $b) !== false) {
+            return "⚠️ Arquivo bloqueado por segurança: {$path}";
+        }
+    }
+    $allowedPrefixes = ['admin/', 'api/', 'docs/', 'assets/', 'css/', 'js/', 'includes/'];
+    $allowed = false;
+    foreach ($allowedPrefixes as $p) {
+        if (str_starts_with($path, $p)) { $allowed = true; break; }
+    }
+    if (!$allowed) return "⚠️ Caminho não permitido: {$path} (use admin/, api/, docs/, assets/, css/, js/)";
+
+    // Busca SHA do arquivo atual (necessário para atualizar)
+    $sha = '';
+    $ch = curl_init("https://api.github.com/repos/{$repo}/contents/{$path}");
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10,
+        CURLOPT_HTTPHEADER => ["Authorization: Bearer {$token}", "Accept: application/vnd.github+json", "User-Agent: ShopVivaliz-Squad/1.0"]]);
+    $existing = json_decode((string) curl_exec($ch), true);
+    curl_close($ch);
+    if (isset($existing['sha'])) $sha = $existing['sha'];
+
+    $payload = ['message' => "[Squad] {$message}", 'content' => base64_encode($content)];
+    if ($sha !== '') $payload['sha'] = $sha;
+
+    $ch = curl_init("https://api.github.com/repos/{$repo}/contents/{$path}");
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CUSTOMREQUEST => 'PUT',
+        CURLOPT_POSTFIELDS => json_encode($payload), CURLOPT_TIMEOUT => 15,
+        CURLOPT_HTTPHEADER => ["Authorization: Bearer {$token}", "Accept: application/vnd.github+json",
+            "Content-Type: application/json", "User-Agent: ShopVivaliz-Squad/1.0"]]);
+    $res  = json_decode((string) curl_exec($ch), true);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if (in_array($code, [200, 201]) && isset($res['commit']['html_url'])) {
+        return "✅ Commit aplicado: {$res['commit']['html_url']}";
+    }
+    return "⚠️ Erro no commit HTTP {$code}";
+}
+
+function squad_github_commits(): string
+{
+    $token = getenv('GH_REPO_TOKEN') ?: '';
+    $repo  = getenv('GH_REPO') ?: 'Vivaliz-site/site-shopvivaliz';
+    if ($token === '') return '';
+
+    $ch = curl_init("https://api.github.com/repos/{$repo}/commits?per_page=10");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_HTTPHEADER     => [
+            "Authorization: Bearer {$token}",
+            "Accept: application/vnd.github+json",
+            "User-Agent: ShopVivaliz-Squad/1.0",
+        ],
+    ]);
+    $raw = (string) curl_exec($ch);
+    curl_close($ch);
+
+    $items = json_decode($raw, true);
+    if (!is_array($items)) return '';
+
+    $lines = ["=== COMMITS RECENTES ==="];
+    foreach (array_slice($items, 0, 10) as $c) {
+        $sha  = substr($c['sha'], 0, 7);
+        $msg  = strtok($c['commit']['message'], "\n");
+        $date = substr($c['commit']['author']['date'], 0, 10);
+        $lines[] = "{$sha} [{$date}] {$msg}";
+    }
+    return implode("\n", $lines);
+}
 
 $allowed_origins = [
     'https://shopvivaliz.com.br',
     'https://www.shopvivaliz.com.br',
+    'https://admin.shopvivaliz.com.br',
     'http://localhost',
     'http://localhost:3000',
     'http://127.0.0.1',
@@ -653,6 +864,11 @@ foreach ($agentsToRun as $agentKey) {
         'text'     => $text,
         'ok'       => $ok,
     ];
+}
+
+$logDir = dirname(__DIR__, 3) . '/logs/squad';
+if (!is_dir($logDir)) {
+    @mkdir($logDir, 0755, true);
 }
 
 if (svais_cycle_complete_for_consensus($responses, $agentsToRun)) {
