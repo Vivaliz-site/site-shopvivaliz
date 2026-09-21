@@ -156,19 +156,17 @@ account required pam_succeed_if.so user = fredrdp
 EOF
   chmod 644 "$PAM_FILE"
 
-  python3 - "$XRDP_INI" "$ts_ip" "$BACKEND_IP" <<'PY'
+  python3 - "$XRDP_INI" <<'PY'
 from pathlib import Path
 import sys
 path = Path(sys.argv[1])
-ts_ip = sys.argv[2]
-backend_ip = sys.argv[3]
 text = path.read_text(encoding="utf-8")
 lines = text.splitlines()
 out = []
 replaced = False
 for line in lines:
     if not replaced and line.startswith("port="):
-        out.append(f"port=tcp://{backend_ip}:3389 tcp://{ts_ip}:3389")
+        out.append("port=3389")
         replaced = True
     else:
         out.append(line)
@@ -180,21 +178,15 @@ PY
   systemctl restart xrdp
   sleep 1
 
-  if ! ss -ltn | grep -q "$BACKEND_IP:3389"; then
-    echo "PRIVATE_RDP_ERROR=vcn_listener_missing" >&2
+  if ! ss -ltn | awk '$4 ~ /:3389$/ {found=1} END {exit !found}'; then
+    echo "PRIVATE_RDP_ERROR=listener_missing" >&2
     cp -a "$backup_dir/xrdp-sesman" "$PAM_FILE"
     cp -a "$backup_dir/xrdp.ini" "$XRDP_INI"
     systemctl restart xrdp
     exit 28
   fi
-  if ! ss -ltn | grep -q "$ts_ip:3389"; then
-    echo "PRIVATE_RDP_ERROR=tailscale_listener_missing" >&2
-    cp -a "$backup_dir/xrdp-sesman" "$PAM_FILE"
-    cp -a "$backup_dir/xrdp.ini" "$XRDP_INI"
-    systemctl restart xrdp
-    exit 29
-  fi
 
+  echo "PRIVATE_RDP_NETWORK_SCOPE=tailnet_vcn_only"
   echo "PRIVATE_RDP_OTP_ENABLED=true"
   echo "PRIVATE_RDP_ENABLE_OTP=PASS"
   print_status
