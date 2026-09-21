@@ -49,6 +49,17 @@ class RuntimeDeployReconciliationContractTest(unittest.TestCase):
         self.assertIn('ln -sfn "releases/$(basename "$previous")" "$root/current.rollback"', text)
         self.assertIn('mv -Tf "$root/current.rollback" "$current"', text)
 
+    def test_master_pipeline_reconciles_ai_squad_runtime_on_activate_and_rollback(self) -> None:
+        workflow = (ROOT / ".github/workflows/master-production-pipeline.yml").read_text(encoding="utf-8")
+        helper = (ROOT / "scripts/reconcile-ai-squad-runtime.sh").read_text(encoding="utf-8")
+        self.assertEqual(workflow.count('scripts/reconcile-ai-squad-runtime.sh" "$current"'), 2)
+        self.assertIn('ai_squad_runtime_reconcile_failed=true', workflow)
+        self.assertIn('ai_squad_runtime_rollback_reconcile_failed=true', workflow)
+        self.assertIn('17656/health', helper)
+        self.assertIn('"web_search_mode":"live"', helper)
+        self.assertIn('shopvivaliz-squad-claude-bridge.service', helper)
+        self.assertIn('17657/health', helper)
+
     def test_runtime_checks_wait_off_the_oracle_runner(self) -> None:
         reusable = (ROOT / ".github/workflows/production-release-await.yml").read_text(encoding="utf-8")
         self.assertIn("workflow_call:", reusable)
