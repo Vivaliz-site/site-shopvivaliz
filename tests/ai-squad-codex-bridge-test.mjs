@@ -67,6 +67,13 @@ assert.equal(isDirectInvocation(pathToFileURL(bridgeTarget).href, bridgeLink), t
 assert.equal(isDirectInvocation(pathToFileURL(bridgeTarget).href, import.meta.filename), false);
 fs.rmSync(invocationDir, { recursive: true, force: true });
 
+const bridgeSource = fs.readFileSync(bridgeTarget, 'utf8');
+assert.match(
+  bridgeSource,
+  /Promise\.allSettled\(profiles\.map/,
+  'cold health probes must run profiles concurrently'
+);
+
 const safe = sanitizeBridgeError(
   'Authorization: Bearer sk-secret-token quota reached for user@example.com'
 );

@@ -12,6 +12,7 @@ const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 const DEFAULT_CLAUDE_BIN = '/home/ubuntu/.local/bin/claude';
 const DEFAULT_ENV_PATH = '/home/ubuntu/shopvivaliz-deploy/shared/.env';
+const DEFAULT_CREDENTIALS_PATH = '/home/ubuntu/.claude/.credentials.json';
 const DEFAULT_WORKDIR = '/home/ubuntu/.local/share/shopvivaliz-squad-claude/workspace';
 const MODEL_ALLOWLIST = new Set([
   'claude-opus-5',
@@ -123,11 +124,35 @@ function envValue(name) {
   return '';
 }
 
-function claudeEnv(token) {
+export function resolveClaudeAuthSource(explicitToken, credentialsPath = DEFAULT_CREDENTIALS_PATH) {
+  const direct = String(explicitToken || '').trim();
+  if (direct) return { mode: 'env_token', configured: true, token: direct };
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+    const oauth = parsed?.claudeAiOauth;
+    const configured = Boolean(
+      oauth
+      && typeof oauth === 'object'
+      && (String(oauth.accessToken || '').trim() || String(oauth.refreshToken || '').trim())
+    );
+    return { mode: configured ? 'credential_store' : 'none', configured, token: '' };
+  } catch {
+    return { mode: 'none', configured: false, token: '' };
+  }
+}
+
+function claudeAuthSource() {
+  const credentialsPath = process.env.AI_SQUAD_CLAUDE_CREDENTIALS_PATH || DEFAULT_CREDENTIALS_PATH;
+  return resolveClaudeAuthSource(envValue('CLAUDE_CODE_OAUTH_TOKEN'), credentialsPath);
+}
+
+function claudeEnv(token = '') {
   const env = { ...process.env };
   delete env.ANTHROPIC_API_KEY;
   delete env.CLAUDE_API_KEY;
-  env.CLAUDE_CODE_OAUTH_TOKEN = token;
+  if (String(token || '').trim()) env.CLAUDE_CODE_OAUTH_TOKEN = String(token).trim();
+  else delete env.CLAUDE_CODE_OAUTH_TOKEN;
   env.HOME = process.env.AI_SQUAD_CLAUDE_HOME || '/home/ubuntu';
   env.PATH = process.env.PATH || '/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin';
   return env;
@@ -182,8 +207,8 @@ function runClaude(args, input, timeoutMs, token) {
 }
 
 async function probeAuth() {
-  const token = envValue('CLAUDE_CODE_OAUTH_TOKEN');
-  if (!token) {
+  const auth = claudeAuthSource();
+  if (!auth.configured) {
     authState = { checked_at: Date.now(), authenticated: false };
     return false;
   }
@@ -191,7 +216,7 @@ async function probeAuth() {
     // `claude auth status` can report loggedIn=true for an OAuth token that
     // cannot perform inference. Health must prove the same non-interactive
     // path used by the AI Squad, otherwise the UI can go falsely green.
-    const status = await runClaude(['auth', 'status', '--json'], '', 8000, token);
+    const status = await runClaude(['auth', 'status', '--json'], '', 8000, auth.token);
     const statusData = JSON.parse(status.stdout || '{}');
     if (status.code !== 0 || statusData?.loggedIn !== true) {
       authState = { checked_at: Date.now(), authenticated: false };
@@ -205,7 +230,7 @@ async function probeAuth() {
       prompt: 'OK',
       web_search: false,
     };
-    const result = await runClaude(buildClaudeArgs(request), request.prompt, 20000, token);
+    const result = await runClaude(buildClaudeArgs(request), request.prompt, 20000, auth.token);
     let data = {};
     try {
       data = JSON.parse(result.stdout || '{}');
@@ -231,11 +256,11 @@ function extractUrls(text) {
 }
 
 async function answer(request) {
-  const token = envValue('CLAUDE_CODE_OAUTH_TOKEN');
-  if (!token) throw new Error('missing token');
+  const auth = claudeAuthSource();
+  if (!auth.configured) throw new Error('missing token');
 
   const timeoutMs = Math.max(30000, Math.min(300000, Number(process.env.AI_SQUAD_CLAUDE_REQUEST_TIMEOUT_MS || DEFAULT_TIMEOUT_MS)));
-  const result = await runClaude(buildClaudeArgs(request), request.prompt, timeoutMs, token);
+  const result = await runClaude(buildClaudeArgs(request), request.prompt, timeoutMs, auth.token);
   if (result.code !== 0) {
     const detail = claudeFailureDetail(result);
     throw new Error(detail || 'claude_transport_error');
@@ -275,14 +300,16 @@ function sendJson(res, status, payload) {
 
 async function handle(req, res) {
   if (req.method === 'GET' && req.url === '/health') {
-    const tokenConfigured = envValue('CLAUDE_CODE_OAUTH_TOKEN') !== '';
+    const auth = claudeAuthSource();
     const bin = process.env.AI_SQUAD_CLAUDE_BIN || DEFAULT_CLAUDE_BIN;
     const binaryConfigured = fs.existsSync(bin);
     sendJson(res, 200, {
-      ok: tokenConfigured && binaryConfigured && authState.authenticated,
+      ok: auth.configured && binaryConfigured && authState.authenticated,
       endpoint: 'ai-squad-claude-bridge',
       auth_mode: 'claude_code_oauth',
-      token_configured: tokenConfigured,
+      token_configured: auth.configured,
+      credential_store_configured: auth.mode === 'credential_store',
+      auth_source: auth.mode,
       authenticated: authState.authenticated,
       binary_configured: binaryConfigured,
       model_allowlist: [...MODEL_ALLOWLIST],
