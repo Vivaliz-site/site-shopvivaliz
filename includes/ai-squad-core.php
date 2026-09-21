@@ -258,7 +258,6 @@ function svais_provider_state(array $profile): array
 {
     $openRouterConfigured = trim((string)(getenv('OPENROUTER_API_KEY') ?: '')) !== '';
     $openAiDirectConfigured = trim((string)(getenv('OPENAI_API_KEY') ?: '')) !== '';
-    $anthropicDirectConfigured = trim((string)(getenv('ANTHROPIC_API_KEY') ?: '')) !== '';
     $geminiDirectConfigured = trim((string)(getenv('GEMINI_API_KEY') ?: getenv('GOOGLE_API_KEY') ?: '')) !== '';
     $vertexConfigured = svais_google_vertex_configured();
     $codex = svais_codex_bridge_health();
@@ -907,9 +906,6 @@ function svais_anthropic_dispatch(
     ): array {
         return match ($transport) {
             'claude_code' => svais_claude_bridge_call($cfg, $system, $prompt, $webSearch),
-            'direct' => svais_anthropic_call($cfg, $system, $prompt, $webSearch),
-            'vertex_oauth' => svais_anthropic_vertex_call($cfg, $system, $prompt, $webSearch),
-            'openrouter' => svais_openrouter_call('anthropic', $cfg, $system, $prompt, $webSearch),
             default => throw new InvalidArgumentException('unknown_anthropic_transport'),
         };
     };
