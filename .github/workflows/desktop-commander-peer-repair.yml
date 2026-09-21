@@ -93,16 +93,13 @@ jobs:
           test "${case_ids[0]}" = "22153077391"
           test "${case_ids[1]}" = "22153259501"
 
-          set +e
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@10.0.1.38 \
-            'set -Eeuo pipefail
-             PEER_KEY=/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor
-             test -f "$PEER_KEY"
-             exec ssh -i "$PEER_KEY" -o BatchMode=yes -o StrictHostKeyChecking=yes ubuntu@10.0.1.112 bash -s' <<'SITE' | tee /tmp/shopvivaliz-amazon-support-result.log
+          cat >/tmp/shopvivaliz-amazon-support-site.sh <<'SITE_SCRIPT'
+          #!/usr/bin/env bash
           set -Eeuo pipefail
+          echo SITE_REACHED=true
           sudo -n true
+          echo SITE_SUDO_OK=true
+
           cleanup() {
             if [[ -s /tmp/shopvivaliz-amazon-support-browser.pid ]]; then
               pid="$(cat /tmp/shopvivaliz-amazon-support-browser.pid 2>/dev/null || true)"
@@ -135,6 +132,7 @@ jobs:
             sleep 0.5
           done
           curl -fsS --max-time 2 http://127.0.0.1:9226/json/version >/dev/null
+          echo SELLER_CENTRAL_CDP_READY=true
 
           cat >/tmp/shopvivaliz-amazon-support-reply.mjs <<'NODE'
           const CDP='http://127.0.0.1:9226';
@@ -198,9 +196,33 @@ jobs:
           NODE
 
           node /tmp/shopvivaliz-amazon-support-reply.mjs
-          SITE
+          SITE_SCRIPT
+          chmod 700 /tmp/shopvivaliz-amazon-support-site.sh
+
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=10 -i ~/.ssh/vmkey \
+            /tmp/shopvivaliz-amazon-support-site.sh ubuntu@10.0.1.38:/tmp/shopvivaliz-amazon-support-site.sh
+
+          set +e
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@10.0.1.38 \
+            'set -Eeuo pipefail
+             echo BACKEND_REACHED=true
+             PEER_KEY=/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor
+             test -f "$PEER_KEY"
+             echo PEER_KEY_PRESENT=true
+             scp -q -i "$PEER_KEY" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+               /tmp/shopvivaliz-amazon-support-site.sh ubuntu@10.0.1.112:/tmp/shopvivaliz-amazon-support-site.sh
+             ssh -i "$PEER_KEY" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+               ubuntu@10.0.1.112 "bash /tmp/shopvivaliz-amazon-support-site.sh"
+             rc=$?
+             rm -f /tmp/shopvivaliz-amazon-support-site.sh
+             exit "$rc"' | tee /tmp/shopvivaliz-amazon-support-result.log
           rc=${PIPESTATUS[0]}
           set -e
+          rm -f /tmp/shopvivaliz-amazon-support-site.sh
           printf '%s\\n' "$rc" >/tmp/shopvivaliz-amazon-support-result.rc
           exit "$rc"
 
