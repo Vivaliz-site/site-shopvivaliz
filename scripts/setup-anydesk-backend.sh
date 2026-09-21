@@ -85,13 +85,21 @@ launch_gui() {
   install -d -m 700 -o "$RDP_USER" -g "$RDP_USER" "/home/$RDP_USER/.local/state"
   runuser -u "$RDP_USER" -- env     DISPLAY="$display"     XAUTHORITY="$auth"     XDG_RUNTIME_DIR="$runtime"     DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus"     GDK_BACKEND=x11     sh -lc "nohup anydesk >'$log' 2>&1 </dev/null &"
   sleep 3
-  if pgrep -u "$RDP_USER" -x anydesk >/dev/null 2>&1; then
-    echo "ANYDESK_GUI=running"
+  local window_dump
+  window_dump="$(runuser -u "$RDP_USER" -- env DISPLAY="$display" XAUTHORITY="$auth" xwininfo -root -tree 2>/dev/null || true)"
+  if printf '%s\n' "$window_dump" | grep -qi 'AnyDesk'; then
+    echo "ANYDESK_GUI=window_present"
+    echo "ANYDESK_DISPLAY=$display"
+    echo "ANYDESK_LAUNCH=PASS"
+  elif pgrep -u "$RDP_USER" -f '(^|/)anydesk([[:space:]]|$)' >/dev/null 2>&1; then
+    echo "ANYDESK_GUI=process_present"
     echo "ANYDESK_DISPLAY=$display"
     echo "ANYDESK_LAUNCH=PASS"
   else
     echo "ANYDESK_ERROR=gui_not_running" >&2
-    tail -20 "$log" 2>/dev/null || true
+    echo "ANYDESK_DISPLAY=$display" >&2
+    echo "ANYDESK_X11_ACCESS=$([ -n "$window_dump" ] && echo ok || echo failed)" >&2
+    tail -20 "$log" 2>/dev/null | sed -E 's/([A-Za-z0-9+\/_=-]{32,})/[redacted]/g' >&2 || true
     exit 26
   fi
 }
