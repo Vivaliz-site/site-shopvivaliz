@@ -1,35 +1,200 @@
-# Dependências
 node_modules/
 vendor/
-
-# Build e cache
-dist/
-build/
-.cache/
-
-# Ambiente
 .env
 .env.*
 !.env.example
-
-# Logs
-logs/
+.tokens/
 *.log
+logs/
+cache/
+tmp/
+.DS_Store
+Thumbs.db
+*.sql
+*.sql.gz
+*.zip
+*.tar
+*.tar.gz
+backup/
+backups/
+claude-backup/
+__pycache__/
+scripts/.ftp-credentials
+scripts/autonomous-cycle-log.json
+.vercel/
+.env.local
+.env.*.local
 
-# Storage runtime
+claude-bkp/api/shopee-integration/scripts/test_final.py
+claude-bkp/api/shopee-integration/scripts/test_shopee_api.py
+claude-bkp/api/tiktok-integration/scripts/test_tiktok_api.py
+claude-bkp/medusa/apps/storefront/next-env.d.ts
+claude-bkp/medusa/apps/storefront/tsconfig.tsbuildinfo
+.secrets/
+.aider*
+
+# Segurança: Nunca committar secrets gerados em deploy
+config/runtime-secrets.php
+config/runtime-secrets*.php
+.env.production
+.env.production.local
+
+# Playwright runtime artifacts belong in CI artifacts, never in source control.
+test-results/
+playwright-report/
 storage/order-rate-limit/
 storage/order-idempotency/
 storage/private/
 storage/tiny/
-storage/orders/
-storage/queue.sqlite
 
-# AI Studio
+# AI Image Studio: imagens geradas em staging, e cópias temporárias da foto
+# real do produto usada como referência, são runtime output, não código.
+# Os diretórios são criados automaticamente por admin/ai-image-studio/config.php.
 admin/ai-image-studio/storage/staging/*
 !admin/ai-image-studio/storage/staging/.gitkeep
 admin/ai-image-studio/storage/base-image-tmp/*
 !admin/ai-image-studio/storage/base-image-tmp/.gitkeep
 
-# OS
-.DS_Store
-Thumbs.db
+# Backups pontuais deixados por agentes em produção -- nunca devem ser
+# versionados nem travar o auto-sync seguro da VM.
+*.backup-*
+
+# ⚠️ CRÍTICO: Dados operacionais - NUNCA versionados (risco de perda em git reset)
+storage/orders/
+storage/commerce_signals.json
+storage/codex-bridge/state.json
+storage/orchestrator/queue.json
+storage/products-cache-ativos.json
+!storage/autonomous_cycle.json
+.agent-heartbeats/
+.git-sync.lock
+.git-auto-sync.log
+artifacts/
+scratch/compress_favicon.py
+scratch/embed_favicon_base64.py
+scratch/update_favicons_html.py
+ai-system/config/orchestrator.json
+ai-system/memory/*.db
+ai-system/memory/*_status.json
+!ai-system/requirements.txt
+!ai-system/orchestrator/runtime.py
+!ai-system/orchestrator/
+!ai-system/memory/.gitkeep
+
+# ============================================================================
+# ARQUITETURA DE RELEASES IMUTÁVEIS (2026-07-25)
+# ============================================================================
+# Pós-migração, /shopvivaliz-deploy/ é um clone local na VM.
+# Seus arquivos nunca devem entrar no Git:
+
+# Deploy infrastructure (local à VM)
+shopvivaliz-deploy/
+/home/ubuntu/shopvivaliz-deploy/
+
+# Builds locais e temporários
+dist/
+!public/dist/
+!public/dist/**
+build/
+out/
+
+# Lock files temporários
+*.lock.tmp
+.deploy.lock
+
+# Logs de deploy (locais)
+deploy-*.log
+
+# Histórico de arquivo temp para rollback
+.rollback-history/
+
+# ============================================================================
+# CREDENTIALS E SECRETOS (Absolutamente Proibido)
+# ============================================================================
+.env.*.production
+.env.*.secret
+config/*secret*
+config/*credential*
+credentials/
+.credentials/
+secrets/
+.secrets/
+
+# ============================================================================
+# ARQUIVOS GERADOS (Nunca comitter)
+# ============================================================================
+# Estes são gerados/modificados em runtime via symlinks em /shared/
+
+# Gerados por app
+api/catalog/fallback-products.json
+storage/products-cache-ativos.json
+
+# Podem aparecer se não estão bem symlinked
+sync-cache-to-admin.php.bak
+sync-cache-to-admin.php
+*.tmp.php
+
+# ============================================================================
+# TESTES E VALIDAÇÃO (Temporários de sessão)
+# ============================================================================
+validacao-*.js
+diagnostico-*.js
+screenshots-validacao/
+test-*.log
+/.tmp_shopvivaliz/
+/test*.php
+/teste*.php
+/_real_smoke/
+/_real_smoke.ps1
+/_tmp_ai_smoke/
+/_tmp_ai_smoke.ps1
+storage/raw/SKU-*-SMOKE/
+storage/processed/SKU-*-SMOKE/
+storage/queue.json
+storage/queue.json.lock
+
+# Certificados (NUNCA commitar)
+*.pfx
+*.p12
+*.key
+*.pem
+Certs/
+certs/
+certificates/
+
+# Tokens e Secrets
+*.token
+*.secret
+tokens/
+
+# Relatorios locais com material sensivel
+GITHUB_SECRETS.md
+
+/test-all-shopv506.php
+/.venv-homologacao/
+/storage/rate-limit/
+
+# ============================================================================
+# RELATÓRIOS DE DIAGNÓSTICO (Temporários de sessão de agentes autônomos)
+# ============================================================================
+# reports/ acumula dumps de diagnóstico pontual (mei-email-*, automation-*,
+# fredwin-*, hourly/) gerados por agentes autônomos rodando na VM. Só os .md
+# de auditoria formal na raiz de reports/ são histórico real e ficam versionados.
+reports/hourly/
+reports/*.txt
+reports/*.csv
+reports/*.json
+reports/*.rtf
+reports/*.png
+
+# Screenshots de QA/browser-testing são temporários, nunca versionados.
+scratch/*.png
+scratch/*.jpg
+
+# Isolated agent worktrees
+.worktrees/
+.claude/worktrees/
+
+# Editor extension packages are local tooling, never production artifacts.
+*.vsix
+storage/queue.sqlite
