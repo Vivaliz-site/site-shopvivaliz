@@ -35,11 +35,11 @@ A UI mostra a interação em fases:
 
 ### `deep_research`
 
-Preset para pesquisas aprofundadas e debates com evidência atual:
+Preset para pesquisas aprofundadas e debates com evidência atual. O nível operacional atual de raciocínio/esforço é `medium` para os três provedores:
 
-- OpenAI: `gpt-5.6-sol`, effort `xhigh`;
-- Anthropic: `claude-opus-5`, effort `xhigh`;
-- Gemini: `gemini-3.1-pro-preview`, thinking `HIGH`;
+- OpenAI: `gpt-5.6-terra`, effort `medium`;
+- Anthropic: `claude-sonnet-5`, effort `medium`;
+- Gemini: `gemini-3.5-flash`, thinking `MEDIUM`;
 - web search habilitado para os três.
 
 Por decisão operacional, Fable não faz parte de nenhum preset do AI Squad.
