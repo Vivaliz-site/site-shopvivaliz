@@ -1,0 +1,33 @@
+name: Google Ads Backend Browser OAuth Status
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 3
+    steps:
+      - name: Inspect backend Browser Worker
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json, urllib.request
+          base='http://127.0.0.1:17777'
+          def get(path):
+              with urllib.request.urlopen(base+path,timeout=10) as r:
+                  return json.loads(r.read().decode())
+          health=get('/health')
+          if health.get('ok') is not True or health.get('endpoint') != 'browser-worker':
+              raise SystemExit('browser worker unhealthy')
+          sessions=get('/sessions').get('sessions') or []
+          matches=[s for s in sessions if s.get('profile')=='google-ads-oauth']
+          print('BROWSER_WORKER_OK=true')
+          print('GOOGLE_ADS_OAUTH_SESSIONS='+str(len(matches)))
+          for s in matches:
+              print('SESSION='+str(s.get('id',''))[:8]+' persistent='+str(bool(s.get('persistent'))).lower())
+          PY

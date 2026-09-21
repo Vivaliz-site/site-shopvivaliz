@@ -39,6 +39,25 @@ if [ "$current" != "$PW_VERSION" ]; then
   npm install --prefix "$ROOT" --no-audit --no-fund --omit=dev --save-exact "playwright-core@$PW_VERSION"
 fi
 
+PY_VENV="$ROOT/python-venv"
+if [ ! -x "$PY_VENV/bin/python" ]; then
+  python3 -m venv "$PY_VENV"
+fi
+py_current=""
+if py_value="$("$PY_VENV/bin/python" - <<'PYVER' 2>/dev/null
+try:
+    import importlib.metadata
+    print(importlib.metadata.version("playwright"))
+except Exception:
+    pass
+PYVER
+)"; then
+  py_current="$py_value"
+fi
+if [ "$py_current" != "$PW_VERSION" ]; then
+  "$PY_VENV/bin/python" -m pip install --disable-pip-version-check --no-cache-dir "playwright==$PW_VERSION"
+fi
+
 chrome="$(find /home/ubuntu/.cache/ms-playwright -maxdepth 3 -type f -path '*/chromium-*/chrome-linux/chrome' -perm -u+x 2>/dev/null | sort -V | tail -1)"
 test -n "$chrome"
 "$chrome" --version
