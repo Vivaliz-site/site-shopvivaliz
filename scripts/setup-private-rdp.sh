@@ -13,6 +13,8 @@ XRDP_INI="/etc/xrdp/xrdp.ini"
 ENROLL_DIR="/home/ubuntu/.private-rdp-enroll"
 ENROLL_PORT="18777"
 ENROLL_PID_FILE="$ENROLL_DIR/server.pid"
+ENROLL_TAILNET_PORT="18778"
+ENROLL_TAILNET_PID_FILE="$ENROLL_DIR/tailnet-server.pid"
 ENROLL_SESSION_FILE="$ENROLL_DIR/session.id"
 BROWSER_API="http://127.0.0.1:17777"
 
@@ -252,6 +254,14 @@ PY
 }
 
 publish_enrollment() {
+  local ts_ip
+  if ! ts_ip="$(tailscale_ip)"; then
+    ts_ip=""
+  fi
+  if [ -z "$ts_ip" ]; then
+    echo "PRIVATE_RDP_ERROR=tailscale_not_authenticated" >&2
+    exit 25
+  fi
   if [ ! -s "$PASSWORD_PATH" ]; then
     echo "PRIVATE_RDP_ERROR=password_file_missing" >&2
     exit 31
@@ -290,7 +300,7 @@ img{display:block;max-width:380px;width:100%;margin:24px auto;background:white;p
 <div id="pw" class="pw">carregando...</div>
 <p class="note">Cadastre o QR abaixo no Authenticator. No RDP, use a senha acima seguida imediatamente do codigo TOTP de 6 digitos.</p>
 <img src="otp.png" alt="QR TOTP">
-<p class="note">Pagina temporaria, servida apenas em 127.0.0.1 dentro da VM.</p>
+<p class="note">Pagina temporaria: Browser Worker local ou rede privada Tailscale. Nao compartilhe esta tela.</p>
 <script>
 fetch('password.txt',{cache:'no-store'})
   .then(r=>{if(!r.ok) throw new Error('load'); return r.text()})
@@ -324,13 +334,31 @@ EOF
     unset old_pid
   fi
 
-  runuser -u ubuntu -- sh -c "nohup python3 -m http.server 18777 --bind 127.0.0.1 --directory '$ENROLL_DIR' >'$ENROLL_DIR/server.log' 2>&1 </dev/null & echo \$! > '$ENROLL_PID_FILE'"
+  if [ -s "$ENROLL_TAILNET_PID_FILE" ]; then
+    local old_tailnet_pid
+    old_tailnet_pid="$(cat "$ENROLL_TAILNET_PID_FILE")"
+    if [ -n "$old_tailnet_pid" ] && kill -0 "$old_tailnet_pid" 2>/dev/null; then
+      if ! kill "$old_tailnet_pid"; then
+        echo "PRIVATE_RDP_WARN=previous_tailnet_enrollment_server_stop_failed" >&2
+      fi
+    fi
+    unset old_tailnet_pid
+  fi
 
-  local ready
+  runuser -u ubuntu -- sh -c "nohup timeout 1800 python3 -m http.server 18777 --bind 127.0.0.1 --directory '$ENROLL_DIR' >'$ENROLL_DIR/server.log' 2>&1 </dev/null & echo \$! > '$ENROLL_PID_FILE'"
+  runuser -u ubuntu -- sh -c "nohup timeout 1800 python3 -m http.server 18778 --bind '$ts_ip' --directory '$ENROLL_DIR' >'$ENROLL_DIR/tailnet-server.log' 2>&1 </dev/null & echo \$! > '$ENROLL_TAILNET_PID_FILE'"
+
+  local ready tailnet_ready
   ready=false
+  tailnet_ready=false
   for _ in $(seq 1 20); do
-    if curl -fsS --connect-timeout 1 --max-time 2 "http://127.0.0.1:$ENROLL_PORT/index.html" >/dev/null; then
+    if curl --noproxy '*' -fsS --connect-timeout 1 --max-time 2 "http://127.0.0.1:$ENROLL_PORT/index.html" >/dev/null; then
       ready=true
+    fi
+    if curl --noproxy '*' -fsS --connect-timeout 1 --max-time 2 "http://$ts_ip:$ENROLL_TAILNET_PORT/index.html" >/dev/null; then
+      tailnet_ready=true
+    fi
+    if [ "$ready" = true ] && [ "$tailnet_ready" = true ]; then
       break
     fi
     sleep 1
@@ -338,6 +366,10 @@ EOF
   if [ "$ready" != true ]; then
     echo "PRIVATE_RDP_ERROR=enrollment_server_not_ready" >&2
     exit 34
+  fi
+  if [ "$tailnet_ready" != true ]; then
+    echo "PRIVATE_RDP_ERROR=tailnet_enrollment_server_not_ready" >&2
+    exit 36
   fi
 
   local response session_id
@@ -356,6 +388,8 @@ EOF
   echo "RDP_ENROLLMENT_SESSION_READY=true"
   echo "RDP_ENROLLMENT_LABEL=rdp-enrollment"
   echo "RDP_ENROLLMENT_TTL_SECONDS=1800"
+  echo "RDP_ENROLLMENT_TAILNET_READY=true"
+  echo "RDP_ENROLLMENT_TAILNET_URL=http://$ts_ip:$ENROLL_TAILNET_PORT/index.html"
 }
 
 cleanup_enrollment() {
@@ -379,6 +413,17 @@ cleanup_enrollment() {
       fi
     fi
     unset server_pid
+  fi
+
+  if [ -s "$ENROLL_TAILNET_PID_FILE" ]; then
+    local tailnet_server_pid
+    tailnet_server_pid="$(cat "$ENROLL_TAILNET_PID_FILE")"
+    if [ -n "$tailnet_server_pid" ] && kill -0 "$tailnet_server_pid" 2>/dev/null; then
+      if ! kill "$tailnet_server_pid"; then
+        echo "PRIVATE_RDP_WARN=tailnet_enrollment_server_stop_failed" >&2
+      fi
+    fi
+    unset tailnet_server_pid
   fi
 
   rm -rf "$ENROLL_DIR"
