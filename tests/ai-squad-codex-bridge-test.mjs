@@ -23,7 +23,7 @@ assert.equal(valid.model, 'gpt-5.6-sol');
 assert.equal(valid.effort, 'xhigh');
 assert.equal(valid.web_search, true);
 
-assert.equal(resolveCodexWebSearchMode(true, undefined), 'cached');
+assert.equal(resolveCodexWebSearchMode(true, undefined), 'live');
 assert.equal(resolveCodexWebSearchMode(true, 'cached'), 'cached');
 assert.equal(resolveCodexWebSearchMode(true, 'live'), 'live');
 assert.equal(resolveCodexWebSearchMode(false, 'live'), 'disabled');
