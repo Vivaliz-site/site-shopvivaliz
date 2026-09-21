@@ -72,6 +72,11 @@ jobs:
           print(f"MLRR_REASON={reason}")
           PY
 
+      - name: Checkout bridge support
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - name: Execute canonical MLRR operation
         shell: bash
         env:
@@ -82,18 +87,27 @@ jobs:
           set -Eeuo pipefail
           test "$(hostname)" = shopvivaliz-free-a1
 
-          site_repo=/home/ubuntu/shopvivaliz-deploy/repo
           state_dir="$HOME/.local/state/shopvivaliz"
+          conf_dir="$HOME/.config/shopvivaliz"
           cache_root=/home/ubuntu/.cache/mlrr-production-bridge
-          key_file="$HOME/.config/shopvivaliz/execution-provenance.key"
+          key_file="$conf_dir/execution-provenance.key"
+          provenance_script="$GITHUB_WORKSPACE/scripts/emit-execution-provenance.py"
           work_root=""
           repo=""
-          mkdir -p "$state_dir"
-          chmod 700 "$state_dir"
+
+          mkdir -p "$state_dir" "$conf_dir"
+          chmod 700 "$conf_dir"
           install -d -m 700 "$cache_root"
+          if [ ! -s "$key_file" ]; then
+            umask 077
+            openssl rand -hex 32 > "$key_file"
+            chmod 600 "$key_file"
+          fi
           test -s "$key_file"
-          test -x "$site_repo/scripts/emit-execution-provenance.py"
-          gh auth status --hostname github.com >/dev/null 2>&1
+          test -f "$provenance_script"
+
+          export GH_CONFIG_DIR=/home/ubuntu/.config/gh
+          env -u GH_TOKEN -u GITHUB_TOKEN gh auth status --hostname github.com >/dev/null 2>&1
 
           export EXECUTION_PROVENANCE_HMAC_KEY="$(cat "$key_file")"
           export EXECUTION_PROVENANCE_KEY_ID=shopvivaliz-host-provenance-v1
@@ -102,11 +116,12 @@ jobs:
           export EXECUTION_REF=refs/heads/main
           export EXECUTION_TARGET=shopvivaliz-free-a1
           export EXECUTION_ORIGIN_TYPE=github-actions
+          export EXECUTION_SHA=UNRESOLVED
 
           provenance() {
             local result="$1" code="$2"
             EXECUTION_RESULT="$result" EXECUTION_EXIT_CODE="$code" \
-              python3 "$site_repo/scripts/emit-execution-provenance.py" \
+              python3 "$provenance_script" \
                 mlrr_production_bridge --target shopvivaliz-free-a1 \
               >> "$state_dir/execution-provenance.jsonl"
           }
@@ -133,6 +148,11 @@ jobs:
             if ! cleanup_workspace; then
               cleanup_rc=1
             fi
+            if [ "$cleanup_rc" -eq 0 ]; then
+              export EXECUTION_CLEANUP_STATUS=COMPLETED
+            else
+              export EXECUTION_CLEANUP_STATUS=FAILED
+            fi
             if [ "$rc" -eq 0 ] && [ "$cleanup_rc" -eq 0 ]; then
               provenance COMPLETED 0
             else
@@ -148,23 +168,23 @@ jobs:
             exit "$rc"
           }
           trap cleanup EXIT
-          provenance STARTED ""
 
           work_root="$(mktemp -d "$cache_root/run-XXXXXX")"
           chmod 700 "$work_root"
           repo="$work_root/repo"
-          gh repo clone Vivaliz-site/mercadolivre-returns-recovery "$repo" -- --branch main --single-branch --quiet
+          env -u GH_TOKEN -u GITHUB_TOKEN gh repo clone Vivaliz-site/mercadolivre-returns-recovery "$repo" -- --branch main --single-branch --quiet
           test -z "$(git -C "$repo" status --porcelain)"
           git -C "$repo" merge-base --is-ancestor f6f8c587e893286aa532760ee461c05b061eeaa2 HEAD
           git -C "$repo" merge-base --is-ancestor f28cfcdd8efe68a144b528517f230ce803774ef1 HEAD
           sha="$(git -C "$repo" rev-parse HEAD)"
           test "$sha" = "$(git -C "$repo" rev-parse origin/main)"
-          cd "$repo"
 
           export GITHUB_WORKSPACE="$repo"
           export GITHUB_SHA="$sha"
           export EXECUTION_SHA="$sha"
           export GITHUB_REF_NAME=main
+          provenance STARTED ""
+          cd "$repo"
           test -x scripts/mlrr-production-ops.sh
 
           if [ "$MLRR_OPERATION" = rollout ]; then
