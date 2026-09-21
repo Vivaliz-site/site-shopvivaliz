@@ -38,6 +38,9 @@ on:
           - anydesk_control_revoke
           - anydesk_console_unlock
           - ai_squad_ui_audit
+          - rustdesk_server_install
+          - rustdesk_client_install
+          - rustdesk_status
       reason:
         description: Audit reason
         required: true
@@ -90,7 +93,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit", "rustdesk_server_install", "rustdesk_client_install", "rustdesk_status"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -101,6 +104,10 @@ jobs:
               raise SystemExit("AnyDesk actions are restricted to the backend VM")
           if action == "ai_squad_ui_audit" and target != "shopvivaliz-free-a1":
               raise SystemExit("AI Squad UI audit is restricted to production orchestration")
+          if action == "rustdesk_server_install" and target != "always-free-arm-1787907847-26":
+              raise SystemExit("RustDesk server is restricted to the backend VM")
+          if action.startswith("rustdesk_") and target not in {"shopvivaliz-free-a1", "always-free-arm-1787907847-26"}:
+              raise SystemExit("RustDesk actions are restricted to the two Linux VMs")
           if not reason:
               raise SystemExit("Reason is required")
 
@@ -112,7 +119,7 @@ jobs:
           PY
 
       - name: Configure backend SSH
-        if: steps.req.outputs.target != 'shopvivaliz-free-a1' || steps.req.outputs.action == 'ai_squad_ui_audit'
+        if: steps.req.outputs.target != 'shopvivaliz-free-a1' || steps.req.outputs.action == 'ai_squad_ui_audit' || startsWith(steps.req.outputs.action, 'rustdesk_')
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
           VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
@@ -208,6 +215,14 @@ jobs:
             runtime_status)
               bash scripts/runtime-service-status.sh site
               ;;
+            rustdesk_client_install)
+              SERVER_KEY="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey" ubuntu@10.0.1.38 "sudo -n cat /opt/shopvivaliz-rustdesk-server/data/id_ed25519.pub")"
+              test -n "$SERVER_KEY"
+              sudo -n env RUSTDESK_SERVER_KEY="$SERVER_KEY" RUSTDESK_ID_SERVER="10.0.1.38" bash scripts/setup-rustdesk-remote.sh client_install
+              ;;
+            rustdesk_status)
+              sudo -n bash scripts/setup-rustdesk-remote.sh status
+              ;;
             repo_status)
               echo "REMOTE_REPO_STATUS_BEGIN"
               cd /home/ubuntu/shopvivaliz-deploy/repo
@@ -251,6 +266,20 @@ jobs:
             repo_status)
               CMD='echo REMOTE_REPO_STATUS_BEGIN; for d in /home/ubuntu/*; do if [ -d "$d/.git" ]; then echo "REPO=$d"; git -C "$d" branch --show-current; git -C "$d" status --porcelain; git -C "$d" rev-parse HEAD; fi; done; echo REMOTE_REPO_STATUS_END'
               "${SSH[@]}" "$CMD"
+              ;;
+            rustdesk_server_install|rustdesk_client_install|rustdesk_status)
+              case "$ACTION" in
+                rustdesk_server_install) MODE=server_install ;;
+                rustdesk_client_install) MODE=client_install ;;
+                rustdesk_status) MODE=status ;;
+              esac
+              if [ "$MODE" = "client_install" ]; then
+                SERVER_KEY="$("${SSH[@]}" "sudo -n cat /opt/shopvivaliz-rustdesk-server/data/id_ed25519.pub")"
+                test -n "$SERVER_KEY"
+                "${SSH[@]}" "sudo -n env RUSTDESK_SERVER_KEY=\"$SERVER_KEY\" RUSTDESK_ID_SERVER=10.0.1.38 bash -s -- client_install" < scripts/setup-rustdesk-remote.sh
+              else
+                "${SSH[@]}" "sudo -n bash -s -- $MODE" < scripts/setup-rustdesk-remote.sh
+              fi
               ;;
             rdp_prepare|rdp_status|rdp_otp_prepare|rdp_enable_otp|rdp_enrollment_publish|rdp_enrollment_cleanup)
               case "$ACTION" in
