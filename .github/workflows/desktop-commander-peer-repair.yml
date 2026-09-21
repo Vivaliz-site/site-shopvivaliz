@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   repair-peer:
@@ -186,8 +187,67 @@ jobs:
           ws.close();
           NODE
 
-          node /tmp/shopvivaliz-amazon-support-reply.mjs
+          set +e
+          node /tmp/shopvivaliz-amazon-support-reply.mjs | tee /tmp/shopvivaliz-amazon-support-result.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          printf '%s\n' "$rc" >/tmp/shopvivaliz-amazon-support-result.rc
+          exit "$rc"
+
+      - name: Publish sanitized Amazon support audit
+        if: always() && steps.request.outputs.action == 'amazon_support_reply'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json, os, urllib.request
+          rc_path='/tmp/shopvivaliz-amazon-support-result.rc'
+          log_path='/tmp/shopvivaliz-amazon-support-result.log'
+          try:
+              rc=int(open(rc_path).read().strip())
+          except Exception:
+              rc=99
+          results=[]
+          try:
+              for line in open(log_path, errors='ignore'):
+                  line=line.strip()
+                  if not line.startswith('{'):
+                      continue
+                  try:
+                      item=json.loads(line)
+                  except Exception:
+                      continue
+                  if item.get('case_id') in {'22153077391','22153259501'}:
+                      results.append({k:item.get(k) for k in ('case_id','order_id','status','result','read_back')})
+          except FileNotFoundError:
+              pass
+          body='AMAZON_SUPPORT_REPLY_AUDIT\n' + '\n'.join([
+              'run_id='+os.environ['GITHUB_RUN_ID'],
+              'sha='+os.environ['GITHUB_SHA'],
+              'rc='+str(rc),
+              'results='+json.dumps(results,ensure_ascii=False,separators=(',',':')),
+          ])
+          repo=os.environ['GITHUB_REPOSITORY']
+          url=f'https://api.github.com/repos/{repo}/issues/1586/comments'
+          req=urllib.request.Request(
+              url,
+              data=json.dumps({'body':body}).encode(),
+              headers={
+                  'Authorization':'Bearer '+os.environ['GH_TOKEN'],
+                  'Accept':'application/vnd.github+json',
+                  'X-GitHub-Api-Version':'2022-11-28',
+                  'Content-Type':'application/json',
+              },
+              method='POST',
+          )
+          with urllib.request.urlopen(req,timeout=20) as response:
+              if response.status not in (200,201):
+                  raise SystemExit('audit_comment_failed')
+          print('AMAZON_SUPPORT_AUDIT_COMMENTED=true')
+          PY
 
       - name: Cleanup
         if: always()
-        run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts
+        run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts /tmp/shopvivaliz-amazon-support-result.log /tmp/shopvivaliz-amazon-support-result.rc
