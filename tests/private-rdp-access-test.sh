@@ -9,6 +9,8 @@ test -f "$setup"
 grep -q 'libpam-google-authenticator' "$setup"
 grep -q 'tailscale' "$setup"
 grep -q 'pam_google_authenticator.so forward_pass' "$setup"
+grep -q 'port=3389' "$setup"
+grep -q 'PRIVATE_RDP_NETWORK_SCOPE=tailnet_vcn_only' "$setup"
 grep -q 'pam_permit.so' "$setup" && { echo "unsafe pam_permit remains"; exit 1; } || true
 grep -q 'rdp_prepare' "$workflow"
 grep -q 'rdp_status' "$workflow"
