@@ -62,13 +62,13 @@ As variáveis abaixo são referências de configuração. Valores nunca devem se
 
 Transportes operacionais atuais:
 
-- OpenAI: `codex_chatgpt` com perfis ChatGPT Business autenticados; o bridge tenta os perfis configurados em ordem e, se todos estiverem sem cota/indisponíveis, emite fallback explícito `manual_chatgpt`. O AI Squad não usa `OPENAI_API_KEY` como fallback.
+- OpenAI: `codex_chatgpt` com perfis ChatGPT Business autenticados → `chatgpt_browser` usando a sessão persistente do perfil `ai-squad-chatgpt` na VM backend → `manual_chatgpt` apenas se ambos os transportes automáticos falharem. O AI Squad não usa `OPENAI_API_KEY` como fallback.
 - Anthropic: `claude_code` com OAuth da conta; o runtime canônico é um `systemd --user` instalado por `ops/ai-squad/install-claude-bridge-user-service.sh`, executando sempre o bridge da release ativa; não há fallback silencioso para API direta, Vertex ou OpenRouter;
 - Gemini: `vertex_oauth` → API direta quando configurada. O OpenRouter não faz parte da cadeia operacional enquanto não houver credencial validada ao vivo.
 
 Credenciais opcionais dos provedores que ainda usam API são mantidas apenas no runtime protegido. Para OpenAI, a política do AI Squad é login ChatGPT Business via Codex, sem fallback para `OPENAI_API_KEY`. Gemini pode usar `GEMINI_API_KEY`/`GOOGLE_API_KEY` como fallback direto conforme a ordem de transportes documentada.
 
-Para OpenAI, cada identidade ChatGPT mantém `CODEX_HOME` isolado. O bridge verifica autenticação e limites de cada perfil, tenta automaticamente o próximo perfil quando encontra cota/rate-limit esgotado e só então gera o fallback `manual_chatgpt` para uso visível no ChatGPT. O health publica apenas contagens de perfis autenticados/disponíveis/esgotados, nunca tokens.
+Para OpenAI, cada identidade ChatGPT mantém `CODEX_HOME` isolado. O bridge verifica autenticação e limites de cada perfil e tenta automaticamente o próximo perfil quando encontra cota/rate-limit esgotado. Se todos os perfis Codex ficarem sem capacidade, o core chama `chatgpt_browser` no browser worker da VM backend pelo túnel local `127.0.0.1:17777`. Esse transporte usa exclusivamente o perfil persistente `ai-squad-chatgpt`; cookies/tokens nunca são retornados pela API. O ChatGPT web não garante o mesmo modelo exato solicitado ao Codex, por isso o health publica `chatgpt_browser_exact_model_guarantee=false`. Somente se o browser também estiver indisponível/desautenticado surge `manual_chatgpt`.
 
 Para Claude Code, o bridge reutiliza preferencialmente o login persistente Claude.ai do usuário `ubuntu` em `/home/ubuntu/.claude/.credentials.json`; um `CLAUDE_CODE_OAUTH_TOKEN` explicitamente provisionado continua aceito quando necessário. O conteúdo dessas credenciais nunca deve ser impresso, versionado ou copiado para logs. A presença de credencial não é suficiente para health verde: o bridge executa uma inferência real e limitada antes de declarar `authenticated=true`.
 
@@ -79,6 +79,8 @@ Overrides opcionais:
 - `AI_SQUAD_GEMINI_MODEL`
 - equivalentes `*_BALANCED_MODEL` e `*_FAST_MODEL`;
 - `AI_SQUAD_CODEX_WEB_SEARCH_MODE` — modo de pesquisa web do bridge Codex (`live`, `cached` ou `disabled` conforme política de runtime).
+- `AI_SQUAD_BROWSER_WORKER_URL` — endpoint local do browser worker, default `http://127.0.0.1:17777`;
+- `AI_SQUAD_CHATGPT_BROWSER_ENABLED` — habilita/desabilita o fallback ChatGPT web sem afetar o Codex.
 
 ## Health
 
@@ -135,6 +137,7 @@ node tests/ai-squad-codex-bridge-test.mjs
 node tests/ai-squad-claude-bridge-test.mjs
 bash tests/ai-squad-three-provider-runtime-contract-test.sh
 bash tests/ai-squad-ui-audit-contract-test.sh
+bash tests/ai-squad-chatgpt-browser-contract-test.sh
 ```
 
 O teste também falha caso o nome `fable` apareça em qualquer preset.
