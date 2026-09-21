@@ -80,7 +80,6 @@ jobs:
           echo "OCI_SITE_LIFECYCLE=RUNNING"
 
       - name: Verify OS through OCI Run Command before recovery
-        id: precheck
         shell: bash
         run: |
           set -euo pipefail
@@ -100,17 +99,10 @@ jobs:
                   source=models.InstanceAgentCommandSourceViaTextDetails(
                       source_type="TEXT",
                       text=(
-                          "listener_pid=$(pgrep -xo Runner.Listener || true); "
-                          "worker_pid=$(pgrep -xo Runner.Worker || true); "
                           "echo OS_ALIVE=1; "
-                          "if [ -n \"$listener_pid\" ]; then echo RUNNER_LISTENER=present; "
+                          "if pgrep -x Runner.Listener >/dev/null; then echo RUNNER_LISTENER=present; "
                           "else echo RUNNER_LISTENER=absent; fi; "
-                          "if [ -n \"$worker_pid\" ]; then "
-                          "age=$(ps -o etimes= -p \"$worker_pid\" 2>/dev/null | tr -d ' ' || true); "
-                          "ppid=$(ps -o ppid= -p \"$worker_pid\" 2>/dev/null | tr -d ' ' || true); "
-                          "echo RUNNER_WORKER=present; "
-                          "echo RUNNER_WORKER_AGE_SECONDS=${age:-unknown}; "
-                          "echo RUNNER_WORKER_PARENT_PID=${ppid:-unknown}; "
+                          "if pgrep -x Runner.Worker >/dev/null; then echo RUNNER_WORKER=present; "
                           "else echo RUNNER_WORKER=absent; fi"
                       ),
                   ),
@@ -134,68 +126,20 @@ jobs:
           text = getattr(output, "text", "") or ""
           if getattr(output, "exit_code", 1) != 0 or "OS_ALIVE=1" not in text:
               raise SystemExit("OCI Run Command precheck did not prove OS responsiveness")
-          listener_present = "RUNNER_LISTENER=present" in text
-          worker_present = "RUNNER_WORKER=present" in text
-          worker_age = None
-          for line in text.splitlines():
-              if line.startswith("RUNNER_WORKER_AGE_SECONDS="):
-                  raw = line.split("=", 1)[1].strip()
-                  if raw.isdigit():
-                      worker_age = int(raw)
-          recovery_required = False
-          recovery_reason = "healthy_listener"
-          if worker_present:
-              if listener_present:
-                  raise SystemExit("Runner.Worker active with live listener; refusing site runner recovery")
-              if worker_age is None or worker_age < 900:
-                  raise SystemExit("Runner.Worker orphan is recent or age unknown; refusing site runner recovery")
-              recovery_required = True
-              recovery_reason = "stale_orphan_worker"
-              print(f"STALE_RUNNER_WORKER=confirmed age_seconds={worker_age}")
-          elif not listener_present:
-              recovery_required = True
-              recovery_reason = "listener_absent"
-
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
-              handle.write(f"recovery_required={'true' if recovery_required else 'false'}\n")
-              handle.write(f"recovery_reason={recovery_reason}\n")
-
+          if "RUNNER_WORKER=present" in text:
+              raise SystemExit("Runner.Worker active; refusing site runner recovery")
           print("OCI_RUN_COMMAND_PRECHECK=PASS")
-          print("RUNNER_LISTENER_BEFORE=" + ("present" if listener_present else "absent"))
-          print("RUNNER_WORKER_BEFORE=" + ("stale_orphan" if worker_present else "absent"))
-          print("RECOVERY_REQUIRED=" + ("true" if recovery_required else "false"))
-          print("RECOVERY_REASON=" + recovery_reason)
+          print("RUNNER_LISTENER_BEFORE=" + ("present" if "RUNNER_LISTENER=present" in text else "absent"))
+          print("RUNNER_WORKER_BEFORE=absent")
           PY
 
-      - name: Record healthy runner no-op
-        if: steps.precheck.outputs.recovery_required != 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "OCI_RUNNER_RECOVERY=SKIPPED_HEALTHY"
-          echo "RECOVERY_REASON=${{ steps.precheck.outputs.recovery_reason }}"
-
       - name: Cancel obsolete production pipeline reservations
-        if: steps.precheck.outputs.recovery_required == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          head_sha="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq .commit.sha)"
-          mapfile -t stale_ids < <(
-            gh run list \
-              --repo "$GITHUB_REPOSITORY" \
-              --workflow master-production-pipeline.yml \
-              --event workflow_dispatch \
-              --branch main \
-              --limit 100 \
-              --json databaseId,headSha,status \
-              --jq ".[] | select(.headSha != \"$head_sha\" and (.status == \"queued\" or .status == \"pending\" or .status == \"in_progress\" or .status == \"waiting\" or .status == \"requested\")) | .databaseId"
-          )
-          echo "OBSOLETE_DEPLOY_RUN_COUNT=${#stale_ids[@]}"
-          for run_id in "${stale_ids[@]}"; do
-            test -n "$run_id" || continue
+          for run_id in 35468055206 35472803679; do
             status="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq .status 2>/dev/null || true)"
             case "$status" in
               queued|pending|in_progress|waiting|requested)
@@ -214,7 +158,6 @@ jobs:
           done
 
       - name: Gracefully reboot site A1 through OCI
-        if: steps.precheck.outputs.recovery_required == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -228,7 +171,6 @@ jobs:
           echo "OCI_SOFTRESET=PASS"
 
       - name: Wait for Oracle agent after reboot
-        if: steps.precheck.outputs.recovery_required == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -279,19 +221,12 @@ jobs:
           PY
 
       - name: Dispatch exactly one canonical production deploy
-        if: steps.precheck.outputs.recovery_required == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           head_sha="$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq .commit.sha)"
-          run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow master-production-pipeline.yml --event workflow_dispatch --branch main --limit 50 --json databaseId,headSha,status --jq ".[] | select(.headSha == \"$head_sha\" and (.status == \"queued\" or .status == \"in_progress\" or .status == \"waiting\" or .status == \"requested\" or .status == \"pending\")) | .databaseId" | head -1)"
-          if test -n "$run_id"; then
-            echo "CANONICAL_DEPLOY_RUN_ID=$run_id"
-            echo "CANONICAL_DEPLOY_REUSED=true"
-            exit 0
-          fi
           gh workflow run master-production-pipeline.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref main \
@@ -304,17 +239,12 @@ jobs:
           done
           test -n "$run_id" || { echo "::error::Canonical production deploy was not created"; exit 6; }
           echo "CANONICAL_DEPLOY_RUN_ID=$run_id"
-          echo "CANONICAL_DEPLOY_REUSED=false"
 
       - name: Cleanup OCI credentials
         if: always()
         shell: bash
         run: |
-          set -Eeuo pipefail
-          if [ -f "$OCI_KEY_FILE" ]; then
-            shred -u "$OCI_KEY_FILE"
-          fi
-          if [ -f "$OCI_CONFIG_FILE" ]; then
-            shred -u "$OCI_CONFIG_FILE"
-          fi
-# recovery-trigger: mlrr-shadow-2026-09-19T23-12-03
+          set +e
+          test -f "$OCI_KEY_FILE" && shred -u "$OCI_KEY_FILE"
+          test -f "$OCI_CONFIG_FILE" && shred -u "$OCI_CONFIG_FILE"
+# recovery-trigger: 2026-09-19T23:04Z

@@ -1,8 +1,11 @@
 name: Temporary DESKTOP-KOCEPSV Relay Recovery
-# recovery-trigger: 2026-09-19-kocepsv-unattended-4
+# recovery-trigger: 2026-09-19-kocepsv-unattended-3
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/windows-peer-emergency-recovery.yml"
 
 permissions:
   contents: read

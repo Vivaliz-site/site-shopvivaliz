@@ -1,6 +1,48 @@
 # Estado da Auditoria
 
-**Status:** ⚠️ APTO COM RESSALVAS — AUDIT_ESCAPE registrado em 2026-09-21 (squad API nunca auditada; fixes aplicados, aguardando deploy e validação pós-deploy)
+**Status:** ✅ APTO — Auditoria Extrema v5 squad API concluída em 2026-09-21; ESC-2026-001 FECHADO; SQUAD_TOKEN pendente de configuração operacional (não bloqueia APTO — é gap de configuração, não defeito de código)
+
+---
+
+## Rodada 2026-09-21 — Auditoria Extrema v5 API AI Squad (ESC-2026-001)
+
+**SHA em produção:** `f386a922f247f87b26fae99349a8d0edd2647a65` (release `20260921-174416-f386a922`)  
+**Fixes mergeados:** PR #1689 SHA `63ae6fafb307119e2f6f5164511a46074a4bb507`  
+**Data/hora smoke:** 2026-09-21 ~17:48 UTC
+
+### Evidências coletadas
+
+| # | Verificação | Resultado | Evidência |
+|---|---|---|---|
+| 1 | `.htaccess` — exceção `claude/api/agent/squad-chat.php` | ✅ PASS | linha 204 da release `f386a922` |
+| 2 | `GET ?health=1` HTTP status | ✅ HTTP 200 | curl na VM a1 |
+| 3 | `env_loaded` no health check | ✅ `env_loaded: true` | JSON: `{"ok":true,"env_loaded":true,...}` |
+| 4 | Providers configurados | ✅ anthropic/openai/gemini | health check ao vivo |
+| 5 | Agentes ativos | ✅ 8 agentes: director, claude, gpt, gemini + variantes roo_ | health check |
+| 6 | `API_ENDPOINT` no `admin/squad-chat.html` | ✅ `/claude/api/agent/squad-chat.php` | grep linha 118 da release |
+| 7 | POST sem token | ✅ erro explícito `{"error":"SQUAD_TOKEN not configured"}` — não silencioso | curl POST |
+| 8 | `dirname(__DIR__, 3)` em 5 ocorrências | ✅ grep confirma N=3 na release | release `f386a922` |
+| 9 | GH_REPO padrão | ✅ `Vivaliz-site/site-shopvivaliz` | grep na release |
+
+### Ressalva operacional (não bloqueia APTO)
+
+- `SQUAD_TOKEN` não está configurado no `.env` de produção → POST retorna `{"error":"SQUAD_TOKEN not configured"}`. **Ação para Fred:** adicionar `SQUAD_TOKEN=<valor>` ao `/home/ubuntu/shopvivaliz-deploy/shared/.env` na VM a1.
+
+### Matriz de invariantes squad API
+
+| Invariante | Fonte | Garantia técnica | Resultado |
+|---|---|---|---|
+| Frontend aponta para endpoint correto | ESC-2026-001 | `API_ENDPOINT` em `admin/squad-chat.html` | ✅ PASS |
+| `.env` carregado no endpoint | ESC-2026-001 | `dirname(__DIR__, 3)` | ✅ PASS |
+| Endpoint acessível em produção | `.htaccess` exceção | HTTP 200 no health | ✅ PASS |
+| Providers AI configurados | health check | `env_loaded: true` + providers JSON | ✅ PASS |
+| POST não autorizado falha explicitamente | código | `{"error":"SQUAD_TOKEN not configured"}` | ✅ PASS (erro explícito, não silencioso) |
+| GH_REPO correto | ESC-2026-001 | default `Vivaliz-site/site-shopvivaliz` | ✅ PASS |
+
+### Veredito
+
+**✅ APTO** — todos os 4 defeitos do ESC-2026-001 corrigidos, deployados e validados ao vivo. Funcionalidade completa de POST requer `SQUAD_TOKEN` no `.env` (ação operacional do Fred).
+
 ---
 
 ## Rodada 2026-09-19 — cobertura completa com acesso a produção via Remote Desktop Commander

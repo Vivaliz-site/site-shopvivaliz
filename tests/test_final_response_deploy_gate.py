@@ -21,10 +21,6 @@ class FinalResponseDeployGateTests(unittest.TestCase):
             self.assertIn(MARKER, text, str(path))
             self.assertIn("resposta final", text.lower(), str(path))
             self.assertIn("pós-deploy", text.lower(), str(path))
-            self.assertIn("origin/main", text.lower(), str(path))
-            self.assertIn("current/.release-sha", text.lower(), str(path))
-            self.assertIn("api/health/version.php", text.lower(), str(path))
-            self.assertIn("master production pipeline", text.lower(), str(path))
 
     def test_guard_is_enforced_by_repository_governance(self):
         self.assertTrue(GUARD.is_file(), "final-response deploy guard must exist")

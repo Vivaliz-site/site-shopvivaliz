@@ -10,15 +10,7 @@ Antes de diagnosticar, alterar ou validar qualquer ambiente, o agente deve:
 2. identificar o host correto pelo papel atual;
 3. confirmar o acesso com evidência (`hostname`, `whoami`, diretório e, quando aplicável, `git status`);
 4. nunca assumir que um IP antigo continua sendo produção;
-5. preferir o canal GitHub Remote Access documentado em `docs/REMOTE-ACCESS-GITHUB.md` para terminal, serviços e diagnóstico; usar Desktop Commander apenas como fallback opcional para tarefas não-browser; usar SSH/Bastion como fallback autorizado. Navegação/browser segue a regra global abaixo e não usa Windows.
-
-## Navegação e browser — regra global
-
-<!-- GLOBAL_BROWSER_VM_POLICY_V2 -->
-
-O host canônico para navegação e automação browser é `always-free-arm-1787907847-26` (`10.0.1.38`), via Browser Worker privado. Interação humana para MFA/CAPTCHA/consentimento é feita em `https://shopvivaliz.com.br/admin/browser-worker.php`.
-
-Fred-Win (`LAPTOP-NIG4IFUU`) e `DESKTOP-KOCEPSV` **não são destinos nem fallback de navegador**. Se o Browser Worker estiver indisponível, reparar o acesso pela VCN/OCI Bastion/túnel privado; não transferir a navegação para Windows. Exceção somente por ordem explícita do proprietário na tarefa atual.
+5. preferir Desktop Commander quando o dispositivo estiver conectado; usar SSH como fallback autorizado.
 
 ## Hosts operacionais atuais
 
@@ -29,49 +21,6 @@ Fred-Win (`LAPTOP-NIG4IFUU`) e `DESKTOP-KOCEPSV` **não são destinos nem fallba
 | `shopvivaliz-ai` | `137.131.156.17` | DEV legado / e-mail / testes; **não tratar como produção web** | pode aparecer offline/legado |
 
 A arquitetura atual deve ser confirmada no código e nos hosts antes de qualquer intervenção. Se houver divergência entre este arquivo e evidência ao vivo, pare a hipótese e atualize a documentação com a evidência encontrada.
-
-### Sessão visual ChatGPT canônica do AI Squad
-
-O fallback manual/visual do AI Squad usa a sessão já autenticada em `always-free-arm-1787907847-26`, usuário `fredrdp`, perfil Chromium `/home/fredrdp/.config/shopvivaliz-chromium`, CDP local `127.0.0.1:9555`. O processo principal esperado deve usar esse mesmo `--user-data-dir` e `--remote-debugging-port=9555`.
-
-Não criar outro perfil, outro Chromium ou uma cópia dessa sessão em `shopvivaliz-free-a1`: esse host não é o dono da sessão visual. Antes de iniciar qualquer navegador, verificar o processo existente e `http://127.0.0.1:9555/json/version` no host backend; se já estiver ativo, reutilizar a sessão. Nunca registrar cookies, conteúdo de conversa ou tokens.
-
-## Inventário canônico de runtime
-
-Para status operacional, usar `scripts/runtime-service-status.sh` ou a ação remota `runtime_status`, que executa esse inventário. Não montar health checks a partir de nomes históricos memorizados.
-
-Semântica obrigatória:
-
-- `LoadState=not-found` em unidade aposentada significa **ausente como esperado**, não serviço quebrado.
-- Serviço `oneshot` pode ficar `inactive (dead)` entre execuções e continuar saudável. Para catálogo, o gate é `shopvivaliz-catalog-reconcile.timer` ativo + último `shopvivaliz-catalog-reconcile.service` com `Result=success` e `ExecMainStatus=0`.
-- No backend, `mei-mg-email-worker.service` deve permanecer inativo enquanto `/var/lib/mei-mg-email/sender_blocked.pause` existir. Reiniciar o worker nesse estado é violação do circuit breaker.
-- Uso de disco >= 85% é atenção operacional mesmo quando os serviços estão saudáveis.
-
-Runtime principal atual em `shopvivaliz-free-a1`:
-
-```text
-apache2.service
-shopvivaliz-queue-worker.service
-shopvivaliz-token-renewer.service
-shopvivaliz-shopee-token-renewer.service
-shopvivaliz-catalog-reconcile.timer
-shopvivaliz-catalog-reconcile.service   # oneshot; normalmente inactive entre execuções
-shopvivaliz-desktop-commander.service
-```
-
-Runtime principal atual em `always-free-arm-1787907847-26`:
-
-```text
-shopvivaliz-desktop-commander.service
-mei-mg-email-api.service
-mei-mg-email-monitor.service
-mei-mg-email-queue-replenisher.service
-mei-mg-email-brevo-reconciler.service
-mei-mg-email-site-tunnel.service
-mei-mg-email-worker.service             # policy-aware; pode estar intencionalmente inactive
-```
-
-Nomes como `shopvivaliz-products-active-sync.service`, `shopvivaliz-24x7.service`, `agent-bridge.service`, `shopvivaliz-mcp.service` e `mei-mg-email.service` não devem ser usados como prova de indisponibilidade do runtime atual quando estiverem `not-found`.
 
 ## Produção web/deploy
 
@@ -126,13 +75,9 @@ No Windows:
 Use Remote Desktop Commander ou OCI Bastion; SSH publico direto esta desabilitado.
 ```
 
-## GitHub Remote Access (canal primário)
+## Desktop Commander
 
-Para operações de terminal, serviços, status, disco e Git nos quatro hosts, usar `docs/REMOTE-ACCESS-GITHUB.md` e `.github/workflows/shopvivaliz-remote-access.yml`. O issue canônico `#1586` dispara a execução por comentário allowlisted e mantém trilha de auditoria por comentário/workflow, sem acionar pipelines gerais de `push`. `ops/remote-access-request.json` é legado temporário e não deve ser usado por novas execuções.
-
-## Desktop Commander (fallback opcional)
-
-Quando houver cota disponível e necessidade específica de UI, o acesso pode ser feito por nome do dispositivo em vez de depender de IP/chave manual:
+Quando houver dispositivos conectados, preferir o acesso por nome do dispositivo em vez de depender de IP/chave manual:
 
 ```text
 shopvivaliz-free-a1
