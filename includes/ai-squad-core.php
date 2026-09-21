@@ -167,6 +167,21 @@ function svais_browser_worker_url(): string
     return rtrim($url, '/');
 }
 
+function svais_agent_context(): string
+{
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    $path = dirname(__DIR__) . '/docs/knowledge/ai-agent-context.md';
+    $text = is_file($path) ? (string)file_get_contents($path) : '';
+    if ($text === '') {
+        return $cached = 'Use docs/knowledge/host-access.md, README.md and agent-rules.md as the canonical operational context. Never expose secrets.';
+    }
+
+    $text = preg_replace('/(?i)(password|senha|token|secret|private[_ -]?key|cookie|otp)\s*[:=]\s*\S+/', '$1=[redacted]', $text);
+    return $cached = mb_substr((string)$text, 0, 24000, 'UTF-8');
+}
+
 function svais_chatgpt_browser_health(): array
 {
     static $cached = null;
@@ -527,9 +542,10 @@ function svais_chatgpt_browser_call(array $cfg, string $system, string $prompt, 
         [
             'model' => (string)$cfg['model'],
             'effort' => (string)$cfg['effort'],
-            'system' => $system,
+            'system' => $system . "\n\nSHOPVIVALIZ CANONICAL CONTEXT:\n" . svais_agent_context(),
             'prompt' => $prompt,
             'web_search' => $webSearch,
+            'programming_web_research' => true,
         ],
         210
     );
