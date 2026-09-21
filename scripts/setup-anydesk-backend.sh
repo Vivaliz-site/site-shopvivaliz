@@ -4,6 +4,7 @@ set -Eeuo pipefail
 ACTION="${1:-status}"
 EXPECTED_HOST="always-free-arm-1787907847-26"
 RDP_USER="fredrdp"
+GUI_USER="fredconsole"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "ANYDESK_ERROR=root_required" >&2
@@ -16,6 +17,10 @@ fi
 if ! id "$RDP_USER" >/dev/null 2>&1; then
   echo "ANYDESK_ERROR=rdp_user_missing" >&2
   exit 22
+fi
+if ! id "$GUI_USER" >/dev/null 2>&1; then
+  echo "ANYDESK_ERROR=gui_user_missing" >&2
+  exit 27
 fi
 if [ "$(dpkg --print-architecture)" != "arm64" ]; then
   echo "ANYDESK_ERROR=unsupported_arch" >&2
@@ -73,35 +78,59 @@ launch_gui() {
     echo "ANYDESK_ERROR=not_installed" >&2
     exit 24
   }
-  display="$(ps -u "$RDP_USER" -o args= | sed -n 's#.*Xorg \(:[0-9][0-9]*\).*#\1#p' | head -1)"
-  if [ -z "$display" ]; then
-    echo "ANYDESK_ERROR=xorg_session_missing" >&2
+
+  local tray_pid env_dump display xauthority runtime dbus window_dump session_id session_type session_remote
+  tray_pid="$(pgrep -u "$GUI_USER" -f '/usr/bin/anydesk --tray' | head -1 || true)"
+  if [ -z "$tray_pid" ]; then
+    echo "ANYDESK_ERROR=physical_tray_missing" >&2
     exit 25
   fi
-  uid="$(id -u "$RDP_USER")"
-  runtime="/run/user/$uid"
-  auth="/home/$RDP_USER/.Xauthority"
-  log="/home/$RDP_USER/.local/state/shopvivaliz-anydesk-gui.log"
-  install -d -m 700 -o "$RDP_USER" -g "$RDP_USER" "/home/$RDP_USER/.local/state"
-  runuser -u "$RDP_USER" -- env     DISPLAY="$display"     XAUTHORITY="$auth"     XDG_RUNTIME_DIR="$runtime"     DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus"     GDK_BACKEND=x11     sh -lc "nohup anydesk >'$log' 2>&1 </dev/null &"
-  sleep 3
-  local window_dump
-  window_dump="$(runuser -u "$RDP_USER" -- env DISPLAY="$display" XAUTHORITY="$auth" xwininfo -root -tree 2>/dev/null || true)"
+
+  env_dump="$(tr '\0' '\n' < "/proc/$tray_pid/environ")"
+  display="$(printf '%s\n' "$env_dump" | sed -n 's/^DISPLAY=//p' | head -1)"
+  xauthority="$(printf '%s\n' "$env_dump" | sed -n 's/^XAUTHORITY=//p' | head -1)"
+  runtime="$(printf '%s\n' "$env_dump" | sed -n 's/^XDG_RUNTIME_DIR=//p' | head -1)"
+  dbus="$(printf '%s\n' "$env_dump" | sed -n 's/^DBUS_SESSION_BUS_ADDRESS=//p' | head -1)"
+
+  session_id="$(loginctl list-sessions --no-legend | awk -v user="$GUI_USER" '$3 == user {print $1; exit}')"
+  session_type="$(loginctl show-session "$session_id" -p Type --value 2>/dev/null || true)"
+  session_remote="$(loginctl show-session "$session_id" -p Remote --value 2>/dev/null || true)"
+
+  if [ -z "$display" ] || [ "$display" != ":0" ] || [ "$session_type" != "x11" ] || [ "$session_remote" != "no" ]; then
+    echo "ANYDESK_ERROR=unsupported_gui_session" >&2
+    echo "ANYDESK_DISPLAY=${display:-missing}" >&2
+    echo "ANYDESK_SESSION_TYPE=${session_type:-missing}" >&2
+    echo "ANYDESK_SESSION_REMOTE=${session_remote:-missing}" >&2
+    exit 28
+  fi
+
+  [ -n "$xauthority" ] || xauthority="/home/$GUI_USER/.Xauthority"
+  [ -n "$runtime" ] || runtime="/run/user/$(id -u "$GUI_USER")"
+  [ -n "$dbus" ] || dbus="unix:path=$runtime/bus"
+
+  runuser -u "$GUI_USER" -- env \
+    DISPLAY="$display" \
+    XAUTHORITY="$xauthority" \
+    XDG_RUNTIME_DIR="$runtime" \
+    DBUS_SESSION_BUS_ADDRESS="$dbus" \
+    GDK_BACKEND=x11 \
+    anydesk --settings >/dev/null 2>&1 || true
+
+  sleep 2
+  window_dump="$(runuser -u "$GUI_USER" -- env DISPLAY="$display" XAUTHORITY="$xauthority" xwininfo -root -tree 2>/dev/null || true)"
   if printf '%s\n' "$window_dump" | grep -qi 'AnyDesk'; then
     echo "ANYDESK_GUI=window_present"
-    echo "ANYDESK_DISPLAY=$display"
-    echo "ANYDESK_LAUNCH=PASS"
-  elif pgrep -u "$RDP_USER" -f '(^|/)anydesk([[:space:]]|$)' >/dev/null 2>&1; then
-    echo "ANYDESK_GUI=process_present"
-    echo "ANYDESK_DISPLAY=$display"
-    echo "ANYDESK_LAUNCH=PASS"
+  elif pgrep -u "$GUI_USER" -f '/usr/bin/anydesk --tray' >/dev/null 2>&1; then
+    echo "ANYDESK_GUI=tray_present"
   else
     echo "ANYDESK_ERROR=gui_not_running" >&2
-    echo "ANYDESK_DISPLAY=$display" >&2
-    echo "ANYDESK_X11_ACCESS=$([ -n "$window_dump" ] && echo ok || echo failed)" >&2
-    tail -20 "$log" 2>/dev/null | sed -E 's/([A-Za-z0-9+\/_=-]{32,})/[redacted]/g' >&2 || true
     exit 26
   fi
+  echo "ANYDESK_GUI_USER=$GUI_USER"
+  echo "ANYDESK_DISPLAY=$display"
+  echo "ANYDESK_SESSION_TYPE=$session_type"
+  echo "ANYDESK_SESSION_REMOTE=$session_remote"
+  echo "ANYDESK_LAUNCH=PASS"
 }
 
 case "$ACTION" in
