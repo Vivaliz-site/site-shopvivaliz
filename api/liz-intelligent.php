@@ -808,6 +808,7 @@ function liz_call_with_fallback(string $message, array $history, array $products
         $answer = match ($provider['name']) {
             'gemini' => liz_call_gemini($message, $history, $products, $provider['key'], $knowledge, $orderContext, $state),
             'openrouter' => liz_call_openrouter($message, $history, $products, $provider['key'], $knowledge, $orderContext, $state),
+            'claude' => liz_call_claude($message, $history, $products, $provider['key'], $knowledge, $orderContext, $state),
             default => null,
         };
         if ($answer !== null) {
