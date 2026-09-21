@@ -34,18 +34,23 @@ class WorkflowPrivateTransportTests(unittest.TestCase):
                     offenders.append(f'{path}:{ip}')
         self.assertEqual(offenders, [], 'legacy public VM IPs remain: ' + ', '.join(offenders))
 
-    def test_legacy_fredwin_relay_workflows_are_manual_only(self):
+    def test_browser_workflows_do_not_use_windows_relays(self):
         offenders = []
-        automatic = ('schedule:', 'push:', 'pull_request:', 'workflow_run:')
-        relay_markers = ('127.0.0.1:5557', '127.0.0.1:5558', 'select-active-products-browser-relay.sh')
-        for path, text in workflow_texts():
-            if not any(marker in text for marker in relay_markers):
-                continue
-            head = text.split('jobs:', 1)[0]
-            found = [event[:-1] for event in automatic if event in head]
-            if found:
-                offenders.append(f'{path}:{"/" .join(found)}')
-        self.assertEqual(offenders, [], 'legacy relay workflows still auto-trigger: ' + ', '.join(offenders))
+        browser_workflows = (
+            'active-products-browser-smoke.yml',
+            'backend-vm-admin-mobile-readonly-smoke.yml',
+            'image-run-browser-smoke.yml',
+            'backend-vm-browser-capability.yml',
+            'google-ads-backend-vm-open-oauth.yml',
+        )
+        forbidden = ('127.0.0.1:5557', '127.0.0.1:5558', 'select-active-products-browser-relay.sh', 'SV_BROWSER_RELAY_PORT')
+        for name in browser_workflows:
+            path = WORKFLOWS / name
+            text = path.read_text(encoding='utf-8')
+            for marker in forbidden:
+                if marker in text:
+                    offenders.append(f'{path}:{marker}')
+        self.assertEqual(offenders, [], 'browser workflows still use Windows relays: ' + ', '.join(offenders))
 
     def test_private_vm_ssh_jobs_use_verified_private_transport(self):
         offenders = []

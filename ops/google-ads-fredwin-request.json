@@ -1,5 +1,5 @@
 {
-  "action": "open_google_cloud_oauth",
+  "action": "browser_vm_required",
   "requested_at": "2026-08-08T12:40:00-03:00",
-  "reason": "Open Google Cloud OAuth credentials in Fred-Win interactive session to repair Google Ads authentication"
+  "reason": "Legacy request retired: browser authentication must use the backend VM Browser Worker, not Fred-Win"
 }
