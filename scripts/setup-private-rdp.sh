@@ -38,12 +38,16 @@ print_status() {
   local ts_state ts_ip pw
   if command -v tailscale >/dev/null 2>&1; then
     ts_state="$(tailscale status --json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("BackendState","unknown"))' 2>/dev/null || echo unknown)"
-    ts_ip="$(tailscale_ip || true)"
+    if ! ts_ip="$(tailscale_ip)"; then
+    ts_ip=""
+  fi
   else
     ts_state="not-installed"
     ts_ip=""
   fi
-  pw="$(password_state || true)"
+  if ! pw="$(password_state)"; then
+    pw=""
+  fi
   echo "PRIVATE_RDP_STATUS=ok"
   echo "TAILSCALE_STATE=$ts_state"
   echo "TAILSCALE_IP=${ts_ip:-none}"
@@ -70,7 +74,9 @@ prepare() {
   DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libpam-google-authenticator qrencode oathtool pamtester
   systemctl enable --now tailscaled
   systemctl enable --now xrdp
-  tailscale set --operator=ubuntu >/dev/null 2>&1 || true
+  if ! tailscale set --operator=ubuntu >/dev/null 2>&1; then
+    echo "PRIVATE_RDP_WARN=operator_not_set" >&2
+  fi
   timedatectl show -p NTPSynchronized --value | grep -qx true || {
     echo "PRIVATE_RDP_ERROR=time_not_synchronized" >&2
     exit 23
@@ -85,7 +91,9 @@ prepare_otp() {
     exit 24
   }
   local ts_ip
-  ts_ip="$(tailscale_ip || true)"
+  if ! ts_ip="$(tailscale_ip)"; then
+    ts_ip=""
+  fi
   if [ -z "$ts_ip" ]; then
     echo "PRIVATE_RDP_ERROR=tailscale_not_authenticated" >&2
     exit 25
@@ -124,7 +132,9 @@ PY
 
 enable_otp() {
   local ts_ip pw backup_dir
-  ts_ip="$(tailscale_ip || true)"
+  if ! ts_ip="$(tailscale_ip)"; then
+    ts_ip=""
+  fi
   if [ -z "$ts_ip" ]; then
     echo "PRIVATE_RDP_ERROR=tailscale_not_authenticated" >&2
     exit 25
@@ -133,7 +143,9 @@ enable_otp() {
     echo "PRIVATE_RDP_ERROR=otp_secret_missing" >&2
     exit 26
   fi
-  pw="$(password_state || true)"
+  if ! pw="$(password_state)"; then
+    pw=""
+  fi
   if [ "$pw" != "P" ]; then
     echo "PRIVATE_RDP_ERROR=unix_password_not_set"
     echo "FREDRDP_PASSWORD_STATE=${pw:-unknown}"
