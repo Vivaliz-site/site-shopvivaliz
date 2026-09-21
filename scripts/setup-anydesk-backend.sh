@@ -209,6 +209,43 @@ admin_security() {
   echo "ANYDESK_DISPLAY=$display"
 }
 
+admin_security_rdp() {
+  local session_pid env_dump display xauthority runtime dbus admin_log
+  if session_pid="$(pgrep -n -u "$RDP_USER" -f 'xfce4-session' 2>/dev/null)"; then
+    :
+  else
+    session_pid=""
+  fi
+  if [ -z "$session_pid" ]; then
+    echo "ANYDESK_ERROR=rdp_desktop_session_missing" >&2
+    exit 39
+  fi
+  env_dump="$(tr '\0' '\n' < "/proc/$session_pid/environ")"
+  display="$(printf '%s\n' "$env_dump" | sed -n 's/^DISPLAY=//p' | head -1)"
+  xauthority="$(printf '%s\n' "$env_dump" | sed -n 's/^XAUTHORITY=//p' | head -1)"
+  runtime="$(printf '%s\n' "$env_dump" | sed -n 's/^XDG_RUNTIME_DIR=//p' | head -1)"
+  dbus="$(printf '%s\n' "$env_dump" | sed -n 's/^DBUS_SESSION_BUS_ADDRESS=//p' | head -1)"
+  case "$display" in
+    :[1-9]*|:[1-9]*.0) ;;
+    *) echo "ANYDESK_ERROR=unsupported_rdp_admin_display" >&2; exit 40 ;;
+  esac
+  if [ -z "$xauthority" ]; then xauthority="/home/$RDP_USER/.Xauthority"; fi
+  if [ -z "$runtime" ]; then runtime="/run/user/$(id -u "$RDP_USER")"; fi
+  if [ -z "$dbus" ]; then dbus="unix:path=$runtime/bus"; fi
+  admin_log="/home/$RDP_USER/.local/state/shopvivaliz-anydesk-admin-security-rdp.log"
+  install -d -m 700 -o "$RDP_USER" -g "$RDP_USER" "/home/$RDP_USER/.local/state"
+  nohup env \
+    DISPLAY="$display" \
+    XAUTHORITY="$xauthority" \
+    XDG_RUNTIME_DIR="$runtime" \
+    DBUS_SESSION_BUS_ADDRESS="$dbus" \
+    GDK_BACKEND=x11 \
+    anydesk --admin-settings:security >"$admin_log" 2>&1 </dev/null &
+  sleep 2
+  echo "ANYDESK_ADMIN_SECURITY_RDP=PASS"
+  echo "ANYDESK_RDP_DISPLAY=$display"
+}
+
 console_unlock() {
   local session_id locked active
   session_id="$(loginctl list-sessions --no-legend | awk -v user="$GUI_USER" '$3 == user && $4 == "seat0" {print $1; exit}')"
@@ -272,6 +309,7 @@ case "$ACTION" in
   status) status ;;
   launch) launch_gui ;;
   admin_security) admin_security ;;
+  admin_security_rdp) admin_security_rdp ;;
   control_grant) console_control grant ;;
   control_revoke) console_control revoke ;;
   console_unlock) console_unlock ;;
