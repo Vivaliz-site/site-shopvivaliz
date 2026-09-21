@@ -158,7 +158,7 @@ jobs:
               echo "LARGE_OLD_FILES"
               sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +50M -mtime +30 -printf '%s %TY-%Tm-%Td %p\n' 2>/dev/null | sort -nr | head -n 80
               echo "DUPLICATES_BY_HASH_OVER_20M"
-              sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +20M -print0 2>/dev/null | xargs -0 -r sha256sum 2>/dev/null | sort | awk '{h=$1; $1=""; sub(/^ /,""); if (h==prev){if(!shown){print prev_line; shown=1}; print} else {shown=0} prev=h; prev_line=$0}'
+              tmpf=$(mktemp); trap 'rm -f "$tmpf"' RETURN; sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +20M -printf '%s\t%p\n' 2>/dev/null | sort -n > "$tmpf"; awk -F '\t' 'NR==1{s=$1; lines=$0; n=1; next} $1==s{lines=lines ORS $0; n++; next} {if(n>1) print lines; s=$1; lines=$0; n=1} END{if(n>1) print lines}' "$tmpf" | cut -f2- | while IFS= read -r p; do sha256sum "$p"; done | sort | awk '{h=$1; $1=""; sub(/^ /,""); if (h==prev){if(!shown){print prev_line; shown=1}; print} else {shown=0} prev=h; prev_line=$0}'
               echo "REMOTE_STORAGE_SCAN_END"
               ;;
             runtime_status)
