@@ -113,6 +113,46 @@ install_client() {
   status
 }
 
+install_rustdesk_firewall() {
+  cat >/usr/local/sbin/shopvivaliz-rustdesk-firewall <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+CHAIN=SHOPVIVALIZ_RUSTDESK
+iptables -N "$CHAIN" 2>/dev/null || true
+iptables -F "$CHAIN"
+iptables -A "$CHAIN" -s 10.0.0.0/8 -j ACCEPT
+iptables -A "$CHAIN" -s 100.64.0.0/10 -j ACCEPT
+iptables -A "$CHAIN" -j REJECT
+
+iptables -C INPUT -p tcp -m multiport --dports 21115,21116,21117 -j "$CHAIN" 2>/dev/null ||
+  iptables -I INPUT 1 -p tcp -m multiport --dports 21115,21116,21117 -j "$CHAIN"
+iptables -C INPUT -p udp --dport 21116 -j "$CHAIN" 2>/dev/null ||
+  iptables -I INPUT 1 -p udp --dport 21116 -j "$CHAIN"
+
+iptables -C INPUT -p tcp -m multiport --dports 21118,21119 -j REJECT 2>/dev/null ||
+  iptables -I INPUT 1 -p tcp -m multiport --dports 21118,21119 -j REJECT
+EOF
+  chown root:root /usr/local/sbin/shopvivaliz-rustdesk-firewall
+  chmod 0755 /usr/local/sbin/shopvivaliz-rustdesk-firewall
+
+  cat >/etc/systemd/system/shopvivaliz-rustdesk-firewall.service <<'EOF'
+[Unit]
+Description=ShopVivaliz RustDesk private-network firewall
+After=network-pre.target
+Before=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/shopvivaliz-rustdesk-firewall
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable --now shopvivaliz-rustdesk-firewall.service
+}
+
 install_server() {
   require_root
   assert_host
@@ -154,12 +194,8 @@ EOF
   if [ -f "$SERVER_ROOT/data/id_ed25519" ]; then chmod 600 "$SERVER_ROOT/data/id_ed25519"; fi
   chmod 644 "$SERVER_ROOT/data/id_ed25519.pub"
 
-  # Never publish the RustDesk web-client ports. The OCI security list remains
-  # the outer firewall; locally reject 21118/21119 on non-loopback interfaces.
-  if command -v iptables >/dev/null 2>&1; then
-    iptables -C INPUT -p tcp --dport 21118 -j REJECT 2>/dev/null || iptables -I INPUT -p tcp --dport 21118 -j REJECT
-    iptables -C INPUT -p tcp --dport 21119 -j REJECT 2>/dev/null || iptables -I INPUT -p tcp --dport 21119 -j REJECT
-  fi
+  command -v iptables >/dev/null 2>&1 || die iptables_missing 46
+  install_rustdesk_firewall
 
   docker ps --format '{{.Names}} {{.Status}}' | grep -q '^shopvivaliz-rustdesk-hbbs ' || die hbbs_not_running 42
   docker ps --format '{{.Names}} {{.Status}}' | grep -q '^shopvivaliz-rustdesk-hbbr ' || die hbbr_not_running 43
@@ -195,6 +231,11 @@ status() {
       echo "RUSTDESK_HBBS=${hbbs:-missing}"
       echo "RUSTDESK_HBBR=${hbbr:-missing}"
       [ -s "$SERVER_ROOT/data/id_ed25519.pub" ] && echo "RUSTDESK_SERVER_KEY_PRESENT=true" || echo "RUSTDESK_SERVER_KEY_PRESENT=false"
+      if systemctl is-active --quiet shopvivaliz-rustdesk-firewall.service; then
+        echo "RUSTDESK_FIREWALL=active"
+      else
+        echo "RUSTDESK_FIREWALL=inactive"
+      fi
     else
       echo "RUSTDESK_HBBS=missing"
       echo "RUSTDESK_HBBR=missing"
