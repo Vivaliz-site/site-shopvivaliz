@@ -1,4 +1,4 @@
-name: Active Products Browser Smoke
+name: Backend VM Admin Mobile Read-Only Smoke
 
 on:
   workflow_dispatch:
@@ -6,30 +6,35 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: backend-vm-admin-mobile-readonly-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  browser-smoke:
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
+  smoke:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz' && github.actor == 'fredmourao-ai'
+    name: Authenticated mobile smoke with mutations blocked
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 15
     environment: production
     steps:
-      - name: Checkout deployed commit
+      - name: Checkout without persisted credentials
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
-          fetch-depth: 1
 
-      - name: Validate smoke source
+      - name: Enforce read-only source contract
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m py_compile tests/active-products-browser-smoke.py
-          grep -Fq 'SV_ACTIVE_PRODUCTS_BROWSER_B64=' tests/active-products-browser-smoke.py
-          grep -Fq 'pending_candidates.php' tests/active-products-browser-smoke.py
-          grep -Fq '/catalogo' tests/active-products-browser-smoke.py
+          test "$GITHUB_REPOSITORY" = 'Vivaliz-site/site-shopvivaliz'
+          test "$GITHUB_ACTOR" = 'fredmourao-ai'
+          python3 -m py_compile tests/backend-vm-admin-mobile-smoke.py
+                              php tests/fredwin-image-studio-modern-smoke-regression.php
+          grep -Fq "MUTATING_METHODS={'POST','PUT','PATCH','DELETE'}" tests/backend-vm-admin-mobile-smoke.py
+          grep -Fq 'service_workers="block"' tests/backend-vm-admin-mobile-smoke.py
+          grep -Fq 'SV_ADMIN_SESSION_ID' tests/backend-vm-admin-mobile-smoke.py
+          grep -Fq 'SV_ADMIN_SMOKE_B64=' tests/backend-vm-admin-mobile-smoke.py
 
       - name: Configure verified VM access
         shell: bash
@@ -42,8 +47,8 @@ jobs:
           set -Eeuo pipefail
           key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
           known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
-          test -n "$key"
-          test -n "$known_hosts"
+          test -n "$key" || { echo '::error::SSH key is missing'; exit 2; }
+          test -n "$known_hosts" || { echo '::error::known_hosts is missing'; exit 3; }
           install -m 700 -d "$HOME/.ssh"
           printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
           printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
@@ -62,8 +67,10 @@ jobs:
               'bash -s' -- "$session_id" <<'REMOTE'
           set -Eeuo pipefail
           sid="$1"
-          cd /home/ubuntu/shopvivaliz-deploy/current
+          root='/home/ubuntu/shopvivaliz-deploy/current'
+          cd "$root"
           name="$(sudo -u www-data php -d display_errors=0 -d session.use_strict_mode=0 -r '
+            declare(strict_types=1);
             require "includes/pdo-database.php";
             $db = function_exists("sv_pdo") ? sv_pdo() : null;
             if (!$db instanceof PDO) exit(2);
@@ -78,6 +85,11 @@ jobs:
             echo session_name();
           ' "$sid")"
           test -n "$name"
+          probe="$(mktemp /tmp/sv-admin-session.XXXXXX.html)"
+          code="$(curl -sS -o "$probe" -w '%{http_code}' -H "Cookie: ${name}=${sid}" https://shopvivaliz.com.br/admin/)"
+          test "$code" = '200'
+          grep -Fq '<body class="admin-surface">' "$probe"
+          rm -f "$probe"
           printf '%s\n' "$name"
           REMOTE
           } | tail -n1 | tr -d '\r\n')"
@@ -85,14 +97,14 @@ jobs:
           printf 'SV_ADMIN_SESSION_ID=%s\n' "$session_id" >> "$GITHUB_ENV"
           printf 'SV_ADMIN_SESSION_NAME=%s\n' "$session_name" >> "$GITHUB_ENV"
 
-      - name: Execute Chromium active-only smoke on backend VM
+      - name: Execute isolated read-only smoke on backend VM
         shell: bash
         run: |
           set -Eeuo pipefail
           bash scripts/run-browser-smoke-on-backend-vm.sh \
-            tests/active-products-browser-smoke.py \
-            'SV_ACTIVE_PRODUCTS_BROWSER_B64=' \
-            test-results/active-products-browser-smoke/result.json
+            tests/backend-vm-admin-mobile-smoke.py \
+            'SV_ADMIN_SMOKE_B64=' \
+            test-results/backend-vm-admin-mobile-smoke/result.json
       - name: Revoke ephemeral admin audit session
         if: always()
         shell: bash
@@ -106,17 +118,20 @@ jobs:
           set -Eeuo pipefail
           cd /home/ubuntu/shopvivaliz-deploy/current
           sudo -u www-data php -d display_errors=0 -d session.use_strict_mode=0 -r '
-            session_id($argv[1]); session_start(); $_SESSION=[]; session_destroy();
+            session_id($argv[1]);
+            session_start();
+            $_SESSION = [];
+            session_destroy();
           ' "$1"
           REMOTE
           fi
 
-      - name: Upload browser smoke result
+      - name: Upload sanitized metrics
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: active-products-browser-smoke-${{ github.run_id }}-${{ github.run_attempt }}
-          path: test-results/active-products-browser-smoke/result.json
+          name: backend-vm-admin-mobile-readonly-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/backend-vm-admin-mobile-smoke/result.json
           if-no-files-found: error
           retention-days: 14
 
@@ -124,4 +139,5 @@ jobs:
         if: always()
         shell: bash
         run: |
-          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts" /tmp/active-products-browser-smoke.py.gz.b64 /tmp/active-products-browser-body.json /tmp/active-products-browser-remote.log
+          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts" \
+            /tmp/fredwin-smoke.py.gz.b64 /tmp/fredwin-smoke-body.json /tmp/fredwin-smoke-remote.log

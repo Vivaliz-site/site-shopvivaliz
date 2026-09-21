@@ -9,9 +9,9 @@ Este documento registra a informacao operacional extraida do PDF sem publicar id
 ## Dois canais que não devem ser confundidos
 
 1. **Remote MCP/Desktop Commander autenticado por device flow:** canal descrito pelo PDF e pelas regras gerais deste documento.
-2. **Fred-Win private relay:** canal operacional do projeto, documentado em `docs/FRED-WIN-PRIVATE-RELAY.md`, que usa `.github/workflows/fred-win-remote-action.yml`, SSH para a Oracle VM `137.131.156.17` e reverse tunnel na porta 5557.
+2. **Fred-Win private relay:** canal operacional do projeto, documentado em `docs/FRED-WIN-PRIVATE-RELAY.md`, que usa `.github/workflows/fred-win-remote-action.yml` e reverse tunnel privado na porta 5557 através da VM backend canônica.
 
-A ausência do primeiro canal em uma sessão não prova indisponibilidade do segundo. Quando a tarefa mencionar Fred-Win, Exchange Admin, navegador real no Windows, porta 5557, `ssh-tunnel-service-managed.ps1` ou `ops/fredwin-request.json`, prevalece o protocolo do relay privado.
+A ausência do primeiro canal em uma sessão não prova indisponibilidade do segundo. Quando a tarefa mencionar Fred-Win, Exchange Admin **em modo não-browser**, porta 5557, `ssh-tunnel-service-managed.ps1` ou `ops/fredwin-request.json`, prevalece o protocolo do relay privado. Navegação, OAuth visual, MFA/CAPTCHA e validação por browser não usam este relay: devem usar a VM backend e o Browser Worker.
 
 ## Estado observado no PDF
 
