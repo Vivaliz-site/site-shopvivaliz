@@ -22,6 +22,9 @@ grep -q 'reconcile_ai_squad_codex_bridge_unit' "$deploy"
 grep -q 'install-codex-bridge-user-service.sh' "$deploy"
 grep -q 'reconcile_ai_squad_claude_bridge_unit' "$deploy"
 grep -q 'shopvivaliz-squad-claude-bridge.service' "$deploy"
+grep -q 'systemctl stop "$service"' "$deploy"
+grep -q 'fuser -k 17657/tcp' "$deploy"
+grep -q '\"authenticated\":true' "$deploy"
 python3 - "$deploy" <<'PY'
 from pathlib import Path
 import sys
