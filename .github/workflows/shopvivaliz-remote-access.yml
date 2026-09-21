@@ -177,7 +177,6 @@ jobs:
         if: steps.req.outputs.target == 'shopvivaliz-free-a1' && steps.req.outputs.action != 'ai_squad_ui_audit'
         env:
           ACTION: ${{ steps.req.outputs.action }}
-          SHOPVIVALIZ_AGENT_SSH_PUBKEY: ${{ secrets.SHOPVIVALIZ_AGENT_SSH_PUBKEY }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -229,8 +228,9 @@ jobs:
               sudo -n bash scripts/setup-rustdesk-remote.sh status
               ;;
             agent_ssh_install)
-              test -n "${SHOPVIVALIZ_AGENT_SSH_PUBKEY:-}"
-              sudo -n env SHOPVIVALIZ_AGENT_SSH_PUBKEY="$SHOPVIVALIZ_AGENT_SSH_PUBKEY" bash scripts/setup-agent-ssh.sh install
+              AGENT_PUBKEY="$(ssh-keygen -y -f "$HOME/.ssh/shopvivaliz_vmkey")"
+              test -n "$AGENT_PUBKEY"
+              sudo -n env SHOPVIVALIZ_AGENT_SSH_PUBKEY="$AGENT_PUBKEY" bash scripts/setup-agent-ssh.sh install
               ;;
             agent_ssh_status)
               sudo -n bash scripts/setup-agent-ssh.sh status
@@ -286,8 +286,9 @@ jobs:
                 agent_ssh_status) MODE=status ;;
               esac
               if [ "$MODE" = "install" ]; then
-                test -n "${SHOPVIVALIZ_AGENT_SSH_PUBKEY:-}"
-                "${SSH[@]}" "sudo -n env SHOPVIVALIZ_AGENT_SSH_PUBKEY=\"$SHOPVIVALIZ_AGENT_SSH_PUBKEY\" bash -s -- install" < scripts/setup-agent-ssh.sh
+                AGENT_PUBKEY="$(ssh-keygen -y -f "$HOME/.ssh/shopvivaliz_vmkey")"
+                test -n "$AGENT_PUBKEY"
+                "${SSH[@]}" "sudo -n env SHOPVIVALIZ_AGENT_SSH_PUBKEY=\"$AGENT_PUBKEY\" bash -s -- install" < scripts/setup-agent-ssh.sh
               else
                 "${SSH[@]}" "sudo -n bash -s -- status" < scripts/setup-agent-ssh.sh
               fi
