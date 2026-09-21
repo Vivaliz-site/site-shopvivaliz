@@ -320,11 +320,10 @@ ais_assert(str_contains($apiSource, "claude_code_account_only_no_fable"), 'Claud
 $legacyPolicy = 'opus' . '5_primary_no_fable';
 ais_assert(!str_contains($apiSource, $legacyPolicy), 'stale Claude policy label must not remain');
 
-echo "AI_SQUAD_CORE_TEST=PASS\n";
-
 $apiSource = file_get_contents(__DIR__ . '/../api/agent/ai-squad.php');
 ais_assert(str_contains($apiSource, 'set_time_limit(900)'), 'AI Squad API must allow deep-research cycles beyond default PHP timeout');
 ais_assert(str_contains($apiSource, 'ignore_user_abort(true)'), 'AI Squad API must finish audit cycle after transient client disconnect');
 ais_assert(str_contains($apiSource, 'svais_cycle_complete_for_consensus'), 'API must gate consensus on complete provider/phase coverage');
-ais_assert(!str_contains($apiSource, "if ($successful !== [])"), 'API must not allow partial-success consensus');
+ais_assert(!str_contains($apiSource, 'if ($successful !== [])'), 'API must not allow partial-success consensus');
 ais_assert(str_contains((string)file_get_contents(dirname(__DIR__) . '/includes/ai-squad-core.php'), 'CURLOPT_TIMEOUT_MS => 25000'), 'Codex health probe timeout must cover live bridge verification');
+echo "AI_SQUAD_CORE_TEST=PASS\n";
