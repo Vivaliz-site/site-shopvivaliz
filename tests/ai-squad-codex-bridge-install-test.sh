@@ -14,7 +14,7 @@ grep -Fq 'systemctl --user daemon-reload' "$installer"
 grep -Fq 'systemctl --user enable --now' "$installer"
 grep -Fq 'AI_SQUAD_CODEX_REAL=' "$installer"
 grep -Fq 'AI_SQUAD_CODEX_BUSINESS_HOME=' "$installer"
-grep -Fq 'AI_SQUAD_CODEX_WEB_SEARCH_MODE=cached' "$installer"
+grep -Fq 'AI_SQUAD_CODEX_WEB_SEARCH_MODE=live' "$installer"
 grep -Fq 'ExecStart=' "$installer"
 
 if grep -Eq 'auth\.json|OPENAI_API_KEY|CODEX_API_KEY' "$installer"; then
