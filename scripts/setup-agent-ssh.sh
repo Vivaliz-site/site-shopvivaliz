@@ -90,7 +90,7 @@ status() {
   fi
   sshd -T 2>/dev/null | grep -q '^permitrootlogin no$' && echo "AGENT_SSH_ROOT_LOGIN_DISABLED=true" || echo "AGENT_SSH_ROOT_LOGIN_DISABLED=unknown"
   if command -v tailscale >/dev/null 2>&1; then
-    ts="$(tailscale ip -4 2>/dev/null | head -1 || true)"
+    if ts="$(tailscale ip -4 2>/dev/null | head -1)"; then :; else ts=""; fi
     [ -n "$ts" ] && echo "AGENT_SSH_TAILSCALE_IP=$ts"
   fi
 }
