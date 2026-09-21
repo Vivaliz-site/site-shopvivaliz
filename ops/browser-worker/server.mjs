@@ -12,7 +12,7 @@ const BROWSER_PATH = process.env.SHOPVIVALIZ_CHROMIUM_PATH || '/home/ubuntu/.cac
 const DEFAULT_TTL = 2 * 60 * 60;
 const MAX_TTL = 12 * 60 * 60;
 const sessions = new Map();
-const CHATGPT_PROFILE = process.env.AI_SQUAD_CHATGPT_PROFILE || 'ai-squad-chatgpt';
+const CHATGPT_PROFILE = process.env.AI_SQUAD_CHATGPT_PROFILE || 'ai-squad-chatgpt-fallback';
 const CHATGPT_URL = 'https://chatgpt.com/';
 let chatgptBusy = false;
 
@@ -261,16 +261,26 @@ function validateChatgptRequest(input) {
   const model = String(input.model || '').trim();
   const effort = String(input.effort || '').trim();
   const webSearch = input.web_search === true;
+  const programmingWebResearch = input.programming_web_research !== false;
   if (!prompt || prompt.length > 120000) throw new Error('invalid_prompt');
-  if (system.length > 30000) throw new Error('invalid_system');
-  return { prompt, system, model, effort, web_search: webSearch };
+  if (system.length > 60000) throw new Error('invalid_system');
+  return { prompt, system, model, effort, web_search: webSearch, programming_web_research: programmingWebResearch };
 }
 
 function chatgptCombinedPrompt(input) {
   const parts = [];
   if (input.system) parts.push('INSTRUCOES DO AGENTE:\n' + input.system);
   parts.push('TAREFA:\n' + input.prompt);
-  if (input.web_search) parts.push('Use pesquisa web quando necessario e cite URLs das fontes no texto.');
+  if (input.web_search) parts.push('Use pesquisa web quando necessario e cite URLs completas das fontes no texto.');
+  if (input.programming_web_research) {
+    parts.push([
+      'PESQUISA TECNICA OBRIGATORIA:',
+      'Se a tarefa envolver programacao, APIs, bibliotecas, frameworks, infraestrutura, CI/CD, banco, navegador, SO, erros ou seguranca, pesquise conhecimento atual na web antes de concluir.',
+      'Priorize documentacao oficial, repositorios oficiais, especificacoes, release notes, changelogs e issues.',
+      'Valide a versao/data aplicavel ao ambiente observado e cite URLs completas das fontes materiais.',
+      'Confronte o que encontrar com o codigo/runtime real do ShopVivaliz; nao aplique workaround incompatível com a versao real.'
+    ].join('\n'));
+  }
   return parts.join('\n\n');
 }
 
