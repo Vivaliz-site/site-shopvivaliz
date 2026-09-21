@@ -29,6 +29,8 @@ on:
           - rdp_status
           - rdp_otp_prepare
           - rdp_enable_otp
+          - rdp_enrollment_publish
+          - rdp_enrollment_cleanup
           - anydesk_install
           - anydesk_status
           - anydesk_launch
@@ -84,7 +86,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "anydesk_install", "anydesk_status", "anydesk_launch"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -208,12 +210,14 @@ jobs:
               CMD='echo REMOTE_REPO_STATUS_BEGIN; for d in /home/ubuntu/*; do if [ -d "$d/.git" ]; then echo "REPO=$d"; git -C "$d" branch --show-current; git -C "$d" status --porcelain; git -C "$d" rev-parse HEAD; fi; done; echo REMOTE_REPO_STATUS_END'
               "${SSH[@]}" "$CMD"
               ;;
-            rdp_prepare|rdp_status|rdp_otp_prepare|rdp_enable_otp)
+            rdp_prepare|rdp_status|rdp_otp_prepare|rdp_enable_otp|rdp_enrollment_publish|rdp_enrollment_cleanup)
               case "$ACTION" in
                 rdp_prepare) MODE=prepare ;;
                 rdp_status) MODE=status ;;
                 rdp_otp_prepare) MODE=otp_prepare ;;
                 rdp_enable_otp) MODE=enable_otp ;;
+                rdp_enrollment_publish) MODE=enrollment_publish ;;
+                rdp_enrollment_cleanup) MODE=enrollment_cleanup ;;
               esac
               "${SSH[@]}" "tmp=\$(mktemp); trap 'rm -f \"\$tmp\"' EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-private-rdp.sh -o \"\$tmp\"; sudo -n bash \"\$tmp\" $MODE"
               ;;
