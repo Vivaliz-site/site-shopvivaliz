@@ -58,9 +58,17 @@ mv "$tmp" "$unit"
 trap - EXIT
 
 systemctl --user daemon-reload
-systemctl --user stop "$service" >/dev/null 2>&1 || true
+if systemctl --user is-active --quiet "$service" 2>/dev/null; then
+  systemctl --user stop "$service" >/dev/null 2>&1
+fi
 if command -v fuser >/dev/null 2>&1; then
-  fuser -k 17657/tcp >/dev/null 2>&1 || true
+  fuser_rc=0
+  fuser -k 17657/tcp >/dev/null 2>&1 || fuser_rc=$?
+  # fuser exits 1 when no process holds the port — that is expected and not an error
+  if [ "$fuser_rc" -gt 1 ]; then
+    printf 'fuser: unexpected exit %d\n' "$fuser_rc" >&2
+    exit "$fuser_rc"
+  fi
 fi
 systemctl --user enable "$service" >/dev/null
 systemctl --user start "$service"
@@ -80,5 +88,7 @@ for _ in $(seq 1 50); do
 done
 
 printf '%s\n' "AI_SQUAD_CLAUDE_BRIDGE_HEALTH=FAILED" >&2
-systemctl --user --no-pager --full status "$service" >&2 || true
+if ! systemctl --user --no-pager --full status "$service" >&2; then
+  printf 'systemctl status: service not found or failed to query\n' >&2
+fi
 exit 1
