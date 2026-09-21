@@ -12,6 +12,7 @@ on:
         options:
           - identity
           - disk
+          - storage_scan
           - runtime_status
           - repo_status
           - browser_status
@@ -80,7 +81,7 @@ jobs:
               action, reason = match.group(1), match.group(2).strip()
 
           allowed = {
-              "identity", "disk", "runtime_status", "repo_status",
+              "identity", "disk", "storage_scan", "runtime_status", "repo_status",
               "browser_status", "browser_health", "browser_install",
               "browser_start", "browser_restart", "browser_stop",
               "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp",
@@ -294,6 +295,10 @@ jobs:
               ;;
             disk)
               CMD='echo BACKEND_DISK_BEGIN; df -h /; if [ -d /home/ubuntu/shopvivaliz-browser-worker ]; then du -sh /home/ubuntu/shopvivaliz-browser-worker; else echo BROWSER_WORKER_DIR=missing; fi; echo BACKEND_DISK_END'
+              "${SSH[@]}" "$CMD"
+              ;;
+            storage_scan)
+              CMD='echo BACKEND_STORAGE_SCAN_BEGIN; df -h /; echo TOP_LEVEL; sudo -n du -x -h --max-depth=1 / 2>/dev/null | sort -h | tail -n 20; echo HOME_UBUNTU; du -x -h --max-depth=2 /home/ubuntu 2>/dev/null | sort -h | tail -n 40; echo VAR; sudo -n du -x -h --max-depth=2 /var 2>/dev/null | sort -h | tail -n 40; echo LARGE_OLD_FILES; sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +50M -mtime +30 -printf "%s %TY-%Tm-%Td %p\\n" 2>/dev/null | sort -nr | head -n 80; echo DUPLICATES_BY_HASH_OVER_20M; sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +20M -print0 2>/dev/null | xargs -0 -r sha256sum 2>/dev/null | sort | awk '"'"'{h=$1; $1=""; sub(/^ /,""); if (h==prev){if(!shown){print prev_line; shown=1}; print} else {shown=0} prev=h; prev_line=$0}'"'"'; echo BACKEND_STORAGE_SCAN_END'
               "${SSH[@]}" "$CMD"
               ;;
             runtime_status)
