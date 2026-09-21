@@ -12,6 +12,7 @@ grep -q 'tailscale' "$setup"
 grep -q 'pam_google_authenticator.so forward_pass' "$setup"
 grep -q 'port=3389' "$setup"
 grep -q 'PRIVATE_RDP_NETWORK_SCOPE=tailnet_vcn_only' "$setup"
+grep -q "grep -qxE '(yes|true)'" "$setup"
 if grep -q 'pam_permit.so' "$setup"; then
   echo "unsafe pam_permit remains"
   exit 1
