@@ -260,15 +260,15 @@ jobs:
             workers="$(pgrep -fc "^/home/ubuntu/actions-runner-shopvivaliz/bin/Runner.Worker( |$)")"
             if [ "$workers" -gt 0 ]; then
               echo "RUNNER_LISTENER_RESTART=skipped_worker_active"
-              exit 0
+            else
+              uid="$(id -u)"
+              runtime="/run/user/$uid"
+              bus="unix:path=$runtime/bus"
+              test -S "$runtime/bus"
+              env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user restart "$service"
+              env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user is-active --quiet "$service"
+              echo "RUNNER_LISTENER_RESTART=PASS"
             fi
-            uid="$(id -u)"
-            runtime="/run/user/$uid"
-            bus="unix:path=$runtime/bus"
-            test -S "$runtime/bus"
-            env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user restart "$service"
-            env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user is-active --quiet "$service"
-            echo "RUNNER_LISTENER_RESTART=PASS"
           '
 
       - name: Validate private access and RustDesk state
@@ -289,18 +289,22 @@ jobs:
         if: always()
         shell: bash
         run: |
-          set +e
+          set -Eeuo pipefail
           if [ -n "${BACKEND_SESSION_ID:-}" ]; then
-            oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE" bastion session delete --session-id "$BACKEND_SESSION_ID" --force >/dev/null 2>&1
+            oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE" bastion session delete --session-id "$BACKEND_SESSION_ID" --force >/dev/null
           fi
           if [ -n "${SITE_SESSION_ID:-}" ]; then
-            oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE" bastion session delete --session-id "$SITE_SESSION_ID" --force >/dev/null 2>&1
+            oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE" bastion session delete --session-id "$SITE_SESSION_ID" --force >/dev/null
           fi
           if [ -n "${BASTION_ID:-}" ] && [ -s "${ORIGINAL_CIDRS_FILE:-}" ]; then
-            oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null 2>&1
+            oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null
           fi
-          pkill -f "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" >/dev/null 2>&1
-          pkill -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" >/dev/null 2>&1
+          if pgrep -f "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" >/dev/null; then
+            pkill -f "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22"
+          fi
+          if pgrep -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" >/dev/null; then
+            pkill -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22"
+          fi
           for f in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do
             if [ -n "$f" ] && [ -f "$f" ]; then shred -u "$f"; fi
           done
