@@ -21,10 +21,7 @@ cat > "$repo/scripts/deploy-production.sh" <<'DEPLOY'
 #!/usr/bin/env bash
 set -euo pipefail
 : "${DEPLOY_MARKER:?}"
-: "${CURRENT_ROOT:?}"
-: "${SHOPVIVALIZ_DEPLOY_REPO_DIR:?}"
 printf 'deploy\n' >> "$DEPLOY_MARKER"
-git -C "$SHOPVIVALIZ_DEPLOY_REPO_DIR" rev-parse HEAD > "$CURRENT_ROOT/.release-sha"
 DEPLOY
 chmod +x "$repo/scripts/deploy-production.sh"
 printf 'base\n' > "$repo/index.php"
@@ -41,10 +38,8 @@ marker="$tmp/deploy.marker"
 DEPLOY_MARKER="$marker" ROOT="$repo" SHARED_ROOT="$shared" CURRENT_ROOT="$current" \
   SYNC_RUNNER_PATH="$repo/git-auto-sync.py" DEPLOY_CLASSIFIER="$classifier" \
   bash "$source_script" > "$tmp/docs.log"
-test "$(wc -l < "$marker")" -eq 1
-docs_sha="$(git -C "$repo" rev-parse HEAD)"
-test "$(cat "$current/.release-sha")" = "$docs_sha"
-grep -Fq 'delta exige producao' "$tmp/docs.log"
+test ! -e "$marker"
+grep -Fq 'nao exige deploy; release preservada' "$tmp/docs.log"
 
 printf 'runtime change\n' > "$repo/scripts/runtime-worker.php"
 git -C "$repo" add scripts/runtime-worker.php
@@ -52,9 +47,7 @@ git -C "$repo" commit -qm runtime-change
 DEPLOY_MARKER="$marker" ROOT="$repo" SHARED_ROOT="$shared" CURRENT_ROOT="$current" \
   SYNC_RUNNER_PATH="$repo/git-auto-sync.py" DEPLOY_CLASSIFIER="$classifier" \
   bash "$source_script" > "$tmp/runtime.log"
-test "$(wc -l < "$marker")" -eq 2
-runtime_sha="$(git -C "$repo" rev-parse HEAD)"
-test "$(cat "$current/.release-sha")" = "$runtime_sha"
+test "$(wc -l < "$marker")" -eq 1
 grep -Fq 'delta exige producao' "$tmp/runtime.log"
 
-echo 'safe repo sync production parity: ok'
+echo 'safe repo sync production classifier: ok'

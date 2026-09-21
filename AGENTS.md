@@ -1,12 +1,5 @@
 # 🤖 GUIA OBRIGATÓRIO PARA AGENTES IA
 
-<!-- GLOBAL_BROWSER_VM_POLICY_V2 -->
-> **NAVEGAÇÃO GLOBAL — VM OBRIGATÓRIA; WINDOWS PROIBIDO PARA BROWSER:** qualquer navegador, automação browser, sessão gráfica, Playwright/Selenium/CDP, Chrome/Chromium/Edge/Opera, CAPTCHA, MFA, consentimento ou validação visual deve usar por padrão e obrigatoriamente a VM backend `always-free-arm-1787907847-26` (`10.0.1.38`) e o Browser Worker privado. Para intervenção humana, usar `https://shopvivaliz.com.br/admin/browser-worker.php`. **Fred-Win (`LAPTOP-NIG4IFUU`) e `DESKTOP-KOCEPSV` não são destinos nem fallback para navegação.** Não perguntar qual máquina usar para browser: use a VM. Exceção somente se o proprietário ordenar explicitamente, na tarefa atual, o uso de um Windows específico para aquela navegação. Se a VM estiver indisponível, reparar o caminho VM/OCI Bastion/túnel privado ou registrar bloqueio real; nunca migrar silenciosamente para Windows. Workflows/relays Windows de browser são legado e não devem ser executados até serem migrados. A regra não proíbe Windows para tarefas não-browser que realmente dependam dele.
-
-<!-- GLOBAL_BROWSER_SESSION_PROFILE_V1 -->
-> **SESSAO CANONICA OPENAI/CHATGPT NA VM:** para qualquer navegacao em ChatGPT/OpenAI no Browser Worker, reutilize o contexto persistente existente com `persistent=true` e `profile=ai-squad-chatgpt`. Esse e o perfil canonico que deve preservar a autenticacao ja realizada. Nao criar perfil novo, nao usar `manual` como fallback e nao migrar para Fred-Win/KOCEPSV. Se a autenticacao expirar ou exigir MFA/CAPTCHA, abra **esse mesmo perfil** pela interface autenticada `https://shopvivaliz.com.br/admin/browser-worker.php`, conclua a autenticacao nele e continue reutilizando `ai-squad-chatgpt`. Labels/TTL de sessoes de trabalho podem variar, mas o profile para ChatGPT/OpenAI deve permanecer `ai-squad-chatgpt`, salvo ordem explicita do proprietario na tarefa atual.
-
-
 <!-- SHOPVIVALIZ_HOST_BOOTSTRAP_V1 -->
 > 🔴 **BOOTSTRAP DE HOSTS OBRIGATÓRIO:** antes de qualquer diagnóstico, alteração ou validação, leia [`docs/knowledge/host-access.md`](docs/knowledge/host-access.md), [`docs/knowledge/README.md`](docs/knowledge/README.md) e [`docs/knowledge/agent-rules.md`](docs/knowledge/agent-rules.md).
 > Estado canônico atual: produção web/deploy = `shopvivaliz-free-a1` (origin `137.131.149.55`, privado `10.0.1.112`); backend/MEI/M365/relay = `always-free-arm-1787907847-26` (privado `10.0.1.38`, sem IP público); `shopvivaliz-ai` / `137.131.156.17` é legado DEV/e-mail/testes e **não é produção web**. Prefira Remote Desktop Commander por nome do dispositivo; SSH público direto está desabilitado. Se qualquer seção histórica abaixo divergir, a Knowledge Base canônica prevalece até nova evidência ao vivo.
@@ -530,7 +523,6 @@ Para operações OCI, use somente a identidade dedicada `AGENTS`; nunca use como
 - Quando existir alvo de deploy para o repositorio, e obrigatorio acompanhar o deploy ate o SHA correto estar ativo e executar validacao pós-deploy real e reproduzivel.
 - Se o deploy falhar, investigar a causa raiz, corrigir, revalidar, repetir commit/push/PR/merge quando necessario e tentar o deploy novamente; nao encerrar em estado intermediario.
 - Antes de qualquer resposta final, comparar pedido original x estado real e registrar evidencias de: validacao, commit, push, PR, checks, merge, deploy e pós-deploy, conforme aplicavel.
-- No `site-shopvivaliz`, qualquer commit que chegue a `origin/main` exige paridade exata antes da resposta final: `origin/main` = `/home/ubuntu/shopvivaliz-deploy/current/.release-sha` = `release_sha` de `https://shopvivaliz.com.br/api/health/version.php`. O `Master Production Pipeline` deve publicar o SHA mesmo para mudancas somente de documentacao, politica, workflow ou teste. Se o fluxo automatico nao publicar o SHA, o agente deve acionar o `Master Production Pipeline` com `confirmation=DEPLOY` e aguardar deploy + monitor `SUCCESS`; nunca concluir com producao atrasada.
 - So e permitido encerrar sem deploy bem-sucedido diante de bloqueio externo genuino e incontornavel com os acessos/ferramentas disponiveis; nesse caso o estado e BLOCKED/INCONCLUSIVO, nunca sucesso.
 
 ## Isolamento obrigatorio de sessao CLI por chat
@@ -539,13 +531,3 @@ Antes de qualquer operacao em terminal/CLI, leia e cumpra a secao `Isolamento ob
 
 ## Auditoria Extrema - arquitetura e deploy
 Nos gatilhos de `AUDIT_POLICY.md`, execute tambem `docs/quality/ARCHITECTURE_DEPLOY_AUDIT_V1.md`. A auditoria inclui gargalos de CI/deploy, arquitetura/codigo, ownership, contratos cross-repo e melhorias seguras de velocidade sem reduzir cobertura.
-
-<!-- EXECUTION_PROVENANCE_POLICY_V1 -->
-## Assinatura e origem obrigatorias de toda execucao
-
-Antes de qualquer acao material, leia e cumpra EXECUTION-PROVENANCE-POLICY.md. Toda execucao automatizada ou operacional deve carregar identidade, origem e execution_id verificaveis; recursos temporarios devem ter owner/origin e cleanup. Use scripts/emit-execution-provenance.py como formato de referencia. Nunca registre secrets.
-
-
-<!-- BROWSER_SESSION_POLICY_V1 -->
-## Navegador: VM backend obrigatoria e cleanup obrigatorio
-Para browser interativo/remoto, automacao grafica, MFA, CAPTCHA ou validacao visual, use obrigatoriamente a VM backend `always-free-arm-1787907847-26` e o Browser Worker privado. Fred-Win e DESKTOP-KOCEPSV nao sao destinos nem fallback para navegacao, salvo ordem explicita do proprietario na tarefa atual. Sessoes invisiveis/headless transitorias devem ter ownership + TTL padrao de 2h renovavel por heartbeat e cleanup ao final/boot. Orfaos podem ser limpos antes; sessoes visiveis e bridges persistentes documentadas devem ser preservadas. Nunca matar navegador globalmente por nome de processo. Leia a politica completa em `REGRAS-AGENTES-CENTRALIZADAS.md` (GLOBAL_BROWSER_VM_POLICY_V2).
