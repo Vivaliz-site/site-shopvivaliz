@@ -4,6 +4,7 @@ set -Eeuo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 setup="$root/scripts/setup-anydesk-backend.sh"
 workflow="$root/.github/workflows/shopvivaliz-remote-access.yml"
+oci_workflow="$root/.github/workflows/backend-vm-oci-control.yml"
 
 test -f "$setup"
 grep -q 'keys.anydesk.com/repos/DEB-GPG-KEY' "$setup"
@@ -21,5 +22,9 @@ grep -q 'anydesk_status' "$workflow"
 grep -q 'anydesk_launch' "$workflow"
 grep -q 'setup-anydesk-backend.sh' "$workflow"
 grep -q 'action.startswith("anydesk_")' "$workflow"
+grep -q 'anydesk_install' "$oci_workflow"
+grep -q 'anydesk_status' "$oci_workflow"
+grep -q 'anydesk_launch' "$oci_workflow"
+grep -q 'setup-anydesk-backend.sh' "$oci_workflow"
 
 echo "ANYDESK_BACKEND_CONTRACT=PASS"
