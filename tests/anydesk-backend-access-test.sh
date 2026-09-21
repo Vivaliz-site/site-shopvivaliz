@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+bash -n "$setup"\n#!/usr/bin/env bash
 set -Eeuo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -34,3 +34,10 @@ grep -q "/usr/bin/anydesk --tray" "$setup"
 grep -q 'DISPLAY="$display"' "$setup"
 grep -q 'anydesk --settings' "$setup"
 grep -q 'ANYDESK_SESSION_REMOTE' "$setup"
+
+grep -q '\[ "$display" != ":0" \] && \[ "$display" != ":0.0" \]' "$setup"
+grep -q 'GUI_CONTROL_USER="ubuntu"' "$setup"
+grep -q 'xhost "+SI:localuser:$GUI_CONTROL_USER"' "$setup"
+grep -q 'xhost "-SI:localuser:$GUI_CONTROL_USER"' "$setup"
+grep -q 'anydesk_control_grant' "$workflow"
+grep -q 'anydesk_control_revoke' "$workflow"
