@@ -1,0 +1,12 @@
+[Unit]
+Description=Ensure ShopVivaliz browser worker every minute
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+AccuracySec=10s
+Persistent=true
+Unit=shopvivaliz-browser-worker-ensure.service
+
+[Install]
+WantedBy=timers.target
