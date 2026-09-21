@@ -56,3 +56,8 @@ grep -q 'admin_security_rdp' "$setup"
 grep -q "pgrep -n -u \"\$RDP_USER\" -f 'xfce4-session'" "$setup"
 grep -q 'ANYDESK_ADMIN_SECURITY_RDP=PASS' "$setup"
 grep -q 'anydesk_admin_security_rdp' "$oci_workflow"
+
+grep -q 'QT_ACCESSIBILITY=1' "$script"
+grep -q 'DBUS_SESSION_BUS_ADDRESS="$dbus"' "$script"
+grep -q 'ui_dump)' "$script"
+grep -q 'anydesk_ui_dump' "$workflow"
