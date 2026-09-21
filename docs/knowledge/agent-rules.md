@@ -110,3 +110,11 @@ O campo `configured` indica configuração detectada, mas não prova que a crede
 ## Autonomia
 
 Tomar decisões autônomas dentro do escopo autorizado, mas interromper ações destrutivas, irreversíveis ou sem evidência suficiente. Autonomia não substitui validação.
+
+
+## Login administrativo ShopVivaliz
+
+- Para acessar a área administrativa de shopvivaliz.com.br, usar o login nativo por email e senha em /auth/login.php; não usar "Entrar com Google" como caminho operacional de agentes.
+- A fonte canônica da credencial é o arquivo privado admsite.txt no Google Drive autorizado pelo proprietário. Nunca copiar o conteúdo desse arquivo para Git, documentação, logs, chat ou código.
+- Antes de pedir ao proprietário uma nova autenticação, verificar a fonte segura já provisionada. A intervenção humana deve ser exceção, não parte rotineira da operação.
+- A sessão de navegador usada pelos agentes deve ser persistente na VM backend canônica, sem migrar a navegação para hosts Windows.
