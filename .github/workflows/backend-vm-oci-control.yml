@@ -20,6 +20,10 @@ on:
           - browser_start
           - browser_restart
           - browser_stop
+          - rdp_prepare
+          - rdp_status
+          - rdp_otp_prepare
+          - rdp_enable_otp
       reason:
         description: Audit reason
         required: true
@@ -79,6 +83,7 @@ jobs:
               "identity", "disk", "runtime_status", "repo_status",
               "browser_status", "browser_health", "browser_install",
               "browser_start", "browser_restart", "browser_stop",
+              "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp",
           }
           if action not in allowed:
               raise SystemExit(f"Unsupported action: {action}")
@@ -315,6 +320,18 @@ jobs:
               ;;
             browser_stop)
               "${SSH[@]}" '/home/ubuntu/shopvivaliz-browser-worker/supervisor.sh stop'
+              ;;
+            rdp_prepare)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-private-rdp.sh -o "$tmp"; sudo -n bash "$tmp" prepare'
+              ;;
+            rdp_status)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-private-rdp.sh -o "$tmp"; sudo -n bash "$tmp" status'
+              ;;
+            rdp_otp_prepare)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-private-rdp.sh -o "$tmp"; sudo -n bash "$tmp" otp_prepare'
+              ;;
+            rdp_enable_otp)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-private-rdp.sh -o "$tmp"; sudo -n bash "$tmp" enable_otp'
               ;;
           esac
           echo "BACKEND_OCI_ACTION=PASS"
