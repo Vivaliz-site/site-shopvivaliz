@@ -39,13 +39,12 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: shopvivaliz-remote-access
-  cancel-in-progress: false
-
 jobs:
   execute:
     if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && startsWith(github.event.comment.body, '/remote '))
+    concurrency:
+      group: shopvivaliz-remote-access
+      cancel-in-progress: false
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
     timeout-minutes: 10
 
