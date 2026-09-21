@@ -74,6 +74,24 @@ export function claudeFailureDetail(result) {
   return sanitizeBridgeError(detail || ('claude_exit_' + String(result?.code ?? 'unknown')));
 }
 
+export function buildClaudeInput(request, retryForSources = false) {
+  const prompt = String(request?.prompt || '');
+  if (request?.web_search !== true) return prompt;
+
+  const requirement = [
+    '',
+    'WEB RESEARCH EVIDENCE REQUIREMENT:',
+    'Use WebSearch/WebFetch for current factual claims.',
+    'Your final answer MUST include at least one complete https:// source URL that directly supports the research.',
+    'Prefer multiple primary or authoritative source URLs when material claims rely on different sources.',
+    'Do not provide a web-research answer without explicit full URLs.',
+  ];
+  if (retryForSources) {
+    requirement.push('This is a retry because the previous answer exposed no usable source URL. Correct that defect.');
+  }
+  return prompt + '\n' + requirement.join('\n');
+}
+
 export function buildClaudeArgs(request) {
   const args = [
     '-p',
@@ -248,7 +266,7 @@ async function probeAuth() {
   }
 }
 
-function extractUrls(text) {
+export function extractUrls(text) {
   const seen = new Set();
   const matches = String(text || '').match(/https?:\/\/[^\s<>"')\]]+/g) || [];
   for (const url of matches) seen.add(url.replace(/[.,;:!?]+$/, ''));
@@ -260,31 +278,52 @@ async function answer(request) {
   if (!auth.configured) throw new Error('missing token');
 
   const timeoutMs = Math.max(30000, Math.min(300000, Number(process.env.AI_SQUAD_CLAUDE_REQUEST_TIMEOUT_MS || DEFAULT_TIMEOUT_MS)));
-  const result = await runClaude(buildClaudeArgs(request), request.prompt, timeoutMs, auth.token);
-  if (result.code !== 0) {
-    const detail = claudeFailureDetail(result);
-    throw new Error(detail || 'claude_transport_error');
+
+  const execute = async (retryForSources = false) => {
+    const result = await runClaude(
+      buildClaudeArgs(request),
+      buildClaudeInput(request, retryForSources),
+      timeoutMs,
+      auth.token
+    );
+    if (result.code !== 0) {
+      const detail = claudeFailureDetail(result);
+      throw new Error(detail || 'claude_transport_error');
+    }
+    let data;
+    try {
+      data = JSON.parse(result.stdout);
+    } catch {
+      throw new Error('invalid_json');
+    }
+    if (!data || data.is_error === true) {
+      throw new Error(sanitizeBridgeError(data?.result || 'claude_error'));
+    }
+    const text = String(data.result || '').trim();
+    if (!text) throw new Error('empty_response');
+    return {
+      text,
+      sources: extractUrls(text),
+      usage: data.usage && typeof data.usage === 'object' ? data.usage : {},
+    };
+  };
+
+  let output = await execute(false);
+  if (request.web_search && output.sources.length < 1) {
+    output = await execute(true);
   }
-  let data;
-  try {
-    data = JSON.parse(result.stdout);
-  } catch {
-    throw new Error('invalid_json');
+  if (request.web_search && output.sources.length < 1) {
+    throw new Error('web_search_sources_missing');
   }
-  if (!data || data.is_error === true) {
-    throw new Error(sanitizeBridgeError(data?.result || 'claude_error'));
-  }
-  const text = String(data.result || '').trim();
-  if (!text) throw new Error('empty_response');
 
   authState = { checked_at: Date.now(), authenticated: true };
   return {
     ok: true,
-    text,
+    text: output.text,
     model: request.model,
     transport: 'claude_code',
-    sources: extractUrls(text),
-    usage: data.usage && typeof data.usage === 'object' ? data.usage : {},
+    sources: output.sources,
+    usage: output.usage,
   };
 }
 
