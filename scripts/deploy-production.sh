@@ -253,7 +253,7 @@ reconcile_ai_squad_claude_bridge_unit() {
 
   local health_url="http://127.0.0.1:17657/health"
   local body
-  for _ in $(seq 1 20); do
+  for _ in $(seq 1 30); do
     if body="$(curl -fsS --max-time 3 "$health_url" 2>/dev/null)"; then
       if printf '%s' "$body" | grep -q '"endpoint":"ai-squad-claude-bridge"' \
         && printf '%s' "$body" | grep -q '"ok":true' \
