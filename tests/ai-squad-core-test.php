@@ -291,3 +291,7 @@ $legacyPolicy = 'opus' . '5_primary_no_fable';
 ais_assert(!str_contains($apiSource, $legacyPolicy), 'stale Claude policy label must not remain');
 
 echo "AI_SQUAD_CORE_TEST=PASS\n";
+
+$apiSource = file_get_contents(__DIR__ . '/../api/agent/ai-squad.php');
+ais_assert(str_contains($apiSource, 'set_time_limit(900)'), 'AI Squad API must allow deep-research cycles beyond default PHP timeout');
+ais_assert(str_contains($apiSource, 'ignore_user_abort(true)'), 'AI Squad API must finish audit cycle after transient client disconnect');
