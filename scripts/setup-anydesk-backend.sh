@@ -201,7 +201,9 @@ console_control() {
       echo "ANYDESK_CONTROL=granted"
       ;;
     revoke)
-      if ! runuser -u "$GUI_USER" -- env DISPLAY="$display" XAUTHORITY="$xauthority" xhost "-SI:localuser:$GUI_CONTROL_USER" >/dev/null 2>&1; then\n        echo "ANYDESK_WARN=control_revoke_not_present" >&2\n      fi
+      if ! runuser -u "$GUI_USER" -- env DISPLAY="$display" XAUTHORITY="$xauthority" xhost "-SI:localuser:$GUI_CONTROL_USER" >/dev/null 2>&1; then
+        echo "ANYDESK_WARN=control_revoke_not_present" >&2
+      fi
       echo "ANYDESK_CONTROL=revoked"
       ;;
     *) echo "ANYDESK_ERROR=unsupported_control_action" >&2; exit 34 ;;
