@@ -5,6 +5,7 @@ ROOT="${SHOPVIVALIZ_BROWSER_ROOT:-/home/ubuntu/shopvivaliz-browser-worker}"
 REF="${SHOPVIVALIZ_BROWSER_REF:-main}"
 REPO_RAW="https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/$REF"
 PW_VERSION="1.62.1"
+PY_PW_VERSION="${SHOPVIVALIZ_BROWSER_PY_PLAYWRIGHT_VERSION:-${PW_VERSION%.*}.0}"
 
 if [ "$(id -un)" != "ubuntu" ]; then
   echo "browser worker must run as ubuntu" >&2
@@ -37,6 +38,25 @@ if [ -f "$ROOT/node_modules/playwright-core/package.json" ]; then
 fi
 if [ "$current" != "$PW_VERSION" ]; then
   npm install --prefix "$ROOT" --no-audit --no-fund --omit=dev --save-exact "playwright-core@$PW_VERSION"
+fi
+
+PY_VENV="$ROOT/python-venv"
+if [ ! -x "$PY_VENV/bin/python" ]; then
+  python3 -m venv "$PY_VENV"
+fi
+py_current=""
+if py_value="$("$PY_VENV/bin/python" - <<'PYVER' 2>/dev/null
+try:
+    import importlib.metadata
+    print(importlib.metadata.version("playwright"))
+except Exception:
+    pass
+PYVER
+)"; then
+  py_current="$py_value"
+fi
+if [ "$py_current" != "$PY_PW_VERSION" ]; then
+  "$PY_VENV/bin/python" -m pip install --disable-pip-version-check --no-cache-dir "playwright==$PY_PW_VERSION"
 fi
 
 chrome="$(find /home/ubuntu/.cache/ms-playwright -maxdepth 3 -type f -path '*/chromium-*/chrome-linux/chrome' -perm -u+x 2>/dev/null | sort -V | tail -1)"

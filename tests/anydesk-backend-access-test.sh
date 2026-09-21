@@ -1,0 +1,58 @@
+bash -n "$setup"\n#!/usr/bin/env bash
+set -Eeuo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+setup="$root/scripts/setup-anydesk-backend.sh"
+workflow="$root/.github/workflows/shopvivaliz-remote-access.yml"
+oci_workflow="$root/.github/workflows/backend-vm-oci-control.yml"
+
+test -f "$setup"
+grep -q 'keys.anydesk.com/repos/DEB-GPG-KEY' "$setup"
+grep -q 'https://deb.anydesk.com all main' "$setup"
+grep -q 'apt-get install -y -qq anydesk' "$setup"
+grep -q 'menu desktop-file-utils xdg-utils' "$setup"
+grep -q 'dpkg --configure anydesk' "$setup"
+grep -q 'systemctl enable --now anydesk.service' "$setup"
+grep -q 'runuser -u "$RDP_USER"' "$setup"
+grep -q 'GDK_BACKEND=x11' "$setup"
+grep -q 'xwininfo -root -tree' "$setup"
+grep -q "grep -qi 'AnyDesk'" "$setup"
+grep -q 'anydesk_install' "$workflow"
+grep -q 'anydesk_status' "$workflow"
+grep -q 'anydesk_launch' "$workflow"
+grep -q 'setup-anydesk-backend.sh' "$workflow"
+grep -q 'action.startswith("anydesk_")' "$workflow"
+grep -q 'anydesk_install' "$oci_workflow"
+grep -q 'anydesk_status' "$oci_workflow"
+grep -q 'anydesk_launch' "$oci_workflow"
+grep -q 'setup-anydesk-backend.sh' "$oci_workflow"
+
+echo "ANYDESK_BACKEND_CONTRACT=PASS"
+
+grep -q 'GUI_USER="fredconsole"' "$setup"
+grep -q "/usr/bin/anydesk --tray" "$setup"
+grep -q 'DISPLAY="$display"' "$setup"
+grep -q 'anydesk --settings' "$setup"
+grep -q 'ANYDESK_SESSION_REMOTE' "$setup"
+
+grep -q '\[ "$display" != ":0" \] && \[ "$display" != ":0.0" \]' "$setup"
+grep -q 'GUI_CONTROL_USER="ubuntu"' "$setup"
+grep -q 'xhost "+SI:localuser:$GUI_CONTROL_USER"' "$setup"
+grep -q 'xhost "-SI:localuser:$GUI_CONTROL_USER"' "$setup"
+grep -q 'anydesk_control_grant' "$workflow"
+grep -q 'anydesk_control_revoke' "$workflow"
+
+grep -q 'anydesk_console_unlock' "$workflow"
+grep -q 'ANYDESK_CONSOLE_UNLOCK=PASS' "$setup"
+grep -q 'loginctl unlock-session' "$setup"
+grep -q 'loginctl activate' "$setup"
+
+grep -q 'admin_security' "$setup"
+grep -q 'anydesk --admin-settings:security' "$setup"
+grep -q 'nohup anydesk --settings' "$setup"
+grep -q 'anydesk_admin_security' "$oci_workflow"
+
+grep -q 'admin_security_rdp' "$setup"
+grep -q "pgrep -n -u \"\$RDP_USER\" -f 'xfce4-session'" "$setup"
+grep -q 'ANYDESK_ADMIN_SECURITY_RDP=PASS' "$setup"
+grep -q 'anydesk_admin_security_rdp' "$oci_workflow"

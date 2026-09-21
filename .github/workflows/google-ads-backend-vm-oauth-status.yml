@@ -1,0 +1,55 @@
+name: Google Ads Backend Browser OAuth Status
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  status:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 3
+    steps:
+      - name: Configure verified backend SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Inspect backend Browser Worker
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@10.0.1.38 "python3 - <<'PY'
+          import json, os, urllib.request
+          if os.uname().nodename != 'always-free-arm-1787907847-26':
+              raise SystemExit('backend identity mismatch')
+          base='http://127.0.0.1:17777'
+          def get(path):
+              with urllib.request.urlopen(base+path,timeout=10) as r:
+                  return json.loads(r.read().decode())
+          health=get('/health')
+          if health.get('ok') is not True or health.get('endpoint') != 'browser-worker':
+              raise SystemExit('browser worker unhealthy')
+          sessions=get('/sessions').get('sessions') or []
+          matches=[s for s in sessions if s.get('profile')=='google-ads-oauth']
+          print('BROWSER_WORKER_OK=true')
+          print('GOOGLE_ADS_OAUTH_SESSIONS='+str(len(matches)))
+          for s in matches:
+              print('SESSION='+str(s.get('id',''))[:8]+' persistent='+str(bool(s.get('persistent'))).lower())
+          PY"
+
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"

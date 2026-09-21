@@ -12,6 +12,8 @@ on:
         options:
           - identity
           - disk
+          - storage_scan
+          - storage_cleanup_safe
           - runtime_status
           - repo_status
           - browser_status
@@ -20,6 +22,24 @@ on:
           - browser_start
           - browser_restart
           - browser_stop
+          - rdp_prepare
+          - rdp_status
+          - rdp_otp_prepare
+          - rdp_enable_otp
+          - rdp_enrollment_publish
+          - rdp_enrollment_cleanup
+          - anydesk_install
+          - anydesk_status
+          - anydesk_launch
+          - anydesk_control_grant
+          - anydesk_control_revoke
+          - anydesk_console_unlock
+          - anydesk_admin_security
+          - anydesk_admin_security_rdp
+          - anydesk_native_prepare
+          - anydesk_native_status
+          - anydesk_password_from_clipboard
+          - anydesk_native_cleanup
       reason:
         description: Audit reason
         required: true
@@ -76,9 +96,16 @@ jobs:
               action, reason = match.group(1), match.group(2).strip()
 
           allowed = {
-              "identity", "disk", "runtime_status", "repo_status",
+              "identity", "disk", "storage_scan", "storage_cleanup_safe", "runtime_status", "repo_status",
               "browser_status", "browser_health", "browser_install",
               "browser_start", "browser_restart", "browser_stop",
+              "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp",
+              "rdp_enrollment_publish", "rdp_enrollment_cleanup",
+              "anydesk_install", "anydesk_status", "anydesk_launch",
+              "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock",
+              "anydesk_admin_security", "anydesk_admin_security_rdp",
+              "anydesk_native_prepare", "anydesk_native_status",
+              "anydesk_password_from_clipboard", "anydesk_native_cleanup",
           }
           if action not in allowed:
               raise SystemExit(f"Unsupported action: {action}")
@@ -249,16 +276,33 @@ jobs:
           local_port=32240
           tunnel_command="${metadata_command//<privateKey>/$HOME/.ssh/bastion_session_key}"
           tunnel_command="${tunnel_command//<localPort>/$local_port}"
-          eval "$tunnel_command" &
-          tunnel_pid=$!
-          echo "BASTION_TUNNEL_PID=$tunnel_pid" >> "$GITHUB_ENV"
-
+          BASTION_TUNNEL_RETRY_MAX=6
           ready=false
-          for _ in $(seq 1 20); do
-            if timeout 2 bash -c "</dev/tcp/127.0.0.1/$local_port" 2>/dev/null; then ready=true; break; fi
-            sleep 2
+          tunnel_pid=''
+
+          for attempt in $(seq 1 "$BASTION_TUNNEL_RETRY_MAX"); do
+            eval "$tunnel_command" &
+            tunnel_pid=$!
+
+            for _ in $(seq 1 5); do
+              if timeout 2 bash -c "</dev/tcp/127.0.0.1/$local_port" 2>/dev/null; then
+                ready=true
+                echo "bastion_tunnel_ready_attempt=$attempt"
+                break 2
+              fi
+              if ! kill -0 "$tunnel_pid" 2>/dev/null; then
+                break
+              fi
+              sleep 2
+            done
+
+            if ! wait "$tunnel_pid" 2>/dev/null; then
+              echo "bastion_tunnel_attempt_exit=$attempt"
+            fi
+            sleep $((attempt * 2))
           done
           test "$ready" = true
+          echo "BASTION_TUNNEL_PID=$tunnel_pid" >> "$GITHUB_ENV"
 
           identity="$(ssh -p "$local_port"             -o BatchMode=yes             -o ConnectTimeout=10             -o HostKeyAlias="$BACKEND_PRIVATE_IP"             -o StrictHostKeyChecking=yes             -o UserKnownHostsFile="$HOME/.ssh/known_hosts"             -i "$HOME/.ssh/vmkey"             ubuntu@127.0.0.1             'printf "%s/%s" "$(hostname)" "$(id -un)"')"
           test "$identity" = "$EXPECTED_BACKEND_HOST/ubuntu"
@@ -291,6 +335,63 @@ jobs:
               CMD='echo BACKEND_DISK_BEGIN; df -h /; if [ -d /home/ubuntu/shopvivaliz-browser-worker ]; then du -sh /home/ubuntu/shopvivaliz-browser-worker; else echo BROWSER_WORKER_DIR=missing; fi; echo BACKEND_DISK_END'
               "${SSH[@]}" "$CMD"
               ;;
+            storage_scan)
+              CMD='echo BACKEND_STORAGE_SCAN_BEGIN; df -h /; echo TOP_LEVEL; sudo -n du -x -h --max-depth=1 / 2>/dev/null | sort -h | tail -n 20; echo HOME_UBUNTU; du -x -h --max-depth=2 /home/ubuntu 2>/dev/null | sort -h | tail -n 40; echo VAR; sudo -n du -x -h --max-depth=2 /var 2>/dev/null | sort -h | tail -n 40; echo LARGE_OLD_FILES; sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +50M -mtime +30 -printf "%s %TY-%Tm-%Td %p\\n" 2>/dev/null | sort -nr | head -n 80; echo DUPLICATES_BY_HASH_OVER_20M; sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +20M -print0 2>/dev/null | xargs -0 -r sha256sum 2>/dev/null | sort | awk '"'"'{h=$1; $1=""; sub(/^ /,""); if (h==prev){if(!shown){print prev_line; shown=1}; print} else {shown=0} prev=h; prev_line=$0}'"'"'; echo BACKEND_STORAGE_SCAN_END'
+              "${SSH[@]}" "$CMD"
+              ;;
+            storage_cleanup_safe)
+              CMD='set -Eeuo pipefail
+              echo BACKEND_STORAGE_CLEANUP_BEGIN
+              df -h /
+              path_in_use() {
+                target="$1"
+                for ref in /proc/[0-9]*/cwd /proc/[0-9]*/exe /proc/[0-9]*/fd/*; do
+                  if resolved="$(readlink -f "$ref" 2>/dev/null)"; then
+                    :
+                  else
+                    continue
+                  fi
+                  case "$resolved" in "$target"|"$target"/*) return 0 ;; esac
+                done
+                return 1
+              }
+              if ! path_in_use "/home/ubuntu/.cache/ms-playwright"; then
+                rm -rf /home/ubuntu/.cache/ms-playwright
+                echo CLEANED=/home/ubuntu/.cache/ms-playwright
+              else
+                echo SKIPPED_ACTIVE=/home/ubuntu/.cache/ms-playwright
+              fi
+              rm -rf /home/ubuntu/.npm/_cacache
+              echo CLEANED=/home/ubuntu/.npm/_cacache
+              if ! path_in_use "/home/ubuntu/.npm/_npx"; then
+                find /home/ubuntu/.npm/_npx -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
+                echo CLEANED=/home/ubuntu/.npm/_npx_children
+              else
+                echo SKIPPED_ACTIVE=/home/ubuntu/.npm/_npx
+              fi
+              for d in                 /home/ubuntu/shopvivaliz-olist-integration-20260911-vm1                 /home/ubuntu/shopvivaliz-revenue-recovery-20260911                 /home/ubuntu/shopvivaliz-me-runtime-refresh                 /home/ubuntu/site-shopvivaliz-private-runner-fix                 /home/ubuntu/site-shopvivaliz-origin-access-fix                 /home/ubuntu/site-shopvivaliz-oci-rebalance-20260913                 /home/ubuntu/shopvivaliz-pr1478-policy-red                 /home/ubuntu/shopvivaliz-pr-enforcer-red                 /home/ubuntu/shopvivaliz-evidence-fix
+              do
+                [ -e "$d" ] || continue
+                if path_in_use "$d"; then
+                  echo SKIPPED_ACTIVE=$d
+                  continue
+                fi
+                if git -C "$d" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+                  if [ -n "$(git -C "$d" status --porcelain 2>/dev/null)" ]; then
+                    echo SKIPPED_DIRTY=$d
+                    continue
+                  fi
+                else
+                  echo SKIPPED_NOT_GIT=$d
+                  continue
+                fi
+                rm -rf "$d"
+                echo CLEANED=$d
+              done
+              df -h /
+              echo BACKEND_STORAGE_CLEANUP_END'
+              "${SSH[@]}" "$CMD"
+              ;;
             runtime_status)
               "${SSH[@]}" 'bash -s -- backend' < scripts/runtime-service-status.sh
               ;;
@@ -315,6 +416,60 @@ jobs:
               ;;
             browser_stop)
               "${SSH[@]}" '/home/ubuntu/shopvivaliz-browser-worker/supervisor.sh stop'
+              ;;
+            rdp_prepare)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-private-rdp.sh -o "$tmp"; sudo -n bash "$tmp" prepare'
+              ;;
+            rdp_status)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-private-rdp.sh -o "$tmp"; sudo -n bash "$tmp" status'
+              ;;
+            rdp_otp_prepare)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-private-rdp.sh -o "$tmp"; sudo -n bash "$tmp" otp_prepare'
+              ;;
+            rdp_enable_otp)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-private-rdp.sh -o "$tmp"; sudo -n bash "$tmp" enable_otp'
+              ;;
+            rdp_enrollment_publish)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-private-rdp.sh -o "$tmp"; sudo -n bash "$tmp" enrollment_publish'
+              ;;
+            rdp_enrollment_cleanup)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-private-rdp.sh -o "$tmp"; sudo -n bash "$tmp" enrollment_cleanup'
+              ;;
+            anydesk_install)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-backend.sh -o "$tmp"; sudo -n bash "$tmp" install'
+              ;;
+            anydesk_status)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-backend.sh -o "$tmp"; sudo -n bash "$tmp" status'
+              ;;
+            anydesk_launch)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-backend.sh -o "$tmp"; sudo -n bash "$tmp" launch'
+              ;;
+            anydesk_control_grant)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-backend.sh -o "$tmp"; sudo -n bash "$tmp" control_grant'
+              ;;
+            anydesk_control_revoke)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-backend.sh -o "$tmp"; sudo -n bash "$tmp" control_revoke'
+              ;;
+            anydesk_console_unlock)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-backend.sh -o "$tmp"; sudo -n bash "$tmp" console_unlock'
+              ;;
+            anydesk_admin_security)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-backend.sh -o "$tmp"; sudo -n bash "$tmp" admin_security'
+              ;;
+            anydesk_admin_security_rdp)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-backend.sh -o "$tmp"; sudo -n bash "$tmp" admin_security_rdp'
+              ;;
+            anydesk_native_prepare)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-native-control.sh -o "$tmp"; sudo -n bash "$tmp" prepare'
+              ;;
+            anydesk_native_status)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-native-control.sh -o "$tmp"; sudo -n bash "$tmp" status'
+              ;;
+            anydesk_password_from_clipboard)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-native-control.sh -o "$tmp"; sudo -n bash "$tmp" password_from_clipboard'
+              ;;
+            anydesk_native_cleanup)
+              "${SSH[@]}" 'tmp=$(mktemp); trap "rm -f $tmp" EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-native-control.sh -o "$tmp"; sudo -n bash "$tmp" cleanup'
               ;;
           esac
           echo "BACKEND_OCI_ACTION=PASS"

@@ -1,0 +1,143 @@
+name: Backend VM Admin Mobile Read-Only Smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-vm-admin-mobile-readonly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    if: github.repository == 'Vivaliz-site/site-shopvivaliz' && github.actor == 'fredmourao-ai'
+    name: Authenticated mobile smoke with mutations blocked
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - name: Checkout without persisted credentials
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Enforce read-only source contract
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "$GITHUB_REPOSITORY" = 'Vivaliz-site/site-shopvivaliz'
+          test "$GITHUB_ACTOR" = 'fredmourao-ai'
+          python3 -m py_compile tests/backend-vm-admin-mobile-smoke.py
+                              php tests/fredwin-image-studio-modern-smoke-regression.php
+          grep -Fq "MUTATING_METHODS={'POST','PUT','PATCH','DELETE'}" tests/backend-vm-admin-mobile-smoke.py
+          grep -Fq 'service_workers="block"' tests/backend-vm-admin-mobile-smoke.py
+          grep -Fq 'SV_ADMIN_SESSION_ID' tests/backend-vm-admin-mobile-smoke.py
+          grep -Fq 'SV_ADMIN_SMOKE_B64=' tests/backend-vm-admin-mobile-smoke.py
+
+      - name: Configure verified VM access
+        shell: bash
+        env:
+          PRIMARY_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY }}
+          LEGACY_KEY: ${{ secrets.ORACLE_VM_SSH_KEY }}
+          PRIMARY_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS }}
+          LEGACY_HOSTS: ${{ secrets.ORACLE_VM_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          key="${PRIMARY_KEY:-${LEGACY_KEY:-}}"
+          known_hosts="${PRIMARY_HOSTS:-${LEGACY_HOSTS:-}}"
+          test -n "$key" || { echo '::error::SSH key is missing'; exit 2; }
+          test -n "$known_hosts" || { echo '::error::known_hosts is missing'; exit 3; }
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$key" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$known_hosts" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Provision ephemeral admin audit session
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          session_id="$(openssl rand -hex 24)"
+          echo "::add-mask::$session_id"
+          session_name="$({
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+              -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1 \
+              'bash -s' -- "$session_id" <<'REMOTE'
+          set -Eeuo pipefail
+          sid="$1"
+          root='/home/ubuntu/shopvivaliz-deploy/current'
+          cd "$root"
+          name="$(sudo -u www-data php -d display_errors=0 -d session.use_strict_mode=0 -r '
+            declare(strict_types=1);
+            require "includes/pdo-database.php";
+            $db = function_exists("sv_pdo") ? sv_pdo() : null;
+            if (!$db instanceof PDO) exit(2);
+            $id = (int)$db->query("SELECT id FROM users WHERE is_admin = 1 ORDER BY id ASC LIMIT 1")->fetchColumn();
+            if ($id < 1) exit(3);
+            session_id($argv[1]);
+            if (!session_start()) exit(4);
+            $_SESSION["user_id"] = $id;
+            $_SESSION["is_admin"] = 1;
+            $_SESSION["issued_at"] = time();
+            session_write_close();
+            echo session_name();
+          ' "$sid")"
+          test -n "$name"
+          probe="$(mktemp /tmp/sv-admin-session.XXXXXX.html)"
+          code="$(curl -sS -o "$probe" -w '%{http_code}' -H "Cookie: ${name}=${sid}" https://shopvivaliz.com.br/admin/)"
+          test "$code" = '200'
+          grep -Fq '<body class="admin-surface">' "$probe"
+          rm -f "$probe"
+          printf '%s\n' "$name"
+          REMOTE
+          } | tail -n1 | tr -d '\r\n')"
+          [[ "$session_name" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]]
+          printf 'SV_ADMIN_SESSION_ID=%s\n' "$session_id" >> "$GITHUB_ENV"
+          printf 'SV_ADMIN_SESSION_NAME=%s\n' "$session_name" >> "$GITHUB_ENV"
+
+      - name: Execute isolated read-only smoke on backend VM
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash scripts/run-browser-smoke-on-backend-vm.sh \
+            tests/backend-vm-admin-mobile-smoke.py \
+            'SV_ADMIN_SMOKE_B64=' \
+            test-results/backend-vm-admin-mobile-smoke/result.json
+      - name: Revoke ephemeral admin audit session
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ -n "${SV_ADMIN_SESSION_ID:-}" && -f "$HOME/.ssh/id_rsa" ]]; then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+              -i "$HOME/.ssh/id_rsa" ubuntu@127.0.0.1 \
+              'bash -s' -- "$SV_ADMIN_SESSION_ID" <<'REMOTE'
+          set -Eeuo pipefail
+          cd /home/ubuntu/shopvivaliz-deploy/current
+          sudo -u www-data php -d display_errors=0 -d session.use_strict_mode=0 -r '
+            session_id($argv[1]);
+            session_start();
+            $_SESSION = [];
+            session_destroy();
+          ' "$1"
+          REMOTE
+          fi
+
+      - name: Upload sanitized metrics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-vm-admin-mobile-readonly-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/backend-vm-admin-mobile-smoke/result.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts" \
+            /tmp/fredwin-smoke.py.gz.b64 /tmp/fredwin-smoke-body.json /tmp/fredwin-smoke-remote.log

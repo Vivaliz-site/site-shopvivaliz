@@ -22,8 +22,21 @@ on:
           - health
           - identity
           - disk
+          - storage_scan
           - runtime_status
           - repo_status
+          - rdp_prepare
+          - rdp_status
+          - rdp_otp_prepare
+          - rdp_enable_otp
+          - rdp_enrollment_publish
+          - rdp_enrollment_cleanup
+          - anydesk_install
+          - anydesk_status
+          - anydesk_launch
+          - anydesk_control_grant
+          - anydesk_control_revoke
+          - anydesk_console_unlock
       reason:
         description: Audit reason
         required: true
@@ -31,10 +44,6 @@ on:
 
 permissions:
   contents: read
-
-concurrency:
-  group: shopvivaliz-remote-access
-  cancel-in-progress: false
 
 jobs:
   execute:
@@ -80,11 +89,15 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "runtime_status", "repo_status"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
               raise SystemExit(f"Unsupported action: {action}")
+          if action.startswith("rdp_") and target != "always-free-arm-1787907847-26":
+              raise SystemExit("RDP actions are restricted to the backend VM")
+          if action.startswith("anydesk_") and target != "always-free-arm-1787907847-26":
+              raise SystemExit("AnyDesk actions are restricted to the backend VM")
           if not reason:
               raise SystemExit("Reason is required")
 
@@ -138,6 +151,21 @@ jobs:
               if [ -d /home/ubuntu/shopvivaliz-deploy ]; then du -sh /home/ubuntu/shopvivaliz-deploy; else echo 'DEPLOY_DIR=missing'; fi
               echo "REMOTE_DISK_END"
               ;;
+            storage_scan)
+              echo "REMOTE_STORAGE_SCAN_BEGIN"
+              df -h /
+              echo "TOP_LEVEL"
+              sudo -n du -x -h --max-depth=1 / 2>/dev/null | sort -h | tail -n 20
+              echo "HOME_UBUNTU"
+              du -x -h --max-depth=2 /home/ubuntu 2>/dev/null | sort -h | tail -n 40
+              echo "VAR"
+              sudo -n du -x -h --max-depth=2 /var 2>/dev/null | sort -h | tail -n 40
+              echo "LARGE_OLD_FILES"
+              sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +50M -mtime +30 -printf '%s %TY-%Tm-%Td %p\n' 2>/dev/null | sort -nr | head -n 80
+              echo "DUPLICATES_BY_HASH_OVER_20M"
+              tmpf=$(mktemp); trap 'rm -f "$tmpf"' RETURN; sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +20M -printf '%s\t%p\n' 2>/dev/null | sort -n > "$tmpf"; awk -F '\t' 'NR==1{s=$1; lines=$0; n=1; next} $1==s{lines=lines ORS $0; n++; next} {if(n>1) print lines; s=$1; lines=$0; n=1} END{if(n>1) print lines}' "$tmpf" | cut -f2- | while IFS= read -r p; do sha256sum "$p"; done | sort | awk '{h=$1; $1=""; sub(/^ /,""); if (h==prev){if(!shown){print prev_line; shown=1}; print} else {shown=0} prev=h; prev_line=$0}'
+              echo "REMOTE_STORAGE_SCAN_END"
+              ;;
             runtime_status)
               bash scripts/runtime-service-status.sh site
               ;;
@@ -165,12 +193,49 @@ jobs:
             exit 0
           fi
           case "$ACTION" in
-            health) CMD='echo REMOTE_HEALTH=ok; hostname; whoami; uptime' ;;
-            identity) CMD='echo REMOTE_IDENTITY_BEGIN; hostname; whoami; pwd; uname -a; echo REMOTE_IDENTITY_END' ;;
-            disk) CMD='echo REMOTE_DISK_BEGIN; df -h /; if [ -d /home/ubuntu ]; then du -sh /home/ubuntu; else echo HOME_UBUNTU=missing; fi; echo REMOTE_DISK_END' ;;
-            repo_status) CMD='echo REMOTE_REPO_STATUS_BEGIN; for d in /home/ubuntu/*; do if [ -d "$d/.git" ]; then echo "REPO=$d"; git -C "$d" branch --show-current; git -C "$d" status --porcelain; git -C "$d" rev-parse HEAD; fi; done; echo REMOTE_REPO_STATUS_END' ;;
+            health)
+              CMD='echo REMOTE_HEALTH=ok; hostname; whoami; uptime'
+              "${SSH[@]}" "$CMD"
+              ;;
+            identity)
+              CMD='echo REMOTE_IDENTITY_BEGIN; hostname; whoami; pwd; uname -a; echo REMOTE_IDENTITY_END'
+              "${SSH[@]}" "$CMD"
+              ;;
+            disk)
+              CMD='echo REMOTE_DISK_BEGIN; df -h /; if [ -d /home/ubuntu ]; then du -sh /home/ubuntu; else echo HOME_UBUNTU=missing; fi; echo REMOTE_DISK_END'
+              "${SSH[@]}" "$CMD"
+              ;;
+            storage_scan)
+              CMD='echo REMOTE_STORAGE_SCAN_BEGIN; df -h /; echo TOP_LEVEL; sudo -n du -x -h --max-depth=1 / 2>/dev/null | sort -h | tail -n 20; echo HOME_UBUNTU; du -x -h --max-depth=2 /home/ubuntu 2>/dev/null | sort -h | tail -n 40; echo VAR; sudo -n du -x -h --max-depth=2 /var 2>/dev/null | sort -h | tail -n 40; echo LARGE_OLD_FILES; sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +50M -mtime +30 -printf "%s %TY-%Tm-%Td %p\\n" 2>/dev/null | sort -nr | head -n 80; echo DUPLICATES_BY_HASH_OVER_20M; sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +20M -print0 2>/dev/null | xargs -0 -r sha256sum 2>/dev/null | sort | awk '"'"'{h=$1; $1=""; sub(/^ /,""); if (h==prev){if(!shown){print prev_line; shown=1}; print} else {shown=0} prev=h; prev_line=$0}'"'"'; echo REMOTE_STORAGE_SCAN_END'
+              "${SSH[@]}" "$CMD"
+              ;;
+            repo_status)
+              CMD='echo REMOTE_REPO_STATUS_BEGIN; for d in /home/ubuntu/*; do if [ -d "$d/.git" ]; then echo "REPO=$d"; git -C "$d" branch --show-current; git -C "$d" status --porcelain; git -C "$d" rev-parse HEAD; fi; done; echo REMOTE_REPO_STATUS_END'
+              "${SSH[@]}" "$CMD"
+              ;;
+            rdp_prepare|rdp_status|rdp_otp_prepare|rdp_enable_otp|rdp_enrollment_publish|rdp_enrollment_cleanup)
+              case "$ACTION" in
+                rdp_prepare) MODE=prepare ;;
+                rdp_status) MODE=status ;;
+                rdp_otp_prepare) MODE=otp_prepare ;;
+                rdp_enable_otp) MODE=enable_otp ;;
+                rdp_enrollment_publish) MODE=enrollment_publish ;;
+                rdp_enrollment_cleanup) MODE=enrollment_cleanup ;;
+              esac
+              "${SSH[@]}" "tmp=\$(mktemp); trap 'rm -f \"\$tmp\"' EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-private-rdp.sh -o \"\$tmp\"; sudo -n bash \"\$tmp\" $MODE"
+              ;;
+            anydesk_install|anydesk_status|anydesk_launch|anydesk_control_grant|anydesk_control_revoke|anydesk_console_unlock)
+              case "$ACTION" in
+                anydesk_install) MODE=install ;;
+                anydesk_status) MODE=status ;;
+                anydesk_launch) MODE=launch ;;
+                anydesk_control_grant) MODE=control_grant ;;
+                anydesk_control_revoke) MODE=control_revoke ;;
+                anydesk_console_unlock) MODE=console_unlock ;;
+              esac
+              "${SSH[@]}" "tmp=\$(mktemp); trap 'rm -f \"\$tmp\"' EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-backend.sh -o \"\$tmp\"; sudo -n bash \"\$tmp\" $MODE"
+              ;;
           esac
-          "${SSH[@]}" "$CMD"
 
       - name: Resolve Windows command
         if: steps.req.outputs.target == 'fred-win' || steps.req.outputs.target == 'kocepsv'

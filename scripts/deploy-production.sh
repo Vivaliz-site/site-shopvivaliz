@@ -173,6 +173,92 @@ reconcile_runtime_service_units() {
 }
 
 
+reconcile_ai_squad_codex_bridge_unit() {
+  local release_path="$1"
+  local installer="$release_path/ops/ai-squad/install-codex-bridge-user-service.sh"
+
+  if [ ! -f "$installer" ]; then
+    log ERROR "Instalador do bridge Codex ausente na release: $installer"
+    return 1
+  fi
+  if ! XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" bash "$installer" >> "$LOG_FILE" 2>&1; then
+    log ERROR "Falha ao reconciliar bridge Codex"
+    return 1
+  fi
+}
+
+reconcile_ai_squad_claude_bridge_unit() {
+  local release_path="$1"
+  local service="shopvivaliz-squad-claude-bridge.service"
+  local source="$release_path/deploy/systemd/$service"
+  local target="/etc/systemd/system/$service"
+  local runtime="/home/ubuntu/.local/share/shopvivaliz-squad-claude"
+  local workspace="$runtime/workspace"
+
+  if [ ! -f "$source" ]; then
+    if sudo systemctl cat "$service" >/dev/null 2>&1; then
+      if ! sudo systemctl disable --now "$service" >> "$LOG_FILE" 2>&1; then
+        log ERROR "Falha ao desabilitar bridge Claude ausente na release alvo"
+        return 1
+      fi
+    fi
+    if [ -f "$target" ]; then
+      if ! sudo rm -f "$target"; then
+        log ERROR "Falha ao remover unit Claude obsoleta"
+        return 1
+      fi
+      if ! sudo systemctl daemon-reload; then
+        log ERROR "systemd daemon-reload falhou ao remover bridge Claude"
+        return 1
+      fi
+    fi
+    return 0
+  fi
+
+  if ! sudo install -d -o ubuntu -g ubuntu -m 0700 "$runtime" "$workspace"; then
+    log ERROR "Falha ao preparar runtime do bridge Claude"
+    return 1
+  fi
+  if ! sudo install -o root -g root -m 0644 "$source" "$target"; then
+    log ERROR "Falha ao instalar unit do bridge Claude"
+    return 1
+  fi
+  if ! sudo systemd-analyze verify "$target" >> "$LOG_FILE" 2>&1; then
+    log ERROR "Unit do bridge Claude invalida"
+    return 1
+  fi
+  if ! sudo systemctl daemon-reload; then
+    log ERROR "systemd daemon-reload falhou para bridge Claude"
+    return 1
+  fi
+  if ! sudo systemctl enable "$service" >> "$LOG_FILE" 2>&1; then
+    log ERROR "Falha ao habilitar bridge Claude"
+    return 1
+  fi
+  if ! sudo systemctl restart "$service"; then
+    log ERROR "Falha ao reiniciar bridge Claude"
+    return 1
+  fi
+  if ! sudo systemctl is-active --quiet "$service"; then
+    log ERROR "Bridge Claude inativo apos reinicio"
+    return 1
+  fi
+
+  local health_url="http://127.0.0.1:17657/health"
+  local body
+  for _ in $(seq 1 20); do
+    if body="$(curl -fsS --max-time 3 "$health_url" 2>/dev/null)"; then
+      if printf '%s' "$body" | grep -q '"endpoint":"ai-squad-claude-bridge"'; then
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+
+  log ERROR "Health estrutural do bridge Claude nao respondeu"
+  return 1
+}
+
 reconcile_abandoned_cart_recovery_units() {
   local release_path="$1"
   local installer="$release_path/scripts/install-abandoned-cart-recovery-service.sh"
@@ -316,6 +402,14 @@ rollback_to() {
       log ERROR "Rollback nao conseguiu reconciliar a unit Mercado Livre"
       return 1
     fi
+  fi
+  if ! reconcile_ai_squad_codex_bridge_unit "$RELEASES_DIR/$previous_release"; then
+    log ERROR "Rollback nao conseguiu reconciliar o bridge Codex"
+    return 1
+  fi
+  if ! reconcile_ai_squad_claude_bridge_unit "$RELEASES_DIR/$previous_release"; then
+    log ERROR "Rollback nao conseguiu reconciliar o bridge Claude"
+    return 1
   fi
   if [ -f "$RELEASES_DIR/$previous_release/deploy/systemd/shopvivaliz-abandoned-cart-recovery.service" ] && [ -f "$RELEASES_DIR/$previous_release/deploy/systemd/shopvivaliz-abandoned-cart-recovery.timer" ]; then
     if ! reconcile_abandoned_cart_recovery_units "$RELEASES_DIR/$previous_release"; then
@@ -593,12 +687,15 @@ if [ -L "$CURRENT_LINK" ] && [ -e "$CURRENT_LINK" ]; then
 fi
 
 if [ "${REMOTE_SHA:0:8}" = "$ACTIVE_SHA" ]; then
-  if ! reconcile_runtime_secrets "$CURRENT_LINK" || ! verify_runtime_health; then
-    write_status failure "$REMOTE_SHA" "$ACTIVE_RELEASE" "release alinhada, mas runtime compartilhado invalido"
+  if ! reconcile_runtime_secrets "$CURRENT_LINK" \
+    || ! reconcile_ai_squad_codex_bridge_unit "$CURRENT_LINK" \
+    || ! reconcile_ai_squad_claude_bridge_unit "$CURRENT_LINK" \
+    || ! verify_runtime_health; then
+    write_status failure "$REMOTE_SHA" "$ACTIVE_RELEASE" "release alinhada, mas runtime compartilhado/AI Squad invalido"
     exit 1
   fi
-  log INFO "Producao e runtime ja alinhados em $REMOTE_SHA"
-  write_status success "$REMOTE_SHA" "$ACTIVE_RELEASE" "release e runtime ja estavam alinhados"
+  log INFO "Producao, runtime e bridges AI Squad ja alinhados em $REMOTE_SHA"
+  write_status success "$REMOTE_SHA" "$ACTIVE_RELEASE" "release, runtime e bridges AI Squad ja estavam alinhados"
   exit 0
 fi
 
@@ -711,6 +808,22 @@ if ! reconcile_runtime_service_units "$NEW_RELEASE_PATH"; then
     log ERROR "Rollback apos falha ao instalar unit Mercado Livre tambem falhou"
   fi
   write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "reconciliacao da unit Mercado Livre falhou"
+  exit 1
+fi
+
+if ! reconcile_ai_squad_codex_bridge_unit "$NEW_RELEASE_PATH"; then
+  if ! rollback_to "$ACTIVE_RELEASE"; then
+    log ERROR "Rollback apos falha ao instalar bridge Codex tambem falhou"
+  fi
+  write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "reconciliacao do bridge Codex falhou"
+  exit 1
+fi
+
+if ! reconcile_ai_squad_claude_bridge_unit "$NEW_RELEASE_PATH"; then
+  if ! rollback_to "$ACTIVE_RELEASE"; then
+    log ERROR "Rollback apos falha ao instalar bridge Claude tambem falhou"
+  fi
+  write_status failure "$REMOTE_SHA" "$NEW_RELEASE" "reconciliacao do bridge Claude falhou"
   exit 1
 fi
 

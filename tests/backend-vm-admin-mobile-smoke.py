@@ -1,4 +1,4 @@
-# Read-only Fred-Win Admin mobile smoke; verifies repaired Playwright arg handling and navbar metrics.
+# Read-only backend VM Admin mobile smoke; Chromium runs only on always-free-arm-1787907847-26.
 import base64,json,os
 from datetime import datetime,timezone
 from pathlib import Path
@@ -12,9 +12,15 @@ def path(u):return urlparse(u).path or '/'
 def emit(x,n):
  print('SV_ADMIN_SMOKE_B64='+base64.b64encode(json.dumps(x,ensure_ascii=False,separators=(',',':')).encode()).decode());raise SystemExit(n)
 def chrome():
- for p in (r'C:\Program Files\Google\Chrome\Application\chrome.exe',r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',os.path.expandvars(r'%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe')):
-  if Path(p).is_file():return p
- raise FileNotFoundError('chrome_missing')
+ explicit=os.environ.get('SV_BROWSER_EXECUTABLE','').strip()
+ if explicit and Path(explicit).is_file(): return explicit
+ roots=(Path('/home/ubuntu/.cache/ms-playwright'),Path.home()/'.cache'/'ms-playwright')
+ candidates=[]
+ for browser_root in roots:
+  if browser_root.is_dir(): candidates.extend(browser_root.glob('chromium-*/chrome-linux/chrome'))
+ for p in sorted(candidates,reverse=True):
+  if p.is_file(): return str(p)
+ raise FileNotFoundError('backend_vm_chromium_missing')
 def guard(c,blocked):
  def h(r,q):
   m=q.method.upper();p=path(q.url)
@@ -77,12 +83,12 @@ def home(p):
 def catalog(p):
  s,slow=nav(p,'/admin/catalog-optimization/admin_catalog.php',2400);a=auth(p)
  if not a['authenticated']:return {'authenticated':False,'path':a['path'],'status':s,'navigation_slow':slow}
- p.evaluate("""()=>{let t=document.querySelector('#sv-effective-toolbar');if(!t){t=document.createElement('div');t.id='sv-effective-toolbar';t.innerHTML='<span id=sv-effective-visible-count></span>';document.body.prepend(t)}let h=document.querySelector('#sv-fredwin-sort-fixture');if(!h){h=document.createElement('section');h.id='sv-fredwin-sort-fixture';document.body.append(h)}h.innerHTML='<article class="sv-review-card is-ready" data-sv-state="ready" data-effective-loaded="1" data-effective-count="1" data-sv-search="site Alpha"><input type=hidden name=staging_id value=990001><div class="source-title"><strong>Alpha</strong></div></article><article class="sv-review-card" data-sv-search="mercado livre Beta"><input type=hidden name=staging_id value=990002><div class="source-title"><strong>Beta</strong></div></article><article class="sv-review-card has-failure" data-sv-state="fail" data-sv-search="shopee Zeta"><input type=hidden name=staging_id value=990003><div class="source-title"><strong>Zeta</strong></div></article>';let q=document.createElement('script');q.src='/admin/assets/admin-mobile-completion.js?smoke='+Date.now();document.head.append(q)}""")
+ p.evaluate("""()=>{let t=document.querySelector('#sv-effective-toolbar');if(!t){t=document.createElement('div');t.id='sv-effective-toolbar';t.innerHTML='<span id=sv-effective-visible-count></span>';document.body.prepend(t)}let h=document.querySelector('#sv-browser-sort-fixture');if(!h){h=document.createElement('section');h.id='sv-browser-sort-fixture';document.body.append(h)}h.innerHTML='<article class="sv-review-card is-ready" data-sv-state="ready" data-effective-loaded="1" data-effective-count="1" data-sv-search="site Alpha"><input type=hidden name=staging_id value=990001><div class="source-title"><strong>Alpha</strong></div></article><article class="sv-review-card" data-sv-search="mercado livre Beta"><input type=hidden name=staging_id value=990002><div class="source-title"><strong>Beta</strong></div></article><article class="sv-review-card has-failure" data-sv-state="fail" data-sv-search="shopee Zeta"><input type=hidden name=staging_id value=990003><div class="source-title"><strong>Zeta</strong></div></article>';let q=document.createElement('script');q.src='/admin/assets/admin-mobile-completion.js?smoke='+Date.now();document.head.append(q)}""")
  try:p.wait_for_selector('#sv-effective-sort',timeout=9000)
  except T:pass
  q=p.locator('#sv-effective-sort');v=q.count()>0 and q.first.is_visible();o=pr=ur=[]
  if v:
-  o=q.first.locator('option').evaluate_all('e=>e.map(x=>x.value)');js="()=>[...document.querySelectorAll('#sv-fredwin-sort-fixture article')].map(a=>a.querySelector('strong')?.textContent.trim())"
+  o=q.first.locator('option').evaluate_all('e=>e.map(x=>x.value)');js="()=>[...document.querySelectorAll('#sv-browser-sort-fixture article')].map(a=>a.querySelector('strong')?.textContent.trim())"
   q.first.select_option('product');p.wait_for_timeout(220);pr=p.evaluate(js);q.first.select_option('urgent');p.wait_for_timeout(220);ur=p.evaluate(js)
  return {'authenticated':True,'status':s,'navigation_slow':slow,'sort':v,'options':{'recent','urgent','channel','status','product'}<=set(o),'product':pr==['Alpha','Beta','Zeta'],'urgent':ur==['Zeta','Beta','Alpha'],'overflow':p.evaluate('()=>Math.max(0,document.documentElement.scrollWidth-innerWidth)')}
 def image(p):

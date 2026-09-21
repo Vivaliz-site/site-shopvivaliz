@@ -1,0 +1,85 @@
+name: Google Ads OAuth on Backend Browser VM
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: google-ads-backend-browser-oauth
+  cancel-in-progress: false
+
+jobs:
+  open:
+    runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve OAuth target
+        id: req
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          job="$(jq -r '.job // ""' ops/google-ads-open-oauth.json)"
+          [[ "$job" =~ ^[a-f0-9]{32}$ ]]
+          url="https://shopvivaliz.com.br/auth/google-ads-authorize.php?job=$job"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Configure verified backend SSH
+        env:
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -n "$VM_KEY"
+          test -n "$VM_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VM_KEY" > "$HOME/.ssh/id_rsa"
+          printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
+
+      - name: Open or reuse backend VM browser session
+        env:
+          OAUTH_URL: ${{ steps.req.outputs.url }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          url_b64="$(printf '%s' "$OAUTH_URL" | base64 -w0)"
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -i "$HOME/.ssh/id_rsa" \
+            ubuntu@10.0.1.38 "OAUTH_URL_B64='$url_b64' python3 - <<'PY'
+          import base64, json, os, urllib.request
+          if os.uname().nodename != 'always-free-arm-1787907847-26':
+              raise SystemExit('backend identity mismatch')
+          base='http://127.0.0.1:17777'
+          def call(method,path,payload=None):
+              data=None if payload is None else json.dumps(payload).encode()
+              req=urllib.request.Request(base+path,data=data,headers={'content-type':'application/json'},method=method)
+              with urllib.request.urlopen(req,timeout=30) as r:
+                  return json.loads(r.read().decode())
+          health=call('GET','/health')
+          if health.get('ok') is not True or health.get('endpoint') != 'browser-worker':
+              raise SystemExit('browser worker unhealthy')
+          sessions=call('GET','/sessions').get('sessions') or []
+          current=next((s for s in sessions if s.get('persistent') and s.get('profile')=='google-ads-oauth'),None)
+          url=base64.b64decode(os.environ['OAUTH_URL_B64']).decode('utf-8')
+          if current:
+              sid=current['id']
+              call('POST',f'/sessions/{sid}/action',{'action':'goto','url':url})
+              call('POST',f'/sessions/{sid}/renew',{'ttl_seconds':7200})
+              action='reused'
+          else:
+              created=call('POST','/sessions',{'url':url,'label':'google-ads-oauth','origin':'github-actions','persistent':True,'profile':'google-ads-oauth','ttl_seconds':7200})
+              sid=created['session']['id']
+              action='created'
+          print('GOOGLE_ADS_BROWSER_VM_SESSION='+action)
+          print('SESSION_ID_PREFIX='+sid[:8])
+          print('HUMAN_UI=https://shopvivaliz.com.br/admin/browser-worker.php')
+          PY"
+
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/id_rsa" "$HOME/.ssh/known_hosts"
