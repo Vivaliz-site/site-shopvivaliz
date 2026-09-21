@@ -12,6 +12,13 @@ claude_workspace="$claude_runtime/workspace"
 test -f "$codex_installer"
 XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" bash "$codex_installer"
 
+codex_health="$(curl -fsS --max-time 5 http://127.0.0.1:17656/health)"
+if ! printf '%s' "$codex_health" | grep -q '"ok":true' \
+  || ! printf '%s' "$codex_health" | grep -q '"web_search_mode":"live"'; then
+  echo "AI_SQUAD_CODEX_RUNTIME_MODE_INVALID=true" >&2
+  exit 1
+fi
+
 if [ ! -f "$claude_source" ]; then
   if sudo systemctl cat "$claude_service" >/dev/null 2>&1; then
     sudo systemctl disable --now "$claude_service"
