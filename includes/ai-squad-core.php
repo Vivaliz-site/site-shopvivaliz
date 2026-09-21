@@ -254,6 +254,14 @@ function svais_google_vertex_configured(): bool
     return $clientId !== '' && $clientSecret !== '' && $refreshToken !== '' && $project !== '';
 }
 
+function svais_health_state(bool $verified, bool $configured): string
+{
+    if ($verified) {
+        return 'verified';
+    }
+    return $configured ? 'configured_unverified' : 'unavailable';
+}
+
 function svais_provider_state(array $profile): array
 {
     $openRouterConfigured = trim((string)(getenv('OPENROUTER_API_KEY') ?: '')) !== '';
@@ -262,9 +270,15 @@ function svais_provider_state(array $profile): array
     $vertexConfigured = svais_google_vertex_configured();
     $codex = svais_codex_bridge_health();
     $claude = svais_claude_bridge_health();
+    $openAiVerified = ($codex['authenticated'] ?? false) === true && ($codex['available'] ?? false) === true;
+    $openAiConfigured = $openAiVerified || $openAiDirectConfigured;
+    $anthropicConfigured = ($claude['configured'] ?? false) === true;
+    $anthropicVerified = ($claude['authenticated'] ?? false) === true && ($claude['available'] ?? false) === true;
+    $geminiConfigured = $vertexConfigured || $geminiDirectConfigured || $openRouterConfigured;
     return [
         'openai' => [
-            'configured' => $codex['available'] || $openAiDirectConfigured,
+            'configured' => $openAiConfigured,
+            'health' => svais_health_state($openAiVerified, $openAiConfigured),
             'codex_chatgpt_authenticated' => $codex['authenticated'],
             'codex_chatgpt_available' => $codex['available'],
             'codex_web_search_mode' => (string)($codex['web_search_mode'] ?? 'unknown'),
@@ -275,7 +289,8 @@ function svais_provider_state(array $profile): array
             'reasoning' => (string)$profile['openai']['effort'],
         ],
         'anthropic' => [
-            'configured' => $claude['available'],
+            'configured' => $anthropicConfigured,
+            'health' => svais_health_state($anthropicVerified, $anthropicConfigured),
             'claude_code_oauth_configured' => $claude['configured'],
             'claude_code_authenticated' => $claude['authenticated'],
             'claude_code_available' => $claude['available'],
@@ -285,7 +300,8 @@ function svais_provider_state(array $profile): array
             'reasoning' => (string)$profile['anthropic']['effort'],
         ],
         'gemini' => [
-            'configured' => $vertexConfigured || $geminiDirectConfigured || $openRouterConfigured,
+            'configured' => $geminiConfigured,
+            'health' => svais_health_state(false, $geminiConfigured),
             'vertex_oauth_configured' => $vertexConfigured,
             'direct_configured' => $geminiDirectConfigured,
             'openrouter_fallback_configured' => $openRouterConfigured,
