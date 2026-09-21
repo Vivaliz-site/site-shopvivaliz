@@ -257,6 +257,10 @@ jobs:
           ln -sfn "releases/$(basename "$release")" "$root/current.next"
           mv -Tf "$root/current.next" "$current"
           fail=0
+          if ! bash "$release/scripts/reconcile-ai-squad-runtime.sh" "$current"; then
+            echo 'ai_squad_runtime_reconcile_failed=true' >&2
+            fail=1
+          fi
           if ! sudo bash "$current/scripts/install-abandoned-cart-recovery-service.sh" "$current"; then
             echo 'abandoned_cart_recovery_install_failed=true' >&2
             fail=1
@@ -318,6 +322,10 @@ jobs:
             if [ -n "$previous" ] && [ -d "$previous" ]; then
               ln -sfn "releases/$(basename "$previous")" "$root/current.rollback"
               mv -Tf "$root/current.rollback" "$current"
+              if ! bash "$release/scripts/reconcile-ai-squad-runtime.sh" "$current"; then
+                echo 'ai_squad_runtime_rollback_reconcile_failed=true' >&2
+                fail=1
+              fi
               if [ -f "$current/scripts/install-abandoned-cart-recovery-service.sh" ]; then
                 sudo bash "$current/scripts/install-abandoned-cart-recovery-service.sh" "$current"
               else
