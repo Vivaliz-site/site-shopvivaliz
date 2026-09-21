@@ -1,0 +1,8 @@
+[Unit]
+Description=ShopVivaliz browser worker ensure
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/ubuntu/shopvivaliz-browser-worker/supervisor.sh ensure
