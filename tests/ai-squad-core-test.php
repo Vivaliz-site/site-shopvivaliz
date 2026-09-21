@@ -93,6 +93,36 @@ $consensus = svais_consensus_prompt('teste', [[
 ]]);
 ais_assert(str_contains($consensus, 'SÍNTESE DE CONSENSO'), 'consensus prompt contract missing');
 
+$completeTranscript = [];
+foreach (['research', 'critique', 'converge'] as $phaseName) {
+    foreach (['openai', 'anthropic', 'gemini'] as $providerName) {
+        $completeTranscript[] = [
+            'type' => 'agent_message',
+            'ok' => true,
+            'provider' => $providerName,
+            'phase' => $phaseName,
+            'text' => $providerName . '-' . $phaseName,
+        ];
+    }
+}
+ais_assert(
+    svais_cycle_complete_for_consensus($completeTranscript, ['openai', 'anthropic', 'gemini'], ['research', 'critique', 'converge']),
+    'complete three-provider coverage must allow consensus'
+);
+$missingOne = $completeTranscript;
+array_pop($missingOne);
+ais_assert(
+    !svais_cycle_complete_for_consensus($missingOne, ['openai', 'anthropic', 'gemini'], ['research', 'critique', 'converge']),
+    'missing any provider/phase must block consensus'
+);
+$errorTranscript = $completeTranscript;
+$errorTranscript[0]['ok'] = false;
+$errorTranscript[0]['type'] = 'agent_error';
+ais_assert(
+    !svais_cycle_complete_for_consensus($errorTranscript, ['openai', 'anthropic', 'gemini'], ['research', 'critique', 'converge']),
+    'provider error must block consensus coverage'
+);
+
 $order = svais_openai_transport_order();
 ais_assert($order === ['codex_chatgpt', 'direct', 'manual'], 'OpenAI transport order mismatch');
 
@@ -295,3 +325,6 @@ echo "AI_SQUAD_CORE_TEST=PASS\n";
 $apiSource = file_get_contents(__DIR__ . '/../api/agent/ai-squad.php');
 ais_assert(str_contains($apiSource, 'set_time_limit(900)'), 'AI Squad API must allow deep-research cycles beyond default PHP timeout');
 ais_assert(str_contains($apiSource, 'ignore_user_abort(true)'), 'AI Squad API must finish audit cycle after transient client disconnect');
+ais_assert(str_contains($apiSource, 'svais_cycle_complete_for_consensus'), 'API must gate consensus on complete provider/phase coverage');
+ais_assert(!str_contains($apiSource, "if ($successful !== [])"), 'API must not allow partial-success consensus');
+ais_assert(str_contains((string)file_get_contents(dirname(__DIR__) . '/includes/ai-squad-core.php'), 'CURLOPT_TIMEOUT_MS => 25000'), 'Codex health probe timeout must cover live bridge verification');
