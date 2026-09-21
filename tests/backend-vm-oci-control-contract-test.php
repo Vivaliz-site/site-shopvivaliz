@@ -66,11 +66,13 @@ if (substr_count($text, "allowed = {") !== 1) {
     fwrite(STDERR, "backend OCI must have one explicit action allowlist\n");
     exit(1);
 }
-if (!str_contains($text, '"identity", "disk", "storage_scan", "runtime_status", "repo_status"')) {
-    fwrite(STDERR, "backend OCI core operations allowlist missing\n");
-    exit(1);
+foreach (['identity', 'disk', 'storage_scan', 'storage_cleanup_safe', 'runtime_status', 'repo_status'] as $needle) {
+    if (!str_contains($text, '"' . $needle . '"')) {
+        fwrite(STDERR, "backend OCI core operation missing: {$needle}\n");
+        exit(1);
+    }
 }
-foreach (['anydesk_install', 'anydesk_status', 'anydesk_launch', 'setup-anydesk-backend.sh'] as $needle) {
+foreach (['anydesk_install', 'anydesk_status', 'anydesk_launch', 'anydesk_control_grant', 'anydesk_control_revoke', 'anydesk_console_unlock', 'setup-anydesk-backend.sh'] as $needle) {
     if (!str_contains($text, $needle)) {
         fwrite(STDERR, "backend OCI AnyDesk contract missing: {$needle}\n");
         exit(1);
