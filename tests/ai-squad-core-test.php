@@ -22,6 +22,10 @@ ais_assert(($deep['anthropic']['effort'] ?? '') === 'medium', 'deep Anthropic ef
 ais_assert(($deep['gemini']['model'] ?? '') === (getenv('AI_SQUAD_GEMINI_MODEL') ?: 'gemini-3.5-flash'), 'deep Gemini model mismatch');
 ais_assert(($deep['gemini']['thinking_level'] ?? '') === 'MEDIUM', 'deep Gemini thinking must be MEDIUM');
 
+ais_assert(svais_health_state(true, true) === 'verified', 'health state verified mismatch');
+ais_assert(svais_health_state(false, true) === 'configured_unverified', 'configured provider must not be reported as verified');
+ais_assert(svais_health_state(false, false) === 'unavailable', 'unconfigured provider health mismatch');
+
 $serialized = strtolower(json_encode($catalog, JSON_UNESCAPED_SLASHES) ?: '');
 ais_assert(!str_contains($serialized, 'fable'), 'Fable must not appear in any AI Squad preset');
 putenv('AI_SQUAD_TEST_ANTHROPIC_MODEL=claude-fable-5');
@@ -267,5 +271,23 @@ ais_assert(!array_key_exists('vertex_oauth_configured', $state['anthropic']), 'A
 ais_assert(!array_key_exists('openrouter_fallback_configured', $state['anthropic']), 'Anthropic health must not advertise OpenRouter fallback');
 ais_assert(($state['gemini']['transport_order'] ?? []) === $geminiOrder, 'Gemini health transport order missing');
 ais_assert(array_key_exists('vertex_oauth_configured', $state['gemini']), 'Gemini health Vertex OAuth state missing');
+
+foreach (['openai', 'anthropic', 'gemini'] as $providerId) {
+    ais_assert(
+        in_array((string)($state[$providerId]['health'] ?? ''), ['verified', 'configured_unverified', 'unavailable'], true),
+        $providerId . ' provider health state missing or invalid'
+    );
+}
+
+$uiSource = (string)file_get_contents(dirname(__DIR__) . '/admin/ai-squad.php');
+ais_assert(str_contains($uiSource, 'configured_unverified'), 'UI must expose configured-but-unverified state');
+ais_assert(str_contains($uiSource, 'healthState(p)'), 'UI must normalize provider health state');
+ais_assert(!str_contains($uiSource, "(p.configured?'ok':'bad')"), 'UI must not paint configured-only providers green');
+ais_assert(str_contains($uiSource, "j.endpoint!=='ai-squad'"), 'UI must validate AI Squad health endpoint identity');
+
+$apiSource = (string)file_get_contents(dirname(__DIR__) . '/api/agent/ai-squad.php');
+ais_assert(str_contains($apiSource, "claude_code_account_only_no_fable"), 'Claude policy label must reflect account-only transport');
+$legacyPolicy = 'opus' . '5_primary_no_fable';
+ais_assert(!str_contains($apiSource, $legacyPolicy), 'stale Claude policy label must not remain');
 
 echo "AI_SQUAD_CORE_TEST=PASS\n";
