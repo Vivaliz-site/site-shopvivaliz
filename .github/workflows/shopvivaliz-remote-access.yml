@@ -228,9 +228,15 @@ jobs:
               sudo -n bash scripts/setup-rustdesk-remote.sh status
               ;;
             agent_ssh_install)
-              AGENT_PUBKEY="$(ssh-keygen -y -f "$HOME/.ssh/shopvivaliz_vmkey")"
+              AGENT_KEY="$HOME/.ssh/shopvivaliz_agent_ed25519"
+              if [ ! -s "$AGENT_KEY" ]; then
+                ssh-keygen -q -t ed25519 -N '' -C 'shopvivaliz-agent' -f "$AGENT_KEY"
+                chmod 600 "$AGENT_KEY"
+              fi
+              AGENT_PUBKEY="$(cat "$AGENT_KEY.pub")"
               test -n "$AGENT_PUBKEY"
               sudo -n env SHOPVIVALIZ_AGENT_SSH_PUBKEY="$AGENT_PUBKEY" bash scripts/setup-agent-ssh.sh install
+              echo "AGENT_SSH_KEY_SOURCE=dedicated_runner_key"
               ;;
             agent_ssh_status)
               sudo -n bash scripts/setup-agent-ssh.sh status
@@ -286,9 +292,17 @@ jobs:
                 agent_ssh_status) MODE=status ;;
               esac
               if [ "$MODE" = "install" ]; then
-                AGENT_PUBKEY="$(ssh-keygen -y -f "$HOME/.ssh/shopvivaliz_vmkey")"
+                AGENT_KEY="$HOME/.ssh/shopvivaliz_agent_ed25519"
+                if [ ! -s "$AGENT_KEY" ]; then
+                  ssh-keygen -q -t ed25519 -N '' -C 'shopvivaliz-agent' -f "$AGENT_KEY"
+                  chmod 600 "$AGENT_KEY"
+                fi
+                AGENT_PUBKEY="$(cat "$AGENT_KEY.pub")"
                 test -n "$AGENT_PUBKEY"
                 "${SSH[@]}" "sudo -n env SHOPVIVALIZ_AGENT_SSH_PUBKEY=\"$AGENT_PUBKEY\" bash -s -- install" < scripts/setup-agent-ssh.sh
+                ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$AGENT_KEY" shopvivaliz-agent@10.0.1.38 'sudo -n /usr/local/sbin/shopvivaliz-agent-ops host-status >/dev/null && test "$(whoami)" = shopvivaliz-agent'
+                echo "AGENT_SSH_BACKEND_PROBE=PASS"
+                echo "AGENT_SSH_KEY_SOURCE=dedicated_runner_key"
               else
                 "${SSH[@]}" "sudo -n bash -s -- status" < scripts/setup-agent-ssh.sh
               fi
