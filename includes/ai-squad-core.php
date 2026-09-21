@@ -32,7 +32,7 @@ final class SvaisManualInterventionRequired extends RuntimeException
 
 function svais_openai_transport_order(): array
 {
-    return ['codex_chatgpt', 'manual_chatgpt'];
+    return ['codex_chatgpt', 'chatgpt_browser', 'manual_chatgpt'];
 }
 
 function svais_anthropic_transport_order(): array
@@ -159,6 +159,63 @@ function svais_codex_bridge_url(): string
 {
     $url = trim((string)(getenv('AI_SQUAD_CODEX_BRIDGE_URL') ?: 'http://127.0.0.1:17656'));
     return rtrim($url, '/');
+}
+
+function svais_browser_worker_url(): string
+{
+    $url = trim((string)(getenv('AI_SQUAD_BROWSER_WORKER_URL') ?: 'http://127.0.0.1:17777'));
+    return rtrim($url, '/');
+}
+
+function svais_agent_context(): string
+{
+    static $cached = null;
+    if ($cached !== null) return $cached;
+
+    $path = dirname(__DIR__) . '/docs/knowledge/ai-agent-context.md';
+    $text = is_file($path) ? (string)file_get_contents($path) : '';
+    if ($text === '') {
+        return $cached = 'Use docs/knowledge/host-access.md, README.md and agent-rules.md as the canonical operational context. Never expose secrets.';
+    }
+
+    $text = preg_replace('/(?i)(password|senha|token|secret|private[_ -]?key|cookie|otp)\s*[:=]\s*\S+/', '$1=[redacted]', $text);
+    return $cached = mb_substr((string)$text, 0, 24000, 'UTF-8');
+}
+
+function svais_chatgpt_browser_health(): array
+{
+    static $cached = null;
+    if ($cached !== null) return $cached;
+    if ((string)(getenv('AI_SQUAD_CHATGPT_BROWSER_ENABLED') ?: '1') === '0') {
+        return $cached = ['configured' => false, 'authenticated' => false, 'available' => false];
+    }
+
+    $ch = curl_init(svais_browser_worker_url() . '/chatgpt/health');
+    if ($ch === false) {
+        return $cached = ['configured' => true, 'authenticated' => false, 'available' => false];
+    }
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT_MS => 12000,
+        CURLOPT_CONNECTTIMEOUT_MS => 1000,
+        CURLOPT_PROXY => '',
+    ]);
+    $body = curl_exec($ch);
+    $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if (!is_string($body) || $status !== 200) {
+        return $cached = ['configured' => true, 'authenticated' => false, 'available' => false];
+    }
+    $data = json_decode($body, true);
+    if (!is_array($data)) {
+        return $cached = ['configured' => true, 'authenticated' => false, 'available' => false];
+    }
+    return $cached = [
+        'configured' => true,
+        'authenticated' => ($data['authenticated'] ?? false) === true,
+        'available' => ($data['ok'] ?? false) === true && ($data['available'] ?? false) === true,
+        'profile' => preg_replace('/[^A-Za-z0-9._-]/', '', (string)($data['profile'] ?? '')),
+    ];
 }
 
 function svais_codex_bridge_health(): array
@@ -304,10 +361,14 @@ function svais_provider_state(array $profile): array
     $geminiDirectConfigured = trim((string)(getenv('GEMINI_API_KEY') ?: getenv('GOOGLE_API_KEY') ?: '')) !== '';
     $vertexConfigured = svais_google_vertex_configured();
     $codex = svais_codex_bridge_health();
+    $chatgptBrowser = svais_chatgpt_browser_health();
     $claude = svais_claude_bridge_health();
-    $openAiAuthenticated = ($codex['authenticated'] ?? false) === true;
-    $openAiVerified = $openAiAuthenticated && ($codex['available'] ?? false) === true;
-    $openAiConfigured = $openAiAuthenticated;
+    $openAiAuthenticated = ($codex['authenticated'] ?? false) === true
+        || ($chatgptBrowser['authenticated'] ?? false) === true;
+    $openAiVerified = (($codex['authenticated'] ?? false) === true && ($codex['available'] ?? false) === true)
+        || (($chatgptBrowser['authenticated'] ?? false) === true && ($chatgptBrowser['available'] ?? false) === true);
+    $openAiConfigured = ($codex['authenticated'] ?? false) === true
+        || ($chatgptBrowser['configured'] ?? false) === true;
     $anthropicConfigured = ($claude['configured'] ?? false) === true;
     $anthropicVerified = ($claude['authenticated'] ?? false) === true && ($claude['available'] ?? false) === true;
     $geminiConfigured = $vertexConfigured || $geminiDirectConfigured;
@@ -322,6 +383,11 @@ function svais_provider_state(array $profile): array
             'chatgpt_authenticated_profile_count' => (int)($codex['authenticated_profile_count'] ?? 0),
             'chatgpt_available_profile_count' => (int)($codex['available_profile_count'] ?? 0),
             'chatgpt_exhausted_profile_count' => (int)($codex['exhausted_profile_count'] ?? 0),
+            'chatgpt_browser_configured' => ($chatgptBrowser['configured'] ?? false) === true,
+            'chatgpt_browser_authenticated' => ($chatgptBrowser['authenticated'] ?? false) === true,
+            'chatgpt_browser_available' => ($chatgptBrowser['available'] ?? false) === true,
+            'chatgpt_browser_profile' => (string)($chatgptBrowser['profile'] ?? ''),
+            'chatgpt_browser_exact_model_guarantee' => false,
             'account_login_only' => true,
             'manual_chatgpt_fallback' => true,
             'platform_api_fallback' => false,
@@ -395,6 +461,8 @@ function svais_http_json(string $url, array $headers, array $payload, int $timeo
         $providerMessage = '';
         if (is_string($decoded['error']['message'] ?? null)) {
             $providerMessage = (string)$decoded['error']['message'];
+        } elseif (is_string($decoded['error'] ?? null)) {
+            $providerMessage = (string)$decoded['error'];
         } elseif (is_string($decoded['message'] ?? null)) {
             $providerMessage = (string)$decoded['message'];
         }
@@ -459,6 +527,40 @@ function svais_codex_bridge_call(array $cfg, string $system, string $prompt, boo
         'usage' => is_array($data['usage'] ?? null) ? $data['usage'] : [],
         'model' => (string)($data['model'] ?? ''),
         'transport' => 'codex_chatgpt',
+    ];
+}
+
+function svais_chatgpt_browser_call(array $cfg, string $system, string $prompt, bool $webSearch): array
+{
+    if ((string)(getenv('AI_SQUAD_CHATGPT_BROWSER_ENABLED') ?: '1') === '0') {
+        throw new RuntimeException('chatgpt_browser_not_configured');
+    }
+
+    $data = svais_http_json(
+        svais_browser_worker_url() . '/chatgpt/respond',
+        ['Content-Type: application/json'],
+        [
+            'model' => (string)$cfg['model'],
+            'effort' => (string)$cfg['effort'],
+            'system' => $system . "\n\nSHOPVIVALIZ CANONICAL CONTEXT:\n" . svais_agent_context(),
+            'prompt' => $prompt,
+            'web_search' => $webSearch,
+            'programming_web_research' => true,
+        ],
+        210
+    );
+    if (($data['ok'] ?? false) !== true) {
+        throw new RuntimeException('chatgpt_browser_unavailable');
+    }
+
+    return [
+        'text' => trim((string)($data['text'] ?? '')),
+        'sources' => array_values(array_filter((array)($data['sources'] ?? []), 'is_string')),
+        'usage' => is_array($data['usage'] ?? null) ? $data['usage'] : [],
+        'model' => (string)($data['model'] ?? 'chatgpt-web'),
+        'requested_model' => (string)$cfg['model'],
+        'transport' => 'chatgpt_browser',
+        'exact_model_guarantee' => false,
     ];
 }
 
@@ -868,6 +970,7 @@ function svais_openai_dispatch(
     ): array {
         return match ($transport) {
             'codex_chatgpt' => svais_codex_bridge_call($cfg, $system, $prompt, $webSearch),
+            'chatgpt_browser' => svais_chatgpt_browser_call($cfg, $system, $prompt, $webSearch),
             default => throw new InvalidArgumentException('unknown_openai_transport'),
         };
     };
@@ -886,8 +989,12 @@ function svais_openai_dispatch(
 
             $requestedModel = (string)$cfg['model'];
             $actualModel = (string)($result['model'] ?? '');
-            if ($actualModel !== $requestedModel) {
+            if ($transport !== 'chatgpt_browser' && $actualModel !== $requestedModel) {
                 throw new RuntimeException('model_mismatch');
+            }
+            if ($transport === 'chatgpt_browser') {
+                $result['requested_model'] = $requestedModel;
+                $result['exact_model_guarantee'] = false;
             }
 
             $result['transport'] = $transport;

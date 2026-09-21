@@ -11,6 +11,12 @@ function ais_assert(bool $condition, string $message): void
     }
 }
 
+$agentContext = svais_agent_context();
+ais_assert(str_contains($agentContext, 'shopvivaliz-free-a1'), 'shared AI context must include production host');
+ais_assert(str_contains($agentContext, 'always-free-arm-1787907847-26'), 'shared AI context must include backend host');
+ais_assert(str_contains($agentContext, 'mercadolivre-returns-recovery'), 'shared AI context must include related projects');
+ais_assert(str_contains($agentContext, 'pesquise a web'), 'shared AI context must require current technical web research');
+
 $catalog = svais_profile_catalog();
 ais_assert(isset($catalog['deep_research'], $catalog['balanced'], $catalog['fast']), 'expected profiles missing');
 
@@ -125,7 +131,7 @@ ais_assert(
 );
 
 $order = svais_openai_transport_order();
-ais_assert($order === ['codex_chatgpt', 'manual_chatgpt'], 'OpenAI transport order mismatch');
+ais_assert($order === ['codex_chatgpt', 'chatgpt_browser', 'manual_chatgpt'], 'OpenAI transport order mismatch');
 
 $anthropicOrder = svais_anthropic_transport_order();
 ais_assert($anthropicOrder === ['claude_code'], 'Anthropic transport must use Claude Code account login only');
@@ -219,24 +225,33 @@ ais_assert(($codexResult['text'] ?? '') === 'codex-ok', 'Codex transport result 
 ais_assert($calls === ['codex_chatgpt'], 'Codex success must stop OpenAI chain');
 
 $calls = [];
-$quotaFallback = null;
-try {
-    svais_openai_dispatch(
-        $dispatchCfg,
-        'system',
-        'prompt',
-        false,
-        function (string $transport) use (&$calls): array {
-            $calls[] = $transport;
+$browserFallback = svais_openai_dispatch(
+    $dispatchCfg,
+    'system',
+    'prompt',
+    false,
+    function (string $transport) use (&$calls): array {
+        $calls[] = $transport;
+        if ($transport === 'codex_chatgpt') {
             throw new RuntimeException('usage_limit_exhausted');
         }
-    );
-} catch (SvaisManualInterventionRequired $e) {
-    $quotaFallback = $e;
-}
-ais_assert($quotaFallback instanceof SvaisManualInterventionRequired, 'Codex quota exhaustion must fall back to ChatGPT manual mode');
-ais_assert($calls === ['codex_chatgpt'], 'OpenAI Platform API must not be attempted after Codex quota exhaustion');
-ais_assert(($quotaFallback->attempts[0]['class'] ?? '') === 'quota', 'Codex quota fallback class missing');
+        if ($transport === 'chatgpt_browser') {
+            return [
+                'text' => 'chatgpt-web-ok',
+                'sources' => [],
+                'usage' => [],
+                'model' => 'chatgpt-web',
+                'transport' => 'chatgpt_browser',
+                'exact_model_guarantee' => false,
+            ];
+        }
+        throw new RuntimeException('unexpected_transport');
+    }
+);
+ais_assert(($browserFallback['text'] ?? '') === 'chatgpt-web-ok', 'Codex quota exhaustion must continue through ChatGPT web');
+ais_assert($calls === ['codex_chatgpt', 'chatgpt_browser'], 'OpenAI fallback order must be Codex then ChatGPT browser');
+ais_assert(($browserFallback['transport_attempts'][0]['class'] ?? '') === 'quota', 'Codex quota fallback class missing');
+ais_assert(($browserFallback['exact_model_guarantee'] ?? true) === false, 'ChatGPT web fallback must not claim exact model guarantee');
 
 $manual = null;
 try {
@@ -254,7 +269,9 @@ try {
 }
 ais_assert($manual instanceof SvaisManualInterventionRequired, 'manual fallback exception missing');
 ais_assert($manual->model === $dispatchCfg['model'], 'manual fallback model mismatch');
-ais_assert(count($manual->attempts) === 1, 'manual fallback attempts must cover only ChatGPT/Codex before manual ChatGPT');
+ais_assert(count($manual->attempts) === 2, 'manual fallback must occur only after Codex and ChatGPT browser both fail');
+ais_assert(($manual->attempts[0]['transport'] ?? '') === 'codex_chatgpt', 'manual fallback missing Codex attempt');
+ais_assert(($manual->attempts[1]['transport'] ?? '') === 'chatgpt_browser', 'manual fallback missing ChatGPT browser attempt');
 ais_assert(str_contains($manual->manualPrompt, 'system-marker'), 'manual prompt missing system');
 ais_assert(str_contains($manual->manualPrompt, 'prompt-marker'), 'manual prompt missing task');
 
@@ -284,8 +301,11 @@ try {
 ais_assert($modelMismatch instanceof SvaisManualInterventionRequired, 'model mismatch must not be accepted');
 ais_assert(($modelMismatch->attempts[0]['class'] ?? '') === 'model', 'model mismatch class missing');
 
+putenv('AI_SQUAD_CHATGPT_BROWSER_ENABLED=0');
 $state = svais_provider_state($deep);
 ais_assert(($state['openai']['transport_order'] ?? []) === $order, 'health transport order missing');
+ais_assert(array_key_exists('chatgpt_browser_configured', $state['openai']), 'health ChatGPT browser state missing');
+ais_assert(($state['openai']['chatgpt_browser_exact_model_guarantee'] ?? true) === false, 'health must not claim exact model guarantee for ChatGPT browser');
 ais_assert(($state['openai']['manual_chatgpt_fallback'] ?? false) === true, 'health manual ChatGPT fallback missing');
 ais_assert(($state['openai']['platform_api_fallback'] ?? true) === false, 'OpenAI health must explicitly disable Platform API fallback');
 ais_assert(($state['anthropic']['transport_order'] ?? []) === $anthropicOrder, 'Anthropic health transport order missing');
@@ -314,11 +334,15 @@ ais_assert(str_contains($uiSource, "j.endpoint!=='ai-squad'"), 'UI must validate
 $coreSource = (string)file_get_contents(dirname(__DIR__) . '/includes/ai-squad-core.php');
 ais_assert(!str_contains($coreSource, 'function svais_openai_call'), 'AI Squad core must not retain dormant OpenAI Platform API transport');
 ais_assert(!str_contains($coreSource, "getenv('OPENAI_API_KEY')"), 'AI Squad core must not read OPENAI_API_KEY');
+ais_assert(str_contains($coreSource, 'function svais_chatgpt_browser_call'), 'AI Squad core must implement ChatGPT browser transport');
+ais_assert(str_contains($coreSource, "'programming_web_research' => true"), 'ChatGPT browser payload must require technical web research');
+ais_assert(str_contains($coreSource, 'SHOPVIVALIZ CANONICAL CONTEXT'), 'ChatGPT browser payload must receive canonical project context');
 ais_assert(!str_contains($coreSource, 'function svais_anthropic_call'), 'AI Squad core must not retain dormant Anthropic API transport');
 ais_assert(!str_contains($coreSource, 'function svais_anthropic_vertex_call'), 'AI Squad core must not retain dormant Anthropic Vertex transport');
 ais_assert(!str_contains($coreSource, "getenv('ANTHROPIC_API_KEY')"), 'AI Squad core must not read ANTHROPIC_API_KEY');
 
 $adminSource = (string)file_get_contents(dirname(__DIR__) . '/admin/ai-squad.php');
+ais_assert(str_contains($adminSource, 'chatgpt_browser'), 'UI must expose automatic ChatGPT browser fallback');
 ais_assert(str_contains($adminSource, 'manual_chatgpt'), 'UI must expose manual ChatGPT fallback');
 ais_assert(str_contains($adminSource, 'https://chatgpt.com/'), 'UI must provide explicit ChatGPT fallback action');
 

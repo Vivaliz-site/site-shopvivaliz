@@ -10,6 +10,7 @@ Esta pasta é a referência operacional para agentes de IA e desenvolvedores.
 - [`troubleshooting.md`](troubleshooting.md) — diagnóstico de erros HTTP, rede, integrações e deploy.
 - [`deploy.md`](deploy.md) — fluxo de publicação, curl, CI e checklist.
 - [`agent-rules.md`](agent-rules.md) — regras obrigatórias para agentes.
+- [`ai-agent-context.md`](ai-agent-context.md) — contexto operacional não secreto compartilhado com agentes/fallback ChatGPT, incluindo projetos, hosts, regras e pesquisa técnica.
 - [`repository-index.md`](repository-index.md) — índice canônico de aplicação, automações e áreas alvo.
 - [`structure-policy.md`](structure-policy.md) — política de reorganização por lotes e critérios de conclusão.
 - [`updater.md`](updater.md) — atualizações cumulativas, migrations e reparos automáticos.
