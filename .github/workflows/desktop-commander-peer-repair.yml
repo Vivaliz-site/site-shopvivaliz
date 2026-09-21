@@ -93,41 +93,18 @@ jobs:
           test "${case_ids[0]}" = "22153077391"
           test "${case_ids[1]}" = "22153259501"
 
-          cleanup() {
-            if [[ -s /tmp/shopvivaliz-amazon-support-browser.pid ]]; then
-              pid="$(cat /tmp/shopvivaliz-amazon-support-browser.pid 2>/dev/null || true)"
-              [[ "$pid" =~ ^[0-9]+$ ]] && kill -TERM -- "-$pid" 2>/dev/null || true
+          cdp_ready=0
+          for _ in $(seq 1 420); do
+            if curl -fsS --max-time 1 http://127.0.0.1:9225/json/version >/dev/null 2>&1; then
+              cdp_ready=1
+              break
             fi
-            rm -f /tmp/shopvivaliz-amazon-support-browser.pid /tmp/shopvivaliz-amazon-support-reply.mjs
-            sudo systemctl start amazon-returns-seller-central-browser.timer >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
-
-          sudo systemctl stop amazon-returns-seller-central-browser.timer
-          sudo systemctl stop amazon-returns-seller-central-browser.service || true
-
-          sudo -u ubuntu -g www-data bash -lc '
-            set -Eeuo pipefail
-            set -a
-            . /home/ubuntu/amazon-returns-deploy/shared/seller-central-browser.env
-            set +a
-            setsid "$SELLER_CENTRAL_BROWSER" \
-              --headless=new --no-sandbox --disable-gpu \
-              --remote-debugging-address=127.0.0.1 --remote-debugging-port=9226 \
-              "--user-data-dir=$SELLER_CENTRAL_PROFILE" \
-              --no-first-run --no-default-browser-check about:blank \
-              >/tmp/shopvivaliz-amazon-support-browser.log 2>&1 &
-            echo $! >/tmp/shopvivaliz-amazon-support-browser.pid
-          '
-
-          for _ in $(seq 1 40); do
-            curl -fsS --max-time 1 http://127.0.0.1:9226/json/version >/dev/null 2>&1 && break
-            sleep 0.5
+            sleep 1
           done
-          curl -fsS --max-time 2 http://127.0.0.1:9226/json/version >/dev/null
+          test "$cdp_ready" = 1
 
           cat >/tmp/shopvivaliz-amazon-support-reply.mjs <<'NODE'
-          const CDP='http://127.0.0.1:9226';
+          const CDP='http://127.0.0.1:9225';
           const cases=[
             {
               caseId:'22153077391',
@@ -141,16 +118,22 @@ jobs:
             }
           ];
           const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-          const targets=await fetch(CDP+'/json').then(r=>r.json());
-          const page=targets.find(x=>x.type==='page'&&x.webSocketDebuggerUrl);
-          if(!page) throw new Error('NO_CDP_PAGE');
+          let sellerReady=false;
+          for(let attempt=0;attempt<40;attempt++){
+            const targets=await fetch(CDP+'/json').then(r=>r.json());
+            if(targets.some(x=>x.type==='page'&&String(x.url||'').includes('sellercentral.amazon.com.br'))){sellerReady=true;break}
+            await sleep(250);
+          }
+          if(!sellerReady) throw new Error('SELLER_CENTRAL_TARGET_NOT_READY');
+          const page=await fetch(CDP+'/json/new?'+encodeURIComponent('about:blank'),{method:'PUT'}).then(r=>r.json());
+          if(!page?.id||!page?.webSocketDebuggerUrl) throw new Error('NO_CDP_PAGE');
           const ws=new WebSocket(page.webSocketDebuggerUrl);
           await new Promise((ok,no)=>{ws.onopen=ok;ws.onerror=no});
           let seq=0; const pending=new Map();
           ws.onmessage=e=>{const m=JSON.parse(e.data);if(!m.id||!pending.has(m.id))return;const [ok,no]=pending.get(m.id);pending.delete(m.id);m.error?no(new Error(m.error.message)):ok(m.result)};
           const send=(method,params={})=>new Promise((ok,no)=>{const id=++seq;pending.set(id,[ok,no]);ws.send(JSON.stringify({id,method,params}))});
           const evalv=async expression=>(await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true})).result?.value;
-          const navigate=async url=>{await send('Page.navigate',{url});await sleep(2500)};
+          const navigate=async url=>{await send('Page.navigate',{url});await sleep(1500)};
           await navigate('https://sellercentral.amazon.com.br/cu/case-lobby');
           const href=String(await evalv('location.href'));
           if(/signin|ap\/signin|auth/i.test(href)) throw new Error('AUTH_REQUIRED');
@@ -174,17 +157,22 @@ jobs:
             }
             const opened=await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(!['Reply','Responder'].includes(label))continue;const b=h.tagName==='KAT-BUTTON'?(h.shadowRoot?.querySelector('button')||h):h;if(b&&!b.disabled){b.click();return label}}return ''})()`);
             if(!opened) throw new Error(item.caseId+':REPLY_ACTION_MISSING');
-            await sleep(700);
+            await sleep(450);
             const written=await evalv(`(()=>{const value=${JSON.stringify(item.narrative)};const host=[...document.querySelectorAll('kat-textarea')].find(h=>!h.disabled&&!h.hasAttribute('disabled'));if(host){const i=host.shadowRoot?.querySelector('textarea');if(!i)return false;const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set;if(!setter)return false;setter.call(i,value);i.dispatchEvent(new InputEvent('input',{bubbles:true,composed:true,inputType:'insertText',data:value}));i.dispatchEvent(new Event('change',{bubbles:true,composed:true}));return i.value===value}const i=[...document.querySelectorAll('textarea')].find(h=>!h.disabled&&!h.hasAttribute('disabled')&&!String(h.placeholder||'').toLowerCase().includes('feedback'));if(!i)return false;const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set;if(!setter)return false;setter.call(i,value);i.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:value}));i.dispatchEvent(new Event('change',{bubbles:true}));return i.value===value})()`);
             if(written!==true) throw new Error(item.caseId+':REPLY_NOT_WRITABLE');
             const sent=await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.innerText||'').trim();if(!['Send','Send message','Reply','Enviar','Enviar mensagem','Responder'].includes(label))continue;const b=h.tagName==='KAT-BUTTON'?h.shadowRoot?.querySelector('button'):h;if(b&&!b.disabled){b.click();return label}}return ''})()`);
             if(!sent) throw new Error(item.caseId+':SEND_ACTION_MISSING');
-            await sleep(4000);
-            const confirmed=await evalv(`(document.body?.innerText||'').includes(${JSON.stringify(prefix)})`);
+            let confirmed=false;
+            for(let attempt=0;attempt<16;attempt++){
+              confirmed=await evalv(`(document.body?.innerText||'').includes(${JSON.stringify(prefix)})`);
+              if(confirmed===true)break;
+              await sleep(250);
+            }
             if(confirmed!==true) throw new Error(item.caseId+':READ_BACK_FAILED');
             console.log(JSON.stringify({case_id:item.caseId,order_id:item.orderId,status:lookup.status,result:'SENT',read_back:true}));
           }
           ws.close();
+          await fetch(CDP+'/json/close/'+encodeURIComponent(page.id)).catch(()=>null);
           NODE
 
           set +e
