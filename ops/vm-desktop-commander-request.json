@@ -1,6 +1,9 @@
 {
   "action": "amazon_support_reply",
-  "case_ids": ["22153077391", "22153259501"],
-  "requested_at": "2026-09-21T23:18:00Z",
-  "reason": "reply to the two Seller Support cases via deterministic runner-backend-site scp route and publish sanitized read-back evidence"
+  "case_ids": [
+    "22153077391",
+    "22153259501"
+  ],
+  "requested_at": "2026-09-21T23:20:00Z",
+  "reason": "reply to the two existing Seller Support cases after correcting case ID line separation; publish sanitized read-back evidence"
 }

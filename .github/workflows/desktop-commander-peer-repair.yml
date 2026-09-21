@@ -88,7 +88,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           request='ops/vm-desktop-commander-request.json'
-          mapfile -t case_ids < <(python3 -c 'import json; d=json.load(open("'"$request"'")); print(*d.get("case_ids",[]), sep="\\n")')
+          mapfile -t case_ids < <(python3 -c 'import json; d=json.load(open("'"$request"'")); print(*d.get("case_ids",[]), sep="\n")')
           test "${#case_ids[@]}" -eq 2
           test "${case_ids[0]}" = "22153077391"
           test "${case_ids[1]}" = "22153259501"
