@@ -19,8 +19,12 @@ ais_assert(($deep['openai']['model'] ?? '') === (getenv('AI_SQUAD_OPENAI_MODEL')
 ais_assert(($deep['openai']['effort'] ?? '') === 'medium', 'deep OpenAI effort must be medium');
 ais_assert(($deep['anthropic']['model'] ?? '') === svais_non_fable_model('AI_SQUAD_ANTHROPIC_MODEL', 'claude-sonnet-5'), 'deep Anthropic model mismatch');
 ais_assert(($deep['anthropic']['effort'] ?? '') === 'medium', 'deep Anthropic effort must be medium');
-ais_assert(($deep['gemini']['model'] ?? '') === (getenv('AI_SQUAD_GEMINI_MODEL') ?: 'gemini-3.5-flash'), 'deep Gemini model mismatch');
+ais_assert(($deep['gemini']['model'] ?? '') === (getenv('AI_SQUAD_GEMINI_MODEL') ?: 'gemini-2.5-flash'), 'deep Gemini model mismatch');
 ais_assert(($deep['gemini']['thinking_level'] ?? '') === 'MEDIUM', 'deep Gemini thinking must be MEDIUM');
+ais_assert(svais_gemini_thinking_config($deep['gemini']) === ['thinkingBudget' => 8192], 'Gemini 2.5 MEDIUM must use thinkingBudget 8192');
+$fast = $catalog['fast'];
+ais_assert(svais_gemini_thinking_config($fast['gemini']) === ['thinkingBudget' => 1024], 'Gemini 2.5 LOW must use thinkingBudget 1024');
+ais_assert(svais_gemini_thinking_config(['model' => 'gemini-3-flash-preview', 'thinking_level' => 'MEDIUM']) === ['thinkingLevel' => 'medium'], 'Gemini 3 must use thinkingLevel');
 
 ais_assert(svais_health_state(true, true) === 'verified', 'health state verified mismatch');
 ais_assert(svais_health_state(false, true) === 'configured_unverified', 'configured provider must not be reported as verified');
@@ -35,9 +39,6 @@ ais_assert(
 );
 putenv('AI_SQUAD_TEST_ANTHROPIC_MODEL');
 
-ais_assert(svais_openrouter_model_slug('openai', 'gpt-5.6-sol') === 'openai/gpt-5.6-sol', 'OpenRouter OpenAI slug mismatch');
-ais_assert(svais_openrouter_model_slug('anthropic', 'claude-opus-5') === 'anthropic/claude-opus-5', 'OpenRouter Anthropic slug mismatch');
-ais_assert(svais_openrouter_model_slug('gemini', 'gemini-3.1-pro-preview') === 'google/gemini-3.1-pro-preview', 'OpenRouter Gemini slug mismatch');
 
 $openaiFixture = [
     'output' => [[
@@ -124,12 +125,12 @@ ais_assert(
 );
 
 $order = svais_openai_transport_order();
-ais_assert($order === ['codex_chatgpt', 'direct', 'manual'], 'OpenAI transport order mismatch');
+ais_assert($order === ['codex_chatgpt', 'manual_chatgpt'], 'OpenAI transport order mismatch');
 
 $anthropicOrder = svais_anthropic_transport_order();
 ais_assert($anthropicOrder === ['claude_code'], 'Anthropic transport must use Claude Code account login only');
 $geminiOrder = svais_gemini_transport_order();
-ais_assert($geminiOrder === ['vertex_oauth', 'direct', 'openrouter'], 'Gemini transport order mismatch');
+ais_assert($geminiOrder === ['vertex_oauth', 'direct'], 'Gemini transport order mismatch');
 
 $anthropicCalls = [];
 $anthropicResult = svais_anthropic_dispatch(
@@ -218,30 +219,24 @@ ais_assert(($codexResult['text'] ?? '') === 'codex-ok', 'Codex transport result 
 ais_assert($calls === ['codex_chatgpt'], 'Codex success must stop OpenAI chain');
 
 $calls = [];
-$directResult = svais_openai_dispatch(
-    $dispatchCfg,
-    'system',
-    'prompt',
-    false,
-    function (string $transport) use (&$calls, $dispatchCfg): array {
-        $calls[] = $transport;
-        if ($transport === 'codex_chatgpt') {
+$quotaFallback = null;
+try {
+    svais_openai_dispatch(
+        $dispatchCfg,
+        'system',
+        'prompt',
+        false,
+        function (string $transport) use (&$calls): array {
+            $calls[] = $transport;
             throw new RuntimeException('usage_limit_exhausted');
         }
-        if ($transport === 'direct') {
-            return [
-                'text' => 'direct-ok',
-                'sources' => [],
-                'usage' => [],
-                'model' => $dispatchCfg['model'],
-                'transport' => 'direct',
-            ];
-        }
-        throw new RuntimeException('unexpected_transport');
-    }
-);
-ais_assert(($directResult['text'] ?? '') === 'direct-ok', 'direct fallback failed');
-ais_assert($calls === ['codex_chatgpt', 'direct'], 'direct fallback order mismatch');
+    );
+} catch (SvaisManualInterventionRequired $e) {
+    $quotaFallback = $e;
+}
+ais_assert($quotaFallback instanceof SvaisManualInterventionRequired, 'Codex quota exhaustion must fall back to ChatGPT manual mode');
+ais_assert($calls === ['codex_chatgpt'], 'OpenAI Platform API must not be attempted after Codex quota exhaustion');
+ais_assert(($quotaFallback->attempts[0]['class'] ?? '') === 'quota', 'Codex quota fallback class missing');
 
 $manual = null;
 try {
@@ -259,7 +254,7 @@ try {
 }
 ais_assert($manual instanceof SvaisManualInterventionRequired, 'manual fallback exception missing');
 ais_assert($manual->model === $dispatchCfg['model'], 'manual fallback model mismatch');
-ais_assert(count($manual->attempts) === 2, 'manual fallback attempts must cover Codex and direct OpenAI only');
+ais_assert(count($manual->attempts) === 1, 'manual fallback attempts must cover only ChatGPT/Codex before manual ChatGPT');
 ais_assert(str_contains($manual->manualPrompt, 'system-marker'), 'manual prompt missing system');
 ais_assert(str_contains($manual->manualPrompt, 'prompt-marker'), 'manual prompt missing task');
 
@@ -291,8 +286,8 @@ ais_assert(($modelMismatch->attempts[0]['class'] ?? '') === 'model', 'model mism
 
 $state = svais_provider_state($deep);
 ais_assert(($state['openai']['transport_order'] ?? []) === $order, 'health transport order missing');
-ais_assert(($state['openai']['manual_fallback'] ?? false) === true, 'health manual fallback missing');
-ais_assert(!array_key_exists('openrouter_fallback_configured', $state['openai']), 'OpenAI health must not advertise OpenRouter fallback');
+ais_assert(($state['openai']['manual_chatgpt_fallback'] ?? false) === true, 'health manual ChatGPT fallback missing');
+ais_assert(($state['openai']['platform_api_fallback'] ?? true) === false, 'OpenAI health must explicitly disable Platform API fallback');
 ais_assert(($state['anthropic']['transport_order'] ?? []) === $anthropicOrder, 'Anthropic health transport order missing');
 ais_assert(array_key_exists('claude_code_oauth_configured', $state['anthropic']), 'Anthropic health Claude OAuth state missing');
 ais_assert(($state['anthropic']['account_login_only'] ?? false) === true, 'Anthropic health must declare account login only');
@@ -301,6 +296,7 @@ ais_assert(!array_key_exists('vertex_oauth_configured', $state['anthropic']), 'A
 ais_assert(!array_key_exists('openrouter_fallback_configured', $state['anthropic']), 'Anthropic health must not advertise OpenRouter fallback');
 ais_assert(($state['gemini']['transport_order'] ?? []) === $geminiOrder, 'Gemini health transport order missing');
 ais_assert(array_key_exists('vertex_oauth_configured', $state['gemini']), 'Gemini health Vertex OAuth state missing');
+ais_assert(!array_key_exists('openrouter_fallback_configured', $state['gemini']), 'Gemini health must not advertise broken OpenRouter fallback');
 
 foreach (['openai', 'anthropic', 'gemini'] as $providerId) {
     ais_assert(
@@ -314,6 +310,17 @@ ais_assert(str_contains($uiSource, 'configured_unverified'), 'UI must expose con
 ais_assert(str_contains($uiSource, 'healthState(p)'), 'UI must normalize provider health state');
 ais_assert(!str_contains($uiSource, "(p.configured?'ok':'bad')"), 'UI must not paint configured-only providers green');
 ais_assert(str_contains($uiSource, "j.endpoint!=='ai-squad'"), 'UI must validate AI Squad health endpoint identity');
+
+$coreSource = (string)file_get_contents(dirname(__DIR__) . '/includes/ai-squad-core.php');
+ais_assert(!str_contains($coreSource, 'function svais_openai_call'), 'AI Squad core must not retain dormant OpenAI Platform API transport');
+ais_assert(!str_contains($coreSource, "getenv('OPENAI_API_KEY')"), 'AI Squad core must not read OPENAI_API_KEY');
+ais_assert(!str_contains($coreSource, 'function svais_anthropic_call'), 'AI Squad core must not retain dormant Anthropic API transport');
+ais_assert(!str_contains($coreSource, 'function svais_anthropic_vertex_call'), 'AI Squad core must not retain dormant Anthropic Vertex transport');
+ais_assert(!str_contains($coreSource, "getenv('ANTHROPIC_API_KEY')"), 'AI Squad core must not read ANTHROPIC_API_KEY');
+
+$adminSource = (string)file_get_contents(dirname(__DIR__) . '/admin/ai-squad.php');
+ais_assert(str_contains($adminSource, 'manual_chatgpt'), 'UI must expose manual ChatGPT fallback');
+ais_assert(str_contains($adminSource, 'https://chatgpt.com/'), 'UI must provide explicit ChatGPT fallback action');
 
 $apiSource = (string)file_get_contents(dirname(__DIR__) . '/api/agent/ai-squad.php');
 ais_assert(str_contains($apiSource, "claude_code_account_only_no_fable"), 'Claude policy label must reflect account-only transport');

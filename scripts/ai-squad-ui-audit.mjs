@@ -1,20 +1,26 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 
 const credentialFile = process.env.AI_SQUAD_ADMIN_CREDENTIAL_FILE || '/home/ubuntu/.config/shopvivaliz-admin-test.credentials.json';
 const screenshotPath = process.env.AI_SQUAD_UI_SCREENSHOT || '/tmp/ai-squad-ui-final.png';
-const browserPath = process.env.SHOPVIVALIZ_CHROMIUM_PATH || '/home/ubuntu/.cache/ms-playwright/chromium-1234/chrome-linux/chrome';
-const profileDir = process.env.AI_SQUAD_UI_PROFILE || '/home/ubuntu/.local/share/shopvivaliz-browser-worker/profiles/shopvivaliz-admin-test';
+const configuredBrowserPath = String(process.env.SHOPVIVALIZ_CHROMIUM_PATH || '').trim();
+const configuredProfileDir = String(process.env.AI_SQUAD_UI_PROFILE || '').trim();
+const ephemeralProfile = configuredProfileDir === '';
+const profileDir = configuredProfileDir || fs.mkdtempSync(path.join(os.tmpdir(), 'sv-ai-squad-audit-'));
 const playwrightCandidates = [
+  String(process.env.AI_SQUAD_PLAYWRIGHT_MODULE || '').trim(),
+  '/home/ubuntu/shopvivaliz-deploy/repo/node_modules/playwright/index.js',
   '/home/ubuntu/shopvivaliz-browser-worker/node_modules/playwright-core/index.js',
   '/home/ubuntu/solange-rolla-consultorio/node_modules/playwright/index.js',
 ];
 
 async function loadChromium() {
-  for (const candidate of playwrightCandidates) {
+  for (const candidate of playwrightCandidates.filter(Boolean)) {
     if (!fs.existsSync(candidate)) continue;
     const mod = await import('file://' + candidate);
-    if (mod.chromium) return mod.chromium;
+    const chromium = mod.chromium || mod.default?.chromium;
+    if (chromium) return chromium;
   }
   throw new Error('playwright_runtime_missing');
 }
@@ -25,15 +31,24 @@ function fail(message) {
 
 const raw = JSON.parse(fs.readFileSync(credentialFile, 'utf8'));
 if (!raw.email || !raw.password) fail('credential_file_invalid');
-if (!fs.existsSync(browserPath)) fail('chromium_missing');
-fs.mkdirSync(profileDir, { recursive: true, mode: 0o700 });
+if (!ephemeralProfile) fs.mkdirSync(profileDir, { recursive: true, mode: 0o700 });
 
 const chromium = await loadChromium();
+const browserPath = configuredBrowserPath || chromium.executablePath();
+if (!browserPath || !fs.existsSync(browserPath)) fail('chromium_missing');
 const context = await chromium.launchPersistentContext(profileDir, {
   executablePath: browserPath,
-  headless: false,
+  headless: true,
   viewport: { width: 1440, height: 900 },
-  args: ['--no-sandbox', '--disable-dev-shm-usage'],
+  env: { ...process.env, LIBGL_ALWAYS_SOFTWARE: '1' },
+  args: [
+    '--no-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--disable-vulkan',
+    '--use-gl=swiftshader',
+    '--use-angle=swiftshader',
+  ],
 });
 const page = context.pages()[0] || await context.newPage();
 page.setDefaultTimeout(20000);
@@ -54,10 +69,10 @@ try {
   await page.waitForFunction(() => {
     const value = document.querySelector('#models')?.textContent || '';
     return value && !value.includes('Carregando') && !value.includes('Não foi possível');
-  }, { timeout: 30000 });
+  }, null, { timeout: 30000 });
 
   const modelText = (await page.locator('#models').innerText()).trim();
-  for (const expected of ['gpt-5.6-terra', 'claude-sonnet-5', 'gemini-3.5-flash', 'Fable: desabilitado']) {
+  for (const expected of ['gpt-5.6-terra', 'claude-sonnet-5', 'gemini-2.5-flash', 'Fable: desabilitado']) {
     if (!modelText.includes(expected)) fail('model_contract_missing_' + expected);
   }
   if ((modelText.match(/medium/gi) || []).length < 3) fail('medium_reasoning_not_visible');
@@ -75,12 +90,12 @@ try {
   await page.locator('#message').fill(prompt);
 
   await page.locator('#run').click();
-  await page.waitForFunction(() => document.querySelector('#run')?.disabled === true, { timeout: 5000 });
+  await page.waitForFunction(() => document.querySelector('#run')?.disabled === true, null, { timeout: 5000 });
   await page.waitForFunction(() => {
     const phase = (document.querySelector('#phase')?.textContent || '').trim();
     const run = document.querySelector('#run');
     return phase === 'Concluído' && run && run.disabled === false;
-  }, { timeout: 1100000 });
+  }, null, { timeout: 1100000 });
 
   const summary = await page.evaluate(() => {
     const phases = [];
@@ -151,4 +166,5 @@ try {
   console.log('AI_SQUAD_UI_AUDIT=PASS');
 } finally {
   await context.close().catch(() => {});
+  if (ephemeralProfile) fs.rmSync(profileDir, { recursive: true, force: true });
 }

@@ -39,7 +39,7 @@ Preset para pesquisas aprofundadas e debates com evidência atual. O nível oper
 
 - OpenAI: `gpt-5.6-terra`, effort `medium`;
 - Anthropic: `claude-sonnet-5`, effort `medium`;
-- Gemini: `gemini-3.5-flash`, thinking `MEDIUM`;
+- Gemini: `gemini-2.5-flash`, thinking `MEDIUM`;
 - web search habilitado para os três.
 
 Por decisão operacional, Fable não faz parte de nenhum preset do AI Squad.
@@ -48,11 +48,13 @@ Por decisão operacional, Fable não faz parte de nenhum preset do AI Squad.
 
 - OpenAI: `gpt-5.6-terra`, effort `high`;
 - Anthropic: `claude-sonnet-5`, effort `high`;
-- Gemini: `gemini-3.5-flash`, thinking `MEDIUM`.
+- Gemini: `gemini-2.5-flash`, thinking `MEDIUM`.
 
 ### `fast`
 
 Perfil de menor custo/latência para tarefas simples.
+
+Para `gemini-2.5-flash`, o nível lógico `MEDIUM` é serializado nas APIs GenerateContent/Vertex como `thinkingBudget: 8192`; `LOW` usa `thinkingBudget: 1024`. `thinkingLevel` é reservado aos modelos Gemini 3.x que suportam esse campo.
 
 ## Variáveis de ambiente
 
@@ -60,13 +62,15 @@ As variáveis abaixo são referências de configuração. Valores nunca devem se
 
 Transportes operacionais atuais:
 
-- OpenAI: `codex_chatgpt` (login ChatGPT Business) → API direta quando configurada → fallback manual explícito;
+- OpenAI: `codex_chatgpt` com perfis ChatGPT Business autenticados; o bridge tenta os perfis configurados em ordem e, se todos estiverem sem cota/indisponíveis, emite fallback explícito `manual_chatgpt`. O AI Squad não usa `OPENAI_API_KEY` como fallback.
 - Anthropic: `claude_code` com OAuth da conta; o runtime canônico é um `systemd --user` instalado por `ops/ai-squad/install-claude-bridge-user-service.sh`, executando sempre o bridge da release ativa; não há fallback silencioso para API direta, Vertex ou OpenRouter;
-- Gemini: `vertex_oauth` → API direta quando configurada → OpenRouter quando configurado.
+- Gemini: `vertex_oauth` → API direta quando configurada. O OpenRouter não faz parte da cadeia operacional enquanto não houver credencial validada ao vivo.
 
-Credenciais opcionais de fallback são mantidas apenas no runtime protegido. `OPENAI_API_KEY`, `GEMINI_API_KEY`/`GOOGLE_API_KEY` e `OPENROUTER_API_KEY` não são requisitos para considerar os bridges primários autenticados.
+Credenciais opcionais dos provedores que ainda usam API são mantidas apenas no runtime protegido. Para OpenAI, a política do AI Squad é login ChatGPT Business via Codex, sem fallback para `OPENAI_API_KEY`. Gemini pode usar `GEMINI_API_KEY`/`GOOGLE_API_KEY` como fallback direto conforme a ordem de transportes documentada.
 
-Para Claude Code, o bridge aceita um `CLAUDE_CODE_OAUTH_TOKEN` já provisionado no runtime ou, preferencialmente, reutiliza o credential store refreshável da conta em `/home/ubuntu/.claude/.credentials.json`. O conteúdo dessas credenciais nunca deve ser impresso, versionado ou copiado para logs. A presença de credencial não é suficiente para health verde: o bridge executa uma inferência real e limitada antes de declarar `authenticated=true`.
+Para OpenAI, cada identidade ChatGPT mantém `CODEX_HOME` isolado. O bridge verifica autenticação e limites de cada perfil, tenta automaticamente o próximo perfil quando encontra cota/rate-limit esgotado e só então gera o fallback `manual_chatgpt` para uso visível no ChatGPT. O health publica apenas contagens de perfis autenticados/disponíveis/esgotados, nunca tokens.
+
+Para Claude Code, o bridge reutiliza preferencialmente o login persistente Claude.ai do usuário `ubuntu` em `/home/ubuntu/.claude/.credentials.json`; um `CLAUDE_CODE_OAUTH_TOKEN` explicitamente provisionado continua aceito quando necessário. O conteúdo dessas credenciais nunca deve ser impresso, versionado ou copiado para logs. A presença de credencial não é suficiente para health verde: o bridge executa uma inferência real e limitada antes de declarar `authenticated=true`.
 
 Overrides opcionais:
 
