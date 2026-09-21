@@ -1,6 +1,6 @@
 # Estado da Auditoria
 
-**Status:** ✅ APTO (emitido em 2026-09-19, sessão RDC com acesso real a produção)
+**Status:** ⚠️ APTO COM RESSALVAS — AUDIT_ESCAPE registrado em 2026-09-21 (squad API nunca auditada; fixes aplicados, aguardando deploy e validação pós-deploy)
 
 ---
 
