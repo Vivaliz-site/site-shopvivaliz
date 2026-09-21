@@ -10,6 +10,7 @@ import {
   sanitizeBridgeError,
   remainingRequestMs,
   isDirectInvocation,
+  resolveWebSearchMode,
 } from '../ops/ai-squad/codex-bridge.mjs';
 
 const valid = validateRequest({
@@ -21,6 +22,11 @@ const valid = validateRequest({
 assert.equal(valid.model, 'gpt-5.6-sol');
 assert.equal(valid.effort, 'xhigh');
 assert.equal(valid.web_search, true);
+assert.equal(resolveWebSearchMode(valid), 'cached');
+assert.equal(resolveWebSearchMode(valid, 'live'), 'live');
+assert.equal(resolveWebSearchMode(valid, 'cached'), 'cached');
+assert.equal(resolveWebSearchMode({ ...valid, web_search: false }, 'live'), 'disabled');
+assert.equal(resolveWebSearchMode(valid, 'unexpected'), 'cached');
 
 assert.throws(() => validateRequest({
   model: 'gpt-4o',

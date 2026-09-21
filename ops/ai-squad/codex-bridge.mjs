@@ -45,6 +45,11 @@ export function remainingRequestMs(deadlineMs, nowMs = Date.now(), capMs = Infin
   return Math.max(1, Math.min(remaining, Number(capMs)));
 }
 
+export function resolveWebSearchMode(request, configured = process.env.AI_SQUAD_CODEX_WEB_SEARCH_MODE) {
+  if (request?.web_search !== true) return 'disabled';
+  return String(configured ?? '').trim().toLowerCase() === 'live' ? 'live' : 'cached';
+}
+
 export function isDirectInvocation(moduleUrl, argvPath) {
   if (!argvPath) return false;
   try {
@@ -138,7 +143,7 @@ class AppServerClient {
   async start(deadlineMs) {
     const args = [
       'app-server', '--stdio',
-      '-c', `web_search="${this.request.web_search ? 'live' : 'disabled'}"`,
+      '-c', `web_search="${resolveWebSearchMode(this.request)}"`,
       '-c', `model_reasoning_effort="${this.request.effort}"`,
       '-c', 'features.shell_tool=false',
       '-c', 'agents.enabled=false',

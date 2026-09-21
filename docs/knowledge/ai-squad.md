@@ -76,15 +76,17 @@ curl -fsS http://127.0.0.1:17656/health
 
 O health do bridge publica apenas estado agregado de autenticação/cota e allowlist de modelos; não publica conta, e-mail, token ou nome de perfil.
 
+Quando `web_search=true`, o bridge Codex usa `cached` por padrão para evitar travamentos observados no App Server com `live`. O modo `live` continua disponível somente por override explícito `AI_SQUAD_CODEX_WEB_SEARCH_MODE=live`; sem pesquisa web, o modo permanece `disabled`.
+
 ## Perfis
 
 ### `deep_research`
 
 Preset para pesquisas aprofundadas e debates com evidência atual:
 
-- OpenAI: `gpt-5.6-sol`, effort `xhigh`;
-- Anthropic: `claude-opus-5`, effort `xhigh`;
-- Gemini: `gemini-3.1-pro-preview`, thinking `HIGH`;
+- OpenAI: `gpt-5.6-terra`, effort `medium`;
+- Anthropic: `claude-sonnet-5`, effort `medium`;
+- Gemini: `gemini-3.5-flash`, thinking `MEDIUM`;
 - web search habilitado para os três.
 
 Por decisão operacional, Fable não faz parte de nenhum preset do AI Squad.
