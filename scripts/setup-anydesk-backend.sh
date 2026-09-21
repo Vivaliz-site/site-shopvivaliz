@@ -6,6 +6,9 @@ EXPECTED_HOST="always-free-arm-1787907847-26"
 RDP_USER="fredrdp"
 GUI_USER="fredconsole"
 GUI_CONTROL_USER="ubuntu"
+SECRET_BRIDGE_DIR="/home/ubuntu/.cache/shopvivaliz-secret-bridge"
+SECRET_BRIDGE_KEY="$SECRET_BRIDGE_DIR/key.pem"
+SECRET_BRIDGE_PAYLOAD="$SECRET_BRIDGE_DIR/payload.b64"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "ANYDESK_ERROR=root_required" >&2
@@ -143,17 +146,16 @@ launch_gui() {
   if [ -z "$runtime" ]; then runtime="/run/user/$(id -u "$GUI_USER")"; fi
   if [ -z "$dbus" ]; then dbus="unix:path=$runtime/bus"; fi
 
-  if runuser -u "$GUI_USER" -- env \
+  local settings_log
+  settings_log="/home/$GUI_USER/.local/state/shopvivaliz-anydesk-settings.log"
+  install -d -m 700 -o "$GUI_USER" -g "$GUI_USER" "/home/$GUI_USER/.local/state"
+  runuser -u "$GUI_USER" -- env \
     DISPLAY="$display" \
     XAUTHORITY="$xauthority" \
     XDG_RUNTIME_DIR="$runtime" \
     DBUS_SESSION_BUS_ADDRESS="$dbus" \
     GDK_BACKEND=x11 \
-    anydesk --settings >/dev/null 2>&1; then
-    :
-  else
-    echo "ANYDESK_WARN=settings_open_returned_nonzero" >&2
-  fi
+    sh -lc "nohup anydesk --settings >'$settings_log' 2>&1 </dev/null &"
 
   sleep 2
   if window_dump="$(runuser -u "$GUI_USER" -- env DISPLAY="$display" XAUTHORITY="$xauthority" xwininfo -root -tree 2>/dev/null)"; then
@@ -174,6 +176,72 @@ launch_gui() {
   echo "ANYDESK_SESSION_TYPE=$session_type"
   echo "ANYDESK_SESSION_REMOTE=$session_remote"
   echo "ANYDESK_LAUNCH=PASS"
+}
+
+set_password_ephemeral() {
+  local password_bytes
+  command -v openssl >/dev/null 2>&1
+  command -v anydesk >/dev/null 2>&1
+  test -f "$SECRET_BRIDGE_KEY"
+  test -f "$SECRET_BRIDGE_PAYLOAD"
+  [ "$(stat -c '%U' "$SECRET_BRIDGE_KEY")" = "ubuntu" ]
+  [ "$(stat -c '%a' "$SECRET_BRIDGE_KEY")" = "600" ]
+  [ "$(stat -c '%U' "$SECRET_BRIDGE_PAYLOAD")" = "ubuntu" ]
+  password_bytes="$(
+    base64 -d < "$SECRET_BRIDGE_PAYLOAD" \
+      | openssl pkeyutl -decrypt \
+          -inkey "$SECRET_BRIDGE_KEY" \
+          -pkeyopt rsa_padding_mode:oaep \
+          -pkeyopt rsa_oaep_md:sha256 \
+      | sed -n '2p' \
+      | wc -c
+  )"
+  if [ "$password_bytes" -lt 9 ]; then
+    echo "ANYDESK_ERROR=decrypted_password_invalid" >&2
+    exit 37
+  fi
+  base64 -d < "$SECRET_BRIDGE_PAYLOAD" \
+    | openssl pkeyutl -decrypt \
+        -inkey "$SECRET_BRIDGE_KEY" \
+        -pkeyopt rsa_padding_mode:oaep \
+        -pkeyopt rsa_oaep_md:sha256 \
+    | sed -n '2p' \
+    | anydesk --set-password >/dev/null 2>&1
+  echo "ANYDESK_PASSWORD_EPHEMERAL=PASS"
+}
+
+admin_security() {
+  local tray_pid env_dump display xauthority runtime admin_log
+  if tray_pid="$(pgrep -u "$GUI_USER" -f '/usr/bin/anydesk --tray' | head -1)"; then
+    :
+  else
+    tray_pid=""
+  fi
+  if [ -z "$tray_pid" ]; then
+    echo "ANYDESK_ERROR=physical_tray_missing" >&2
+    exit 25
+  fi
+  env_dump="$(tr '\0' '\n' < "/proc/$tray_pid/environ")"
+  display="$(printf '%s\n' "$env_dump" | sed -n 's/^DISPLAY=//p' | head -1)"
+  xauthority="$(printf '%s\n' "$env_dump" | sed -n 's/^XAUTHORITY=//p' | head -1)"
+  runtime="$(printf '%s\n' "$env_dump" | sed -n 's/^XDG_RUNTIME_DIR=//p' | head -1)"
+  if [ -z "$xauthority" ]; then xauthority="/home/$GUI_USER/.Xauthority"; fi
+  if [ -z "$runtime" ]; then runtime="/run/user/$(id -u "$GUI_USER")"; fi
+  if [ "$display" != ":0" ] && [ "$display" != ":0.0" ]; then
+    echo "ANYDESK_ERROR=unsupported_admin_display" >&2
+    exit 38
+  fi
+  admin_log="$SECRET_BRIDGE_DIR/admin-security.log"
+  install -d -m 700 -o ubuntu -g ubuntu "$SECRET_BRIDGE_DIR"
+  nohup env \
+    DISPLAY="$display" \
+    XAUTHORITY="$xauthority" \
+    XDG_RUNTIME_DIR="$runtime" \
+    GDK_BACKEND=x11 \
+    anydesk --admin-settings:security >"$admin_log" 2>&1 </dev/null &
+  sleep 2
+  echo "ANYDESK_ADMIN_SECURITY=PASS"
+  echo "ANYDESK_DISPLAY=$display"
 }
 
 console_unlock() {
@@ -238,6 +306,8 @@ case "$ACTION" in
   install) install_anydesk ;;
   status) status ;;
   launch) launch_gui ;;
+  set_password_ephemeral) set_password_ephemeral ;;
+  admin_security) admin_security ;;
   control_grant) console_control grant ;;
   control_revoke) console_control revoke ;;
   console_unlock) console_unlock ;;
