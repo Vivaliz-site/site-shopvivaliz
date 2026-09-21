@@ -47,8 +47,8 @@ case "$cmd" in
     ;;
   service-status)
     allowed_service "$arg" || { echo "AGENT_OPS_ERROR=service_not_allowed" >&2; exit 64; }
-    SYSTEMD_PAGER=cat systemctl --no-pager status "$arg" || true
-    systemctl is-active "$arg" || true
+    if ! SYSTEMD_PAGER=cat systemctl --no-pager status "$arg"; then echo "AGENT_OPS_WARN=service_status_nonzero"; fi
+    if state="$(systemctl is-active "$arg" 2>/dev/null)"; then echo "$state"; else echo "inactive"; fi
     ;;
   service-restart)
     allowed_service "$arg" || { echo "AGENT_OPS_ERROR=service_not_allowed" >&2; exit 64; }
@@ -56,9 +56,13 @@ case "$cmd" in
     systemctl is-active "$arg"
     ;;
   rustdesk-status)
-    systemctl is-active rustdesk.service 2>/dev/null || true
+    if state="$(systemctl is-active rustdesk.service 2>/dev/null)"; then echo "$state"; else echo "inactive"; fi
     if command -v docker >/dev/null 2>&1; then
-      docker inspect -f '{{.Name}} {{.State.Status}}' shopvivaliz-rustdesk-hbbs shopvivaliz-rustdesk-hbbr 2>/dev/null || true
+      if docker_state="$(docker inspect -f '{{.Name}} {{.State.Status}}' shopvivaliz-rustdesk-hbbs shopvivaliz-rustdesk-hbbr 2>/dev/null)"; then
+        printf '%s\n' "$docker_state"
+      else
+        echo "AGENT_OPS_WARN=rustdesk_containers_unavailable"
+      fi
     fi
     ;;
   browser-status)
@@ -83,7 +87,7 @@ install_agent_ssh() {
   if ! id "$AGENT_USER" >/dev/null 2>&1; then
     useradd --create-home --shell /bin/bash "$AGENT_USER"
   fi
-  passwd -l "$AGENT_USER" >/dev/null 2>&1 || true
+  if ! passwd -l "$AGENT_USER" >/dev/null 2>&1; then die password_lock_failed 32; fi
 
   install -d -m 700 -o "$AGENT_USER" -g "$AGENT_USER" "$AGENT_HOME/.ssh"
   {
@@ -152,7 +156,7 @@ status() {
     echo "AGENT_SSH_OPS_WRAPPER_PRESENT=true" ||
     echo "AGENT_SSH_OPS_WRAPPER_PRESENT=false"
   if command -v tailscale >/dev/null 2>&1; then
-    ts="$(tailscale ip -4 2>/dev/null | head -1 || true)"
+    if ts="$(tailscale ip -4 2>/dev/null | head -1)"; then :; else ts=""; fi
     [ -n "$ts" ] && echo "AGENT_SSH_TAILSCALE_IP=$ts"
   fi
 }
