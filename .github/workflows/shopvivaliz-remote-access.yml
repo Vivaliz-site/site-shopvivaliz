@@ -28,6 +28,9 @@ on:
           - rdp_status
           - rdp_otp_prepare
           - rdp_enable_otp
+          - anydesk_install
+          - anydesk_status
+          - anydesk_launch
       reason:
         description: Audit reason
         required: true
@@ -84,13 +87,15 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp"}
+          actions = {"health", "identity", "disk", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "anydesk_install", "anydesk_status", "anydesk_launch"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
               raise SystemExit(f"Unsupported action: {action}")
           if action.startswith("rdp_") and target != "always-free-arm-1787907847-26":
               raise SystemExit("RDP actions are restricted to the backend VM")
+          if action.startswith("anydesk_") and target != "always-free-arm-1787907847-26":
+              raise SystemExit("AnyDesk actions are restricted to the backend VM")
           if not reason:
               raise SystemExit("Reason is required")
 
@@ -195,6 +200,14 @@ jobs:
                 rdp_enable_otp) MODE=enable_otp ;;
               esac
               "${SSH[@]}" "tmp=\$(mktemp); trap 'rm -f \"\$tmp\"' EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-private-rdp.sh -o \"\$tmp\"; sudo -n bash \"\$tmp\" $MODE"
+              ;;
+            anydesk_install|anydesk_status|anydesk_launch)
+              case "$ACTION" in
+                anydesk_install) MODE=install ;;
+                anydesk_status) MODE=status ;;
+                anydesk_launch) MODE=launch ;;
+              esac
+              "${SSH[@]}" "tmp=\$(mktemp); trap 'rm -f \"\$tmp\"' EXIT; curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-anydesk-backend.sh -o \"\$tmp\"; sudo -n bash \"\$tmp\" $MODE"
               ;;
           esac
 
