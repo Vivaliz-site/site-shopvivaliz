@@ -1,0 +1,311 @@
+name: OCI Bastion Private Access Bootstrap
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    if: >-
+      ${{
+        github.repository == 'Vivaliz-site/site-shopvivaliz' &&
+        github.event.issue.title == '[private-access-bootstrap]' &&
+        github.event.issue.user.login == 'fredmourao-ai' &&
+        github.event.issue.body == 'action=install-rustdesk-and-agent-ssh'
+      }}
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 25
+    env:
+      OCI_PROFILE: AGENTS
+      SITE_INSTANCE_NAME: shopvivaliz-free-a1
+      BACKEND_INSTANCE_NAME: always-free-arm-1787907847-26
+      SITE_PRIVATE_IP: 10.0.1.112
+      BACKEND_PRIVATE_IP: 10.0.1.38
+      SITE_TUNNEL_PORT: "22212"
+      BACKEND_TUNNEL_PORT: "22213"
+
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@v4
+
+      - name: Configure protected OCI and VM credentials
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+          VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
+          VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT VM_KEY VM_HOSTS; do
+            test -n "${!name:-}" || { echo "::error::Required protected bootstrap secret missing: $name"; exit 1; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          VM_KEY_FILE="$RUNNER_TEMP/vm-admin.key"
+          VM_KNOWN_HOSTS="$RUNNER_TEMP/vm-known-hosts"
+          BASTION_KEY_FILE="$RUNNER_TEMP/bastion-session-ed25519"
+          BASTION_KNOWN_HOSTS="$RUNNER_TEMP/bastion-known-hosts"
+          ORIGINAL_CIDRS_FILE="$RUNNER_TEMP/bastion-original-cidrs.json"
+          EXPANDED_CIDRS_FILE="$RUNNER_TEMP/bastion-expanded-cidrs.json"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\nVM_KEY_FILE=%s\nVM_KNOWN_HOSTS=%s\nBASTION_KEY_FILE=%s\nBASTION_KNOWN_HOSTS=%s\nORIGINAL_CIDRS_FILE=%s\nEXPANDED_CIDRS_FILE=%s\n' \
+            "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" "$VM_KEY_FILE" "$VM_KNOWN_HOSTS" "$BASTION_KEY_FILE" "$BASTION_KNOWN_HOSTS" "$ORIGINAL_CIDRS_FILE" "$EXPANDED_CIDRS_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          printf '%s\n' "$VM_KEY" > "$VM_KEY_FILE"
+          printf '%s\n' "$VM_HOSTS" > "$VM_KNOWN_HOSTS"
+          chmod 600 "$OCI_KEY_FILE" "$VM_KEY_FILE" "$VM_KNOWN_HOSTS"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+          ssh-keygen -q -t ed25519 -N '' -C shopvivaliz-oci-bastion-session -f "$BASTION_KEY_FILE"
+          chmod 600 "$BASTION_KEY_FILE"
+          echo "OCI_REGION=$OCI_CLI_REGION" >> "$GITHUB_ENV"
+
+      - name: Install OCI CLI
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci-cli
+          oci --version
+
+      - name: Discover active Bastion and temporarily allow this runner
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          query="query instance resources where displayName = '$BACKEND_INSTANCE_NAME'"
+          backend_count="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'length(data.items)' --raw-output)"
+          test "$backend_count" = "1" || { echo "::error::Expected exactly one backend instance, found $backend_count"; exit 2; }
+          backend_id="$("${OCI[@]}" search resource structured-search --query-text "$query" --query 'data.items[0].identifier' --raw-output)"
+          compartment_id="$("${OCI[@]}" compute instance get --instance-id "$backend_id" --query 'data."compartment-id"' --raw-output)"
+          test -n "$compartment_id"
+
+          "${OCI[@]}" bastion bastion list --compartment-id "$compartment_id" --all > "$RUNNER_TEMP/bastions.json"
+          BASTION_ID="$(python3 - "$RUNNER_TEMP/bastions.json" <<'PY'
+          import json, sys
+          data=json.load(open(sys.argv[1], encoding='utf-8')).get('data') or []
+          active=[b for b in data if b.get('lifecycle-state') == 'ACTIVE']
+          if len(active) != 1:
+              raise SystemExit(f'Expected exactly one ACTIVE bastion, found {len(active)}')
+          print(active[0]['id'])
+          PY
+          )"
+          test -n "$BASTION_ID"
+          echo "BASTION_ID=$BASTION_ID" >> "$GITHUB_ENV"
+
+          "${OCI[@]}" bastion bastion get --bastion-id "$BASTION_ID" --query 'data."client-cidr-block-allow-list"' --output json > "$ORIGINAL_CIDRS_FILE"
+          RUNNER_IP="$(curl -4fsS --connect-timeout 10 --max-time 20 https://api.ipify.org)"
+          python3 - "$RUNNER_IP" "$ORIGINAL_CIDRS_FILE" "$EXPANDED_CIDRS_FILE" <<'PY'
+          import ipaddress, json, sys
+          ip=str(ipaddress.ip_address(sys.argv[1]))
+          src=json.load(open(sys.argv[2], encoding='utf-8'))
+          if not isinstance(src, list):
+              raise SystemExit('Bastion CIDR allowlist is not a list')
+          cidrs=list(dict.fromkeys([str(x) for x in src] + [ip + '/32']))
+          json.dump(cidrs, open(sys.argv[3], 'w', encoding='utf-8'))
+          PY
+          "${OCI[@]}" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$EXPANDED_CIDRS_FILE" --force >/dev/null
+          echo "BASTION_RUNNER_ALLOWLIST=temporary"
+
+      - name: Create private SSH port-forwarding sessions
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          OCI=(oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE")
+          create_session() {
+            local ip="$1" name="$2"
+            "${OCI[@]}" bastion session create-port-forwarding \
+              --bastion-id "$BASTION_ID" \
+              --target-private-ip "$ip" \
+              --target-port 22 \
+              --session-ttl 1800 \
+              --display-name "$name" \
+              --ssh-public-key-file "$BASTION_KEY_FILE.pub" \
+              --query 'data.id' --raw-output
+          }
+          wait_active() {
+            local sid="$1"
+            for _ in $(seq 1 36); do
+              state="$("${OCI[@]}" bastion session get --session-id "$sid" --query 'data."lifecycle-state"' --raw-output)"
+              if [ "$state" = "ACTIVE" ]; then return 0; fi
+              case "$state" in
+                FAILED|DELETED) echo "::error::Bastion session entered $state"; return 1 ;;
+              esac
+              sleep 5
+            done
+            echo "::error::Timed out waiting for Bastion session"
+            return 1
+          }
+          BACKEND_SESSION_ID="$(create_session "$BACKEND_PRIVATE_IP" shopvivaliz-backend-bootstrap)"
+          SITE_SESSION_ID="$(create_session "$SITE_PRIVATE_IP" shopvivaliz-site-bootstrap)"
+          test -n "$BACKEND_SESSION_ID"
+          test -n "$SITE_SESSION_ID"
+          printf 'BACKEND_SESSION_ID=%s\nSITE_SESSION_ID=%s\n' "$BACKEND_SESSION_ID" "$SITE_SESSION_ID" >> "$GITHUB_ENV"
+          wait_active "$BACKEND_SESSION_ID"
+          wait_active "$SITE_SESSION_ID"
+          echo "BASTION_SESSIONS=ACTIVE"
+
+      - name: Open verified private SSH tunnels
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bastion_host="host.bastion.$OCI_REGION.oci.oraclecloud.com"
+          open_tunnel() {
+            local sid="$1" port="$2" target="$3"
+            ssh -fNT \
+              -o BatchMode=yes \
+              -o IdentitiesOnly=yes \
+              -o ExitOnForwardFailure=yes \
+              -o ServerAliveInterval=30 \
+              -o StrictHostKeyChecking=accept-new \
+              -o UserKnownHostsFile="$BASTION_KNOWN_HOSTS" \
+              -i "$BASTION_KEY_FILE" \
+              -L "$port:$target:22" \
+              -p 22 "$sid@$bastion_host"
+          }
+          open_tunnel "$BACKEND_SESSION_ID" "$BACKEND_TUNNEL_PORT" "$BACKEND_PRIVATE_IP"
+          open_tunnel "$SITE_SESSION_ID" "$SITE_TUNNEL_PORT" "$SITE_PRIVATE_IP"
+          sleep 3
+
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=10 -i "$VM_KEY_FILE")
+          ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1 'test "$(hostname)" = "always-free-arm-1787907847-26"'
+          ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1 'test "$(hostname)" = "shopvivaliz-free-a1"'
+          echo "PRIVATE_SSH_TUNNELS=PASS"
+
+      - name: Install RustDesk server and clients on both VMs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+
+          "${BACKEND_SSH[@]}" 'sudo -n bash -s -- server_install' < scripts/setup-rustdesk-remote.sh
+          SERVER_KEY="$("${BACKEND_SSH[@]}" 'sudo -n cat /opt/shopvivaliz-rustdesk-server/data/id_ed25519.pub')"
+          test -n "$SERVER_KEY"
+
+          server_key_b64="$(printf '%s' "$SERVER_KEY" | base64 -w0)"
+          "${BACKEND_SSH[@]}" "SERVER_KEY_B64='$server_key_b64' bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+          key="$(printf '%s' "$SERVER_KEY_B64" | base64 -d)"
+          sudo -n env RUSTDESK_SERVER_KEY="$key" RUSTDESK_ID_SERVER=10.0.1.38 bash -s -- client_install
+          REMOTE
+          "${SITE_SSH[@]}" "SERVER_KEY_B64='$server_key_b64' bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+          key="$(printf '%s' "$SERVER_KEY_B64" | base64 -d)"
+          sudo -n env RUSTDESK_SERVER_KEY="$key" RUSTDESK_ID_SERVER=10.0.1.38 bash -s -- client_install
+          REMOTE
+          echo "RUSTDESK_BOOTSTRAP=BOTH_VMS_INSTALLED"
+
+      - name: Provision dedicated private SSH agent access on both VMs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+
+          AGENT_PUBKEY="$("${SITE_SSH[@]}" 'set -Eeuo pipefail; install -m 700 -d "$HOME/.ssh"; key="$HOME/.ssh/shopvivaliz_agent_ed25519"; if [ ! -s "$key" ]; then ssh-keygen -q -t ed25519 -N "" -C shopvivaliz-agent -f "$key"; chmod 600 "$key"; fi; ssh-keygen -y -f "$key"')"
+          test -n "$AGENT_PUBKEY"
+          pub_b64="$(printf '%s' "$AGENT_PUBKEY" | base64 -w0)"
+
+          "${BACKEND_SSH[@]}" "PUB_B64='$pub_b64' bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+          pub="$(printf '%s' "$PUB_B64" | base64 -d)"
+          sudo -n env SHOPVIVALIZ_AGENT_SSH_PUBKEY="$pub" bash -s -- install
+          REMOTE
+          "${SITE_SSH[@]}" "PUB_B64='$pub_b64' bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+          pub="$(printf '%s' "$PUB_B64" | base64 -d)"
+          sudo -n env SHOPVIVALIZ_AGENT_SSH_PUBKEY="$pub" bash -s -- install
+          REMOTE
+
+          "${SITE_SSH[@]}" 'set -Eeuo pipefail
+            kh="$HOME/.ssh/shopvivaliz-agent-known-hosts"
+            touch "$kh"; chmod 600 "$kh"
+            for ip in 10.0.1.112 10.0.1.38; do
+              if ! ssh-keygen -F "$ip" -f "$kh" >/dev/null 2>&1; then
+                ssh-keyscan -T 5 "$ip" >> "$kh" 2>/dev/null
+              fi
+            done
+            key="$HOME/.ssh/shopvivaliz_agent_ed25519"
+            ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$kh" -i "$key" shopvivaliz-agent@10.0.1.112 "sudo -n /usr/local/sbin/shopvivaliz-agent-ops host-status >/dev/null; test \"\$(whoami)\" = shopvivaliz-agent"
+            ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$kh" -i "$key" shopvivaliz-agent@10.0.1.38 "sudo -n /usr/local/sbin/shopvivaliz-agent-ops host-status >/dev/null; test \"\$(whoami)\" = shopvivaliz-agent"
+          '
+          echo "AGENT_SSH_SITE_PROBE=PASS"
+          echo "AGENT_SSH_BACKEND_PROBE=PASS"
+
+      - name: Restore production runner listener without reboot
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+          "${SITE_SSH[@]}" 'set -Eeuo pipefail
+            service=shopvivaliz-actions-runner.service
+            workers="$(pgrep -fc "^/home/ubuntu/actions-runner-shopvivaliz/bin/Runner.Worker( |$)")"
+            if [ "$workers" -gt 0 ]; then
+              echo "RUNNER_LISTENER_RESTART=skipped_worker_active"
+            else
+              uid="$(id -u)"
+              runtime="/run/user/$uid"
+              bus="unix:path=$runtime/bus"
+              test -S "$runtime/bus"
+              env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user restart "$service"
+              env XDG_RUNTIME_DIR="$runtime" DBUS_SESSION_BUS_ADDRESS="$bus" systemctl --user is-active --quiet "$service"
+              echo "RUNNER_LISTENER_RESTART=PASS"
+            fi
+          '
+
+      - name: Validate private access and RustDesk state
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SSH_COMMON=(-o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$VM_KNOWN_HOSTS" -o ConnectTimeout=15 -i "$VM_KEY_FILE")
+          BACKEND_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias="$BACKEND_PRIVATE_IP" -p "$BACKEND_TUNNEL_PORT" ubuntu@127.0.0.1)
+          SITE_SSH=(ssh "${SSH_COMMON[@]}" -o HostKeyAlias=127.0.0.1 -p "$SITE_TUNNEL_PORT" ubuntu@127.0.0.1)
+
+          "${BACKEND_SSH[@]}" 'sudo -n bash -s -- status' < scripts/setup-rustdesk-remote.sh
+          "${SITE_SSH[@]}" 'sudo -n bash -s -- status' < scripts/setup-rustdesk-remote.sh
+          "${BACKEND_SSH[@]}" 'sudo -n bash -s -- status' < scripts/setup-agent-ssh.sh
+          "${SITE_SSH[@]}" 'sudo -n bash -s -- status' < scripts/setup-agent-ssh.sh
+          echo "PRIVATE_ACCESS_BOOTSTRAP=PASS"
+
+      - name: Cleanup temporary Bastion access and credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [ -n "${BACKEND_SESSION_ID:-}" ]; then
+            oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE" bastion session delete --session-id "$BACKEND_SESSION_ID" --force >/dev/null
+          fi
+          if [ -n "${SITE_SESSION_ID:-}" ]; then
+            oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE" bastion session delete --session-id "$SITE_SESSION_ID" --force >/dev/null
+          fi
+          if [ -n "${BASTION_ID:-}" ] && [ -s "${ORIGINAL_CIDRS_FILE:-}" ]; then
+            oci --config-file "$OCI_CONFIG_FILE" --profile "$OCI_PROFILE" bastion bastion update --bastion-id "$BASTION_ID" --client-cidr-list "file://$ORIGINAL_CIDRS_FILE" --force >/dev/null
+          fi
+          if pgrep -f "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22" >/dev/null; then
+            pkill -f "$BACKEND_TUNNEL_PORT:$BACKEND_PRIVATE_IP:22"
+          fi
+          if pgrep -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22" >/dev/null; then
+            pkill -f "$SITE_TUNNEL_PORT:$SITE_PRIVATE_IP:22"
+          fi
+          for f in "${OCI_KEY_FILE:-}" "${VM_KEY_FILE:-}" "${BASTION_KEY_FILE:-}"; do
+            if [ -n "$f" ] && [ -f "$f" ]; then shred -u "$f"; fi
+          done
+          rm -f "${BASTION_KEY_FILE:-}.pub" "${VM_KNOWN_HOSTS:-}" "${BASTION_KNOWN_HOSTS:-}" "${OCI_CONFIG_FILE:-}" "${ORIGINAL_CIDRS_FILE:-}" "${EXPANDED_CIDRS_FILE:-}" "$RUNNER_TEMP/bastions.json"

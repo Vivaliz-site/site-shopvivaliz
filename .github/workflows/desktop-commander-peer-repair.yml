@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   repair-peer:
@@ -16,7 +17,21 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+
+      - name: Read operation request
+        id: request
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          action="$(python3 -c 'import json; print(json.load(open("ops/vm-desktop-commander-request.json"))["action"])')"
+          case "$action" in
+            install_or_repair|amazon_support_reply) ;;
+            *) echo "Unsupported action: $action" >&2; exit 64 ;;
+          esac
+          echo "action=$action" >> "$GITHUB_OUTPUT"
+
       - name: Configure verified backend SSH
+        if: steps.request.outputs.action == 'install_or_repair' || steps.request.outputs.action == 'amazon_support_reply'
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
           VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
@@ -28,7 +43,9 @@ jobs:
           printf '%s\n' "$VM_KEY" > ~/.ssh/vmkey
           printf '%s\n' "$VM_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/vmkey ~/.ssh/known_hosts
+
       - name: Repair private A1 peer through backend
+        if: steps.request.outputs.action == 'install_or_repair'
         run: |
           set -Eeuo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
@@ -64,6 +81,205 @@ jobs:
                echo PEER_V4=true
                echo PEER_PROVIDER_CONNECTED=true
              '\'''
+
+      - name: Reply to requested Amazon Seller Support cases
+        if: steps.request.outputs.action == 'amazon_support_reply'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          request='ops/vm-desktop-commander-request.json'
+          mapfile -t case_ids < <(python3 -c 'import json; d=json.load(open("'"$request"'")); print(*d.get("case_ids",[]), sep="\n")')
+          test "${#case_ids[@]}" -eq 2
+          test "${case_ids[0]}" = "22153077391"
+          test "${case_ids[1]}" = "22153259501"
+
+          cat >/tmp/shopvivaliz-amazon-support-site.sh <<'SITE_SCRIPT'
+          #!/usr/bin/env bash
+          set -Eeuo pipefail
+          echo SITE_REACHED=true
+          sudo -n true
+          echo SITE_SUDO_OK=true
+
+          cleanup() {
+            if [[ -s /tmp/shopvivaliz-amazon-support-browser.pid ]]; then
+              pid="$(cat /tmp/shopvivaliz-amazon-support-browser.pid 2>/dev/null || true)"
+              [[ "$pid" =~ ^[0-9]+$ ]] && kill -TERM -- "-$pid" 2>/dev/null || true
+            fi
+            rm -f /tmp/shopvivaliz-amazon-support-browser.pid /tmp/shopvivaliz-amazon-support-reply.mjs
+            sudo -n systemctl start amazon-returns-seller-central-browser.timer >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          sudo -n systemctl stop amazon-returns-seller-central-browser.timer
+          sudo -n systemctl stop amazon-returns-seller-central-browser.service || true
+
+          sudo -n -u ubuntu -g www-data bash -lc '
+            set -Eeuo pipefail
+            set -a
+            . /home/ubuntu/amazon-returns-deploy/shared/seller-central-browser.env
+            set +a
+            setsid "$SELLER_CENTRAL_BROWSER" \
+              --headless=new --no-sandbox --disable-gpu \
+              --remote-debugging-address=127.0.0.1 --remote-debugging-port=9226 \
+              "--user-data-dir=$SELLER_CENTRAL_PROFILE" \
+              --no-first-run --no-default-browser-check about:blank \
+              >/tmp/shopvivaliz-amazon-support-browser.log 2>&1 &
+            echo $! >/tmp/shopvivaliz-amazon-support-browser.pid
+          '
+
+          for _ in $(seq 1 40); do
+            curl -fsS --max-time 1 http://127.0.0.1:9226/json/version >/dev/null 2>&1 && break
+            sleep 0.5
+          done
+          curl -fsS --max-time 2 http://127.0.0.1:9226/json/version >/dev/null
+          echo SELLER_CENTRAL_CDP_READY=true
+
+          cat >/tmp/shopvivaliz-amazon-support-reply.mjs <<'NODE'
+          const CDP='http://127.0.0.1:9226';
+          const cases=[
+            {
+              caseId:'22153077391',
+              orderId:'701-8413776-8628228',
+              narrative:'Temos ciência de que o comprador já foi reembolsado no pedido 701-8413776-8628228. Nossa solicitação não se refere ao reembolso realizado ao comprador. Estamos solicitando o nosso ressarcimento como vendedores. Até o momento, não identificamos em nossa conta de vendedor o crédito correspondente a esse ressarcimento. Caso a Amazon considere que o ressarcimento já foi efetuado, solicitamos que informe o valor creditado em nossa conta de vendedor, a data do crédito, o ID da transação financeira e/ou o ID do ressarcimento, além do relatório ou evento financeiro em que esse crédito aparece. Enquanto esse crédito não puder ser identificado e conciliado em nossa conta de vendedor, consideramos o ressarcimento pendente.'
+            },
+            {
+              caseId:'22153259501',
+              orderId:'701-0172386-7380246',
+              narrative:'Temos ciência de que o comprador já foi reembolsado no pedido 701-0172386-7380246. Nossa solicitação não se refere ao reembolso realizado ao comprador. Estamos solicitando o nosso ressarcimento como vendedores. Até o momento, não identificamos em nossa conta de vendedor o crédito correspondente a esse ressarcimento. Caso a Amazon considere que o ressarcimento já foi efetuado, solicitamos que informe o valor creditado em nossa conta de vendedor, a data do crédito, o ID da transação financeira e/ou o ID do ressarcimento, além do relatório ou evento financeiro em que esse crédito aparece. Enquanto esse crédito não puder ser identificado e conciliado em nossa conta de vendedor, consideramos o ressarcimento pendente.'
+            }
+          ];
+          const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+          const targets=await fetch(CDP+'/json').then(r=>r.json());
+          const page=targets.find(x=>x.type==='page'&&x.webSocketDebuggerUrl);
+          if(!page) throw new Error('NO_CDP_PAGE');
+          const ws=new WebSocket(page.webSocketDebuggerUrl);
+          await new Promise((ok,no)=>{ws.onopen=ok;ws.onerror=no});
+          let seq=0; const pending=new Map();
+          ws.onmessage=e=>{const m=JSON.parse(e.data);if(!m.id||!pending.has(m.id))return;const [ok,no]=pending.get(m.id);pending.delete(m.id);m.error?no(new Error(m.error.message)):ok(m.result)};
+          const send=(method,params={})=>new Promise((ok,no)=>{const id=++seq;pending.set(id,[ok,no]);ws.send(JSON.stringify({id,method,params}))});
+          const evalv=async expression=>(await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true})).result?.value;
+          const navigate=async url=>{await send('Page.navigate',{url});await sleep(2500)};
+          await navigate('https://sellercentral.amazon.com.br/cu/case-lobby');
+          const href=String(await evalv('location.href'));
+          if(/signin|ap\/signin|auth/i.test(href)) throw new Error('AUTH_REQUIRED');
+
+          for(const item of cases){
+            const lookup=JSON.parse(await evalv(`(async()=>{for(let page=0;page<10;page++){const r=await fetch('/hill/hillservice/mons-api/SearchForCases',{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({page,searchPageSize:50,sortBy:'CreationDate',sortByOrder:'DESC',getCountOnly:false,caseFilters:{caseOwner:'MerchantCases'}})});if(!r.ok)return JSON.stringify({error:'SEARCH_HTTP_'+r.status});const j=await r.json();const rows=Array.isArray(j.caseSearchResultList)?j.caseSearchResultList:[];const x=rows.find(v=>String(v.caseId||'')===${JSON.stringify(item.caseId)});if(x)return JSON.stringify({caseId:String(x.caseId||''),status:String(x.status||''),shortDescription:String(x.shortDescription||'')});if(rows.length<50)break;}return JSON.stringify({error:'NOT_FOUND'})})()`));
+            if(lookup.error) throw new Error(item.caseId+':'+lookup.error);
+            const normalized=String(lookup.status||'').toUpperCase();
+            if(/RESOLVED|CLOSED|CANCELLED|ANSWERED/.test(normalized)) throw new Error(item.caseId+':TERMINAL_STATUS:'+normalized);
+
+            const detail=await evalv(`(async()=>{const r=await fetch('/hill/hillservice/mons-api/ViewCase?caseId='+encodeURIComponent(${JSON.stringify(item.caseId)})+'&timeZone=UTC&pageSize=10',{credentials:'include'});if(!r.ok)return JSON.stringify({error:'DETAIL_HTTP_'+r.status});return JSON.stringify(await r.json())})()`);
+            const parsed=JSON.parse(detail);
+            if(parsed.error) throw new Error(item.caseId+':'+parsed.error);
+            if(!JSON.stringify(parsed).includes(item.orderId)) throw new Error(item.caseId+':ORDER_IDENTITY_MISMATCH');
+
+            await navigate('https://sellercentral.amazon.com.br/cu/case-dashboard/view-case?caseID='+encodeURIComponent(item.caseId));
+            const prefix=item.narrative.slice(0,180);
+            if(await evalv(`(document.body?.innerText||'').includes(${JSON.stringify(prefix)})`)){
+              console.log(JSON.stringify({case_id:item.caseId,order_id:item.orderId,status:lookup.status,result:'ALREADY_EXISTS',read_back:true}));
+              continue;
+            }
+            const opened=await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.getAttribute('aria-label')||h.innerText||'').trim();if(!['Reply','Responder'].includes(label))continue;const b=h.tagName==='KAT-BUTTON'?(h.shadowRoot?.querySelector('button')||h):h;if(b&&!b.disabled){b.click();return label}}return ''})()`);
+            if(!opened) throw new Error(item.caseId+':REPLY_ACTION_MISSING');
+            await sleep(700);
+            const written=await evalv(`(()=>{const value=${JSON.stringify(item.narrative)};const host=[...document.querySelectorAll('kat-textarea')].find(h=>!h.disabled&&!h.hasAttribute('disabled'));if(host){const i=host.shadowRoot?.querySelector('textarea');if(!i)return false;const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set;if(!setter)return false;setter.call(i,value);i.dispatchEvent(new InputEvent('input',{bubbles:true,composed:true,inputType:'insertText',data:value}));i.dispatchEvent(new Event('change',{bubbles:true,composed:true}));return i.value===value}const i=[...document.querySelectorAll('textarea')].find(h=>!h.disabled&&!h.hasAttribute('disabled')&&!String(h.placeholder||'').toLowerCase().includes('feedback'));if(!i)return false;const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set;if(!setter)return false;setter.call(i,value);i.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:value}));i.dispatchEvent(new Event('change',{bubbles:true}));return i.value===value})()`);
+            if(written!==true) throw new Error(item.caseId+':REPLY_NOT_WRITABLE');
+            const sent=await evalv(`(()=>{for(const h of document.querySelectorAll('kat-button,button')){const label=(h.getAttribute('label')||h.innerText||'').trim();if(!['Send','Send message','Reply','Enviar','Enviar mensagem','Responder'].includes(label))continue;const b=h.tagName==='KAT-BUTTON'?h.shadowRoot?.querySelector('button'):h;if(b&&!b.disabled){b.click();return label}}return ''})()`);
+            if(!sent) throw new Error(item.caseId+':SEND_ACTION_MISSING');
+            await sleep(4000);
+            const confirmed=await evalv(`(document.body?.innerText||'').includes(${JSON.stringify(prefix)})`);
+            if(confirmed!==true) throw new Error(item.caseId+':READ_BACK_FAILED');
+            console.log(JSON.stringify({case_id:item.caseId,order_id:item.orderId,status:lookup.status,result:'SENT',read_back:true}));
+          }
+          ws.close();
+          NODE
+
+          node /tmp/shopvivaliz-amazon-support-reply.mjs
+          SITE_SCRIPT
+          chmod 700 /tmp/shopvivaliz-amazon-support-site.sh
+
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=10 -i ~/.ssh/vmkey \
+            /tmp/shopvivaliz-amazon-support-site.sh ubuntu@10.0.1.38:/tmp/shopvivaliz-amazon-support-site.sh
+
+          set +e
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -o ConnectTimeout=10 -i ~/.ssh/vmkey ubuntu@10.0.1.38 \
+            'set -Eeuo pipefail
+             echo BACKEND_REACHED=true
+             PEER_KEY=/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor
+             test -f "$PEER_KEY"
+             echo PEER_KEY_PRESENT=true
+             scp -q -i "$PEER_KEY" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+               /tmp/shopvivaliz-amazon-support-site.sh ubuntu@10.0.1.112:/tmp/shopvivaliz-amazon-support-site.sh
+             ssh -i "$PEER_KEY" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+               ubuntu@10.0.1.112 "bash /tmp/shopvivaliz-amazon-support-site.sh"
+             rc=$?
+             rm -f /tmp/shopvivaliz-amazon-support-site.sh
+             exit "$rc"' | tee /tmp/shopvivaliz-amazon-support-result.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          rm -f /tmp/shopvivaliz-amazon-support-site.sh
+          printf '%s\\n' "$rc" >/tmp/shopvivaliz-amazon-support-result.rc
+          exit "$rc"
+
+      - name: Publish sanitized Amazon support audit
+        if: always() && steps.request.outputs.action == 'amazon_support_reply'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json, os, urllib.request
+          rc_path='/tmp/shopvivaliz-amazon-support-result.rc'
+          log_path='/tmp/shopvivaliz-amazon-support-result.log'
+          try:
+              rc=int(open(rc_path).read().strip())
+          except Exception:
+              rc=99
+          results=[]
+          try:
+              for line in open(log_path, errors='ignore'):
+                  line=line.strip()
+                  if not line.startswith('{'):
+                      continue
+                  try:
+                      item=json.loads(line)
+                  except Exception:
+                      continue
+                  if item.get('case_id') in {'22153077391','22153259501'}:
+                      results.append({k:item.get(k) for k in ('case_id','order_id','status','result','read_back')})
+          except FileNotFoundError:
+              pass
+          body='AMAZON_SUPPORT_REPLY_AUDIT\n' + '\n'.join([
+              'run_id='+os.environ['GITHUB_RUN_ID'],
+              'sha='+os.environ['GITHUB_SHA'],
+              'rc='+str(rc),
+              'results='+json.dumps(results,ensure_ascii=False,separators=(',',':')),
+          ])
+          repo=os.environ['GITHUB_REPOSITORY']
+          url=f'https://api.github.com/repos/{repo}/issues/1586/comments'
+          req=urllib.request.Request(
+              url,
+              data=json.dumps({'body':body}).encode(),
+              headers={
+                  'Authorization':'Bearer '+os.environ['GH_TOKEN'],
+                  'Accept':'application/vnd.github+json',
+                  'X-GitHub-Api-Version':'2022-11-28',
+                  'Content-Type':'application/json',
+              },
+              method='POST',
+          )
+          with urllib.request.urlopen(req,timeout=20) as response:
+              if response.status not in (200,201):
+                  raise SystemExit('audit_comment_failed')
+          print('AMAZON_SUPPORT_AUDIT_COMMENTED=true')
+          PY
+
       - name: Cleanup
         if: always()
-        run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts
+        run: rm -f ~/.ssh/vmkey ~/.ssh/known_hosts /tmp/shopvivaliz-amazon-support-result.log /tmp/shopvivaliz-amazon-support-result.rc
