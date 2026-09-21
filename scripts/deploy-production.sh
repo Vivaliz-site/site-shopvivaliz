@@ -189,85 +189,34 @@ reconcile_ai_squad_codex_bridge_unit() {
 
 reconcile_ai_squad_claude_bridge_unit() {
   local release_path="$1"
-  local service="shopvivaliz-squad-claude-bridge.service"
-  local source="$release_path/deploy/systemd/$service"
-  local target="/etc/systemd/system/$service"
-  local runtime="/home/ubuntu/.local/share/shopvivaliz-squad-claude"
-  local workspace="$runtime/workspace"
+  local installer="$release_path/ops/ai-squad/install-claude-bridge-user-service.sh"
+  local legacy_service="shopvivaliz-squad-claude-bridge.service"
+  local legacy_target="/etc/systemd/system/$legacy_service"
 
-  if [ ! -f "$source" ]; then
-    if sudo systemctl cat "$service" >/dev/null 2>&1; then
-      if ! sudo systemctl disable --now "$service" >> "$LOG_FILE" 2>&1; then
-        log ERROR "Falha ao desabilitar bridge Claude ausente na release alvo"
-        return 1
-      fi
+  # Retire the old system-level deployment path. The canonical bridge is a
+  # user service, matching Codex and the authenticated Claude account store.
+  if sudo systemctl cat "$legacy_service" >/dev/null 2>&1; then
+    if ! sudo systemctl disable --now "$legacy_service" >> "$LOG_FILE" 2>&1; then
+      log ERROR "Falha ao desabilitar bridge Claude system-level legado"
+      return 1
     fi
-    if [ -f "$target" ]; then
-      if ! sudo rm -f "$target"; then
-        log ERROR "Falha ao remover unit Claude obsoleta"
-        return 1
-      fi
-      if ! sudo systemctl daemon-reload; then
-        log ERROR "systemd daemon-reload falhou ao remover bridge Claude"
-        return 1
-      fi
+  fi
+  if [ -f "$legacy_target" ]; then
+    if ! sudo rm -f "$legacy_target" || ! sudo systemctl daemon-reload; then
+      log ERROR "Falha ao remover unit Claude system-level legada"
+      return 1
     fi
-    return 0
   fi
 
-  if ! sudo install -d -o ubuntu -g ubuntu -m 0700 "$runtime" "$workspace"; then
-    log ERROR "Falha ao preparar runtime do bridge Claude"
+  if [ ! -f "$installer" ]; then
+    log ERROR "Instalador user-level do bridge Claude ausente na release: $installer"
     return 1
   fi
-  if ! sudo install -o root -g root -m 0644 "$source" "$target"; then
-    log ERROR "Falha ao instalar unit do bridge Claude"
+  if ! XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" bash "$installer" >> "$LOG_FILE" 2>&1; then
+    log ERROR "Falha ao reconciliar bridge Claude user-level"
     return 1
   fi
-  if ! sudo systemd-analyze verify "$target" >> "$LOG_FILE" 2>&1; then
-    log ERROR "Unit do bridge Claude invalida"
-    return 1
-  fi
-  if ! sudo systemctl daemon-reload; then
-    log ERROR "systemd daemon-reload falhou para bridge Claude"
-    return 1
-  fi
-  if ! sudo systemctl enable "$service" >> "$LOG_FILE" 2>&1; then
-    log ERROR "Falha ao habilitar bridge Claude"
-    return 1
-  fi
-  # A previous unmanaged bridge can keep 17657 bound while systemd loops on
-  # EADDRINUSE. Stop the managed unit first, evict any stale listener, then
-  # start exactly one systemd-owned process.
-  sudo systemctl stop "$service" >> "$LOG_FILE" 2>&1 || true
-  if command -v fuser >/dev/null 2>&1; then
-    sudo fuser -k 17657/tcp >> "$LOG_FILE" 2>&1 || true
-  fi
-  if ! sudo systemctl start "$service"; then
-    log ERROR "Falha ao iniciar bridge Claude"
-    return 1
-  fi
-  if ! sudo systemctl is-active --quiet "$service"; then
-    log ERROR "Bridge Claude inativo apos reinicio"
-    return 1
-  fi
-
-  local health_url="http://127.0.0.1:17657/health"
-  local body
-  for _ in $(seq 1 20); do
-    if body="$(curl -fsS --max-time 3 "$health_url" 2>/dev/null)"; then
-      if printf '%s' "$body" | grep -q '"endpoint":"ai-squad-claude-bridge"' \
-        && printf '%s' "$body" | grep -q '"ok":true' \
-        && printf '%s' "$body" | grep -q '"authenticated":true'; then
-        return 0
-      fi
-    fi
-    sleep 1
-  done
-
-  log ERROR "Health estrutural do bridge Claude nao respondeu"
-  return 1
 }
-
 reconcile_abandoned_cart_recovery_units() {
   local release_path="$1"
   local installer="$release_path/scripts/install-abandoned-cart-recovery-service.sh"

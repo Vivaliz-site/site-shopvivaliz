@@ -355,14 +355,16 @@ async function bridgeHealth() {
     prompt: 'health',
     web_search: false,
   };
-  for (const profile of profiles) {
-    try {
-      const { client, state } = await probeProfile(profile, probeRequest, Date.now() + 20000);
-      authenticated++;
-      if (state === 'exhausted') exhausted++;
-      else available++;
-      client.close();
-    } catch {}
+  const results = await Promise.allSettled(profiles.map(async (profile) => {
+    const { client, state } = await probeProfile(profile, probeRequest, Date.now() + 20000);
+    client.close();
+    return state;
+  }));
+  for (const result of results) {
+    if (result.status !== 'fulfilled') continue;
+    authenticated++;
+    if (result.value === 'exhausted') exhausted++;
+    else available++;
   }
 
   const value = {
