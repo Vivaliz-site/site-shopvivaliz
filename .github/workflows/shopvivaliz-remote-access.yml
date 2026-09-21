@@ -22,6 +22,7 @@ on:
           - health
           - identity
           - disk
+          - storage_scan
           - runtime_status
           - repo_status
           - rdp_prepare
@@ -86,7 +87,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "anydesk_install", "anydesk_status", "anydesk_launch"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "anydesk_install", "anydesk_status", "anydesk_launch"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -148,6 +149,21 @@ jobs:
               if [ -d /home/ubuntu/shopvivaliz-deploy ]; then du -sh /home/ubuntu/shopvivaliz-deploy; else echo 'DEPLOY_DIR=missing'; fi
               echo "REMOTE_DISK_END"
               ;;
+            storage_scan)
+              echo "REMOTE_STORAGE_SCAN_BEGIN"
+              df -h /
+              echo "TOP_LEVEL"
+              sudo -n du -x -h --max-depth=1 / 2>/dev/null | sort -h | tail -n 20
+              echo "HOME_UBUNTU"
+              du -x -h --max-depth=2 /home/ubuntu 2>/dev/null | sort -h | tail -n 40
+              echo "VAR"
+              sudo -n du -x -h --max-depth=2 /var 2>/dev/null | sort -h | tail -n 40
+              echo "LARGE_OLD_FILES"
+              sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +50M -mtime +30 -printf '%s %TY-%Tm-%Td %p\n' 2>/dev/null | sort -nr | head -n 80
+              echo "DUPLICATES_BY_HASH_OVER_20M"
+              sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +20M -print0 2>/dev/null | xargs -0 -r sha256sum 2>/dev/null | sort | awk '{h=$1; $1=""; sub(/^ /,""); if (h==prev){if(!shown){print prev_line; shown=1}; print} else {shown=0} prev=h; prev_line=$0}'
+              echo "REMOTE_STORAGE_SCAN_END"
+              ;;
             runtime_status)
               bash scripts/runtime-service-status.sh site
               ;;
@@ -185,6 +201,10 @@ jobs:
               ;;
             disk)
               CMD='echo REMOTE_DISK_BEGIN; df -h /; if [ -d /home/ubuntu ]; then du -sh /home/ubuntu; else echo HOME_UBUNTU=missing; fi; echo REMOTE_DISK_END'
+              "${SSH[@]}" "$CMD"
+              ;;
+            storage_scan)
+              CMD='echo REMOTE_STORAGE_SCAN_BEGIN; df -h /; echo TOP_LEVEL; sudo -n du -x -h --max-depth=1 / 2>/dev/null | sort -h | tail -n 20; echo HOME_UBUNTU; du -x -h --max-depth=2 /home/ubuntu 2>/dev/null | sort -h | tail -n 40; echo VAR; sudo -n du -x -h --max-depth=2 /var 2>/dev/null | sort -h | tail -n 40; echo LARGE_OLD_FILES; sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +50M -mtime +30 -printf "%s %TY-%Tm-%Td %p\\n" 2>/dev/null | sort -nr | head -n 80; echo DUPLICATES_BY_HASH_OVER_20M; sudo -n find /home/ubuntu /var/tmp /tmp -xdev -type f -size +20M -print0 2>/dev/null | xargs -0 -r sha256sum 2>/dev/null | sort | awk '"'"'{h=$1; $1=""; sub(/^ /,""); if (h==prev){if(!shown){print prev_line; shown=1}; print} else {shown=0} prev=h; prev_line=$0}'"'"'; echo REMOTE_STORAGE_SCAN_END'
               "${SSH[@]}" "$CMD"
               ;;
             repo_status)
