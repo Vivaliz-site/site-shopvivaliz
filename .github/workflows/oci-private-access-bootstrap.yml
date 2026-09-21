@@ -1,0 +1,226 @@
+name: OCI Private Access Bootstrap
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    if: >-
+      ${{
+        github.repository == 'Vivaliz-site/site-shopvivaliz' &&
+        github.event.issue.title == '[oci-private-access-bootstrap]' &&
+        github.event.issue.user.login == 'fredmourao-ai' &&
+        github.event.issue.body == 'action=install-both-vms'
+      }}
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 20
+    env:
+      OCI_PROFILE: AGENTS
+      BACKEND_INSTANCE_NAME: always-free-arm-1787907847-26
+
+    steps:
+      - name: Configure protected OCI profile
+        env:
+          OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+          OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+          OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+          OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+          OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for name in OCI_CLI_USER OCI_CLI_TENANCY OCI_CLI_FINGERPRINT OCI_CLI_REGION OCI_CLI_KEY_CONTENT; do
+            test -n "${!name:-}" || { echo "::error::Required OCI bootstrap secret missing: $name"; exit 1; }
+          done
+          OCI_CONFIG_FILE="$RUNNER_TEMP/oci-agents/config"
+          OCI_KEY_FILE="$RUNNER_TEMP/oci-agents/key.pem"
+          printf 'OCI_CONFIG_FILE=%s\nOCI_KEY_FILE=%s\n' "$OCI_CONFIG_FILE" "$OCI_KEY_FILE" >> "$GITHUB_ENV"
+          install -m 700 -d "$(dirname "$OCI_CONFIG_FILE")"
+          printf '%s' "$OCI_CLI_KEY_CONTENT" > "$OCI_KEY_FILE"
+          chmod 600 "$OCI_KEY_FILE"
+          cat > "$OCI_CONFIG_FILE" <<EOF
+          [AGENTS]
+          user=$OCI_CLI_USER
+          fingerprint=$OCI_CLI_FINGERPRINT
+          tenancy=$OCI_CLI_TENANCY
+          region=$OCI_CLI_REGION
+          key_file=$OCI_KEY_FILE
+          EOF
+          chmod 600 "$OCI_CONFIG_FILE"
+
+      - name: Install OCI SDK
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet oci
+
+      - name: Bootstrap both VMs through backend OCI Run Command
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import os
+          import time
+          import oci
+
+          cfg = oci.config.from_file(os.environ['OCI_CONFIG_FILE'], os.environ['OCI_PROFILE'])
+          search = oci.resource_search.ResourceSearchClient(cfg)
+          compute = oci.core.ComputeClient(cfg)
+          agent = oci.compute_instance_agent.ComputeInstanceAgentClient(cfg)
+          models = oci.compute_instance_agent.models
+
+          name = os.environ['BACKEND_INSTANCE_NAME']
+          query = "query instance resources where displayName = '" + name + "'"
+          result = search.search_resources(
+              oci.resource_search.models.StructuredSearchDetails(query=query, type='Structured')
+          ).data.items
+          if len(result) != 1:
+              raise SystemExit(f'Expected exactly one backend instance, found {len(result)}')
+          instance_id = result[0].identifier
+          instance = compute.get_instance(instance_id).data
+          if instance.display_name != name or instance.lifecycle_state != 'RUNNING':
+              raise SystemExit('OCI backend identity/lifecycle mismatch')
+
+          command = r'''set -Eeuo pipefail
+          workdir="$(mktemp -d /tmp/shopvivaliz-private-access.XXXXXX)"
+          cleanup() {
+            rm -rf "$workdir"
+          }
+          trap cleanup EXIT
+
+          rustdesk_script="$workdir/setup-rustdesk-remote.sh"
+          ssh_script="$workdir/setup-agent-ssh.sh"
+          curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-rustdesk-remote.sh -o "$rustdesk_script"
+          curl -fsSL https://raw.githubusercontent.com/Vivaliz-site/site-shopvivaliz/main/scripts/setup-agent-ssh.sh -o "$ssh_script"
+          chmod 700 "$rustdesk_script" "$ssh_script"
+
+          agent_key=/home/ubuntu/.ssh/shopvivaliz_agent_ed25519
+          install -d -m 700 -o ubuntu -g ubuntu /home/ubuntu/.ssh
+          if [ ! -s "$agent_key" ]; then
+            sudo -u ubuntu ssh-keygen -q -t ed25519 -N '' -C shopvivaliz-agent -f "$agent_key"
+          fi
+          chown ubuntu:ubuntu "$agent_key" "$agent_key.pub"
+          chmod 600 "$agent_key"
+          chmod 644 "$agent_key.pub"
+          agent_pub="$(cat "$agent_key.pub")"
+          test -n "$agent_pub"
+
+          sudo -n bash "$rustdesk_script" server_install
+          server_key="$(sudo -n cat /opt/shopvivaliz-rustdesk-server/data/id_ed25519.pub)"
+          test -n "$server_key"
+          sudo -n env RUSTDESK_SERVER_KEY="$server_key" RUSTDESK_ID_SERVER=10.0.1.38 bash "$rustdesk_script" client_install
+          sudo -n env SHOPVIVALIZ_AGENT_SSH_PUBKEY="$agent_pub" bash "$ssh_script" install
+
+          peer_key=/home/ubuntu/.ssh/shopvivaliz-free-a1-monitor
+          test -s "$peer_key"
+          site_known_hosts=/home/ubuntu/.ssh/known_hosts
+          test -s "$site_known_hosts"
+
+          scp -q -i "$peer_key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$site_known_hosts" \
+            "$rustdesk_script" "$ssh_script" ubuntu@10.0.1.112:/tmp/
+
+          server_key_b64="$(printf '%s' "$server_key" | base64 -w0)"
+          agent_pub_b64="$(printf '%s' "$agent_pub" | base64 -w0)"
+          ssh -i "$peer_key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$site_known_hosts" \
+            ubuntu@10.0.1.112 \
+            "set -Eeuo pipefail; server_key=\$(printf '%s' '$server_key_b64' | base64 -d); agent_pub=\$(printf '%s' '$agent_pub_b64' | base64 -d); sudo -n env RUSTDESK_SERVER_KEY=\"\$server_key\" RUSTDESK_ID_SERVER=10.0.1.38 bash /tmp/setup-rustdesk-remote.sh client_install; sudo -n env SHOPVIVALIZ_AGENT_SSH_PUBKEY=\"\$agent_pub\" bash /tmp/setup-agent-ssh.sh install; rm -f /tmp/setup-rustdesk-remote.sh /tmp/setup-agent-ssh.sh"
+
+          backend_probe="$(ssh -i "$agent_key" -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 shopvivaliz-agent@10.0.1.38 'sudo -n /usr/local/sbin/shopvivaliz-agent-ops host-status')"
+          printf '%s\n' "$backend_probe" | grep -q 'always-free-arm-1787907847-26'
+
+          site_probe="$(ssh -i "$agent_key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$site_known_hosts" -o ConnectTimeout=10 shopvivaliz-agent@10.0.1.112 'sudo -n /usr/local/sbin/shopvivaliz-agent-ops host-status')"
+          printf '%s\n' "$site_probe" | grep -q 'shopvivaliz-free-a1'
+
+          backend_rustdesk="$(sudo -n bash "$rustdesk_script" status)"
+          printf '%s\n' "$backend_rustdesk" | grep -q 'RUSTDESK_CLIENT_INSTALLED=true'
+          printf '%s\n' "$backend_rustdesk" | grep -q 'RUSTDESK_HBBS=running'
+          printf '%s\n' "$backend_rustdesk" | grep -q 'RUSTDESK_HBBR=running'
+
+          site_rustdesk="$(ssh -i "$peer_key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$site_known_hosts" ubuntu@10.0.1.112 'sudo -n bash -s -- status' < "$rustdesk_script")"
+          printf '%s\n' "$site_rustdesk" | grep -q 'RUSTDESK_CLIENT_INSTALLED=true'
+
+          backend_id="$(printf '%s\n' "$backend_rustdesk" | sed -n 's/^RUSTDESK_ID=//p' | head -1)"
+          site_id="$(printf '%s\n' "$site_rustdesk" | sed -n 's/^RUSTDESK_ID=//p' | head -1)"
+          test -n "$backend_id"
+          test -n "$site_id"
+          test "$backend_id" != unavailable
+          test "$site_id" != unavailable
+
+          echo "PRIVATE_ACCESS_BOOTSTRAP=PASS"
+          echo "AGENT_SSH_BACKEND=PASS"
+          echo "AGENT_SSH_SITE=PASS"
+          echo "RUSTDESK_SERVER=PASS"
+          echo "RUSTDESK_BACKEND_ID=$backend_id"
+          echo "RUSTDESK_SITE_ID=$site_id"
+          '''
+
+          details = models.CreateInstanceAgentCommandDetails(
+              compartment_id=instance.compartment_id,
+              execution_time_out_in_seconds=900,
+              target=models.InstanceAgentCommandTarget(instance_id=instance_id),
+              content=models.InstanceAgentCommandContent(
+                  source=models.InstanceAgentCommandSourceViaTextDetails(source_type='TEXT', text=command),
+                  output=models.InstanceAgentCommandOutputViaTextDetails(output_type='TEXT'),
+              ),
+              display_name='shopvivaliz-private-access-bootstrap',
+          )
+          command_id = agent.create_instance_agent_command(details).data.id
+          execution = None
+          for _ in range(240):
+              execution = agent.get_instance_agent_command_execution(
+                  instance_agent_command_id=command_id,
+                  instance_id=instance_id,
+              ).data
+              if execution.lifecycle_state in {'SUCCEEDED', 'FAILED', 'TIMED_OUT', 'CANCELED'}:
+                  break
+              time.sleep(4)
+          if execution is None:
+              raise SystemExit('OCI Run Command produced no execution')
+          output = execution.content
+          text = getattr(output, 'text', '') or ''
+          exit_code = int(getattr(output, 'exit_code', 1))
+          markers = (
+              'PRIVATE_ACCESS_BOOTSTRAP=',
+              'AGENT_SSH_BACKEND=',
+              'AGENT_SSH_SITE=',
+              'RUSTDESK_SERVER=',
+              'RUSTDESK_BACKEND_ID=',
+              'RUSTDESK_SITE_ID=',
+              'RUSTDESK_ERROR=',
+              'AGENT_SSH_ERROR=',
+          )
+          for line in text.splitlines():
+              if line.startswith(markers):
+                  print(line)
+          if execution.lifecycle_state != 'SUCCEEDED' or exit_code != 0:
+              tail = '\n'.join(text.splitlines()[-40:])
+              if tail:
+                  print(tail)
+              raise SystemExit('OCI private access bootstrap failed')
+          required = (
+              'PRIVATE_ACCESS_BOOTSTRAP=PASS',
+              'AGENT_SSH_BACKEND=PASS',
+              'AGENT_SSH_SITE=PASS',
+              'RUSTDESK_SERVER=PASS',
+          )
+          for marker in required:
+              if marker not in text:
+                  raise SystemExit(f'Missing success marker: {marker}')
+          PY
+
+      - name: Cleanup OCI credentials
+        if: always()
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [ -f "${OCI_KEY_FILE:-}" ]; then
+            shred -u "$OCI_KEY_FILE"
+          fi
+          if [ -f "${OCI_CONFIG_FILE:-}" ]; then
+            shred -u "$OCI_CONFIG_FILE"
+          fi
