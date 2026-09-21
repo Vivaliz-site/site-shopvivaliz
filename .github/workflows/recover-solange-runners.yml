@@ -202,8 +202,12 @@ jobs:
         if: always()
         shell: bash
         run: |
-          set +e
-          test -n "${OCI_KEY_FILE:-}" && test -f "$OCI_KEY_FILE" && shred -u "$OCI_KEY_FILE"
-          test -n "${OCI_CONFIG_FILE:-}" && test -f "$OCI_CONFIG_FILE" && shred -u "$OCI_CONFIG_FILE"
+          set -Eeuo pipefail
+          if [ -n "${OCI_KEY_FILE:-}" ] && [ -f "$OCI_KEY_FILE" ]; then
+            shred -u "$OCI_KEY_FILE"
+          fi
+          if [ -n "${OCI_CONFIG_FILE:-}" ] && [ -f "$OCI_CONFIG_FILE" ]; then
+            shred -u "$OCI_CONFIG_FILE"
+          fi
 
 # recovery-trigger: 2026-09-20T01:50Z
