@@ -278,7 +278,13 @@ function handleEvent(e){
     document.getElementById('consensus').textContent=e.text||'Consenso vazio.';
   }else if(e.type==='cycle_finished'){
     document.getElementById('duration').textContent=fmtMs(e.duration_ms);
-    document.getElementById('phase').textContent='Concluído';
+    const failed=(e.failed_providers||[]).map(id=>names[id]||id);
+    document.getElementById('phase').textContent=e.ok?'Concluído':(e.degraded?'Concluído com falhas':'Falhou');
+    if(!e.ok&&failed.length){
+      const box=document.getElementById('consensus');
+      const warning='⚠️ Ciclo incompleto. Falharam: '+failed.join(', ')+'.';
+      box.textContent=e.consensus_available?warning+'\n\n'+box.textContent:warning+'\n\nNão houve consenso completo dos três provedores.';
+    }
   }
 }
 
