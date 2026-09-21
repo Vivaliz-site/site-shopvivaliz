@@ -37,6 +37,7 @@ on:
           - anydesk_control_grant
           - anydesk_control_revoke
           - anydesk_console_unlock
+          - ai_squad_ui_audit
       reason:
         description: Audit reason
         required: true
@@ -49,7 +50,7 @@ jobs:
   execute:
     if: github.event_name == 'workflow_dispatch' || (github.event.issue.number == 1586 && github.event.comment.user.login == 'fredmourao-ai' && startsWith(github.event.comment.body, '/remote '))
     runs-on: [self-hosted, Linux, ARM64, shopvivaliz-a1-deploy]
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -89,7 +90,7 @@ jobs:
               requested_at = str(comment.get("created_at") or "")
 
           targets = {"shopvivaliz-free-a1", "always-free-arm-1787907847-26", "fred-win", "kocepsv"}
-          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock"}
+          actions = {"health", "identity", "disk", "storage_scan", "runtime_status", "repo_status", "rdp_prepare", "rdp_status", "rdp_otp_prepare", "rdp_enable_otp", "rdp_enrollment_publish", "rdp_enrollment_cleanup", "anydesk_install", "anydesk_status", "anydesk_launch", "anydesk_control_grant", "anydesk_control_revoke", "anydesk_console_unlock", "ai_squad_ui_audit"}
           if target not in targets:
               raise SystemExit(f"Unsupported target: {target}")
           if action not in actions:
@@ -98,6 +99,8 @@ jobs:
               raise SystemExit("RDP actions are restricted to the backend VM")
           if action.startswith("anydesk_") and target != "always-free-arm-1787907847-26":
               raise SystemExit("AnyDesk actions are restricted to the backend VM")
+          if action == "ai_squad_ui_audit" and target != "shopvivaliz-free-a1":
+              raise SystemExit("AI Squad UI audit is restricted to production orchestration")
           if not reason:
               raise SystemExit("Reason is required")
 
@@ -109,7 +112,7 @@ jobs:
           PY
 
       - name: Configure backend SSH
-        if: steps.req.outputs.target != 'shopvivaliz-free-a1'
+        if: steps.req.outputs.target != 'shopvivaliz-free-a1' || steps.req.outputs.action == 'ai_squad_ui_audit'
         env:
           VM_KEY: ${{ secrets.SHOPVIVALIZ_VM_SSH_KEY || secrets.ORACLE_VM_SSH_KEY }}
           VM_HOSTS: ${{ secrets.SHOPVIVALIZ_VM_KNOWN_HOSTS || secrets.ORACLE_VM_KNOWN_HOSTS }}
@@ -123,8 +126,44 @@ jobs:
           printf '%s\n' "$VM_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/shopvivaliz_vmkey" "$HOME/.ssh/known_hosts"
 
+      - name: Execute AI Squad UI audit
+        if: steps.req.outputs.target == 'shopvivaliz-free-a1' && steps.req.outputs.action == 'ai_squad_ui_audit'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cred="/home/ubuntu/.config/shopvivaliz-admin-test.credentials.json"
+          backend_cred="/home/ubuntu/.config/shopvivaliz-admin-test.credentials.json"
+          remote_script="/tmp/ai-squad-ui-audit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.mjs"
+          remote_shot="/tmp/ai-squad-ui-audit-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.png"
+          local_shot="${RUNNER_TEMP}/ai-squad-ui-audit.png"
+          ssh_opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=10 -i "$HOME/.ssh/shopvivaliz_vmkey")
+
+          php /home/ubuntu/shopvivaliz-deploy/current/scripts/create-admin-test-user.php --credential-file="$cred"
+          test -s "$cred"
+          test "$(stat -c '%a' "$cred")" = "600"
+
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 'install -d -m 700 /home/ubuntu/.config'
+          scp "${ssh_opts[@]}" "$cred" "ubuntu@10.0.1.38:${backend_cred}.tmp"
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "chmod 600 '${backend_cred}.tmp' && mv '${backend_cred}.tmp' '${backend_cred}'"
+          scp "${ssh_opts[@]}" scripts/ai-squad-ui-audit.mjs "ubuntu@10.0.1.38:${remote_script}"
+
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "DISPLAY=:98 AI_SQUAD_ADMIN_CREDENTIAL_FILE='${backend_cred}' AI_SQUAD_UI_SCREENSHOT='${remote_shot}' node '${remote_script}'"
+          scp "${ssh_opts[@]}" "ubuntu@10.0.1.38:${remote_shot}" "$local_shot"
+          ssh "${ssh_opts[@]}" ubuntu@10.0.1.38 "rm -f '${remote_script}' '${remote_shot}'"
+          test -s "$local_shot"
+          echo "AI_SQUAD_UI_AUDIT=PASS"
+
+      - name: Upload AI Squad UI evidence
+        if: steps.req.outputs.target == 'shopvivaliz-free-a1' && steps.req.outputs.action == 'ai_squad_ui_audit'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-squad-ui-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ai-squad-ui-audit.png
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Execute on site production host
-        if: steps.req.outputs.target == 'shopvivaliz-free-a1'
+        if: steps.req.outputs.target == 'shopvivaliz-free-a1' && steps.req.outputs.action != 'ai_squad_ui_audit'
         env:
           ACTION: ${{ steps.req.outputs.action }}
         shell: bash
