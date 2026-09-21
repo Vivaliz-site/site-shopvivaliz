@@ -28,3 +28,9 @@ grep -q 'anydesk_launch' "$oci_workflow"
 grep -q 'setup-anydesk-backend.sh' "$oci_workflow"
 
 echo "ANYDESK_BACKEND_CONTRACT=PASS"
+
+grep -q 'GUI_USER="fredconsole"' "$setup"
+grep -q "/usr/bin/anydesk --tray" "$setup"
+grep -q 'DISPLAY="$display"' "$setup"
+grep -q 'anydesk --settings' "$setup"
+grep -q 'ANYDESK_SESSION_REMOTE' "$setup"
